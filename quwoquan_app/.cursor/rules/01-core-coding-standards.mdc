@@ -1,0 +1,372 @@
+---
+alwaysApply: true
+---
+
+# 趣我圈App 核心编码标准
+
+## 🎯 核心原则
+
+**最重要的规则**：绝对禁止使用硬编码值！所有颜色、间距、文本、类型都必须使用语义标签。
+
+### 强制要求
+
+1. **语义标签优先**：所有UI元素必须使用语义标签
+2. **禁止硬编码**：严格禁止硬编码颜色、间距、文本、数字
+3. **空值安全**：语义间距映射必须处理空值
+4. **命名规范**：遵循项目命名规范
+5. **错误处理**：所有异步操作必须有错误处理
+
+## 🚨 严格禁止的错误
+
+### ❌ 绝对不要这样做
+
+```dart
+// ❌ 错误 - 硬编码颜色
+Container(
+  color: Color(0xFF1877F2),
+  child: Text('首页'),
+)
+
+// ❌ 错误 - 硬编码间距
+Container(
+  padding: EdgeInsets.all(16.w),
+  child: Icon(Icons.home, size: 24.sp),
+)
+
+// ❌ 错误 - 硬编码文本
+Text('首页')
+
+// ❌ 错误 - 魔鬼数字
+Container(
+  width: 48.h,
+  height: 48.h,
+)
+
+// ❌ 错误 - 空值不安全
+padding: EdgeInsets.symmetric(
+  horizontal: AppSpacing.semantic[DesignSemanticConstants.container][DesignSemanticConstants.sm],
+)
+```
+
+### ✅ 必须这样做
+
+```dart
+// ✅ 正确 - 语义颜色
+Container(
+  color: AppColors.primaryColor,
+  child: Text(UITextConstants.home),
+)
+
+// ✅ 正确 - 语义间距（空值安全）
+Container(
+  padding: EdgeInsets.symmetric(
+    horizontal: AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.sm] ?? AppSpacing.containerSm,
+  ),
+  child: Icon(
+    Icons.home, 
+    size: AppSpacing.iconLarge,
+    color: AppColors.primaryColor,
+  ),
+)
+
+// ✅ 正确 - 语义文本
+Text(UITextConstants.home)
+
+// ✅ 正确 - 语义尺寸
+Container(
+  width: AppSpacing.buttonHeight,
+  height: AppSpacing.buttonHeight,
+)
+```
+
+## 📏 语义标签系统
+
+### 颜色系统
+
+```dart
+// 主色调
+AppColors.primaryColor           // 主蓝色 #1877F2
+AppColors.primaryColorHover      // 悬停状态
+AppColors.primaryColorActive     // 激活状态
+
+// 次要色调
+AppColors.secondaryColor         // 主紫色 #8B5CF6
+AppColors.secondaryColorHover
+AppColors.secondaryColorActive
+
+// 强调色调
+AppColors.accentColor           // 主绿色 #10B981
+AppColors.accentColorHover
+AppColors.accentColorActive
+
+// 功能性颜色
+AppColors.success               // #00BA7C
+AppColors.warning               // #FF9500
+AppColors.error                 // #ED4956
+AppColors.info                  // #1877F2
+
+// 特殊功能色
+AppColors.special.linkColor
+AppColors.special.hoverColor
+AppColors.special.selectedColor
+AppColors.special.focusColor
+AppColors.special.disabledColor
+
+// 主题适配
+AppColors.light.backgroundPrimary
+AppColors.dark.backgroundPrimary
+```
+
+### 间距系统（响应式）
+
+```dart
+// 基础间距
+AppSpacing.xs                    // 极小间距
+AppSpacing.sm                    // 小间距
+AppSpacing.md                    // 中等间距
+AppSpacing.lg                    // 大间距
+AppSpacing.xl                    // 超大间距
+
+// 语义间距（必须空值安全）
+AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.md] ?? AppSpacing.containerMd
+AppSpacing.semantic[DesignSemanticConstants.intraGroup]?[DesignSemanticConstants.sm] ?? AppSpacing.intraGroupSm
+AppSpacing.semantic[DesignSemanticConstants.interGroup]?[DesignSemanticConstants.lg] ?? AppSpacing.interGroupLg
+
+// 图标尺寸
+AppSpacing.iconSmall             // 16.0
+AppSpacing.iconMedium            // 24.0
+AppSpacing.iconLarge             // 32.0
+
+// 布局高度
+AppSpacing.bottomNavHeight
+AppSpacing.tabNavigationHeight
+AppSpacing.buttonHeight
+```
+
+### 文本常量
+
+```dart
+// 通用文本
+UITextConstants.loading          // '加载中...'
+UITextConstants.retry            // '重试'
+UITextConstants.cancel           // '取消'
+UITextConstants.confirm          // '确认'
+
+// 导航文本
+UITextConstants.home             // '首页'
+UITextConstants.search           // '搜索'
+UITextConstants.create           // '创建'
+UITextConstants.chat             // '聊天'
+UITextConstants.profile          // '个人资料'
+
+// 操作文本
+UITextConstants.like             // '点赞'
+UITextConstants.share            // '分享'
+UITextConstants.follow           // '关注'
+UITextConstants.comment          // '评论'
+```
+
+### 内容类型常量
+
+```dart
+// 媒体类型
+ContentTypeConstants.image       // 'image'
+ContentTypeConstants.video       // 'video'
+ContentTypeConstants.audio       // 'audio'
+
+// 发布者类型
+ContentTypeConstants.author      // 'author'
+ContentTypeConstants.circle      // 'circle'
+ContentTypeConstants.official    // 'official'
+
+// 显示模式
+ContentTypeConstants.singleMode  // 'single'
+ContentTypeConstants.gridMode    // 'grid'
+```
+
+### 设计语义常量
+
+```dart
+// 间距语义
+DesignSemanticConstants.container     // 容器间距
+DesignSemanticConstants.intraGroup    // 组内间距
+DesignSemanticConstants.interGroup    // 组间间距
+
+// 尺寸语义
+DesignSemanticConstants.xs            // 极小
+DesignSemanticConstants.sm            // 小
+DesignSemanticConstants.md            // 中
+DesignSemanticConstants.lg            // 大
+DesignSemanticConstants.xl            // 超大
+
+// 组件语义
+DesignSemanticConstants.button
+DesignSemanticConstants.card
+DesignSemanticConstants.input
+```
+
+## 🔧 代码实现规范
+
+### 1. Widget 实现
+
+```dart
+// ✅ 正确示例
+class ProfileHeader extends StatelessWidget {
+  const ProfileHeader({
+    Key? key,
+    required this.user,
+  }) : super(key: key);
+
+  final User user;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(
+        AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.md] ?? AppSpacing.containerMd,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.light.backgroundPrimary,
+        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: AppSpacing.avatarSize / 2,
+            backgroundImage: NetworkImage(user.avatarUrl),
+          ),
+          SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  user.name,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                SizedBox(height: AppSpacing.xs),
+                Text(
+                  user.bio,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+```
+
+### 2. 状态管理
+
+```dart
+// ✅ 正确示例
+class ProfileState {
+  final bool isLoading;
+  final User? user;
+  final String? error;
+  
+  const ProfileState({
+    required this.isLoading,
+    this.user,
+    this.error,
+  });
+  
+  ProfileState copyWith({
+    bool? isLoading,
+    User? user,
+    String? error,
+  }) {
+    return ProfileState(
+      isLoading: isLoading ?? this.isLoading,
+      user: user ?? this.user,
+      error: error ?? this.error,
+    );
+  }
+}
+
+class ProfileNotifier extends StateNotifier<ProfileState> {
+  final ProfileService _service;
+  
+  ProfileNotifier(this._service) : super(const ProfileState(isLoading: false));
+  
+  Future<void> loadProfile(String userId) async {
+    try {
+      state = state.copyWith(isLoading: true, error: null);
+      final user = await _service.getProfile(userId);
+      state = state.copyWith(isLoading: false, user: user);
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+    }
+  }
+}
+```
+
+### 3. 错误处理
+
+```dart
+// ✅ 正确示例
+Future<List<Post>> getPosts({int page = 1}) async {
+  try {
+    final response = await _httpClient.get('/posts?page=$page');
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      return (data['posts'] as List)
+          .map((json) => Post.fromJson(json))
+          .toList();
+    } else {
+      throw NetworkException('Failed to load posts: ${response.statusCode}');
+    }
+  } on SocketException {
+    throw NetworkException('No internet connection');
+  } on TimeoutException {
+    throw NetworkException('Request timeout');
+  } on FormatException {
+    throw NetworkException('Invalid response format');
+  } catch (e) {
+    if (e is AppException) {
+      rethrow;
+    }
+    throw NetworkException('Unexpected error: $e');
+  }
+}
+```
+
+## 📋 检查清单
+
+在提交代码前，必须检查：
+
+- [ ] 所有颜色都使用语义标签（AppColors.*）
+- [ ] 所有间距都使用语义标签（AppSpacing.*）
+- [ ] 所有文本都使用常量（UITextConstants.*）
+- [ ] 所有类型都使用常量（ContentTypeConstants.*）
+- [ ] 语义间距使用空值安全操作符（?.）
+- [ ] 没有硬编码颜色值（Color(0x...）
+- [ ] 没有硬编码间距（EdgeInsets.all(16)）
+- [ ] 没有魔鬼数字（48.h, 24.sp）
+- [ ] 所有异步操作都有错误处理
+- [ ] 运行 `flutter analyze` 无错误
+
+## 🔍 快速检查命令
+
+```bash
+# 检查硬编码颜色
+grep -r "Color(0x" lib/ | grep -v "AppColors"
+
+# 检查硬编码间距
+grep -r "EdgeInsets\.all(" lib/ | grep -v "AppSpacing"
+
+# 检查硬编码文本
+grep -r "'[^']*'" lib/ | grep -v "UITextConstants\|ContentTypeConstants\|DesignSemanticConstants"
+
+# 运行静态分析
+flutter analyze
+```
+
+## 相关文档
+
+- [04_CODING_RULES.md](mdc:04_CODING_RULES.md)
+- [CODING_QUICK_REFERENCE.md](mdc:CODING_QUICK_REFERENCE.md)
+- [CODING_STANDARDS_CHECKLIST.md](mdc:CODING_STANDARDS_CHECKLIST.md)

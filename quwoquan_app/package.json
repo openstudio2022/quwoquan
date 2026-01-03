@@ -1,0 +1,17 @@
+{
+  "name": "quwoquan-app",
+  "version": "1.0.0",
+  "description": "趣我圈App - Figma设计令牌同步工具",
+  "scripts": {
+    "sync:figma": "node scripts/sync_figma.js",
+    "sync:figma:py": "python3 scripts/sync_figma.py"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
+
