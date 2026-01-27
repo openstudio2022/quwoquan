@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import '../../features/home/pages/home_page.dart';
-import '../../features/profile/pages/my_profile_page.dart';
-import '../../shared/components/author_profile.dart';
-import '../../shared/components/immersive_media_viewer.dart';
-import '../../shared/components/video_media_viewer.dart';
-import '../../core/quwoquan_core.dart';
+import 'package:quwoquan_app/features/home/pages/home_page.dart';
+import 'package:quwoquan_app/features/profile/pages/my_profile_page.dart';
+import 'package:quwoquan_app/components/author_profile.dart';
+import 'package:quwoquan_app/components/immersive_media_viewer.dart';
+import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -15,11 +14,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(
         path: '/',
-        builder: (context, state) => const HomePage(),
+        pageBuilder: (context, state) => NoTransitionPage(
+          key: state.pageKey,
+          child: const HomePage(),
+        ),
       ),
       GoRoute(
         path: '/my-profile',
-        builder: (context, state) => const MyProfilePage(),
+        pageBuilder: (context, state) => NoTransitionPage(
+          key: state.pageKey,
+          child: const MyProfilePage(),
+        ),
       ),
       GoRoute(
         path: '/user/:username',

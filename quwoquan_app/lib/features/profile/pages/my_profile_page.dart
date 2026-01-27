@@ -7,7 +7,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/shared/components/bottom_navigation.dart';
+import 'package:quwoquan_app/components/bottom_navigation.dart';
 
 /// 我的主页页面 - 基于作者主页实现
 class MyProfilePage extends ConsumerWidget {
@@ -647,7 +647,7 @@ class _MyProfileContentState extends ConsumerState<_MyProfileContent> with Ticke
                   onPressed: _loadUserData,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryColor,
-                    foregroundColor: Colors.white,
+                    foregroundColor: AppColors.white,
                     padding: EdgeInsets.symmetric(
                       horizontal: AppSpacing.lg.w,
                       vertical: AppSpacing.md.h,
@@ -694,7 +694,7 @@ class _MyProfileContentState extends ConsumerState<_MyProfileContent> with Ticke
             alignment: Alignment.topCenter, // 🔑 从顶部开始缩放
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.grey[300], // 占位背景色
+                color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary), // 占位背景色
                 image: DecorationImage(
                   image: NetworkImage(_userData?.backgroundImage ?? 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&h=600&fit=crop'),
                   fit: BoxFit.cover, // 🔑 居中缩放裁剪
@@ -710,7 +710,7 @@ class _MyProfileContentState extends ConsumerState<_MyProfileContent> with Ticke
                     end: Alignment.bottomCenter,
                     colors: [
                       Colors.transparent,
-                      Colors.black.withValues(alpha: 0.3),
+                      AppColors.overlayMedium,
                     ],
                   ),
                 ),
@@ -786,7 +786,7 @@ class _MyProfileContentState extends ConsumerState<_MyProfileContent> with Ticke
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.1),
+                                    color: AppColors.overlayLight,
                                     blurRadius: 8.r,
                                     offset: Offset(0, 2.h),
                                   ),
@@ -1178,10 +1178,10 @@ class _MyProfileContentState extends ConsumerState<_MyProfileContent> with Ticke
               child: Container(
                 padding: EdgeInsets.all(AppSpacing.sm.w),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.3), // 更透明的背景
+                  color: AppColors.overlayMedium, // 更透明的背景
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.2),
+                    color: AppColors.overlayLight,
                     width: 1,
                   ),
                 ),

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'app_spacing.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 
 /// 间距尺寸枚举
 enum SpacingSize {

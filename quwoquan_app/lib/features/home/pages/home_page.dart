@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/shared/components/post_list_section.dart';
-import 'package:quwoquan_app/shared/components/tab_navigation.dart';
-import 'package:quwoquan_app/shared/components/bottom_navigation.dart';
+import 'package:quwoquan_app/components/post_list_section.dart';
+import 'package:quwoquan_app/components/tab_navigation.dart';
+import 'package:quwoquan_app/components/bottom_navigation.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   final String initialTab;

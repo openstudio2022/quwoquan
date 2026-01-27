@@ -15,6 +15,7 @@ alwaysApply: true
 3. **空值安全**：语义间距映射必须处理空值
 4. **命名规范**：遵循项目命名规范
 5. **错误处理**：所有异步操作必须有错误处理
+6. **包引用规范**：所有导入必须使用包引用方式，禁止使用相对路径（`../` 或 `./`）
 
 ## 🚨 严格禁止的错误
 
@@ -334,6 +335,26 @@ Future<List<Post>> getPosts({int page = 1}) async {
 }
 ```
 
+### 4. 导入规范
+
+```dart
+// ❌ 错误 - 使用相对路径
+import '../../features/home/pages/home_page.dart';
+import '../components/media_post_card.dart';
+import 'comment_models.dart';
+
+// ✅ 正确 - 使用包引用
+import 'package:quwoquan_app/features/home/pages/home_page.dart';
+import 'package:quwoquan_app/components/media_post_card.dart';
+import 'package:quwoquan_app/components/comment_system/comment_models.dart';
+```
+
+**规则说明**：
+- 所有项目内部导入必须使用 `package:quwoquan_app/...` 格式
+- 禁止使用相对路径（`../` 或 `./`）
+- 包括同级文件的导入也必须使用包引用方式
+- 这样可以避免文件移动时路径失效，提高代码可维护性
+
 ## 📋 检查清单
 
 在提交代码前，必须检查：
@@ -347,6 +368,7 @@ Future<List<Post>> getPosts({int page = 1}) async {
 - [ ] 没有硬编码间距（EdgeInsets.all(16)）
 - [ ] 没有魔鬼数字（48.h, 24.sp）
 - [ ] 所有异步操作都有错误处理
+- [ ] 所有导入使用包引用方式，无相对路径（`../` 或 `./`）
 - [ ] 运行 `flutter analyze` 无错误
 
 ## 🔍 快速检查命令
@@ -360,6 +382,10 @@ grep -r "EdgeInsets\.all(" lib/ | grep -v "AppSpacing"
 
 # 检查硬编码文本
 grep -r "'[^']*'" lib/ | grep -v "UITextConstants\|ContentTypeConstants\|DesignSemanticConstants"
+
+# 检查相对路径导入
+grep -r "import.*\.\./" lib/ --include="*.dart"
+grep -r "import.*\./[^p]" lib/ --include="*.dart"
 
 # 运行静态分析
 flutter analyze

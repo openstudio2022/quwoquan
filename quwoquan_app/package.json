@@ -4,7 +4,10 @@
   "description": "趣我圈App - Figma设计令牌同步工具",
   "scripts": {
     "sync:figma": "node scripts/sync_figma.js",
-    "sync:figma:py": "python3 scripts/sync_figma.py"
+    "sync:figma:enhanced": "node scripts/sync_figma_enhanced.js",
+    "sync:figma:py": "python3 scripts/sync_figma.py",
+    "setup:figma": "bash scripts/setup_figma_config.sh",
+    "find:figma": "node scripts/find_team_files.js"
   },
   "dependencies": {
     "dotenv": "^16.3.1"

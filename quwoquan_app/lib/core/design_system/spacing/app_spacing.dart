@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../constants/design_semantic_constants.dart';
+import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
 
 /// 应用间距常量
 /// 根据设计规则文档 (03_DESIGN_RULES.md) 定义
