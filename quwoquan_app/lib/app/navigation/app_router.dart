@@ -386,9 +386,11 @@ class _MediaViewerPageState extends ConsumerState<_MediaViewerPage> {
       }).toList();
       
       if (imagePosts.isEmpty) {
-        setState(() {
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
         return;
       }
 
@@ -409,14 +411,18 @@ class _MediaViewerPageState extends ConsumerState<_MediaViewerPage> {
 
       _posts = imagePosts;
       
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       debugPrint('MediaViewer loadData error: $e');
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -494,15 +500,13 @@ class _MediaViewerPageState extends ConsumerState<_MediaViewerPage> {
         final id = post['id']?.toString() ?? '';
         final n = homeState.getPostLikesCount(id);
         if (n > 0) return n;
-        final fromPost = post['likes'];
-        if (fromPost is int) return fromPost;
-        return post['commentsCount'] is int ? post['commentsCount'] as int : 0;
+        return _getLikesCountFromPost(post);
       },
       getPostBookmarksCount: (post) {
         final id = post['id']?.toString() ?? '';
         final n = homeState.getPostBookmarksCount(id);
         if (n > 0) return n;
-        return 0;
+        return _getBookmarksCountFromPost(post);
       },
       onLikeClick: (post) {
         final id = post['id']?.toString() ?? '';
@@ -514,6 +518,24 @@ class _MediaViewerPageState extends ConsumerState<_MediaViewerPage> {
       },
     );
   }
+}
+
+/// 从 post 安全获取点赞数。
+/// 仅使用 [likesCount] 或 [likes]，无数据时回退为 0。
+/// 禁止使用 commentsCount 作为回退，与 getPostBookmarksCount 行为一致。
+int _getLikesCountFromPost(dynamic post) {
+  if (post == null || post is! Map) return 0;
+  final v = post['likesCount'] ?? post['likes'];
+  if (v == null) return 0;
+  return (v is int) ? v : (int.tryParse(v.toString()) ?? 0);
+}
+
+/// 从 post 安全获取收藏数（仅使用 bookmarks 相关字段，回退为 0）
+int _getBookmarksCountFromPost(dynamic post) {
+  if (post == null || post is! Map) return 0;
+  final v = post['savesCount'] ?? post['bookmarks'];
+  if (v == null) return 0;
+  return (v is int) ? v : (int.tryParse(v.toString()) ?? 0);
 }
 
 /// 视频查看器页面包装器
@@ -570,13 +592,17 @@ class _VideoViewerPageState extends ConsumerState<_VideoViewerPage> {
 
       _posts = posts;
       
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -654,15 +680,13 @@ class _VideoViewerPageState extends ConsumerState<_VideoViewerPage> {
         final id = post['id']?.toString() ?? '';
         final n = homeState.getPostLikesCount(id);
         if (n > 0) return n;
-        final fromPost = post['likes'];
-        if (fromPost is int) return fromPost;
-        return post['commentsCount'] is int ? post['commentsCount'] as int : 0;
+        return _getLikesCountFromPost(post);
       },
       getPostBookmarksCount: (post) {
         final id = post['id']?.toString() ?? '';
         final n = homeState.getPostBookmarksCount(id);
         if (n > 0) return n;
-        return 0;
+        return _getBookmarksCountFromPost(post);
       },
       onLikeClick: (post) {
         final id = post['id']?.toString() ?? '';
