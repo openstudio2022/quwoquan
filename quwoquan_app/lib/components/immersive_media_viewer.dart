@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:photo_view/photo_view.dart';
@@ -39,6 +40,8 @@ class ImmersiveMediaViewer extends ConsumerStatefulWidget {
   final bool enableHeroAnimation;
   final Map<String, dynamic>? heroAnimationSource;
   final Function(String)? onHeroAnimationComplete;
+  /// 私人助理入口（中间图标，点击跳转助理主页）
+  final VoidCallback? onAssistantClick;
 
   const ImmersiveMediaViewer({
     super.key,
@@ -68,6 +71,7 @@ class ImmersiveMediaViewer extends ConsumerStatefulWidget {
     this.enableHeroAnimation = false,
     this.heroAnimationSource,
     this.onHeroAnimationComplete,
+    this.onAssistantClick,
   });
 
   @override
@@ -121,6 +125,17 @@ class _ImmersiveMediaViewerState extends ConsumerState<ImmersiveMediaViewer>
     _fadeController.dispose();
     _controlsController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(ImmersiveMediaViewer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.likedPosts != widget.likedPosts ||
+        oldWidget.savedPosts != widget.savedPosts ||
+        oldWidget.getPostLikesCount != widget.getPostLikesCount ||
+        oldWidget.getPostBookmarksCount != widget.getPostBookmarksCount) {
+      _initializePostState();
+    }
   }
 
   void _initializePostState() {
@@ -241,13 +256,21 @@ class _ImmersiveMediaViewerState extends ConsumerState<ImmersiveMediaViewer>
     if (widget.posts.isNotEmpty && _currentPostIndex < widget.posts.length) {
       final currentPost = widget.posts[_currentPostIndex];
       
-      // 显示更多操作弹窗
+      // 显示更多操作弹窗（1:1 PostActionSheet：复制链接、保存、举报等）
       final config = MediaPostMoreActionConfig(
         post: currentPost,
         onReward: () => debugPrint('Reward post: ${currentPost['id']}'),
         onSave: () => _handleSaveClick(),
         onMessage: () => debugPrint('Message user: ${currentPost['username']}'),
-        onCopyLink: () => debugPrint('Copy link: ${currentPost['id']}'),
+        onCopyLink: () {
+          final link = 'https://quwoquan.app/post/${currentPost['id'] ?? ''}';
+          Clipboard.setData(ClipboardData(text: link));
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(UITextConstants.copyLink)),
+            );
+          }
+        },
         onViewOriginal: () => debugPrint('View original: ${currentPost['id']}'),
         onFontSettings: () => debugPrint('Font settings'),
         onThemeToggle: () => debugPrint('Theme toggle'),
@@ -734,9 +757,15 @@ class _ImmersiveMediaViewerState extends ConsumerState<ImmersiveMediaViewer>
               count: _commentsCount,
               onTap: _handleCommentsClick,
             ),
-            
+            if (widget.onAssistantClick != null) ...[
+              SizedBox(width: context.safeGetIntraGroupSpacing(SpacingSize.md)),
+              IconButton(
+                icon: Icon(Icons.auto_awesome, color: Theme.of(context).colorScheme.onSurface),
+                onPressed: widget.onAssistantClick,
+                tooltip: AppConceptConstants.assistantLabel,
+              ),
+            ],
             SizedBox(width: context.safeGetIntraGroupSpacing(SpacingSize.md)),
-            
             _buildActionButton(
               context: context,
               icon: _isSaved ? Icons.star_rounded : Icons.star_border_rounded, // 使用Star图标，与原型一致

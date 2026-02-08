@@ -5,9 +5,14 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
+import 'package:quwoquan_app/core/emoji/emoji_analytics.dart';
+import 'package:quwoquan_app/core/emoji/emoji_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:quwoquan_app/app/navigation/app_router.dart';
+import 'package:quwoquan_app/app/providers/welcome_state_provider.dart';
+import 'package:quwoquan_app/features/welcome/pages/welcome_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -41,7 +46,7 @@ void main() async {
       designSize: const Size(375, 812), // iPhone X 设计尺寸
       minTextAdapt: true,
       splitScreenMode: true,
-      child: const ProviderScope(child: QuWoQuanApp()),
+      child: const ProviderScope(child: QuWoQuanAppRoot()),
     ),
   );
 }
@@ -65,10 +70,43 @@ Future<void> _preInitializeAnalytics() async {
         'initialization_complete': true,
       },
     ));
-    
+
+    // 每日 emoji 使用量埋点：当天首次启动后上报自上次以来的增量
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final emojiRepo = EmojiRepository(prefs);
+      await EmojiAnalytics.tryReportDaily(emojiRepo, analyticsService);
+    } catch (e) {
+      debugPrint('Emoji daily report failed: $e');
+    }
+
     container.dispose();
   } catch (e) {
     debugPrint('Failed to pre-initialize analytics: $e');
+  }
+}
+
+/// 根组件：欢迎页完成后展示主应用
+class QuWoQuanAppRoot extends ConsumerWidget {
+  const QuWoQuanAppRoot({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final welcomeCompleted = ref.watch(welcomeCompletedProvider);
+
+    if (!welcomeCompleted) {
+      return MaterialApp(
+        title: '趣我圈',
+        debugShowCheckedModeBanner: false,
+        home: WelcomeScreen(
+          onFinish: () {
+            ref.read(welcomeCompletedProvider.notifier).setCompleted(true);
+          },
+        ),
+      );
+    }
+
+    return const QuWoQuanApp();
   }
 }
 

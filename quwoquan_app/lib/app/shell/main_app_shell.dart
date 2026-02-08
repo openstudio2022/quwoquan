@@ -1,0 +1,119 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/components/bottom_navigation.dart';
+import 'package:quwoquan_app/features/home/pages/discovery_page.dart';
+import 'package:quwoquan_app/features/circles/pages/circles_page.dart';
+import 'package:quwoquan_app/features/chat/pages/chat_page.dart';
+import 'package:quwoquan_app/features/profile/pages/my_profile_page.dart';
+
+/// 主 App 壳
+///
+/// 包含五大频道容器与底部导航，与原型 App.tsx 的主框架结构一致。
+/// 使用 IndexedStack 保持各频道状态，底部导航切换频道。
+class MainAppShell extends ConsumerStatefulWidget {
+  final Widget child;
+  final String currentLocation;
+
+  const MainAppShell({
+    super.key,
+    required this.child,
+    required this.currentLocation,
+  });
+
+  @override
+  ConsumerState<MainAppShell> createState() => _MainAppShellState();
+}
+
+class _MainAppShellState extends ConsumerState<MainAppShell> {
+  late int _currentIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = _getIndexFromLocation(widget.currentLocation);
+  }
+
+  @override
+  void didUpdateWidget(MainAppShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentLocation != widget.currentLocation) {
+      _currentIndex = _getIndexFromLocation(widget.currentLocation);
+    }
+  }
+
+  int _getIndexFromLocation(String location) {
+    if (location == '/') {
+      return 0; // 发现
+    } else if (location == '/circles') {
+      return 1; // 圈子
+    } else if (location == '/chat') {
+      return 3; // 趣聊
+    } else if (location == '/profile') {
+      return 4; // 我的
+    }
+    return 0;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = ref.watch(isDarkProvider);
+
+    return Scaffold(
+      backgroundColor:
+          AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
+      body: Stack(
+        children: [
+          // 主内容区域 - 使用 IndexedStack 保持各频道状态
+          IndexedStack(
+            index: _currentIndex,
+            children: const [
+              DiscoveryPage(), // 0: 发现
+              CirclesPage(), // 1: 圈子
+              SizedBox.shrink(), // 2: 创作（不占路由，通过 Overlay）
+              ChatPage(), // 3: 趣聊
+              MyProfilePage(), // 4: 我的
+            ],
+          ),
+          // 底部导航
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: BottomNavigationWidget(
+              currentIndex: _currentIndex,
+              onTap: _handleBottomNavTap,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handleBottomNavTap(int index) {
+    if (index == 2) {
+      context.go('/create');
+      return;
+    }
+
+    setState(() {
+      _currentIndex = index;
+    });
+
+    switch (index) {
+      case 0:
+        context.go('/');
+        break;
+      case 1:
+        context.go('/circles');
+        break;
+      case 3:
+        context.go('/chat');
+        break;
+      case 4:
+        context.go('/profile');
+        break;
+    }
+  }
+}

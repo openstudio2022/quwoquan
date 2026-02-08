@@ -13,9 +13,10 @@ alwaysApply: true
 1. **语义标签优先**：所有UI元素必须使用语义标签
 2. **禁止硬编码**：严格禁止硬编码颜色、间距、文本、数字
 3. **空值安全**：语义间距映射必须处理空值
-4. **命名规范**：遵循项目命名规范
+4. **命名规范**：遵循项目命名规范；包名/文件名/类名/路由用**实体或分类名**，不用产品拟人化名或品牌名
 5. **错误处理**：所有异步操作必须有错误处理
 6. **包引用规范**：所有导入必须使用包引用方式，禁止使用相对路径（`../` 或 `./`）
+7. **实体与展示名分离**：逻辑判断用固定 ID 常量（如 `AppConceptConstants.assistantSenderId`），用户可见文案用常量（如 `assistantLabel`），确保名字变更不影响代码结构
 
 ## 🚨 严格禁止的错误
 
@@ -355,6 +356,48 @@ import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 - 包括同级文件的导入也必须使用包引用方式
 - 这样可以避免文件移动时路径失效，提高代码可维护性
 
+### 5. 命名与实体：不用产品名做文件名/包名
+
+**原则**：代码中的**包名、文件夹名、文件名、类名、变量名、路由路径**应使用**实体类型或功能分类**（如 `assistant`、`personal_assistant`、`chat`、`profile`），**禁止使用当前产品的拟人化名称或品牌名**（如「小趣」、`xiaoqu`）。展示给用户的名字应放在常量中（如 `AppConceptConstants.assistantLabel`），便于改名时只改一处，不影响代码结构。
+
+#### ❌ 禁止
+
+```dart
+// ❌ 错误 - 包名/文件名用产品名
+lib/features/xiaoqu/pages/xiaoqu_home_page.dart
+class XiaoquHomePage { }
+
+// ❌ 错误 - 逻辑用名字字符串判断
+if (msg['senderName'].toString().contains('小趣')) { }
+if (conversationId == 'xiao-qu') { }  // 魔法字符串且语义不明
+
+// ❌ 错误 - 硬编码展示名
+title: '小趣私人助理'
+tooltip: '小趣'
+```
+
+#### ✅ 正确
+
+```dart
+// ✅ 正确 - 包名/文件名用实体或分类
+lib/features/assistant/pages/assistant_home_page.dart
+class AssistantHomePage { }
+
+// ✅ 正确 - 逻辑用固定 ID 常量判断（AppConceptConstants）
+if (msg['senderId'] == AppConceptConstants.assistantSenderId) { }
+if (conversationId == AppConceptConstants.assistantConversationId) { }
+
+// ✅ 正确 - 展示名从常量取，名字可变
+title: AppConceptConstants.assistantDisplayTitle
+tooltip: AppConceptConstants.assistantLabel
+```
+
+**规则说明**：
+- **包/文件夹/文件/类名**：用实体或功能（`assistant`、`chat`、`profile`、`settings`），不用拟人化名或品牌名。
+- **路由路径**：用实体语义（如 `/assistant`、`/assistant/management`），不用产品名（如 `/xiaoqu`）。
+- **逻辑判断**：用 `AppConceptConstants` 中的 **固定 ID**（如 `assistantConversationId`、`assistantSenderId`），不在代码里对展示名做 `.contains()` 或相等比较。
+- **用户可见文案**：全部使用 `AppConceptConstants` 或 `UITextConstants` 中的常量（如 `assistantLabel`、`assistantDisplayTitle`），产品改名时只改常量值。
+
 ## 📋 检查清单
 
 在提交代码前，必须检查：
@@ -369,6 +412,8 @@ import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 - [ ] 没有魔鬼数字（48.h, 24.sp）
 - [ ] 所有异步操作都有错误处理
 - [ ] 所有导入使用包引用方式，无相对路径（`../` 或 `./`）
+- [ ] 包名/文件名/类名/路由用实体或分类名，不用产品拟人化名或品牌名
+- [ ] 逻辑判断用固定 ID 常量（如 AppConceptConstants.*Id），不对展示名做字符串匹配
 - [ ] 运行 `flutter analyze` 无错误
 
 ## 🔍 快速检查命令
@@ -386,6 +431,9 @@ grep -r "'[^']*'" lib/ | grep -v "UITextConstants\|ContentTypeConstants\|DesignS
 # 检查相对路径导入
 grep -r "import.*\.\./" lib/ --include="*.dart"
 grep -r "import.*\./[^p]" lib/ --include="*.dart"
+
+# 检查是否用产品名做逻辑（应改为 ID 常量）
+grep -r "\.contains.*小趣\|senderName.*小趣\|'xiao-qu'" lib/ --include="*.dart" || true
 
 # 运行静态分析
 flutter analyze

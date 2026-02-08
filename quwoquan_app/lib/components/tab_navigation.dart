@@ -4,31 +4,49 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
+/// Tab 项定义
+class TabItem {
+  final String id;
+  final String label;
+
+  const TabItem({required this.id, required this.label});
+}
+
 class TabNavigationWidget extends ConsumerWidget {
   final String activeTab;
   final Function(String) onTabChange;
-  final bool? isDark; // 可选的主题参数
+  final bool? isDark;
+  /// 可选：自定义 Tab 列表。不传则使用默认（发现页：推荐/图片/视频/文章）
+  final List<TabItem>? tabs;
 
   const TabNavigationWidget({
     super.key,
     required this.activeTab,
     required this.onTabChange,
     this.isDark,
+    this.tabs,
   });
+
+  static const List<TabItem> discoveryTabs = [
+    TabItem(id: 'recommended', label: '推荐'),
+    TabItem(id: 'images', label: '图片'),
+    TabItem(id: 'video', label: '视频'),
+    TabItem(id: 'articles', label: '文章'),
+  ];
+
+  static const List<TabItem> defaultTabs = [
+    TabItem(id: 'following', label: '关注'),
+    TabItem(id: 'recommended', label: '推荐'),
+    TabItem(id: 'images', label: '图片'),
+    TabItem(id: 'video', label: '视频'),
+    TabItem(id: 'articles', label: '文章'),
+    TabItem(id: 'moments', label: '动态'),
+  ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // 优先使用传入的主题参数，否则使用Provider
     final currentIsDark = (isDark ?? ref.watch(effectiveIsDarkProvider))!;
-    
-    final tabs = [
-      {'id': 'following', 'label': '关注'},
-      {'id': 'recommended', 'label': '推荐'},
-      {'id': 'images', 'label': '图片'},
-      {'id': 'video', 'label': '视频'},
-      {'id': 'articles', 'label': '文章'},
-      {'id': 'moments', 'label': '动态'},
-    ];
+    final tabList = tabs ?? defaultTabs;
 
     return Container(
       height: AppSpacing.tabNavigationHeight,
@@ -40,11 +58,11 @@ class TabNavigationWidget extends ConsumerWidget {
       padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween, // 均匀分布，第一个和最后一个贴边
-        children: tabs.map((tab) {
-          final isActive = tab['id'] == activeTab;
-          
+        children: tabList.map((tab) {
+          final isActive = tab.id == activeTab;
+
           return GestureDetector(
-            onTap: () => onTabChange(tab['id']!),
+            onTap: () => onTabChange(tab.id),
             child: Container(
               padding: EdgeInsets.symmetric(
                 horizontal: AppSpacing.xs.w,
@@ -56,7 +74,7 @@ class TabNavigationWidget extends ConsumerWidget {
                 children: [
                   // 文字始终在中心位置
                   Text(
-                    tab['label']!,
+                    tab.label,
                     style: TextStyle(fontSize: AppTypography.lg).copyWith( // 使用大号字体
                       color: isActive 
                         ? AppColorsFunctional.getColor(currentIsDark, ColorType.foregroundPrimary) // 选中时使用主文字颜色（黑色/白色粗体），与二级tab保持一致

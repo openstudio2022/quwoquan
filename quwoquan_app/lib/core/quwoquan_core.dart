@@ -4,11 +4,20 @@
 // Core functionality
 export 'core.dart' show MediaItem;
 
+// Emoji (public library + analytics)
+export 'emoji/emoji_analytics.dart';
+export 'emoji/emoji_catalog.dart';
+export 'emoji/emoji_providers.dart';
+export 'emoji/emoji_repository.dart';
+
 // Constants
 export 'constants/ui_text_constants.dart';
 export 'constants/content_type_constants.dart';
 export 'constants/app_strings.dart';
 export 'constants/design_semantic_constants.dart';
+export 'constants/settings_semantic_constants.dart';
+export 'constants/app_concept_constants.dart';
+export 'constants/z_index_constants.dart';
 
 // Design System
 export 'design_system/theme/app_theme.dart';

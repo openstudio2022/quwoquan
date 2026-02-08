@@ -4,10 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:go_router/go_router.dart';
 
+import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/components/bottom_navigation.dart';
 
 /// 我的主页页面 - 基于作者主页实现
 class MyProfilePage extends ConsumerWidget {
@@ -26,12 +25,12 @@ class _MyProfileContent extends ConsumerStatefulWidget {
 }
 
 class _MyProfileContentState extends ConsumerState<_MyProfileContent> with TickerProviderStateMixin {
-  late TabController _tabController;
   late ScrollController _scrollController;
   late AnimationController _fadeController;
   late AnimationController _pullController; // 下拉动画控制器
   
-  String _activeTab = 'all';
+  int _mainTabIndex = 0; // 0=创作 1=互动 2=生活
+  int _subTabIndex = 0;  // 创作: 全部/图片/视频/文章; 生活: 足迹/书影音/味蕾/爱物
   bool _showStickyHeader = false;
   bool _showStickyButtons = false;
   bool _isFollowing = false;
@@ -68,7 +67,6 @@ class _MyProfileContentState extends ConsumerState<_MyProfileContent> with Ticke
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this); // 4个tab: 作品、动态、收藏、标签
     _scrollController = ScrollController();
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 300),
@@ -78,6 +76,7 @@ class _MyProfileContentState extends ConsumerState<_MyProfileContent> with Ticke
       duration: const Duration(milliseconds: 400),
       vsync: this,
     );
+    // 需要 TickerProvider，暂时使用 mixin
     
     _setupScrollListener();
     _setupPullListener();
@@ -91,7 +90,6 @@ class _MyProfileContentState extends ConsumerState<_MyProfileContent> with Ticke
 
   @override
   void dispose() {
-    _tabController.dispose();
     _scrollController.dispose();
     _fadeController.dispose();
     _pullController.dispose();
@@ -550,29 +548,6 @@ class _MyProfileContentState extends ConsumerState<_MyProfileContent> with Ticke
           ],
         ),
       ),
-      bottomNavigationBar: BottomNavigationWidget(
-        currentIndex: 4, // 我的页面索引为4
-        onTap: (index) {
-          // 根据索引导航到不同页面
-          switch (index) {
-            case 0: // 首页
-              context.go('/');
-              break;
-            case 1: // 搜索
-              // TODO: 实现搜索页面
-              break;
-            case 2: // 创建
-              // TODO: 实现创建页面
-              break;
-            case 3: // 聊天
-              // TODO: 实现聊天页面
-              break;
-            case 4: // 我的
-              // 已经在我的页面，无需导航
-              break;
-          }
-        },
-      ),
     );
   }
 
@@ -765,6 +740,8 @@ class _MyProfileContentState extends ConsumerState<_MyProfileContent> with Ticke
                             children: [
                               _buildUserInfo(isDark),
                               SizedBox(height: AppSpacing.md.h),
+                              _buildResonanceCard(isDark),
+                              SizedBox(height: AppSpacing.md.h),
                               _buildStatsSection(isDark),
                               _buildActionButtons(isDark),
                             ],
@@ -893,7 +870,81 @@ class _MyProfileContentState extends ConsumerState<_MyProfileContent> with Ticke
     );
   }
 
-  /// 构建统计信息区域
+  /// 交集卡片（1:1 MyProfilePage.tsx「本周有 128 位趣友与你有交集」）
+  Widget _buildResonanceCard(bool isDark) {
+    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
+    final borderColor =
+        AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
+    return InkWell(
+      onTap: _handleResonance,
+      borderRadius: BorderRadius.circular(24.r),
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: AppSpacing.md.w,
+          vertical: AppSpacing.md.h,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.primaryColor.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(24.r),
+          border: Border.all(
+            color: AppColors.primaryColor.withValues(alpha: 0.2),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                SizedBox(
+                  width: 36.w,
+                  height: 36.w,
+                  child: CircleAvatar(
+                    backgroundColor: AppColorsFunctional.getColor(
+                        isDark, ColorType.backgroundSecondary),
+                    child: Icon(Icons.people_outline,
+                        size: 18.sp, color: fg),
+                  ),
+                ),
+                SizedBox(width: 12.w),
+                Text(
+                  '本周有 ',
+                  style: TextStyle(
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.w600,
+                    color: fg,
+                  ),
+                ),
+                Text(
+                  '128',
+                  style: TextStyle(
+                    fontSize: 18.sp,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.primaryColor,
+                  ),
+                ),
+                Text(
+                  ' 位趣友与你有交集',
+                  style: TextStyle(
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.w600,
+                    color: fg,
+                  ),
+                ),
+              ],
+            ),
+            Icon(
+              Icons.chevron_right,
+              size: 20.sp,
+              color: AppColors.primaryColor.withValues(alpha: 0.6),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 构建统计信息区域（1:1 Figma：关注 | 圈子 | 粉丝 | 获赞，点击进入对应列表）
   Widget _buildStatsSection(bool isDark) {
     if (_userData == null) {
       return Container(
@@ -908,22 +959,60 @@ class _MyProfileContentState extends ConsumerState<_MyProfileContent> with Ticke
         ),
       );
     }
-    
+    final followingCount = _userData!.following ?? 128;
+    const circlesCount = 12;
+    const fansCount = 456;
+    final likesCount = _userData!.likes ?? 4200;
+
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: AppSpacing.md.w,
         vertical: AppSpacing.sm.h,
       ),
       decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(
+            color: AppColorsFunctional.getColor(isDark, ColorType.borderPrimary)
+                .withValues(alpha: 0.3),
+          ),
+        ),
         color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildStatItem('作品', _userData!.posts ?? 0, isDark),
-          _buildStatItem('关注', _userData!.following ?? 0, isDark),
-          _buildStatItem('点赞', _userData!.likes ?? 0, isDark),
-          _buildStatItem('收藏', _userData!.bookmarks ?? 0, isDark),
+          InkWell(
+            onTap: () => _handleStats('following'),
+            borderRadius: BorderRadius.circular(8.r),
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 8.h, horizontal: 12.w),
+              child: _buildStatItem(UITextConstants.follow, followingCount, isDark),
+            ),
+          ),
+          InkWell(
+            onTap: () {},
+            borderRadius: BorderRadius.circular(8.r),
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 8.h, horizontal: 12.w),
+              child: _buildStatItem('圈子', circlesCount, isDark),
+            ),
+          ),
+          InkWell(
+            onTap: () => _handleStats('fans'),
+            borderRadius: BorderRadius.circular(8.r),
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 8.h, horizontal: 12.w),
+              child: _buildStatItem(UITextConstants.circleFans, fansCount, isDark),
+            ),
+          ),
+          InkWell(
+            onTap: () => _handleStats('likes'),
+            borderRadius: BorderRadius.circular(8.r),
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 8.h, horizontal: 12.w),
+              child: _buildStatItem(UITextConstants.circleLikes, likesCount, isDark),
+            ),
+          ),
         ],
       ),
     );
@@ -953,7 +1042,7 @@ class _MyProfileContentState extends ConsumerState<_MyProfileContent> with Ticke
     );
   }
 
-  /// 构建操作按钮区域
+  /// 构建操作按钮区域（含 PersonaSwitcher 1:1 对应 PersonaSwitcher.tsx）
   Widget _buildActionButtons(bool isDark) {
     return Container(
       key: _buttonsKey,
@@ -961,76 +1050,174 @@ class _MyProfileContentState extends ConsumerState<_MyProfileContent> with Ticke
       decoration: BoxDecoration(
         color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 身份/分身切换
+          Align(
+            alignment: Alignment.centerLeft,
+            child: InkWell(
+              onTap: () => _showPersonaMenu(context, isDark),
+              borderRadius: BorderRadius.circular(AppSpacing.borderRadius.r),
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 4.h, horizontal: 8.w),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      UITextConstants.personaPrimary,
+                      style: TextStyle(
+                        fontSize: 14.sp,
+                        fontWeight: FontWeight.w500,
+                        color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
+                      ),
+                    ),
+                    SizedBox(width: 4.w),
+                    Icon(
+                      Icons.keyboard_arrow_down,
+                      size: 18.sp,
+                      color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          SizedBox(height: 8.h),
+          Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // 编辑按钮
-          Expanded(
-            flex: 2,
-            child: ElevatedButton(
-              onPressed: _handleEditProfile,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryColor,
-                foregroundColor: AppColors.white,
-                padding: EdgeInsets.symmetric(vertical: AppSpacing.sm.h),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppSpacing.borderRadius.r),
+          // 资料编辑（1:1 Figma 浅灰 pill）
+          Material(
+            color: AppColorsFunctional.getColor(isDark, ColorType.backgroundTertiary),
+            borderRadius: BorderRadius.circular(24.r),
+            child: InkWell(
+              onTap: _handleEditProfile,
+              borderRadius: BorderRadius.circular(24.r),
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: 24.w,
+                  vertical: 12.h,
                 ),
-              ),
-              child: Text(
-                '编辑资料',
-                style: TextStyle(
-                  fontSize: 16.sp,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-          SizedBox(width: AppSpacing.sm.w),
-          
-          // 设置按钮
-          Expanded(
-            flex: 2,
-            child: OutlinedButton(
-              onPressed: _handleSettings,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
-                side: BorderSide(
-                  color: AppColorsFunctional.getColor(isDark, ColorType.borderPrimary),
-                ),
-                padding: EdgeInsets.symmetric(vertical: AppSpacing.sm.h),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppSpacing.borderRadius.r),
-                ),
-              ),
-              child: Text(
-                '设置',
-                style: TextStyle(
-                  fontSize: 16.sp,
-                  fontWeight: FontWeight.w600,
+                child: Text(
+                  UITextConstants.profileEditLabel,
+                  style: TextStyle(
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.w800,
+                    color: AppColorsFunctional.getColor(
+                        isDark, ColorType.foregroundSecondary),
+                  ),
                 ),
               ),
             ),
           ),
+          SizedBox(width: 10.w),
+          // 分身管理（1:1 Figma 深灰 pill）
+          Material(
+            color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary),
+            borderRadius: BorderRadius.circular(24.r),
+            child: InkWell(
+              onTap: _handlePersonas,
+              borderRadius: BorderRadius.circular(24.r),
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: 24.w,
+                  vertical: 12.h,
+                ),
+                child: Text(
+                  UITextConstants.profilePersonasLabel,
+                  style: TextStyle(
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.w800,
+                    color: AppColorsFunctional.getColor(
+                        isDark, ColorType.foregroundPrimary),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SizedBox(width: 10.w),
+          // 私人助理入口（1:1 Figma 纯图标，无蓝底）
+          GestureDetector(
+            onTap: _handleAssistantEntry,
+            child: Container(
+              width: 40.w,
+              height: 40.w,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Colors.transparent,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.auto_awesome,
+                size: AppSpacing.iconMedium.sp,
+                color: AppColors.primaryColor,
+              ),
+            ),
+          ),
+          // 设置入口在顶栏，此处仅保留 资料编辑 | 分身管理 | 私人助理（1:1 Figma）
+        ],
+      ),
         ],
       ),
     );
   }
 
-  /// 构建Tab导航
+  void _showPersonaMenu(BuildContext context, bool isDark) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppSpacing.borderRadius.r)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(Icons.person, color: AppColors.primaryColor),
+              title: Text(UITextConstants.personaPrimary),
+              onTap: () {
+                Navigator.pop(ctx);
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.settings, color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary)),
+              title: Text(UITextConstants.personaManage),
+              onTap: () {
+                Navigator.pop(ctx);
+                context.push('/profile/personas');
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 构建Tab导航：主 Tab（创作/互动/生活）+ 子 Tab（按主 Tab 切换）
   Widget _buildTabNavigation(bool isDark) {
-    final tabs = [
-      {'id': 'all', 'label': '全部'},
-      {'id': 'moments', 'label': '动态'},
-      {'id': 'images', 'label': '图片'},
-      {'id': 'videos', 'label': '视频'},
-      {'id': 'articles', 'label': '文章'},
+    const mainTabs = [
+      AppConceptConstants.creation,
+      AppConceptConstants.interaction,
+      AppConceptConstants.life,
+    ];
+    const creationSubTabs = [
+      AppConceptConstants.all,
+      AppConceptConstants.images,
+      AppConceptConstants.videos,
+      AppConceptConstants.articles,
+    ];
+    const lifeSubTabs = [
+      AppConceptConstants.footprint,
+      AppConceptConstants.bookMovieMusic,
+      AppConceptConstants.taste,
+      AppConceptConstants.aiwu,
     ];
 
     return Container(
-      height: AppSpacing.subTabNavigationHeight.h,
       decoration: BoxDecoration(
-        color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary), // 使用primary背景色
+        color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
         border: Border(
           bottom: BorderSide(
             color: AppColorsFunctional.getColor(isDark, ColorType.borderPrimary),
@@ -1038,53 +1225,92 @@ class _MyProfileContentState extends ConsumerState<_MyProfileContent> with Ticke
           ),
         ),
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm.w),
-        child: Row(
-          children: tabs.map((tab) {
-            final isActive = tab['id'] == _activeTab;
-
-            return GestureDetector(
-              onTap: () {
-          setState(() {
-                  _activeTab = tab['id']!;
-          });
-        },
-              child: Container(
-                margin: EdgeInsets.only(right: AppSpacing.xs.w),
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm.w,
-                  vertical: 1.h,
-                ),
-                decoration: BoxDecoration(
-                  color: isActive
-                      ? AppColorsFunctional.getColor(isDark, ColorType.selectionBackground)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius.r),
-                  border: isActive
-                      ? Border.all(
-                          color: AppColorsFunctional.getColor(isDark, ColorType.selectionBorder),
-                          width: 1.0,
-                        )
-                      : null,
-                ),
-                child: Center(
-                  child: Text(
-                    tab['label']!,
-                    style: TextStyle(
-                      fontSize: 14.sp,
-                      fontWeight: isActive ? FontWeight.w500 : FontWeight.normal,
-                      color: isActive
-                          ? AppColorsFunctional.getColor(isDark, ColorType.selectionForeground)
-                          : AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 主 Tab 行
+          SizedBox(
+            height: AppSpacing.tabNavigationHeight.h,
+            child: Row(
+              children: List.generate(mainTabs.length, (i) {
+                final isActive = i == _mainTabIndex;
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() {
+                      _mainTabIndex = i;
+                      _subTabIndex = 0;
+                    }),
+                    child: Center(
+                      child: Text(
+                        mainTabs[i],
+                        style: TextStyle(
+                          fontSize: 14.sp,
+                          fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                          color: isActive
+                              ? AppColors.primaryColor
+                              : AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),
+                        ),
+                      ),
                     ),
+                  ),
+                );
+              }),
+            ),
+          ),
+          // 子 Tab 行（创作、生活有子分类）
+          if (_mainTabIndex == 0 || _mainTabIndex == 2) ...[
+            Container(
+              height: AppSpacing.subTabNavigationHeight.h,
+              padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm.w),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: List.generate(
+                    _mainTabIndex == 0 ? creationSubTabs.length : lifeSubTabs.length,
+                    (i) {
+                      final label = _mainTabIndex == 0 ? creationSubTabs[i] : lifeSubTabs[i];
+                      final isActive = i == _subTabIndex;
+                      return GestureDetector(
+                        onTap: () => setState(() => _subTabIndex = i),
+                        child: Container(
+                          margin: EdgeInsets.only(right: AppSpacing.xs.w),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: AppSpacing.sm.w,
+                            vertical: AppSpacing.xs.h,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isActive
+                                ? AppColorsFunctional.getColor(isDark, ColorType.selectionBackground)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius.r),
+                            border: isActive
+                                ? Border.all(
+                                    color: AppColorsFunctional.getColor(isDark, ColorType.selectionBorder),
+                                    width: 1.0,
+                                  )
+                                : null,
+                          ),
+                          child: Center(
+                            child: Text(
+                              label,
+                              style: TextStyle(
+                                fontSize: 12.sp,
+                                fontWeight: isActive ? FontWeight.w500 : FontWeight.normal,
+                                color: isActive
+                                    ? AppColorsFunctional.getColor(isDark, ColorType.selectionForeground)
+                                    : AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
-            );
-          }).toList(),
-        ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -1260,13 +1486,29 @@ class _MyProfileContentState extends ConsumerState<_MyProfileContent> with Ticke
     );
   }
 
-  // 交互处理方法
+  // 交互处理方法（1:1 对应 MyProfilePage.tsx 跳转）
   void _handleEditProfile() {
-    _showToast('编辑资料功能开发中...');
+    context.push('/profile/edit');
+  }
+
+  void _handlePersonas() {
+    context.push('/profile/personas');
+  }
+
+  void _handleResonance() {
+    context.push('/profile/resonance');
+  }
+
+  void _handleStats(String type) {
+    context.push('/profile/stats?type=$type');
   }
 
   void _handleSettings() {
-    _showToast('设置功能开发中...');
+    context.push('/settings');
+  }
+
+  void _handleAssistantEntry() {
+    context.push('/assistant/management');
   }
 
   void _handleShare() {

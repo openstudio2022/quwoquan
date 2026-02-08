@@ -2,29 +2,169 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:quwoquan_app/features/home/pages/home_page.dart';
-import 'package:quwoquan_app/features/profile/pages/my_profile_page.dart';
+import 'package:quwoquan_app/app/shell/main_app_shell.dart';
 import 'package:quwoquan_app/components/author_profile.dart';
 import 'package:quwoquan_app/components/immersive_media_viewer.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/features/content/pages/article_detail_page.dart';
+import 'package:quwoquan_app/features/circles/pages/circle_detail_page.dart';
+import 'package:quwoquan_app/features/circles/pages/circle_stats_page.dart';
+import 'package:quwoquan_app/features/create/components/create_entry_sheet.dart';
+import 'package:quwoquan_app/features/create/pages/image_editor_page.dart';
+import 'package:quwoquan_app/features/create/pages/create_page.dart';
+import 'package:quwoquan_app/features/settings/pages/settings_page.dart';
+import 'package:quwoquan_app/features/chat/pages/chat_detail_page.dart';
+import 'package:quwoquan_app/features/chat/pages/chat_settings_page.dart';
+import 'package:quwoquan_app/features/chat/pages/start_group_chat_page.dart';
+import 'package:quwoquan_app/features/profile/pages/edit_profile_page.dart';
+import 'package:quwoquan_app/features/profile/pages/persona_management_page.dart';
+import 'package:quwoquan_app/features/profile/pages/profile_stats_page.dart';
+import 'package:quwoquan_app/features/profile/pages/resonance_page.dart';
+import 'package:quwoquan_app/features/assistant/pages/assistant_home_page.dart';
+import 'package:quwoquan_app/features/assistant/pages/assistant_management_page.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/',
     routes: [
-      GoRoute(
-        path: '/',
-        pageBuilder: (context, state) => NoTransitionPage(
-          key: state.pageKey,
-          child: const HomePage(),
-        ),
+      ShellRoute(
+        builder: (context, state, child) {
+          return MainAppShell(
+            currentLocation: state.uri.path,
+            child: child,
+          );
+        },
+        routes: [
+          GoRoute(
+            path: '/',
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: const SizedBox.shrink(), // DiscoveryPage 在 MainAppShell 中渲染
+            ),
+          ),
+          GoRoute(
+            path: '/circles',
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: const SizedBox.shrink(), // CirclesPage 在 MainAppShell 中渲染
+            ),
+          ),
+          GoRoute(
+            path: '/chat',
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: const SizedBox.shrink(), // ChatPage 在 MainAppShell 中渲染
+            ),
+          ),
+          GoRoute(
+            path: '/profile',
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: const SizedBox.shrink(), // MyProfilePage 在 MainAppShell 中渲染
+            ),
+          ),
+        ],
       ),
       GoRoute(
-        path: '/my-profile',
-        pageBuilder: (context, state) => NoTransitionPage(
-          key: state.pageKey,
-          child: const MyProfilePage(),
-        ),
+        path: '/create-entry',
+        builder: (context, state) {
+          return const _CreateEntryRoutePage();
+        },
+      ),
+      GoRoute(
+        path: '/create',
+        builder: (context, state) {
+          final typeStr = state.uri.queryParameters['type'];
+          CreateEntryType? type;
+          if (typeStr != null) {
+            try {
+              type = CreateEntryType.values
+                  .firstWhere((e) => e.name == typeStr);
+            } on StateError {
+              type = null;
+            }
+          }
+          return CreatePage(initialType: type);
+        },
+        routes: [
+          GoRoute(
+            path: 'edit-image',
+            pageBuilder: (context, state) {
+              final path = state.uri.queryParameters['path'] ?? '';
+              final source = state.uri.queryParameters['source'] ?? 'moment';
+              final index = int.tryParse(state.uri.queryParameters['index'] ?? '0') ?? 0;
+              final total = int.tryParse(state.uri.queryParameters['total'] ?? '1') ?? 1;
+              final paths = <String>[];
+              for (var i = 0; i < total; i++) {
+                final p = state.uri.queryParameters['path$i'];
+                if (p != null && p.isNotEmpty) paths.add(p);
+              }
+              if (paths.isEmpty && path.isNotEmpty) paths.add(path);
+              return MaterialPage<void>(
+                key: state.pageKey,
+                fullscreenDialog: true,
+                child: ImageEditorPage(
+                  initialPath: path,
+                  source: source,
+                  index: index,
+                  total: total,
+                  imagePaths: paths.isNotEmpty ? paths : null,
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+      GoRoute(
+        path: '/circle/:id',
+        builder: (context, state) {
+          final id = state.pathParameters['id'] ?? '';
+          final roleStr = state.uri.queryParameters['role'];
+          CircleRole role = CircleRole.visitor;
+          if (roleStr != null) {
+            switch (roleStr) {
+              case 'owner':
+                role = CircleRole.owner;
+                break;
+              case 'admin':
+                role = CircleRole.admin;
+                break;
+              case 'member':
+                role = CircleRole.member;
+                break;
+              default:
+                role = CircleRole.visitor;
+            }
+          }
+          return CircleDetailPage(
+            circleId: id,
+            initialRole: role,
+            onBack: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/circles');
+              }
+            },
+          );
+        },
+        routes: [
+          GoRoute(
+            path: 'stats',
+            builder: (context, state) {
+              final id = state.pathParameters['id'] ?? '';
+              final type = state.uri.queryParameters['type'] ?? 'members';
+              return CircleStatsPage(circleId: id, type: type);
+            },
+          ),
+        ],
+      ),
+      GoRoute(
+        path: '/article/:id',
+        builder: (context, state) {
+          final id = state.pathParameters['id'] ?? '0';
+          return ArticleDetailPage(articleId: id);
+        },
       ),
       GoRoute(
         path: '/user/:username',
@@ -75,9 +215,131 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
+      GoRoute(
+        path: '/assistant',
+        builder: (context, state) {
+          return AssistantHomePage(
+            onBack: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/chat');
+              }
+            },
+            onManageClick: () => context.push('/assistant/management'),
+          );
+        },
+      ),
+      GoRoute(
+        path: '/assistant/management',
+        builder: (context, state) {
+          return AssistantManagementPage(
+            onBack: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/assistant');
+              }
+            },
+          );
+        },
+      ),
+      GoRoute(
+        path: '/settings',
+        builder: (context, state) {
+          return const SettingsPage();
+        },
+      ),
+      GoRoute(
+        path: '/profile/edit',
+        builder: (context, state) {
+          return const EditProfilePage();
+        },
+      ),
+      GoRoute(
+        path: '/profile/personas',
+        builder: (context, state) {
+          return const PersonaManagementPage();
+        },
+      ),
+      GoRoute(
+        path: '/profile/resonance',
+        builder: (context, state) {
+          return const ResonancePage();
+        },
+      ),
+      GoRoute(
+        path: '/profile/stats',
+        builder: (context, state) {
+          final type =
+              state.uri.queryParameters['type'] ?? 'fans';
+          return ProfileStatsPage(type: type);
+        },
+      ),
+      GoRoute(
+        path: '/chat/:id',
+        builder: (context, state) {
+          final id = state.pathParameters['id'] ?? '';
+          return ChatDetailPage(
+            conversationId: id,
+            onBack: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/chat');
+              }
+            },
+          );
+        },
+        routes: [
+          GoRoute(
+            path: 'settings',
+            builder: (context, state) {
+              final id = state.pathParameters['id'] ?? '';
+              return ChatSettingsPage(conversationId: id);
+            },
+          ),
+          GoRoute(
+            path: 'add-members',
+            builder: (context, state) {
+              final id = state.pathParameters['id'] ?? '';
+              return StartGroupChatPage(
+                conversationId: id,
+                onBack: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go('/chat');
+                  }
+                },
+              );
+            },
+          ),
+        ],
+      ),
     ],
   );
 });
+
+/// 创作入口抽屉的独立路由页（避免在 Shell 内 setState 导致 build scope 断言）
+class _CreateEntryRoutePage extends ConsumerWidget {
+  const _CreateEntryRoutePage();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Material(
+      color: Colors.transparent,
+      child: CreateEntrySheet(
+        isOpen: true,
+        onClose: () => context.pop(),
+        onSelect: (CreateEntryType type) {
+          // 用 go 替换当前路由，避免先 pop 再 push 导致 CreateEntrySheet 卸载时触发 Element 依赖断言
+          context.go('/create?type=${type.name}');
+        },
+      ),
+    );
+  }
+}
 
 /// 媒体查看器页面包装器
 class _MediaViewerPage extends ConsumerStatefulWidget {
@@ -209,6 +471,7 @@ class _MediaViewerPageState extends ConsumerState<_MediaViewerPage> {
         ? widget.initialIndex
         : 0;
 
+    final homeState = ref.watch(homeStateProvider);
     return ImmersiveMediaViewer(
       isOpen: _isOpen,
       onClose: () {
@@ -223,6 +486,31 @@ class _MediaViewerPageState extends ConsumerState<_MediaViewerPage> {
       initialPostIndex: safeIndex,
       onUserClick: (username) {
         context.push('/user/$username');
+      },
+      onAssistantClick: () => context.push('/assistant'),
+      likedPosts: homeState.likedPosts,
+      savedPosts: homeState.savedPosts,
+      getPostLikesCount: (post) {
+        final id = post['id']?.toString() ?? '';
+        final n = homeState.getPostLikesCount(id);
+        if (n > 0) return n;
+        final fromPost = post['likes'];
+        if (fromPost is int) return fromPost;
+        return post['commentsCount'] is int ? post['commentsCount'] as int : 0;
+      },
+      getPostBookmarksCount: (post) {
+        final id = post['id']?.toString() ?? '';
+        final n = homeState.getPostBookmarksCount(id);
+        if (n > 0) return n;
+        return 0;
+      },
+      onLikeClick: (post) {
+        final id = post['id']?.toString() ?? '';
+        ref.read(homeStateProvider).toggleLike(id);
+      },
+      onSaveClick: (post) {
+        final id = post['id']?.toString() ?? '';
+        ref.read(homeStateProvider).toggleSave(id);
       },
     );
   }
@@ -343,6 +631,7 @@ class _VideoViewerPageState extends ConsumerState<_VideoViewerPage> {
         ? widget.initialIndex
         : 0;
 
+    final homeState = ref.watch(homeStateProvider);
     return ImmersiveMediaViewer(
       isOpen: _isOpen,
       onClose: () {
@@ -357,6 +646,31 @@ class _VideoViewerPageState extends ConsumerState<_VideoViewerPage> {
       initialPostIndex: safeIndex,
       onUserClick: (username) {
         context.push('/user/$username');
+      },
+      onAssistantClick: () => context.push('/assistant'),
+      likedPosts: homeState.likedPosts,
+      savedPosts: homeState.savedPosts,
+      getPostLikesCount: (post) {
+        final id = post['id']?.toString() ?? '';
+        final n = homeState.getPostLikesCount(id);
+        if (n > 0) return n;
+        final fromPost = post['likes'];
+        if (fromPost is int) return fromPost;
+        return post['commentsCount'] is int ? post['commentsCount'] as int : 0;
+      },
+      getPostBookmarksCount: (post) {
+        final id = post['id']?.toString() ?? '';
+        final n = homeState.getPostBookmarksCount(id);
+        if (n > 0) return n;
+        return 0;
+      },
+      onLikeClick: (post) {
+        final id = post['id']?.toString() ?? '';
+        ref.read(homeStateProvider).toggleLike(id);
+      },
+      onSaveClick: (post) {
+        final id = post['id']?.toString() ?? '';
+        ref.read(homeStateProvider).toggleSave(id);
       },
     );
   }

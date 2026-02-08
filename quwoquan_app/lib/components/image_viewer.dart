@@ -488,16 +488,16 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
     );
   }
 
-  /// 构建关闭按钮
+  /// 构建关闭按钮（Positioned 须为 Stack 直接子组件，不能包在 FadeTransition/Opacity 内）
   Widget _buildCloseButton(bool isDark) {
-    return AnimatedBuilder(
-      animation: _fadeController,
-      builder: (context, child) {
-        return FadeTransition(
-          opacity: _fadeController,
-          child: Positioned(
-            top: 50.h,
-            right: 16.w,
+    return Positioned(
+      top: 50.h,
+      right: 16.w,
+      child: AnimatedBuilder(
+        animation: _fadeController,
+        builder: (context, child) {
+          return FadeTransition(
+            opacity: _fadeController,
             child: GestureDetector(
               onTap: widget.onClose,
               child: Container(
@@ -513,9 +513,9 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
                 ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 

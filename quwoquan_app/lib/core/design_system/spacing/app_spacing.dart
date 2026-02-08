@@ -33,14 +33,34 @@ class AppSpacing {
   /// 小按钮尺寸: 32.0
   static const double smallButtonSize = 32.0;
   
-  /// 头像尺寸: 40.0
+  /// 头像尺寸: 40.0（向后兼容）
   static const double avatarSize = 40.0;
-  
-  /// 小头像尺寸: 32.0
+
+  /// 小头像尺寸: 32.0（向后兼容）
   static const double smallAvatarSize = 32.0;
-  
-  /// 大头像尺寸: 64.0
+
+  /// 大头像尺寸: 64.0（向后兼容）
   static const double largeAvatarSize = 64.0;
+
+  // ==================== 头像语义尺寸（AVATAR_DESIGN_SYSTEM，Mobile 基准） ====================
+  /// 个人/作者/AI 头像 xs: 24px
+  static const double avatarUserXs = 24.0;
+  static const double avatarCircleXs = 24.0;
+  /// 个人/作者/AI 头像 sm: 32px
+  static const double avatarUserSm = 32.0;
+  static const double avatarCircleSm = 32.0;
+  /// 个人/作者/AI 头像 md: 40px
+  static const double avatarUserMd = 40.0;
+  static const double avatarCircleMd = 40.0;
+  /// 个人/作者/AI 头像 lg: 56px
+  static const double avatarUserLg = 56.0;
+  static const double avatarCircleLg = 56.0;
+  /// 个人/作者/AI 头像 xl: 72px
+  static const double avatarUserXl = 72.0;
+  static const double avatarCircleXl = 72.0;
+
+  /// 圈子头像圆角比例（border-radius: 20%）
+  static const double avatarCircleBorderRadiusRatio = 0.2;
   
   /// 底部导航高度: 56.0
   static const double bottomNavHeight = 56.0;
@@ -53,6 +73,19 @@ class AppSpacing {
   
   /// 模态框头部高度: 56.0
   static const double modalHeaderHeight = 56.0;
+
+  /// 创作入口抽屉最大高度比例 (67vh)
+  static const double createEntrySheetMaxHeightRatio = 0.67;
+
+  /// 创作入口抽屉顶部拖拽手柄宽度
+  static const double createEntrySheetHandleWidth = 40.0;
+
+  /// 创作入口抽屉顶部拖拽手柄高度
+  static const double createEntrySheetHandleHeight = 4.0;
+
+  /// 私人助理半屏面板高度比例 (55-60vh)
+  static const double assistantPanelHeightRatioMin = 0.55;
+  static const double assistantPanelHeightRatioMax = 0.60;
 
   // ==================== 内容间距 ====================
   /// 内容间距 - 极小

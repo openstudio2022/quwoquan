@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
+import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 /// 作者主页组件 - 基于原型代码实现
@@ -68,10 +69,18 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
   late TabController _tabController;
   late ScrollController _scrollController;
   late AnimationController _fadeController;
-  late AnimationController _pullController; // 下拉动画控制器
-  
-  String _activeTab = 'all';
+  late AnimationController _pullController;
+
+  // 与 AuthorProfile.tsx 一致：主 Tab 创作 | 互动 | 生活
+  String _activeTab = 'works';
+  String _workCategory = 'all'; // all | photo | video | article
+  String _lifestyleCategory = 'all'; // all | footprint | soul | taste | private
+  String _communitySubTab = 'likes'; // likes | comments
+  String _interactionDirection = 'received'; // received | sent
+  bool _worksViewModeGrid = true;
+  bool _lifestyleViewModeGrid = true;
   bool _isFollowing = false;
+  bool _isResonanceOpen = false;
   bool _loading = true;
   String? _error;
   
@@ -93,7 +102,7 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this); // 4个tab: 作品、动态、收藏、标签
+    _tabController = TabController(length: 3, vsync: this); // 与 TSX 一致：创作、互动、生活
     _scrollController = ScrollController();
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 300),
@@ -414,18 +423,15 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
         statusBarBrightness: Brightness.dark,
       ),
       child: Scaffold(
-        backgroundColor: Colors.transparent, // 透明背景，让背景图片显示
+        backgroundColor: Colors.transparent,
         extendBodyBehindAppBar: true,
-      body: Stack(
-        children: [
-          // 底层：可滚动的内容区域 - 背景图跟随滚动
-          _buildScrollableContent(isDark),
-          
-          // 顶层：悬浮层
-          // 顶部工具栏
-          _buildTopToolbar(isDark),
-        ],
-      ),
+        body: Stack(
+          children: [
+            _buildScrollableContent(isDark),
+            _buildTopToolbar(isDark),
+            if (_isResonanceOpen) _buildResonanceOverlay(isDark),
+          ],
+        ),
       ),
     );
   }
@@ -789,12 +795,556 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
     );
   }
 
-  /// 构建Tab内容区域
+  /// 与 AuthorProfile.tsx 一致：按主 Tab 切换 创作 / 互动 / 生活 内容
   Widget _buildTabContent(bool isDark) {
-    return Container(
-      height: 600.h, // 固定高度，避免无限高度问题
-      child: _buildSimplePostsGrid(isDark),
+    if (_activeTab == 'works') return _buildWorksTabContent(isDark);
+    if (_activeTab == 'interaction') return _buildInteractionTabContent(isDark);
+    if (_activeTab == 'lifestyle') return _buildLifestyleTabContent(isDark);
+    return const SizedBox.shrink();
+  }
+
+  /// 创作 Tab：子分类 全部/图片/视频/文章 + 网格/列表切换 + 作品列表（与 TSX 一致）
+  Widget _buildWorksTabContent(bool isDark) {
+    const workCats = [
+      {'id': 'all', 'label': '全部'},
+      {'id': 'photo', 'label': '图片'},
+      {'id': 'video', 'label': '视频'},
+      {'id': 'article', 'label': '文章'},
+    ];
+    final works = _getMockWorks();
+    final filtered = _workCategory == 'all'
+        ? works
+        : works.where((w) => w['type'] == _workCategory).toList();
+    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
+    final muted = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    final borderColor = AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
+
+    return Padding(
+      padding: EdgeInsets.all(AppSpacing.md.w),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: workCats.map((c) {
+                      final active = _workCategory == c['id'];
+                      return Padding(
+                        padding: EdgeInsets.only(right: AppSpacing.sm.w),
+                        child: GestureDetector(
+                          onTap: () => setState(() => _workCategory = c['id']!),
+                          child: Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md.w,
+                              vertical: AppSpacing.sm.h,
+                            ),
+                            decoration: BoxDecoration(
+                              color: active
+                                  ? AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius),
+                              border: active ? null : Border.all(color: borderColor),
+                            ),
+                            child: Text(
+                              c['label']!,
+                              style: TextStyle(
+                                fontSize: 12.sp,
+                                fontWeight: FontWeight.w900,
+                                color: active ? fg : muted,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: () => setState(() => _worksViewModeGrid = !_worksViewModeGrid),
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    _worksViewModeGrid ? Icons.view_list : Icons.grid_view,
+                    size: AppSpacing.iconMedium,
+                    color: muted,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: AppSpacing.md.h),
+          if (_worksViewModeGrid)
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                mainAxisSpacing: AppSpacing.sm,
+                crossAxisSpacing: AppSpacing.sm,
+                childAspectRatio: 1,
+              ),
+              itemCount: filtered.length,
+              itemBuilder: (context, i) {
+                final w = filtered[i];
+                return ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.network(
+                        w['image'] as String,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(color: borderColor),
+                      ),
+                      if (w['type'] == 'video')
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: Icon(Icons.play_arrow, color: Colors.white, size: 14.sp),
+                        ),
+                      if (w['type'] == 'article')
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: Icon(Icons.article_outlined, color: Colors.white, size: 14.sp),
+                        ),
+                    ],
+                  ),
+                );
+              },
+            )
+          else
+            ...filtered.map((w) => Padding(
+                  padding: EdgeInsets.only(bottom: AppSpacing.lg.h),
+                  child: Container(
+                    padding: EdgeInsets.all(AppSpacing.md.w),
+                    decoration: BoxDecoration(
+                      color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary).withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(32),
+                      border: Border.all(color: borderColor),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: AspectRatio(
+                            aspectRatio: 16 / 9,
+                            child: Image.network(
+                              w['image'] as String,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(color: borderColor),
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: AppSpacing.md.h),
+                        Text(
+                          w['title'] as String,
+                          style: TextStyle(
+                            fontSize: 15.sp,
+                            fontWeight: FontWeight.w900,
+                            color: fg,
+                          ),
+                        ),
+                        SizedBox(height: AppSpacing.xs.h),
+                        Text(
+                          w['desc'] as String,
+                          style: TextStyle(
+                            fontSize: 12.sp,
+                            color: muted,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        SizedBox(height: AppSpacing.sm.h),
+                        Text(
+                          '${w['date']} · ${w['likes']} 获赞',
+                          style: TextStyle(
+                            fontSize: 11.sp,
+                            fontWeight: FontWeight.w700,
+                            color: muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )),
+        ],
+      ),
     );
+  }
+
+  List<Map<String, dynamic>> _getMockWorks() {
+    return [
+      {'id': 'w1', 'type': 'photo', 'title': '光影的节奏', 'image': 'https://images.unsplash.com/photo-1647956450271-2ff54205bebf?q=80&w=400', 'likes': '1.2k', 'date': '2025-12-20', 'desc': '在布鲁塞尔的午后，捕捉到的一组极简主义建筑光影。'},
+      {'id': 'w2', 'type': 'video', 'title': '森林的呼吸', 'image': 'https://images.unsplash.com/photo-1646034296147-d8ed3aace9a4?q=80&w=400', 'likes': '840', 'date': '2025-12-15', 'desc': '4K延时摄影，记录大兴安岭清晨云雾缭绕的过程。'},
+      {'id': 'w3', 'type': 'article', 'title': '极简摄影的真谛', 'image': 'https://images.unsplash.com/photo-1627216661750-c59a4cea849c?q=80&w=400', 'likes': '2.1k', 'date': '2025-12-10', 'desc': '通过剥离不必要的元素，我们才能看见事物的本质。'},
+      {'id': 'w4', 'type': 'photo', 'title': '咖啡厅一角', 'image': 'https://images.unsplash.com/photo-1650211573412-9d36d0cbbf00?q=80&w=400', 'likes': '560', 'date': '2025-12-05', 'desc': '深夜的咖啡馆，除了香味，还有孤独。'},
+    ];
+  }
+
+  /// 互动 Tab：赞/评论 + Ta收到/Ta发出 + 互动列表占位（与 TSX 一致）
+  Widget _buildInteractionTabContent(bool isDark) {
+    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
+    final muted = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    final borderColor = AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
+
+    return Padding(
+      padding: EdgeInsets.all(AppSpacing.md.w),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Row(
+                children: [
+                  _pill('赞', _communitySubTab == 'likes', () => setState(() => _communitySubTab = 'likes'), isDark),
+                  SizedBox(width: AppSpacing.sm.w),
+                  _pill('评论', _communitySubTab == 'comments', () => setState(() => _communitySubTab = 'comments'), isDark),
+                ],
+              ),
+              SizedBox(width: AppSpacing.sm.w),
+              Container(
+                padding: EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary),
+                  borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius),
+                  border: Border.all(color: borderColor),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _smallPill('Ta收到', _interactionDirection == 'received', () => setState(() => _interactionDirection = 'received'), isDark),
+                    _smallPill('Ta发出', _interactionDirection == 'sent', () => setState(() => _interactionDirection = 'sent'), isDark),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: AppSpacing.lg.h),
+          Text(
+            _communitySubTab == 'likes'
+                ? (_interactionDirection == 'received' ? '赞了 Ta 的照片/文章' : 'Ta 赞了 他人 的文章')
+                : (_interactionDirection == 'received' ? '评论了 Ta 的照片' : 'Ta 评论了 他人 的照片'),
+            style: TextStyle(fontSize: 14.sp, color: muted),
+          ),
+          SizedBox(height: AppSpacing.md.h),
+          Container(
+            padding: EdgeInsets.all(AppSpacing.lg.w),
+            decoration: BoxDecoration(
+              color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary).withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: borderColor),
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 22,
+                  backgroundImage: const NetworkImage('https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=100'),
+                ),
+                SizedBox(width: AppSpacing.md.w),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('李摄影', style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w900, color: fg)),
+                      Text('赞了 Ta 的照片', style: TextStyle(fontSize: 12.sp, color: muted)),
+                      Text('"我们确实搞砸了"！奥特曼罕见直播...', style: TextStyle(fontSize: 13.sp, color: fg)),
+                      Text('5分钟前', style: TextStyle(fontSize: 11.sp, color: muted)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pill(String label, bool active, VoidCallback onTap, bool isDark) {
+    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
+    final muted = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: AppSpacing.md.w, vertical: AppSpacing.sm.h),
+        decoration: BoxDecoration(
+          color: active ? AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary) : null,
+          borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius),
+          border: active ? null : Border.all(color: AppColorsFunctional.getColor(isDark, ColorType.borderPrimary)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12.sp,
+            fontWeight: FontWeight.w900,
+            color: active ? fg : muted,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _smallPill(String label, bool active, VoidCallback onTap, bool isDark) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: active ? AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary) : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius),
+          boxShadow: active ? [BoxShadow(color: AppColors.primaryColor.withValues(alpha: 0.2), blurRadius: 4)] : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 10.sp,
+            fontWeight: FontWeight.w900,
+            color: active ? AppColors.primaryColor : AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 生活 Tab：全部/足迹/书影音/味蕾/爱物 + 网格/列表（与 TSX 一致）
+  Widget _buildLifestyleTabContent(bool isDark) {
+    const lifeCats = [
+      {'id': 'all', 'label': '全部'},
+      {'id': 'footprint', 'label': '足迹'},
+      {'id': 'soul', 'label': '书影音'},
+      {'id': 'taste', 'label': '味蕾'},
+      {'id': 'private', 'label': '爱物'},
+    ];
+    final items = _getMockLifeItems();
+    final filtered = _lifestyleCategory == 'all'
+        ? items
+        : items.where((e) => e['categoryKey'] == _lifestyleCategory).toList();
+    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
+    final muted = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    final borderColor = AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
+
+    return Padding(
+      padding: EdgeInsets.all(AppSpacing.md.w),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: lifeCats.map((c) {
+                      final active = _lifestyleCategory == c['id'];
+                      return Padding(
+                        padding: EdgeInsets.only(right: AppSpacing.sm.w),
+                        child: GestureDetector(
+                          onTap: () => setState(() => _lifestyleCategory = c['id']!),
+                          child: Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md.w,
+                              vertical: AppSpacing.sm.h,
+                            ),
+                            decoration: BoxDecoration(
+                              color: active
+                                  ? AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius),
+                              border: active ? null : Border.all(color: borderColor),
+                            ),
+                            child: Text(
+                              c['label']!,
+                              style: TextStyle(
+                                fontSize: 12.sp,
+                                fontWeight: FontWeight.w900,
+                                color: active ? fg : muted,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: () => setState(() => _lifestyleViewModeGrid = !_lifestyleViewModeGrid),
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    _lifestyleViewModeGrid ? Icons.view_list : Icons.grid_view,
+                    size: AppSpacing.iconMedium,
+                    color: muted,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: AppSpacing.md.h),
+          if (_lifestyleViewModeGrid)
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                mainAxisSpacing: AppSpacing.sm,
+                crossAxisSpacing: AppSpacing.sm,
+                childAspectRatio: 1,
+              ),
+              itemCount: filtered.length,
+              itemBuilder: (context, i) {
+                final item = filtered[i];
+                return ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    alignment: Alignment.bottomLeft,
+                    children: [
+                      Image.network(
+                        item['image'] as String,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(color: borderColor),
+                      ),
+                      Container(
+                        padding: EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Colors.transparent, Colors.black54],
+                          ),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item['category'] as String,
+                              style: TextStyle(
+                                fontSize: 10.sp,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white70,
+                              ),
+                            ),
+                            Text(
+                              item['name'] as String,
+                              style: TextStyle(
+                                fontSize: 12.sp,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            )
+          else
+            ...filtered.map((item) => Padding(
+                  padding: EdgeInsets.only(bottom: AppSpacing.md.h),
+                  child: Container(
+                    padding: EdgeInsets.all(AppSpacing.md.w),
+                    decoration: BoxDecoration(
+                      color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary).withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: borderColor),
+                    ),
+                    child: Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: SizedBox(
+                            width: 96,
+                            height: 96,
+                            child: Image.network(
+                              item['image'] as String,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(color: borderColor),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: AppSpacing.md.w),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primaryColor.withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      item['category'] as String,
+                                      style: TextStyle(
+                                        fontSize: 9.sp,
+                                        fontWeight: FontWeight.w900,
+                                        color: AppColors.primaryColor,
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(width: AppSpacing.sm.w),
+                                  Text(
+                                    item['name'] as String,
+                                    style: TextStyle(
+                                      fontSize: 14.sp,
+                                      fontWeight: FontWeight.w900,
+                                      color: fg,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: AppSpacing.xs.h),
+                              Text(
+                                item['desc'] as String,
+                                style: TextStyle(fontSize: 11.sp, color: muted),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )),
+        ],
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> _getMockLifeItems() {
+    return [
+      {'id': 'i1', 'name': '阿那亚礼堂', 'category': '足迹', 'categoryKey': 'footprint', 'image': 'https://images.unsplash.com/photo-1627216661750-c59a4cea849c?q=80&w=400', 'desc': '在海边的孤独感中寻找创作灵感。'},
+      {'id': 'i2', 'name': '《摄影的哲学》', 'category': '书影音', 'categoryKey': 'soul', 'image': 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?q=80&w=400', 'desc': '比起技巧，我更痴迷于思考快门背后。'},
+      {'id': 'i3', 'name': 'Dirty Coffee', 'category': '味蕾', 'categoryKey': 'taste', 'image': 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?q=80&w=400', 'desc': '喜欢那种冷热交替的冲突感。'},
+      {'id': 'i4', 'name': 'Leica M11', 'category': '爱物', 'categoryKey': 'private', 'image': 'https://images.unsplash.com/photo-1648049003029-3b3b32cb9a1f?q=80&w=400', 'desc': '它是我身体的延伸。'},
+    ];
   }
 
   /// 构建用户信息区域
@@ -882,7 +1432,98 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
     );
   }
 
-  /// 构建统计信息区域
+  /// 与 AuthorProfile.tsx 一致：「你们有 12 个交集点」卡片，点击打开交集详情
+  Widget _buildResonanceCard(bool isDark) {
+    const commonAvatars = [
+      'https://images.unsplash.com/photo-1630939687530-241d630735df?q=80&w=100',
+      'https://images.unsplash.com/photo-1603987248955-9c142c5ae89b?q=80&w=100',
+      'https://images.unsplash.com/photo-1603110502322-93cd2173d19a?q=80&w=100',
+    ];
+    return Padding(
+      padding: EdgeInsets.only(bottom: AppSpacing.md.h),
+      child: Material(
+        color: AppColors.primaryColor.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(24),
+        child: InkWell(
+          onTap: () => setState(() => _isResonanceOpen = true),
+          borderRadius: BorderRadius.circular(24),
+          child: Container(
+            padding: EdgeInsets.all((AppSpacing.md.w).clamp(0.0, double.infinity)),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: AppColors.primaryColor.withValues(alpha: 0.2),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (int i = 0; i < commonAvatars.length; i++)
+                      Transform.translate(
+                        offset: Offset(i == 0 ? 0 : -12.0, 0),
+                        child: CircleAvatar(
+                          radius: 18,
+                          backgroundColor: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
+                          child: CircleAvatar(
+                            radius: 16,
+                            backgroundImage: NetworkImage(commonAvatars[i]),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                SizedBox(width: AppSpacing.md.w),
+                Text(
+                  '你们有 ',
+                  style: TextStyle(
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.w700,
+                    color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
+                  ),
+                ),
+                Text(
+                  '12',
+                  style: TextStyle(
+                    fontSize: 18.sp,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.primaryColor,
+                  ),
+                ),
+                Text(
+                  ' 个交集点',
+                  style: TextStyle(
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.w700,
+                    color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '交集详情',
+                  style: TextStyle(
+                    fontSize: 10.sp,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.primaryColor.withValues(alpha: 0.9),
+                  ),
+                ),
+                SizedBox(width: AppSpacing.xs.w),
+                Icon(
+                  Icons.chevron_right,
+                  size: AppSpacing.iconMedium,
+                  color: AppColors.primaryColor.withValues(alpha: 0.7),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 与 AuthorProfile.tsx 一致：关注 | 圈子 | 粉丝 | 获赞，带竖线分隔，可点击打开列表
   Widget _buildStatsSection(bool isDark) {
     if (_userData == null) {
       return Container(
@@ -890,51 +1531,77 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
         decoration: BoxDecoration(
           color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
         ),
-        child: Center(
-          child: CircularProgressIndicator(
-            color: AppColors.primaryColor,
-          ),
+        child: const Center(
+          child: CircularProgressIndicator(),
         ),
       );
     }
-    
+    final borderColor = AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: AppSpacing.md.w,
-        vertical: AppSpacing.sm.h,
+        vertical: AppSpacing.md.h,
       ),
       decoration: BoxDecoration(
         color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
+        border: Border(
+          top: BorderSide(color: borderColor, width: 1),
+        ),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildStatItem('作品', _userData!.posts ?? 0, isDark),
-          _buildStatItem('关注', _userData!.following ?? 0, isDark),
-          _buildStatItem('点赞', _userData!.likes ?? 0, isDark),
-          _buildStatItem('收藏', _userData!.bookmarks ?? 0, isDark),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => context.push('/profile/stats?type=following'),
+              child: _buildStatItem('284', '关注', isDark),
+            ),
+          ),
+          Container(width: 1, height: AppSpacing.lg, color: borderColor),
+          Expanded(
+            child: GestureDetector(
+              onTap: () {}, // 圈子暂不打开列表
+              child: _buildStatItem('8', '圈子', isDark),
+            ),
+          ),
+          Container(width: 1, height: AppSpacing.lg, color: borderColor),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => context.push('/profile/stats?type=fans'),
+              child: _buildStatItem('1.2k', '粉丝', isDark),
+            ),
+          ),
+          Container(width: 1, height: AppSpacing.lg, color: borderColor),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => context.push('/profile/stats?type=likes'),
+              child: _buildStatItem('4.8k', '获赞', isDark),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  /// 构建统计项目
-  Widget _buildStatItem(String label, int count, bool isDark) {
+  /// 与 TSX 一致：数字 + 小号大写标签（如 "关注"）
+  Widget _buildStatItem(String value, String label, bool isDark) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          _formatCount(count),
+          value,
           style: TextStyle(
-            fontSize: 18.sp,
-            fontWeight: FontWeight.bold,
+            fontSize: 22.sp,
+            fontWeight: FontWeight.w900,
             color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
           ),
         ),
-        SizedBox(height: 4.h),
+        SizedBox(height: 2.h),
         Text(
-          label,
+          label.toUpperCase(),
           style: TextStyle(
-            fontSize: 14.sp,
+            fontSize: 11.sp,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.2,
             color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),
           ),
         ),
@@ -942,65 +1609,68 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
     );
   }
 
-  /// 构建操作按钮区域
+  /// 与 AuthorProfile.tsx 一致：关注（胶囊）+ 消息图标圆钮
   Widget _buildActionButtons(bool isDark) {
+    final bgSecondary = AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary);
+    final fgMuted = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
     return Container(
       key: _buttonsKey,
-      padding: EdgeInsets.all(AppSpacing.md.w),
-      decoration: BoxDecoration(
-        color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.md.w,
+        vertical: AppSpacing.sm.h,
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // 关注按钮
-          Expanded(
-            flex: 2,
-            child: ElevatedButton(
-              onPressed: _handleFollowToggle,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _isFollowing 
-                    ? AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary)
-                    : AppColors.primaryColor,
-                foregroundColor: _isFollowing 
-                    ? AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary)
-                    : AppColors.white,
-                padding: EdgeInsets.symmetric(vertical: AppSpacing.sm.h),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppSpacing.borderRadius.r),
+          Material(
+            color: _isFollowing ? bgSecondary : AppColors.primaryColor,
+            borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius),
+            child: InkWell(
+              onTap: _handleFollowToggle,
+              borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius),
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.lg.w,
+                  vertical: 12.h,
                 ),
-              ),
-              child: Text(
-                _isFollowing ? '已关注' : '关注',
-                style: TextStyle(
-                  fontSize: 16.sp,
-                  fontWeight: FontWeight.w600,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (!_isFollowing) ...[
+                      Icon(
+                        Icons.add,
+                        size: AppSpacing.iconSmall,
+                        color: Colors.white,
+                      ),
+                      SizedBox(width: AppSpacing.sm.w),
+                    ],
+                    Text(
+                      _isFollowing ? '已关注' : '关注',
+                      style: TextStyle(
+                        fontSize: 14.sp,
+                        fontWeight: FontWeight.w900,
+                        color: _isFollowing ? fgMuted : Colors.white,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
-          SizedBox(width: AppSpacing.sm.w),
-          
-          // 私信按钮
-          Expanded(
-            flex: 2,
-            child: OutlinedButton(
-              onPressed: _handleMessage,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
-                side: BorderSide(
-                  color: AppColorsFunctional.getColor(isDark, ColorType.borderPrimary),
-                ),
-                padding: EdgeInsets.symmetric(vertical: AppSpacing.sm.h),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppSpacing.borderRadius.r),
-                ),
-              ),
-              child: Text(
-                '私信',
-                style: TextStyle(
-                  fontSize: 16.sp,
-                  fontWeight: FontWeight.w600,
+          SizedBox(width: AppSpacing.md.w),
+          Material(
+            color: bgSecondary,
+            shape: const CircleBorder(),
+            child: InkWell(
+              onTap: _handleMessage,
+              customBorder: const CircleBorder(),
+              child: Container(
+                width: 44,
+                height: 44,
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.chat_bubble_outline,
+                  size: AppSpacing.iconMedium,
+                  color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
                 ),
               ),
             ),
@@ -1010,74 +1680,55 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
     );
   }
 
-  /// 构建Tab导航
+  /// 与 AuthorProfile.tsx 一致：创作 | 互动 | 生活，sticky 顶栏 + 底部蓝色下划线
   Widget _buildTabNavigation(bool isDark) {
-    final tabs = [
-      {'id': 'all', 'label': '全部'},
-      {'id': 'moments', 'label': '动态'},
-      {'id': 'images', 'label': '图片'},
-      {'id': 'videos', 'label': '视频'},
-      {'id': 'articles', 'label': '文章'},
-    ];
+    const labels = ['创作', '互动', '生活'];
+    const ids = ['works', 'interaction', 'lifestyle'];
+    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
+    final muted = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    final borderColor = AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
 
     return Container(
-      height: AppSpacing.subTabNavigationHeight.h,
       decoration: BoxDecoration(
-        color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary), // 使用primary背景色
-        border: Border(
-          bottom: BorderSide(
-            color: AppColorsFunctional.getColor(isDark, ColorType.borderPrimary),
-            width: 1,
-          ),
-        ),
+        color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary).withValues(alpha: 0.95),
+        border: Border(bottom: BorderSide(color: borderColor, width: 1)),
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm.w),
-        child: Row(
-          children: tabs.map((tab) {
-            final isActive = tab['id'] == _activeTab;
-
-            return GestureDetector(
-              onTap: () {
-          setState(() {
-                  _activeTab = tab['id']!;
-          });
-        },
+      child: Row(
+        children: List.generate(3, (i) {
+          final isActive = _activeTab == ids[i];
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _activeTab = ids[i]),
+              behavior: HitTestBehavior.opaque,
               child: Container(
-                margin: EdgeInsets.only(right: AppSpacing.xs.w),
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm.w,
-                  vertical: 1.h,
-                ),
-                decoration: BoxDecoration(
-                  color: isActive
-                      ? AppColorsFunctional.getColor(isDark, ColorType.selectionBackground)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius.r),
-                  border: isActive
-                      ? Border.all(
-                          color: AppColorsFunctional.getColor(isDark, ColorType.selectionBorder),
-                          width: 1.0,
-                        )
-                      : null,
-                ),
-                child: Center(
-                  child: Text(
-                    tab['label']!,
-                    style: TextStyle(
-                      fontSize: 14.sp,
-                      fontWeight: isActive ? FontWeight.w500 : FontWeight.normal,
-                      color: isActive
-                          ? AppColorsFunctional.getColor(isDark, ColorType.selectionForeground)
-                          : AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
+                padding: EdgeInsets.symmetric(vertical: AppSpacing.md.h),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      labels[i],
+                      style: TextStyle(
+                        fontSize: 14.sp,
+                        fontWeight: isActive ? FontWeight.w900 : FontWeight.w700,
+                        color: isActive ? fg : muted,
+                      ),
                     ),
-                  ),
+                    if (isActive)
+                      Container(
+                        margin: EdgeInsets.only(top: 4.h),
+                        width: 32,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryColor,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-            );
-          }).toList(),
-        ),
+            ),
+          );
+        }),
       ),
     );
   }
@@ -1314,6 +1965,54 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
               child: Icon(Icons.more_horiz, size: 16.sp),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// 与 TSX ResonanceSpace 一致：交集详情全屏叠层，占位实现
+  Widget _buildResonanceOverlay(bool isDark) {
+    return Positioned.fill(
+      child: Material(
+        color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
+        child: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md.w,
+                  vertical: AppSpacing.sm.h,
+                ),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back),
+                      onPressed: () => setState(() => _isResonanceOpen = false),
+                    ),
+                    Text(
+                      '交集详情',
+                      style: TextStyle(
+                        fontSize: 18.sp,
+                        fontWeight: FontWeight.w900,
+                        color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Center(
+                  child: Text(
+                    '交集详情（与 ResonanceSpace 一致，待完整迁移）',
+                    style: TextStyle(
+                      fontSize: 14.sp,
+                      color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1588,6 +2287,7 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
                             children: [
                               _buildUserInfo(isDark),
                               SizedBox(height: AppSpacing.md.h),
+                              _buildResonanceCard(isDark),
                               _buildStatsSection(isDark),
                               _buildActionButtons(isDark),
                             ],

@@ -19,11 +19,11 @@ class BottomNavigationWidget extends ConsumerWidget {
     final isDark = ref.watch(isDarkProvider);
     
     final items = [
-      {'icon': Icons.home_outlined, 'iconSelected': Icons.home, 'label': '首页'},
-      {'icon': Icons.explore_outlined, 'iconSelected': Icons.explore, 'label': '发现'},
-      {'icon': Icons.add_circle_outline, 'iconSelected': Icons.add_circle, 'label': '创建'},
-      {'icon': Icons.forum_outlined, 'iconSelected': Icons.forum, 'label': '聊天'}, // 使用forum图标作为双气泡聊天图标
-      {'icon': Icons.person_outline, 'iconSelected': Icons.person, 'label': '我的'},
+      {'icon': Icons.explore_outlined, 'iconSelected': Icons.explore, 'label': AppConceptConstants.discovery},
+      {'icon': Icons.group_outlined, 'iconSelected': Icons.group, 'label': AppConceptConstants.circles},
+      {'icon': Icons.add_circle_outline, 'iconSelected': Icons.add_circle, 'label': AppConceptConstants.create},
+      {'icon': Icons.chat_bubble_outline, 'iconSelected': Icons.chat_bubble, 'label': AppConceptConstants.chat},
+      {'icon': Icons.person_outline, 'iconSelected': Icons.person, 'label': AppConceptConstants.profile},
     ];
 
     return Container(

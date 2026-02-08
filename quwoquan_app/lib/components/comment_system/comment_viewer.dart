@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
+import 'package:quwoquan_app/components/unified_emoji_picker.dart';
 export 'comment_viewer_modal.dart' show CommentViewer;
 
 
 
 /// 评论输入组件
-class CommentInput extends StatefulWidget {
+class CommentInput extends ConsumerStatefulWidget {
   final CommentConfig config;
   final CommentModel? replyTo;
   final Function(String)? onSubmit;
@@ -25,13 +27,14 @@ class CommentInput extends StatefulWidget {
   });
 
   @override
-  State<CommentInput> createState() => _CommentInputState();
+  ConsumerState<CommentInput> createState() => _CommentInputState();
 }
 
-class _CommentInputState extends State<CommentInput> {
+class _CommentInputState extends ConsumerState<CommentInput> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   bool _isComposing = false;
+  bool _showEmojiPanel = false;
 
   @override
   void initState() {
@@ -72,12 +75,21 @@ class _CommentInputState extends State<CommentInput> {
         ),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           // 回复提示
           if (widget.replyTo != null) _buildReplyIndicator(context, isDark),
-          
           // 输入区域
           _buildInputArea(context, isDark),
+          if (_showEmojiPanel)
+            UnifiedEmojiPicker(
+              onEmojiSelected: (char) {
+                final pos = _controller.selection.baseOffset.clamp(0, _controller.text.length);
+                _controller.text = _controller.text.substring(0, pos) + char + _controller.text.substring(pos);
+                _controller.selection = TextSelection.collapsed(offset: pos + char.length);
+                setState(() {});
+              },
+            ),
         ],
       ),
     );
@@ -199,7 +211,26 @@ class _CommentInputState extends State<CommentInput> {
         ),
         
         SizedBox(width: CommentResponsive.getIntraGroupSpacing(context, SpacingSize.sm)),
-        
+        // Emoji 入口
+        GestureDetector(
+          onTap: () {
+            setState(() {
+              _showEmojiPanel = !_showEmojiPanel;
+              if (_showEmojiPanel) _focusNode.unfocus();
+            });
+          },
+          child: Container(
+            width: CommentResponsive.getCommentItemSize(context),
+            height: CommentResponsive.getCommentItemSize(context),
+            alignment: Alignment.center,
+            child: Icon(
+              _showEmojiPanel ? Icons.keyboard_outlined : Icons.emoji_emotions_outlined,
+              size: CommentResponsive.getCommentItemIconSize(context),
+              color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),
+            ),
+          ),
+        ),
+        SizedBox(width: CommentResponsive.getIntraGroupSpacing(context, SpacingSize.sm)),
         // 发送按钮
         _buildSendButton(context, isDark),
       ],

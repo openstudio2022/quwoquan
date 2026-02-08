@@ -7,14 +7,19 @@
     "sync:figma:enhanced": "node scripts/sync_figma_enhanced.js",
     "sync:figma:py": "python3 scripts/sync_figma.py",
     "setup:figma": "bash scripts/setup_figma_config.sh",
-    "find:figma": "node scripts/find_team_files.js"
+    "find:figma": "node scripts/find_team_files.js",
+    "openspec:init": "npx openspec init --tools cursor",
+    "openspec:update": "npx openspec update",
+    "openspec:list": "npx openspec list",
+    "openspec:view": "npx openspec view"
   },
   "dependencies": {
     "dotenv": "^16.3.1"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "@fission-ai/openspec": "latest"
+  },
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=20.19.0"
   }
 }
-
