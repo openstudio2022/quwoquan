@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
@@ -38,7 +36,6 @@ class MediaViewerTopBar extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final contentWidth = math.max(0.0, constraints.maxWidth - horizontalPadding * 2);
         // 左/右固定宽度，中间 Expanded，保证作者名+关注按钮有足够空间（8 字+渐变+按钮）
         final leftWidth = AppSpacing.buttonSize +
             (showPosition
@@ -46,7 +43,6 @@ class MediaViewerTopBar extends StatelessWidget {
                     AppSpacing.mediaViewerPositionIndicatorWidth
                 : 0.0);
         final rightWidth = AppSpacing.buttonSize;
-        final centerWidth = math.max(0.0, contentWidth - leftWidth - rightWidth);
         return Container(
           padding: EdgeInsets.only(
             left: horizontalPadding,

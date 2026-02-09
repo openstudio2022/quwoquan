@@ -169,29 +169,27 @@ class _ImmersiveMediaViewerState extends ConsumerState<ImmersiveMediaViewer>
 
   void _startAutoHideTimer() {
     // 工具栏始终显示，不自动隐藏（与图片浏览器保持一致）
-    return;
-    if (widget.source == 'userProfile') return;
-    
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted && _showControls) {
-        setState(() {
-          _showControls = false;
-        });
-        _controlsController.reverse();
-      }
-    });
   }
 
   void _toggleControls() {
-    setState(() {
-      _isPureMode = !_isPureMode;
-    });
     if (_isPureMode) {
-      _controlsController.reverse();
-    } else {
+      setState(() => _isPureMode = false);
       _controlsController.forward();
+      _applySystemUiMode();
+    } else {
+      // 先执行淡出动画，动画结束后再更新状态，避免控件被立即移出树导致无淡出效果
+      _controlsController.reverse();
+      void listener(AnimationStatus status) {
+        if (status == AnimationStatus.dismissed) {
+          _controlsController.removeStatusListener(listener);
+          if (mounted) {
+            setState(() => _isPureMode = true);
+            _applySystemUiMode();
+          }
+        }
+      }
+      _controlsController.addStatusListener(listener);
     }
-    _applySystemUiMode();
   }
 
   void _applySystemUiMode() {
@@ -1136,12 +1134,15 @@ class _ImmersiveMediaViewerState extends ConsumerState<ImmersiveMediaViewer>
   }) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final textPainter = TextPainter(
+        // 溢出判断必须使用固定行数，不能依赖 isExpanded：若用 maxLines: isExpanded ? null : 3，
+        // didExceedMaxLines 在展开时恒为 false，会走下面 early return 导致无法显示「收起」按钮。
+        const int captionOverflowMaxLines = 3;
+        final overflowPainter = TextPainter(
           text: TextSpan(text: caption, style: captionStyle),
-          maxLines: isExpanded ? null : 3,
+          maxLines: captionOverflowMaxLines,
           textDirection: TextDirection.ltr,
         )..layout(maxWidth: constraints.maxWidth);
-        final isOverflow = textPainter.didExceedMaxLines;
+        final isOverflow = overflowPainter.didExceedMaxLines;
 
         if (!isOverflow) {
           return Text(caption, style: captionStyle);
@@ -1153,7 +1154,7 @@ class _ImmersiveMediaViewerState extends ConsumerState<ImmersiveMediaViewer>
             TextSpan(
               children: [
                 TextSpan(
-                  text: isExpanded ? caption : _truncateCaption(caption, textPainter, constraints.maxWidth),
+                  text: isExpanded ? caption : _truncateCaption(caption, overflowPainter, constraints.maxWidth),
                   style: captionStyle,
                 ),
                 TextSpan(
@@ -1234,6 +1235,7 @@ class _ImmersiveMediaViewerState extends ConsumerState<ImmersiveMediaViewer>
               );
             },
           ),
+          // 控制栏始终构建以便淡出动画生效，用 IgnorePointer 在纯模式屏蔽点击
           Positioned.fill(
             child: AnimatedBuilder(
               animation: _controlsController,
@@ -1246,11 +1248,9 @@ class _ImmersiveMediaViewerState extends ConsumerState<ImmersiveMediaViewer>
                   ),
                 );
               },
-              child: _isPureMode
-                  ? const SizedBox.shrink()
-                  : Column(
-                      children: [
-                        MediaViewerTopBar(
+              child: Column(
+                children: [
+                  MediaViewerTopBar(
                           onBack: widget.onClose,
                           positionText: '${_currentPostIndex + 1}/${widget.posts.length}',
                           authorName: _getAuthorName(currentPost),

@@ -114,17 +114,30 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
   }
 
   void _toggleControls() {
-    setState(() {
-      _showControls = !_showControls;
-      _isPureMode = !_showControls;
-    });
-    
     if (_showControls) {
-      _fadeController.forward();
-    } else {
+      // 先执行淡出动画，动画结束后再更新状态，避免控件被立即移出树导致无淡出效果
       _fadeController.reverse();
+      void listener(AnimationStatus status) {
+        if (status == AnimationStatus.dismissed) {
+          _fadeController.removeStatusListener(listener);
+          if (mounted) {
+            setState(() {
+              _showControls = false;
+              _isPureMode = true;
+            });
+            _applySystemUiMode();
+          }
+        }
+      }
+      _fadeController.addStatusListener(listener);
+    } else {
+      setState(() {
+        _showControls = true;
+        _isPureMode = false;
+      });
+      _fadeController.forward();
+      _applySystemUiMode();
     }
-    _applySystemUiMode();
   }
 
   @override
@@ -189,7 +202,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
           // 图片画廊
           _buildImageGallery(isDark),
 
-          // 控制栏与文案
+          // 控制栏与文案（始终构建以便 FadeTransition 能淡出，用 IgnorePointer 在纯模式屏蔽点击）
           Positioned.fill(
             child: FadeTransition(
               opacity: _fadeController,
@@ -197,37 +210,35 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
                 ignoring: _isPureMode,
                 child: Column(
                   children: [
-                    if (!_isPureMode)
-                      MediaViewerTopBar(
-                        onBack: widget.onClose,
-                        positionText: '${_currentIndex + 1}/${widget.imageUrls.length}',
-                        authorName: _getAuthorName(),
-                        authorAvatarUrl: _getAuthorAvatar(),
-                        isFollowing: _isFollowing,
-                        onFollow: _handleFollow,
-                        onAuthorTap: _handleAuthorTap,
-                        onMore: _showMoreOptions,
-                        showPosition: widget.imageUrls.length > 1,
-                      ),
+                    MediaViewerTopBar(
+                      onBack: widget.onClose,
+                      positionText: '${_currentIndex + 1}/${widget.imageUrls.length}',
+                      authorName: _getAuthorName(),
+                      authorAvatarUrl: _getAuthorAvatar(),
+                      isFollowing: _isFollowing,
+                      onFollow: _handleFollow,
+                      onAuthorTap: _handleAuthorTap,
+                      onMore: _showMoreOptions,
+                      showPosition: widget.imageUrls.length > 1,
+                    ),
                     const Spacer(),
-                    if (!_isPureMode) _buildCaptionOverlay(context),
-                    if (!_isPureMode)
-                      Align(
-                        alignment: Alignment.bottomCenter,
-                        child: MediaViewerBottomBar(
-                          shareCount: _sharesCount,
-                          commentCount: _commentsCount,
-                          likeCount: _likesCount,
-                          saveCount: _savesCount,
-                          isLiked: _isLiked,
-                          isSaved: _isSaved,
-                          onShare: _handleShare,
-                          onComment: _handleComment,
-                          onLike: _handleLike,
-                          onSave: _handleSave,
-                          onAssistant: null,
-                        ),
+                    _buildCaptionOverlay(context),
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: MediaViewerBottomBar(
+                        shareCount: _sharesCount,
+                        commentCount: _commentsCount,
+                        likeCount: _likesCount,
+                        saveCount: _savesCount,
+                        isLiked: _isLiked,
+                        isSaved: _isSaved,
+                        onShare: _handleShare,
+                        onComment: _handleComment,
+                        onLike: _handleLike,
+                        onSave: _handleSave,
+                        onAssistant: null,
                       ),
+                    ),
                   ],
                 ),
               ),
@@ -357,12 +368,15 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
     );
     return LayoutBuilder(
       builder: (context, constraints) {
-        final textPainter = TextPainter(
+        // 溢出判断必须使用固定行数，不能依赖 _isCaptionExpanded：若用 maxLines: expanded ? null : 3，
+        // didExceedMaxLines 在展开时恒为 false，会走下面 early return 导致无法显示「收起」按钮。
+        const int captionOverflowMaxLines = 3;
+        final overflowPainter = TextPainter(
           text: TextSpan(text: caption, style: captionStyle),
-          maxLines: _isCaptionExpanded ? null : 3,
+          maxLines: captionOverflowMaxLines,
           textDirection: TextDirection.ltr,
         )..layout(maxWidth: constraints.maxWidth);
-        final isOverflow = textPainter.didExceedMaxLines;
+        final isOverflow = overflowPainter.didExceedMaxLines;
 
         if (!isOverflow) {
           return Text(caption, style: captionStyle);
@@ -380,7 +394,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
                 TextSpan(
                   text: _isCaptionExpanded
                       ? caption
-                      : _truncateCaption(caption, textPainter, constraints.maxWidth),
+                      : _truncateCaption(caption, overflowPainter, constraints.maxWidth),
                   style: captionStyle,
                 ),
                 TextSpan(
