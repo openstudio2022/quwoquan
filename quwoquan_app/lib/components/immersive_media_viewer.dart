@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +13,8 @@ import 'package:quwoquan_app/components/more_actions_popup/configs/media_post_co
 import 'package:quwoquan_app/components/comment_system/comment_viewer.dart';
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 import 'package:quwoquan_app/components/more_actions_popup/more_action_popup.dart';
+import 'package:quwoquan_app/components/media_viewer_toolbar.dart';
+import 'package:quwoquan_app/components/assistant_avatar.dart';
 
 /// 沉浸式媒体查看器 - 基于Figma原型实现
 /// 支持与作者主页、评论和帖子的完整联动
@@ -83,6 +88,9 @@ class _ImmersiveMediaViewerState extends ConsumerState<ImmersiveMediaViewer>
   late PageController _pageController;
   late AnimationController _fadeController;
   late AnimationController _controlsController;
+  final TextEditingController _assistantInputController = TextEditingController();
+  final ScrollController _assistantScrollController = ScrollController();
+  final FocusNode _assistantInputFocusNode = FocusNode();
   
   int _currentPostIndex = 0;
   bool _showControls = true;
@@ -95,7 +103,10 @@ class _ImmersiveMediaViewerState extends ConsumerState<ImmersiveMediaViewer>
   int _likesCount = 0;
   int _savesCount = 0;
   int _commentsCount = 0;
-  final int _sharesCount = 95;
+  int _sharesCount = 0;
+  bool _isPureMode = false;
+  final Map<String, bool> _expandedCaptions = {};
+  final Map<String, double> _imageAspectRatios = {};
 
   @override
   void initState() {
@@ -117,6 +128,7 @@ class _ImmersiveMediaViewerState extends ConsumerState<ImmersiveMediaViewer>
     
     _initializePostState();
     _startAutoHideTimer();
+    _applySystemUiMode();
   }
 
   @override
@@ -124,6 +136,10 @@ class _ImmersiveMediaViewerState extends ConsumerState<ImmersiveMediaViewer>
     _pageController.dispose();
     _fadeController.dispose();
     _controlsController.dispose();
+    _assistantInputController.dispose();
+    _assistantScrollController.dispose();
+    _assistantInputFocusNode.dispose();
+    _restoreSystemUiMode();
     super.dispose();
   }
 
@@ -147,6 +163,7 @@ class _ImmersiveMediaViewerState extends ConsumerState<ImmersiveMediaViewer>
       _likesCount = widget.getPostLikesCount?.call(currentPost) ?? 0;
       _savesCount = widget.getPostBookmarksCount?.call(currentPost) ?? 0;
       _commentsCount = currentPost['commentsCount'] ?? 0;
+      _sharesCount = currentPost['sharesCount'] ?? currentPost['shareCount'] ?? 0;
     }
   }
 
@@ -166,8 +183,55 @@ class _ImmersiveMediaViewerState extends ConsumerState<ImmersiveMediaViewer>
   }
 
   void _toggleControls() {
-    // 工具栏始终显示，不响应点击切换（与图片浏览器保持一致）
-    // 保留方法以兼容现有代码，但不执行任何操作
+    setState(() {
+      _isPureMode = !_isPureMode;
+    });
+    if (_isPureMode) {
+      _controlsController.reverse();
+    } else {
+      _controlsController.forward();
+    }
+    _applySystemUiMode();
+  }
+
+  void _applySystemUiMode() {
+    if (_isPureMode) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      SystemChrome.setSystemUIOverlayStyle(
+        const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
+          statusBarBrightness: Brightness.light,
+          systemNavigationBarColor: Colors.transparent,
+          systemNavigationBarIconBrightness: Brightness.dark,
+        ),
+      );
+      return;
+    }
+
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+    );
+  }
+
+  void _restoreSystemUiMode() {
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+    );
   }
 
   void _handlePageChanged(int index) {
@@ -213,7 +277,10 @@ class _ImmersiveMediaViewerState extends ConsumerState<ImmersiveMediaViewer>
       setState(() {
         _isFollowing = !_isFollowing;
       });
-      widget.onFollowClick?.call(currentPost['username'], _isFollowing);
+      final username = currentPost['username']?.toString() ??
+          currentPost['publisher']?['username']?.toString();
+      if (username == null || username.isEmpty) return;
+      widget.onFollowClick?.call(username, _isFollowing);
     }
   }
 
@@ -294,11 +361,840 @@ class _ImmersiveMediaViewerState extends ConsumerState<ImmersiveMediaViewer>
     }
   }
 
-  void _handleAuthorClick() {
-    if (widget.posts.isNotEmpty && _currentPostIndex < widget.posts.length) {
-      final currentPost = widget.posts[_currentPostIndex];
-      widget.onUserClick(currentPost['username']);
+  void _handleAssistantClick() {
+    final currentPost = widget.posts.isNotEmpty && _currentPostIndex < widget.posts.length
+        ? widget.posts[_currentPostIndex]
+        : null;
+    _showAssistantPanel(currentPost);
+  }
+
+  void _showAssistantPanel(dynamic post) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final suggestions = _buildAssistantSuggestions(post);
+    final contextId = post?['id']?.toString() ?? 'media-viewer';
+    AssistantChatStore.normalizeMessages();
+    final summaryText = AssistantChatStore.buildSummary(
+      contextId: contextId,
+      title: _getPostTitle(post),
+      caption: _getPostCaption(post),
+    );
+    final summaryCards = AssistantChatStore.buildSummaryCards();
+    AssistantChatStore.ensureSummaryForContext(
+      contextId: contextId,
+      summaryText: summaryText,
+      cards: summaryCards,
+    );
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          decoration: BoxDecoration(
+            color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(AppSpacing.largeBorderRadius),
+              topRight: Radius.circular(AppSpacing.largeBorderRadius),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.black.withValues(alpha: 0.12),
+                blurRadius: AppSpacing.lg,
+                offset: const Offset(0, -4),
+              ),
+            ],
+          ),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: context.safeGetContainerSpacing(SpacingSize.md),
+                vertical: context.safeGetIntraGroupSpacing(SpacingSize.md),
+              ),
+              child: SizedBox(
+                height: MediaQuery.of(context).size.height * AppSpacing.assistantPanelHeightRatioMax,
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Center(
+                            child: Text(
+                              '${AppConceptConstants.assistantLabel}${UITextConstants.assistantPanelTitleSuffix}',
+                              style: TextStyle(
+                                fontSize: AppTypography.lg.sp,
+                                fontWeight: FontWeight.w600,
+                                color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
+                              ),
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: Icon(
+                            Icons.close,
+                            size: AppSpacing.iconMedium,
+                            color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: context.safeGetIntraGroupSpacing(SpacingSize.sm)),
+                    Expanded(
+                      child: ValueListenableBuilder<List<AssistantChatMessage>>(
+                        valueListenable: AssistantChatStore.messages,
+                        builder: (context, messages, child) {
+                          return ListView.builder(
+                            controller: _assistantScrollController,
+                            padding: EdgeInsets.zero,
+                            itemCount: messages.length,
+                            itemBuilder: (context, index) {
+                              final message = messages[index];
+                              return _buildAssistantMessageBubble(
+                                context,
+                                isDark,
+                                message,
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                    SizedBox(height: context.safeGetIntraGroupSpacing(SpacingSize.sm)),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        UITextConstants.assistantPromptFollowUp,
+                        style: TextStyle(
+                          fontSize: AppTypography.sm.sp,
+                          color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: context.safeGetIntraGroupSpacing(SpacingSize.sm)),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Wrap(
+                        spacing: context.safeGetIntraGroupSpacing(SpacingSize.sm),
+                        runSpacing: context.safeGetIntraGroupSpacing(SpacingSize.sm),
+                        children: suggestions
+                            .map((text) => _buildSuggestionChip(context, isDark, text))
+                            .toList(),
+                      ),
+                    ),
+                    SizedBox(height: context.safeGetInterGroupSpacing(SpacingSize.sm)),
+                    _buildAssistantInput(context, isDark),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  List<String> _buildAssistantSuggestions(dynamic post) {
+    final suggestions = <String>[
+      UITextConstants.assistantAskAboutSummary,
+      UITextConstants.assistantAskAboutRecommendations,
+      UITextConstants.assistantAskAboutComments,
+    ];
+    final content = _getPostCaption(post);
+    if (content.isNotEmpty) {
+      suggestions.insert(1, UITextConstants.assistantAskAboutOutfit);
     }
+    suggestions.add(UITextConstants.assistantAskAboutLocation);
+    return suggestions;
+  }
+
+  Widget _buildSuggestionChip(BuildContext context, bool isDark, String text) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: context.safeGetContainerSpacing(SpacingSize.sm),
+        vertical: context.safeGetIntraGroupSpacing(SpacingSize.xs),
+      ),
+      decoration: BoxDecoration(
+        color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary),
+        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+        border: Border.all(
+          color: AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary)
+              .withValues(alpha: 0.2),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.black.withValues(alpha: 0.08),
+            blurRadius: AppSpacing.sm,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: InkWell(
+        onTap: () {
+          _assistantInputController.text = text;
+          _assistantInputFocusNode.requestFocus();
+        },
+        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: context.safeGetIntraGroupSpacing(SpacingSize.xs),
+            vertical: context.safeGetIntraGroupSpacing(SpacingSize.xs),
+          ),
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: AppTypography.sm.sp,
+              color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAssistantInput(BuildContext context, bool isDark) {
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: context.safeGetContainerSpacing(SpacingSize.sm),
+              vertical: context.safeGetIntraGroupSpacing(SpacingSize.xs),
+            ),
+            decoration: BoxDecoration(
+              color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary),
+              borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+              border: Border.all(
+                color: AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary)
+                    .withValues(alpha: 0.2),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.black.withValues(alpha: 0.08),
+                  blurRadius: AppSpacing.sm,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: TextField(
+              controller: _assistantInputController,
+              focusNode: _assistantInputFocusNode,
+              decoration: InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                hintText: UITextConstants.assistantAskPlaceholder,
+                hintStyle: TextStyle(
+                  color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),
+                  fontSize: AppTypography.sm.sp,
+                ),
+              ),
+              style: TextStyle(
+                color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
+                fontSize: AppTypography.sm.sp,
+              ),
+              onSubmitted: (_) => _handleAssistantSend(),
+            ),
+          ),
+        ),
+        SizedBox(width: context.safeGetIntraGroupSpacing(SpacingSize.sm)),
+        Container(
+          decoration: BoxDecoration(
+            color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary),
+            borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+            border: Border.all(
+              color: AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary)
+                  .withValues(alpha: 0.2),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.black.withValues(alpha: 0.08),
+                blurRadius: AppSpacing.sm,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: InkWell(
+            onTap: _handleAssistantSend,
+            borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+            child: Padding(
+              padding: EdgeInsets.all(context.safeGetIntraGroupSpacing(SpacingSize.xs)),
+              child: Icon(
+                Icons.send,
+                color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),
+                size: AppSpacing.iconMedium,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAssistantMessageBubble(
+    BuildContext context,
+    bool isDark,
+    AssistantChatMessage message,
+  ) {
+    final messageKind = message.kind ?? 'text';
+    final bubbleSelf = AppColors.chatBubbleOutgoing;
+    final bubbleOther = AppColors.chatBubbleIncoming;
+    final fgPrimary = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
+    final isSelf = message.isSelf;
+    final bubbleColor = isSelf ? bubbleSelf : bubbleOther;
+    final textColor = isSelf ? AppColors.white : fgPrimary;
+    final align = isSelf ? CrossAxisAlignment.end : CrossAxisAlignment.start;
+
+    final selfAvatarUrl = _getSelfAvatarUrl();
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        vertical: context.safeGetIntraGroupSpacing(SpacingSize.xs),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: isSelf ? MainAxisAlignment.end : MainAxisAlignment.start,
+        children: [
+          if (!isSelf)
+            Padding(
+              padding: EdgeInsets.only(right: context.safeGetIntraGroupSpacing(SpacingSize.sm)),
+              child: AssistantAvatar(
+                radius: AppSpacing.iconMedium,
+                onTap: widget.onAssistantClick,
+              ),
+            ),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: align,
+              children: [
+                if (messageKind == 'summary_cards')
+                  _buildAssistantSummaryCards(context, isDark, message)
+                else
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: context.safeGetContainerSpacing(SpacingSize.sm),
+                      vertical: context.safeGetIntraGroupSpacing(SpacingSize.xs),
+                    ),
+                    decoration: BoxDecoration(
+                      color: bubbleColor,
+                      borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.black.withValues(alpha: 0.08),
+                          blurRadius: AppSpacing.sm,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      message.text,
+                      style: TextStyle(
+                        color: textColor,
+                        fontSize: AppTypography.base.sp,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (isSelf)
+            Padding(
+              padding: EdgeInsets.only(left: context.safeGetIntraGroupSpacing(SpacingSize.sm)),
+              child: CircleAvatar(
+                radius: AppSpacing.iconMedium,
+                backgroundColor: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary),
+                backgroundImage:
+                    selfAvatarUrl != null ? NetworkImage(selfAvatarUrl) : null,
+                child: selfAvatarUrl == null
+                    ? Icon(
+                        Icons.person,
+                        size: AppSpacing.iconSmall,
+                        color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),
+                      )
+                    : null,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAssistantSummaryCards(
+    BuildContext context,
+    bool isDark,
+    AssistantChatMessage message,
+  ) {
+    final cards = message.cards ?? [];
+    final summaryText = message.text.trim();
+    final fgPrimary = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
+    final fgSecondary = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    final cardBg = AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (summaryText.isNotEmpty)
+          Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: context.safeGetContainerSpacing(SpacingSize.sm),
+              vertical: context.safeGetIntraGroupSpacing(SpacingSize.sm),
+            ),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+              border: Border.all(
+                color: AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary)
+                    .withValues(alpha: 0.2),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.black.withValues(alpha: 0.08),
+                  blurRadius: AppSpacing.sm,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Text(
+              summaryText,
+              style: TextStyle(
+                color: fgPrimary,
+                fontSize: AppTypography.base.sp,
+              ),
+            ),
+          ),
+        if (summaryText.isNotEmpty)
+          SizedBox(height: context.safeGetIntraGroupSpacing(SpacingSize.sm)),
+        ...cards.map(
+          (card) => Padding(
+            padding: EdgeInsets.only(bottom: context.safeGetIntraGroupSpacing(SpacingSize.sm)),
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: context.safeGetContainerSpacing(SpacingSize.sm),
+                vertical: context.safeGetIntraGroupSpacing(SpacingSize.sm),
+              ),
+              decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                border: Border.all(
+                  color: AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary)
+                      .withValues(alpha: 0.2),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.black.withValues(alpha: 0.08),
+                    blurRadius: AppSpacing.sm,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    card.title,
+                    style: TextStyle(
+                      color: fgPrimary,
+                      fontSize: AppTypography.base.sp,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(height: context.safeGetIntraGroupSpacing(SpacingSize.xs)),
+                  Text(
+                    card.body,
+                    style: TextStyle(
+                      color: fgSecondary,
+                      fontSize: AppTypography.sm.sp,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String? _getSelfAvatarUrl() {
+    final user = ref.read(userDataProvider);
+    return user?.avatarUrlOrAvatar;
+  }
+
+  void _handleAssistantSend() {
+    final text = _assistantInputController.text.trim();
+    if (text.isEmpty) return;
+    AssistantChatStore.addUserMessage(text);
+    AssistantChatStore.addAssistantMessage(
+      '${UITextConstants.assistantAutoResponsePrefix}$text',
+    );
+    _assistantInputController.clear();
+    _assistantInputFocusNode.unfocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_assistantScrollController.hasClients) return;
+      _assistantScrollController.animateTo(
+        _assistantScrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
+  void _handleAuthorTap() {
+    if (widget.posts.isEmpty || _currentPostIndex >= widget.posts.length) return;
+    final currentPost = widget.posts[_currentPostIndex];
+    final username = currentPost['username']?.toString() ??
+        currentPost['publisher']?['username']?.toString();
+    if (username == null || username.isEmpty) return;
+    widget.onUserClick(username);
+  }
+
+  void _resolveImageAspectRatio(String imageUrl) {
+    if (_imageAspectRatios.containsKey(imageUrl)) return;
+    final stream = NetworkImage(imageUrl).resolve(const ImageConfiguration());
+    stream.addListener(
+      ImageStreamListener((info, _) {
+        final ratio = info.image.width / info.image.height;
+        if (!mounted) return;
+        setState(() {
+          _imageAspectRatios[imageUrl] = ratio;
+        });
+      }),
+    );
+  }
+
+  String _getPostTitle(dynamic post) {
+    final title = post?['title'];
+    return title?.toString() ?? '';
+  }
+
+  String _getPostCaption(dynamic post) {
+    final content = post?['content'] ?? post?['caption'];
+    return content?.toString() ?? '';
+  }
+
+  String _getAuthorName(dynamic post) {
+    return post?['displayName']?.toString() ??
+        post?['username']?.toString() ??
+        post?['publisher']?['displayName']?.toString() ??
+        post?['publisher']?['username']?.toString() ??
+        UITextConstants.unknownUser;
+  }
+
+  String? _getAuthorAvatar(dynamic post) {
+    return post?['avatar']?.toString() ??
+        post?['publisher']?['avatar']?.toString();
+  }
+
+  Widget _buildMediaPage(
+    BuildContext context,
+    dynamic post,
+    MediaItem mediaItem,
+    bool isDark,
+    bool isActive,
+    bool showCaption,
+  ) {
+    final title = _getPostTitle(post);
+    final caption = _getPostCaption(post);
+    final hasTextLayout = title.isNotEmpty || caption.isNotEmpty;
+    final shouldShowCaption = showCaption && hasTextLayout;
+    final postId = post?['id']?.toString() ?? '';
+    final isExpanded = _expandedCaptions[postId] ?? false;
+    final imageUrl = mediaItem.url;
+
+    if (mediaItem.type == 'image') {
+      _resolveImageAspectRatio(imageUrl);
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final horizontalPadding = context.safeGetContainerSpacing(SpacingSize.md);
+        final maxTextWidth = constraints.maxWidth - horizontalPadding * 2;
+        final titleStyle = TextStyle(
+          color: AppColors.white,
+          fontSize: AppTypography.lg.sp,
+          fontWeight: FontWeight.w600,
+        );
+        final captionStyle = TextStyle(
+          color: AppColors.white,
+          fontSize: AppTypography.base.sp,
+          fontWeight: FontWeight.normal,
+        );
+        final titleHeight = title.isNotEmpty
+            ? _measureTextHeight(
+                text: title,
+                style: titleStyle,
+                maxWidth: maxTextWidth,
+                maxLines: 1,
+              )
+            : 0.0;
+        final captionMaxLines = isExpanded ? null : 3;
+        final captionHeight = caption.isNotEmpty
+            ? _measureTextHeight(
+                text: caption,
+                style: captionStyle,
+                maxWidth: maxTextWidth,
+                maxLines: captionMaxLines,
+              )
+            : 0.0;
+        final textSpacing = (title.isNotEmpty && caption.isNotEmpty)
+            ? context.safeGetIntraGroupSpacing(SpacingSize.xs)
+            : 0.0;
+        final textBlockHeight = titleHeight + captionHeight + textSpacing;
+        final captionBottomOffset = MediaQuery.of(context).padding.bottom +
+            AppSpacing.buttonHeight +
+            context.safeGetIntraGroupSpacing(SpacingSize.md);
+        final captionReservedHeight = hasTextLayout ? (textBlockHeight + captionBottomOffset) : 0.0;
+
+        final availableHeight = constraints.maxHeight;
+        final imageAspectRatio = _imageAspectRatios[imageUrl] ??
+            mediaItem.aspectRatio ??
+            (constraints.maxWidth / constraints.maxHeight);
+        final naturalImageHeight = constraints.maxWidth / imageAspectRatio;
+        final availableForImage = availableHeight - captionReservedHeight;
+        final canPlaceTextBelow = availableForImage > 0;
+        final imageHeight = canPlaceTextBelow
+            ? math.min(naturalImageHeight, availableForImage)
+            : availableHeight;
+        final remainingHeight = canPlaceTextBelow ? (availableForImage - imageHeight) : 0.0;
+        final topBottomPadding = remainingHeight > 0 ? remainingHeight / 2 : 0.0;
+        final shouldOverlayText = hasTextLayout && (!canPlaceTextBelow || remainingHeight <= 0);
+
+        return Stack(
+          children: [
+            Positioned(
+              top: topBottomPadding,
+              left: 0,
+              right: 0,
+              height: imageHeight,
+              child: _buildMediaContent(context, post, mediaItem, isActive),
+            ),
+            if (!shouldOverlayText && shouldShowCaption)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: captionBottomOffset,
+                child: _buildCaptionBlock(
+                  context,
+                  title: title,
+                  caption: caption,
+                  isExpanded: isExpanded,
+                  onToggle: () => _toggleCaptionExpanded(postId),
+                ),
+              ),
+            if (shouldOverlayText && shouldShowCaption)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: captionBottomOffset,
+                child: _buildBlurCaptionOverlay(
+                  context,
+                  title: title,
+                  caption: caption,
+                  isExpanded: isExpanded,
+                  onToggle: () => _toggleCaptionExpanded(postId),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildMediaContent(
+    BuildContext context,
+    dynamic post,
+    MediaItem mediaItem,
+    bool isActive,
+  ) {
+    if (mediaItem.type == 'video') {
+      return GestureDetector(
+        onTap: _toggleControls,
+        child: VideoPlayerWidget(
+          videoUrl: mediaItem.url,
+          autoPlay: isActive,
+          showControls: true,
+          aspectRatio: mediaItem.aspectRatio ?? 9 / 16,
+          onTap: _toggleControls,
+        ),
+      );
+    }
+    if (mediaItem.url.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.image_not_supported_outlined,
+              color: AppColors.overlayLight,
+              size: AppSpacing.iconLarge,
+            ),
+            SizedBox(height: context.safeGetIntraGroupSpacing(SpacingSize.xs)),
+            Text(
+              UITextConstants.loadFailed,
+              style: TextStyle(
+                color: AppColors.overlayLight,
+                fontSize: AppTypography.sm.sp,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return GestureDetector(
+      onTap: _toggleControls,
+      child: PhotoView(
+        imageProvider: NetworkImage(mediaItem.url),
+        minScale: PhotoViewComputedScale.contained,
+        maxScale: PhotoViewComputedScale.covered * 2.0,
+        heroAttributes: PhotoViewHeroAttributes(
+          tag: 'photo_${post['id']}_${mediaItem.url}',
+        ),
+        onTapDown: (context, details, controllerValue) {
+          _toggleControls();
+        },
+      ),
+    );
+  }
+
+  Widget _buildCaptionBlock(
+    BuildContext context, {
+    required String title,
+    required String caption,
+    required bool isExpanded,
+    required VoidCallback onToggle,
+  }) {
+    final horizontalPadding = context.safeGetContainerSpacing(SpacingSize.md);
+    final titleStyle = TextStyle(
+      color: AppColors.white,
+      fontSize: AppTypography.lg.sp,
+      fontWeight: FontWeight.w600,
+    );
+    final captionStyle = TextStyle(
+      color: AppColors.white,
+      fontSize: AppTypography.base.sp,
+      fontWeight: FontWeight.normal,
+    );
+
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (title.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.only(
+                bottom: context.safeGetIntraGroupSpacing(SpacingSize.xs),
+              ),
+              child: Text(title, style: titleStyle),
+            ),
+          if (caption.isNotEmpty)
+            _buildExpandableCaption(
+              context,
+              caption: caption,
+              isExpanded: isExpanded,
+              onToggle: onToggle,
+              captionStyle: captionStyle,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBlurCaptionOverlay(
+    BuildContext context, {
+    required String title,
+    required String caption,
+    required bool isExpanded,
+    required VoidCallback onToggle,
+  }) {
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(
+          sigmaX: AppSpacing.sm,
+          sigmaY: AppSpacing.sm,
+        ),
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            vertical: context.safeGetIntraGroupSpacing(SpacingSize.sm),
+          ),
+          color: AppColors.overlayLight,
+          child: _buildCaptionBlock(
+            context,
+            title: title,
+            caption: caption,
+            isExpanded: isExpanded,
+            onToggle: onToggle,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExpandableCaption(
+    BuildContext context, {
+    required String caption,
+    required bool isExpanded,
+    required VoidCallback onToggle,
+    required TextStyle captionStyle,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final textPainter = TextPainter(
+          text: TextSpan(text: caption, style: captionStyle),
+          maxLines: isExpanded ? null : 3,
+          textDirection: TextDirection.ltr,
+        )..layout(maxWidth: constraints.maxWidth);
+        final isOverflow = textPainter.didExceedMaxLines;
+
+        if (!isOverflow) {
+          return Text(caption, style: captionStyle);
+        }
+
+        return GestureDetector(
+          onTap: onToggle,
+          child: Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(
+                  text: isExpanded ? caption : _truncateCaption(caption, textPainter, constraints.maxWidth),
+                  style: captionStyle,
+                ),
+                TextSpan(
+                  text: isExpanded ? UITextConstants.collapse : UITextConstants.fullText,
+                  style: captionStyle.copyWith(
+                    color: AppColors.primaryColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _truncateCaption(String caption, TextPainter textPainter, double maxWidth) {
+    final position = textPainter.getPositionForOffset(Offset(maxWidth, textPainter.height));
+    final truncatedLength = (position.offset - 4).clamp(0, caption.length);
+    return '${caption.substring(0, truncatedLength)}${UITextConstants.ellipsis}';
+  }
+
+  double _measureTextHeight({
+    required String text,
+    required TextStyle style,
+    required double maxWidth,
+    int? maxLines,
+  }) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      maxLines: maxLines,
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: maxWidth);
+    return painter.height;
+  }
+
+  void _toggleCaptionExpanded(String postId) {
+    setState(() {
+      _expandedCaptions[postId] = !(_expandedCaptions[postId] ?? false);
+    });
   }
 
   @override
@@ -306,530 +1202,81 @@ class _ImmersiveMediaViewerState extends ConsumerState<ImmersiveMediaViewer>
     if (!widget.isOpen) return const SizedBox.shrink();
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final currentPost = widget.posts.isNotEmpty && _currentPostIndex < widget.posts.length 
-        ? widget.posts[_currentPostIndex] 
+    final currentPost = widget.posts.isNotEmpty && _currentPostIndex < widget.posts.length
+        ? widget.posts[_currentPostIndex]
         : null;
 
     return Material(
       color: AppColors.black,
-      child: SafeArea(
-        child: Stack(
-          children: [
-          // 媒体内容区域
-          GestureDetector(
-            onTap: _toggleControls,
-            child: PageView.builder(
-              controller: _pageController,
-              itemCount: widget.posts.length,
-              onPageChanged: _handlePageChanged,
-              itemBuilder: (context, index) {
-                final post = widget.posts[index];
-                final mediaItem = widget.mediaItems.isNotEmpty 
-                    ? widget.mediaItems[index % widget.mediaItems.length]
-                    : MediaItem(type: 'image', url: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df9?w=400&h=400&fit=crop');
-
-                // 根据媒体类型选择不同的显示方式
-                if (mediaItem.type == 'video') {
-                  return GestureDetector(
-                    onTap: _toggleControls,
-                    child: VideoPlayerWidget(
-                      videoUrl: mediaItem.url,
-                      autoPlay: index == _currentPostIndex,
-                      showControls: true,
-                      aspectRatio: mediaItem.aspectRatio ?? 9 / 16,
-                      onTap: _toggleControls,
-                    ),
-                  );
-                } else {
-                  return GestureDetector(
-                    onTap: _toggleControls,
-                    child: PhotoView(
-                      imageProvider: NetworkImage(mediaItem.url),
-                      minScale: PhotoViewComputedScale.contained,
-                      maxScale: PhotoViewComputedScale.covered * 2.0,
-                      heroAttributes: PhotoViewHeroAttributes(
-                        tag: 'photo_${post['id']}_$index',
-                      ),
-                      onTapDown: (context, details, controllerValue) {
-                        _toggleControls();
-                      },
-                    ),
-                  );
-                }
-              },
-            ),
+      child: Stack(
+        children: [
+          PageView.builder(
+            controller: _pageController,
+            itemCount: widget.posts.length,
+            onPageChanged: _handlePageChanged,
+            itemBuilder: (context, index) {
+              final post = widget.posts[index];
+              final mediaItem = widget.mediaItems.isNotEmpty
+                  ? widget.mediaItems[index % widget.mediaItems.length]
+                  : MediaItem(
+                      type: ContentTypeConstants.image,
+                      url: (post?['images'] is List && (post['images'] as List).isNotEmpty)
+                          ? (post['images'] as List).first.toString()
+                          : (post?['imageUrl']?.toString() ?? ''),
+                    );
+              return _buildMediaPage(
+                context,
+                post,
+                mediaItem,
+                isDark,
+                index == _currentPostIndex,
+                !_isPureMode,
+              );
+            },
           ),
-
-          // 头部工具栏（始终显示）
-          _buildHeaderBar(context, currentPost, isDark),
-
-          // 底部工具栏（始终显示）
-          _buildBottomBar(context, currentPost, isDark),
-        ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeaderBar(BuildContext context, dynamic currentPost, bool isDark) {
-    return Positioned(
-      top: 0,
-      left: 0,
-      right: 0,
-      child: Container(
-        // 顶部工具栏直接贴到顶部，紧贴状态栏
-        padding: EdgeInsets.only(
-          left: context.safeGetContainerSpacing(SpacingSize.md),
-          right: context.safeGetContainerSpacing(SpacingSize.md),
-          top: MediaQuery.of(context).padding.top, // 只在状态栏下方，紧贴状态栏
-          bottom: context.safeGetIntraGroupSpacing(SpacingSize.sm), // 增加底部padding，避免位置指示器被遮挡
-        ),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              AppColors.overlayStrong,
-              Colors.transparent,
-            ],
-          ),
-        ),
-        child: Row(
-          children: [
-            // 左侧：返回按钮和数值指示器
-            Row(
-              children: [
-                GestureDetector(
-                  onTap: widget.onClose,
-                  child: Container(
-                    width: AppSpacing.avatarSize,
-                    height: AppSpacing.avatarSize,
-                    decoration: BoxDecoration(
-                      color: AppColors.overlayDark,
-                      borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
-                    ),
-                    child: Icon(
-                      Icons.arrow_back_ios,
-                      color: AppColors.white,
-                      size: AppSpacing.smallButtonSize,
-                    ),
-                  ),
-                ),
-                
-                if (widget.posts.length > 1) ...[
-                  SizedBox(width: context.safeGetIntraGroupSpacing(SpacingSize.sm)),
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: context.safeGetContainerSpacing(SpacingSize.sm),
-                      vertical: context.safeGetIntraGroupSpacing(SpacingSize.xs),
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.overlayDark,
-                      borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-                    ),
-                    child: Text(
-                      '${_currentPostIndex + 1} / ${widget.posts.length}',
-                      style: TextStyle(
-                        color: AppColors.white,
-                        fontSize: AppTypography.sm,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-
-            const Spacer(),
-
-            // 中间：作者信息（UserProfile模式）
-            if (widget.source == 'userProfile' && currentPost != null)
-              Expanded(
-                child: Center(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // 作者头像 - 使用较小尺寸，节省空间
-                      if (currentPost['avatar'] != null)
-                        CircleAvatar(
-                          radius: AppSpacing.iconSmall / 2, // 使用语义图标尺寸
-                          backgroundImage: NetworkImage(currentPost['avatar']),
-                        )
-                      else
-                        CircleAvatar(
-                          radius: AppSpacing.iconSmall / 2, // 使用语义图标尺寸
-                          backgroundColor: AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary),
-                          child: Icon(Icons.person, color: AppColors.white, size: AppSpacing.iconSmall),
-                        ),
-                      
-                      SizedBox(width: context.safeGetIntraGroupSpacing(SpacingSize.xs)), // 使用较小间距
-                      
-                      SizedBox(
-                        width: AppSpacing.usernameMinWidth, // 使用语义常量，确保至少显示5个字符
-                        child:                         Text(
-                          currentPost['displayName'] ?? currentPost['username'] ?? UITextConstants.user,
-                          style: TextStyle(
-                            color: AppColors.white,
-                            fontSize: AppTypography.sm, // 使用较小字体，节省空间
-                            fontWeight: FontWeight.w600,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      
-                      if (widget.onFollowClick != null) ...[
-                        SizedBox(width: context.safeGetIntraGroupSpacing(SpacingSize.xs)), // 使用较小间距
-                        GestureDetector(
-                          onTap: _handleFollowClick,
-                          child: Container(
-                            width: AppSpacing.followButtonWidth, // 使用语义常量，固定按钮宽度
-                            padding: EdgeInsets.symmetric(
-                              horizontal: context.safeGetContainerSpacing(SpacingSize.sm), // 使用语义水平padding，确保文字完整显示且不溢出
-                              vertical: context.safeGetIntraGroupSpacing(SpacingSize.xs), // 使用语义垂直padding，确保美观对称
-                            ),
-                            decoration: BoxDecoration(
-                              color: _isFollowing 
-                                  ? AppColors.overlayDark // 使用半透明黑色背景，在暗色背景下更美观
-                                  : AppColors.primaryColor,
-                              borderRadius: BorderRadius.circular(AppSpacing.borderRadius), // 使用语义化圆角
-                              border: _isFollowing ? Border.all(
-                                color: AppColors.overlayLight, // 已关注状态添加淡边框，更美观
-                                width: 1,
-                              ) : null,
-                            ),
-                            child: Center(
-                              child: Text(
-                                _isFollowing ? UITextConstants.following : UITextConstants.follow,
-                                style: TextStyle(
-                                  color: AppColors.white, // 统一使用白色文字，在暗色背景下更清晰
-                                  fontSize: AppTypography.sm, // 使用语义字体大小，确保不溢出且清晰
-                                  fontWeight: FontWeight.w600, // 使用更粗的字体，更清晰美观
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis, // 防止溢出
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-
-            const Spacer(),
-
-            // 右侧：更多操作按钮
-            GestureDetector(
-              onTap: _handleMoreClick,
-              child: Container(
-                width: AppSpacing.avatarSize,
-                height: AppSpacing.avatarSize,
-                decoration: BoxDecoration(
-                  color: AppColors.overlayMedium,
-                  borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius / 2),
-                ),
-                child: Icon(
-                  Icons.more_horiz,
-                  color: AppColors.white,
-                  size: AppSpacing.smallButtonSize,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBottomBar(BuildContext context, dynamic currentPost, bool isDark) {
-    return Positioned(
-      bottom: 0,
-      left: 0,
-      right: 0,
-      child: Container(
-        padding: EdgeInsets.all(context.safeGetContainerSpacing(SpacingSize.md)),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.bottomCenter,
-            end: Alignment.topCenter,
-            colors: [
-              AppColors.overlayStrong,
-              Colors.transparent,
-            ],
-          ),
-        ),
-        child: (widget.source == 'feed' || widget.source == null) 
-            ? _buildFeedBottomBar(context, currentPost, isDark)
-            : _buildUserProfileBottomBar(context, currentPost, isDark),
-      ),
-    );
-  }
-
-  Widget _buildFeedBottomBar(BuildContext context, dynamic currentPost, bool isDark) {
-    return Row(
-      children: [
-        // 左侧：作者信息（可点击，有选中状态）
-        Expanded(
-          child: GestureDetector(
-            onTap: _handleAuthorClick,
-            child: LayoutBuilder(
-              builder: (context, outerConstraints) {
-                // 根据可用空间调整布局
-                final availableWidth = outerConstraints.maxWidth;
-                final isCompact = availableWidth < 200;
-                
-                return Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isCompact 
-                        ? AppSpacing.xs.w 
-                        : context.safeGetIntraGroupSpacing(SpacingSize.xs).w,
-                    vertical: context.safeGetIntraGroupSpacing(SpacingSize.xs).h,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _isAuthorSelected 
-                        ? AppColors.overlayLight
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-                  ),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      // 根据可用空间调整布局元素
-                      final avatarSize = isCompact 
-                          ? AppSpacing.smallAvatarSize / 2 
-                          : AppSpacing.circularBorderRadius;
-                      final spacing = isCompact 
-                          ? AppSpacing.xs.w
-                          : context.safeGetIntraGroupSpacing(SpacingSize.sm).w;
-                  
-                  return ClipRect(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.max,
-                      children: [
-                        // 头像 - 根据空间调整大小
-                        CircleAvatar(
-                          radius: avatarSize,
-                          backgroundImage: currentPost?['avatar'] != null 
-                              ? NetworkImage(currentPost['avatar'])
-                              : null,
-                          backgroundColor: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
-                          onBackgroundImageError: (exception, stackTrace) {
-                            // 静默处理图片加载错误，显示默认图标
-                          },
-                          child: currentPost?['avatar'] == null 
-                              ? Icon(
-                                  Icons.person, 
-                                  color: AppColors.white, 
-                                  size: isCompact ? AppSpacing.iconSmall : AppSpacing.smallButtonSize,
-                                )
-                              : null,
-                        ),
-                        
-                        SizedBox(width: spacing),
-                        
-                        // 用户名 - 可收缩
-                        Flexible(
-                          child: Text(
-                            currentPost?['displayName'] ?? currentPost?['username'] ?? UITextConstants.user,
-                            style: TextStyle(
-                              color: AppColors.white,
-                              fontSize: isCompact ? AppTypography.xs : AppTypography.base,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        
-                        // 关注按钮 - 仅在空间足够时显示
-                        if (widget.onFollowClick != null && !isCompact) ...[
-                          SizedBox(width: context.safeGetIntraGroupSpacing(SpacingSize.xs).w),
-                          GestureDetector(
-                            onTap: _handleFollowClick,
-                            child: Container(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: context.safeGetContainerSpacing(SpacingSize.xs),
-                                vertical: context.safeGetIntraGroupSpacing(SpacingSize.xs),
-                              ),
-                              decoration: BoxDecoration(
-                                color: _isFollowing 
-                                    ? AppColorsFunctional.getColor(isDark, ColorType.backgroundTertiary)
-                                    : AppColors.primaryColor,
-                                borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-                              ),
-                              child: Text(
-                                _isFollowing ? UITextConstants.following : UITextConstants.follow,
-                                style: TextStyle(
-                                  color: _isFollowing 
-                                      ? AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary)
-                                      : AppColors.white,
-                                  fontSize: AppTypography.xs,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  );
-                    },
+          Positioned.fill(
+            child: AnimatedBuilder(
+              animation: _controlsController,
+              builder: (context, child) {
+                return IgnorePointer(
+                  ignoring: _isPureMode,
+                  child: Opacity(
+                    opacity: _controlsController.value,
+                    child: child,
                   ),
                 );
               },
-            ), // 关闭LayoutBuilder和Container
-          ), // 关闭GestureDetector
-        ), // 关闭Expanded
-        
-        SizedBox(width: context.safeGetIntraGroupSpacing(SpacingSize.md).w),
-        
-        // 右侧：操作按钮
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildActionButton(
-              context: context,
-              icon: _isLiked ? Icons.favorite_rounded : Icons.favorite_outlined,
-              count: _likesCount,
-              isActive: _isLiked,
-              activeColor: AppColors.error,
-              onTap: _handleLikeClick,
-            ),
-            
-            SizedBox(width: context.safeGetIntraGroupSpacing(SpacingSize.md)),
-            
-            _buildActionButton(
-              context: context,
-              icon: Icons.chat_bubble_outline_rounded,
-              count: _commentsCount,
-              onTap: _handleCommentsClick,
-            ),
-            
-            SizedBox(width: context.safeGetIntraGroupSpacing(SpacingSize.md)),
-            
-            _buildActionButton(
-              context: context,
-              icon: _isSaved ? Icons.star_rounded : Icons.star_border_rounded, // 使用Star图标，与原型一致
-              count: _savesCount,
-              isActive: _isSaved,
-              activeColor: AppColors.warning, // 使用语义颜色，与图片瀑布流保持一致
-              onTap: _handleSaveClick,
-            ),
-            
-            SizedBox(width: context.safeGetIntraGroupSpacing(SpacingSize.md)),
-            
-            _buildActionButton(
-              context: context,
-              icon: Icons.share_rounded,
-              count: _sharesCount,
-              onTap: _handleShareClick,
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildUserProfileBottomBar(BuildContext context, dynamic currentPost, bool isDark) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        // 左侧：前三个按钮
-        Row(
-          children: [
-            _buildActionButton(
-              context: context,
-              icon: _isLiked ? Icons.favorite_rounded : Icons.favorite_outlined,
-              count: _likesCount,
-              isActive: _isLiked,
-              activeColor: AppColors.error,
-              onTap: _handleLikeClick,
-            ),
-            
-            SizedBox(width: context.safeGetIntraGroupSpacing(SpacingSize.md)),
-            
-            _buildActionButton(
-              context: context,
-              icon: Icons.chat_bubble_outline_rounded,
-              count: _commentsCount,
-              onTap: _handleCommentsClick,
-            ),
-            if (widget.onAssistantClick != null) ...[
-              SizedBox(width: context.safeGetIntraGroupSpacing(SpacingSize.md)),
-              IconButton(
-                icon: Icon(Icons.auto_awesome, color: Theme.of(context).colorScheme.onSurface),
-                onPressed: widget.onAssistantClick,
-                tooltip: AppConceptConstants.assistantLabel,
-              ),
-            ],
-            SizedBox(width: context.safeGetIntraGroupSpacing(SpacingSize.md)),
-            _buildActionButton(
-              context: context,
-              icon: _isSaved ? Icons.star_rounded : Icons.star_border_rounded, // 使用Star图标，与原型一致
-              count: _savesCount,
-              isActive: _isSaved,
-              activeColor: AppColors.warning, // 使用语义颜色，与图片瀑布流保持一致
-              onTap: _handleSaveClick,
-            ),
-          ],
-        ),
-        
-        // 右侧：分享按钮
-        _buildActionButton(
-          context: context,
-          icon: Icons.share,
-          count: _sharesCount,
-          onTap: _handleShareClick,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActionButton({
-    required BuildContext context,
-    required IconData icon,
-    required int count,
-    required VoidCallback onTap,
-    bool isActive = false,
-    Color? activeColor,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: (AppSpacing.smallButtonSize + AppSpacing.sm).w, // 使用语义标签：32 + 8 = 40，接近原型36px
-            height: (AppSpacing.smallButtonSize + AppSpacing.sm).w,
-            decoration: BoxDecoration(
-              color: AppColors.overlayMedium,
-              borderRadius: BorderRadius.circular((AppSpacing.smallButtonSize + AppSpacing.sm) / 2), // 圆形按钮，使用语义标签
-            ),
-            child: Icon(
-              icon,
-              color: isActive ? (activeColor ?? AppColors.primaryColor) : AppColors.white,
-              size: AppSpacing.iconSmall, // 使用小号图标，与原型一致
-            ),
-          ),
-          
-          SizedBox(height: AppSpacing.xs.w), // 与原型一致：gap: '2px'，使用更小的间距
-          
-          Text(
-            count.toString(),
-            style: TextStyle(
-              color: AppColors.white,
-              fontSize: AppTypography.xs.sp, // 使用语义标签，与原型一致的小号字体
-              fontWeight: FontWeight.w500,
-              shadows: [
-                Shadow(
-                  offset: Offset(0, 1.h),
-                  blurRadius: 3.r,
-                  color: AppColors.overlayStrong,
-                ),
-              ],
+              child: _isPureMode
+                  ? const SizedBox.shrink()
+                  : Column(
+                      children: [
+                        MediaViewerTopBar(
+                          onBack: widget.onClose,
+                          positionText: '${_currentPostIndex + 1}/${widget.posts.length}',
+                          authorName: _getAuthorName(currentPost),
+                          authorAvatarUrl: _getAuthorAvatar(currentPost),
+                          isFollowing: _isFollowing,
+                          onFollow: _handleFollowClick,
+                          onAuthorTap: _handleAuthorTap,
+                          onMore: _handleMoreClick,
+                          showPosition: widget.posts.length > 1,
+                        ),
+                        const Spacer(),
+                        MediaViewerBottomBar(
+                          shareCount: _sharesCount,
+                          commentCount: _commentsCount,
+                          likeCount: _likesCount,
+                          saveCount: _savesCount,
+                          isLiked: _isLiked,
+                          isSaved: _isSaved,
+                          onShare: _handleShareClick,
+                          onComment: _handleCommentsClick,
+                          onLike: _handleLikeClick,
+                          onSave: _handleSaveClick,
+                          onAssistant: _handleAssistantClick,
+                        ),
+                      ],
+                    ),
             ),
           ),
         ],
