@@ -109,6 +109,12 @@ class AppSpacing {
   /// 关注按钮宽度: 80.0
   static const double followButtonWidth = 80.0;
 
+  /// 关注按钮宽度（紧凑，用于媒体查看器顶栏，左右间距更小）: 56.0
+  static const double followButtonWidthCompact = 56.0;
+
+  /// 媒体查看器顶栏位置指示器预估宽度（如 "1/9"）: 44.0
+  static const double mediaViewerPositionIndicatorWidth = 44.0;
+
   // ==================== 图标尺寸 ====================
   /// 小图标: 16.0
   static const double iconSmall = 16.0;

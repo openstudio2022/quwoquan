@@ -1,10 +1,14 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/components/media_viewer_toolbar.dart';
 
 /// 图片浏览器组件 - 基于原型代码实现
 /// 支持状态与Post同步，包含更多功能、点赞、收藏、评论、转发
@@ -61,9 +65,13 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
   bool _showControls = true;
   bool _isLiked = false;
   bool _isSaved = false;
+  bool _isFollowing = false;
   int _likesCount = 0;
   int _savesCount = 0;
   int _commentsCount = 0;
+  int _sharesCount = 0;
+  bool _isPureMode = false;
+  bool _isCaptionExpanded = false;
 
   @override
   void initState() {
@@ -75,6 +83,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
+    _fadeController.value = 1.0;
     
     _slideController = AnimationController(
       duration: const Duration(milliseconds: 300),
@@ -85,39 +94,49 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
     
     // 自动隐藏控制栏
     _startAutoHideTimer();
+    _applySystemUiMode();
   }
 
   void _initializePostState() {
     if (widget.post != null) {
       _isLiked = widget.likedPosts?.contains(widget.post['id']?.toString()) ?? false;
       _isSaved = widget.savedPosts?.contains(widget.post['id']?.toString()) ?? false;
+      _isFollowing = widget.followingUsers?.contains(widget.post['username']) ?? false;
       _likesCount = widget.getPostLikesCount?.call(widget.post) ?? 0;
       _savesCount = widget.getPostBookmarksCount?.call(widget.post) ?? 0;
       _commentsCount = widget.post['commentsCount'] ?? 0;
+      _sharesCount = widget.post['sharesCount'] ?? widget.post['shareCount'] ?? 0;
     }
   }
 
   void _startAutoHideTimer() {
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted && _showControls) {
-        setState(() {
-          _showControls = false;
-        });
-        _fadeController.reverse();
-      }
-    });
+    return;
   }
 
   void _toggleControls() {
-    setState(() {
-      _showControls = !_showControls;
-    });
-    
     if (_showControls) {
-      _fadeController.forward();
-      _startAutoHideTimer();
-    } else {
+      // 先执行淡出动画，动画结束后再更新状态，避免控件被立即移出树导致无淡出效果
       _fadeController.reverse();
+      void listener(AnimationStatus status) {
+        if (status == AnimationStatus.dismissed) {
+          _fadeController.removeStatusListener(listener);
+          if (mounted) {
+            setState(() {
+              _showControls = false;
+              _isPureMode = true;
+            });
+            _applySystemUiMode();
+          }
+        }
+      }
+      _fadeController.addStatusListener(listener);
+    } else {
+      setState(() {
+        _showControls = true;
+        _isPureMode = false;
+      });
+      _fadeController.forward();
+      _applySystemUiMode();
     }
   }
 
@@ -126,7 +145,48 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
     _pageController.dispose();
     _fadeController.dispose();
     _slideController.dispose();
+    _restoreSystemUiMode();
     super.dispose();
+  }
+
+  void _applySystemUiMode() {
+    if (_isPureMode) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      SystemChrome.setSystemUIOverlayStyle(
+        const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
+          statusBarBrightness: Brightness.light,
+          systemNavigationBarColor: Colors.transparent,
+          systemNavigationBarIconBrightness: Brightness.dark,
+        ),
+      );
+      return;
+    }
+
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+    );
+  }
+
+  void _restoreSystemUiMode() {
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+    );
   }
 
   @override
@@ -141,15 +201,49 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
         children: [
           // 图片画廊
           _buildImageGallery(isDark),
-          
-          // 控制栏
-          if (_showControls) _buildControls(isDark),
-          
-          // 底部操作栏
-          if (_showControls) _buildBottomBar(isDark),
-          
-          // 关闭按钮
-          if (_showControls) _buildCloseButton(isDark),
+
+          // 控制栏与文案（始终构建以便 FadeTransition 能淡出，用 IgnorePointer 在纯模式屏蔽点击）
+          Positioned.fill(
+            child: FadeTransition(
+              opacity: _fadeController,
+              child: IgnorePointer(
+                ignoring: _isPureMode,
+                child: Column(
+                  children: [
+                    MediaViewerTopBar(
+                      onBack: widget.onClose,
+                      positionText: '${_currentIndex + 1}/${widget.imageUrls.length}',
+                      authorName: _getAuthorName(),
+                      authorAvatarUrl: _getAuthorAvatar(),
+                      isFollowing: _isFollowing,
+                      onFollow: _handleFollow,
+                      onAuthorTap: _handleAuthorTap,
+                      onMore: _showMoreOptions,
+                      showPosition: widget.imageUrls.length > 1,
+                    ),
+                    const Spacer(),
+                    _buildCaptionOverlay(context),
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: MediaViewerBottomBar(
+                        shareCount: _sharesCount,
+                        commentCount: _commentsCount,
+                        likeCount: _likesCount,
+                        saveCount: _savesCount,
+                        isLiked: _isLiked,
+                        isSaved: _isSaved,
+                        onShare: _handleShare,
+                        onComment: _handleComment,
+                        onLike: _handleLike,
+                        onSave: _handleSave,
+                        onAssistant: null,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -185,6 +279,143 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
         ),
       ),
     );
+  }
+
+  String _getAuthorName() {
+    return widget.post?['displayName']?.toString() ??
+        widget.post?['username']?.toString() ??
+        widget.post?['publisher']?['displayName']?.toString() ??
+        widget.post?['publisher']?['username']?.toString() ??
+        UITextConstants.unknownUser;
+  }
+
+  String? _getAuthorAvatar() {
+    return widget.post?['avatar']?.toString() ??
+        widget.post?['publisher']?['avatar']?.toString();
+  }
+
+  Widget _buildCaptionOverlay(BuildContext context) {
+    final title = widget.post?['title']?.toString() ?? '';
+    final caption = (widget.post?['content'] ?? widget.post?['caption'])?.toString() ?? '';
+    if (title.isEmpty && caption.isEmpty) return const SizedBox.shrink();
+
+    final bottomOffset = MediaQuery.of(context).padding.bottom +
+        AppSpacing.buttonHeight +
+        context.safeGetIntraGroupSpacing(SpacingSize.md);
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: context.safeGetContainerSpacing(SpacingSize.md),
+          right: context.safeGetContainerSpacing(SpacingSize.md),
+          bottom: bottomOffset,
+        ),
+        child: ClipRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(
+              sigmaX: AppSpacing.sm,
+              sigmaY: AppSpacing.sm,
+            ),
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: context.safeGetContainerSpacing(SpacingSize.xs),
+                vertical: context.safeGetIntraGroupSpacing(SpacingSize.sm),
+              ),
+              decoration: BoxDecoration(
+                color: AppColors.overlayLight,
+                borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (title.isNotEmpty)
+                    Padding(
+                      padding: EdgeInsets.only(
+                        bottom: context.safeGetIntraGroupSpacing(SpacingSize.xs),
+                      ),
+                      child: Text(
+                        title,
+                        style: TextStyle(
+                          color: AppColors.white,
+                          fontSize: AppTypography.lg.sp,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  if (caption.isNotEmpty)
+                    _buildExpandableCaption(
+                      context,
+                      caption: caption,
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExpandableCaption(
+    BuildContext context, {
+    required String caption,
+  }) {
+    final captionStyle = TextStyle(
+      color: AppColors.white,
+      fontSize: AppTypography.base.sp,
+      fontWeight: FontWeight.normal,
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // 溢出判断必须使用固定行数，不能依赖 _isCaptionExpanded：若用 maxLines: expanded ? null : 3，
+        // didExceedMaxLines 在展开时恒为 false，会走下面 early return 导致无法显示「收起」按钮。
+        const int captionOverflowMaxLines = 3;
+        final overflowPainter = TextPainter(
+          text: TextSpan(text: caption, style: captionStyle),
+          maxLines: captionOverflowMaxLines,
+          textDirection: TextDirection.ltr,
+        )..layout(maxWidth: constraints.maxWidth);
+        final isOverflow = overflowPainter.didExceedMaxLines;
+
+        if (!isOverflow) {
+          return Text(caption, style: captionStyle);
+        }
+
+        return GestureDetector(
+          onTap: () {
+            setState(() {
+              _isCaptionExpanded = !_isCaptionExpanded;
+            });
+          },
+          child: Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(
+                  text: _isCaptionExpanded
+                      ? caption
+                      : _truncateCaption(caption, overflowPainter, constraints.maxWidth),
+                  style: captionStyle,
+                ),
+                TextSpan(
+                  text: _isCaptionExpanded ? UITextConstants.collapse : UITextConstants.fullText,
+                  style: captionStyle.copyWith(
+                    color: AppColors.primaryColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _truncateCaption(String caption, TextPainter textPainter, double maxWidth) {
+    final position = textPainter.getPositionForOffset(Offset(maxWidth, textPainter.height));
+    final truncatedLength = (position.offset - 4).clamp(0, caption.length);
+    return '${caption.substring(0, truncatedLength)}${UITextConstants.ellipsis}';
   }
 
   /// 构建控制栏 - 基于原型代码
@@ -607,6 +838,23 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
       _savesCount += _isSaved ? 1 : -1;
     });
     widget.onSaveClick?.call(widget.post);
+  }
+
+  void _handleFollow() {
+    setState(() {
+      _isFollowing = !_isFollowing;
+    });
+    final username = widget.post?['username']?.toString() ??
+        widget.post?['publisher']?['username']?.toString();
+    if (username == null || username.isEmpty) return;
+    widget.onFollowClick?.call(username, _isFollowing);
+  }
+
+  void _handleAuthorTap() {
+    final username = widget.post?['username']?.toString() ??
+        widget.post?['publisher']?['username']?.toString();
+    if (username == null || username.isEmpty) return;
+    widget.onUserClick(username);
   }
 
   void _handleShare() {

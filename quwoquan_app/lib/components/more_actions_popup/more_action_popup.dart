@@ -138,28 +138,28 @@ class _MediaPostMoreActionSheetState extends ConsumerState<_MediaPostMoreActionS
     return [
       _BottomAction(
         id: 'notInterested',
-        icon: Icons.visibility_off, // 使用 visibility_off 而不是 block
+        icon: Icons.visibility_off_outlined,
         label: AppStrings.notInterested,
         description: AppStrings.notInterestedDescription,
         onTap: widget.config.onNotInterested,
       ),
       _BottomAction(
         id: 'blockUser',
-        icon: Icons.person_off,
+        icon: Icons.person_off_outlined,
         label: AppStrings.blockUser,
         description: AppStrings.blockUserDescription,
         onTap: widget.config.onBlockUser,
       ),
       _BottomAction(
         id: 'blockWords',
-        icon: Icons.filter_list, // 添加屏蔽词图标
+        icon: Icons.filter_alt_outlined,
         label: AppStrings.blockWords,
         description: AppStrings.blockWordsDescription,
         onTap: null, // 暂时没有回调
       ),
       _BottomAction(
         id: 'report',
-        icon: Icons.flag,
+        icon: Icons.flag_outlined,
         label: AppStrings.report,
         description: AppStrings.reportDescription,
         onTap: widget.config.onReport,
@@ -184,20 +184,13 @@ class _MediaPostMoreActionSheetState extends ConsumerState<_MediaPostMoreActionS
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 拖拽指示器
-          Container(
-            width: 40.w,
-            height: 4.h,
-            margin: EdgeInsets.only(top: 12.h, bottom: 16.h),
-            decoration: BoxDecoration(
-              color: AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary),
-              borderRadius: BorderRadius.circular(2.r),
-            ),
-          ),
-          
           // 标题和关闭按钮
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: AppSpacing.md.w),
+            padding: EdgeInsets.only(
+              left: AppSpacing.md.w,
+              right: AppSpacing.md.w,
+              top: AppSpacing.md.h,
+            ),
             child: Row(
               children: [
                 Expanded(
@@ -220,7 +213,7 @@ class _MediaPostMoreActionSheetState extends ConsumerState<_MediaPostMoreActionS
                   ),
                   onPressed: () => Navigator.pop(context),
                   padding: EdgeInsets.zero,
-                  constraints: BoxConstraints(),
+                  constraints: const BoxConstraints(),
                 ),
               ],
             ),
@@ -311,45 +304,53 @@ class _MediaPostMoreActionSheetState extends ConsumerState<_MediaPostMoreActionS
                   final action = entry.value;
                   return Column(
                     children: [
-                      ListTile(
-                        contentPadding: EdgeInsets.symmetric(
-                          horizontal: AppSpacing.md.w,
-                          vertical: AppSpacing.sm.h,
-                        ),
-                        leading: Icon(
-                          action.icon,
-                          size: 20.sp, // h-5 w-5: 20px
-                          color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
-                        ),
-                        title: Text(
-                          action.label,
-                          style: TextStyle(
-                            fontSize: 16.sp,
-                            fontWeight: FontWeight.normal,
-                            color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
-                          ),
-                        ),
-                        subtitle: action.description != null
-                            ? Text(
-                                action.description!,
-                                style: TextStyle(
-                                  fontSize: 14.sp,
-                                  color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),
-                                ),
-                              )
-                            : null,
-                        trailing: null,
+                      InkWell(
                         onTap: () {
                           Navigator.pop(context);
                           action.onTap?.call();
                         },
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: AppSpacing.md.w,
+                            vertical: AppSpacing.md.h,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                action.icon,
+                                size: 20.sp, // h-5 w-5: 20px
+                                color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
+                              ),
+                              SizedBox(width: AppSpacing.sm.w),
+                              Expanded(
+                                child: Text(
+                                  action.label,
+                                  style: TextStyle(
+                                    fontSize: 16.sp,
+                                    fontWeight: FontWeight.normal,
+                                    color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
+                                  ),
+                                ),
+                              ),
+                              if (action.description != null)
+                                Text(
+                                  action.description!,
+                                  style: TextStyle(
+                                    fontSize: 14.sp,
+                                    color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),
+                                  ),
+                                  textAlign: TextAlign.right,
+                                ),
+                            ],
+                          ),
+                        ),
                       ),
                       // 分隔线 (除了最后一个选项)
                       if (index < bottomActions.length - 1)
                         Divider(
                           height: 1,
                           thickness: 1,
-                          color: AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary).withValues(alpha: 0.4),
+                          color: AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary).withValues(alpha: 0.2),
                           indent: AppSpacing.md.w,
                           endIndent: AppSpacing.md.w,
                         ),

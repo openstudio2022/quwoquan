@@ -80,6 +80,30 @@ class UITextConstants {
   static const String circleOfficialBadge = '官方认证 | 优质社区';
   static const String discoveryEndHint = '已经到底啦';
   static const String seeMore = '查看更多';
+  static const String fullText = '全文';
+  static const String collapse = '收起';
+  static const String ellipsis = '...';
+  static const String assistantPanelTitleSuffix = '智能助手';
+  static const String assistantPanelSubtitle = '可总结图片与评论，给出推荐与标注信息';
+  static const String assistantAskPlaceholder = '可以问：这张图有什么亮点？';
+  static const String assistantSuggestedQuestionsTitle = '推荐问题';
+  static const String assistantAskAboutSummary = '帮我总结这张图片';
+  static const String assistantAskAboutOutfit = '分析人物穿搭/风格';
+  static const String assistantAskAboutLocation = '这可能是什么地方';
+  static const String assistantAskAboutRecommendations = '给出相关推荐';
+  static const String assistantAskAboutComments = '结合评论给出观点';
+  static const String assistantInitialSummaryPrefix = '我已经浏览了当前内容：';
+  static const String assistantInitialSummaryNoContent = '我已经浏览了当前图片，可以帮你总结亮点、推荐类似内容或解析拍摄信息。';
+  static const String assistantInitialSummaryTitleLabel = '标题：';
+  static const String assistantInitialSummaryCaptionLabel = '配文：';
+  static const String assistantPromptFollowUp = '你还可以继续问我：';
+  static const String assistantAutoResponsePrefix = '收到，我来看看：';
+  static const String assistantCardHighlightsTitle = '图片亮点';
+  static const String assistantCardHighlightsBody = '构图集中在主体与光影对比，画面层次清晰。';
+  static const String assistantCardCommentsTitle = '评论总结';
+  static const String assistantCardCommentsBody = '当前讨论聚焦于拍摄地点与色调风格。';
+  static const String assistantCardRecommendationsTitle = '推荐内容';
+  static const String assistantCardRecommendationsBody = '可以看看同风格拍摄与相似场景合集。';
 
   // ==================== 趣聊 ====================
   static const String atMe = '@我';

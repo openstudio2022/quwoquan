@@ -36,6 +36,7 @@ export 'package:quwoquan_app/features/home/providers/home_state.dart';
 
 // Services
 export 'services/data_service.dart';
+export 'services/assistant_chat_store.dart';
 
 // Models
 export 'package:quwoquan_app/features/home/models/post_models.dart';

@@ -14,6 +14,9 @@ class AppColors {
   static const Color overlayDark = Color(0xCC000000); // 80% 黑色遮罩（深色遮罩）
   static const Color overlayLight = Color(0x4D000000); // 30% 黑色遮罩（浅色遮罩）
 
+  /// 媒体查看器等深色背景上的「已关注」按钮背景，与黑底明显区分
+  static const Color followingButtonOnDark = Color(0xFF4A4A4A);
+
   // ==================== 欢迎页语义色 ====================
   static const Color welcomeBackground = Color(0xFF2563EB); // blue-600
   static const Color welcomeGradientStart = Color(0xFF3B82F6); // blue-500
