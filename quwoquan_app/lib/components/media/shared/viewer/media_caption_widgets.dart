@@ -1,0 +1,153 @@
+import 'dart:ui';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:quwoquan_app/core/quwoquan_core.dart';
+
+class MediaCaptionBlock extends StatelessWidget {
+  const MediaCaptionBlock({
+    super.key,
+    required this.title,
+    required this.caption,
+    required this.isExpanded,
+    required this.onToggle,
+  });
+
+  final String title;
+  final String caption;
+  final bool isExpanded;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final horizontalPadding = context.safeGetContainerSpacing(SpacingSize.md);
+    final titleStyle = TextStyle(
+      color: AppColors.white,
+      fontSize: AppTypography.lg.sp,
+      fontWeight: FontWeight.w600,
+    );
+    final captionStyle = TextStyle(
+      color: AppColors.white,
+      fontSize: AppTypography.base.sp,
+      fontWeight: FontWeight.normal,
+    );
+
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (title.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.only(
+                bottom: context.safeGetIntraGroupSpacing(SpacingSize.xs),
+              ),
+              child: Text(title, style: titleStyle),
+            ),
+          if (caption.isNotEmpty)
+            _buildExpandableCaption(
+              context,
+              caption: caption,
+              isExpanded: isExpanded,
+              onToggle: onToggle,
+              captionStyle: captionStyle,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExpandableCaption(
+    BuildContext context, {
+    required String caption,
+    required bool isExpanded,
+    required VoidCallback onToggle,
+    required TextStyle captionStyle,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // 溢出判断必须使用固定行数，不能依赖 isExpanded：若用 maxLines: isExpanded ? null : 3，
+        // didExceedMaxLines 在展开时恒为 false，会走下面 early return 导致无法显示「收起」按钮。
+        const int captionOverflowMaxLines = 3;
+        final overflowPainter = TextPainter(
+          text: TextSpan(text: caption, style: captionStyle),
+          maxLines: captionOverflowMaxLines,
+          textDirection: TextDirection.ltr,
+        )..layout(maxWidth: constraints.maxWidth);
+        final isOverflow = overflowPainter.didExceedMaxLines;
+
+        if (!isOverflow) {
+          return Text(caption, style: captionStyle);
+        }
+
+        return GestureDetector(
+          onTap: onToggle,
+          child: Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(
+                  text: isExpanded
+                      ? caption
+                      : _truncateCaption(caption, overflowPainter, constraints.maxWidth),
+                  style: captionStyle,
+                ),
+                TextSpan(
+                  text: isExpanded ? UITextConstants.collapse : UITextConstants.fullText,
+                  style: captionStyle.copyWith(
+                    color: AppColors.primaryColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _truncateCaption(String caption, TextPainter textPainter, double maxWidth) {
+    final position = textPainter.getPositionForOffset(Offset(maxWidth, textPainter.height));
+    final truncatedLength = (position.offset - 4).clamp(0, caption.length);
+    return '${caption.substring(0, truncatedLength)}${UITextConstants.ellipsis}';
+  }
+}
+
+class MediaBlurCaptionOverlay extends StatelessWidget {
+  const MediaBlurCaptionOverlay({
+    super.key,
+    required this.title,
+    required this.caption,
+    required this.isExpanded,
+    required this.onToggle,
+  });
+
+  final String title;
+  final String caption;
+  final bool isExpanded;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(
+          sigmaX: AppSpacing.sm,
+          sigmaY: AppSpacing.sm,
+        ),
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            vertical: context.safeGetIntraGroupSpacing(SpacingSize.sm),
+          ),
+          color: AppColors.overlayLight,
+          child: MediaCaptionBlock(
+            title: title,
+            caption: caption,
+            isExpanded: isExpanded,
+            onToggle: onToggle,
+          ),
+        ),
+      ),
+    );
+  }
+}

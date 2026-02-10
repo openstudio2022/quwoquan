@@ -30,13 +30,17 @@ export 'media_post_card.dart';
 // ==================== 导航组件 ====================
 export 'tab_navigation.dart';
 export 'bottom_navigation.dart';
-export 'image_sub_tab_navigation.dart';
+export 'media/image/navigation/image_sub_tab_navigation.dart';
 
 // ==================== 媒体查看器组件 ====================
-export 'image_viewer.dart';
-export 'video_media_viewer.dart';
-export 'immersive_media_viewer.dart';
-export 'video_player_widget.dart';
+export 'media/image/viewer/image_viewer.dart';
+export 'media/video/viewer/video_media_viewer.dart';
+export 'media/image/viewer/immersive_image_viewer.dart';
+export 'media/video/viewer/immersive_video_viewer.dart';
+export 'media/video/player/video_player_widget.dart';
+export 'media/shared/toolbar/media_viewer_toolbar.dart';
+export 'media/shared/viewer/media_assistant_panel.dart';
+export 'media/shared/viewer/media_caption_widgets.dart';
 
 // ==================== 内容区域组件 ====================
 export 'feed_section.dart';

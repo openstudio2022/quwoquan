@@ -32,6 +32,57 @@ class AppSpacing {
   
   /// 小按钮尺寸: 32.0
   static const double smallButtonSize = 32.0;
+
+  // ==================== 按钮语义尺寸（小、正常、中、大，不受容器约束） ====================
+  /// 按钮高度 xs: 28.0
+  static const double buttonHeightXs = 28.0;
+  /// 按钮高度 sm: 32.0
+  static const double buttonHeightSm = 32.0;
+  /// 按钮高度 md: 36.0（与「重置」等次要操作一致）
+  static const double buttonHeightMd = 36.0;
+  /// 按钮高度 lg: 48.0
+  static const double buttonHeightLg = 48.0;
+  /// 图标按钮最小点击区域 sm: 44.0
+  static const double iconButtonMinSizeSm = 44.0;
+  /// 图标按钮最小点击区域 md: 64.0
+  static const double iconButtonMinSizeMd = 64.0;
+  
+  /// 获取文案按钮内边距（按断点适配，不受容器约束）
+  static EdgeInsets buttonPadding(
+    BuildContext context,
+    String size,
+  ) {
+    final horizontal = getSpacing(
+      DesignSemanticConstants.container,
+      size == DesignSemanticConstants.lg
+          ? DesignSemanticConstants.lg
+          : DesignSemanticConstants.md,
+      context: context,
+    );
+    final vertical = getSpacing(
+      DesignSemanticConstants.intraGroup,
+      size == DesignSemanticConstants.lg
+          ? DesignSemanticConstants.sm
+          : DesignSemanticConstants.xs,
+      context: context,
+    );
+    return EdgeInsets.symmetric(horizontal: horizontal, vertical: vertical);
+  }
+  
+  /// 获取文案按钮高度（固定语义值，不受容器约束）
+  static double buttonHeightForSize(String size) {
+    switch (size) {
+      case DesignSemanticConstants.xs:
+        return buttonHeightXs;
+      case DesignSemanticConstants.sm:
+        return buttonHeightSm;
+      case DesignSemanticConstants.lg:
+        return buttonHeightLg;
+      case DesignSemanticConstants.md:
+      default:
+        return buttonHeightMd;
+    }
+  }
   
   /// 头像尺寸: 40.0（向后兼容）
   static const double avatarSize = 40.0;

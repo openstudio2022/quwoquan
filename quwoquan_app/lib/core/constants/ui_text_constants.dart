@@ -241,10 +241,10 @@ class UITextConstants {
   static const String imageEditorRotate = '旋转';
   static const String imageEditorCrop = '裁剪';
   static const String imageEditorFilter = '滤镜';
+  static const String imageEditorBeauty = '美颜';
   static const String imageEditorProTools = '专业修图';
   static const String imageEditorFrame = '相框';
   static const String imageEditorText = '文字';
-  static const String imageEditorDoodle = '涂鸦';
   static const String imageEditorMosaic = '马赛克';
   /// 图片编辑器历史与操作面板
   static const String imageEditorHistory = '历史';
@@ -252,9 +252,16 @@ class UITextConstants {
   static const String imageEditorRedoStep = '重做';
   /// 裁剪比例
   static const String imageEditorCropFree = '自由';
-  static const String imageEditorCropOriginal = '原图';
-  static const String imageEditorCropSquare = '正方形';
+  static const String imageEditorCropOriginal = '原始';
+  static const String imageEditorCropRatio1x1 = '1:1';
+  static const String imageEditorCropRatio2x3 = '2:3';
   static const String imageEditorCropRatio3x2 = '3:2';
+  static const String imageEditorCropRatio3x4 = '3:4';
+  static const String imageEditorCropRatio4x3 = '4:3';
+  static const String imageEditorCropRatio9x16 = '9:16';
+  static const String imageEditorCropRatio16x9 = '16:9';
+  static const String imageEditorCropReset = '重置';
+  static const String imageEditorRotateRestore = '还原';
   /// 滤镜分类（面板顶部分类）
   static const String imageEditorFilterRecommended = '推荐';
   static const String imageEditorFilterQuality = '画质';
@@ -266,7 +273,28 @@ class UITextConstants {
   static const String imageEditorProBrightness = '亮度';
   static const String imageEditorProContrast = '对比度';
   static const String imageEditorProColorTemp = '色温';
+  static const String imageEditorProExposure = '曝光';
+  static const String imageEditorProSaturation = '饱和度';
+  static const String imageEditorProHighlight = '高光';
+  static const String imageEditorProShadow = '阴影';
+  static const String imageEditorProTone = '色调';
+  static const String imageEditorProDenoise = '降噪';
+  static const String imageEditorProSharpen = '锐化';
+  static const String imageEditorProUnsharpen = '去锐化';
   static const String imageEditorPanelPlaceholder = '操作模版或内容';
+  static const String imageEditorBeautyNatural = '自然';
+  static const String imageEditorBeautySoft = '柔和';
+  static const String imageEditorBeautyClear = '清透';
+  static const String imageEditorTextPlaceholder = '点击输入文字';
+  static const String imageEditorTextStyle = '样式';
+  static const String imageEditorTextColor = '颜色';
+  static const String imageEditorMosaicPixel = '像素';
+  static const String imageEditorMosaicBlur = '模糊';
+  static const String imageEditorMosaicBrush = '画笔';
+  static const String imageEditorMosaicSize = '大小';
+  static const String imageEditorFrameSimple = '简洁';
+  static const String imageEditorFrameFilm = '胶片';
+  static const String imageEditorFrameWhite = '留白';
   /// 专业修图子工具
   static const String imageEditorProCurve = '曲线';
   static const String imageEditorProWhiteBalance = '白平衡';
@@ -275,6 +303,10 @@ class UITextConstants {
   static const String imageEditorProGlamourGlow = '美丽光晕';
   static const String imageEditorProToneContrast = '色调对比度';
   static const String imageEditorProHsl = 'HSL 调色';
+  static const String imageEditorProTabExposure = '曝光';
+  static const String imageEditorProTabColor = '色彩';
+  static const String imageEditorProTabLight = '光影';
+  static const String imageEditorProTabTexture = '质感';
   /// 旋转快捷：向左90°、向右90°、水平翻转、垂直翻转
   static const String imageEditorRotateLeft90 = '向左90°';
   static const String imageEditorRotateRight90 = '向右90°';

@@ -4,13 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:quwoquan_app/app/shell/main_app_shell.dart';
 import 'package:quwoquan_app/components/author_profile.dart';
-import 'package:quwoquan_app/components/immersive_media_viewer.dart';
+import 'package:quwoquan_app/components/media/image/viewer/immersive_image_viewer.dart';
+import 'package:quwoquan_app/components/media/video/viewer/immersive_video_viewer.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/features/content/pages/article_detail_page.dart';
 import 'package:quwoquan_app/features/circles/pages/circle_detail_page.dart';
 import 'package:quwoquan_app/features/circles/pages/circle_stats_page.dart';
 import 'package:quwoquan_app/features/create/components/create_entry_sheet.dart';
-import 'package:quwoquan_app/features/create/pages/image_editor_page.dart';
+import 'package:quwoquan_app/components/media/image/editor/image_editor_page.dart';
 import 'package:quwoquan_app/features/create/pages/create_page.dart';
 import 'package:quwoquan_app/features/settings/pages/settings_page.dart';
 import 'package:quwoquan_app/features/chat/pages/chat_detail_page.dart';
@@ -478,7 +479,7 @@ class _MediaViewerPageState extends ConsumerState<_MediaViewerPage> {
         : 0;
 
     final homeState = ref.watch(homeStateProvider);
-    return ImmersiveMediaViewer(
+    return ImmersiveImageViewer(
       isOpen: _isOpen,
       onClose: () {
         setState(() {
@@ -658,7 +659,7 @@ class _VideoViewerPageState extends ConsumerState<_VideoViewerPage> {
         : 0;
 
     final homeState = ref.watch(homeStateProvider);
-    return ImmersiveMediaViewer(
+    return ImmersiveVideoViewer(
       isOpen: _isOpen,
       onClose: () {
         setState(() {
