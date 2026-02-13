@@ -1,3 +1,6 @@
+// ignore_for_file: unused_element, deprecated_member_use_from_same_package
+
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -360,7 +363,7 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
                             : (widget.post['username'] ??
                                 UITextConstants.unknownUser),
                         style: TextStyle(
-                          fontWeight: FontWeight.w600,
+                          fontWeight: AppTypography.medium,
                           fontSize: AppTypography.base, // 使用语义标签
                           color: isDark
                               ? AppColors.dark.foregroundPrimary
@@ -477,12 +480,17 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
       ),
       child: Row(
         children: [
-          // 点赞按钮 - 按照Figma原型，使用心形图标，带数字和动效
+          // 点赞按钮
           _buildInteractionButton(
-            icon: _isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded, // 使用圆角版本，与其他图标风格一致
+            iconWidget: Icon(
+              _isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
+              size: AppSpacing.iconSmall,
+              color: _isLiked
+                  ? AppColors.error
+                  : (isDark ? AppColors.dark.foregroundPrimary : AppColors.light.foregroundPrimary),
+            ),
             count: _likesCount,
             isActive: _isLiked,
-            activeColor: AppColors.error,
             onTap: _handleLike,
             isDark: isDark,
           ),
@@ -492,13 +500,18 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
                           .safeGetInterGroupSpacing(SpacingSize.sm)
                   .w),
 
-          // 评论按钮 - 按照Figma原型，使用聊天气泡图标，带数字
+          // 收藏按钮
           _buildInteractionButton(
-            icon: Icons.chat_bubble_outline_rounded, // 使用圆角版本，与其他图标风格一致
-            count: _commentsCount,
-            isActive: false,
-            activeColor: AppColors.primaryColor,
-            onTap: _handleComment,
+            iconWidget: AppStarIcon(
+              size: AppSpacing.iconSmall,
+              color: _isBookmarked
+                  ? AppColors.warning
+                  : (isDark ? AppColors.dark.foregroundPrimary : AppColors.light.foregroundPrimary),
+              filled: _isBookmarked,
+            ),
+            count: _savesCount,
+            isActive: _isBookmarked,
+            onTap: _handleBookmark,
             isDark: isDark,
           ),
 
@@ -507,34 +520,34 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
                           .safeGetInterGroupSpacing(SpacingSize.sm)
                   .w),
 
-          // 收藏按钮 - 使用星星图标，带数字和动效，与其他图标大小一致
+          // 评论按钮
           _buildInteractionButton(
-            icon: _isBookmarked ? Icons.star_rounded : Icons.star_border_rounded,
-            count: _savesCount,
-            isActive: _isBookmarked,
-            activeColor: AppColors.warning,
-            onTap: _handleBookmark,
+            iconWidget: AppBubbleIcon(
+              size: AppSpacing.iconSmall,
+              color: isDark ? AppColors.dark.foregroundPrimary : AppColors.light.foregroundPrimary,
+            ),
+            count: _commentsCount,
+            isActive: false,
+            onTap: _handleComment,
             isDark: isDark,
           ),
 
           const Spacer(),
 
-          // 转发按钮 - 不显示数字，靠右对齐
+          // 转发按钮 - 靠右对齐
           _buildShareButton(isDark),
         ],
       ),
     );
   }
 
-  /// 构建交互按钮，包含图标、数字和动效
+  /// 构建交互按钮，包含图标 Widget、数字和动效
   Widget _buildInteractionButton({
-    required IconData icon,
+    required Widget iconWidget,
     required int count,
     required bool isActive,
-    required Color activeColor,
     required VoidCallback? onTap,
     required bool isDark,
-    double? iconSize, // 添加可选的图标尺寸参数
   }) {
     return GestureDetector(
       onTap: onTap,
@@ -554,32 +567,22 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
             AnimatedScale(
               scale: isActive ? 1.1 : 1.0,
               duration: const Duration(milliseconds: 200),
-              child: Icon(
-                icon,
-                size: iconSize ?? AppSpacing.iconSmall, // 使用小号图标，与原型一致
-                color: isActive
-                    ? activeColor
-                    : (isDark
-                        ? AppColors.dark.foregroundPrimary
-                        : AppColors.light.foregroundPrimary),
-              ),
+              child: iconWidget,
             ),
             SizedBox(
                 width: context
                     .safeGetIntraGroupSpacing(SpacingSize.xs)
                     .w),
-            // 为数字预留固定宽度空间，确保图标位置稳定
-            // 数字大小与图标大小保持一致（小号）
             SizedBox(
-              width: 40.w, // 使用更小的固定宽度，避免溢出
+              width: 40.w,
               child: Text(
-                count > 0 ? _formatCount(count) : '', // 数字为0时显示空字符串
+                count > 0 ? _formatCount(count) : '',
                 style: TextStyle(
-                  fontSize: (iconSize ?? AppSpacing.iconSmall).sp, // 数字大小与图标大小一致（小号）
+                  fontSize: AppTypography.actionCount,
                   color: isDark
                       ? AppColors.dark.foregroundSecondary
                       : AppColors.light.foregroundSecondary,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: AppTypography.medium,
                 ),
                 textAlign: TextAlign.left,
                 overflow: TextOverflow.ellipsis,
@@ -608,8 +611,8 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              Icons.share_rounded, // 使用圆角分享图标，与原型一致
-              size: AppSpacing.iconSmall, // 使用小号图标，与原型一致
+              CupertinoIcons.arrowshape_turn_up_right,
+              size: AppSpacing.iconSmall,
               color: isDark
                   ? AppColors.dark.foregroundPrimary
                   : AppColors.light.foregroundPrimary,
@@ -624,11 +627,11 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
               child: Text(
                 _sharesCount > 0 ? _formatCount(_sharesCount) : '',
                 style: TextStyle(
-                  fontSize: AppSpacing.iconSmall.sp, // 数字大小与图标大小一致（小号）
+                  fontSize: AppTypography.actionCount,
                   color: isDark
                       ? AppColors.dark.foregroundSecondary
                       : AppColors.light.foregroundSecondary,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: AppTypography.medium,
                 ),
                 textAlign: TextAlign.left,
                 overflow: TextOverflow.ellipsis,
@@ -663,7 +666,7 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
                     _formatCount(_likesCount),
                     style: TextStyle(
                       fontSize: AppTypography.base, // 使用语义标签
-                      fontWeight: FontWeight.w600,
+                      fontWeight: AppTypography.semiBold,
                       color: isDark
                           ? AppColors.dark.foregroundPrimary
                           : AppColors.light.foregroundPrimary,
@@ -718,7 +721,7 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
             TextSpan(
               text: widget.post['username'] ?? 'Unknown User',
               style: TextStyle(
-                fontWeight: FontWeight.w600,
+                fontWeight: AppTypography.medium,
                 fontSize: AppTypography.base, // 使用语义标签
                 color: isDark
                     ? AppColors.dark.foregroundPrimary

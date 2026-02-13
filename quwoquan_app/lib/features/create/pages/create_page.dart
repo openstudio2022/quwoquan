@@ -6,14 +6,15 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
+import 'package:quwoquan_app/components/media/picker/create_media_picker_page.dart';
 import 'package:quwoquan_app/components/unified_emoji_picker.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/features/create/components/create_entry_sheet.dart';
+import 'package:quwoquan_app/features/create/models/create_media_models.dart';
 
 /// 创作页
 ///
@@ -78,6 +79,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
         'videoPath': '',
         'thumbnail': '',
         'durationMs': 0,
+          'storyboardImages': <String>[],
       },
       'article': {'title': '', 'content': '', 'covers': <String>[]},
     };
@@ -201,7 +203,14 @@ class _CreatePageState extends ConsumerState<CreatePage>
       });
       return;
     }
-    final paths = await _pickImages(maxCount: selection);
+    final currentCovers = List<String>.from(
+      ((_currentData['article'] as Map<String, dynamic>?)?['covers'] as List?) ??
+          <String>[],
+    );
+    final paths = await _pickImages(
+      maxCount: selection,
+      initialPaths: currentCovers,
+    );
     if (!mounted) return;
     setState(() {
       _currentData = Map.from(_currentData);
@@ -268,7 +277,8 @@ class _CreatePageState extends ConsumerState<CreatePage>
       case 'video':
         return (d['title'] as String? ?? '').isNotEmpty ||
             (d['videoPath'] as String? ?? '').isNotEmpty ||
-            (d['thumbnail'] as String? ?? '').isNotEmpty;
+            (d['thumbnail'] as String? ?? '').isNotEmpty ||
+            (d['storyboardImages'] as List?)?.isNotEmpty == true;
       case 'article':
         return (d['title'] as String? ?? '').isNotEmpty ||
             (d['content'] as String? ?? '').isNotEmpty ||
@@ -288,7 +298,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
       if (decoded is List) {
         final drafts = decoded
             .whereType<Map>()
-            .map((e) => Map<String, dynamic>.from(e as Map))
+            .map((e) => Map<String, dynamic>.from(e))
             .toList();
         if (!mounted) return;
         setState(() {
@@ -474,28 +484,92 @@ class _CreatePageState extends ConsumerState<CreatePage>
     );
   }
 
-  /// 打开相册选择图片（微趣/美图/文章共用）
-  Future<List<String>> _pickImages({int maxCount = 9}) async {
-    final picker = ImagePicker();
-    if (maxCount <= 1) {
-      final x = await picker.pickImage(source: ImageSource.gallery);
-      if (x == null) return [];
-      return [x.path];
-    }
-    final list = await picker.pickMultiImage();
-    if (list.isEmpty) return [];
-    return list.map((e) => e.path).take(maxCount).toList();
+  Future<CreateMediaPickerResult?> _openCreateMediaPicker({
+    required MediaPickerEntryMode mode,
+    required int maxSelection,
+    List<String> initialPaths = const <String>[],
+  }) {
+    final initialSelection = initialPaths
+        .where((path) => path.trim().isNotEmpty)
+        .map(
+          (path) => CreateMediaItem(
+            id: path,
+            path: path,
+            type: mode == MediaPickerEntryMode.video
+                ? CreateMediaType.video
+                : CreateMediaType.image,
+            source: CreateMediaSource.album,
+          ),
+        )
+        .take(maxSelection)
+        .toList();
+    return Navigator.of(context).push<CreateMediaPickerResult>(
+      MaterialPageRoute<CreateMediaPickerResult>(
+        fullscreenDialog: true,
+        builder: (_) => CreateMediaPickerPage(
+          entryMode: mode,
+          maxSelection: maxSelection,
+          initialSelection: initialSelection,
+        ),
+      ),
+    );
   }
 
-  /// 打开相册选择视频（发视频使用）
-  Future<String?> _pickVideo() async {
-    final picker = ImagePicker();
-    try {
-      final picked = await picker.pickVideo(source: ImageSource.gallery);
-      return picked?.path;
-    } catch (_) {
-      return null;
+  /// 打开创作媒体选择器并返回图片路径列表（微趣/美图/文章共用）
+  Future<List<String>> _pickImages({
+    int maxCount = 9,
+    List<String> initialPaths = const <String>[],
+  }) async {
+    final result = await _openCreateMediaPicker(
+      mode: MediaPickerEntryMode.image,
+      maxSelection: maxCount,
+      initialPaths: initialPaths,
+    );
+    if (!mounted || result == null) return <String>[];
+    final imagePaths = result.items
+        .where((item) => item.isImage)
+        .map((item) => item.path)
+        .take(maxCount)
+        .toList();
+    if (result.openOneTapMovie) {
+      _applyOneTapMovieSelection(result.items);
+      return imagePaths;
     }
+    return imagePaths;
+  }
+
+  void _applyOneTapMovieSelection(List<CreateMediaItem> items) {
+    final imagePaths = items.where((item) => item.isImage).map((item) => item.path).toList();
+    if (imagePaths.isEmpty) return;
+    setState(() {
+      _currentData = Map.from(_currentData);
+      final video = Map<String, dynamic>.from(
+        _currentData['video'] as Map<String, dynamic>? ?? <String, dynamic>{},
+      );
+      video['storyboardImages'] = imagePaths;
+      _currentData['video'] = video;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(UITextConstants.mediaPickerOneTapMovieQueued)),
+    );
+  }
+
+  /// 打开创作媒体选择器并返回视频路径（发视频使用）
+  Future<String?> _pickVideo() async {
+    final currentVideo = (_currentData['video'] as Map<String, dynamic>?)?['videoPath']
+            ?.toString() ??
+        '';
+    final result = await _openCreateMediaPicker(
+      mode: MediaPickerEntryMode.video,
+      maxSelection: 1,
+      initialPaths: currentVideo.isEmpty ? const <String>[] : <String>[currentVideo],
+    );
+    if (!mounted || result == null || result.items.isEmpty) return null;
+    final firstVideo = result.items.firstWhere(
+      (item) => item.isVideo,
+      orElse: () => result.items.first,
+    );
+    return firstVideo.path;
   }
 
   bool _isVideoFilePath(String path) {
@@ -553,6 +627,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
       (_currentData['video'] as Map)['thumbnail'] = thumb ?? '';
       (_currentData['video'] as Map)['durationMs'] =
           duration?.inMilliseconds ?? 0;
+      (_currentData['video'] as Map)['storyboardImages'] = <String>[];
     });
   }
 
@@ -577,6 +652,71 @@ class _CreatePageState extends ConsumerState<CreatePage>
     }
     final uri = Uri(path: '/create/edit-image', queryParameters: params);
     return context.push<Object>(uri.toString());
+  }
+
+  ({int index, String path})? _parseEditImageResult(
+    Object? result,
+    int fallbackIndex,
+  ) {
+    if (result == null) return null;
+    if (result is String && result.isNotEmpty) {
+      return (index: fallbackIndex, path: result);
+    }
+    if (result is Map) {
+      final path = result['path']?.toString() ?? '';
+      if (path.isEmpty) return null;
+      final rawIndex = result['index'];
+      final parsedIndex = rawIndex is int
+          ? rawIndex
+          : int.tryParse(rawIndex?.toString() ?? '');
+      return (
+        index: parsedIndex ?? fallbackIndex,
+        path: path,
+      );
+    }
+    return null;
+  }
+
+  void _applyEditedImageToTab({
+    required String tabKey,
+    required int fallbackIndex,
+    required Object? result,
+  }) {
+    final parsed = _parseEditImageResult(result, fallbackIndex);
+    if (parsed == null) return;
+    setState(() {
+      _currentData = Map.from(_currentData);
+      final tab = Map<String, dynamic>.from(
+          _currentData[tabKey] as Map<String, dynamic>? ?? {});
+      final list = List<String>.from(tab['images'] as List? ?? []);
+      if (list.isEmpty) return;
+      final safeIndex = parsed.index.clamp(0, list.length - 1);
+      list[safeIndex] = parsed.path;
+      tab['images'] = list;
+      if (tabKey == 'photo') {
+        tab['_photoCurrentIndex'] = safeIndex;
+      }
+      _currentData[tabKey] = tab;
+    });
+  }
+
+  Future<void> _openPhotoImageEditorAt(int index) async {
+    final photoData = _currentData['photo'] as Map<String, dynamic>? ?? {};
+    final images = List<String>.from(photoData['images'] as List? ?? []);
+    if (images.isEmpty || index < 0 || index >= images.length) return;
+    final result = await _openEditImage(
+      'photo',
+      images[index],
+      index,
+      total: images.length,
+      allPaths: images,
+    );
+    if (!mounted) return;
+    _applyEditedImageToTab(
+      tabKey: 'photo',
+      fallbackIndex: index,
+      result: result,
+    );
   }
 
   @override
@@ -651,10 +791,17 @@ class _CreatePageState extends ConsumerState<CreatePage>
               else
                 TextButton.icon(
                   onPressed: () => setState(() => _showDraftsList = true),
-                  icon: Icon(Icons.inventory_2_outlined, size: 18, color: fgSecondary),
+                  icon: Icon(
+                    Icons.inventory_2_outlined,
+                    size: AppSpacing.iconMedium,
+                    color: fgSecondary,
+                  ),
                   label: Text(
                     UITextConstants.drafts,
-                    style: TextStyle(fontSize: 14, color: fgSecondary),
+                    style: TextStyle(
+                      fontSize: AppTypography.base,
+                      color: fgSecondary,
+                    ),
                   ),
                 ),
             ],
@@ -814,6 +961,25 @@ class _CreatePageState extends ConsumerState<CreatePage>
       final mediaBlock = momentBlocks.length >= 3 ? momentBlocks[2] : null;
       final hintBlock = momentBlocks.length >= 6 ? momentBlocks[3] : null;
       final optionsBlock = momentBlocks.length >= 5 ? momentBlocks.last : null;
+      final momentContentChildren = <Widget>[
+        textBlock,
+        Padding(
+          padding: EdgeInsets.symmetric(
+            vertical: SettingsSemanticConstants.sectionVerticalPadding - 4,
+          ),
+          child: Divider(
+            height: 1,
+            thickness: SettingsSemanticConstants.dividerThickness,
+            color: SettingsSemanticConstants.createInlineDividerColor(isDark),
+          ),
+        ),
+      ];
+      if (mediaBlock != null) {
+        momentContentChildren.add(mediaBlock);
+      }
+      if (hintBlock != null) {
+        momentContentChildren.add(hintBlock);
+      }
       return SingleChildScrollView(
         padding: EdgeInsets.only(
           left: 0,
@@ -831,20 +997,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
-                children: [
-                  textBlock,
-                  Padding(
-                    padding: EdgeInsets.symmetric(
-                        vertical: SettingsSemanticConstants.sectionVerticalPadding - 4),
-                    child: Divider(
-                      height: 1,
-                      thickness: SettingsSemanticConstants.dividerThickness,
-                      color: SettingsSemanticConstants.createInlineDividerColor(isDark),
-                    ),
-                  ),
-                  if (mediaBlock != null) mediaBlock,
-                  if (hintBlock != null) hintBlock,
-                ],
+                children: momentContentChildren,
               ),
             ),
             if (optionsBlock != null) ...[
@@ -990,22 +1143,22 @@ class _CreatePageState extends ConsumerState<CreatePage>
               );
             },
           ),
-          SizedBox(height: 4),
+          SizedBox(height: AppSpacing.intraGroupXs),
           Align(
             alignment: Alignment.centerRight,
             child: Text(
               '${_momentContentController.text.length}/$_kMomentMaxLength',
-              style: TextStyle(fontSize: 12, color: fgSecondary),
+              style: TextStyle(fontSize: AppTypography.sm, color: fgSecondary),
             ),
           ),
         ],
       ),
       // 文字与图片区间隔两行（一空行一待输入）
-      SizedBox(height: 40),
+      SizedBox(height: AppSpacing.interGroupXl),
       // 2. 媒体区：可拖动排序、添加格焦点时边框渐深
       LayoutBuilder(
         builder: (context, constraints) {
-          const gap = 8.0;
+          final gap = AppSpacing.interGroupXs;
           final cellSize = (constraints.maxWidth - gap * 2) / 3;
           final totalCells = images.length + 1;
           final rowCount = (totalCells / 3).ceil();
@@ -1025,22 +1178,46 @@ class _CreatePageState extends ConsumerState<CreatePage>
                           onTap: () async {
                             addImageFocusNode?.requestFocus();
                             onEnterEditing?.call();
-                            final paths = await _pickImages(maxCount: 9 - images.length);
+                            final paths = await _pickImages(
+                              maxCount: 9,
+                              initialPaths: images,
+                            );
                             if (paths.isEmpty) return;
+                            final oldLength = images.length;
                             setState(() {
                               _currentData = Map.from(_currentData);
-                              final list = List<String>.from(
-                                  (_currentData['moment'] as Map)['images'] as List? ?? []);
-                              list.addAll(paths);
-                              (_currentData['moment'] as Map)['images'] = list;
+                              (_currentData['moment'] as Map)['images'] = paths;
                             });
+                            if (!mounted) return;
+                            final merged = List<String>.from(
+                              (_currentData['moment'] as Map)['images'] as List? ?? [],
+                            );
+                            if (merged.isEmpty) return;
+                            final targetIndex = oldLength.clamp(0, merged.length - 1);
+                            final result = await _openEditImage(
+                              'moment',
+                              merged[targetIndex],
+                              targetIndex,
+                              total: merged.length,
+                              allPaths: merged,
+                            );
+                            if (!mounted) return;
+                            _applyEditedImageToTab(
+                              tabKey: 'moment',
+                              fallbackIndex: targetIndex,
+                              result: result,
+                            );
                           },
                           child: _buildDashedAddTile(
                             isDark: isDark,
                             width: cellSize,
                             height: cellSize,
                             borderRadius: SettingsSemanticConstants.createAddTileBorderRadius,
-                            child: Icon(Icons.add, size: 44, color: SettingsSemanticConstants.createAddTileIconColor(isDark)),
+                            child: Icon(
+                              Icons.add,
+                              size: AppSpacing.iconLarge + AppSpacing.iconSmall,
+                              color: SettingsSemanticConstants.createAddTileIconColor(isDark),
+                            ),
                           ),
                         ),
                       );
@@ -1067,16 +1244,16 @@ class _CreatePageState extends ConsumerState<CreatePage>
       ),
       if (images.isNotEmpty)
         Padding(
-          padding: EdgeInsets.only(top: 8),
+          padding: EdgeInsets.only(top: AppSpacing.interGroupXs),
           child: Text(
             UITextConstants.momentImageReorderHint,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: AppTypography.sm,
               color: fgSecondary.withValues(alpha: 0.9),
             ),
           ),
         ),
-      SizedBox(height: 24),
+      SizedBox(height: AppSpacing.interGroupLg),
       // 3. 列表选项：所在位置、提醒谁看、谁可以看（语义与设置页一致）
       Column(
         children: [
@@ -1143,8 +1320,8 @@ class _CreatePageState extends ConsumerState<CreatePage>
         ),
         child: Row(
           children: [
-            Icon(icon, size: 20, color: fgColor),
-            SizedBox(width: 12),
+            Icon(icon, size: AppSpacing.iconMedium, color: fgColor),
+            SizedBox(width: AppSpacing.interGroupSm),
             Text(
               label,
               style: TextStyle(
@@ -1162,8 +1339,8 @@ class _CreatePageState extends ConsumerState<CreatePage>
                   color: SettingsSemanticConstants.createSettingItemValueColor(isDark),
                 ),
               ),
-            if (trailing != null) SizedBox(width: 8),
-            Icon(Icons.chevron_right, size: 18, color: fgSecondary),
+            if (trailing != null) SizedBox(width: AppSpacing.interGroupXs),
+            Icon(Icons.chevron_right, size: AppSpacing.iconMedium, color: fgSecondary),
           ],
         ),
       ),
@@ -1184,13 +1361,13 @@ class _CreatePageState extends ConsumerState<CreatePage>
       data: index,
       delay: const Duration(milliseconds: 200),
       feedback: Material(
-        elevation: 8,
-        borderRadius: BorderRadius.circular(12),
+        elevation: AppSpacing.intraGroupMd,
+        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
         child: SizedBox(
           width: cellSize,
           height: cellSize,
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
             child: _photoImage(path, fgSecondary),
           ),
         ),
@@ -1201,7 +1378,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
           width: cellSize,
           height: cellSize,
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
             child: _photoImage(path, fgSecondary),
           ),
         ),
@@ -1231,22 +1408,24 @@ class _CreatePageState extends ConsumerState<CreatePage>
               width: cellSize,
               height: cellSize,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
               ),
               child: GestureDetector(
                 onTap: () async {
                   onEnterEditing?.call();
-                  final result = await _openEditImage('moment', path, index, total: images.length);
-                  if (result == null || !mounted) return;
-                  final pathResult = result is String ? result : null;
-                  if (pathResult == null) return;
-                  setState(() {
-                    _currentData = Map.from(_currentData);
-                    final list = List<String>.from(
-                        (_currentData['moment'] as Map)['images'] as List? ?? []);
-                    if (index < list.length) list[index] = pathResult;
-                    (_currentData['moment'] as Map)['images'] = list;
-                  });
+                    final result = await _openEditImage(
+                      'moment',
+                      path,
+                      index,
+                      total: images.length,
+                      allPaths: images,
+                    );
+                    if (!mounted) return;
+                    _applyEditedImageToTab(
+                      tabKey: 'moment',
+                      fallbackIndex: index,
+                      result: result,
+                    );
                 },
                 child: _momentImageCell(
                   path,
@@ -1276,31 +1455,35 @@ class _CreatePageState extends ConsumerState<CreatePage>
         ? Image.file(
             File(path),
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) =>
+            errorBuilder: (context, error, stackTrace) =>
                 Container(color: AppColorsFunctional.getColor(ref.read(isDarkProvider), ColorType.backgroundSecondary)),
           )
         : Image.network(
             path,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) =>
+            errorBuilder: (context, error, stackTrace) =>
                 Container(color: AppColorsFunctional.getColor(ref.read(isDarkProvider), ColorType.backgroundSecondary)),
           );
     return Stack(
       fit: StackFit.expand,
       children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
           child: image,
         ),
         Positioned(
-          top: 4,
-          right: 4,
+          top: AppSpacing.xs,
+          right: AppSpacing.xs,
           child: GestureDetector(
             onTap: onRemove,
             child: CircleAvatar(
-              radius: 10,
+              radius: AppSpacing.sm + AppSpacing.xs / 2,
               backgroundColor: Colors.black54,
-              child: Icon(Icons.close, size: 14, color: Colors.white),
+              child: Icon(
+                Icons.close,
+                size: AppSpacing.iconSmall,
+                color: Colors.white,
+              ),
             ),
           ),
         ),
@@ -1331,32 +1514,53 @@ class _CreatePageState extends ConsumerState<CreatePage>
           child: Container(
             decoration: BoxDecoration(
               color: blockBg,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
               child: images.isEmpty
                   ? GestureDetector(
                       onTap: () async {
-                        final paths = await _pickImages(maxCount: _kMaxPhotoImages);
+                        final paths = await _pickImages(
+                          maxCount: _kMaxPhotoImages,
+                          initialPaths: images,
+                        );
                         if (paths.isEmpty) return;
+                        final oldLength = images.length;
                         setState(() {
                           _currentData = Map.from(_currentData);
-                          final list = List<String>.from(
-                              (_currentData['photo'] as Map)['images'] as List? ?? []);
-                          list.addAll(paths);
-                          (_currentData['photo'] as Map)['images'] = list;
+                          (_currentData['photo'] as Map)['images'] = paths;
                         });
                         if (!mounted) return;
                         final list = List<String>.from(
                             (_currentData['photo'] as Map)['images'] as List? ?? []);
                         if (list.isEmpty) return;
+                        final targetIndex = oldLength.clamp(0, list.length - 1);
+                        final result = await _openEditImage(
+                          'photo',
+                          list[targetIndex],
+                          targetIndex,
+                          total: list.length,
+                          allPaths: list,
+                        );
+                        if (!mounted) return;
+                        _applyEditedImageToTab(
+                          tabKey: 'photo',
+                          fallbackIndex: targetIndex,
+                          result: result,
+                        );
                         _enterPhotoEditingMode();
                       },
                       child: _buildDashedAddTile(
                         isDark: isDark,
-                        borderRadius: 12,
-                        child: Icon(Icons.add, size: 48, color: SettingsSemanticConstants.createAddTileIconColor(isDark)),
+                        borderRadius: AppSpacing.largeBorderRadius,
+                        child: Icon(
+                          Icons.add,
+                          size: AppSpacing.largeButtonSize,
+                          color: SettingsSemanticConstants.createAddTileIconColor(
+                            isDark,
+                          ),
+                        ),
                       ),
                     )
                   : _buildPhotoMainImageStack(
@@ -1369,7 +1573,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
           ),
         ),
         if (images.isNotEmpty) ...[
-          SizedBox(height: 8),
+          SizedBox(height: AppSpacing.interGroupXs),
           _buildPhotoThumbnailGrid(
             images: images,
             currentIndex: currentIndex,
@@ -1380,10 +1584,13 @@ class _CreatePageState extends ConsumerState<CreatePage>
             blockBg: blockBg,
           ),
           Padding(
-            padding: EdgeInsets.only(top: 6),
+            padding: EdgeInsets.only(top: AppSpacing.intraGroupSm),
             child: Text(
               UITextConstants.photoReorderHint,
-              style: TextStyle(fontSize: 12, color: fgSecondary),
+              style: TextStyle(
+                fontSize: AppTypography.sm,
+                color: fgSecondary,
+              ),
             ),
           ),
         ],
@@ -1518,30 +1725,36 @@ class _CreatePageState extends ConsumerState<CreatePage>
               });
             },
             itemBuilder: (context, index) {
-              return ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: _photoImage(images[index], fgSecondary),
+              return GestureDetector(
+                onTap: () => _openPhotoImageEditorAt(index),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+                  child: _photoImage(images[index], fgSecondary),
+                ),
               );
             },
           ),
           Positioned(
-            top: 12,
-            right: 12,
+            top: AppSpacing.containerSm,
+            right: AppSpacing.containerSm,
             child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: EdgeInsets.symmetric(
+                horizontal: AppSpacing.intraGroupLg,
+                vertical: AppSpacing.intraGroupXs,
+              ),
               decoration: BoxDecoration(
                 color: Colors.black54,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
               ),
               child: Text(
                 '${currentIndex + 1} / ${images.length}',
-                style: TextStyle(color: Colors.white, fontSize: 12),
+                style: TextStyle(color: Colors.white, fontSize: AppTypography.sm),
               ),
             ),
           ),
           Positioned(
-            top: 12,
-            left: 12,
+            top: AppSpacing.containerSm,
+            left: AppSpacing.containerSm,
             child: GestureDetector(
               onTap: () {
                 setState(() {
@@ -1556,9 +1769,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
                 });
               },
               child: CircleAvatar(
-                radius: 16,
+                radius: AppSpacing.iconButtonMinSizeSm / 2,
                 backgroundColor: Colors.black54,
-                child: Icon(Icons.close, size: 18, color: Colors.white),
+                child: Icon(Icons.close, size: AppSpacing.iconMedium, color: Colors.white),
               ),
             ),
           ),
@@ -1570,32 +1783,38 @@ class _CreatePageState extends ConsumerState<CreatePage>
       children: [
         Positioned.fill(
           child: GestureDetector(
-            onTap: _enterPhotoEditingMode,
+            onTap: () {
+              _enterPhotoEditingMode();
+              _openPhotoImageEditorAt(currentIndex);
+            },
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
               child: _photoImage(images[currentIndex], fgSecondary),
             ),
           ),
         ),
         if (images.length > 1)
           Positioned(
-            top: 12,
-            right: 12,
+            top: AppSpacing.containerSm,
+            right: AppSpacing.containerSm,
             child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: EdgeInsets.symmetric(
+                horizontal: AppSpacing.intraGroupLg,
+                vertical: AppSpacing.intraGroupXs,
+              ),
               decoration: BoxDecoration(
                 color: Colors.black54,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
               ),
               child: Text(
                 '${currentIndex + 1} / ${images.length}',
-                style: TextStyle(color: Colors.white, fontSize: 12),
+                style: TextStyle(color: Colors.white, fontSize: AppTypography.sm),
               ),
             ),
           ),
         Positioned(
-          top: 12,
-          left: 12,
+          top: AppSpacing.containerSm,
+          left: AppSpacing.containerSm,
           child: GestureDetector(
             onTap: () {
               setState(() {
@@ -1610,9 +1829,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
               });
             },
             child: CircleAvatar(
-              radius: 16,
+              radius: AppSpacing.iconButtonMinSizeSm / 2,
               backgroundColor: Colors.black54,
-              child: Icon(Icons.close, size: 18, color: Colors.white),
+              child: Icon(Icons.close, size: AppSpacing.iconMedium, color: Colors.white),
             ),
           ),
         ),
@@ -1624,14 +1843,17 @@ class _CreatePageState extends ConsumerState<CreatePage>
           child: IgnorePointer(
             child: Center(
               child: Container(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.containerMd,
+                  vertical: AppSpacing.intraGroupMd,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.black54,
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
                 ),
                 child: Text(
                   UITextConstants.photoTapToEdit,
-                  style: TextStyle(color: Colors.white, fontSize: 14),
+                  style: TextStyle(color: Colors.white, fontSize: AppTypography.base),
                 ),
               ),
             ),
@@ -1671,13 +1893,13 @@ class _CreatePageState extends ConsumerState<CreatePage>
             data: index,
             delay: const Duration(milliseconds: 200),
             feedback: Material(
-              elevation: 4,
-              borderRadius: BorderRadius.circular(8),
+              elevation: AppSpacing.intraGroupXs,
+              borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
               child: SizedBox(
                 width: size,
                 height: size,
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
                   child: _photoImage(path, fgSecondary),
                 ),
               ),
@@ -1688,7 +1910,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
                 width: size,
                 height: size,
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
                   child: _photoImage(path, fgSecondary),
                 ),
               ),
@@ -1707,8 +1929,12 @@ class _CreatePageState extends ConsumerState<CreatePage>
                   list[index] = a;
                   (_currentData['photo'] as Map)['images'] = list;
                   final cur = (data['_photoCurrentIndex'] as int? ?? 0);
-                  if (cur == from) (_currentData['photo'] as Map)['_photoCurrentIndex'] = index;
-                  else if (cur == index) (_currentData['photo'] as Map)['_photoCurrentIndex'] = from;
+                  if (cur == from) {
+                    (_currentData['photo'] as Map)['_photoCurrentIndex'] =
+                        index;
+                  } else if (cur == index) {
+                    (_currentData['photo'] as Map)['_photoCurrentIndex'] = from;
+                  }
                 });
               },
               builder: (context, candidateData, rejectedData) {
@@ -1722,10 +1948,12 @@ class _CreatePageState extends ConsumerState<CreatePage>
                     height: size,
                     decoration: BoxDecoration(
                       color: blockBg,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
                       border: Border.all(
                         color: isCurrent ? AppColors.primaryColor : fgSecondary.withValues(alpha: 0.2),
-                        width: isCurrent ? 2 : 1,
+                        width: isCurrent
+                            ? AppSpacing.toolPanelItemBorderWidthSelected
+                            : AppSpacing.toolPanelItemBorderWidthUnselected,
                       ),
                     ),
                     child: Material(
@@ -1735,9 +1963,13 @@ class _CreatePageState extends ConsumerState<CreatePage>
                           _currentData = Map.from(_currentData);
                           (_currentData['photo'] as Map)['_photoCurrentIndex'] = index;
                         }),
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius:
+                            BorderRadius.circular(AppSpacing.smallBorderRadius +
+                                AppSpacing.xs / 2),
                         child: ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(
+                            AppSpacing.smallBorderRadius + AppSpacing.xs / 2,
+                          ),
                           child: _photoImage(path, fgSecondary),
                         ),
                       ),
@@ -1757,15 +1989,35 @@ class _CreatePageState extends ConsumerState<CreatePage>
           cells.add(
             GestureDetector(
               onTap: () async {
-                final paths = await _pickImages(maxCount: _kMaxPhotoImages - images.length);
+                final paths = await _pickImages(
+                  maxCount: _kMaxPhotoImages,
+                  initialPaths: images,
+                );
                 if (paths.isEmpty) return;
+                final oldLength = images.length;
                 setState(() {
                   _currentData = Map.from(_currentData);
-                  final list = List<String>.from(
-                      (_currentData['photo'] as Map)['images'] as List? ?? []);
-                  list.addAll(paths);
-                  (_currentData['photo'] as Map)['images'] = list;
+                  (_currentData['photo'] as Map)['images'] = paths;
                 });
+                if (!mounted) return;
+                final merged = List<String>.from(
+                  (_currentData['photo'] as Map)['images'] as List? ?? [],
+                );
+                if (merged.isEmpty) return;
+                final targetIndex = oldLength.clamp(0, merged.length - 1);
+                final result = await _openEditImage(
+                  'photo',
+                  merged[targetIndex],
+                  targetIndex,
+                  total: merged.length,
+                  allPaths: merged,
+                );
+                if (!mounted) return;
+                _applyEditedImageToTab(
+                  tabKey: 'photo',
+                  fallbackIndex: targetIndex,
+                  result: result,
+                );
                 _enterPhotoEditingMode();
               },
               child: _buildDashedAddTile(
@@ -1773,7 +2025,13 @@ class _CreatePageState extends ConsumerState<CreatePage>
                 width: size,
                 height: size,
                 borderRadius: SettingsSemanticConstants.createAddTileBorderRadius,
-                child: Icon(Icons.add, color: SettingsSemanticConstants.createAddTileIconColor(isDark), size: 28),
+                  child: Icon(
+                    Icons.add,
+                    color: SettingsSemanticConstants.createAddTileIconColor(
+                      isDark,
+                    ),
+                    size: AppSpacing.iconLarge - AppSpacing.xs,
+                  ),
               ),
             ),
           );
@@ -1838,13 +2096,13 @@ class _CreatePageState extends ConsumerState<CreatePage>
       return Image.file(
         File(path),
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => Container(color: errorBg, child: Icon(Icons.broken_image_outlined, color: fgSecondary.withValues(alpha: 0.5))),
+        errorBuilder: (context, error, stackTrace) => Container(color: errorBg, child: Icon(Icons.broken_image_outlined, color: fgSecondary.withValues(alpha: 0.5))),
       );
     }
     return Image.network(
       path,
       fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => Container(color: errorBg, child: Icon(Icons.broken_image_outlined, color: fgSecondary.withValues(alpha: 0.5))),
+      errorBuilder: (context, error, stackTrace) => Container(color: errorBg, child: Icon(Icons.broken_image_outlined, color: fgSecondary.withValues(alpha: 0.5))),
     );
   }
 
@@ -1854,7 +2112,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
       child: Center(
         child: Icon(
           Icons.play_circle_outline,
-          size: 56,
+          size: AppSpacing.bottomNavHeight,
           color: fgSecondary.withValues(alpha: 0.6),
         ),
       ),
@@ -1915,30 +2173,34 @@ class _CreatePageState extends ConsumerState<CreatePage>
     final blockBg = AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
     final rawVideo = data['videoPath'] as String? ?? '';
     final rawThumb = data['thumbnail'] as String? ?? '';
+    final storyboardImages = List<String>.from(data['storyboardImages'] as List? ?? const <String>[]);
     final legacyVideo = rawVideo.isEmpty && _isVideoFilePath(rawThumb) ? rawThumb : '';
     final videoPath = rawVideo.isNotEmpty ? rawVideo : legacyVideo;
     final thumb = rawVideo.isNotEmpty ? rawThumb : (legacyVideo.isNotEmpty ? '' : rawThumb);
     final hasVideo = videoPath.isNotEmpty;
+    final hasStoryboard = storyboardImages.isNotEmpty;
     final uploadBlock = AspectRatio(
       aspectRatio: 4 / 3,
       child: Container(
         decoration: BoxDecoration(
           color: blockBg,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
         ),
           child: hasVideo
               ? Stack(
                   children: [
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.largeBorderRadius,
+                      ),
                       child: thumb.isNotEmpty
                           ? _photoImage(thumb, fgSecondary)
                           : _buildVideoPlaceholder(fgSecondary),
                     ),
                     Center(
                       child: Container(
-                        width: 64,
-                        height: 64,
+                        width: AppSpacing.bottomNavHeight + AppSpacing.sm,
+                        height: AppSpacing.bottomNavHeight + AppSpacing.sm,
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.9),
                           shape: BoxShape.circle,
@@ -1946,32 +2208,45 @@ class _CreatePageState extends ConsumerState<CreatePage>
                             BoxShadow(color: Colors.black12, blurRadius: 8),
                           ],
                         ),
-                        child: Icon(Icons.play_arrow, size: 36, color: Colors.black87),
+                        child: Icon(
+                          Icons.play_arrow,
+                          size: AppSpacing.iconLarge + AppSpacing.xs,
+                          color: Colors.black87,
+                        ),
                       ),
                     ),
                     Positioned(
-                      bottom: 12,
-                      right: 12,
+                      bottom: AppSpacing.containerSm,
+                      right: AppSpacing.containerSm,
                       child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: AppSpacing.intraGroupMd,
+                          vertical: AppSpacing.intraGroupXs,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.black54,
-                          borderRadius: BorderRadius.circular(4),
+                          borderRadius: BorderRadius.circular(AppSpacing.smallBorderRadius),
                         ),
                         child: Text(
                           '00:00',
-                          style: TextStyle(color: Colors.white, fontSize: 12),
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: AppTypography.sm,
+                          ),
                         ),
                       ),
                     ),
                     Positioned(
-                      top: 12,
-                      right: 12,
+                      top: AppSpacing.containerSm,
+                      right: AppSpacing.containerSm,
                       child: TextButton(
                         onPressed: _handlePickVideo,
                         child: Text(
                           UITextConstants.videoChangeCover,
-                          style: TextStyle(color: Colors.white, fontSize: 12),
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: AppTypography.sm,
+                          ),
                         ),
                       ),
                     ),
@@ -1985,21 +2260,39 @@ class _CreatePageState extends ConsumerState<CreatePage>
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.upload_outlined, size: 32, color: SettingsSemanticConstants.createAddTileIconColor(isDark)),
-                        SizedBox(height: 12),
+                        Icon(
+                          hasStoryboard ? Icons.movie_creation_outlined : Icons.upload_outlined,
+                          size: AppSpacing.iconLarge,
+                          color: SettingsSemanticConstants.createAddTileIconColor(isDark),
+                        ),
+                        SizedBox(height: AppSpacing.interGroupSm),
                         Text(
-                          UITextConstants.videoUploadLabel,
+                          hasStoryboard
+                              ? '${UITextConstants.mediaPickerOneTapMovie} (${storyboardImages.length})'
+                              : UITextConstants.videoUploadLabel,
                           style: TextStyle(
                             fontSize: SettingsSemanticConstants.createInputBodyFontSize,
                             fontWeight: FontWeight.w500,
                             color: SettingsSemanticConstants.createAddTileIconColor(isDark),
                           ),
                         ),
-                        if (UITextConstants.videoUploadHint.isNotEmpty) ...[
-                          SizedBox(height: 4),
+                        if (hasStoryboard) ...[
+                          SizedBox(height: AppSpacing.intraGroupXs),
+                          Text(
+                            UITextConstants.mediaPickerOneTapMovieQueued,
+                            style: TextStyle(
+                              fontSize: AppTypography.sm,
+                              color: SettingsSemanticConstants.createAddTileIconColor(isDark),
+                            ),
+                          ),
+                        ] else if (UITextConstants.videoUploadHint.isNotEmpty) ...[
+                          SizedBox(height: AppSpacing.intraGroupXs),
                           Text(
                             UITextConstants.videoUploadHint,
-                            style: TextStyle(fontSize: 12, color: SettingsSemanticConstants.createAddTileIconColor(isDark)),
+                            style: TextStyle(
+                              fontSize: AppTypography.sm,
+                              color: SettingsSemanticConstants.createAddTileIconColor(isDark),
+                            ),
                           ),
                         ],
                       ],
@@ -2132,12 +2425,12 @@ class _CreatePageState extends ConsumerState<CreatePage>
       final isFilePath = path.isNotEmpty &&
           (path.startsWith('/') || (path.length > 1 && path[1] == ':'));
       return ClipRRect(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
         child: isFilePath
             ? Image.file(
                 File(path),
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Center(
+                errorBuilder: (context, error, stackTrace) => Center(
                   child: Text(
                     UITextConstants.loadFailed,
                     style: TextStyle(color: fgSecondary),
@@ -2147,7 +2440,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
             : Image.network(
                 path,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Center(
+                errorBuilder: (context, error, stackTrace) => Center(
                   child: Text(
                     UITextConstants.loadFailed,
                     style: TextStyle(color: fgSecondary),
@@ -2162,12 +2455,16 @@ class _CreatePageState extends ConsumerState<CreatePage>
       coverPreview = _buildDashedAddTile(
         isDark: isDark,
         height: 120,
-        borderRadius: 12,
+        borderRadius: AppSpacing.largeBorderRadius,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.add, size: 28, color: SettingsSemanticConstants.createAddTileIconColor(isDark)),
-            SizedBox(height: 8),
+            Icon(
+              Icons.add,
+              size: AppSpacing.iconLarge - AppSpacing.xs,
+              color: SettingsSemanticConstants.createAddTileIconColor(isDark),
+            ),
+            SizedBox(height: AppSpacing.interGroupXs),
             Text(
               UITextConstants.addCover,
               style: TextStyle(color: SettingsSemanticConstants.createAddTileIconColor(isDark)),
@@ -2190,10 +2487,10 @@ class _CreatePageState extends ConsumerState<CreatePage>
               ),
             ),
           ),
-          SizedBox(width: 12),
+          SizedBox(width: AppSpacing.interGroupSm),
           SizedBox(
-            width: 120,
-            height: 80,
+            width: AppSpacing.buttonHeight * 2.5,
+            height: AppSpacing.buttonHeight + AppSpacing.buttonHeightSm,
             child: buildCoverImage(covers.first),
           ),
         ],
@@ -2213,12 +2510,16 @@ class _CreatePageState extends ConsumerState<CreatePage>
               color: titleColor,
             ),
           ),
-          SizedBox(height: 8),
+          SizedBox(height: AppSpacing.interGroupXs),
           Row(
             children: List.generate(rowCovers.length, (i) {
               return Expanded(
                 child: Padding(
-                  padding: EdgeInsets.only(right: i < rowCovers.length - 1 ? 8 : 0),
+                  padding: EdgeInsets.only(
+                    right: i < rowCovers.length - 1
+                        ? AppSpacing.interGroupXs
+                        : 0,
+                  ),
                   child: AspectRatio(
                     aspectRatio: 4 / 3,
                     child: buildCoverImage(rowCovers[i]),
@@ -2338,12 +2639,12 @@ class _CreatePageState extends ConsumerState<CreatePage>
           child: GestureDetector(
             onTap: () {},
             child: Container(
-              margin: EdgeInsets.all(32),
-              padding: EdgeInsets.all(24),
+              margin: EdgeInsets.all(AppSpacing.interGroupXl),
+              padding: EdgeInsets.all(AppSpacing.interGroupLg),
               decoration: BoxDecoration(
                 color: AppColorsFunctional.getColor(
                     isDark, ColorType.backgroundPrimary),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -2354,7 +2655,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
                       Text(
                         UITextConstants.saveDraftConfirm,
                         style: TextStyle(
-                          fontSize: 18,
+                          fontSize: AppTypography.xl,
                           fontWeight: FontWeight.w600,
                           color: fgColor,
                         ),
@@ -2363,23 +2664,32 @@ class _CreatePageState extends ConsumerState<CreatePage>
                         right: 0,
                         top: 0,
                         child: IconButton(
-                          icon: Icon(Icons.close, color: fgSecondary, size: 22),
+                          icon: Icon(
+                            Icons.close,
+                            color: fgSecondary,
+                            size: AppSpacing.iconMedium,
+                          ),
                           onPressed: () => setState(() => _showExitConfirm = false),
                           style: IconButton.styleFrom(
-                            minimumSize: Size(36, 36),
+                            minimumSize: Size.square(
+                              AppSpacing.iconButtonMinSizeSm,
+                            ),
                             padding: EdgeInsets.zero,
                           ),
                         ),
                       ),
                     ],
                   ),
-                  SizedBox(height: 8),
+                  SizedBox(height: AppSpacing.interGroupXs),
                   Text(
                     UITextConstants.saveDraftHint,
-                    style: TextStyle(fontSize: 14, color: fgSecondary),
+                    style: TextStyle(
+                      fontSize: AppTypography.base,
+                      color: fgSecondary,
+                    ),
                     textAlign: TextAlign.center,
                   ),
-                  SizedBox(height: 24),
+                  SizedBox(height: AppSpacing.interGroupLg),
                   Row(
                     children: [
                       Expanded(
@@ -2391,7 +2701,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
                           child: Text(UITextConstants.discardAndExit),
                         ),
                       ),
-                      SizedBox(width: 12),
+                      SizedBox(width: AppSpacing.interGroupSm),
                       Expanded(
                         child: FilledButton(
                           onPressed: _handleSaveAndExit,
@@ -2420,25 +2730,25 @@ class _CreatePageState extends ConsumerState<CreatePage>
       color: Colors.black54,
       child: Center(
         child: Container(
-          margin: EdgeInsets.all(24),
+          margin: EdgeInsets.all(AppSpacing.interGroupLg),
           constraints: BoxConstraints(maxWidth: 400, maxHeight: 400),
           decoration: BoxDecoration(
             color: AppColorsFunctional.getColor(
                 isDark, ColorType.backgroundPrimary),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Padding(
-                padding: EdgeInsets.all(16),
+                padding: EdgeInsets.all(AppSpacing.containerMd),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
                       '${UITextConstants.draftCount} (${_savedDrafts.length})',
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: AppTypography.xl,
                         fontWeight: FontWeight.bold,
                         color: fgColor,
                       ),
@@ -2453,20 +2763,22 @@ class _CreatePageState extends ConsumerState<CreatePage>
               Flexible(
                 child: sorted.isEmpty
                     ? Padding(
-                        padding: EdgeInsets.all(32),
+                        padding: EdgeInsets.all(AppSpacing.interGroupXl),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(Icons.inventory_2_outlined,
-                                size: 32, color: fgSecondary.withValues(alpha: 0.5)),
-                            SizedBox(height: 8),
+                                size: AppSpacing.iconLarge, color: fgSecondary.withValues(alpha: 0.5)),
+                            SizedBox(height: AppSpacing.interGroupXs),
                             Text(UITextConstants.noDraft, style: TextStyle(color: fgSecondary)),
                           ],
                         ),
                       )
                     : ListView.builder(
                         shrinkWrap: true,
-                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: AppSpacing.containerMd,
+                        ),
                         itemCount: sorted.length,
                         itemBuilder: (context, i) {
                           final d = sorted[i];
@@ -2489,14 +2801,27 @@ class _CreatePageState extends ConsumerState<CreatePage>
                               desc.isEmpty ? UITextConstants.unlabeled : desc,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 12, color: fgSecondary),
+                              style: TextStyle(
+                                fontSize: AppTypography.sm,
+                                color: fgSecondary,
+                              ),
                             ),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(dateStr, style: TextStyle(fontSize: 10, color: fgSecondary)),
+                                Text(
+                                  dateStr,
+                                  style: TextStyle(
+                                    fontSize: AppTypography.xs,
+                                    color: fgSecondary,
+                                  ),
+                                ),
                                 IconButton(
-                                  icon: Icon(Icons.delete_outline, size: 18, color: fgSecondary),
+                                  icon: Icon(
+                                    Icons.delete_outline,
+                                    size: AppSpacing.iconMedium,
+                                    color: fgSecondary,
+                                  ),
                                   onPressed: () => _handleDeleteDraft(d['id'] as String),
                                 ),
                               ],

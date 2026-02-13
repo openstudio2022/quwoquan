@@ -41,6 +41,7 @@ class UITextConstants {
   static const String unknown = '未知';
   static const String commentSent = '评论已发送';
   static const String replySent = '回复已发送';
+  static const String pullToRefreshHint = '下拉刷新试试';
   static const String goToUserProfile = '前往用户主页';
   static const String loadMoreComments = '加载更多评论';
 
@@ -78,6 +79,8 @@ class UITextConstants {
   static const String circleSubLikes = '赞';
   static const String circleSubComments = '评论';
   static const String circleOfficialBadge = '官方认证 | 优质社区';
+  static const String circlesRecommendedTitle = '推荐圈子';
+  static const String circlesFollowingEmpty = '关注暂无内容';
   static const String discoveryEndHint = '已经到底啦';
   static const String seeMore = '查看更多';
   static const String fullText = '全文';
@@ -242,7 +245,7 @@ class UITextConstants {
   static const String imageEditorCrop = '裁剪';
   static const String imageEditorFilter = '滤镜';
   static const String imageEditorBeauty = '美颜';
-  static const String imageEditorProTools = '专业修图';
+  static const String imageEditorProTools = '专业工具';
   static const String imageEditorFrame = '相框';
   static const String imageEditorText = '文字';
   static const String imageEditorMosaic = '马赛克';
@@ -264,6 +267,8 @@ class UITextConstants {
   static const String imageEditorRotateRestore = '还原';
   /// 滤镜分类（面板顶部分类）
   static const String imageEditorFilterRecommended = '推荐';
+  static const String imageEditorFilterFrequent = '常用';
+  static const String imageEditorFilterRemove = '去滤镜';
   static const String imageEditorFilterQuality = '画质';
   static const String imageEditorFilterSpring = '春天';
   static const String imageEditorFilterVivid = '鲜明';
@@ -271,13 +276,20 @@ class UITextConstants {
   static const String imageEditorFilterDehaze = '去灰';
   /// 专业修图子工具（曲线/白平衡等参数标签）
   static const String imageEditorProBrightness = '亮度';
+  static const String imageEditorProLightSense = '光感';
   static const String imageEditorProContrast = '对比度';
   static const String imageEditorProColorTemp = '色温';
   static const String imageEditorProExposure = '曝光';
   static const String imageEditorProSaturation = '饱和度';
+  static const String imageEditorProNaturalSaturation = '自然饱和度';
+  static const String imageEditorProTexture = '纹理';
   static const String imageEditorProHighlight = '高光';
   static const String imageEditorProShadow = '阴影';
+  static const String imageEditorProAmbiance = '氛围';
+  static const String imageEditorProWarmth = '暖色调';
   static const String imageEditorProTone = '色调';
+  static const String imageEditorProGrain = '颗粒';
+  static const String imageEditorProFade = '褪色';
   static const String imageEditorProDenoise = '降噪';
   static const String imageEditorProSharpen = '锐化';
   static const String imageEditorProUnsharpen = '去锐化';
@@ -302,11 +314,51 @@ class UITextConstants {
   static const String imageEditorProHeal = '修复';
   static const String imageEditorProGlamourGlow = '美丽光晕';
   static const String imageEditorProToneContrast = '色调对比度';
-  static const String imageEditorProHsl = 'HSL 调色';
-  static const String imageEditorProTabExposure = '曝光';
-  static const String imageEditorProTabColor = '色彩';
-  static const String imageEditorProTabLight = '光影';
-  static const String imageEditorProTabTexture = '质感';
+  static const String imageEditorProHsl = 'HSL';
+  static const String imageEditorProAdjustImage = '调整图片';
+  static const String imageEditorProPerspective = '视角';
+  static const String imageEditorProTabOverall = '调整图片';
+  static const String imageEditorProTabLocal = '局部';
+  // 兼容旧引用
+  static const String imageEditorProTabBase = imageEditorProTabOverall;
+  static const String imageEditorProTabHsl = 'HSL';
+  static const String imageEditorProTabCurve = '曲线';
+  static const String imageEditorProTabBwLevels = '黑白色阶';
+  static const String imageEditorProPlaceholderHsl = 'HSL 即将支持';
+  static const String imageEditorProPlaceholderLocal = '点击添加锚点开始局部调节';
+  static const String imageEditorProPlaceholderCurve = '曲线 即将支持';
+  static const String imageEditorProPlaceholderBwLevels = '黑白色阶 即将支持';
+  static const String imageEditorProHue = '色相';
+  static const String imageEditorProLuminance = '明度';
+  static const String imageEditorProStructure = '结构';
+  static const String imageEditorProWhiteLevel = '白色色阶';
+  static const String imageEditorProBlackLevel = '黑色色阶';
+  static const String imageEditorProAnchorAdd = '添加局部';
+  static const String imageEditorProAnchorShowAll = '显隐局部';
+  static const String imageEditorProAnchorRange = '显隐范围';
+  static const String imageEditorProAnchorShow = '显示局部';
+  static const String imageEditorProAnchorHide = '隐藏局部';
+  static const String imageEditorProAnchorRangeShow = '显示范围';
+  static const String imageEditorProAnchorRangeHide = '隐藏范围';
+  static const String imageEditorProAnchorCopy = '复制';
+  static const String imageEditorProAnchorDelete = '删除';
+  static const String imageEditorProAnchorLimitReached = '局部锚点最多可添加10个';
+  static const String imageEditorProAnchorScaleHint = '可缩放局部位置以调节范围大小';
+  static const String imageEditorProAnchorSelectHint = '请先添加或选择局部锚点';
+  static const String imageEditorProAnchorLetterBrightness = '亮';
+  static const String imageEditorProAnchorLetterContrast = '对';
+  static const String imageEditorProAnchorLetterSaturation = '饱';
+  static const String imageEditorProAnchorLetterStructure = '结';
+  static const String imageEditorProChannelRed = '红';
+  static const String imageEditorProChannelOrange = '橙';
+  static const String imageEditorProChannelYellow = '黄';
+  static const String imageEditorProChannelGreen = '绿';
+  static const String imageEditorProChannelCyan = '青';
+  static const String imageEditorProChannelBlue = '蓝';
+  static const String imageEditorProChannelPurple = '紫';
+  static const String imageEditorProChannelMagenta = '洋红';
+  static const String imageEditorProColorPicker = '取色器';
+  static const String imageEditorProBwLevels = '黑白色阶';
   /// 旋转快捷：向左90°、向右90°、水平翻转、垂直翻转
   static const String imageEditorRotateLeft90 = '向左90°';
   static const String imageEditorRotateRight90 = '向右90°';
@@ -350,6 +402,24 @@ class UITextConstants {
   static const String videoChangeCover = '更换封面';
   static const String videoNoVideo = '暂无视频';
   static const String videoDurationTooLong = '视频时长超过1小时，请重新选择';
+  // 媒体选择器（创作）
+  static const String mediaPickerAlbumAll = '全部';
+  static const String mediaPickerCategoryAll = '全部';
+  static const String mediaPickerCategoryVideo = '视频';
+  static const String mediaPickerCategoryPhoto = '照片';
+  static const String mediaPickerCategoryLive = '实况图';
+  static const String mediaPickerCategoryFullscreen = '全屏图';
+  static const String mediaPickerCameraEntry = '拍摄';
+  static const String mediaPickerOneTapMovie = '一键成片';
+  static const String mediaPickerOneTapMovieQueued = '已加入一键成片，请在发视频页继续';
+  static const String mediaPickerNextStep = '下一步';
+  static const String mediaPickerOverLimit = '已达到可选数量上限';
+  static const String mediaPickerPermissionDenied = '请允许相册访问权限后再选择媒体';
+  static const String mediaPickerImageOnly = '当前入口仅支持选择图片';
+  static const String cameraUnavailable = '相机不可用';
+  static const String cameraCaptureFailed = '拍摄失败，请重试';
+  static const String cameraPhotoMode = '拍照';
+  static const String cameraVideoMode = '录像';
   /// 文章（ArticleEditorCard 1:1）
   static const String articleTitlePlaceholder = '请输入标题';
 }

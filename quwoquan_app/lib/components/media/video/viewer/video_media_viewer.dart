@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -302,7 +303,7 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
                   children: [
                     // 点赞按钮
                     _buildActionButton(
-                      icon: Icons.favorite,
+                      icon: CupertinoIcons.heart_fill,
                       count: widget.getPostLikesCount?.call(currentPost) ?? 0,
                       isActive: widget.likedPosts?.contains(currentPost['id']) ?? false,
                       onTap: () => widget.onLikeClick?.call(currentPost),
@@ -310,28 +311,34 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
                     
                     SizedBox(width: AppSpacing.lg.w),
                     
+                    // 收藏按钮
+                    _buildActionButtonWidget(
+                      iconWidget: AppStarIcon(
+                        size: AppSpacing.iconLarge.sp,
+                        color: (widget.savedPosts?.contains(currentPost['id']) ?? false) ? AppColors.primaryColor : AppColors.white,
+                        filled: widget.savedPosts?.contains(currentPost['id']) ?? false,
+                      ),
+                      count: widget.getPostBookmarksCount?.call(currentPost) ?? 0,
+                      onTap: () => widget.onSaveClick?.call(currentPost),
+                    ),
+                    
+                    SizedBox(width: AppSpacing.lg.w),
+                    
                     // 评论按钮
-                    _buildActionButton(
-                      icon: Icons.chat_bubble_outline,
+                    _buildActionButtonWidget(
+                      iconWidget: AppBubbleIcon(
+                        size: AppSpacing.iconLarge.sp,
+                        color: AppColors.white,
+                      ),
                       count: currentPost['commentsCount'] ?? 0,
                       onTap: () => widget.onCommentsClick?.call(currentPost),
                     ),
                     
                     SizedBox(width: AppSpacing.lg.w),
                     
-                    // 保存按钮
+                    // 转发按钮
                     _buildActionButton(
-                      icon: Icons.bookmark_outline,
-                      count: widget.getPostBookmarksCount?.call(currentPost) ?? 0,
-                      isActive: widget.savedPosts?.contains(currentPost['id']) ?? false,
-                      onTap: () => widget.onSaveClick?.call(currentPost),
-                    ),
-                    
-                    SizedBox(width: AppSpacing.lg.w),
-                    
-                    // 分享按钮
-                    _buildActionButton(
-                      icon: Icons.share,
+                      icon: CupertinoIcons.arrowshape_turn_up_right,
                       onTap: () => widget.onShareClick?.call(currentPost),
                     ),
                     
@@ -368,6 +375,33 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
             color: isActive ? AppColors.primaryColor : AppColors.white,
             size: AppSpacing.iconLarge.sp,
           ),
+          if (count > 0) ...[
+            SizedBox(height: 2.h),
+            Text(
+              count > 1000 ? '${(count / 1000).toStringAsFixed(1)}k' : count.toString(),
+              style: TextStyle(
+                color: AppColors.white,
+                fontSize: AppTypography.xs.sp,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButtonWidget({
+    required Widget iconWidget,
+    int count = 0,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          iconWidget,
           if (count > 0) ...[
             SizedBox(height: 2.h),
             Text(

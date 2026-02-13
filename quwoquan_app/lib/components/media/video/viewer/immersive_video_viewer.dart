@@ -1,8 +1,9 @@
+// ignore_for_file: unused_field, prefer_final_fields
+
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:photo_view/photo_view.dart';
 
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -512,13 +513,13 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
         final maxTextWidth = constraints.maxWidth - horizontalPadding * 2;
         final titleStyle = TextStyle(
           color: AppColors.white,
-          fontSize: AppTypography.lg.sp,
-          fontWeight: FontWeight.w600,
+          fontSize: AppTypography.lg,
+          fontWeight: AppTypography.semiBold,
         );
         final captionStyle = TextStyle(
           color: AppColors.white,
-          fontSize: AppTypography.base.sp,
-          fontWeight: FontWeight.normal,
+          fontSize: AppTypography.base,
+          fontWeight: AppTypography.normal,
         );
         final titleHeight = title.isNotEmpty
             ? _measureTextHeight(
@@ -632,7 +633,7 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
               UITextConstants.loadFailed,
               style: TextStyle(
                 color: AppColors.overlayLight,
-                fontSize: AppTypography.sm.sp,
+                fontSize: AppTypography.sm,
               ),
             ),
           ],

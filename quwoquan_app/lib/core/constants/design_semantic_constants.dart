@@ -16,6 +16,14 @@ class DesignSemanticConstants {
   static const String button = 'button';
   static const String card = 'card';
   static const String input = 'input';
+  static const String toolbar = 'toolbar';
+  static const String icon = 'icon';
+  static const String typography = 'typography';
+
+  // 响应式断点语义
+  static const String compact = 'compact';
+  static const String regular = 'regular';
+  static const String expanded = 'expanded';
 
   // 头像语义 - 个人/作者/AI（圆形）
   static const String avatarUser = 'avatar-user';

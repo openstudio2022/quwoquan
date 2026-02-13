@@ -1,3 +1,5 @@
+// ignore_for_file: unused_field, unused_local_variable, unused_element, sized_box_for_whitespace
+
 import 'dart:math';
 
 import 'package:flutter/material.dart';

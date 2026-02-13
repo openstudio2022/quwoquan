@@ -1,3 +1,5 @@
+// ignore_for_file: dangling_library_doc_comments
+
 /// 组件模块统一导出门面
 /// 
 /// 提供应用中使用的所有通用组件，包括：

@@ -1,8 +1,7 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/components/assistant_avatar.dart';
 
 class MediaViewerTopBar extends StatelessWidget {
   final VoidCallback onBack;
@@ -129,8 +128,8 @@ class MediaViewerTopBar extends StatelessWidget {
       positionText,
       style: TextStyle(
         color: AppColors.dark.foregroundSecondary,
-        fontSize: AppTypography.sm.sp,
-        fontWeight: FontWeight.w600,
+        fontSize: AppTypography.sm,
+        fontWeight: AppTypography.semiBold,
       ),
     );
   }
@@ -156,8 +155,8 @@ class MediaViewerTopBar extends StatelessWidget {
   static double _nameVisibleWidth(BuildContext context, int charCount) {
     final style = TextStyle(
       color: AppColors.white,
-      fontSize: AppTypography.sm.sp,
-      fontWeight: FontWeight.w600,
+      fontSize: AppTypography.sm,
+      fontWeight: AppTypography.semiBold,
     );
     const sample = '一二三四五六七八九十';
     final text = sample.length >= charCount ? sample.substring(0, charCount) : sample;
@@ -178,8 +177,8 @@ class MediaViewerTopBar extends StatelessWidget {
     final height = AppSpacing.smallButtonSize;
     final nameStyle = TextStyle(
       color: AppColors.white,
-      fontSize: AppTypography.sm.sp,
-      fontWeight: FontWeight.w600,
+      fontSize: AppTypography.sm,
+      fontWeight: AppTypography.medium,
     );
 
     if (onFollow == null) {
@@ -279,8 +278,8 @@ class MediaViewerTopBar extends StatelessWidget {
           buttonText,
           style: TextStyle(
             color: AppColors.white,
-            fontSize: AppTypography.sm.sp,
-            fontWeight: FontWeight.w600,
+            fontSize: AppTypography.sm,
+            fontWeight: AppTypography.semiBold,
           ),
         ),
       ),
@@ -361,42 +360,49 @@ class MediaViewerBottomBar extends StatelessWidget {
           Expanded(
             child: _buildActionSlot(
               context,
-              icon: Icons.share_outlined,
-              count: shareCount,
-              onTap: onShare,
+              iconWidget: Icon(
+                isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
+                color: isLiked ? AppColors.error : AppColors.white,
+                size: AppSpacing.iconMedium,
+              ),
+              count: likeCount,
+              onTap: onLike,
             ),
           ),
           Expanded(
             child: _buildActionSlot(
               context,
-              icon: Icons.chat_bubble_outline,
+              iconWidget: AppStarIcon(
+                size: AppSpacing.iconMedium,
+                color: isSaved ? AppColors.warning : AppColors.white,
+                filled: isSaved,
+              ),
+              count: saveCount,
+              onTap: onSave,
+            ),
+          ),
+          Expanded(
+            child: _buildActionSlot(
+              context,
+              iconWidget: AppBubbleIcon(
+                size: AppSpacing.iconMedium,
+                color: AppColors.white,
+              ),
               count: commentCount,
               onTap: onComment,
             ),
           ),
-          Expanded(
-            child: Center(
-              child: _buildAssistantButton(context),
-            ),
-          ),
+          const Spacer(),
           Expanded(
             child: _buildActionSlot(
               context,
-              icon: isLiked ? Icons.favorite : Icons.favorite_border,
-              count: likeCount,
-              onTap: onLike,
-              isActive: isLiked,
-              activeColor: AppColors.error,
-            ),
-          ),
-          Expanded(
-            child: _buildActionSlot(
-              context,
-              icon: isSaved ? Icons.star : Icons.star_border,
-              count: saveCount,
-              onTap: onSave,
-              isActive: isSaved,
-              activeColor: AppColors.warning,
+              iconWidget: Icon(
+                CupertinoIcons.arrowshape_turn_up_right,
+                color: AppColors.white,
+                size: AppSpacing.iconMedium,
+              ),
+              count: shareCount,
+              onTap: onShare,
             ),
           ),
         ],
@@ -406,49 +412,31 @@ class MediaViewerBottomBar extends StatelessWidget {
 
   Widget _buildActionSlot(
     BuildContext context, {
-    required IconData icon,
+    required Widget iconWidget,
     required int count,
     required VoidCallback onTap,
-    bool isActive = false,
-    Color? activeColor,
   }) {
     return Center(
       child: MediaViewerActionButton(
-        icon: icon,
+        iconWidget: iconWidget,
         count: count,
         onTap: onTap,
-        isActive: isActive,
-        activeColor: activeColor,
       ),
     );
   }
 
-  Widget _buildAssistantButton(BuildContext context) {
-    if (onAssistant == null) {
-      return const SizedBox.shrink();
-    }
-    return InkWell(
-      onTap: onAssistant,
-      borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
-      child: AssistantAvatar(radius: AppSpacing.iconMedium),
-    );
-  }
 }
 
 class MediaViewerActionButton extends StatelessWidget {
-  final IconData icon;
+  final Widget iconWidget;
   final int count;
   final VoidCallback onTap;
-  final bool isActive;
-  final Color? activeColor;
 
   const MediaViewerActionButton({
     super.key,
-    required this.icon,
+    required this.iconWidget,
     required this.count,
     required this.onTap,
-    this.isActive = false,
-    this.activeColor,
   });
 
   @override
@@ -459,27 +447,35 @@ class MediaViewerActionButton extends StatelessWidget {
       child: Padding(
         padding: EdgeInsets.symmetric(
           vertical: context.safeGetIntraGroupSpacing(SpacingSize.xs),
+          horizontal: context.safeGetIntraGroupSpacing(SpacingSize.xs),
         ),
-        child: Column(
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              color: isActive ? (activeColor ?? AppColors.white) : AppColors.white,
-              size: AppSpacing.iconMedium,
-            ),
-            SizedBox(height: context.safeGetIntraGroupSpacing(SpacingSize.xs)),
-            Text(
-              count.toString(),
-              style: TextStyle(
-                color: AppColors.white,
-                fontSize: AppTypography.xs.sp,
-                fontWeight: FontWeight.w500,
+            iconWidget,
+            if (count > 0) ...[
+              SizedBox(width: context.safeGetIntraGroupSpacing(SpacingSize.xs)),
+              Text(
+                _formatCount(count),
+                style: TextStyle(
+                  color: AppColors.white,
+                  fontSize: AppTypography.sm,
+                  fontWeight: AppTypography.medium,
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),
     );
+  }
+
+  String _formatCount(int count) {
+    if (count >= 10000) {
+      return '${(count / 10000).toStringAsFixed(1)}万';
+    } else if (count >= 1000) {
+      return '${(count / 1000).toStringAsFixed(1)}k';
+    }
+    return count.toString();
   }
 }

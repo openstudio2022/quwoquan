@@ -1,3 +1,5 @@
+// ignore_for_file: unused_import, unnecessary_underscores
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -8,7 +10,6 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/assistant_avatar.dart';
 import 'package:quwoquan_app/components/unified_emoji_picker.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/data/mock/prototype_mock_data.dart';
 
 /// 聊天气泡最大宽度（语义尺寸，多屏适配由布局约束决定）
 const double _chatBubbleMaxWidth = 280.0;
@@ -65,7 +66,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   @override
   void initState() {
     super.initState();
-    _messages = List.from(PrototypeMockData.chatMessagesFor(widget.conversationId));
+    _messages = List.from(
+      ref.read(appContentRepositoryProvider).chatMessagesFor(widget.conversationId),
+    );
     _inputController.addListener(_onInputChanged);
   }
 
@@ -84,9 +87,11 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
 
   String get _conversationTitle {
     if (widget.conversationId == AppConceptConstants.assistantConversationId) {
-      return PrototypeMockData.chatAssistantConversation['title'] as String? ?? AppConceptConstants.assistantLabel;
+      return ref.read(appContentRepositoryProvider).chatAssistantConversation['title']
+              as String? ??
+          AppConceptConstants.assistantLabel;
     }
-    for (final c in PrototypeMockData.chatMockConversations) {
+    for (final c in ref.read(appContentRepositoryProvider).chatMockConversations) {
       if (c['id'] == widget.conversationId) {
         return c['title'] as String? ?? widget.conversationId;
       }

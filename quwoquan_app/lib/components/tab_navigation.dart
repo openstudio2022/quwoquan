@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+
+// ignore_for_file: unused_local_variable
 
 /// Tab 项定义
 class TabItem {
@@ -12,12 +13,21 @@ class TabItem {
   const TabItem({required this.id, required this.label});
 }
 
+enum TabNavigationMode {
+  compactPill,
+  mixedScrollable,
+}
+
 class TabNavigationWidget extends ConsumerWidget {
   final String activeTab;
   final Function(String) onTabChange;
   final bool? isDark;
   /// 可选：自定义 Tab 列表。不传则使用默认（发现页：推荐/图片/视频/文章）
   final List<TabItem>? tabs;
+  final TabNavigationMode? mode;
+  final List<String> fixedTabIds;
+  final GestureDragEndCallback? onHorizontalDragEnd;
+  final List<Widget> trailingActions;
 
   const TabNavigationWidget({
     super.key,
@@ -25,6 +35,10 @@ class TabNavigationWidget extends ConsumerWidget {
     required this.onTabChange,
     this.isDark,
     this.tabs,
+    this.mode,
+    this.fixedTabIds = const <String>['following', 'recommended'],
+    this.onHorizontalDragEnd,
+    this.trailingActions = const <Widget>[],
   });
 
   static const List<TabItem> discoveryTabs = [
@@ -47,66 +61,210 @@ class TabNavigationWidget extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currentIsDark = (isDark ?? ref.watch(effectiveIsDarkProvider))!;
     final tabList = tabs ?? defaultTabs;
+    final resolvedMode = mode ??
+        (tabList.length <= 4
+            ? TabNavigationMode.compactPill
+            : TabNavigationMode.mixedScrollable);
+    final bg = AppColorsFunctional.getColor(
+      currentIsDark,
+      ColorType.backgroundPrimary,
+    );
+    final fg = AppColorsFunctional.getColor(
+      currentIsDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      currentIsDark,
+      ColorType.foregroundSecondary,
+    );
+    final horizontalPadding = AppSpacing.responsiveValue(
+      context,
+      compact: AppSpacing.intraGroupSm,
+      regular: AppSpacing.containerSm,
+      expanded: AppSpacing.containerMd,
+    );
+
+    final borderColor = AppColorsFunctional.getColor(
+      currentIsDark,
+      ColorType.borderPrimary,
+    );
+    final navContent = resolvedMode == TabNavigationMode.compactPill
+        ? _buildCompactPillNav(
+            context,
+            tabList,
+            currentIsDark,
+            fg,
+            fgSecondary,
+          )
+        : _buildMixedScrollableNav(
+            context,
+            tabList,
+            currentIsDark,
+            fg,
+            fgSecondary,
+          );
 
     return Container(
       height: AppSpacing.tabNavigationHeight,
       decoration: BoxDecoration(
-        // 与主背景色完全一致，实现侵入式体验
-        color: AppColorsFunctional.getColor(currentIsDark, ColorType.backgroundPrimary),
-        // 移除底部边框，去掉与二级tab之间的分割线
+        color: bg,
+        border: Border(
+          bottom: BorderSide(
+            color: borderColor.withValues(alpha: 0.3),
+            width: 0.5,
+          ),
+        ),
       ),
-      padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+      padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween, // 均匀分布，第一个和最后一个贴边
-        children: tabList.map((tab) {
-          final isActive = tab.id == activeTab;
+        children: [
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onHorizontalDragEnd: onHorizontalDragEnd,
+              child: navContent,
+            ),
+          ),
+          if (trailingActions.isNotEmpty) ...[
+            SizedBox(width: AppSpacing.intraGroupXs),
+            ...trailingActions,
+          ],
+        ],
+      ),
+    );
+  }
 
-          return GestureDetector(
-            onTap: () => onTabChange(tab.id),
-            child: Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: AppSpacing.xs.w,
-                vertical: 2.h, // 保持对称的垂直padding，避免留白过大
-              ),
-              decoration: const BoxDecoration(), // 移除原来的Border下划线
-              child: Stack(
-                alignment: Alignment.center,
+  Widget _buildCompactPillNav(
+    BuildContext context,
+    List<TabItem> tabList,
+    bool isDark,
+    Color fg,
+    Color fgSecondary,
+  ) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        for (var i = 0; i < tabList.length; i++)
+          _buildTabChip(
+            context: context,
+            tab: tabList[i],
+            selected: tabList[i].id == activeTab,
+            isDark: isDark,
+            fg: fg,
+            fgSecondary: fgSecondary,
+          ),
+      ],
+    );
+  }
+
+  Widget _buildMixedScrollableNav(
+    BuildContext context,
+    List<TabItem> tabList,
+    bool isDark,
+    Color fg,
+    Color fgSecondary,
+  ) {
+    final fixedSet = fixedTabIds.toSet();
+    final fixedTabs = <TabItem>[
+      for (final id in fixedTabIds)
+        ...tabList.where((tab) => tab.id == id),
+    ];
+    final scrollTabs = tabList
+        .where((tab) => !fixedSet.contains(tab.id))
+        .toList(growable: false);
+
+    return Row(
+      children: [
+        for (final tab in fixedTabs)
+          _buildTabChip(
+            context: context,
+            tab: tab,
+            selected: tab.id == activeTab,
+            isDark: isDark,
+            fg: fg,
+            fgSecondary: fgSecondary,
+          ),
+        Expanded(
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: scrollTabs.length,
+            itemBuilder: (context, index) => _buildTabChip(
+              context: context,
+              tab: scrollTabs[index],
+              selected: scrollTabs[index].id == activeTab,
+              isDark: isDark,
+              fg: fg,
+              fgSecondary: fgSecondary,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTabChip({
+    required BuildContext context,
+    required TabItem tab,
+    required bool selected,
+    required bool isDark,
+    required Color fg,
+    required Color fgSecondary,
+  }) {
+    final chipFontSize = AppTypography.responsive(
+      context,
+      compact: AppTypography.sm,
+      regular: AppTypography.base,
+      expanded: AppTypography.lg,
+    );
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => onTabChange(tab.id),
+        borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.intraGroupMd,
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minWidth: AppSpacing.minInteractiveSize,
+              minHeight: AppSpacing.minInteractiveSize,
+            ),
+            child: IntrinsicWidth(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // 文字始终在中心位置
                   Text(
                     tab.label,
-                    style: TextStyle(fontSize: AppTypography.lg).copyWith( // 使用大号字体
-                      color: isActive 
-                        ? AppColorsFunctional.getColor(currentIsDark, ColorType.foregroundPrimary) // 选中时使用主文字颜色（黑色/白色粗体），与二级tab保持一致
-                        : AppColorsFunctional.getColor(currentIsDark, ColorType.foregroundSecondary), // 未选中时使用次要文字颜色（较浅），与二级tab保持一致
-                      fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                      fontSize: 16.sp, // 明确设置大号字体
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: chipFontSize,
+                      fontWeight: selected
+                          ? AppTypography.bold
+                          : AppTypography.medium,
+                      color: selected ? fg : fgSecondary,
                     ),
                   ),
-                  // 下划线作为背景层，不影响文字位置，使用主题色
-                  // 使用Positioned的bottom值精确控制下划线与文字的距离
-                  // 确保下划线与字体保持适当距离，符合业界最佳实践（4-6px间距）
-                  if (isActive)
-                    Positioned(
-                      bottom: 4.h, // 下划线在字体底部，保持适当间距（4px），符合业界最佳实践
-                      left: 0,
-                      right: 0,
-                      child: Center(
-                        child: Container(
-                          width: 16.w, // 下划线宽度比文字短，固定宽度
-                          height: 2.h, // 下划线高度：2px（与原型一致）
-                          decoration: BoxDecoration(
-                            color: AppColorsFunctional.getColor(currentIsDark, ColorType.primary), // 下划线使用主题色
-                            borderRadius: BorderRadius.circular(1.h), // 圆角与高度匹配
-                          ),
-                        ),
+                  SizedBox(height: AppSpacing.intraGroupXs),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    height: AppSpacing.intraGroupXs / 2,
+                    decoration: BoxDecoration(
+                      color: selected ? fg : Colors.transparent,
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.intraGroupXs / 4,
                       ),
                     ),
+                  ),
                 ],
               ),
             ),
-          );
-        }).toList(),
+          ),
+        ),
       ),
     );
   }

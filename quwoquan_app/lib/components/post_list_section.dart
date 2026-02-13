@@ -1,6 +1,7 @@
+// ignore_for_file: unused_field
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
@@ -330,7 +331,7 @@ class _PostListSectionState extends ConsumerState<PostListSection> {
               width: AppSpacing.buttonSize,
               height: AppSpacing.buttonSize,
               child: CircularProgressIndicator(
-                strokeWidth: AppSpacing.xs.h,
+                strokeWidth: AppSpacing.xs,
                 valueColor: AlwaysStoppedAnimation<Color>(
                   isDark 
                       ? AppColors.dark.foregroundTertiary 
@@ -338,7 +339,7 @@ class _PostListSectionState extends ConsumerState<PostListSection> {
                 ),
               ),
             ),
-            SizedBox(height: AppSpacing.md.h),
+            SizedBox(height: AppSpacing.md),
             Text(
               UITextConstants.loading,
               style: TextStyle(
@@ -362,19 +363,19 @@ class _PostListSectionState extends ConsumerState<PostListSection> {
           children: [
             Icon(
               Icons.error_outline,
-              size: (AppSpacing.avatarSize * 1.6).sp,
+              size: AppSpacing.avatarSize * 1.6,
               color: AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary),
             ),
-            SizedBox(height: AppSpacing.md.h),
+            SizedBox(height: AppSpacing.md),
             Text(
               UITextConstants.loading,
               style: TextStyle(
-                fontSize: 18.sp,
-                fontWeight: FontWeight.w600,
+                fontSize: AppTypography.xl,
+                fontWeight: AppTypography.semiBold,
                 color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
               ),
             ),
-            SizedBox(height: 8.h),
+            SizedBox(height: AppSpacing.interGroupXs),
             Text(
               error.toString(),
               style: TextStyle(
@@ -383,7 +384,7 @@ class _PostListSectionState extends ConsumerState<PostListSection> {
               ),
               textAlign: TextAlign.center,
             ),
-            SizedBox(height: AppSpacing.lg.h),
+            SizedBox(height: AppSpacing.lg),
             ElevatedButton(
               onPressed: () {
                 _refreshPosts(); // 使用专门的刷新方法
@@ -391,7 +392,10 @@ class _PostListSectionState extends ConsumerState<PostListSection> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryColor,
                 foregroundColor: AppColorsFunctional.getColor(false, ColorType.foregroundInverse),
-                padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 12.h),
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.interGroupLg,
+                  vertical: AppSpacing.interGroupSm,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
                 ),
@@ -400,7 +404,7 @@ class _PostListSectionState extends ConsumerState<PostListSection> {
                 UITextConstants.retry,
                 style: TextStyle(
                   fontSize: AppTypography.base,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: AppTypography.semiBold,
                 ),
               ),
             ),
@@ -420,21 +424,21 @@ class _PostListSectionState extends ConsumerState<PostListSection> {
           children: [
             Icon(
               Icons.photo_library_outlined,
-              size: (AppSpacing.avatarSize * 1.6).sp,
+              size: AppSpacing.avatarSize * 1.6,
               color: AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary),
             ),
-            SizedBox(height: AppSpacing.md.h),
+            SizedBox(height: AppSpacing.md),
             Text(
               UITextConstants.loading,
               style: TextStyle(
-                fontSize: 18.sp,
-                fontWeight: FontWeight.w600,
+                fontSize: AppTypography.xl,
+                fontWeight: AppTypography.semiBold,
                 color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
               ),
             ),
-            SizedBox(height: 8.h),
+            SizedBox(height: AppSpacing.interGroupXs),
             Text(
-              '下拉刷新试试',
+              UITextConstants.pullToRefreshHint,
               style: TextStyle(
                 fontSize: AppTypography.sm,
                 color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),

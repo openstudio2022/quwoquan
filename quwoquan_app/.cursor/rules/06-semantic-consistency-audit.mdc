@@ -1,0 +1,74 @@
+---
+description: 创作与频道链路语义一致性与硬编码清零规范
+alwaysApply: true
+---
+
+# 语义一致性基线（全局）
+
+- 所有 Dart UI 代码禁止新增硬编码字号/图标/间距/圆角/触控尺寸，必须优先使用 `AppTypography`、`AppSpacing`、`AppColors`。
+- 断点语义统一使用 `compact < 360`、`regular 360-599`、`expanded >= 600`，通过 `AppSpacing.responsiveValue` / `AppTypography.responsive` 控制差异。
+- 可交互热区下限：`44x44`，主操作建议 `48x48`（`AppSpacing.minInteractiveSize` / `iconButtonMinSizeSm`）。
+- 组内与组间间距必须语义化：组内 `intraGroup*`，组间 `interGroup*`；分类分段优先 `filterCategoryGroupGap`。
+- 工具面板与创作页可读性阈值：核心可交互文案不低于 `AppTypography.sm`，优先 `base`。
+- 深色背景下文本/图标需满足高对比，禁止使用低对比固定灰值；优先 `AppColorsFunctional.getColor(...)`。
+- 发现/圈子/主页入口一级导航必须同语义：统一选中态、字号、热区与动画；圈子支持“固定主频道+横滑扩展”但不新增 tab 层级。
+- 圈子推荐卡统一为横向封面语义（建议 4:3）+ 名称单行；互动区与发现卡统一为 `赞/评/转/藏` 四动作语义。
+
+# 提交前检查（必须执行）
+
+```bash
+flutter analyze lib/features/home/pages/discovery_page.dart \
+  lib/features/home/pages/home_page.dart \
+  lib/components/tab_navigation.dart \
+  lib/components/post_list_section.dart \
+  lib/features/circles/pages/circles_page.dart \
+  lib/features/circles/pages/circle_detail_page.dart \
+  lib/features/circles/pages/circle_stats_page.dart \
+  lib/features/create/pages/create_page.dart \
+  lib/components/media/image/editor/image_editor_page.dart \
+  lib/components/media/image/editor/panels/image_editor_operation_panel.dart \
+  lib/components/media/image/editor/panels/image_editor_rotate_overlay.dart \
+  lib/components/media/image/editor/tool_list/image_editor_tool_entry_chip.dart \
+  lib/components/media/image/editor/tool_list/image_editor_pro_tool_list.dart \
+  lib/components/media/image/editor/top_bar/image_editor_top_bar.dart \
+  lib/components/media/image/editor/bottom_bar/image_editor_bottom_bar.dart \
+  lib/core/design_system/spacing/app_spacing.dart \
+  lib/core/design_system/typography/app_typography.dart \
+  lib/core/constants/design_semantic_constants.dart
+```
+
+```bash
+python3 - <<'PY'
+import pathlib
+import re
+
+targets = [
+    "lib/features/home/pages/discovery_page.dart",
+    "lib/features/home/pages/home_page.dart",
+    "lib/features/circles/pages/circles_page.dart",
+    "lib/components/tab_navigation.dart",
+    "lib/components/post_list_section.dart",
+    "lib/features/create/pages/create_page.dart",
+]
+targets += [str(p) for p in pathlib.Path("lib/components/media/image/editor").rglob("*.dart")]
+
+pattern = re.compile(
+    r"fontSize:\s*\d+(\.\d+)?(\.sp)?|"
+    r"size:\s*\d+(\.\d+)?(\.sp)?|"
+    r"BorderRadius\.circular\(\s*\d+(\.\d+)?\s*\)|"
+    r"EdgeInsets\.(all|symmetric|only)\(\s*\d+"
+)
+
+found = False
+for file in targets:
+    p = pathlib.Path(file)
+    if not p.exists():
+        continue
+    for i, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
+        if pattern.search(line):
+            print(f"{file}:{i}: {line.strip()}")
+            found = True
+if not found:
+    print("No hardcoded visual literals found in targeted scope.")
+PY
+```

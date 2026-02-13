@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/data/mock/prototype_mock_data.dart';
 
 /// 私人助理主页
 ///
@@ -138,7 +137,7 @@ class _AssistantHomePageState extends ConsumerState<AssistantHomePage> {
   }
 
   Widget _buildMemoryContent(Color fgPrimary, Color fgSecondary) {
-    final memoryData = PrototypeMockData.assistantMemoryData;
+    final memoryData = ref.watch(appContentRepositoryProvider).assistantMemoryData;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -272,7 +271,7 @@ class _AssistantHomePageState extends ConsumerState<AssistantHomePage> {
   }
 
   Widget _buildTasksContent(Color fgPrimary, Color fgSecondary) {
-    final tasksData = PrototypeMockData.assistantTasksData;
+    final tasksData = ref.watch(appContentRepositoryProvider).assistantTasksData;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -406,7 +405,7 @@ class _AssistantHomePageState extends ConsumerState<AssistantHomePage> {
   }
 
   Widget _buildSkillsContent(Color fgPrimary, Color fgSecondary) {
-    final skillsData = PrototypeMockData.assistantSkillsData;
+    final skillsData = ref.watch(appContentRepositoryProvider).assistantSkillsData;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

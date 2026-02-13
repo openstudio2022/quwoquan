@@ -1,9 +1,10 @@
+// ignore_for_file: unnecessary_underscores
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/data/mock/prototype_mock_data.dart';
 
 /// 文章详情页 - 1:1 对应 ArticleDetailView.tsx → UniversalArticleLayout
 /// 含：顶栏（返回/吸顶标题）、封面、标题、作者行、正文、底栏（点赞/评论/收藏/分享）、评论区
@@ -31,7 +32,7 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
   @override
   void initState() {
     super.initState();
-    _article = PrototypeMockData.articleById(widget.articleId);
+    _article = ref.read(appContentRepositoryProvider).articleById(widget.articleId);
     if (_article != null) {
       final stats = _article!['stats'] is Map ? Map<String, dynamic>.from(_article!['stats'] as Map) : null;
       _likesCount = (stats?['likes'] as num?)?.toInt() ?? 0;

@@ -1,5 +1,8 @@
+// ignore_for_file: unused_element
+
 import 'dart:ui';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -338,8 +341,8 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
                         title,
                         style: TextStyle(
                           color: AppColors.white,
-                          fontSize: AppTypography.lg.sp,
-                          fontWeight: FontWeight.w600,
+                          fontSize: AppTypography.lg,
+                          fontWeight: AppTypography.medium,
                         ),
                       ),
                     ),
@@ -363,8 +366,8 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
   }) {
     final captionStyle = TextStyle(
       color: AppColors.white,
-      fontSize: AppTypography.base.sp,
-      fontWeight: FontWeight.normal,
+      fontSize: AppTypography.base,
+      fontWeight: AppTypography.normal,
     );
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -401,7 +404,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
                   text: _isCaptionExpanded ? UITextConstants.collapse : UITextConstants.fullText,
                   style: captionStyle.copyWith(
                     color: AppColors.primaryColor,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: AppTypography.semiBold,
                   ),
                 ),
               ],
@@ -484,15 +487,15 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
                         widget.post['username'] ?? UITextConstants.unknownUser,
                         style: TextStyle(
                           color: AppColors.white,
-                          fontSize: 16.sp,
-                          fontWeight: FontWeight.w600,
+                          fontSize: AppTypography.lg,
+                          fontWeight: AppTypography.semiBold,
                         ),
                       ),
                       Text(
                         _formatTimeAgo(widget.post['createdAt']),
                         style: TextStyle(
                           color: AppColors.overlayStrong,
-                          fontSize: 12.sp,
+                          fontSize: AppTypography.sm,
                         ),
                       ),
                     ],
@@ -511,7 +514,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
             child: Icon(
               Icons.more_horiz,
               color: AppColors.white,
-              size: 24.sp,
+              size: AppSpacing.iconMedium,
             ),
           ),
         ),
@@ -587,46 +590,54 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
       children: [
         // 点赞按钮
         _buildInteractionButton(
-          icon: _isLiked ? Icons.favorite : Icons.favorite_border,
+          iconWidget: Icon(
+            _isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
+            size: AppSpacing.iconMedium,
+            color: _isLiked ? AppColors.error : AppColors.white,
+          ),
           count: _likesCount,
           isActive: _isLiked,
-          activeColor: AppColors.error,
           onTap: _handleLike,
         ),
         
-        SizedBox(width: 24.w),
-        
-        // 评论按钮
-        _buildInteractionButton(
-          icon: Icons.chat_bubble_outline,
-          count: _commentsCount,
-          isActive: false,
-          activeColor: AppColors.primaryColor,
-          onTap: _handleComment,
-        ),
-        
-        SizedBox(width: 24.w),
+        SizedBox(width: AppSpacing.interGroupSm),
         
         // 收藏按钮
         _buildInteractionButton(
-          icon: _isSaved ? Icons.star : Icons.star_border,
+          iconWidget: AppStarIcon(
+            size: AppSpacing.iconMedium,
+            color: _isSaved ? AppColors.warning : AppColors.white,
+            filled: _isSaved,
+          ),
           count: _savesCount,
           isActive: _isSaved,
-          activeColor: AppColors.warning,
           onTap: _handleSave,
+        ),
+        
+        SizedBox(width: AppSpacing.interGroupSm),
+        
+        // 评论按钮
+        _buildInteractionButton(
+          iconWidget: AppBubbleIcon(
+            size: AppSpacing.iconMedium,
+            color: AppColors.white,
+          ),
+          count: _commentsCount,
+          isActive: false,
+          onTap: _handleComment,
         ),
         
         const Spacer(),
         
-        // 分享按钮
+        // 转发按钮
         GestureDetector(
           onTap: _handleShare,
-          child: Container(
-            padding: EdgeInsets.all(8.w),
+          child: Padding(
+            padding: EdgeInsets.all(AppSpacing.sm),
             child: Icon(
-              Icons.share_outlined,
+              CupertinoIcons.arrowshape_turn_up_right,
               color: AppColors.white,
-              size: 24.sp,
+              size: AppSpacing.iconMedium,
             ),
           ),
         ),
@@ -636,10 +647,9 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
 
   /// 构建交互按钮
   Widget _buildInteractionButton({
-    required IconData icon,
+    required Widget iconWidget,
     required int count,
     required bool isActive,
-    required Color activeColor,
     required VoidCallback onTap,
   }) {
     return GestureDetector(
@@ -650,20 +660,16 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
           AnimatedScale(
             scale: isActive ? 1.1 : 1.0,
             duration: const Duration(milliseconds: 200),
-            child: Icon(
-              icon,
-              size: 24.sp,
-              color: isActive ? activeColor : AppColors.white,
-            ),
+            child: iconWidget,
           ),
           if (count > 0) ...[
-            SizedBox(width: 8.w),
+            SizedBox(width: AppSpacing.intraGroupSm),
             Text(
               _formatCount(count),
               style: TextStyle(
                 color: AppColors.white,
-                fontSize: 14.sp,
-                fontWeight: FontWeight.w500,
+                fontSize: AppTypography.base,
+                fontWeight: AppTypography.medium,
               ),
             ),
           ],
@@ -687,8 +693,8 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
                   _formatCount(_likesCount),
                   style: TextStyle(
                     color: AppColors.white,
-                    fontSize: 16.sp,
-                    fontWeight: FontWeight.w600,
+                    fontSize: AppTypography.lg,
+                    fontWeight: AppTypography.semiBold,
                   ),
                 ),
                 SizedBox(width: 4.w),
@@ -696,7 +702,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
                   '个赞',
                   style: TextStyle(
                     color: AppColors.overlayStrong,
-                    fontSize: 16.sp,
+                    fontSize: AppTypography.lg,
                   ),
                 ),
               ],
@@ -711,7 +717,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
               '查看全部 $_commentsCount 条评论',
               style: TextStyle(
                 color: AppColors.overlayStrong,
-                fontSize: 14.sp,
+                fontSize: AppTypography.base,
               ),
             ),
           ),
@@ -740,7 +746,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
                 child: Icon(
                   Icons.close,
                   color: AppColors.white,
-                  size: 24.sp,
+                  size: AppSpacing.iconMedium,
                 ),
               ),
             ),
@@ -802,14 +808,14 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
       leading: Icon(
         icon,
         color: isDark ? AppColors.dark.foregroundPrimary : AppColors.light.foregroundPrimary,
-        size: 20.sp,
+        size: AppSpacing.iconMedium - AppSpacing.xs,
       ),
       title: Text(
         title,
         style: TextStyle(
           color: isDark ? AppColors.dark.foregroundPrimary : AppColors.light.foregroundPrimary,
-          fontSize: 16.sp,
-          fontWeight: FontWeight.w500,
+          fontSize: AppTypography.lg,
+          fontWeight: AppTypography.medium,
         ),
       ),
       onTap: () {

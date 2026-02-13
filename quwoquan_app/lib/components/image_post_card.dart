@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use, overridden_fields
+
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -70,8 +72,8 @@ class ImagePostCard extends MediaPostCard {
               child: Text(
                 title,
                 style: TextStyle(
-                  fontSize: 16.sp, // 与一级tab一样大
-                  fontWeight: FontWeight.w600, // 加粗
+                  fontSize: AppTypography.lg,
+                  fontWeight: AppTypography.semiBold,
                   color: isDark
                       ? AppColors.dark.foregroundPrimary
                       : AppColors.light.foregroundPrimary,
@@ -103,7 +105,7 @@ class ImagePostCard extends MediaPostCard {
                 text: content,
                 style: TextStyle(
                   fontSize: AppTypography.base, // 与作者名一致的字号
-                  fontWeight: FontWeight.normal, // 不加粗
+                  fontWeight: AppTypography.normal,
                   color: isDark
                       ? AppColors.dark.foregroundPrimary
                       : AppColors.light.foregroundPrimary,
@@ -139,7 +141,7 @@ class ImagePostCard extends MediaPostCard {
                             }(),
                             style: TextStyle(
                               fontSize: AppTypography.base,
-                              fontWeight: FontWeight.normal,
+                              fontWeight: AppTypography.normal,
                               color: isDark
                                   ? AppColors.dark.foregroundPrimary
                                   : AppColors.light.foregroundPrimary,
@@ -150,7 +152,7 @@ class ImagePostCard extends MediaPostCard {
                             style: TextStyle(
                               fontSize: AppTypography.base,
                               color: AppColorsFunctional.getColor(isDark, ColorType.primary),
-                              fontWeight: FontWeight.w500,
+                              fontWeight: AppTypography.medium,
                             ),
                           ),
                         ],
@@ -160,7 +162,7 @@ class ImagePostCard extends MediaPostCard {
                       content,
                       style: TextStyle(
                         fontSize: AppTypography.base,
-                        fontWeight: FontWeight.normal,
+                        fontWeight: AppTypography.normal,
                         color: isDark
                             ? AppColors.dark.foregroundPrimary
                             : AppColors.light.foregroundPrimary,

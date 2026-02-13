@@ -1,24 +1,29 @@
-const int kImageEditorToolCrop = 0;
-const int kImageEditorToolRotate = 1;
-const int kImageEditorToolFilter = 2;
-const int kImageEditorToolBeauty = 3;
-const int kImageEditorToolText = 4;
-const int kImageEditorToolMosaic = 5;
-const int kImageEditorToolFrame = 6;
-const int kImageEditorToolPro = 7;
+const int kImageEditorToolFilter = 0;
+const int kImageEditorToolCrop = 1;
+const int kImageEditorToolRotate = 2;
+const int kImageEditorToolPro = 3;
+const int kImageEditorToolFrame = 4;
+const int kImageEditorToolText = 5;
+const int kImageEditorToolMosaic = 6;
 
-const int kImageEditorProCategoryExposure = 0;
-const int kImageEditorProCategoryColor = 1;
-const int kImageEditorProCategoryLight = 2;
-const int kImageEditorProCategoryTexture = 3;
+const int kImageEditorProCategoryOverall = 0;
+const int kImageEditorProCategoryLocal = 1;
+const int kImageEditorProCategoryHsl = 2;
+const int kImageEditorProCategoryCurve = 3;
+const int kImageEditorProCategoryWhiteBalance = 4;
+const int kImageEditorProCategoryPerspective = 5;
+const int kImageEditorProCategoryBwLevels = 6;
+const int kImageEditorProCategoryPicker = -1;
+
+// 兼容旧引用（后续统一迁移到 Overall 命名）
+const int kImageEditorProCategoryBase = kImageEditorProCategoryOverall;
 
 const List<String> kImageEditorToolTypes = [
+  'filter',
   'crop',
   'rotate',
-  'filter',
-  'beauty',
+  'proTools',
+  'frame',
   'text',
   'mosaic',
-  'frame',
-  'proTools',
 ];

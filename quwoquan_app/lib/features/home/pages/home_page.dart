@@ -1,3 +1,5 @@
+// ignore_for_file: unnecessary_brace_in_string_interps
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -80,6 +82,8 @@ class _HomePageState extends ConsumerState<HomePage>
           TabNavigationWidget(
             activeTab: _activeTab,
             isDark: isDark, // 传递当前主题状态
+            mode: TabNavigationMode.mixedScrollable,
+            fixedTabIds: const <String>['following', 'recommended'],
             onTabChange: (tab) {
               setState(() {
                 _activeTab = tab;
@@ -96,28 +100,49 @@ class _HomePageState extends ConsumerState<HomePage>
 
           // 图片tab的二级导航已移到PostListSection中，跟随列表滚动
 
-          // 主内容区域 - 统一使用PostListSection
+          // 主内容区域 - 统一使用PostListSection，支持左右滑动切换一级tab
           Expanded(
-            child: PostListSection(
-              category: _activeTab,
-              subCategory: _activeTab == 'images' ? _activeImageSubCategory : null,
-              isDark: isDark, // 传递当前主题状态
-              onPostTap: (post, index) {
-                // 处理post点击
-                if (post['type'] == 'image') {
-                  context.push('/media-viewer/${_activeTab}/$index');
-                } else if (post['type'] == 'video') {
-                  context.push('/video-viewer/$index');
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onHorizontalDragEnd: (details) {
+                final velocity = details.primaryVelocity ?? 0;
+                if (velocity.abs() < 200) return;
+                final delta = velocity < 0 ? 1 : -1;
+                final currentIndex = _tabs.indexOf(_activeTab);
+                final newIndex = (currentIndex + delta).clamp(0, _tabs.length - 1);
+                if (newIndex != currentIndex) {
+                  final newTab = _tabs[newIndex];
+                  setState(() {
+                    _activeTab = newTab;
+                  });
+                  if (newTab == 'video') {
+                    ref.read(videoForceDarkProvider.notifier).setForceDark(true);
+                  } else {
+                    ref.read(videoForceDarkProvider.notifier).setForceDark(false);
+                  }
                 }
               },
-              onUserTap: (username) {
-                context.push('/user/$username');
-              },
-              onImageSubCategoryChange: (category) {
-                setState(() {
-                  _activeImageSubCategory = category;
-                });
-              },
+              child: PostListSection(
+                category: _activeTab,
+                subCategory: _activeTab == 'images' ? _activeImageSubCategory : null,
+                isDark: isDark, // 传递当前主题状态
+                onPostTap: (post, index) {
+                  // 处理post点击
+                  if (post['type'] == 'image') {
+                    context.push('/media-viewer/${_activeTab}/$index');
+                  } else if (post['type'] == 'video') {
+                    context.push('/video-viewer/$index');
+                  }
+                },
+                onUserTap: (username) {
+                  context.push('/user/$username');
+                },
+                onImageSubCategoryChange: (category) {
+                  setState(() {
+                    _activeImageSubCategory = category;
+                  });
+                },
+              ),
             ),
           ),
         ],

@@ -1,10 +1,12 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/components/assistant_floating_ball.dart';
-import 'package:quwoquan_app/data/mock/prototype_mock_data.dart';
+import 'package:quwoquan_app/components/tab_navigation.dart';
 
 /// 发现页
 ///
@@ -31,13 +33,39 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
 
   /// 与 DiscoveryFeed.tsx CATEGORIES 完全一致
   static const List<Map<String, String>> _categories = [
-    {'id': 'moment', 'label': '微趣'},
-    {'id': 'photo', 'label': '美图'},
-    {'id': 'video', 'label': '视频'},
-    {'id': 'article', 'label': '文章'},
+    {'id': 'moment', 'label': UITextConstants.discoveryTabMoment},
+    {'id': 'photo', 'label': UITextConstants.discoveryTabPhoto},
+    {'id': 'video', 'label': UITextConstants.discoveryTabVideo},
+    {'id': 'article', 'label': UITextConstants.discoveryTabArticle},
   ];
 
   bool get _isVideoMode => _activeType == 'video';
+
+  List<String> get _primaryTabIds =>
+      _categories.map((category) => category['id']!).toList(growable: false);
+
+  void _setActiveType(String id) {
+    setState(() => _activeType = id);
+    _applyVideoForceDark();
+  }
+
+  void _switchPrimaryByDelta(int delta) {
+    final ids = _primaryTabIds;
+    final currentIndex = ids.indexOf(_activeType);
+    if (currentIndex < 0) return;
+    final nextIndex = currentIndex + delta;
+    if (nextIndex < 0 || nextIndex >= ids.length) {
+      HapticFeedback.selectionClick();
+      return;
+    }
+    _setActiveType(ids[nextIndex]);
+  }
+
+  void _onPrimaryDragEnd(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    if (velocity.abs() < 220) return;
+    _switchPrimaryByDelta(velocity < 0 ? 1 : -1);
+  }
 
   void _onTheaterModeChange(bool isHidden) {
     // TODO: 与 App.tsx isBottomNavHidden 一致，需 Shell 提供 bottomNavVisibilityProvider
@@ -93,129 +121,41 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     );
   }
 
-  /// 1:1 复制 DiscoveryFeed.tsx Motion.header：sticky top-0 z-40 safe-top，左侧占位、中间胶囊、右侧搜索
+  /// 发现页主导航：与圈子/首页复用同一 Tab 组件与字级。
   Widget _buildHeader(bool isDark) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 500),
+    final tabs = _categories
+        .map((cat) => TabItem(id: cat['id']!, label: cat['label']!))
+        .toList(growable: false);
+
+    return Container(
       decoration: BoxDecoration(
-        color: _isVideoMode
-            ? null
-            : AppColorsFunctional
-                .getColor(isDark, ColorType.backgroundPrimary)
-                .withValues(alpha: 0.9),
-        gradient: _isVideoMode
-            ? const LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0x99000000), Colors.transparent],
-              )
-            : null,
-        border: _isVideoMode
-            ? null
-            : Border(
-                bottom: BorderSide(
-                  color: AppColorsFunctional.getColor(isDark, ColorType.borderPrimary),
-                  width: 1,
-                ),
-              ),
+        color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
       ),
       child: SafeArea(
         bottom: false,
-        child: AnimatedOpacity(
-          opacity: (_isVideoMode && !_isUIVisible) ? 0 : 1,
-          duration: const Duration(milliseconds: 200),
-          child: SizedBox(
-            height: 56,
-            child: Row(
-              children: [
-                const SizedBox(width: 32),
-                Expanded(
-                  child: Center(
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(999),
-                        color: _isVideoMode
-                            ? Colors.white.withValues(alpha: 0.1)
-                            : AppColorsFunctional
-                                .getColor(isDark, ColorType.backgroundSecondary)
-                                .withValues(alpha: 0.8),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: _categories.map((cat) {
-                          final isActive = _activeType == cat['id'];
-                          return GestureDetector(
-                            onTap: () {
-                              setState(() => _activeType = cat['id']!);
-                              _applyVideoForceDark();
-                            },
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(999),
-                                color: isActive
-                                    ? (_isVideoMode
-                                        ? Colors.white.withValues(alpha: 0.2)
-                                        : AppColorsFunctional.getColor(
-                                            isDark,
-                                            ColorType.backgroundPrimary,
-                                          ))
-                                    : Colors.transparent,
-                                boxShadow: isActive && !_isVideoMode
-                                    ? [
-                                        BoxShadow(
-                                          color: Colors.black.withValues(alpha: 0.06),
-                                          blurRadius: 4,
-                                          offset: const Offset(0, 1),
-                                        ),
-                                      ]
-                                    : null,
-                              ),
-                              child: Text(
-                                cat['label']!,
-                                style: TextStyle(
-                                  fontSize: 13.sp,
-                                  fontWeight: FontWeight.w900,
-                                  color: isActive
-                                      ? (_isVideoMode
-                                          ? Colors.white
-                                          : AppColors.primaryColor)
-                                      : (_isVideoMode
-                                          ? Colors.white.withValues(alpha: 0.5)
-                                          : AppColorsFunctional.getColor(
-                                              isDark,
-                                              ColorType.foregroundSecondary,
-                                            )),
-                                ),
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                  ),
+        child: TabNavigationWidget(
+          activeTab: _activeType,
+          isDark: isDark,
+          tabs: tabs,
+          mode: TabNavigationMode.compactPill,
+          onTabChange: _setActiveType,
+          onHorizontalDragEnd: _onPrimaryDragEnd,
+          trailingActions: [
+            IconButton(
+              icon: Icon(
+                Icons.search,
+                size: AppSpacing.iconMedium,
+                color: AppColorsFunctional.getColor(
+                  isDark,
+                  ColorType.foregroundSecondary,
                 ),
-                IconButton(
-                  icon: Icon(
-                    Icons.search,
-                    size: 20,
-                    color: _isVideoMode
-                        ? Colors.white
-                        : AppColorsFunctional.getColor(
-                            isDark,
-                            ColorType.foregroundSecondary,
-                          ),
-                  ),
-                  onPressed: () {},
-                ),
-              ],
+              ),
+              onPressed: () {},
+              style: IconButton.styleFrom(
+                minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -223,7 +163,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
 
   /// 1:1 复制 VideoImmersionView.tsx：顶栏（返回/胶囊 Tab/搜索）、竖滑视频列表、点击切换 UI、下拉退出
   Widget _buildVideoImmersionView(bool isDark) {
-    final videos = PrototypeMockData.discoveryVideoData;
+    final videos = ref.watch(appContentRepositoryProvider).discoveryVideoData;
     return _VideoImmersionView(
       categories: _categories,
       activeTab: _activeType,
@@ -263,21 +203,23 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
 
   /// 微趣流：1:1 使用 DiscoveryFeed.tsx activeType===moment 的 discoveryData，RecommendFeed 等价
   Widget _buildMomentContent(bool isDark) {
-    final items = PrototypeMockData.discoveryMomentData;
+    final items = ref.watch(appContentRepositoryProvider).discoveryMomentData;
     return ListView.builder(
       padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).padding.bottom + 80,
+        bottom: MediaQuery.of(context).padding.bottom +
+            AppSpacing.bottomNavHeight +
+            AppSpacing.interGroupMd,
       ),
       itemCount: items.length + 1,
       itemBuilder: (context, index) {
         if (index == items.length) {
           return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 40),
+            padding: EdgeInsets.symmetric(vertical: AppSpacing.interGroupXl),
             child: Center(
               child: Text(
-                '— 已显示全部推荐内容 —',
+                UITextConstants.discoveryEndHint,
                 style: TextStyle(
-                  fontSize: 13.sp,
+                  fontSize: AppTypography.sm,
                   color: AppColorsFunctional.getColor(
                     isDark,
                     ColorType.foregroundSecondary,
@@ -299,21 +241,23 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
 
   /// 文章流：1:1 使用 DiscoveryFeed.tsx activeType===article 的 discoveryData
   Widget _buildArticleContent(bool isDark) {
-    final items = PrototypeMockData.discoveryArticleData;
+    final items = ref.watch(appContentRepositoryProvider).discoveryArticleData;
     return ListView.builder(
       padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).padding.bottom + 80,
+        bottom: MediaQuery.of(context).padding.bottom +
+            AppSpacing.bottomNavHeight +
+            AppSpacing.interGroupMd,
       ),
       itemCount: items.length + 1,
       itemBuilder: (context, index) {
         if (index == items.length) {
           return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 40),
+            padding: EdgeInsets.symmetric(vertical: AppSpacing.interGroupXl),
             child: Center(
               child: Text(
-                '— 已显示全部推荐内容 —',
+                UITextConstants.discoveryEndHint,
                 style: TextStyle(
-                  fontSize: 13.sp,
+                  fontSize: AppTypography.sm,
                   color: AppColorsFunctional.getColor(
                     isDark,
                     ColorType.foregroundSecondary,
@@ -336,18 +280,20 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
 
   /// 美图流：1:1 使用 DiscoveryFeed.tsx photo 的 discoveryData，MasonryLayoutEngine + DiscoveryItem 等价
   Widget _buildPhotoContent(bool isDark) {
-    final items = PrototypeMockData.discoveryPhotoData;
+    final items = ref.watch(appContentRepositoryProvider).discoveryPhotoData;
     return GridView.builder(
       padding: EdgeInsets.fromLTRB(
-        8,
-        8,
-        8,
-        MediaQuery.of(context).padding.bottom + 80 + 24,
+        AppSpacing.containerSm,
+        AppSpacing.containerSm,
+        AppSpacing.containerSm,
+        MediaQuery.of(context).padding.bottom +
+            AppSpacing.bottomNavHeight +
+            AppSpacing.interGroupLg,
       ),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        mainAxisSpacing: 8,
-        crossAxisSpacing: 8,
+        mainAxisSpacing: AppSpacing.interGroupSm,
+        crossAxisSpacing: AppSpacing.interGroupSm,
         childAspectRatio: 0.75,
       ),
       itemCount: items.length,
@@ -409,7 +355,7 @@ class _MomentPostCard extends StatelessWidget {
               GestureDetector(
                 onTap: () => onUserTap(user['id']?.toString() ?? user['name']?.toString() ?? ''),
                 child: CircleAvatar(
-                  radius: 22,
+                  radius: AppSpacing.avatarUserMd / 2,
                   backgroundImage: NetworkImage(
                     user['avatar']?.toString() ?? 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100',
                   ),
@@ -425,24 +371,29 @@ class _MomentPostCard extends StatelessWidget {
                         Text(
                           user['name']?.toString() ?? '',
                           style: TextStyle(
-                            fontSize: 15.sp,
-                            fontWeight: FontWeight.w800,
+                            fontSize: AppTypography.base,
+                            fontWeight: AppTypography.medium,
                             color: fg,
                           ),
                         ),
                         if (user['badge'] != null) ...[
-                          SizedBox(width: 4.w),
+                          SizedBox(width: AppSpacing.intraGroupXs),
                           Container(
-                            padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: AppSpacing.intraGroupXs,
+                              vertical: AppSpacing.intraGroupXs / 2,
+                            ),
                             decoration: BoxDecoration(
                               color: AppColors.warning,
-                              borderRadius: BorderRadius.circular(2),
+                              borderRadius: BorderRadius.circular(
+                                AppSpacing.smallBorderRadius / 2,
+                              ),
                             ),
                             child: Text(
                               'V${user['badge']}',
                               style: TextStyle(
-                                fontSize: 9.sp,
-                                fontWeight: FontWeight.w700,
+                                fontSize: AppTypography.xs,
+                                fontWeight: AppTypography.bold,
                                 color: Colors.white,
                               ),
                             ),
@@ -450,38 +401,45 @@ class _MomentPostCard extends StatelessWidget {
                         ],
                       ],
                     ),
-                    SizedBox(height: 2.h),
+                    SizedBox(height: AppSpacing.intraGroupXs / 2),
                     Text(
                       item['timeAgo']?.toString() ?? '',
                       style: TextStyle(
-                        fontSize: 12.sp,
+                        fontSize: AppTypography.sm,
                         color: muted,
                       ),
                     ),
                     if (item['source'] != null)
                       Text(
                         item['source'].toString(),
-                        style: TextStyle(fontSize: 11.sp, color: muted),
+                        style: TextStyle(
+                          fontSize: AppTypography.xs,
+                          color: muted,
+                        ),
                       ),
                   ],
                 ),
               ),
             ],
           ),
-          SizedBox(height: 8.h),
+          SizedBox(height: AppSpacing.interGroupXs),
           Text(
             item['content']?.toString() ?? '',
-            style: TextStyle(fontSize: 15.sp, color: fg, height: 1.4),
+            style: TextStyle(
+              fontSize: AppTypography.lg,
+              color: fg,
+              height: 1.4,
+            ),
             maxLines: 10,
             overflow: TextOverflow.ellipsis,
           ),
           if (item['quotedPost'] != null) ...[
-            SizedBox(height: 8.h),
+            SizedBox(height: AppSpacing.interGroupXs),
             Container(
               padding: EdgeInsets.all(AppSpacing.sm.w),
               decoration: BoxDecoration(
                 color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -489,15 +447,18 @@ class _MomentPostCard extends StatelessWidget {
                   Text(
                     '@${(item['quotedPost'] as Map)['user']}',
                     style: TextStyle(
-                      fontSize: 13.sp,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primaryColor,
+                      fontSize: AppTypography.sm,
+                      fontWeight: AppTypography.medium,
+                      color: fg,
                     ),
                   ),
-                  SizedBox(height: 4.h),
+                  SizedBox(height: AppSpacing.intraGroupXs),
                   Text(
                     (item['quotedPost'] as Map)['content']?.toString() ?? '',
-                    style: TextStyle(fontSize: 13.sp, color: muted),
+                    style: TextStyle(
+                      fontSize: AppTypography.sm,
+                      color: muted,
+                    ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -506,35 +467,63 @@ class _MomentPostCard extends StatelessWidget {
             ),
           ],
           if (item['media'] != null && (item['media'] as List).isNotEmpty) ...[
-            SizedBox(height: 8.h),
+            SizedBox(height: AppSpacing.interGroupXs),
             GestureDetector(
               onTap: () => onPostTap(item, 0),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.network(
-                  (item['media'] as List).first['url']?.toString() ??
-                      (item['media'] as List).first['thumbnail']?.toString() ??
-                      '',
-                  width: double.infinity,
-                  height: 200,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    height: 200,
-                    color: borderColor,
-                    child: const Icon(Icons.broken_image_outlined),
+                borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                child: AspectRatio(
+                  aspectRatio: 4 / 3,
+                  child: Image.network(
+                    (item['media'] as List).first['url']?.toString() ??
+                        (item['media'] as List).first['thumbnail']?.toString() ??
+                        '',
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      color: borderColor,
+                      child: const Icon(Icons.broken_image_outlined),
+                    ),
                   ),
                 ),
               ),
             ),
           ],
-          SizedBox(height: 10.h),
+          SizedBox(height: AppSpacing.interGroupSm),
           Row(
             children: [
-              _actionChip(Icons.thumb_up_outlined, '${item['likes'] ?? 0}', isDark),
-              SizedBox(width: 16.w),
-              _actionChip(Icons.chat_bubble_outline, '${item['comments'] ?? 0}', isDark),
-              SizedBox(width: 16.w),
-              _actionChip(Icons.share_outlined, '${item['shares'] ?? 0}', isDark),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _actionChip(CupertinoIcons.heart, '${item['likes'] ?? 0}', isDark),
+                  SizedBox(width: AppSpacing.intraGroupMd),
+                  _actionChipWidget(
+                    AppStarIcon(
+                      size: AppSpacing.iconMedium,
+                      color: AppColorsFunctional.getColor(
+                        isDark,
+                        ColorType.foregroundSecondary,
+                      ),
+                    ),
+                    '${item['bookmarks'] ?? item['saves'] ?? 0}',
+                    isDark,
+                  ),
+                  SizedBox(width: AppSpacing.intraGroupMd),
+                  _actionChipWidget(
+                    AppBubbleIcon(
+                      size: AppSpacing.iconMedium,
+                      color: AppColorsFunctional.getColor(
+                        isDark,
+                        ColorType.foregroundSecondary,
+                      ),
+                    ),
+                    '${item['comments'] ?? 0}',
+                    isDark,
+                  ),
+                ],
+              ),
+              const Spacer(),
+              _actionChip(CupertinoIcons.arrowshape_turn_up_right, '${item['shares'] ?? 0}', isDark),
             ],
           ),
         ],
@@ -547,11 +536,26 @@ class _MomentPostCard extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 18, color: muted),
-        SizedBox(width: 4.w),
+        Icon(icon, size: AppSpacing.iconMedium, color: muted),
+        SizedBox(width: AppSpacing.intraGroupXs),
         Text(
           count,
-          style: TextStyle(fontSize: 13.sp, color: muted),
+          style: TextStyle(fontSize: AppTypography.sm, color: muted),
+        ),
+      ],
+    );
+  }
+
+  Widget _actionChipWidget(Widget iconWidget, String count, bool isDark) {
+    final muted = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        iconWidget,
+        SizedBox(width: AppSpacing.intraGroupXs),
+        Text(
+          count,
+          style: TextStyle(fontSize: AppTypography.sm, color: muted),
         ),
       ],
     );
@@ -597,63 +601,96 @@ class _ArticleCardPlaceholder extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              article['category']?.toString() ?? '',
-              style: TextStyle(
-                fontSize: 12.sp,
-                color: AppColors.primaryColor,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            SizedBox(height: 4.h),
-            Text(
-              article['title']?.toString() ?? '',
-              style: TextStyle(
-                fontSize: 17.sp,
-                fontWeight: FontWeight.w900,
-                color: fg,
-              ),
-            ),
-            SizedBox(height: 4.h),
-            Text(
-              article['description']?.toString() ?? '',
-              style: TextStyle(fontSize: 14.sp, color: muted),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            SizedBox(height: 8.h),
             Row(
               children: [
                 GestureDetector(
                   onTap: onUserTap,
                   child: CircleAvatar(
-                    radius: 14,
+                    radius: AppSpacing.avatarUserSm / 2,
                     backgroundImage: NetworkImage(
-                      author['avatar']?.toString() ?? 'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100',
+                      author['avatar']?.toString() ??
+                          'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100',
                     ),
                   ),
                 ),
-                SizedBox(width: 8.w),
+                SizedBox(width: AppSpacing.interGroupXs),
                 Text(
                   author['name']?.toString() ?? '',
-                  style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600, color: fg),
+                  style: TextStyle(
+                    fontSize: AppTypography.base,
+                    fontWeight: AppTypography.medium,
+                    color: fg,
+                  ),
                 ),
                 const Spacer(),
                 Text(
                   article['date']?.toString() ?? '',
-                  style: TextStyle(fontSize: 12.sp, color: muted),
+                  style: TextStyle(fontSize: AppTypography.base, color: muted),
                 ),
               ],
             ),
-            SizedBox(height: 6.h),
+            SizedBox(height: AppSpacing.intraGroupSm),
+            Text(
+              article['category']?.toString() ?? '',
+              style: TextStyle(
+                fontSize: AppTypography.sm,
+                color: AppColors.primaryColor,
+                fontWeight: AppTypography.bold,
+              ),
+            ),
+            SizedBox(height: AppSpacing.intraGroupXs),
+            Text(
+              article['title']?.toString() ?? '',
+              style: TextStyle(
+                fontSize: AppTypography.lg,
+                fontWeight: AppTypography.semiBold,
+                color: fg,
+              ),
+            ),
+            SizedBox(height: AppSpacing.intraGroupXs),
+            Text(
+              article['description']?.toString() ?? '',
+              style: TextStyle(fontSize: AppTypography.base, color: fg),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            SizedBox(height: AppSpacing.interGroupXs),
             Row(
               children: [
-                Icon(Icons.thumb_up_outlined, size: 14, color: muted),
-                Text(' ${stats['likes'] ?? 0} ', style: TextStyle(fontSize: 12.sp, color: muted)),
-                Icon(Icons.chat_bubble_outline, size: 14, color: muted),
-                Text(' ${stats['comments'] ?? 0} ', style: TextStyle(fontSize: 12.sp, color: muted)),
-                Icon(Icons.share_outlined, size: 14, color: muted),
-                Text(' ${stats['shares'] ?? 0}', style: TextStyle(fontSize: 12.sp, color: muted)),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      CupertinoIcons.heart,
+                      size: AppSpacing.iconMedium,
+                      color: muted,
+                    ),
+                    Text(
+                      ' ${stats['likes'] ?? 0} ',
+                      style: TextStyle(fontSize: AppTypography.base, color: muted),
+                    ),
+                    AppStarIcon(size: AppSpacing.iconMedium, color: muted),
+                    Text(
+                      ' ${stats['bookmarks'] ?? stats['saves'] ?? 0} ',
+                      style: TextStyle(fontSize: AppTypography.base, color: muted),
+                    ),
+                    AppBubbleIcon(size: AppSpacing.iconMedium, color: muted),
+                    Text(
+                      ' ${stats['comments'] ?? 0} ',
+                      style: TextStyle(fontSize: AppTypography.base, color: muted),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                Icon(
+                  CupertinoIcons.arrowshape_turn_up_right,
+                  size: AppSpacing.iconMedium,
+                  color: muted,
+                ),
+                Text(
+                  ' ${stats['shares'] ?? 0}',
+                  style: TextStyle(fontSize: AppTypography.base, color: muted),
+                ),
               ],
             ),
           ],
@@ -683,7 +720,7 @@ class _DiscoveryItemCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
           color: Colors.grey.shade200,
           boxShadow: [
             BoxShadow(
@@ -697,11 +734,14 @@ class _DiscoveryItemCard extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
               child: Image.network(
                 thumb,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, size: 48),
+                  errorBuilder: (context, error, stackTrace) => Icon(
+                    Icons.broken_image_outlined,
+                    size: AppSpacing.largeButtonSize,
+                  ),
               ),
             ),
             Positioned(
@@ -712,30 +752,38 @@ class _DiscoveryItemCard extends StatelessWidget {
                 children: [
                   if (!isVideo && imageCount > 1)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppSpacing.intraGroupSm,
+                        vertical: AppSpacing.xs / 2,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.25),
-                        borderRadius: BorderRadius.circular(4),
+                        borderRadius:
+                            BorderRadius.circular(AppSpacing.smallBorderRadius),
                         border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                       ),
                       child: Text(
                         '$imageCount',
                         style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
+                          fontSize: AppTypography.xs,
+                          fontWeight: AppTypography.black,
                           color: Colors.white.withValues(alpha: 0.9),
                         ),
                       ),
                     ),
                   if (isVideo)
                     Container(
-                      padding: const EdgeInsets.all(4),
+                      padding: EdgeInsets.all(AppSpacing.xs),
                       decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.25),
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                       ),
-                      child: Icon(Icons.play_arrow, size: 14, color: Colors.white),
+                      child: Icon(
+                        Icons.play_arrow,
+                        size: AppSpacing.iconSmall,
+                        color: Colors.white,
+                      ),
                     ),
                 ],
               ),
@@ -777,6 +825,29 @@ class _VideoImmersionViewState extends State<_VideoImmersionView> {
   late PageController _pageController;
   final Set<int> _likedIndexes = {};
 
+  List<String> get _primaryTabIds =>
+      widget.categories.map((category) => category['id']!).toList(growable: false);
+
+  void _switchPrimaryByDelta(int delta) {
+    final currentIndex = _primaryTabIds.indexOf(widget.activeTab);
+    if (currentIndex < 0) return;
+    final nextIndex = currentIndex + delta;
+    if (nextIndex < 0 || nextIndex >= _primaryTabIds.length) {
+      HapticFeedback.selectionClick();
+      return;
+    }
+    final nextId = _primaryTabIds[nextIndex];
+    if (nextId != 'video') {
+      widget.onTabChange(nextId);
+    }
+  }
+
+  void _onPrimaryDragEnd(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    if (velocity.abs() < 220) return;
+    _switchPrimaryByDelta(velocity < 0 ? 1 : -1);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -803,7 +874,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView> {
               opacity: widget.isUIVisible ? 1 : 0,
               duration: const Duration(milliseconds: 200),
               child: Container(
-                height: 56,
+                height: AppSpacing.toolbarHeight,
                 padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
                 child: Row(
                   children: [
@@ -815,45 +886,110 @@ class _VideoImmersionViewState extends State<_VideoImmersionView> {
                       ),
                     ),
                     Expanded(
-                      child: Center(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onHorizontalDragEnd: _onPrimaryDragEnd,
                         child: Container(
-                          padding: const EdgeInsets.all(2),
+                          padding: EdgeInsets.all(AppSpacing.xs / 2),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(999),
+                            borderRadius: BorderRadius.circular(
+                              AppSpacing.circularBorderRadius,
+                            ),
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: widget.categories.map((cat) {
-                              final isActive = widget.activeTab == cat['id'];
-                              return GestureDetector(
-                                onTap: () {
-                                  if (cat['id'] != 'video') widget.onTabChange(cat['id']!);
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: isActive ? Colors.white.withValues(alpha: 0.2) : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(999),
+                          child: Stack(
+                            children: [
+                              SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  children: widget.categories.map((cat) {
+                                final isActive = widget.activeTab == cat['id'];
+                                return Padding(
+                                  padding: EdgeInsets.only(right: AppSpacing.intraGroupSm),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: () {
+                                        if (cat['id'] != 'video') {
+                                          widget.onTabChange(cat['id']!);
+                                        }
+                                      },
+                                      borderRadius: BorderRadius.circular(
+                                        AppSpacing.circularBorderRadius,
+                                      ),
+                                      child: ConstrainedBox(
+                                        constraints: BoxConstraints(
+                                          minWidth: AppSpacing.minInteractiveSize,
+                                          minHeight: AppSpacing.minInteractiveSize,
+                                        ),
+                                        child: Container(
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: AppSpacing.containerSm,
+                                            vertical: AppSpacing.intraGroupXs,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: isActive
+                                                ? Colors.white.withValues(alpha: 0.2)
+                                                : Colors.transparent,
+                                            borderRadius: BorderRadius.circular(
+                                              AppSpacing.circularBorderRadius,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            cat['label']!,
+                                            style: TextStyle(
+                                              fontSize: AppTypography.base,
+                                              fontWeight: isActive
+                                                  ? AppTypography.bold
+                                                  : AppTypography.medium,
+                                              color: isActive
+                                                  ? Colors.white
+                                                  : Colors.white.withValues(alpha: 0.5),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                   ),
-                                  child: Text(
-                                    cat['label']!,
-                                    style: TextStyle(
-                                      fontSize: 13.sp,
-                                      fontWeight: FontWeight.w900,
-                                      color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.5),
+                                );
+                              }).toList(),
+                                ),
+                              ),
+                              Positioned(
+                                right: 0,
+                                top: 0,
+                                bottom: 0,
+                                child: IgnorePointer(
+                                  child: Container(
+                                    width: AppSpacing.lg,
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        begin: Alignment.centerLeft,
+                                        end: Alignment.centerRight,
+                                        colors: [
+                                          Colors.transparent,
+                                          Colors.white.withValues(alpha: 0.15),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
-                              );
-                            }).toList(),
+                              ),
+                            ],
                           ),
                         ),
                       ),
                     ),
                     IconButton(
-                      icon: Icon(Icons.search, color: Colors.white, size: 20.sp),
+                      icon: Icon(
+                        Icons.search,
+                        color: Colors.white,
+                        size: AppSpacing.iconMedium,
+                      ),
                       onPressed: () {},
+                      style: IconButton.styleFrom(
+                        minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+                      ),
                     ),
                   ],
                 ),
@@ -880,7 +1016,8 @@ class _VideoImmersionViewState extends State<_VideoImmersionView> {
                         Image.network(
                           post['thumbnail'] as String? ?? '',
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(color: Colors.grey.shade900),
+                          errorBuilder: (context, error, stackTrace) =>
+                              Container(color: Colors.grey.shade900),
                         ),
                         // 底部渐变
                         Container(
@@ -895,8 +1032,8 @@ class _VideoImmersionViewState extends State<_VideoImmersionView> {
                         // 右侧互动栏（吸收点击，避免触发整页 onToggleUI）
                         if (widget.isUIVisible)
                           Positioned(
-                            right: 16,
-                            bottom: 80,
+                            right: AppSpacing.containerMd,
+                            bottom: AppSpacing.bottomNavHeight + AppSpacing.interGroupMd,
                             child: GestureDetector(
                               onTap: () {},
                               behavior: HitTestBehavior.opaque,
@@ -908,27 +1045,31 @@ class _VideoImmersionViewState extends State<_VideoImmersionView> {
                                   child: Column(
                                     children: [
                                       CircleAvatar(
-                                        radius: 24.r,
+                                        radius: AppSpacing.buttonHeight / 2,
                                         backgroundColor: Colors.white,
                                         backgroundImage: NetworkImage(author['avatar'] as String? ?? ''),
                                       ),
-                                      SizedBox(height: 4.h),
-                                      Icon(Icons.add_circle, color: AppColors.primaryColor, size: 20.sp),
+                                      SizedBox(height: AppSpacing.intraGroupXs),
+                                      Icon(
+                                        Icons.add_circle,
+                                        color: AppColors.primaryColor,
+                                        size: AppSpacing.iconMedium,
+                                      ),
                                     ],
                                   ),
                                 ),
-                                SizedBox(height: 24.h),
-                                _videoAction(Icons.favorite, isLiked, '${post['likes'] ?? ''}', () => setState(() {
+                                SizedBox(height: AppSpacing.interGroupLg),
+                                _videoAction(CupertinoIcons.heart, isLiked, '${post['likes'] ?? ''}', () => setState(() {
                                   if (_likedIndexes.contains(index)) {
                                     _likedIndexes.remove(index);
                                   } else {
                                     _likedIndexes.add(index);
                                   }
                                 })),
-                                _videoAction(Icons.chat_bubble_outline, false, '${post['comments'] ?? ''}', () {}),
-                                _videoAction(Icons.bookmark_border, false, '收藏', () {}),
-                                _videoAction(Icons.share, false, '${post['shares'] ?? ''}', () {}),
-                                SizedBox(height: 16.h),
+                                _videoActionWidget(AppStarIcon(size: AppSpacing.iconMedium, color: Colors.white.withValues(alpha: 0.78)), UITextConstants.bookmarks, () {}),
+                                _videoActionWidget(AppBubbleIcon(size: AppSpacing.iconMedium, color: Colors.white.withValues(alpha: 0.78)), '${post['comments'] ?? ''}', () {}),
+                                _videoAction(CupertinoIcons.arrowshape_turn_up_right, false, '${post['shares'] ?? ''}', () {}),
+                                SizedBox(height: AppSpacing.interGroupMd),
                                 Container(
                                   width: 40.w,
                                   height: 40.w,
@@ -948,9 +1089,9 @@ class _VideoImmersionViewState extends State<_VideoImmersionView> {
                         // 左下文案
                         if (widget.isUIVisible)
                           Positioned(
-                            left: 16,
+                            left: AppSpacing.containerMd,
                             right: 80,
-                            bottom: 48,
+                            bottom: AppSpacing.buttonHeight,
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -958,25 +1099,39 @@ class _VideoImmersionViewState extends State<_VideoImmersionView> {
                                   onTap: () => widget.onUserClick(authorId),
                                   child: Text(
                                     '@${author['name'] ?? ''}',
-                                    style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w900, color: Colors.white),
+                                    style: TextStyle(
+                                      fontSize: AppTypography.lg,
+                                      fontWeight: AppTypography.medium,
+                                      color: Colors.white,
+                                    ),
                                   ),
                                 ),
-                                SizedBox(height: 4.h),
+                                SizedBox(height: AppSpacing.intraGroupXs),
                                 Text(
                                   '${post['content'] ?? ''}',
-                                  style: TextStyle(fontSize: 14.sp, color: Colors.white.withValues(alpha: 0.9)),
+                                  style: TextStyle(
+                                    fontSize: AppTypography.base,
+                                    color: Colors.white.withValues(alpha: 0.9),
+                                  ),
                                   maxLines: 3,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                                SizedBox(height: 8.h),
+                                SizedBox(height: AppSpacing.interGroupXs),
                                 Row(
                                   children: [
-                                    Icon(Icons.music_note, size: 16.sp, color: Colors.white),
-                                    SizedBox(width: 6.w),
+                                    Icon(
+                                      Icons.music_note,
+                                      size: AppSpacing.iconSmall,
+                                      color: Colors.white,
+                                    ),
+                                    SizedBox(width: AppSpacing.intraGroupSm),
                                     Expanded(
                                       child: Text(
                                         '${post['musicName'] ?? ''} • ${author['name'] ?? ''} 创作的原声',
-                                        style: TextStyle(fontSize: 13.sp, color: Colors.white.withValues(alpha: 0.8)),
+                                        style: TextStyle(
+                                          fontSize: AppTypography.sm,
+                                          color: Colors.white.withValues(alpha: 0.8),
+                                        ),
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
@@ -1002,14 +1157,51 @@ class _VideoImmersionViewState extends State<_VideoImmersionView> {
       children: [
         IconButton(
           icon: Icon(
-            icon == Icons.favorite ? (filled ? Icons.favorite : Icons.favorite_border) : icon,
-            color: filled ? AppColors.primaryColor : Colors.white,
-            size: 28.sp,
+            icon == CupertinoIcons.heart
+                ? (filled ? CupertinoIcons.heart_fill : CupertinoIcons.heart)
+                : icon,
+            color: filled
+                ? Colors.white
+                : Colors.white.withValues(alpha: 0.78),
+            size: AppSpacing.iconMedium,
           ),
           onPressed: onTap,
+          style: IconButton.styleFrom(
+            minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+          ),
         ),
-        Text(label, style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w700, color: Colors.white)),
-        SizedBox(height: 16.h),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: AppTypography.sm,
+            fontWeight: AppTypography.bold,
+            color: Colors.white,
+          ),
+        ),
+        SizedBox(height: AppSpacing.interGroupMd),
+      ],
+    );
+  }
+
+  Widget _videoActionWidget(Widget iconWidget, String label, VoidCallback onTap) {
+    return Column(
+      children: [
+        IconButton(
+          icon: iconWidget,
+          onPressed: onTap,
+          style: IconButton.styleFrom(
+            minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: AppTypography.sm,
+            fontWeight: AppTypography.bold,
+            color: Colors.white,
+          ),
+        ),
+        SizedBox(height: AppSpacing.interGroupMd),
       ],
     );
   }

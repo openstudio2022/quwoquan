@@ -16,10 +16,10 @@ class ImageEditorProCategoryTabs extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tabs = [
-      UITextConstants.imageEditorProTabExposure,
-      UITextConstants.imageEditorProTabColor,
-      UITextConstants.imageEditorProTabLight,
-      UITextConstants.imageEditorProTabTexture,
+      UITextConstants.imageEditorProTabOverall,
+      UITextConstants.imageEditorProTabLocal,
+      UITextConstants.imageEditorProTabHsl,
+      UITextConstants.imageEditorProTabCurve,
     ];
     return SizedBox(
       height: AppSpacing.subTabNavigationHeight,
@@ -50,6 +50,7 @@ class ImageEditorProCategoryTabs extends StatelessWidget {
     VoidCallback? onTap,
   }) {
     const isDark = true;
+    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
     final fgSecondary =
         AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
     return Material(
@@ -69,18 +70,17 @@ class ImageEditorProCategoryTabs extends StatelessWidget {
               Text(
                 label,
                 style: TextStyle(
-                  color: selected ? AppColors.primaryColor : fgSecondary,
+                  color: selected ? fg : fgSecondary.withValues(alpha: 0.75),
                   fontSize: AppTypography.sm,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
                 ),
               ),
-              if (selected)
-                Container(
-                  margin: EdgeInsets.only(top: AppSpacing.xs / 2),
-                  height: AppSpacing.xs / 2,
-                  width: AppSpacing.iconSmall,
-                  color: AppColors.primaryColor,
-                ),
+              Container(
+                margin: EdgeInsets.only(top: AppSpacing.xs / 2),
+                height: AppSpacing.xs / 2,
+                width: AppSpacing.iconSmall,
+                color: selected ? fg : Colors.transparent,
+              ),
             ],
           ),
         ),
@@ -103,27 +103,31 @@ class ImageEditorProToolList extends StatelessWidget {
   final ValueChanged<int> onToolTap;
   final void Function(double viewportWidth, double itemWidth) onScrollSync;
 
+  /// 与裁剪、调整面板、底部工具栏一致：containerSm 边距、intraGroupSm 项间距、buttonHeight*1.4 单项宽度
+  static const _gap = AppSpacing.intraGroupSm;
+  static const _itemWidth = AppSpacing.buttonHeight * 1.4;
+
   @override
   Widget build(BuildContext context) {
-    final itemWidth = AppSpacing.buttonHeight + AppSpacing.sm;
     return SizedBox(
       height: AppSpacing.bottomNavHeight,
       child: LayoutBuilder(
         builder: (context, constraints) {
           return NotificationListener<ScrollUpdateNotification>(
-            onNotification: (notification) {
-              onScrollSync(constraints.maxWidth, itemWidth);
+            onNotification: (_) {
+              onScrollSync(constraints.maxWidth, _itemWidth);
               return false;
             },
-            child: ListView.builder(
+            child: ListView.separated(
               controller: scrollController,
               scrollDirection: Axis.horizontal,
               padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
               itemCount: kImageEditorProToolEntries.length,
+              separatorBuilder: (context, index) => SizedBox(width: _gap),
               itemBuilder: (context, index) {
                 final entry = kImageEditorProToolEntries[index];
                 return SizedBox(
-                  width: itemWidth,
+                  width: _itemWidth,
                   child: ImageEditorToolEntryChip(
                     icon: entry.icon,
                     label: entry.label,

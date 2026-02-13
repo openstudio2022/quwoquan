@@ -1,9 +1,10 @@
+// ignore_for_file: unnecessary_underscores
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/assistant_avatar.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/data/mock/prototype_mock_data.dart';
 
 /// 趣聊页
 ///
@@ -91,10 +92,11 @@ class _ChatPageState extends ConsumerState<ChatPage>
   }
 
   List<Map<String, dynamic>> _filteredConversations() {
-    final list = PrototypeMockData.chatMockConversations;
+    final repository = ref.read(appContentRepositoryProvider);
+    final list = repository.chatMockConversations;
     final sub = _mainTabIndex == 0 ? _messageSubTabs[_subTabIndex] : _contactsSubTabs[_subTabIndex];
     if (_mainTabIndex != 0) return list;
-    if (sub == UITextConstants.atMe) return PrototypeMockData.chatMockConversationsAtMe;
+    if (sub == UITextConstants.atMe) return repository.chatMockConversationsAtMe;
     if (sub == UITextConstants.unread) return list.where((c) => (c['unreadCount'] as int? ?? 0) > 0).toList();
     if (sub == UITextConstants.secretMessage) return []; // 密信由 _buildSecretMessageContent 单独展示
     return list;
@@ -270,7 +272,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
     if (!_secretUnlocked) {
       return _buildSecretLockScreen(context, fgPrimary, fgSecondary);
     }
-    final encrypted = PrototypeMockData.chatEncryptedConversations;
+    final encrypted = ref.read(appContentRepositoryProvider).chatEncryptedConversations;
     return Column(
       children: [
         Container(
@@ -425,7 +427,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
       children: [
         if (showAssistant)
           _ConversationTile(
-            conversation: PrototypeMockData.chatAssistantConversation,
+            conversation: ref.read(appContentRepositoryProvider).chatAssistantConversation,
             isSpecial: true,
             onTap: () => context.push('/chat/${AppConceptConstants.assistantConversationId}'),
             fgPrimary: fgPrimary,
@@ -446,15 +448,18 @@ class _ChatPageState extends ConsumerState<ChatPage>
 
   Widget _buildContactsContent(BuildContext context, Color fgPrimary, Color fgSecondary, Color borderColor) {
     final sub = _contactsSubTabs[_subTabIndex];
+    final repository = ref.read(appContentRepositoryProvider);
     List<Map<String, dynamic>> list;
     if (sub == UITextConstants.contactsTabCircles) {
-      list = PrototypeMockData.chatMockContactCircles;
+      list = repository.chatMockContactCircles;
     } else if (sub == UITextConstants.contactsTabSameInterest) {
-      list = PrototypeMockData.chatMockContacts.where((c) => c['isFriend'] == true).toList();
+      list = repository.chatMockContacts
+          .where((c) => c['isFriend'] == true)
+          .toList();
     } else if (sub == UITextConstants.contactsTabFunGroup) {
-      list = PrototypeMockData.chatMockContactGroups;
+      list = repository.chatMockContactGroups;
     } else {
-      list = PrototypeMockData.chatMockContacts;
+      list = repository.chatMockContacts;
     }
     if (list.isEmpty) {
       return Center(

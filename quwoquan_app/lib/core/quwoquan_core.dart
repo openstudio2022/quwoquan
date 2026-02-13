@@ -25,6 +25,7 @@ export 'design_system/colors/app_colors.dart';
 export 'design_system/spacing/app_spacing.dart';
 export 'design_system/spacing/spacing_extensions.dart';
 export 'design_system/typography/app_typography.dart';
+export 'design_system/icons/app_custom_icons.dart';
 
 // Providers
 export 'design_system/providers/theme_provider.dart';
@@ -36,6 +37,7 @@ export 'package:quwoquan_app/features/home/providers/home_state.dart';
 
 // Services
 export 'services/data_service.dart';
+export 'services/app_content_repository.dart';
 export 'services/assistant_chat_store.dart';
 
 // Models

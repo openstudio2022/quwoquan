@@ -4,6 +4,10 @@ import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
 /// 应用间距常量
 /// 根据设计规则文档 (03_DESIGN_RULES.md) 定义
 class AppSpacing {
+  // ==================== 响应式断点 ====================
+  static const double compactBreakpoint = 360.0;
+  static const double expandedBreakpoint = 600.0;
+
   // ==================== 基础间距 ====================
   /// 极小间距: 4.0
   static const double xs = 4.0;
@@ -46,6 +50,8 @@ class AppSpacing {
   static const double iconButtonMinSizeSm = 44.0;
   /// 图标按钮最小点击区域 md: 64.0
   static const double iconButtonMinSizeMd = 64.0;
+  /// 统一可点击区域最低标准（WCAG 触控建议）
+  static const double minInteractiveSize = 44.0;
   
   /// 获取文案按钮内边距（按断点适配，不受容器约束）
   static EdgeInsets buttonPadding(
@@ -121,6 +127,10 @@ class AppSpacing {
   
   /// 子标签导航高度: 44.0
   static const double subTabNavigationHeight = 44.0;
+  /// 顶部工具栏高度（常规）
+  static const double toolbarHeight = 56.0;
+  /// 底部工具栏最小触控高度
+  static const double toolbarMinTouchHeight = 48.0;
   
   /// 模态框头部高度: 56.0
   static const double modalHeaderHeight = 56.0;
@@ -175,6 +185,35 @@ class AppSpacing {
   
   /// 大图标: 32.0
   static const double iconLarge = 32.0;
+
+  // ==================== 工具面板功能项（裁剪比例 / 旋转四项 / 专业工具列表） ====================
+  /// 功能项图标尺寸，与 iconMedium 一致
+  static const double toolPanelItemIconSize = iconMedium;
+  /// 功能项：图标与文案间距，使用组内极小间距语义
+  static const double toolPanelItemIconLabelGap = intraGroupSm;
+  /// 功能项单行文案行高（与 toolPanelItemLabel / xs 字号搭配，用于滤镜等单行标签）
+  static const double toolPanelItemLabelLineHeight = 14.0;
+  /// 滤镜模板卡片预览图尺寸（正方形，与底部栏高一致便于一行展示）
+  static const double filterTemplatePreviewSize = bottomNavHeight + intraGroupMd;
+  /// 滤镜模板名称色块高度（图下标签条）
+  static const double filterTemplateLabelBarHeight = buttonHeightXs;
+  /// 滤镜模板卡片单项宽度（预览 + 与专业工具一致的组间间距）
+  static const double filterTemplateItemWidth = filterTemplatePreviewSize + interGroupLg;
+  /// 滤镜模板卡片之间的水平间距
+  static const double filterTemplateItemGap = intraGroupSm;
+  /// 滤镜分类标签之间的水平间距（较原方案更舒展）
+  static const double filterCategoryChipGap = interGroupSm;
+  /// 滤镜模板跨分类分段间距（约为常规模板间距的两倍）
+  static const double filterTemplateCategoryGap = filterTemplateItemGap * 2;
+  /// 滤镜分类分组间距（同组间距约2x）
+  static const double filterCategoryGroupGap = interGroupMd;
+  /// 滤镜模板横向滚动步长（单项宽度 + 项间距）
+  static const double filterTemplateItemExtent =
+      filterTemplateItemWidth + filterTemplateItemGap;
+  /// 功能项选中边框线宽（如裁剪比例框）
+  static const double toolPanelItemBorderWidthSelected = 2.0;
+  /// 功能项未选中边框线宽
+  static const double toolPanelItemBorderWidthUnselected = 1.0;
 
   // ==================== 圆角 ====================
   /// 小圆角: 4.0 (按钮、标签、输入框、小卡片)
@@ -382,5 +421,17 @@ class AppSpacing {
       default:
         return md;
     }
+  }
+
+  static double responsiveValue(
+    BuildContext context, {
+    required double compact,
+    required double regular,
+    required double expanded,
+  }) {
+    final width = MediaQuery.sizeOf(context).width;
+    if (width < compactBreakpoint) return compact;
+    if (width >= expandedBreakpoint) return expanded;
+    return regular;
   }
 }

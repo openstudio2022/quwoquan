@@ -1,8 +1,13 @@
+// ignore_for_file: unnecessary_underscores
+
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/components/tab_navigation.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/data/mock/prototype_mock_data.dart';
 
 /// 圈子页
 ///
@@ -18,11 +23,13 @@ class CirclesPage extends ConsumerStatefulWidget {
 
 class _CirclesPageState extends ConsumerState<CirclesPage>
     with AutomaticKeepAliveClientMixin {
+  static const String _fixedPrimaryFollowing = 'following';
+  static const String _fixedPrimaryRecommended = 'all';
+  static const double _circleCoverAspectRatio = 4 / 3;
+
   String _selectedDimension = 'all';
-  String _selectedSubCategory = '综合';
+  String _selectedSubCategory = UITextConstants.circleSubAll;
   final ScrollController _scrollController = ScrollController();
-  double _lastScrollY = 0;
-  bool _subBarVisible = true;
 
   @override
   bool get wantKeepAlive => true;
@@ -35,7 +42,7 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
 
   /// 与 DiscoveryView myCategories 一致：关注 + CATEGORY_CONFIG
   List<Map<String, String>> get _categories {
-    final config = PrototypeMockData.circlesCategoryConfig;
+    final config = ref.read(appContentRepositoryProvider).circlesCategoryConfig;
     final list = <Map<String, String>>[
       {'id': 'following', 'label': '关注'},
     ];
@@ -46,28 +53,37 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
   }
 
   List<Map<String, dynamic>> get _filteredCircles {
-    final circles = PrototypeMockData.circlesMockCircles;
+    final circles = ref.read(appContentRepositoryProvider).circlesMockCircles;
     if (_selectedDimension == 'all') return circles;
     return circles.where((c) => c['categoryId'] == _selectedDimension).toList();
   }
 
   List<Map<String, dynamic>> get _filteredActivities {
-    final activities = PrototypeMockData.circlesMockActivities;
+    final activities = ref.read(appContentRepositoryProvider).circlesMockActivities;
     if (_selectedDimension == 'all') return activities;
-    final label = PrototypeMockData.circlesCategoryConfig[_selectedDimension]?['label'] as String? ?? '';
+    final label = ref.read(appContentRepositoryProvider).circlesCategoryConfig[_selectedDimension]?['label'] as String? ?? '';
     return activities.where((a) => (a['circleName'] as String).contains(label)).toList();
   }
 
   List<String> get _currentSubCategories {
-    final config = PrototypeMockData.circlesCategoryConfig[_selectedDimension];
+    final config = ref.read(appContentRepositoryProvider).circlesCategoryConfig[_selectedDimension];
     if (config == null) return [];
     final sub = config['subCategories'] as List<dynamic>? ?? [];
-    return sub.map((e) => e.toString()).where((s) => s != '综合').toList();
+    return sub
+        .map((e) => e.toString())
+        .where((s) => s != '综合' && s != UITextConstants.circleSubAll)
+        .toList();
   }
 
   List<Map<String, dynamic>> get _discoveryPosts {
-    final circles = _filteredCircles.isEmpty ? PrototypeMockData.circlesMockCircles : _filteredCircles;
-    final pool = circles;
+    final circles = _filteredCircles.isEmpty
+        ? ref.read(appContentRepositoryProvider).circlesMockCircles
+        : _filteredCircles;
+    // 按二级分类过滤（综合则不过滤）
+    final filtered = _selectedSubCategory == UITextConstants.circleSubAll
+        ? circles
+        : circles.where((c) => c['subCategory'] == _selectedSubCategory).toList();
+    final pool = filtered.isEmpty ? circles : filtered;
     final urls = [
       'https://images.unsplash.com/photo-1617634667039-8e4cb277ab46?w=800&fit=crop',
       'https://images.unsplash.com/photo-1551024601-bec78aea704b?w=800&fit=crop',
@@ -85,19 +101,72 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
         'user': {'name': 'User_$i', 'avatar': 'https://api.dicebear.com/7.x/avataaars/svg?seed=$i'},
         'likes': 24 + i * 5,
         'comments': 2 + i,
+        'shares': 1 + (i ~/ 2),
+        'bookmarks': 3 + (i % 5),
         'circleName': circle['name'],
         'type': type,
       };
     });
   }
 
-  void _onScroll(double y) {
-    if (y - _lastScrollY > 5 && y > 100) {
-      if (_subBarVisible) setState(() => _subBarVisible = false);
-    } else if (_lastScrollY - y > 5) {
-      if (!_subBarVisible) setState(() => _subBarVisible = true);
+  List<String> get _primaryTabIds =>
+      _categories.map((category) => category['id']!).toList(growable: false);
+
+  List<String> get _secondaryTabIds =>
+      [UITextConstants.circleSubAll, ..._currentSubCategories];
+
+  void _switchPrimaryByDelta(int delta) {
+    final ids = _primaryTabIds;
+    final currentIndex = ids.indexOf(_selectedDimension);
+    if (currentIndex < 0) return;
+    final nextIndex = currentIndex + delta;
+    if (nextIndex < 0 || nextIndex >= ids.length) {
+      HapticFeedback.selectionClick();
+      return;
     }
-    _lastScrollY = y;
+    setState(() {
+      _selectedDimension = ids[nextIndex];
+      _selectedSubCategory = UITextConstants.circleSubAll;
+    });
+  }
+
+  void _switchSecondaryByDelta(int delta) {
+    final ids = _secondaryTabIds;
+    final currentIndex = ids.indexOf(_selectedSubCategory);
+    if (currentIndex < 0) return;
+    final nextIndex = currentIndex + delta;
+    if (nextIndex < 0 || nextIndex >= ids.length) {
+      HapticFeedback.selectionClick();
+      return;
+    }
+    setState(() => _selectedSubCategory = ids[nextIndex]);
+  }
+
+  void _onPrimaryDragEnd(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    if (velocity.abs() < 220) return;
+    _switchPrimaryByDelta(velocity < 0 ? 1 : -1);
+  }
+
+  void _onSecondaryDragEnd(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    if (velocity.abs() < 220) return;
+    _switchSecondaryByDelta(velocity < 0 ? 1 : -1);
+  }
+
+  double _circleCardWidth(BuildContext context) {
+    return AppSpacing.responsiveValue(
+      context,
+      compact: AppSpacing.bottomNavHeight * 1.5,
+      regular: AppSpacing.bottomNavHeight * 1.65,
+      expanded: AppSpacing.bottomNavHeight * 1.85,
+    );
+  }
+
+  double _circleCardRailHeight(BuildContext context) {
+    final cardWidth = _circleCardWidth(context);
+    final coverHeight = cardWidth / _circleCoverAspectRatio;
+    return coverHeight + AppSpacing.intraGroupXs + AppTypography.sm + AppSpacing.sm;
   }
 
   @override
@@ -119,29 +188,55 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
             Expanded(
               child: _selectedDimension == 'following'
                   ? _buildFollowingPlaceholder(fgSecondary)
-                  : NotificationListener<ScrollNotification>(
-                      onNotification: (n) {
-                        _onScroll(n.metrics.pixels);
-                        return false;
+                  : GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onHorizontalDragEnd: (details) {
+                        final velocity = details.primaryVelocity ?? 0;
+                        if (velocity.abs() < 200) return;
+                        final delta = velocity < 0 ? 1 : -1;
+                        if (_currentSubCategories.isNotEmpty) {
+                          _switchSecondaryByDelta(delta);
+                        } else {
+                          _switchPrimaryByDelta(delta);
+                        }
                       },
-                      child: ListView(
+                      child: CustomScrollView(
                         controller: _scrollController,
-                        children: [
-                        _buildRecommendedSection(context, isDark, fgSecondary),
-                        if (_filteredActivities.isNotEmpty) _buildActivities(isDark, fgSecondary),
-                        if (_currentSubCategories.isNotEmpty) _buildSubCategoryBar(isDark, fgPrimary, fgSecondary, borderColor),
-                        _buildDiscoveryGrid(context, isDark, fgSecondary),
-                        Padding(
-                          padding: const EdgeInsets.only(top: 32, bottom: 16),
-                          child: Center(
-                            child: Text(
-                              UITextConstants.discoveryEndHint,
-                              style: TextStyle(fontSize: 12, color: fgSecondary),
+                        slivers: [
+                          SliverToBoxAdapter(
+                            child: _buildRecommendedSection(
+                              context, isDark, fgPrimary, fgSecondary,
                             ),
                           ),
-                        ),
-                      ],
-                    ),
+                          if (_filteredActivities.isNotEmpty)
+                            SliverToBoxAdapter(child: _buildActivities(isDark, fgSecondary)),
+                          if (_currentSubCategories.isNotEmpty)
+                            SliverPersistentHeader(
+                              floating: true,
+                              delegate: _SubCategoryBarDelegate(
+                                child: _buildSubCategoryBarContent(
+                                  context, isDark, fgPrimary, fgSecondary, borderColor,
+                                ),
+                                extent: AppSpacing.subTabNavigationHeight,
+                              ),
+                            ),
+                          _buildDiscoveryMasonryGrid(context, isDark, fgPrimary, fgSecondary),
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: EdgeInsets.only(
+                                top: AppSpacing.interGroupXl,
+                                bottom: MediaQuery.of(context).padding.bottom + AppSpacing.bottomNavHeight,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  UITextConstants.discoveryEndHint,
+                                  style: TextStyle(fontSize: AppTypography.sm, color: fgSecondary),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
             ),
           ],
@@ -161,7 +256,10 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
               icon: const Icon(Icons.add, color: Colors.white),
               label: Text(
                 UITextConstants.createCircle,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: AppTypography.semiBold,
+                ),
               ),
             )
           : null,
@@ -169,68 +267,46 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
   }
 
   Widget _buildHeader(BuildContext context, bool isDark, Color fgPrimary, Color fgSecondary) {
-    return Container(
-      padding: EdgeInsets.only(
-        left: AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.sm] ?? AppSpacing.containerSm,
-        right: AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.sm] ?? AppSpacing.containerSm,
-        top: 8,
-        bottom: 8,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: _categories.map((c) {
-                  final selected = _selectedDimension == c['id'];
-                  return Padding(
-                    padding: EdgeInsets.only(right: AppSpacing.sm),
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _selectedDimension = c['id']!;
-                          _selectedSubCategory = '综合';
-                        });
-                      },
-                      child: Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: AppSpacing.md,
-                          vertical: AppSpacing.sm,
-                        ),
-                        decoration: BoxDecoration(
-                          color: selected ? AppColors.primaryColor : Colors.transparent,
-                          borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius),
-                        ),
-                        child: Text(
-                          c['label']!,
-                          style: TextStyle(
-                            color: selected ? Colors.white : fgSecondary,
-                            fontWeight: selected ? FontWeight.w800 : FontWeight.normal,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
+    final tabs = _categories
+        .map((entry) => TabItem(id: entry['id']!, label: entry['label']!))
+        .toList(growable: false);
+
+    return TabNavigationWidget(
+      activeTab: _selectedDimension,
+      isDark: isDark,
+      tabs: tabs,
+      mode: TabNavigationMode.mixedScrollable,
+      fixedTabIds: const <String>[_fixedPrimaryFollowing, _fixedPrimaryRecommended],
+      onTabChange: (id) {
+        setState(() {
+          _selectedDimension = id;
+          _selectedSubCategory = UITextConstants.circleSubAll;
+        });
+      },
+      onHorizontalDragEnd: _onPrimaryDragEnd,
+      trailingActions: [
+        IconButton(
+          icon: Icon(Icons.search, size: AppSpacing.iconMedium, color: fgSecondary),
+          onPressed: () {},
+          style: IconButton.styleFrom(
+            minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+          ),
+        ),
+        IconButton(
+          icon: Icon(Icons.tune, size: AppSpacing.iconMedium, color: fgSecondary),
+          onPressed: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('频道管理（ChannelManager 待接入）'),
+                behavior: SnackBarBehavior.floating,
               ),
-            ),
+            );
+          },
+          style: IconButton.styleFrom(
+            minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
           ),
-          IconButton(
-            icon: Icon(Icons.search, color: fgSecondary),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: Icon(Icons.tune, color: fgSecondary),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('频道管理（ChannelManager 待接入）'), behavior: SnackBarBehavior.floating),
-              );
-            },
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -239,15 +315,27 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.people_outline, size: 64, color: fgSecondary),
-          SizedBox(height: AppSpacing.md),
-          Text('关注 暂无内容', style: TextStyle(fontSize: 16, color: fgSecondary)),
+          Icon(
+            Icons.people_outline,
+            size: AppSpacing.largeButtonSize + AppSpacing.sm,
+            color: fgSecondary,
+          ),
+          SizedBox(height: AppSpacing.interGroupMd),
+          Text(
+            UITextConstants.circlesFollowingEmpty,
+            style: TextStyle(fontSize: AppTypography.lg, color: fgSecondary),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildRecommendedSection(BuildContext context, bool isDark, Color fgSecondary) {
+  Widget _buildRecommendedSection(
+    BuildContext context,
+    bool isDark,
+    Color fgPrimary,
+    Color fgSecondary,
+  ) {
     final circles = _filteredCircles;
     return Container(
       color: isDark ? Colors.white.withValues(alpha: 0.03) : Colors.black.withValues(alpha: 0.02),
@@ -262,17 +350,27 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '推荐圈子',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: fgSecondary),
+                UITextConstants.circlesRecommendedTitle,
+                style: TextStyle(
+                  fontSize: AppTypography.lg,
+                  fontWeight: AppTypography.extraBold,
+                  color: fgSecondary,
+                ),
               ),
               TextButton(
                 onPressed: () {},
-                child: Text(UITextConstants.seeMore, style: TextStyle(fontSize: 12, color: AppColors.primaryColor)),
+                child: Text(
+                  UITextConstants.seeMore,
+                  style: TextStyle(
+                    fontSize: AppTypography.sm,
+                    color: AppColors.primaryColor,
+                  ),
+                ),
               ),
             ],
           ),
           SizedBox(
-            height: 112,
+            height: _circleCardRailHeight(context),
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               itemCount: circles.length + 1,
@@ -287,12 +385,16 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
                         );
                       },
                       child: Container(
-                        width: 80,
+                        width: _circleCardWidth(context),
                         decoration: BoxDecoration(
                           color: AppColors.primaryColor.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
                         ),
-                        child: Icon(Icons.add, color: AppColors.primaryColor, size: 32),
+                        child: Icon(
+                          Icons.add,
+                          color: AppColors.primaryColor,
+                          size: AppSpacing.iconLarge,
+                        ),
                       ),
                     ),
                   );
@@ -304,30 +406,42 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
                     onTap: () => context.push('/circle/${c['id']}'),
                     child: Column(
                       children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.network(
-                            c['avatar'] as String,
-                            width: 64,
-                            height: 64,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              width: 64,
-                              height: 64,
-                              color: fgSecondary.withValues(alpha: 0.2),
-                              child: Icon(Icons.group, color: fgSecondary),
+                        SizedBox(
+                          width: _circleCardWidth(context),
+                          child: AspectRatio(
+                            aspectRatio: _circleCoverAspectRatio,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(
+                                AppSpacing.borderRadius,
+                              ),
+                              child: Image.network(
+                                c['avatar'] as String,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    Container(
+                                      color: fgSecondary.withValues(alpha: 0.2),
+                                      child: Icon(
+                                        Icons.group,
+                                        color: fgSecondary,
+                                        size: AppSpacing.iconMedium,
+                                      ),
+                                    ),
+                              ),
                             ),
                           ),
                         ),
-                        SizedBox(height: 4),
+                        SizedBox(height: AppSpacing.intraGroupXs),
                         SizedBox(
-                          width: 72,
+                          width: _circleCardWidth(context),
                           child: Text(
                             c['name'] as String,
-                            maxLines: 2,
+                            maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 11, color: fgSecondary),
+                            style: TextStyle(
+                              fontSize: AppTypography.sm,
+                              color: fgPrimary,
+                            ),
                           ),
                         ),
                       ],
@@ -354,22 +468,26 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
             padding: EdgeInsets.only(bottom: AppSpacing.sm),
             child: Material(
               color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.03),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
               child: InkWell(
                 onTap: () {},
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
                 child: Padding(
                   padding: EdgeInsets.all(AppSpacing.sm),
                   child: Row(
                     children: [
                       ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
                         child: Image.network(
                           a['image'] as String? ?? '',
-                          width: 56,
-                          height: 56,
+                          width: AppSpacing.bottomNavHeight,
+                          height: AppSpacing.bottomNavHeight,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(width: 56, height: 56, color: fgSecondary.withValues(alpha: 0.2)),
+                          errorBuilder: (context, error, stackTrace) => Container(
+                            width: AppSpacing.bottomNavHeight,
+                            height: AppSpacing.bottomNavHeight,
+                            color: fgSecondary.withValues(alpha: 0.2),
+                          ),
                         ),
                       ),
                       SizedBox(width: AppSpacing.sm),
@@ -377,8 +495,20 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(a['title'] as String, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                            Text(a['circleName'] as String, style: TextStyle(fontSize: 11, color: fgSecondary)),
+                            Text(
+                              a['title'] as String,
+                              style: TextStyle(
+                                fontSize: AppTypography.base,
+                                fontWeight: AppTypography.semiBold,
+                              ),
+                            ),
+                            Text(
+                              a['circleName'] as String,
+                              style: TextStyle(
+                                fontSize: AppTypography.sm,
+                                color: fgSecondary,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -393,60 +523,110 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
     );
   }
 
-  Widget _buildSubCategoryBar(bool isDark, Color fgPrimary, Color fgSecondary, Color borderColor) {
-    if (!_subBarVisible) return const SizedBox.shrink();
-    final subs = ['综合', ..._currentSubCategories];
+  /// 二级分类条内容 — 胶囊样式 + 浅色背景工具栏
+  Widget _buildSubCategoryBarContent(
+    BuildContext context,
+    bool isDark,
+    Color fgPrimary,
+    Color fgSecondary,
+    Color borderColor,
+  ) {
+    final subs = [UITextConstants.circleSubAll, ..._currentSubCategories];
+    final chipFontSize = AppTypography.responsive(
+      context,
+      compact: AppTypography.sm,
+      regular: AppTypography.base,
+      expanded: AppTypography.base,
+    );
+    final bgBar = isDark
+        ? Colors.white.withValues(alpha: 0.04)
+        : Colors.black.withValues(alpha: 0.03);
+
     return Container(
-      color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.03),
-      padding: EdgeInsets.symmetric(vertical: 8),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-        child: Row(
-          children: subs.map((s) {
-            final selected = _selectedSubCategory == s;
-            return Padding(
-              padding: EdgeInsets.only(right: AppSpacing.sm),
-              child: GestureDetector(
-                onTap: () => setState(() => _selectedSubCategory = s),
-                child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: selected ? (isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.06)) : null,
-                    border: Border.all(color: borderColor.withValues(alpha: 0.5)),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    s,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: selected ? fgPrimary : fgSecondary,
+      color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
+      height: AppSpacing.subTabNavigationHeight,
+      child: Container(
+        color: bgBar,
+        child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onHorizontalDragEnd: _onSecondaryDragEnd,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.containerSm,
+              vertical: AppSpacing.intraGroupSm,
+            ),
+            itemCount: subs.length,
+            itemBuilder: (context, index) {
+              final s = subs[index];
+              final selected = _selectedSubCategory == s;
+              return Padding(
+                padding: EdgeInsets.only(right: AppSpacing.intraGroupSm),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+                    onTap: () => setState(() => _selectedSubCategory = s),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      alignment: Alignment.center,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppSpacing.intraGroupMd + AppSpacing.xs,
+                        vertical: AppSpacing.intraGroupXs,
+                      ),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? (isDark ? Colors.white.withValues(alpha: 0.15) : AppColors.primaryColor.withValues(alpha: 0.12))
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+                        border: Border.all(
+                          color: selected
+                              ? (isDark ? Colors.white.withValues(alpha: 0.2) : AppColors.primaryColor.withValues(alpha: 0.25))
+                              : fgSecondary.withValues(alpha: 0.2),
+                          width: 0.5,
+                        ),
+                      ),
+                      child: Text(
+                        s,
+                        style: TextStyle(
+                          fontSize: chipFontSize,
+                          fontWeight: selected ? AppTypography.semiBold : AppTypography.medium,
+                          color: selected
+                              ? (isDark ? Colors.white : AppColors.primaryColor)
+                              : fgSecondary,
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            );
-          }).toList(),
+              );
+            },
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildDiscoveryGrid(BuildContext context, bool isDark, Color fgSecondary) {
+  /// 瀑布流宫格（Sliver 版本）
+  Widget _buildDiscoveryMasonryGrid(
+    BuildContext context,
+    bool isDark,
+    Color fgPrimary,
+    Color fgSecondary,
+  ) {
     final posts = _discoveryPosts;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(12, 16, 12, MediaQuery.of(context).padding.bottom + 80),
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 0.75,
-        ),
-        itemCount: posts.length,
+    return SliverPadding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.containerSm,
+        AppSpacing.containerMd,
+        AppSpacing.containerSm,
+        0,
+      ),
+      sliver: SliverMasonryGrid.count(
+        crossAxisCount: 2,
+        mainAxisSpacing: AppSpacing.interGroupSm,
+        crossAxisSpacing: AppSpacing.interGroupSm,
+        childCount: posts.length,
         itemBuilder: (context, i) {
           final p = posts[i];
           return _DiscoveryPostCard(
@@ -460,60 +640,153 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
   }
 }
 
+/// 简化版宫格卡片：媒体 + 标题 + 作者头像/名字 + 右侧爱心
 class _DiscoveryPostCard extends StatelessWidget {
   final Map<String, dynamic> post;
   final bool isDark;
   final VoidCallback onTap;
 
-  const _DiscoveryPostCard({required this.post, required this.isDark, required this.onTap});
+  const _DiscoveryPostCard({
+    required this.post,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  /// 计算图片显示宽高比（随机模拟），最大不超过 9:16
+  double get _imageAspectRatio {
+    // 用 post id 的 hashCode 做伪随机
+    final hash = post['id'].hashCode;
+    final ratios = [1.0, 4 / 3, 3 / 4, 1 / 1, 9 / 16];
+    final ratio = ratios[hash.abs() % ratios.length];
+    // 最小 9/16 = 0.5625（最高竖图）
+    return ratio.clamp(9.0 / 16.0, 16.0 / 9.0);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final fgPrimary = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
     final fgSecondary = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    final user = post['user'] as Map<String, dynamic>? ?? {};
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
+            // 媒体图片（按模拟宽高比，最大 9:16）
+            AspectRatio(
+              aspectRatio: _imageAspectRatio,
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
                     Image.network(
                       post['image'] as String,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(color: fgSecondary.withValues(alpha: 0.2)),
+                      errorBuilder: (context, error, stackTrace) =>
+                          Container(color: fgSecondary.withValues(alpha: 0.15)),
                     ),
                     if (post['type'] == 'video')
                       Positioned(
-                        top: 8,
-                        right: 8,
-                        child: Icon(Icons.play_circle_fill, color: Colors.white, size: 28),
+                        top: AppSpacing.intraGroupSm,
+                        right: AppSpacing.intraGroupSm,
+                        child: Icon(
+                          Icons.play_circle_fill,
+                          color: Colors.white,
+                          size: AppSpacing.iconLarge - AppSpacing.xs,
+                        ),
                       ),
                   ],
                 ),
               ),
             ),
-            SizedBox(height: 6),
+            SizedBox(height: AppSpacing.intraGroupSm),
+            // 标题（最多2行，正常色）
             Text(
               post['title'] as String,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 12, color: fgSecondary),
+              style: TextStyle(
+                fontSize: AppTypography.sm,
+                color: fgPrimary,
+              ),
             ),
+            SizedBox(height: AppSpacing.intraGroupXs),
+            // 底部行：左侧三动作，右侧转发（宫格保持更紧凑字号）。
             Row(
               children: [
-                Icon(Icons.favorite_border, size: 12, color: fgSecondary),
-                SizedBox(width: 4),
-                Text('${post['likes']}', style: TextStyle(fontSize: 11, color: fgSecondary)),
-                SizedBox(width: 8),
-                Icon(Icons.chat_bubble_outline, size: 12, color: fgSecondary),
-                Text('${post['comments']}', style: TextStyle(fontSize: 11, color: fgSecondary)),
+                CircleAvatar(
+                  radius: AppSpacing.intraGroupMd,
+                  backgroundColor: fgSecondary.withValues(alpha: 0.15),
+                  backgroundImage: (user['avatar'] as String?)?.isNotEmpty == true
+                      ? NetworkImage(user['avatar'] as String)
+                      : null,
+                  child: (user['avatar'] as String?)?.isNotEmpty != true
+                      ? Icon(Icons.person, size: AppSpacing.iconSmall, color: fgSecondary)
+                      : null,
+                ),
+                SizedBox(width: AppSpacing.intraGroupXs),
+                Expanded(
+                  child: Text(
+                    user['name'] as String? ?? '',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: AppTypography.xs,
+                      color: fgSecondary,
+                    ),
+                  ),
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      CupertinoIcons.heart,
+                      size: AppSpacing.iconSmall,
+                      color: fgSecondary,
+                    ),
+                    Text(
+                      ' ${post['likes'] ?? 0} ',
+                      style: TextStyle(
+                        fontSize: AppTypography.xs,
+                        color: fgSecondary,
+                      ),
+                    ),
+                    AppBubbleIcon(size: AppSpacing.iconSmall, color: fgSecondary),
+                    Text(
+                      ' ${post['comments'] ?? 0} ',
+                      style: TextStyle(
+                        fontSize: AppTypography.xs,
+                        color: fgSecondary,
+                      ),
+                    ),
+                    AppStarIcon(size: AppSpacing.iconSmall, color: fgSecondary),
+                    Text(
+                      ' ${post['bookmarks'] ?? 0}',
+                      style: TextStyle(
+                        fontSize: AppTypography.xs,
+                        color: fgSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(width: AppSpacing.intraGroupSm),
+                Icon(
+                  CupertinoIcons.arrowshape_turn_up_right,
+                  size: AppSpacing.iconSmall,
+                  color: fgSecondary,
+                ),
+                Text(
+                  ' ${post['shares'] ?? 0}',
+                  style: TextStyle(
+                    fontSize: AppTypography.xs,
+                    color: fgSecondary,
+                  ),
+                ),
               ],
             ),
           ],
@@ -521,4 +794,26 @@ class _DiscoveryPostCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 浮动二级分类条的 delegate
+class _SubCategoryBarDelegate extends SliverPersistentHeaderDelegate {
+  final Widget child;
+  final double extent;
+
+  _SubCategoryBarDelegate({required this.child, required this.extent});
+
+  @override
+  double get maxExtent => extent;
+
+  @override
+  double get minExtent => extent;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return child;
+  }
+
+  @override
+  bool shouldRebuild(covariant _SubCategoryBarDelegate oldDelegate) => true;
 }

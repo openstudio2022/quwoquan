@@ -1,8 +1,9 @@
+// ignore_for_file: unnecessary_underscores
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/data/mock/prototype_mock_data.dart';
 
 /// 圈子主页
 ///
@@ -42,7 +43,7 @@ class _CircleDetailPageState extends ConsumerState<CircleDetailPage> {
   bool _lifestyleViewModeGrid = true;
 
   Map<String, dynamic> get _circleInfo {
-    final info = PrototypeMockData.circlePageCircleInfo;
+    final info = ref.read(appContentRepositoryProvider).circlePageCircleInfo;
     return {...info, 'id': widget.circleId};
   }
 

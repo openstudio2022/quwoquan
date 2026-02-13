@@ -309,8 +309,6 @@ class ImageEditorRotatePreview extends StatelessWidget {
         final scale = RotateGeometry.scaleToFill(frame.w, frame.h, radians);
         // 上下等留白居中
         final verticalGap = availableHeight - frame.h;
-        final topOffset = topPad + verticalGap / 2;
-        final bottomOffset = bottomReserve + verticalGap / 2;
 
         final baseImage = SizedBox(
           width: frame.w,
@@ -318,9 +316,11 @@ class ImageEditorRotatePreview extends StatelessWidget {
           child: FittedBox(fit: BoxFit.cover, child: child),
         );
         final transformMatrix = Matrix4.identity()
-          ..scale(
+          ..scaleByDouble(
             flipHorizontal ? -scale : scale,
             flipVertical ? -scale : scale,
+            1.0,
+            1.0,
           )
           ..rotateZ(radians);
 
@@ -529,7 +529,7 @@ class RotateFramePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty || columns <= 0 || rows <= 0) return;
     final borderPaint = Paint()
-      ..color = AppColors.white
+      ..color = AppColors.white.withValues(alpha: 0.35)
       ..style = PaintingStyle.stroke
       ..strokeWidth = AppSpacing.xs / 2;
     final gridPaint = Paint()
