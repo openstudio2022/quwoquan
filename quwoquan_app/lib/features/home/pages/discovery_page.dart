@@ -10,9 +10,13 @@ import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 import 'package:quwoquan_app/components/more_actions_popup/more_action_popup.dart';
 import 'package:quwoquan_app/components/more_actions_popup/configs/media_post_config.dart';
+import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/components/tab_navigation.dart';
+import 'package:quwoquan_app/components/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/assistant_avatar.dart';
+import 'package:quwoquan_app/features/assistant/context/assistant_open_context.dart';
+import 'package:quwoquan_app/features/assistant/widgets/assistant_half_sheet.dart';
 
 /// 发现页
 ///
@@ -54,6 +58,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
 
   void _setActiveType(String id) {
     setState(() => _activeType = id);
+    _recordDiscoveryVisit(id);
     _applyVideoForceDark();
     final index = _primaryTabIds.indexOf(id);
     if (index < 0) return;
@@ -103,6 +108,24 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     ref.read(bottomNavHiddenProvider.notifier).setHidden(_isVideoMode);
   }
 
+  void _recordDiscoveryVisit(String tabId) {
+    ref.read(visitRecorderServiceProvider).recordVisit(
+          VisitTarget.page('discovery_$tabId'),
+        );
+  }
+
+  void _openAssistantHalfSheet() {
+    final target = VisitTarget.page('discovery_$_activeType');
+    final service = ref.read(visitRecorderServiceProvider);
+    final ctx = AssistantOpenContext(
+      source: AssistantSource.discovery,
+      tab: _activeType,
+      visitTarget: target,
+      experienceLevel: service.getExperience(target),
+    );
+    AssistantHalfSheet.show(context, ctx);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -113,6 +136,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       _videoForceDarkNotifier = ref.read(videoForceDarkProvider.notifier);
       _bottomNavHiddenNotifier = ref.read(bottomNavHiddenProvider.notifier);
       _applyVideoForceDark();
+      _recordDiscoveryVisit(_activeType);
     });
   }
 
@@ -206,19 +230,17 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       ),
       child: SafeArea(
         bottom: false,
-        child: TabNavigationWidget(
+        child: CenteredScrollableTabBar(
+          tabs: tabs,
           activeTab: _activeType,
           isDark: isDark,
-          tabs: tabs,
-          mode: TabNavigationMode.compactPill,
-          tabsAlignment: MainAxisAlignment.start,
           onTabChange: _setActiveType,
           onHorizontalDragEnd: _onPrimaryDragEnd,
           trailingActions: [
             IconButton(
               tooltip: UITextConstants.assistantEntryFind,
               icon: AssistantAvatar(radius: AppSpacing.iconMedium / 2),
-              onPressed: () => context.push('/assistant'),
+              onPressed: _openAssistantHalfSheet,
               style: IconButton.styleFrom(
                 minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
               ),
@@ -246,6 +268,9 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
         _onTheaterModeChange(!_isUIVisible);
       },
       onUserClick: (userId) => context.push('/user/$userId'),
+      onAssistantTap: _openAssistantHalfSheet,
+      onCommentTap: _onMomentCommentTap,
+      onShareTap: _onMomentShareTap,
     );
   }
 
@@ -266,6 +291,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
 
   Widget _buildMomentContent(bool isDark) {
     final moments = ref.watch(appContentRepositoryProvider).discoveryMomentData;
+    final horizontal = AppSpacing.feedContentHorizontal(context);
     return ListView.builder(
       padding: EdgeInsets.only(
         top: AppSpacing.containerSm,
@@ -281,7 +307,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
+              padding: EdgeInsets.symmetric(horizontal: horizontal),
               child: _MomentPostCard(
                 item: moments[index],
                 isDark: isDark,
@@ -309,6 +335,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
 
   Widget _buildArticleContent(bool isDark) {
     final articles = ref.watch(appContentRepositoryProvider).discoveryArticleData;
+    final horizontal = AppSpacing.feedContentHorizontal(context);
     return ListView.builder(
       padding: EdgeInsets.only(
         top: AppSpacing.containerSm,
@@ -325,7 +352,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
+              padding: EdgeInsets.symmetric(horizontal: horizontal),
               child: _ArticleCardPlaceholder(
                 article: article,
                 isDark: isDark,
@@ -364,7 +391,8 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   Widget _buildPhotoContent(bool isDark) {
     final items = ref.watch(appContentRepositoryProvider).discoveryPhotoData;
     final screenWidth = MediaQuery.of(context).size.width;
-    final horizontalPadding = AppSpacing.containerSm * 2;
+    final horizontal = AppSpacing.feedContentHorizontal(context);
+    final horizontalPadding = horizontal * 2;
     final gap = AppSpacing.interGroupSm;
     final cardWidth = (screenWidth - horizontalPadding - gap) / 2;
 
@@ -372,9 +400,9 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       slivers: [
         SliverPadding(
           padding: EdgeInsets.fromLTRB(
+            horizontal,
             AppSpacing.containerSm,
-            AppSpacing.containerSm,
-            AppSpacing.containerSm,
+            horizontal,
             MediaQuery.of(context).padding.bottom +
                 AppSpacing.bottomNavHeight +
                 AppSpacing.interGroupLg,
@@ -1031,6 +1059,9 @@ class _VideoImmersionView extends StatefulWidget {
     required this.onTabChange,
     required this.onToggleUI,
     required this.onUserClick,
+    required this.onAssistantTap,
+    this.onCommentTap,
+    this.onShareTap,
   });
 
   final List<Map<String, String>> categories;
@@ -1040,15 +1071,24 @@ class _VideoImmersionView extends StatefulWidget {
   final void Function(String id) onTabChange;
   final VoidCallback onToggleUI;
   final void Function(String userId) onUserClick;
+  final VoidCallback onAssistantTap;
+  final void Function(BuildContext context, dynamic post)? onCommentTap;
+  final void Function(BuildContext context, dynamic post)? onShareTap;
 
   @override
   State<_VideoImmersionView> createState() => _VideoImmersionViewState();
 }
 
-class _VideoImmersionViewState extends State<_VideoImmersionView> {
+class _VideoImmersionViewState extends State<_VideoImmersionView>
+    with TickerProviderStateMixin {
   late PageController _pageController;
   final Set<int> _likedIndexes = {};
+  final Set<int> _savedIndexes = {};
   final Set<int> _followedIndexes = {};
+  late AnimationController _likeAnimationController;
+  late AnimationController _bookmarkAnimationController;
+  late Animation<double> _likeScaleAnimation;
+  late Animation<double> _bookmarkScaleAnimation;
 
   List<String> get _primaryTabIds =>
       widget.categories.map((category) => category['id']!).toList(growable: false);
@@ -1077,11 +1117,49 @@ class _VideoImmersionViewState extends State<_VideoImmersionView> {
   void initState() {
     super.initState();
     _pageController = PageController();
+    _likeAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+    _bookmarkAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+    _likeScaleAnimation = TweenSequence<double>(
+      <TweenSequenceItem<double>>[
+        TweenSequenceItem(
+          tween: Tween<double>(begin: 1.0, end: 1.2)
+              .chain(CurveTween(curve: Curves.easeOut)),
+          weight: 50,
+        ),
+        TweenSequenceItem(
+          tween: Tween<double>(begin: 1.2, end: 1.0)
+              .chain(CurveTween(curve: Curves.easeIn)),
+          weight: 50,
+        ),
+      ],
+    ).animate(_likeAnimationController);
+    _bookmarkScaleAnimation = TweenSequence<double>(
+      <TweenSequenceItem<double>>[
+        TweenSequenceItem(
+          tween: Tween<double>(begin: 1.0, end: 1.2)
+              .chain(CurveTween(curve: Curves.easeOut)),
+          weight: 50,
+        ),
+        TweenSequenceItem(
+          tween: Tween<double>(begin: 1.2, end: 1.0)
+              .chain(CurveTween(curve: Curves.easeIn)),
+          weight: 50,
+        ),
+      ],
+    ).animate(_bookmarkAnimationController);
   }
 
   @override
   void dispose() {
     _pageController.dispose();
+    _likeAnimationController.dispose();
+    _bookmarkAnimationController.dispose();
     super.dispose();
   }
 
@@ -1089,55 +1167,24 @@ class _VideoImmersionViewState extends State<_VideoImmersionView> {
   Widget build(BuildContext context) {
     return Container(
       color: Colors.black,
-      child: SafeArea(
-        top: true,
-        bottom: false,
-        child: Column(
-          children: [
-            // 顶栏：与微趣/美图/文章完全一致（深色模式），无返回按钮
-            AnimatedOpacity(
-              opacity: widget.isUIVisible ? 1 : 0,
-              duration: const Duration(milliseconds: 200),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppColorsFunctional.getColor(true, ColorType.backgroundPrimary),
-                ),
-                child: TabNavigationWidget(
-                  activeTab: widget.activeTab,
-                  isDark: true,
-                  tabs: widget.categories
-                      .map((c) => TabItem(id: c['id']!, label: c['label']!))
-                      .toList(growable: false),
-                  mode: TabNavigationMode.compactPill,
-                  tabsAlignment: MainAxisAlignment.start,
-                  onTabChange: (id) {
-                    if (id != 'video') widget.onTabChange(id);
-                  },
-                  onHorizontalDragEnd: _onPrimaryDragEnd,
-                  trailingActions: [
-                    IconButton(
-                      tooltip: UITextConstants.assistantEntryFind,
-                      icon: AssistantAvatar(radius: AppSpacing.iconMedium / 2),
-                      onPressed: () => context.push('/assistant'),
-                      style: IconButton.styleFrom(
-                        minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            // 竖滑视频列表；水平滑动手势切换一级 tab（微趣/美图/视频/文章）
-            Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onHorizontalDragEnd: _onPrimaryDragEnd,
-                child: PageView.builder(
-                  controller: _pageController,
-                  scrollDirection: Axis.vertical,
-                  itemCount: widget.videos.length,
-                  onPageChanged: (_) {},
-                  itemBuilder: (context, index) {
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // 视频仅从状态栏下开始，不侵入状态栏；仅侵入顶部工具栏（透明透出视频）
+          Positioned(
+            top: MediaQuery.of(context).padding.top,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onHorizontalDragEnd: _onPrimaryDragEnd,
+              child: PageView.builder(
+                controller: _pageController,
+                scrollDirection: Axis.vertical,
+                itemCount: widget.videos.length,
+                onPageChanged: (_) {},
+                itemBuilder: (context, index) {
                   final post = widget.videos[index];
                   final author = post['author'] is Map ? Map<String, dynamic>.from(post['author'] as Map) : <String, dynamic>{};
                   final authorId = author['id'] as String? ?? author['name'] as String? ?? '';
@@ -1197,44 +1244,46 @@ class _VideoImmersionViewState extends State<_VideoImmersionView> {
                                               right: 0,
                                               bottom: -AppSpacing.buttonHeightXs /
                                                   2,
-                                              child: GestureDetector(
-                                                onTap: () => setState(() {
-                                                  _followedIndexes.add(index);
-                                                }),
-                                                child: Container(
-                                                  constraints: BoxConstraints(
-                                                    minWidth:
-                                                        AppSpacing.followButtonWidthCompact,
-                                                  ),
-                                                  padding:
-                                                      EdgeInsets.symmetric(
-                                                    horizontal:
-                                                        AppSpacing.containerSm,
-                                                    vertical:
-                                                        AppSpacing.intraGroupXs,
-                                                  ),
-                                                  decoration: BoxDecoration(
-                                                    color:
-                                                        AppColors.primaryColor,
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                      AppSpacing
-                                                          .circularBorderRadius,
-                                                    ),
-                                                  ),
-                                                  child: Center(
-                                                    child: Text(
-                                                      '+ ${UITextConstants.follow}',
-                                                      style: TextStyle(
-                                                        fontSize:
-                                                            AppTypography.sm,
-                                                        fontWeight:
-                                                            AppTypography.medium,
-                                                        color: Colors.white,
+                                              child: Center(
+                                                child: IntrinsicWidth(
+                                                  child: GestureDetector(
+                                                    onTap: () => setState(() {
+                                                      _followedIndexes.add(index);
+                                                    }),
+                                                    child: Container(
+                                                      padding:
+                                                          AppSpacing.buttonPaddingCompact(
+                                                        context,
+                                                        DesignSemanticConstants.sm,
                                                       ),
-                                                      overflow:
-                                                          TextOverflow.clip,
-                                                      maxLines: 1,
+                                                      height: AppSpacing
+                                                          .buttonHeightForSizeCompact(
+                                                        DesignSemanticConstants.sm,
+                                                      ),
+                                                      decoration: BoxDecoration(
+                                                        color:
+                                                            AppColors.primaryColor,
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                          AppSpacing
+                                                              .circularBorderRadius,
+                                                        ),
+                                                      ),
+                                                      child: Center(
+                                                        child: Text(
+                                                          '+ ${UITextConstants.follow}',
+                                                          style: TextStyle(
+                                                            fontSize:
+                                                                AppTypography.sm,
+                                                            fontWeight:
+                                                                AppTypography.medium,
+                                                            color: AppColors.white,
+                                                          ),
+                                                          overflow:
+                                                              TextOverflow.clip,
+                                                          maxLines: 1,
+                                                        ),
+                                                      ),
                                                     ),
                                                   ),
                                                 ),
@@ -1245,23 +1294,42 @@ class _VideoImmersionViewState extends State<_VideoImmersionView> {
                                     ),
                                   ),
                                   SizedBox(height: AppSpacing.interGroupLg),
-                                  _videoAction(CupertinoIcons.heart, isLiked,
-                                      '${post['likes'] ?? ''}', () {
-                                    setState(() {
-                                      if (_likedIndexes.contains(index)) {
-                                        _likedIndexes.remove(index);
-                                      } else {
-                                        _likedIndexes.add(index);
-                                      }
-                                    });
-                                  }),
+                                  _videoAction(
+                                    CupertinoIcons.heart,
+                                    isLiked,
+                                    '${(int.tryParse('${post['likes'] ?? ''}') ?? 0) + (isLiked ? 1 : 0)}',
+                                    () {
+                                      setState(() {
+                                        if (_likedIndexes.contains(index)) {
+                                          _likedIndexes.remove(index);
+                                        } else {
+                                          _likedIndexes.add(index);
+                                        }
+                                      });
+                                      _likeAnimationController.forward(from: 0);
+                                    },
+                                    scaleAnimation: _likeScaleAnimation,
+                                  ),
                                   _videoActionWidget(
                                     AppStarIcon(
                                       size: AppSpacing.iconMedium,
-                                      color: Colors.white.withValues(alpha: 0.78),
+                                      filled: _savedIndexes.contains(index),
+                                      color: _savedIndexes.contains(index)
+                                          ? AppColors.warning
+                                          : Colors.white.withValues(alpha: 0.78),
                                     ),
                                     UITextConstants.bookmarks,
-                                    () {},
+                                    () {
+                                      setState(() {
+                                        if (_savedIndexes.contains(index)) {
+                                          _savedIndexes.remove(index);
+                                        } else {
+                                          _savedIndexes.add(index);
+                                        }
+                                      });
+                                      _bookmarkAnimationController.forward(from: 0);
+                                    },
+                                    scaleAnimation: _bookmarkScaleAnimation,
                                   ),
                                   _videoActionWidget(
                                     AppBubbleIcon(
@@ -1269,7 +1337,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView> {
                                       color: Colors.white.withValues(alpha: 0.78),
                                     ),
                                     '${post['comments'] ?? ''}',
-                                    () {},
+                                    () => widget.onCommentTap?.call(context, post),
                                   ),
                                   _videoActionWidget(
                                     Icon(
@@ -1278,7 +1346,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView> {
                                       color: Colors.white.withValues(alpha: 0.78),
                                     ),
                                     UITextConstants.share,
-                                    () {},
+                                    () => widget.onShareTap?.call(context, post),
                                   ),
                                 ],
                               ),
@@ -1342,11 +1410,45 @@ class _VideoImmersionViewState extends State<_VideoImmersionView> {
                     ),
                   );
                 },
+              ),
+            ),
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              top: true,
+              bottom: false,
+              child: AnimatedOpacity(
+                opacity: widget.isUIVisible ? 1 : 0,
+                duration: const Duration(milliseconds: 200),
+                child: CenteredScrollableTabBar(
+                  tabs: widget.categories
+                      .map((c) => TabItem(id: c['id']!, label: c['label']!))
+                      .toList(growable: false),
+                  activeTab: widget.activeTab,
+                  isDark: true,
+                  transparentBackground: true,
+                  onTabChange: (id) {
+                    if (id != 'video') widget.onTabChange(id);
+                  },
+                  onHorizontalDragEnd: _onPrimaryDragEnd,
+                  trailingActions: [
+                    IconButton(
+                      tooltip: UITextConstants.assistantEntryFind,
+                      icon: AssistantAvatar(radius: AppSpacing.iconMedium / 2),
+                      onPressed: widget.onAssistantTap,
+                      style: IconButton.styleFrom(
+                        minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1355,11 +1457,21 @@ class _VideoImmersionViewState extends State<_VideoImmersionView> {
     IconData icon,
     bool filled,
     String label,
-    VoidCallback onTap,
-  ) {
+    VoidCallback onTap, {
+    Animation<double>? scaleAnimation,
+  }) {
     final iconToken = AppSpacing.semantic[DesignSemanticConstants.intraGroup]?[
             DesignSemanticConstants.xs] ??
         AppSpacing.intraGroupXs;
+    final iconWidget = Icon(
+      icon == CupertinoIcons.heart
+          ? (filled ? CupertinoIcons.heart_fill : CupertinoIcons.heart)
+          : icon,
+      color: filled
+          ? AppColors.error
+          : Colors.white.withValues(alpha: 0.78),
+      size: AppSpacing.iconMedium,
+    );
     return Padding(
       padding: EdgeInsets.only(bottom: AppSpacing.interGroupMd),
       child: GestureDetector(
@@ -1368,15 +1480,12 @@ class _VideoImmersionViewState extends State<_VideoImmersionView> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon == CupertinoIcons.heart
-                  ? (filled ? CupertinoIcons.heart_fill : CupertinoIcons.heart)
-                  : icon,
-              color: filled
-                  ? Colors.white
-                  : Colors.white.withValues(alpha: 0.78),
-              size: AppSpacing.iconMedium,
-            ),
+            scaleAnimation != null
+                ? ScaleTransition(
+                    scale: scaleAnimation,
+                    child: iconWidget,
+                  )
+                : iconWidget,
             SizedBox(height: iconToken),
             Text(
               label,
@@ -1395,11 +1504,18 @@ class _VideoImmersionViewState extends State<_VideoImmersionView> {
   Widget _videoActionWidget(
     Widget iconWidget,
     String label,
-    VoidCallback onTap,
-  ) {
+    VoidCallback onTap, {
+    Animation<double>? scaleAnimation,
+  }) {
     final iconToken = AppSpacing.semantic[DesignSemanticConstants.intraGroup]?[
             DesignSemanticConstants.xs] ??
         AppSpacing.intraGroupXs;
+    final child = scaleAnimation != null
+        ? ScaleTransition(
+            scale: scaleAnimation,
+            child: iconWidget,
+          )
+        : iconWidget;
     return Padding(
       padding: EdgeInsets.only(bottom: AppSpacing.interGroupMd),
       child: GestureDetector(
@@ -1408,7 +1524,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            iconWidget,
+            child,
             SizedBox(height: iconToken),
             Text(
               label,

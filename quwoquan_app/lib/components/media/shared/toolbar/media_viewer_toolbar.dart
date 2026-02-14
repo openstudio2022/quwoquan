@@ -170,11 +170,13 @@ class MediaViewerTopBar extends StatelessWidget {
   /// 名字与关注按钮紧贴；超过 5 字部分用渐变遮挡，再被按钮盖住
   Widget _buildNameAndFollow(BuildContext context) {
     const double gradientWidth = 20.0;
-    final buttonWidth = AppSpacing.followButtonWidthCompact;
+    final buttonMaxWidth = AppSpacing.followButtonWidthCompact;
+    final height = AppSpacing.buttonHeightForSizeCompact(
+      DesignSemanticConstants.sm,
+    );
     // 只显示 5 个字，超过则渐变+按钮遮挡
     final nameVisibleWidth = _nameVisibleWidth(context, 5);
-    final totalWidth = nameVisibleWidth + gradientWidth + buttonWidth;
-    final height = AppSpacing.smallButtonSize;
+    final totalWidth = nameVisibleWidth + gradientWidth + buttonMaxWidth;
     final nameStyle = TextStyle(
       color: AppColors.white,
       fontSize: AppTypography.sm,
@@ -267,7 +269,13 @@ class MediaViewerTopBar extends StatelessWidget {
       onTap: onFollow,
       borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
       child: Container(
-        width: AppSpacing.followButtonWidthCompact,
+        constraints: BoxConstraints(
+          maxWidth: AppSpacing.followButtonWidthCompact,
+        ),
+        padding: AppSpacing.buttonPaddingCompact(
+          context,
+          DesignSemanticConstants.sm,
+        ),
         height: height,
         alignment: Alignment.center,
         decoration: BoxDecoration(

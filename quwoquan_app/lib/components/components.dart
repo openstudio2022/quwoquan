@@ -31,6 +31,7 @@ export 'media_post_card.dart';
 
 // ==================== 导航组件 ====================
 export 'tab_navigation.dart';
+export 'centered_scrollable_tab_bar.dart';
 export 'bottom_navigation.dart';
 export 'media/image/navigation/image_sub_tab_navigation.dart';
 

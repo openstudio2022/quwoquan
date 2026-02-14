@@ -10,6 +10,10 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/assistant_avatar.dart';
 import 'package:quwoquan_app/components/unified_emoji_picker.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/models/visit_models.dart';
+import 'package:quwoquan_app/features/assistant/config/assistant_prompt_config.dart';
+import 'package:quwoquan_app/features/assistant/context/assistant_open_context.dart';
+import 'package:quwoquan_app/features/assistant/widgets/assistant_half_sheet.dart';
 
 /// 聊天气泡最大宽度（语义尺寸，多屏适配由布局约束决定）
 const double _chatBubbleMaxWidth = 280.0;
@@ -41,10 +45,13 @@ class ChatDetailPage extends ConsumerStatefulWidget {
     super.key,
     required this.conversationId,
     required this.onBack,
+    this.assistantOpenContext,
   });
 
   final String conversationId;
   final VoidCallback onBack;
+  /// 从半弹窗「进入完整对话」传入时携带，用于首条欢迎与推荐（与半弹窗一致）。
+  final AssistantOpenContext? assistantOpenContext;
 
   @override
   ConsumerState<ChatDetailPage> createState() => _ChatDetailPageState();
@@ -354,6 +361,23 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           ),
           body: Column(
         children: [
+          if (_isAssistantConversation && widget.assistantOpenContext != null)
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.sm] ?? AppSpacing.containerSm,
+                vertical: AppSpacing.sm,
+              ),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  AssistantPromptConfig.getWelcomeMessage(widget.assistantOpenContext!),
+                  style: TextStyle(
+                    fontSize: AppTypography.sm,
+                    color: fgPrimary.withValues(alpha: 0.8),
+                  ),
+                ),
+              ),
+            ),
           Expanded(
             child: Container(
               color: chatListBg,
@@ -400,7 +424,16 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                         onLongPressStart: (details) => _onLongPressMessage(msg, details.globalPosition),
                         onTap: _isSelectionMode ? () => _toggleSelect(msg['id'] as String) : null,
                         onAvatarTap: isAssistantMessage
-                            ? () => context.push('/assistant')
+                            ? () {
+                                final target = VisitTarget.page('chat');
+                                final service = ref.read(visitRecorderServiceProvider);
+                                final ctx = AssistantOpenContext(
+                                  source: AssistantSource.chat,
+                                  visitTarget: target,
+                                  experienceLevel: service.getExperience(target),
+                                );
+                                AssistantHalfSheet.show(context, ctx);
+                              }
                             : () {
                                 final senderId = msg['senderId'] as String? ?? '';
                                 if (senderId == 'current_user') {

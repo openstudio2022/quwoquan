@@ -6,7 +6,9 @@ import 'package:quwoquan_app/app/shell/main_app_shell.dart';
 import 'package:quwoquan_app/components/author_profile.dart';
 import 'package:quwoquan_app/components/media/image/viewer/immersive_image_viewer.dart';
 import 'package:quwoquan_app/components/media/video/viewer/immersive_video_viewer.dart';
+import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/features/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/features/content/pages/article_detail_page.dart';
 import 'package:quwoquan_app/features/circles/pages/circle_detail_page.dart';
 import 'package:quwoquan_app/features/circles/pages/circle_stats_page.dart';
@@ -21,6 +23,7 @@ import 'package:quwoquan_app/features/profile/pages/edit_profile_page.dart';
 import 'package:quwoquan_app/features/profile/pages/persona_management_page.dart';
 import 'package:quwoquan_app/features/profile/pages/profile_stats_page.dart';
 import 'package:quwoquan_app/features/profile/pages/resonance_page.dart';
+import 'package:quwoquan_app/features/assistant/context/assistant_open_context.dart';
 import 'package:quwoquan_app/features/assistant/pages/assistant_home_page.dart';
 import 'package:quwoquan_app/features/assistant/pages/assistant_management_page.dart';
 
@@ -281,6 +284,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/chat/:id',
         builder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
+          final assistantOpenContext = state.extra is AssistantOpenContext
+              ? state.extra as AssistantOpenContext
+              : null;
           return ChatDetailPage(
             conversationId: id,
             onBack: () {
@@ -290,6 +296,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 context.go('/chat');
               }
             },
+            assistantOpenContext: assistantOpenContext,
           );
         },
         routes: [
@@ -494,7 +501,17 @@ class _MediaViewerPageState extends ConsumerState<_MediaViewerPage> {
       onUserClick: (username) {
         context.push('/user/$username');
       },
-      onAssistantClick: () => context.push('/assistant'),
+      onAssistantClick: () {
+        final target = VisitTarget.page('discovery_photo');
+        final service = ref.read(visitRecorderServiceProvider);
+        final ctx = AssistantOpenContext(
+          source: AssistantSource.discovery,
+          tab: 'photo',
+          visitTarget: target,
+          experienceLevel: service.getExperience(target),
+        );
+        AssistantHalfSheet.show(context, ctx);
+      },
       likedPosts: homeState.likedPosts,
       savedPosts: homeState.savedPosts,
       getPostLikesCount: (post) {
@@ -674,7 +691,17 @@ class _VideoViewerPageState extends ConsumerState<_VideoViewerPage> {
       onUserClick: (username) {
         context.push('/user/$username');
       },
-      onAssistantClick: () => context.push('/assistant'),
+      onAssistantClick: () {
+        final target = VisitTarget.page('discovery_video');
+        final service = ref.read(visitRecorderServiceProvider);
+        final ctx = AssistantOpenContext(
+          source: AssistantSource.discovery,
+          tab: 'video',
+          visitTarget: target,
+          experienceLevel: service.getExperience(target),
+        );
+        AssistantHalfSheet.show(context, ctx);
+      },
       likedPosts: homeState.likedPosts,
       savedPosts: homeState.savedPosts,
       getPostLikesCount: (post) {

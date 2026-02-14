@@ -10,6 +10,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:quwoquan_app/core/emoji/emoji_analytics.dart';
 import 'package:quwoquan_app/core/emoji/emoji_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:quwoquan_app/app/navigation/app_router.dart';
@@ -39,7 +40,8 @@ void main() async {
   
   // 初始化Hive
   await Hive.initFlutter();
-  
+  await Hive.openBox<String>(kVisitRecordsBoxName);
+
   // 预先初始化AnalyticsService
   await _preInitializeAnalytics();
   

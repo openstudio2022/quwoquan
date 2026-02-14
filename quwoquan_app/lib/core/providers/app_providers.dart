@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/core/services/data_service.dart';
+import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
 import 'package:quwoquan_app/features/home/models/user_models.dart';
 
 /// 主题相关的便捷Provider
@@ -36,5 +37,10 @@ final responsiveProvider = Provider<Map<String, dynamic>>((ref) {
 /// 数据服务Provider
 final dataServiceProvider = Provider<DataService>((ref) {
   return DataServiceImpl();
+});
+
+/// 浏览记录服务 Provider（小趣基线：记录访问用于 experienceLevel）
+final visitRecorderServiceProvider = Provider<VisitRecorderService>((ref) {
+  return VisitRecorderService();
 });
 

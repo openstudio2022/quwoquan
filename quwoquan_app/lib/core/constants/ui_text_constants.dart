@@ -48,6 +48,12 @@ class UITextConstants {
   static const String assistantFeedbackAddedToLater = '已加入稍后处理';
   static const String assistantEntryFind = '找小趣';
   static const String assistantEntryAskLegacy = '问小趣';
+  /// 半弹窗：进入完整对话按钮
+  static const String assistantHalfSheetEnterFullChat = '进入完整对话';
+  /// 半弹窗：输入框占位
+  static const String assistantHalfSheetInputPlaceholder = '说点什么或选上面试试';
+  /// 半弹窗：「当前适合干啥」区块标题
+  static const String assistantHalfSheetSuggestionTitle = '当前适合干啥';
   static const String search = '搜索';
   static const String create = '创建';
   static const String chat = '聊天';

@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/features/assistant/context/assistant_open_context.dart';
+import 'package:quwoquan_app/features/assistant/widgets/assistant_half_sheet.dart';
 
 /// 文章详情页 - 1:1 对应 ArticleDetailView.tsx → UniversalArticleLayout
 /// 含：顶栏（返回/吸顶标题）、封面、标题、作者行、正文、底栏（点赞/评论/收藏/分享）、评论区
@@ -27,6 +30,17 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
   bool _isFollowing = false;
   int _likesCount = 0;
   int _commentsCount = 0;
+
+  void _openAssistantHalfSheet() {
+    final target = VisitTarget.page('article');
+    final service = ref.read(visitRecorderServiceProvider);
+    final ctx = AssistantOpenContext(
+      source: AssistantSource.article,
+      visitTarget: target,
+      experienceLevel: service.getExperience(target),
+    );
+    AssistantHalfSheet.show(context, ctx);
+  }
 
   @override
   void initState() {
@@ -116,7 +130,7 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
         actions: [
           IconButton(
             icon: Icon(Icons.auto_awesome, color: contentText),
-            onPressed: () => context.push('/assistant'),
+            onPressed: _openAssistantHalfSheet,
             tooltip: AppConceptConstants.assistantLabel,
           ),
         ],

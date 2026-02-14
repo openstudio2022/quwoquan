@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -24,11 +25,14 @@ class WelcomeScreen extends StatefulWidget {
 
 class _WelcomeScreenState extends State<WelcomeScreen>
     with TickerProviderStateMixin {
-  late AnimationController _stepController;
+  /// 欢迎页自动进入发现页的倒计时秒数（右上角展示）
+  static const int welcomeCountdownSeconds = 3;
+
   late AnimationController _dropController;
   late List<AnimationController> _petalControllers;
   late AnimationController _textController;
-  late AnimationController _buttonController;
+  int _countdownRemaining = 0;
+  Timer? _countdownTimer;
 
   static const List<Color> _petalColors = [
     AppColors.welcomePetalOrange,
@@ -63,14 +67,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
-    _buttonController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-    _stepController = AnimationController(
-      vsync: this,
-      duration: Duration.zero,
-    );
 
     Future<void> runSequence() async {
       await Future<void>.delayed(const Duration(milliseconds: 100));
@@ -87,7 +83,19 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       await _textController.forward();
       await Future<void>.delayed(const Duration(milliseconds: 1200));
       if (!mounted) return;
-      await _buttonController.forward();
+      setState(() => _countdownRemaining = welcomeCountdownSeconds);
+      _countdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+        if (!mounted) {
+          t.cancel();
+          return;
+        }
+        setState(() => _countdownRemaining--);
+        if (_countdownRemaining <= 0) {
+          t.cancel();
+          _countdownTimer = null;
+          widget.onFinish();
+        }
+      });
     }
 
     runSequence();
@@ -100,36 +108,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       c.dispose();
     }
     _textController.dispose();
-    _buttonController.dispose();
-    _stepController.dispose();
+    _countdownTimer?.cancel();
     super.dispose();
-  }
-
-  void _handleRestart() {
-    _dropController.reset();
-    for (final c in _petalControllers) {
-      c.reset();
-    }
-    _textController.reset();
-    _buttonController.reset();
-    setState(() {});
-    Future<void>.delayed(const Duration(milliseconds: 100), () {
-      if (!mounted) return;
-      _dropController.forward();
-      Future<void>.delayed(const Duration(milliseconds: 500), () {
-        if (!mounted) return;
-        for (var i = 0; i < 8; i++) {
-          _petalControllers[i].forward();
-        }
-        Future<void>.delayed(const Duration(milliseconds: 800), () async {
-          if (!mounted) return;
-          await _textController.forward();
-          await Future<void>.delayed(const Duration(milliseconds: 1200));
-          if (!mounted) return;
-          await _buttonController.forward();
-        });
-      });
-    });
   }
 
   @override
@@ -139,10 +119,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       child: Stack(
         children: [
           _buildBackground(),
-          _buildRestartButton(),
           _buildMainContent(),
-          _buildBottomButton(),
           _buildFooter(),
+          _buildCountdownBadge(),
         ],
       ),
     );
@@ -189,22 +168,26 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     );
   }
 
-  Widget _buildRestartButton() {
+  /// 右上角倒计时角标：仅在进入 3 秒等待阶段显示
+  Widget _buildCountdownBadge() {
+    if (_countdownRemaining <= 0) return const SizedBox.shrink();
     return Positioned(
       top: MediaQuery.of(context).padding.top + AppSpacing.lg,
       right: AppSpacing.lg,
       child: Material(
         color: AppColors.welcomeButtonBg,
         borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius),
-        child: InkWell(
-          onTap: _handleRestart,
-          borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius),
-          child: Padding(
-            padding: EdgeInsets.all(AppSpacing.sm),
-            child: Icon(
-              Icons.refresh,
-              size: AppSpacing.iconMedium,
-              color: AppColors.welcomeForeground.withValues(alpha:0.5),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: AppSpacing.xs,
+          ),
+          child: Text(
+            '$_countdownRemaining',
+            style: TextStyle(
+              fontSize: AppTypography.lg,
+              fontWeight: AppTypography.semiBold,
+              color: AppColors.welcomeForeground.withValues(alpha: 0.9),
             ),
           ),
         ),
@@ -213,7 +196,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   }
 
   Widget _buildMainContent() {
-    final topOffset = MediaQuery.of(context).size.height * 0.05;
+    final topOffset = MediaQuery.of(context).size.height * 0.02;
     return Center(
       child: Transform.translate(
         offset: Offset(0, -topOffset),
@@ -340,28 +323,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
             ),
           ],
         ),
-        child: Stack(
-          children: [
-            Positioned(
-              top: 0.25 * 112 - 8,
-              left: 0.5 * 112 - 16,
-              child: Container(
-                width: 32,
-                height: 16,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha:0.6),
-                  borderRadius: BorderRadius.circular(50),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.white.withValues(alpha:0.3),
-                      blurRadius: 4,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -385,9 +346,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           ShaderMask(
             shaderCallback: (bounds) => LinearGradient(
               colors: [
-                AppColors.welcomeForeground,
-                AppColors.welcomeTitleGradientMid,
                 AppColors.welcomeTitleGradientEnd,
+                AppColors.welcomeTitleGradientMid,
+                AppColors.welcomeForeground,
               ],
             ).createShader(bounds),
             child: Text(
@@ -466,65 +427,4 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     );
   }
 
-  /// 底部按钮：Positioned 须为 Stack 直接子组件，不能包在 Opacity/AnimatedBuilder 内
-  Widget _buildBottomButton() {
-    return Positioned(
-      bottom: MediaQuery.of(context).size.height * 0.1 +
-          MediaQuery.of(context).padding.bottom,
-      left: 0,
-      right: 0,
-      child: AnimatedBuilder(
-        animation: _buttonController,
-        builder: (context, child) {
-          return Opacity(
-            opacity: Curves.easeOut.transform(_buttonController.value),
-            child: Center(
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: widget.onFinish,
-                  borderRadius:
-                      BorderRadius.circular(AppSpacing.fullBorderRadius),
-                  child: Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: AppSpacing.xl * 2,
-                      vertical: AppSpacing.md,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.welcomeButtonBg,
-                      border: Border.all(
-                        color: AppColors.welcomeButtonBorder,
-                        width: 1,
-                      ),
-                      borderRadius:
-                          BorderRadius.circular(AppSpacing.fullBorderRadius),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          UITextConstants.welcomeButtonLabel,
-                          style: TextStyle(
-                            color: AppColors.welcomeForeground,
-                            fontWeight: AppTypography.bold,
-                            fontSize: AppTypography.lg,
-                          ),
-                        ),
-                        SizedBox(width: AppSpacing.sm),
-                        Icon(
-                          Icons.arrow_forward,
-                          size: AppSpacing.iconSmall,
-                          color: AppColors.welcomeForeground,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
 }

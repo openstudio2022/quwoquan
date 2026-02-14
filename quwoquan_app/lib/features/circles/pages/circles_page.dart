@@ -6,8 +6,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/components/assistant_avatar.dart';
+import 'package:quwoquan_app/components/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/tab_navigation.dart';
+import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/features/assistant/context/assistant_open_context.dart';
+import 'package:quwoquan_app/features/assistant/widgets/assistant_half_sheet.dart';
 
 /// 圈子页
 ///
@@ -29,11 +34,28 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
   String _selectedSubCategory = UITextConstants.circleSubAll;
   final Map<String, String> _subCategoryByDimension = {};
   late PageController _primaryPageController;
-  late ScrollController _tabScrollController;
-  static const double _estimatedTabChipWidth = 64.0;
 
   @override
   bool get wantKeepAlive => true;
+
+  void _recordCirclesVisit(String dimensionId) {
+    ref.read(visitRecorderServiceProvider).recordVisit(
+          VisitTarget.page('circles_$dimensionId'),
+        );
+  }
+
+  /// 打开小趣半弹窗（搜索、频道管理等统一由此入口）
+  void _openAssistantHalfSheet() {
+    final target = VisitTarget.page('circles_$_selectedDimension');
+    final service = ref.read(visitRecorderServiceProvider);
+    final ctx = AssistantOpenContext(
+      source: AssistantSource.circles,
+      dimension: _selectedDimension,
+      visitTarget: target,
+      experienceLevel: service.getExperience(target),
+    );
+    AssistantHalfSheet.show(context, ctx);
+  }
 
   @override
   void initState() {
@@ -41,27 +63,15 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
     _primaryPageController = PageController(
       initialPage: _primaryTabIds.indexOf(_selectedDimension).clamp(0, _primaryTabIds.length - 1),
     );
-    _tabScrollController = ScrollController();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _recordCirclesVisit(_selectedDimension);
+    });
   }
 
   @override
   void dispose() {
     _primaryPageController.dispose();
-    _tabScrollController.dispose();
     super.dispose();
-  }
-
-  void _scrollTabToSelected() {
-    if (!_tabScrollController.hasClients) return;
-    final index = _primaryTabIds.indexOf(_selectedDimension);
-    if (index < 0) return;
-    final offset = (index * _estimatedTabChipWidth).toDouble();
-    final maxOffset = _tabScrollController.position.maxScrollExtent;
-    _tabScrollController.animateTo(
-      offset.clamp(0.0, maxOffset),
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeInOut,
-    );
   }
 
   /// 与 DiscoveryView myCategories 一致：关注 + CATEGORY_CONFIG
@@ -169,6 +179,7 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
     setState(() {
       _selectedDimension = nextId;
       _selectedSubCategory = _subCategoryByDimension[nextId] ?? UITextConstants.circleSubAll;
+      _recordCirclesVisit(nextId);
     });
     if (_primaryPageController.hasClients) {
       _primaryPageController.animateToPage(
@@ -267,8 +278,8 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
                       setState(() {
                         _selectedDimension = id;
                         _selectedSubCategory = _subCategoryByDimension[id] ?? UITextConstants.circleSubAll;
+                        _recordCirclesVisit(id);
                       });
-                      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollTabToSelected());
                     }
                   },
                   children: _primaryTabIds.map((id) {
@@ -284,27 +295,6 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
           ],
         ),
       ),
-      floatingActionButton: _selectedDimension != 'following'
-          ? FloatingActionButton.extended(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('${UITextConstants.createCircle}（CreateCircleWizard 待接入）'),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-              },
-              backgroundColor: AppColors.primaryColor,
-              icon: const Icon(Icons.add, color: Colors.white),
-              label: Text(
-                UITextConstants.createCircle,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: AppTypography.semiBold,
-                ),
-              ),
-            )
-          : null,
     );
   }
 
@@ -323,17 +313,16 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
           ),
         ),
       ),
-      child: TabNavigationWidget(
-        activeTab: _selectedDimension,
-        isDark: isDark,
+      child: CenteredScrollableTabBar(
         tabs: tabs,
-        mode: TabNavigationMode.compactPill,
-        tabsAlignment: MainAxisAlignment.start,
-        tabScrollController: _tabScrollController,
+        activeTab: _selectedDimension,
+        anchorTabId: 'all',
+        isDark: isDark,
         onTabChange: (id) {
           setState(() {
             _selectedDimension = id;
             _selectedSubCategory = _subCategoryByDimension[id] ?? UITextConstants.circleSubAll;
+            _recordCirclesVisit(id);
           });
           final index = _primaryTabIds.indexOf(id);
           if (index >= 0 && _primaryPageController.hasClients) {
@@ -343,27 +332,13 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
               curve: Curves.easeInOut,
             );
           }
-          WidgetsBinding.instance.addPostFrameCallback((_) => _scrollTabToSelected());
         },
         onHorizontalDragEnd: _onPrimaryDragEnd,
         trailingActions: [
           IconButton(
-            icon: Icon(Icons.search, size: AppSpacing.iconMedium, color: fgSecondary),
-            onPressed: () {},
-            style: IconButton.styleFrom(
-              minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
-            ),
-          ),
-          IconButton(
-            icon: Icon(Icons.tune, size: AppSpacing.iconMedium, color: fgSecondary),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('频道管理（ChannelManager 待接入）'),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            },
+            tooltip: UITextConstants.assistantEntryFind,
+            icon: AssistantAvatar(radius: AppSpacing.iconMedium / 2),
+            onPressed: _openAssistantHalfSheet,
             style: IconButton.styleFrom(
               minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
             ),
@@ -418,7 +393,7 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
         ),
         if (activities.isNotEmpty)
           SliverToBoxAdapter(
-            child: _buildActivities(isDark, fgSecondary, activitiesParam: activities),
+            child: _buildActivities(context, isDark, fgSecondary, activitiesParam: activities),
           ),
         if (subCats.isNotEmpty)
           SliverPersistentHeader(
@@ -486,7 +461,7 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
       color: isDark ? Colors.white.withValues(alpha: 0.03) : Colors.black.withValues(alpha: 0.02),
       padding: EdgeInsets.symmetric(
         vertical: AppSpacing.md,
-        horizontal: AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.sm] ?? AppSpacing.containerSm,
+        horizontal: AppSpacing.feedContentHorizontal(context),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -601,11 +576,11 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
     );
   }
 
-  Widget _buildActivities(bool isDark, Color fgSecondary, {List<Map<String, dynamic>>? activitiesParam}) {
+  Widget _buildActivities(BuildContext context, bool isDark, Color fgSecondary, {List<Map<String, dynamic>>? activitiesParam}) {
     final activities = activitiesParam ?? _filteredActivities;
     return Padding(
       padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.md] ?? AppSpacing.containerMd,
+        horizontal: AppSpacing.feedContentHorizontal(context),
         vertical: AppSpacing.sm,
       ),
       child: Column(
@@ -705,7 +680,7 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: EdgeInsets.symmetric(
-              horizontal: AppSpacing.containerSm,
+              horizontal: AppSpacing.feedContentHorizontal(context),
               vertical: AppSpacing.intraGroupSm,
             ),
             itemCount: subs.length,
@@ -775,11 +750,12 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
     GestureDragEndCallback? onGridHorizontalDragEnd,
   }) {
     final posts = postsParam ?? _discoveryPosts;
+    final horizontal = AppSpacing.feedContentHorizontal(context);
     return SliverPadding(
       padding: EdgeInsets.fromLTRB(
-        AppSpacing.containerSm,
+        horizontal,
         AppSpacing.containerMd,
-        AppSpacing.containerSm,
+        horizontal,
         0,
       ),
       sliver: SliverMasonryGrid.count(

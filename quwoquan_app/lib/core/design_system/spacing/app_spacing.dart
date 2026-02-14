@@ -89,6 +89,49 @@ class AppSpacing {
         return buttonHeightMd;
     }
   }
+
+  // ==================== 按钮紧凑语义（每档尺寸对应更小内边距/高度，用于关注等紧凑场景） ====================
+  /// 紧凑按钮高度 sm: 26.0
+  static const double buttonHeightSmCompact = 26.0;
+  /// 紧凑按钮高度 md: 28.0（复用 xs）
+  static const double buttonHeightMdCompact = 28.0;
+  /// 紧凑按钮高度 lg: 32.0（复用 sm）
+  static const double buttonHeightLgCompact = 32.0;
+
+  /// 获取文案按钮内边距（紧凑模式：左右上下更小，语义统一）
+  static EdgeInsets buttonPaddingCompact(
+    BuildContext context,
+    String size,
+  ) {
+    final horizontal = getSpacing(
+      DesignSemanticConstants.container,
+      size == DesignSemanticConstants.lg
+          ? DesignSemanticConstants.sm
+          : DesignSemanticConstants.xs,
+      context: context,
+    );
+    final vertical = getSpacing(
+      DesignSemanticConstants.intraGroup,
+      DesignSemanticConstants.xs,
+      context: context,
+    );
+    return EdgeInsets.symmetric(horizontal: horizontal, vertical: vertical);
+  }
+
+  /// 获取文案按钮高度（紧凑模式，固定语义值）
+  static double buttonHeightForSizeCompact(String size) {
+    switch (size) {
+      case DesignSemanticConstants.xs:
+        return buttonHeightXs;
+      case DesignSemanticConstants.sm:
+        return buttonHeightSmCompact;
+      case DesignSemanticConstants.lg:
+        return buttonHeightLgCompact;
+      case DesignSemanticConstants.md:
+      default:
+        return buttonHeightMdCompact;
+    }
+  }
   
   /// 头像尺寸: 40.0（向后兼容）
   static const double avatarSize = 40.0;
@@ -127,6 +170,20 @@ class AppSpacing {
   
   /// 子标签导航高度: 44.0
   static const double subTabNavigationHeight = 44.0;
+
+  /// 一级 Tab 芯片基准宽度（居中滚动 Tab 栏用，确保可见数 3/5/7/9/11 与 scroll 计算一致）
+  static const double tabChipBaseWidth = 56.0;
+
+  /// 视频沉浸模式下一级 Tab 芯片宽度（略大，避免「视频」等两字被裁切、只显示「视」亮色）
+  static const double tabChipBaseWidthVideoImmersion = 64.0;
+
+  /// 发现/圈子内容区左右边距（微趣、文章、图片宫格、圈子各 tab 页统一使用）
+  static double feedContentHorizontal(BuildContext context) =>
+      getSpacing(
+        DesignSemanticConstants.container,
+        DesignSemanticConstants.md,
+        context: context,
+      );
   /// 顶部工具栏高度（常规）
   static const double toolbarHeight = 56.0;
   /// 底部工具栏最小触控高度

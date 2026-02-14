@@ -12,6 +12,7 @@ import 'package:video_player/video_player.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
 import 'package:quwoquan_app/components/media/picker/create_media_picker_page.dart';
 import 'package:quwoquan_app/components/unified_emoji_picker.dart';
+import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/features/create/components/create_entry_sheet.dart';
 import 'package:quwoquan_app/features/create/models/create_media_models.dart';
@@ -87,6 +88,12 @@ class _CreatePageState extends ConsumerState<CreatePage>
 
   final List<Map<String, dynamic>> _savedDrafts = [];
 
+  void _recordCreateVisit(String tabId) {
+    ref.read(visitRecorderServiceProvider).recordVisit(
+          VisitTarget.page('create_$tabId'),
+        );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -100,11 +107,15 @@ class _CreatePageState extends ConsumerState<CreatePage>
       initialIndex: initialIndex,
     );
     _loadDrafts();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _recordCreateVisit(_tabIds[_tabController.index]);
+    });
     _tabController.addListener(() {
       if (_tabController.indexIsChanging) return;
       if (_tabController.index != 1 && _isPhotoEditingMode) {
         setState(() => _isPhotoEditingMode = false);
       }
+      _recordCreateVisit(_tabIds[_tabController.index]);
     });
     _autoSaveTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       if (_hasContent()) _saveDraft();

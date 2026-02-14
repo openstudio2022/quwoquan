@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 /// 圈子主页
@@ -57,6 +58,13 @@ class _CircleDetailPageState extends ConsumerState<CircleDetailPage> {
     if (_activeTab == 'works') _activeSubTab = 'all';
     if (_activeTab == 'interaction') _activeSubTab = 'likes';
     if (_activeTab == 'lifestyle') _activeSubTab = 'all';
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(visitRecorderServiceProvider).recordVisit(
+              VisitTarget.entity(kind: VisitEntityKind.circle, id: widget.circleId),
+            );
+      }
+    });
   }
 
   void _handleJoinCircle() {

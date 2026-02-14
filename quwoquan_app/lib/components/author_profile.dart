@@ -9,6 +9,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 /// 作者主页组件 - 基于原型代码实现
@@ -117,6 +118,13 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
     
     _setupScrollListener();
     _setupPullListener();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(visitRecorderServiceProvider).recordVisit(
+              VisitTarget.entity(kind: VisitEntityKind.author, id: widget.username),
+            );
+      }
+    });
     
     // 延迟加载用户数据，避免在initState中修改provider
     WidgetsBinding.instance.addPostFrameCallback((_) {

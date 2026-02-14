@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/assistant_avatar.dart';
+import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/features/assistant/context/assistant_open_context.dart';
+import 'package:quwoquan_app/features/assistant/widgets/assistant_half_sheet.dart';
 
 /// 趣聊页
 ///
@@ -75,6 +78,17 @@ class _ChatPageState extends ConsumerState<ChatPage>
   final TextEditingController _secretPasswordController = TextEditingController();
   String _secretAuthError = '';
   bool _secretShowPassword = false;
+
+  void _openAssistantHalfSheet() {
+    final target = VisitTarget.page('chat');
+    final service = ref.read(visitRecorderServiceProvider);
+    final ctx = AssistantOpenContext(
+      source: AssistantSource.chat,
+      visitTarget: target,
+      experienceLevel: service.getExperience(target),
+    );
+    AssistantHalfSheet.show(context, ctx);
+  }
 
   void _onScroll() {
     final y = _scrollController.hasClients ? _scrollController.offset : 0.0;
@@ -429,7 +443,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
           _ConversationTile(
             conversation: ref.read(appContentRepositoryProvider).chatAssistantConversation,
             isSpecial: true,
-            onTap: () => context.push('/chat/${AppConceptConstants.assistantConversationId}'),
+            onTap: _openAssistantHalfSheet,
             fgPrimary: fgPrimary,
             fgSecondary: fgSecondary,
             borderColor: borderColor,
