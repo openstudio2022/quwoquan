@@ -401,7 +401,7 @@ class MediaViewerBottomBar extends StatelessWidget {
                 color: AppColors.white,
                 size: AppSpacing.iconMedium,
               ),
-              count: shareCount,
+              count: 0, // 分享不显示数字
               onTap: onShare,
             ),
           ),

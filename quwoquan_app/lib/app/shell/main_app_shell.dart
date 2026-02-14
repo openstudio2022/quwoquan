@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -59,11 +60,23 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
+    final bottomNavHidden = ref.watch(bottomNavHiddenProvider).hidden;
 
-    return Scaffold(
-      backgroundColor:
-          AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
-      body: Stack(
+    final statusBarStyle = SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+      statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness:
+          isDark ? Brightness.light : Brightness.dark,
+    );
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: statusBarStyle,
+      child: Scaffold(
+        backgroundColor:
+            AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
+        body: Stack(
         children: [
           // 主内容区域 - 使用 IndexedStack 保持各频道状态
           IndexedStack(
@@ -76,18 +89,20 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
               MyProfilePage(), // 4: 我的
             ],
           ),
-          // 底部导航
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: BottomNavigationWidget(
-              currentIndex: _currentIndex,
-              onTap: _handleBottomNavTap,
+          // 底部导航（视频全屏沉浸时隐藏）
+          if (!bottomNavHidden)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: BottomNavigationWidget(
+                currentIndex: _currentIndex,
+                onTap: _handleBottomNavTap,
+              ),
             ),
-          ),
         ],
       ),
+    ),
     );
   }
 

@@ -25,3 +25,24 @@ final videoForceDarkProvider = NotifierProvider<VideoForceDarkNotifier, VideoFor
   return VideoForceDarkNotifier();
 });
 
+/// 视频全屏沉浸时隐藏底部导航栏
+class BottomNavHiddenState {
+  final bool hidden;
+
+  const BottomNavHiddenState({this.hidden = false});
+}
+
+class BottomNavHiddenNotifier extends Notifier<BottomNavHiddenState> {
+  @override
+  BottomNavHiddenState build() => const BottomNavHiddenState();
+
+  void setHidden(bool hidden) {
+    state = BottomNavHiddenState(hidden: hidden);
+  }
+}
+
+final bottomNavHiddenProvider =
+    NotifierProvider<BottomNavHiddenNotifier, BottomNavHiddenState>(() {
+  return BottomNavHiddenNotifier();
+});
+

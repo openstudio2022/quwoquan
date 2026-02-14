@@ -28,6 +28,10 @@ class TabNavigationWidget extends ConsumerWidget {
   final List<String> fixedTabIds;
   final GestureDragEndCallback? onHorizontalDragEnd;
   final List<Widget> trailingActions;
+  /// 一级 tab 的对齐方式，默认居中；发现页使用 start 左对齐
+  final MainAxisAlignment? tabsAlignment;
+  /// 可选：横向滚动时使用，用于圈子页等 tab 跟随选中项滚动
+  final ScrollController? tabScrollController;
 
   const TabNavigationWidget({
     super.key,
@@ -39,6 +43,8 @@ class TabNavigationWidget extends ConsumerWidget {
     this.fixedTabIds = const <String>['following', 'recommended'],
     this.onHorizontalDragEnd,
     this.trailingActions = const <Widget>[],
+    this.tabsAlignment,
+    this.tabScrollController,
   });
 
   static const List<TabItem> discoveryTabs = [
@@ -95,6 +101,8 @@ class TabNavigationWidget extends ConsumerWidget {
             currentIsDark,
             fg,
             fgSecondary,
+            tabsAlignment: tabsAlignment ?? MainAxisAlignment.center,
+            scrollController: tabScrollController,
           )
         : _buildMixedScrollableNav(
             context,
@@ -139,21 +147,35 @@ class TabNavigationWidget extends ConsumerWidget {
     List<TabItem> tabList,
     bool isDark,
     Color fg,
-    Color fgSecondary,
-  ) {
+    Color fgSecondary, {
+    MainAxisAlignment tabsAlignment = MainAxisAlignment.center,
+    ScrollController? scrollController,
+  }) {
+    final chips = [
+      for (var i = 0; i < tabList.length; i++)
+        _buildTabChip(
+          context: context,
+          tab: tabList[i],
+          selected: tabList[i].id == activeTab,
+          isDark: isDark,
+          fg: fg,
+          fgSecondary: fgSecondary,
+        ),
+    ];
+    if (tabsAlignment == MainAxisAlignment.start || scrollController != null) {
+      return SingleChildScrollView(
+        controller: scrollController,
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: chips,
+        ),
+      );
+    }
     return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        for (var i = 0; i < tabList.length; i++)
-          _buildTabChip(
-            context: context,
-            tab: tabList[i],
-            selected: tabList[i].id == activeTab,
-            isDark: isDark,
-            fg: fg,
-            fgSecondary: fgSecondary,
-          ),
-      ],
+      mainAxisAlignment: tabsAlignment,
+      children: chips,
     );
   }
 
@@ -212,9 +234,9 @@ class TabNavigationWidget extends ConsumerWidget {
   }) {
     final chipFontSize = AppTypography.responsive(
       context,
-      compact: AppTypography.sm,
-      regular: AppTypography.base,
-      expanded: AppTypography.lg,
+      compact: AppTypography.base,
+      regular: AppTypography.lg,
+      expanded: AppTypography.xl,
     );
 
     return Material(
@@ -231,36 +253,39 @@ class TabNavigationWidget extends ConsumerWidget {
               minWidth: AppSpacing.minInteractiveSize,
               minHeight: AppSpacing.minInteractiveSize,
             ),
-            child: IntrinsicWidth(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    tab.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: chipFontSize,
-                      fontWeight: selected
-                          ? AppTypography.bold
-                          : AppTypography.medium,
-                      color: selected ? fg : fgSecondary,
-                    ),
-                  ),
-                  SizedBox(height: AppSpacing.intraGroupXs),
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    height: AppSpacing.intraGroupXs / 2,
-                    decoration: BoxDecoration(
-                      color: selected ? fg : Colors.transparent,
-                      borderRadius: BorderRadius.circular(
-                        AppSpacing.intraGroupXs / 4,
+            child: Center(
+              child: IntrinsicWidth(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      tab.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: chipFontSize,
+                        fontWeight: selected
+                            ? AppTypography.bold
+                            : AppTypography.medium,
+                        color: selected ? fg : fgSecondary,
                       ),
                     ),
-                  ),
-                ],
+                    SizedBox(height: AppSpacing.intraGroupXs),
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      height: AppSpacing.intraGroupXs / 2,
+                      decoration: BoxDecoration(
+                        color: selected ? fg : Colors.transparent,
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.intraGroupXs / 4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

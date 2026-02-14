@@ -50,7 +50,6 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
   int _likesCount = 0;
   int _commentsCount = 0;
   int _savesCount = 0;
-  int _sharesCount = 0;
 
   @override
   void initState() {
@@ -60,7 +59,6 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
     _likesCount = widget.post['likesCount'] ?? 0;
     _commentsCount = widget.post['commentsCount'] ?? 0;
     _savesCount = widget.post['savesCount'] ?? 0;
-    _sharesCount = widget.post['sharesCount'] ?? 0;
   }
 
   @override
@@ -496,9 +494,8 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
           ),
 
           SizedBox(
-              width: context
-                          .safeGetInterGroupSpacing(SpacingSize.sm)
-                  .w),
+            width: context.safeGetInterGroupSpacing(SpacingSize.lg).w,
+          ),
 
           // 收藏按钮
           _buildInteractionButton(
@@ -516,9 +513,8 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
           ),
 
           SizedBox(
-              width: context
-                          .safeGetInterGroupSpacing(SpacingSize.sm)
-                  .w),
+            width: context.safeGetInterGroupSpacing(SpacingSize.lg).w,
+          ),
 
           // 评论按钮
           _buildInteractionButton(
@@ -532,9 +528,11 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
             isDark: isDark,
           ),
 
-          const Spacer(),
+          SizedBox(
+            width: context.safeGetInterGroupSpacing(SpacingSize.sm).w,
+          ),
 
-          // 转发按钮 - 靠右对齐
+          // 转发按钮 - 与左组固定组间间距
           _buildShareButton(isDark),
         ],
       ),
@@ -616,26 +614,6 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
               color: isDark
                   ? AppColors.dark.foregroundPrimary
                   : AppColors.light.foregroundPrimary,
-            ),
-            SizedBox(
-                width: context
-                    .safeGetIntraGroupSpacing(SpacingSize.xs)
-                    .w),
-            // 分享按钮也显示数字，使用更小的固定宽度避免溢出
-            SizedBox(
-              width: 40.w, // 使用更小的固定宽度，避免溢出
-              child: Text(
-                _sharesCount > 0 ? _formatCount(_sharesCount) : '',
-                style: TextStyle(
-                  fontSize: AppTypography.actionCount,
-                  color: isDark
-                      ? AppColors.dark.foregroundSecondary
-                      : AppColors.light.foregroundSecondary,
-                  fontWeight: AppTypography.medium,
-                ),
-                textAlign: TextAlign.left,
-                overflow: TextOverflow.ellipsis,
-              ),
             ),
           ],
         ),

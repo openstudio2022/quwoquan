@@ -7,6 +7,47 @@ class UITextConstants {
   static const String discoveryTabPhoto = '美图';
   static const String discoveryTabVideo = '视频';
   static const String discoveryTabArticle = '文章';
+  /// 发现页 V1：帮读/美图/视频
+  static const String discoveryTabHelperRead = '帮读';
+  static const String discoveryHelperSummaryTitle = '小趣已为你读完';
+  static const String discoveryHelperSummarySubtitle = '今日值得看 3 条，已筛选 27 条重复信息';
+  /// 帮读一句话综述占位（自上次阅读后…）
+  static const String discoveryHelperOneLinerTemplate = '自上次阅读以来，%s';
+  /// 帮读分维度展开的维度标题
+  static const String discoveryHelperDimensionFriendPublish = '趣友新动态';
+  static const String discoveryHelperDimensionNewFollowPublish = '刚加入的趣友';
+  static const String discoveryHelperDimensionDormantFriendPublish = '久未发·最近有互动';
+  static const String discoveryHelperDimensionCircleMoment = '圈子发生了什么';
+  static const String discoveryHelperDimensionInteractionWithYou = '谁与你互动';
+  static const String discoveryHelperDimensionExplore = '探索推荐';
+  /// 时间线分组
+  static const String discoveryHelperTimelineToday = '今天';
+  static const String discoveryHelperTimelineYesterday = '昨天';
+  static const String discoveryHelperTimelineThisWeek = '本周';
+  static const String discoveryHelperExpandMoments = '展开微趣';
+  static const String discoveryHelperExpandArticles = '查看文章列表';
+  static const String discoveryHelperSectionMoments = '微趣';
+  static const String discoveryHelperSectionArticles = '文章';
+  static const String discoveryHelperActionReadOriginal = '看原文';
+  static const String discoveryHelperActionLater = '稍后处理';
+  static const String discoveryHelperActionPreference = '更像这个';
+  static const String assistantCommandRead = '帮我读';
+  static const String assistantCommandRemember = '帮我记';
+  static const String assistantCommandHandle = '帮我办';
+  static const String assistantCommandShare = '帮我发';
+  static const String assistantCommandFind = '帮我找';
+  static const String assistantCommandPlan = '帮我排';
+  static const String assistantActionNoRemind = '不再提醒';
+  static const String assistantFeedbackSavedToMemory = '已加入记忆';
+  static const String assistantFeedbackTaskDraftCreated = '已生成待办草案';
+  static const String assistantFeedbackShareDraftCreated = '已生成分享草稿';
+  static const String assistantFeedbackPlanCreated = '已生成安排建议';
+  static const String assistantFeedbackRemindLater = '已设为稍后提醒';
+  static const String assistantFeedbackReduceProactive = '已减少主动提醒';
+  static const String assistantFeedbackOptimizeRecommendation = '收到，将优化推荐';
+  static const String assistantFeedbackAddedToLater = '已加入稍后处理';
+  static const String assistantEntryFind = '找小趣';
+  static const String assistantEntryAskLegacy = '问小趣';
   static const String search = '搜索';
   static const String create = '创建';
   static const String chat = '聊天';
@@ -19,7 +60,10 @@ class UITextConstants {
   // ==================== 欢迎页 ====================
   static const String welcomeTitle = '趣我圈';
   static const String welcomeSubtitle = '以兴趣为半径，画出我们的交集';
+  static const String welcomeMainSlogan = '专注你的热爱，其余交给小趣';
   static const String welcomeButtonLabel = '开启发现之旅';
+  /// 欢迎页底部署名（中文表达，居中）
+  static const String welcomeFooterCredit = '小趣私人助手 · 与你相伴';
 
   // ==================== 通用 ====================
   static const String commentPlaceholder = '添加评论...';
@@ -35,6 +79,10 @@ class UITextConstants {
   static const String following = '已关注';
   static const String unknownUser = '未知用户';
   static const String copyLink = '复制链接';
+  /// 分享目标：微信
+  static const String shareTargetWechat = '微信';
+  /// 分享目标：朋友圈
+  static const String shareTargetMoments = '朋友圈';
   static const String loadFailed = '加载失败';
   static const String report = '举报';
   static const String shareTo = '分享到';

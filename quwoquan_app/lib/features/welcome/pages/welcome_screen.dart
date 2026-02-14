@@ -1,11 +1,10 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 
 /// 欢迎页
 ///
@@ -143,6 +142,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           _buildRestartButton(),
           _buildMainContent(),
           _buildBottomButton(),
+          _buildFooter(),
         ],
       ),
     );
@@ -393,25 +393,75 @@ class _WelcomeScreenState extends State<WelcomeScreen>
             child: Text(
               UITextConstants.welcomeTitle,
               style: TextStyle(
-                fontSize: 48.sp,
-                fontWeight: FontWeight.w900,
+                fontSize: AppTypography.welcomeHeroTitle,
+                fontWeight: AppTypography.black,
                 color: Colors.white,
                 letterSpacing: -0.5,
               ),
             ),
           ),
           SizedBox(height: AppSpacing.md),
-          Text(
-            AppConceptConstants.coreIdea,
-            style: TextStyle(
-              fontSize: 18.sp,
-              fontWeight: FontWeight.w500,
-              color: AppColors.welcomeForegroundMuted,
-              letterSpacing: 3.2,
-            ),
-            textAlign: TextAlign.center,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  UITextConstants.welcomeMainSlogan,
+                  style: TextStyle(
+                    fontSize: AppTypography.xl,
+                    fontWeight: AppTypography.medium,
+                    color: AppColors.welcomeForegroundMuted,
+                    letterSpacing: 1.0,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              SizedBox(width: AppSpacing.intraGroupXs),
+              Icon(
+                Icons.auto_awesome,
+                size: AppSpacing.iconSmall,
+                color: AppColors.welcomeForeground.withValues(alpha: 0.9),
+              ),
+            ],
           ),
         ],
+      ),
+    );
+  }
+
+  /// 欢迎页底部署名：居中、小字号、弱对比，与主按钮分离
+  Widget _buildFooter() {
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: EdgeInsets.only(
+            bottom: AppSpacing.md + MediaQuery.of(context).padding.bottom,
+          ),
+          child: AnimatedBuilder(
+            animation: _textController,
+            builder: (context, child) {
+              return Opacity(
+                opacity: Curves.easeOut.transform(_textController.value),
+                child: child,
+              );
+            },
+            child: Center(
+              child: Text(
+                UITextConstants.welcomeFooterCredit,
+                style: TextStyle(
+                  fontSize: AppTypography.sm,
+                  fontWeight: AppTypography.medium,
+                  color: AppColors.welcomeForegroundMuted.withValues(alpha: 0.8),
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -456,8 +506,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                           UITextConstants.welcomeButtonLabel,
                           style: TextStyle(
                             color: AppColors.welcomeForeground,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16.sp,
+                            fontWeight: AppTypography.bold,
+                            fontSize: AppTypography.lg,
                           ),
                         ),
                         SizedBox(width: AppSpacing.sm),

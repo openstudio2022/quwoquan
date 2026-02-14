@@ -32,7 +32,9 @@ export 'design_system/providers/theme_provider.dart';
 export 'providers/app_providers.dart';
 export 'package:quwoquan_app/app/providers/app_state_provider.dart';
 export 'package:quwoquan_app/app/providers/accessibility_provider.dart';
-export 'package:quwoquan_app/features/home/providers/video_force_dark_provider.dart';
+export 'package:quwoquan_app/features/home/providers/video_force_dark_provider.dart'
+    show VideoForceDarkState, VideoForceDarkNotifier, videoForceDarkProvider,
+        BottomNavHiddenState, BottomNavHiddenNotifier, bottomNavHiddenProvider;
 export 'package:quwoquan_app/features/home/providers/home_state.dart';
 
 // Services

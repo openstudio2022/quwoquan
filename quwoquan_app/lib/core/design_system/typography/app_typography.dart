@@ -19,6 +19,8 @@ class AppTypography {
   static const double toolPanelItemLabel = base;
   static const double toolPanelCategoryLabel = base;
   static const double actionCount = lg;
+  /// 欢迎页主标题（hero）
+  static const double welcomeHeroTitle = 48.0;
 
   static const FontWeight normal = FontWeight.w400;
   static const FontWeight medium = FontWeight.w500;

@@ -41,6 +41,9 @@ abstract class AppContentRepository {
   List<Map<String, dynamic>> get assistantMemoryData;
   List<Map<String, dynamic>> get assistantTasksData;
   List<Map<String, dynamic>> get assistantSkillsData;
+
+  /// 帮读摘要：一句话综述 + 分维度展开事实。格式见 PrototypeMockData.helperReadSummary。
+  Map<String, dynamic> get helperReadSummary;
 }
 
 class MockAppContentRepository implements AppContentRepository {
@@ -122,6 +125,10 @@ class MockAppContentRepository implements AppContentRepository {
   @override
   List<Map<String, dynamic>> get assistantSkillsData =>
       PrototypeMockData.assistantSkillsData;
+
+  @override
+  Map<String, dynamic> get helperReadSummary =>
+      PrototypeMockData.helperReadSummary;
 }
 
 class RemoteAppContentRepository implements AppContentRepository {
@@ -176,6 +183,8 @@ class RemoteAppContentRepository implements AppContentRepository {
   List<Map<String, dynamic>> get assistantTasksData => _fallback.assistantTasksData;
   @override
   List<Map<String, dynamic>> get assistantSkillsData => _fallback.assistantSkillsData;
+  @override
+  Map<String, dynamic> get helperReadSummary => _fallback.helperReadSummary;
 }
 
 final appContentRepositoryProvider = Provider<AppContentRepository>((ref) {

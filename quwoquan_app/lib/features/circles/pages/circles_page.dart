@@ -23,21 +23,45 @@ class CirclesPage extends ConsumerStatefulWidget {
 
 class _CirclesPageState extends ConsumerState<CirclesPage>
     with AutomaticKeepAliveClientMixin {
-  static const String _fixedPrimaryFollowing = 'following';
-  static const String _fixedPrimaryRecommended = 'all';
   static const double _circleCoverAspectRatio = 4 / 3;
 
   String _selectedDimension = 'all';
   String _selectedSubCategory = UITextConstants.circleSubAll;
-  final ScrollController _scrollController = ScrollController();
+  final Map<String, String> _subCategoryByDimension = {};
+  late PageController _primaryPageController;
+  late ScrollController _tabScrollController;
+  static const double _estimatedTabChipWidth = 64.0;
 
   @override
   bool get wantKeepAlive => true;
 
   @override
+  void initState() {
+    super.initState();
+    _primaryPageController = PageController(
+      initialPage: _primaryTabIds.indexOf(_selectedDimension).clamp(0, _primaryTabIds.length - 1),
+    );
+    _tabScrollController = ScrollController();
+  }
+
+  @override
   void dispose() {
-    _scrollController.dispose();
+    _primaryPageController.dispose();
+    _tabScrollController.dispose();
     super.dispose();
+  }
+
+  void _scrollTabToSelected() {
+    if (!_tabScrollController.hasClients) return;
+    final index = _primaryTabIds.indexOf(_selectedDimension);
+    if (index < 0) return;
+    final offset = (index * _estimatedTabChipWidth).toDouble();
+    final maxOffset = _tabScrollController.position.maxScrollExtent;
+    _tabScrollController.animateTo(
+      offset.clamp(0.0, maxOffset),
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
+    );
   }
 
   /// 与 DiscoveryView myCategories 一致：关注 + CATEGORY_CONFIG
@@ -52,18 +76,22 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
     return list;
   }
 
-  List<Map<String, dynamic>> get _filteredCircles {
+  List<Map<String, dynamic>> _filteredCirclesFor(String dimensionId) {
     final circles = ref.read(appContentRepositoryProvider).circlesMockCircles;
-    if (_selectedDimension == 'all') return circles;
-    return circles.where((c) => c['categoryId'] == _selectedDimension).toList();
+    if (dimensionId == 'all') return circles;
+    return circles.where((c) => c['categoryId'] == dimensionId).toList();
   }
 
-  List<Map<String, dynamic>> get _filteredActivities {
+  List<Map<String, dynamic>> get _filteredCircles => _filteredCirclesFor(_selectedDimension);
+
+  List<Map<String, dynamic>> _filteredActivitiesFor(String dimensionId) {
     final activities = ref.read(appContentRepositoryProvider).circlesMockActivities;
-    if (_selectedDimension == 'all') return activities;
-    final label = ref.read(appContentRepositoryProvider).circlesCategoryConfig[_selectedDimension]?['label'] as String? ?? '';
+    if (dimensionId == 'all') return activities;
+    final label = ref.read(appContentRepositoryProvider).circlesCategoryConfig[dimensionId]?['label'] as String? ?? '';
     return activities.where((a) => (a['circleName'] as String).contains(label)).toList();
   }
+
+  List<Map<String, dynamic>> get _filteredActivities => _filteredActivitiesFor(_selectedDimension);
 
   List<String> get _currentSubCategories {
     final config = ref.read(appContentRepositoryProvider).circlesCategoryConfig[_selectedDimension];
@@ -75,15 +103,15 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
         .toList();
   }
 
-  List<Map<String, dynamic>> get _discoveryPosts {
-    final circles = _filteredCircles.isEmpty
+  List<Map<String, dynamic>> _discoveryPostsFor(String dimensionId, String subCategory) {
+    final circles = _filteredCirclesFor(dimensionId);
+    final poolCircles = circles.isEmpty
         ? ref.read(appContentRepositoryProvider).circlesMockCircles
-        : _filteredCircles;
-    // 按二级分类过滤（综合则不过滤）
-    final filtered = _selectedSubCategory == UITextConstants.circleSubAll
-        ? circles
-        : circles.where((c) => c['subCategory'] == _selectedSubCategory).toList();
-    final pool = filtered.isEmpty ? circles : filtered;
+        : circles;
+    final filtered = subCategory == UITextConstants.circleSubAll
+        ? poolCircles
+        : poolCircles.where((c) => c['subCategory'] == subCategory).toList();
+    final pool = filtered.isEmpty ? poolCircles : filtered;
     final urls = [
       'https://images.unsplash.com/photo-1617634667039-8e4cb277ab46?w=800&fit=crop',
       'https://images.unsplash.com/photo-1551024601-bec78aea704b?w=800&fit=crop',
@@ -109,8 +137,21 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
     });
   }
 
+  List<Map<String, dynamic>> get _discoveryPosts =>
+      _discoveryPostsFor(_selectedDimension, _selectedSubCategory);
+
   List<String> get _primaryTabIds =>
       _categories.map((category) => category['id']!).toList(growable: false);
+
+  List<String> _getSubCategoriesFor(String dimensionId) {
+    final config = ref.read(appContentRepositoryProvider).circlesCategoryConfig[dimensionId];
+    if (config == null) return [];
+    final sub = config['subCategories'] as List<dynamic>? ?? [];
+    return sub
+        .map((e) => e.toString())
+        .where((s) => s != '综合' && s != UITextConstants.circleSubAll)
+        .toList();
+  }
 
   List<String> get _secondaryTabIds =>
       [UITextConstants.circleSubAll, ..._currentSubCategories];
@@ -124,10 +165,18 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
       HapticFeedback.selectionClick();
       return;
     }
+    final nextId = ids[nextIndex];
     setState(() {
-      _selectedDimension = ids[nextIndex];
-      _selectedSubCategory = UITextConstants.circleSubAll;
+      _selectedDimension = nextId;
+      _selectedSubCategory = _subCategoryByDimension[nextId] ?? UITextConstants.circleSubAll;
     });
+    if (_primaryPageController.hasClients) {
+      _primaryPageController.animateToPage(
+        nextIndex,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
   }
 
   void _switchSecondaryByDelta(int delta) {
@@ -139,7 +188,30 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
       HapticFeedback.selectionClick();
       return;
     }
-    setState(() => _selectedSubCategory = ids[nextIndex]);
+    setState(() {
+      _selectedSubCategory = ids[nextIndex];
+      _subCategoryByDimension[_selectedDimension] = ids[nextIndex];
+    });
+  }
+
+  void _switchSecondaryByDeltaFor(String dimensionId, int delta) {
+    final ids = [UITextConstants.circleSubAll, ..._getSubCategoriesFor(dimensionId)];
+    if (ids.length <= 1) return;
+    final current = _subCategoryByDimension[dimensionId] ?? UITextConstants.circleSubAll;
+    final currentIndex = ids.indexOf(current);
+    if (currentIndex < 0) return;
+    final nextIndex = currentIndex + delta;
+    if (nextIndex < 0 || nextIndex >= ids.length) {
+      HapticFeedback.selectionClick();
+      return;
+    }
+    final next = ids[nextIndex];
+    setState(() {
+      _subCategoryByDimension[dimensionId] = next;
+      if (dimensionId == _selectedDimension) {
+        _selectedSubCategory = next;
+      }
+    });
   }
 
   void _onPrimaryDragEnd(DragEndDetails details) {
@@ -173,72 +245,42 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
   Widget build(BuildContext context) {
     super.build(context);
     final isDark = ref.watch(isDarkProvider);
-    final bgColor = AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
+    final bgPrimary = AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
     final fgPrimary = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
     final fgSecondary = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
     final borderColor = AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
 
     return Scaffold(
-      backgroundColor: bgColor,
+      backgroundColor: bgPrimary,
       body: SafeArea(
         bottom: false,
         child: Column(
           children: [
             _buildHeader(context, isDark, fgPrimary, fgSecondary),
             Expanded(
-              child: _selectedDimension == 'following'
-                  ? _buildFollowingPlaceholder(fgSecondary)
-                  : GestureDetector(
-                      behavior: HitTestBehavior.translucent,
-                      onHorizontalDragEnd: (details) {
-                        final velocity = details.primaryVelocity ?? 0;
-                        if (velocity.abs() < 200) return;
-                        final delta = velocity < 0 ? 1 : -1;
-                        if (_currentSubCategories.isNotEmpty) {
-                          _switchSecondaryByDelta(delta);
-                        } else {
-                          _switchPrimaryByDelta(delta);
-                        }
-                      },
-                      child: CustomScrollView(
-                        controller: _scrollController,
-                        slivers: [
-                          SliverToBoxAdapter(
-                            child: _buildRecommendedSection(
-                              context, isDark, fgPrimary, fgSecondary,
-                            ),
-                          ),
-                          if (_filteredActivities.isNotEmpty)
-                            SliverToBoxAdapter(child: _buildActivities(isDark, fgSecondary)),
-                          if (_currentSubCategories.isNotEmpty)
-                            SliverPersistentHeader(
-                              floating: true,
-                              delegate: _SubCategoryBarDelegate(
-                                child: _buildSubCategoryBarContent(
-                                  context, isDark, fgPrimary, fgSecondary, borderColor,
-                                ),
-                                extent: AppSpacing.subTabNavigationHeight,
-                              ),
-                            ),
-                          _buildDiscoveryMasonryGrid(context, isDark, fgPrimary, fgSecondary),
-                          SliverToBoxAdapter(
-                            child: Padding(
-                              padding: EdgeInsets.only(
-                                top: AppSpacing.interGroupXl,
-                                bottom: MediaQuery.of(context).padding.bottom + AppSpacing.bottomNavHeight,
-                              ),
-                              child: Center(
-                                child: Text(
-                                  UITextConstants.discoveryEndHint,
-                                  style: TextStyle(fontSize: AppTypography.sm, color: fgSecondary),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-            ),
+              child: PageView(
+                  controller: _primaryPageController,
+                  physics: const PageScrollPhysics(),
+                  onPageChanged: (index) {
+                    final id = _primaryTabIds[index];
+                    if (id != _selectedDimension) {
+                      setState(() {
+                        _selectedDimension = id;
+                        _selectedSubCategory = _subCategoryByDimension[id] ?? UITextConstants.circleSubAll;
+                      });
+                      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollTabToSelected());
+                    }
+                  },
+                  children: _primaryTabIds.map((id) {
+                    if (id == 'following') {
+                      return _buildFollowingPlaceholder(fgSecondary);
+                    }
+                    return _buildDimensionContent(
+                      context, id, isDark, fgPrimary, fgSecondary, borderColor,
+                    );
+                  }).toList(),
+                ),
+              ),
           ],
         ),
       ),
@@ -271,42 +313,63 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
         .map((entry) => TabItem(id: entry['id']!, label: entry['label']!))
         .toList(growable: false);
 
-    return TabNavigationWidget(
-      activeTab: _selectedDimension,
-      isDark: isDark,
-      tabs: tabs,
-      mode: TabNavigationMode.mixedScrollable,
-      fixedTabIds: const <String>[_fixedPrimaryFollowing, _fixedPrimaryRecommended],
-      onTabChange: (id) {
-        setState(() {
-          _selectedDimension = id;
-          _selectedSubCategory = UITextConstants.circleSubAll;
-        });
-      },
-      onHorizontalDragEnd: _onPrimaryDragEnd,
-      trailingActions: [
-        IconButton(
-          icon: Icon(Icons.search, size: AppSpacing.iconMedium, color: fgSecondary),
-          onPressed: () {},
-          style: IconButton.styleFrom(
-            minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
+        border: Border(
+          bottom: BorderSide(
+            color: AppColorsFunctional.getColor(isDark, ColorType.borderPrimary),
+            width: 1,
           ),
         ),
-        IconButton(
-          icon: Icon(Icons.tune, size: AppSpacing.iconMedium, color: fgSecondary),
-          onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('频道管理（ChannelManager 待接入）'),
-                behavior: SnackBarBehavior.floating,
-              ),
+      ),
+      child: TabNavigationWidget(
+        activeTab: _selectedDimension,
+        isDark: isDark,
+        tabs: tabs,
+        mode: TabNavigationMode.compactPill,
+        tabsAlignment: MainAxisAlignment.start,
+        tabScrollController: _tabScrollController,
+        onTabChange: (id) {
+          setState(() {
+            _selectedDimension = id;
+            _selectedSubCategory = _subCategoryByDimension[id] ?? UITextConstants.circleSubAll;
+          });
+          final index = _primaryTabIds.indexOf(id);
+          if (index >= 0 && _primaryPageController.hasClients) {
+            _primaryPageController.animateToPage(
+              index,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
             );
-          },
-          style: IconButton.styleFrom(
-            minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+          }
+          WidgetsBinding.instance.addPostFrameCallback((_) => _scrollTabToSelected());
+        },
+        onHorizontalDragEnd: _onPrimaryDragEnd,
+        trailingActions: [
+          IconButton(
+            icon: Icon(Icons.search, size: AppSpacing.iconMedium, color: fgSecondary),
+            onPressed: () {},
+            style: IconButton.styleFrom(
+              minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+            ),
           ),
-        ),
-      ],
+          IconButton(
+            icon: Icon(Icons.tune, size: AppSpacing.iconMedium, color: fgSecondary),
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('频道管理（ChannelManager 待接入）'),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
+            style: IconButton.styleFrom(
+              minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -330,13 +393,95 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
     );
   }
 
+  /// 构建指定维度（如全部、美食、旅行）的完整内容：推荐区 + 活动 + 二级分类条 + 瀑布流
+  Widget _buildDimensionContent(
+    BuildContext context,
+    String dimensionId,
+    bool isDark,
+    Color fgPrimary,
+    Color fgSecondary,
+    Color borderColor,
+  ) {
+    final subCategory = _subCategoryByDimension[dimensionId] ?? UITextConstants.circleSubAll;
+    final subCats = _getSubCategoriesFor(dimensionId);
+    final circles = _filteredCirclesFor(dimensionId);
+    final activities = _filteredActivitiesFor(dimensionId);
+    final posts = _discoveryPostsFor(dimensionId, subCategory);
+
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: _buildRecommendedSection(
+            context, isDark, fgPrimary, fgSecondary,
+            circlesParam: circles,
+          ),
+        ),
+        if (activities.isNotEmpty)
+          SliverToBoxAdapter(
+            child: _buildActivities(isDark, fgSecondary, activitiesParam: activities),
+          ),
+        if (subCats.isNotEmpty)
+          SliverPersistentHeader(
+            floating: true,
+            delegate: _SubCategoryBarDelegate(
+              child: _buildSubCategoryBarContent(
+                context, isDark, fgPrimary, fgSecondary, borderColor,
+                subCategoriesParam: subCats,
+                selectedSubParam: subCategory,
+                onSubHorizontalDragEnd: (details) {
+                  final velocity = details.primaryVelocity ?? 0;
+                  if (velocity.abs() < 220) return;
+                  _switchSecondaryByDeltaFor(dimensionId, velocity < 0 ? 1 : -1);
+                },
+                onSubTap: (s) {
+                  setState(() {
+                    _subCategoryByDimension[dimensionId] = s;
+                    if (dimensionId == _selectedDimension) {
+                      _selectedSubCategory = s;
+                    }
+                  });
+                },
+              ),
+              extent: AppSpacing.subTabNavigationHeight,
+            ),
+          ),
+        _buildDiscoveryMasonryGrid(
+          context, isDark, fgPrimary, fgSecondary,
+          postsParam: posts,
+          onGridHorizontalDragEnd: subCats.isEmpty
+              ? null
+              : (details) {
+                  final velocity = details.primaryVelocity ?? 0;
+                  if (velocity.abs() < 220) return;
+                  _switchSecondaryByDeltaFor(dimensionId, velocity < 0 ? 1 : -1);
+                },
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.only(
+              top: AppSpacing.interGroupXl,
+              bottom: MediaQuery.of(context).padding.bottom + AppSpacing.bottomNavHeight,
+            ),
+            child: Center(
+              child: Text(
+                UITextConstants.discoveryEndHint,
+                style: TextStyle(fontSize: AppTypography.sm, color: fgSecondary),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildRecommendedSection(
     BuildContext context,
     bool isDark,
     Color fgPrimary,
-    Color fgSecondary,
-  ) {
-    final circles = _filteredCircles;
+    Color fgSecondary, {
+    List<Map<String, dynamic>>? circlesParam,
+  }) {
+    final circles = circlesParam ?? _filteredCircles;
     return Container(
       color: isDark ? Colors.white.withValues(alpha: 0.03) : Colors.black.withValues(alpha: 0.02),
       padding: EdgeInsets.symmetric(
@@ -456,14 +601,15 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
     );
   }
 
-  Widget _buildActivities(bool isDark, Color fgSecondary) {
+  Widget _buildActivities(bool isDark, Color fgSecondary, {List<Map<String, dynamic>>? activitiesParam}) {
+    final activities = activitiesParam ?? _filteredActivities;
     return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.md] ?? AppSpacing.containerMd,
         vertical: AppSpacing.sm,
       ),
       child: Column(
-        children: _filteredActivities.map((a) {
+        children: activities.map((a) {
           return Padding(
             padding: EdgeInsets.only(bottom: AppSpacing.sm),
             child: Material(
@@ -529,9 +675,15 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
     bool isDark,
     Color fgPrimary,
     Color fgSecondary,
-    Color borderColor,
-  ) {
-    final subs = [UITextConstants.circleSubAll, ..._currentSubCategories];
+    Color borderColor, {
+    List<String>? subCategoriesParam,
+    String? selectedSubParam,
+    void Function(String)? onSubTap,
+    GestureDragEndCallback? onSubHorizontalDragEnd,
+  }) {
+    final subCats = subCategoriesParam ?? _currentSubCategories;
+    final subs = [UITextConstants.circleSubAll, ...subCats];
+    final selectedSub = selectedSubParam ?? _selectedSubCategory;
     final chipFontSize = AppTypography.responsive(
       context,
       compact: AppTypography.sm,
@@ -549,7 +701,7 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
         color: bgBar,
         child: GestureDetector(
           behavior: HitTestBehavior.translucent,
-          onHorizontalDragEnd: _onSecondaryDragEnd,
+          onHorizontalDragEnd: onSubHorizontalDragEnd ?? _onSecondaryDragEnd,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: EdgeInsets.symmetric(
@@ -559,14 +711,20 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
             itemCount: subs.length,
             itemBuilder: (context, index) {
               final s = subs[index];
-              final selected = _selectedSubCategory == s;
+              final selected = selectedSub == s;
               return Padding(
                 padding: EdgeInsets.only(right: AppSpacing.intraGroupSm),
                 child: Material(
                   color: Colors.transparent,
                   child: InkWell(
                     borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
-                    onTap: () => setState(() => _selectedSubCategory = s),
+                    onTap: () {
+                      if (onSubTap != null) {
+                        onSubTap(s);
+                      } else {
+                        setState(() => _selectedSubCategory = s);
+                      }
+                    },
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
                       alignment: Alignment.center,
@@ -612,9 +770,11 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
     BuildContext context,
     bool isDark,
     Color fgPrimary,
-    Color fgSecondary,
-  ) {
-    final posts = _discoveryPosts;
+    Color fgSecondary, {
+    List<Map<String, dynamic>>? postsParam,
+    GestureDragEndCallback? onGridHorizontalDragEnd,
+  }) {
+    final posts = postsParam ?? _discoveryPosts;
     return SliverPadding(
       padding: EdgeInsets.fromLTRB(
         AppSpacing.containerSm,
@@ -633,6 +793,7 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
             post: p,
             isDark: isDark,
             onTap: () => context.push('/article/${p['id']}'),
+            onHorizontalDragEnd: onGridHorizontalDragEnd,
           );
         },
       ),
@@ -645,11 +806,13 @@ class _DiscoveryPostCard extends StatelessWidget {
   final Map<String, dynamic> post;
   final bool isDark;
   final VoidCallback onTap;
+  final GestureDragEndCallback? onHorizontalDragEnd;
 
   const _DiscoveryPostCard({
     required this.post,
     required this.isDark,
     required this.onTap,
+    this.onHorizontalDragEnd,
   });
 
   /// 计算图片显示宽高比（随机模拟），最大不超过 9:16
@@ -667,15 +830,24 @@ class _DiscoveryPostCard extends StatelessWidget {
     final fgPrimary = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
     final fgSecondary = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
     final user = post['user'] as Map<String, dynamic>? ?? {};
+    final gridMetaFontSize = AppTypography.responsive(
+      context,
+      compact: AppTypography.sm,
+      regular: AppTypography.base,
+      expanded: AppTypography.base,
+    );
 
     return Material(
       color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onHorizontalDragEnd: onHorizontalDragEnd,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             // 媒体图片（按模拟宽高比，最大 9:16）
             AspectRatio(
               aspectRatio: _imageAspectRatio,
@@ -711,7 +883,7 @@ class _DiscoveryPostCard extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: AppTypography.sm,
+                fontSize: gridMetaFontSize,
                 color: fgPrimary,
               ),
             ),
@@ -736,7 +908,7 @@ class _DiscoveryPostCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: AppTypography.xs,
+                      fontSize: gridMetaFontSize,
                       color: fgSecondary,
                     ),
                   ),
@@ -746,50 +918,22 @@ class _DiscoveryPostCard extends StatelessWidget {
                   children: [
                     Icon(
                       CupertinoIcons.heart,
-                      size: AppSpacing.iconSmall,
+                      size: gridMetaFontSize,
                       color: fgSecondary,
                     ),
                     Text(
-                      ' ${post['likes'] ?? 0} ',
+                      ' ${post['likes'] ?? 0}',
                       style: TextStyle(
-                        fontSize: AppTypography.xs,
-                        color: fgSecondary,
-                      ),
-                    ),
-                    AppBubbleIcon(size: AppSpacing.iconSmall, color: fgSecondary),
-                    Text(
-                      ' ${post['comments'] ?? 0} ',
-                      style: TextStyle(
-                        fontSize: AppTypography.xs,
-                        color: fgSecondary,
-                      ),
-                    ),
-                    AppStarIcon(size: AppSpacing.iconSmall, color: fgSecondary),
-                    Text(
-                      ' ${post['bookmarks'] ?? 0}',
-                      style: TextStyle(
-                        fontSize: AppTypography.xs,
+                        fontSize: gridMetaFontSize,
                         color: fgSecondary,
                       ),
                     ),
                   ],
                 ),
-                SizedBox(width: AppSpacing.intraGroupSm),
-                Icon(
-                  CupertinoIcons.arrowshape_turn_up_right,
-                  size: AppSpacing.iconSmall,
-                  color: fgSecondary,
-                ),
-                Text(
-                  ' ${post['shares'] ?? 0}',
-                  style: TextStyle(
-                    fontSize: AppTypography.xs,
-                    color: fgSecondary,
-                  ),
-                ),
               ],
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );

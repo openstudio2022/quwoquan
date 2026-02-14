@@ -27,7 +27,6 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
   bool _isFollowing = false;
   int _likesCount = 0;
   int _commentsCount = 0;
-  int _sharesCount = 0;
 
   @override
   void initState() {
@@ -37,7 +36,6 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
       final stats = _article!['stats'] is Map ? Map<String, dynamic>.from(_article!['stats'] as Map) : null;
       _likesCount = (stats?['likes'] as num?)?.toInt() ?? 0;
       _commentsCount = (stats?['comments'] as num?)?.toInt() ?? 0;
-      _sharesCount = (stats?['shares'] as num?)?.toInt() ?? 0;
     }
   }
 
@@ -354,9 +352,12 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
               ),
             ),
           ),
-          // 底栏：点赞、评论、收藏、分享
+          // 底栏：点赞、评论、收藏、分享（组内 interGroupMd，与图片浏览器一致）
           Container(
-            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+            padding: EdgeInsets.symmetric(
+              horizontal: context.safeGetContainerSpacing(SpacingSize.md),
+              vertical: context.safeGetIntraGroupSpacing(SpacingSize.sm),
+            ),
             decoration: BoxDecoration(
               color: contentBg,
               border: Border(top: BorderSide(color: contentText.withValues(alpha: 0.1))),
@@ -364,7 +365,6 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
             child: SafeArea(
               top: false,
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
                   _actionChip(context, _isLiked ? Icons.favorite : Icons.favorite_border, _likesCount, _isLiked, AppColors.error, () {
                     setState(() {
@@ -373,9 +373,12 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
                       if (_likesCount < 0) _likesCount = 0;
                     });
                   }),
+                  SizedBox(width: AppSpacing.interGroupLg),
                   _actionChip(context, Icons.chat_bubble_outline, _commentsCount, false, null, () {}),
+                  SizedBox(width: AppSpacing.interGroupLg),
                   _actionChip(context, _isSaved ? Icons.star : Icons.star_border, 0, _isSaved, AppColors.warning, () => setState(() => _isSaved = !_isSaved)),
-                  _actionChip(context, Icons.share, _sharesCount, false, null, () {}),
+                  SizedBox(width: AppSpacing.interGroupSm),
+                  _actionChipLabel(context, Icons.share, UITextConstants.share, () {}),
                 ],
               ),
             ),
@@ -411,6 +414,25 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
           Text(
             count > 0 ? _formatCount(count) : '',
             style: TextStyle(fontSize: 10.sp, color: fg),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _actionChipLabel(BuildContext context, IconData icon, String label, VoidCallback onTap) {
+    final isDark = ref.watch(isDarkProvider);
+    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: AppSpacing.iconMedium, color: fg),
+          SizedBox(height: AppSpacing.intraGroupXs / 2),
+          Text(
+            label,
+            style: TextStyle(fontSize: AppTypography.xs, color: fg),
           ),
         ],
       ),

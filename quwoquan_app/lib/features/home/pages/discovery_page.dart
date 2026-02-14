@@ -1,12 +1,18 @@
+// ignore_for_file: unnecessary_non_null_assertion
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
+import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
+import 'package:quwoquan_app/components/comment_system/comment_models.dart';
+import 'package:quwoquan_app/components/more_actions_popup/more_action_popup.dart';
+import 'package:quwoquan_app/components/more_actions_popup/configs/media_post_config.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/components/assistant_floating_ball.dart';
 import 'package:quwoquan_app/components/tab_navigation.dart';
+import 'package:quwoquan_app/components/assistant_avatar.dart';
 
 /// 发现页
 ///
@@ -21,17 +27,19 @@ class DiscoveryPage extends ConsumerStatefulWidget {
 
 class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
-  /// 与 DiscoveryFeed.tsx activeType 一致
-  String _activeType = 'moment';
+  /// 与 design-clarification-2026-02：微趣|美图|视频|文章，默认美图
+  String _activeType = 'photo';
   /// 与 DiscoveryFeed.tsx isUIVisible 一致，视频模式下可切换
   bool _isUIVisible = true;
   /// 保存 notifier 供 dispose 回调使用，避免 dispose 后使用 ref
   VideoForceDarkNotifier? _videoForceDarkNotifier;
+  BottomNavHiddenNotifier? _bottomNavHiddenNotifier;
+  late PageController _primaryPageController;
 
   @override
   bool get wantKeepAlive => true;
 
-  /// 与 DiscoveryFeed.tsx CATEGORIES 完全一致
+  /// 一级分类：微趣|美图|视频|文章（design-clarification-2026-02）
   static const List<Map<String, String>> _categories = [
     {'id': 'moment', 'label': UITextConstants.discoveryTabMoment},
     {'id': 'photo', 'label': UITextConstants.discoveryTabPhoto},
@@ -47,6 +55,24 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   void _setActiveType(String id) {
     setState(() => _activeType = id);
     _applyVideoForceDark();
+    final index = _primaryTabIds.indexOf(id);
+    if (index < 0) return;
+    if (_primaryPageController.hasClients &&
+        index != _primaryPageController.page?.round()) {
+      _primaryPageController.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    } else if (!_primaryPageController.hasClients) {
+      // 从视频全屏切到其他 tab 时 PageView 未挂载，下一帧挂载后需同步到正确页
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (_primaryPageController.hasClients) {
+          _primaryPageController.jumpToPage(index);
+        }
+      });
+    }
   }
 
   void _switchPrimaryByDelta(int delta) {
@@ -68,27 +94,34 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   }
 
   void _onTheaterModeChange(bool isHidden) {
-    // TODO: 与 App.tsx isBottomNavHidden 一致，需 Shell 提供 bottomNavVisibilityProvider
+    ref.read(bottomNavHiddenProvider.notifier).setHidden(isHidden);
   }
 
   /// 在非 build/initState/dispose 中更新，避免 “modify provider while building”
   void _applyVideoForceDark() {
     ref.read(videoForceDarkProvider.notifier).setForceDark(_isVideoMode);
+    ref.read(bottomNavHiddenProvider.notifier).setHidden(_isVideoMode);
   }
 
   @override
   void initState() {
     super.initState();
+    _primaryPageController = PageController(
+      initialPage: _primaryTabIds.indexOf(_activeType).clamp(0, _primaryTabIds.length - 1),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _videoForceDarkNotifier = ref.read(videoForceDarkProvider.notifier);
+      _bottomNavHiddenNotifier = ref.read(bottomNavHiddenProvider.notifier);
       _applyVideoForceDark();
     });
   }
 
   @override
   void dispose() {
+    _primaryPageController.dispose();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _videoForceDarkNotifier?.setForceDark(false);
+      _bottomNavHiddenNotifier?.setHidden(false);
     });
     super.dispose();
   }
@@ -96,28 +129,62 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final isDark = ref.watch(effectiveIsDarkProvider);
-    if (_isVideoMode && !_isUIVisible) _onTheaterModeChange(true);
-    if (!_isVideoMode) _onTheaterModeChange(false);
+    final themeDark = ref.watch(effectiveIsDarkProvider);
+    final isDark = themeDark || _isVideoMode;
+
+    // 从视频全屏返回时确保 PageView 显示与 _activeType 一致的页
+    if (!_isVideoMode && _primaryPageController.hasClients) {
+      final expectedIndex = _primaryTabIds.indexOf(_activeType);
+      if (expectedIndex != -1 &&
+          (_primaryPageController.page?.round() ?? -1) != expectedIndex) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          if (!_isVideoMode &&
+              _primaryPageController.hasClients &&
+              _primaryTabIds.contains(_activeType)) {
+            _primaryPageController.jumpToPage(
+              _primaryTabIds.indexOf(_activeType),
+            );
+          }
+        });
+      }
+    }
+
+    final body = Column(
+      children: [
+        _buildHeader(isDark),
+        Expanded(
+          child: PageView(
+            controller: _primaryPageController,
+            onPageChanged: (index) {
+              final id = _primaryTabIds[index];
+              if (id != _activeType) {
+                setState(() => _activeType = id);
+                _applyVideoForceDark();
+              }
+            },
+            children: _primaryTabIds
+                .map((id) => _buildContentForTab(id, isDark))
+                .toList(growable: false),
+          ),
+        ),
+      ],
+    );
 
     return Scaffold(
       backgroundColor: _isVideoMode
           ? Colors.black
-          : AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
-      body: Stack(
-        children: [
-          if (_isVideoMode)
-            _buildVideoImmersionView(isDark)
-          else
-            Column(
-              children: [
-                _buildHeader(isDark),
-                Expanded(child: _buildContent(isDark)),
-              ],
-            ),
-          AssistantFloatingBall(onTap: () => context.push('/assistant')),
-        ],
-      ),
+          : AppColorsFunctional.getColor(themeDark, ColorType.backgroundPrimary),
+      body: _isVideoMode
+          ? AnnotatedRegion<SystemUiOverlayStyle>(
+              value: const SystemUiOverlayStyle(
+                statusBarColor: Colors.transparent,
+                statusBarIconBrightness: Brightness.light,
+                statusBarBrightness: Brightness.dark,
+              ),
+              child: _buildVideoImmersionView(isDark),
+            )
+          : body,
     );
   }
 
@@ -130,6 +197,12 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     return Container(
       decoration: BoxDecoration(
         color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
+        border: Border(
+          bottom: BorderSide(
+            color: AppColorsFunctional.getColor(isDark, ColorType.borderPrimary),
+            width: 1,
+          ),
+        ),
       ),
       child: SafeArea(
         bottom: false,
@@ -138,19 +211,14 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
           isDark: isDark,
           tabs: tabs,
           mode: TabNavigationMode.compactPill,
+          tabsAlignment: MainAxisAlignment.start,
           onTabChange: _setActiveType,
           onHorizontalDragEnd: _onPrimaryDragEnd,
           trailingActions: [
             IconButton(
-              icon: Icon(
-                Icons.search,
-                size: AppSpacing.iconMedium,
-                color: AppColorsFunctional.getColor(
-                  isDark,
-                  ColorType.foregroundSecondary,
-                ),
-              ),
-              onPressed: () {},
+              tooltip: UITextConstants.assistantEntryFind,
+              icon: AssistantAvatar(radius: AppSpacing.iconMedium / 2),
+              onPressed: () => context.push('/assistant'),
               style: IconButton.styleFrom(
                 minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
               ),
@@ -161,7 +229,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     );
   }
 
-  /// 1:1 复制 VideoImmersionView.tsx：顶栏（返回/胶囊 Tab/搜索）、竖滑视频列表、点击切换 UI、下拉退出
+  /// 顶栏与微趣/美图/文章完全一致（深色模式），竖滑视频列表、点击切换 UI
   Widget _buildVideoImmersionView(bool isDark) {
     final videos = ref.watch(appContentRepositoryProvider).discoveryVideoData;
     return _VideoImmersionView(
@@ -169,12 +237,8 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       activeTab: _activeType,
       videos: videos,
       isUIVisible: _isUIVisible,
-      onBack: () {
-        setState(() => _activeType = 'moment');
-        _applyVideoForceDark();
-      },
       onTabChange: (id) {
-        setState(() => _activeType = id);
+        _setActiveType(id);
         _applyVideoForceDark();
       },
       onToggleUI: () {
@@ -185,11 +249,10 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     );
   }
 
-  /// 1:1 复制 DiscoveryFeed.tsx 内容区：moment/article→RecommendFeed；photo→MasonryLayoutEngine（video 由 _buildVideoImmersionView 全屏展示）
-  Widget _buildContent(bool isDark) {
-    switch (_activeType) {
+  Widget _buildContentForTab(String tabId, bool isDark) {
+    switch (tabId) {
       case 'video':
-        return const SizedBox.shrink(); // 视频模式由 _buildVideoImmersionView 独占
+        return _buildVideoImmersionView(isDark);
       case 'moment':
         return _buildMomentContent(isDark);
       case 'article':
@@ -197,113 +260,144 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       case 'photo':
         return _buildPhotoContent(isDark);
       default:
-        return _buildMomentContent(isDark);
+        return _buildPhotoContent(isDark);
     }
   }
 
-  /// 微趣流：1:1 使用 DiscoveryFeed.tsx activeType===moment 的 discoveryData，RecommendFeed 等价
   Widget _buildMomentContent(bool isDark) {
-    final items = ref.watch(appContentRepositoryProvider).discoveryMomentData;
+    final moments = ref.watch(appContentRepositoryProvider).discoveryMomentData;
     return ListView.builder(
       padding: EdgeInsets.only(
+        top: AppSpacing.containerSm,
         bottom: MediaQuery.of(context).padding.bottom +
             AppSpacing.bottomNavHeight +
             AppSpacing.interGroupMd,
       ),
-      itemCount: items.length + 1,
+      itemCount: moments.length,
       itemBuilder: (context, index) {
-        if (index == items.length) {
-          return Padding(
-            padding: EdgeInsets.symmetric(vertical: AppSpacing.interGroupXl),
-            child: Center(
-              child: Text(
-                UITextConstants.discoveryEndHint,
-                style: TextStyle(
-                  fontSize: AppTypography.sm,
-                  color: AppColorsFunctional.getColor(
-                    isDark,
-                    ColorType.foregroundSecondary,
-                  ),
-                ),
+        final isFirst = index == 0;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
+              child: _MomentPostCard(
+                item: moments[index],
+                isDark: isDark,
+                isFirst: isFirst,
+                onUserTap: (id) => context.push('/user/$id'),
+                onPostTap: (post, i) => _onPostTap(post, i),
+                onCommentTap: (post) => _onMomentCommentTap(context, post),
+                onShareTap: (post) => _onMomentShareTap(context, post),
+                onMoreTap: (post) => _onMomentMoreTap(context, post),
               ),
             ),
-          );
-        }
-        return _MomentPostCard(
-          item: items[index],
-          isDark: isDark,
-          onUserTap: (id) => context.push('/user/$id'),
-          onPostTap: (post, i) => _onPostTap(post, i),
+            if (index < moments.length - 1)
+              Container(
+                height: AppSpacing.sm,
+                color: AppColorsFunctional.getColor(
+                  isDark,
+                  ColorType.backgroundTertiary,
+                ),
+              ),
+          ],
         );
       },
     );
   }
 
-  /// 文章流：1:1 使用 DiscoveryFeed.tsx activeType===article 的 discoveryData
   Widget _buildArticleContent(bool isDark) {
-    final items = ref.watch(appContentRepositoryProvider).discoveryArticleData;
+    final articles = ref.watch(appContentRepositoryProvider).discoveryArticleData;
     return ListView.builder(
       padding: EdgeInsets.only(
+        top: AppSpacing.containerSm,
         bottom: MediaQuery.of(context).padding.bottom +
             AppSpacing.bottomNavHeight +
             AppSpacing.interGroupMd,
       ),
-      itemCount: items.length + 1,
+      itemCount: articles.length,
       itemBuilder: (context, index) {
-        if (index == items.length) {
-          return Padding(
-            padding: EdgeInsets.symmetric(vertical: AppSpacing.interGroupXl),
-            child: Center(
-              child: Text(
-                UITextConstants.discoveryEndHint,
-                style: TextStyle(
-                  fontSize: AppTypography.sm,
-                  color: AppColorsFunctional.getColor(
-                    isDark,
-                    ColorType.foregroundSecondary,
-                  ),
+        final article = articles[index];
+        final isFirst = index == 0;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
+              child: _ArticleCardPlaceholder(
+                article: article,
+                isDark: isDark,
+                isFirst: isFirst,
+                onTap: () => context.push('/article/${article['id']}'),
+                onUserTap: () => context.push(
+                  '/user/${article['author']?['name'] ?? ''}',
                 ),
               ),
             ),
-          );
-        }
-        final article = items[index];
-        return _ArticleCardPlaceholder(
-          article: article,
-          isDark: isDark,
-          onTap: () => context.push('/article/${article['id']}'),
-          onUserTap: () => context.push('/user/${article['author']?['name'] ?? ''}'),
+            if (index < articles.length - 1)
+              Container(
+                height: AppSpacing.sm,
+                color: AppColorsFunctional.getColor(
+                  isDark,
+                  ColorType.backgroundTertiary,
+                ),
+              ),
+          ],
         );
       },
     );
   }
 
-  /// 美图流：1:1 使用 DiscoveryFeed.tsx photo 的 discoveryData，MasonryLayoutEngine + DiscoveryItem 等价
+  /// 美图流：不规则瀑布流，单图高按宽高比自适应，最大 9:16
+  static const double _photoMaxAspectRatio = 16 / 9;
+
+  double _photoItemHeight(double cardWidth, Map<String, dynamic> post) {
+    final ratio = (post['aspectRatio'] as num?)?.toDouble() ?? 1.0;
+    if (ratio <= 0) return cardWidth;
+    final heightByImage = cardWidth / ratio;
+    final maxHeight = cardWidth * _photoMaxAspectRatio;
+    return heightByImage > maxHeight ? maxHeight : heightByImage;
+  }
+
   Widget _buildPhotoContent(bool isDark) {
     final items = ref.watch(appContentRepositoryProvider).discoveryPhotoData;
-    return GridView.builder(
-      padding: EdgeInsets.fromLTRB(
-        AppSpacing.containerSm,
-        AppSpacing.containerSm,
-        AppSpacing.containerSm,
-        MediaQuery.of(context).padding.bottom +
-            AppSpacing.bottomNavHeight +
-            AppSpacing.interGroupLg,
-      ),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: AppSpacing.interGroupSm,
-        crossAxisSpacing: AppSpacing.interGroupSm,
-        childAspectRatio: 0.75,
-      ),
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final d = items[index];
-        return _DiscoveryItemCard(
-          post: d,
-          onTap: () => _onPostTap(d, 0),
-        );
-      },
+    final screenWidth = MediaQuery.of(context).size.width;
+    final horizontalPadding = AppSpacing.containerSm * 2;
+    final gap = AppSpacing.interGroupSm;
+    final cardWidth = (screenWidth - horizontalPadding - gap) / 2;
+
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.containerSm,
+            AppSpacing.containerSm,
+            AppSpacing.containerSm,
+            MediaQuery.of(context).padding.bottom +
+                AppSpacing.bottomNavHeight +
+                AppSpacing.interGroupLg,
+          ),
+          sliver: SliverMasonryGrid.count(
+            crossAxisCount: 2,
+            mainAxisSpacing: AppSpacing.interGroupSm,
+            crossAxisSpacing: gap,
+            childCount: items.length,
+            itemBuilder: (context, index) {
+              final post = items[index];
+              final height = _photoItemHeight(cardWidth, post);
+              return SizedBox(
+                height: height,
+                child: _DiscoveryItemCard(
+                  post: post,
+                  onTap: () => _onPostTap(post, 0),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -315,28 +409,129 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     }
     context.push('/media-viewer/images/0'); // TODO: 传 post 与 index
   }
+
+  void _onMomentCommentTap(BuildContext context, dynamic post) {
+    CommentViewer.showModal(
+      context: context,
+      postId: post['id']?.toString() ?? '',
+      initialComments: [],
+      config: const CommentConfig(enabled: true),
+    );
+  }
+
+  void _onMomentShareTap(BuildContext context, dynamic post) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.all(AppSpacing.containerMd),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                UITextConstants.shareTo,
+                style: TextStyle(
+                  fontSize: AppTypography.lg,
+                  fontWeight: AppTypography.semiBold,
+                ),
+              ),
+              SizedBox(height: AppSpacing.interGroupMd),
+              ListTile(
+                leading: const Icon(Icons.chat_bubble_outline),
+                title: Text(UITextConstants.shareTargetWechat),
+                onTap: () => Navigator.pop(context),
+              ),
+              ListTile(
+                leading: const Icon(Icons.people_outline),
+                title: Text(UITextConstants.shareTargetMoments),
+                onTap: () => Navigator.pop(context),
+              ),
+              ListTile(
+                leading: const Icon(Icons.link),
+                title: Text(UITextConstants.copyLink),
+                onTap: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _onMomentMoreTap(BuildContext context, dynamic post) {
+    MoreActionPopup.show(
+      context: context,
+      config: MediaPostMoreActionConfig(post: post),
+    );
+  }
 }
 
 /// 微趣卡片：1:1 复制 MomentPost.tsx 结构（简化版，后续补全转发引用、九宫格等）
-class _MomentPostCard extends StatelessWidget {
+class _MomentPostCard extends StatefulWidget {
   final Map<String, dynamic> item;
   final bool isDark;
+  final bool isFirst;
   final void Function(String) onUserTap;
   final void Function(dynamic, int) onPostTap;
+  final void Function(dynamic)? onCommentTap;
+  final void Function(dynamic)? onShareTap;
+  final void Function(dynamic)? onMoreTap;
 
   const _MomentPostCard({
     required this.item,
     required this.isDark,
+    this.isFirst = false,
     required this.onUserTap,
     required this.onPostTap,
+    this.onCommentTap,
+    this.onShareTap,
+    this.onMoreTap,
   });
 
   @override
+  State<_MomentPostCard> createState() => _MomentPostCardState();
+}
+
+class _MomentPostCardState extends State<_MomentPostCard>
+    with SingleTickerProviderStateMixin {
+  bool _isLiked = false;
+  bool _isBookmarked = false;
+  late AnimationController _likeAnimationController;
+
+  @override
+  void initState() {
+    super.initState();
+    _likeAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+  }
+
+  @override
+  void dispose() {
+    _likeAnimationController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final item = widget.item;
+    final isDark = widget.isDark;
+    final isFirst = widget.isFirst;
     final user = item['user'] as Map<String, dynamic>? ?? {};
     final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
     final muted = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
-    final borderColor = AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
+    final quotedBg = AppColorsFunctional.getColor(isDark, ColorType.backgroundQuoted);
+    final likeColor = _isLiked ? AppColors.error : muted;
+    final bookmarkColor = _isBookmarked ? AppColors.warning : muted;
+
+    final borderRadius = isFirst
+        ? BorderRadius.only(
+            bottomLeft: Radius.circular(AppSpacing.borderRadius),
+            bottomRight: Radius.circular(AppSpacing.borderRadius),
+          )
+        : BorderRadius.circular(AppSpacing.borderRadius);
 
     return Container(
       padding: EdgeInsets.symmetric(
@@ -345,7 +540,7 @@ class _MomentPostCard extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
-        border: Border(bottom: BorderSide(color: borderColor)),
+        borderRadius: borderRadius,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -353,7 +548,7 @@ class _MomentPostCard extends StatelessWidget {
           Row(
             children: [
               GestureDetector(
-                onTap: () => onUserTap(user['id']?.toString() ?? user['name']?.toString() ?? ''),
+                onTap: () => widget.onUserTap(user['id']?.toString() ?? user['name']?.toString() ?? ''),
                 child: CircleAvatar(
                   radius: AppSpacing.avatarUserMd / 2,
                   backgroundImage: NetworkImage(
@@ -420,6 +615,14 @@ class _MomentPostCard extends StatelessWidget {
                   ],
                 ),
               ),
+              if (widget.onMoreTap != null)
+                IconButton(
+                  icon: Icon(Icons.more_horiz, size: AppSpacing.iconMedium, color: muted),
+                  onPressed: () => widget.onMoreTap!(item),
+                  style: IconButton.styleFrom(
+                    minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+                  ),
+                ),
             ],
           ),
           SizedBox(height: AppSpacing.interGroupXs),
@@ -438,7 +641,7 @@ class _MomentPostCard extends StatelessWidget {
             Container(
               padding: EdgeInsets.all(AppSpacing.sm.w),
               decoration: BoxDecoration(
-                color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary),
+                color: quotedBg,
                 borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
               ),
               child: Column(
@@ -447,7 +650,7 @@ class _MomentPostCard extends StatelessWidget {
                   Text(
                     '@${(item['quotedPost'] as Map)['user']}',
                     style: TextStyle(
-                      fontSize: AppTypography.sm,
+                      fontSize: AppTypography.base,
                       fontWeight: AppTypography.medium,
                       color: fg,
                     ),
@@ -456,7 +659,7 @@ class _MomentPostCard extends StatelessWidget {
                   Text(
                     (item['quotedPost'] as Map)['content']?.toString() ?? '',
                     style: TextStyle(
-                      fontSize: AppTypography.sm,
+                      fontSize: AppTypography.base,
                       color: muted,
                     ),
                     maxLines: 2,
@@ -469,7 +672,7 @@ class _MomentPostCard extends StatelessWidget {
           if (item['media'] != null && (item['media'] as List).isNotEmpty) ...[
             SizedBox(height: AppSpacing.interGroupXs),
             GestureDetector(
-              onTap: () => onPostTap(item, 0),
+              onTap: () => widget.onPostTap(item, 0),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
                 child: AspectRatio(
@@ -481,7 +684,7 @@ class _MomentPostCard extends StatelessWidget {
                     width: double.infinity,
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) => Container(
-                      color: borderColor,
+                      color: quotedBg,
                       child: const Icon(Icons.broken_image_outlined),
                     ),
                   ),
@@ -495,35 +698,53 @@ class _MomentPostCard extends StatelessWidget {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _actionChip(CupertinoIcons.heart, '${item['likes'] ?? 0}', isDark),
-                  SizedBox(width: AppSpacing.intraGroupMd),
-                  _actionChipWidget(
-                    AppStarIcon(
-                      size: AppSpacing.iconMedium,
-                      color: AppColorsFunctional.getColor(
-                        isDark,
-                        ColorType.foregroundSecondary,
-                      ),
+                  GestureDetector(
+                    onTap: () {
+                      setState(() => _isLiked = !_isLiked);
+                      _likeAnimationController.forward(from: 0);
+                      _likeAnimationController.reverse();
+                    },
+                    child: _actionChip(
+                      _isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
+                      '${(item['likes'] as int? ?? 0) + (_isLiked ? 1 : 0)}',
+                      isDark,
+                      iconColor: likeColor,
                     ),
-                    '${item['bookmarks'] ?? item['saves'] ?? 0}',
-                    isDark,
                   ),
                   SizedBox(width: AppSpacing.intraGroupMd),
-                  _actionChipWidget(
-                    AppBubbleIcon(
-                      size: AppSpacing.iconMedium,
-                      color: AppColorsFunctional.getColor(
-                        isDark,
-                        ColorType.foregroundSecondary,
+                  GestureDetector(
+                    onTap: () => setState(() => _isBookmarked = !_isBookmarked),
+                    child: _actionChipWidget(
+                      AppStarIcon(
+                        size: AppSpacing.iconMedium,
+                        color: bookmarkColor,
                       ),
+                      '${((item['bookmarks'] ?? item['saves'] ?? 0) as num).toInt() + (_isBookmarked ? 1 : 0)}',
+                      isDark,
                     ),
-                    '${item['comments'] ?? 0}',
-                    isDark,
+                  ),
+                  SizedBox(width: AppSpacing.intraGroupMd),
+                  GestureDetector(
+                    onTap: () => widget.onCommentTap?.call(item),
+                    child: _actionChipWidget(
+                      AppBubbleIcon(
+                        size: AppSpacing.iconMedium,
+                        color: AppColorsFunctional.getColor(
+                          isDark,
+                          ColorType.foregroundSecondary,
+                        ),
+                      ),
+                      '${item['comments'] ?? 0}',
+                      isDark,
+                    ),
                   ),
                 ],
               ),
               const Spacer(),
-              _actionChip(CupertinoIcons.arrowshape_turn_up_right, '${item['shares'] ?? 0}', isDark),
+              GestureDetector(
+                onTap: () => widget.onShareTap?.call(item),
+                child: _actionChip(CupertinoIcons.arrowshape_turn_up_right, UITextConstants.share, isDark),
+              ),
             ],
           ),
         ],
@@ -531,12 +752,12 @@ class _MomentPostCard extends StatelessWidget {
     );
   }
 
-  Widget _actionChip(IconData icon, String count, bool isDark) {
+  Widget _actionChip(IconData icon, String count, bool isDark, {Color? iconColor}) {
     final muted = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: AppSpacing.iconMedium, color: muted),
+        Icon(icon, size: AppSpacing.iconMedium, color: iconColor ?? muted),
         SizedBox(width: AppSpacing.intraGroupXs),
         Text(
           count,
@@ -566,12 +787,14 @@ class _MomentPostCard extends StatelessWidget {
 class _ArticleCardPlaceholder extends StatelessWidget {
   final Map<String, dynamic> article;
   final bool isDark;
+  final bool isFirst;
   final VoidCallback onTap;
   final VoidCallback onUserTap;
 
   const _ArticleCardPlaceholder({
     required this.article,
     required this.isDark,
+    this.isFirst = false,
     required this.onTap,
     required this.onUserTap,
   });
@@ -583,6 +806,13 @@ class _ArticleCardPlaceholder extends StatelessWidget {
     final author = article['author'] as Map<String, dynamic>? ?? {};
     final stats = article['stats'] as Map<String, dynamic>? ?? {};
 
+    final borderRadius = isFirst
+        ? BorderRadius.only(
+            bottomLeft: Radius.circular(AppSpacing.borderRadius),
+            bottomRight: Radius.circular(AppSpacing.borderRadius),
+          )
+        : BorderRadius.circular(AppSpacing.borderRadius);
+
     return InkWell(
       onTap: onTap,
       child: Container(
@@ -592,11 +822,7 @@ class _ArticleCardPlaceholder extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
-          border: Border(
-            bottom: BorderSide(
-              color: AppColorsFunctional.getColor(isDark, ColorType.borderPrimary),
-            ),
-          ),
+          borderRadius: borderRadius,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -688,7 +914,7 @@ class _ArticleCardPlaceholder extends StatelessWidget {
                   color: muted,
                 ),
                 Text(
-                  ' ${stats['shares'] ?? 0}',
+                  ' ${UITextConstants.share}',
                   style: TextStyle(fontSize: AppTypography.base, color: muted),
                 ),
               ],
@@ -795,14 +1021,13 @@ class _DiscoveryItemCard extends StatelessWidget {
   }
 }
 
-/// 1:1 复制 VideoImmersionView.tsx：顶栏（返回/胶囊/搜索）、竖滑整屏视频、右侧互动栏、左下文案与音乐
+/// 顶栏与微趣/美图/文章一致（深色模式），竖滑整屏视频、右侧互动栏、左下文案与音乐
 class _VideoImmersionView extends StatefulWidget {
   const _VideoImmersionView({
     required this.categories,
     required this.activeTab,
     required this.videos,
     required this.isUIVisible,
-    required this.onBack,
     required this.onTabChange,
     required this.onToggleUI,
     required this.onUserClick,
@@ -812,7 +1037,6 @@ class _VideoImmersionView extends StatefulWidget {
   final String activeTab;
   final List<Map<String, dynamic>> videos;
   final bool isUIVisible;
-  final VoidCallback onBack;
   final void Function(String id) onTabChange;
   final VoidCallback onToggleUI;
   final void Function(String userId) onUserClick;
@@ -824,6 +1048,7 @@ class _VideoImmersionView extends StatefulWidget {
 class _VideoImmersionViewState extends State<_VideoImmersionView> {
   late PageController _pageController;
   final Set<int> _likedIndexes = {};
+  final Set<int> _followedIndexes = {};
 
   List<String> get _primaryTabIds =>
       widget.categories.map((category) => category['id']!).toList(growable: false);
@@ -869,124 +1094,31 @@ class _VideoImmersionViewState extends State<_VideoImmersionView> {
         bottom: false,
         child: Column(
           children: [
-            // 顶栏：返回 | 胶囊 Tab | 搜索（1:1 VideoImmersionView header）
+            // 顶栏：与微趣/美图/文章完全一致（深色模式），无返回按钮
             AnimatedOpacity(
               opacity: widget.isUIVisible ? 1 : 0,
               duration: const Duration(milliseconds: 200),
               child: Container(
-                height: AppSpacing.toolbarHeight,
-                padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-                child: Row(
-                  children: [
+                decoration: BoxDecoration(
+                  color: AppColorsFunctional.getColor(true, ColorType.backgroundPrimary),
+                ),
+                child: TabNavigationWidget(
+                  activeTab: widget.activeTab,
+                  isDark: true,
+                  tabs: widget.categories
+                      .map((c) => TabItem(id: c['id']!, label: c['label']!))
+                      .toList(growable: false),
+                  mode: TabNavigationMode.compactPill,
+                  tabsAlignment: MainAxisAlignment.start,
+                  onTabChange: (id) {
+                    if (id != 'video') widget.onTabChange(id);
+                  },
+                  onHorizontalDragEnd: _onPrimaryDragEnd,
+                  trailingActions: [
                     IconButton(
-                      icon: const Icon(Icons.chevron_left, color: Colors.white),
-                      onPressed: widget.onBack,
-                      style: IconButton.styleFrom(
-                        backgroundColor: Colors.white.withValues(alpha: 0.2),
-                      ),
-                    ),
-                    Expanded(
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.translucent,
-                        onHorizontalDragEnd: _onPrimaryDragEnd,
-                        child: Container(
-                          padding: EdgeInsets.all(AppSpacing.xs / 2),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(
-                              AppSpacing.circularBorderRadius,
-                            ),
-                          ),
-                          child: Stack(
-                            children: [
-                              SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: Row(
-                                  children: widget.categories.map((cat) {
-                                final isActive = widget.activeTab == cat['id'];
-                                return Padding(
-                                  padding: EdgeInsets.only(right: AppSpacing.intraGroupSm),
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      onTap: () {
-                                        if (cat['id'] != 'video') {
-                                          widget.onTabChange(cat['id']!);
-                                        }
-                                      },
-                                      borderRadius: BorderRadius.circular(
-                                        AppSpacing.circularBorderRadius,
-                                      ),
-                                      child: ConstrainedBox(
-                                        constraints: BoxConstraints(
-                                          minWidth: AppSpacing.minInteractiveSize,
-                                          minHeight: AppSpacing.minInteractiveSize,
-                                        ),
-                                        child: Container(
-                                          padding: EdgeInsets.symmetric(
-                                            horizontal: AppSpacing.containerSm,
-                                            vertical: AppSpacing.intraGroupXs,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: isActive
-                                                ? Colors.white.withValues(alpha: 0.2)
-                                                : Colors.transparent,
-                                            borderRadius: BorderRadius.circular(
-                                              AppSpacing.circularBorderRadius,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            cat['label']!,
-                                            style: TextStyle(
-                                              fontSize: AppTypography.base,
-                                              fontWeight: isActive
-                                                  ? AppTypography.bold
-                                                  : AppTypography.medium,
-                                              color: isActive
-                                                  ? Colors.white
-                                                  : Colors.white.withValues(alpha: 0.5),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              }).toList(),
-                                ),
-                              ),
-                              Positioned(
-                                right: 0,
-                                top: 0,
-                                bottom: 0,
-                                child: IgnorePointer(
-                                  child: Container(
-                                    width: AppSpacing.lg,
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        begin: Alignment.centerLeft,
-                                        end: Alignment.centerRight,
-                                        colors: [
-                                          Colors.transparent,
-                                          Colors.white.withValues(alpha: 0.15),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      icon: Icon(
-                        Icons.search,
-                        color: Colors.white,
-                        size: AppSpacing.iconMedium,
-                      ),
-                      onPressed: () {},
+                      tooltip: UITextConstants.assistantEntryFind,
+                      icon: AssistantAvatar(radius: AppSpacing.iconMedium / 2),
+                      onPressed: () => context.push('/assistant'),
                       style: IconButton.styleFrom(
                         minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
                       ),
@@ -995,14 +1127,17 @@ class _VideoImmersionViewState extends State<_VideoImmersionView> {
                 ),
               ),
             ),
-            // 竖滑视频列表
+            // 竖滑视频列表；水平滑动手势切换一级 tab（微趣/美图/视频/文章）
             Expanded(
-              child: PageView.builder(
-                controller: _pageController,
-                scrollDirection: Axis.vertical,
-                itemCount: widget.videos.length,
-                onPageChanged: (_) {},
-                itemBuilder: (context, index) {
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onHorizontalDragEnd: _onPrimaryDragEnd,
+                child: PageView.builder(
+                  controller: _pageController,
+                  scrollDirection: Axis.vertical,
+                  itemCount: widget.videos.length,
+                  onPageChanged: (_) {},
+                  itemBuilder: (context, index) {
                   final post = widget.videos[index];
                   final author = post['author'] is Map ? Map<String, dynamic>.from(post['author'] as Map) : <String, dynamic>{};
                   final authorId = author['id'] as String? ?? author['name'] as String? ?? '';
@@ -1033,57 +1168,120 @@ class _VideoImmersionViewState extends State<_VideoImmersionView> {
                         if (widget.isUIVisible)
                           Positioned(
                             right: AppSpacing.containerMd,
-                            bottom: AppSpacing.bottomNavHeight + AppSpacing.interGroupMd,
+                            bottom: AppSpacing.interGroupMd +
+                                MediaQuery.of(context).padding.bottom,
                             child: GestureDetector(
                               onTap: () {},
                               behavior: HitTestBehavior.opaque,
                               child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                GestureDetector(
-                                  onTap: () => widget.onUserClick(authorId),
-                                  child: Column(
-                                    children: [
-                                      CircleAvatar(
-                                        radius: AppSpacing.buttonHeight / 2,
-                                        backgroundColor: Colors.white,
-                                        backgroundImage: NetworkImage(author['avatar'] as String? ?? ''),
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  GestureDetector(
+                                    onTap: () => widget.onUserClick(authorId),
+                                    child: SizedBox(
+                                      width: AppSpacing.followButtonWidth,
+                                      child: Stack(
+                                        clipBehavior: Clip.none,
+                                        alignment: Alignment.center,
+                                        children: [
+                                          CircleAvatar(
+                                            radius: AppSpacing.buttonHeight / 2,
+                                            backgroundColor: Colors.white,
+                                            backgroundImage: NetworkImage(
+                                              author['avatar'] as String? ?? '',
+                                            ),
+                                          ),
+                                          if (!_followedIndexes.contains(index))
+                                            Positioned(
+                                              left: 0,
+                                              right: 0,
+                                              bottom: -AppSpacing.buttonHeightXs /
+                                                  2,
+                                              child: GestureDetector(
+                                                onTap: () => setState(() {
+                                                  _followedIndexes.add(index);
+                                                }),
+                                                child: Container(
+                                                  constraints: BoxConstraints(
+                                                    minWidth:
+                                                        AppSpacing.followButtonWidthCompact,
+                                                  ),
+                                                  padding:
+                                                      EdgeInsets.symmetric(
+                                                    horizontal:
+                                                        AppSpacing.containerSm,
+                                                    vertical:
+                                                        AppSpacing.intraGroupXs,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color:
+                                                        AppColors.primaryColor,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                      AppSpacing
+                                                          .circularBorderRadius,
+                                                    ),
+                                                  ),
+                                                  child: Center(
+                                                    child: Text(
+                                                      '+ ${UITextConstants.follow}',
+                                                      style: TextStyle(
+                                                        fontSize:
+                                                            AppTypography.sm,
+                                                        fontWeight:
+                                                            AppTypography.medium,
+                                                        color: Colors.white,
+                                                      ),
+                                                      overflow:
+                                                          TextOverflow.clip,
+                                                      maxLines: 1,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                        ],
                                       ),
-                                      SizedBox(height: AppSpacing.intraGroupXs),
-                                      Icon(
-                                        Icons.add_circle,
-                                        color: AppColors.primaryColor,
-                                        size: AppSpacing.iconMedium,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                SizedBox(height: AppSpacing.interGroupLg),
-                                _videoAction(CupertinoIcons.heart, isLiked, '${post['likes'] ?? ''}', () => setState(() {
-                                  if (_likedIndexes.contains(index)) {
-                                    _likedIndexes.remove(index);
-                                  } else {
-                                    _likedIndexes.add(index);
-                                  }
-                                })),
-                                _videoActionWidget(AppStarIcon(size: AppSpacing.iconMedium, color: Colors.white.withValues(alpha: 0.78)), UITextConstants.bookmarks, () {}),
-                                _videoActionWidget(AppBubbleIcon(size: AppSpacing.iconMedium, color: Colors.white.withValues(alpha: 0.78)), '${post['comments'] ?? ''}', () {}),
-                                _videoAction(CupertinoIcons.arrowshape_turn_up_right, false, '${post['shares'] ?? ''}', () {}),
-                                SizedBox(height: AppSpacing.interGroupMd),
-                                Container(
-                                  width: 40.w,
-                                  height: 40.w,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: Colors.white24, width: 2),
-                                    image: DecorationImage(
-                                      image: NetworkImage(author['avatar'] as String? ?? ''),
-                                      fit: BoxFit.cover,
                                     ),
                                   ),
-                                ),
-                              ],
-                            ),
+                                  SizedBox(height: AppSpacing.interGroupLg),
+                                  _videoAction(CupertinoIcons.heart, isLiked,
+                                      '${post['likes'] ?? ''}', () {
+                                    setState(() {
+                                      if (_likedIndexes.contains(index)) {
+                                        _likedIndexes.remove(index);
+                                      } else {
+                                        _likedIndexes.add(index);
+                                      }
+                                    });
+                                  }),
+                                  _videoActionWidget(
+                                    AppStarIcon(
+                                      size: AppSpacing.iconMedium,
+                                      color: Colors.white.withValues(alpha: 0.78),
+                                    ),
+                                    UITextConstants.bookmarks,
+                                    () {},
+                                  ),
+                                  _videoActionWidget(
+                                    AppBubbleIcon(
+                                      size: AppSpacing.iconMedium,
+                                      color: Colors.white.withValues(alpha: 0.78),
+                                    ),
+                                    '${post['comments'] ?? ''}',
+                                    () {},
+                                  ),
+                                  _videoActionWidget(
+                                    Icon(
+                                      CupertinoIcons.arrowshape_turn_up_right,
+                                      size: AppSpacing.iconMedium,
+                                      color: Colors.white.withValues(alpha: 0.78),
+                                    ),
+                                    UITextConstants.share,
+                                    () {},
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         // 左下文案
@@ -1144,6 +1342,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView> {
                     ),
                   );
                 },
+                ),
               ),
             ),
           ],
@@ -1152,57 +1351,76 @@ class _VideoImmersionViewState extends State<_VideoImmersionView> {
     );
   }
 
-  Widget _videoAction(IconData icon, bool filled, String label, VoidCallback onTap) {
-    return Column(
-      children: [
-        IconButton(
-          icon: Icon(
-            icon == CupertinoIcons.heart
-                ? (filled ? CupertinoIcons.heart_fill : CupertinoIcons.heart)
-                : icon,
-            color: filled
-                ? Colors.white
-                : Colors.white.withValues(alpha: 0.78),
-            size: AppSpacing.iconMedium,
-          ),
-          onPressed: onTap,
-          style: IconButton.styleFrom(
-            minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
-          ),
+  Widget _videoAction(
+    IconData icon,
+    bool filled,
+    String label,
+    VoidCallback onTap,
+  ) {
+    final iconToken = AppSpacing.semantic[DesignSemanticConstants.intraGroup]?[
+            DesignSemanticConstants.xs] ??
+        AppSpacing.intraGroupXs;
+    return Padding(
+      padding: EdgeInsets.only(bottom: AppSpacing.interGroupMd),
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon == CupertinoIcons.heart
+                  ? (filled ? CupertinoIcons.heart_fill : CupertinoIcons.heart)
+                  : icon,
+              color: filled
+                  ? Colors.white
+                  : Colors.white.withValues(alpha: 0.78),
+              size: AppSpacing.iconMedium,
+            ),
+            SizedBox(height: iconToken),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: AppTypography.sm,
+                fontWeight: AppTypography.bold,
+                color: Colors.white,
+              ),
+            ),
+          ],
         ),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: AppTypography.sm,
-            fontWeight: AppTypography.bold,
-            color: Colors.white,
-          ),
-        ),
-        SizedBox(height: AppSpacing.interGroupMd),
-      ],
+      ),
     );
   }
 
-  Widget _videoActionWidget(Widget iconWidget, String label, VoidCallback onTap) {
-    return Column(
-      children: [
-        IconButton(
-          icon: iconWidget,
-          onPressed: onTap,
-          style: IconButton.styleFrom(
-            minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
-          ),
+  Widget _videoActionWidget(
+    Widget iconWidget,
+    String label,
+    VoidCallback onTap,
+  ) {
+    final iconToken = AppSpacing.semantic[DesignSemanticConstants.intraGroup]?[
+            DesignSemanticConstants.xs] ??
+        AppSpacing.intraGroupXs;
+    return Padding(
+      padding: EdgeInsets.only(bottom: AppSpacing.interGroupMd),
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            iconWidget,
+            SizedBox(height: iconToken),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: AppTypography.sm,
+                fontWeight: AppTypography.bold,
+                color: Colors.white,
+              ),
+            ),
+          ],
         ),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: AppTypography.sm,
-            fontWeight: AppTypography.bold,
-            color: Colors.white,
-          ),
-        ),
-        SizedBox(height: AppSpacing.interGroupMd),
-      ],
+      ),
     );
   }
 }

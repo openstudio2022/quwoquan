@@ -83,6 +83,9 @@ class AppColorsFunctional {
       case ColorType.backgroundPrimary:
         // 深色模式：深黑 #1a1a1a (用于状态栏、顶部tab、post列表、底部工具栏、更多按钮页)
         return isDark ? const Color(0xFF1A1A1A) : Colors.white;
+      case ColorType.backgroundQuoted:
+        // 引用块/图片占位：比分割条更浅，更接近 post 白
+        return isDark ? const Color(0xFF222222) : const Color(0xFFFAFAFA);
       case ColorType.borderPrimary:
         return isDark ? Colors.grey[700]! : Colors.grey[300]!;
       case ColorType.borderSecondary:
@@ -118,6 +121,8 @@ enum ColorType {
   backgroundTertiary,
   backgroundSecondary,
   backgroundPrimary,
+  /// 引用块/图片占位：比分割条(tertiary)更浅，更接近 post 白(primary)
+  backgroundQuoted,
   borderPrimary,
   borderSecondary,
   foregroundPrimary,

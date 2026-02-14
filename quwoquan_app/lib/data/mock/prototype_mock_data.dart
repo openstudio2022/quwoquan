@@ -142,6 +142,7 @@ class PrototypeMockData {
   }
 
   /// 1:1 来自 DiscoveryFeed.tsx activeType === 'photo' 的 return 数组（10 条，含 images 字段）
+  /// aspectRatio: 宽/高，用于美图流自适应高度（最大 9:16）
   static List<Map<String, dynamic>> get discoveryPhotoData {
     return [
       {
@@ -149,22 +150,26 @@ class PrototypeMockData {
         'type': 'image',
         'thumbnail': 'https://images.unsplash.com/photo-1518152006812-edab29b069ac?w=800',
         'images': ['img1', 'img2'],
+        'aspectRatio': 1.2,
       },
       {
         'id': 'd2',
         'type': 'image',
         'thumbnail': 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800',
+        'aspectRatio': 0.8,
       },
       {
         'id': 'd4',
         'type': 'image',
         'thumbnail': 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=800',
         'images': ['img1', 'img2', 'img3'],
+        'aspectRatio': 1.0,
       },
       {
         'id': 'd5',
         'type': 'image',
         'thumbnail': 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=800',
+        'aspectRatio': 1.5,
       },
       {
         'id': 'd6',
@@ -527,6 +532,111 @@ class PrototypeMockData {
         'subCategories': ['探店', '烹饪', '茶酒', '咖啡', '烘焙'],
         'desc': '唯美食不可辜负，分享味蕾惊喜',
       },
+    };
+  }
+
+  /// 帮读摘要：一句话综述 + 分维度展开事实。oneLiner 为单句概括；dimensions 为维度列表，每项含 dimensionKey、title、items（事实条，含 actorName、titleOrDescription、likes、workId、workIds 等）。
+  static Map<String, dynamic> get helperReadSummary {
+    return {
+      'oneLiner':
+          '自上次阅读以来，3 位趣友发布了新作，2 个圈子有 5 条新动态，你的趣友在互动 2 个新圈子。',
+      'dimensions': [
+        {
+          'dimensionKey': 'friendPublish',
+          'title': '趣友新动态',
+          'items': [
+            {
+              'actorName': '李想',
+              'titleOrDescription': '发布了一条微趣',
+              'likes': 1581,
+              'workId': 'm4',
+              'workType': 'moment',
+            },
+            {
+              'actorName': '你的皮炎有点辣',
+              'titleOrDescription': '发布了一条微趣',
+              'likes': 234,
+              'workId': 'm1',
+              'workType': 'moment',
+            },
+            {
+              'actorName': '墨韵',
+              'titleOrDescription': '发布了文章《墨韵流芳：汉字书法中的空间美学与精神寄托》',
+              'likes': 892,
+              'workId': 'calligraphy',
+              'workType': 'article',
+            },
+          ],
+        },
+        {
+          'dimensionKey': 'newFollowPublish',
+          'title': '刚加入的趣友',
+          'items': [
+            {
+              'actorName': 'TechDaily',
+              'titleOrDescription': '新关注的 1 位趣友发布了文章《2024年现代Web开发趋势》',
+              'likes': 1240,
+              'workId': 'web-dev',
+              'workType': 'article',
+            },
+          ],
+        },
+        {
+          'dimensionKey': 'circleMoment',
+          'title': '圈子发生了什么',
+          'items': [
+            {
+              'actorName': '徕卡影像志',
+              'titleOrDescription': '圈内有 3 条新微趣',
+              'likes': 56,
+              'workIds': ['m4', 'm1'],
+              'circleId': 'c-human-1',
+            },
+            {
+              'actorName': '我的摄影圈 (圈主)',
+              'titleOrDescription': '圈内有 2 条新动态',
+              'likes': 12,
+              'workIds': ['m1'],
+              'circleId': 'c-photo-owner',
+            },
+          ],
+        },
+        {
+          'dimensionKey': 'interactionWithYou',
+          'title': '谁与你互动',
+          'items': [
+            {
+              'actorName': '李想',
+              'titleOrDescription': '赞了你的微趣',
+              'workId': 'm1',
+              'workType': 'moment',
+            },
+            {
+              'actorName': '3 位趣友',
+              'titleOrDescription': '共同点赞了《意式风情：三种经典酱汁的制作秘籍》',
+              'likes': 2105,
+              'workId': 'pasta',
+              'workType': 'article',
+            },
+          ],
+        },
+        {
+          'dimensionKey': 'explore',
+          'title': '探索推荐',
+          'items': [
+            {
+              'actorName': '2 个圈子',
+              'titleOrDescription': '你的趣友在互动：互联网校友内推圈、静安·安福路下午茶搭子',
+              'circleIds': ['c-cam-2', 'c-meet-1'],
+            },
+            {
+              'actorName': '与你兴趣相近',
+              'titleOrDescription': '科技前沿 (管理员)、极氪001·全国自驾团',
+              'circleIds': ['c-tech-admin', 'c-car-2'],
+            },
+          ],
+        },
+      ],
     };
   }
 
