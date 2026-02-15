@@ -234,6 +234,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
           tabs: tabs,
           activeTab: _activeType,
           isDark: isDark,
+          leftAlignedCompactMode: true,
           onTabChange: _setActiveType,
           onHorizontalDragEnd: _onPrimaryDragEnd,
           trailingActions: [
@@ -289,9 +290,12 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     }
   }
 
+  double _contentHorizontalPadding(BuildContext context) =>
+      AppSpacing.feedContentHorizontal(context);
+
   Widget _buildMomentContent(bool isDark) {
     final moments = ref.watch(appContentRepositoryProvider).discoveryMomentData;
-    final horizontal = AppSpacing.feedContentHorizontal(context);
+    final horizontal = _contentHorizontalPadding(context);
     return ListView.builder(
       padding: EdgeInsets.only(
         top: AppSpacing.containerSm,
@@ -335,7 +339,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
 
   Widget _buildArticleContent(bool isDark) {
     final articles = ref.watch(appContentRepositoryProvider).discoveryArticleData;
-    final horizontal = AppSpacing.feedContentHorizontal(context);
+    final horizontal = _contentHorizontalPadding(context);
     return ListView.builder(
       padding: EdgeInsets.only(
         top: AppSpacing.containerSm,
@@ -391,7 +395,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   Widget _buildPhotoContent(bool isDark) {
     final items = ref.watch(appContentRepositoryProvider).discoveryPhotoData;
     final screenWidth = MediaQuery.of(context).size.width;
-    final horizontal = AppSpacing.feedContentHorizontal(context);
+    final horizontal = _contentHorizontalPadding(context);
     final horizontalPadding = horizontal * 2;
     final gap = AppSpacing.interGroupSm;
     final cardWidth = (screenWidth - horizontalPadding - gap) / 2;
@@ -562,10 +566,7 @@ class _MomentPostCardState extends State<_MomentPostCard>
         : BorderRadius.circular(AppSpacing.borderRadius);
 
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.md.w,
-        vertical: AppSpacing.md.h,
-      ),
+      padding: EdgeInsets.symmetric(vertical: AppSpacing.md.h),
       decoration: BoxDecoration(
         color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
         borderRadius: borderRadius,
@@ -844,10 +845,7 @@ class _ArticleCardPlaceholder extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.md.w,
-          vertical: AppSpacing.md.h,
-        ),
+        padding: EdgeInsets.symmetric(vertical: AppSpacing.md.h),
         decoration: BoxDecoration(
           color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
           borderRadius: borderRadius,
@@ -1430,6 +1428,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                   activeTab: widget.activeTab,
                   isDark: true,
                   transparentBackground: true,
+                  leftAlignedCompactMode: true,
                   onTabChange: (id) {
                     if (id != 'video') widget.onTabChange(id);
                   },

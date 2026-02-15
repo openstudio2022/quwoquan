@@ -171,11 +171,14 @@ class AppSpacing {
   /// 子标签导航高度: 44.0
   static const double subTabNavigationHeight = 44.0;
 
-  /// 一级 Tab 芯片基准宽度（居中滚动 Tab 栏用，确保可见数 3/5/7/9/11 与 scroll 计算一致）
-  static const double tabChipBaseWidth = 56.0;
+  /// 一级 Tab 芯片基准宽度（居中滚动 Tab 栏用；2 CJK 字 ≈ 32px + 触控余量 ≥ minInteractiveSize）
+  static const double tabChipBaseWidth = 48.0;
 
   /// 视频沉浸模式下一级 Tab 芯片宽度（略大，避免「视频」等两字被裁切、只显示「视」亮色）
   static const double tabChipBaseWidthVideoImmersion = 64.0;
+
+  /// 一级 Tab 芯片间距（发现、圈子统一；组内语义 intraGroup.md，同一导航组内间距）
+  static const double primaryTabChipGap = intraGroupMd;
 
   /// 发现/圈子内容区左右边距（微趣、文章、图片宫格、圈子各 tab 页统一使用）
   static double feedContentHorizontal(BuildContext context) =>

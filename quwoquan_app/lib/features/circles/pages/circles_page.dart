@@ -271,7 +271,9 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
             Expanded(
               child: PageView(
                   controller: _primaryPageController,
-                  physics: const PageScrollPhysics(),
+                  // 禁用 PageView 自带的滑动切换，一级 Tab 切换完全由
+                  // 各区域的 GestureDetector 通过 animateToPage 程序驱动
+                  physics: const NeverScrollableScrollPhysics(),
                   onPageChanged: (index) {
                     final id = _primaryTabIds[index];
                     if (id != _selectedDimension) {
@@ -284,7 +286,12 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
                   },
                   children: _primaryTabIds.map((id) {
                     if (id == 'following') {
-                      return _buildFollowingPlaceholder(fgSecondary);
+                      // 关注页无二级 Tab，整页水平拖拽切换一级 Tab
+                      return GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onHorizontalDragEnd: _onPrimaryDragEnd,
+                        child: _buildFollowingPlaceholder(fgSecondary),
+                      );
                     }
                     return _buildDimensionContent(
                       context, id, isDark, fgPrimary, fgSecondary, borderColor,
@@ -333,7 +340,7 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
             );
           }
         },
-        onHorizontalDragEnd: _onPrimaryDragEnd,
+        // Tab 栏区域：手指滑动只滚动 Tab 栏，不切换 Tab
         trailingActions: [
           IconButton(
             tooltip: UITextConstants.assistantEntryFind,
@@ -385,15 +392,25 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
 
     return CustomScrollView(
       slivers: [
+        // 推荐区：二级 Tab 之上区域，水平拖拽切换一级 Tab
         SliverToBoxAdapter(
-          child: _buildRecommendedSection(
-            context, isDark, fgPrimary, fgSecondary,
-            circlesParam: circles,
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onHorizontalDragEnd: _onPrimaryDragEnd,
+            child: _buildRecommendedSection(
+              context, isDark, fgPrimary, fgSecondary,
+              circlesParam: circles,
+            ),
           ),
         ),
+        // 活动区：二级 Tab 之上区域，水平拖拽切换一级 Tab
         if (activities.isNotEmpty)
           SliverToBoxAdapter(
-            child: _buildActivities(context, isDark, fgSecondary, activitiesParam: activities),
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onHorizontalDragEnd: _onPrimaryDragEnd,
+              child: _buildActivities(context, isDark, fgSecondary, activitiesParam: activities),
+            ),
           ),
         if (subCats.isNotEmpty)
           SliverPersistentHeader(
@@ -424,7 +441,7 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
           context, isDark, fgPrimary, fgSecondary,
           postsParam: posts,
           onGridHorizontalDragEnd: subCats.isEmpty
-              ? null
+              ? _onPrimaryDragEnd // 无二级 Tab 时，瀑布流水平拖拽切换一级 Tab
               : (details) {
                   final velocity = details.primaryVelocity ?? 0;
                   if (velocity.abs() < 220) return;
