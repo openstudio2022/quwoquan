@@ -136,7 +136,7 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
         'id': 'dp-$i-${circle['id']}',
         'image': urls[i % 5],
         'title': '[${circle['subCategory'] ?? '精选'}] ${circle['name']} 的内容分享 #${i + 1}',
-        'user': {'name': 'User_$i', 'avatar': 'https://api.dicebear.com/7.x/avataaars/svg?seed=$i'},
+        'user': {'name': 'User_$i', 'avatar': 'https://api.dicebear.com/7.x/avataaars/png?seed=$i'},
         'likes': 24 + i * 5,
         'comments': 2 + i,
         'shares': 1 + (i ~/ 2),
@@ -884,15 +884,10 @@ class _DiscoveryPostCard extends StatelessWidget {
             // 底部行：左侧三动作，右侧转发（宫格保持更紧凑字号）。
             Row(
               children: [
-                CircleAvatar(
+                _buildUserAvatar(
+                  user['avatar'] as String?,
+                  fgSecondary,
                   radius: AppSpacing.intraGroupMd,
-                  backgroundColor: fgSecondary.withValues(alpha: 0.15),
-                  backgroundImage: (user['avatar'] as String?)?.isNotEmpty == true
-                      ? NetworkImage(user['avatar'] as String)
-                      : null,
-                  child: (user['avatar'] as String?)?.isNotEmpty != true
-                      ? Icon(Icons.person, size: AppSpacing.iconSmall, color: fgSecondary)
-                      : null,
                 ),
                 SizedBox(width: AppSpacing.intraGroupXs),
                 Expanded(
@@ -953,4 +948,32 @@ class _SubCategoryBarDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   bool shouldRebuild(covariant _SubCategoryBarDelegate oldDelegate) => true;
+}
+
+/// 用户头像：网络图加载失败时显示占位，避免 Invalid image data 异常。供圈子页与宫格卡片共用。
+Widget _buildUserAvatar(String? avatarUrl, Color fgSecondary, {required double radius}) {
+  final size = radius * 2;
+  if (avatarUrl == null || avatarUrl.trim().isEmpty) {
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: fgSecondary.withValues(alpha: 0.15),
+      child: Icon(Icons.person, size: AppSpacing.iconSmall, color: fgSecondary),
+    );
+  }
+  return SizedBox(
+    width: size,
+    height: size,
+    child: ClipOval(
+      child: Image.network(
+        avatarUrl,
+        fit: BoxFit.cover,
+        width: size,
+        height: size,
+        errorBuilder: (_, __, ___) => Container(
+          color: fgSecondary.withValues(alpha: 0.15),
+          child: Icon(Icons.person, size: AppSpacing.iconSmall, color: fgSecondary),
+        ),
+      ),
+    ),
+  );
 }

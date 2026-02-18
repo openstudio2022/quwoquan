@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/personal_assistant/app/assistant_engine_provider.dart';
 
 /// 私人助理主页
 ///
@@ -405,99 +406,146 @@ class _AssistantHomePageState extends ConsumerState<AssistantHomePage> {
   }
 
   Widget _buildSkillsContent(Color fgPrimary, Color fgSecondary) {
-    final skillsData = ref.watch(appContentRepositoryProvider).assistantSkillsData;
+    final skillsValue = ref.watch(assistantSkillMarketProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(height: 24),
-        ...skillsData.map((skill) {
-          final active = skill['active'] as bool? ?? false;
-          return Padding(
-            padding: EdgeInsets.only(bottom: 16),
-            child: Material(
-              color: ref.watch(isDarkProvider)
-                  ? Colors.white.withValues(alpha: 0.05)
-                  : Colors.black.withValues(alpha: 0.03),
-              borderRadius: BorderRadius.circular(16),
-              child: InkWell(
-                onTap: () {},
+        ...skillsValue.when(
+          data: (skillsData) => skillsData.map((skill) {
+            final active = skill.enabled;
+            return Padding(
+              padding: EdgeInsets.only(bottom: 16),
+              child: Material(
+                color: ref.watch(isDarkProvider)
+                    ? Colors.white.withValues(alpha: 0.05)
+                    : Colors.black.withValues(alpha: 0.03),
                 borderRadius: BorderRadius.circular(16),
-                child: Padding(
-                  padding: EdgeInsets.all(20),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: ref.watch(isDarkProvider)
-                              ? Colors.white.withValues(alpha: 0.1)
-                              : Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.06),
-                              blurRadius: 8,
-                              offset: Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Icon(
-                          Icons.widgets,
-                          color: active
-                              ? AppColors.primaryColor
-                              : fgSecondary,
-                          size: 24,
-                        ),
-                      ),
-                      SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              skill['name'] as String? ?? '',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                                color: fgPrimary,
+                child: InkWell(
+                  onTap: () async {
+                    if (skill.isDefaultFree) {
+                      return;
+                    }
+                    await ref
+                        .read(assistantGatewayProvider)
+                        .setSkillEnabled(skill.manifest.id, !active);
+                    ref.invalidate(assistantSkillMarketProvider);
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: ref.watch(isDarkProvider)
+                                ? Colors.white.withValues(alpha: 0.1)
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.06),
+                                blurRadius: 8,
+                                offset: Offset(0, 2),
                               ),
-                            ),
-                            SizedBox(height: 4),
-                            Text(
-                              skill['desc'] as String? ?? '',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: fgSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: active
-                              ? AppColors.primaryColor
-                              : fgSecondary.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          active ? '已启用' : '点击订阅',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: active ? Colors.white : fgSecondary,
+                            ],
+                          ),
+                          child: Icon(
+                            Icons.widgets,
+                            color: active ? AppColors.primaryColor : fgSecondary,
+                            size: 24,
                           ),
                         ),
-                      ),
-                    ],
+                        SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                skill.manifest.name,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: fgPrimary,
+                                ),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                skill.manifest.description,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: fgSecondary,
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                '${skill.category} · v${skill.version}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: fgSecondary.withValues(alpha: 0.8),
+                                ),
+                              ),
+                              Text(
+                                skill.isDefaultFree ? '默认能力 · 免订阅' : '${skill.tier.toUpperCase()} 订阅能力',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: skill.isDefaultFree
+                                      ? AppColors.success
+                                      : fgSecondary.withValues(alpha: 0.8),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: active
+                                ? AppColors.primaryColor
+                                : fgSecondary.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            skill.isDefaultFree
+                                ? '默认启用'
+                                : (active ? '已启用' : '点击订阅'),
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: active ? Colors.white : fgSecondary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
+            );
+          }).toList(growable: false),
+          loading: () => <Widget>[
+            Padding(
+              padding: EdgeInsets.only(top: 12),
+              child: Center(
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppColors.primaryColor,
+                ),
+              ),
             ),
-          );
-        }),
+          ],
+          error: (error, _) => <Widget>[
+            Padding(
+              padding: EdgeInsets.only(top: 12),
+              child: Text(
+                '技能加载失败: $error',
+                style: TextStyle(color: fgSecondary),
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }

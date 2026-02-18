@@ -1,0 +1,34 @@
+id: knowledge_qa
+name: 知识问答
+description: 基于多搜索源的知识问答策略引擎，支持结论/依据/不确定性输出
+version: 1.0.0
+executionTarget: tool_chain
+visibility: both
+category: knowledge
+tier: free
+defaultEnabled: true
+channelScopes:
+  - app
+  - feishu
+  - openclaw
+deviceScopes:
+  - mobile
+  - tablet
+  - pc
+versionPolicy: semver
+permissions:
+  - network
+permissionScopes:
+  - web_search
+parametersSchema:
+  type: object
+  properties:
+    query:
+      type: string
+    provider:
+      type: string
+    backupProviders:
+      type: array
+    maxEvidence:
+      type: number
+

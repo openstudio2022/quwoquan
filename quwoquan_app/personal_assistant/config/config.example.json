@@ -1,0 +1,20 @@
+{
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "mimo/mimo-v2-flash"
+      }
+    }
+  },
+  "models": {
+    "providers": {
+      "mimo": {
+        "baseUrl": "https://api.xiaomimimo.com/v1",
+        "apiKey": "${PERSONAL_ASSISTANT_MIMO_API_KEY}",
+        "models": [
+          { "id": "mimo-v2-flash" }
+        ]
+      }
+    }
+  }
+}

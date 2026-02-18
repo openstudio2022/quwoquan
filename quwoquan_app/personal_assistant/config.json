@@ -1,0 +1,44 @@
+{
+  "meta": {
+    "version": "v1",
+    "description": "Project-local assistant model config (independent from moltbot)."
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "mimo/mimo-v2-flash",
+        "fallbacks": []
+      }
+    }
+  },
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "mimo": {
+        "baseUrl": "https://api.xiaomimimo.com/v1",
+        "apiKey": "${MIMO_API_KEY}",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "mimo-v2-flash",
+            "name": "MiMo V2 Flash"
+          }
+        ]
+      }
+    }
+  },
+  "tools": {
+    "web": {
+      "search": {
+        "enabled": true,
+        "provider": "brave",
+        "apiKey": "${BRAVE_API_KEY}",
+        "perplexity": {
+          "apiKey": "${PERPLEXITY_API_KEY}",
+          "baseUrl": "https://api.perplexity.ai",
+          "model": "sonar-pro"
+        }
+      }
+    }
+  }
+}

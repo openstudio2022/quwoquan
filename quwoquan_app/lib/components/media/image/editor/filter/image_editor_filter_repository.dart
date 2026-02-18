@@ -218,7 +218,7 @@ class ImageEditorFilterRepository {
   Future<void> incrementUsageCount(String presetId) async {
     if (presetId.trim().isEmpty) return;
     final prefs = await SharedPreferences.getInstance();
-    final current = await loadUsageCounts();
+    final current = Map<String, int>.from(await loadUsageCounts());
     current[presetId] = (current[presetId] ?? 0) + 1;
     await prefs.setString(_usageCountMapKey, json.encode(current));
   }

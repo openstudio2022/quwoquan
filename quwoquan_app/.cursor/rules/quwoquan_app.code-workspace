@@ -8,6 +8,12 @@
 		},
 		{
 			"path": "../../../../moltbot"
+		},
+		{
+			"path": "../../../../nanobot"
+		},
+		{
+			"path": "../../../app_log"
 		}
 	],
 	"settings": {

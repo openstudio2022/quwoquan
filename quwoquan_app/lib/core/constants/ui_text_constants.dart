@@ -246,6 +246,32 @@ class UITextConstants {
   static const String timeFormatAM = '上午';
   static const String timeFormatPM = '下午';
   static const String assistantHome = '助理主页';
+  /// 助手 run 失败时展示的通用提示（会话/存储/模型等任一步骤异常均会触发）
+  static const String assistantUnavailable = '助手暂时不可用，请稍后重试。';
+  static const String assistantModelUnavailable = '当前未配置可用模型，请先在模型配置中接入远程模型或桥接服务。';
+  static const String assistantRunningHint = '小趣正在规划与执行中...';
+  static const String assistantFeedbackHelpful = '有帮助';
+  static const String assistantFeedbackUnhelpful = '没帮助';
+  static const String assistantFeedbackCorrect = '纠正';
+  static const String assistantFeedbackSubmitted = '已记录你的反馈';
+  static const String assistantFeedbackReasonTitle = '请选择问题原因';
+  static const String assistantFeedbackReasonOffTopic = '答非所问';
+  static const String assistantFeedbackReasonInsufficient = '信息不足';
+  static const String assistantFeedbackReasonIncorrect = '事实不准';
+  static const String assistantFeedbackReasonStyle = '表达不清晰';
+  static const String assistantFeedbackReasonPrivacy = '隐私顾虑';
+  static const String assistantCorrectionTitle = '补充纠正';
+  static const String assistantCorrectionHint = '告诉我你期望的正确表达';
+  static const String assistantDevReplayTitle = '助理开发态回放';
+  static const String assistantDevReplayOpen = '回放';
+  static const String assistantDevReplayRun = '运行记录';
+  static const String assistantDevReplayQuery = '问题';
+  static const String assistantDevReplayAnswer = '回答';
+  static const String assistantDevReplayPolicy = '策略决策';
+  static const String assistantDevReplayPlan = '查询计划';
+  static const String assistantDevReplayRounds = '轮次轨迹';
+  static const String assistantDevReplayScore = '评分聚合快照';
+  static const String assistantNoReplayData = '暂无回放数据';
   /// 身份/分身（1:1 对应 PersonaSwitcher.tsx）
   static const String personaManage = '管理分身';
   static const String personaPrimary = '主账号';

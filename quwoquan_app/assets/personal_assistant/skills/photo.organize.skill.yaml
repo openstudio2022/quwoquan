@@ -1,0 +1,24 @@
+id: photo.organize
+name: 照片整理
+description: 按时间与主题整理相册内容
+version: 1.0.0
+executionTarget: tool_chain
+visibility: app_only
+category: media
+tier: pro
+channelScopes:
+  - app
+deviceScopes:
+  - mobile
+  - tablet
+versionPolicy: semver
+permissions:
+  - photo_read
+permissionScopes:
+  - media_gallery
+parametersSchema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [recent, by_album]

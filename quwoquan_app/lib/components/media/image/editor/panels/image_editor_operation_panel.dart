@@ -206,7 +206,7 @@ class ImageEditorOperationPanel extends StatelessWidget {
         border: Border(top: BorderSide(color: borderColor)),
       ),
       child: toolIndex == kImageEditorToolPro
-          ? _buildProToolsPanel()
+          ? _buildProToolsPanel(context)
           : Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -220,23 +220,24 @@ class ImageEditorOperationPanel extends StatelessWidget {
 
   Widget _buildEntryIcon(
     ImageEditorProToolEntry entry,
-    Color color,
-  ) {
+    Color color, {
+    required double iconSize,
+  }) {
     if (entry.semanticIconKey != null) {
       return ImageEditorSemanticIcon(
         iconKey: entry.semanticIconKey!,
-        size: AppSpacing.toolPanelItemIconSize,
+        size: iconSize,
         color: color,
       );
     }
     return Icon(
       entry.icon,
       color: color,
-      size: AppSpacing.toolPanelItemIconSize,
+      size: iconSize,
     );
   }
 
-  Widget _buildProToolsPanel() {
+  Widget _buildProToolsPanel(BuildContext context) {
     final isOverall = selectedProCategory == kImageEditorProCategoryOverall;
     final isLocal = selectedProCategory == kImageEditorProCategoryLocal;
     final isHsl = selectedProCategory == kImageEditorProCategoryHsl;
@@ -251,7 +252,10 @@ class ImageEditorOperationPanel extends StatelessWidget {
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _buildProAdjustPanelContent(showLocalControls: isLocal),
+          _buildProAdjustPanelContent(
+            context,
+            showLocalControls: isLocal,
+          ),
           _buildProPanelExitBar(),
         ],
       );
@@ -300,7 +304,10 @@ class ImageEditorOperationPanel extends StatelessWidget {
     );
   }
 
-  Widget _buildProAdjustPanelContent({required bool showLocalControls}) {
+  Widget _buildProAdjustPanelContent(
+    BuildContext context, {
+    required bool showLocalControls,
+  }) {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
       child: Column(
@@ -310,7 +317,7 @@ class ImageEditorOperationPanel extends StatelessWidget {
           if (showLocalControls) SizedBox(height: AppSpacing.xs / 2),
           SizedBox(
             height: AppSpacing.bottomNavHeight + AppSpacing.sm * 2,
-            child: _buildProBasePanelContent(),
+            child: _buildProBasePanelContent(context),
           ),
         ],
       ),
@@ -580,9 +587,33 @@ class ImageEditorOperationPanel extends StatelessWidget {
     );
   }
 
-  Widget _buildProBasePanelContent() {
+  Widget _buildProBasePanelContent(BuildContext context) {
     final gap = AppSpacing.intraGroupSm;
     final itemWidth = AppSpacing.buttonHeight * 1.4;
+    final itemIconSize = AppTypography.responsive(
+      context,
+      compact: AppSpacing.iconSmall,
+      regular: AppSpacing.toolPanelItemIconSize,
+      expanded: AppSpacing.toolPanelItemIconSize,
+    );
+    final itemLabelFontSize = AppTypography.responsive(
+      context,
+      compact: AppTypography.sm,
+      regular: AppTypography.toolPanelItemLabel,
+      expanded: AppTypography.toolPanelItemLabel,
+    );
+    final itemLabelLineHeight = AppTypography.responsive(
+      context,
+      compact: AppTypography.sm,
+      regular: AppSpacing.toolPanelItemLabelLineHeight,
+      expanded: AppSpacing.toolPanelItemLabelLineHeight,
+    );
+    final itemIconLabelGap = AppTypography.responsive(
+      context,
+      compact: AppSpacing.intraGroupXs,
+      regular: AppSpacing.toolPanelItemIconLabelGap,
+      expanded: AppSpacing.toolPanelItemIconLabelGap,
+    );
     return SizedBox(
       height: AppSpacing.bottomNavHeight + AppSpacing.sm * 2,
       child: ListView.separated(
@@ -608,8 +639,9 @@ class ImageEditorOperationPanel extends StatelessWidget {
                     selected
                         ? foregroundColor
                         : foregroundSecondary.withValues(alpha: 0.75),
+                    iconSize: itemIconSize,
                   ),
-                  SizedBox(height: AppSpacing.toolPanelItemIconLabelGap),
+                  SizedBox(height: itemIconLabelGap),
                   Text(
                     entry.label,
                     maxLines: 1,
@@ -618,18 +650,20 @@ class ImageEditorOperationPanel extends StatelessWidget {
                       color: selected
                           ? foregroundColor
                           : foregroundSecondary.withValues(alpha: 0.75),
-                      fontSize: AppTypography.toolPanelItemLabel,
+                      fontSize: itemLabelFontSize,
+                      height: itemLabelLineHeight / itemLabelFontSize,
                       fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
                     ),
                   ),
-                  SizedBox(height: AppSpacing.toolPanelItemIconLabelGap),
+                  SizedBox(height: itemIconLabelGap),
                   Text(
                     value.toString(),
                     style: TextStyle(
                       color: selected
                           ? foregroundColor
                           : foregroundSecondary.withValues(alpha: 0.75),
-                      fontSize: AppTypography.toolPanelItemLabel,
+                      fontSize: itemLabelFontSize,
+                      height: itemLabelLineHeight / itemLabelFontSize,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
