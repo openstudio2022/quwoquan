@@ -1,0 +1,9 @@
+{
+  "templateId": "domain.travel_transport.answer",
+  "version": "2026.02.18",
+  "stage": "answer",
+  "domainId": "travel_transport",
+  "requiredVariables": ["domainResults", "contextSlots", "transportEvidencePacks", "userProfileSnapshot", "originDestinationSlots", "timePreferenceSlots", "transportModeSlots"],
+  "outputContract": "domain_answer_v2026_02_18",
+  "selfCheckRules": ["origin_destination_time_consistency", "evidence_per_route", "no_discontinued_routes", "time_baseline_consistent", "transfer_guidance_complete"]
+}

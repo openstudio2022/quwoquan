@@ -16,6 +16,10 @@ class AssistentInteractionEvent {
     required this.copiedAnswer,
     required this.sharedAnswer,
     required this.favoritedAnswer,
+    required this.regeneratedAnswer,
+    required this.styleAdjusted,
+    required this.modelSwitched,
+    required this.referenceOpened,
     required this.interrupted,
     required this.createdAt,
     this.feedbackTargetMessageId = '',
@@ -38,6 +42,10 @@ class AssistentInteractionEvent {
   final bool copiedAnswer;
   final bool sharedAnswer;
   final bool favoritedAnswer;
+  final bool regeneratedAnswer;
+  final bool styleAdjusted;
+  final bool modelSwitched;
+  final bool referenceOpened;
   final bool interrupted;
   final DateTime createdAt;
   final String feedbackTargetMessageId;
@@ -61,6 +69,10 @@ class AssistentInteractionEvent {
       'copiedAnswer': copiedAnswer,
       'sharedAnswer': sharedAnswer,
       'favoritedAnswer': favoritedAnswer,
+      'regeneratedAnswer': regeneratedAnswer,
+      'styleAdjusted': styleAdjusted,
+      'modelSwitched': modelSwitched,
+      'referenceOpened': referenceOpened,
       'interrupted': interrupted,
       'createdAt': createdAt.toIso8601String(),
       'feedbackTargetMessageId': feedbackTargetMessageId,
@@ -96,6 +108,10 @@ class AssistentInteractionEvent {
       copiedAnswer: json['copiedAnswer'] == true,
       sharedAnswer: json['sharedAnswer'] == true,
       favoritedAnswer: json['favoritedAnswer'] == true,
+      regeneratedAnswer: json['regeneratedAnswer'] == true,
+      styleAdjusted: json['styleAdjusted'] == true,
+      modelSwitched: json['modelSwitched'] == true,
+      referenceOpened: json['referenceOpened'] == true,
       interrupted: json['interrupted'] == true,
       createdAt: DateTime.tryParse((json['createdAt'] as String?) ?? '') ?? DateTime.now(),
       feedbackTargetMessageId: (json['feedbackTargetMessageId'] as String?) ?? '',

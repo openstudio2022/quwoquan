@@ -1,0 +1,21 @@
+{
+  "templateId": "planner.global_plan",
+  "version": "2026.02.18",
+  "stage": "plan",
+  "domainId": "global",
+  "requiredVariables": [
+    "userQuery",
+    "contextEnvelope",
+    "userProfileSnapshot",
+    "historicalRetrievalFeedback",
+    "domainLearningSignals"
+  ],
+  "outputContract": "domain_plan_v2026_02_18",
+  "selfCheckRules": [
+    "coverage",
+    "slot_completeness",
+    "single_topic_query",
+    "safety_boundary"
+  ]
+}
+

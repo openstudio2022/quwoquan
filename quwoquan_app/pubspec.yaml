@@ -52,6 +52,8 @@ dependencies:
   flutter_staggered_grid_view: ^0.7.0
   yaml: ^3.1.2
   crypto: ^3.0.3
+  url_launcher: ^6.3.2
+  share_plus: ^12.0.1
 
 dev_dependencies:
   flutter_test:
@@ -79,6 +81,49 @@ flutter:
   assets:
     - assets/filters/filter_presets.json
     - assets/personal_assistant/skills/
+    - assets/personal_assistant/prompts/manifest.json
+    - assets/personal_assistant/prompts/global/
+    - assets/personal_assistant/prompts/web/
+    - assets/personal_assistant/prompts/domain_routing/
+    - assets/personal_assistant/prompts/domains/weather/
+    - assets/personal_assistant/prompts/domains/weather/dialogue/
+    - assets/personal_assistant/prompts/domains/travel_transport/
+    - assets/personal_assistant/prompts/domains/travel_transport/dialogue/
+    - assets/personal_assistant/prompts/domains/travel_planning/
+    - assets/personal_assistant/prompts/domains/travel_planning/dialogue/
+    - assets/personal_assistant/prompts/domains/local_life/
+    - assets/personal_assistant/prompts/domains/local_life/dialogue/
+    - assets/personal_assistant/prompts/domains/calendar_task/
+    - assets/personal_assistant/prompts/domains/calendar_task/dialogue/
+    - assets/personal_assistant/prompts/domains/knowledge_general/
+    - assets/personal_assistant/prompts/domains/knowledge_general/dialogue/
+    - assets/personal_assistant/prompts/domains/finance_consumer/
+    - assets/personal_assistant/prompts/domains/finance_consumer/dialogue/
+    - assets/personal_assistant/prompts/domains/health_wellness/
+    - assets/personal_assistant/prompts/domains/health_wellness/dialogue/
+    - assets/personal_assistant/prompts/domains/education_learning/
+    - assets/personal_assistant/prompts/domains/education_learning/dialogue/
+    - assets/personal_assistant/prompts/domains/work_productivity/
+    - assets/personal_assistant/prompts/domains/work_productivity/dialogue/
+    - assets/personal_assistant/prompts/domains/shopping_decision/
+    - assets/personal_assistant/prompts/domains/shopping_decision/dialogue/
+    - assets/personal_assistant/prompts/domains/policy_public_service/
+    - assets/personal_assistant/prompts/domains/policy_public_service/dialogue/
+    - assets/personal_assistant/prompts/domains/emotion_companion/
+    - assets/personal_assistant/prompts/domains/emotion_companion/dialogue/
+    - assets/personal_assistant/prompts/domains/social_companion_chat/
+    - assets/personal_assistant/prompts/domains/social_companion_chat/dialogue/
+    - assets/personal_assistant/prompts/domains/relationship_matchmaking/
+    - assets/personal_assistant/prompts/domains/relationship_matchmaking/dialogue/
+    - assets/personal_assistant/prompts/domains/divination_fortune/
+    - assets/personal_assistant/prompts/domains/divination_fortune/dialogue/
+    - assets/personal_assistant/prompts/domains/astrology_constellation/
+    - assets/personal_assistant/prompts/domains/astrology_constellation/dialogue/
+    - assets/personal_assistant/prompts/domains/family_parenting/
+    - assets/personal_assistant/prompts/domains/family_parenting/dialogue/
+    - assets/personal_assistant/prompts/domains/fallback_general_search/
+    - assets/personal_assistant/prompts/domains/fallback_general_search/dialogue/
+    - assets/personal_assistant/tools/
     - personal_assistant/config.json
     - personal_assistant/.env
   

@@ -30,6 +30,10 @@ void main() {
         userTags: const <String>['creator', 'daily_user'],
         durationMs: 1400,
         explicitThumb: 'up',
+        regeneratedAnswer: true,
+        styleAdjusted: true,
+        modelSwitched: true,
+        referenceOpened: true,
       );
 
       final snapshot = await service.latestScoreSnapshot();
@@ -40,6 +44,12 @@ void main() {
       expect(tagDomainDaily.isNotEmpty, isTrue);
       expect(adapter.interactionEvents.length, equals(1));
       expect(adapter.scorecards.isNotEmpty, isTrue);
+      final feedbackStats =
+          (snapshot['feedbackStats'] as Map?) ?? const <String, dynamic>{};
+      expect((feedbackStats['regenerateCount'] as int?) ?? 0, equals(1));
+      expect((feedbackStats['styleAdjustedCount'] as int?) ?? 0, equals(1));
+      expect((feedbackStats['modelSwitchedCount'] as int?) ?? 0, equals(1));
+      expect((feedbackStats['referenceOpenedCount'] as int?) ?? 0, equals(1));
     });
 
     test('records explicit feedback with correction text', () async {

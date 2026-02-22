@@ -27,13 +27,26 @@ class ReactRuntime {
   final ReactPlanner _planner;
   final ReactReflector _reflector;
 
+  List<String> listAvailableToolNames() {
+    return _toolRegistry
+        .listTools()
+        .map((tool) => tool.name)
+        .toList(growable: false);
+  }
+
   Future<ReactRuntimeResult> run({
     required List<Map<String, String>> messages,
     required int maxIterations,
     String goal = '',
+    List<String>? availableToolNamesOverride,
+    Map<String, dynamic> templateContext = const <String, dynamic>{},
+    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    String templateId = 'planner.global_plan',
+    String templateVersion = '',
     String sessionId = '',
     String? runId,
     String? traceId,
+    void Function(AssistantTraceEvent event)? onTraceEvent,
   }) async {
     final goalText = goal.isEmpty
         ? (messages.lastWhere(
@@ -47,7 +60,12 @@ class ReactRuntime {
       maxIterations: maxIterations,
       toolBudget: maxIterations * 2,
     );
-    final traces = <AssistantTraceEvent>[
+    final traces = <AssistantTraceEvent>[];
+    void pushTrace(AssistantTraceEvent event) {
+      traces.add(event);
+      onTraceEvent?.call(event);
+    }
+    pushTrace(
       AssistantTraceEvent(
         type: AssistantTraceEventType.lifecycleStart,
         message: 'agent loop started',
@@ -55,7 +73,7 @@ class ReactRuntime {
         runId: runId,
         traceId: traceId,
       ),
-    ];
+    );
 
     var finalText = '';
     while (!state.shouldStopByIteration && !state.shouldStopByBudget) {
@@ -68,11 +86,9 @@ class ReactRuntime {
             },
           )
           .toList(growable: false);
-      final availableToolNames = _toolRegistry
-          .listTools()
-          .map((tool) => tool.name)
-          .toList(growable: false);
-      traces.add(
+      final availableToolNames =
+          availableToolNamesOverride ?? listAvailableToolNames();
+      pushTrace(
         AssistantTraceEvent(
           type: AssistantTraceEventType.lifecycleStart,
           message: 'llm request iteration ${state.iteration}',
@@ -90,6 +106,10 @@ class ReactRuntime {
       final output = await _llmProvider.reason(
         messages: llmRequestMessages,
         availableTools: availableToolNames,
+        templateContext: templateContext,
+        templateVariables: templateVariables,
+        templateId: templateId,
+        templateVersion: templateVersion,
         sessionId: sessionId,
         runId: runId ?? '',
         traceId: traceId ?? '',
@@ -102,7 +122,7 @@ class ReactRuntime {
             suggestedToolCalls: output.toolCalls,
           ),
         );
-      traces.add(
+      pushTrace(
         AssistantTraceEvent(
           type: AssistantTraceEventType.assistantDelta,
           message: output.text,
@@ -139,7 +159,7 @@ class ReactRuntime {
           break;
         }
         state.usedTools += 1;
-        traces.add(
+        pushTrace(
           AssistantTraceEvent(
             type: AssistantTraceEventType.toolStart,
             message: 'calling ${step.toolName}',
@@ -182,7 +202,7 @@ class ReactRuntime {
           ...?result.data,
           if (!isOk && shouldSuppressToolErrorForUser) 'suppressed': true,
         };
-        traces.add(
+        pushTrace(
           AssistantTraceEvent(
             type: isOk
                 ? AssistantTraceEventType.toolResult
@@ -216,7 +236,7 @@ class ReactRuntime {
         );
         if (replan) {
           state.openQuestions.add('step ${step.id} result needs re-check');
-          traces.add(
+          pushTrace(
             AssistantTraceEvent(
               type: AssistantTraceEventType.lifecycleStart,
               message: 'replanning after ${step.id}',
@@ -234,7 +254,7 @@ class ReactRuntime {
       finalText = '本次任务已完成，但没有生成可展示结果。';
     }
 
-    traces.add(
+    pushTrace(
       AssistantTraceEvent(
         type: AssistantTraceEventType.lifecycleEnd,
         message: 'agent loop finished (${state.stopReason ?? 'normal_end'})',

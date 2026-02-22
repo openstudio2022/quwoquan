@@ -1,0 +1,9 @@
+{
+  "templateId": "domain.calendar_task.answer",
+  "version": "2026.02.18",
+  "stage": "answer",
+  "domainId": "calendar_task",
+  "requiredVariables": ["domainResults", "contextSlots", "calendarOperationResults", "userProfileSnapshot", "timeSlots", "calendarTaskSlots", "existingCalendarSnapshot"],
+  "outputContract": "domain_answer_v2026_02_18",
+  "selfCheckRules": ["time_consistency_echo", "action_result_explicit", "conflict_explicit_resolved", "reminder_valid", "high_risk_confirmed", "intent_fully_responded"]
+}

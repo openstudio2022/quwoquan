@@ -1,17 +1,11 @@
 class AssistantRunMessage {
-  const AssistantRunMessage({
-    required this.role,
-    required this.content,
-  });
+  const AssistantRunMessage({required this.role, required this.content});
 
   final String role;
   final String content;
 
   Map<String, dynamic> toJson() {
-    return <String, dynamic>{
-      'role': role,
-      'content': content,
-    };
+    return <String, dynamic>{'role': role, 'content': content};
   }
 
   factory AssistantRunMessage.fromJson(Map<String, dynamic> json) {
@@ -28,6 +22,9 @@ class AssistantRunRequest {
     this.sessionId,
     this.userId,
     this.deviceProfile = 'mobile',
+    this.deviceModel = '',
+    this.deviceOs = '',
+    this.gpsLocation = const <String, dynamic>{},
     this.channel = 'app',
     this.traceId,
     this.maxIterations = 6,
@@ -35,12 +32,16 @@ class AssistantRunRequest {
     this.contextScopeHint = const <String, dynamic>{},
     this.privacyProfile = 'default',
     this.privacyPolicy = const <String, dynamic>{},
+    this.userProfileSnapshot = const <String, dynamic>{},
   });
 
   final List<AssistantRunMessage> messages;
   final String? sessionId;
   final String? userId;
   final String deviceProfile;
+  final String deviceModel;
+  final String deviceOs;
+  final Map<String, dynamic> gpsLocation;
   final String channel;
   final String? traceId;
   final int maxIterations;
@@ -48,6 +49,7 @@ class AssistantRunRequest {
   final Map<String, dynamic> contextScopeHint;
   final String privacyProfile;
   final Map<String, dynamic> privacyPolicy;
+  final Map<String, dynamic> userProfileSnapshot;
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
@@ -55,6 +57,9 @@ class AssistantRunRequest {
       'sessionId': sessionId,
       'userId': userId,
       'deviceProfile': deviceProfile,
+      'deviceModel': deviceModel,
+      'deviceOs': deviceOs,
+      'gpsLocation': gpsLocation,
       'channel': channel,
       'traceId': traceId,
       'maxIterations': maxIterations,
@@ -62,6 +67,7 @@ class AssistantRunRequest {
       'contextScopeHint': contextScopeHint,
       'privacyProfile': privacyProfile,
       'privacyPolicy': privacyPolicy,
+      'userProfileSnapshot': userProfileSnapshot,
     };
   }
 
@@ -70,34 +76,43 @@ class AssistantRunRequest {
     return AssistantRunRequest(
       messages: rawMessages
           .whereType<Map>()
-          .map(
-            (m) => AssistantRunMessage.fromJson(
-              m.cast<String, dynamic>(),
-            ),
-          )
+          .map((m) => AssistantRunMessage.fromJson(m.cast<String, dynamic>()))
           .toList(growable: false),
       sessionId: json['sessionId'] as String?,
       userId: json['userId'] as String?,
-      deviceProfile: (json['deviceProfile'] as String?)?.trim().isNotEmpty == true
+      deviceProfile:
+          (json['deviceProfile'] as String?)?.trim().isNotEmpty == true
           ? (json['deviceProfile'] as String).trim()
           : 'mobile',
+      deviceModel: (json['deviceModel'] as String?)?.trim() ?? '',
+      deviceOs: (json['deviceOs'] as String?)?.trim() ?? '',
+      gpsLocation:
+          (json['gpsLocation'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{},
       channel: (json['channel'] as String?)?.trim().isNotEmpty == true
           ? (json['channel'] as String).trim()
           : 'app',
       traceId: (json['traceId'] as String?)?.trim(),
       maxIterations: (json['maxIterations'] as int?) ?? 6,
-      capabilityCatalog: (json['capabilityCatalog'] as List?)
+      capabilityCatalog:
+          (json['capabilityCatalog'] as List?)
               ?.whereType<String>()
               .map((item) => item.trim())
               .where((item) => item.isNotEmpty)
               .toList(growable: false) ??
           const <String>[],
-      contextScopeHint: (json['contextScopeHint'] as Map?)?.cast<String, dynamic>() ??
+      contextScopeHint:
+          (json['contextScopeHint'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{},
-      privacyProfile: (json['privacyProfile'] as String?)?.trim().isNotEmpty == true
+      privacyProfile:
+          (json['privacyProfile'] as String?)?.trim().isNotEmpty == true
           ? (json['privacyProfile'] as String).trim()
           : 'default',
-      privacyPolicy: (json['privacyPolicy'] as Map?)?.cast<String, dynamic>() ??
+      privacyPolicy:
+          (json['privacyPolicy'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{},
+      userProfileSnapshot:
+          (json['userProfileSnapshot'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{},
     );
   }

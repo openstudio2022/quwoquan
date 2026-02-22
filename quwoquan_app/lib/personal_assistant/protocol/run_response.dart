@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/personal_assistant/protocol/trace_events.dart';
+import 'package:quwoquan_app/personal_assistant/protocol/profile_update_proposal.dart';
 
 class AssistantRunResponse {
   const AssistantRunResponse({
@@ -8,6 +9,8 @@ class AssistantRunResponse {
     this.traceId,
     this.degraded = false,
     this.errorCode,
+    this.structuredResponse = const <String, dynamic>{},
+    this.profileUpdateProposal,
   });
 
   final String finalText;
@@ -16,6 +19,8 @@ class AssistantRunResponse {
   final String? traceId;
   final bool degraded;
   final String? errorCode;
+  final Map<String, dynamic> structuredResponse;
+  final ProfileUpdateProposal? profileUpdateProposal;
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
@@ -25,11 +30,15 @@ class AssistantRunResponse {
       'traceId': traceId,
       'degraded': degraded,
       'errorCode': errorCode,
+      'structuredResponse': structuredResponse,
+      'profileUpdateProposal': profileUpdateProposal?.toJson(),
     };
   }
 
   factory AssistantRunResponse.fromJson(Map<String, dynamic> json) {
     final traceList = (json['traces'] as List?) ?? const <dynamic>[];
+    final rawProposal = (json['profileUpdateProposal'] as Map?)
+        ?.cast<String, dynamic>();
     return AssistantRunResponse(
       finalText: (json['finalText'] as String?) ?? '',
       traces: traceList
@@ -40,6 +49,12 @@ class AssistantRunResponse {
       traceId: json['traceId'] as String?,
       degraded: json['degraded'] == true,
       errorCode: json['errorCode'] as String?,
+      structuredResponse:
+          (json['structuredResponse'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{},
+      profileUpdateProposal: rawProposal == null
+          ? null
+          : ProfileUpdateProposal.fromJson(rawProposal),
     );
   }
 }

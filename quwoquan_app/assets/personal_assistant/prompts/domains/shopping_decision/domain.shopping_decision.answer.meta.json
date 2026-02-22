@@ -1,0 +1,21 @@
+{
+  "templateId": "domain.shopping_decision.answer",
+  "version": "2026.02.18",
+  "stage": "answer",
+  "domainId": "shopping_decision",
+  "requiredVariables": [
+    "userQuery",
+    "domainResults",
+    "contextSlots",
+    "webEvidencePacks",
+    "userProfileSnapshot"
+  ],
+  "outputContract": "domain_answer_v2026_02_18",
+  "selfCheckRules": [
+    "constraint_satisfied",
+    "coverage_satisfied",
+    "comparison_complete",
+    "risk_disclosed"
+  ]
+}
+

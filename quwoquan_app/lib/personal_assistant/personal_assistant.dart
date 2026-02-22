@@ -45,6 +45,7 @@ export 'engine/llm_provider.dart';
 export 'engine/model_config.dart';
 export 'protocol/run_request.dart';
 export 'protocol/run_response.dart';
+export 'protocol/profile_update_proposal.dart';
 export 'protocol/trace_events.dart';
 export 'skills/skill_executor.dart';
 export 'skills/skill_loader.dart';

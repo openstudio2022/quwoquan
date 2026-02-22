@@ -2,6 +2,7 @@ import 'package:quwoquan_app/personal_assistant/app/assistant_runtime.dart';
 import 'package:quwoquan_app/personal_assistant/observability/logging/app_log_exporter.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/run_response.dart';
+import 'package:quwoquan_app/personal_assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/personal_assistant/skills/skill_manifest.dart';
 import 'package:quwoquan_app/personal_assistant/tools/tool_schema.dart';
 
@@ -12,6 +13,20 @@ class AssistantGateway {
 
   Future<AssistantRunResponse> run(AssistantRunRequest request) async {
     return _runtime.agentLoop.run(request);
+  }
+
+  Future<String> classifyDomain(
+    String query,
+    Map<String, dynamic> contextScopeHint,
+  ) async {
+    return _runtime.agentLoop.classifyDomain(query, contextScopeHint);
+  }
+
+  Future<AssistantRunResponse> runWithTraceStream(
+    AssistantRunRequest request, {
+    void Function(AssistantTraceEvent event)? onTraceEvent,
+  }) async {
+    return _runtime.agentLoop.run(request, onTraceEvent: onTraceEvent);
   }
 
   Future<AppLogExportResult> exportLogsToWorkspace({

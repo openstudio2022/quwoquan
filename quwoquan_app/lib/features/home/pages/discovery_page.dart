@@ -33,8 +33,6 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   /// 与 design-clarification-2026-02：微趣|美图|视频|文章，默认美图
   String _activeType = 'photo';
-  /// 与 DiscoveryFeed.tsx isUIVisible 一致，视频模式下可切换
-  bool _isUIVisible = true;
   /// 保存 notifier 供 dispose 回调使用，避免 dispose 后使用 ref
   VideoForceDarkNotifier? _videoForceDarkNotifier;
   BottomNavHiddenNotifier? _bottomNavHiddenNotifier;
@@ -96,10 +94,6 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     final velocity = details.primaryVelocity ?? 0;
     if (velocity.abs() < 220) return;
     _switchPrimaryByDelta(velocity < 0 ? 1 : -1);
-  }
-
-  void _onTheaterModeChange(bool isHidden) {
-    ref.read(bottomNavHiddenProvider.notifier).setHidden(isHidden);
   }
 
   /// 在非 build/initState/dispose 中更新，避免 “modify provider while building”
@@ -252,22 +246,21 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     );
   }
 
-  /// 顶栏与微趣/美图/文章完全一致（深色模式），竖滑视频列表、点击切换 UI
+  /// 视频沉浸：竖滑列表、顶栏/右侧栏/左下文案常显；使用频道流模式（[theaterModeTapToToggle] = false），不启用剧场点击切换。
+  /// 底部导航仅由 [ _applyVideoForceDark ] 控制（在视频频道时隐藏，离开或 dispose 时恢复）。
   Widget _buildVideoImmersionView(bool isDark) {
     final videos = ref.watch(appContentRepositoryProvider).discoveryVideoData;
     return _VideoImmersionView(
       categories: _categories,
       activeTab: _activeType,
       videos: videos,
-      isUIVisible: _isUIVisible,
+      isUIVisible: true,
+      theaterModeTapToToggle: false,
       onTabChange: (id) {
         _setActiveType(id);
         _applyVideoForceDark();
       },
-      onToggleUI: () {
-        setState(() => _isUIVisible = !_isUIVisible);
-        _onTheaterModeChange(!_isUIVisible);
-      },
+      onToggleUI: () {},
       onUserClick: (userId) => context.push('/user/$userId'),
       onAssistantTap: _openAssistantHalfSheet,
       onCommentTap: _onMomentCommentTap,
@@ -1047,13 +1040,20 @@ class _DiscoveryItemCard extends StatelessWidget {
   }
 }
 
-/// 顶栏与微趣/美图/文章一致（深色模式），竖滑整屏视频、右侧互动栏、左下文案与音乐
+/// 竖滑整屏视频、顶栏/右侧互动栏/左下文案与音乐。
+///
+/// [theaterModeTapToToggle] 语义：
+/// - **true**（剧场模式）：点击视频区域可切换 overlay（顶栏、右侧栏、左下文案）显隐，
+///   宿主可在此回调中联动底部导航等；适用于独立全屏剧场/播放器场景。
+/// - **false**（频道流模式）：overlay 常显，点击不触发切换；底部导航仅由宿主按「是否在视频」控制。
+///   适用于发现页视频频道等列表流场景。
 class _VideoImmersionView extends StatefulWidget {
   const _VideoImmersionView({
     required this.categories,
     required this.activeTab,
     required this.videos,
     required this.isUIVisible,
+    required this.theaterModeTapToToggle,
     required this.onTabChange,
     required this.onToggleUI,
     required this.onUserClick,
@@ -1066,6 +1066,8 @@ class _VideoImmersionView extends StatefulWidget {
   final String activeTab;
   final List<Map<String, dynamic>> videos;
   final bool isUIVisible;
+  /// 是否启用「点击视频区域切换 overlay」的剧场模式；false 时 overlay 常显、点击无切换。
+  final bool theaterModeTapToToggle;
   final void Function(String id) onTabChange;
   final VoidCallback onToggleUI;
   final void Function(String userId) onUserClick;
@@ -1188,7 +1190,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                   final authorId = author['id'] as String? ?? author['name'] as String? ?? '';
                   final isLiked = _likedIndexes.contains(index);
                   return GestureDetector(
-                    onTap: widget.onToggleUI,
+                    onTap: widget.theaterModeTapToToggle ? widget.onToggleUI : null,
                     child: Stack(
                       fit: StackFit.expand,
                       children: [

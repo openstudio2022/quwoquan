@@ -1,0 +1,9 @@
+{
+  "templateId": "domain.travel_transport.plan",
+  "version": "2026.02.18",
+  "stage": "plan",
+  "domainId": "travel_transport",
+  "requiredVariables": ["userQuery", "contextEnvelope", "userProfileSnapshot", "originDestinationSlots", "timePreferenceSlots", "transportModeSlots"],
+  "outputContract": "domain_plan_v2026_02_18",
+  "selfCheckRules": ["origin_destination_resolved", "time_baseline_consistent", "transport_mode_covered", "no_discontinued_routes", "slot_completeness"]
+}

@@ -262,6 +262,22 @@ class UITextConstants {
   static const String assistantFeedbackReasonPrivacy = '隐私顾虑';
   static const String assistantCorrectionTitle = '补充纠正';
   static const String assistantCorrectionHint = '告诉我你期望的正确表达';
+  static const String assistantActionRegenerate = '重新生成';
+  static const String assistantActionBrief = '更加简洁';
+  static const String assistantActionDetailed = '更加详细';
+  static const String assistantActionSwitchModel = '模型切换';
+  static const String assistantTimelineSearchProcess = '搜索过程';
+  static const String assistantTimelineReferenceCount = '可参考 %s 篇资料';
+  static const String assistantTimelineThinking = '正在思考';
+  static const String assistantTimelineKeywordSearch = '发起关键词检索';
+  static const String assistantTimelineReferenceIncrement = '检索到资料';
+  static const String assistantTimelineReady = '可参考资料已准备';
+  static const String assistantSearchingReferenceCount = '参考 %s 篇资料';
+  static const String assistantReferenceCopied = '链接已复制';
+  static const String assistantReferenceOpenFailed = '链接打开失败，已复制到剪贴板';
+  static const String assistantReferenceHostBlocked =
+      '该链接域名未通过安全白名单，已复制到剪贴板';
+  static const String assistantBookmarked = '已收藏';
   static const String assistantDevReplayTitle = '助理开发态回放';
   static const String assistantDevReplayOpen = '回放';
   static const String assistantDevReplayRun = '运行记录';

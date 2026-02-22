@@ -1,0 +1,9 @@
+{
+  "templateId": "domain.travel_planning.answer",
+  "version": "2026.02.18",
+  "stage": "answer",
+  "domainId": "travel_planning",
+  "requiredVariables": ["domainResults", "contextSlots", "travelEvidencePacks", "userProfileSnapshot", "destinationSlots", "dateBudgetSlots", "preferenceSlots"],
+  "outputContract": "domain_answer_v2026_02_18",
+  "selfCheckRules": ["budget_throughout", "conflict_explicit_resolved", "evidence_per_recommendation", "executable_itinerary", "over_budget_flagged", "preferences_reflected"]
+}

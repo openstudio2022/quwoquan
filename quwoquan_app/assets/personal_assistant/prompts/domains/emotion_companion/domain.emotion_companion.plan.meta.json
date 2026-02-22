@@ -1,0 +1,21 @@
+{
+  "templateId": "domain.emotion_companion.plan",
+  "version": "2026.02.18",
+  "stage": "plan",
+  "domainId": "emotion_companion",
+  "requiredVariables": [
+    "userQuery",
+    "contextEnvelope",
+    "userProfileSnapshot",
+    "historicalRetrievalFeedback",
+    "domainLearningSignals"
+  ],
+  "outputContract": "domain_plan_v2026_02_18",
+  "selfCheckRules": [
+    "safety_boundary",
+    "risk_detection",
+    "empathy_quality",
+    "handoff_condition"
+  ]
+}
+

@@ -1,0 +1,157 @@
+{
+  "catalogId": "assistant.tool_catalog",
+  "version": "2026.02.18",
+  "sourceModel": "mcp-like-tool-catalog",
+  "tools": [
+    {
+      "toolName": "unified_retrieval",
+      "displayName": "Unified Retrieval",
+      "purpose": "统一检索页面、会话、长期记忆与Web信息",
+      "whenToUse": [
+        "需要证据检索",
+        "需要跨来源信息拼接"
+      ],
+      "supportedSkills": [
+        "retrieval.multi_source",
+        "reasoning.evidence_pack"
+      ],
+      "parameterSummary": [
+        {"name": "query", "type": "string", "required": true, "description": "检索问题"},
+        {"name": "requestedCapabilities", "type": "array<string>", "required": false, "description": "能力列表"},
+        {"name": "providerHint", "type": "string", "required": false, "description": "provider偏好"}
+      ],
+      "openAiFunction": {
+        "name": "unified_retrieval",
+        "description": "统一检索：按能力路由查询页面上下文、会话历史、长期记忆与 Web。",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {"type": "string", "description": "要检索的问题或关键词。"},
+            "requestedCapabilities": {"type": "array", "items": {"type": "string"}, "description": "候选能力ID列表。"},
+            "contextScopeHint": {"type": "object", "description": "页面与会话上下文锚点。"},
+            "privacyProfile": {"type": "string", "description": "隐私配置名。"},
+            "providerHint": {"type": "string", "description": "可选 provider 提示。"},
+            "maxItems": {"type": "integer", "description": "检索条数上限。"}
+          },
+          "required": ["query"]
+        }
+      }
+    },
+    {
+      "toolName": "web_search",
+      "displayName": "Web Search",
+      "purpose": "网络检索最新公开信息",
+      "whenToUse": [
+        "需要实时信息",
+        "需要公开来源证据"
+      ],
+      "supportedSkills": [
+        "retrieval.web",
+        "evidence.freshness_check"
+      ],
+      "parameterSummary": [
+        {"name": "query", "type": "string", "required": true, "description": "查询文本"},
+        {"name": "provider", "type": "string", "required": false, "description": "搜索引擎"},
+        {"name": "count", "type": "integer", "required": false, "description": "结果条数"}
+      ],
+      "openAiFunction": {
+        "name": "web_search",
+        "description": "网络检索最新信息。",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {"type": "string"},
+            "provider": {"type": "string"},
+            "count": {"type": "integer"}
+          },
+          "required": ["query"]
+        }
+      }
+    },
+    {
+      "toolName": "local_context",
+      "displayName": "Local Context",
+      "purpose": "获取设备本地上下文",
+      "whenToUse": [
+        "需要设备态信息"
+      ],
+      "supportedSkills": [
+        "device.context"
+      ],
+      "parameterSummary": [],
+      "openAiFunction": {
+        "name": "local_context",
+        "description": "获取设备本地上下文。",
+        "parameters": {"type": "object", "properties": {}}
+      }
+    },
+    {
+      "toolName": "media_gallery",
+      "displayName": "Media Gallery",
+      "purpose": "访问设备媒体资源",
+      "whenToUse": [
+        "用户请求相册或媒体处理"
+      ],
+      "supportedSkills": [
+        "media.asset_access"
+      ],
+      "parameterSummary": [
+        {"name": "mode", "type": "string", "required": false, "description": "媒体访问模式"}
+      ],
+      "openAiFunction": {
+        "name": "media_gallery",
+        "description": "访问设备媒体库。",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "mode": {"type": "string"}
+          }
+        }
+      }
+    },
+    {
+      "toolName": "intent_bridge",
+      "displayName": "Intent Bridge",
+      "purpose": "执行系统Intent或URL跳转",
+      "whenToUse": [
+        "需要跨应用打开或系统动作"
+      ],
+      "supportedSkills": [
+        "device.intent_bridge"
+      ],
+      "parameterSummary": [
+        {"name": "target", "type": "string", "required": false, "description": "目标对象"},
+        {"name": "action", "type": "string", "required": false, "description": "动作标识"}
+      ],
+      "openAiFunction": {
+        "name": "intent_bridge",
+        "description": "执行系统 Intent 或 URL 跳转。",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "target": {"type": "string"},
+            "action": {"type": "string"}
+          }
+        }
+      }
+    }
+  ],
+  "domainToolMatrix": [
+    {
+      "domainId": "divination_fortune",
+      "allowedTools": [
+        "unified_retrieval",
+        "web_search"
+      ],
+      "preferredTools": [
+        "web_search"
+      ],
+      "skillHints": [
+        "fortune.interpretation",
+        "fortune.safety_boundary",
+        "retrieval.web"
+      ]
+    }
+  ]
+}
+

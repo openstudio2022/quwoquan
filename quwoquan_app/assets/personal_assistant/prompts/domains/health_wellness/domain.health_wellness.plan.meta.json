@@ -1,0 +1,21 @@
+{
+  "templateId": "domain.health_wellness.plan",
+  "version": "2026.02.18",
+  "stage": "plan",
+  "domainId": "health_wellness",
+  "requiredVariables": [
+    "userQuery",
+    "contextEnvelope",
+    "userProfileSnapshot",
+    "historicalRetrievalFeedback",
+    "domainLearningSignals"
+  ],
+  "outputContract": "domain_plan_v2026_02_18",
+  "selfCheckRules": [
+    "safety_boundary",
+    "medical_disclaimer",
+    "context_completeness",
+    "risk_triage"
+  ]
+}
+

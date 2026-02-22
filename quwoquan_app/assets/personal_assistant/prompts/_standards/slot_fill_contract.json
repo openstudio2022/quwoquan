@@ -1,0 +1,38 @@
+{
+  "slotSchema": {
+    "required": [
+      "slotId",
+      "status",
+      "source",
+      "value"
+    ],
+    "statusEnum": [
+      "ready",
+      "need_query",
+      "unavailable"
+    ],
+    "sourceEnum": [
+      "request",
+      "profile",
+      "memory",
+      "device",
+      "retrieval",
+      "web_pipeline"
+    ]
+  },
+  "queryTaskSchema": {
+    "required": [
+      "targetSlot",
+      "reason",
+      "singleTopicQuery",
+      "providerHint",
+      "stopCondition"
+    ]
+  },
+  "evidenceThresholds": {
+    "coverageMin": 0.7,
+    "confidenceMin": 0.65,
+    "freshnessHoursMax": 72
+  }
+}
+

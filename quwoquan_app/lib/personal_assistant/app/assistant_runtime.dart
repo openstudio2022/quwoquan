@@ -19,9 +19,12 @@ import 'package:quwoquan_app/personal_assistant/retrieval/retrieval_service.dart
 import 'package:quwoquan_app/personal_assistant/skills/market/skill_market_service.dart';
 import 'package:quwoquan_app/personal_assistant/skills/skill_executor.dart';
 import 'package:quwoquan_app/personal_assistant/skills/skill_loader.dart';
+import 'package:quwoquan_app/personal_assistant/template_runtime/template_registry.dart';
+import 'package:quwoquan_app/personal_assistant/template_runtime/template_runtime.dart';
 import 'package:quwoquan_app/personal_assistant/tools/intent_bridge_tool.dart';
 import 'package:quwoquan_app/personal_assistant/tools/local_context_tool.dart';
 import 'package:quwoquan_app/personal_assistant/tools/media_gallery_tool.dart';
+import 'package:quwoquan_app/personal_assistant/tools/metadata/tool_metadata_registry.dart';
 import 'package:quwoquan_app/personal_assistant/tools/tool_registry.dart';
 import 'dart:io';
 
@@ -93,8 +96,15 @@ class AssistantRuntime {
           androidAdapter: androidAdapter,
         ),
       );
+    final templateRuntime = PromptTemplateRuntime(
+      registry: TemplateRegistry(),
+    );
+    final toolMetadataRegistry = ToolMetadataRegistry();
     final switchableProvider = SwitchableAssistantLlmProvider(
       fallbackProvider: const HeuristicLocalLlmProvider(),
+      templateRuntime: templateRuntime,
+      toolMetadataRegistry: toolMetadataRegistry,
+      plannerTemplateVersion: '',
     );
     if (registerSyncConfig) {
       final loader = const AssistantModelConfigLoader();
@@ -114,6 +124,7 @@ class AssistantRuntime {
       runtime,
       sessionManager: sessionManager,
       memoryRepository: memoryRepository,
+      toolMetadataRegistry: toolMetadataRegistry,
     );
     final skillLoader = const PersonalAssistantSkillLoader();
     return AssistantRuntime._(
@@ -149,4 +160,5 @@ class AssistantRuntime {
       llmProvider.registerRemoteModel(config);
     }
   }
+
 }

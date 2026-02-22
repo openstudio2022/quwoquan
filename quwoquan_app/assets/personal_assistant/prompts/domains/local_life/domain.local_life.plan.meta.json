@@ -1,0 +1,9 @@
+{
+  "templateId": "domain.local_life.plan",
+  "version": "2026.02.18",
+  "stage": "plan",
+  "domainId": "local_life",
+  "requiredVariables": ["userQuery", "contextEnvelope", "userProfileSnapshot", "locationSlots", "categoryTimeSlots", "preferenceSlots"],
+  "outputContract": "domain_plan_v2026_02_18",
+  "selfCheckRules": ["location_resolved", "business_hours_checked", "promo_validity_checked", "distance_ordering", "no_closed_merchants", "slot_completeness"]
+}

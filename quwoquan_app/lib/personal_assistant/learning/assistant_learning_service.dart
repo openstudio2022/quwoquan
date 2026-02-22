@@ -42,6 +42,10 @@ class AssistentLearningService {
     bool copiedAnswer = false,
     bool sharedAnswer = false,
     bool favoritedAnswer = false,
+    bool regeneratedAnswer = false,
+    bool styleAdjusted = false,
+    bool modelSwitched = false,
+    bool referenceOpened = false,
     bool interrupted = false,
     String feedbackTargetMessageId = '',
     String correctionText = '',
@@ -64,6 +68,10 @@ class AssistentLearningService {
       copiedAnswer: copiedAnswer,
       sharedAnswer: sharedAnswer,
       favoritedAnswer: favoritedAnswer,
+      regeneratedAnswer: regeneratedAnswer,
+      styleAdjusted: styleAdjusted,
+      modelSwitched: modelSwitched,
+      referenceOpened: referenceOpened,
       interrupted: interrupted,
       createdAt: now,
       feedbackTargetMessageId: feedbackTargetMessageId,
@@ -131,6 +139,10 @@ class AssistentLearningService {
     var helpfulCount = 0;
     var unhelpfulCount = 0;
     var correctionCount = 0;
+    var regenerateCount = 0;
+    var styleAdjustedCount = 0;
+    var modelSwitchedCount = 0;
+    var referenceOpenedCount = 0;
 
     for (final event in events) {
       final hasExplicit = event.explicitThumb != 'none' ||
@@ -141,6 +153,10 @@ class AssistentLearningService {
       if (event.explicitThumb == 'up') helpfulCount += 1;
       if (event.explicitThumb == 'down') unhelpfulCount += 1;
       if (event.correctionText.trim().isNotEmpty) correctionCount += 1;
+      if (event.regeneratedAnswer) regenerateCount += 1;
+      if (event.styleAdjusted) styleAdjustedCount += 1;
+      if (event.modelSwitched) modelSwitchedCount += 1;
+      if (event.referenceOpened) referenceOpenedCount += 1;
 
       domainDist[event.domainId] = (domainDist[event.domainId] ?? 0) + 1;
       for (final reason in event.explicitReasonCodes) {
@@ -159,6 +175,10 @@ class AssistentLearningService {
       'reasonCodeDistribution': _sortMap(reasonDist),
       'domainDistribution': _sortMap(domainDist),
       'userTagDistribution': _sortMap(tagDist),
+      'regenerateCount': regenerateCount,
+      'styleAdjustedCount': styleAdjustedCount,
+      'modelSwitchedCount': modelSwitchedCount,
+      'referenceOpenedCount': referenceOpenedCount,
     };
   }
 

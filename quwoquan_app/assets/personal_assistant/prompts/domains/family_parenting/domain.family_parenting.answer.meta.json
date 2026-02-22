@@ -1,0 +1,9 @@
+{
+  "templateId": "domain.family_parenting.answer",
+  "version": "2026.02.18",
+  "stage": "answer",
+  "domainId": "family_parenting",
+  "requiredVariables": ["userQuery", "domainResults", "contextSlots", "userProfileSnapshot"],
+  "outputContract": "domain_answer_v2026_02_18",
+  "selfCheckRules": ["constraint_satisfied", "coverage_satisfied", "safety_satisfied", "disclaimer_satisfied", "child_safety_first", "family_diversity_respected"]
+}

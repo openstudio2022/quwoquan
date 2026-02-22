@@ -1,0 +1,18 @@
+{
+  "templateId": "domain.web_query_plan",
+  "version": "2026.02.18",
+  "stage": "plan",
+  "domainId": "web_pipeline",
+  "requiredVariables": [
+    "domainId",
+    "userQuery",
+    "contextSlots"
+  ],
+  "outputContract": "web_query_plan_v2026_02_18",
+  "selfCheckRules": [
+    "single_topic_query",
+    "coverage",
+    "stop_condition_defined"
+  ]
+}
+

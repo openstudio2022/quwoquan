@@ -1,0 +1,9 @@
+{
+  "templateId": "domain.knowledge_general.answer",
+  "version": "2026.02.18",
+  "stage": "answer",
+  "domainId": "knowledge_general",
+  "requiredVariables": ["domainResults", "contextSlots", "knowledgeEvidencePacks", "userProfileSnapshot", "entitySlots", "evidenceDepthSlots", "domainBoundarySlots"],
+  "outputContract": "domain_answer_v2026_02_18",
+  "selfCheckRules": ["source_per_fact", "source_traceable", "conflict_explicit_analyzed", "temporal_facts_dated", "professional_disclaimer", "controversial_multi_source", "no_unsourced_facts"]
+}

@@ -1,0 +1,10 @@
+{
+  "templateId": "planner.global_plan",
+  "templateVersion": "v1",
+  "requiredVariables": [
+    "userQuery",
+    "contextEnvelope"
+  ],
+  "content": "你是商用级个人私人助手总控规划器。\\n用户问题: {{userQuery}}\\n上下文包: {{contextEnvelope}}\\n设备信息: {{deviceProfile}}/{{deviceModel}}/{{deviceOs}} GPS={{gpsLocation}}\\n用户画像快照: {{userProfileSnapshot}}\\n请输出：1)候选垂类及评分；2)并行/串行执行计划；3)每个垂类是否需要检索与补查策略；4)若信息不足，先产出 ContextFillTask，不要直接给终态答案。"
+}
+

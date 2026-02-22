@@ -1,5 +1,7 @@
 // ignore_for_file: unused_import, unnecessary_underscores
 
+import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -8,6 +10,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:quwoquan_app/components/assistant_avatar.dart';
 import 'package:quwoquan_app/components/unified_emoji_picker.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -25,6 +29,7 @@ import 'package:quwoquan_app/features/assistant/widgets/assistant_half_sheet.dar
 
 /// 聊天气泡最大宽度（语义尺寸，多屏适配由布局约束决定）
 const double _chatBubbleMaxWidth = 280.0;
+const double _chatBubbleWidthFactor = 0.84;
 
 /// 聊天气泡内图片展示尺寸（语义尺寸）
 const double _chatBubbleImageSize = 200.0;
@@ -87,6 +92,10 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   final Map<String, String> _assistantFeedbackStatusByMessageId =
       <String, String>{};
   double _lastViewportWidth = 390;
+  Timer? _assistantProgressTimer;
+  int _assistantThinkingDots = 1;
+  int _assistantSearchingCount = 0;
+  int _assistantReferenceCount = 0;
 
   @override
   void initState() {
@@ -117,11 +126,91 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
 
   @override
   void dispose() {
+    _assistantProgressTimer?.cancel();
     _inputController.removeListener(_onInputChanged);
     _inputController.dispose();
     _scrollController.dispose();
     _inputFocusNode.dispose();
     super.dispose();
+  }
+
+  void _startAssistantProgress() {
+    _assistantProgressTimer?.cancel();
+    _assistantThinkingDots = 1;
+    _assistantSearchingCount = 0;
+    _assistantReferenceCount = 0;
+    _assistantProgressTimer = Timer.periodic(const Duration(milliseconds: 420), (
+      timer,
+    ) {
+      if (!mounted || !_assistantResponding) {
+        timer.cancel();
+        return;
+      }
+      setState(() {
+        _assistantThinkingDots = _assistantThinkingDots >= 3
+            ? 1
+            : _assistantThinkingDots + 1;
+      });
+    });
+  }
+
+  void _stopAssistantProgress() {
+    _assistantProgressTimer?.cancel();
+    _assistantProgressTimer = null;
+  }
+
+  void _consumeAssistantTraceEvent(AssistantTraceEvent event) {
+    if (!mounted || !_assistantResponding) return;
+    final type = event.type;
+    final data = event.data ?? const <String, dynamic>{};
+    var searchingCount = _assistantSearchingCount;
+    var referenceCount = _assistantReferenceCount;
+    if (type == AssistantTraceEventType.toolStart &&
+        _isSearchLikeTrace(event, data)) {
+      searchingCount += 1;
+    }
+    if (type == AssistantTraceEventType.toolResult ||
+        type == AssistantTraceEventType.assistantDelta) {
+      referenceCount = math.max(
+        referenceCount,
+        _extractReferenceCountFromTraceData(data),
+      );
+    }
+    if (searchingCount == _assistantSearchingCount &&
+        referenceCount == _assistantReferenceCount) {
+      return;
+    }
+    setState(() {
+      _assistantSearchingCount = searchingCount;
+      _assistantReferenceCount = referenceCount;
+    });
+  }
+
+  bool _isSearchLikeTrace(
+    AssistantTraceEvent event,
+    Map<String, dynamic> data,
+  ) {
+    final tokens = <String>[
+      event.message,
+      (data['tool'] ?? '').toString(),
+      (data['toolName'] ?? '').toString(),
+      (data['name'] ?? '').toString(),
+      (data['description'] ?? '').toString(),
+    ].map((item) => item.toLowerCase()).join(' ');
+    return tokens.contains('search') ||
+        tokens.contains('retrieval') ||
+        tokens.contains('web');
+  }
+
+  int _extractReferenceCountFromTraceData(Map<String, dynamic> data) {
+    final references = data['references'];
+    if (references is List) return references.length;
+    final items = data['items'];
+    if (items is List) return items.length;
+    final countRaw = data['count'] ?? data['referenceCount'] ?? data['resultCount'];
+    if (countRaw is int) return countRaw;
+    if (countRaw is String) return int.tryParse(countRaw.trim()) ?? 0;
+    return 0;
   }
 
   String get _conversationTitle {
@@ -289,16 +378,12 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
 
     if (_isAssistantConversation) {
       setState(() => _assistantResponding = true);
+      _startAssistantProgress();
       try {
         final deviceProfile = _assistantDeviceProfileByWidth(
           _lastViewportWidth,
         );
         await ref.read(assistantRuntimeProvider).ensureRemoteConfigLoaded();
-        final currentModelRef = ref
-            .read(assistantGatewayProvider)
-            .currentModel();
-        final hasModelProvider =
-            currentModelRef != null && currentModelRef.trim().isNotEmpty;
         final runStartedAt = DateTime.now();
         final assistantMessages = _messages
             .where((m) => (m['type'] as String? ?? 'text') == 'text')
@@ -310,6 +395,11 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             )
             .toList(growable: false);
         final contextScope = _buildAssistantContextScope();
+        final domainId = await ref.read(assistantGatewayProvider).classifyDomain(
+          text,
+          contextScope,
+        );
+        contextScope['domainId'] = domainId;
         final request = AssistantRunRequest(
           messages: assistantMessages,
           sessionId: widget.conversationId,
@@ -324,12 +414,36 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                   ?.cast<String, dynamic>() ??
               const <String, dynamic>{},
         );
-        final routeMode = hasModelProvider
-            ? CapabilityRouteMode.localOnly
-            : CapabilityRouteMode.remotePreferred;
-        final response = await ref
+        // 商用模式默认优先远端模型链路，避免先走本地启发式导致垂类与总分总失效。
+        final routeMode = CapabilityRouteMode.remotePreferred;
+        AssistantRunResponse? response;
+        await for (final streamEvent in ref
             .read(capabilityGatewayProvider)
-            .run(request: request, mode: routeMode);
+            .runStream(request: request, mode: routeMode)) {
+          if (streamEvent.type == AssistantRunStreamEventType.trace &&
+              streamEvent.trace != null) {
+            _consumeAssistantTraceEvent(streamEvent.trace!);
+            continue;
+          }
+          if (streamEvent.type == AssistantRunStreamEventType.failed) {
+            throw StateError(
+              streamEvent.errorMessage ?? UITextConstants.assistantUnavailable,
+            );
+          }
+          if (streamEvent.type == AssistantRunStreamEventType.completed &&
+              streamEvent.response != null) {
+            response = streamEvent.response;
+          }
+        }
+        if (response == null) {
+          throw StateError(UITextConstants.assistantUnavailable);
+        }
+        final runResponse = response;
+        final displayText = _resolveAssistantDisplayText(runResponse);
+        final dialogueRuntime =
+            (runResponse.structuredResponse['dialogueRuntime'] as Map?)
+                ?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
         final elapsedMs = DateTime.now()
             .difference(runStartedAt)
             .inMilliseconds;
@@ -338,50 +452,53 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             '${replyNow.hour}:${replyNow.minute.toString().padLeft(2, '0')}';
         final assistantMessageId =
             'assistant_${DateTime.now().millisecondsSinceEpoch}';
+        final uiTimeline =
+            (runResponse.structuredResponse['uiTimeline'] as List?)
+                ?.whereType<Map>()
+                .map((item) => item.cast<String, dynamic>())
+                .toList(growable: false) ??
+            const <Map<String, dynamic>>[];
+        final uiReferences =
+            (runResponse.structuredResponse['uiReferences'] as List?)
+                ?.whereType<Map>()
+                .map((item) => item.cast<String, dynamic>())
+                .toList(growable: false) ??
+            const <Map<String, dynamic>>[];
+        final uiActions =
+            (runResponse.structuredResponse['uiActions'] as List?)
+                ?.whereType<Map>()
+                .map((item) => item.cast<String, dynamic>())
+                .toList(growable: false) ??
+            const <Map<String, dynamic>>[];
+        final uiAnswer =
+            (runResponse.structuredResponse['uiAnswer'] as Map?)
+                ?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
         setState(() {
-          for (final trace in response.traces) {
-            if (trace.type == AssistantTraceEventType.toolError &&
-                (trace.data?['suppressed'] == true ||
-                    _shouldHideTechnicalToolTrace(trace.message))) {
-              continue;
-            }
-            if (trace.type == AssistantTraceEventType.toolStart ||
-                trace.type == AssistantTraceEventType.toolResult ||
-                trace.type == AssistantTraceEventType.toolError ||
-                trace.type == AssistantTraceEventType.skillStart ||
-                trace.type == AssistantTraceEventType.skillResult ||
-                trace.type == AssistantTraceEventType.skillError) {
-              _messages.add({
-                'id': 'trace_${DateTime.now().microsecondsSinceEpoch}',
-                'conversationId': widget.conversationId,
-                'type': 'text',
-                'content': '[能力] ${trace.message}',
-                'senderId': AppConceptConstants.assistantSenderId,
-                'senderName': AppConceptConstants.assistantLabel,
-                'senderAvatar': '',
-                'timestamp': replyTime,
-                'isRead': true,
-                'isSelf': false,
-              });
-            }
-          }
           _messages.add({
             'id': assistantMessageId,
             'conversationId': widget.conversationId,
             'type': 'text',
-            'content': response.finalText,
+            'content': displayText,
             'senderId': AppConceptConstants.assistantSenderId,
             'senderName': AppConceptConstants.assistantLabel,
             'senderAvatar': '',
             'timestamp': replyTime,
             'isRead': true,
             'isSelf': false,
-            'runId': response.runId ?? '',
-            'traceId': response.traceId ?? '',
+            'runId': runResponse.runId ?? '',
+            'traceId': runResponse.traceId ?? '',
             'sourceQuery': text,
+            'domainId': (dialogueRuntime['domainId'] ?? '').toString(),
+            'dialogueState': dialogueRuntime,
+            'uiTimeline': uiTimeline,
+            'uiReferences': uiReferences,
+            'uiActions': uiActions,
+            'uiAnswer': uiAnswer,
           });
           _assistantResponding = false;
         });
+        _stopAssistantProgress();
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (_scrollController.hasClients) {
             _scrollController.animateTo(
@@ -401,22 +518,22 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         _storeAssistantReplayRecord(
           messageId: assistantMessageId,
           query: text,
-          response: response,
+          response: runResponse,
         );
         await ref
             .read(assistentLearningServiceProvider)
             .recordInteraction(
               runId:
-                  response.runId ??
+                  runResponse.runId ??
                   'run_${DateTime.now().millisecondsSinceEpoch}',
               traceId:
-                  response.traceId ??
+                  runResponse.traceId ??
                   'trace_${DateTime.now().millisecondsSinceEpoch}',
               userId: 'current_user',
               sessionId: widget.conversationId,
               pageType: (contextScope['pageType'] as String?) ?? 'chat',
               queryText: text,
-              answerText: response.finalText,
+              answerText: runResponse.finalText,
               userTags: userTags,
               durationMs: elapsedMs,
             );
@@ -441,6 +558,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             'isSelf': false,
           });
         });
+        _stopAssistantProgress();
       }
     }
   }
@@ -475,6 +593,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           ],
           'maxWebRounds': 1,
           'redactBeforeWeb': true,
+          'allowedReferenceHosts': AppConceptConstants.assistantReferenceHostWhitelist,
         };
     final userTags =
         (hints['userTags'] as List?)
@@ -483,6 +602,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             .where((item) => item.isNotEmpty)
             .toList(growable: false) ??
         const <String>[];
+    final latestDialogueState = _latestAssistantDialogueState();
     return <String, dynamic>{
       'pageType': _assistantSourceToPageType(openContext?.source),
       'sessionId': widget.conversationId,
@@ -493,9 +613,69 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       if (hints['behaviorTimeline'] is List<dynamic>)
         'behaviorTimeline': hints['behaviorTimeline'],
       if (userTags.isNotEmpty) 'userTags': userTags,
+      if (latestDialogueState.isNotEmpty) 'dialogueState': latestDialogueState,
+      if (latestDialogueState['suggestedNextStateId'] is String &&
+          (latestDialogueState['suggestedNextStateId'] as String)
+              .trim()
+              .isNotEmpty)
+        'currentStateId': (latestDialogueState['suggestedNextStateId'] as String)
+            .trim(),
       'privacyProfile': 'default',
       'privacyPolicy': privacyPolicy,
     };
+  }
+
+  Map<String, dynamic> _latestAssistantDialogueState() {
+    for (var i = _messages.length - 1; i >= 0; i--) {
+      final message = _messages[i];
+      if ((message['senderId'] as String?) != AppConceptConstants.assistantSenderId) {
+        continue;
+      }
+      final state = (message['dialogueState'] as Map?)?.cast<String, dynamic>();
+      if (state != null && state.isNotEmpty) return state;
+    }
+    return const <String, dynamic>{};
+  }
+
+  String _resolveAssistantDisplayText(AssistantRunResponse response) {
+    final structured = response.structuredResponse;
+    final uiAnswer =
+        (structured['uiAnswer'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+    final markdown = (uiAnswer['markdownText'] as String?)?.trim() ?? '';
+    if (markdown.isNotEmpty) return markdown;
+    final answerPayload =
+        (structured['answerPayload'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+    final userFacingMarkdown =
+        (answerPayload['userFacingMarkdown'] as String?)?.trim() ?? '';
+    if (userFacingMarkdown.isNotEmpty) return userFacingMarkdown;
+    final parsed = _extractTextFromPotentialJson(response.finalText);
+    if (parsed.isNotEmpty) return parsed;
+    return UITextConstants.assistantUnavailable;
+  }
+
+  String _extractTextFromPotentialJson(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) return '';
+    if (!text.startsWith('{') && !text.startsWith('```')) return text;
+    final cleaned = text
+        .replaceAll(RegExp(r'^```json\s*'), '')
+        .replaceAll(RegExp(r'^```\s*'), '')
+        .replaceAll(RegExp(r'```$'), '')
+        .trim();
+    try {
+      final decoded = jsonDecode(cleaned);
+      if (decoded is Map<String, dynamic>) {
+        final result = (decoded['result'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+        final markdown = (decoded['userFacingMarkdown'] as String?)?.trim() ?? '';
+        if (markdown.isNotEmpty) return markdown;
+        final resultText = (result['text'] as String?)?.trim() ?? '';
+        if (resultText.isNotEmpty) return resultText;
+      }
+    } catch (_) {}
+    return '';
   }
 
   String _assistantSourceToPageType(AssistantSource? source) {
@@ -516,24 +696,14 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     }
   }
 
-  bool _shouldHideTechnicalToolTrace(String message) {
-    final lowered = message.toLowerCase();
-    return lowered.contains('web search error') ||
-        lowered.contains('socketexception') ||
-        lowered.contains('clientexception') ||
-        lowered.contains('operation timed out') ||
-        lowered.contains('未发现可用搜索 provider') ||
-        lowered.contains('api key') ||
-        lowered.contains('检索未找到足够信息') ||
-        lowered.contains('检索完成但信息不足');
-  }
-
   void _storeAssistantReplayRecord({
     required String messageId,
     required String query,
     required AssistantRunResponse response,
   }) {
     final replayPayload = _extractReplayPayload(response.traces);
+    final structured =
+        response.structuredResponse.isEmpty ? const <String, dynamic>{} : response.structuredResponse;
     final record = <String, dynamic>{
       'messageId': messageId,
       'runId': response.runId ?? '',
@@ -541,6 +711,12 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       'query': query,
       'answer': response.finalText,
       'createdAt': DateTime.now().toIso8601String(),
+      'uiTimeline':
+          (structured['uiTimeline'] as List?)?.whereType<Map>().toList(growable: false) ??
+              const <Map>[],
+      'uiReferences':
+          (structured['uiReferences'] as List?)?.whereType<Map>().toList(growable: false) ??
+              const <Map>[],
       ...replayPayload,
     };
     _assistantReplayByMessageId[messageId] = record;
@@ -808,6 +984,174 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     );
   }
 
+  Future<void> _recordAssistantImplicitFeedback({
+    required Map<String, dynamic> message,
+    bool copiedAnswer = false,
+    bool sharedAnswer = false,
+    bool favoritedAnswer = false,
+    bool regeneratedAnswer = false,
+    bool styleAdjusted = false,
+    bool modelSwitched = false,
+    bool referenceOpened = false,
+    List<String> userTags = const <String>[],
+  }) async {
+    final contextScope = _buildAssistantContextScope();
+    final tags = userTags.isNotEmpty
+        ? userTags
+        : ((contextScope['userTags'] as List?)
+                ?.whereType<String>()
+                .map((item) => item.trim())
+                .where((item) => item.isNotEmpty)
+                .toList(growable: false) ??
+            const <String>[]);
+    await ref.read(assistentLearningServiceProvider).recordInteraction(
+      runId: (message['runId'] as String?)?.trim().isNotEmpty == true
+          ? (message['runId'] as String).trim()
+          : 'run_${DateTime.now().millisecondsSinceEpoch}',
+      traceId: (message['traceId'] as String?)?.trim().isNotEmpty == true
+          ? (message['traceId'] as String).trim()
+          : 'trace_${DateTime.now().millisecondsSinceEpoch}',
+      userId: 'current_user',
+      sessionId: widget.conversationId,
+      pageType: (contextScope['pageType'] as String?) ?? 'chat',
+      queryText: (message['sourceQuery'] as String?) ?? '',
+      answerText: (message['content'] as String?) ?? '',
+      userTags: tags,
+      durationMs: 0,
+      copiedAnswer: copiedAnswer,
+      sharedAnswer: sharedAnswer,
+      favoritedAnswer: favoritedAnswer,
+      regeneratedAnswer: regeneratedAnswer,
+      styleAdjusted: styleAdjusted,
+      modelSwitched: modelSwitched,
+      referenceOpened: referenceOpened,
+      feedbackTargetMessageId: (message['id'] as String?) ?? '',
+    );
+  }
+
+  Future<void> _requestAssistantRewrite({
+    required Map<String, dynamic> message,
+    required String mode,
+  }) async {
+    final query = (message['sourceQuery'] as String?)?.trim() ?? '';
+    if (query.isEmpty) return;
+    final text = switch (mode) {
+      'brief' => '请基于同样问题给我更简洁版本：$query',
+      'detailed' => '请基于同样问题给我更详细版本：$query',
+      _ => query,
+    };
+    await _recordAssistantImplicitFeedback(
+      message: message,
+      regeneratedAnswer: mode == 'regenerate',
+      styleAdjusted: mode == 'brief' || mode == 'detailed',
+      userTags: <String>[mode],
+    );
+    _inputController.text = text;
+    await _sendMessage();
+  }
+
+  Future<void> _switchAssistantModelAndRegenerate(
+    Map<String, dynamic> message,
+  ) async {
+    final models = ref.read(assistantRuntimeProvider).listAvailableModels();
+    if (models.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(UITextConstants.assistantModelUnavailable)),
+      );
+      return;
+    }
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: models
+                .map(
+                  (modelRef) => ListTile(
+                    title: Text(modelRef),
+                    onTap: () => Navigator.of(context).pop(modelRef),
+                  ),
+                )
+                .toList(growable: false),
+          ),
+        );
+      },
+    );
+    if (selected == null || selected.trim().isEmpty) return;
+    ref.read(assistantRuntimeProvider).switchModel(selected);
+    await _recordAssistantImplicitFeedback(
+      message: message,
+      modelSwitched: true,
+      userTags: <String>['model_switch'],
+    );
+    await _requestAssistantRewrite(message: message, mode: 'regenerate');
+  }
+
+  Future<void> _onAssistantReferenceTap(
+    Map<String, dynamic> message,
+    Map<String, dynamic> reference,
+  ) async {
+    final url = (reference['url'] as String?)?.trim() ?? '';
+    if (url.isEmpty) return;
+    final uri = Uri.tryParse(url);
+    final allowOpen = uri != null && _isAssistantReferenceHostAllowed(uri);
+    var opened = false;
+    if (allowOpen) {
+      opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+    if (!opened || !allowOpen) {
+      await Clipboard.setData(ClipboardData(text: url));
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          opened
+              ? url
+              : allowOpen
+                  ? UITextConstants.assistantReferenceOpenFailed
+                  : UITextConstants.assistantReferenceHostBlocked,
+        ),
+      ),
+    );
+    await _recordAssistantImplicitFeedback(
+      message: message,
+      referenceOpened: true,
+      userTags: const <String>['reference_click'],
+    );
+  }
+
+  List<String> _assistantReferenceWhitelistHosts() {
+    final contextScope = _buildAssistantContextScope();
+    final privacyPolicy =
+        (contextScope['privacyPolicy'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final rawHosts = (privacyPolicy['allowedReferenceHosts'] as List?)
+            ?.whereType<String>()
+            .map((item) => item.trim().toLowerCase())
+            .where((item) => item.isNotEmpty)
+            .toList(growable: false) ??
+        const <String>[];
+    if (rawHosts.isNotEmpty) return rawHosts;
+    return AppConceptConstants.assistantReferenceHostWhitelist;
+  }
+
+  bool _isAssistantReferenceHostAllowed(Uri uri) {
+    if (uri.scheme != 'https') return false;
+    final host = uri.host.trim().toLowerCase();
+    if (host.isEmpty) return false;
+    final whitelist = _assistantReferenceWhitelistHosts();
+    if (whitelist.isEmpty) return false;
+    for (final allowed in whitelist) {
+      if (host == allowed || host.endsWith('.$allowed')) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   void _openAssistantDevReplayPage() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -835,14 +1179,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     if (msg == null) return;
     switch (action) {
       case 'forward':
-        // 单条转发占位
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${UITextConstants.messageActionForward}（开发中）'),
-            ),
-          );
-        }
+        _shareMessages(<Map<String, dynamic>>[msg]);
         break;
       case 'select':
         setState(() {
@@ -874,6 +1211,16 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       _actionMenuMessage = null;
       _actionMenuPosition = null;
     });
+  }
+
+  Future<void> _shareMessages(List<Map<String, dynamic>> messages) async {
+    final lines = messages
+        .map((item) => (item['content'] as String?)?.trim() ?? '')
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    if (lines.isEmpty) return;
+    final text = lines.join('\n\n');
+    await SharePlus.instance.share(ShareParams(text: text));
   }
 
   void _toggleSelect(String id) {
@@ -942,16 +1289,13 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             actions: [
               if (_isSelectionMode)
                 TextButton(
-                  onPressed: () {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            '${UITextConstants.messageActionForward}（开发中）',
-                          ),
-                        ),
-                      );
-                    }
+                  onPressed: () async {
+                    final selectedMessages = _messages
+                        .where(
+                          (item) => _selectedIds.contains((item['id'] as String?) ?? ''),
+                        )
+                        .toList(growable: false);
+                    await _shareMessages(selectedMessages);
                     _cancelSelection();
                   },
                   child: Text(UITextConstants.messageActionForward),
@@ -1131,6 +1475,84 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                             onFeedbackCorrect: isAssistantMessage
                                 ? () => _showAssistantCorrectionSheet(msg)
                                 : null,
+                            onCopyAnswer: isAssistantMessage
+                                ? () async {
+                                    final content =
+                                        (msg['content'] as String?) ?? '';
+                                    if (content.isEmpty) return;
+                                    await Clipboard.setData(
+                                      ClipboardData(text: content),
+                                    );
+                                    if (!mounted) return;
+                                    ScaffoldMessenger.of(this.context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          UITextConstants.copiedToClipboard,
+                                        ),
+                                      ),
+                                    );
+                                    await _recordAssistantImplicitFeedback(
+                                      message: msg,
+                                      copiedAnswer: true,
+                                    );
+                                  }
+                                : null,
+                            onShareAnswer: isAssistantMessage
+                                ? () async {
+                                    final content =
+                                        (msg['content'] as String?) ?? '';
+                                    if (content.isNotEmpty) {
+                                      await SharePlus.instance.share(
+                                        ShareParams(text: content),
+                                      );
+                                    }
+                                    await _recordAssistantImplicitFeedback(
+                                      message: msg,
+                                      sharedAnswer: true,
+                                    );
+                                  }
+                                : null,
+                            onFavoriteAnswer: isAssistantMessage
+                                ? () async {
+                                    await _recordAssistantImplicitFeedback(
+                                      message: msg,
+                                      favoritedAnswer: true,
+                                    );
+                                    if (!mounted) return;
+                                    ScaffoldMessenger.of(this.context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          UITextConstants.assistantBookmarked,
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                : null,
+                            onRegenerateAnswer: isAssistantMessage
+                                ? () => _requestAssistantRewrite(
+                                    message: msg,
+                                    mode: 'regenerate',
+                                  )
+                                : null,
+                            onBriefAnswer: isAssistantMessage
+                                ? () => _requestAssistantRewrite(
+                                    message: msg,
+                                    mode: 'brief',
+                                  )
+                                : null,
+                            onDetailedAnswer: isAssistantMessage
+                                ? () => _requestAssistantRewrite(
+                                    message: msg,
+                                    mode: 'detailed',
+                                  )
+                                : null,
+                            onSwitchModelAnswer: isAssistantMessage
+                                ? () => _switchAssistantModelAndRegenerate(msg)
+                                : null,
+                            onReferenceTap: isAssistantMessage
+                                ? (refItem) =>
+                                    _onAssistantReferenceTap(msg, refItem)
+                                : null,
                             onAvatarTap: isAssistantMessage
                                 ? () {
                                     final target = VisitTarget.page('chat');
@@ -1155,7 +1577,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                                       context.push('/user/$senderId');
                                     }
                                   },
-                            showAssistantAvatar: isAssistantMessage,
+                            showAssistantAvatar: false,
                           ),
                         ],
                       );
@@ -1246,20 +1668,34 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                           padding: EdgeInsets.only(top: AppSpacing.xs),
                           child: Row(
                             children: [
-                              SizedBox(
-                                width: AppSpacing.iconSmall,
-                                height: AppSpacing.iconSmall,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: AppColors.primaryColor,
+                              Icon(
+                                Icons.bubble_chart_outlined,
+                                size: AppSpacing.iconSmall,
+                                color: AppColors.primaryColor,
+                              ),
+                              SizedBox(width: AppSpacing.xs),
+                              Text(
+                                '${UITextConstants.assistantRunningHint}${'.' * _assistantThinkingDots}',
+                                style: TextStyle(
+                                  fontSize: AppTypography.sm,
+                                  color: fgPrimary.withValues(alpha: 0.7),
                                 ),
                               ),
                               SizedBox(width: AppSpacing.xs),
                               Text(
-                                UITextConstants.assistantRunningHint,
+                                UITextConstants.assistantSearchingReferenceCount
+                                    .replaceFirst(
+                                  '%s',
+                                  math.max(
+                                    _assistantSearchingCount,
+                                    _assistantReferenceCount,
+                                  )
+                                      .clamp(0, 20)
+                                      .toString(),
+                                ),
                                 style: TextStyle(
                                   fontSize: AppTypography.sm,
-                                  color: fgPrimary.withValues(alpha: 0.7),
+                                  color: fgPrimary.withValues(alpha: 0.6),
                                 ),
                               ),
                             ],
@@ -1466,6 +1902,14 @@ class _ChatBubble extends StatelessWidget {
     this.onFeedbackHelpful,
     this.onFeedbackUnhelpful,
     this.onFeedbackCorrect,
+    this.onCopyAnswer,
+    this.onShareAnswer,
+    this.onFavoriteAnswer,
+    this.onRegenerateAnswer,
+    this.onBriefAnswer,
+    this.onDetailedAnswer,
+    this.onSwitchModelAnswer,
+    this.onReferenceTap,
   });
 
   final Map<String, dynamic> message;
@@ -1483,9 +1927,22 @@ class _ChatBubble extends StatelessWidget {
   final VoidCallback? onFeedbackHelpful;
   final VoidCallback? onFeedbackUnhelpful;
   final VoidCallback? onFeedbackCorrect;
+  final VoidCallback? onCopyAnswer;
+  final VoidCallback? onShareAnswer;
+  final VoidCallback? onFavoriteAnswer;
+  final VoidCallback? onRegenerateAnswer;
+  final VoidCallback? onBriefAnswer;
+  final VoidCallback? onDetailedAnswer;
+  final VoidCallback? onSwitchModelAnswer;
+  final void Function(Map<String, dynamic> reference)? onReferenceTap;
 
   @override
   Widget build(BuildContext context) {
+    final viewportWidth = MediaQuery.of(context).size.width;
+    final bubbleMaxWidth = math.max(
+      _chatBubbleMaxWidth,
+      viewportWidth * _chatBubbleWidthFactor,
+    );
     final type = message['type'] as String? ?? 'text';
     final content = message['content'] as String? ?? '';
     final senderName = message['senderName'] as String? ?? '';
@@ -1496,7 +1953,7 @@ class _ChatBubble extends StatelessWidget {
     if (type == 'task_card') {
       final tasks = message['tasks'] as List<dynamic>? ?? [];
       contentWidget = Container(
-        constraints: const BoxConstraints(maxWidth: _chatBubbleMaxWidth),
+        constraints: BoxConstraints(maxWidth: bubbleMaxWidth),
         decoration: BoxDecoration(
           color: bubbleColor.withValues(alpha: 0.2),
           borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
@@ -1579,7 +2036,7 @@ class _ChatBubble extends StatelessWidget {
         isRight: isRight,
         color: bubbleColor,
         child: Container(
-          constraints: const BoxConstraints(maxWidth: _chatBubbleMaxWidth),
+          constraints: BoxConstraints(maxWidth: bubbleMaxWidth),
           padding: EdgeInsets.fromLTRB(
             AppSpacing.containerSm,
             AppSpacing.intraGroupLg,
@@ -1599,7 +2056,28 @@ class _ChatBubble extends StatelessWidget {
       );
     }
 
-    Widget avatarWidget;
+    final timeline = (message['uiTimeline'] as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[];
+    final references = (message['uiReferences'] as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[];
+    final followupPrompt = (((message['uiAnswer'] as Map?)?['followupPrompt'])
+                as String?)
+            ?.trim() ??
+        '';
+    final actionHints = ((((message['uiAnswer'] as Map?)?['actionHints'])
+                as List?)
+            ?.whereType<String>()
+            .map((item) => item.trim())
+            .where((item) => item.isNotEmpty)
+            .toList(growable: false)) ??
+        const <String>[];
+    Widget? avatarWidget;
     final chatAvatarRadius = AppSpacing.avatarUserSm / 2;
     if (showAssistantAvatar) {
       avatarWidget = AssistantAvatar(
@@ -1613,11 +2091,6 @@ class _ChatBubble extends StatelessWidget {
           radius: chatAvatarRadius,
           backgroundImage: NetworkImage(avatar),
         ),
-      );
-    } else {
-      avatarWidget = SizedBox(
-        width: AppSpacing.avatarUserSm,
-        height: AppSpacing.avatarUserSm,
       );
     }
 
@@ -1634,8 +2107,8 @@ class _ChatBubble extends StatelessWidget {
               ? CrossAxisAlignment.end
               : CrossAxisAlignment.start,
           children: [
-            if (!isRight) avatarWidget,
-            if (!isRight) SizedBox(width: AppSpacing.sm),
+            if (!isRight && avatarWidget != null) avatarWidget,
+            if (!isRight && avatarWidget != null) SizedBox(width: AppSpacing.sm),
             Flexible(
               child: Column(
                 crossAxisAlignment: isRight
@@ -1686,9 +2159,26 @@ class _ChatBubble extends StatelessWidget {
                             color: textColor.withValues(alpha: 0.8),
                           ),
                         ),
-                      contentWidget,
+                      Expanded(
+                        child: contentWidget,
+                      ),
                     ],
                   ),
+                  if (timeline.isNotEmpty) ...[
+                    SizedBox(height: AppSpacing.xs),
+                    _AssistantTimelineCard(
+                      timeline: timeline,
+                      references: references,
+                      onReferenceTap: onReferenceTap,
+                    ),
+                  ],
+                  if (followupPrompt.isNotEmpty || actionHints.isNotEmpty) ...[
+                    SizedBox(height: AppSpacing.xs),
+                    _AssistantFollowupCard(
+                      followupPrompt: followupPrompt,
+                      actionHints: actionHints,
+                    ),
+                  ],
                   if (showFeedbackActions) ...[
                     SizedBox(height: AppSpacing.xs),
                     Wrap(
@@ -1731,16 +2221,258 @@ class _ChatBubble extends StatelessWidget {
                               ),
                             ),
                           ),
+                        IconButton(
+                          onPressed: onCopyAnswer,
+                          icon: const Icon(Icons.copy_outlined),
+                          tooltip: UITextConstants.copyLink,
+                          iconSize: AppSpacing.iconSmall,
+                        ),
+                        IconButton(
+                          onPressed: onFavoriteAnswer,
+                          icon: const Icon(Icons.bookmark_border),
+                          tooltip: UITextConstants.bookmarks,
+                          iconSize: AppSpacing.iconSmall,
+                        ),
+                        IconButton(
+                          onPressed: onShareAnswer,
+                          icon: const Icon(Icons.share_outlined),
+                          tooltip: UITextConstants.share,
+                          iconSize: AppSpacing.iconSmall,
+                        ),
+                        PopupMenuButton<String>(
+                          onSelected: (value) {
+                            if (value == 'regenerate') {
+                              onRegenerateAnswer?.call();
+                            } else if (value == 'brief') {
+                              onBriefAnswer?.call();
+                            } else if (value == 'detailed') {
+                              onDetailedAnswer?.call();
+                            } else if (value == 'switch_model') {
+                              onSwitchModelAnswer?.call();
+                            }
+                          },
+                          itemBuilder: (context) => const <PopupMenuEntry<String>>[
+                            PopupMenuItem<String>(
+                              value: 'regenerate',
+                              child: Text(UITextConstants.assistantActionRegenerate),
+                            ),
+                            PopupMenuItem<String>(
+                              value: 'brief',
+                              child: Text(UITextConstants.assistantActionBrief),
+                            ),
+                            PopupMenuItem<String>(
+                              value: 'detailed',
+                              child: Text(UITextConstants.assistantActionDetailed),
+                            ),
+                            PopupMenuItem<String>(
+                              value: 'switch_model',
+                              child: Text(UITextConstants.assistantActionSwitchModel),
+                            ),
+                          ],
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: AppSpacing.xs,
+                              vertical: AppSpacing.xs,
+                            ),
+                            child: Icon(
+                              Icons.sync,
+                              size: AppSpacing.iconSmall,
+                              color: AppColors.primaryColor,
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ],
                 ],
               ),
             ),
-            if (isRight) SizedBox(width: AppSpacing.sm),
-            if (isRight) avatarWidget,
+            if (isRight && avatarWidget != null) SizedBox(width: AppSpacing.sm),
+            if (isRight && avatarWidget != null) avatarWidget,
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _AssistantTimelineCard extends StatefulWidget {
+  const _AssistantTimelineCard({
+    required this.timeline,
+    required this.references,
+    this.onReferenceTap,
+  });
+
+  final List<Map<String, dynamic>> timeline;
+  final List<Map<String, dynamic>> references;
+  final void Function(Map<String, dynamic> reference)? onReferenceTap;
+
+  @override
+  State<_AssistantTimelineCard> createState() => _AssistantTimelineCardState();
+}
+
+class _AssistantTimelineCardState extends State<_AssistantTimelineCard> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = widget.references.isEmpty
+        ? UITextConstants.assistantTimelineSearchProcess
+        : UITextConstants.assistantTimelineReferenceCount.replaceFirst(
+            '%s',
+            widget.references.length.toString(),
+          );
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(AppSpacing.containerSm),
+      decoration: BoxDecoration(
+        color: AppColors.primaryColor.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: AppTypography.sm,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primaryColor,
+                    ),
+                  ),
+                ),
+                Icon(
+                  _expanded ? Icons.expand_less : Icons.expand_more,
+                  size: AppSpacing.iconSmall,
+                  color: AppColors.primaryColor,
+                ),
+              ],
+            ),
+          ),
+          if (_expanded) ...[
+            SizedBox(height: AppSpacing.xs),
+            ...widget.timeline.map(
+              (item) => Padding(
+                padding: EdgeInsets.only(bottom: AppSpacing.xs),
+                child: Text(
+                  _timelineText(item),
+                  style: TextStyle(
+                    fontSize: AppTypography.sm,
+                    color: AppColors.primaryColor.withValues(alpha: 0.85),
+                  ),
+                ),
+              ),
+            ),
+            if (widget.references.isNotEmpty) ...[
+              SizedBox(height: AppSpacing.xs),
+              ...widget.references.map(
+                (ref) => InkWell(
+                  onTap: () => widget.onReferenceTap?.call(ref),
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: AppSpacing.xs),
+                    child: Text(
+                      '• ${(ref['title'] ?? '').toString()}',
+                      style: TextStyle(
+                        fontSize: AppTypography.sm,
+                        color: AppColors.primaryColor,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _timelineText(Map<String, dynamic> item) {
+    final event = (item['event'] as String?)?.trim() ?? '';
+    final label = switch (event) {
+      'thinking' => UITextConstants.assistantTimelineThinking,
+      'keyword_search' => UITextConstants.assistantTimelineKeywordSearch,
+      'reference_increment' => UITextConstants.assistantTimelineReferenceIncrement,
+      'reference_ready' => UITextConstants.assistantTimelineReady,
+      _ => '',
+    };
+    final count = (item['count'] as num?)?.toInt() ?? 0;
+    final keywords = (item['keywords'] as List?)
+            ?.whereType<String>()
+            .where((value) => value.trim().isNotEmpty)
+            .toList(growable: false) ??
+        const <String>[];
+    if (keywords.isNotEmpty) return '$label：${keywords.join('、')}';
+    if (count > 0) return '$label：$count';
+    return label;
+  }
+}
+
+class _AssistantFollowupCard extends StatelessWidget {
+  const _AssistantFollowupCard({
+    required this.followupPrompt,
+    required this.actionHints,
+  });
+
+  final String followupPrompt;
+  final List<String> actionHints;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(AppSpacing.containerSm),
+      decoration: BoxDecoration(
+        color: AppColors.primaryColor.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (followupPrompt.isNotEmpty)
+            Text(
+              followupPrompt,
+              style: TextStyle(
+                fontSize: AppTypography.sm,
+                color: AppColors.primaryColor,
+              ),
+            ),
+          if (actionHints.isNotEmpty) ...[
+            if (followupPrompt.isNotEmpty) SizedBox(height: AppSpacing.xs),
+            Wrap(
+              spacing: AppSpacing.xs,
+              runSpacing: AppSpacing.xs,
+              children: actionHints
+                  .map(
+                    (hint) => Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppSpacing.containerSm,
+                        vertical: AppSpacing.xs,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.fullBorderRadius,
+                        ),
+                        color: Colors.white.withValues(alpha: 0.8),
+                      ),
+                      child: Text(
+                        hint,
+                        style: TextStyle(
+                          fontSize: AppTypography.sm,
+                          color: AppColors.primaryColor,
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
+          ],
+        ],
       ),
     );
   }

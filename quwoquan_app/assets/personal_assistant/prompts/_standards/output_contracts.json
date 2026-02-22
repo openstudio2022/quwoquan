@@ -1,0 +1,51 @@
+{
+  "contracts": {
+    "domain_plan_v2026_02_18": {
+      "required": [
+        "domainId",
+        "taskPlan",
+        "contextSlots",
+        "needQuery",
+        "queryTasks",
+        "selfCheck"
+      ]
+    },
+    "domain_answer_v2026_02_18": {
+      "required": [
+        "result",
+        "evidence",
+        "reasoningBasis",
+        "selfCheck",
+        "diagnostics"
+      ]
+    },
+    "web_query_plan_v2026_02_18": {
+      "required": [
+        "domainId",
+        "queryTasks"
+      ]
+    },
+    "web_result_judge_v2026_02_18": {
+      "required": [
+        "relevantItems",
+        "irrelevantItems",
+        "relevanceScore"
+      ]
+    },
+    "web_key_fact_extract_v2026_02_18": {
+      "required": [
+        "keyFacts",
+        "conflictFlags"
+      ]
+    },
+    "web_evidence_pack_v2026_02_18": {
+      "required": [
+        "coverage",
+        "confidence",
+        "freshnessHours",
+        "facts"
+      ]
+    }
+  }
+}
+

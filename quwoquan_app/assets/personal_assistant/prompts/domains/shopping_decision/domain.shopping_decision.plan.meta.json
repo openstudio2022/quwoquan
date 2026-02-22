@@ -1,0 +1,21 @@
+{
+  "templateId": "domain.shopping_decision.plan",
+  "version": "2026.02.18",
+  "stage": "plan",
+  "domainId": "shopping_decision",
+  "requiredVariables": [
+    "userQuery",
+    "contextEnvelope",
+    "userProfileSnapshot",
+    "historicalRetrievalFeedback",
+    "domainLearningSignals"
+  ],
+  "outputContract": "domain_plan_v2026_02_18",
+  "selfCheckRules": [
+    "coverage",
+    "slot_completeness",
+    "no_product_recommendation",
+    "price_freshness",
+    "scope_tagged"
+  ]
+}

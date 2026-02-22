@@ -1,0 +1,9 @@
+{
+  "templateId": "domain.knowledge_general.plan",
+  "version": "2026.02.18",
+  "stage": "plan",
+  "domainId": "knowledge_general",
+  "requiredVariables": ["userQuery", "contextEnvelope", "userProfileSnapshot", "entitySlots", "evidenceDepthSlots", "domainBoundarySlots"],
+  "outputContract": "domain_plan_v2026_02_18",
+  "selfCheckRules": ["fact_traceable_source", "source_credibility_assessed", "temporal_facts_dated", "professional_boundary_flagged", "controversial_multi_source", "slot_completeness"]
+}

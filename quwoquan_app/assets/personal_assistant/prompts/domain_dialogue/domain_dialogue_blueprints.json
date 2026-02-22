@@ -1,0 +1,518 @@
+{
+  "version": "2026.02.19",
+  "description": "19-domain dialogue blueprints with total-sub-total, state machine, and source quality floor.",
+  "byDomain": {
+    "weather": {
+      "verticalFocus": "weather_decision",
+      "totalSubTotalTemplate": {
+        "totalGoal": "给出地点+时间绑定的天气判断与行动建议",
+        "subTasks": ["提取地点时间", "检索天气证据", "评估风险等级", "生成可执行建议"],
+        "totalSynthesis": "输出总分总答复并提示下一步补充"
+      },
+      "stateMachine": {
+        "states": [
+          {"stateId": "S0_INTENT_CAPTURE", "goal": "识别地点与时间"},
+          {"stateId": "S1_BASELINE_WEATHER", "goal": "先答天气结论"},
+          {"stateId": "S2_OPTIONAL_ENRICH", "goal": "补充通勤/穿衣偏好"},
+          {"stateId": "S3_PERSONALIZED_ADVICE", "goal": "生成个性化建议"},
+          {"stateId": "S4_FOLLOWUP_QA", "goal": "持续问答与更新"},
+          {"stateId": "S5_SAFE_CLOSE", "goal": "安全收束"}
+        ]
+      },
+      "sourcePolicy": {
+        "qualityTier": "high",
+        "preferredSites": [
+          {"name": "中国天气网", "host": "weather.com.cn"},
+          {"name": "中央气象台", "host": "nmc.cn"},
+          {"name": "中国气象局", "host": "cma.gov.cn"}
+        ]
+      },
+      "qualityFloor": {"requiredElements": ["地点时间一致", "证据时效", "风险提示", "下一步引导"]}
+    },
+    "travel_transport": {
+      "verticalFocus": "route_and_transfer",
+      "totalSubTotalTemplate": {
+        "totalGoal": "给出路线选择与备选方案",
+        "subTasks": ["识别起终点", "检索时刻与拥堵", "比较时效与成本", "生成主备方案"],
+        "totalSynthesis": "给出主方案+备选+风险边界"
+      },
+      "stateMachine": {
+        "states": [
+          {"stateId": "S0_INTENT_CAPTURE", "goal": "识别起终点与时间"},
+          {"stateId": "S1_BASELINE_ROUTE", "goal": "先给主路线"},
+          {"stateId": "S2_OPTIONAL_ENRICH", "goal": "补充预算/偏好"},
+          {"stateId": "S3_ALTERNATIVE_PLAN", "goal": "生成备选方案"},
+          {"stateId": "S4_FOLLOWUP_QA", "goal": "处理变更与追问"},
+          {"stateId": "S5_SAFE_CLOSE", "goal": "收束"}
+        ]
+      },
+      "sourcePolicy": {
+        "qualityTier": "high",
+        "preferredSites": [
+          {"name": "12306", "host": "12306.cn"},
+          {"name": "高德地图", "host": "amap.com"},
+          {"name": "百度地图", "host": "map.baidu.com"}
+        ]
+      },
+      "qualityFloor": {"requiredElements": ["主备方案", "时效/成本对比", "异常应对", "下一步引导"]}
+    },
+    "travel_planning": {
+      "verticalFocus": "trip_itinerary",
+      "totalSubTotalTemplate": {
+        "totalGoal": "给出预算约束下的行程方案",
+        "subTasks": ["识别预算时长", "检索目的地信息", "生成行程节奏", "匹配住宿餐饮"],
+        "totalSynthesis": "输出可执行行程与复盘点"
+      },
+      "stateMachine": {
+        "states": [
+          {"stateId": "S0_INTENT_CAPTURE", "goal": "识别预算/时长/人群"},
+          {"stateId": "S1_BASELINE_PLAN", "goal": "先给初版行程"},
+          {"stateId": "S2_OPTIONAL_ENRICH", "goal": "补充偏好"},
+          {"stateId": "S3_PERSONALIZED_PLAN", "goal": "细化行程"},
+          {"stateId": "S4_FOLLOWUP_QA", "goal": "应对改动"},
+          {"stateId": "S5_SAFE_CLOSE", "goal": "收束"}
+        ]
+      },
+      "sourcePolicy": {
+        "qualityTier": "high",
+        "preferredSites": [
+          {"name": "文化和旅游部", "host": "mct.gov.cn"},
+          {"name": "Lonely Planet", "host": "lonelyplanet.com"},
+          {"name": "Tripadvisor", "host": "tripadvisor.com"}
+        ]
+      },
+      "qualityFloor": {"requiredElements": ["行程节奏", "预算可行性", "风险提醒", "下一步引导"]}
+    },
+    "local_life": {
+      "verticalFocus": "nearby_service_recommendation",
+      "totalSubTotalTemplate": {
+        "totalGoal": "给出场景匹配的本地推荐",
+        "subTasks": ["识别地理范围", "识别人群场景", "检索候选点", "生成对比建议"],
+        "totalSynthesis": "输出推荐清单与选择建议"
+      },
+      "stateMachine": {
+        "states": [
+          {"stateId": "S0_INTENT_CAPTURE", "goal": "识别地点与场景"},
+          {"stateId": "S1_BASELINE_RECOMMEND", "goal": "先给推荐"},
+          {"stateId": "S2_OPTIONAL_ENRICH", "goal": "补充预算/时段"},
+          {"stateId": "S3_PERSONALIZED_RECOMMEND", "goal": "细化推荐"},
+          {"stateId": "S4_FOLLOWUP_QA", "goal": "处理偏好变化"},
+          {"stateId": "S5_SAFE_CLOSE", "goal": "收束"}
+        ]
+      },
+      "sourcePolicy": {
+        "qualityTier": "high",
+        "preferredSites": [
+          {"name": "高德地图", "host": "amap.com"},
+          {"name": "大众点评", "host": "dianping.com"},
+          {"name": "美团", "host": "meituan.com"}
+        ]
+      },
+      "qualityFloor": {"requiredElements": ["场景匹配", "可达性", "营业时段", "下一步引导"]}
+    },
+    "calendar_task": {
+      "verticalFocus": "time_block_planning",
+      "totalSubTotalTemplate": {
+        "totalGoal": "给出可执行的日程任务拆解",
+        "subTasks": ["识别任务优先级", "拆解里程碑", "分配时间块", "构建冲突应对"],
+        "totalSynthesis": "输出执行表与复盘节点"
+      },
+      "stateMachine": {
+        "states": [
+          {"stateId": "S0_INTENT_CAPTURE", "goal": "识别任务与截止"},
+          {"stateId": "S1_BASELINE_SCHEDULE", "goal": "先给排期"},
+          {"stateId": "S2_OPTIONAL_ENRICH", "goal": "补充约束条件"},
+          {"stateId": "S3_PERSONALIZED_SCHEDULE", "goal": "细化排期"},
+          {"stateId": "S4_FOLLOWUP_QA", "goal": "处理变更"},
+          {"stateId": "S5_SAFE_CLOSE", "goal": "收束"}
+        ]
+      },
+      "sourcePolicy": {
+        "qualityTier": "medium",
+        "preferredSites": [
+          {"name": "Atlassian", "host": "atlassian.com"},
+          {"name": "Asana", "host": "asana.com"},
+          {"name": "Notion Help", "host": "notion.so"}
+        ]
+      },
+      "qualityFloor": {"requiredElements": ["里程碑", "优先级", "冲突应对", "下一步引导"]}
+    },
+    "knowledge_general": {
+      "verticalFocus": "general_knowledge_explain",
+      "totalSubTotalTemplate": {
+        "totalGoal": "给出准确且可理解的知识解释",
+        "subTasks": ["定义问题边界", "检索权威来源", "构建因果解释", "给出例子"],
+        "totalSynthesis": "输出结论与可验证来源"
+      },
+      "stateMachine": {
+        "states": [
+          {"stateId": "S0_INTENT_CAPTURE", "goal": "识别问题范围"},
+          {"stateId": "S1_BASELINE_EXPLAIN", "goal": "先给核心结论"},
+          {"stateId": "S2_OPTIONAL_ENRICH", "goal": "补充深度偏好"},
+          {"stateId": "S3_PERSONALIZED_EXPLAIN", "goal": "细化解释"},
+          {"stateId": "S4_FOLLOWUP_QA", "goal": "追问与举例"},
+          {"stateId": "S5_SAFE_CLOSE", "goal": "收束"}
+        ]
+      },
+      "sourcePolicy": {
+        "qualityTier": "high",
+        "preferredSites": [
+          {"name": "Britannica", "host": "britannica.com"},
+          {"name": "Nature", "host": "nature.com"},
+          {"name": "Science", "host": "science.org"}
+        ]
+      },
+      "qualityFloor": {"requiredElements": ["定义清晰", "因果链路", "来源可核验", "下一步引导"]}
+    },
+    "finance_consumer": {
+      "verticalFocus": "personal_finance_consumer",
+      "totalSubTotalTemplate": {
+        "totalGoal": "给出风险匹配的消费/理财建议",
+        "subTasks": ["识别风险偏好", "检索规则与费率", "设计方案", "给出边界声明"],
+        "totalSynthesis": "输出可执行步骤与风险提醒"
+      },
+      "stateMachine": {
+        "states": [
+          {"stateId": "S0_INTENT_CAPTURE", "goal": "识别目标与风险"},
+          {"stateId": "S1_BASELINE_FINANCE_ADVICE", "goal": "先给基本建议"},
+          {"stateId": "S2_OPTIONAL_ENRICH", "goal": "补充收入负债"},
+          {"stateId": "S3_PERSONALIZED_FINANCE_PLAN", "goal": "细化方案"},
+          {"stateId": "S4_FOLLOWUP_QA", "goal": "风险追问"},
+          {"stateId": "S5_SAFE_CLOSE", "goal": "收束"}
+        ]
+      },
+      "sourcePolicy": {
+        "qualityTier": "high",
+        "preferredSites": [
+          {"name": "中国人民银行", "host": "pbc.gov.cn"},
+          {"name": "证监会", "host": "csrc.gov.cn"},
+          {"name": "银保监会", "host": "cbirc.gov.cn"}
+        ]
+      },
+      "qualityFloor": {"requiredElements": ["风险分层", "成本测算", "边界声明", "下一步引导"]}
+    },
+    "health_wellness": {
+      "verticalFocus": "wellness_guidance",
+      "totalSubTotalTemplate": {
+        "totalGoal": "给出生活方式层面的健康建议",
+        "subTasks": ["识别症状级别", "检索权威建议", "形成分层建议", "标注就医边界"],
+        "totalSynthesis": "输出行动建议与风险升级阈值"
+      },
+      "stateMachine": {
+        "states": [
+          {"stateId": "S0_INTENT_CAPTURE", "goal": "识别健康诉求"},
+          {"stateId": "S1_BASELINE_HEALTH_ADVICE", "goal": "先给基础建议"},
+          {"stateId": "S2_OPTIONAL_ENRICH", "goal": "补充症状与时长"},
+          {"stateId": "S3_PERSONALIZED_HEALTH_PLAN", "goal": "细化建议"},
+          {"stateId": "S4_FOLLOWUP_QA", "goal": "观察与复盘"},
+          {"stateId": "S5_SAFE_CLOSE", "goal": "收束"}
+        ]
+      },
+      "sourcePolicy": {
+        "qualityTier": "high",
+        "preferredSites": [
+          {"name": "WHO", "host": "who.int"},
+          {"name": "国家卫健委", "host": "nhc.gov.cn"},
+          {"name": "CDC", "host": "cdc.gov"}
+        ]
+      },
+      "qualityFloor": {"requiredElements": ["生活方式建议", "风险分层", "就医边界", "下一步引导"]}
+    },
+    "education_learning": {
+      "verticalFocus": "learning_path_design",
+      "totalSubTotalTemplate": {
+        "totalGoal": "给出可持续学习路径",
+        "subTasks": ["识别目标与时长", "拆解阶段任务", "设计复盘机制", "输出执行计划"],
+        "totalSynthesis": "输出学习闭环与下一步"
+      },
+      "stateMachine": {
+        "states": [
+          {"stateId": "S0_INTENT_CAPTURE", "goal": "识别学习目标"},
+          {"stateId": "S1_BASELINE_PLAN", "goal": "先给学习路径"},
+          {"stateId": "S2_OPTIONAL_ENRICH", "goal": "补充基础水平"},
+          {"stateId": "S3_PERSONALIZED_PLAN", "goal": "细化计划"},
+          {"stateId": "S4_FOLLOWUP_QA", "goal": "迭代修正"},
+          {"stateId": "S5_SAFE_CLOSE", "goal": "收束"}
+        ]
+      },
+      "sourcePolicy": {
+        "qualityTier": "medium",
+        "preferredSites": [
+          {"name": "Coursera", "host": "coursera.org"},
+          {"name": "edX", "host": "edx.org"},
+          {"name": "Khan Academy", "host": "khanacademy.org"}
+        ]
+      },
+      "qualityFloor": {"requiredElements": ["阶段目标", "时间预算", "复盘机制", "下一步引导"]}
+    },
+    "work_productivity": {
+      "verticalFocus": "productivity_execution",
+      "totalSubTotalTemplate": {
+        "totalGoal": "给出工作效率提升方案",
+        "subTasks": ["识别任务结构", "拆解执行路径", "建立应急机制", "定义复盘点"],
+        "totalSynthesis": "输出执行清单与风险控制"
+      },
+      "stateMachine": {
+        "states": [
+          {"stateId": "S0_INTENT_CAPTURE", "goal": "识别工作瓶颈"},
+          {"stateId": "S1_BASELINE_STRATEGY", "goal": "先给策略"},
+          {"stateId": "S2_OPTIONAL_ENRICH", "goal": "补充约束"},
+          {"stateId": "S3_PERSONALIZED_EXECUTION", "goal": "细化动作"},
+          {"stateId": "S4_FOLLOWUP_QA", "goal": "执行复盘"},
+          {"stateId": "S5_SAFE_CLOSE", "goal": "收束"}
+        ]
+      },
+      "sourcePolicy": {
+        "qualityTier": "medium",
+        "preferredSites": [
+          {"name": "Atlassian", "host": "atlassian.com"},
+          {"name": "Microsoft Learn", "host": "learn.microsoft.com"},
+          {"name": "Asana", "host": "asana.com"}
+        ]
+      },
+      "qualityFloor": {"requiredElements": ["任务拆解", "依赖关系", "应急策略", "下一步引导"]}
+    },
+    "shopping_decision": {
+      "verticalFocus": "purchase_decision",
+      "totalSubTotalTemplate": {
+        "totalGoal": "给出可解释的购买建议",
+        "subTasks": ["识别预算与偏好", "检索参数对比", "评估性价比", "给出推荐与不推荐"],
+        "totalSynthesis": "输出建议与风险点"
+      },
+      "stateMachine": {
+        "states": [
+          {"stateId": "S0_INTENT_CAPTURE", "goal": "识别需求与预算"},
+          {"stateId": "S1_BASELINE_RECOMMEND", "goal": "先给推荐"},
+          {"stateId": "S2_OPTIONAL_ENRICH", "goal": "补充偏好"},
+          {"stateId": "S3_PERSONALIZED_COMPARE", "goal": "细化对比"},
+          {"stateId": "S4_FOLLOWUP_QA", "goal": "追问与替换"},
+          {"stateId": "S5_SAFE_CLOSE", "goal": "收束"}
+        ]
+      },
+      "sourcePolicy": {
+        "qualityTier": "high",
+        "preferredSites": [
+          {"name": "Consumer Reports", "host": "consumerreports.org"},
+          {"name": "RTINGS", "host": "rtings.com"},
+          {"name": "GSMArena", "host": "gsmarena.com"}
+        ]
+      },
+      "qualityFloor": {"requiredElements": ["参数对比", "取舍理由", "风险提示", "下一步引导"]}
+    },
+    "policy_public_service": {
+      "verticalFocus": "policy_service",
+      "totalSubTotalTemplate": {
+        "totalGoal": "给出政策办理路径",
+        "subTasks": ["识别地区与政策主题", "检索官方依据", "梳理办理流程", "提示时效边界"],
+        "totalSynthesis": "输出步骤清单与复核建议"
+      },
+      "stateMachine": {
+        "states": [
+          {"stateId": "S0_INTENT_CAPTURE", "goal": "识别政策场景"},
+          {"stateId": "S1_BASELINE_POLICY", "goal": "先给核心条件"},
+          {"stateId": "S2_OPTIONAL_ENRICH", "goal": "补充地区身份"},
+          {"stateId": "S3_PERSONALIZED_PATH", "goal": "细化流程"},
+          {"stateId": "S4_FOLLOWUP_QA", "goal": "追问与变更"},
+          {"stateId": "S5_SAFE_CLOSE", "goal": "收束"}
+        ]
+      },
+      "sourcePolicy": {
+        "qualityTier": "highest",
+        "preferredSites": [
+          {"name": "中国政府网", "host": "gov.cn"},
+          {"name": "国家政务服务平台", "host": "gjzwfw.gov.cn"},
+          {"name": "地方政务网站", "host": "sz.gov.cn"}
+        ]
+      },
+      "qualityFloor": {"requiredElements": ["官方来源", "时效标注", "地区适配", "下一步引导"]}
+    },
+    "emotion_companion": {
+      "verticalFocus": "emotional_support",
+      "totalSubTotalTemplate": {
+        "totalGoal": "提供情绪支持与稳态引导",
+        "subTasks": ["识别情绪信号", "先共情再引导", "提供微行动", "标注安全边界"],
+        "totalSynthesis": "输出支持性答复与下一步"
+      },
+      "stateMachine": {
+        "states": [
+          {"stateId": "S0_INTENT_CAPTURE", "goal": "识别情绪状态"},
+          {"stateId": "S1_BASELINE_SUPPORT", "goal": "先接纳共情"},
+          {"stateId": "S2_OPTIONAL_ENRICH", "goal": "补充触发情境"},
+          {"stateId": "S3_PERSONALIZED_SUPPORT", "goal": "细化支持"},
+          {"stateId": "S4_FOLLOWUP_QA", "goal": "持续陪伴"},
+          {"stateId": "S5_SAFE_CLOSE", "goal": "安全收束"}
+        ]
+      },
+      "sourcePolicy": {
+        "qualityTier": "high",
+        "preferredSites": [
+          {"name": "APA", "host": "apa.org"},
+          {"name": "WHO Mental Health", "host": "who.int"},
+          {"name": "NIMH", "host": "nimh.nih.gov"}
+        ]
+      },
+      "qualityFloor": {"requiredElements": ["共情", "非决定论", "微行动", "风险升级提示"]}
+    },
+    "social_companion_chat": {
+      "verticalFocus": "casual_companion_chat",
+      "totalSubTotalTemplate": {
+        "totalGoal": "提供连续且有温度的闲聊体验",
+        "subTasks": ["识别话题偏好", "保持节奏", "生成延续问题", "确保安全边界"],
+        "totalSynthesis": "输出轻互动并引导下一话题"
+      },
+      "stateMachine": {
+        "states": [
+          {"stateId": "S0_INTENT_CAPTURE", "goal": "识别闲聊意图"},
+          {"stateId": "S1_BASELINE_CHAT", "goal": "先回应并接住情绪"},
+          {"stateId": "S2_OPTIONAL_ENRICH", "goal": "补充兴趣标签"},
+          {"stateId": "S3_PERSONALIZED_CHAT", "goal": "个性化延展"},
+          {"stateId": "S4_FOLLOWUP_QA", "goal": "连续互动"},
+          {"stateId": "S5_SAFE_CLOSE", "goal": "收束"}
+        ]
+      },
+      "sourcePolicy": {
+        "qualityTier": "medium",
+        "preferredSites": [
+          {"name": "无强制外部来源", "host": ""}
+        ]
+      },
+      "qualityFloor": {"requiredElements": ["连续性", "轻互动", "安全边界", "下一步引导"]}
+    },
+    "relationship_matchmaking": {
+      "verticalFocus": "relationship_guidance",
+      "totalSubTotalTemplate": {
+        "totalGoal": "提供关系沟通与相处建议",
+        "subTasks": ["识别关系冲突", "提炼沟通目标", "给出可执行话术", "标注边界与风险"],
+        "totalSynthesis": "输出关系改善行动方案"
+      },
+      "stateMachine": {
+        "states": [
+          {"stateId": "S0_INTENT_CAPTURE", "goal": "识别关系情境"},
+          {"stateId": "S1_BASELINE_ADVICE", "goal": "先给沟通建议"},
+          {"stateId": "S2_OPTIONAL_ENRICH", "goal": "补充冲突细节"},
+          {"stateId": "S3_PERSONALIZED_STRATEGY", "goal": "细化策略"},
+          {"stateId": "S4_FOLLOWUP_QA", "goal": "持续优化"},
+          {"stateId": "S5_SAFE_CLOSE", "goal": "收束"}
+        ]
+      },
+      "sourcePolicy": {
+        "qualityTier": "high",
+        "preferredSites": [
+          {"name": "Gottman Institute", "host": "gottman.com"},
+          {"name": "APA", "host": "apa.org"},
+          {"name": "Psychology Today", "host": "psychologytoday.com"}
+        ]
+      },
+      "qualityFloor": {"requiredElements": ["沟通策略", "边界感", "非操控", "下一步引导"]}
+    },
+    "divination_fortune": {
+      "verticalFocus": "yijing_divination",
+      "totalSubTotalTemplate": {
+        "totalGoal": "先给卦解，再可选补全，形成趋吉避凶建议",
+        "subTasks": ["识别主题", "检索易经证据", "推理映射现实", "输出行动建议与边界"],
+        "totalSynthesis": "总分总输出并给下一步可选问题"
+      },
+      "stateMachine": {
+        "states": [
+          {"stateId": "S0_ENTRY_INTENT_CAPTURE", "goal": "意图捕捉"},
+          {"stateId": "S1_FAST_BASELINE_ANSWER", "goal": "先答"},
+          {"stateId": "S2_OPTIONAL_SLOT_ENRICHMENT", "goal": "可选补全"},
+          {"stateId": "S3_PERSONALIZED_REASONING", "goal": "个性化推演"},
+          {"stateId": "S4_DIALOGUE_LOOP_QA", "goal": "持续问答"},
+          {"stateId": "S5_FOLLOWUP_REVIEW", "goal": "复盘校准"},
+          {"stateId": "S6_SAFE_CLOSE", "goal": "安全收束"}
+        ]
+      },
+      "sourcePolicy": {
+        "qualityTier": "high",
+        "preferredSites": [
+          {"name": "Chinese Text Project", "host": "ctext.org"},
+          {"name": "国学网", "host": "guoxue.com"},
+          {"name": "维基文库易经", "host": "zh.wikisource.org"}
+        ]
+      },
+      "qualityFloor": {"requiredElements": ["易经证据", "太极表达", "可执行建议", "边界声明"]}
+    },
+    "astrology_constellation": {
+      "verticalFocus": "astrology_guidance",
+      "totalSubTotalTemplate": {
+        "totalGoal": "提供星座主题化建议",
+        "subTasks": ["识别星座与主题", "检索专业星盘内容", "给出建议", "标注娱乐边界"],
+        "totalSynthesis": "输出总分总与下一步互动"
+      },
+      "stateMachine": {
+        "states": [
+          {"stateId": "S0_INTENT_CAPTURE", "goal": "识别星座诉求"},
+          {"stateId": "S1_BASELINE_READING", "goal": "先给解读"},
+          {"stateId": "S2_OPTIONAL_ENRICH", "goal": "补充时间与背景"},
+          {"stateId": "S3_PERSONALIZED_READING", "goal": "细化建议"},
+          {"stateId": "S4_FOLLOWUP_QA", "goal": "持续互动"},
+          {"stateId": "S5_SAFE_CLOSE", "goal": "收束"}
+        ]
+      },
+      "sourcePolicy": {
+        "qualityTier": "medium",
+        "preferredSites": [
+          {"name": "Astro.com", "host": "astro.com"},
+          {"name": "Cafe Astrology", "host": "cafeastrology.com"},
+          {"name": "Astrology.com", "host": "astrology.com"}
+        ]
+      },
+      "qualityFloor": {"requiredElements": ["主题匹配", "娱乐边界", "行动建议", "下一步引导"]}
+    },
+    "family_parenting": {
+      "verticalFocus": "family_parenting_support",
+      "totalSubTotalTemplate": {
+        "totalGoal": "提供家庭与育儿场景建议",
+        "subTasks": ["识别角色冲突", "提炼核心诉求", "输出分层行动", "设置边界与升级策略"],
+        "totalSynthesis": "输出可执行家庭协作方案"
+      },
+      "stateMachine": {
+        "states": [
+          {"stateId": "S0_INTENT_CAPTURE", "goal": "识别家庭场景"},
+          {"stateId": "S1_BASELINE_ADVICE", "goal": "先给建议"},
+          {"stateId": "S2_OPTIONAL_ENRICH", "goal": "补充年龄阶段"},
+          {"stateId": "S3_PERSONALIZED_ADVICE", "goal": "细化策略"},
+          {"stateId": "S4_FOLLOWUP_QA", "goal": "执行复盘"},
+          {"stateId": "S5_SAFE_CLOSE", "goal": "收束"}
+        ]
+      },
+      "sourcePolicy": {
+        "qualityTier": "high",
+        "preferredSites": [
+          {"name": "HealthyChildren", "host": "healthychildren.org"},
+          {"name": "CDC Parenting", "host": "cdc.gov"},
+          {"name": "WHO Parenting", "host": "who.int"}
+        ]
+      },
+      "qualityFloor": {"requiredElements": ["分龄建议", "家庭协作", "风险升级路径", "下一步引导"]}
+    },
+    "fallback_general_search": {
+      "verticalFocus": "open_domain_fallback",
+      "totalSubTotalTemplate": {
+        "totalGoal": "提供可核验的开放域答案",
+        "subTasks": ["识别问题类型", "检索高质量来源", "构建证据包", "输出边界说明"],
+        "totalSynthesis": "输出总分总、证据、在线离线边界和补查建议"
+      },
+      "stateMachine": {
+        "states": [
+          {"stateId": "S0_INTENT_CAPTURE", "goal": "识别问题"},
+          {"stateId": "S1_BASELINE_ANSWER", "goal": "先给当前可答部分"},
+          {"stateId": "S2_OPTIONAL_ENRICH", "goal": "补充上下文"},
+          {"stateId": "S3_EVIDENCE_PACK", "goal": "构建证据包"},
+          {"stateId": "S4_FOLLOWUP_QA", "goal": "继续补查"},
+          {"stateId": "S5_SAFE_CLOSE", "goal": "收束"}
+        ]
+      },
+      "sourcePolicy": {
+        "qualityTier": "highest",
+        "preferredSites": [
+          {"name": "Google Scholar", "host": "scholar.google.com"},
+          {"name": "arXiv", "host": "arxiv.org"},
+          {"name": "Wikipedia", "host": "wikipedia.org"}
+        ]
+      },
+      "qualityFloor": {"requiredElements": ["证据来源", "时效说明", "不确定性", "补查建议"]}
+    }
+  }
+}

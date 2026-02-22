@@ -53,6 +53,10 @@ class AssistantAgentLoopDevLogger {
           'degraded': response.degraded,
           'errorCode': response.errorCode,
           'traceCount': response.traces.length,
+          'structuredResponse': _safeJsonValue(response.structuredResponse),
+          'profileUpdateProposal': _safeJsonValue(
+            response.profileUpdateProposal?.toJson(),
+          ),
         },
         'response': _safeJsonMap(response.toJson()),
       };

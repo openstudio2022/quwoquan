@@ -2,11 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:quwoquan_app/components/assistant_avatar.dart';
-import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
-import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
-import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
-import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/features/assistant/config/assistant_prompt_config.dart';
 import 'package:quwoquan_app/features/assistant/context/assistant_open_context.dart';
@@ -25,21 +20,11 @@ class AssistantHalfSheet extends StatelessWidget {
     BuildContext modalContext,
     AssistantOpenContext assistantOpenContext,
   ) async {
-    await showModalBottomSheet<void>(
-      context: modalContext,
-      isScrollControlled: true,
-      isDismissible: true,
-      enableDrag: true,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black54,
-      builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.5,
-        minChildSize: 0.3,
-        maxChildSize: 0.9,
-        builder: (ctx, scrollController) => AssistantHalfSheet(
-          openContext: assistantOpenContext,
-        ),
-      ),
+    await Future<void>.delayed(Duration.zero);
+    if (!modalContext.mounted) return;
+    modalContext.push(
+      '/chat/${AppConceptConstants.assistantConversationId}',
+      extra: assistantOpenContext,
     );
   }
 

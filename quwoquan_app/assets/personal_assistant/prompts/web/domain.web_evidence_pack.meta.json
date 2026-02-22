@@ -1,0 +1,17 @@
+{
+  "templateId": "domain.web_evidence_pack",
+  "version": "2026.02.18",
+  "stage": "plan",
+  "domainId": "web_pipeline",
+  "requiredVariables": [
+    "keyFacts",
+    "conflictFlags"
+  ],
+  "outputContract": "web_evidence_pack_v2026_02_18",
+  "selfCheckRules": [
+    "threshold_checked",
+    "gaps_reported",
+    "eligibility_decided"
+  ]
+}
+

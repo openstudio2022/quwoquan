@@ -117,6 +117,10 @@ class WebSearchTool implements AssistantTool {
         provider: provider,
         decoded: decoded,
       );
+      final references = _extractReferences(
+        provider: provider,
+        decoded: decoded,
+      );
       await _logSearchInteraction(
         sessionId: sessionId,
         runId: runId,
@@ -142,6 +146,7 @@ class WebSearchTool implements AssistantTool {
         data: <String, dynamic>{
           'provider': provider.name,
           'summary': summary,
+          'references': references,
           'raw': decoded,
           'diagnostics': runtimeConfig.toDiagnostics(
             selectedProvider: provider.name,
@@ -156,6 +161,13 @@ class WebSearchTool implements AssistantTool {
         config: runtimeConfig,
       );
       if (fallback != null) {
+        final fallbackProvider =
+            _parseProvider(fallback.providerLabel) ??
+            AssistantSearchProvider.duckduckgo;
+        final fallbackReferences = _extractReferences(
+          provider: fallbackProvider,
+          decoded: fallback.raw,
+        );
         await _logSearchInteraction(
           sessionId: sessionId,
           runId: runId,
@@ -186,6 +198,7 @@ class WebSearchTool implements AssistantTool {
           data: <String, dynamic>{
             'provider': fallback.providerLabel,
             'summary': fallback.summary,
+            'references': fallbackReferences,
             'raw': fallback.raw,
             'fallbackFrom': provider.name,
             'primaryError': error.toString(),
@@ -273,6 +286,139 @@ class WebSearchTool implements AssistantTool {
       case AssistantSearchProvider.duckduckgo:
         return _summarizeDuckduckgo(decoded);
     }
+  }
+
+  List<Map<String, dynamic>> _extractReferences({
+    required AssistantSearchProvider provider,
+    required dynamic decoded,
+  }) {
+    switch (provider) {
+      case AssistantSearchProvider.brave:
+        return _extractBraveReferences(decoded);
+      case AssistantSearchProvider.duckduckgo:
+        return _extractDuckduckgoReferences(decoded);
+      case AssistantSearchProvider.perplexity:
+        return _extractPerplexityReferences(decoded);
+      case AssistantSearchProvider.serpapi:
+        return _extractSerpApiReferences(decoded);
+      case AssistantSearchProvider.openclawProxy:
+        return _extractOpenclawReferences(decoded);
+    }
+  }
+
+  List<Map<String, dynamic>> _extractBraveReferences(dynamic decoded) {
+    if (decoded is! Map) return const <Map<String, dynamic>>[];
+    final results = ((decoded['web'] as Map?)?['results'] as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[];
+    return results
+        .take(12)
+        .map((item) => <String, dynamic>{
+              'title': (item['title'] as String?)?.trim() ?? '',
+              'url': (item['url'] as String?)?.trim() ?? '',
+              'snippet': (item['description'] as String?)?.trim() ?? '',
+              'provider': AssistantSearchProvider.brave.name,
+            })
+        .where((item) => (item['url'] as String).isNotEmpty)
+        .toList(growable: false);
+  }
+
+  List<Map<String, dynamic>> _extractDuckduckgoReferences(dynamic decoded) {
+    if (decoded is! Map) return const <Map<String, dynamic>>[];
+    final refs = <Map<String, dynamic>>[];
+    final related = (decoded['RelatedTopics'] as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[];
+    for (final item in related.take(12)) {
+      final text = (item['Text'] as String?)?.trim() ?? '';
+      final url = (item['FirstURL'] as String?)?.trim() ?? '';
+      if (url.isNotEmpty) {
+        refs.add(<String, dynamic>{
+          'title': text,
+          'url': url,
+          'snippet': text,
+          'provider': AssistantSearchProvider.duckduckgo.name,
+        });
+      }
+      final topics = (item['Topics'] as List?)
+              ?.whereType<Map>()
+              .map((entry) => entry.cast<String, dynamic>())
+              .toList(growable: false) ??
+          const <Map<String, dynamic>>[];
+      for (final topic in topics.take(4)) {
+        final nestedText = (topic['Text'] as String?)?.trim() ?? '';
+        final nestedUrl = (topic['FirstURL'] as String?)?.trim() ?? '';
+        if (nestedUrl.isEmpty) continue;
+        refs.add(<String, dynamic>{
+          'title': nestedText,
+          'url': nestedUrl,
+          'snippet': nestedText,
+          'provider': AssistantSearchProvider.duckduckgo.name,
+        });
+      }
+    }
+    return refs;
+  }
+
+  List<Map<String, dynamic>> _extractPerplexityReferences(dynamic decoded) {
+    if (decoded is! Map) return const <Map<String, dynamic>>[];
+    final citations = (decoded['citations'] as List?)
+            ?.whereType<String>()
+            .map((item) => item.trim())
+            .where((item) => item.isNotEmpty)
+            .toList(growable: false) ??
+        const <String>[];
+    return citations
+        .take(12)
+        .map((url) => <String, dynamic>{
+              'title': url,
+              'url': url,
+              'snippet': '',
+              'provider': AssistantSearchProvider.perplexity.name,
+            })
+        .toList(growable: false);
+  }
+
+  List<Map<String, dynamic>> _extractSerpApiReferences(dynamic decoded) {
+    if (decoded is! Map) return const <Map<String, dynamic>>[];
+    final organic = (decoded['organic_results'] as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[];
+    return organic
+        .take(12)
+        .map((item) => <String, dynamic>{
+              'title': (item['title'] as String?)?.trim() ?? '',
+              'url': (item['link'] as String?)?.trim() ?? '',
+              'snippet': (item['snippet'] as String?)?.trim() ?? '',
+              'provider': AssistantSearchProvider.serpapi.name,
+            })
+        .where((item) => (item['url'] as String).isNotEmpty)
+        .toList(growable: false);
+  }
+
+  List<Map<String, dynamic>> _extractOpenclawReferences(dynamic decoded) {
+    if (decoded is! Map) return const <Map<String, dynamic>>[];
+    final rawRefs = (decoded['references'] as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[];
+    return rawRefs
+        .take(12)
+        .map((item) => <String, dynamic>{
+              'title': (item['title'] as String?)?.trim() ?? '',
+              'url': (item['url'] as String?)?.trim() ?? '',
+              'snippet': (item['snippet'] as String?)?.trim() ?? '',
+              'provider': AssistantSearchProvider.openclawProxy.name,
+            })
+        .where((item) => (item['url'] as String).isNotEmpty)
+        .toList(growable: false);
   }
 
   String _summarizePerplexity(dynamic decoded) {

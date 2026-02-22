@@ -5,6 +5,8 @@ import 'package:quwoquan_app/personal_assistant/engine/model_config.dart';
 import 'package:quwoquan_app/personal_assistant/observability/logging/app_log_models.dart';
 import 'package:quwoquan_app/personal_assistant/observability/logging/app_log_service.dart';
 import 'package:quwoquan_app/personal_assistant/observability/logging/app_run_interaction_collector.dart';
+import 'package:quwoquan_app/personal_assistant/template_runtime/template_runtime.dart';
+import 'package:quwoquan_app/personal_assistant/tools/metadata/tool_metadata_registry.dart';
 import 'package:quwoquan_app/personal_assistant/tools/tool_schema.dart';
 
 class AssistantModelOutput {
@@ -25,6 +27,10 @@ abstract class AssistantLlmProvider {
   Future<AssistantModelOutput> reason({
     required List<Map<String, String>> messages,
     required List<String> availableTools,
+    Map<String, dynamic> templateContext = const <String, dynamic>{},
+    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    String templateId = 'planner.global_plan',
+    String templateVersion = '',
     String sessionId = '',
     String runId = '',
     String traceId = '',
@@ -36,29 +42,48 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
     required this.modelId,
     required this.baseUrl,
     required this.apiKey,
+    this.templateRuntime,
+    this.toolMetadataRegistry,
+    this.plannerTemplateVersion = '',
   });
 
   final String modelId;
   final String baseUrl;
   final String apiKey;
+  final PromptTemplateRuntime? templateRuntime;
+  final ToolMetadataRegistry? toolMetadataRegistry;
+  final String plannerTemplateVersion;
 
   @override
   Future<AssistantModelOutput> reason({
     required List<Map<String, String>> messages,
     required List<String> availableTools,
+    Map<String, dynamic> templateContext = const <String, dynamic>{},
+    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    String templateId = 'planner.global_plan',
+    String templateVersion = '',
     String sessionId = '',
     String runId = '',
     String traceId = '',
   }) async {
+    await toolMetadataRegistry?.ensureLoaded();
+    final plannerPrompt = await _resolvePlannerPrompt(
+      templateContext: templateContext,
+      templateVariables: templateVariables,
+      templateId: templateId,
+      templateVersion: templateVersion,
+    );
+    if (plannerPrompt.missingVariables.contains('__template_not_found__') ||
+        plannerPrompt.rendered.content.trim().isEmpty) {
+      return const AssistantModelOutput(
+        text: '模板渲染失败: planner.global_plan 模板缺失或为空。',
+        degraded: true,
+      );
+    }
     final requestMessages = <Map<String, String>>[
-      const <String, String>{
+      <String, String>{
         'role': 'system',
-        'content':
-            '你是可调用工具的助理，必须采用“思考-查询-观察-再决策”的方式回答。'
-            '由你决定是否查询、查询什么、使用哪个 provider、是否继续扩展检索轮次。'
-            '当问题涉及实时信息或你明确要“查询/检索”时，必须先发起 tool_calls，'
-            '拿到工具结果后再回答；禁止只说“我来查询”却不调用工具。'
-            '若检索结果不足，请改写查询词并追加一轮；若工具不可用，请明确说明并基于已有知识回答。',
+        'content': plannerPrompt.rendered.content,
       },
       ...messages,
     ];
@@ -67,6 +92,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       requestMessages: requestMessages,
       toolSchemas: toolSchemas,
       enableTools: toolSchemas.isNotEmpty,
+      plannerPrompt: plannerPrompt,
       sessionId: sessionId,
       runId: runId,
       traceId: traceId,
@@ -79,6 +105,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       requestMessages: requestMessages,
       toolSchemas: const <Map<String, dynamic>>[],
       enableTools: false,
+      plannerPrompt: plannerPrompt,
       sessionId: sessionId,
       runId: runId,
       traceId: traceId,
@@ -118,6 +145,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
     required List<Map<String, String>> requestMessages,
     required List<Map<String, dynamic>> toolSchemas,
     required bool enableTools,
+    required TemplateRuntimeOutput plannerPrompt,
     required String sessionId,
     required String runId,
     required String traceId,
@@ -152,6 +180,13 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
             'kind': 'llm',
             'provider': 'openai_compatible',
             'model': modelId,
+            'template': <String, dynamic>{
+              'templateId': plannerPrompt.rendered.templateId,
+              'templateVersion': plannerPrompt.rendered.templateVersion,
+              'variableBindings': plannerPrompt.rendered.variableBindings,
+              'bucket': plannerPrompt.bucket,
+              'missingVariables': plannerPrompt.missingVariables,
+            },
             'request': <String, dynamic>{
               'url': endpoint,
               'method': 'POST',
@@ -183,6 +218,13 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
           'kind': 'llm',
           'provider': 'openai_compatible',
           'model': modelId,
+          'template': <String, dynamic>{
+            'templateId': plannerPrompt.rendered.templateId,
+            'templateVersion': plannerPrompt.rendered.templateVersion,
+            'variableBindings': plannerPrompt.rendered.variableBindings,
+            'bucket': plannerPrompt.bucket,
+            'missingVariables': plannerPrompt.missingVariables,
+          },
           'request': <String, dynamic>{
             'url': endpoint,
             'method': 'POST',
@@ -206,6 +248,13 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
           'kind': 'llm',
           'provider': 'openai_compatible',
           'model': modelId,
+          'template': <String, dynamic>{
+            'templateId': plannerPrompt.rendered.templateId,
+            'templateVersion': plannerPrompt.rendered.templateVersion,
+            'variableBindings': plannerPrompt.rendered.variableBindings,
+            'bucket': plannerPrompt.bucket,
+            'missingVariables': plannerPrompt.missingVariables,
+          },
           'request': <String, dynamic>{
             'url': endpoint,
             'method': 'POST',
@@ -218,6 +267,27 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       );
       return AssistantModelOutput(text: '模型调用异常: $error', degraded: true);
     }
+  }
+
+  Future<TemplateRuntimeOutput> _resolvePlannerPrompt({
+    required Map<String, dynamic> templateContext,
+    required Map<String, dynamic> templateVariables,
+    required String templateId,
+    required String templateVersion,
+  }) async {
+    final runtime = templateRuntime;
+    if (runtime == null) {
+      return TemplateRuntimeOutput.empty(
+        templateId: templateId,
+        templateVersion: templateVersion,
+      );
+    }
+    return runtime.renderTemplate(
+      templateId: templateId,
+      defaultVersion: templateVersion.isEmpty ? plannerTemplateVersion : templateVersion,
+      variables: templateVariables,
+      selectionContext: templateContext,
+    );
   }
 
   Future<void> _logLlmInteraction({
@@ -332,116 +402,12 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
   List<Map<String, dynamic>> _buildToolSchemas(List<String> availableTools) {
     final schemas = <Map<String, dynamic>>[];
     for (final name in availableTools) {
-      final schema = _toolSchemaByName(name);
+      final schema = toolMetadataRegistry?.openAiFunctionSchemaByName(name);
       if (schema != null) {
         schemas.add(schema);
       }
     }
     return schemas;
-  }
-
-  Map<String, dynamic>? _toolSchemaByName(String name) {
-    switch (name) {
-      case 'unified_retrieval':
-        return <String, dynamic>{
-          'type': 'function',
-          'function': <String, dynamic>{
-            'name': 'unified_retrieval',
-            'description': '统一检索：按能力路由查询页面上下文、会话历史、长期记忆与 Web。',
-            'parameters': <String, dynamic>{
-              'type': 'object',
-              'properties': <String, dynamic>{
-                'query': <String, dynamic>{
-                  'type': 'string',
-                  'description': '要检索的问题或关键词。',
-                },
-                'requestedCapabilities': <String, dynamic>{
-                  'type': 'array',
-                  'items': <String, dynamic>{'type': 'string'},
-                  'description': '候选能力ID，如 context.web_search。',
-                },
-                'contextScopeHint': <String, dynamic>{
-                  'type': 'object',
-                  'description': '页面与会话上下文锚点。',
-                },
-                'privacyProfile': <String, dynamic>{
-                  'type': 'string',
-                  'description': '隐私配置名。',
-                },
-                'providerHint': <String, dynamic>{
-                  'type': 'string',
-                  'description': '可选 provider 提示，如 brave/perplexity。',
-                },
-                'maxItems': <String, dynamic>{
-                  'type': 'integer',
-                  'description': '检索条数上限，默认 6。',
-                },
-              },
-              'required': <String>['query'],
-            },
-          },
-        };
-      case 'web_search':
-        return <String, dynamic>{
-          'type': 'function',
-          'function': <String, dynamic>{
-            'name': 'web_search',
-            'description': '网络检索最新信息。',
-            'parameters': <String, dynamic>{
-              'type': 'object',
-              'properties': <String, dynamic>{
-                'query': <String, dynamic>{'type': 'string'},
-                'provider': <String, dynamic>{'type': 'string'},
-                'count': <String, dynamic>{'type': 'integer'},
-              },
-              'required': <String>['query'],
-            },
-          },
-        };
-      case 'local_context':
-        return <String, dynamic>{
-          'type': 'function',
-          'function': <String, dynamic>{
-            'name': 'local_context',
-            'description': '获取设备本地上下文。',
-            'parameters': <String, dynamic>{
-              'type': 'object',
-              'properties': <String, dynamic>{},
-            },
-          },
-        };
-      case 'media_gallery':
-        return <String, dynamic>{
-          'type': 'function',
-          'function': <String, dynamic>{
-            'name': 'media_gallery',
-            'description': '访问设备媒体库。',
-            'parameters': <String, dynamic>{
-              'type': 'object',
-              'properties': <String, dynamic>{
-                'mode': <String, dynamic>{'type': 'string'},
-              },
-            },
-          },
-        };
-      case 'intent_bridge':
-        return <String, dynamic>{
-          'type': 'function',
-          'function': <String, dynamic>{
-            'name': 'intent_bridge',
-            'description': '执行系统 Intent 或 URL 跳转。',
-            'parameters': <String, dynamic>{
-              'type': 'object',
-              'properties': <String, dynamic>{
-                'target': <String, dynamic>{'type': 'string'},
-                'action': <String, dynamic>{'type': 'string'},
-              },
-            },
-          },
-        };
-      default:
-        return null;
-    }
   }
 }
 
@@ -452,6 +418,10 @@ class ModelOnlyFailureLlmProvider implements AssistantLlmProvider {
   Future<AssistantModelOutput> reason({
     required List<Map<String, String>> messages,
     required List<String> availableTools,
+    Map<String, dynamic> templateContext = const <String, dynamic>{},
+    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    String templateId = 'planner.global_plan',
+    String templateVersion = '',
     String sessionId = '',
     String runId = '',
     String traceId = '',
@@ -466,9 +436,15 @@ class ModelOnlyFailureLlmProvider implements AssistantLlmProvider {
 class SwitchableAssistantLlmProvider implements AssistantLlmProvider {
   SwitchableAssistantLlmProvider({
     required AssistantLlmProvider fallbackProvider,
+    this.templateRuntime,
+    this.toolMetadataRegistry,
+    this.plannerTemplateVersion = '',
   }) : _fallbackProvider = fallbackProvider;
 
   final AssistantLlmProvider _fallbackProvider;
+  final PromptTemplateRuntime? templateRuntime;
+  final ToolMetadataRegistry? toolMetadataRegistry;
+  final String plannerTemplateVersion;
   final Map<String, OpenAiCompatibleLlmProvider> _providers =
       <String, OpenAiCompatibleLlmProvider>{};
   final List<String> _registrationOrder = <String>[];
@@ -483,6 +459,9 @@ class SwitchableAssistantLlmProvider implements AssistantLlmProvider {
       modelId: config.modelId,
       baseUrl: config.baseUrl,
       apiKey: config.apiKey,
+      templateRuntime: templateRuntime,
+      toolMetadataRegistry: toolMetadataRegistry,
+      plannerTemplateVersion: plannerTemplateVersion,
     );
     if (!_registrationOrder.contains(config.modelRef)) {
       _registrationOrder.add(config.modelRef);
@@ -506,6 +485,10 @@ class SwitchableAssistantLlmProvider implements AssistantLlmProvider {
   Future<AssistantModelOutput> reason({
     required List<Map<String, String>> messages,
     required List<String> availableTools,
+    Map<String, dynamic> templateContext = const <String, dynamic>{},
+    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    String templateId = 'planner.global_plan',
+    String templateVersion = '',
     String sessionId = '',
     String runId = '',
     String traceId = '',
@@ -515,6 +498,10 @@ class SwitchableAssistantLlmProvider implements AssistantLlmProvider {
       return _fallbackProvider.reason(
         messages: messages,
         availableTools: availableTools,
+        templateContext: templateContext,
+        templateVariables: templateVariables,
+        templateId: templateId,
+        templateVersion: templateVersion,
         sessionId: sessionId,
         runId: runId,
         traceId: traceId,
@@ -525,6 +512,10 @@ class SwitchableAssistantLlmProvider implements AssistantLlmProvider {
       return _fallbackProvider.reason(
         messages: messages,
         availableTools: availableTools,
+        templateContext: templateContext,
+        templateVariables: templateVariables,
+        templateId: templateId,
+        templateVersion: templateVersion,
         sessionId: sessionId,
         runId: runId,
         traceId: traceId,
@@ -533,6 +524,10 @@ class SwitchableAssistantLlmProvider implements AssistantLlmProvider {
     final remoteResult = await remote.reason(
       messages: messages,
       availableTools: availableTools,
+      templateContext: templateContext,
+      templateVariables: templateVariables,
+      templateId: templateId,
+      templateVersion: templateVersion,
       sessionId: sessionId,
       runId: runId,
       traceId: traceId,
@@ -547,6 +542,10 @@ class SwitchableAssistantLlmProvider implements AssistantLlmProvider {
           final retry = await nextProvider.reason(
             messages: messages,
             availableTools: availableTools,
+            templateContext: templateContext,
+            templateVariables: templateVariables,
+            templateId: templateId,
+            templateVersion: templateVersion,
             sessionId: sessionId,
             runId: runId,
             traceId: traceId,
@@ -557,6 +556,10 @@ class SwitchableAssistantLlmProvider implements AssistantLlmProvider {
       return _fallbackProvider.reason(
         messages: messages,
         availableTools: availableTools,
+        templateContext: templateContext,
+        templateVariables: templateVariables,
+        templateId: templateId,
+        templateVersion: templateVersion,
         sessionId: sessionId,
         runId: runId,
         traceId: traceId,
@@ -585,6 +588,10 @@ class HeuristicLocalLlmProvider implements AssistantLlmProvider {
   Future<AssistantModelOutput> reason({
     required List<Map<String, String>> messages,
     required List<String> availableTools,
+    Map<String, dynamic> templateContext = const <String, dynamic>{},
+    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    String templateId = 'planner.global_plan',
+    String templateVersion = '',
     String sessionId = '',
     String runId = '',
     String traceId = '',
@@ -615,7 +622,7 @@ class HeuristicLocalLlmProvider implements AssistantLlmProvider {
     if (lastToolContent.startsWith('检索结果：')) {
       var body = lastToolContent.replaceFirst('检索结果：', '').trim();
       body = _dropGenericCapabilityLine(body);
-      if (_isWeatherQuery(query) || _looksLikeWeatherContent(body)) {
+      if (_isWeatherQuery(query)) {
         return AssistantModelOutput(
           text: _buildWeatherBriefReply(
             query: query,
@@ -624,11 +631,12 @@ class HeuristicLocalLlmProvider implements AssistantLlmProvider {
           ),
         );
       }
+      body = _filterEvidenceByCurrentIntent(query: query, body: body);
       if (body.trim().isNotEmpty) {
         return AssistantModelOutput(text: body.trim());
       }
       return AssistantModelOutput(
-        text: lastToolContent.replaceFirst('检索结果：', '').trim(),
+        text: '已完成检索，但当前结果与本轮问题相关性不足。请补充更具体条件（如城市、时间、目标岗位）后我继续查询。',
       );
     }
     if (retrievalToolName != null &&
@@ -818,6 +826,24 @@ class HeuristicLocalLlmProvider implements AssistantLlmProvider {
         lowered.contains('湿度') ||
         lowered.contains('风') ||
         lowered.contains('预报');
+  }
+
+  /// 当前 query 优先：历史记忆只做槽位补全，不能主导当前回答方向。
+  String _filterEvidenceByCurrentIntent({
+    required String query,
+    required String body,
+  }) {
+    if (body.trim().isEmpty) return body;
+    if (_isWeatherQuery(query)) return body;
+    final lines = body.split('\n');
+    final kept = <String>[];
+    for (final raw in lines) {
+      final line = raw.trim();
+      if (line.isEmpty) continue;
+      if (_looksLikeWeatherContent(line)) continue;
+      kept.add(raw);
+    }
+    return kept.join('\n').trim();
   }
 
   String _buildWeatherBriefReply({
