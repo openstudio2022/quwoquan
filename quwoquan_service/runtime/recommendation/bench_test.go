@@ -164,6 +164,81 @@ func BenchmarkHotPath_GetSessionState_Parallel(b *testing.B) {
 	}
 }
 
+func BenchmarkHotPath_GetSessionState_Pipeline(b *testing.B) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	for i := 0; i < 100; i++ {
+		hp.ProcessSignal(ctx, BehaviorSignal{
+			UserID: "bench", SessionID: "s1",
+			ContentID: fmt.Sprintf("c%d", i), Action: "click",
+			Tags: []string{fmt.Sprintf("tag%d", i%10)},
+		})
+	}
+
+	// Verify pipeline path is used
+	if _, ok := hp.redis.(RedisPipeliner); !ok {
+		b.Fatal("mock should implement RedisPipeliner")
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		hp.GetSessionState(ctx, "bench", "s1")
+	}
+}
+
+func BenchmarkPool_AcquireRelease(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		buf := acquireCandidates()
+		for j := 0; j < 200; j++ {
+			*buf = append(*buf, ContentCandidate{ContentID: fmt.Sprintf("c%d", j)})
+		}
+		releaseCandidates(buf)
+	}
+}
+
+func BenchmarkGetFeed_WithPool(b *testing.B) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	now := time.Now()
+	candidates := make([]ContentCandidate, 200)
+	for i := range candidates {
+		candidates[i] = ContentCandidate{
+			ContentID:   fmt.Sprintf("c%d", i),
+			ContentType: []string{"image", "video", "article"}[i%3],
+			AuthorID:    fmt.Sprintf("a%d", i%20),
+			Tags:        []string{fmt.Sprintf("tag%d", i%10), fmt.Sprintf("cat%d", i%5)},
+			PublishedAt: now.Add(-time.Duration(i) * time.Hour),
+			LikeCount:   int64(200 - i),
+			ViewCount:   int64(1000 - i*5),
+		}
+	}
+	source := &mockCandidateSource{candidates: candidates}
+
+	hp.ProcessSignal(ctx, BehaviorSignal{
+		UserID: "bench", SessionID: "s1", ContentID: "seed",
+		Action: "like", Tags: []string{"tag0", "tag1"},
+	})
+
+	cache := NewSessionCache(hp, 2*time.Second, 10000)
+	engine := NewEngine(cache, []CandidateSource{source}, WithExploreFraction(0))
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		engine.GetFeed(ctx, GetFeedRequest{
+			UserID:    "bench",
+			SessionID: "s1",
+			Limit:     20,
+		})
+	}
+}
+
 func BenchmarkSessionCache_GetSessionState(b *testing.B) {
 	redis := newMockRedis()
 	hp := NewHotPath(redis)

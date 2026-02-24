@@ -46,11 +46,14 @@
 - A7：消费 recommend_impact 事件和 recommend_feature 字段。✅ 通过
 - A8：热路径 + 引擎 + 模型集成 + 性能基准 均有测试。✅ 通过
 
+## 特性树子节点（L3）
+
+- **dual-channel-recommendation-engine**：双通道引擎（HotPath + Engine + 7 阶段管线），已基线完成。引擎通过 HTTP 调用**推荐平台**（L1 recommendation-platform）下的 **rec-model-service**（模型服务）完成 ML 打分；训练由 **rec-model-training** 独立负责，本节点不包含二者。
+
 ## 下一步优化方向
+- 实现 rec-model-training 与 rec-model-service 全链路（见特性树 **recommendation-platform** 下两 L3：rec-model-training、rec-model-service）
 - Redis Pipeline 替换并行 goroutine（进一步降低 RTT）
 - Bloom Filter 处理超大曝光集合
-- 实际 ML 模型服务部署 + gRPC transport
 - A/B 路由集成（按用户分组选择打分策略）
 - CTR/曝光/留存 metric dashboard
 - 内容 Embedding 生成 pipeline
-- 在线学习反馈闭环

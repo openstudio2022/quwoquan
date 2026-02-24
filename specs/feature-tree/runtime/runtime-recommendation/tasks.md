@@ -60,13 +60,32 @@
 - [x] 集成：Engine 接入 ModelScorer + FeatureProvider + PreRanker（WithScorer/WithFeatureProvider/WithPreRanker） → `engine.go`
 - [x] 测试：自定义 Scorer 注入 / CascadeScorer 容灾 / FeatureProvider 端到端 / RuleScorer 特征贡献 / PreRanker 过滤截断 → `engine_test.go`
 
+## R6 — 深度性能优化（✅ 已完成）
+
+- [x] 优化：Redis Pipeline 批量读（RedisPipeliner 可选接口，3 goroutine → 1 RTT pipeline） → `hotpath.go`
+- [x] 实现：PipelineOp / PipelineOpType 抽象（HGetAll + SMembers 混合管线） → `hotpath.go`
+- [x] 实现：RedisClientAdapter.PipelineRead（go-redis Pipeline 真实实现） → `redis_client.go`
+- [x] 优化：GetSessionState 自动探测 RedisPipeliner，优先管线路径降级并行 → `hotpath.go`
+- [x] 优化：sync.Pool 对象池化（candidatePool + scoredPool + feedItemPool） → `pool.go`
+- [x] 优化：Engine.parallelRecallInto 直接写入池化 buffer，消除中间切片分配 → `engine.go`
+- [x] 优化：GetFeed 中 recallBuf/filteredBuf 池化 + scoring 后释放 → `engine.go`
+- [x] 测试：Pipeline 一致性验证（PipelineVsParallel_Consistent） → `engine_test.go`
+- [x] 测试：Pool acquire/release 正确性 → `engine_test.go`
+- [x] 测试：Pipeline 基准 + Pool 基准 + GetFeed_WithPool 基准（共 3 项新增） → `bench_test.go`
+
+## R6 — 推荐平台训练与模型服务（🔲 特性树已拆为两个 L3，待实现）
+
+特性树已拆为 **recommendation-platform/rec-model-training** 与 **recommendation-platform/rec-model-service**；Go 引擎仅调用 rec-model-service。
+
+- [ ] **rec-model-training**：L4 training-pipeline、training-deployment（见 `recommendation-platform/rec-model-training/`）
+- [ ] **rec-model-service**：L4 inference-api、go-integration、inference-deployment（见 `recommendation-platform/rec-model-service/`）；就绪检查见 rec-model-service/readiness.md
+- [ ] L5 叶子任务见各 L4 目录下 tasks.md
+
 ## 下一步优化方向（🔲 待规划）
 
-- [ ] 优化：Redis Pipeline 批量读（替换 3 个并行 goroutine 为单 RTT pipeline）
 - [ ] 优化：Bloom Filter 替代 SMEMBERS 处理超大曝光集合
 - [ ] 实现：实际 ML 模型服务部署 + gRPC transport for ModelServiceClient
 - [ ] 实现：特征实时更新推送（FeatureStore 变更 → SessionCache 失效）
 - [ ] 实现：内容 Embedding 生成 pipeline（PostCreated → RemoteEmbeddingService → 存储）
 - [ ] 实现：在线学习反馈闭环（FeedbackRecorder → 训练数据 → 模型更新）
-- [ ] 优化：对象池化减少 GC 压力（sync.Pool for candidate slices）
 - [ ] 监控：推荐 CTR/曝光/留存 metric dashboard

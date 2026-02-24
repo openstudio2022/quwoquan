@@ -1,0 +1,31 @@
+# 训练样本：SampleJoiner 从 rec_learning_events 拼接生成，供训练管线消费
+version: 1
+read_model: TrainingSamples
+
+description: |
+  推荐训练样本集合。由 SampleJoiner 从 rec_learning_events 拼接 impression 与 engagement，
+  带 scenario、用户/物品/交叉特征快照、多目标标签。训练脚本读取生成 rec_datasets。
+
+storage_backend: mongodb
+collection: rec_training_samples
+
+producers:
+  - rec-model-service
+
+consumers:
+  - rec-model-service
+
+fields:
+  - { name: _id, type: ObjectId }
+  - { name: scenario, type: string }
+  - { name: userId, type: string }
+  - { name: targetId, type: string }
+  - { name: userFeatures, type: object }
+  - { name: itemFeatures, type: object }
+  - { name: contextFeatures, type: object }
+  - { name: labels, type: object, description: 多目标标签如 click, like, dwell_sec }
+  - { name: ts, type: timestamp }
+
+indexes:
+  - { name: idx_scenario_ts, keys: { scenario: 1, ts: -1 } }
+  - { name: idx_user_ts, keys: { userId: 1, ts: -1 } }

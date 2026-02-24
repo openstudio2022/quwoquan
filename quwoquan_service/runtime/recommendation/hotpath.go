@@ -21,6 +21,31 @@ type RedisClient interface {
 	Expire(ctx context.Context, key string, ttl time.Duration) error
 }
 
+// RedisPipeliner is optionally implemented by RedisClient adapters that
+// support pipelining multiple reads into a single RTT.
+// When HotPath detects this interface, GetSessionState sends all 3 reads
+// (HGetAll + 2× SMembers) in one pipeline instead of 3 parallel goroutines.
+type RedisPipeliner interface {
+	PipelineRead(ctx context.Context, ops []PipelineOp) error
+}
+
+// PipelineOpType identifies the Redis command within a pipeline batch.
+type PipelineOpType int
+
+const (
+	PipelineHGetAll  PipelineOpType = iota // result in Op.Hash
+	PipelineSMembers                       // result in Op.Set
+)
+
+// PipelineOp represents a single command in a pipeline batch.
+// Callers populate Type+Key before exec; the implementation fills Hash or Set.
+type PipelineOp struct {
+	Type PipelineOpType
+	Key  string
+	Hash map[string]string // populated after exec for PipelineHGetAll
+	Set  []string          // populated after exec for PipelineSMembers
+}
+
 // SessionReader reads session state for feed generation.
 // Implemented by HotPath, SessionCache, etc.
 type SessionReader interface {
@@ -158,10 +183,46 @@ func (h *HotPath) ProcessSignalBatch(ctx context.Context, signals []BehaviorSign
 }
 
 // GetSessionState returns the full session state for the recommendation engine.
-// Reads all 3 Redis keys in parallel (1 RTT instead of 3).
+// Prefers pipeline (single RTT) when the underlying RedisClient implements
+// RedisPipeliner; falls back to 3 parallel goroutines otherwise.
 func (h *HotPath) GetSessionState(ctx context.Context, userID, sessionID string) (*SessionState, error) {
 	sk := sessionKey(userID, sessionID)
 
+	if pipeliner, ok := h.redis.(RedisPipeliner); ok {
+		return h.getSessionStatePipeline(ctx, pipeliner, sk, userID, sessionID)
+	}
+	return h.getSessionStateParallel(ctx, sk, userID, sessionID)
+}
+
+// getSessionStatePipeline sends HGetAll + 2× SMembers in a single RTT.
+func (h *HotPath) getSessionStatePipeline(ctx context.Context, p RedisPipeliner, sk, userID, sessionID string) (*SessionState, error) {
+	ops := []PipelineOp{
+		{Type: PipelineHGetAll, Key: signalKeyPrefix + sk},
+		{Type: PipelineSMembers, Key: exposedKeyPrefix + sk},
+		{Type: PipelineSMembers, Key: negativeKeyPrefix + sk},
+	}
+	if err := p.PipelineRead(ctx, ops); err != nil {
+		return nil, err
+	}
+
+	tagWeights := make(map[string]float64, len(ops[0].Hash))
+	for k, v := range ops[0].Hash {
+		var f float64
+		fmt.Sscanf(v, "%f", &f)
+		tagWeights[k] = f
+	}
+
+	return &SessionState{
+		UserID:      userID,
+		SessionID:   sessionID,
+		TagWeights:  tagWeights,
+		ExposedIDs:  ops[1].Set,
+		NegativeIDs: ops[2].Set,
+	}, nil
+}
+
+// getSessionStateParallel reads 3 Redis keys via parallel goroutines (fallback).
+func (h *HotPath) getSessionStateParallel(ctx context.Context, sk, userID, sessionID string) (*SessionState, error) {
 	var (
 		tagWeights  map[string]float64
 		exposed     []string

@@ -1,0 +1,31 @@
+# 学习事件流：行为上报经 FeedbackRecorder → MongoSink 写入，供样本拼接与模型训练消费
+version: 1
+read_model: LearningEvents
+
+description: |
+  推荐学习事件集合。由 content-service（及可选其他业务服务）的 FeedbackRecorder 写入，
+  SampleJoiner 读取并拼接为 rec_training_samples。含曝光、点击、停留、点赞、收藏、负反馈等。
+
+storage_backend: mongodb
+collection: rec_learning_events
+
+producers:
+  - content-service
+
+consumers:
+  - rec-model-service
+
+fields:
+  - { name: _id, type: ObjectId }
+  - { name: userId, type: string }
+  - { name: sessionId, type: string }
+  - { name: scenario, type: string, description: 场景如 content_feed / circle_discovery }
+  - { name: eventType, type: string, description: impression / click / dwell / like / favorite / dislike / share / report }
+  - { name: targetId, type: string, description: 内容/圈子/用户 ID 等 }
+  - { name: targetType, type: string }
+  - { name: payload, type: object, description: 扩展 payload }
+  - { name: ts, type: timestamp }
+
+indexes:
+  - { name: idx_ts_user, keys: { ts: -1, userId: 1 } }
+  - { name: idx_scenario_ts, keys: { scenario: 1, ts: -1 } }

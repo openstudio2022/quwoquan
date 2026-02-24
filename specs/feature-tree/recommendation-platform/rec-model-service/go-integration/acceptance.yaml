@@ -1,0 +1,37 @@
+version: 1
+feature: "go-integration"
+level: "L4_detail"
+template: "A1-A8"
+tree_context:
+  feature_level: "L4_detail"
+  feature_path: "capability.recommendation-platform.component.rec-model-service.object.go-integration"
+  parent_path: "capability.recommendation-platform.component.rec-model-service"
+  acceptance_inherits_from: "capability.recommendation-platform"
+level_acceptance:
+  focus_groups:
+    - A1_functional
+    - A3_service_governance
+    - A7_contract_metadata_consistency
+    - A8_test_automation
+  notes: "Go 业务服务通过 HTTP 调用模型服务，契约一致，CascadeScorer 兜底。"
+global_acceptance:
+  A1_functional:
+    scenarios:
+      - given: "rec_model_service.enabled=true"
+        when: "content-service GetFeed"
+        then: "使用模型服务打分"
+      - given: "rec_model_service.enabled=false"
+        when: "content-service GetFeed"
+        then: "使用 RuleScorer"
+      - given: "模型服务超时或不可用"
+        when: "content-service GetFeed"
+        then: "CascadeScorer 回退 RuleScorer，请求成功"
+  A3_service_governance:
+    - "模型失败可降级，不影响业务可用性"
+  A7_contract_metadata_consistency:
+    - "ModelPredictRequest/Response 与 Python 端一致"
+  A8_test_automation:
+    - "HTTPModelServiceClient 与 CascadeScorer 有测试"
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"

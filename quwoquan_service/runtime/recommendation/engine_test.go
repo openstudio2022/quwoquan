@@ -84,6 +84,31 @@ func (m *mockRedisClient) HGetAll(_ context.Context, key string) (map[string]str
 }
 func (m *mockRedisClient) Expire(_ context.Context, _ string, _ time.Duration) error { return nil }
 
+// PipelineRead implements RedisPipeliner for single-RTT batch reads.
+func (m *mockRedisClient) PipelineRead(_ context.Context, ops []PipelineOp) error {
+	for i := range ops {
+		switch ops[i].Type {
+		case PipelineHGetAll:
+			if m.hashes[ops[i].Key] == nil {
+				ops[i].Hash = map[string]string{}
+			} else {
+				cp := make(map[string]string, len(m.hashes[ops[i].Key]))
+				for k, v := range m.hashes[ops[i].Key] {
+					cp[k] = v
+				}
+				ops[i].Hash = cp
+			}
+		case PipelineSMembers:
+			var result []string
+			for k := range m.sets[ops[i].Key] {
+				result = append(result, k)
+			}
+			ops[i].Set = result
+		}
+	}
+	return nil
+}
+
 func TestHotPath_ProcessSignal_UpdatesState(t *testing.T) {
 	redis := newMockRedis()
 	hp := NewHotPath(redis)
@@ -863,6 +888,152 @@ func (s *slowCandidateSource) Recall(ctx context.Context, _ RecallRequest) ([]Co
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+func TestHotPath_PipelinePath(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	// Verify mock implements RedisPipeliner
+	if _, ok := hp.redis.(RedisPipeliner); !ok {
+		t.Fatal("mockRedisClient should implement RedisPipeliner")
+	}
+
+	hp.ProcessSignal(ctx, BehaviorSignal{
+		UserID: "u1", SessionID: "s1", ContentID: "c1",
+		Action: "like", Tags: []string{"travel", "photo"},
+	})
+	hp.ProcessSignal(ctx, BehaviorSignal{
+		UserID: "u1", SessionID: "s1", ContentID: "c2",
+		Action: "dislike", Tags: []string{"spam"},
+	})
+
+	state, err := hp.GetSessionState(ctx, "u1", "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.TagWeights["travel"] <= 0 {
+		t.Error("travel tag should have positive weight")
+	}
+	if len(state.ExposedIDs) < 2 {
+		t.Errorf("expected at least 2 exposed IDs, got %d", len(state.ExposedIDs))
+	}
+	found := false
+	for _, id := range state.NegativeIDs {
+		if id == "c2" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("c2 should be in negative set")
+	}
+}
+
+func TestHotPath_PipelineVsParallel_Consistent(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	for i := 0; i < 20; i++ {
+		hp.ProcessSignal(ctx, BehaviorSignal{
+			UserID: "u1", SessionID: "s1",
+			ContentID: fmt.Sprintf("c%d", i), Action: "click",
+			Tags: []string{fmt.Sprintf("tag%d", i%5)},
+		})
+	}
+	hp.ProcessSignal(ctx, BehaviorSignal{
+		UserID: "u1", SessionID: "s1", ContentID: "bad1", Action: "dislike",
+	})
+
+	// Pipeline path
+	statePipeline, err := hp.GetSessionState(ctx, "u1", "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Force parallel path by wrapping in a non-pipeliner reader
+	parallelHP := &nonPipelinerHotPath{hp: hp}
+	stateParallel, err := parallelHP.GetSessionState(ctx, "u1", "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(statePipeline.ExposedIDs) != len(stateParallel.ExposedIDs) {
+		t.Errorf("exposed count mismatch: pipeline=%d parallel=%d",
+			len(statePipeline.ExposedIDs), len(stateParallel.ExposedIDs))
+	}
+	if len(statePipeline.NegativeIDs) != len(stateParallel.NegativeIDs) {
+		t.Errorf("negative count mismatch: pipeline=%d parallel=%d",
+			len(statePipeline.NegativeIDs), len(stateParallel.NegativeIDs))
+	}
+	if len(statePipeline.TagWeights) != len(stateParallel.TagWeights) {
+		t.Errorf("tag weights count mismatch: pipeline=%d parallel=%d",
+			len(statePipeline.TagWeights), len(stateParallel.TagWeights))
+	}
+}
+
+// nonPipelinerHotPath wraps HotPath with a redis that does NOT implement RedisPipeliner.
+type nonPipelinerHotPath struct {
+	hp *HotPath
+}
+
+func (n *nonPipelinerHotPath) GetSessionState(ctx context.Context, userID, sessionID string) (*SessionState, error) {
+	wrapped := &nonPipelinerRedis{inner: n.hp.redis}
+	tmp := NewHotPath(wrapped)
+	return tmp.GetSessionState(ctx, userID, sessionID)
+}
+
+type nonPipelinerRedis struct {
+	inner RedisClient
+}
+
+func (r *nonPipelinerRedis) Get(ctx context.Context, key string) (string, error) {
+	return r.inner.Get(ctx, key)
+}
+func (r *nonPipelinerRedis) Set(ctx context.Context, key, value string, ttl time.Duration) error {
+	return r.inner.Set(ctx, key, value, ttl)
+}
+func (r *nonPipelinerRedis) Del(ctx context.Context, keys ...string) error {
+	return r.inner.Del(ctx, keys...)
+}
+func (r *nonPipelinerRedis) SAdd(ctx context.Context, key string, members ...string) error {
+	return r.inner.SAdd(ctx, key, members...)
+}
+func (r *nonPipelinerRedis) SMembers(ctx context.Context, key string) ([]string, error) {
+	return r.inner.SMembers(ctx, key)
+}
+func (r *nonPipelinerRedis) SIsMember(ctx context.Context, key, member string) (bool, error) {
+	return r.inner.SIsMember(ctx, key, member)
+}
+func (r *nonPipelinerRedis) HIncrByFloat(ctx context.Context, key, field string, incr float64) error {
+	return r.inner.HIncrByFloat(ctx, key, field, incr)
+}
+func (r *nonPipelinerRedis) HGetAll(ctx context.Context, key string) (map[string]string, error) {
+	return r.inner.HGetAll(ctx, key)
+}
+func (r *nonPipelinerRedis) Expire(ctx context.Context, key string, ttl time.Duration) error {
+	return r.inner.Expire(ctx, key, ttl)
+}
+
+func TestPool_AcquireRelease(t *testing.T) {
+	buf := acquireCandidates()
+	if buf == nil {
+		t.Fatal("acquireCandidates should return non-nil")
+	}
+	if len(*buf) != 0 {
+		t.Errorf("expected empty slice, got len %d", len(*buf))
+	}
+
+	*buf = append(*buf, ContentCandidate{ContentID: "c1"})
+	releaseCandidates(buf)
+
+	// Acquire again — should get a reset slice
+	buf2 := acquireCandidates()
+	if len(*buf2) != 0 {
+		t.Errorf("pool-returned slice should be reset, got len %d", len(*buf2))
+	}
+	releaseCandidates(buf2)
 }
 
 func TestEngine_ConcurrentFeedRequests(t *testing.T) {

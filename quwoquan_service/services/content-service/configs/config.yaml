@@ -6,5 +6,10 @@ redis:
   addr: ""
   password: ""
   db: 0
+# rec-model-service: optional ML scoring; when disabled or unreachable, CascadeScorer falls back to RuleScorer
+rec_model_service:
+  url: ""           # e.g. http://localhost:18090
+  timeout_ms: 50
+  enabled: false
 metadata:
   dir: "../../../contracts/metadata"

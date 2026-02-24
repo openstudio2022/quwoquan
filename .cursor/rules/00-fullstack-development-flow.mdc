@@ -24,6 +24,7 @@ Plan(G0) → Create(G1) → Implement(G2) → Verify(G3) → Submit(G4)
 2. 确认涉及的业务对象（查 `contracts/metadata/`）
 3. 确认涉及的扩展场景（S01~S20）
 4. 生成的任务拆解必须遵循：**metadata → codegen → 业务逻辑 → 测试**
+5. 特性树节点仅使用四类文档：**spec.md、design.md、tasks.md、acceptance.yaml**；禁止在节点下生成 analysis-*.md、README、独立规划书等，详见 `specs/feature-tree/00_FEATURE_TREE_STANDARD.md`。
 
 禁止跳过 Plan 直接编码。禁止不经 metadata 直接创建 struct/DTO。
 

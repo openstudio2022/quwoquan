@@ -1,0 +1,26 @@
+version: 1
+feature: "recommendation-platform"
+level: "L1"
+template: "A1-A8"
+focus_groups:
+  - A1_functional
+  - A2_performance_reliability
+  - A7_contract_metadata_consistency
+  - A8_test_automation
+notes: "L1 平台验收：两 L3 边界清晰、推理契约与延迟/兜底、训练与推理各自测试与就绪检查。"
+level_acceptance:
+  A1_functional:
+    scenarios:
+      - given: "rec-model-training 与 rec-model-service 已按 tree 部署"
+        when: "训练产出写入 ModelRegistry/OSS，推理服务加载模型"
+        then: "POST /v1/score 可返回正确 scores，无训练职责混入推理服务"
+  A2_performance_reliability:
+    - "rec-model-service 推理延迟满足 Go 侧预算（如 30–50ms）"
+    - "推理超时或不可用时 Go CascadeScorer 回退 RuleScorer"
+  A7_contract_metadata_consistency:
+    - "contracts/metadata/rec_model_service、OpenAPI、endpoint_catalog 与 rec-model-service 一致"
+  A8_test_automation:
+    - "训练管线与推理 API 各有对应测试；rec-model-service 就绪检查见 readiness.md"
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"

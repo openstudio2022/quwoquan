@@ -28,10 +28,16 @@ type config struct {
 		Password string `yaml:"password"`
 		DB       int    `yaml:"db"`
 	} `yaml:"redis"`
+	RecModelService struct {
+		URL       string `yaml:"url"`
+		TimeoutMs int    `yaml:"timeout_ms"`
+		Enabled   bool   `yaml:"enabled"`
+	} `yaml:"rec_model_service"`
 }
 
 func main() {
 	cfg := loadConfig("configs/config.yaml")
+	applyRecModelServiceEnv(&cfg)
 	addr := getenvOrDefault("CONTENT_SERVICE_ADDR", cfg.Service.HTTP.Addr)
 	if addr == "" {
 		addr = ":18080"
@@ -51,10 +57,25 @@ func main() {
 
 	store := persistence.NewPostStore(recinfra.DefaultSeedPosts())
 	source := recinfra.NewPostRepositorySource(store)
-	engine := rtrec.NewEngine(sessionCache, []rtrec.CandidateSource{source},
-		rtrec.WithRecallTimeout(150*time.Millisecond),
+
+	opts := []rtrec.EngineOption{
+		rtrec.WithRecallTimeout(150 * time.Millisecond),
 		rtrec.WithLogger(logger),
-	)
+	}
+	if cfg.RecModelService.Enabled && cfg.RecModelService.URL != "" {
+		timeout := time.Duration(cfg.RecModelService.TimeoutMs) * time.Millisecond
+		if timeout <= 0 {
+			timeout = 50 * time.Millisecond
+		}
+		client := recinfra.NewHTTPModelServiceClient(cfg.RecModelService.URL, timeout)
+		remoteScorer := rtrec.NewRemoteModelScorer(client, "content_feed")
+		ruleScorer := &rtrec.RuleScorer{}
+		cascade := rtrec.NewCascadeScorer(remoteScorer, ruleScorer, timeout)
+		cascade.Logger = logger
+		opts = append(opts, rtrec.WithScorer(cascade))
+		log.Printf("content-service rec-model-service enabled url=%s timeout=%v", cfg.RecModelService.URL, timeout)
+	}
+	engine := rtrec.NewEngine(sessionCache, []rtrec.CandidateSource{source}, opts...)
 	feedService := application.NewFeedService(engine, source)
 	postService := application.NewPostService(store,
 		application.WithSignalProcessor(bufferedWriter),
@@ -90,6 +111,21 @@ func loadConfig(path string) config {
 		log.Printf("content-service config parse failed: %v", err)
 	}
 	return cfg
+}
+
+// applyRecModelServiceEnv overrides rec_model_service from env (e.g. Docker: REC_MODEL_SERVICE_URL=http://rec-model-service:8000).
+func applyRecModelServiceEnv(cfg *config) {
+	if v := os.Getenv("REC_MODEL_SERVICE_URL"); v != "" {
+		cfg.RecModelService.URL = v
+	}
+	if v := os.Getenv("REC_MODEL_SERVICE_ENABLED"); v == "true" || v == "1" {
+		cfg.RecModelService.Enabled = true
+	}
+	if v := os.Getenv("REC_MODEL_SERVICE_TIMEOUT_MS"); v != "" {
+		if ms, err := strconv.Atoi(v); err == nil && ms > 0 {
+			cfg.RecModelService.TimeoutMs = ms
+		}
+	}
 }
 
 func buildRedisClient(cfg config) rtrec.RedisClient {

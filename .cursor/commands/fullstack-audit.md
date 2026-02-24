@@ -29,6 +29,7 @@ description: 端云全栈一致性审计（语义 + 结构 + metadata + ArchUnit
 │    - Migration ↔ storage.yaml               │
 ├────────────────────────────────────────────┤
 │ 4. 特性树一致性                              │
+│    - 四类文档：spec/design/tasks/acceptance（见 00_FEATURE_TREE_STANDARD.md） │
 │    - tree.yaml ↔ 目录结构                    │
 │    - acceptance.yaml 完整性                  │
 └────────────────────────────────────────────┘

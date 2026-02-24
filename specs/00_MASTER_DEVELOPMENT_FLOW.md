@@ -53,7 +53,7 @@
 **入口**：`/opsx-ff` 或 `/qwq-extend`
 
 **AI Agent 必须做的事**：
-1. 创建/更新特性目录（`acceptance.yaml` + `traceability.yaml` + `tasks.md`）
+1. 创建/更新特性目录，**仅使用四类文档**：`spec.md`、`design.md`、`tasks.md`、`acceptance.yaml`；禁止在节点下生成 analysis-*.md、README、独立规划书等（详见 `specs/feature-tree/00_FEATURE_TREE_STANDARD.md`）。**design 须遵循设计原则**：业界最佳实践与标杆对比、多备选方案对比、选定最优或可演进到最优；若采用轻量方案，design 与 tasks 中必须写明未来演进与遗留带规划任务。
 2. 如需新建业务对象 → 执行 `/qwq-extend new-aggregate|entity|service`
 3. 如需扩展已有对象 → 执行 `/qwq-extend add-field|capability|event|...`
 4. 更新 metadata YAML（5 文件一组）
@@ -62,9 +62,11 @@
 **自动卡点 G1**：
 ```bash
 # /opsx-ff 和 /qwq-extend 命令执行完毕后自动运行：
-make verify                    # metadata 内部一致性
-make codegen                   # 从 metadata 生成骨架代码
+make verify-metadata           # 或 make verify：metadata 内部一致性（quwoquan_service 当前为 verify-metadata）
+make codegen                   # 从 metadata 生成 Go 骨架代码
 make codegen-app               # 从 metadata 生成端侧代码
+# 若涉及 rec-model-service（推荐平台下模型服务，Python）：
+make codegen-rec-model-python  # 生成 Pydantic 模型与 FastAPI 路由骨架至 services/rec-model-service/generated
 ```
 失败 → 停止，输出错误 + 修复建议，修复后重新执行。
 
@@ -312,7 +314,7 @@ quwoquan/
 │   ├── runtime_framework_design.md     # runtime 框架设计（附录）
 │   ├── runtime_gap_analysis_and_plan.md # runtime 开发计划（附录）
 │   ├── runtime_extension_catalog.md    # 扩展场景详解（附录）
-│   └── feature-tree/                   # 特性树
+│   └── feature-tree/                   # 特性树（四类文档标准见 00_FEATURE_TREE_STANDARD.md）
 │
 ├── quwoquan_service/
 │   ├── runtime/                        # 横切 runtime
@@ -334,4 +336,5 @@ quwoquan/
 | runtime 各模块的 Gap 和开发任务 | `specs/runtime_gap_analysis_and_plan.md` |
 | 20 个扩展场景的详细步骤 | `specs/runtime_extension_catalog.md` |
 | 特性树结构 | `specs/feature-tree/` |
+| **特性树文档标准（四类文档）** | `specs/feature-tree/00_FEATURE_TREE_STANDARD.md` |
 | 元数据目录结构 | `contracts/metadata/DESIGN.md` |

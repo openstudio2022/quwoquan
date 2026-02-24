@@ -59,3 +59,10 @@ entities:
   - name: ExperimentBucket
     domain: ops
     service: content-service
+  # 推荐模型服务 API 契约实体（rec-model-service 无聚合根，仅 DTO）
+  - name: ModelScoreRequest
+    domain: recommendation
+    service: rec-model-service
+  - name: ModelScoreResponse
+    domain: recommendation
+    service: rec-model-service

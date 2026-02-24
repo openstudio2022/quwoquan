@@ -1,0 +1,76 @@
+# 推荐模型服务 API 请求/响应 DTO（与 runtime/recommendation/scorer.go ModelPredictRequest/ModelPredictResponse 对齐）
+version: 1
+# 无聚合根，仅定义 API 契约用实体
+
+entities:
+  ModelScoreRequest:
+    description: 打分请求（多场景：content_feed / circle_discovery / friend_suggestion）
+    fields:
+      - name: scenario
+        type: string
+        constraints: [NOT_NULL]
+        description: 场景标识，如 content_feed / circle_discovery / friend_suggestion
+      - name: userId
+        type: string
+        constraints: [NOT_NULL]
+      - name: sessionId
+        type: string
+        constraints: [NOT_NULL]
+      - name: userFeatures
+        type: object
+        constraints: [NULLABLE]
+        description: 用户侧特征（与 UserFeatureVector 对齐）
+      - name: sessionSignals
+        type: object
+        constraints: [NULLABLE]
+        description: 会话内实时信号（与 SessionState 对齐）
+      - name: candidates
+        type: "[]CandidateInput"
+        constraints: [NOT_NULL]
+      - name: context
+        type: object
+        constraints: [NULLABLE]
+        description: 可选上下文（设备/位置等）
+
+  CandidateInput:
+    description: 候选条目特征（请求中用）
+    fields:
+      - name: contentId
+        type: string
+      - name: contentType
+        type: string
+      - name: authorId
+        type: string
+      - name: tags
+        type: "[]string"
+      - name: ageHours
+        type: float64
+      - name: viewCount
+        type: int64
+      - name: likeCount
+        type: int64
+      - name: commentCount
+        type: int64
+      - name: shareCount
+        type: int64
+      - name: recallPath
+        type: string
+
+  ModelScoreResponse:
+    description: 打分响应
+    fields:
+      - name: scores
+        type: "[]CandidateScore"
+        constraints: [NOT_NULL]
+
+  CandidateScore:
+    description: 单条候选得分
+    fields:
+      - name: contentId
+        type: string
+      - name: score
+        type: float64
+      - name: detail
+        type: object
+        constraints: [NULLABLE]
+        description: 可解释性字段贡献（如 tagRelevance, authorAffinity）

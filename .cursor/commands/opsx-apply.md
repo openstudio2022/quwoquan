@@ -10,13 +10,14 @@ description: 实施特性（逐 task 执行 + 每 task 自动 G2 卡点）
 ## 前置条件
 
 - `/opsx-ff` 已完成（G0 + G1 已通过）
+- 目标节点已具备四类文档：`spec.md`、`design.md`、`tasks.md`、`acceptance.yaml`（见 `specs/feature-tree/00_FEATURE_TREE_STANDARD.md`）
 - `tasks.md` 已就绪
 
 ## 步骤
 
 ### 1. 加载 tasks
 
-读取目标特性的 `tasks.md`，按顺序逐项执行。
+读取目标特性的 `tasks.md`，按顺序逐项执行。实现须符合 `spec.md` 与 `design.md`。
 
 **强制开发顺序**：
 ```

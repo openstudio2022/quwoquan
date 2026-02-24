@@ -1,0 +1,4 @@
+version: 1
+# 推荐模型服务无独立存储；读写 rec_learning_events / rec_training_samples / rec_model_registry 见 _projections/
+collections: {}
+tables: {}

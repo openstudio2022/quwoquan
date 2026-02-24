@@ -217,7 +217,9 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 
 	// Stage 2: Parallel recall from all sources
 	recallStart := time.Now()
-	allCandidates := e.parallelRecall(ctx, req, session)
+	recallBuf := acquireCandidates()
+	e.parallelRecallInto(ctx, req, session, recallBuf)
+	allCandidates := *recallBuf
 	recallLatency := time.Since(recallStart)
 
 	// Stage 3: Pre-rank (lightweight filter before expensive scoring)
@@ -226,15 +228,16 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	// Stage 4: Filter exposed + negative + dedup
 	exposedSet := toSet(session.ExposedIDs)
 	negativeSet := toSet(session.NegativeIDs)
-	filtered := make([]ContentCandidate, 0, len(preranked)/2)
+	filteredBuf := acquireCandidates()
 	seen := make(map[string]bool, len(preranked))
 	for _, c := range preranked {
 		if exposedSet[c.ContentID] || negativeSet[c.ContentID] || seen[c.ContentID] {
 			continue
 		}
 		seen[c.ContentID] = true
-		filtered = append(filtered, c)
+		*filteredBuf = append(*filteredBuf, c)
 	}
+	filtered := *filteredBuf
 
 	// Stage 5: Feature assembly (user features from feature store, with timeout)
 	var userFeatures *UserFeatureVector
@@ -266,6 +269,10 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	sort.Slice(scored, func(i, j int) bool {
 		return scored[i].Score > scored[j].Score
 	})
+
+	// Release intermediate pooled buffers after scoring
+	releaseCandidates(recallBuf)
+	releaseCandidates(filteredBuf)
 
 	// Stage 7: Rerank (diversity + author dedup)
 	rerankStart := time.Now()
@@ -330,8 +337,9 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	return resp, nil
 }
 
-// parallelRecall fans out to all sources concurrently with per-source timeout.
-func (e *Engine) parallelRecall(ctx context.Context, req GetFeedRequest, session *SessionState) []ContentCandidate {
+// parallelRecallInto fans out to all sources concurrently with per-source timeout,
+// appending results into the provided pooled buffer.
+func (e *Engine) parallelRecallInto(ctx context.Context, req GetFeedRequest, session *SessionState, out *[]ContentCandidate) {
 	interestTags := topNTags(session.TagWeights, 10)
 	recallReq := RecallRequest{
 		FeedType: req.FeedType,
@@ -350,7 +358,6 @@ func (e *Engine) parallelRecall(ctx context.Context, req GetFeedRequest, session
 	}
 
 	if len(e.sources) <= 1 {
-		var all []ContentCandidate
 		for _, src := range e.sources {
 			candidates, err := src.Recall(recallCtx, recallReq)
 			if err != nil {
@@ -359,9 +366,9 @@ func (e *Engine) parallelRecall(ctx context.Context, req GetFeedRequest, session
 				}
 				continue
 			}
-			all = append(all, candidates...)
+			*out = append(*out, candidates...)
 		}
-		return all
+		return
 	}
 
 	type result struct {
@@ -385,15 +392,9 @@ func (e *Engine) parallelRecall(ctx context.Context, req GetFeedRequest, session
 	}
 	wg.Wait()
 
-	totalCap := 0
 	for _, r := range results {
-		totalCap += len(r.candidates)
+		*out = append(*out, r.candidates...)
 	}
-	all := make([]ContentCandidate, 0, totalCap)
-	for _, r := range results {
-		all = append(all, r.candidates...)
-	}
-	return all
 }
 
 // rerank applies diversity constraints: content type variety, author dedup, exploration injection.

@@ -1,0 +1,30 @@
+# 模型注册表：训练/导出写入版本元信息，推理服务按 production 标记加载
+version: 1
+read_model: ModelRegistry
+
+description: |
+  推荐模型版本元信息。训练管线写入版本、scenario、指标、存储路径等；
+  模型文件存 OSS/TOS，推理服务按 production 标记热加载。
+
+storage_backend: mongodb
+collection: rec_model_registry
+
+producers:
+  - rec-model-service
+
+consumers:
+  - rec-model-service
+
+fields:
+  - { name: _id, type: ObjectId }
+  - { name: scenario, type: string }
+  - { name: version, type: string }
+  - { name: metrics, type: object, description: 评估指标 }
+  - { name: artifactPath, type: string, description: OSS/TOS 路径 }
+  - { name: production, type: bool, description: 是否当前生产流量 }
+  - { name: createdAt, type: timestamp }
+  - { name: updatedAt, type: timestamp }
+
+indexes:
+  - { name: idx_scenario_production, keys: { scenario: 1, production: 1 } }
+  - { name: idx_scenario_version, keys: { scenario: 1, version: 1 }, unique: true }

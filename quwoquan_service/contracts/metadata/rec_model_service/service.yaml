@@ -1,0 +1,35 @@
+# 推荐模型工程服务（Python）：训练管线 + 多场景推理 API
+# 无聚合根，仅定义 API 契约与消费者，供端云一致性与门禁校验使用。
+version: 1
+service:
+  name: rec-model-service
+  domain: recommendation
+  owner: ml-platform
+  description: 推荐模型训练与多场景推理（content_feed / circle_discovery / friend_suggestion），为 content-service 等业务服务提供统一打分能力
+
+api_routes:
+  - method: POST
+    path: /v1/score
+    operation: Score
+    description: 多场景推荐打分，请求体含 scenario、userId、sessionId、userFeatures、sessionSignals、candidates、context
+    request_entity: ModelScoreRequest
+    response_entity: ModelScoreResponse
+
+  - method: GET
+    path: /health
+    operation: Health
+    description: 健康检查
+
+consumers:
+  - name: content-service
+    capabilities: [score]
+    scenario_default: content_feed
+  - name: circle-service
+    capabilities: [score]
+    scenario_default: circle_discovery
+  - name: user-service
+    capabilities: [score]
+    scenario_default: friend_suggestion
+
+# 请求/响应与 runtime/recommendation/scorer.go ModelPredictRequest/ModelPredictResponse 对齐
+# 详见 contracts/openapi/rec-model-service.v1.yaml

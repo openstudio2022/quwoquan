@@ -9,7 +9,7 @@ description: 探索模式（Plan 阶段 + 自动 G0 约束）
 
 探索模式：思考、分析、澄清需求。不写实现代码。
 
-**IMPORTANT: Explore mode is for thinking, not implementing.** You may read files, search code, and investigate the codebase, but you must NEVER write code or implement features. If the user asks you to implement something, remind them to exit explore mode first (use `/opsx-ff` or `/qwq-extend`). You MAY create specs/proposals if the user asks.
+**IMPORTANT: Explore mode is for thinking, not implementing.** You may read files, search code, and investigate the codebase, but you must NEVER write code or implement features. If the user asks you to implement something, remind them to exit explore mode first (use `/opsx-ff` or `/qwq-extend`). If you capture conclusions or design decisions, write them into the target feature node's **spec.md / design.md / tasks.md** only — do not create standalone analysis or planning documents (see `specs/feature-tree/00_FEATURE_TREE_STANDARD.md`).
 
 **自动 G0 约束**：在任何探索开始前，自动加载以下上下文：
 1. 查 `specs/feature-tree/tree_index.yaml` 确认需求所属节点

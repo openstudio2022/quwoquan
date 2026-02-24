@@ -11,8 +11,9 @@ description: 归档特性（自动 G3 全量门禁 + 归档）
 
 ### 1. 完成度检查
 
-1) 校验 `tasks.md` 所有任务已标记完成
-2) 校验 `acceptance.yaml` A1~A8 均已映射到自动化
+1) 确认目标节点具备四类文档：`spec.md`、`design.md`、`tasks.md`、`acceptance.yaml`（标准见 `specs/feature-tree/00_FEATURE_TREE_STANDARD.md`）
+2) 校验 `tasks.md` 所有任务已标记完成（含规划任务可保留未勾选）
+3) 校验 `acceptance.yaml` A1~A8 均已映射到自动化
 
 ### 2. 自动 G3 卡点：全量门禁
 

@@ -1,0 +1,18 @@
+# feature_registry: shared with rec-model-service inference.
+# Align field names and types with ModelScoreRequest / CandidateInput.
+version: 1
+scenarios:
+  content_feed:
+    user_features: []   # extend when UserFeatureVector fields are formalized
+    item_features:
+      - contentId
+      - contentType
+      - authorId
+      - tags
+      - ageHours
+      - viewCount
+      - likeCount
+      - commentCount
+      - shareCount
+      - recallPath
+    context_features: []

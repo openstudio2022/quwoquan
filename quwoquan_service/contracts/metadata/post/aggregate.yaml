@@ -3,7 +3,8 @@ domain: content
 aggregate_root: Post
 
 description: |
-  内容聚合。图片/视频/微趣/文章四种内容类型统一建模。
+  内容聚合。图片/视频/微趣/文章四种内容类型统一建模（contentType 判别，通用框架 + 按类型扩展）。
+  设计详见 specs/feature-tree/discovery-content/content-type-framework/。
   全部实体 MongoDB 存储，支撑高并发读写和水平扩展。
   热数据 + 互动状态走 Redis 缓存，热点计数 Redis 原子递增后异步回写。
 

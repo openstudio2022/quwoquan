@@ -726,6 +726,13 @@ features:
       status: specified
       tags: []
       children:
+        - id: content-type-framework
+          name: content-type-framework
+          level: L2_feature
+          path: ../specs/feature-tree/discovery-content/content-type-framework
+          domain: ""
+          status: specified
+          tags: []
         - id: feed-orchestration-recommendation
           name: feed-orchestration-recommendation
           level: L2_feature
@@ -2214,6 +2221,97 @@ features:
                       domain: ""
                       status: specified
                       tags: []
+    - id: recommendation-platform
+      name: recommendation-platform
+      level: L1_domain
+      path: ../specs/feature-tree/recommendation-platform
+      domain: ""
+      status: specified
+      tags: []
+      children:
+        - id: rec-model-training
+          name: rec-model-training
+          level: L3_component
+          path: ../specs/feature-tree/recommendation-platform/rec-model-training
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: training-pipeline
+              name: training-pipeline
+              level: L4_detail
+              path: ../specs/feature-tree/recommendation-platform/rec-model-training/training-pipeline
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: sample-feature-train-registry
+                  name: sample-feature-train-registry
+                  level: L5_leaf
+                  path: ../specs/feature-tree/recommendation-platform/rec-model-training/training-pipeline/sample-feature-train-registry
+                  domain: ""
+                  status: specified
+                  tags: []
+            - id: training-deployment
+              name: training-deployment
+              level: L4_detail
+              path: ../specs/feature-tree/recommendation-platform/rec-model-training/training-deployment
+              domain: ""
+              status: specified
+              tags: []
+        - id: rec-model-service
+          name: rec-model-service
+          level: L3_component
+          path: ../specs/feature-tree/recommendation-platform/rec-model-service
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: inference-api
+              name: inference-api
+              level: L4_detail
+              path: ../specs/feature-tree/recommendation-platform/rec-model-service/inference-api
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: scenario-router-and-models
+                  name: scenario-router-and-models
+                  level: L5_leaf
+                  path: ../specs/feature-tree/recommendation-platform/rec-model-service/inference-api/scenario-router-and-models
+                  domain: ""
+                  status: specified
+                  tags: []
+            - id: go-integration
+              name: go-integration
+              level: L4_detail
+              path: ../specs/feature-tree/recommendation-platform/rec-model-service/go-integration
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: http-contract-and-client
+                  name: http-contract-and-client
+                  level: L5_leaf
+                  path: ../specs/feature-tree/recommendation-platform/rec-model-service/go-integration/http-contract-and-client
+                  domain: ""
+                  status: specified
+                  tags: []
+            - id: inference-deployment
+              name: inference-deployment
+              level: L4_detail
+              path: ../specs/feature-tree/recommendation-platform/rec-model-service/inference-deployment
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: docker-and-cloud
+                  name: docker-and-cloud
+                  level: L5_leaf
+                  path: ../specs/feature-tree/recommendation-platform/rec-model-service/inference-deployment/docker-and-cloud
+                  domain: ""
+                  status: specified
+                  tags: []
     - id: user-identity-profile-relationship
       name: user-identity-profile-relationship
       level: L1_domain

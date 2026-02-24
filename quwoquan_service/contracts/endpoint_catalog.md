@@ -91,7 +91,18 @@
 
 ---
 
-## 7. 关键接口错误归因（contracts-first）
+## 7. Recommendation（推荐模型服务 rec-model-service）
+
+推荐平台下模型服务（推理），常驻 POST /v1/score；训练工程 rec-model-training 无对外 HTTP endpoint。
+
+| endpoint | method | path | 说明 |
+|---|---|---|---|
+| `recommendation.score.predict` | POST | `/v1/score` | 多场景推荐打分（content_feed / circle_discovery / friend_suggestion） |
+| `recommendation.health` | GET | `/health` | 健康检查 |
+
+---
+
+## 8. 关键接口错误归因（contracts-first）
 
 用于确保 `endpoint -> code(module/kind/reason)` 可机检，避免服务自定义漂移。以下为关键接口的最小错误集合：
 
@@ -103,6 +114,7 @@
 | `user.auth.login` | `USER.USER.unauthorized` / `USER.USER.rate_limited` / `USER.SYSTEM.internal_error` |
 | `ops.events.ingest` | `OPS.USER.invalid_argument` / `OPS.MIDDLEWARE.unavailable` / `OPS.SYSTEM.internal_error` |
 | `assistant.run.create` | `ASSISTANT.USER.invalid_argument` / `ASSISTANT.NETWORK.timeout` / `ASSISTANT.SYSTEM.internal_error` |
+| `recommendation.score.predict` | `RECOMMENDATION.USER.invalid_argument` / `RECOMMENDATION.NETWORK.timeout` / `RECOMMENDATION.SYSTEM.internal_error` |
 
 约束：
 

@@ -7,6 +7,8 @@ import (
 	"time"
 
 	redis "github.com/redis/go-redis/v9"
+
+	rtrec "quwoquan_service/runtime/recommendation"
 )
 
 type RedisClientAdapter struct {
@@ -91,6 +93,57 @@ func (r *RedisClientAdapter) HGetAll(ctx context.Context, key string) (map[strin
 
 func (r *RedisClientAdapter) Expire(ctx context.Context, key string, ttl time.Duration) error {
 	return r.client.Expire(ctx, key, ttl).Err()
+}
+
+// PipelineRead implements recommendation.RedisPipeliner — sends all ops in
+// a single Redis pipeline RTT. Used by HotPath.GetSessionState to replace
+// 3 parallel goroutines with 1 pipeline round-trip.
+func (r *RedisClientAdapter) PipelineRead(ctx context.Context, ops []rtrec.PipelineOp) error {
+	pipe := r.client.Pipeline()
+
+	type pendingHash struct {
+		idx int
+		cmd *redis.MapStringStringCmd
+	}
+	type pendingSet struct {
+		idx int
+		cmd *redis.StringSliceCmd
+	}
+
+	hashes := make([]pendingHash, 0, len(ops))
+	sets := make([]pendingSet, 0, len(ops))
+
+	for i, op := range ops {
+		switch op.Type {
+		case rtrec.PipelineHGetAll:
+			cmd := pipe.HGetAll(ctx, op.Key)
+			hashes = append(hashes, pendingHash{idx: i, cmd: cmd})
+		case rtrec.PipelineSMembers:
+			cmd := pipe.SMembers(ctx, op.Key)
+			sets = append(sets, pendingSet{idx: i, cmd: cmd})
+		}
+	}
+
+	if _, err := pipe.Exec(ctx); err != nil && err != redis.Nil {
+		return err
+	}
+
+	for _, h := range hashes {
+		val, err := h.cmd.Result()
+		if err != nil && err != redis.Nil {
+			return err
+		}
+		ops[h.idx].Hash = val
+	}
+	for _, s := range sets {
+		val, err := s.cmd.Result()
+		if err != nil && err != redis.Nil {
+			return err
+		}
+		ops[s.idx].Set = val
+	}
+
+	return nil
 }
 
 func ParseRedisDB(raw string) int {

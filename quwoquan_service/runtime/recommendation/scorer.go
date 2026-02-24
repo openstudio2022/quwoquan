@@ -137,7 +137,9 @@ type ModelServiceClient interface {
 }
 
 // ModelPredictRequest is sent to the model service.
+// Aligned with contracts/metadata/rec_model_service/fields.yaml and OpenAPI.
 type ModelPredictRequest struct {
+	Scenario       string             `json:"scenario"`                  // e.g. content_feed / circle_discovery / friend_suggestion
 	UserID         string             `json:"userId"`
 	SessionID      string             `json:"sessionId"`
 	UserFeatures   *UserFeatureVector `json:"userFeatures,omitempty"`
@@ -173,11 +175,15 @@ type CandidateScore struct {
 
 // RemoteModelScorer delegates scoring to an external ML model service.
 type RemoteModelScorer struct {
-	client ModelServiceClient
+	client   ModelServiceClient
+	Scenario string // scenario sent to model service, e.g. content_feed
 }
 
-func NewRemoteModelScorer(client ModelServiceClient) *RemoteModelScorer {
-	return &RemoteModelScorer{client: client}
+func NewRemoteModelScorer(client ModelServiceClient, scenario string) *RemoteModelScorer {
+	if scenario == "" {
+		scenario = "content_feed"
+	}
+	return &RemoteModelScorer{client: client, Scenario: scenario}
 }
 
 func (s *RemoteModelScorer) ScoreBatch(ctx context.Context, features *ScoringFeatures, candidates []ContentCandidate) ([]ScoredCandidate, error) {
@@ -208,6 +214,7 @@ func (s *RemoteModelScorer) ScoreBatch(ctx context.Context, features *ScoringFea
 	}
 
 	resp, err := s.client.Predict(ctx, &ModelPredictRequest{
+		Scenario:       s.Scenario,
 		UserID:         session.UserID,
 		SessionID:      session.SessionID,
 		UserFeatures:   features.User,

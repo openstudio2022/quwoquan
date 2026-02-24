@@ -24,6 +24,8 @@ description: 创建特性（Plan + Create + 自动 G0/G1 卡点）
 
 ### 2. 特性创建
 
+**特性树文档标准**：仅使用四类文档，详见 `specs/feature-tree/00_FEATURE_TREE_STANDARD.md`。禁止在节点下生成 analysis-*.md、README、独立规划书等；所有需求/设计/任务/验收汇入 spec、design、tasks、acceptance。
+
 1) 在特性树中定位或新增节点：
    - 查 `specs/feature-tree/tree_index.yaml`
    - 选择对应 L1 的 `tree.yaml`
@@ -31,10 +33,12 @@ description: 创建特性（Plan + Create + 自动 G0/G1 卡点）
    ```bash
    bash scripts/new_feature_fullstack.sh "<slug>"
    ```
-3) 补齐特性制品：
-   - `acceptance.yaml` — A1~A8 验收标准
-   - `traceability.yaml` — 追溯映射
-   - `tasks.md` — 任务拆解（**顺序：metadata → codegen → 业务逻辑 → 测试**）
+3) 补齐特性制品（四类缺一不可，且足够详细）：
+   - `spec.md` — 功能说明、范围、约束、验收重点（见标准 2.1）
+   - `design.md` — 设计动因、决策、契约与迁移/演进说明；**须遵循设计原则**：业界对标与多方案对比、选最优或可演进到最优、轻量方案时在 design 与 tasks 中写清未来演进与规划任务（见标准 2.2）
+   - `tasks.md` — 任务拆解（**顺序：metadata → codegen → 业务逻辑 → 测试**）；可选「规划任务」小节（见标准 2.3）
+   - `acceptance.yaml` — A1~A8 验收标准、focus_groups、execution（见标准 2.4）
+   - 若项目使用：`traceability.yaml` — 追溯映射
 
 ### 3. G1 卡点：Verify + Codegen（自动执行）
 

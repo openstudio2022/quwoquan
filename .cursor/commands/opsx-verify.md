@@ -7,15 +7,16 @@ description: 验证实现匹配制品 + 自动 G3 门禁
 
 > 主线：`specs/00_MASTER_DEVELOPMENT_FLOW.md` — 阶段 4
 
-验证特性实现匹配制品（specs、tasks、acceptance），并自动执行全量门禁。
+验证特性实现匹配制品（spec、design、tasks、acceptance），并自动执行全量门禁。特性树节点仅使用此四类文档，见 `specs/feature-tree/00_FEATURE_TREE_STANDARD.md`。
 
 ## 步骤
 
 ### 1. 完成度检查
 
-1) 读取目标特性的 `tasks.md`，逐项检查是否标记完成
-2) 读取 `acceptance.yaml` A1~A8，逐项确认是否有对应实现
-3) 生成完成度报告
+1) 确认目标节点具备四类文档：`spec.md`、`design.md`、`tasks.md`、`acceptance.yaml`
+2) 读取目标特性的 `tasks.md`，逐项检查是否标记完成
+3) 读取 `acceptance.yaml` A1~A8，逐项确认是否有对应实现
+4) 生成完成度报告
 
 ### 2. 正确性检查
 
