@@ -1,0 +1,85 @@
+feature:
+  id: "F005"
+  name: "opsx-ddd-metadata-feature-migration"
+opsx:
+  change_id: "OPSX-2026-005"
+  specs:
+    - "opsx_ff_cloud_services_guide"
+    - "assistant-domain-catalog-17"
+services:
+  - "platform-ops"
+  - "product-ops"
+  - "chat-service"
+  - "content-service"
+  - "orchestrator-service"
+  - "gateway-service"
+objects:
+  - "Conversation"
+  - "Message"
+  - "FeedItem"
+  - "InteractionEvent"
+  - "VisitRecord"
+  - "ExperimentBucket"
+apis:
+  - method: GET
+    path: /v1/chat/conversations
+  - method: GET
+    path: /v1/chat/conversations/{conversationId}/messages
+  - method: GET
+    path: /v1/orch/discovery/feed
+  - method: POST
+    path: /v1/product-ops/events
+  - method: GET
+    path: /v1/product-ops/experiments/bucket
+metadata:
+  entities:
+    - "Conversation"
+    - "Message"
+    - "InteractionEvent"
+    - "VisitRecord"
+  fields:
+    - "Message.content"
+    - "Conversation.participantIds"
+    - "InteractionEvent.traceId"
+    - "VisitRecord.targetKey"
+cross_cutting:
+  observability: true
+  product_ops: true
+  service_governance: true
+  config_governance: true
+tests:
+  unit:
+    - "quwoquan_app/test/personal_assistant/learning_service_test.dart"
+    - "quwoquan_app/test/personal_assistant/protocol_compatibility_test.dart"
+  contract:
+    - "quwoquan_app/test/personal_assistant/structured_response_contract_test.dart"
+    - "quwoquan_app/test/personal_assistant/tool_metadata_contract_test.dart"
+  integration:
+    - "quwoquan_app/test/personal_assistant/web_pipeline_integration_test.dart"
+    - "quwoquan_app/test/personal_assistant/dual_gate_integration_test.dart"
+  uat:
+    - "UAT-CHAT-REMOTE-SWITCH-001"
+    - "UAT-DISCOVERY-ORCH-FEED-001"
+test_automation:
+  mock:
+    app:
+      - "quwoquan_app/test/personal_assistant/template_runtime_test.dart"
+    service:
+      - "quwoquan_service/specs/chat-service/spec.md"
+  contract:
+    app:
+      - "quwoquan_app/test/personal_assistant/protocol_compatibility_test.dart"
+    service:
+      - "quwoquan_service/contracts/openapi/common.yaml"
+  integration:
+    app:
+      - "quwoquan_app/test/personal_assistant/json_answer_parse_integration_test.dart"
+    service:
+      - "quwoquan_service/specs/orchestrator-service/spec.md"
+  uat:
+    cases:
+      - "UAT-CHAT-REMOTE-SWITCH-001"
+      - "UAT-DISCOVERY-ORCH-FEED-001"
+    automation:
+      - "scripts/gate_repo.sh --scope app"
+      - "scripts/gate_repo.sh --scope service"

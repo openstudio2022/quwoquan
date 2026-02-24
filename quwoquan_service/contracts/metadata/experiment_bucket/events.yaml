@@ -1,0 +1,10 @@
+version: 1
+entity: ExperimentBucket
+
+events:
+  - name: ExperimentAssigned
+    description: 用户分桶
+    producer: product-ops
+    consumers: []
+    channel: event_store
+    payload_fields: [experimentId, userId, variant]

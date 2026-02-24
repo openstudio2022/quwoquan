@@ -1,0 +1,244 @@
+version: 1
+owner: quwoquan-platform
+source_of_truth: "目录层级 + 标题（可读性优先）"
+notes:
+  - "本文件用于端云一体特性树骨架。"
+  - "现有 feature_catalog.yaml 的 id/parent_id 仅作为兼容索引。"
+
+acceptance_focus_by_level:
+  L1_capability: [A2_experience, A3_service_governance, A4_observability, A8_test_automation]
+  L2_feature: [A1_functional, A2_experience, A7_contract_metadata_consistency, A8_test_automation]
+  L3_subfeature: [A1_functional, A3_service_governance, A7_contract_metadata_consistency]
+  L4_object_task: [A1_functional, A6_security_privacy, A7_contract_metadata_consistency]
+  L5_cross_cutting: [A3_service_governance, A4_observability, A5_product_ops, A8_test_automation]
+
+tree:
+  - level: L1_capability
+    title: "内容发现与发布"
+    feature_path: "capability.discovery-content"
+    service_mapping: [orchestrator-service, content-service, gateway-service, product-ops]
+    business_objects: [Post, MediaAsset, Comment, ReactionState, Counters, ContentBehaviorEvent, FeedItem]
+    app_mapping: [home.discovery, content.article_detail, create.create]
+    children:
+      - level: L2_feature
+        title: "发现流编排与推荐"
+        feature_path: "capability.discovery-content.feature.feed-orchestration-recommendation"
+        parent_path: "capability.discovery-content"
+        service_mapping: [orchestrator-service, content-service, user-service, product-ops]
+        business_objects: [FeedItem, UserProfile, VisitRecord, InteractionEvent]
+        children:
+          - level: L3_subfeature
+            title: "发现流统一响应结构"
+            feature_path: "capability.discovery-content.feature.feed-orchestration-recommendation.subfeature.unified-items-cursor"
+            parent_path: "capability.discovery-content.feature.feed-orchestration-recommendation"
+            children:
+              - level: L4_object_task
+                title: "编排 Feed DTO 与分页游标契约"
+                feature_path: "capability.discovery-content.feature.feed-orchestration-recommendation.subfeature.unified-items-cursor.object-task.feed-dto-cursor-contract"
+                parent_path: "capability.discovery-content.feature.feed-orchestration-recommendation.subfeature.unified-items-cursor"
+                service_mapping: [orchestrator-service, content-service]
+                business_objects: [FeedItem, FeedCursor]
+                api_contracts:
+                  - "GET /v1/orch/discovery/feed"
+                storage:
+                  primary: "MongoDB(content feed/materialized stream)"
+                  cache: "Redis(feed cursor cache)"
+              - level: L5_cross_cutting
+                title: "发现链路可观测与SLO"
+                feature_path: "capability.discovery-content.feature.feed-orchestration-recommendation.subfeature.unified-items-cursor.cross-cutting.observability-slo"
+                parent_path: "capability.discovery-content.feature.feed-orchestration-recommendation.subfeature.unified-items-cursor"
+                service_mapping: [platform-ops, gateway-service, orchestrator-service]
+                business_objects: [AppLogEvent]
+                focus: [A4_observability, A3_service_governance]
+      - level: L2_feature
+        title: "内容发布与互动"
+        feature_path: "capability.discovery-content.feature.publish-comment-reaction"
+        parent_path: "capability.discovery-content"
+        service_mapping: [content-service, gateway-service, product-ops]
+        business_objects: [Post, MediaAsset, Comment, ReactionState, Counters]
+
+  - level: L1_capability
+    title: "圈子社区"
+    feature_path: "capability.circle-community"
+    service_mapping: [circle-service, orchestrator-service, gateway-service, product-ops]
+    business_objects: [Circle, CircleActivity, CircleMember, CircleRole, CircleBehaviorEvent]
+    app_mapping: [circles.circles_page, circles.circle_detail, circles.circle_stats]
+    children:
+      - level: L2_feature
+        title: "圈子活动流与成员治理"
+        feature_path: "capability.circle-community.feature.activity-member-governance"
+        parent_path: "capability.circle-community"
+      - level: L2_feature
+        title: "圈内推荐与反馈闭环"
+        feature_path: "capability.circle-community.feature.in-circle-recommendation-loop"
+        parent_path: "capability.circle-community"
+
+  - level: L1_capability
+    title: "聊天与会话"
+    feature_path: "capability.chat-conversation"
+    service_mapping: [chat-service, gateway-service, orchestrator-service]
+    business_objects: [Conversation, ConversationMember, ConversationSettings, Message, Contact]
+    app_mapping: [chat.chat_page, chat.chat_detail, chat.start_group_chat, chat.chat_settings]
+    children:
+      - level: L2_feature
+        title: "会话列表详情与消息投递"
+        feature_path: "capability.chat-conversation.feature.list-detail-message-delivery"
+        parent_path: "capability.chat-conversation"
+        children:
+          - level: L3_subfeature
+            title: "chatRepository 端侧无感切换"
+            feature_path: "capability.chat-conversation.feature.list-detail-message-delivery.subfeature.repository-switching"
+            parent_path: "capability.chat-conversation.feature.list-detail-message-delivery"
+            children:
+              - level: L4_object_task
+                title: "会话列表与消息分页契约"
+                feature_path: "capability.chat-conversation.feature.list-detail-message-delivery.subfeature.repository-switching.object-task.conversation-message-contract"
+                parent_path: "capability.chat-conversation.feature.list-detail-message-delivery.subfeature.repository-switching"
+                service_mapping: [chat-service]
+                business_objects: [Conversation, Message]
+                api_contracts:
+                  - "GET /v1/chat/conversations"
+                  - "GET /v1/chat/conversations/{conversationId}/messages"
+                storage:
+                  primary: "MongoDB(chat_conversations, chat_messages)"
+                  cache: "Redis(chat cursor/unread cache)"
+              - level: L5_cross_cutting
+                title: "聊天链路 headers/trace 标准化"
+                feature_path: "capability.chat-conversation.feature.list-detail-message-delivery.subfeature.repository-switching.cross-cutting.trace-headers"
+                parent_path: "capability.chat-conversation.feature.list-detail-message-delivery.subfeature.repository-switching"
+                service_mapping: [gateway-service, platform-ops]
+                business_objects: [InteractionEvent]
+                focus: [A4_observability, A7_contract_metadata_consistency]
+      - level: L2_feature
+        title: "群聊创建与成员管理"
+        feature_path: "capability.chat-conversation.feature.group-creation-member-management"
+        parent_path: "capability.chat-conversation"
+
+  - level: L1_capability
+    title: "用户身份画像与关系"
+    feature_path: "capability.user-identity-profile-relationship"
+    service_mapping: [user-service, gateway-service, orchestrator-service]
+    business_objects: [UserIdentity, UserProfile, ProfileSnapshot, ProfileUpdateProposal, Persona, FollowEdge, UserNotificationSettings, UserPrivacySettings, DevicePushToken]
+    app_mapping: [profile.my_profile, profile.edit_profile, profile.persona_management, settings.settings_page]
+    children:
+      - level: L2_feature
+        title: "引导与身份入口"
+        feature_path: "capability.user-identity-profile-relationship.feature.onboarding-and-identity-entry"
+        parent_path: "capability.user-identity-profile-relationship"
+      - level: L2_feature
+        title: "认证与用户画像快照"
+        feature_path: "capability.user-identity-profile-relationship.feature.auth-profile-snapshot"
+        parent_path: "capability.user-identity-profile-relationship"
+      - level: L2_feature
+        title: "分身与关系网络"
+        feature_path: "capability.user-identity-profile-relationship.feature.persona-follow-graph"
+        parent_path: "capability.user-identity-profile-relationship"
+
+  - level: L1_capability
+    title: "助手运行与学习闭环"
+    feature_path: "capability.assistant-run-learning"
+    service_mapping: [assistant-service, user-service, product-ops, platform-ops]
+    business_objects: [AssistantRunRequest, AssistantRunResponse, InteractionEvent, Scorecard, ProfileUpdateProposal]
+    app_mapping: [assistant.assistant_home, assistant.assistant_management]
+    children:
+      - level: L2_feature
+        title: "Run/Stream 与策略模板"
+        feature_path: "capability.assistant-run-learning.feature.run-stream-policy"
+        parent_path: "capability.assistant-run-learning"
+      - level: L2_feature
+        title: "学习事件采集与反馈注入"
+        feature_path: "capability.assistant-run-learning.feature.learning-event-feedback-injection"
+        parent_path: "capability.assistant-run-learning"
+
+  - level: L1_capability
+    title: "产品运营增长"
+    feature_path: "capability.product-ops-growth"
+    service_mapping: [product-ops, content-service, circle-service, assistant-service]
+    business_objects: [InteractionEvent, VisitRecord, ExperimentBucket]
+    app_mapping: [home.discovery, chat.chat_page, assistant.assistant_home]
+    children:
+      - level: L2_feature
+        title: "运营事件采集与统计"
+        feature_path: "capability.product-ops-growth.feature.event-ingestion-analytics"
+        parent_path: "capability.product-ops-growth"
+      - level: L2_feature
+        title: "实验分桶与灰度策略"
+        feature_path: "capability.product-ops-growth.feature.experiment-bucketing-rollout"
+        parent_path: "capability.product-ops-growth"
+
+  - level: L1_capability
+    title: "平台运维治理"
+    feature_path: "capability.platform-ops-governance"
+    service_mapping: [platform-ops, gateway-service, orchestrator-service, content-service, chat-service, user-service, circle-service, assistant-service]
+    business_objects: [AppLogEvent, AlertPolicy, ConfigReleaseRecord, ReliabilityGuard]
+    app_mapping: []
+    children:
+      - level: L2_feature
+        title: "可观测与告警"
+        feature_path: "capability.platform-ops-governance.feature.observability-alerting"
+        parent_path: "capability.platform-ops-governance"
+      - level: L2_feature
+        title: "系统配置与服务治理"
+        feature_path: "capability.platform-ops-governance.feature.config-governance-reliability"
+        parent_path: "capability.platform-ops-governance"
+
+  - level: L1_capability
+    title: "网关与编排基础能力"
+    feature_path: "capability.gateway-orchestrator-foundation"
+    service_mapping: [gateway-service, orchestrator-service]
+    business_objects: [RequestContext, TraceContext, AggregatedFeed]
+    app_mapping: [all]
+    children:
+      - level: L2_feature
+        title: "统一入口与安全防护"
+        feature_path: "capability.gateway-orchestrator-foundation.feature.unified-entry-security"
+        parent_path: "capability.gateway-orchestrator-foundation"
+      - level: L2_feature
+        title: "跨服务编排降级与回滚"
+        feature_path: "capability.gateway-orchestrator-foundation.feature.orchestration-degradation-rollback"
+        parent_path: "capability.gateway-orchestrator-foundation"
+
+  - level: L1_capability
+    title: "统一运行时能力域"
+    feature_path: "capability.runtime"
+    service_mapping: [gateway-service, orchestrator-service, content-service, circle-service, user-service, chat-service, assistant-service, product-ops, platform-ops]
+    business_objects: [RuntimeConfig, ErrorEnvelope, IOAccessLog, ProcessTraceLog, ExceptionLog, HttpContext, RpcContext, MessageEnvelope, GovernancePolicy, ExperimentBucket, LearningEvent]
+    app_mapping: []
+    children:
+      - level: L2_feature
+        title: "配置运行时"
+        feature_path: "capability.runtime.feature.runtime-config"
+        parent_path: "capability.runtime"
+      - level: L2_feature
+        title: "错误运行时"
+        feature_path: "capability.runtime.feature.runtime-errors"
+        parent_path: "capability.runtime"
+      - level: L2_feature
+        title: "可观测运行时"
+        feature_path: "capability.runtime.feature.runtime-observability"
+        parent_path: "capability.runtime"
+      - level: L2_feature
+        title: "HTTP 运行时"
+        feature_path: "capability.runtime.feature.runtime-http"
+        parent_path: "capability.runtime"
+      - level: L2_feature
+        title: "RPC 运行时"
+        feature_path: "capability.runtime.feature.runtime-rpc"
+        parent_path: "capability.runtime"
+      - level: L2_feature
+        title: "消息运行时"
+        feature_path: "capability.runtime.feature.runtime-messaging"
+        parent_path: "capability.runtime"
+      - level: L2_feature
+        title: "治理运行时"
+        feature_path: "capability.runtime.feature.runtime-governance"
+        parent_path: "capability.runtime"
+      - level: L2_feature
+        title: "实验运行时"
+        feature_path: "capability.runtime.feature.runtime-experiments"
+        parent_path: "capability.runtime"
+      - level: L2_feature
+        title: "学习运行时"
+        feature_path: "capability.runtime.feature.runtime-learning"
+        parent_path: "capability.runtime"
+

@@ -1,0 +1,611 @@
+{
+  "runtime": {
+    "model": "mimo-v2-flash",
+    "baseUrl": "https://api.xiaomimimo.com/v1"
+  },
+  "domainId": "astrology_constellation",
+  "blueprint": {
+    "verticalFocus": "astrology_guidance",
+    "totalSubTotalTemplate": {
+      "totalGoal": "提供星座主题化建议",
+      "subTasks": [
+        "识别星座与主题",
+        "检索专业星盘内容",
+        "给出建议",
+        "标注娱乐边界"
+      ],
+      "totalSynthesis": "输出总分总与下一步互动"
+    },
+    "stateMachine": {
+      "states": [
+        {
+          "stateId": "S0_INTENT_CAPTURE",
+          "goal": "识别星座诉求"
+        },
+        {
+          "stateId": "S1_BASELINE_READING",
+          "goal": "先给解读"
+        },
+        {
+          "stateId": "S2_OPTIONAL_ENRICH",
+          "goal": "补充时间与背景"
+        },
+        {
+          "stateId": "S3_PERSONALIZED_READING",
+          "goal": "细化建议"
+        },
+        {
+          "stateId": "S4_FOLLOWUP_QA",
+          "goal": "持续互动"
+        },
+        {
+          "stateId": "S5_SAFE_CLOSE",
+          "goal": "收束"
+        }
+      ]
+    },
+    "sourcePolicy": {
+      "qualityTier": "medium",
+      "preferredSites": [
+        {
+          "name": "Astro.com",
+          "host": "astro.com"
+        },
+        {
+          "name": "Cafe Astrology",
+          "host": "cafeastrology.com"
+        },
+        {
+          "name": "Astrology.com",
+          "host": "astrology.com"
+        }
+      ]
+    },
+    "qualityFloor": {
+      "requiredElements": [
+        "主题匹配",
+        "娱乐边界",
+        "行动建议",
+        "下一步引导"
+      ]
+    }
+  },
+  "conversationMetrics": {
+    "normalEndedCases": 3,
+    "normalEndRatio": 1.0,
+    "maxRounds": 2,
+    "avgRounds": 1.3333,
+    "solvedCases": 3,
+    "solvedRatio": 1.0
+  },
+  "userFeedbackSimulation1000": {
+    "sampleSize": 1000,
+    "helpfulCount": 900,
+    "notHelpfulCount": 100,
+    "helpfulRatio": 0.9,
+    "notHelpfulRatio": 0.1,
+    "method": "score_proxy_v1"
+  },
+  "cases": [
+    {
+      "score": 85,
+      "ruleScore": 90,
+      "modelJudgeScore": 85,
+      "firstPassRuleScore": 70,
+      "firstPassModelJudgeScore": 75,
+      "modelJudge": {
+        "score": 85,
+        "dimensions": {
+          "correctness": 85,
+          "goalCoverage": 90,
+          "safetyBoundary": 95,
+          "actionability": 85,
+          "evidenceQuality": 75
+        },
+        "strengths": [
+          "内容紧扣星座主题，准确回应了天秤座的工作运势和合作沟通问题",
+          "明确包含娱乐参考声明，符合安全边界要求",
+          "提供了具体、可操作的行动建议，如沟通技巧和会议安排",
+          "结构清晰，分总结、分析、建议等部分，易于理解",
+          "语气友好且鼓励，符合娱乐性内容的基调"
+        ],
+        "issues": [
+          "evidenceQuality维度得分较低，因为内容基于星座特质和行星能量的描述，缺乏可验证的客观证据，更多是主观解读",
+          "correctness方面，工作运势评分（7/10）和具体建议虽合理，但作为娱乐内容，无实际数据支持，可能被视为主观",
+          "部分建议（如“每周安排一次团队会议”）虽实用，但未明确针对天秤座特质，略显通用"
+        ],
+        "mustFix": [
+          "在evidenceQuality上，可添加免责声明或说明内容基于常见星座解读，以增强透明度",
+          "确保所有建议明确标注为娱乐参考，避免任何可能被误解为专业指导的表述"
+        ]
+      },
+      "detail": {
+        "keyword_hit": 2,
+        "keyword_total": 3
+      },
+      "conversation": [
+        "我是天秤座，这个月工作运势如何？",
+        "那在合作沟通上要注意什么？"
+      ],
+      "answerLines": [
+        "### 总结",
+        "天秤座本月合作沟通需注重平衡与公正，发挥你的外交天赋，避免优柔寡断。整体工作运势中等偏上（约7/10分），适合团队协作，但需注意截止期限避免拖延。娱乐参考：天秤座像职场外交官，但别让天平摇摆不定哦！",
+        "",
+        "### 分析",
+        "基于天秤座的典型特质（追求公正、社交魅力强），本月金星能量可能带来职场人际机遇，如贵人相助或合作邀约，但水星逆行（若适用）可能让沟通稍显混乱，带来挑战如意见分歧或误解。合作沟通上要注意：1. 保持中立公正——用“我理解你的观点，但……”开头调解分歧，避免直接对抗；2. 倾听优先——主动倾听他人能提升信任，化解小摩擦；3. 注意非语言信号——你的美感直觉强，留意肢体语言，避免误解；4. 实用小贴士——每周安排一次团队会议记录关键点，若遇争执建议暂停10分钟冷静再谈。所有内容均为娱乐性参考，非专业占卜，请结合实际情况理性对待。",
+        "",
+        "### 建议",
+        "行动建议：利用天秤座的社交优势，本月多 networking，但别忽略个人休息以防 burnout。具体步骤：设定清晰目标，优先处理高价值任务；在沟通中多用“我”语句表达，保持和谐；若遇挑战，可寻求中立第三方调解。幽默提醒：天秤座的你天生是和平使者，但别为了平衡而变成“和事佬”机器人，记得给自己留点时间充电！",
+        "",
+        "### 下一步（可选）",
+        "如果你想深入探讨个人星盘（如出生时间细化解读）或其他主题（如爱情或健康），请提供更多细节，我可以继续为你服务。或者，你有其他问题吗？"
+      ],
+      "answerJson": {
+        "domainId": "astrology_constellation",
+        "result": {
+          "summary": "天秤座本月合作沟通需注重平衡与公正，发挥外交天赋，避免优柔寡断。",
+          "details": {
+            "workTrend": "整体工作运势中等偏上（约7/10分），适合团队协作，金星能量带来人际机遇，但需注意截止期限避免拖延。",
+            "communicationAdvice": "1. 保持中立公正：用“我理解你的观点，但……”开头调解分歧；2. 倾听优先：主动倾听提升信任；3. 注意非语言信号：利用美感直觉解读肢体语言；4. 实用贴士：每周团队会议记录关键点，争执时暂停10分钟冷静。",
+            "entertainmentNote": "娱乐参考，非专业预测，结合实际情况理性对待。"
+          }
+        },
+        "evidence": [
+          {
+            "sourceType": "web_search",
+            "sourceRef": "astrology_constellation 那在合作沟通上要注意什么？ ### 总：星座主题化建议 site:astro.com site:cafeastrology.com",
+            "claimSupported": "answer_generation"
+          }
+        ],
+        "reasoningBasis": [
+          {
+            "claim": "基于多源信息综合判断",
+            "support": "模型推理与证据整合"
+          }
+        ],
+        "selfCheck": {
+          "goalSatisfied": true,
+          "constraintSatisfied": true,
+          "safetyBoundarySatisfied": true,
+          "failedItems": []
+        },
+        "diagnostics": {
+          "whyThisAnswer": "依据用户问题、上下文与检索证据生成。",
+          "riskFlags": [],
+          "missingInfo": [],
+          "needMoreInfo": false
+        },
+        "modelSelfScore": {
+          "score": 85,
+          "reason": "覆盖核心问题并提供执行建议。",
+          "improvementHints": []
+        },
+        "toolCalls": [
+          {
+            "toolName": "web_search",
+            "arguments": {
+              "query": "astrology_constellation 那在合作沟通上要注意什么？ ### 总：星座主题化建议 site:astro.com site:cafeastrology.com"
+            },
+            "purpose": "retrieve evidence"
+          }
+        ],
+        "missingContextSlots": [],
+        "fillGuidance": [],
+        "followupPrompt": "如果你想深入探讨个人星盘（如出生时间细化解读）或其他主题（如爱情或健康），请提供更多细节，我可以继续为你服务。或者，你有其他问题吗？",
+        "userFacingMarkdown": "### 总结\n天秤座本月合作沟通需注重平衡与公正，发挥你的外交天赋，避免优柔寡断。整体工作运势中等偏上（约7/10分），适合团队协作，但需注意截止期限避免拖延。娱乐参考：天秤座像职场外交官，但别让天平摇摆不定哦！\n\n### 分析\n基于天秤座的典型特质（追求公正、社交魅力强），本月金星能量可能带来职场人际机遇，如贵人相助或合作邀约，但水星逆行（若适用）可能让沟通稍显混乱，带来挑战如意见分歧或误解。合作沟通上要注意：1. 保持中立公正——用“我理解你的观点，但……”开头调解分歧，避免直接对抗；2. 倾听优先——主动倾听他人能提升信任，化解小摩擦；3. 注意非语言信号——你的美感直觉强，留意肢体语言，避免误解；4. 实用小贴士——每周安排一次团队会议记录关键点，若遇争执建议暂停10分钟冷静再谈。所有内容均为娱乐性参考，非专业占卜，请结合实际情况理性对待。\n\n### 建议\n行动建议：利用天秤座的社交优势，本月多 networking，但别忽略个人休息以防 burnout。具体步骤：设定清晰目标，优先处理高价值任务；在沟通中多用“我”语句表达，保持和谐；若遇挑战，可寻求中立第三方调解。幽默提醒：天秤座的你天生是和平使者，但别为了平衡而变成“和事佬”机器人，记得给自己留点时间充电！\n\n### 下一步（可选）\n如果你想深入探讨个人星盘（如出生时间细化解读）或其他主题（如爱情或健康），请提供更多细节，我可以继续为你服务。或者，你有其他问题吗？",
+        "stateMachineProfile": {
+          "states": [
+            {
+              "stateId": "S0_INTENT_CAPTURE",
+              "goal": "识别星座诉求"
+            },
+            {
+              "stateId": "S1_BASELINE_READING",
+              "goal": "先给解读"
+            },
+            {
+              "stateId": "S2_OPTIONAL_ENRICH",
+              "goal": "补充时间与背景"
+            },
+            {
+              "stateId": "S3_PERSONALIZED_READING",
+              "goal": "细化建议"
+            },
+            {
+              "stateId": "S4_FOLLOWUP_QA",
+              "goal": "持续互动"
+            },
+            {
+              "stateId": "S5_SAFE_CLOSE",
+              "goal": "收束"
+            }
+          ]
+        },
+        "sourceQualityCheck": {
+          "allowedHosts": [
+            "astro.com",
+            "cafeastrology.com",
+            "astrology.com"
+          ],
+          "queryUsesWhitelistedSite": true,
+          "qualityTier": "medium"
+        }
+      },
+      "searchCalls": 2,
+      "roundCount": 2,
+      "normalEnded": true,
+      "solved": true,
+      "remediationApplied": true,
+      "reason": "quality_gate_fail(rule=70,judge=75), missing=['星座主题', '娱乐参考', '行动建议', '增强娱乐参考：添加更多轻松、趣味的表达，例如用比喻或幽默描述星座特质，使内容更符合星座娱乐的定位。', '补充整体工作运势：在总结或分析中简要提及本月工作运势的其他方面（如机遇、挑战），以更全面回应用户初始问题。']",
+      "id": "astrology_constellation-1",
+      "elapsedMs": 58874
+    },
+    {
+      "score": 85,
+      "ruleScore": 100,
+      "modelJudgeScore": 85,
+      "firstPassRuleScore": 100,
+      "firstPassModelJudgeScore": 85,
+      "modelJudge": {
+        "score": 85,
+        "dimensions": {
+          "correctness": 85,
+          "goalCoverage": 90,
+          "safetyBoundary": 95,
+          "actionability": 85,
+          "evidenceQuality": 75
+        },
+        "strengths": [
+          "回答紧扣双鱼座本周感情运主题，提供了具体、相关的提示。",
+          "明确包含了必需的关键词“边界”和“建议”，满足了核心要求。",
+          "安全边界清晰，明确标注为娱乐参考，避免了专业占卜或预测的误导。",
+          "建议具体且可操作，如“设定情感界限”、“创意表达”、“独处反思”等，具有行动指导性。",
+          "结构完整，包含总结、分析、建议和下一步引导，用户体验良好。"
+        ],
+        "issues": [
+          "证据质量维度扣分：证据部分主要基于“通用占星知识”，缺乏具体星象日期或引用来源，显得较为笼统，可信度稍弱。",
+          "正确性维度扣分：虽然整体正确，但“海王星本周可能增强直觉力”的表述在占星学中不够精确，海王星是双鱼座的守护星，其影响是长期的，而非仅限于本周。",
+          "行动性维度扣分：建议部分虽然具体，但部分建议（如“通过艺术或音乐表达情感”）略显宽泛，可以更贴近“本周”这个时间框架。"
+        ],
+        "mustFix": [
+          "在evidence部分，可以尝试提及本周具体的星象（如月亮进入某个星座、金星与某行星的相位），即使只是示例，也能提升证据的时效性和具体性。",
+          "在correctness上，需确保对行星影响的描述更符合占星学常识，避免将长期影响简化为短期事件。",
+          "在actionability上，建议可以更聚焦于“本周”可执行的短期行动，例如“本周三月亮进入双鱼座，适合安排一次浪漫约会”。"
+        ]
+      },
+      "detail": {
+        "keyword_hit": 2,
+        "keyword_total": 2
+      },
+      "conversation": [
+        "双鱼座本周感情运有什么提示？"
+      ],
+      "answerLines": [
+        "```json",
+        "{",
+        "    \"result\": \"双鱼座本周感情运提示：情感流动增强，需平衡理想与现实，通过创意表达深化连接，同时注意设定情感界限。\",",
+        "    \"evidence\": \"基于通用占星知识（非实时星盘计算），本周双鱼座感情运受月亮和金星位置影响。月亮可能带来情绪波动，金星则促进温柔表达。双鱼座的守护星海王星本周可能增强直觉力，但需注意现实边界。\",",
+        "    \"reasoningBasis\": \"双鱼座（2月19日-3月20日出生）以浪漫、直觉和情感深度著称。本周星象（月亮和金星）可能带来灵感时刻，但海王星的影响易导致过度理想化。因此，建议聚焦情感深化、创意表达和界限设定，以娱乐视角提供主题化建议。\",",
+        "    \"selfCheck\": \"回答紧扣双鱼座本周感情运主题，提供了具体提示（如创意表达、观察而非冲动、设定界限），符合娱乐边界（标注为休闲参考），包含行动建议（如独处反思、分享梦想），并引导下一步（提供出生时间/地点以个性化分析）。未涉及专业占卜或预测。\",",
+        "    \"diagnostics\": \"用户问题明确，历史无冲突。规划摘要已覆盖意图捕捉和基础解读，检索证据虽为通用知识，但足够支撑娱乐性建议。输出结构符合JSON要求，userFacingMarkdown将采用总分总格式。\",",
+        "    \"modelSelfScore\": 8.5（主题匹配度高，建议具体，但缺乏实时星盘数据，故扣分；娱乐边界清晰，行动建议实用）。\",",
+        "    \"toolCalls\": \"无外部工具调用，基于通用占星知识生成。\",",
+        "    \"missingContextSlots\": \"出生时间、出生地点（用于个性化星盘分析）。\",",
+        "    \"fillGuidance\": \"若用户补充出生时间/地点，可进入S3_PERSONALIZED_READING，提供更针对性的星盘细节，如行星相位对感情的具体影响。\",",
+        "    \"followupPrompt\": \"如果您能提供出生时间（例如上午10点）和出生地点（例如北京），我可以为您生成更个性化的本周感情运星盘分析。否则，您还有其他星座问题吗？\",",
+        "    \"userFacingMarkdown\": \"### 总结\\n双鱼座本周感情运以情感深化为主，提示通过直觉引导浪漫互动，但需平衡理想与现实，避免情绪过度波动。建议以创意方式表达情感，如写信或共赏音乐，以加深连接。\\n\\n### 分析\\n基于通用占星知识，本周双鱼座受月亮和金星影响：月亮可能带来情绪波动，需注意外界情绪干扰；金星促进温柔表达，适合创意互动。守护星海王星增强直觉力，但易导致过度理想化，例如单身者可能遇到直觉匹配对象，但建议先观察而非冲动。潜在挑战包括情绪易受他人影响，沟通时需多用“我感觉”而非指责。\\n\\n### 建议\\n- **积极行动**：花时间独处反思，或与伴侣分享梦想，能提升感情质量。通过艺术或音乐表达情感，能加深亲密关系。\\n- **风险规避**：设定情感界限，避免被他人情绪淹没。保持现实感，避免逃避问题。\\n- **娱乐边界**：此建议仅供休闲参考，非科学预测。感情运受个人选择和环境影响，请结合实际情况或咨询专业人士。\\n\\n### 下一步\\n如果您提供出生时间（例如上午10点）和出生地点（例如北京），我可以为您生成更个性化的本周感情运星盘分析。否则，您还有其他星座问题吗？\"",
+        "}",
+        "```",
+        "",
+        "### 下一步（可选）",
+        "若你愿意，可补充出生日期（阳历即可）与大致时辰。"
+      ],
+      "answerJson": {
+        "domainId": "astrology_constellation",
+        "result": {
+          "interpretation": "{",
+          "actionHints": [
+            "若你愿意，可补充出生日期（阳历即可）与大致时辰。"
+          ],
+          "uncertainty": "存在不确定性，需结合后续补充信息持续校准。",
+          "disclaimer": "仅供参考，不替代专业建议。",
+          "positiveGuidance": "先做一条可执行的小动作，再复盘更新。"
+        },
+        "evidence": [
+          {
+            "sourceType": "web_search",
+            "sourceRef": "astrology_constellation 双鱼座本周感情运有什么提示？ ### 总：星座主题化建议 site:astro.com site:cafeastrology.com",
+            "claimSupported": "answer_generation"
+          }
+        ],
+        "reasoningBasis": [
+          {
+            "claim": "基于多源信息综合判断",
+            "support": "模型推理与证据整合"
+          }
+        ],
+        "selfCheck": {
+          "goalSatisfied": true,
+          "constraintSatisfied": true,
+          "safetyBoundarySatisfied": true,
+          "failedItems": []
+        },
+        "diagnostics": {
+          "whyThisAnswer": "依据用户问题、上下文与检索证据生成。",
+          "riskFlags": [],
+          "missingInfo": [
+            "birthInfo",
+            "expectedEvent",
+            "fearedEvent",
+            "recentEvents",
+            "timeHorizon"
+          ],
+          "needMoreInfo": true
+        },
+        "modelSelfScore": {
+          "score": 85,
+          "reason": "覆盖核心问题并提供执行建议。",
+          "improvementHints": []
+        },
+        "toolCalls": [
+          {
+            "toolName": "web_search",
+            "arguments": {
+              "query": "astrology_constellation 双鱼座本周感情运有什么提示？ ### 总：星座主题化建议 site:astro.com site:cafeastrology.com"
+            },
+            "purpose": "retrieve evidence"
+          }
+        ],
+        "missingContextSlots": [
+          "birthInfo",
+          "expectedEvent",
+          "fearedEvent",
+          "recentEvents",
+          "timeHorizon"
+        ],
+        "fillGuidance": [
+          {
+            "slot": "birthInfo",
+            "question": "若你愿意，可补充出生日期（阳历即可）与大致时辰。",
+            "why": "用于细化个体节律，不补充也可继续。"
+          },
+          {
+            "slot": "expectedEvent",
+            "question": "你最希望近期发生的变化是什么？",
+            "why": "用于对齐目标导向建议。"
+          }
+        ],
+        "followupPrompt": "若你愿意，可补充出生日期（阳历即可）与大致时辰。",
+        "userFacingMarkdown": "```json\n{\n    \"result\": \"双鱼座本周感情运提示：情感流动增强，需平衡理想与现实，通过创意表达深化连接，同时注意设定情感界限。\",\n    \"evidence\": \"基于通用占星知识（非实时星盘计算），本周双鱼座感情运受月亮和金星位置影响。月亮可能带来情绪波动，金星则促进温柔表达。双鱼座的守护星海王星本周可能增强直觉力，但需注意现实边界。\",\n    \"reasoningBasis\": \"双鱼座（2月19日-3月20日出生）以浪漫、直觉和情感深度著称。本周星象（月亮和金星）可能带来灵感时刻，但海王星的影响易导致过度理想化。因此，建议聚焦情感深化、创意表达和界限设定，以娱乐视角提供主题化建议。\",\n    \"selfCheck\": \"回答紧扣双鱼座本周感情运主题，提供了具体提示（如创意表达、观察而非冲动、设定界限），符合娱乐边界（标注为休闲参考），包含行动建议（如独处反思、分享梦想），并引导下一步（提供出生时间/地点以个性化分析）。未涉及专业占卜或预测。\",\n    \"diagnostics\": \"用户问题明确，历史无冲突。规划摘要已覆盖意图捕捉和基础解读，检索证据虽为通用知识，但足够支撑娱乐性建议。输出结构符合JSON要求，userFacingMarkdown将采用总分总格式。\",\n    \"modelSelfScore\": 8.5（主题匹配度高，建议具体，但缺乏实时星盘数据，故扣分；娱乐边界清晰，行动建议实用）。\",\n    \"toolCalls\": \"无外部工具调用，基于通用占星知识生成。\",\n    \"missingContextSlots\": \"出生时间、出生地点（用于个性化星盘分析）。\",\n    \"fillGuidance\": \"若用户补充出生时间/地点，可进入S3_PERSONALIZED_READING，提供更针对性的星盘细节，如行星相位对感情的具体影响。\",\n    \"followupPrompt\": \"如果您能提供出生时间（例如上午10点）和出生地点（例如北京），我可以为您生成更个性化的本周感情运星盘分析。否则，您还有其他星座问题吗？\",\n    \"userFacingMarkdown\": \"### 总结\\n双鱼座本周感情运以情感深化为主，提示通过直觉引导浪漫互动，但需平衡理想与现实，避免情绪过度波动。建议以创意方式表达情感，如写信或共赏音乐，以加深连接。\\n\\n### 分析\\n基于通用占星知识，本周双鱼座受月亮和金星影响：月亮可能带来情绪波动，需注意外界情绪干扰；金星促进温柔表达，适合创意互动。守护星海王星增强直觉力，但易导致过度理想化，例如单身者可能遇到直觉匹配对象，但建议先观察而非冲动。潜在挑战包括情绪易受他人影响，沟通时需多用“我感觉”而非指责。\\n\\n### 建议\\n- **积极行动**：花时间独处反思，或与伴侣分享梦想，能提升感情质量。通过艺术或音乐表达情感，能加深亲密关系。\\n- **风险规避**：设定情感界限，避免被他人情绪淹没。保持现实感，避免逃避问题。\\n- **娱乐边界**：此建议仅供休闲参考，非科学预测。感情运受个人选择和环境影响，请结合实际情况或咨询专业人士。\\n\\n### 下一步\\n如果您提供出生时间（例如上午10点）和出生地点（例如北京），我可以为您生成更个性化的本周感情运星盘分析。否则，您还有其他星座问题吗？\"\n}\n```\n\n### 下一步（可选）\n若你愿意，可补充出生日期（阳历即可）与大致时辰。",
+        "stateMachineProfile": {
+          "states": [
+            {
+              "stateId": "S0_INTENT_CAPTURE",
+              "goal": "识别星座诉求"
+            },
+            {
+              "stateId": "S1_BASELINE_READING",
+              "goal": "先给解读"
+            },
+            {
+              "stateId": "S2_OPTIONAL_ENRICH",
+              "goal": "补充时间与背景"
+            },
+            {
+              "stateId": "S3_PERSONALIZED_READING",
+              "goal": "细化建议"
+            },
+            {
+              "stateId": "S4_FOLLOWUP_QA",
+              "goal": "持续互动"
+            },
+            {
+              "stateId": "S5_SAFE_CLOSE",
+              "goal": "收束"
+            }
+          ]
+        },
+        "sourceQualityCheck": {
+          "allowedHosts": [
+            "astro.com",
+            "cafeastrology.com",
+            "astrology.com"
+          ],
+          "queryUsesWhitelistedSite": true,
+          "qualityTier": "medium"
+        }
+      },
+      "searchCalls": 1,
+      "roundCount": 1,
+      "normalEnded": true,
+      "solved": true,
+      "remediationApplied": false,
+      "reason": "",
+      "id": "astrology_constellation-2",
+      "elapsedMs": 15252
+    },
+    {
+      "score": 85,
+      "ruleScore": 100,
+      "modelJudgeScore": 85,
+      "firstPassRuleScore": 70,
+      "firstPassModelJudgeScore": 85,
+      "modelJudge": {
+        "score": 85,
+        "dimensions": {
+          "correctness": 85,
+          "goalCoverage": 90,
+          "safetyBoundary": 90,
+          "actionability": 85,
+          "evidenceQuality": 75
+        },
+        "strengths": [
+          "回答明确包含了'风险提示'（如'需警惕冲动消费或高风险投资'、'避免 impulsively 行动'）和'非绝对结论'（如'仅为娱乐参考'、'非专业财务分析'、'非财务或法律建议'），满足了必须包含项。",
+          "主题匹配度高，直接回应了射手座财务决策的保守性问题，并提供了具体、可操作的建议（如适度保守、平衡乐观、选择低风险投资）。",
+          "安全边界清晰，多次强调娱乐性质，避免了提供专业财务建议，符合安全要求。",
+          "结构清晰，用户界面Markdown采用总分总结构，易于理解，包含总结、分析、建议和下一步，覆盖了用户问题的多个方面。"
+        ],
+        "issues": [
+          "证据质量维度得分较低，因为证据主要基于'通用占星知识'和'网络问题'的声明，缺乏具体、可验证的来源或数据支持，显得较为笼统和主观。",
+          "正确性维度有轻微扣分，因为占星学本身缺乏科学依据，回答中虽声明为娱乐，但未明确指出其非科学性，可能误导用户过度依赖。",
+          "可行动性维度扣分，建议虽具体（如储蓄、低风险投资），但未提供更详细的步骤或资源链接，用户可能仍需自行搜索。",
+          "模型自评分数（8.5）未在最终输出中明确体现，但整体回答质量较高，仅在证据来源上存在不足。"
+        ],
+        "mustFix": [
+          "增强证据质量：在evidence或reasoningBasis中，可添加更具体的占星术语解释（如木星和土星的具体相位影响），或引用公认的占星学资源（如经典占星书籍），以提升可信度，即使作为娱乐内容。",
+          "强化非科学性声明：在userFacingMarkdown的'娱乐边界'部分，更明确地指出占星学非科学，避免用户误解为专业建议。",
+          "提升可行动性：在建议部分，可添加更具体的行动示例，如'建议开设高息储蓄账户'或'参考权威理财网站如Investopedia'，以增强实用性。",
+          "确保格式一致性：检查JSON输出中modelSelfScore的格式（当前为字符串，应为数字），但鉴于这是内部诊断，不影响用户可见内容，可忽略。"
+        ]
+      },
+      "detail": {
+        "keyword_hit": 2,
+        "keyword_total": 2
+      },
+      "conversation": [
+        "射手座最近财务决策应该保守吗？"
+      ],
+      "answerLines": [
+        "```json",
+        "{",
+        "    \"result\": \"射手座近期财务决策建议适度保守，但可结合乐观天性寻找平衡点。\",",
+        "    \"evidence\": \"基于通用占星知识，射手座守护星木星当前可能带来财务机会，但土星相位提示需警惕冲动消费或高风险投资。射手座天生乐观冒险，近期财务宫位（第二宫）可能活跃，放大收益潜力的同时也需管理风险。\",",
+        "    \"reasoningBasis\": \"占星学娱乐视角：射手座（11月22日-12月21日）以自由、乐观著称，近期星象可能影响财务决策。木星扩张特质鼓励机会探索，但土星的谨慎相位建议避免 impulsively 行动。这仅为娱乐参考，非专业财务分析。\",",
+        "    \"selfCheck\": \"已覆盖风险提示（非绝对结论、娱乐边界）和行动建议（适度保守、平衡乐观与理性）。主题匹配射手座财务决策，避免空泛，提供具体建议如储蓄或低风险投资。\",",
+        "    \"diagnostics\": \"用户问题聚焦射手座财务保守性，历史规划摘要已提供基础框架。检索证据显示网络问题，但基于通用占星知识可生成回答。确保输出JSON格式正确，userFacingMarkdown为总分总结构。\",",
+        "    \"modelSelfScore\": 8.5（主题匹配度高，娱乐边界清晰，行动建议具体，但缺乏个人星盘细节，因用户未提供出生信息）。\",",
+        "    \"toolCalls\": [],",
+        "    \"missingContextSlots\": [\"个人出生日期和时间（用于精确星盘分析）\", \"具体财务场景（如投资、储蓄或债务管理）\"],",
+        "    \"fillGuidance\": \"若用户补充出生信息，可细化行星相位影响；若提供财务细节，可调整建议针对性。\",",
+        "    \"followupPrompt\": \"您能提供射手座的出生日期和时间吗？或者具体财务场景（如投资计划）？这样我可以给出更个性化的娱乐占星分析。\",",
+        "    \"userFacingMarkdown\": \"### 总结\\n射手座近期财务决策建议适度保守，但可利用乐观天性平衡机会与风险。基于占星娱乐视角，木星可能带来收益潜力，但需警惕冲动行为。\\n\\n### 分析\\n射手座（11月22日-12月21日）以冒险和乐观著称，近期星象显示财务宫位活跃。木星作为守护星，可能放大投资或收入机会，但土星相位提示需谨慎，避免高风险决策如投机或 impulsively 大额支出。通用占星知识表明，这阶段适合评估而非激进行动，但个人星盘（如出生时间）会更精确影响结果。\\n\\n### 建议\\n1. **适度保守**：优先选择稳定选项，如增加储蓄或低风险投资（如债券或指数基金），而非高波动资产。\\n2. **平衡乐观**：利用射手座直觉评估机会，但结合理性分析，避免因乐观而忽略风险。\\n3. **行动步骤**：列出近期财务目标，咨询专业理财顾问，确保决策基于事实而非星象冲动。\\n4. **娱乐边界**：此建议仅供休闲参考，非财务或法律建议，请以个人判断和专业咨询为准。\\n\\n### 下一步\\n如果您提供射手座的出生日期和时间，或具体财务场景（如投资或债务），我可以进一步细化娱乐占星分析。否则，建议从保守策略开始，观察市场动态。\"",
+        "}",
+        "```",
+        "",
+        "### 下一步（可选）",
+        "若你愿意，可补充出生日期（阳历即可）与大致时辰。"
+      ],
+      "answerJson": {
+        "domainId": "astrology_constellation",
+        "result": {
+          "interpretation": "{",
+          "actionHints": [
+            "若你愿意，可补充出生日期（阳历即可）与大致时辰。"
+          ],
+          "uncertainty": "存在不确定性，需结合后续补充信息持续校准。",
+          "disclaimer": "仅供参考，不替代专业建议。",
+          "positiveGuidance": "先做一条可执行的小动作，再复盘更新。"
+        },
+        "evidence": [
+          {
+            "sourceType": "web_search",
+            "sourceRef": "astrology_constellation 射手座最近财务决策应该保守吗？ **总：** 作为星座垂类规划器，我将为您提供射手座财务决策的星座主题化建议，基 site:astro.com site:cafeastrology.com",
+            "claimSupported": "answer_generation"
+          }
+        ],
+        "reasoningBasis": [
+          {
+            "claim": "基于多源信息综合判断",
+            "support": "模型推理与证据整合"
+          }
+        ],
+        "selfCheck": {
+          "goalSatisfied": true,
+          "constraintSatisfied": true,
+          "safetyBoundarySatisfied": true,
+          "failedItems": []
+        },
+        "diagnostics": {
+          "whyThisAnswer": "依据用户问题、上下文与检索证据生成。",
+          "riskFlags": [],
+          "missingInfo": [
+            "birthInfo",
+            "expectedEvent",
+            "fearedEvent",
+            "timeHorizon"
+          ],
+          "needMoreInfo": true
+        },
+        "modelSelfScore": {
+          "score": 85,
+          "reason": "覆盖核心问题并提供执行建议。",
+          "improvementHints": []
+        },
+        "toolCalls": [
+          {
+            "toolName": "web_search",
+            "arguments": {
+              "query": "astrology_constellation 射手座最近财务决策应该保守吗？ **总：** 作为星座垂类规划器，我将为您提供射手座财务决策的星座主题化建议，基 site:astro.com site:cafeastrology.com"
+            },
+            "purpose": "retrieve evidence"
+          }
+        ],
+        "missingContextSlots": [
+          "birthInfo",
+          "expectedEvent",
+          "fearedEvent",
+          "timeHorizon"
+        ],
+        "fillGuidance": [
+          {
+            "slot": "birthInfo",
+            "question": "若你愿意，可补充出生日期（阳历即可）与大致时辰。",
+            "why": "用于细化个体节律，不补充也可继续。"
+          },
+          {
+            "slot": "expectedEvent",
+            "question": "你最希望近期发生的变化是什么？",
+            "why": "用于对齐目标导向建议。"
+          }
+        ],
+        "followupPrompt": "若你愿意，可补充出生日期（阳历即可）与大致时辰。",
+        "userFacingMarkdown": "```json\n{\n    \"result\": \"射手座近期财务决策建议适度保守，但可结合乐观天性寻找平衡点。\",\n    \"evidence\": \"基于通用占星知识，射手座守护星木星当前可能带来财务机会，但土星相位提示需警惕冲动消费或高风险投资。射手座天生乐观冒险，近期财务宫位（第二宫）可能活跃，放大收益潜力的同时也需管理风险。\",\n    \"reasoningBasis\": \"占星学娱乐视角：射手座（11月22日-12月21日）以自由、乐观著称，近期星象可能影响财务决策。木星扩张特质鼓励机会探索，但土星的谨慎相位建议避免 impulsively 行动。这仅为娱乐参考，非专业财务分析。\",\n    \"selfCheck\": \"已覆盖风险提示（非绝对结论、娱乐边界）和行动建议（适度保守、平衡乐观与理性）。主题匹配射手座财务决策，避免空泛，提供具体建议如储蓄或低风险投资。\",\n    \"diagnostics\": \"用户问题聚焦射手座财务保守性，历史规划摘要已提供基础框架。检索证据显示网络问题，但基于通用占星知识可生成回答。确保输出JSON格式正确，userFacingMarkdown为总分总结构。\",\n    \"modelSelfScore\": 8.5（主题匹配度高，娱乐边界清晰，行动建议具体，但缺乏个人星盘细节，因用户未提供出生信息）。\",\n    \"toolCalls\": [],\n    \"missingContextSlots\": [\"个人出生日期和时间（用于精确星盘分析）\", \"具体财务场景（如投资、储蓄或债务管理）\"],\n    \"fillGuidance\": \"若用户补充出生信息，可细化行星相位影响；若提供财务细节，可调整建议针对性。\",\n    \"followupPrompt\": \"您能提供射手座的出生日期和时间吗？或者具体财务场景（如投资计划）？这样我可以给出更个性化的娱乐占星分析。\",\n    \"userFacingMarkdown\": \"### 总结\\n射手座近期财务决策建议适度保守，但可利用乐观天性平衡机会与风险。基于占星娱乐视角，木星可能带来收益潜力，但需警惕冲动行为。\\n\\n### 分析\\n射手座（11月22日-12月21日）以冒险和乐观著称，近期星象显示财务宫位活跃。木星作为守护星，可能放大投资或收入机会，但土星相位提示需谨慎，避免高风险决策如投机或 impulsively 大额支出。通用占星知识表明，这阶段适合评估而非激进行动，但个人星盘（如出生时间）会更精确影响结果。\\n\\n### 建议\\n1. **适度保守**：优先选择稳定选项，如增加储蓄或低风险投资（如债券或指数基金），而非高波动资产。\\n2. **平衡乐观**：利用射手座直觉评估机会，但结合理性分析，避免因乐观而忽略风险。\\n3. **行动步骤**：列出近期财务目标，咨询专业理财顾问，确保决策基于事实而非星象冲动。\\n4. **娱乐边界**：此建议仅供休闲参考，非财务或法律建议，请以个人判断和专业咨询为准。\\n\\n### 下一步\\n如果您提供射手座的出生日期和时间，或具体财务场景（如投资或债务），我可以进一步细化娱乐占星分析。否则，建议从保守策略开始，观察市场动态。\"\n}\n```\n\n### 下一步（可选）\n若你愿意，可补充出生日期（阳历即可）与大致时辰。",
+        "stateMachineProfile": {
+          "states": [
+            {
+              "stateId": "S0_INTENT_CAPTURE",
+              "goal": "识别星座诉求"
+            },
+            {
+              "stateId": "S1_BASELINE_READING",
+              "goal": "先给解读"
+            },
+            {
+              "stateId": "S2_OPTIONAL_ENRICH",
+              "goal": "补充时间与背景"
+            },
+            {
+              "stateId": "S3_PERSONALIZED_READING",
+              "goal": "细化建议"
+            },
+            {
+              "stateId": "S4_FOLLOWUP_QA",
+              "goal": "持续互动"
+            },
+            {
+              "stateId": "S5_SAFE_CLOSE",
+              "goal": "收束"
+            }
+          ]
+        },
+        "sourceQualityCheck": {
+          "allowedHosts": [
+            "astro.com",
+            "cafeastrology.com",
+            "astrology.com"
+          ],
+          "queryUsesWhitelistedSite": true,
+          "qualityTier": "medium"
+        }
+      },
+      "searchCalls": 1,
+      "roundCount": 1,
+      "normalEnded": true,
+      "solved": true,
+      "remediationApplied": true,
+      "reason": "quality_gate_fail(rule=70,judge=85), missing=['风险提示', '非绝对结论']",
+      "id": "astrology_constellation-3",
+      "elapsedMs": 25603
+    }
+  ]
+}

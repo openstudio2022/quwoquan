@@ -1,0 +1,23 @@
+version: 1
+domain: assistant
+entity: SkillConsent
+is_aggregate: false
+
+description: |
+  Skill 授权同意。用户对 Skill 的上下文授权记录。
+  PostgreSQL 存储，授权决策必须准确一致。
+
+storage_backend: postgres
+cache_layer: none
+capabilities:
+  - queryable
+
+taggable: false
+vector_enabled: false
+
+ddd_layer_mapping:
+  domain_model: internal/domain/assistant/model
+  repository: internal/domain/assistant/repository
+  application: internal/application/assistant
+  adapter_rest: internal/adapter/rest/assistant
+  adapter_event: internal/adapter/event/assistant

@@ -1,0 +1,590 @@
+version: 1
+aggregate: UserProfile
+
+entities:
+  UserProfile:
+    description: 用户核心档案（聚合根）
+    fields:
+      - name: userId
+        type: string
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: false
+        description: 全局唯一用户 ID
+
+      - name: phone
+        type: string
+        constraints: [UK, NOT_NULL]
+        classification: PII
+        log_policy: mask
+        api_exposure: drop
+        ops_exposure: mask
+        recommend_feature: false
+        description: 手机号（登录凭证）
+
+      - name: nickname
+        type: string
+        constraints: [UK, NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: false
+        search_field: true
+        description: 昵称
+
+      - name: avatarUrl
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        recommend_feature: false
+
+      - name: bio
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        recommend_feature: true
+        search_field: true
+        description: 个人签名
+
+      - name: gender
+        type: enum
+        enum_ref: Gender
+        constraints: [NULLABLE]
+        classification: PII
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: mask
+        recommend_feature: true
+
+      - name: birthDate
+        type: date
+        constraints: [NULLABLE]
+        classification: PII
+        log_policy: drop
+        api_exposure: read_write
+        ops_exposure: drop
+        recommend_feature: false
+
+      - name: region
+        type: string
+        constraints: [NULLABLE]
+        classification: PII
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: true
+        description: 地区（ipResidenceProfile 落库）
+
+      - name: status
+        type: enum
+        enum_ref: UserStatus
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read_write
+        recommend_feature: false
+        observe_metric: user_status_gauge
+
+      - name: profileVersion
+        type: int
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: false
+        description: 画像快照版本号（端侧增量校验）
+
+      - name: followerCount
+        type: int
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: true
+
+      - name: followingCount
+        type: int
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: true
+
+      - name: postCount
+        type: int
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: true
+
+      - name: createdAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: true
+
+      - name: updatedAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: false
+
+  Persona:
+    description: 分身（匿名/私密身份）
+    fields:
+      - name: id
+        type: string
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: userId
+        type: string
+        constraints: [FK_user_profiles_CASCADE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: displayName
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: avatarUrl
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: isPrimary
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: isPrivate
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: isActive
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: createdAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: updatedAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+    unique_constraints:
+      - columns: [userId, isPrimary]
+        condition: "isPrimary = true"
+        description: 每用户恰好一个主分身
+      - columns: [userId, isActive]
+        condition: "isActive = true"
+        description: 每用户恰好一个激活分身
+
+  UserAuth:
+    description: 认证凭证（安全隔离，不缓存到 Redis）
+    cache_excluded: true
+    fields:
+      - name: userId
+        type: string
+        constraints: [PK, FK_user_profiles_CASCADE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: drop
+        description: 1:1 关联
+
+      - name: passwordHash
+        type: string
+        constraints: [NOT_NULL]
+        classification: SECRET
+        log_policy: drop
+        api_exposure: drop
+        ops_exposure: drop
+
+      - name: otpSecret
+        type: string
+        constraints: [NULLABLE]
+        classification: SECRET
+        log_policy: drop
+        api_exposure: drop
+        ops_exposure: drop
+
+      - name: refreshToken
+        type: string
+        constraints: [NULLABLE]
+        classification: SECRET
+        log_policy: drop
+        api_exposure: drop
+        ops_exposure: drop
+
+      - name: refreshTokenExpiresAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: drop
+
+      - name: lastLoginAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: lastLoginIp
+        type: string
+        constraints: [NULLABLE]
+        classification: PII
+        log_policy: mask
+        api_exposure: drop
+        ops_exposure: mask
+
+      - name: loginFailCount
+        type: int
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+        observe_metric: login_fail_counter
+
+      - name: lockedUntil
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: createdAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: drop
+
+      - name: updatedAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: drop
+
+  UserDevice:
+    description: 设备绑定与推送 token
+    fields:
+      - name: id
+        type: string
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: userId
+        type: string
+        constraints: [FK_user_profiles_CASCADE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: deviceId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: read
+
+      - name: platform
+        type: enum
+        enum_ref: Platform
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: read
+
+      - name: pushToken
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: drop
+
+      - name: appVersion
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: read
+
+      - name: lastActiveAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: createdAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+    unique_constraints:
+      - columns: [userId, deviceId]
+        description: 同用户同设备不重复注册
+
+  UserSetting:
+    description: 通知 + 隐私设置
+    fields:
+      - name: userId
+        type: string
+        constraints: [PK, FK_user_profiles_CASCADE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 1:1 关联
+
+      - name: enablePush
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_TRUE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: enableMarketing
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: quietHoursStart
+        type: time
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: quietHoursEnd
+        type: time
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: allowStrangerMsg
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_TRUE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: profileVisibility
+        type: enum
+        enum_ref: ProfileVisibility
+        constraints: [NOT_NULL, DEFAULT_PUBLIC]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: contentLanguage
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 内容语言偏好（超前）
+
+      - name: feedPreference
+        type: enum
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: recommend/chronological（超前）
+
+      - name: assistantEnabled
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_TRUE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 小趣助手开关
+
+      - name: updatedAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+  ProfileUpdateProposal:
+    description: 资料修改提案（状态机 + 乐观锁）
+    fields:
+      - name: id
+        type: string
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: userId
+        type: string
+        constraints: [FK_user_profiles_CASCADE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: source
+        type: enum
+        enum_ref: ProposalSource
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: proposedChanges
+        type: jsonb
+        constraints: [NOT_NULL]
+        classification: SENSITIVE
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: read
+
+      - name: status
+        type: enum
+        enum_ref: ProposalStatus
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read_write
+
+      - name: reviewedBy
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: version
+        type: int
+        constraints: [NOT_NULL, DEFAULT_1]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: drop
+        description: 乐观锁版本号
+
+      - name: createdAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: resolvedAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+    indexes:
+      - columns: [userId, status]
+        condition: "status IN ('created', 'confirmed')"
+        description: 活跃提案快速查询
+
+    state_machine:
+      field: status
+      transitions:
+        - from: created
+          to: [confirmed, rejected]
+        - from: confirmed
+          to: [applied, rejected]
+      concurrency: optimistic_lock
+      lock_field: version

@@ -1,0 +1,33 @@
+version: 1
+domain: assistant
+aggregate_root: AssistantRun
+
+description: |
+  助手执行聚合。记录每次小趣助手的执行上下文、输入输出和交互事件。
+  MongoDB 存储，支撑高频写入和灵活 schema（LLM 输出多变）。
+  contextEmbedding 支持 RAG 语义检索历史 run。
+
+storage_backend: mongodb
+cache_layer: redis
+cache_ttl_seconds: 60
+
+capabilities:
+  - queryable
+  - aggregatable
+  - vector_searchable
+
+taggable: false
+vector_enabled: true
+
+members:
+  - entity: InteractionEvent
+    relation: 1:N
+    cascade_delete: true
+    description: 交互事件与反馈
+
+ddd_layer_mapping:
+  domain_model: internal/domain/assistant/model
+  repository: internal/domain/assistant/repository
+  application: internal/application/assistant
+  adapter_rest: internal/adapter/rest/assistant
+  adapter_event: internal/adapter/event/assistant

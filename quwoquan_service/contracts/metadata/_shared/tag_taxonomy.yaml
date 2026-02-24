@@ -1,0 +1,112 @@
+version: 1
+
+taxonomies:
+  user_tags:
+    description: 用户标签
+    auto_taggable: true
+    applicable_entities: [UserProfile]
+    tags:
+      - { id: interest_tech, label: 科技, category: interest }
+      - { id: interest_art, label: 艺术, category: interest }
+      - { id: interest_food, label: 美食, category: interest }
+      - { id: interest_travel, label: 旅行, category: interest }
+      - { id: interest_fashion, label: 时尚, category: interest }
+      - { id: interest_sports, label: 运动, category: interest }
+      - { id: interest_music, label: 音乐, category: interest }
+      - { id: interest_photography, label: 摄影, category: interest }
+      - { id: interest_reading, label: 阅读, category: interest }
+      - { id: interest_gaming, label: 游戏, category: interest }
+      - { id: interest_pets, label: 宠物, category: interest }
+      - { id: interest_parenting, label: 育儿, category: interest }
+      - { id: interest_fitness, label: 健身, category: interest }
+      - { id: interest_home, label: 家居, category: interest }
+      - { id: interest_finance, label: 财经, category: interest }
+      - { id: role_creator, label: 创作者, category: role }
+      - { id: role_consumer, label: 消费者, category: role }
+      - { id: role_curator, label: 策展人, category: role }
+      - { id: active_high, label: 高活跃, category: activity }
+      - { id: active_medium, label: 中活跃, category: activity }
+      - { id: active_low, label: 低活跃, category: activity }
+      - { id: active_dormant, label: 沉默, category: activity }
+      - { id: prefer_image, label: 偏好图片, category: content_pref }
+      - { id: prefer_video, label: 偏好视频, category: content_pref }
+      - { id: prefer_article, label: 偏好文章, category: content_pref }
+      - { id: prefer_micro, label: 偏好微趣, category: content_pref }
+
+  content_tags:
+    description: 内容标签
+    auto_taggable: true
+    applicable_entities: [Post, MediaAsset]
+    tags:
+      - { id: type_image, label: 图片, category: type }
+      - { id: type_video, label: 视频, category: type }
+      - { id: type_micro, label: 微趣, category: type }
+      - { id: type_article, label: 文章, category: type }
+      - { id: topic_travel, label: 旅行, category: topic }
+      - { id: topic_food, label: 美食, category: topic }
+      - { id: topic_tech, label: 科技, category: topic }
+      - { id: topic_fashion, label: 时尚, category: topic }
+      - { id: topic_sports, label: 运动, category: topic }
+      - { id: topic_music, label: 音乐, category: topic }
+      - { id: topic_photography, label: 摄影, category: topic }
+      - { id: topic_art, label: 艺术, category: topic }
+      - { id: topic_education, label: 教育, category: topic }
+      - { id: topic_pets, label: 宠物, category: topic }
+      - { id: topic_parenting, label: 育儿, category: topic }
+      - { id: topic_fitness, label: 健身, category: topic }
+      - { id: topic_home, label: 家居, category: topic }
+      - { id: topic_finance, label: 财经, category: topic }
+      - { id: topic_local, label: 本地生活, category: topic }
+      - { id: topic_news, label: 资讯, category: topic }
+      - { id: mood_positive, label: 正面情绪, category: mood }
+      - { id: mood_neutral, label: 中性, category: mood }
+      - { id: mood_negative, label: 负面情绪, category: mood }
+      - { id: mood_inspirational, label: 励志, category: mood }
+      - { id: mood_humorous, label: 幽默, category: mood }
+      - { id: quality_high, label: 高质量, category: quality }
+      - { id: quality_original, label: 原创, category: quality }
+      - { id: quality_curated, label: 精选, category: quality }
+      - { id: geo_domestic, label: 国内, category: geo }
+      - { id: geo_overseas, label: 海外, category: geo }
+
+  social_tags:
+    description: 社交关系标签
+    auto_taggable: true
+    applicable_entities: [FollowEdge, Conversation]
+    tags:
+      - { id: rel_close, label: 密切关系, category: strength }
+      - { id: rel_moderate, label: 一般关系, category: strength }
+      - { id: rel_casual, label: 普通关系, category: strength }
+      - { id: chat_frequent, label: 频繁聊天, category: frequency }
+      - { id: chat_occasional, label: 偶尔聊天, category: frequency }
+      - { id: chat_rare, label: 很少聊天, category: frequency }
+      - { id: rel_mutual_follow, label: 互关, category: relation }
+      - { id: rel_one_way, label: 单向关注, category: relation }
+      - { id: rel_same_circle, label: 同圈好友, category: relation }
+      - { id: interact_like, label: 爱点赞, category: interact }
+      - { id: interact_comment, label: 爱评论, category: interact }
+      - { id: interact_share, label: 爱转发, category: interact }
+
+  circle_tags:
+    description: 圈子标签
+    auto_taggable: true
+    applicable_entities: [Circle]
+    tags:
+      - { id: circle_interest, label: 兴趣圈, category: type }
+      - { id: circle_local, label: 本地圈, category: type }
+      - { id: circle_professional, label: 行业圈, category: type }
+      - { id: circle_event, label: 活动圈, category: type }
+      - { id: circle_alumni, label: 校友圈, category: type }
+      - { id: circle_active, label: 活跃圈, category: activity }
+      - { id: circle_growing, label: 成长中, category: activity }
+      - { id: circle_stable, label: 稳定, category: activity }
+      - { id: circle_dormant, label: 沉寂, category: activity }
+      - { id: circle_small, label: 小圈子, category: size }
+      - { id: circle_medium, label: 中圈子, category: size }
+      - { id: circle_large, label: 大圈子, category: size }
+      - { id: circle_topic_travel, label: 旅行圈, category: topic }
+      - { id: circle_topic_food, label: 美食圈, category: topic }
+      - { id: circle_topic_tech, label: 科技圈, category: topic }
+      - { id: circle_topic_photography, label: 摄影圈, category: topic }
+      - { id: circle_topic_fitness, label: 健身圈, category: topic }
+      - { id: circle_topic_pets, label: 宠物圈, category: topic }

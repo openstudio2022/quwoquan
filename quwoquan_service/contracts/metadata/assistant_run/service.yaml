@@ -1,0 +1,152 @@
+version: 1
+aggregate: AssistantRun
+
+service:
+  name: assistant-service
+  domain: assistant
+  owner: backend-team
+  description: 小趣助手执行、上下文感知、Skill 路由与学习反馈
+
+api_routes:
+  - method: POST
+    path: /v1/assistant/runs
+    operation: CreateRun
+    description: 同步执行
+    request_fields: [userQuery, triggerType, skillId]
+    response_entity: AssistantRun
+
+  - method: POST
+    path: /v1/assistant/runs/stream
+    operation: CreateRunStream
+    description: 流式执行（SSE）
+
+  - method: POST
+    path: /v1/assistant/page-context
+    operation: ReportPageContext
+    description: 页面上下文上报
+    request_fields: [pageType, businessObjects, userAction, userActions]
+
+  - method: GET
+    path: /v1/assistant/suggested-actions
+    operation: GetSuggestedActions
+    description: 获取当前页面建议操作
+    query_params: [pageType, objectId]
+
+  - method: POST
+    path: /v1/assistant/learning/events
+    operation: ReportInteractionEvent
+    description: 交互事件上报
+    request_entity: InteractionEvent
+
+  - method: POST
+    path: /v1/assistant/learning/scorecards
+    operation: ReportScorecard
+    description: 评分卡上报
+
+  - method: GET
+    path: /v1/assistant/policy
+    operation: GetPolicy
+    description: 策略拉取
+
+  - method: GET
+    path: /v1/assistant/skills
+    operation: ListSkills
+    description: 可用 Skill 列表
+
+  - method: POST
+    path: /v1/assistant/skills/{skillId}/consent
+    operation: GrantSkillConsent
+    description: 授权 Skill
+
+  - method: DELETE
+    path: /v1/assistant/skills/{skillId}/consent
+    operation: RevokeSkillConsent
+    description: 撤销 Skill 授权
+
+consumers:
+  - name: app
+    capabilities: [create_run, stream_run, report_page_context, get_suggested_actions, report_events, list_skills, manage_consent]
+  - name: platform-ops
+    capabilities: [read_runs, read_events, read_scorecards, manage_policy, manage_skills]
+  - name: recommendation-engine
+    capabilities: [read_runs, read_events]
+
+contract_test:
+  mock_strategy:
+    app_side:
+      mock_target: assistant-service API
+      data_source: fields.yaml
+      scenarios:
+        - name: sync_run
+          route: POST /v1/assistant/runs
+          assertions: [status_200, run_id_returned, response_type_valid]
+
+        - name: stream_run
+          route: POST /v1/assistant/runs/stream
+          assertions: [sse_connection_established, events_streamed, run_completed]
+
+        - name: page_context_report
+          route: POST /v1/assistant/page-context
+          variants: [content_detail, feed, chat, circle]
+          assertions: [status_200, context_cached]
+
+        - name: suggested_actions
+          route: GET /v1/assistant/suggested-actions
+          assertions: [status_200, actions_relevant_to_page]
+
+        - name: skill_consent_flow
+          routes:
+            - POST /v1/assistant/skills/{skillId}/consent
+            - DELETE /v1/assistant/skills/{skillId}/consent
+          assertions: [consent_granted, consent_revoked]
+
+    service_side:
+      description: 使用真实测试数据库，不 mock 存储层
+      real_engines:
+        mongodb: testcontainers (mongo:7)
+        redis: miniredis/v2
+      spy_targets: [event_publisher]
+      mock_targets: [llm_client, embedding_client, cross_service_clients]
+      data_management:
+        seed: fixture 工厂预制到真实 MongoDB
+        cleanup: "DeleteMany for assistant_runs, interaction_events"
+        redis_cleanup: miniredis.FlushAll()
+      scenarios:
+        - name: run_lifecycle
+          command: CreateRun
+          seed: []
+          assertions:
+            - "db.assistant_runs.FindOne({_id}) → status='running' then 'completed'"
+            - "db.assistant_runs.FindOne({_id}).latencyMs → > 0"
+            - "eventSpy.AssertPublished('AssistantRunStarted')"
+            - "eventSpy.AssertPublished('AssistantRunCompleted', {llmTokensUsed})"
+            - "llm mock called with correct context"
+
+        - name: page_context_to_redis
+          command: ReportPageContext (with userActions)
+          seed: []
+          assertions:
+            - "miniredis.HGetAll('page_ctx:{userId}') → contains pageType + objects"
+            - "miniredis.TTL('page_ctx:{userId}') → ~300s"
+
+        - name: feedback_learning_loop
+          command: ReportInteractionEvent (feedback)
+          seed: [fixture.NewAssistantRun()]
+          assertions:
+            - "db.interaction_events.FindOne({runId}) → feedbackType + score correct"
+            - "db.assistant_runs.FindOne({_id}).satisfactionScore → updated"
+            - "eventSpy.AssertPublished('AssistantFeedbackReceived')"
+
+        - name: skill_consent_check
+          command: CreateRun (with skillId, no consent)
+          seed: []
+          assertions:
+            - "error returned: skill consent required"
+            - "db.assistant_runs.CountDocuments({}) → 0 (not persisted)"
+
+  coverage_requirements:
+    - all trigger types (user_query/suggested_action/skill_select) covered
+    - all page types covered in page_context scenarios
+    - SSE streaming tested
+    - skill consent enforcement verified
+    - learning feedback loop end-to-end

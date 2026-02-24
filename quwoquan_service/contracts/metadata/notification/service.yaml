@@ -1,0 +1,88 @@
+version: 1
+entity: Notification
+
+service:
+  name: notification-service
+  domain: notification
+
+api_routes:
+  - method: GET
+    path: /v1/notifications
+    operation: ListNotifications
+    description: 通知列表
+    query_params: [type, read, cursor, limit]
+
+  - method: POST
+    path: /v1/notifications/read
+    operation: MarkAsRead
+    description: 批量标记已读
+    request_fields: [notificationIds]
+
+  - method: POST
+    path: /v1/notifications/read-all
+    operation: MarkAllAsRead
+    description: 全部标记已读
+
+  - method: GET
+    path: /v1/notifications/unread-count
+    operation: GetUnreadCount
+    description: 未读计数
+
+consumers:
+  - name: app
+    capabilities: [list, mark_read, mark_all_read, unread_count]
+  - name: platform-ops
+    capabilities: [send_system_notification]
+
+contract_test:
+  mock_strategy:
+    app_side:
+      mock_target: notification-service API
+      scenarios:
+        - name: notification_list_tabs
+          route: GET /v1/notifications
+          variants: [all, social, content, circle, system]
+          assertions: [status_200, items_match_schema, sorted_by_created_at_desc]
+
+        - name: mark_read
+          route: POST /v1/notifications/read
+          assertions: [status_200, read_status_updated]
+
+        - name: unread_count
+          route: GET /v1/notifications/unread-count
+          assertions: [status_200, count_matches]
+
+    service_side:
+      description: 使用真实测试数据库，不 mock 存储层
+      real_engines:
+        mongodb: testcontainers (mongo:7)
+      spy_targets: [event_publisher]
+      mock_targets: [push_service_client]
+      data_management:
+        seed: fixture 工厂预制到真实 MongoDB
+        cleanup: "db.notifications.DeleteMany(ctx, bson.D{})"
+      scenarios:
+        - name: create_notification_from_event
+          trigger: inject UserFollowed event
+          seed: []
+          assertions:
+            - "db.notifications.FindOne({userId, type: 'social'}) → document exists"
+            - "push mock called if user settings enablePush=true"
+
+        - name: batch_mark_read
+          command: MarkAsRead([id1, id2, id3])
+          seed: [fixture.NewNotification() x3]
+          assertions:
+            - "db.notifications.Find({_id: {$in: [id1,id2,id3]}}).read → all true"
+            - "db.notifications.Find({...}).readAt → all NOT NULL"
+
+        - name: ttl_expiry
+          description: 验证 90 天 TTL 索引
+          seed: [fixture.NewNotification(createdAt=91_days_ago)]
+          assertions:
+            - "after MongoDB TTL monitor runs → document auto-deleted"
+
+  coverage_requirements:
+    - all notification types tested
+    - TTL cleanup verified
+    - push integration tested

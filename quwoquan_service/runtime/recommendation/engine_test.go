@@ -1,0 +1,915 @@
+package recommendation
+
+import (
+	"context"
+	"fmt"
+	"sync"
+	"testing"
+	"time"
+
+	experiments "quwoquan_service/runtime/experiments"
+	learning "quwoquan_service/runtime/learning"
+)
+
+type mockCandidateSource struct {
+	candidates []ContentCandidate
+}
+
+func (m *mockCandidateSource) Recall(_ context.Context, _ RecallRequest) ([]ContentCandidate, error) {
+	return m.candidates, nil
+}
+
+type mockRedisClient struct {
+	data   map[string]string
+	sets   map[string]map[string]bool
+	hashes map[string]map[string]string
+}
+
+func newMockRedis() *mockRedisClient {
+	return &mockRedisClient{
+		data:   make(map[string]string),
+		sets:   make(map[string]map[string]bool),
+		hashes: make(map[string]map[string]string),
+	}
+}
+
+func (m *mockRedisClient) Get(_ context.Context, key string) (string, error) {
+	return m.data[key], nil
+}
+func (m *mockRedisClient) Set(_ context.Context, key, value string, _ time.Duration) error {
+	m.data[key] = value
+	return nil
+}
+func (m *mockRedisClient) Del(_ context.Context, keys ...string) error {
+	for _, k := range keys {
+		delete(m.data, k)
+	}
+	return nil
+}
+func (m *mockRedisClient) SAdd(_ context.Context, key string, members ...string) error {
+	if m.sets[key] == nil {
+		m.sets[key] = make(map[string]bool)
+	}
+	for _, mem := range members {
+		m.sets[key][mem] = true
+	}
+	return nil
+}
+func (m *mockRedisClient) SMembers(_ context.Context, key string) ([]string, error) {
+	var result []string
+	for k := range m.sets[key] {
+		result = append(result, k)
+	}
+	return result, nil
+}
+func (m *mockRedisClient) SIsMember(_ context.Context, key, member string) (bool, error) {
+	return m.sets[key][member], nil
+}
+func (m *mockRedisClient) HIncrByFloat(_ context.Context, key, field string, incr float64) error {
+	if m.hashes[key] == nil {
+		m.hashes[key] = make(map[string]string)
+	}
+	var cur float64
+	if v, ok := m.hashes[key][field]; ok {
+		fmt.Sscanf(v, "%f", &cur)
+	}
+	m.hashes[key][field] = fmt.Sprintf("%f", cur+incr)
+	return nil
+}
+func (m *mockRedisClient) HGetAll(_ context.Context, key string) (map[string]string, error) {
+	if m.hashes[key] == nil {
+		return map[string]string{}, nil
+	}
+	return m.hashes[key], nil
+}
+func (m *mockRedisClient) Expire(_ context.Context, _ string, _ time.Duration) error { return nil }
+
+func TestHotPath_ProcessSignal_UpdatesState(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	err := hp.ProcessSignal(ctx, BehaviorSignal{
+		UserID:    "u1",
+		SessionID: "s1",
+		ContentID: "c1",
+		Action:    "like",
+		Tags:      []string{"travel", "photo"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exposed, _ := hp.IsExposed(ctx, "u1", "s1", "c1")
+	if !exposed {
+		t.Error("c1 should be exposed")
+	}
+
+	state, err := hp.GetSessionState(ctx, "u1", "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if state.TagWeights["travel"] <= 0 {
+		t.Error("travel tag weight should be positive after like")
+	}
+	if state.SessionID != "s1" {
+		t.Errorf("expected sessionID s1, got %s", state.SessionID)
+	}
+}
+
+func TestHotPath_SessionIsolation(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	hp.ProcessSignal(ctx, BehaviorSignal{UserID: "u1", SessionID: "s1", ContentID: "c1", Action: "like", Tags: []string{"travel"}})
+	hp.ProcessSignal(ctx, BehaviorSignal{UserID: "u1", SessionID: "s2", ContentID: "c2", Action: "like", Tags: []string{"food"}})
+
+	s1, _ := hp.GetSessionState(ctx, "u1", "s1")
+	s2, _ := hp.GetSessionState(ctx, "u1", "s2")
+
+	if s1.TagWeights["food"] > 0 {
+		t.Error("session s1 should not have food tag from session s2")
+	}
+	if s2.TagWeights["travel"] > 0 {
+		t.Error("session s2 should not have travel tag from session s1")
+	}
+}
+
+func TestHotPath_DislikeSignal_AddsToNegativeSet(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	hp.ProcessSignal(ctx, BehaviorSignal{
+		UserID:    "u1",
+		SessionID: "s1",
+		ContentID: "c2",
+		Action:    "dislike",
+		Tags:      []string{"spam"},
+	})
+
+	state, _ := hp.GetSessionState(ctx, "u1", "s1")
+	found := false
+	for _, id := range state.NegativeIDs {
+		if id == "c2" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("c2 should be in negative set after dislike")
+	}
+}
+
+func TestEngine_GetFeed_FiltersExposed(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	hp.ProcessSignal(ctx, BehaviorSignal{UserID: "u1", SessionID: "s1", ContentID: "c1", Action: "click"})
+
+	source := &mockCandidateSource{
+		candidates: []ContentCandidate{
+			{ContentID: "c1", ContentType: "image", PublishedAt: time.Now()},
+			{ContentID: "c2", ContentType: "video", PublishedAt: time.Now()},
+			{ContentID: "c3", ContentType: "article", PublishedAt: time.Now()},
+		},
+	}
+
+	engine := NewEngine(hp, []CandidateSource{source})
+	resp, err := engine.GetFeed(ctx, GetFeedRequest{UserID: "u1", SessionID: "s1", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, item := range resp.Items {
+		if item.ContentID == "c1" {
+			t.Error("c1 should be filtered (already exposed)")
+		}
+	}
+	if len(resp.Items) != 2 {
+		t.Errorf("expected 2 items, got %d", len(resp.Items))
+	}
+}
+
+func TestEngine_GetFeed_ScoresByTagRelevance(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	hp.ProcessSignal(ctx, BehaviorSignal{UserID: "u1", SessionID: "s1", ContentID: "x1", Action: "like", Tags: []string{"travel"}})
+	hp.ProcessSignal(ctx, BehaviorSignal{UserID: "u1", SessionID: "s1", ContentID: "x2", Action: "like", Tags: []string{"travel"}})
+
+	now := time.Now()
+	source := &mockCandidateSource{
+		candidates: []ContentCandidate{
+			{ContentID: "a", ContentType: "image", Tags: []string{"food"}, PublishedAt: now},
+			{ContentID: "b", ContentType: "image", Tags: []string{"travel"}, PublishedAt: now},
+		},
+	}
+
+	engine := NewEngine(hp, []CandidateSource{source}, WithExploreFraction(0))
+	resp, _ := engine.GetFeed(ctx, GetFeedRequest{UserID: "u1", SessionID: "s1", Limit: 10})
+
+	if len(resp.Items) < 2 {
+		t.Fatal("expected at least 2 items")
+	}
+	if resp.Items[0].ContentID != "b" {
+		t.Errorf("travel content should rank higher, got %s first", resp.Items[0].ContentID)
+	}
+}
+
+func TestEngine_Rerank_AuthorDedup(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	now := time.Now()
+	source := &mockCandidateSource{
+		candidates: []ContentCandidate{
+			{ContentID: "p1", ContentType: "image", AuthorID: "a1", PublishedAt: now, LikeCount: 100},
+			{ContentID: "p2", ContentType: "image", AuthorID: "a1", PublishedAt: now, LikeCount: 90},
+			{ContentID: "p3", ContentType: "image", AuthorID: "a1", PublishedAt: now, LikeCount: 80},
+			{ContentID: "p4", ContentType: "image", AuthorID: "a1", PublishedAt: now, LikeCount: 70},
+			{ContentID: "p5", ContentType: "video", AuthorID: "a2", PublishedAt: now, LikeCount: 50},
+		},
+	}
+
+	engine := NewEngine(hp, []CandidateSource{source},
+		WithMaxAuthorPerFeed(2),
+		WithExploreFraction(0),
+	)
+	resp, _ := engine.GetFeed(ctx, GetFeedRequest{UserID: "u1", Limit: 5})
+
+	a1Count := 0
+	for _, item := range resp.Items {
+		if item.AuthorID == "a1" {
+			a1Count++
+		}
+	}
+	if a1Count > 2 {
+		t.Errorf("expected at most 2 items from a1, got %d", a1Count)
+	}
+}
+
+func TestEngine_MultiSource_Dedup(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	now := time.Now()
+	src1 := &mockCandidateSource{candidates: []ContentCandidate{
+		{ContentID: "c1", ContentType: "image", PublishedAt: now},
+		{ContentID: "c2", ContentType: "video", PublishedAt: now},
+	}}
+	src2 := &mockCandidateSource{candidates: []ContentCandidate{
+		{ContentID: "c2", ContentType: "video", PublishedAt: now},
+		{ContentID: "c3", ContentType: "article", PublishedAt: now},
+	}}
+
+	engine := NewEngine(hp, []CandidateSource{src1, src2})
+	resp, _ := engine.GetFeed(ctx, GetFeedRequest{UserID: "u1", Limit: 10})
+
+	ids := map[string]int{}
+	for _, item := range resp.Items {
+		ids[item.ContentID]++
+	}
+	for id, count := range ids {
+		if count > 1 {
+			t.Errorf("content %s appears %d times (should be deduped)", id, count)
+		}
+	}
+	if len(resp.Items) != 3 {
+		t.Errorf("expected 3 unique items, got %d", len(resp.Items))
+	}
+}
+
+func TestEngine_ABExperiment_AffectsScoring(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	resolver := experiments.NewHashResolver()
+	RegisterRecWeightsExperiment(resolver)
+
+	now := time.Now()
+	source := &mockCandidateSource{candidates: []ContentCandidate{
+		{ContentID: "c1", ContentType: "image", Tags: []string{"travel"}, PublishedAt: now, LikeCount: 50},
+		{ContentID: "c2", ContentType: "video", Tags: []string{"food"}, PublishedAt: now, LikeCount: 5},
+	}}
+
+	engine := NewEngine(hp, []CandidateSource{source},
+		WithExperimentResolver(resolver),
+		WithExploreFraction(0),
+	)
+	resp, err := engine.GetFeed(ctx, GetFeedRequest{UserID: "testuser", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(resp.Items))
+	}
+
+	// Verify that items have scores (regardless of which bucket was assigned)
+	for _, item := range resp.Items {
+		if item.Score <= 0 {
+			t.Errorf("item %s should have positive score, got %f", item.ContentID, item.Score)
+		}
+	}
+}
+
+func TestResolveWeights_DefaultOnNilResolver(t *testing.T) {
+	ctx := context.Background()
+	w := ResolveWeights(ctx, nil, "u1")
+	def := DefaultWeights()
+	if w.TagRelevance != def.TagRelevance {
+		t.Errorf("expected default TagRelevance %f, got %f", def.TagRelevance, w.TagRelevance)
+	}
+}
+
+func TestResolveWeights_PresetBuckets(t *testing.T) {
+	ctx := context.Background()
+	resolver := experiments.NewHashResolver()
+	RegisterRecWeightsExperiment(resolver)
+
+	// Test a known preset
+	assignment, _ := resolver.Resolve(ctx, ExpRecWeights, "testuser")
+	if _, ok := WeightPresets[assignment.Bucket]; !ok {
+		t.Errorf("assigned bucket %q not in WeightPresets", assignment.Bucket)
+	}
+}
+
+type mockLearningRecorder struct {
+	mu         sync.Mutex
+	events     []struct{ eventType string }
+	scorecards []struct{ runID string }
+}
+
+func (m *mockLearningRecorder) RecordEvent(_ context.Context, e learning.Event) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.events = append(m.events, struct{ eventType string }{e.EventType})
+	return nil
+}
+
+func (m *mockLearningRecorder) RecordScorecard(_ context.Context, sc learning.Scorecard) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.scorecards = append(m.scorecards, struct{ runID string }{sc.RunID})
+	return nil
+}
+
+func (m *mockLearningRecorder) eventCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.events)
+}
+
+func TestFeedbackRecorder_RecordImpression(t *testing.T) {
+	mock := &mockLearningRecorder{}
+	fr := NewFeedbackRecorder(mock)
+	ctx := context.Background()
+
+	items := []FeedItem{
+		{ContentID: "c1", ContentType: "image", Score: 5.0, RecallPath: "tag_recall"},
+		{ContentID: "c2", ContentType: "video", Score: 3.0, RecallPath: "hot_recall"},
+	}
+
+	err := fr.RecordImpression(ctx, "u1", "s1", items)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mock.events) != 2 {
+		t.Errorf("expected 2 impression events, got %d", len(mock.events))
+	}
+	for _, e := range mock.events {
+		if e.eventType != "rec_impression" {
+			t.Errorf("unexpected event type: %s", e.eventType)
+		}
+	}
+}
+
+func TestFeedbackRecorder_RecordEngagement(t *testing.T) {
+	mock := &mockLearningRecorder{}
+	fr := NewFeedbackRecorder(mock)
+	ctx := context.Background()
+
+	err := fr.RecordEngagement(ctx, BehaviorSignal{
+		UserID: "u1", SessionID: "s1", ContentID: "c1", Action: "like",
+	}, 5.0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mock.events) != 1 {
+		t.Errorf("expected 1 engagement event, got %d", len(mock.events))
+	}
+}
+
+func TestFeedbackRecorder_RecordScorecard(t *testing.T) {
+	mock := &mockLearningRecorder{}
+	fr := NewFeedbackRecorder(mock)
+	ctx := context.Background()
+
+	err := fr.RecordScorecard(ctx, "u1", "control", 1500.0, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mock.scorecards) != 1 {
+		t.Errorf("expected 1 scorecard, got %d", len(mock.scorecards))
+	}
+	if mock.scorecards[0].runID != "control" {
+		t.Errorf("expected runID 'control', got %s", mock.scorecards[0].runID)
+	}
+}
+
+func TestEngine_WithFeedback_RecordsImpressions(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	mock := &mockLearningRecorder{}
+	fr := NewFeedbackRecorder(mock)
+	ctx := context.Background()
+
+	now := time.Now()
+	source := &mockCandidateSource{candidates: []ContentCandidate{
+		{ContentID: "c1", ContentType: "image", PublishedAt: now},
+		{ContentID: "c2", ContentType: "video", PublishedAt: now},
+	}}
+
+	engine := NewEngine(hp, []CandidateSource{source}, WithFeedbackRecorder(fr))
+	resp, _ := engine.GetFeed(ctx, GetFeedRequest{UserID: "u1", SessionID: "s1", Limit: 10})
+
+	// Feedback is now async — poll until events arrive or timeout
+	deadline := time.After(2 * time.Second)
+	for {
+		if mock.eventCount() >= len(resp.Items) {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("timeout waiting for async feedback: expected %d events, got %d",
+				len(resp.Items), mock.eventCount())
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+}
+
+// --- Model integration tests ---
+
+type mockModelScorer struct {
+	boost float64
+}
+
+func (m *mockModelScorer) ScoreBatch(_ context.Context, features *ScoringFeatures, candidates []ContentCandidate) ([]ScoredCandidate, error) {
+	result := make([]ScoredCandidate, len(candidates))
+	for i, c := range candidates {
+		score := float64(c.LikeCount) * m.boost
+		result[i] = ScoredCandidate{Candidate: c, Score: score}
+	}
+	return result, nil
+}
+
+type failingModelScorer struct{}
+
+func (f *failingModelScorer) ScoreBatch(_ context.Context, _ *ScoringFeatures, _ []ContentCandidate) ([]ScoredCandidate, error) {
+	return nil, fmt.Errorf("model service unavailable")
+}
+
+type mockFeatureProvider struct {
+	features map[string]*UserFeatureVector
+}
+
+func (m *mockFeatureProvider) GetFeatures(_ context.Context, userID string) (*UserFeatureVector, error) {
+	if f, ok := m.features[userID]; ok {
+		return f, nil
+	}
+	return nil, nil
+}
+
+func TestEngine_WithCustomScorer(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	now := time.Now()
+	source := &mockCandidateSource{candidates: []ContentCandidate{
+		{ContentID: "c1", ContentType: "image", PublishedAt: now, LikeCount: 10},
+		{ContentID: "c2", ContentType: "video", PublishedAt: now, LikeCount: 100},
+	}}
+
+	customScorer := &mockModelScorer{boost: 2.0}
+	engine := NewEngine(hp, []CandidateSource{source}, WithScorer(customScorer))
+	resp, err := engine.GetFeed(ctx, GetFeedRequest{UserID: "u1", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(resp.Items))
+	}
+	// c2 (LikeCount=100) should rank first with boost scorer
+	if resp.Items[0].ContentID != "c2" {
+		t.Errorf("expected c2 first (higher likes), got %s", resp.Items[0].ContentID)
+	}
+}
+
+func TestEngine_CascadeScorer_FallbackOnError(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	now := time.Now()
+	source := &mockCandidateSource{candidates: []ContentCandidate{
+		{ContentID: "c1", ContentType: "image", PublishedAt: now, LikeCount: 50},
+		{ContentID: "c2", ContentType: "video", PublishedAt: now, LikeCount: 5},
+	}}
+
+	cascade := NewCascadeScorer(
+		&failingModelScorer{},
+		&RuleScorer{},
+		100*time.Millisecond,
+	)
+
+	engine := NewEngine(hp, []CandidateSource{source}, WithScorer(cascade))
+	resp, err := engine.GetFeed(ctx, GetFeedRequest{UserID: "u1", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Should have results from fallback RuleScorer
+	if len(resp.Items) == 0 {
+		t.Error("cascade scorer should fallback to RuleScorer on primary failure")
+	}
+}
+
+func TestEngine_WithFeatureProvider(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	hp.ProcessSignal(ctx, BehaviorSignal{
+		UserID: "u1", SessionID: "s1", ContentID: "x1", Action: "like", Tags: []string{"travel"},
+	})
+
+	now := time.Now()
+	source := &mockCandidateSource{candidates: []ContentCandidate{
+		{ContentID: "c1", ContentType: "image", Tags: []string{"food"}, AuthorID: "auth1", PublishedAt: now},
+		{ContentID: "c2", ContentType: "video", Tags: []string{"travel"}, AuthorID: "auth2", PublishedAt: now},
+	}}
+
+	fp := &mockFeatureProvider{features: map[string]*UserFeatureVector{
+		"u1": {
+			TagAffinities:    map[string]float64{"travel": 5.0, "food": 1.0},
+			AuthorAffinities: map[string]float64{"auth2": 3.0},
+			TotalLikes:       100,
+			EngagementRate:   0.15,
+		},
+	}}
+
+	engine := NewEngine(hp, []CandidateSource{source},
+		WithFeatureProvider(fp),
+		WithExploreFraction(0),
+	)
+	resp, err := engine.GetFeed(ctx, GetFeedRequest{UserID: "u1", SessionID: "s1", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Items) < 2 {
+		t.Fatal("expected at least 2 items")
+	}
+	// c2 should rank higher: session travel affinity + user tag affinity + author affinity
+	if resp.Items[0].ContentID != "c2" {
+		t.Errorf("c2 (travel + author affinity) should rank first, got %s", resp.Items[0].ContentID)
+	}
+}
+
+func TestRuleScorer_UsesUserFeatures(t *testing.T) {
+	scorer := &RuleScorer{}
+	ctx := context.Background()
+
+	now := time.Now()
+	candidates := []ContentCandidate{
+		{ContentID: "c1", ContentType: "image", Tags: []string{"food"}, AuthorID: "a1", PublishedAt: now},
+		{ContentID: "c2", ContentType: "video", Tags: []string{"travel"}, AuthorID: "a2", PublishedAt: now},
+	}
+
+	features := &ScoringFeatures{
+		Session: &SessionState{TagWeights: map[string]float64{"travel": 2.0}},
+		User: &UserFeatureVector{
+			TagAffinities:    map[string]float64{"travel": 5.0},
+			AuthorAffinities: map[string]float64{"a2": 3.0},
+			EngagementRate:   0.2,
+		},
+		Weights:     DefaultWeights(),
+		ExploreRate: 0,
+	}
+
+	scored, err := scorer.ScoreBatch(ctx, features, candidates)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scored) != 2 {
+		t.Fatalf("expected 2 scored items, got %d", len(scored))
+	}
+
+	// Verify c2 scores higher due to tag + author affinity
+	var c1Score, c2Score float64
+	for _, s := range scored {
+		if s.Candidate.ContentID == "c1" {
+			c1Score = s.Score
+		}
+		if s.Candidate.ContentID == "c2" {
+			c2Score = s.Score
+		}
+	}
+	if c2Score <= c1Score {
+		t.Errorf("c2 (travel+author) should score higher: c1=%f c2=%f", c1Score, c2Score)
+	}
+
+	// Verify detail map has feature contributions
+	for _, s := range scored {
+		if s.Detail == nil {
+			t.Errorf("scored item %s should have detail map", s.Candidate.ContentID)
+		}
+		if _, ok := s.Detail["authorAffinity"]; !ok {
+			t.Errorf("detail should contain authorAffinity for %s", s.Candidate.ContentID)
+		}
+	}
+}
+
+func TestQualityPreRanker_FiltersStaleContent(t *testing.T) {
+	now := time.Now()
+	candidates := []ContentCandidate{
+		{ContentID: "new", PublishedAt: now.Add(-1 * time.Hour), LikeCount: 10, ViewCount: 100},
+		{ContentID: "old", PublishedAt: now.Add(-30 * 24 * time.Hour), LikeCount: 1000, ViewCount: 10000},
+		{ContentID: "recent", PublishedAt: now.Add(-2 * 24 * time.Hour), LikeCount: 50, ViewCount: 500},
+	}
+
+	pr := NewQualityPreRanker(7 * 24 * time.Hour)
+	result := pr.PreRank(context.Background(), candidates, 10)
+
+	for _, c := range result {
+		if c.ContentID == "old" {
+			t.Error("pre-ranker should filter content older than maxAge")
+		}
+	}
+	if len(result) != 2 {
+		t.Errorf("expected 2 items after pre-rank, got %d", len(result))
+	}
+}
+
+func TestQualityPreRanker_TruncatesToLimit(t *testing.T) {
+	now := time.Now()
+	candidates := make([]ContentCandidate, 100)
+	for i := range candidates {
+		candidates[i] = ContentCandidate{
+			ContentID:   fmt.Sprintf("c%d", i),
+			PublishedAt: now.Add(-time.Duration(i) * time.Hour),
+			LikeCount:   int64(100 - i),
+			ViewCount:   int64(1000 - i*10),
+		}
+	}
+
+	pr := NewQualityPreRanker(30 * 24 * time.Hour)
+	result := pr.PreRank(context.Background(), candidates, 20)
+
+	if len(result) != 20 {
+		t.Errorf("expected 20 items after pre-rank truncation, got %d", len(result))
+	}
+}
+
+// --- Performance optimization tests ---
+
+func TestSessionCache_HitAndMiss(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	hp.ProcessSignal(ctx, BehaviorSignal{
+		UserID: "u1", SessionID: "s1", ContentID: "c1", Action: "like", Tags: []string{"travel"},
+	})
+
+	cache := NewSessionCache(hp, 5*time.Second, 100)
+
+	// First call: cache miss → reads from HotPath
+	s1, err := cache.GetSessionState(ctx, "u1", "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s1.TagWeights["travel"] <= 0 {
+		t.Error("expected travel tag weight > 0")
+	}
+
+	// Second call: cache hit → same result without Redis
+	s2, err := cache.GetSessionState(ctx, "u1", "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s2.TagWeights["travel"] != s1.TagWeights["travel"] {
+		t.Error("cache should return same result")
+	}
+}
+
+func TestSessionCache_Singleflight(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	cache := NewSessionCache(hp, 5*time.Second, 100)
+
+	// Launch 100 concurrent requests for the same session
+	const n = 100
+	errs := make(chan error, n)
+	for i := 0; i < n; i++ {
+		go func() {
+			_, err := cache.GetSessionState(ctx, "u1", "s1")
+			errs <- err
+		}()
+	}
+
+	for i := 0; i < n; i++ {
+		if err := <-errs; err != nil {
+			t.Fatalf("concurrent GetSessionState failed: %v", err)
+		}
+	}
+}
+
+func TestSessionCache_Invalidate(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	cache := NewSessionCache(hp, 5*time.Second, 100)
+
+	cache.GetSessionState(ctx, "u1", "s1")
+
+	hp.ProcessSignal(ctx, BehaviorSignal{
+		UserID: "u1", SessionID: "s1", ContentID: "c1", Action: "like", Tags: []string{"food"},
+	})
+
+	// Before invalidate: cache returns stale data (no food tag)
+	s1, _ := cache.GetSessionState(ctx, "u1", "s1")
+	if s1.TagWeights["food"] > 0 {
+		t.Error("cached state should not have food tag yet")
+	}
+
+	cache.Invalidate("u1", "s1")
+
+	// After invalidate: fresh data from Redis
+	s2, _ := cache.GetSessionState(ctx, "u1", "s1")
+	if s2.TagWeights["food"] <= 0 {
+		t.Error("after invalidate, food tag should be present")
+	}
+}
+
+func TestBufferedHotPath_AsyncWrite(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	buf := NewBufferedHotPath(hp, WithFlushInterval(20*time.Millisecond))
+	defer buf.Stop()
+
+	buf.ProcessSignal(ctx, BehaviorSignal{
+		UserID: "u1", SessionID: "s1", ContentID: "c1", Action: "like", Tags: []string{"travel"},
+	})
+
+	// Signal is async — wait for flush
+	time.Sleep(100 * time.Millisecond)
+
+	state, err := hp.GetSessionState(ctx, "u1", "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.TagWeights["travel"] <= 0 {
+		t.Error("expected travel tag weight after buffered flush")
+	}
+}
+
+func TestBufferedHotPath_BatchFlush(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	buf := NewBufferedHotPath(hp, WithFlushInterval(20*time.Millisecond))
+	defer buf.Stop()
+
+	signals := make([]BehaviorSignal, 20)
+	for i := range signals {
+		signals[i] = BehaviorSignal{
+			UserID:    "u1",
+			SessionID: "s1",
+			ContentID: fmt.Sprintf("c%d", i),
+			Action:    "click",
+		}
+	}
+	buf.ProcessSignalBatch(ctx, signals)
+
+	time.Sleep(150 * time.Millisecond)
+
+	state, _ := hp.GetSessionState(ctx, "u1", "s1")
+	if len(state.ExposedIDs) < 20 {
+		t.Errorf("expected 20 exposed IDs after batch flush, got %d", len(state.ExposedIDs))
+	}
+}
+
+func TestEngine_RecallTimeout(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	// Slow source that takes 500ms
+	slowSource := &slowCandidateSource{
+		delay: 500 * time.Millisecond,
+		candidates: []ContentCandidate{
+			{ContentID: "slow1", ContentType: "image", PublishedAt: time.Now()},
+		},
+	}
+	// Fast source that responds immediately
+	fastSource := &mockCandidateSource{
+		candidates: []ContentCandidate{
+			{ContentID: "fast1", ContentType: "video", PublishedAt: time.Now()},
+		},
+	}
+
+	engine := NewEngine(hp, []CandidateSource{slowSource, fastSource},
+		WithRecallTimeout(100*time.Millisecond),
+	)
+
+	start := time.Now()
+	resp, err := engine.GetFeed(ctx, GetFeedRequest{UserID: "u1", Limit: 10})
+	elapsed := time.Since(start)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if elapsed > 300*time.Millisecond {
+		t.Errorf("feed should complete within timeout, took %v", elapsed)
+	}
+	// Fast source should have returned results
+	if len(resp.Items) == 0 {
+		t.Error("expected at least items from fast source")
+	}
+}
+
+type slowCandidateSource struct {
+	delay      time.Duration
+	candidates []ContentCandidate
+}
+
+func (s *slowCandidateSource) Recall(ctx context.Context, _ RecallRequest) ([]ContentCandidate, error) {
+	select {
+	case <-time.After(s.delay):
+		return s.candidates, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func TestEngine_ConcurrentFeedRequests(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	now := time.Now()
+	candidates := make([]ContentCandidate, 50)
+	for i := range candidates {
+		candidates[i] = ContentCandidate{
+			ContentID:   fmt.Sprintf("c%d", i),
+			ContentType: "image",
+			AuthorID:    fmt.Sprintf("a%d", i%10),
+			PublishedAt: now,
+			LikeCount:   int64(50 - i),
+		}
+	}
+	source := &mockCandidateSource{candidates: candidates}
+	cache := NewSessionCache(hp, 2*time.Second, 1000)
+	engine := NewEngine(cache, []CandidateSource{source})
+
+	const goroutines = 100
+	errs := make(chan error, goroutines)
+	for i := 0; i < goroutines; i++ {
+		go func(userIdx int) {
+			userID := fmt.Sprintf("user%d", userIdx%10)
+			resp, err := engine.GetFeed(ctx, GetFeedRequest{
+				UserID:    userID,
+				SessionID: "s1",
+				Limit:     20,
+			})
+			if err != nil {
+				errs <- err
+				return
+			}
+			if len(resp.Items) == 0 {
+				errs <- fmt.Errorf("user %s got empty feed", userID)
+				return
+			}
+			errs <- nil
+		}(i)
+	}
+
+	for i := 0; i < goroutines; i++ {
+		if err := <-errs; err != nil {
+			t.Fatalf("concurrent feed failed: %v", err)
+		}
+	}
+}

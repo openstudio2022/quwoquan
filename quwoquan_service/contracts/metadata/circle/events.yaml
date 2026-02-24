@@ -1,0 +1,50 @@
+version: 1
+aggregate: Circle
+
+events:
+  - name: CircleCreated
+    description: 圈子创建
+    producer: circle-service
+    consumers: [recommendation-engine, notification-service]
+    channel: event_store
+    payload_entity: Circle
+    payload_fields: [_id, name, ownerId, category, tags]
+    recommend_impact: circle_index_refresh
+
+  - name: CircleUpdated
+    description: 圈子信息更新
+    producer: circle-service
+    consumers: [recommendation-engine]
+    channel: event_store
+    payload_entity: Circle
+    payload_fields: [_id, name, description, tags, category]
+
+  - name: CircleMemberJoined
+    description: 成员加入圈子
+    producer: circle-service
+    consumers: [recommendation-engine, notification-service, chat-service]
+    channel: event_store
+    payload_fields: [circleId, userId, role]
+    recommend_impact: social_signal
+
+  - name: CircleMemberLeft
+    description: 成员退出圈子
+    producer: circle-service
+    consumers: [recommendation-engine, chat-service]
+    channel: event_store
+    payload_fields: [circleId, userId]
+
+  - name: CircleArchived
+    description: 圈子归档
+    producer: circle-service
+    consumers: [recommendation-engine, notification-service]
+    channel: event_store
+    payload_fields: [_id, status]
+
+  - name: CircleBehaviorReported
+    description: 圈子行为上报
+    producer: circle-service
+    consumers: [recommendation-engine]
+    channel: direct
+    payload_fields: [userId, circleId, eventType, sessionId]
+    recommend_impact: hot_path_signal

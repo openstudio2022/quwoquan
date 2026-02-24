@@ -1,0 +1,72 @@
+version: 1
+l1: user-identity-profile-relationship
+l2:
+  - feature: onboarding-and-identity-entry
+    l3:
+      - feature: welcome-entry-routing
+        l4:
+          - feature: login-state-entry-policy
+            l5:
+              - feature: entry-consistency-guard
+      - feature: onboarding-consent-flow
+        l4:
+          - feature: consent-record-contract
+            l5:
+              - feature: consent-audit-guard
+      - feature: post-login-landing
+        l4:
+          - feature: landing-bootstrap-context
+            l5:
+              - feature: bootstrap-fallback-guard
+  - feature: auth-profile-snapshot
+    l3:
+      - feature: auth-token-lifecycle
+        l4:
+          - feature: token-issue-refresh-revoke
+            l5:
+              - feature: session-security-guard
+      - feature: profile-read-update
+        l4:
+          - feature: profile-field-contract
+            l5:
+              - feature: profile-write-validation-guard
+      - feature: profile-snapshot-versioning
+        l4:
+          - feature: snapshot-version-control
+            l5:
+              - feature: version-conflict-repair
+  - feature: persona-follow-graph
+    l3:
+      - feature: persona-management
+        l4:
+          - feature: persona-lifecycle-contract
+            l5:
+              - feature: persona-activation-guard
+      - feature: follow-relationship
+        l4:
+          - feature: follow-unfollow-contract
+            l5:
+              - feature: relationship-idempotency-guard
+      - feature: social-graph-read
+        l4:
+          - feature: followers-following-pagination
+            l5:
+              - feature: graph-consistency-repair
+  - feature: settings-and-device-token
+    l3:
+      - feature: notification-privacy-settings
+        l4:
+          - feature: settings-read-write-contract
+            l5:
+              - feature: settings-audit-guard
+      - feature: device-token-register
+        l4:
+          - feature: device-token-upsert-contract
+            l5:
+              - feature: duplicate-token-cleanup-guard
+      - feature: settings-audit
+        l4:
+          - feature: settings-change-trace-link
+            l5:
+              - feature: compliance-audit-export
+

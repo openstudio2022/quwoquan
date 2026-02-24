@@ -59,6 +59,23 @@ class CapabilityGateway {
   final AssistantGateway _assistantGateway;
   final OpenClawBridge _openClawBridge;
 
+  bool _isRemoteResponseCommercialReady(AssistantRunResponse response) {
+    if (response.degraded) return false;
+    final structured = response.structuredResponse;
+    final dialogueRuntime =
+        (structured['dialogueRuntime'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final domainId = (dialogueRuntime['domainId'] as String?)?.trim() ?? '';
+    final uiAnswer = (structured['uiAnswer'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final markdown = (uiAnswer['markdownText'] as String?)?.trim() ?? '';
+    final hasRawTraceLikePrefix = RegExp(
+      r'^\s*\[(page|memory|tool|trace)\.',
+      caseSensitive: false,
+    ).hasMatch(response.finalText);
+    return domainId.isNotEmpty && markdown.isNotEmpty && !hasRawTraceLikePrefix;
+  }
+
   Future<AssistantRunResponse> run({
     required AssistantRunRequest request,
     CapabilityRouteMode mode = CapabilityRouteMode.hybrid,
@@ -68,13 +85,17 @@ class CapabilityGateway {
     }
     if (mode == CapabilityRouteMode.remotePreferred) {
       final remote = await _safeRemoteRun(request);
-      if (remote != null) return remote;
+      if (remote != null && _isRemoteResponseCommercialReady(remote)) {
+        return remote;
+      }
       return _safeLocalRun(request);
     }
     final local = await _safeLocalRun(request);
     if (local.degraded) {
       final remote = await _safeRemoteRun(request);
-      if (remote != null) return remote;
+      if (remote != null && _isRemoteResponseCommercialReady(remote)) {
+        return remote;
+      }
     }
     return local;
   }
@@ -93,7 +114,7 @@ class CapabilityGateway {
         }
         if (mode == CapabilityRouteMode.remotePreferred) {
           final remote = await _safeRemoteRun(request);
-          if (remote != null) {
+          if (remote != null && _isRemoteResponseCommercialReady(remote)) {
             for (final trace in remote.traces) {
               controller.add(AssistantRunStreamEvent.trace(trace));
             }
@@ -110,7 +131,7 @@ class CapabilityGateway {
           return;
         }
         final remote = await _safeRemoteRun(request);
-        if (remote != null) {
+        if (remote != null && _isRemoteResponseCommercialReady(remote)) {
           for (final trace in remote.traces) {
             controller.add(AssistantRunStreamEvent.trace(trace));
           }

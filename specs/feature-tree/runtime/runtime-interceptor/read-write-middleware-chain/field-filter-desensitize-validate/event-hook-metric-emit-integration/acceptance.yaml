@@ -1,0 +1,54 @@
+version: 1
+feature: "event-hook-metric-emit-integration"
+level: "L5_cross_cutting"
+template: "A1-A8"
+tree_context:
+  feature_level: "L5_cross_cutting"
+  feature_path: "capability.runtime.feature.runtime-interceptor.subfeature.read-write-middleware-chain.object.field-filter-desensitize-validate.cross.event-hook-metric-emit-integration"
+  parent_path: "capability.runtime.feature.runtime-interceptor.subfeature.read-write-middleware-chain.object.field-filter-desensitize-validate"
+  acceptance_inherits_from: "capability.runtime.feature.runtime-interceptor"
+level_acceptance:
+  focus_groups:
+    - A1_functional
+    - A4_observability
+    - A5_product_ops
+    - A8_test_automation
+  notes: "事件 hook + 指标发射横切集成。"
+global_acceptance:
+  A1_functional:
+    scenarios:
+      - given: "Post 实体 Save 成功"
+        when: "写链事件 hook 触发"
+        then: "PostCreated 事件发布到 EventPublisher"
+      - given: "observe_metric=true 的字段变更"
+        when: "写链执行"
+        then: "OTEL metric 自动产生"
+      - given: "ops_exposure 控制的字段"
+        when: "运营后台查询"
+        then: "按 ops_exposure 控制可见性"
+  A2_experience:
+    - "事件/指标对业务代码透明"
+  A3_service_governance:
+    - "事件发布不阻塞主流程"
+  A4_observability:
+    - "observe_metric 字段变更产生 OTEL metric"
+    - "事件发布可配置异步/同步"
+  A5_product_ops:
+    - "ops_exposure 控制运营后台字段可见性"
+  A6_security_privacy:
+    - "SECRET 字段不参与事件 payload"
+  A7_contract_metadata_consistency:
+    - "事件/指标规则由 fields.yaml 驱动"
+  A8_test_automation:
+    - "事件 hook 单元测试（发布/不发布场景）"
+    - "指标发射单元测试"
+    - "端到端契约测试（Post 事件 + UserProfile 指标）"
+tests:
+  unit:
+    - "quwoquan_service/runtime/interceptor/tests/event_hook_test.go"
+    - "quwoquan_service/runtime/interceptor/tests/metric_emit_test.go"
+  contract:
+    - "quwoquan_service/runtime/interceptor/tests/field_security_contract_test.go"
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"

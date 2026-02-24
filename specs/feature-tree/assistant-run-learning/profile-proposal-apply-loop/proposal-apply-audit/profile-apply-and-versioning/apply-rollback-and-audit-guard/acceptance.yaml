@@ -1,0 +1,14 @@
+version: 1
+feature: "apply-rollback-and-audit-guard"
+level: "L5"
+template: "A1-A8"
+focus_groups: []
+tests:
+  mock: []
+  unit: []
+  contract: []
+  integration: []
+  uat: []
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"

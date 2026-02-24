@@ -1,0 +1,49 @@
+version: 1
+feature: "runtime-interceptor"
+level: "L2_feature"
+template: "A1-A8"
+tree_context:
+  feature_level: "L2_feature"
+  feature_path: "capability.runtime.feature.runtime-interceptor"
+  parent_path: "capability.runtime"
+  acceptance_inherits_from: "capability.runtime"
+level_acceptance:
+  focus_groups:
+    - A1_functional
+    - A6_security_privacy
+    - A7_contract_metadata_consistency
+    - A8_test_automation
+  notes: "拦截链确保字段级安全、日志和指标一致性，是 metadata 驱动的安全屏障。"
+global_acceptance:
+  A1_functional:
+    scenarios:
+      - given: "UserProfile 实体含 phone 字段（classification=PII, api_exposure=drop）"
+        when: "通过 Repository 读取 UserProfile"
+        then: "返回结果中 phone 字段不存在"
+      - given: "Post 实体写入"
+        when: "通过 Repository Save"
+        then: "PostCreated 事件自动发布 hook 就绪"
+  A2_experience:
+    - "拦截链对业务代码透明，无需手动调用"
+  A3_service_governance:
+    - "拦截链延迟 < 1ms per field"
+  A4_observability:
+    - "observe_metric=true 的字段变更自动产生 OTEL metric"
+  A5_product_ops:
+    - "ops_exposure 控制运营后台字段可见性"
+  A6_security_privacy:
+    - "classification=SECRET 字段不出现在任何 API 响应中"
+    - "classification=PII 字段按 log_policy 执行 mask/drop"
+  A7_contract_metadata_consistency:
+    - "拦截规则完全由 fields.yaml 的 constraints/classification/api_exposure 驱动"
+  A8_test_automation:
+    - "读链/写链均有单元测试和契约测试"
+tests:
+  unit:
+    - "quwoquan_service/runtime/interceptor/tests/read_chain_test.go"
+    - "quwoquan_service/runtime/interceptor/tests/write_chain_test.go"
+  contract:
+    - "quwoquan_service/runtime/interceptor/tests/field_security_contract_test.go"
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"

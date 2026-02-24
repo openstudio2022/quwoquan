@@ -1,0 +1,96 @@
+version: 1
+entity: FollowEdge
+
+service:
+  name: user-service
+  domain: user
+
+api_routes:
+  - method: POST
+    path: /v1/user/follow/{targetUserId}
+    operation: FollowUser
+    description: 关注用户
+
+  - method: DELETE
+    path: /v1/user/follow/{targetUserId}
+    operation: UnfollowUser
+    description: 取消关注
+
+  - method: GET
+    path: /v1/user/{userId}/following
+    operation: ListFollowing
+    description: 关注列表
+
+  - method: GET
+    path: /v1/user/{userId}/followers
+    operation: ListFollowers
+    description: 粉丝列表
+
+  - method: GET
+    path: /v1/user/{userId}/relationship
+    operation: GetRelationship
+    description: 关系查询（是否互关）
+
+consumers:
+  - name: app
+    capabilities: [follow, unfollow, list_following, list_followers, check_relationship]
+  - name: recommendation-engine
+    capabilities: [read_graph]
+  - name: notification-service
+    capabilities: [read_follow]
+
+contract_test:
+  mock_strategy:
+    app_side:
+      mock_target: user-service API (follow)
+      data_source: fields.yaml
+      scenarios:
+        - name: follow_unfollow_toggle
+          routes:
+            - POST /v1/user/follow/{targetUserId}
+            - DELETE /v1/user/follow/{targetUserId}
+          assertions: [follow_created, follow_removed, idempotent]
+
+        - name: mutual_follow_detection
+          route: GET /v1/user/{userId}/relationship
+          assertions: [status_200, mutual_flag_correct]
+
+        - name: follower_list_pagination
+          route: GET /v1/user/{userId}/followers
+          assertions: [status_200, cursor_pagination_works]
+
+    service_side:
+      description: 使用真实测试数据库，不 mock 存储层
+      real_engines:
+        mongodb: testcontainers (mongo:7)
+      spy_targets: [event_publisher]
+      mock_targets: [user_service_client]
+      data_management:
+        seed: fixture 工厂预制到真实 MongoDB
+        cleanup: "db.follow_edges.DeleteMany(ctx, bson.D{})"
+      scenarios:
+        - name: follow_with_counter_sync
+          command: FollowUser
+          seed: []
+          assertions:
+            - "db.follow_edges.FindOne({followerId, followeeId}) → document exists"
+            - "eventSpy.AssertPublished('UserFollowed', {followerId, followeeId, source})"
+
+        - name: unfollow
+          command: UnfollowUser
+          seed: [fixture.NewFollowEdge()]
+          assertions:
+            - "db.follow_edges.FindOne({followerId, followeeId}) → not found"
+            - "eventSpy.AssertPublished('UserUnfollowed')"
+
+        - name: duplicate_follow_idempotent
+          command: FollowUser x2 (same pair)
+          seed: []
+          assertions:
+            - "db.follow_edges.CountDocuments({followerId, followeeId}) → exactly 1"
+            - "no error on second call"
+
+  coverage_requirements:
+    - idempotency tested
+    - counter sync verified
+    - mutual follow scenario covered

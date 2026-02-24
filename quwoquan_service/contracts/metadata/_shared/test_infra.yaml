@@ -1,0 +1,279 @@
+version: 1
+description: |
+  契约测试基础设施配置。
+  服务侧测试使用真实兼容的轻量测试引擎，不 mock 存储层。
+  业务代码零修改，仅通过配置切换连接地址。
+
+# ─────────────────────────────────────────────────────────────────────────
+# 测试引擎选型
+# ─────────────────────────────────────────────────────────────────────────
+
+engines:
+  postgres:
+    production: "PostgreSQL 16"
+    test_engine: embedded-postgres
+    go_package: "github.com/fergusstrange/embedded-postgres"
+    description: |
+      真实 PostgreSQL 二进制，进程内启动。
+      支持完整 SQL（窗口函数/CTE/JSONB/部分索引/触发器）。
+      无需 Docker，无需预装 PostgreSQL。
+    startup_time: "~2s (cold) / <1s (cached)"
+    config:
+      version: "16.2.0"
+      port: 0  # 随机端口，避免冲突
+      database: "test_db"
+      username: "test"
+      password: "test"
+      data_path: ""  # 临时目录，自动清理
+      locale: "en_US.UTF-8"
+      logger: discard  # 测试时静默
+    setup_code: |
+      db := embeddedpostgres.NewDatabase(
+          embeddedpostgres.DefaultConfig().
+              Version(embeddedpostgres.V16).
+              Port(0).
+              Database("test_db").
+              Username("test").
+              Password("test"),
+      )
+      db.Start()
+      // → 得到 connection string，传给 pgxpool.New()
+
+  mongodb:
+    production: "MongoDB 7"
+    test_engine: testcontainers-go (mongo module)
+    go_package: "github.com/testcontainers/testcontainers-go/modules/mongodb"
+    description: |
+      真实 mongod 容器。支持完整功能（事务/Change Stream/聚合管道/文本索引）。
+      需要 Docker。镜像缓存后启动 ~3s。
+    startup_time: "~3s (image cached) / ~15s (first pull)"
+    docker_image: "mongo:7"
+    config:
+      replica_set: false  # 单节点足够契约测试
+    setup_code: |
+      mongoContainer, _ := mongodb.Run(ctx, "mongo:7")
+      connStr, _ := mongoContainer.ConnectionString(ctx)
+      // → 得到 connection string，传给 mongo.Connect()
+
+  redis:
+    production: "Redis 7"
+    test_engine: miniredis/v2
+    go_package: "github.com/alicebob/miniredis/v2"
+    description: |
+      纯 Go 内存 Redis 实现，TCP 兼容。
+      支持 STRING/HASH/SET/SORTED SET/LIST/TTL/Lua 脚本/MULTI-EXEC。
+      无需 Docker，无需安装 Redis，<1ms 启动。
+    startup_time: "<1ms"
+    supported_commands:
+      - STRING: [GET, SET, MGET, MSET, INCR, DECR, INCRBY, SETNX, SETEX, PSETEX]
+      - HASH: [HGET, HSET, HMGET, HMSET, HDEL, HGETALL, HINCRBY]
+      - SET: [SADD, SREM, SMEMBERS, SISMEMBER, SCARD]
+      - SORTED_SET: [ZADD, ZREM, ZRANGE, ZRANGEBYSCORE, ZSCORE, ZCARD]
+      - KEY: [DEL, EXISTS, EXPIRE, TTL, PTTL, KEYS, SCAN]
+      - TRANSACTION: [MULTI, EXEC, DISCARD]
+      - SCRIPTING: [EVAL, EVALSHA]
+    not_supported:
+      - CLUSTER commands
+      - STREAM commands (XADD, XREAD)
+      - Module commands (RedisSearch, RedisJSON)
+    setup_code: |
+      mr := miniredis.Run()
+      // → 得到 mr.Addr()，传给 redis.NewClient()
+    time_control: |
+      // miniredis 支持手动推进时间，验证 TTL 过期
+      mr.FastForward(10 * time.Minute)
+      // 此时所有 TTL < 10min 的 key 已过期
+
+# ─────────────────────────────────────────────────────────────────────────
+# 仅需 mock 的外部依赖（非存储层）
+# ─────────────────────────────────────────────────────────────────────────
+
+external_mocks:
+  event_publisher:
+    strategy: spy
+    description: |
+      EventPublisher 使用 spy 实现：真实执行发布逻辑，但写入内存 capture list。
+      断言时从 capture list 检查事件类型和 payload。
+    interface: "domain.EventPublisher"
+    spy_capabilities:
+      - capture published events with type + payload
+      - assert event count
+      - assert payload fields match events.yaml
+      - assert channel (event_store / direct)
+      - reset captured events between tests
+
+  llm_client:
+    strategy: mock
+    description: 隔离外部 LLM API（OpenAI/Claude 等）
+    interface: "infrastructure.LLMClient"
+    mock_behavior:
+      - return pre-recorded responses
+      - simulate latency
+      - simulate errors (rate limit, timeout)
+
+  embedding_client:
+    strategy: mock
+    description: 隔离外部 Embedding API
+    interface: "infrastructure.EmbeddingClient"
+    mock_behavior:
+      - return fixed-dimension zero/random vectors
+      - deterministic for same input
+
+  cross_service_clients:
+    strategy: mock
+    description: 隔离跨服务 HTTP/gRPC 调用
+    interfaces:
+      - "infrastructure.UserServiceClient"
+      - "infrastructure.ContentServiceClient"
+      - "infrastructure.ChatServiceClient"
+      - "infrastructure.CircleServiceClient"
+      - "infrastructure.NotificationServiceClient"
+
+# ─────────────────────────────────────────────────────────────────────────
+# 数据管理
+# ─────────────────────────────────────────────────────────────────────────
+
+data_management:
+  seed:
+    description: |
+      从 fields.yaml 生成的 fixture 工厂预制测试数据。
+      每个聚合一个 fixture 包，提供 Builder 模式。
+    generation_rules:
+      PK: "uuid.New().String() / primitive.NewObjectID()"
+      NOT_NULL: "类型推导默认值（string→faker, int→rand, bool→false, timestamp→now）"
+      NULLABLE: "默认 nil，Builder 方法可设置"
+      UNIQUE: "uuid 或 faker 保证全局唯一"
+      DEFAULT_value: "使用 DEFAULT 值"
+      FK: "引用已预制的 parent fixture ID"
+      SECRET: "不出现在 fixture 的公开 API 中"
+      PII: "使用脱敏 faker 数据"
+    example: |
+      // codegen 生成的 fixture 工厂
+      user := fixture.NewUserProfile().
+          WithNickname("test_user").
+          WithStatus("active").
+          Build()
+
+      persona := fixture.NewPersona().
+          WithUserId(user.UserId).
+          WithIsPrimary(true).
+          WithIsActive(true).
+          Build()
+
+      // Seed 到真实数据库
+      suite.SeedPG(user, persona)
+
+  cleanup:
+    postgres:
+      strategy: truncate_cascade
+      command: "TRUNCATE {table_list} CASCADE"
+      description: |
+        每个测试用例结束后，TRUNCATE 该聚合涉及的全部表。
+        CASCADE 自动清理 FK 关联的子表。
+        比 DELETE 快（不写 WAL 日志）。
+      alternative:
+        strategy: transaction_rollback
+        description: |
+          对于只读或简单写测试，可用 tx.Begin() → 测试 → tx.Rollback()。
+          适用于不涉及事务嵌套的场景。不适用于测试事务本身。
+
+    mongodb:
+      strategy: delete_many
+      command: "collection.DeleteMany(ctx, bson.D{})"
+      description: |
+        清空集合数据但保留索引。比 Drop + 重建索引更快。
+        如果测试修改了索引，用 collection.Drop() + 重新创建。
+
+    redis:
+      strategy: flush_all
+      command: "miniredis.FlushAll()"
+      description: 内存清空，<0.1ms。
+
+# ─────────────────────────────────────────────────────────────────────────
+# 按聚合的测试引擎映射
+# ─────────────────────────────────────────────────────────────────────────
+
+aggregate_engine_map:
+  user_profile:
+    engines: [postgres, redis]
+    pg_tables: [user_profiles, personas, user_auth, user_devices, user_settings, profile_update_proposals]
+    cleanup_order: [profile_update_proposals, user_devices, user_settings, user_auth, personas, user_profiles]
+
+  post:
+    engines: [mongodb, redis]
+    mongo_collections: [posts, comments, media_assets, content_reactions]
+
+  conversation:
+    engines: [mongodb, redis]
+    mongo_collections: [conversations, messages]
+
+  circle:
+    engines: [mongodb, redis]
+    mongo_collections: [circles, circle_members]
+
+  assistant_run:
+    engines: [mongodb, redis]
+    mongo_collections: [assistant_runs, interaction_events]
+
+  follow_edge:
+    engines: [mongodb]
+    mongo_collections: [follow_edges]
+
+  block_edge:
+    engines: [postgres, redis]
+    pg_tables: [block_edges]
+
+  report:
+    engines: [postgres]
+    pg_tables: [reports]
+
+  notification:
+    engines: [mongodb]
+    mongo_collections: [notifications]
+
+  skill_consent:
+    engines: [postgres]
+    pg_tables: [skill_consents]
+
+  visit_record:
+    engines: [mongodb]
+    mongo_collections: [visit_records]
+
+  experiment_bucket:
+    engines: [postgres, redis]
+    pg_tables: [experiment_buckets]
+
+# ─────────────────────────────────────────────────────────────────────────
+# Go 依赖汇总（go.mod 需添加）
+# ─────────────────────────────────────────────────────────────────────────
+
+go_dependencies:
+  test_engines:
+    - package: "github.com/fergusstrange/embedded-postgres"
+      scope: test
+      description: PostgreSQL 测试引擎
+
+    - package: "github.com/testcontainers/testcontainers-go"
+      scope: test
+      description: testcontainers 核心
+
+    - package: "github.com/testcontainers/testcontainers-go/modules/mongodb"
+      scope: test
+      description: MongoDB 测试容器
+
+    - package: "github.com/alicebob/miniredis/v2"
+      scope: test
+      description: Redis 内存引擎
+
+  test_utilities:
+    - package: "github.com/stretchr/testify"
+      scope: test
+      description: 断言库
+
+    - package: "github.com/brianvoe/gofakeit/v7"
+      scope: test
+      description: 测试数据生成
+
+    - package: "github.com/golang/mock/gomock"
+      scope: test
+      description: 外部依赖 mock（仅用于 cross-service / AI API）

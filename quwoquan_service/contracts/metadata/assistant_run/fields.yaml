@@ -1,0 +1,271 @@
+version: 1
+aggregate: AssistantRun
+
+entities:
+  AssistantRun:
+    description: 一次助手会话执行（聚合根）
+    fields:
+      - name: _id
+        type: ObjectId
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: userId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: sessionId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: skillId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: pageType
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 触发时的页面类型
+
+      - name: pageObjectId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 触发时的业务对象 ID
+
+      - name: triggerType
+        type: enum
+        enum_ref: RunTriggerType
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: userQuery
+        type: string
+        constraints: [NULLABLE]
+        classification: SENSITIVE
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: mask
+
+      - name: contextSnapshot
+        type: object
+        constraints: [NULLABLE]
+        classification: SENSITIVE
+        log_policy: drop
+        api_exposure: drop
+        ops_exposure: drop
+        description: 三层上下文快照
+
+      - name: responseType
+        type: enum
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: text/structured/action_card/stream
+
+      - name: responseText
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: responsePayload
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: toolsCalled
+        type: "[]string"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: llmModel
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+        observe_metric: llm_model_usage
+
+      - name: llmTokensUsed
+        type: int
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+        observe_metric: llm_token_counter
+
+      - name: latencyMs
+        type: int
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+        observe_metric: assistant_latency_histogram
+
+      - name: status
+        type: enum
+        enum_ref: RunStatus
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        observe_metric: run_status_gauge
+
+      - name: satisfactionScore
+        type: float
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: contextEmbedding
+        type: "[]float32"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: drop
+        api_exposure: drop
+        ops_exposure: drop
+        description: 上下文向量（RAG 检索用，1536维）
+
+      - name: createdAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: completedAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+  InteractionEvent:
+    description: 交互事件与反馈
+    fields:
+      - name: _id
+        type: ObjectId
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: runId
+        type: ObjectId
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: userId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: eventType
+        type: enum
+        enum_ref: InteractionEventType
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: payload
+        type: object
+        constraints: [NULLABLE]
+        classification: SENSITIVE
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: mask
+
+      - name: feedbackType
+        type: enum
+        enum_ref: FeedbackType
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: feedbackScore
+        type: float
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: feedbackText
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: traceId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+        description: OTEL trace 关联
+
+      - name: timestamp
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read

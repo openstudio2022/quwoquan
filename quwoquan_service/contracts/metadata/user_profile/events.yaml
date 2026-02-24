@@ -1,0 +1,77 @@
+version: 1
+aggregate: UserProfile
+
+events:
+  - name: UserRegistered
+    description: 用户注册完成
+    producer: user-service
+    consumers: [recommendation-engine, notification-service, assistant-service]
+    channel: event_store
+    payload_entity: UserProfile
+    payload_fields: [userId, nickname, gender, region, createdAt]
+    recommend_impact: cold_start_profile
+
+  - name: UserProfileUpdated
+    description: 用户资料更新
+    producer: user-service
+    consumers: [recommendation-engine, assistant-service]
+    channel: event_store
+    payload_entity: UserProfile
+    payload_fields: [userId, nickname, bio, avatarUrl, gender, region, profileVersion]
+    recommend_impact: profile_feature_refresh
+
+  - name: PersonaActivated
+    description: 分身切换
+    producer: user-service
+    consumers: [chat-service, content-service]
+    channel: event_store
+    payload_entity: Persona
+    payload_fields: [userId, id, displayName, isPrivate]
+
+  - name: PersonaCreated
+    description: 新分身创建
+    producer: user-service
+    consumers: []
+    channel: event_store
+    payload_entity: Persona
+    payload_fields: [userId, id, displayName, isPrimary, isPrivate]
+
+  - name: ProfileProposalCreated
+    description: 资料修改提案创建
+    producer: user-service
+    consumers: [notification-service]
+    channel: event_store
+    payload_entity: ProfileUpdateProposal
+    payload_fields: [id, userId, source, status]
+
+  - name: ProfileProposalResolved
+    description: 资料修改提案处理完成
+    producer: user-service
+    consumers: [notification-service]
+    channel: event_store
+    payload_entity: ProfileUpdateProposal
+    payload_fields: [id, userId, status, resolvedAt]
+
+  - name: UserSuspended
+    description: 用户账户停用
+    producer: user-service
+    consumers: [content-service, chat-service, circle-service, notification-service]
+    channel: event_store
+    payload_entity: UserProfile
+    payload_fields: [userId, status]
+
+  - name: UserDeviceRegistered
+    description: 设备注册
+    producer: user-service
+    consumers: [notification-service]
+    channel: event_store
+    payload_entity: UserDevice
+    payload_fields: [userId, deviceId, platform, pushToken]
+
+  - name: UserSettingUpdated
+    description: 用户设置更新
+    producer: user-service
+    consumers: [notification-service, recommendation-engine]
+    channel: event_store
+    payload_entity: UserSetting
+    payload_fields: [userId, enablePush, profileVisibility, assistantEnabled, feedPreference]

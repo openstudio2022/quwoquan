@@ -1,0 +1,46 @@
+version: 1
+feature: "runtime-http"
+level: "L2_feature"
+template: "A1-A8"
+tree_context:
+  feature_level: "L2_feature"
+  feature_path: "capability.runtime.feature.runtime-http"
+  parent_path: "capability.runtime"
+  acceptance_inherits_from: "capability.runtime"
+level_acceptance:
+  focus_groups: [A1_functional, A3_service_governance, A4_observability, A8_test_automation]
+  notes: "HTTP server/client 统一运行时接入为主。"
+global_acceptance:
+  A1_functional:
+    scenarios:
+      - given: "服务注册 runtime-http 中间件"
+        when: "处理 inbound/outbound 请求"
+        then: "上下文传播、错误映射、日志输出一致"
+  A2_experience:
+    - "pipeline 增加的处理开销可控"
+  A3_service_governance:
+    - "timeout/retry/degrade 通过配置驱动"
+  A4_observability:
+    - "endpoint 命名稳定且可汇总 SLI"
+  A5_product_ops:
+    - "可输出必要业务关联字段供运营分析"
+  A6_security_privacy:
+    - "敏感头字段不进入日志"
+  A7_contract_metadata_consistency:
+    - "headers 与错误响应契约一致"
+  A8_test_automation:
+    - "pipeline/factory/integration 自动化覆盖"
+tests:
+  mock:
+    - "quwoquan_service/runtime/http/tests/http_pipeline_mock_test.go"
+  unit:
+    - "quwoquan_service/runtime/http/tests/header_context_unit_test.go"
+  contract:
+    - "quwoquan_service/contracts/tests/http_header_contract_test.go"
+  integration:
+    - "quwoquan_service/runtime/http/tests/inbound_outbound_integration_test.go"
+  uat:
+    - "UAT-RUNTIME-HTTP-ENDPOINT-SLI-001"
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"

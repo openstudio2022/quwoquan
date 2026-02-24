@@ -63,14 +63,18 @@ class OpenClawBridge {
           errorCode: 'remote_model_http_${response.statusCode}',
         );
       }
-      final body = jsonDecode(response.body) as Map<String, dynamic>;
-      return AssistantRunResponse(
-        finalText: (body['finalText'] as String?) ?? '',
-        traces: const [],
-        runId: body['runId'] as String?,
-        traceId: body['traceId'] as String?,
-        degraded: false,
-      );
+      final body = jsonDecode(response.body);
+      if (body is! Map<String, dynamic>) {
+        return AssistantRunResponse(
+          finalText: '远端模型返回格式异常',
+          traces: const [],
+          runId: request.traceId,
+          traceId: request.traceId,
+          degraded: true,
+          errorCode: 'remote_model_invalid_payload',
+        );
+      }
+      return AssistantRunResponse.fromJson(body);
     } catch (e) {
       return AssistantRunResponse(
         finalText: '远端模型调用异常: $e',

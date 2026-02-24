@@ -1,0 +1,30 @@
+name: gate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - dev1.0
+      - main
+
+jobs:
+  quwoquan_service:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Gate (quwoquan_service)
+        run: |
+          bash scripts/gate_repo.sh --scope service
+
+  quwoquan_app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Gate (quwoquan_app)
+        run: |
+          bash scripts/gate_repo.sh --scope app
+

@@ -1,0 +1,23 @@
+version: 1
+domain: notification
+entity: Notification
+is_aggregate: false
+
+description: |
+  通知。社交互动/内容/圈子/系统/助手通知。
+  MongoDB 存储，写入量极大（每次互动产生），需水平扩展。
+
+storage_backend: mongodb
+cache_layer: none
+capabilities:
+  - queryable
+
+taggable: false
+vector_enabled: false
+
+ddd_layer_mapping:
+  domain_model: internal/domain/notification/model
+  repository: internal/domain/notification/repository
+  application: internal/application/notification
+  adapter_rest: internal/adapter/rest/notification
+  adapter_event: internal/adapter/event/notification

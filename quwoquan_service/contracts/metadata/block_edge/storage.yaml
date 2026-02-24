@@ -1,0 +1,26 @@
+version: 1
+entity: BlockEdge
+backend: postgres
+
+tables:
+  block_edges:
+    entity: BlockEdge
+    pk: id
+    columns:
+      - { name: id, type: VARCHAR(36), constraints: [PK] }
+      - { name: blocker_id, type: VARCHAR(36), constraints: [NOT_NULL] }
+      - { name: blocked_id, type: VARCHAR(36), constraints: [NOT_NULL] }
+      - { name: reason, type: VARCHAR(256) }
+      - { name: created_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
+    indexes:
+      - { name: idx_block_blocker, columns: [blocker_id] }
+      - { name: idx_block_blocked, columns: [blocked_id] }
+    unique_constraints:
+      - { name: uq_block_edge, columns: [blocker_id, blocked_id] }
+
+redis_cache:
+  - key: "blocked_set:{userId}"
+    ttl_seconds: 3600
+    type: set
+    description: 屏蔽用户列表（O(1) 检查）
+    invalidate_on: [UserBlocked, UserUnblocked]

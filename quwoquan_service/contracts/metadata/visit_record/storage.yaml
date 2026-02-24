@@ -1,0 +1,15 @@
+version: 1
+entity: VisitRecord
+backend: mongodb
+
+collections:
+  visit_records:
+    entity: VisitRecord
+    indexes:
+      - { name: idx_visit_user_target, keys: { userId: 1, targetType: 1, targetKey: 1, timestamp: -1 } }
+      - { name: idx_visit_target, keys: { targetType: 1, targetKey: 1, timestamp: -1 } }
+      - { name: idx_visit_session, keys: { sessionId: 1, timestamp: -1 }, sparse: true }
+    ttl_index:
+      field: timestamp
+      expire_after_seconds: 15552000
+      description: 访问记录 180 天过期

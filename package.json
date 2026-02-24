@@ -1,0 +1,18 @@
+{
+  "name": "quwoquan",
+  "version": "1.0.0",
+  "private": true,
+  "description": "趣我圈 monorepo - OpenSpec 与脚本从仓库根运行",
+  "scripts": {
+    "openspec:init": "npx openspec init --tools cursor",
+    "openspec:update": "npx openspec update",
+    "openspec:list": "npx openspec list",
+    "openspec:view": "npx openspec view"
+  },
+  "devDependencies": {
+    "@fission-ai/openspec": "latest"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  }
+}

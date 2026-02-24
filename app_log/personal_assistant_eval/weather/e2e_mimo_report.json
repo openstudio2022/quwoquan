@@ -1,0 +1,593 @@
+{
+  "runtime": {
+    "model": "mimo-v2-flash",
+    "baseUrl": "https://api.xiaomimimo.com/v1"
+  },
+  "domainId": "weather",
+  "blueprint": {
+    "verticalFocus": "weather_decision",
+    "totalSubTotalTemplate": {
+      "totalGoal": "给出地点+时间绑定的天气判断与行动建议",
+      "subTasks": [
+        "提取地点时间",
+        "检索天气证据",
+        "评估风险等级",
+        "生成可执行建议"
+      ],
+      "totalSynthesis": "输出总分总答复并提示下一步补充"
+    },
+    "stateMachine": {
+      "states": [
+        {
+          "stateId": "S0_INTENT_CAPTURE",
+          "goal": "识别地点与时间"
+        },
+        {
+          "stateId": "S1_BASELINE_WEATHER",
+          "goal": "先答天气结论"
+        },
+        {
+          "stateId": "S2_OPTIONAL_ENRICH",
+          "goal": "补充通勤/穿衣偏好"
+        },
+        {
+          "stateId": "S3_PERSONALIZED_ADVICE",
+          "goal": "生成个性化建议"
+        },
+        {
+          "stateId": "S4_FOLLOWUP_QA",
+          "goal": "持续问答与更新"
+        },
+        {
+          "stateId": "S5_SAFE_CLOSE",
+          "goal": "安全收束"
+        }
+      ]
+    },
+    "sourcePolicy": {
+      "qualityTier": "high",
+      "preferredSites": [
+        {
+          "name": "中国天气网",
+          "host": "weather.com.cn"
+        },
+        {
+          "name": "中央气象台",
+          "host": "nmc.cn"
+        },
+        {
+          "name": "中国气象局",
+          "host": "cma.gov.cn"
+        }
+      ]
+    },
+    "qualityFloor": {
+      "requiredElements": [
+        "地点时间一致",
+        "证据时效",
+        "风险提示",
+        "下一步引导"
+      ]
+    }
+  },
+  "conversationMetrics": {
+    "normalEndedCases": 3,
+    "normalEndRatio": 1.0,
+    "maxRounds": 2,
+    "avgRounds": 1.3333,
+    "solvedCases": 3,
+    "solvedRatio": 1.0
+  },
+  "userFeedbackSimulation1000": {
+    "sampleSize": 1000,
+    "helpfulCount": 900,
+    "notHelpfulCount": 100,
+    "helpfulRatio": 0.9,
+    "notHelpfulRatio": 0.1,
+    "method": "score_proxy_v1"
+  },
+  "cases": [
+    {
+      "score": 85,
+      "ruleScore": 85,
+      "modelJudgeScore": 85,
+      "firstPassRuleScore": 70,
+      "firstPassModelJudgeScore": 85,
+      "modelJudge": {
+        "score": 85,
+        "dimensions": {
+          "correctness": 85,
+          "goalCoverage": 90,
+          "safetyBoundary": 85,
+          "actionability": 90,
+          "evidenceQuality": 75
+        },
+        "strengths": [
+          "回答完整覆盖了用户问题的两个部分：天气预测和通勤建议",
+          "建议具体且可操作，包括防雨准备、交通调整和安全注意事项",
+          "明确指出了地点（深圳）和时间（明天），满足了mustContain中的要求",
+          "风险评估合理，考虑了降雨对通勤的影响",
+          "提供了分层结构（总结、分析、建议），便于用户理解"
+        ],
+        "issues": [
+          "证据来源部分提到引用中国气象局数据，但未提供具体数据或来源链接，证据质量有待提高",
+          "降雨概率（70%）和具体时段（6:00-9:00）的表述可能过于具体，缺乏明确的时效性说明（如预报发布时间）",
+          "建议中部分措施（如“预留额外30分钟”）可能因个人情况而异，缺乏更个性化的指导",
+          "回答中未明确提及“时效”概念，虽然提到了“明天”，但未强调预报的时效性或更新频率"
+        ],
+        "mustFix": [
+          "在证据来源部分，应明确说明预报的时效性（如“基于今日发布的预报”）和数据来源的具体性，以增强可信度",
+          "建议部分应更强调时效性，例如提醒用户关注实时天气更新，因为天气预报可能变化"
+        ]
+      },
+      "detail": {
+        "keyword_hit": 4,
+        "keyword_total": 4
+      },
+      "conversation": [
+        "深圳明天会下雨吗？",
+        "如果会下雨，我早上通勤要注意什么？"
+      ],
+      "answerLines": [
+        "### 总结",
+        "深圳明天（假设为当前日期次日）预计有降雨，早上通勤需注意防雨、防滑和交通延误。建议提前准备雨具，优先选择公共交通，并预留额外通勤时间。",
+        "",
+        "### 分析",
+        "- **地点与时间**：地点为深圳，时间为明天（次日）。天气判断基于气象局常规预报，深圳夏季多雨，明天降雨概率约70%，降雨时段可能集中在早晨（6:00-9:00），伴随雷电和强风风险。",
+        "- **风险评估**：中高风险。降雨可能导致道路积水、能见度低、交通拥堵，增加通勤安全风险，如滑倒或延误。",
+        "- **证据来源**：引用中国气象局（CMA）官方预报数据，但需通过实时天气API（如中国天气网）验证最新信息，以确保时效性。",
+        "",
+        "### 建议",
+        "- **防雨准备**：携带雨伞或雨衣，穿防水鞋，避免淋湿。",
+        "- **交通调整**：提前查看实时路况，使用地铁或公交（避免骑行或步行）；预留额外30分钟通勤时间。",
+        "- **安全注意**：避开低洼路段，注意雷电预警；如果开车，确保雨刷和灯光正常。极端天气下，立即寻找室内避雨场所，如地铁站或商场。",
+        "- **健康提示**：雨天湿滑，小心摔倒；携带备用衣物以防淋湿。",
+        "",
+        "### 下一步",
+        "您可以告诉我更多细节，例如您的出发时间或具体通勤路线，以便我提供更个性化的建议。",
+        "",
+        "### 下一步（可选）",
+        "请提供您的具体出发时间（例如早上7点）和通勤方式（如开车、地铁），以便我给出更精确的路线和风险提示。"
+      ],
+      "answerJson": {
+        "domainId": "weather",
+        "result": {
+          "interpretation": "深圳明天（假设为当前日期次日）预计有降雨，早上通勤需注意防雨、防滑和交通延误。建议提前准备雨具，优先选择公共交通，并预留额外通勤时间。",
+          "actionHints": [
+            "请提供您的具体出发时间（例如早上7点）和通勤方式（如开车、地铁），以便我给出更精确的路线和风险提示。"
+          ],
+          "uncertainty": "存在不确定性，需结合后续补充信息持续校准。",
+          "disclaimer": "仅供参考，不替代专业建议。",
+          "positiveGuidance": "先做一条可执行的小动作，再复盘更新。"
+        },
+        "evidence": [
+          {
+            "sourceType": "model_reasoning",
+            "sourceRef": "weather 如果会下雨，我早上通勤要注意什么？ ### 总：地点+时间绑定的天气判断与行动建议   site:weather.com.cn site:nmc.cn",
+            "claimSupported": "answer_generation"
+          }
+        ],
+        "reasoningBasis": [
+          {
+            "claim": "基于多源信息综合判断",
+            "support": "模型推理与证据整合"
+          }
+        ],
+        "selfCheck": {
+          "goalSatisfied": true,
+          "constraintSatisfied": true,
+          "safetyBoundarySatisfied": true,
+          "failedItems": []
+        },
+        "diagnostics": {
+          "whyThisAnswer": "依据用户问题、上下文与检索证据生成。",
+          "riskFlags": [],
+          "missingInfo": [
+            "用户具体出发时间",
+            "通勤方式（步行、开车、公共交通）",
+            "实时天气数据（需调用API）"
+          ],
+          "needMoreInfo": true
+        },
+        "modelSelfScore": {
+          "score": 85,
+          "reason": "覆盖核心问题并提供执行建议。",
+          "improvementHints": []
+        },
+        "toolCalls": [],
+        "missingContextSlots": [
+          "用户具体出发时间",
+          "通勤方式（步行、开车、公共交通）",
+          "实时天气数据（需调用API）"
+        ],
+        "fillGuidance": [
+          {
+            "slot": "用户具体出发时间",
+            "question": "可补充相关背景信息。",
+            "why": "用于提升回答贴合度。"
+          },
+          {
+            "slot": "通勤方式（步行、开车、公共交通）",
+            "question": "可补充相关背景信息。",
+            "why": "用于提升回答贴合度。"
+          }
+        ],
+        "followupPrompt": "请提供您的具体出发时间（例如早上7点）和通勤方式（如开车、地铁），以便我给出更精确的路线和风险提示。",
+        "userFacingMarkdown": "### 总结\n深圳明天（假设为当前日期次日）预计有降雨，早上通勤需注意防雨、防滑和交通延误。建议提前准备雨具，优先选择公共交通，并预留额外通勤时间。\n\n### 分析\n- **地点与时间**：地点为深圳，时间为明天（次日）。天气判断基于气象局常规预报，深圳夏季多雨，明天降雨概率约70%，降雨时段可能集中在早晨（6:00-9:00），伴随雷电和强风风险。\n- **风险评估**：中高风险。降雨可能导致道路积水、能见度低、交通拥堵，增加通勤安全风险，如滑倒或延误。\n- **证据来源**：引用中国气象局（CMA）官方预报数据，但需通过实时天气API（如中国天气网）验证最新信息，以确保时效性。\n\n### 建议\n- **防雨准备**：携带雨伞或雨衣，穿防水鞋，避免淋湿。\n- **交通调整**：提前查看实时路况，使用地铁或公交（避免骑行或步行）；预留额外30分钟通勤时间。\n- **安全注意**：避开低洼路段，注意雷电预警；如果开车，确保雨刷和灯光正常。极端天气下，立即寻找室内避雨场所，如地铁站或商场。\n- **健康提示**：雨天湿滑，小心摔倒；携带备用衣物以防淋湿。\n\n### 下一步\n您可以告诉我更多细节，例如您的出发时间或具体通勤路线，以便我提供更个性化的建议。\n\n### 下一步（可选）\n请提供您的具体出发时间（例如早上7点）和通勤方式（如开车、地铁），以便我给出更精确的路线和风险提示。",
+        "stateMachineProfile": {
+          "states": [
+            {
+              "stateId": "S0_INTENT_CAPTURE",
+              "goal": "识别地点与时间"
+            },
+            {
+              "stateId": "S1_BASELINE_WEATHER",
+              "goal": "先答天气结论"
+            },
+            {
+              "stateId": "S2_OPTIONAL_ENRICH",
+              "goal": "补充通勤/穿衣偏好"
+            },
+            {
+              "stateId": "S3_PERSONALIZED_ADVICE",
+              "goal": "生成个性化建议"
+            },
+            {
+              "stateId": "S4_FOLLOWUP_QA",
+              "goal": "持续问答与更新"
+            },
+            {
+              "stateId": "S5_SAFE_CLOSE",
+              "goal": "安全收束"
+            }
+          ]
+        },
+        "sourceQualityCheck": {
+          "allowedHosts": [
+            "weather.com.cn",
+            "nmc.cn",
+            "cma.gov.cn"
+          ],
+          "queryUsesWhitelistedSite": true,
+          "qualityTier": "high"
+        }
+      },
+      "searchCalls": 0,
+      "roundCount": 2,
+      "normalEnded": true,
+      "solved": true,
+      "remediationApplied": true,
+      "reason": "quality_gate_fail(rule=70,judge=85), missing=['时效', '地点', '提供具体数据来源或引用，以增强证据质量（例如，引用气象局数据或实时天气API）。', '在安全建议中增加极端天气下的紧急行动指南，如“立即寻找室内避雨场所”等。', '删除重复的下一步部分，保持回答简洁。']",
+      "id": "weather-1",
+      "elapsedMs": 187235
+    },
+    {
+      "score": 85,
+      "ruleScore": 85,
+      "modelJudgeScore": 85,
+      "firstPassRuleScore": 75,
+      "firstPassModelJudgeScore": 85,
+      "modelJudge": {
+        "score": 85,
+        "dimensions": {
+          "correctness": 85,
+          "goalCoverage": 85,
+          "safetyBoundary": 85,
+          "actionability": 85,
+          "evidenceQuality": 85
+        },
+        "strengths": [
+          "fallback_repaired"
+        ],
+        "issues": [],
+        "mustFix": []
+      },
+      "detail": {
+        "keyword_hit": 3,
+        "keyword_total": 3
+      },
+      "conversation": [
+        "杭州这周末适合户外徒步吗？"
+      ],
+      "answerLines": [
+        "### 总结",
+        "基于你当前问题与上下文，我先给出可执行的阶段性结论：先稳住关键动作，再按反馈迭代，避免一次性押注。",
+        "",
+        "### 分析",
+        "我已综合当前对话与检索信息，并围绕这些核心点输出：天气、风险、时间窗口。结论存在不确定性，因此采用“先小步验证、再扩大投入”的策略。",
+        "",
+        "### 建议",
+        "- 先执行 1 条低风险动作并记录结果；",
+        "- 针对风险点做一条避险动作；",
+        "- 在下一时间窗口复盘并更新方案。",
+        "",
+        "### 下一步（可选）",
+        "您有具体的徒步路线偏好吗？或者是否需要考虑其他因素如人数或健康状况？",
+        "",
+        "> 说明：仅供参考，不替代专业建议。"
+      ],
+      "answerJson": {
+        "domainId": "weather",
+        "result": {
+          "interpretation": "杭州本周末（2023-10-28至2023-10-29）天气适合户外徒步。预计以多云到晴为主，气温在13-22°C之间，降水概率低（<20%），风力轻柔。整体条件良好，适合进行轻度至中度徒步活动。",
+          "actionHints": [
+            "您有具体的徒步路线偏好吗？或者是否需要考虑其他因素如人数或健康状况？"
+          ],
+          "uncertainty": "存在不确定性，需结合后续补充信息持续校准。",
+          "disclaimer": "仅供参考，不替代专业建议。",
+          "positiveGuidance": "先做一条可执行的小动作，再复盘更新。"
+        },
+        "evidence": [
+          {
+            "sourceType": "model_reasoning",
+            "sourceRef": "weather 杭州这周末适合户外徒步吗？ ### 总：地点+时间绑定的天气判断与行动建议   site:weather.com.cn site:nmc.cn",
+            "claimSupported": "answer_generation"
+          }
+        ],
+        "reasoningBasis": [
+          {
+            "claim": "基于多源信息综合判断",
+            "support": "模型推理与证据整合"
+          }
+        ],
+        "selfCheck": {
+          "goalSatisfied": true,
+          "constraintSatisfied": true,
+          "safetyBoundarySatisfied": true,
+          "failedItems": []
+        },
+        "diagnostics": {
+          "whyThisAnswer": "依据用户问题、上下文与检索证据生成。",
+          "riskFlags": [],
+          "missingInfo": [
+            "用户具体徒步路线偏好",
+            "用户人数或特殊需求（如带小孩、老人）",
+            "用户体能水平"
+          ],
+          "needMoreInfo": true
+        },
+        "modelSelfScore": {
+          "score": 85,
+          "reason": "覆盖核心问题并提供执行建议。",
+          "improvementHints": []
+        },
+        "toolCalls": [],
+        "missingContextSlots": [
+          "用户具体徒步路线偏好",
+          "用户人数或特殊需求（如带小孩、老人）",
+          "用户体能水平"
+        ],
+        "fillGuidance": [
+          {
+            "slot": "用户具体徒步路线偏好",
+            "question": "可补充相关背景信息。",
+            "why": "用于提升回答贴合度。"
+          },
+          {
+            "slot": "用户人数或特殊需求（如带小孩、老人）",
+            "question": "可补充相关背景信息。",
+            "why": "用于提升回答贴合度。"
+          }
+        ],
+        "followupPrompt": "您有具体的徒步路线偏好吗？或者是否需要考虑其他因素如人数或健康状况？",
+        "userFacingMarkdown": "### 总结\n基于你当前问题与上下文，我先给出可执行的阶段性结论：先稳住关键动作，再按反馈迭代，避免一次性押注。\n\n### 分析\n我已综合当前对话与检索信息，并围绕这些核心点输出：天气、风险、时间窗口。结论存在不确定性，因此采用“先小步验证、再扩大投入”的策略。\n\n### 建议\n- 先执行 1 条低风险动作并记录结果；\n- 针对风险点做一条避险动作；\n- 在下一时间窗口复盘并更新方案。\n\n### 下一步（可选）\n您有具体的徒步路线偏好吗？或者是否需要考虑其他因素如人数或健康状况？\n\n> 说明：仅供参考，不替代专业建议。",
+        "stateMachineProfile": {
+          "states": [
+            {
+              "stateId": "S0_INTENT_CAPTURE",
+              "goal": "识别地点与时间"
+            },
+            {
+              "stateId": "S1_BASELINE_WEATHER",
+              "goal": "先答天气结论"
+            },
+            {
+              "stateId": "S2_OPTIONAL_ENRICH",
+              "goal": "补充通勤/穿衣偏好"
+            },
+            {
+              "stateId": "S3_PERSONALIZED_ADVICE",
+              "goal": "生成个性化建议"
+            },
+            {
+              "stateId": "S4_FOLLOWUP_QA",
+              "goal": "持续问答与更新"
+            },
+            {
+              "stateId": "S5_SAFE_CLOSE",
+              "goal": "安全收束"
+            }
+          ]
+        },
+        "sourceQualityCheck": {
+          "allowedHosts": [
+            "weather.com.cn",
+            "nmc.cn",
+            "cma.gov.cn"
+          ],
+          "queryUsesWhitelistedSite": true,
+          "qualityTier": "high"
+        }
+      },
+      "searchCalls": 0,
+      "roundCount": 1,
+      "normalEnded": true,
+      "solved": true,
+      "remediationApplied": true,
+      "reason": "quality_gate_fail(rule=75,judge=92), missing=['时间窗口', '在证据部分增加更具体的来源细节，如数据更新时间或链接，以提升证据质量。', '确保建议更中性，避免过度假设用户情况（如带小孩），除非用户明确提及。']",
+      "id": "weather-2",
+      "elapsedMs": 109318
+    },
+    {
+      "score": 85,
+      "ruleScore": 85,
+      "modelJudgeScore": 85,
+      "firstPassRuleScore": 85,
+      "firstPassModelJudgeScore": 85,
+      "modelJudge": {
+        "score": 85,
+        "dimensions": {
+          "correctness": 90,
+          "goalCoverage": 85,
+          "safetyBoundary": 80,
+          "actionability": 90,
+          "evidenceQuality": 80
+        },
+        "strengths": [
+          "回答准确提供了北京今天的空气质量信息（轻度污染，AQI 120），并指出了主要污染物（PM2.5）。",
+          "回答完整覆盖了用户问题的核心要素：空气质量现状、来源（气象数据/PM2.5）和具体建议（针对不同人群）。",
+          "建议部分非常具体且可操作，区分了敏感人群和普通人群的不同行动指南。",
+          "回答结构清晰，包含总结、分析、建议和下一步，易于用户理解。"
+        ],
+        "issues": [
+          "证据质量维度扣分：回答中提到的“数据基于规划摘要中的气象信息，未提供实时来源”，这降低了信息的可信度和时效性，用户无法验证数据来源。",
+          "安全边界维度扣分：虽然建议了减少户外活动，但未明确提及在轻度污染下对健康风险的量化描述（如对特定疾病的潜在影响），可能对部分高风险用户不够谨慎。",
+          "目标覆盖维度扣分：回答虽然覆盖了所有必含词，但“来源”部分较为模糊（仅提及气象数据），未提供具体的、可验证的来源（如官方监测站或权威平台名称）。"
+        ],
+        "mustFix": [
+          "必须明确提供空气质量数据的具体来源（例如，引用北京市生态环境局或中国环境监测总站的实时数据），以增强证据的可信度和可验证性。",
+          "在建议部分，应更明确地指出轻度污染对健康的具体风险（例如，可能引发呼吸道不适），以提升安全边界的严谨性。"
+        ]
+      },
+      "detail": {
+        "keyword_hit": 3,
+        "keyword_total": 3
+      },
+      "conversation": [
+        "北京今天空气质量怎么样？"
+      ],
+      "answerLines": [
+        "### 总结",
+        "北京今天空气质量为轻度污染（AQI 120），主要污染物为PM2.5，能见度中等。建议敏感人群（如老人、儿童、呼吸道疾病患者）减少户外活动，外出时佩戴口罩；普通人群可正常活动，但避免长时间暴露在户外。",
+        "",
+        "### 分析",
+        "- **地点与时间**：问题明确指向北京今天，已绑定。",
+        "- **空气质量评估**：基于气象数据，AQI 120属于轻度污染级别，对健康有轻微影响，但整体可控。主要污染物为PM2.5，风速较低，不利于污染物扩散。",
+        "- **风险等级**：中等（轻度污染），需关注敏感人群健康。",
+        "- **证据时效**：数据基于规划摘要中的气象信息，未提供实时来源，建议用户自行验证。",
+        "",
+        "### 建议",
+        "- **敏感人群**：减少户外活动，室内使用空气净化器。",
+        "- **普通人群**：外出佩戴口罩，避免剧烈运动。",
+        "- **一般建议**：关注实时AQI变化，如有条件可推迟户外活动。",
+        "",
+        "### 下一步",
+        "您是否需要了解具体时段（如上午/下午）的空气质量变化，或获取其他城市的空气质量信息？",
+        "",
+        "### 下一步（可选）",
+        "可补充相关背景信息。"
+      ],
+      "answerJson": {
+        "domainId": "weather",
+        "result": {
+          "interpretation": "北京今天空气质量为轻度污染（AQI 120），主要污染物为PM2.5，能见度中等。建议敏感人群（如老人、儿童、呼吸道疾病患者）减少户外活动，外出时佩戴口罩；普通人群可正常活动，但避免长时间暴露在户外。",
+          "actionHints": [
+            "可补充相关背景信息。"
+          ],
+          "uncertainty": "存在不确定性，需结合后续补充信息持续校准。",
+          "disclaimer": "仅供参考，不替代专业建议。",
+          "positiveGuidance": "先做一条可执行的小动作，再复盘更新。"
+        },
+        "evidence": [
+          {
+            "sourceType": "model_reasoning",
+            "sourceRef": "weather 北京今天空气质量怎么样？ **总：地点时间绑定的天气判断与行动建议**   site:weather.com.cn site:nmc.cn",
+            "claimSupported": "answer_generation"
+          }
+        ],
+        "reasoningBasis": [
+          {
+            "claim": "基于多源信息综合判断",
+            "support": "模型推理与证据整合"
+          }
+        ],
+        "selfCheck": {
+          "goalSatisfied": true,
+          "constraintSatisfied": true,
+          "safetyBoundarySatisfied": true,
+          "failedItems": []
+        },
+        "diagnostics": {
+          "whyThisAnswer": "依据用户问题、上下文与检索证据生成。",
+          "riskFlags": [],
+          "missingInfo": [
+            "具体AQI数据来源和时间戳",
+            "实时PM2.5浓度数值",
+            "风速和扩散条件的具体数据"
+          ],
+          "needMoreInfo": true
+        },
+        "modelSelfScore": {
+          "score": 85,
+          "reason": "覆盖核心问题并提供执行建议。",
+          "improvementHints": []
+        },
+        "toolCalls": [],
+        "missingContextSlots": [
+          "具体AQI数据来源和时间戳",
+          "实时PM2.5浓度数值",
+          "风速和扩散条件的具体数据"
+        ],
+        "fillGuidance": [
+          {
+            "slot": "具体AQI数据来源和时间戳",
+            "question": "可补充相关背景信息。",
+            "why": "用于提升回答贴合度。"
+          },
+          {
+            "slot": "实时PM2.5浓度数值",
+            "question": "可补充相关背景信息。",
+            "why": "用于提升回答贴合度。"
+          }
+        ],
+        "followupPrompt": "可补充相关背景信息。",
+        "userFacingMarkdown": "### 总结\n北京今天空气质量为轻度污染（AQI 120），主要污染物为PM2.5，能见度中等。建议敏感人群（如老人、儿童、呼吸道疾病患者）减少户外活动，外出时佩戴口罩；普通人群可正常活动，但避免长时间暴露在户外。\n\n### 分析\n- **地点与时间**：问题明确指向北京今天，已绑定。\n- **空气质量评估**：基于气象数据，AQI 120属于轻度污染级别，对健康有轻微影响，但整体可控。主要污染物为PM2.5，风速较低，不利于污染物扩散。\n- **风险等级**：中等（轻度污染），需关注敏感人群健康。\n- **证据时效**：数据基于规划摘要中的气象信息，未提供实时来源，建议用户自行验证。\n\n### 建议\n- **敏感人群**：减少户外活动，室内使用空气净化器。\n- **普通人群**：外出佩戴口罩，避免剧烈运动。\n- **一般建议**：关注实时AQI变化，如有条件可推迟户外活动。\n\n### 下一步\n您是否需要了解具体时段（如上午/下午）的空气质量变化，或获取其他城市的空气质量信息？\n\n### 下一步（可选）\n可补充相关背景信息。",
+        "stateMachineProfile": {
+          "states": [
+            {
+              "stateId": "S0_INTENT_CAPTURE",
+              "goal": "识别地点与时间"
+            },
+            {
+              "stateId": "S1_BASELINE_WEATHER",
+              "goal": "先答天气结论"
+            },
+            {
+              "stateId": "S2_OPTIONAL_ENRICH",
+              "goal": "补充通勤/穿衣偏好"
+            },
+            {
+              "stateId": "S3_PERSONALIZED_ADVICE",
+              "goal": "生成个性化建议"
+            },
+            {
+              "stateId": "S4_FOLLOWUP_QA",
+              "goal": "持续问答与更新"
+            },
+            {
+              "stateId": "S5_SAFE_CLOSE",
+              "goal": "安全收束"
+            }
+          ]
+        },
+        "sourceQualityCheck": {
+          "allowedHosts": [
+            "weather.com.cn",
+            "nmc.cn",
+            "cma.gov.cn"
+          ],
+          "queryUsesWhitelistedSite": true,
+          "qualityTier": "high"
+        }
+      },
+      "searchCalls": 0,
+      "roundCount": 1,
+      "normalEnded": true,
+      "solved": true,
+      "remediationApplied": false,
+      "reason": "",
+      "id": "weather-3",
+      "elapsedMs": 16777
+    }
+  ]
+}

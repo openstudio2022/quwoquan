@@ -1,0 +1,40 @@
+version: 1
+l1: platform-ops-governance
+l2:
+  - feature: observability-and-alerting
+    l3:
+      - feature: log-metric-trace-unification
+        l4:
+          - feature: field-policy-and-dashboard-template
+            l5:
+              - feature: incident-detection-escalation
+      - feature: slo-error-budget-governance
+        l4:
+          - feature: budget-burn-policy
+            l5:
+              - feature: auto-alert-and-action-runbook
+  - feature: config-and-reliability-governance
+    l3:
+      - feature: config-source-governance
+        l4:
+          - feature: risky-config-gray-release
+            l5:
+              - feature: one-click-config-rollback
+      - feature: reliability-policy-control
+        l4:
+          - feature: timeout-retry-circuit-ratelimit-degrade
+            l5:
+              - feature: reliability-drill-automation
+  - feature: security-privacy-audit
+    l3:
+      - feature: data-classification-policy
+        l4:
+          - feature: mask-encrypt-retention-enforcement
+            l5:
+              - feature: privacy-audit-sampling
+      - feature: compliance-reporting
+        l4:
+          - feature: audit-trace-export
+            l5:
+              - feature: compliance-gate-blocker
+

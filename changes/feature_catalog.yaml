@@ -1,0 +1,146 @@
+version: 1
+owner: quwoquan-platform
+taxonomy:
+  levels:
+    - L1_capability
+    - L2_feature
+    - L3_subfeature
+    - L4_object_task
+    - L5_cross_cutting
+features:
+  - id: CAP-001
+    slug: capability-discovery-and-content
+    level: L1_capability
+    parent_id: ROOT
+    service_domain: content
+    status: planned
+    priority: P0
+    opsx_change_id: OPSX-2026-CAP-001
+    opsx_specs: [opsx_ff_cloud_services_guide]
+    delivery_profile:
+      ddd: true
+      metadata_driven: true
+      contract_driven: true
+    services: [content-service, orchestrator-service, gateway-service, product-ops]
+    app_modules: [home.discovery]
+  - id: CAP-002
+    slug: capability-chat-and-conversation
+    level: L1_capability
+    parent_id: ROOT
+    service_domain: chat
+    status: planned
+    priority: P0
+    opsx_change_id: OPSX-2026-CAP-002
+    opsx_specs: [opsx_ff_cloud_services_guide]
+    delivery_profile:
+      ddd: true
+      metadata_driven: true
+      contract_driven: true
+    services: [chat-service, gateway-service, product-ops]
+    app_modules: [chat.conversation]
+  - id: CAP-003
+    slug: capability-user-and-persona
+    level: L1_capability
+    parent_id: ROOT
+    service_domain: user
+    status: planned
+    priority: P1
+    opsx_change_id: OPSX-2026-CAP-003
+    opsx_specs: [opsx_ff_cloud_services_guide]
+    delivery_profile:
+      ddd: true
+      metadata_driven: true
+      contract_driven: true
+    services: [user-service, gateway-service, orchestrator-service]
+    app_modules: [profile.persona]
+  - id: CAP-004
+    slug: capability-assistant-and-learning
+    level: L1_capability
+    parent_id: ROOT
+    service_domain: assistant
+    status: planned
+    priority: P0
+    opsx_change_id: OPSX-2026-CAP-004
+    opsx_specs: [opsx_ff_cloud_services_guide]
+    delivery_profile:
+      ddd: true
+      metadata_driven: true
+      contract_driven: true
+    services: [assistant-service, product-ops, platform-ops]
+    app_modules: [assistant.run]
+  - id: F001
+    slug: discovery-feed-contract-unification
+    level: L2_feature
+    parent_id: CAP-001
+    service_domain: content
+    status: planned
+    priority: P0
+    opsx_change_id: OPSX-2026-001
+    opsx_specs: [assistant-template-runtime, personal-assistant]
+    delivery_profile:
+      ddd: true
+      metadata_driven: true
+      contract_driven: true
+    services: [gateway-service, orchestrator-service, content-service, product-ops]
+    app_modules: [home.discovery]
+  - id: F002
+    slug: chat-repository-migration
+    level: L2_feature
+    parent_id: CAP-002
+    service_domain: chat
+    status: planned
+    priority: P0
+    opsx_change_id: OPSX-2026-002
+    opsx_specs: [chat]
+    delivery_profile:
+      ddd: true
+      metadata_driven: true
+      contract_driven: true
+    services: [chat-service, gateway-service]
+    app_modules: [chat.conversation]
+  - id: F003
+    slug: persona-profile-sync
+    level: L2_feature
+    parent_id: CAP-003
+    service_domain: user
+    status: planned
+    priority: P1
+    opsx_change_id: OPSX-2026-003
+    opsx_specs: [user-service]
+    delivery_profile:
+      ddd: true
+      metadata_driven: true
+      contract_driven: true
+    services: [user-service, gateway-service, orchestrator-service]
+    app_modules: [profile.persona]
+  - id: F004
+    slug: assistant-learning-closed-loop
+    level: L2_feature
+    parent_id: CAP-004
+    service_domain: assistant
+    status: planned
+    priority: P0
+    opsx_change_id: OPSX-2026-004
+    opsx_specs: [personal-assistant-commercial-v1, app-observability-log-pipeline]
+    delivery_profile:
+      ddd: true
+      metadata_driven: true
+      contract_driven: true
+    services: [assistant-service, product-ops, platform-ops]
+    app_modules: [assistant.run]
+  - id: F005
+    slug: opsx-ddd-metadata-feature-migration
+    level: L1_capability
+    parent_id: ROOT
+    service_domain: platform-ops
+    status: active
+    priority: P0
+    opsx_change_id: OPSX-2026-005
+    opsx_specs: [opsx_ff_cloud_services_guide, assistant-domain-catalog-17]
+    delivery_profile:
+      ddd: true
+      metadata_driven: true
+      contract_driven: true
+    services: [platform-ops, product-ops, gateway-service, orchestrator-service, chat-service, content-service]
+    app_modules: [home.discovery, chat.conversation, assistant.run]
+

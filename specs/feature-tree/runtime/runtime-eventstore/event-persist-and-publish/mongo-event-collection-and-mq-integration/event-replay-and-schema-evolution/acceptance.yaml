@@ -1,0 +1,51 @@
+version: 1
+feature: "event-replay-and-schema-evolution"
+level: "L5_cross_cutting"
+template: "A1-A8"
+tree_context:
+  feature_level: "L5_cross_cutting"
+  feature_path: "capability.runtime.feature.runtime-eventstore.subfeature.event-persist-and-publish.object.mongo-event-collection-and-mq-integration.cross.event-replay-and-schema-evolution"
+  parent_path: "capability.runtime.feature.runtime-eventstore.subfeature.event-persist-and-publish.object.mongo-event-collection-and-mq-integration"
+  acceptance_inherits_from: "capability.runtime.feature.runtime-eventstore"
+level_acceptance:
+  focus_groups:
+    - A1_functional
+    - A7_contract_metadata_consistency
+  notes: "事件重放能力 + 事件 schema 版本演进支持；Projector 重建时依赖 Replay。"
+global_acceptance:
+  A1_functional:
+    scenarios:
+      - given: "events 集合已有多条历史事件"
+        when: "调用 EventStore.Replay(aggregate_id, from_version)"
+        then: "返回该聚合自 from_version 起的事件流"
+      - given: "事件 schema 版本升级（v1 → v2）"
+        when: "读取旧版本事件"
+        then: "兼容解析，支持 upcaster 或默认值"
+      - given: "Projector 需要重建 ReadModel"
+        when: "调用 Replay 全量事件"
+        then: "可顺序重建 ReadModel"
+  A2_experience:
+    - "Replay API 对 Projector 透明"
+  A3_service_governance:
+    - "Replay 支持 offset 分页，避免大结果集"
+  A4_observability:
+    - "Replay 延迟可监控"
+  A5_product_ops:
+    - "运营可触发 ReadModel 重建"
+  A6_security_privacy:
+    - "Replay 不暴露 PII/SECRET，由拦截链处理"
+  A7_contract_metadata_consistency:
+    - "事件 schema 版本与 events.yaml 定义一致"
+    - "upcaster 逻辑与 schema 版本映射"
+  A8_test_automation:
+    - "Replay 契约测试"
+    - "Schema 版本演进单元测试"
+tests:
+  unit:
+    - "quwoquan_service/runtime/eventstore/tests/replay_test.go"
+    - "quwoquan_service/runtime/eventstore/tests/schema_evolution_test.go"
+  contract:
+    - "quwoquan_service/runtime/eventstore/tests/replay_contract_test.go"
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"

@@ -1,0 +1,98 @@
+version: 1
+feature_id: "F005"
+title: "端云一体化迁移（DDD + 元数据驱动）"
+template: "A1-A8"
+tree_context:
+  feature_level: "L1_capability"
+  feature_path: "capability.platform-ops-governance"
+  parent_path: "ROOT"
+  parent_id: "ROOT"
+  acceptance_inherits_from: "ROOT"
+level_acceptance:
+  focus_groups:
+    - "A2_experience"
+    - "A3_service_governance"
+    - "A4_observability"
+    - "A8_test_automation"
+  notes: "L1 能力层以跨服务治理、体验基线与自动化准入为主验收关注点。"
+global_acceptance:
+  A1_functional:
+    scenarios:
+      - id: "A1-S1"
+        title: "Chat 页面远端仓储切换无感"
+        given: "应用切换到 remote 模式，用户进入聊天页面"
+        when: "拉取会话列表并进入会话详情"
+        then: "列表与消息均由 chat repository 返回，UI 无字段猜测逻辑"
+      - id: "A1-S2"
+        title: "发现流编排结构统一"
+        given: "orchestrator 已提供 discovery feed"
+        when: "端侧请求 /v1/orch/discovery/feed"
+        then: "返回结构包含 items 与 nextCursor"
+  A2_experience:
+    performance_target: "chat/detail 与 discovery/feed 接口 p95 <= 300ms"
+    stability_target: "迁移相关页面 crash-free >= 99.9%，错误展示率 <= 0.5%"
+    ux_target: "核心链路（聊天列表->详情、发现页首屏）可用率 >= 99.95%"
+  A3_service_governance:
+    timeout_retry_circuit_breaker: "统一 timeout/retry/circuit/rate-limit 策略，并可配置化"
+    health_and_graceful_shutdown: "服务提供健康检查与优雅关停，编排服务支持降级输出"
+    rollback_strategy: "按服务与人群维度灰度回退，保留旧契约兼容窗口"
+  A4_observability:
+    access_log: "requestId/traceId/pageId/sessionId/userId/device/appVersion + latency + status"
+    operation_log_user: "用户关键行为（chat_open/send/feed_scroll）可追踪"
+    operation_log_operator: "运营配置发布/回滚全量审计"
+    error_log: "code/userMessage/debugMessage/module/kind/reason/retryable"
+    debug_log: "仅在 debug 开关开启时输出，SENSITIVE/PII 字段强制脱敏"
+    metrics_alert_slo: "错误率、p95/p99、依赖失败、队列积压、配置发布失败告警"
+  A5_product_ops:
+    event_collection: "chat.message_sent/content.feed_loaded/ops.experiment_bucketed"
+    experiment_gray: "实验分桶按 persona + appVersion + pageId 生效"
+    feedback_loop: "采集 -> 评估 -> 策略更新 -> 灰度 -> 回滚"
+  A6_security_privacy:
+    data_classification: "字段按 PUBLIC/PII/SENSITIVE/SECRET 分级并写入 metadata"
+    masking_encryption_retention: "PII/SENSITIVE 日志脱敏、敏感存储加密、保留策略可配置"
+    auditability: "接口与异步链路均可通过 traceId + causationId 回溯"
+  A7_contract_metadata_consistency:
+    openapi_synced: true
+    openapi_paths:
+      - /v1/chat/conversations
+      - /v1/chat/conversations/{conversationId}/messages
+      - /v1/orch/discovery/feed
+      - /v1/product-ops/events
+      - /v1/product-ops/experiments/bucket
+    metadata_synced: true
+    metadata_files:
+      - quwoquan_service/contracts/metadata/entity_catalog.yaml
+      - quwoquan_service/contracts/metadata/field_policy.yaml
+      - quwoquan_service/contracts/metadata/event_catalog.yaml
+    endpoint_catalog_synced: true
+  A8_test_automation:
+    mock:
+      app:
+        - quwoquan_app/test/personal_assistant/template_runtime_test.dart
+      service:
+        - quwoquan_service/specs/chat-service/spec.md
+    unit:
+      app:
+        - quwoquan_app/test/personal_assistant/learning_service_test.dart
+      service:
+        - quwoquan_service/tasks.md
+    contract:
+      app:
+        - quwoquan_app/test/personal_assistant/protocol_compatibility_test.dart
+      service:
+        - quwoquan_service/contracts/openapi/common.yaml
+    integration:
+      app:
+        - quwoquan_app/test/personal_assistant/web_pipeline_integration_test.dart
+      service:
+        - quwoquan_service/specs/orchestrator-service/spec.md
+    uat:
+      cases:
+        - UAT-CHAT-REMOTE-SWITCH-001
+        - UAT-DISCOVERY-ORCH-FEED-001
+      automation:
+        - scripts/gate_repo.sh --scope app
+        - scripts/gate_repo.sh --scope service
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"

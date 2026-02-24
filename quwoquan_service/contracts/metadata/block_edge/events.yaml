@@ -1,0 +1,24 @@
+version: 1
+entity: BlockEdge
+
+events:
+  - name: UserBlocked
+    description: 用户屏蔽
+    producer: user-service
+    consumers: [chat-service, recommendation-engine, content-service]
+    channel: event_store
+    payload_fields: [blockerId, blockedId]
+    cross_domain_impact:
+      - domain: chat
+        effect: filter messages from blocked user
+      - domain: recommendation
+        effect: exclude blocked user content
+      - domain: content
+        effect: hide comments from blocked user
+
+  - name: UserUnblocked
+    description: 用户取消屏蔽
+    producer: user-service
+    consumers: [chat-service, recommendation-engine, content-service]
+    channel: event_store
+    payload_fields: [blockerId, blockedId]

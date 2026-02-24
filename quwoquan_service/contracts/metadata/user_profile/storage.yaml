@@ -1,0 +1,140 @@
+version: 1
+aggregate: UserProfile
+backend: postgres
+
+tables:
+  user_profiles:
+    entity: UserProfile
+    pk: user_id
+    columns:
+      - { name: user_id, type: VARCHAR(36), constraints: [PK] }
+      - { name: phone, type: VARCHAR(20), constraints: [UNIQUE, NOT_NULL] }
+      - { name: nickname, type: VARCHAR(64), constraints: [UNIQUE, NOT_NULL] }
+      - { name: avatar_url, type: TEXT }
+      - { name: bio, type: VARCHAR(500) }
+      - { name: gender, type: VARCHAR(16) }
+      - { name: birth_date, type: DATE }
+      - { name: region, type: VARCHAR(128) }
+      - { name: status, type: VARCHAR(16), constraints: [NOT_NULL], default: "'active'" }
+      - { name: profile_version, type: INTEGER, constraints: [NOT_NULL], default: 1 }
+      - { name: follower_count, type: INTEGER, constraints: [NOT_NULL], default: 0 }
+      - { name: following_count, type: INTEGER, constraints: [NOT_NULL], default: 0 }
+      - { name: post_count, type: INTEGER, constraints: [NOT_NULL], default: 0 }
+      - { name: created_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
+      - { name: updated_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
+    indexes:
+      - { name: idx_user_profiles_nickname, columns: [nickname] }
+      - { name: idx_user_profiles_phone, columns: [phone] }
+      - { name: idx_user_profiles_status, columns: [status] }
+    search_indexes:
+      - { name: gin_user_profiles_search, columns: [nickname, bio], type: GIN_TRGM }
+
+  personas:
+    entity: Persona
+    pk: id
+    fk: { column: user_id, references: user_profiles.user_id, on_delete: CASCADE }
+    columns:
+      - { name: id, type: VARCHAR(36), constraints: [PK] }
+      - { name: user_id, type: VARCHAR(36), constraints: [NOT_NULL] }
+      - { name: display_name, type: VARCHAR(64), constraints: [NOT_NULL] }
+      - { name: avatar_url, type: TEXT }
+      - { name: is_primary, type: BOOLEAN, constraints: [NOT_NULL], default: false }
+      - { name: is_private, type: BOOLEAN, constraints: [NOT_NULL], default: false }
+      - { name: is_active, type: BOOLEAN, constraints: [NOT_NULL], default: false }
+      - { name: created_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
+      - { name: updated_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
+    indexes:
+      - { name: idx_personas_user_id, columns: [user_id] }
+    unique_constraints:
+      - { name: uq_personas_primary, columns: [user_id, is_primary], condition: "is_primary = true" }
+      - { name: uq_personas_active, columns: [user_id, is_active], condition: "is_active = true" }
+
+  user_auth:
+    entity: UserAuth
+    pk: user_id
+    fk: { column: user_id, references: user_profiles.user_id, on_delete: CASCADE }
+    columns:
+      - { name: user_id, type: VARCHAR(36), constraints: [PK] }
+      - { name: password_hash, type: VARCHAR(256), constraints: [NOT_NULL] }
+      - { name: otp_secret, type: VARCHAR(128) }
+      - { name: refresh_token, type: VARCHAR(512) }
+      - { name: refresh_token_expires_at, type: TIMESTAMPTZ }
+      - { name: last_login_at, type: TIMESTAMPTZ }
+      - { name: last_login_ip, type: VARCHAR(45) }
+      - { name: login_fail_count, type: INTEGER, constraints: [NOT_NULL], default: 0 }
+      - { name: locked_until, type: TIMESTAMPTZ }
+      - { name: created_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
+      - { name: updated_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
+    cache_excluded: true
+
+  user_devices:
+    entity: UserDevice
+    pk: id
+    fk: { column: user_id, references: user_profiles.user_id, on_delete: CASCADE }
+    columns:
+      - { name: id, type: VARCHAR(36), constraints: [PK] }
+      - { name: user_id, type: VARCHAR(36), constraints: [NOT_NULL] }
+      - { name: device_id, type: VARCHAR(128), constraints: [NOT_NULL] }
+      - { name: platform, type: VARCHAR(16), constraints: [NOT_NULL] }
+      - { name: push_token, type: VARCHAR(512) }
+      - { name: app_version, type: VARCHAR(32) }
+      - { name: last_active_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
+      - { name: created_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
+    unique_constraints:
+      - { name: uq_user_devices_user_device, columns: [user_id, device_id] }
+
+  user_settings:
+    entity: UserSetting
+    pk: user_id
+    fk: { column: user_id, references: user_profiles.user_id, on_delete: CASCADE }
+    columns:
+      - { name: user_id, type: VARCHAR(36), constraints: [PK] }
+      - { name: enable_push, type: BOOLEAN, constraints: [NOT_NULL], default: true }
+      - { name: enable_marketing, type: BOOLEAN, constraints: [NOT_NULL], default: false }
+      - { name: quiet_hours_start, type: TIME }
+      - { name: quiet_hours_end, type: TIME }
+      - { name: allow_stranger_msg, type: BOOLEAN, constraints: [NOT_NULL], default: true }
+      - { name: profile_visibility, type: VARCHAR(16), constraints: [NOT_NULL], default: "'public'" }
+      - { name: content_language, type: VARCHAR(16) }
+      - { name: feed_preference, type: VARCHAR(16) }
+      - { name: assistant_enabled, type: BOOLEAN, constraints: [NOT_NULL], default: true }
+      - { name: updated_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
+
+  profile_update_proposals:
+    entity: ProfileUpdateProposal
+    pk: id
+    fk: { column: user_id, references: user_profiles.user_id, on_delete: CASCADE }
+    columns:
+      - { name: id, type: VARCHAR(36), constraints: [PK] }
+      - { name: user_id, type: VARCHAR(36), constraints: [NOT_NULL] }
+      - { name: source, type: VARCHAR(16), constraints: [NOT_NULL] }
+      - { name: proposed_changes, type: JSONB, constraints: [NOT_NULL] }
+      - { name: status, type: VARCHAR(16), constraints: [NOT_NULL] }
+      - { name: reviewed_by, type: VARCHAR(36) }
+      - { name: version, type: INTEGER, constraints: [NOT_NULL], default: 1 }
+      - { name: created_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
+      - { name: resolved_at, type: TIMESTAMPTZ }
+    indexes:
+      - { name: idx_proposals_user_status, columns: [user_id, status], condition: "status IN ('created', 'confirmed')" }
+
+redis_cache:
+  - key: "cache:user_profile:{userId}"
+    ttl_seconds: 600
+    entity: UserProfile
+    invalidate_on: [UserProfileUpdated]
+
+  - key: "cache:user_setting:{userId}"
+    ttl_seconds: 600
+    entity: UserSetting
+    invalidate_on: [UserSettingUpdated]
+
+  - key: "device_tokens:{userId}"
+    ttl_seconds: 3600
+    entity: UserDevice
+    type: set
+    description: 推送 token 集合
+
+  - key: "login_fail:{userId}"
+    ttl_seconds: 1800
+    type: string
+    description: 登录失败滑动窗口计数

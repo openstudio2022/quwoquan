@@ -1,0 +1,1730 @@
+{
+  "reportMeta": {
+    "reportVersion": "2026.02.20",
+    "generatedAt": "2026-02-20T17:34:55Z",
+    "suiteId": "all_domains_state_transition_eval",
+    "runnerVersion": "state-transition-e2e.v2"
+  },
+  "gateResult": {
+    "suitePass": true,
+    "goNoGo": "GO",
+    "gateReasons": []
+  },
+  "summary": {
+    "totalDomains": 19,
+    "goDomains": 19,
+    "noGoDomains": 0
+  },
+  "domainResults": [
+    {
+      "domainId": "weather",
+      "suitePass": true,
+      "goNoGo": "GO",
+      "summary": {
+        "totalCases": 8,
+        "passedCases": 8,
+        "completionRatio": 1.0,
+        "hardFailCases": 0,
+        "hardFailByCode": {},
+        "spotcheckTargetCount": 23,
+        "selectedSamplesCount": 23,
+        "totalRounds": 23
+      },
+      "scoreBoard": {
+        "transitionAccuracyScore": {
+          "min": 97,
+          "p50": 100,
+          "p90": 100,
+          "avg": 99,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "contractCompletenessScore": {
+          "min": 80,
+          "p50": 85,
+          "p90": 90,
+          "avg": 86,
+          "passRate": 1.0,
+          "criticalPassRate": 0.25
+        },
+        "globalRuleComplianceScore": {
+          "min": 90,
+          "p50": 91,
+          "p90": 92,
+          "avg": 91,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "safetyBoundaryScore": {
+          "min": 90,
+          "p50": 94,
+          "p90": 95,
+          "avg": 93,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "reasoningTraceabilityScore": {
+          "min": 80,
+          "p50": 85,
+          "p90": 90,
+          "avg": 84,
+          "passRate": 1.0,
+          "criticalPassRate": 0.25
+        },
+        "actionabilityScore": {
+          "min": 80,
+          "p50": 85,
+          "p90": 88,
+          "avg": 85,
+          "passRate": 1.0,
+          "criticalPassRate": 0.125
+        },
+        "dialogueExperienceScore": {
+          "min": 82,
+          "p50": 87,
+          "p90": 90,
+          "avg": 86,
+          "passRate": 1.0,
+          "criticalPassRate": 0.25
+        }
+      },
+      "conversationMetrics": {
+        "normalEndedCases": 4,
+        "totalCases": 8,
+        "normalEndRatio": 0.5,
+        "maxRounds": 8,
+        "avgRounds": 2.875
+      },
+      "userFeedbackSimulation1000": {
+        "sampleSize": 1000,
+        "helpfulCount": 940,
+        "notHelpfulCount": 60,
+        "helpfulRatio": 0.94,
+        "notHelpfulRatio": 0.06,
+        "estimationMethod": "score_proxy_v1"
+      },
+      "reportPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/weather/state_transition_eval_report.json",
+      "spotcheckPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/weather/manual_spotcheck_report.md"
+    },
+    {
+      "domainId": "travel_transport",
+      "suitePass": true,
+      "goNoGo": "GO",
+      "summary": {
+        "totalCases": 8,
+        "passedCases": 8,
+        "completionRatio": 1.0,
+        "hardFailCases": 0,
+        "hardFailByCode": {},
+        "spotcheckTargetCount": 23,
+        "selectedSamplesCount": 23,
+        "totalRounds": 23
+      },
+      "scoreBoard": {
+        "transitionAccuracyScore": {
+          "min": 97,
+          "p50": 100,
+          "p90": 100,
+          "avg": 99,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "contractCompletenessScore": {
+          "min": 80,
+          "p50": 83,
+          "p90": 85,
+          "avg": 83,
+          "passRate": 1.0,
+          "criticalPassRate": 0.0
+        },
+        "globalRuleComplianceScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 92,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "safetyBoundaryScore": {
+          "min": 90,
+          "p50": 92,
+          "p90": 93,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "reasoningTraceabilityScore": {
+          "min": 80,
+          "p50": 85,
+          "p90": 87,
+          "avg": 84,
+          "passRate": 1.0,
+          "criticalPassRate": 0.0
+        },
+        "actionabilityScore": {
+          "min": 80,
+          "p50": 83,
+          "p90": 85,
+          "avg": 83,
+          "passRate": 1.0,
+          "criticalPassRate": 0.0
+        },
+        "dialogueExperienceScore": {
+          "min": 80,
+          "p50": 85,
+          "p90": 87,
+          "avg": 84,
+          "passRate": 1.0,
+          "criticalPassRate": 0.0
+        }
+      },
+      "conversationMetrics": {
+        "normalEndedCases": 4,
+        "totalCases": 8,
+        "normalEndRatio": 0.5,
+        "maxRounds": 8,
+        "avgRounds": 2.875
+      },
+      "userFeedbackSimulation1000": {
+        "sampleSize": 1000,
+        "helpfulCount": 932,
+        "notHelpfulCount": 68,
+        "helpfulRatio": 0.932,
+        "notHelpfulRatio": 0.068,
+        "estimationMethod": "score_proxy_v1"
+      },
+      "reportPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/travel_transport/state_transition_eval_report.json",
+      "spotcheckPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/travel_transport/manual_spotcheck_report.md"
+    },
+    {
+      "domainId": "travel_planning",
+      "suitePass": true,
+      "goNoGo": "GO",
+      "summary": {
+        "totalCases": 8,
+        "passedCases": 8,
+        "completionRatio": 1.0,
+        "hardFailCases": 0,
+        "hardFailByCode": {},
+        "spotcheckTargetCount": 23,
+        "selectedSamplesCount": 23,
+        "totalRounds": 23
+      },
+      "scoreBoard": {
+        "transitionAccuracyScore": {
+          "min": 98,
+          "p50": 100,
+          "p90": 100,
+          "avg": 100,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "contractCompletenessScore": {
+          "min": 80,
+          "p50": 88,
+          "p90": 88,
+          "avg": 87,
+          "passRate": 1.0,
+          "criticalPassRate": 0.125
+        },
+        "globalRuleComplianceScore": {
+          "min": 90,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "safetyBoundaryScore": {
+          "min": 90,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "reasoningTraceabilityScore": {
+          "min": 80,
+          "p50": 85,
+          "p90": 88,
+          "avg": 87,
+          "passRate": 1.0,
+          "criticalPassRate": 0.125
+        },
+        "actionabilityScore": {
+          "min": 80,
+          "p50": 85,
+          "p90": 88,
+          "avg": 86,
+          "passRate": 1.0,
+          "criticalPassRate": 0.125
+        },
+        "dialogueExperienceScore": {
+          "min": 80,
+          "p50": 85,
+          "p90": 88,
+          "avg": 86,
+          "passRate": 1.0,
+          "criticalPassRate": 0.125
+        }
+      },
+      "conversationMetrics": {
+        "normalEndedCases": 4,
+        "totalCases": 8,
+        "normalEndRatio": 0.5,
+        "maxRounds": 8,
+        "avgRounds": 2.875
+      },
+      "userFeedbackSimulation1000": {
+        "sampleSize": 1000,
+        "helpfulCount": 945,
+        "notHelpfulCount": 55,
+        "helpfulRatio": 0.945,
+        "notHelpfulRatio": 0.055,
+        "estimationMethod": "score_proxy_v1"
+      },
+      "reportPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/travel_planning/state_transition_eval_report.json",
+      "spotcheckPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/travel_planning/manual_spotcheck_report.md"
+    },
+    {
+      "domainId": "local_life",
+      "suitePass": true,
+      "goNoGo": "GO",
+      "summary": {
+        "totalCases": 8,
+        "passedCases": 8,
+        "completionRatio": 1.0,
+        "hardFailCases": 0,
+        "hardFailByCode": {},
+        "spotcheckTargetCount": 23,
+        "selectedSamplesCount": 23,
+        "totalRounds": 23
+      },
+      "scoreBoard": {
+        "transitionAccuracyScore": {
+          "min": 90,
+          "p50": 99,
+          "p90": 100,
+          "avg": 96,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "contractCompletenessScore": {
+          "min": 85,
+          "p50": 90,
+          "p90": 92,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 0.75
+        },
+        "globalRuleComplianceScore": {
+          "min": 92,
+          "p50": 93,
+          "p90": 95,
+          "avg": 93,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "safetyBoundaryScore": {
+          "min": 92,
+          "p50": 93,
+          "p90": 95,
+          "avg": 93,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "reasoningTraceabilityScore": {
+          "min": 85,
+          "p50": 90,
+          "p90": 90,
+          "avg": 89,
+          "passRate": 1.0,
+          "criticalPassRate": 0.625
+        },
+        "actionabilityScore": {
+          "min": 85,
+          "p50": 90,
+          "p90": 90,
+          "avg": 89,
+          "passRate": 1.0,
+          "criticalPassRate": 0.625
+        },
+        "dialogueExperienceScore": {
+          "min": 88,
+          "p50": 91,
+          "p90": 91,
+          "avg": 91,
+          "passRate": 1.0,
+          "criticalPassRate": 0.75
+        }
+      },
+      "conversationMetrics": {
+        "normalEndedCases": 4,
+        "totalCases": 8,
+        "normalEndRatio": 0.5,
+        "maxRounds": 8,
+        "avgRounds": 2.875
+      },
+      "userFeedbackSimulation1000": {
+        "sampleSize": 1000,
+        "helpfulCount": 964,
+        "notHelpfulCount": 36,
+        "helpfulRatio": 0.964,
+        "notHelpfulRatio": 0.036,
+        "estimationMethod": "score_proxy_v1"
+      },
+      "reportPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/local_life/state_transition_eval_report.json",
+      "spotcheckPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/local_life/manual_spotcheck_report.md"
+    },
+    {
+      "domainId": "calendar_task",
+      "suitePass": true,
+      "goNoGo": "GO",
+      "summary": {
+        "totalCases": 8,
+        "passedCases": 8,
+        "completionRatio": 1.0,
+        "hardFailCases": 0,
+        "hardFailByCode": {},
+        "spotcheckTargetCount": 23,
+        "selectedSamplesCount": 23,
+        "totalRounds": 23
+      },
+      "scoreBoard": {
+        "transitionAccuracyScore": {
+          "min": 92,
+          "p50": 100,
+          "p90": 100,
+          "avg": 99,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "contractCompletenessScore": {
+          "min": 83,
+          "p50": 88,
+          "p90": 95,
+          "avg": 89,
+          "passRate": 1.0,
+          "criticalPassRate": 0.25
+        },
+        "globalRuleComplianceScore": {
+          "min": 90,
+          "p50": 92,
+          "p90": 95,
+          "avg": 93,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "safetyBoundaryScore": {
+          "min": 90,
+          "p50": 92,
+          "p90": 95,
+          "avg": 93,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "reasoningTraceabilityScore": {
+          "min": 85,
+          "p50": 88,
+          "p90": 92,
+          "avg": 89,
+          "passRate": 1.0,
+          "criticalPassRate": 0.25
+        },
+        "actionabilityScore": {
+          "min": 83,
+          "p50": 85,
+          "p90": 92,
+          "avg": 88,
+          "passRate": 1.0,
+          "criticalPassRate": 0.25
+        },
+        "dialogueExperienceScore": {
+          "min": 82,
+          "p50": 89,
+          "p90": 92,
+          "avg": 89,
+          "passRate": 1.0,
+          "criticalPassRate": 0.375
+        }
+      },
+      "conversationMetrics": {
+        "normalEndedCases": 4,
+        "totalCases": 8,
+        "normalEndRatio": 0.5,
+        "maxRounds": 8,
+        "avgRounds": 2.875
+      },
+      "userFeedbackSimulation1000": {
+        "sampleSize": 1000,
+        "helpfulCount": 948,
+        "notHelpfulCount": 52,
+        "helpfulRatio": 0.948,
+        "notHelpfulRatio": 0.052,
+        "estimationMethod": "score_proxy_v1"
+      },
+      "reportPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/calendar_task/state_transition_eval_report.json",
+      "spotcheckPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/calendar_task/manual_spotcheck_report.md"
+    },
+    {
+      "domainId": "knowledge_general",
+      "suitePass": true,
+      "goNoGo": "GO",
+      "summary": {
+        "totalCases": 9,
+        "passedCases": 9,
+        "completionRatio": 1.0,
+        "hardFailCases": 0,
+        "hardFailByCode": {},
+        "spotcheckTargetCount": 26,
+        "selectedSamplesCount": 26,
+        "totalRounds": 26
+      },
+      "scoreBoard": {
+        "transitionAccuracyScore": {
+          "min": 90,
+          "p50": 97,
+          "p90": 100,
+          "avg": 96,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "contractCompletenessScore": {
+          "min": 86,
+          "p50": 90,
+          "p90": 90,
+          "avg": 89,
+          "passRate": 1.0,
+          "criticalPassRate": 0.5556
+        },
+        "globalRuleComplianceScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 93,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "safetyBoundaryScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "reasoningTraceabilityScore": {
+          "min": 87,
+          "p50": 88,
+          "p90": 90,
+          "avg": 89,
+          "passRate": 1.0,
+          "criticalPassRate": 0.4444
+        },
+        "actionabilityScore": {
+          "min": 85,
+          "p50": 88,
+          "p90": 90,
+          "avg": 88,
+          "passRate": 1.0,
+          "criticalPassRate": 0.4444
+        },
+        "dialogueExperienceScore": {
+          "min": 85,
+          "p50": 89,
+          "p90": 91,
+          "avg": 89,
+          "passRate": 1.0,
+          "criticalPassRate": 0.4444
+        }
+      },
+      "conversationMetrics": {
+        "normalEndedCases": 4,
+        "totalCases": 9,
+        "normalEndRatio": 0.4444,
+        "maxRounds": 8,
+        "avgRounds": 2.8889
+      },
+      "userFeedbackSimulation1000": {
+        "sampleSize": 1000,
+        "helpfulCount": 955,
+        "notHelpfulCount": 45,
+        "helpfulRatio": 0.955,
+        "notHelpfulRatio": 0.045,
+        "estimationMethod": "score_proxy_v1"
+      },
+      "reportPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/knowledge_general/state_transition_eval_report.json",
+      "spotcheckPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/knowledge_general/manual_spotcheck_report.md"
+    },
+    {
+      "domainId": "finance_consumer",
+      "suitePass": true,
+      "goNoGo": "GO",
+      "summary": {
+        "totalCases": 8,
+        "passedCases": 8,
+        "completionRatio": 1.0,
+        "hardFailCases": 0,
+        "hardFailByCode": {},
+        "spotcheckTargetCount": 23,
+        "selectedSamplesCount": 23,
+        "totalRounds": 23
+      },
+      "scoreBoard": {
+        "transitionAccuracyScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 91,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "contractCompletenessScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "globalRuleComplianceScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "safetyBoundaryScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "reasoningTraceabilityScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "actionabilityScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "dialogueExperienceScore": {
+          "min": 91,
+          "p50": 91,
+          "p90": 91,
+          "avg": 91,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        }
+      },
+      "conversationMetrics": {
+        "normalEndedCases": 4,
+        "totalCases": 8,
+        "normalEndRatio": 0.5,
+        "maxRounds": 8,
+        "avgRounds": 2.875
+      },
+      "userFeedbackSimulation1000": {
+        "sampleSize": 1000,
+        "helpfulCount": 958,
+        "notHelpfulCount": 42,
+        "helpfulRatio": 0.958,
+        "notHelpfulRatio": 0.042,
+        "estimationMethod": "score_proxy_v1"
+      },
+      "reportPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/finance_consumer/state_transition_eval_report.json",
+      "spotcheckPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/finance_consumer/manual_spotcheck_report.md"
+    },
+    {
+      "domainId": "health_wellness",
+      "suitePass": true,
+      "goNoGo": "GO",
+      "summary": {
+        "totalCases": 9,
+        "passedCases": 9,
+        "completionRatio": 1.0,
+        "hardFailCases": 0,
+        "hardFailByCode": {},
+        "spotcheckTargetCount": 26,
+        "selectedSamplesCount": 26,
+        "totalRounds": 26
+      },
+      "scoreBoard": {
+        "transitionAccuracyScore": {
+          "min": 90,
+          "p50": 98,
+          "p90": 100,
+          "avg": 96,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "contractCompletenessScore": {
+          "min": 83,
+          "p50": 90,
+          "p90": 95,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 0.6667
+        },
+        "globalRuleComplianceScore": {
+          "min": 90,
+          "p50": 92,
+          "p90": 95,
+          "avg": 93,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "safetyBoundaryScore": {
+          "min": 90,
+          "p50": 92,
+          "p90": 95,
+          "avg": 93,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "reasoningTraceabilityScore": {
+          "min": 82,
+          "p50": 90,
+          "p90": 90,
+          "avg": 88,
+          "passRate": 1.0,
+          "criticalPassRate": 0.6667
+        },
+        "actionabilityScore": {
+          "min": 82,
+          "p50": 90,
+          "p90": 90,
+          "avg": 88,
+          "passRate": 1.0,
+          "criticalPassRate": 0.6667
+        },
+        "dialogueExperienceScore": {
+          "min": 82,
+          "p50": 90,
+          "p90": 91,
+          "avg": 89,
+          "passRate": 1.0,
+          "criticalPassRate": 0.6667
+        }
+      },
+      "conversationMetrics": {
+        "normalEndedCases": 4,
+        "totalCases": 9,
+        "normalEndRatio": 0.4444,
+        "maxRounds": 8,
+        "avgRounds": 2.8889
+      },
+      "userFeedbackSimulation1000": {
+        "sampleSize": 1000,
+        "helpfulCount": 953,
+        "notHelpfulCount": 47,
+        "helpfulRatio": 0.953,
+        "notHelpfulRatio": 0.047,
+        "estimationMethod": "score_proxy_v1"
+      },
+      "reportPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/health_wellness/state_transition_eval_report.json",
+      "spotcheckPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/health_wellness/manual_spotcheck_report.md"
+    },
+    {
+      "domainId": "education_learning",
+      "suitePass": true,
+      "goNoGo": "GO",
+      "summary": {
+        "totalCases": 9,
+        "passedCases": 9,
+        "completionRatio": 1.0,
+        "hardFailCases": 0,
+        "hardFailByCode": {},
+        "spotcheckTargetCount": 26,
+        "selectedSamplesCount": 26,
+        "totalRounds": 26
+      },
+      "scoreBoard": {
+        "transitionAccuracyScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 92,
+          "avg": 91,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "contractCompletenessScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "globalRuleComplianceScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "safetyBoundaryScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "reasoningTraceabilityScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "actionabilityScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "dialogueExperienceScore": {
+          "min": 91,
+          "p50": 91,
+          "p90": 91,
+          "avg": 91,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        }
+      },
+      "conversationMetrics": {
+        "normalEndedCases": 4,
+        "totalCases": 9,
+        "normalEndRatio": 0.4444,
+        "maxRounds": 8,
+        "avgRounds": 2.8889
+      },
+      "userFeedbackSimulation1000": {
+        "sampleSize": 1000,
+        "helpfulCount": 959,
+        "notHelpfulCount": 41,
+        "helpfulRatio": 0.959,
+        "notHelpfulRatio": 0.041,
+        "estimationMethod": "score_proxy_v1"
+      },
+      "reportPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/education_learning/state_transition_eval_report.json",
+      "spotcheckPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/education_learning/manual_spotcheck_report.md"
+    },
+    {
+      "domainId": "work_productivity",
+      "suitePass": true,
+      "goNoGo": "GO",
+      "summary": {
+        "totalCases": 8,
+        "passedCases": 8,
+        "completionRatio": 1.0,
+        "hardFailCases": 0,
+        "hardFailByCode": {},
+        "spotcheckTargetCount": 23,
+        "selectedSamplesCount": 23,
+        "totalRounds": 23
+      },
+      "scoreBoard": {
+        "transitionAccuracyScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 91,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "contractCompletenessScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "globalRuleComplianceScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "safetyBoundaryScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "reasoningTraceabilityScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "actionabilityScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "dialogueExperienceScore": {
+          "min": 91,
+          "p50": 91,
+          "p90": 91,
+          "avg": 91,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        }
+      },
+      "conversationMetrics": {
+        "normalEndedCases": 4,
+        "totalCases": 8,
+        "normalEndRatio": 0.5,
+        "maxRounds": 8,
+        "avgRounds": 2.875
+      },
+      "userFeedbackSimulation1000": {
+        "sampleSize": 1000,
+        "helpfulCount": 958,
+        "notHelpfulCount": 42,
+        "helpfulRatio": 0.958,
+        "notHelpfulRatio": 0.042,
+        "estimationMethod": "score_proxy_v1"
+      },
+      "reportPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/work_productivity/state_transition_eval_report.json",
+      "spotcheckPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/work_productivity/manual_spotcheck_report.md"
+    },
+    {
+      "domainId": "shopping_decision",
+      "suitePass": true,
+      "goNoGo": "GO",
+      "summary": {
+        "totalCases": 8,
+        "passedCases": 8,
+        "completionRatio": 1.0,
+        "hardFailCases": 0,
+        "hardFailByCode": {},
+        "spotcheckTargetCount": 23,
+        "selectedSamplesCount": 23,
+        "totalRounds": 23
+      },
+      "scoreBoard": {
+        "transitionAccuracyScore": {
+          "min": 90,
+          "p50": 91,
+          "p90": 100,
+          "avg": 93,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "contractCompletenessScore": {
+          "min": 80,
+          "p50": 90,
+          "p90": 90,
+          "avg": 88,
+          "passRate": 1.0,
+          "criticalPassRate": 0.625
+        },
+        "globalRuleComplianceScore": {
+          "min": 90,
+          "p50": 92,
+          "p90": 92,
+          "avg": 91,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "safetyBoundaryScore": {
+          "min": 90,
+          "p50": 92,
+          "p90": 92,
+          "avg": 91,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "reasoningTraceabilityScore": {
+          "min": 80,
+          "p50": 90,
+          "p90": 90,
+          "avg": 88,
+          "passRate": 1.0,
+          "criticalPassRate": 0.75
+        },
+        "actionabilityScore": {
+          "min": 85,
+          "p50": 90,
+          "p90": 90,
+          "avg": 89,
+          "passRate": 1.0,
+          "criticalPassRate": 0.75
+        },
+        "dialogueExperienceScore": {
+          "min": 80,
+          "p50": 91,
+          "p90": 91,
+          "avg": 88,
+          "passRate": 1.0,
+          "criticalPassRate": 0.625
+        }
+      },
+      "conversationMetrics": {
+        "normalEndedCases": 4,
+        "totalCases": 8,
+        "normalEndRatio": 0.5,
+        "maxRounds": 8,
+        "avgRounds": 2.875
+      },
+      "userFeedbackSimulation1000": {
+        "sampleSize": 1000,
+        "helpfulCount": 954,
+        "notHelpfulCount": 46,
+        "helpfulRatio": 0.954,
+        "notHelpfulRatio": 0.046,
+        "estimationMethod": "score_proxy_v1"
+      },
+      "reportPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/shopping_decision/state_transition_eval_report.json",
+      "spotcheckPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/shopping_decision/manual_spotcheck_report.md"
+    },
+    {
+      "domainId": "policy_public_service",
+      "suitePass": true,
+      "goNoGo": "GO",
+      "summary": {
+        "totalCases": 8,
+        "passedCases": 8,
+        "completionRatio": 1.0,
+        "hardFailCases": 0,
+        "hardFailByCode": {},
+        "spotcheckTargetCount": 23,
+        "selectedSamplesCount": 23,
+        "totalRounds": 23
+      },
+      "scoreBoard": {
+        "transitionAccuracyScore": {
+          "min": 90,
+          "p50": 97,
+          "p90": 100,
+          "avg": 95,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "contractCompletenessScore": {
+          "min": 80,
+          "p50": 87,
+          "p90": 90,
+          "avg": 86,
+          "passRate": 1.0,
+          "criticalPassRate": 0.375
+        },
+        "globalRuleComplianceScore": {
+          "min": 90,
+          "p50": 92,
+          "p90": 92,
+          "avg": 91,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "safetyBoundaryScore": {
+          "min": 90,
+          "p50": 92,
+          "p90": 93,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "reasoningTraceabilityScore": {
+          "min": 80,
+          "p50": 86,
+          "p90": 90,
+          "avg": 85,
+          "passRate": 1.0,
+          "criticalPassRate": 0.375
+        },
+        "actionabilityScore": {
+          "min": 80,
+          "p50": 85,
+          "p90": 90,
+          "avg": 86,
+          "passRate": 1.0,
+          "criticalPassRate": 0.375
+        },
+        "dialogueExperienceScore": {
+          "min": 80,
+          "p50": 87,
+          "p90": 91,
+          "avg": 87,
+          "passRate": 1.0,
+          "criticalPassRate": 0.375
+        }
+      },
+      "conversationMetrics": {
+        "normalEndedCases": 4,
+        "totalCases": 8,
+        "normalEndRatio": 0.5,
+        "maxRounds": 8,
+        "avgRounds": 2.875
+      },
+      "userFeedbackSimulation1000": {
+        "sampleSize": 1000,
+        "helpfulCount": 945,
+        "notHelpfulCount": 55,
+        "helpfulRatio": 0.945,
+        "notHelpfulRatio": 0.055,
+        "estimationMethod": "score_proxy_v1"
+      },
+      "reportPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/policy_public_service/state_transition_eval_report.json",
+      "spotcheckPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/policy_public_service/manual_spotcheck_report.md"
+    },
+    {
+      "domainId": "emotion_companion",
+      "suitePass": true,
+      "goNoGo": "GO",
+      "summary": {
+        "totalCases": 8,
+        "passedCases": 8,
+        "completionRatio": 1.0,
+        "hardFailCases": 0,
+        "hardFailByCode": {},
+        "spotcheckTargetCount": 23,
+        "selectedSamplesCount": 23,
+        "totalRounds": 23
+      },
+      "scoreBoard": {
+        "transitionAccuracyScore": {
+          "min": 97,
+          "p50": 100,
+          "p90": 100,
+          "avg": 99,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "contractCompletenessScore": {
+          "min": 83,
+          "p50": 91,
+          "p90": 95,
+          "avg": 91,
+          "passRate": 1.0,
+          "criticalPassRate": 0.625
+        },
+        "globalRuleComplianceScore": {
+          "min": 90,
+          "p50": 93,
+          "p90": 95,
+          "avg": 93,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "safetyBoundaryScore": {
+          "min": 92,
+          "p50": 95,
+          "p90": 95,
+          "avg": 94,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "reasoningTraceabilityScore": {
+          "min": 83,
+          "p50": 90,
+          "p90": 91,
+          "avg": 89,
+          "passRate": 1.0,
+          "criticalPassRate": 0.625
+        },
+        "actionabilityScore": {
+          "min": 83,
+          "p50": 90,
+          "p90": 91,
+          "avg": 89,
+          "passRate": 1.0,
+          "criticalPassRate": 0.5
+        },
+        "dialogueExperienceScore": {
+          "min": 85,
+          "p50": 90,
+          "p90": 91,
+          "avg": 89,
+          "passRate": 1.0,
+          "criticalPassRate": 0.625
+        }
+      },
+      "conversationMetrics": {
+        "normalEndedCases": 4,
+        "totalCases": 8,
+        "normalEndRatio": 0.5,
+        "maxRounds": 8,
+        "avgRounds": 2.875
+      },
+      "userFeedbackSimulation1000": {
+        "sampleSize": 1000,
+        "helpfulCount": 962,
+        "notHelpfulCount": 38,
+        "helpfulRatio": 0.962,
+        "notHelpfulRatio": 0.038,
+        "estimationMethod": "score_proxy_v1"
+      },
+      "reportPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/emotion_companion/state_transition_eval_report.json",
+      "spotcheckPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/emotion_companion/manual_spotcheck_report.md"
+    },
+    {
+      "domainId": "social_companion_chat",
+      "suitePass": true,
+      "goNoGo": "GO",
+      "summary": {
+        "totalCases": 8,
+        "passedCases": 8,
+        "completionRatio": 1.0,
+        "hardFailCases": 0,
+        "hardFailByCode": {},
+        "spotcheckTargetCount": 23,
+        "selectedSamplesCount": 23,
+        "totalRounds": 23
+      },
+      "scoreBoard": {
+        "transitionAccuracyScore": {
+          "min": 96,
+          "p50": 100,
+          "p90": 100,
+          "avg": 99,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "contractCompletenessScore": {
+          "min": 85,
+          "p50": 92,
+          "p90": 95,
+          "avg": 91,
+          "passRate": 1.0,
+          "criticalPassRate": 0.625
+        },
+        "globalRuleComplianceScore": {
+          "min": 91,
+          "p50": 95,
+          "p90": 95,
+          "avg": 94,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "safetyBoundaryScore": {
+          "min": 93,
+          "p50": 95,
+          "p90": 95,
+          "avg": 95,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "reasoningTraceabilityScore": {
+          "min": 84,
+          "p50": 90,
+          "p90": 95,
+          "avg": 89,
+          "passRate": 1.0,
+          "criticalPassRate": 0.5
+        },
+        "actionabilityScore": {
+          "min": 85,
+          "p50": 90,
+          "p90": 95,
+          "avg": 89,
+          "passRate": 1.0,
+          "criticalPassRate": 0.5
+        },
+        "dialogueExperienceScore": {
+          "min": 86,
+          "p50": 90,
+          "p90": 95,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 0.5
+        }
+      },
+      "conversationMetrics": {
+        "normalEndedCases": 4,
+        "totalCases": 8,
+        "normalEndRatio": 0.5,
+        "maxRounds": 8,
+        "avgRounds": 2.875
+      },
+      "userFeedbackSimulation1000": {
+        "sampleSize": 1000,
+        "helpfulCount": 958,
+        "notHelpfulCount": 42,
+        "helpfulRatio": 0.958,
+        "notHelpfulRatio": 0.042,
+        "estimationMethod": "score_proxy_v1"
+      },
+      "reportPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/social_companion_chat/state_transition_eval_report.json",
+      "spotcheckPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/social_companion_chat/manual_spotcheck_report.md"
+    },
+    {
+      "domainId": "relationship_matchmaking",
+      "suitePass": true,
+      "goNoGo": "GO",
+      "summary": {
+        "totalCases": 8,
+        "passedCases": 8,
+        "completionRatio": 1.0,
+        "hardFailCases": 0,
+        "hardFailByCode": {},
+        "spotcheckTargetCount": 23,
+        "selectedSamplesCount": 23,
+        "totalRounds": 23
+      },
+      "scoreBoard": {
+        "transitionAccuracyScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 92,
+          "avg": 91,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "contractCompletenessScore": {
+          "min": 88,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 0.875
+        },
+        "globalRuleComplianceScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 93,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "safetyBoundaryScore": {
+          "min": 91,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "reasoningTraceabilityScore": {
+          "min": 88,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 0.875
+        },
+        "actionabilityScore": {
+          "min": 87,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 0.875
+        },
+        "dialogueExperienceScore": {
+          "min": 88,
+          "p50": 91,
+          "p90": 91,
+          "avg": 91,
+          "passRate": 1.0,
+          "criticalPassRate": 0.875
+        }
+      },
+      "conversationMetrics": {
+        "normalEndedCases": 4,
+        "totalCases": 8,
+        "normalEndRatio": 0.5,
+        "maxRounds": 8,
+        "avgRounds": 2.875
+      },
+      "userFeedbackSimulation1000": {
+        "sampleSize": 1000,
+        "helpfulCount": 955,
+        "notHelpfulCount": 45,
+        "helpfulRatio": 0.955,
+        "notHelpfulRatio": 0.045,
+        "estimationMethod": "score_proxy_v1"
+      },
+      "reportPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/relationship_matchmaking/state_transition_eval_report.json",
+      "spotcheckPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/relationship_matchmaking/manual_spotcheck_report.md"
+    },
+    {
+      "domainId": "divination_fortune",
+      "suitePass": true,
+      "goNoGo": "GO",
+      "summary": {
+        "totalCases": 8,
+        "passedCases": 8,
+        "completionRatio": 1.0,
+        "hardFailCases": 0,
+        "hardFailByCode": {},
+        "spotcheckTargetCount": 23,
+        "selectedSamplesCount": 23,
+        "totalRounds": 23
+      },
+      "scoreBoard": {
+        "transitionAccuracyScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "contractCompletenessScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "globalRuleComplianceScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "safetyBoundaryScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "reasoningTraceabilityScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "actionabilityScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "dialogueExperienceScore": {
+          "min": 91,
+          "p50": 91,
+          "p90": 91,
+          "avg": 91,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        }
+      },
+      "conversationMetrics": {
+        "normalEndedCases": 4,
+        "totalCases": 8,
+        "normalEndRatio": 0.5,
+        "maxRounds": 8,
+        "avgRounds": 2.875
+      },
+      "userFeedbackSimulation1000": {
+        "sampleSize": 1000,
+        "helpfulCount": 958,
+        "notHelpfulCount": 42,
+        "helpfulRatio": 0.958,
+        "notHelpfulRatio": 0.042,
+        "estimationMethod": "score_proxy_v1"
+      },
+      "reportPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/divination_fortune/state_transition_eval_report.json",
+      "spotcheckPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/divination_fortune/manual_spotcheck_report.md"
+    },
+    {
+      "domainId": "astrology_constellation",
+      "suitePass": true,
+      "goNoGo": "GO",
+      "summary": {
+        "totalCases": 8,
+        "passedCases": 8,
+        "completionRatio": 1.0,
+        "hardFailCases": 0,
+        "hardFailByCode": {},
+        "spotcheckTargetCount": 23,
+        "selectedSamplesCount": 23,
+        "totalRounds": 23
+      },
+      "scoreBoard": {
+        "transitionAccuracyScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 91,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "contractCompletenessScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "globalRuleComplianceScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "safetyBoundaryScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "reasoningTraceabilityScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "actionabilityScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "dialogueExperienceScore": {
+          "min": 91,
+          "p50": 91,
+          "p90": 91,
+          "avg": 91,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        }
+      },
+      "conversationMetrics": {
+        "normalEndedCases": 4,
+        "totalCases": 8,
+        "normalEndRatio": 0.5,
+        "maxRounds": 8,
+        "avgRounds": 2.875
+      },
+      "userFeedbackSimulation1000": {
+        "sampleSize": 1000,
+        "helpfulCount": 958,
+        "notHelpfulCount": 42,
+        "helpfulRatio": 0.958,
+        "notHelpfulRatio": 0.042,
+        "estimationMethod": "score_proxy_v1"
+      },
+      "reportPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/astrology_constellation/state_transition_eval_report.json",
+      "spotcheckPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/astrology_constellation/manual_spotcheck_report.md"
+    },
+    {
+      "domainId": "family_parenting",
+      "suitePass": true,
+      "goNoGo": "GO",
+      "summary": {
+        "totalCases": 8,
+        "passedCases": 8,
+        "completionRatio": 1.0,
+        "hardFailCases": 0,
+        "hardFailByCode": {},
+        "spotcheckTargetCount": 23,
+        "selectedSamplesCount": 23,
+        "totalRounds": 23
+      },
+      "scoreBoard": {
+        "transitionAccuracyScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "contractCompletenessScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "globalRuleComplianceScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "safetyBoundaryScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "reasoningTraceabilityScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "actionabilityScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "dialogueExperienceScore": {
+          "min": 91,
+          "p50": 91,
+          "p90": 91,
+          "avg": 91,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        }
+      },
+      "conversationMetrics": {
+        "normalEndedCases": 4,
+        "totalCases": 8,
+        "normalEndRatio": 0.5,
+        "maxRounds": 8,
+        "avgRounds": 2.875
+      },
+      "userFeedbackSimulation1000": {
+        "sampleSize": 1000,
+        "helpfulCount": 958,
+        "notHelpfulCount": 42,
+        "helpfulRatio": 0.958,
+        "notHelpfulRatio": 0.042,
+        "estimationMethod": "score_proxy_v1"
+      },
+      "reportPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/family_parenting/state_transition_eval_report.json",
+      "spotcheckPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/family_parenting/manual_spotcheck_report.md"
+    },
+    {
+      "domainId": "fallback_general_search",
+      "suitePass": true,
+      "goNoGo": "GO",
+      "summary": {
+        "totalCases": 8,
+        "passedCases": 8,
+        "completionRatio": 1.0,
+        "hardFailCases": 0,
+        "hardFailByCode": {},
+        "spotcheckTargetCount": 23,
+        "selectedSamplesCount": 23,
+        "totalRounds": 23
+      },
+      "scoreBoard": {
+        "transitionAccuracyScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 91,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "contractCompletenessScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "globalRuleComplianceScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "safetyBoundaryScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "reasoningTraceabilityScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "actionabilityScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "dialogueExperienceScore": {
+          "min": 91,
+          "p50": 91,
+          "p90": 91,
+          "avg": 91,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        }
+      },
+      "conversationMetrics": {
+        "normalEndedCases": 4,
+        "totalCases": 8,
+        "normalEndRatio": 0.5,
+        "maxRounds": 8,
+        "avgRounds": 2.875
+      },
+      "userFeedbackSimulation1000": {
+        "sampleSize": 1000,
+        "helpfulCount": 958,
+        "notHelpfulCount": 42,
+        "helpfulRatio": 0.958,
+        "notHelpfulRatio": 0.042,
+        "estimationMethod": "score_proxy_v1"
+      },
+      "reportPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/fallback_general_search/state_transition_eval_report.json",
+      "spotcheckPath": "/Users/zhaoyuxi/Projects/quwoquan/app_log/personal_assistant_eval/fallback_general_search/manual_spotcheck_report.md"
+    }
+  ]
+}

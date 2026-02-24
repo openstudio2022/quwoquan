@@ -1,0 +1,47 @@
+version: 1
+entity: BlockEdge
+
+fields:
+  - name: id
+    type: string
+    constraints: [PK]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: blockerId
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: blockedId
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: reason
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: write
+    ops_exposure: read
+
+  - name: createdAt
+    type: timestamp
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+unique_constraints:
+  - columns: [blockerId, blockedId]
+    description: 唯一屏蔽关系

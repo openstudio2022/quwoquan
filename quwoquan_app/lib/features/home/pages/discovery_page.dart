@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/post_runtime_metadata.g.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 import 'package:quwoquan_app/components/more_actions_popup/more_action_popup.dart';
@@ -37,6 +38,8 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   VideoForceDarkNotifier? _videoForceDarkNotifier;
   BottomNavHiddenNotifier? _bottomNavHiddenNotifier;
   late PageController _primaryPageController;
+  final Map<String, Future<List<Map<String, dynamic>>>> _discoveryFeedFutures =
+      <String, Future<List<Map<String, dynamic>>>>{};
 
   @override
   bool get wantKeepAlive => true;
@@ -56,6 +59,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
 
   void _setActiveType(String id) {
     setState(() => _activeType = id);
+    _ensureFeedFuture(id);
     _recordDiscoveryVisit(id);
     _applyVideoForceDark();
     final index = _primaryTabIds.indexOf(id);
@@ -102,6 +106,20 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     ref.read(bottomNavHiddenProvider.notifier).setHidden(_isVideoMode);
   }
 
+  void _trackBehavior(String action, dynamic post, {double? duration}) {
+    final contentId = post is Map ? (post['id']?.toString() ?? '') : '';
+    if (contentId.isEmpty) return;
+    final tags = post is Map
+        ? ((post['tags'] as List?)?.cast<String>() ?? <String>[])
+        : <String>[];
+    ref.read(behaviorRepositoryProvider).reportSingle(
+      contentId: contentId,
+      action: action,
+      tags: tags,
+      duration: duration,
+    );
+  }
+
   void _recordDiscoveryVisit(String tabId) {
     ref.read(visitRecorderServiceProvider).recordVisit(
           VisitTarget.page('discovery_$tabId'),
@@ -131,6 +149,9 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       _bottomNavHiddenNotifier = ref.read(bottomNavHiddenProvider.notifier);
       _applyVideoForceDark();
       _recordDiscoveryVisit(_activeType);
+      for (final id in _primaryTabIds) {
+        _ensureFeedFuture(id);
+      }
     });
   }
 
@@ -249,22 +270,29 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   /// 视频沉浸：竖滑列表、顶栏/右侧栏/左下文案常显；使用频道流模式（[theaterModeTapToToggle] = false），不启用剧场点击切换。
   /// 底部导航仅由 [ _applyVideoForceDark ] 控制（在视频频道时隐藏，离开或 dispose 时恢复）。
   Widget _buildVideoImmersionView(bool isDark) {
-    final videos = ref.watch(appContentRepositoryProvider).discoveryVideoData;
-    return _VideoImmersionView(
-      categories: _categories,
-      activeTab: _activeType,
-      videos: videos,
-      isUIVisible: true,
-      theaterModeTapToToggle: false,
-      onTabChange: (id) {
-        _setActiveType(id);
-        _applyVideoForceDark();
+    final fallback = ref.watch(appContentRepositoryProvider).discoveryVideoData;
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _ensureFeedFuture('video'),
+      builder: (context, snapshot) {
+        final posts = snapshot.data ?? fallback;
+        final videos = posts.map(_toVideoItem).toList(growable: false);
+        return _VideoImmersionView(
+          categories: _categories,
+          activeTab: _activeType,
+          videos: videos,
+          isUIVisible: true,
+          theaterModeTapToToggle: false,
+          onTabChange: (id) {
+            _setActiveType(id);
+            _applyVideoForceDark();
+          },
+          onToggleUI: () {},
+          onUserClick: (userId) => context.push('/user/$userId'),
+          onAssistantTap: _openAssistantHalfSheet,
+          onCommentTap: _onMomentCommentTap,
+          onShareTap: _onMomentShareTap,
+        );
       },
-      onToggleUI: () {},
-      onUserClick: (userId) => context.push('/user/$userId'),
-      onAssistantTap: _openAssistantHalfSheet,
-      onCommentTap: _onMomentCommentTap,
-      onShareTap: _onMomentShareTap,
     );
   }
 
@@ -287,88 +315,106 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       AppSpacing.feedContentHorizontal(context);
 
   Widget _buildMomentContent(bool isDark) {
-    final moments = ref.watch(appContentRepositoryProvider).discoveryMomentData;
+    final fallback = ref.watch(appContentRepositoryProvider).discoveryMomentData;
     final horizontal = _contentHorizontalPadding(context);
-    return ListView.builder(
-      padding: EdgeInsets.only(
-        top: AppSpacing.containerSm,
-        bottom: MediaQuery.of(context).padding.bottom +
-            AppSpacing.bottomNavHeight +
-            AppSpacing.interGroupMd,
-      ),
-      itemCount: moments.length,
-      itemBuilder: (context, index) {
-        final isFirst = index == 0;
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: horizontal),
-              child: _MomentPostCard(
-                item: moments[index],
-                isDark: isDark,
-                isFirst: isFirst,
-                onUserTap: (id) => context.push('/user/$id'),
-                onPostTap: (post, i) => _onPostTap(post, i),
-                onCommentTap: (post) => _onMomentCommentTap(context, post),
-                onShareTap: (post) => _onMomentShareTap(context, post),
-                onMoreTap: (post) => _onMomentMoreTap(context, post),
-              ),
-            ),
-            if (index < moments.length - 1)
-              Container(
-                height: AppSpacing.sm,
-                color: AppColorsFunctional.getColor(
-                  isDark,
-                  ColorType.backgroundTertiary,
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _ensureFeedFuture('moment'),
+      builder: (context, snapshot) {
+        final source = snapshot.data ?? fallback;
+        final moments = source.map(_toMomentItem).toList(growable: false);
+        return ListView.builder(
+          padding: EdgeInsets.only(
+            top: AppSpacing.containerSm,
+            bottom: MediaQuery.of(context).padding.bottom +
+                AppSpacing.bottomNavHeight +
+                AppSpacing.interGroupMd,
+          ),
+          itemCount: moments.length,
+          itemBuilder: (context, index) {
+            final isFirst = index == 0;
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: horizontal),
+                  child: _MomentPostCard(
+                    item: moments[index],
+                    isDark: isDark,
+                    isFirst: isFirst,
+                    onUserTap: (id) => context.push('/user/$id'),
+                    onPostTap: (post, i) => _onPostTap(post, i),
+                    onCommentTap: (post) => _onMomentCommentTap(context, post),
+                    onShareTap: (post) => _onMomentShareTap(context, post),
+                    onMoreTap: (post) => _onMomentMoreTap(context, post),
+                    onBehavior: _trackBehavior,
+                  ),
                 ),
-              ),
-          ],
+                if (index < moments.length - 1)
+                  Container(
+                    height: AppSpacing.sm,
+                    color: AppColorsFunctional.getColor(
+                      isDark,
+                      ColorType.backgroundTertiary,
+                    ),
+                  ),
+              ],
+            );
+          },
         );
       },
     );
   }
 
   Widget _buildArticleContent(bool isDark) {
-    final articles = ref.watch(appContentRepositoryProvider).discoveryArticleData;
+    final fallback = ref.watch(appContentRepositoryProvider).discoveryArticleData;
     final horizontal = _contentHorizontalPadding(context);
-    return ListView.builder(
-      padding: EdgeInsets.only(
-        top: AppSpacing.containerSm,
-        bottom: MediaQuery.of(context).padding.bottom +
-            AppSpacing.bottomNavHeight +
-            AppSpacing.interGroupMd,
-      ),
-      itemCount: articles.length,
-      itemBuilder: (context, index) {
-        final article = articles[index];
-        final isFirst = index == 0;
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: horizontal),
-              child: _ArticleCardPlaceholder(
-                article: article,
-                isDark: isDark,
-                isFirst: isFirst,
-                onTap: () => context.push('/article/${article['id']}'),
-                onUserTap: () => context.push(
-                  '/user/${article['author']?['name'] ?? ''}',
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _ensureFeedFuture('article'),
+      builder: (context, snapshot) {
+        final source = snapshot.data ?? fallback;
+        final articles = source.map(_toArticleItem).toList(growable: false);
+        return ListView.builder(
+          padding: EdgeInsets.only(
+            top: AppSpacing.containerSm,
+            bottom: MediaQuery.of(context).padding.bottom +
+                AppSpacing.bottomNavHeight +
+                AppSpacing.interGroupMd,
+          ),
+          itemCount: articles.length,
+          itemBuilder: (context, index) {
+            final article = articles[index];
+            final isFirst = index == 0;
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: horizontal),
+                  child: _ArticleCardPlaceholder(
+                    article: article,
+                    isDark: isDark,
+                    isFirst: isFirst,
+                    onTap: () {
+                      _trackBehavior('click', article);
+                      context.push('/article/${article['id']}');
+                    },
+                    onUserTap: () => context.push(
+                      '/user/${article['author']?['name'] ?? ''}',
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            if (index < articles.length - 1)
-              Container(
-                height: AppSpacing.sm,
-                color: AppColorsFunctional.getColor(
-                  isDark,
-                  ColorType.backgroundTertiary,
-                ),
-              ),
-          ],
+                if (index < articles.length - 1)
+                  Container(
+                    height: AppSpacing.sm,
+                    color: AppColorsFunctional.getColor(
+                      isDark,
+                      ColorType.backgroundTertiary,
+                    ),
+                  ),
+              ],
+            );
+          },
         );
       },
     );
@@ -386,53 +432,193 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   }
 
   Widget _buildPhotoContent(bool isDark) {
-    final items = ref.watch(appContentRepositoryProvider).discoveryPhotoData;
+    final fallback = ref.watch(appContentRepositoryProvider).discoveryPhotoData;
     final screenWidth = MediaQuery.of(context).size.width;
     final horizontal = _contentHorizontalPadding(context);
     final horizontalPadding = horizontal * 2;
     final gap = AppSpacing.interGroupSm;
     final cardWidth = (screenWidth - horizontalPadding - gap) / 2;
 
-    return CustomScrollView(
-      slivers: [
-        SliverPadding(
-          padding: EdgeInsets.fromLTRB(
-            horizontal,
-            AppSpacing.containerSm,
-            horizontal,
-            MediaQuery.of(context).padding.bottom +
-                AppSpacing.bottomNavHeight +
-                AppSpacing.interGroupLg,
-          ),
-          sliver: SliverMasonryGrid.count(
-            crossAxisCount: 2,
-            mainAxisSpacing: AppSpacing.interGroupSm,
-            crossAxisSpacing: gap,
-            childCount: items.length,
-            itemBuilder: (context, index) {
-              final post = items[index];
-              final height = _photoItemHeight(cardWidth, post);
-              return SizedBox(
-                height: height,
-                child: _DiscoveryItemCard(
-                  post: post,
-                  onTap: () => _onPostTap(post, 0),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _ensureFeedFuture('photo'),
+      builder: (context, snapshot) {
+        final source = snapshot.data ?? fallback;
+        final items = source.map(_toPhotoItem).toList(growable: false);
+        return CustomScrollView(
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                horizontal,
+                AppSpacing.containerSm,
+                horizontal,
+                MediaQuery.of(context).padding.bottom +
+                    AppSpacing.bottomNavHeight +
+                    AppSpacing.interGroupLg,
+              ),
+              sliver: SliverMasonryGrid.count(
+                crossAxisCount: 2,
+                mainAxisSpacing: AppSpacing.interGroupSm,
+                crossAxisSpacing: gap,
+                childCount: items.length,
+                itemBuilder: (context, index) {
+                  final post = items[index];
+                  final height = _photoItemHeight(cardWidth, post);
+                  return SizedBox(
+                    height: height,
+                    child: _DiscoveryItemCard(
+                      post: post,
+                      onTap: () => _onPostTap(post, 0),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
+  Future<List<Map<String, dynamic>>> _fetchDiscoveryFeed(String tabId) async {
+    final dataService = ref.read(dataServiceProvider);
+    final category =
+        GeneratedPostRuntimeMetadata.appTabToFeedCategory[tabId] ??
+        GeneratedPostRuntimeMetadata.appTabToFeedCategory['moment'] ??
+        'recommended';
+    final posts = await dataService.getDataList(
+      endpoint: '/posts',
+      params: <String, dynamic>{'category': category},
+      limit: GeneratedPostRuntimeMetadata.feedDefaultLimit,
+    );
+    return posts;
+  }
+
+  Future<List<Map<String, dynamic>>> _ensureFeedFuture(String tabId) {
+    return _discoveryFeedFutures.putIfAbsent(
+      tabId,
+      () => _fetchDiscoveryFeed(tabId),
+    );
+  }
+
+  Map<String, dynamic> _toMomentItem(Map<String, dynamic> post) {
+    final user = <String, dynamic>{
+      'id': post['authorId']?.toString() ?? post['username']?.toString() ?? '',
+      'name':
+          post['displayName']?.toString() ?? post['username']?.toString() ?? '',
+      'avatar':
+          post['avatarUrl']?.toString() ?? post['avatar']?.toString() ?? '',
+      'badge': post['badge'],
+    };
+    final images = (post['images'] as List? ?? const <dynamic>[])
+        .map((e) => <String, dynamic>{'url': e.toString()})
+        .toList(growable: false);
+    final content = (post['content']?.toString().isNotEmpty == true)
+        ? post['content'].toString()
+        : (post['caption']?.toString() ?? '');
+    return <String, dynamic>{
+      ...post,
+      'user': user,
+      'content': content,
+      'timeAgo': _toTimeAgo(post['createdAt']?.toString()),
+      'media': images,
+      'bookmarks': post['bookmarks'] ?? post['savesCount'] ?? 0,
+      'comments': post['comments'] ?? post['commentsCount'] ?? 0,
+      'likes': post['likes'] ?? post['likesCount'] ?? 0,
+    };
+  }
+
+  Map<String, dynamic> _toArticleItem(Map<String, dynamic> post) {
+    final author = <String, dynamic>{
+      'name':
+          post['displayName']?.toString() ?? post['username']?.toString() ?? '',
+      'avatar':
+          post['avatarUrl']?.toString() ?? post['avatar']?.toString() ?? '',
+      'badge': post['badge']?.toString(),
+    };
+    return <String, dynamic>{
+      ...post,
+      'category': post['contentType']?.toString() ?? 'article',
+      'title': post['title']?.toString() ?? '',
+      'description':
+          post['description']?.toString() ??
+          post['body']?.toString() ??
+          post['caption']?.toString() ??
+          '',
+      'date': _toDate(post['createdAt']?.toString()),
+      'author': author,
+      'stats': <String, dynamic>{
+        'likes': post['likes'] ?? post['likesCount'] ?? 0,
+        'bookmarks': post['bookmarks'] ?? post['savesCount'] ?? 0,
+        'comments': post['comments'] ?? post['commentsCount'] ?? 0,
+      },
+    };
+  }
+
+  Map<String, dynamic> _toPhotoItem(Map<String, dynamic> post) {
+    final images = (post['images'] as List? ?? const <dynamic>[]);
+    final thumb = post['thumbnail']?.toString() ??
+        post['thumbnailUrl']?.toString() ??
+        (images.isNotEmpty ? images.first.toString() : '');
+    return <String, dynamic>{
+      ...post,
+      'type': post['type']?.toString() ?? 'image',
+      'thumbnail': thumb,
+      'images': images,
+      'aspectRatio': (post['aspectRatio'] as num?)?.toDouble() ?? 1.0,
+    };
+  }
+
+  Map<String, dynamic> _toVideoItem(Map<String, dynamic> post) {
+    final author = <String, dynamic>{
+      'id': post['authorId']?.toString() ?? '',
+      'name':
+          post['displayName']?.toString() ?? post['username']?.toString() ?? '',
+      'avatar':
+          post['avatarUrl']?.toString() ?? post['avatar']?.toString() ?? '',
+    };
+    final images = (post['images'] as List? ?? const <dynamic>[]);
+    final thumb = post['thumbnail']?.toString() ??
+        post['thumbnailUrl']?.toString() ??
+        (images.isNotEmpty ? images.first.toString() : '');
+    final content = (post['content']?.toString().isNotEmpty == true)
+        ? post['content'].toString()
+        : (post['caption']?.toString() ?? '');
+    return <String, dynamic>{
+      ...post,
+      'author': author,
+      'thumbnail': thumb,
+      'content': content,
+      'likes': post['likes'] ?? post['likesCount'] ?? 0,
+      'comments': post['comments'] ?? post['commentsCount'] ?? 0,
+      'musicName': post['musicName']?.toString() ?? UITextConstants.discovery,
+    };
+  }
+
+  String _toTimeAgo(String? iso) {
+    if (iso == null || iso.isEmpty) return '';
+    final time = DateTime.tryParse(iso);
+    if (time == null) return '';
+    final delta = DateTime.now().difference(time).inHours;
+    if (delta < 1) return '刚刚';
+    if (delta < 24) return '$delta小时前';
+    return '${time.month}-${time.day}';
+  }
+
+  String _toDate(String? iso) {
+    if (iso == null || iso.isEmpty) return '';
+    final time = DateTime.tryParse(iso);
+    if (time == null) return '';
+    return '${time.year}-${time.month.toString().padLeft(2, '0')}-${time.day.toString().padLeft(2, '0')}';
+  }
+
   void _onPostTap(dynamic post, int mediaIndex) {
+    _trackBehavior('click', post);
     final type = post['type'] as String? ?? 'image';
     if (type == 'article') {
       context.push('/article/${post['id'] ?? ''}');
       return;
     }
-    context.push('/media-viewer/images/0'); // TODO: 传 post 与 index
+    context.push('/media-viewer/images/$mediaIndex');
   }
 
   void _onMomentCommentTap(BuildContext context, dynamic post) {
@@ -445,6 +631,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   }
 
   void _onMomentShareTap(BuildContext context, dynamic post) {
+    _trackBehavior('share', post);
     showModalBottomSheet<void>(
       context: context,
       builder: (context) => SafeArea(
@@ -502,6 +689,7 @@ class _MomentPostCard extends StatefulWidget {
   final void Function(dynamic)? onCommentTap;
   final void Function(dynamic)? onShareTap;
   final void Function(dynamic)? onMoreTap;
+  final void Function(String action, dynamic post)? onBehavior;
 
   const _MomentPostCard({
     required this.item,
@@ -512,6 +700,7 @@ class _MomentPostCard extends StatefulWidget {
     this.onCommentTap,
     this.onShareTap,
     this.onMoreTap,
+    this.onBehavior,
   });
 
   @override
@@ -725,6 +914,7 @@ class _MomentPostCardState extends State<_MomentPostCard>
                       setState(() => _isLiked = !_isLiked);
                       _likeAnimationController.forward(from: 0);
                       _likeAnimationController.reverse();
+                      if (_isLiked) widget.onBehavior?.call('like', item);
                     },
                     child: _actionChip(
                       _isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
@@ -735,7 +925,10 @@ class _MomentPostCardState extends State<_MomentPostCard>
                   ),
                   SizedBox(width: AppSpacing.intraGroupMd),
                   GestureDetector(
-                    onTap: () => setState(() => _isBookmarked = !_isBookmarked),
+                    onTap: () {
+                      setState(() => _isBookmarked = !_isBookmarked);
+                      if (_isBookmarked) widget.onBehavior?.call('favorite', item);
+                    },
                     child: _actionChipWidget(
                       AppStarIcon(
                         size: AppSpacing.iconMedium,

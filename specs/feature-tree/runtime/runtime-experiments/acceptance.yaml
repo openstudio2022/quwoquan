@@ -1,0 +1,46 @@
+version: 1
+feature: "runtime-experiments"
+level: "L2_feature"
+template: "A1-A8"
+tree_context:
+  feature_level: "L2_feature"
+  feature_path: "capability.runtime.feature.runtime-experiments"
+  parent_path: "capability.runtime"
+  acceptance_inherits_from: "capability.runtime"
+level_acceptance:
+  focus_groups: [A1_functional, A3_service_governance, A5_product_ops, A8_test_automation]
+  notes: "实验命中稳定性与审计追踪为重点。"
+global_acceptance:
+  A1_functional:
+    scenarios:
+      - given: "服务请求实验分桶"
+        when: "runtime-experiments 命中策略"
+        then: "返回稳定 bucket 且包含策略版本"
+  A2_experience:
+    - "策略拉取失败时可 fallback 不阻断核心流程"
+  A3_service_governance:
+    - "缓存 TTL 与 fallback 行为可配置"
+  A4_observability:
+    - "命中链路可通过 traceId 检索"
+  A5_product_ops:
+    - "实验命中可用于运营统计和归因"
+  A6_security_privacy:
+    - "分桶输入字段按最小采集原则处理"
+  A7_contract_metadata_consistency:
+    - "实验字段与 contract 一致"
+  A8_test_automation:
+    - "bucket/cache/audit 自动化覆盖"
+tests:
+  mock:
+    - "quwoquan_service/runtime/experiments/tests/bucket_mock_test.go"
+  unit:
+    - "quwoquan_service/runtime/experiments/tests/hash_cache_unit_test.go"
+  contract:
+    - "quwoquan_service/contracts/tests/experiment_bucket_contract_test.go"
+  integration:
+    - "quwoquan_service/runtime/experiments/tests/policy_fetch_integration_test.go"
+  uat:
+    - "UAT-RUNTIME-EXPERIMENTS-BUCKET-STABILITY-001"
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"

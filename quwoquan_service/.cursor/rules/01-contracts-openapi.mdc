@@ -1,0 +1,13 @@
+---
+description: 兼容指引：OpenAPI 规则已迁移到仓库根目录
+globs: contracts/openapi/**/*.yaml
+alwaysApply: false
+---
+
+# 兼容指引（已迁移）
+
+权威 OpenAPI 规则已迁移到：
+- `.cursor/rules/01-contracts-openapi-fullstack.mdc`
+
+本文件仅保留兼容入口，避免旧链接失效。
+

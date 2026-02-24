@@ -229,11 +229,31 @@ class _CreatePageState extends ConsumerState<CreatePage>
     });
   }
 
-  /// 发表微趣：保存/发布后退出编辑态并提示
-  void _publishMoment() {
+  /// 发表微趣：发布到云侧内容服务，成功后退出编辑态并提示
+  Future<void> _publishMoment() async {
     final content = _momentContentController.text;
     _currentData = Map.from(_currentData);
     (_currentData['moment'] as Map<String, dynamic>)['content'] = content;
+    final payload = _buildPostPayload('moment');
+    if (payload == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(UITextConstants.loadFailed)),
+        );
+      }
+      return;
+    }
+    try {
+      final dataService = ref.read(dataServiceProvider);
+      await dataService.createDataItem(endpoint: '/posts', data: payload);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(UITextConstants.loadFailed)),
+        );
+      }
+      return;
+    }
     if (_currentDraftId != null) {
       final nextDrafts =
           _savedDrafts.where((e) => e['id'] != _currentDraftId).toList();
@@ -249,6 +269,97 @@ class _CreatePageState extends ConsumerState<CreatePage>
         SnackBar(content: Text(UITextConstants.momentPublished)),
       );
       _doClose();
+    }
+  }
+
+  Future<void> _publishCurrentTab() async {
+    final tab = _tabIds[_tabController.index];
+    final payload = _buildPostPayload(tab);
+    if (payload == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(UITextConstants.loadFailed)),
+        );
+      }
+      return;
+    }
+    try {
+      final dataService = ref.read(dataServiceProvider);
+      await dataService.createDataItem(endpoint: '/posts', data: payload);
+      if (_currentDraftId != null) {
+        final nextDrafts =
+            _savedDrafts.where((e) => e['id'] != _currentDraftId).toList();
+        setState(() {
+          _savedDrafts..clear()..addAll(nextDrafts);
+          _currentDraftId = null;
+        });
+        await _persistDrafts(nextDrafts, null);
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(UITextConstants.momentPublished)),
+      );
+      _doClose();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(UITextConstants.loadFailed)),
+      );
+    }
+  }
+
+  Map<String, dynamic>? _buildPostPayload(String tab) {
+    switch (tab) {
+      case 'moment':
+        final d = _currentData['moment'] as Map<String, dynamic>? ?? {};
+        return <String, dynamic>{
+          'contentType': 'micro',
+          'body': (d['content'] as String? ?? '').trim(),
+          'mediaUrls': List<String>.from(d['images'] as List? ?? <String>[]),
+          'title': '',
+          'tags': <String>[],
+          'visibility': 'public',
+        };
+      case 'photo':
+        final d = _currentData['photo'] as Map<String, dynamic>? ?? {};
+        return <String, dynamic>{
+          'contentType': 'image',
+          'title': (d['title'] as String? ?? '').trim(),
+          'body': (d['description'] as String? ?? '').trim(),
+          'mediaUrls': List<String>.from(d['images'] as List? ?? <String>[]),
+          'visibility': 'public',
+          'tags': <String>[],
+        };
+      case 'video':
+        final d = _currentData['video'] as Map<String, dynamic>? ?? {};
+        final videoPath = (d['videoPath'] as String? ?? '').trim();
+        final mediaUrls = <String>[
+          if (videoPath.isNotEmpty) videoPath,
+        ];
+        return <String, dynamic>{
+          'contentType': 'video',
+          'title': (d['title'] as String? ?? '').trim(),
+          'body': (d['description'] as String? ?? '').trim(),
+          'videoUrl': videoPath,
+          'mediaUrls': mediaUrls,
+          'coverUrl': (d['thumbnail'] as String? ?? '').trim(),
+          'visibility': 'public',
+          'tags': <String>[],
+        };
+      case 'article':
+        final d = _currentData['article'] as Map<String, dynamic>? ?? {};
+        final covers = List<String>.from(d['covers'] as List? ?? <String>[]);
+        return <String, dynamic>{
+          'contentType': 'article',
+          'title': (d['title'] as String? ?? '').trim(),
+          'body': (d['content'] as String? ?? '').trim(),
+          'coverUrl': covers.isNotEmpty ? covers.first : '',
+          'mediaUrls': covers,
+          'visibility': 'public',
+          'tags': <String>[],
+        };
+      default:
+        return null;
     }
   }
 
@@ -776,24 +887,16 @@ class _CreatePageState extends ConsumerState<CreatePage>
               if (_isMomentEditingMode)
                 _buildPublishButton(
                   isDark: isDark,
-                  onPressed: _publishMoment,
+                  onPressed: () {
+                    _publishMoment();
+                  },
                   enabled: _canPublishMoment,
                 )
               else if (hasContent)
                 _buildPublishButton(
                   isDark: isDark,
                   onPressed: () {
-                    if (_currentDraftId != null) {
-                      final nextDrafts = _savedDrafts
-                          .where((e) => e['id'] != _currentDraftId)
-                          .toList();
-                      setState(() {
-                        _savedDrafts..clear()..addAll(nextDrafts);
-                        _currentDraftId = null;
-                      });
-                      _persistDrafts(nextDrafts, null);
-                    }
-                    _doClose();
+                    _publishCurrentTab();
                   },
                   label: _tabController.index == 0
                       ? UITextConstants.publish

@@ -1,0 +1,153 @@
+version: 1
+l1: runtime
+l2:
+  # ─── 底座层：已有 runtime 能力组件 ───
+  - feature: runtime-config
+    l3:
+      - feature: config-provider-layering
+        l4:
+          - feature: env-file-secret-configcenter-provider
+            l5:
+              - feature: dynamic-refresh-gray-rollback-audit
+  - feature: runtime-errors
+    l3:
+      - feature: error-code-and-response-envelope
+        l4:
+          - feature: module-kind-reason-mapping
+            l5:
+              - feature: user-debug-separation-and-redaction
+  - feature: runtime-observability
+    l3:
+      - feature: log-schema-and-kv-policy
+        l4:
+          - feature: io-process-exception-standardization
+            l5:
+              - feature: contract-sync-and-sli-binding
+      - feature: metrics-trace-core
+        l4:
+          - feature: otel-exporter-adapter
+            l5:
+              - feature: dashboard-alert-template-binding
+  - feature: runtime-http
+    l3:
+      - feature: http-server-client-pipeline
+        l4:
+          - feature: inbound-outbound-context-propagation
+            l5:
+              - feature: endpoint-normalization-and-policy-hooks
+  - feature: runtime-rpc
+    l3:
+      - feature: grpc-interceptor-runtime
+        l4:
+          - feature: metadata-propagation-and-status-mapping
+            l5:
+              - feature: rpc-observability-governance-binding
+  - feature: runtime-messaging
+    l3:
+      - feature: envelope-schema-idempotency
+        l4:
+          - feature: producer-consumer-retry-dlq
+            l5:
+              - feature: outbox-inbox-consistency-pattern
+  - feature: runtime-governance
+    l3:
+      - feature: resilience-policy-engine
+        l4:
+          - feature: timeout-retry-circuit-rate-limit-degrade
+            l5:
+              - feature: health-readiness-graceful-shutdown
+  - feature: runtime-experiments
+    l3:
+      - feature: experiment-bucket-rollout-runtime
+        l4:
+          - feature: assignment-cache-and-audit-link
+            l5:
+              - feature: fallback-and-rollback-strategy
+  - feature: runtime-learning
+    l3:
+      - feature: feedback-event-scorecard-runtime
+        l4:
+          - feature: artifact-version-and-optimization-loop
+            l5:
+              - feature: learning-closure-sli-binding
+
+  # ─── 框架层：元数据驱动的 DDD 领域框架 ───
+  - feature: runtime-registry
+    l3:
+      - feature: metadata-loader-and-entity-registry
+        l4:
+          - feature: v3-directory-parser-and-validator
+            l5:
+              - feature: runtime-query-api-and-hot-reload
+  - feature: runtime-repository
+    l3:
+      - feature: repository-interface-layering
+        l4:
+          - feature: mongo-pg-vector-cache-adapters
+            l5:
+              - feature: storage-routing-and-interceptor-chain
+  - feature: runtime-codegen
+    l3:
+      - feature: template-engine-and-metadata-reader
+        l4:
+          - feature: struct-repo-handler-migration-generation
+            l5:
+              - feature: openapi-dart-dto-test-scaffold-generation
+  - feature: runtime-interceptor
+    l3:
+      - feature: read-write-middleware-chain
+        l4:
+          - feature: field-filter-desensitize-validate
+            l5:
+              - feature: event-hook-metric-emit-integration
+  - feature: runtime-testinfra
+    l3:
+      - feature: test-engine-and-fixture-framework
+        l4:
+          - feature: embedded-pg-testcontainers-miniredis
+            l5:
+              - feature: codegen-test-and-ci-integration
+
+  # ─── 业务能力层：CQRS / 推荐 / 流式 / 上下文 / Skill ───
+  - feature: runtime-eventstore
+    l3:
+      - feature: event-persist-and-publish
+        l4:
+          - feature: mongo-event-collection-and-mq-integration
+            l5:
+              - feature: event-replay-and-schema-evolution
+  - feature: runtime-projector
+    l3:
+      - feature: projector-framework-and-readmodel
+        l4:
+          - feature: five-core-projectors-implementation
+            l5:
+              - feature: catchup-idempotency-and-lag-monitoring
+  - feature: runtime-recommendation
+    l3:
+      - feature: dual-channel-recommendation-engine
+        l4:
+          - feature: redis-hot-path-and-rule-engine
+            l5:
+              - feature: ml-model-integration-and-ab-test
+  - feature: runtime-streaming
+    l3:
+      - feature: sse-server-and-change-stream
+        l4:
+          - feature: assistant-stream-and-chat-push
+            l5:
+              - feature: backpressure-and-reconnection
+  - feature: runtime-context
+    l3:
+      - feature: three-layer-context-model
+        l4:
+          - feature: page-session-longterm-assembly
+            l5:
+              - feature: holistic-profile-and-embedding
+  - feature: runtime-skill
+    l3:
+      - feature: skill-router-and-executor
+        l4:
+          - feature: tool-registry-and-context-authorizer
+            l5:
+              - feature: skill-store-and-ecosystem

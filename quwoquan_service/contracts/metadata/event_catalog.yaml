@@ -1,0 +1,49 @@
+# 事件目录（producer / consumer / envelope）
+# 与 metadata 各聚合 events.yaml 一致，供 gate 校验与运行时消息契约使用。
+version: 1
+events:
+  - name: PostCreated
+    producer: content-service
+    consumers: [recommendation-engine, notification-service, assistant-service]
+    channel: event_store
+    payload_entity: Post
+  - name: PostPublished
+    producer: content-service
+    consumers: [recommendation-engine, notification-service]
+    channel: event_store
+    payload_entity: Post
+  - name: CommentCreated
+    producer: content-service
+    consumers: [notification-service, recommendation-engine, assistant-service]
+    channel: event_store
+    payload_entity: Comment
+  - name: UserRegistered
+    producer: user-service
+    consumers: [recommendation-engine, notification-service, assistant-service]
+    channel: event_store
+    payload_entity: UserProfile
+  - name: UserProfileUpdated
+    producer: user-service
+    consumers: [recommendation-engine, assistant-service]
+    channel: event_store
+    payload_entity: UserProfile
+  - name: AssistantRunStarted
+    producer: assistant-service
+    consumers: []
+    channel: event_store
+    payload_entity: AssistantRun
+  - name: AssistantRunCompleted
+    producer: assistant-service
+    consumers: [recommendation-engine]
+    channel: event_store
+    payload_entity: AssistantRun
+  - name: CircleCreated
+    producer: circle-service
+    consumers: [recommendation-engine, notification-service]
+    channel: event_store
+    payload_entity: Circle
+  - name: MessageSent
+    producer: chat-service
+    consumers: [notification-service]
+    channel: event_store
+    payload_entity: Message

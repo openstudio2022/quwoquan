@@ -1,0 +1,57 @@
+version: 1
+entity: SkillConsent
+
+fields:
+  - name: id
+    type: string
+    constraints: [PK]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: userId
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: skillId
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: grantedScope
+    type: jsonb
+    constraints: [NOT_NULL]
+    classification: SENSITIVE
+    log_policy: mask
+    api_exposure: read
+    ops_exposure: read
+    description: 授权范围（上下文维度 + tool 权限）
+
+  - name: grantedAt
+    type: timestamp
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: revokedAt
+    type: timestamp
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+unique_constraints:
+  - columns: [userId, skillId]
+    condition: "revokedAt IS NULL"
+    description: 每用户每 Skill 只有一个生效授权

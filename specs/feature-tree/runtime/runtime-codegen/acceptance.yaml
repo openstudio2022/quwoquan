@@ -1,0 +1,48 @@
+version: 1
+feature: "runtime-codegen"
+level: "L2_feature"
+template: "A1-A8"
+tree_context:
+  feature_level: "L2_feature"
+  feature_path: "capability.runtime.feature.runtime-codegen"
+  parent_path: "capability.runtime"
+  acceptance_inherits_from: "capability.runtime"
+level_acceptance:
+  focus_groups:
+    - A1_functional
+    - A7_contract_metadata_consistency
+    - A8_test_automation
+  notes: "codegen 是开发效率核心，驱动 AI Agent 自主开发能力。"
+global_acceptance:
+  A1_functional:
+    scenarios:
+      - given: "Post 聚合 metadata v3 目录完整"
+        when: "执行 make codegen target=post"
+        then: "生成 Go struct + Repository interface + Mongo impl + Event struct + Handler 骨架 + OpenAPI + Migration"
+      - given: "UserProfile 聚合 metadata v3 目录完整"
+        when: "执行 make codegen target=user_profile"
+        then: "生成 Go struct + Repository interface + PG impl + Event struct + Handler 骨架 + OpenAPI + Migration SQL"
+  A2_experience:
+    - "codegen 生成代码风格一致，符合 Go 惯例"
+  A3_service_governance:
+    - "codegen 不覆盖手动修改的业务逻辑文件"
+  A4_observability:
+    - "codegen 执行日志输出生成文件清单和变更摘要"
+  A5_product_ops:
+    - "N/A"
+  A6_security_privacy:
+    - "codegen 生成的代码不包含硬编码 secret"
+  A7_contract_metadata_consistency:
+    - "生成代码的字段名、类型、约束与 fields.yaml 完全一致"
+    - "生成的 OpenAPI schema 与 service.yaml 的 API 定义一致"
+  A8_test_automation:
+    - "codegen 模板有单元测试验证生成产物正确性"
+    - "codegen 生成的契约测试骨架可编译运行"
+tests:
+  unit:
+    - "tools/codegen/tests/template_test.go"
+  contract:
+    - "tools/codegen/tests/generated_code_compile_test.go"
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"

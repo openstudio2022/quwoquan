@@ -1,0 +1,212 @@
+version: 1
+aggregate: UserProfile
+
+service:
+  name: user-service
+  domain: user
+  owner: backend-team
+  description: 用户档案、认证、设备、设置与分身管理
+
+api_routes:
+  - method: POST
+    path: /v1/user/auth/login
+    operation: Login
+    description: 登录
+    request_entity: UserAuth
+    response_fields: [accessToken, refreshToken, userId]
+
+  - method: POST
+    path: /v1/user/auth/refresh
+    operation: RefreshToken
+    description: Token 刷新
+
+  - method: GET
+    path: /v1/user/profile/{userId}
+    operation: GetUserProfile
+    description: 档案读取
+    response_entity: UserProfile
+    join_path: user_full_snapshot
+
+  - method: PATCH
+    path: /v1/user/profile
+    operation: UpdateUserProfile
+    description: 更新资料
+    request_entity: UserProfile
+    writable_fields: [nickname, avatarUrl, bio, gender, birthDate, region]
+
+  - method: GET
+    path: /v1/user/personas
+    operation: ListPersonas
+    description: 分身列表
+    response_entity: Persona
+
+  - method: POST
+    path: /v1/user/personas
+    operation: CreatePersona
+    description: 创建分身
+    request_entity: Persona
+
+  - method: PATCH
+    path: /v1/user/personas/{personaId}
+    operation: UpdatePersona
+    description: 更新分身
+
+  - method: DELETE
+    path: /v1/user/personas/{personaId}
+    operation: DeletePersona
+    description: 删除分身
+
+  - method: POST
+    path: /v1/user/personas/{personaId}/activate
+    operation: ActivatePersona
+    description: 激活分身
+
+  - method: GET
+    path: /v1/user/settings/notifications
+    operation: GetNotificationSettings
+    response_entity: UserSetting
+
+  - method: PATCH
+    path: /v1/user/settings/notifications
+    operation: UpdateNotificationSettings
+    request_entity: UserSetting
+
+  - method: GET
+    path: /v1/user/settings/privacy
+    operation: GetPrivacySettings
+    response_entity: UserSetting
+
+  - method: PATCH
+    path: /v1/user/settings/privacy
+    operation: UpdatePrivacySettings
+    request_entity: UserSetting
+
+  - method: POST
+    path: /v1/user/devices/push-tokens
+    operation: RegisterDevice
+    request_entity: UserDevice
+
+  - method: POST
+    path: /v1/user/profile/proposals/{id}/confirm
+    operation: ConfirmProposal
+    description: 确认资料修改提案
+
+  - method: POST
+    path: /v1/user/profile/proposals/{id}/apply
+    operation: ApplyProposal
+    description: 应用资料修改提案
+
+  - method: POST
+    path: /v1/user/profile/proposals/{id}/reject
+    operation: RejectProposal
+    description: 拒绝资料修改提案
+
+consumers:
+  - name: app
+    capabilities: [read_profile, write_profile, manage_persona, manage_settings, manage_device]
+  - name: platform-ops
+    capabilities: [read_profile, write_status, review_proposals]
+  - name: recommendation-engine
+    capabilities: [read_profile, read_tags]
+  - name: assistant-service
+    capabilities: [read_profile, read_settings, create_proposals]
+  - name: notification-service
+    capabilities: [read_device, read_settings]
+
+contract_test:
+  description: |
+    基于接口契约的隔离测试：端侧 mock 云端、服务侧 mock 外部依赖。
+    元数据驱动：从 fields.yaml + service.yaml 自动生成 mock 数据和断言。
+
+  mock_strategy:
+    app_side:
+      description: App 自身不依赖云端的测试
+      mock_target: user-service API
+      data_source: fields.yaml
+      generation: 从 fields.yaml 生成符合 constraints/classification 的 mock JSON
+      scenarios:
+        - name: get_profile_success
+          route: GET /v1/user/profile/{userId}
+          mock_response: auto_from_fields
+          assertions: [status_200, response_matches_schema, pii_fields_filtered]
+
+        - name: update_profile_success
+          route: PATCH /v1/user/profile
+          mock_request: auto_from_writable_fields
+          assertions: [status_200, updated_fields_reflected]
+
+        - name: persona_activate
+          route: POST /v1/user/personas/{personaId}/activate
+          assertions: [status_200, only_one_active]
+
+        - name: login_flow
+          route: POST /v1/user/auth/login
+          assertions: [status_200, tokens_returned]
+
+        - name: proposal_state_machine
+          routes:
+            - POST /v1/user/profile/proposals/{id}/confirm
+            - POST /v1/user/profile/proposals/{id}/apply
+          assertions: [status_transitions_valid]
+
+    service_side:
+      description: 服务只依赖自身，使用真实测试数据库，不 mock 存储层
+      real_engines:
+        postgres: embedded-postgres
+        redis: miniredis/v2
+      spy_targets: [event_publisher]
+      mock_targets: [cross_service_clients]
+      data_management:
+        seed: 从 fields.yaml 生成 fixture 工厂预制到真实 PG
+        cleanup: TRUNCATE user_profiles, personas, user_auth, user_devices, user_settings, profile_update_proposals CASCADE
+        redis_cleanup: miniredis.FlushAll()
+      scenarios:
+        - name: create_user_aggregate
+          command: RegisterUser
+          seed: [fixture.NewUserAuth()]
+          assertions:
+            - "SELECT * FROM user_profiles WHERE user_id = ? → row exists"
+            - "SELECT * FROM user_auth WHERE user_id = ? → row exists"
+            - "SELECT * FROM user_settings WHERE user_id = ? → defaults correct"
+            - "eventSpy.AssertPublished('UserRegistered', {userId, nickname})"
+
+        - name: update_profile_version
+          command: UpdateUserProfile
+          seed: [fixture.NewUserProfile()]
+          assertions:
+            - "SELECT profile_version FROM user_profiles → incremented by 1"
+            - "miniredis.Get('cache:user_profile:{id}') → key deleted (invalidated)"
+            - "eventSpy.AssertPublished('UserProfileUpdated', {userId, profileVersion})"
+
+        - name: persona_activation_exclusivity
+          command: ActivatePersona
+          seed: [fixture.NewUserProfile(), fixture.NewPersona(active=true), fixture.NewPersona(active=false)]
+          assertions:
+            - "SELECT COUNT(*) FROM personas WHERE user_id=? AND is_active=true → exactly 1"
+            - "SELECT id FROM personas WHERE is_active=true → matches new persona ID"
+            - "eventSpy.AssertPublished('PersonaActivated', {userId, id})"
+
+        - name: proposal_state_machine
+          command: ConfirmProposal → ApplyProposal
+          seed: [fixture.NewUserProfile(), fixture.NewProfileUpdateProposal(status='created')]
+          assertions:
+            - "SELECT status FROM profile_update_proposals → 'confirmed' after confirm"
+            - "SELECT version FROM profile_update_proposals → incremented"
+            - "SELECT status FROM profile_update_proposals → 'applied' after apply"
+            - "SELECT nickname FROM user_profiles → matches proposedChanges"
+            - "eventSpy.AssertPublished('ProfileProposalResolved')"
+
+        - name: login_fail_lockout
+          command: Login (5x wrong password)
+          seed: [fixture.NewUserProfile(), fixture.NewUserAuth()]
+          assertions:
+            - "SELECT login_fail_count FROM user_auth → 5"
+            - "SELECT locked_until FROM user_auth → NOT NULL, future timestamp"
+            - "miniredis.Get('login_fail:{userId}') → count exists"
+
+  coverage_requirements:
+    - all api_routes have at least one scenario
+    - all state_machine transitions covered
+    - all unique_constraints have violation test
+    - all SECRET fields verified not exposed in API responses
+    - all events verified published with correct payload_fields

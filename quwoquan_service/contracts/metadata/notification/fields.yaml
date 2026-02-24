@@ -1,0 +1,118 @@
+version: 1
+entity: Notification
+
+fields:
+  - name: _id
+    type: ObjectId
+    constraints: [PK]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: userId
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: type
+    type: enum
+    enum_ref: NotificationType
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: title
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: body
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: senderUserId
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: targetType
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: targetId
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: actionUrl
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: deep link（超前）
+
+  - name: read
+    type: bool
+    constraints: [NOT_NULL, DEFAULT_FALSE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: dismissed
+    type: bool
+    constraints: [NOT_NULL, DEFAULT_FALSE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+
+  - name: pushSent
+    type: bool
+    constraints: [NOT_NULL, DEFAULT_FALSE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+    description: 已发送推送（超前）
+
+  - name: createdAt
+    type: timestamp
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: readAt
+    type: timestamp
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read

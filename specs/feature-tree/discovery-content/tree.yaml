@@ -1,0 +1,55 @@
+version: 1
+l1: discovery-content
+l2:
+  - feature: feed-orchestration-recommendation
+    l3:
+      - feature: unified-items-cursor
+        l4:
+          - feature: feed-dto-cursor-contract
+            l5:
+              - feature: cursor-compatibility-guard
+      - feature: personalized-ranking
+        l4:
+          - feature: ranking-signal-fusion
+            l5:
+              - feature: ranking-fallback-guard
+      - feature: feed-fallback-degrade
+        l4:
+          - feature: downstream-timeout-fallback
+            l5:
+              - feature: degraded-response-observability
+  - feature: publish-comment-reaction
+    l3:
+      - feature: post-create-update
+        l4:
+          - feature: post-lifecycle-contract
+            l5:
+              - feature: publish-idempotency-guard
+      - feature: comment-thread
+        l4:
+          - feature: comment-reply-pagination-contract
+            l5:
+              - feature: moderation-delete-audit-guard
+      - feature: reaction-state-counter
+        l4:
+          - feature: reaction-counter-consistency
+            l5:
+              - feature: eventual-consistency-repair-job
+  - feature: media-processing-helper-read
+    l3:
+      - feature: media-status-pipeline
+        l4:
+          - feature: media-processing-state-machine
+            l5:
+              - feature: media-failure-retry-guard
+      - feature: helper-read-summary
+        l4:
+          - feature: summary-generation-contract
+            l5:
+              - feature: summary-quality-evaluation-guard
+      - feature: media-failure-recovery
+        l4:
+          - feature: recovery-and-rollback-policy
+            l5:
+              - feature: recovery-audit-observability
+

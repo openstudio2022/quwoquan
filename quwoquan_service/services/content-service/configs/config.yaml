@@ -1,0 +1,10 @@
+service:
+  name: content-service
+  http:
+    addr: ":18080"
+redis:
+  addr: ""
+  password: ""
+  db: 0
+metadata:
+  dir: "../../../contracts/metadata"

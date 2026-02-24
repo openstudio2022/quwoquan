@@ -1,0 +1,55 @@
+version: 1
+feature: "struct-repo-handler-migration-generation"
+level: "L4_object_task"
+template: "A1-A8"
+tree_context:
+  feature_level: "L4_object_task"
+  feature_path: "capability.runtime.feature.runtime-codegen.subfeature.template-engine-and-metadata-reader.object.struct-repo-handler-migration-generation"
+  parent_path: "capability.runtime.feature.runtime-codegen.subfeature.template-engine-and-metadata-reader"
+  acceptance_inherits_from: "capability.runtime.feature.runtime-codegen"
+level_acceptance:
+  focus_groups:
+    - A1_functional
+    - A8_test_automation
+  notes: "核心生成模板：struct、repo、handler、migration。"
+global_acceptance:
+  A1_functional:
+    scenarios:
+      - given: "Post 聚合 metadata"
+        when: "执行 entity.go.tmpl 渲染"
+        then: "生成正确的 Go struct，字段与 fields.yaml 一致"
+      - given: "Post 聚合 metadata"
+        when: "执行 repository.go.tmpl + repo_impl_mongo.go.tmpl 渲染"
+        then: "生成 Repository interface 和 Mongo 实现"
+      - given: "Post 聚合 metadata"
+        when: "执行 http_handler.go.tmpl 渲染"
+        then: "生成 HTTP handler 骨架"
+      - given: "UserProfile 聚合 metadata（PG）"
+        when: "执行 migration_pg.sql.tmpl 渲染"
+        then: "生成正确的 PostgreSQL DDL"
+  A2_experience:
+    - "生成代码风格一致，符合 gofmt"
+  A3_service_governance:
+    - "不覆盖手写业务逻辑文件"
+  A4_observability:
+    - "生成文件清单输出"
+  A5_product_ops:
+    - "N/A"
+  A6_security_privacy:
+    - "生成代码无硬编码 secret"
+  A7_contract_metadata_consistency:
+    - "struct 字段名、类型、约束与 fields.yaml 完全一致"
+  A8_test_automation:
+    - "各模板单元测试验证生成产物正确性"
+    - "生成代码 go build 通过"
+tests:
+  unit:
+    - "tools/codegen/tests/entity_template_test.go"
+    - "tools/codegen/tests/repo_template_test.go"
+    - "tools/codegen/tests/handler_template_test.go"
+    - "tools/codegen/tests/migration_template_test.go"
+  contract:
+    - "tools/codegen/tests/generated_code_compile_test.go"
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"

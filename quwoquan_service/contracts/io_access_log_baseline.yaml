@@ -1,0 +1,58 @@
+version: 1
+name: io_access_log_baseline
+description: Unified baseline schema for API and message terminal logs.
+enums:
+  origin:
+    - app.http
+    - app.grpc
+    - service.http
+    - service.grpc
+    - service.mq
+    - job.internal
+    - cron.internal
+  direction:
+    - inbound
+    - outbound
+  status:
+    - success
+    - failed
+    - timeout
+    - retry
+required_fields:
+  - schemaVersion
+  - service
+  - timestamp
+  - origin
+  - direction
+  - endpoint
+  - sourceId
+  - traceId
+  - requestId
+  - sessionId
+  - src
+  - status
+  - durationMs
+  - errorCode
+  - messageSize
+source_specific_requirements:
+  app:
+    required:
+      - devicePlatform
+      - appVersion
+      - pageId
+  service:
+    required:
+      - serviceName
+      - serviceInstanceId
+forbidden_fields:
+  - headers
+  - logType
+  - env
+  - phase
+  - parentTraceId
+  - causationId
+  - statusCode
+error_code_format: "MODULE.KIND.REASON"
+notes:
+  - "One request/message produces only one terminal log."
+  - "API and messaging logs use the same schema."

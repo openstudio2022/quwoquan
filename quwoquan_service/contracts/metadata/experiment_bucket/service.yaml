@@ -1,0 +1,83 @@
+version: 1
+entity: ExperimentBucket
+
+service:
+  name: product-ops
+  domain: ops
+
+api_routes:
+  - method: GET
+    path: /v1/ops/experiments/{experimentId}/bucket
+    operation: GetBucket
+    description: 查询用户分桶
+
+  - method: POST
+    path: /v1/ops/experiments/{experimentId}/assign
+    operation: AssignBucket
+    description: 分桶分配
+
+  - method: GET
+    path: /v1/ops/experiments/{experimentId}/stats
+    operation: GetExperimentStats
+    description: 实验统计（运营）
+
+consumers:
+  - name: app
+    capabilities: [get_bucket]
+  - name: platform-ops
+    capabilities: [assign_bucket, read_stats]
+  - name: recommendation-engine
+    capabilities: [get_bucket]
+
+contract_test:
+  mock_strategy:
+    app_side:
+      scenarios:
+        - name: get_bucket
+          route: GET /v1/ops/experiments/{id}/bucket
+          assertions: [status_200, variant_returned]
+
+    service_side:
+      description: 使用真实测试数据库，不 mock 存储层
+      real_engines:
+        postgres: embedded-postgres
+        redis: miniredis/v2
+      spy_targets: [event_publisher]
+      data_management:
+        seed: fixture 工厂预制到真实 PG
+        cleanup: "TRUNCATE experiment_buckets CASCADE"
+        redis_cleanup: miniredis.FlushAll()
+      scenarios:
+        - name: assign_deterministic
+          command: AssignBucket
+          seed: []
+          assertions:
+            - "SELECT * FROM experiment_buckets WHERE experiment_id=? AND user_id=? → variant matches"
+            - "miniredis.Get('cache:experiment:{expId}:{userId}') → variant cached"
+            - "eventSpy.AssertPublished('ExperimentAssigned', {experimentId, variant})"
+
+        - name: duplicate_assign_rejected
+          command: AssignBucket x2 (same experiment+user)
+          seed: [fixture.NewExperimentBucket()]
+          assertions:
+            - "PG unique violation → handled, returns existing variant"
+
+        - name: get_bucket_cache_hit
+          command: GetBucket
+          seed: [fixture.NewExperimentBucket()]
+          setup: "miniredis.Set('cache:experiment:{expId}:{userId}', 'treatment_a')"
+          assertions:
+            - "result.variant → 'treatment_a' (from cache)"
+            - "no PG query executed (cache hit)"
+
+        - name: get_bucket_cache_miss
+          command: GetBucket
+          seed: [fixture.NewExperimentBucket(variant='control')]
+          assertions:
+            - "result.variant → 'control' (from PG)"
+            - "miniredis.Get('cache:experiment:{expId}:{userId}') → 'control' (cache populated)"
+
+  coverage_requirements:
+    - deterministic assignment verified
+    - unique constraint tested
+    - cache hit/miss paths tested

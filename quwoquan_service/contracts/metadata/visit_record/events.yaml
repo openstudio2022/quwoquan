@@ -1,0 +1,11 @@
+version: 1
+entity: VisitRecord
+
+events:
+  - name: VisitRecorded
+    description: 访问记录
+    producer: product-ops
+    consumers: [recommendation-engine]
+    channel: direct
+    payload_fields: [userId, targetType, targetKey, sessionId, source]
+    recommend_impact: hot_path_signal

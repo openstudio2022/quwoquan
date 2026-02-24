@@ -1,0 +1,17 @@
+version: 1
+entity: Report
+
+events:
+  - name: ReportCreated
+    description: 举报提交
+    producer: content-service
+    consumers: [notification-service]
+    channel: event_store
+    payload_fields: [id, reporterId, targetType, targetId, reason]
+
+  - name: ReportResolved
+    description: 举报处理完成
+    producer: content-service
+    consumers: [notification-service, user-service]
+    channel: event_store
+    payload_fields: [id, targetType, targetId, resolution, reviewerId]

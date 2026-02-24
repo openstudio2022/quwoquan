@@ -1,0 +1,162 @@
+---
+description: Dart 编码标准 + 设计系统 + 状态管理
+globs: **/*.dart
+---
+
+# Dart 编码标准
+
+---
+
+## 1. 绝对禁止
+
+### 1.1 硬编码视觉字面量
+
+```dart
+// ❌ 禁止
+fontSize: 14.sp
+EdgeInsets.all(16.w)
+BorderRadius.circular(8)
+Color(0xFF1877F2)
+Container(width: 48.h, height: 48.h)
+
+// ✅ 必须
+style: AppTypography.sm
+padding: EdgeInsets.all(AppSpacing.md)
+borderRadius: BorderRadius.circular(AppSpacing.borderRadius)
+color: AppColors.primaryColor
+constraints: BoxConstraints(minWidth: AppSpacing.buttonHeight, minHeight: AppSpacing.buttonHeight)
+```
+
+### 1.2 相对路径 import
+
+```dart
+// ❌ 禁止
+import '../../features/home/pages/home_page.dart';
+import '../components/media_post_card.dart';
+
+// ✅ 必须
+import 'package:quwoquan_app/features/home/pages/home_page.dart';
+import 'package:quwoquan_app/components/media_post_card.dart';
+```
+
+### 1.3 产品名做包名/类名
+
+```dart
+// ❌ 禁止
+lib/features/xiaoqu/pages/xiaoqu_home_page.dart
+if (msg['senderName'].toString().contains('小趣')) { }
+
+// ✅ 必须
+lib/features/assistant/pages/assistant_home_page.dart
+if (msg['senderId'] == AppConceptConstants.assistantSenderId) { }
+```
+
+---
+
+## 2. 设计系统
+
+### 2.1 颜色
+
+| 用途 | API |
+|------|-----|
+| 主色 | `AppColors.primaryColor` / `primaryColorHover` / `primaryColorActive` |
+| 次色 | `AppColors.secondaryColor` |
+| 强调 | `AppColors.accentColor` |
+| 功能 | `AppColors.success` / `warning` / `error` / `info` |
+| 主题 | `AppColors.light.*` / `AppColors.dark.*` |
+| 特殊 | `AppColors.special.linkColor` / `onlineColor` / `levelNColor` |
+
+### 2.2 间距
+
+| 层级 | API | 用途 |
+|------|-----|------|
+| 基础 | `AppSpacing.xs/sm/md/lg/xl` | 通用间距 |
+| 语义 | `AppSpacing.semantic[DesignSemanticConstants.container]?[size] ?? AppSpacing.containerMd` | 容器/组内/组间 |
+| 图标 | `AppSpacing.iconSmall/iconMedium/iconLarge` | 图标尺寸 |
+| 布局 | `AppSpacing.bottomNavHeight/tabNavigationHeight/buttonHeight` | 固定高度 |
+| 圆角 | `AppSpacing.smallBorderRadius/borderRadius/largeBorderRadius` | 圆角 |
+
+**空值安全**：语义间距必须用 `?[]` + `??` 兜底。
+
+### 2.3 文本与常量
+
+- 所有用户可见文本 → `UITextConstants.*`
+- 内容类型 → `ContentTypeConstants.*`
+- 概念名称 → `AppConceptConstants.*`
+- 设计语义 → `DesignSemanticConstants.*`
+
+### 2.4 无障碍
+
+- 可交互热区下限 44x44，主操作 48x48
+- 深色背景文本/图标使用高对比（`AppColorsFunctional.getColor`）
+- 文字对比度：正常文字 4.5:1（AA），大号文字 3:1
+
+---
+
+## 3. 状态管理（Riverpod）
+
+### 3.1 State 类
+
+- 必须不可变（`const` 构造函数）
+- 必须提供 `copyWith` 方法
+- 必须提供 `operator ==` 和 `hashCode`
+
+### 3.2 StateNotifier
+
+- 所有异步操作必须有 `try/catch` 错误处理
+- 防止重复加载（`if (state.isLoading) return`）
+- 错误信息使用 `UITextConstants` 或自定义异常类
+
+### 3.3 Provider 使用
+
+- `ref.watch` → 监听状态变化（build 中）
+- `ref.read` → 执行操作（不监听）
+- `ref.listen` → 副作用处理（错误提示等）
+- `ref.watch(provider.select(...))` → 性能优化
+
+### 3.4 异常层次
+
+```
+AppException (abstract)
+├── NetworkException
+├── ValidationException
+├── AuthenticationException
+├── BusinessException
+└── NotFoundException
+```
+
+---
+
+## 4. cloud/ 层约束
+
+- `lib/cloud/models/` DTO 必须从 metadata `fields.yaml` codegen 生成（`DO NOT EDIT`）
+- `lib/cloud/services/` Repository 接口必须与 `service.yaml` API 定义一致
+- `lib/cloud/runtime/` 字段策略必须从 metadata 生成
+
+---
+
+## 5. Feature 层约束
+
+- `lib/features/{name}/` 必须包含 `pages/` 子目录
+- Feature 不允许直接 import 其他 Feature 内部文件（通过 `core/` 或 `cloud/` 共享）
+- Feature Provider 必须使用 Riverpod 标准模式
+- 更新特性树 `acceptance.yaml` 与 `traceability.yaml`
+
+---
+
+## 6. 响应式设计
+
+- 断点语义：`compact < 360` / `regular 360-599` / `expanded >= 600`
+- 通过 `AppSpacing.responsiveValue` / `AppTypography.responsive` 控制差异
+- 组内间距 `intraGroup*`，组间间距 `interGroup*`
+
+---
+
+## 7. 提交前检查
+
+```bash
+flutter analyze
+python3 scripts/verify_dart_semantic.py
+```
+
+检查项：所有颜色/间距/文本/类型使用语义标签，无硬编码，无相对路径 import，无产品名做标识符。

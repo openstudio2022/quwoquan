@@ -1,0 +1,25 @@
+version: 1
+domain: user
+entity: FollowEdge
+is_aggregate: false
+
+description: |
+  关注关系边。用户间单向关注关系。
+  MongoDB 存储，支撑社交图谱高并发查询和水平扩展。
+  关注/取关同步更新 UserProfile.followerCount/followingCount（跨聚合事件）。
+
+storage_backend: mongodb
+cache_layer: none
+capabilities:
+  - queryable
+
+taggable: true
+vector_enabled: false
+tag_taxonomy_ref: social_tags
+
+ddd_layer_mapping:
+  domain_model: internal/domain/user/model
+  repository: internal/domain/user/repository
+  application: internal/application/user
+  adapter_rest: internal/adapter/rest/user
+  adapter_event: internal/adapter/event/user

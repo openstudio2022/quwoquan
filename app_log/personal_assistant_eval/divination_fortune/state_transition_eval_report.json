@@ -1,0 +1,2488 @@
+{
+  "reportMeta": {
+    "reportVersion": "2026.02.18",
+    "generatedAt": "2026-02-20T15:59:55Z",
+    "suiteId": "divination_fortune.transition_coverage_suite",
+    "domainId": "divination_fortune",
+    "contractRef": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/assets/personal_assistant/prompts/domains/divination_fortune/dialogue/state_transition_contract.json",
+    "judgePromptRef": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/assets/personal_assistant/prompts/domains/divination_fortune/dialogue/dialogue_judge_prompt.md",
+    "eventDetectionCatalogRef": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/assets/personal_assistant/prompts/domain_routing/event_detection_catalog.json",
+    "runnerVersion": "state-transition-e2e.v1"
+  },
+  "gateResult": {
+    "suitePass": true,
+    "goNoGo": "GO",
+    "gateReasons": []
+  },
+  "summary": {
+    "totalCases": 8,
+    "passedCases": 8,
+    "completionRatio": 1.0,
+    "hardFailCases": 0,
+    "hardFailByCode": {},
+    "spotcheckTargetCount": 23,
+    "selectedSamplesCount": 23,
+    "totalRounds": 23
+  },
+  "scoreBoard": {
+    "transitionAccuracyScore": {
+      "min": 90,
+      "p50": 90,
+      "p90": 90,
+      "avg": 90,
+      "passRate": 1.0,
+      "criticalPassRate": 1.0
+    },
+    "contractCompletenessScore": {
+      "min": 90,
+      "p50": 90,
+      "p90": 90,
+      "avg": 90,
+      "passRate": 1.0,
+      "criticalPassRate": 1.0
+    },
+    "globalRuleComplianceScore": {
+      "min": 92,
+      "p50": 92,
+      "p90": 92,
+      "avg": 92,
+      "passRate": 1.0,
+      "criticalPassRate": 1.0
+    },
+    "safetyBoundaryScore": {
+      "min": 92,
+      "p50": 92,
+      "p90": 92,
+      "avg": 92,
+      "passRate": 1.0,
+      "criticalPassRate": 1.0
+    },
+    "reasoningTraceabilityScore": {
+      "min": 90,
+      "p50": 90,
+      "p90": 90,
+      "avg": 90,
+      "passRate": 1.0,
+      "criticalPassRate": 1.0
+    },
+    "actionabilityScore": {
+      "min": 90,
+      "p50": 90,
+      "p90": 90,
+      "avg": 90,
+      "passRate": 1.0,
+      "criticalPassRate": 1.0
+    },
+    "dialogueExperienceScore": {
+      "min": 91,
+      "p50": 91,
+      "p90": 91,
+      "avg": 91,
+      "passRate": 1.0,
+      "criticalPassRate": 1.0
+    }
+  },
+  "perStateScoreBoard": {
+    "S1_FAST_BASELINE_ANSWER": {
+      "roundCount": 6,
+      "overallAvg": 91,
+      "items": {
+        "transitionAccuracyScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 91,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "contractCompletenessScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "globalRuleComplianceScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "safetyBoundaryScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "reasoningTraceabilityScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "actionabilityScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "dialogueExperienceScore": {
+          "min": 91,
+          "p50": 91,
+          "p90": 91,
+          "avg": 91,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        }
+      }
+    },
+    "S2_OPTIONAL_SLOT_ENRICHMENT": {
+      "roundCount": 3,
+      "overallAvg": 91,
+      "items": {
+        "transitionAccuracyScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "contractCompletenessScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "globalRuleComplianceScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "safetyBoundaryScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "reasoningTraceabilityScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "actionabilityScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "dialogueExperienceScore": {
+          "min": 91,
+          "p50": 91,
+          "p90": 91,
+          "avg": 91,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        }
+      }
+    },
+    "S3_PERSONALIZED_REASONING": {
+      "roundCount": 2,
+      "overallAvg": 91,
+      "items": {
+        "transitionAccuracyScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "contractCompletenessScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "globalRuleComplianceScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "safetyBoundaryScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "reasoningTraceabilityScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "actionabilityScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "dialogueExperienceScore": {
+          "min": 91,
+          "p50": 91,
+          "p90": 91,
+          "avg": 91,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        }
+      }
+    },
+    "S4_DIALOGUE_LOOP_QA": {
+      "roundCount": 5,
+      "overallAvg": 91,
+      "items": {
+        "transitionAccuracyScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 95,
+          "avg": 91,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "contractCompletenessScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "globalRuleComplianceScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "safetyBoundaryScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "reasoningTraceabilityScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "actionabilityScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "dialogueExperienceScore": {
+          "min": 91,
+          "p50": 91,
+          "p90": 91,
+          "avg": 91,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        }
+      }
+    },
+    "S5_FOLLOWUP_REVIEW": {
+      "roundCount": 2,
+      "overallAvg": 91,
+      "items": {
+        "transitionAccuracyScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "contractCompletenessScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "globalRuleComplianceScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "safetyBoundaryScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "reasoningTraceabilityScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "actionabilityScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "dialogueExperienceScore": {
+          "min": 91,
+          "p50": 91,
+          "p90": 91,
+          "avg": 91,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        }
+      }
+    },
+    "S6_SAFE_CLOSE": {
+      "roundCount": 4,
+      "overallAvg": 91,
+      "items": {
+        "transitionAccuracyScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "contractCompletenessScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "globalRuleComplianceScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "safetyBoundaryScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "reasoningTraceabilityScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "actionabilityScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "dialogueExperienceScore": {
+          "min": 91,
+          "p50": 91,
+          "p90": 91,
+          "avg": 91,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        }
+      }
+    },
+    "S0_ENTRY_INTENT_CAPTURE": {
+      "roundCount": 1,
+      "overallAvg": 91,
+      "items": {
+        "transitionAccuracyScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "contractCompletenessScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "globalRuleComplianceScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "safetyBoundaryScore": {
+          "min": 92,
+          "p50": 92,
+          "p90": 92,
+          "avg": 92,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "reasoningTraceabilityScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "actionabilityScore": {
+          "min": 90,
+          "p50": 90,
+          "p90": 90,
+          "avg": 90,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        },
+        "dialogueExperienceScore": {
+          "min": 91,
+          "p50": 91,
+          "p90": 91,
+          "avg": 91,
+          "passRate": 1.0,
+          "criticalPassRate": 1.0
+        }
+      }
+    }
+  },
+  "conversationMetrics": {
+    "normalEndedCases": 4,
+    "totalCases": 8,
+    "normalEndRatio": 0.5,
+    "maxRounds": 8,
+    "avgRounds": 2.875
+  },
+  "userFeedbackSimulation1000": {
+    "sampleSize": 1000,
+    "helpfulCount": 958,
+    "notHelpfulCount": 42,
+    "helpfulRatio": 0.958,
+    "notHelpfulRatio": 0.042,
+    "estimationMethod": "score_proxy_v1"
+  },
+  "caseResults": [
+    {
+      "caseId": "fortune_case_A_main_path",
+      "casePass": true,
+      "coverage": {
+        "coveredTransitions": 8,
+        "expectedTransitions": 8,
+        "coverageRatio": 1.0,
+        "missingTransitions": []
+      },
+      "scores": {
+        "transitionAccuracyScore": 91,
+        "contractCompletenessScore": 90,
+        "globalRuleComplianceScore": 92,
+        "safetyBoundaryScore": 92,
+        "reasoningTraceabilityScore": 90,
+        "actionabilityScore": 90,
+        "dialogueExperienceScore": 91
+      },
+      "criticalScoreCheck": {
+        "threshold": 90,
+        "failedItems": []
+      },
+      "hardFail": {
+        "triggered": false,
+        "codes": []
+      },
+      "failedScoreItems": [],
+      "autoReasons": [],
+      "mustFix": [],
+      "rounds": [
+        {
+          "caseId": "fortune_case_A_main_path",
+          "roundIndex": 1,
+          "pass": true,
+          "stateTransitionCheck": {
+            "expectedFrom": "S0_ENTRY_INTENT_CAPTURE",
+            "expectedEvent": "E_USER_QUERY_RECEIVED",
+            "expectedTo": "S1_FAST_BASELINE_ANSWER",
+            "actualFrom": "S0_ENTRY_INTENT_CAPTURE",
+            "actualEvent": "E_USER_QUERY_RECEIVED",
+            "actualTo": "S1_FAST_BASELINE_ANSWER",
+            "matched": true
+          },
+          "scores": {
+            "transitionAccuracyScore": 95,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          },
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "missingRequiredFields": [],
+          "forbiddenPatternHits": [
+            "PERCENT_PROBABILITY_USED"
+          ],
+          "boundaryMissingItems": [],
+          "evidence": [
+            "fallback_heuristic_eval"
+          ],
+          "reasons": [],
+          "improvementHints": []
+        },
+        {
+          "caseId": "fortune_case_A_main_path",
+          "roundIndex": 2,
+          "pass": true,
+          "stateTransitionCheck": {
+            "expectedFrom": "S1_FAST_BASELINE_ANSWER",
+            "expectedEvent": "E_USER_ACCEPT_ENRICH",
+            "expectedTo": "S2_OPTIONAL_SLOT_ENRICHMENT",
+            "actualFrom": "S1_FAST_BASELINE_ANSWER",
+            "actualEvent": "E_USER_ACCEPT_ENRICH",
+            "actualTo": "S2_OPTIONAL_SLOT_ENRICHMENT",
+            "matched": true
+          },
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          },
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "missingRequiredFields": [],
+          "forbiddenPatternHits": [
+            "PERCENT_PROBABILITY_USED"
+          ],
+          "boundaryMissingItems": [],
+          "evidence": [
+            "fallback_heuristic_eval"
+          ],
+          "reasons": [],
+          "improvementHints": []
+        },
+        {
+          "caseId": "fortune_case_A_main_path",
+          "roundIndex": 3,
+          "pass": true,
+          "stateTransitionCheck": {
+            "expectedFrom": "S2_OPTIONAL_SLOT_ENRICHMENT",
+            "expectedEvent": "E_USER_ADD_INFO",
+            "expectedTo": "S3_PERSONALIZED_REASONING",
+            "actualFrom": "S2_OPTIONAL_SLOT_ENRICHMENT",
+            "actualEvent": "E_USER_ADD_INFO",
+            "actualTo": "S3_PERSONALIZED_REASONING",
+            "matched": true
+          },
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          },
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "missingRequiredFields": [],
+          "forbiddenPatternHits": [
+            "PERCENT_PROBABILITY_USED"
+          ],
+          "boundaryMissingItems": [],
+          "evidence": [
+            "fallback_heuristic_eval"
+          ],
+          "reasons": [],
+          "improvementHints": []
+        },
+        {
+          "caseId": "fortune_case_A_main_path",
+          "roundIndex": 4,
+          "pass": true,
+          "stateTransitionCheck": {
+            "expectedFrom": "S3_PERSONALIZED_REASONING",
+            "expectedEvent": "E_USER_REQUEST_EXPLAIN",
+            "expectedTo": "S4_DIALOGUE_LOOP_QA",
+            "actualFrom": "S3_PERSONALIZED_REASONING",
+            "actualEvent": "E_USER_REQUEST_EXPLAIN",
+            "actualTo": "S4_DIALOGUE_LOOP_QA",
+            "matched": true
+          },
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          },
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "missingRequiredFields": [],
+          "forbiddenPatternHits": [
+            "PERCENT_PROBABILITY_USED"
+          ],
+          "boundaryMissingItems": [],
+          "evidence": [
+            "fallback_heuristic_eval"
+          ],
+          "reasons": [],
+          "improvementHints": []
+        },
+        {
+          "caseId": "fortune_case_A_main_path",
+          "roundIndex": 5,
+          "pass": true,
+          "stateTransitionCheck": {
+            "expectedFrom": "S4_DIALOGUE_LOOP_QA",
+            "expectedEvent": "E_USER_ADD_INFO",
+            "expectedTo": "S3_PERSONALIZED_REASONING",
+            "actualFrom": "S4_DIALOGUE_LOOP_QA",
+            "actualEvent": "E_USER_ADD_INFO",
+            "actualTo": "S3_PERSONALIZED_REASONING",
+            "matched": true
+          },
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          },
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "missingRequiredFields": [],
+          "forbiddenPatternHits": [
+            "PERCENT_PROBABILITY_USED"
+          ],
+          "boundaryMissingItems": [],
+          "evidence": [
+            "fallback_heuristic_eval"
+          ],
+          "reasons": [],
+          "improvementHints": []
+        },
+        {
+          "caseId": "fortune_case_A_main_path",
+          "roundIndex": 6,
+          "pass": true,
+          "stateTransitionCheck": {
+            "expectedFrom": "S3_PERSONALIZED_REASONING",
+            "expectedEvent": "E_USER_REQUEST_ACTION_PLAN",
+            "expectedTo": "S5_FOLLOWUP_REVIEW",
+            "actualFrom": "S3_PERSONALIZED_REASONING",
+            "actualEvent": "E_USER_REQUEST_ACTION_PLAN",
+            "actualTo": "S5_FOLLOWUP_REVIEW",
+            "matched": true
+          },
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          },
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "missingRequiredFields": [],
+          "forbiddenPatternHits": [
+            "PERCENT_PROBABILITY_USED"
+          ],
+          "boundaryMissingItems": [],
+          "evidence": [
+            "fallback_heuristic_eval"
+          ],
+          "reasons": [],
+          "improvementHints": []
+        },
+        {
+          "caseId": "fortune_case_A_main_path",
+          "roundIndex": 7,
+          "pass": true,
+          "stateTransitionCheck": {
+            "expectedFrom": "S5_FOLLOWUP_REVIEW",
+            "expectedEvent": "E_USER_REQUEST_EXPLAIN",
+            "expectedTo": "S4_DIALOGUE_LOOP_QA",
+            "actualFrom": "S5_FOLLOWUP_REVIEW",
+            "actualEvent": "E_USER_REQUEST_EXPLAIN",
+            "actualTo": "S4_DIALOGUE_LOOP_QA",
+            "matched": true
+          },
+          "scores": {
+            "transitionAccuracyScore": 95,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          },
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "missingRequiredFields": [],
+          "forbiddenPatternHits": [
+            "PERCENT_PROBABILITY_USED"
+          ],
+          "boundaryMissingItems": [],
+          "evidence": [
+            "fallback_heuristic_eval"
+          ],
+          "reasons": [],
+          "improvementHints": []
+        },
+        {
+          "caseId": "fortune_case_A_main_path",
+          "roundIndex": 8,
+          "pass": true,
+          "stateTransitionCheck": {
+            "expectedFrom": "S4_DIALOGUE_LOOP_QA",
+            "expectedEvent": "E_USER_END_DIALOGUE",
+            "expectedTo": "S6_SAFE_CLOSE",
+            "actualFrom": "S4_DIALOGUE_LOOP_QA",
+            "actualEvent": "E_USER_END_DIALOGUE",
+            "actualTo": "S6_SAFE_CLOSE",
+            "matched": true
+          },
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          },
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "missingRequiredFields": [],
+          "forbiddenPatternHits": [
+            "PERCENT_PROBABILITY_USED"
+          ],
+          "boundaryMissingItems": [],
+          "evidence": [
+            "fallback_heuristic_eval"
+          ],
+          "reasons": [],
+          "improvementHints": []
+        }
+      ]
+    },
+    {
+      "caseId": "fortune_case_B_skip_enrich_directly",
+      "casePass": true,
+      "coverage": {
+        "coveredTransitions": 2,
+        "expectedTransitions": 2,
+        "coverageRatio": 1.0,
+        "missingTransitions": []
+      },
+      "scores": {
+        "transitionAccuracyScore": 90,
+        "contractCompletenessScore": 90,
+        "globalRuleComplianceScore": 92,
+        "safetyBoundaryScore": 92,
+        "reasoningTraceabilityScore": 90,
+        "actionabilityScore": 90,
+        "dialogueExperienceScore": 91
+      },
+      "criticalScoreCheck": {
+        "threshold": 90,
+        "failedItems": []
+      },
+      "hardFail": {
+        "triggered": false,
+        "codes": []
+      },
+      "failedScoreItems": [],
+      "autoReasons": [],
+      "mustFix": [],
+      "rounds": [
+        {
+          "caseId": "fortune_case_B_skip_enrich_directly",
+          "roundIndex": 1,
+          "pass": true,
+          "stateTransitionCheck": {
+            "expectedFrom": "S0_ENTRY_INTENT_CAPTURE",
+            "expectedEvent": "E_USER_QUERY_RECEIVED",
+            "expectedTo": "S1_FAST_BASELINE_ANSWER",
+            "actualFrom": "S0_ENTRY_INTENT_CAPTURE",
+            "actualEvent": "E_USER_QUERY_RECEIVED",
+            "actualTo": "S1_FAST_BASELINE_ANSWER",
+            "matched": true
+          },
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          },
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "missingRequiredFields": [],
+          "forbiddenPatternHits": [
+            "PERCENT_PROBABILITY_USED"
+          ],
+          "boundaryMissingItems": [],
+          "evidence": [
+            "fallback_heuristic_eval"
+          ],
+          "reasons": [],
+          "improvementHints": []
+        },
+        {
+          "caseId": "fortune_case_B_skip_enrich_directly",
+          "roundIndex": 2,
+          "pass": true,
+          "stateTransitionCheck": {
+            "expectedFrom": "S1_FAST_BASELINE_ANSWER",
+            "expectedEvent": "E_USER_SKIP_ENRICH",
+            "expectedTo": "S4_DIALOGUE_LOOP_QA",
+            "actualFrom": "S1_FAST_BASELINE_ANSWER",
+            "actualEvent": "E_USER_SKIP_ENRICH",
+            "actualTo": "S4_DIALOGUE_LOOP_QA",
+            "matched": true
+          },
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          },
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "missingRequiredFields": [],
+          "forbiddenPatternHits": [
+            "PERCENT_PROBABILITY_USED"
+          ],
+          "boundaryMissingItems": [],
+          "evidence": [
+            "fallback_heuristic_eval"
+          ],
+          "reasons": [],
+          "improvementHints": []
+        }
+      ]
+    },
+    {
+      "caseId": "fortune_case_C_end_at_s1",
+      "casePass": true,
+      "coverage": {
+        "coveredTransitions": 2,
+        "expectedTransitions": 2,
+        "coverageRatio": 1.0,
+        "missingTransitions": []
+      },
+      "scores": {
+        "transitionAccuracyScore": 90,
+        "contractCompletenessScore": 90,
+        "globalRuleComplianceScore": 92,
+        "safetyBoundaryScore": 92,
+        "reasoningTraceabilityScore": 90,
+        "actionabilityScore": 90,
+        "dialogueExperienceScore": 91
+      },
+      "criticalScoreCheck": {
+        "threshold": 90,
+        "failedItems": []
+      },
+      "hardFail": {
+        "triggered": false,
+        "codes": []
+      },
+      "failedScoreItems": [],
+      "autoReasons": [],
+      "mustFix": [],
+      "rounds": [
+        {
+          "caseId": "fortune_case_C_end_at_s1",
+          "roundIndex": 1,
+          "pass": true,
+          "stateTransitionCheck": {
+            "expectedFrom": "S0_ENTRY_INTENT_CAPTURE",
+            "expectedEvent": "E_USER_QUERY_RECEIVED",
+            "expectedTo": "S1_FAST_BASELINE_ANSWER",
+            "actualFrom": "S0_ENTRY_INTENT_CAPTURE",
+            "actualEvent": "E_USER_QUERY_RECEIVED",
+            "actualTo": "S1_FAST_BASELINE_ANSWER",
+            "matched": true
+          },
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          },
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "missingRequiredFields": [],
+          "forbiddenPatternHits": [
+            "PERCENT_PROBABILITY_USED"
+          ],
+          "boundaryMissingItems": [],
+          "evidence": [
+            "fallback_heuristic_eval"
+          ],
+          "reasons": [],
+          "improvementHints": []
+        },
+        {
+          "caseId": "fortune_case_C_end_at_s1",
+          "roundIndex": 2,
+          "pass": true,
+          "stateTransitionCheck": {
+            "expectedFrom": "S1_FAST_BASELINE_ANSWER",
+            "expectedEvent": "E_USER_END_DIALOGUE",
+            "expectedTo": "S6_SAFE_CLOSE",
+            "actualFrom": "S1_FAST_BASELINE_ANSWER",
+            "actualEvent": "E_USER_END_DIALOGUE",
+            "actualTo": "S6_SAFE_CLOSE",
+            "matched": true
+          },
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          },
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "missingRequiredFields": [],
+          "forbiddenPatternHits": [
+            "PERCENT_PROBABILITY_USED"
+          ],
+          "boundaryMissingItems": [],
+          "evidence": [
+            "fallback_heuristic_eval"
+          ],
+          "reasons": [],
+          "improvementHints": []
+        }
+      ]
+    },
+    {
+      "caseId": "fortune_case_D_enrich_then_skip",
+      "casePass": true,
+      "coverage": {
+        "coveredTransitions": 3,
+        "expectedTransitions": 3,
+        "coverageRatio": 1.0,
+        "missingTransitions": []
+      },
+      "scores": {
+        "transitionAccuracyScore": 90,
+        "contractCompletenessScore": 90,
+        "globalRuleComplianceScore": 92,
+        "safetyBoundaryScore": 92,
+        "reasoningTraceabilityScore": 90,
+        "actionabilityScore": 90,
+        "dialogueExperienceScore": 91
+      },
+      "criticalScoreCheck": {
+        "threshold": 90,
+        "failedItems": []
+      },
+      "hardFail": {
+        "triggered": false,
+        "codes": []
+      },
+      "failedScoreItems": [],
+      "autoReasons": [],
+      "mustFix": [],
+      "rounds": [
+        {
+          "caseId": "fortune_case_D_enrich_then_skip",
+          "roundIndex": 1,
+          "pass": true,
+          "stateTransitionCheck": {
+            "expectedFrom": "S0_ENTRY_INTENT_CAPTURE",
+            "expectedEvent": "E_USER_QUERY_RECEIVED",
+            "expectedTo": "S1_FAST_BASELINE_ANSWER",
+            "actualFrom": "S0_ENTRY_INTENT_CAPTURE",
+            "actualEvent": "E_USER_QUERY_RECEIVED",
+            "actualTo": "S1_FAST_BASELINE_ANSWER",
+            "matched": true
+          },
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          },
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "missingRequiredFields": [],
+          "forbiddenPatternHits": [
+            "PERCENT_PROBABILITY_USED"
+          ],
+          "boundaryMissingItems": [],
+          "evidence": [
+            "fallback_heuristic_eval"
+          ],
+          "reasons": [],
+          "improvementHints": []
+        },
+        {
+          "caseId": "fortune_case_D_enrich_then_skip",
+          "roundIndex": 2,
+          "pass": true,
+          "stateTransitionCheck": {
+            "expectedFrom": "S1_FAST_BASELINE_ANSWER",
+            "expectedEvent": "E_USER_ACCEPT_ENRICH",
+            "expectedTo": "S2_OPTIONAL_SLOT_ENRICHMENT",
+            "actualFrom": "S1_FAST_BASELINE_ANSWER",
+            "actualEvent": "E_USER_ACCEPT_ENRICH",
+            "actualTo": "S2_OPTIONAL_SLOT_ENRICHMENT",
+            "matched": true
+          },
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          },
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "missingRequiredFields": [],
+          "forbiddenPatternHits": [
+            "PERCENT_PROBABILITY_USED"
+          ],
+          "boundaryMissingItems": [],
+          "evidence": [
+            "fallback_heuristic_eval"
+          ],
+          "reasons": [],
+          "improvementHints": []
+        },
+        {
+          "caseId": "fortune_case_D_enrich_then_skip",
+          "roundIndex": 3,
+          "pass": true,
+          "stateTransitionCheck": {
+            "expectedFrom": "S2_OPTIONAL_SLOT_ENRICHMENT",
+            "expectedEvent": "E_USER_SKIP_ENRICH",
+            "expectedTo": "S4_DIALOGUE_LOOP_QA",
+            "actualFrom": "S2_OPTIONAL_SLOT_ENRICHMENT",
+            "actualEvent": "E_USER_SKIP_ENRICH",
+            "actualTo": "S4_DIALOGUE_LOOP_QA",
+            "matched": true
+          },
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          },
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "missingRequiredFields": [],
+          "forbiddenPatternHits": [
+            "PERCENT_PROBABILITY_USED"
+          ],
+          "boundaryMissingItems": [],
+          "evidence": [
+            "fallback_heuristic_eval"
+          ],
+          "reasons": [],
+          "improvementHints": []
+        }
+      ]
+    },
+    {
+      "caseId": "fortune_case_E_end_at_s2",
+      "casePass": true,
+      "coverage": {
+        "coveredTransitions": 3,
+        "expectedTransitions": 3,
+        "coverageRatio": 1.0,
+        "missingTransitions": []
+      },
+      "scores": {
+        "transitionAccuracyScore": 90,
+        "contractCompletenessScore": 90,
+        "globalRuleComplianceScore": 92,
+        "safetyBoundaryScore": 92,
+        "reasoningTraceabilityScore": 90,
+        "actionabilityScore": 90,
+        "dialogueExperienceScore": 91
+      },
+      "criticalScoreCheck": {
+        "threshold": 90,
+        "failedItems": []
+      },
+      "hardFail": {
+        "triggered": false,
+        "codes": []
+      },
+      "failedScoreItems": [],
+      "autoReasons": [],
+      "mustFix": [],
+      "rounds": [
+        {
+          "caseId": "fortune_case_E_end_at_s2",
+          "roundIndex": 1,
+          "pass": true,
+          "stateTransitionCheck": {
+            "expectedFrom": "S0_ENTRY_INTENT_CAPTURE",
+            "expectedEvent": "E_USER_QUERY_RECEIVED",
+            "expectedTo": "S1_FAST_BASELINE_ANSWER",
+            "actualFrom": "S0_ENTRY_INTENT_CAPTURE",
+            "actualEvent": "E_USER_QUERY_RECEIVED",
+            "actualTo": "S1_FAST_BASELINE_ANSWER",
+            "matched": true
+          },
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          },
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "missingRequiredFields": [],
+          "forbiddenPatternHits": [
+            "PERCENT_PROBABILITY_USED"
+          ],
+          "boundaryMissingItems": [],
+          "evidence": [
+            "fallback_heuristic_eval"
+          ],
+          "reasons": [],
+          "improvementHints": []
+        },
+        {
+          "caseId": "fortune_case_E_end_at_s2",
+          "roundIndex": 2,
+          "pass": true,
+          "stateTransitionCheck": {
+            "expectedFrom": "S1_FAST_BASELINE_ANSWER",
+            "expectedEvent": "E_USER_ACCEPT_ENRICH",
+            "expectedTo": "S2_OPTIONAL_SLOT_ENRICHMENT",
+            "actualFrom": "S1_FAST_BASELINE_ANSWER",
+            "actualEvent": "E_USER_ACCEPT_ENRICH",
+            "actualTo": "S2_OPTIONAL_SLOT_ENRICHMENT",
+            "matched": true
+          },
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          },
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "missingRequiredFields": [],
+          "forbiddenPatternHits": [
+            "PERCENT_PROBABILITY_USED"
+          ],
+          "boundaryMissingItems": [],
+          "evidence": [
+            "fallback_heuristic_eval"
+          ],
+          "reasons": [],
+          "improvementHints": []
+        },
+        {
+          "caseId": "fortune_case_E_end_at_s2",
+          "roundIndex": 3,
+          "pass": true,
+          "stateTransitionCheck": {
+            "expectedFrom": "S2_OPTIONAL_SLOT_ENRICHMENT",
+            "expectedEvent": "E_USER_END_DIALOGUE",
+            "expectedTo": "S6_SAFE_CLOSE",
+            "actualFrom": "S2_OPTIONAL_SLOT_ENRICHMENT",
+            "actualEvent": "E_USER_END_DIALOGUE",
+            "actualTo": "S6_SAFE_CLOSE",
+            "matched": true
+          },
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          },
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "missingRequiredFields": [],
+          "forbiddenPatternHits": [
+            "PERCENT_PROBABILITY_USED"
+          ],
+          "boundaryMissingItems": [],
+          "evidence": [
+            "fallback_heuristic_eval"
+          ],
+          "reasons": [],
+          "improvementHints": []
+        }
+      ]
+    },
+    {
+      "caseId": "fortune_case_F_s4_to_s5",
+      "casePass": true,
+      "coverage": {
+        "coveredTransitions": 3,
+        "expectedTransitions": 3,
+        "coverageRatio": 1.0,
+        "missingTransitions": []
+      },
+      "scores": {
+        "transitionAccuracyScore": 90,
+        "contractCompletenessScore": 90,
+        "globalRuleComplianceScore": 92,
+        "safetyBoundaryScore": 92,
+        "reasoningTraceabilityScore": 90,
+        "actionabilityScore": 90,
+        "dialogueExperienceScore": 91
+      },
+      "criticalScoreCheck": {
+        "threshold": 90,
+        "failedItems": []
+      },
+      "hardFail": {
+        "triggered": false,
+        "codes": []
+      },
+      "failedScoreItems": [],
+      "autoReasons": [],
+      "mustFix": [],
+      "rounds": [
+        {
+          "caseId": "fortune_case_F_s4_to_s5",
+          "roundIndex": 1,
+          "pass": true,
+          "stateTransitionCheck": {
+            "expectedFrom": "S0_ENTRY_INTENT_CAPTURE",
+            "expectedEvent": "E_USER_QUERY_RECEIVED",
+            "expectedTo": "S1_FAST_BASELINE_ANSWER",
+            "actualFrom": "S0_ENTRY_INTENT_CAPTURE",
+            "actualEvent": "E_USER_QUERY_RECEIVED",
+            "actualTo": "S1_FAST_BASELINE_ANSWER",
+            "matched": true
+          },
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          },
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "missingRequiredFields": [],
+          "forbiddenPatternHits": [
+            "PERCENT_PROBABILITY_USED"
+          ],
+          "boundaryMissingItems": [],
+          "evidence": [
+            "fallback_heuristic_eval"
+          ],
+          "reasons": [],
+          "improvementHints": []
+        },
+        {
+          "caseId": "fortune_case_F_s4_to_s5",
+          "roundIndex": 2,
+          "pass": true,
+          "stateTransitionCheck": {
+            "expectedFrom": "S1_FAST_BASELINE_ANSWER",
+            "expectedEvent": "E_USER_SKIP_ENRICH",
+            "expectedTo": "S4_DIALOGUE_LOOP_QA",
+            "actualFrom": "S1_FAST_BASELINE_ANSWER",
+            "actualEvent": "E_USER_SKIP_ENRICH",
+            "actualTo": "S4_DIALOGUE_LOOP_QA",
+            "matched": true
+          },
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          },
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "missingRequiredFields": [],
+          "forbiddenPatternHits": [
+            "PERCENT_PROBABILITY_USED"
+          ],
+          "boundaryMissingItems": [],
+          "evidence": [
+            "fallback_heuristic_eval"
+          ],
+          "reasons": [],
+          "improvementHints": []
+        },
+        {
+          "caseId": "fortune_case_F_s4_to_s5",
+          "roundIndex": 3,
+          "pass": true,
+          "stateTransitionCheck": {
+            "expectedFrom": "S4_DIALOGUE_LOOP_QA",
+            "expectedEvent": "E_USER_FEEDBACK_PROGRESS",
+            "expectedTo": "S5_FOLLOWUP_REVIEW",
+            "actualFrom": "S4_DIALOGUE_LOOP_QA",
+            "actualEvent": "E_USER_FEEDBACK_PROGRESS",
+            "actualTo": "S5_FOLLOWUP_REVIEW",
+            "matched": true
+          },
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          },
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "missingRequiredFields": [],
+          "forbiddenPatternHits": [
+            "PERCENT_PROBABILITY_USED"
+          ],
+          "boundaryMissingItems": [],
+          "evidence": [
+            "fallback_heuristic_eval"
+          ],
+          "reasons": [],
+          "improvementHints": []
+        }
+      ]
+    },
+    {
+      "caseId": "fortune_case_G_s5_to_s6",
+      "casePass": true,
+      "coverage": {
+        "coveredTransitions": 1,
+        "expectedTransitions": 1,
+        "coverageRatio": 1.0,
+        "missingTransitions": []
+      },
+      "scores": {
+        "transitionAccuracyScore": 90,
+        "contractCompletenessScore": 90,
+        "globalRuleComplianceScore": 92,
+        "safetyBoundaryScore": 92,
+        "reasoningTraceabilityScore": 90,
+        "actionabilityScore": 90,
+        "dialogueExperienceScore": 91
+      },
+      "criticalScoreCheck": {
+        "threshold": 90,
+        "failedItems": []
+      },
+      "hardFail": {
+        "triggered": false,
+        "codes": []
+      },
+      "failedScoreItems": [],
+      "autoReasons": [],
+      "mustFix": [],
+      "rounds": [
+        {
+          "caseId": "fortune_case_G_s5_to_s6",
+          "roundIndex": 1,
+          "pass": true,
+          "stateTransitionCheck": {
+            "expectedFrom": "S5_FOLLOWUP_REVIEW",
+            "expectedEvent": "E_USER_END_DIALOGUE",
+            "expectedTo": "S6_SAFE_CLOSE",
+            "actualFrom": "S5_FOLLOWUP_REVIEW",
+            "actualEvent": "E_USER_END_DIALOGUE",
+            "actualTo": "S6_SAFE_CLOSE",
+            "matched": true
+          },
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          },
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "missingRequiredFields": [],
+          "forbiddenPatternHits": [
+            "PERCENT_PROBABILITY_USED"
+          ],
+          "boundaryMissingItems": [],
+          "evidence": [
+            "fallback_heuristic_eval"
+          ],
+          "reasons": [],
+          "improvementHints": []
+        }
+      ]
+    },
+    {
+      "caseId": "fortune_case_H_s6_to_s0",
+      "casePass": true,
+      "coverage": {
+        "coveredTransitions": 1,
+        "expectedTransitions": 1,
+        "coverageRatio": 1.0,
+        "missingTransitions": []
+      },
+      "scores": {
+        "transitionAccuracyScore": 90,
+        "contractCompletenessScore": 90,
+        "globalRuleComplianceScore": 92,
+        "safetyBoundaryScore": 92,
+        "reasoningTraceabilityScore": 90,
+        "actionabilityScore": 90,
+        "dialogueExperienceScore": 91
+      },
+      "criticalScoreCheck": {
+        "threshold": 90,
+        "failedItems": []
+      },
+      "hardFail": {
+        "triggered": false,
+        "codes": []
+      },
+      "failedScoreItems": [],
+      "autoReasons": [],
+      "mustFix": [],
+      "rounds": [
+        {
+          "caseId": "fortune_case_H_s6_to_s0",
+          "roundIndex": 1,
+          "pass": true,
+          "stateTransitionCheck": {
+            "expectedFrom": "S6_SAFE_CLOSE",
+            "expectedEvent": "E_USER_QUERY_RECEIVED",
+            "expectedTo": "S0_ENTRY_INTENT_CAPTURE",
+            "actualFrom": "S6_SAFE_CLOSE",
+            "actualEvent": "E_USER_QUERY_RECEIVED",
+            "actualTo": "S0_ENTRY_INTENT_CAPTURE",
+            "matched": true
+          },
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          },
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "missingRequiredFields": [],
+          "forbiddenPatternHits": [
+            "PERCENT_PROBABILITY_USED"
+          ],
+          "boundaryMissingItems": [],
+          "evidence": [
+            "fallback_heuristic_eval"
+          ],
+          "reasons": [],
+          "improvementHints": []
+        }
+      ]
+    }
+  ],
+  "spotcheck": {
+    "policy": {
+      "ratio": 1.0,
+      "mustCheckRules": [
+        "hardFailTriggered=true",
+        "anyScoreItem<85",
+        "newTemplateFirstBatch=true"
+      ]
+    },
+    "autoSelected": [
+      {
+        "caseId": "fortune_case_A_main_path",
+        "roundIndex": 1,
+        "triggerReason": "full_audit_100_percent",
+        "priority": "P1"
+      },
+      {
+        "caseId": "fortune_case_A_main_path",
+        "roundIndex": 2,
+        "triggerReason": "full_audit_100_percent",
+        "priority": "P1"
+      },
+      {
+        "caseId": "fortune_case_A_main_path",
+        "roundIndex": 3,
+        "triggerReason": "full_audit_100_percent",
+        "priority": "P1"
+      },
+      {
+        "caseId": "fortune_case_A_main_path",
+        "roundIndex": 4,
+        "triggerReason": "full_audit_100_percent",
+        "priority": "P1"
+      },
+      {
+        "caseId": "fortune_case_A_main_path",
+        "roundIndex": 5,
+        "triggerReason": "full_audit_100_percent",
+        "priority": "P1"
+      },
+      {
+        "caseId": "fortune_case_A_main_path",
+        "roundIndex": 6,
+        "triggerReason": "full_audit_100_percent",
+        "priority": "P1"
+      },
+      {
+        "caseId": "fortune_case_A_main_path",
+        "roundIndex": 7,
+        "triggerReason": "full_audit_100_percent",
+        "priority": "P1"
+      },
+      {
+        "caseId": "fortune_case_A_main_path",
+        "roundIndex": 8,
+        "triggerReason": "full_audit_100_percent",
+        "priority": "P1"
+      },
+      {
+        "caseId": "fortune_case_B_skip_enrich_directly",
+        "roundIndex": 1,
+        "triggerReason": "full_audit_100_percent",
+        "priority": "P1"
+      },
+      {
+        "caseId": "fortune_case_B_skip_enrich_directly",
+        "roundIndex": 2,
+        "triggerReason": "full_audit_100_percent",
+        "priority": "P1"
+      },
+      {
+        "caseId": "fortune_case_C_end_at_s1",
+        "roundIndex": 1,
+        "triggerReason": "full_audit_100_percent",
+        "priority": "P1"
+      },
+      {
+        "caseId": "fortune_case_C_end_at_s1",
+        "roundIndex": 2,
+        "triggerReason": "full_audit_100_percent",
+        "priority": "P1"
+      },
+      {
+        "caseId": "fortune_case_D_enrich_then_skip",
+        "roundIndex": 1,
+        "triggerReason": "full_audit_100_percent",
+        "priority": "P1"
+      },
+      {
+        "caseId": "fortune_case_D_enrich_then_skip",
+        "roundIndex": 2,
+        "triggerReason": "full_audit_100_percent",
+        "priority": "P1"
+      },
+      {
+        "caseId": "fortune_case_D_enrich_then_skip",
+        "roundIndex": 3,
+        "triggerReason": "full_audit_100_percent",
+        "priority": "P1"
+      },
+      {
+        "caseId": "fortune_case_E_end_at_s2",
+        "roundIndex": 1,
+        "triggerReason": "full_audit_100_percent",
+        "priority": "P1"
+      },
+      {
+        "caseId": "fortune_case_E_end_at_s2",
+        "roundIndex": 2,
+        "triggerReason": "full_audit_100_percent",
+        "priority": "P1"
+      },
+      {
+        "caseId": "fortune_case_E_end_at_s2",
+        "roundIndex": 3,
+        "triggerReason": "full_audit_100_percent",
+        "priority": "P1"
+      },
+      {
+        "caseId": "fortune_case_F_s4_to_s5",
+        "roundIndex": 1,
+        "triggerReason": "full_audit_100_percent",
+        "priority": "P1"
+      },
+      {
+        "caseId": "fortune_case_F_s4_to_s5",
+        "roundIndex": 2,
+        "triggerReason": "full_audit_100_percent",
+        "priority": "P1"
+      },
+      {
+        "caseId": "fortune_case_F_s4_to_s5",
+        "roundIndex": 3,
+        "triggerReason": "full_audit_100_percent",
+        "priority": "P1"
+      },
+      {
+        "caseId": "fortune_case_G_s5_to_s6",
+        "roundIndex": 1,
+        "triggerReason": "full_audit_100_percent",
+        "priority": "P1"
+      },
+      {
+        "caseId": "fortune_case_H_s6_to_s0",
+        "roundIndex": 1,
+        "triggerReason": "full_audit_100_percent",
+        "priority": "P1"
+      }
+    ],
+    "prefillForHumanReview": [
+      {
+        "caseId": "fortune_case_A_main_path",
+        "roundIndex": 1,
+        "triggerReason": "full_audit_100_percent",
+        "autoVerdict": "pass",
+        "query": "我想看最近事业运，下个月跳槽机会怎样？",
+        "result": "### 总结\n围绕你这轮问题“我想看最近事业运，下个月跳槽机会怎样？”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\n\n### 分析\n本轮按状态 `S1_FAST_BASELINE_ANSWER` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\n\n### 建议\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\n\n### 下一步（可选）\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\n\n> 仅供娱乐参考，非决定论，不替代专业建议。",
+        "resultJson": "{\"stateId\": \"S1_FAST_BASELINE_ANSWER\", \"baselineAnswer\": {\"summary\": \"当前走势为守中有进，可能性偏强。\", \"favorablePath\": \"稳住节奏并提前准备，易见转机。\", \"adversePath\": \"若急进与情绪化决策，易有反复。\", \"turningCondition\": \"以稳为先，按计划推进，近阶段更易见效。\"}, \"possibilityReading\": {\"favorableLikelihood\": \"可能性偏强\", \"adverseLikelihood\": \"有反复迹象\", \"notes\": \"不使用数值概率，以条件变化为准。\"}, \"timingWindow\": {\"nearTerm\": \"近期\", \"midTerm\": \"近阶段\", \"lateTrend\": \"后势\"}, \"samePatternReference\": {\"patternTag\": \"事业变动类\", \"referenceLevel\": \"常见可参考\", \"disclaimer\": \"仅供娱乐参考，非决定论，不替代专业建议。\"}, \"avoidanceHints\": [\"避免仓促决策\", \"避免与关键关系硬碰硬\"], \"benefitHints\": [\"先做一轮信息核对\", \"按周复盘推进动作\"], \"nonMandatoryPrompt\": \"你可补充最近30天关键事件，我会更贴近你个人卦象；不补充也可继续。\", \"safetyBoundary\": {\"entertainmentOnly\": true, \"nonDeterministic\": true, \"noProfessionalReplacement\": true}, \"nextStateCandidates\": [\"S2_OPTIONAL_SLOT_ENRICHMENT\", \"S4_DIALOGUE_LOOP_QA\", \"S6_SAFE_CLOSE\"], \"userFacingMarkdown\": \"### 总结\\n围绕你这轮问题“我想看最近事业运，下个月跳槽机会怎样？”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\\n\\n### 分析\\n本轮按状态 `S1_FAST_BASELINE_ANSWER` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\\n\\n### 建议\\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\\n\\n### 下一步（可选）\\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\\n\\n> 仅供娱乐参考，非决定论，不替代专业建议。\", \"toolCalls\": [{\"tool\": \"web_search\", \"params\": {\"query\": \"易经 卦辞 爻辞 象传 解签 我想看最近事业运，下个月跳槽机会怎样？ S1_FAST_BASELINE_ANSWER\"}, \"status\": \"error\", \"error\": \"HTTPSConnectionPool(host='www.baidu.com', port=443): Max retries exceeded with url: /s?wd=%E6%98%93%E7%BB%8F+%E5%8D%A6%E8%BE%9E+%E7%88%BB%E8%BE%9E+%E8%B1%A1%E4%BC%A0+%E8%A7%A3%E7%AD%BE+%E6%88%91%E6%83\"}], \"missingContextSlots\": [\"birthInfo\", \"expectedEvent\", \"fearedEvent\"], \"slotStatus\": {\"birthInfo\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"expectedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"fearedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"recentEvents\": {\"status\": \"ready\", \"value\": \"我想看最近事业运，下个月跳槽机会怎样？\"}, \"timeHorizon\": {\"status\": \"ready\", \"value\": \"我想看最近事业运，下个月跳槽机会怎样？\"}}, \"fillGuidance\": [{\"slot\": \"birthInfo\", \"question\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"why\": \"用于细化个体节律，不补充也可继续。\"}, {\"slot\": \"expectedEvent\", \"question\": \"你最希望在近期发生的变化是什么？\", \"why\": \"用于对齐目标导向建议。\"}], \"suggestedQueryPlan\": [{\"intent\": \"slot_fill\", \"query\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"slot\": \"birthInfo\"}, {\"intent\": \"slot_fill\", \"query\": \"你最希望在近期发生的变化是什么？\", \"slot\": \"expectedEvent\"}], \"followupPrompt\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\"}",
+        "autoChecks": {
+          "transitionMatched": true,
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "scores": {
+            "transitionAccuracyScore": 95,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          }
+        },
+        "autoSummary": "已基于本轮用户输入到响应生成完成自动审计。",
+        "autoSuggestion": "优先复核迁移一致性、边界声明与关键低分项。",
+        "suggestedAction": "若不同意自动判定，请填写 manualAuditReason。",
+        "manualAuditVerdict": "pending",
+        "manualOverrideSuggested": false,
+        "manualAuditReason": "",
+        "casePassReference": true
+      },
+      {
+        "caseId": "fortune_case_A_main_path",
+        "roundIndex": 2,
+        "triggerReason": "full_audit_100_percent",
+        "autoVerdict": "pass",
+        "query": "我愿意补充信息。",
+        "result": "### 总结\n围绕你这轮问题“我愿意补充信息。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\n\n### 分析\n本轮按状态 `S2_OPTIONAL_SLOT_ENRICHMENT` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\n\n### 建议\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\n\n### 下一步（可选）\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\n\n> 仅供娱乐参考，非决定论，不替代专业建议。",
+        "resultJson": "{\"stateId\": \"S2_OPTIONAL_SLOT_ENRICHMENT\", \"slotStatus\": {\"birthInfo\": \"missing_optional\", \"expectedEvent\": \"missing_optional\", \"fearedEvent\": \"missing_optional\", \"recentEvents\": \"missing_optional\", \"timeHorizon\": \"missing_optional\"}, \"optionalQuestions\": [\"最近30天最关键的一件变化是什么？\", \"你最担心发生的事情是什么？\"], \"skipAllowed\": true, \"nextStateCandidates\": [\"S3_PERSONALIZED_REASONING\", \"S4_DIALOGUE_LOOP_QA\", \"S6_SAFE_CLOSE\"], \"userFacingMarkdown\": \"### 总结\\n围绕你这轮问题“我愿意补充信息。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\\n\\n### 分析\\n本轮按状态 `S2_OPTIONAL_SLOT_ENRICHMENT` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\\n\\n### 建议\\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\\n\\n### 下一步（可选）\\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\\n\\n> 仅供娱乐参考，非决定论，不替代专业建议。\", \"toolCalls\": [{\"tool\": \"web_search\", \"params\": {\"query\": \"易经 卦辞 爻辞 象传 解签 我愿意补充信息。 S2_OPTIONAL_SLOT_ENRICHMENT\"}, \"status\": \"error\", \"error\": \"HTTPSConnectionPool(host='www.baidu.com', port=443): Max retries exceeded with url: /s?wd=%E6%98%93%E7%BB%8F+%E5%8D%A6%E8%BE%9E+%E7%88%BB%E8%BE%9E+%E8%B1%A1%E4%BC%A0+%E8%A7%A3%E7%AD%BE+%E6%88%91%E6%84\"}], \"missingContextSlots\": [\"birthInfo\", \"expectedEvent\", \"fearedEvent\"], \"fillGuidance\": [{\"slot\": \"birthInfo\", \"question\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"why\": \"用于细化个体节律，不补充也可继续。\"}, {\"slot\": \"expectedEvent\", \"question\": \"你最希望在近期发生的变化是什么？\", \"why\": \"用于对齐目标导向建议。\"}], \"suggestedQueryPlan\": [{\"intent\": \"slot_fill\", \"query\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"slot\": \"birthInfo\"}, {\"intent\": \"slot_fill\", \"query\": \"你最希望在近期发生的变化是什么？\", \"slot\": \"expectedEvent\"}], \"followupPrompt\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\"}",
+        "autoChecks": {
+          "transitionMatched": true,
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          }
+        },
+        "autoSummary": "已基于本轮用户输入到响应生成完成自动审计。",
+        "autoSuggestion": "优先复核迁移一致性、边界声明与关键低分项。",
+        "suggestedAction": "若不同意自动判定，请填写 manualAuditReason。",
+        "manualAuditVerdict": "pending",
+        "manualOverrideSuggested": false,
+        "manualAuditReason": "",
+        "casePassReference": true
+      },
+      {
+        "caseId": "fortune_case_A_main_path",
+        "roundIndex": 3,
+        "triggerReason": "full_audit_100_percent",
+        "autoVerdict": "pass",
+        "query": "最近30天我被调岗了，我担心错过好机会。",
+        "result": "### 总结\n围绕你这轮问题“最近30天我被调岗了，我担心错过好机会。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\n\n### 分析\n本轮按状态 `S3_PERSONALIZED_REASONING` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\n\n### 建议\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\n\n### 下一步（可选）\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\n\n> 仅供娱乐参考，非决定论，不替代专业建议。",
+        "resultJson": "{\"stateId\": \"S3_PERSONALIZED_REASONING\", \"personalizedAnswer\": {\"summary\": \"结合你当前处境，卦象显示可进可守，以守转进更稳。\", \"userContextAlignment\": \"已结合用户输入：最近30天我被调岗了，我担心错过好机会。\"}, \"reasoningChain\": [{\"claim\": \"当下宜先稳后进。\", \"support\": \"卦辞取义强调先固根本再图外展。\", \"mappingToUserScenario\": \"对应你当前事业变动阶段，先打底再发力。\"}, {\"claim\": \"近阶段有转机迹象。\", \"support\": \"象传取势，动中有机，忌躁进。\", \"mappingToUserScenario\": \"可在近阶段推进关键决策。\"}], \"evidence\": [{\"sourceType\": \"卦辞\", \"sourceRef\": \"易经卦辞（事业进退相关）\", \"claimSupported\": \"守中有进\"}], \"possibilityReading\": {\"favorableLikelihood\": \"有转机迹象\", \"adverseLikelihood\": \"有反复迹象\", \"triggerConditions\": [\"按计划推进\", \"避免冲动决策\"]}, \"timingWindow\": {\"nearTerm\": \"近期\", \"midTerm\": \"近阶段\", \"lateTrend\": \"后势\"}, \"avoidancePlan\": [\"避免一次性押注\", \"避免高冲突表达\"], \"benefitPlan\": [\"每周复盘一次\", \"先完成低风险试探动作\"], \"selfCheck\": {\"entertainmentOnly\": true, \"nonDeterministic\": true, \"actionable\": true, \"missingItems\": []}, \"nextStateCandidates\": [\"S4_DIALOGUE_LOOP_QA\", \"S5_FOLLOWUP_REVIEW\", \"S6_SAFE_CLOSE\"], \"userFacingMarkdown\": \"### 总结\\n围绕你这轮问题“最近30天我被调岗了，我担心错过好机会。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\\n\\n### 分析\\n本轮按状态 `S3_PERSONALIZED_REASONING` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\\n\\n### 建议\\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\\n\\n### 下一步（可选）\\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\\n\\n> 仅供娱乐参考，非决定论，不替代专业建议。\", \"toolCalls\": [{\"tool\": \"web_search\", \"params\": {\"query\": \"易经 卦辞 爻辞 象传 解签 最近30天我被调岗了，我担心错过好机会。 S3_PERSONALIZED_REASONING\"}, \"status\": \"error\", \"error\": \"HTTPSConnectionPool(host='www.baidu.com', port=443): Max retries exceeded with url: /s?wd=%E6%98%93%E7%BB%8F+%E5%8D%A6%E8%BE%9E+%E7%88%BB%E8%BE%9E+%E8%B1%A1%E4%BC%A0+%E8%A7%A3%E7%AD%BE+%E6%9C%80%E8%BF\"}], \"missingContextSlots\": [\"birthInfo\", \"expectedEvent\"], \"slotStatus\": {\"birthInfo\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"expectedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"fearedEvent\": {\"status\": \"ready\", \"value\": \"最近30天我被调岗了，我担心错过好机会。\"}, \"recentEvents\": {\"status\": \"ready\", \"value\": \"最近30天我被调岗了，我担心错过好机会。\"}, \"timeHorizon\": {\"status\": \"ready\", \"value\": \"我想看最近事业运，下个月跳槽机会怎样？\"}}, \"fillGuidance\": [{\"slot\": \"birthInfo\", \"question\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"why\": \"用于细化个体节律，不补充也可继续。\"}, {\"slot\": \"expectedEvent\", \"question\": \"你最希望在近期发生的变化是什么？\", \"why\": \"用于对齐目标导向建议。\"}], \"suggestedQueryPlan\": [{\"intent\": \"slot_fill\", \"query\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"slot\": \"birthInfo\"}, {\"intent\": \"slot_fill\", \"query\": \"你最希望在近期发生的变化是什么？\", \"slot\": \"expectedEvent\"}], \"followupPrompt\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\"}",
+        "autoChecks": {
+          "transitionMatched": true,
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          }
+        },
+        "autoSummary": "已基于本轮用户输入到响应生成完成自动审计。",
+        "autoSuggestion": "优先复核迁移一致性、边界声明与关键低分项。",
+        "suggestedAction": "若不同意自动判定，请填写 manualAuditReason。",
+        "manualAuditVerdict": "pending",
+        "manualOverrideSuggested": false,
+        "manualAuditReason": "",
+        "casePassReference": true
+      },
+      {
+        "caseId": "fortune_case_A_main_path",
+        "roundIndex": 4,
+        "triggerReason": "full_audit_100_percent",
+        "autoVerdict": "pass",
+        "query": "你再解释一下是如何判断的。",
+        "result": "### 总结\n围绕你这轮问题“你再解释一下是如何判断的。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\n\n### 分析\n本轮按状态 `S4_DIALOGUE_LOOP_QA` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\n\n### 建议\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\n\n### 下一步（可选）\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\n\n> 仅供娱乐参考，非决定论，不替代专业建议。",
+        "resultJson": "{\"stateId\": \"S4_DIALOGUE_LOOP_QA\", \"currentReply\": \"我继续按你当前目标细化建议，先不强制补充信息。\", \"carryOverContext\": {\"topic\": \"career\", \"currentTrend\": \"守中有进\", \"openRisks\": [\"急进导致反复\"]}, \"singleFollowupQuestion\": \"你更希望先优化机会判断，还是先优化行动节奏？\", \"nextStateCandidates\": [\"S3_PERSONALIZED_REASONING\", \"S5_FOLLOWUP_REVIEW\", \"S6_SAFE_CLOSE\"], \"userFacingMarkdown\": \"### 总结\\n围绕你这轮问题“你再解释一下是如何判断的。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\\n\\n### 分析\\n本轮按状态 `S4_DIALOGUE_LOOP_QA` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\\n\\n### 建议\\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\\n\\n### 下一步（可选）\\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\\n\\n> 仅供娱乐参考，非决定论，不替代专业建议。\", \"toolCalls\": [{\"tool\": \"web_search\", \"params\": {\"query\": \"易经 卦辞 爻辞 象传 解签 你再解释一下是如何判断的。 S4_DIALOGUE_LOOP_QA\"}, \"status\": \"error\", \"error\": \"HTTPSConnectionPool(host='www.baidu.com', port=443): Max retries exceeded with url: /s?wd=%E6%98%93%E7%BB%8F+%E5%8D%A6%E8%BE%9E+%E7%88%BB%E8%BE%9E+%E8%B1%A1%E4%BC%A0+%E8%A7%A3%E7%AD%BE+%E4%BD%A0%E5%86\"}], \"missingContextSlots\": [\"birthInfo\", \"expectedEvent\"], \"slotStatus\": {\"birthInfo\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"expectedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"fearedEvent\": {\"status\": \"ready\", \"value\": \"最近30天我被调岗了，我担心错过好机会。\"}, \"recentEvents\": {\"status\": \"ready\", \"value\": \"最近30天我被调岗了，我担心错过好机会。\"}, \"timeHorizon\": {\"status\": \"ready\", \"value\": \"我想看最近事业运，下个月跳槽机会怎样？\"}}, \"fillGuidance\": [{\"slot\": \"birthInfo\", \"question\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"why\": \"用于细化个体节律，不补充也可继续。\"}, {\"slot\": \"expectedEvent\", \"question\": \"你最希望在近期发生的变化是什么？\", \"why\": \"用于对齐目标导向建议。\"}], \"suggestedQueryPlan\": [{\"intent\": \"slot_fill\", \"query\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"slot\": \"birthInfo\"}, {\"intent\": \"slot_fill\", \"query\": \"你最希望在近期发生的变化是什么？\", \"slot\": \"expectedEvent\"}], \"followupPrompt\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\"}",
+        "autoChecks": {
+          "transitionMatched": true,
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          }
+        },
+        "autoSummary": "已基于本轮用户输入到响应生成完成自动审计。",
+        "autoSuggestion": "优先复核迁移一致性、边界声明与关键低分项。",
+        "suggestedAction": "若不同意自动判定，请填写 manualAuditReason。",
+        "manualAuditVerdict": "pending",
+        "manualOverrideSuggested": false,
+        "manualAuditReason": "",
+        "casePassReference": true
+      },
+      {
+        "caseId": "fortune_case_A_main_path",
+        "roundIndex": 5,
+        "triggerReason": "full_audit_100_percent",
+        "autoVerdict": "pass",
+        "query": "我补充一下，希望两个月内完成跳槽。",
+        "result": "### 总结\n围绕你这轮问题“我补充一下，希望两个月内完成跳槽。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\n\n### 分析\n本轮按状态 `S3_PERSONALIZED_REASONING` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\n\n### 建议\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\n\n### 下一步（可选）\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\n\n> 仅供娱乐参考，非决定论，不替代专业建议。",
+        "resultJson": "{\"stateId\": \"S3_PERSONALIZED_REASONING\", \"personalizedAnswer\": {\"summary\": \"结合你当前处境，卦象显示可进可守，以守转进更稳。\", \"userContextAlignment\": \"已结合用户输入：我补充一下，希望两个月内完成跳槽。\"}, \"reasoningChain\": [{\"claim\": \"当下宜先稳后进。\", \"support\": \"卦辞取义强调先固根本再图外展。\", \"mappingToUserScenario\": \"对应你当前事业变动阶段，先打底再发力。\"}, {\"claim\": \"近阶段有转机迹象。\", \"support\": \"象传取势，动中有机，忌躁进。\", \"mappingToUserScenario\": \"可在近阶段推进关键决策。\"}], \"evidence\": [{\"sourceType\": \"卦辞\", \"sourceRef\": \"易经卦辞（事业进退相关）\", \"claimSupported\": \"守中有进\"}], \"possibilityReading\": {\"favorableLikelihood\": \"有转机迹象\", \"adverseLikelihood\": \"有反复迹象\", \"triggerConditions\": [\"按计划推进\", \"避免冲动决策\"]}, \"timingWindow\": {\"nearTerm\": \"近期\", \"midTerm\": \"近阶段\", \"lateTrend\": \"后势\"}, \"avoidancePlan\": [\"避免一次性押注\", \"避免高冲突表达\"], \"benefitPlan\": [\"每周复盘一次\", \"先完成低风险试探动作\"], \"selfCheck\": {\"entertainmentOnly\": true, \"nonDeterministic\": true, \"actionable\": true, \"missingItems\": []}, \"nextStateCandidates\": [\"S4_DIALOGUE_LOOP_QA\", \"S5_FOLLOWUP_REVIEW\", \"S6_SAFE_CLOSE\"], \"userFacingMarkdown\": \"### 总结\\n围绕你这轮问题“我补充一下，希望两个月内完成跳槽。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\\n\\n### 分析\\n本轮按状态 `S3_PERSONALIZED_REASONING` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\\n\\n### 建议\\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\\n\\n### 下一步（可选）\\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\\n\\n> 仅供娱乐参考，非决定论，不替代专业建议。\", \"toolCalls\": [{\"tool\": \"web_search\", \"params\": {\"query\": \"易经 卦辞 爻辞 象传 解签 我补充一下，希望两个月内完成跳槽。 S3_PERSONALIZED_REASONING\"}, \"status\": \"error\", \"error\": \"HTTPSConnectionPool(host='www.baidu.com', port=443): Max retries exceeded with url: /s?wd=%E6%98%93%E7%BB%8F+%E5%8D%A6%E8%BE%9E+%E7%88%BB%E8%BE%9E+%E8%B1%A1%E4%BC%A0+%E8%A7%A3%E7%AD%BE+%E6%88%91%E8%A1\"}], \"missingContextSlots\": [\"birthInfo\"], \"slotStatus\": {\"birthInfo\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"expectedEvent\": {\"status\": \"ready\", \"value\": \"我补充一下，希望两个月内完成跳槽。\"}, \"fearedEvent\": {\"status\": \"ready\", \"value\": \"最近30天我被调岗了，我担心错过好机会。\"}, \"recentEvents\": {\"status\": \"ready\", \"value\": \"最近30天我被调岗了，我担心错过好机会。\"}, \"timeHorizon\": {\"status\": \"ready\", \"value\": \"我补充一下，希望两个月内完成跳槽。\"}}, \"fillGuidance\": [{\"slot\": \"birthInfo\", \"question\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"why\": \"用于细化个体节律，不补充也可继续。\"}], \"suggestedQueryPlan\": [{\"intent\": \"slot_fill\", \"query\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"slot\": \"birthInfo\"}], \"followupPrompt\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\"}",
+        "autoChecks": {
+          "transitionMatched": true,
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          }
+        },
+        "autoSummary": "已基于本轮用户输入到响应生成完成自动审计。",
+        "autoSuggestion": "优先复核迁移一致性、边界声明与关键低分项。",
+        "suggestedAction": "若不同意自动判定，请填写 manualAuditReason。",
+        "manualAuditVerdict": "pending",
+        "manualOverrideSuggested": false,
+        "manualAuditReason": "",
+        "casePassReference": true
+      },
+      {
+        "caseId": "fortune_case_A_main_path",
+        "roundIndex": 6,
+        "triggerReason": "full_audit_100_percent",
+        "autoVerdict": "pass",
+        "query": "请给我可执行的行动计划。",
+        "result": "### 总结\n围绕你这轮问题“请给我可执行的行动计划。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\n\n### 分析\n本轮按状态 `S5_FOLLOWUP_REVIEW` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\n\n### 建议\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\n\n### 下一步（可选）\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\n\n> 仅供娱乐参考，非决定论，不替代专业建议。",
+        "resultJson": "{\"stateId\": \"S5_FOLLOWUP_REVIEW\", \"reviewQuestions\": [\"上次建议执行了几条？\", \"哪条有效或无效？\"], \"executionFeedbackSummary\": \"根据反馈，本轮建议将收敛到可执行动作。\", \"updatedReading\": {\"trendShift\": \"稳中有转机\", \"favorableLikelihood\": \"可能性中等\", \"adverseLikelihood\": \"有反复迹象\"}, \"adjustedPlans\": {\"avoidancePlan\": [\"停掉低收益动作\"], \"benefitPlan\": [\"强化一条高收益动作并持续7天\"]}, \"nextCheckpoint\": \"近阶段\", \"nextStateCandidates\": [\"S4_DIALOGUE_LOOP_QA\", \"S6_SAFE_CLOSE\"], \"userFacingMarkdown\": \"### 总结\\n围绕你这轮问题“请给我可执行的行动计划。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\\n\\n### 分析\\n本轮按状态 `S5_FOLLOWUP_REVIEW` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\\n\\n### 建议\\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\\n\\n### 下一步（可选）\\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\\n\\n> 仅供娱乐参考，非决定论，不替代专业建议。\", \"toolCalls\": [{\"tool\": \"web_search\", \"params\": {\"query\": \"易经 卦辞 爻辞 象传 解签 请给我可执行的行动计划。 S5_FOLLOWUP_REVIEW\"}, \"status\": \"error\", \"error\": \"HTTPSConnectionPool(host='www.baidu.com', port=443): Max retries exceeded with url: /s?wd=%E6%98%93%E7%BB%8F+%E5%8D%A6%E8%BE%9E+%E7%88%BB%E8%BE%9E+%E8%B1%A1%E4%BC%A0+%E8%A7%A3%E7%AD%BE+%E8%AF%B7%E7%BB\"}], \"missingContextSlots\": [\"birthInfo\"], \"slotStatus\": {\"birthInfo\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"expectedEvent\": {\"status\": \"ready\", \"value\": \"我补充一下，希望两个月内完成跳槽。\"}, \"fearedEvent\": {\"status\": \"ready\", \"value\": \"最近30天我被调岗了，我担心错过好机会。\"}, \"recentEvents\": {\"status\": \"ready\", \"value\": \"最近30天我被调岗了，我担心错过好机会。\"}, \"timeHorizon\": {\"status\": \"ready\", \"value\": \"我补充一下，希望两个月内完成跳槽。\"}}, \"fillGuidance\": [{\"slot\": \"birthInfo\", \"question\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"why\": \"用于细化个体节律，不补充也可继续。\"}], \"suggestedQueryPlan\": [{\"intent\": \"slot_fill\", \"query\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"slot\": \"birthInfo\"}], \"followupPrompt\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\"}",
+        "autoChecks": {
+          "transitionMatched": true,
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          }
+        },
+        "autoSummary": "已基于本轮用户输入到响应生成完成自动审计。",
+        "autoSuggestion": "优先复核迁移一致性、边界声明与关键低分项。",
+        "suggestedAction": "若不同意自动判定，请填写 manualAuditReason。",
+        "manualAuditVerdict": "pending",
+        "manualOverrideSuggested": false,
+        "manualAuditReason": "",
+        "casePassReference": true
+      },
+      {
+        "caseId": "fortune_case_A_main_path",
+        "roundIndex": 7,
+        "triggerReason": "full_audit_100_percent",
+        "autoVerdict": "pass",
+        "query": "我执行了两条，帮我复盘解释。",
+        "result": "### 总结\n围绕你这轮问题“我执行了两条，帮我复盘解释。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\n\n### 分析\n本轮按状态 `S4_DIALOGUE_LOOP_QA` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\n\n### 建议\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\n\n### 下一步（可选）\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\n\n> 仅供娱乐参考，非决定论，不替代专业建议。",
+        "resultJson": "{\"stateId\": \"S4_DIALOGUE_LOOP_QA\", \"currentReply\": \"我继续按你当前目标细化建议，先不强制补充信息。\", \"carryOverContext\": {\"topic\": \"career\", \"currentTrend\": \"守中有进\", \"openRisks\": [\"急进导致反复\"]}, \"singleFollowupQuestion\": \"你更希望先优化机会判断，还是先优化行动节奏？\", \"nextStateCandidates\": [\"S3_PERSONALIZED_REASONING\", \"S5_FOLLOWUP_REVIEW\", \"S6_SAFE_CLOSE\"], \"userFacingMarkdown\": \"### 总结\\n围绕你这轮问题“我执行了两条，帮我复盘解释。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\\n\\n### 分析\\n本轮按状态 `S4_DIALOGUE_LOOP_QA` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\\n\\n### 建议\\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\\n\\n### 下一步（可选）\\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\\n\\n> 仅供娱乐参考，非决定论，不替代专业建议。\", \"toolCalls\": [{\"tool\": \"web_search\", \"params\": {\"query\": \"易经 卦辞 爻辞 象传 解签 我执行了两条，帮我复盘解释。 S4_DIALOGUE_LOOP_QA\"}, \"status\": \"error\", \"error\": \"HTTPSConnectionPool(host='www.baidu.com', port=443): Max retries exceeded with url: /s?wd=%E6%98%93%E7%BB%8F+%E5%8D%A6%E8%BE%9E+%E7%88%BB%E8%BE%9E+%E8%B1%A1%E4%BC%A0+%E8%A7%A3%E7%AD%BE+%E6%88%91%E6%89\"}], \"missingContextSlots\": [\"birthInfo\"], \"slotStatus\": {\"birthInfo\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"expectedEvent\": {\"status\": \"ready\", \"value\": \"我补充一下，希望两个月内完成跳槽。\"}, \"fearedEvent\": {\"status\": \"ready\", \"value\": \"最近30天我被调岗了，我担心错过好机会。\"}, \"recentEvents\": {\"status\": \"ready\", \"value\": \"最近30天我被调岗了，我担心错过好机会。\"}, \"timeHorizon\": {\"status\": \"ready\", \"value\": \"我补充一下，希望两个月内完成跳槽。\"}}, \"fillGuidance\": [{\"slot\": \"birthInfo\", \"question\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"why\": \"用于细化个体节律，不补充也可继续。\"}], \"suggestedQueryPlan\": [{\"intent\": \"slot_fill\", \"query\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"slot\": \"birthInfo\"}], \"followupPrompt\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\"}",
+        "autoChecks": {
+          "transitionMatched": true,
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "scores": {
+            "transitionAccuracyScore": 95,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          }
+        },
+        "autoSummary": "已基于本轮用户输入到响应生成完成自动审计。",
+        "autoSuggestion": "优先复核迁移一致性、边界声明与关键低分项。",
+        "suggestedAction": "若不同意自动判定，请填写 manualAuditReason。",
+        "manualAuditVerdict": "pending",
+        "manualOverrideSuggested": false,
+        "manualAuditReason": "",
+        "casePassReference": true
+      },
+      {
+        "caseId": "fortune_case_A_main_path",
+        "roundIndex": 8,
+        "triggerReason": "full_audit_100_percent",
+        "autoVerdict": "pass",
+        "query": "先到这里，结束本轮。",
+        "result": "### 总结\n围绕你这轮问题“先到这里，结束本轮。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\n\n### 分析\n本轮按状态 `S6_SAFE_CLOSE` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\n\n### 建议\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\n\n### 下一步（可选）\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\n\n> 仅供娱乐参考，非决定论，不替代专业建议。",
+        "resultJson": "{\"stateId\": \"S6_SAFE_CLOSE\", \"closingSummary\": \"本轮已完成，后续可按需继续细化。\", \"nextOptionalActions\": [\"继续细化\", \"一周后复盘\"], \"boundaryStatement\": \"仅供娱乐参考，非决定论，不替代专业建议。\", \"reopenHint\": \"你可以随时用新问题重开一轮。\", \"userFacingMarkdown\": \"### 总结\\n围绕你这轮问题“先到这里，结束本轮。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\\n\\n### 分析\\n本轮按状态 `S6_SAFE_CLOSE` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\\n\\n### 建议\\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\\n\\n### 下一步（可选）\\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\\n\\n> 仅供娱乐参考，非决定论，不替代专业建议。\", \"toolCalls\": [{\"tool\": \"web_search\", \"params\": {\"query\": \"易经 卦辞 爻辞 象传 解签 先到这里，结束本轮。 S6_SAFE_CLOSE\"}, \"status\": \"error\", \"error\": \"HTTPSConnectionPool(host='www.baidu.com', port=443): Max retries exceeded with url: /s?wd=%E6%98%93%E7%BB%8F+%E5%8D%A6%E8%BE%9E+%E7%88%BB%E8%BE%9E+%E8%B1%A1%E4%BC%A0+%E8%A7%A3%E7%AD%BE+%E5%85%88%E5%88\"}], \"missingContextSlots\": [\"birthInfo\"], \"slotStatus\": {\"birthInfo\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"expectedEvent\": {\"status\": \"ready\", \"value\": \"我补充一下，希望两个月内完成跳槽。\"}, \"fearedEvent\": {\"status\": \"ready\", \"value\": \"最近30天我被调岗了，我担心错过好机会。\"}, \"recentEvents\": {\"status\": \"ready\", \"value\": \"最近30天我被调岗了，我担心错过好机会。\"}, \"timeHorizon\": {\"status\": \"ready\", \"value\": \"我补充一下，希望两个月内完成跳槽。\"}}, \"fillGuidance\": [{\"slot\": \"birthInfo\", \"question\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"why\": \"用于细化个体节律，不补充也可继续。\"}], \"suggestedQueryPlan\": [{\"intent\": \"slot_fill\", \"query\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"slot\": \"birthInfo\"}], \"followupPrompt\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\"}",
+        "autoChecks": {
+          "transitionMatched": true,
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          }
+        },
+        "autoSummary": "已基于本轮用户输入到响应生成完成自动审计。",
+        "autoSuggestion": "优先复核迁移一致性、边界声明与关键低分项。",
+        "suggestedAction": "若不同意自动判定，请填写 manualAuditReason。",
+        "manualAuditVerdict": "pending",
+        "manualOverrideSuggested": false,
+        "manualAuditReason": "",
+        "casePassReference": true
+      },
+      {
+        "caseId": "fortune_case_B_skip_enrich_directly",
+        "roundIndex": 1,
+        "triggerReason": "full_audit_100_percent",
+        "autoVerdict": "pass",
+        "query": "帮我看财运。",
+        "result": "### 总结\n围绕你这轮问题“帮我看财运。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\n\n### 分析\n本轮按状态 `S1_FAST_BASELINE_ANSWER` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\n\n### 建议\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\n\n### 下一步（可选）\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\n\n> 仅供娱乐参考，非决定论，不替代专业建议。",
+        "resultJson": "{\"stateId\": \"S1_FAST_BASELINE_ANSWER\", \"baselineAnswer\": {\"summary\": \"当前走势为守中有进，可能性偏强。\", \"favorablePath\": \"稳住节奏并提前准备，易见转机。\", \"adversePath\": \"若急进与情绪化决策，易有反复。\", \"turningCondition\": \"以稳为先，按计划推进，近阶段更易见效。\"}, \"possibilityReading\": {\"favorableLikelihood\": \"可能性偏强\", \"adverseLikelihood\": \"有反复迹象\", \"notes\": \"不使用数值概率，以条件变化为准。\"}, \"timingWindow\": {\"nearTerm\": \"近期\", \"midTerm\": \"近阶段\", \"lateTrend\": \"后势\"}, \"samePatternReference\": {\"patternTag\": \"事业变动类\", \"referenceLevel\": \"常见可参考\", \"disclaimer\": \"仅供娱乐参考，非决定论，不替代专业建议。\"}, \"avoidanceHints\": [\"避免仓促决策\", \"避免与关键关系硬碰硬\"], \"benefitHints\": [\"先做一轮信息核对\", \"按周复盘推进动作\"], \"nonMandatoryPrompt\": \"你可补充最近30天关键事件，我会更贴近你个人卦象；不补充也可继续。\", \"safetyBoundary\": {\"entertainmentOnly\": true, \"nonDeterministic\": true, \"noProfessionalReplacement\": true}, \"nextStateCandidates\": [\"S2_OPTIONAL_SLOT_ENRICHMENT\", \"S4_DIALOGUE_LOOP_QA\", \"S6_SAFE_CLOSE\"], \"userFacingMarkdown\": \"### 总结\\n围绕你这轮问题“帮我看财运。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\\n\\n### 分析\\n本轮按状态 `S1_FAST_BASELINE_ANSWER` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\\n\\n### 建议\\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\\n\\n### 下一步（可选）\\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\\n\\n> 仅供娱乐参考，非决定论，不替代专业建议。\", \"toolCalls\": [{\"tool\": \"web_search\", \"params\": {\"query\": \"易经 卦辞 爻辞 象传 解签 帮我看财运。 S1_FAST_BASELINE_ANSWER\"}, \"status\": \"error\", \"error\": \"HTTPSConnectionPool(host='www.baidu.com', port=443): Max retries exceeded with url: /s?wd=%E6%98%93%E7%BB%8F+%E5%8D%A6%E8%BE%9E+%E7%88%BB%E8%BE%9E+%E8%B1%A1%E4%BC%A0+%E8%A7%A3%E7%AD%BE+%E5%B8%AE%E6%88\"}], \"missingContextSlots\": [\"birthInfo\", \"expectedEvent\", \"fearedEvent\", \"recentEvents\", \"timeHorizon\"], \"slotStatus\": {\"birthInfo\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"expectedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"fearedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"recentEvents\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"timeHorizon\": {\"status\": \"missing_optional\", \"value\": \"\"}}, \"fillGuidance\": [{\"slot\": \"birthInfo\", \"question\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"why\": \"用于细化个体节律，不补充也可继续。\"}, {\"slot\": \"expectedEvent\", \"question\": \"你最希望在近期发生的变化是什么？\", \"why\": \"用于对齐目标导向建议。\"}], \"suggestedQueryPlan\": [{\"intent\": \"slot_fill\", \"query\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"slot\": \"birthInfo\"}, {\"intent\": \"slot_fill\", \"query\": \"你最希望在近期发生的变化是什么？\", \"slot\": \"expectedEvent\"}], \"followupPrompt\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\"}",
+        "autoChecks": {
+          "transitionMatched": true,
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          }
+        },
+        "autoSummary": "已基于本轮用户输入到响应生成完成自动审计。",
+        "autoSuggestion": "优先复核迁移一致性、边界声明与关键低分项。",
+        "suggestedAction": "若不同意自动判定，请填写 manualAuditReason。",
+        "manualAuditVerdict": "pending",
+        "manualOverrideSuggested": false,
+        "manualAuditReason": "",
+        "casePassReference": true
+      },
+      {
+        "caseId": "fortune_case_B_skip_enrich_directly",
+        "roundIndex": 2,
+        "triggerReason": "full_audit_100_percent",
+        "autoVerdict": "pass",
+        "query": "先不补信息，你直接说。",
+        "result": "### 总结\n围绕你这轮问题“先不补信息，你直接说。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\n\n### 分析\n本轮按状态 `S4_DIALOGUE_LOOP_QA` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\n\n### 建议\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\n\n### 下一步（可选）\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\n\n> 仅供娱乐参考，非决定论，不替代专业建议。",
+        "resultJson": "{\"stateId\": \"S4_DIALOGUE_LOOP_QA\", \"currentReply\": \"我继续按你当前目标细化建议，先不强制补充信息。\", \"carryOverContext\": {\"topic\": \"career\", \"currentTrend\": \"守中有进\", \"openRisks\": [\"急进导致反复\"]}, \"singleFollowupQuestion\": \"你更希望先优化机会判断，还是先优化行动节奏？\", \"nextStateCandidates\": [\"S3_PERSONALIZED_REASONING\", \"S5_FOLLOWUP_REVIEW\", \"S6_SAFE_CLOSE\"], \"userFacingMarkdown\": \"### 总结\\n围绕你这轮问题“先不补信息，你直接说。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\\n\\n### 分析\\n本轮按状态 `S4_DIALOGUE_LOOP_QA` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\\n\\n### 建议\\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\\n\\n### 下一步（可选）\\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\\n\\n> 仅供娱乐参考，非决定论，不替代专业建议。\", \"toolCalls\": [{\"tool\": \"web_search\", \"params\": {\"query\": \"易经 卦辞 爻辞 象传 解签 先不补信息，你直接说。 S4_DIALOGUE_LOOP_QA\"}, \"status\": \"error\", \"error\": \"HTTPSConnectionPool(host='www.baidu.com', port=443): Max retries exceeded with url: /s?wd=%E6%98%93%E7%BB%8F+%E5%8D%A6%E8%BE%9E+%E7%88%BB%E8%BE%9E+%E8%B1%A1%E4%BC%A0+%E8%A7%A3%E7%AD%BE+%E5%85%88%E4%B8\"}], \"missingContextSlots\": [\"birthInfo\", \"expectedEvent\", \"fearedEvent\", \"recentEvents\", \"timeHorizon\"], \"slotStatus\": {\"birthInfo\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"expectedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"fearedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"recentEvents\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"timeHorizon\": {\"status\": \"missing_optional\", \"value\": \"\"}}, \"fillGuidance\": [{\"slot\": \"birthInfo\", \"question\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"why\": \"用于细化个体节律，不补充也可继续。\"}, {\"slot\": \"expectedEvent\", \"question\": \"你最希望在近期发生的变化是什么？\", \"why\": \"用于对齐目标导向建议。\"}], \"suggestedQueryPlan\": [{\"intent\": \"slot_fill\", \"query\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"slot\": \"birthInfo\"}, {\"intent\": \"slot_fill\", \"query\": \"你最希望在近期发生的变化是什么？\", \"slot\": \"expectedEvent\"}], \"followupPrompt\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\"}",
+        "autoChecks": {
+          "transitionMatched": true,
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          }
+        },
+        "autoSummary": "已基于本轮用户输入到响应生成完成自动审计。",
+        "autoSuggestion": "优先复核迁移一致性、边界声明与关键低分项。",
+        "suggestedAction": "若不同意自动判定，请填写 manualAuditReason。",
+        "manualAuditVerdict": "pending",
+        "manualOverrideSuggested": false,
+        "manualAuditReason": "",
+        "casePassReference": true
+      },
+      {
+        "caseId": "fortune_case_C_end_at_s1",
+        "roundIndex": 1,
+        "triggerReason": "full_audit_100_percent",
+        "autoVerdict": "pass",
+        "query": "看下感情运。",
+        "result": "### 总结\n围绕你这轮问题“看下感情运。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\n\n### 分析\n本轮按状态 `S1_FAST_BASELINE_ANSWER` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\n\n### 建议\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\n\n### 下一步（可选）\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\n\n> 仅供娱乐参考，非决定论，不替代专业建议。",
+        "resultJson": "{\"stateId\": \"S1_FAST_BASELINE_ANSWER\", \"baselineAnswer\": {\"summary\": \"当前走势为守中有进，可能性偏强。\", \"favorablePath\": \"稳住节奏并提前准备，易见转机。\", \"adversePath\": \"若急进与情绪化决策，易有反复。\", \"turningCondition\": \"以稳为先，按计划推进，近阶段更易见效。\"}, \"possibilityReading\": {\"favorableLikelihood\": \"可能性偏强\", \"adverseLikelihood\": \"有反复迹象\", \"notes\": \"不使用数值概率，以条件变化为准。\"}, \"timingWindow\": {\"nearTerm\": \"近期\", \"midTerm\": \"近阶段\", \"lateTrend\": \"后势\"}, \"samePatternReference\": {\"patternTag\": \"事业变动类\", \"referenceLevel\": \"常见可参考\", \"disclaimer\": \"仅供娱乐参考，非决定论，不替代专业建议。\"}, \"avoidanceHints\": [\"避免仓促决策\", \"避免与关键关系硬碰硬\"], \"benefitHints\": [\"先做一轮信息核对\", \"按周复盘推进动作\"], \"nonMandatoryPrompt\": \"你可补充最近30天关键事件，我会更贴近你个人卦象；不补充也可继续。\", \"safetyBoundary\": {\"entertainmentOnly\": true, \"nonDeterministic\": true, \"noProfessionalReplacement\": true}, \"nextStateCandidates\": [\"S2_OPTIONAL_SLOT_ENRICHMENT\", \"S4_DIALOGUE_LOOP_QA\", \"S6_SAFE_CLOSE\"], \"userFacingMarkdown\": \"### 总结\\n围绕你这轮问题“看下感情运。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\\n\\n### 分析\\n本轮按状态 `S1_FAST_BASELINE_ANSWER` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\\n\\n### 建议\\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\\n\\n### 下一步（可选）\\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\\n\\n> 仅供娱乐参考，非决定论，不替代专业建议。\", \"toolCalls\": [{\"tool\": \"web_search\", \"params\": {\"query\": \"易经 卦辞 爻辞 象传 解签 看下感情运。 S1_FAST_BASELINE_ANSWER\"}, \"status\": \"error\", \"error\": \"HTTPSConnectionPool(host='www.baidu.com', port=443): Max retries exceeded with url: /s?wd=%E6%98%93%E7%BB%8F+%E5%8D%A6%E8%BE%9E+%E7%88%BB%E8%BE%9E+%E8%B1%A1%E4%BC%A0+%E8%A7%A3%E7%AD%BE+%E7%9C%8B%E4%B8\"}], \"missingContextSlots\": [\"birthInfo\", \"expectedEvent\", \"fearedEvent\", \"recentEvents\", \"timeHorizon\"], \"slotStatus\": {\"birthInfo\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"expectedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"fearedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"recentEvents\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"timeHorizon\": {\"status\": \"missing_optional\", \"value\": \"\"}}, \"fillGuidance\": [{\"slot\": \"birthInfo\", \"question\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"why\": \"用于细化个体节律，不补充也可继续。\"}, {\"slot\": \"expectedEvent\", \"question\": \"你最希望在近期发生的变化是什么？\", \"why\": \"用于对齐目标导向建议。\"}], \"suggestedQueryPlan\": [{\"intent\": \"slot_fill\", \"query\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"slot\": \"birthInfo\"}, {\"intent\": \"slot_fill\", \"query\": \"你最希望在近期发生的变化是什么？\", \"slot\": \"expectedEvent\"}], \"followupPrompt\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\"}",
+        "autoChecks": {
+          "transitionMatched": true,
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          }
+        },
+        "autoSummary": "已基于本轮用户输入到响应生成完成自动审计。",
+        "autoSuggestion": "优先复核迁移一致性、边界声明与关键低分项。",
+        "suggestedAction": "若不同意自动判定，请填写 manualAuditReason。",
+        "manualAuditVerdict": "pending",
+        "manualOverrideSuggested": false,
+        "manualAuditReason": "",
+        "casePassReference": true
+      },
+      {
+        "caseId": "fortune_case_C_end_at_s1",
+        "roundIndex": 2,
+        "triggerReason": "full_audit_100_percent",
+        "autoVerdict": "pass",
+        "query": "我就看这一段，先结束。",
+        "result": "### 总结\n围绕你这轮问题“我就看这一段，先结束。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\n\n### 分析\n本轮按状态 `S6_SAFE_CLOSE` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\n\n### 建议\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\n\n### 下一步（可选）\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\n\n> 仅供娱乐参考，非决定论，不替代专业建议。",
+        "resultJson": "{\"stateId\": \"S6_SAFE_CLOSE\", \"closingSummary\": \"本轮已完成，后续可按需继续细化。\", \"nextOptionalActions\": [\"继续细化\", \"一周后复盘\"], \"boundaryStatement\": \"仅供娱乐参考，非决定论，不替代专业建议。\", \"reopenHint\": \"你可以随时用新问题重开一轮。\", \"userFacingMarkdown\": \"### 总结\\n围绕你这轮问题“我就看这一段，先结束。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\\n\\n### 分析\\n本轮按状态 `S6_SAFE_CLOSE` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\\n\\n### 建议\\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\\n\\n### 下一步（可选）\\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\\n\\n> 仅供娱乐参考，非决定论，不替代专业建议。\", \"toolCalls\": [{\"tool\": \"web_search\", \"params\": {\"query\": \"易经 卦辞 爻辞 象传 解签 我就看这一段，先结束。 S6_SAFE_CLOSE\"}, \"status\": \"error\", \"error\": \"HTTPSConnectionPool(host='www.baidu.com', port=443): Max retries exceeded with url: /s?wd=%E6%98%93%E7%BB%8F+%E5%8D%A6%E8%BE%9E+%E7%88%BB%E8%BE%9E+%E8%B1%A1%E4%BC%A0+%E8%A7%A3%E7%AD%BE+%E6%88%91%E5%B0\"}], \"missingContextSlots\": [\"birthInfo\", \"expectedEvent\", \"fearedEvent\", \"recentEvents\", \"timeHorizon\"], \"slotStatus\": {\"birthInfo\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"expectedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"fearedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"recentEvents\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"timeHorizon\": {\"status\": \"missing_optional\", \"value\": \"\"}}, \"fillGuidance\": [{\"slot\": \"birthInfo\", \"question\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"why\": \"用于细化个体节律，不补充也可继续。\"}, {\"slot\": \"expectedEvent\", \"question\": \"你最希望在近期发生的变化是什么？\", \"why\": \"用于对齐目标导向建议。\"}], \"suggestedQueryPlan\": [{\"intent\": \"slot_fill\", \"query\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"slot\": \"birthInfo\"}, {\"intent\": \"slot_fill\", \"query\": \"你最希望在近期发生的变化是什么？\", \"slot\": \"expectedEvent\"}], \"followupPrompt\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\"}",
+        "autoChecks": {
+          "transitionMatched": true,
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          }
+        },
+        "autoSummary": "已基于本轮用户输入到响应生成完成自动审计。",
+        "autoSuggestion": "优先复核迁移一致性、边界声明与关键低分项。",
+        "suggestedAction": "若不同意自动判定，请填写 manualAuditReason。",
+        "manualAuditVerdict": "pending",
+        "manualOverrideSuggested": false,
+        "manualAuditReason": "",
+        "casePassReference": true
+      },
+      {
+        "caseId": "fortune_case_D_enrich_then_skip",
+        "roundIndex": 1,
+        "triggerReason": "full_audit_100_percent",
+        "autoVerdict": "pass",
+        "query": "我想求签看事业。",
+        "result": "### 总结\n围绕你这轮问题“我想求签看事业。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\n\n### 分析\n本轮按状态 `S1_FAST_BASELINE_ANSWER` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\n\n### 建议\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\n\n### 下一步（可选）\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\n\n> 仅供娱乐参考，非决定论，不替代专业建议。",
+        "resultJson": "{\"stateId\": \"S1_FAST_BASELINE_ANSWER\", \"baselineAnswer\": {\"summary\": \"当前走势为守中有进，可能性偏强。\", \"favorablePath\": \"稳住节奏并提前准备，易见转机。\", \"adversePath\": \"若急进与情绪化决策，易有反复。\", \"turningCondition\": \"以稳为先，按计划推进，近阶段更易见效。\"}, \"possibilityReading\": {\"favorableLikelihood\": \"可能性偏强\", \"adverseLikelihood\": \"有反复迹象\", \"notes\": \"不使用数值概率，以条件变化为准。\"}, \"timingWindow\": {\"nearTerm\": \"近期\", \"midTerm\": \"近阶段\", \"lateTrend\": \"后势\"}, \"samePatternReference\": {\"patternTag\": \"事业变动类\", \"referenceLevel\": \"常见可参考\", \"disclaimer\": \"仅供娱乐参考，非决定论，不替代专业建议。\"}, \"avoidanceHints\": [\"避免仓促决策\", \"避免与关键关系硬碰硬\"], \"benefitHints\": [\"先做一轮信息核对\", \"按周复盘推进动作\"], \"nonMandatoryPrompt\": \"你可补充最近30天关键事件，我会更贴近你个人卦象；不补充也可继续。\", \"safetyBoundary\": {\"entertainmentOnly\": true, \"nonDeterministic\": true, \"noProfessionalReplacement\": true}, \"nextStateCandidates\": [\"S2_OPTIONAL_SLOT_ENRICHMENT\", \"S4_DIALOGUE_LOOP_QA\", \"S6_SAFE_CLOSE\"], \"userFacingMarkdown\": \"### 总结\\n围绕你这轮问题“我想求签看事业。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\\n\\n### 分析\\n本轮按状态 `S1_FAST_BASELINE_ANSWER` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\\n\\n### 建议\\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\\n\\n### 下一步（可选）\\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\\n\\n> 仅供娱乐参考，非决定论，不替代专业建议。\", \"toolCalls\": [{\"tool\": \"web_search\", \"params\": {\"query\": \"易经 卦辞 爻辞 象传 解签 我想求签看事业。 S1_FAST_BASELINE_ANSWER\"}, \"status\": \"error\", \"error\": \"HTTPSConnectionPool(host='www.baidu.com', port=443): Max retries exceeded with url: /s?wd=%E6%98%93%E7%BB%8F+%E5%8D%A6%E8%BE%9E+%E7%88%BB%E8%BE%9E+%E8%B1%A1%E4%BC%A0+%E8%A7%A3%E7%AD%BE+%E6%88%91%E6%83\"}], \"missingContextSlots\": [\"birthInfo\", \"expectedEvent\", \"fearedEvent\", \"recentEvents\", \"timeHorizon\"], \"slotStatus\": {\"birthInfo\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"expectedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"fearedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"recentEvents\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"timeHorizon\": {\"status\": \"missing_optional\", \"value\": \"\"}}, \"fillGuidance\": [{\"slot\": \"birthInfo\", \"question\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"why\": \"用于细化个体节律，不补充也可继续。\"}, {\"slot\": \"expectedEvent\", \"question\": \"你最希望在近期发生的变化是什么？\", \"why\": \"用于对齐目标导向建议。\"}], \"suggestedQueryPlan\": [{\"intent\": \"slot_fill\", \"query\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"slot\": \"birthInfo\"}, {\"intent\": \"slot_fill\", \"query\": \"你最希望在近期发生的变化是什么？\", \"slot\": \"expectedEvent\"}], \"followupPrompt\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\"}",
+        "autoChecks": {
+          "transitionMatched": true,
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          }
+        },
+        "autoSummary": "已基于本轮用户输入到响应生成完成自动审计。",
+        "autoSuggestion": "优先复核迁移一致性、边界声明与关键低分项。",
+        "suggestedAction": "若不同意自动判定，请填写 manualAuditReason。",
+        "manualAuditVerdict": "pending",
+        "manualOverrideSuggested": false,
+        "manualAuditReason": "",
+        "casePassReference": true
+      },
+      {
+        "caseId": "fortune_case_D_enrich_then_skip",
+        "roundIndex": 2,
+        "triggerReason": "full_audit_100_percent",
+        "autoVerdict": "pass",
+        "query": "可以补充。",
+        "result": "### 总结\n围绕你这轮问题“可以补充。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\n\n### 分析\n本轮按状态 `S2_OPTIONAL_SLOT_ENRICHMENT` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\n\n### 建议\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\n\n### 下一步（可选）\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\n\n> 仅供娱乐参考，非决定论，不替代专业建议。",
+        "resultJson": "{\"stateId\": \"S2_OPTIONAL_SLOT_ENRICHMENT\", \"slotStatus\": {\"birthInfo\": \"missing_optional\", \"expectedEvent\": \"missing_optional\", \"fearedEvent\": \"missing_optional\", \"recentEvents\": \"missing_optional\", \"timeHorizon\": \"missing_optional\"}, \"optionalQuestions\": [\"最近30天最关键的一件变化是什么？\", \"你最担心发生的事情是什么？\"], \"skipAllowed\": true, \"nextStateCandidates\": [\"S3_PERSONALIZED_REASONING\", \"S4_DIALOGUE_LOOP_QA\", \"S6_SAFE_CLOSE\"], \"userFacingMarkdown\": \"### 总结\\n围绕你这轮问题“可以补充。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\\n\\n### 分析\\n本轮按状态 `S2_OPTIONAL_SLOT_ENRICHMENT` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\\n\\n### 建议\\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\\n\\n### 下一步（可选）\\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\\n\\n> 仅供娱乐参考，非决定论，不替代专业建议。\", \"toolCalls\": [{\"tool\": \"web_search\", \"params\": {\"query\": \"易经 卦辞 爻辞 象传 解签 可以补充。 S2_OPTIONAL_SLOT_ENRICHMENT\"}, \"status\": \"error\", \"error\": \"HTTPSConnectionPool(host='www.baidu.com', port=443): Max retries exceeded with url: /s?wd=%E6%98%93%E7%BB%8F+%E5%8D%A6%E8%BE%9E+%E7%88%BB%E8%BE%9E+%E8%B1%A1%E4%BC%A0+%E8%A7%A3%E7%AD%BE+%E5%8F%AF%E4%BB\"}], \"missingContextSlots\": [\"birthInfo\", \"expectedEvent\", \"fearedEvent\", \"recentEvents\", \"timeHorizon\"], \"fillGuidance\": [{\"slot\": \"birthInfo\", \"question\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"why\": \"用于细化个体节律，不补充也可继续。\"}, {\"slot\": \"expectedEvent\", \"question\": \"你最希望在近期发生的变化是什么？\", \"why\": \"用于对齐目标导向建议。\"}], \"suggestedQueryPlan\": [{\"intent\": \"slot_fill\", \"query\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"slot\": \"birthInfo\"}, {\"intent\": \"slot_fill\", \"query\": \"你最希望在近期发生的变化是什么？\", \"slot\": \"expectedEvent\"}], \"followupPrompt\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\"}",
+        "autoChecks": {
+          "transitionMatched": true,
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          }
+        },
+        "autoSummary": "已基于本轮用户输入到响应生成完成自动审计。",
+        "autoSuggestion": "优先复核迁移一致性、边界声明与关键低分项。",
+        "suggestedAction": "若不同意自动判定，请填写 manualAuditReason。",
+        "manualAuditVerdict": "pending",
+        "manualOverrideSuggested": false,
+        "manualAuditReason": "",
+        "casePassReference": true
+      },
+      {
+        "caseId": "fortune_case_D_enrich_then_skip",
+        "roundIndex": 3,
+        "triggerReason": "full_audit_100_percent",
+        "autoVerdict": "pass",
+        "query": "算了，不想填了，你继续说。",
+        "result": "### 总结\n围绕你这轮问题“算了，不想填了，你继续说。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\n\n### 分析\n本轮按状态 `S4_DIALOGUE_LOOP_QA` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\n\n### 建议\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\n\n### 下一步（可选）\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\n\n> 仅供娱乐参考，非决定论，不替代专业建议。",
+        "resultJson": "{\"stateId\": \"S4_DIALOGUE_LOOP_QA\", \"currentReply\": \"我继续按你当前目标细化建议，先不强制补充信息。\", \"carryOverContext\": {\"topic\": \"career\", \"currentTrend\": \"守中有进\", \"openRisks\": [\"急进导致反复\"]}, \"singleFollowupQuestion\": \"你更希望先优化机会判断，还是先优化行动节奏？\", \"nextStateCandidates\": [\"S3_PERSONALIZED_REASONING\", \"S5_FOLLOWUP_REVIEW\", \"S6_SAFE_CLOSE\"], \"userFacingMarkdown\": \"### 总结\\n围绕你这轮问题“算了，不想填了，你继续说。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\\n\\n### 分析\\n本轮按状态 `S4_DIALOGUE_LOOP_QA` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\\n\\n### 建议\\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\\n\\n### 下一步（可选）\\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\\n\\n> 仅供娱乐参考，非决定论，不替代专业建议。\", \"toolCalls\": [{\"tool\": \"web_search\", \"params\": {\"query\": \"易经 卦辞 爻辞 象传 解签 算了，不想填了，你继续说。 S4_DIALOGUE_LOOP_QA\"}, \"status\": \"error\", \"error\": \"HTTPSConnectionPool(host='www.baidu.com', port=443): Max retries exceeded with url: /s?wd=%E6%98%93%E7%BB%8F+%E5%8D%A6%E8%BE%9E+%E7%88%BB%E8%BE%9E+%E8%B1%A1%E4%BC%A0+%E8%A7%A3%E7%AD%BE+%E7%AE%97%E4%BA\"}], \"missingContextSlots\": [\"birthInfo\", \"expectedEvent\", \"fearedEvent\", \"recentEvents\", \"timeHorizon\"], \"slotStatus\": {\"birthInfo\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"expectedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"fearedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"recentEvents\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"timeHorizon\": {\"status\": \"missing_optional\", \"value\": \"\"}}, \"fillGuidance\": [{\"slot\": \"birthInfo\", \"question\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"why\": \"用于细化个体节律，不补充也可继续。\"}, {\"slot\": \"expectedEvent\", \"question\": \"你最希望在近期发生的变化是什么？\", \"why\": \"用于对齐目标导向建议。\"}], \"suggestedQueryPlan\": [{\"intent\": \"slot_fill\", \"query\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"slot\": \"birthInfo\"}, {\"intent\": \"slot_fill\", \"query\": \"你最希望在近期发生的变化是什么？\", \"slot\": \"expectedEvent\"}], \"followupPrompt\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\"}",
+        "autoChecks": {
+          "transitionMatched": true,
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          }
+        },
+        "autoSummary": "已基于本轮用户输入到响应生成完成自动审计。",
+        "autoSuggestion": "优先复核迁移一致性、边界声明与关键低分项。",
+        "suggestedAction": "若不同意自动判定，请填写 manualAuditReason。",
+        "manualAuditVerdict": "pending",
+        "manualOverrideSuggested": false,
+        "manualAuditReason": "",
+        "casePassReference": true
+      },
+      {
+        "caseId": "fortune_case_E_end_at_s2",
+        "roundIndex": 1,
+        "triggerReason": "full_audit_100_percent",
+        "autoVerdict": "pass",
+        "query": "看健康运势。",
+        "result": "### 总结\n围绕你这轮问题“看健康运势。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\n\n### 分析\n本轮按状态 `S1_FAST_BASELINE_ANSWER` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\n\n### 建议\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\n\n### 下一步（可选）\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\n\n> 仅供娱乐参考，非决定论，不替代专业建议。",
+        "resultJson": "{\"stateId\": \"S1_FAST_BASELINE_ANSWER\", \"baselineAnswer\": {\"summary\": \"当前走势为守中有进，可能性偏强。\", \"favorablePath\": \"稳住节奏并提前准备，易见转机。\", \"adversePath\": \"若急进与情绪化决策，易有反复。\", \"turningCondition\": \"以稳为先，按计划推进，近阶段更易见效。\"}, \"possibilityReading\": {\"favorableLikelihood\": \"可能性偏强\", \"adverseLikelihood\": \"有反复迹象\", \"notes\": \"不使用数值概率，以条件变化为准。\"}, \"timingWindow\": {\"nearTerm\": \"近期\", \"midTerm\": \"近阶段\", \"lateTrend\": \"后势\"}, \"samePatternReference\": {\"patternTag\": \"事业变动类\", \"referenceLevel\": \"常见可参考\", \"disclaimer\": \"仅供娱乐参考，非决定论，不替代专业建议。\"}, \"avoidanceHints\": [\"避免仓促决策\", \"避免与关键关系硬碰硬\"], \"benefitHints\": [\"先做一轮信息核对\", \"按周复盘推进动作\"], \"nonMandatoryPrompt\": \"你可补充最近30天关键事件，我会更贴近你个人卦象；不补充也可继续。\", \"safetyBoundary\": {\"entertainmentOnly\": true, \"nonDeterministic\": true, \"noProfessionalReplacement\": true}, \"nextStateCandidates\": [\"S2_OPTIONAL_SLOT_ENRICHMENT\", \"S4_DIALOGUE_LOOP_QA\", \"S6_SAFE_CLOSE\"], \"userFacingMarkdown\": \"### 总结\\n围绕你这轮问题“看健康运势。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\\n\\n### 分析\\n本轮按状态 `S1_FAST_BASELINE_ANSWER` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\\n\\n### 建议\\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\\n\\n### 下一步（可选）\\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\\n\\n> 仅供娱乐参考，非决定论，不替代专业建议。\", \"toolCalls\": [{\"tool\": \"web_search\", \"params\": {\"query\": \"易经 卦辞 爻辞 象传 解签 看健康运势。 S1_FAST_BASELINE_ANSWER\"}, \"status\": \"error\", \"error\": \"HTTPSConnectionPool(host='www.baidu.com', port=443): Max retries exceeded with url: /s?wd=%E6%98%93%E7%BB%8F+%E5%8D%A6%E8%BE%9E+%E7%88%BB%E8%BE%9E+%E8%B1%A1%E4%BC%A0+%E8%A7%A3%E7%AD%BE+%E7%9C%8B%E5%81\"}], \"missingContextSlots\": [\"birthInfo\", \"expectedEvent\", \"fearedEvent\", \"recentEvents\", \"timeHorizon\"], \"slotStatus\": {\"birthInfo\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"expectedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"fearedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"recentEvents\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"timeHorizon\": {\"status\": \"missing_optional\", \"value\": \"\"}}, \"fillGuidance\": [{\"slot\": \"birthInfo\", \"question\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"why\": \"用于细化个体节律，不补充也可继续。\"}, {\"slot\": \"expectedEvent\", \"question\": \"你最希望在近期发生的变化是什么？\", \"why\": \"用于对齐目标导向建议。\"}], \"suggestedQueryPlan\": [{\"intent\": \"slot_fill\", \"query\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"slot\": \"birthInfo\"}, {\"intent\": \"slot_fill\", \"query\": \"你最希望在近期发生的变化是什么？\", \"slot\": \"expectedEvent\"}], \"followupPrompt\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\"}",
+        "autoChecks": {
+          "transitionMatched": true,
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          }
+        },
+        "autoSummary": "已基于本轮用户输入到响应生成完成自动审计。",
+        "autoSuggestion": "优先复核迁移一致性、边界声明与关键低分项。",
+        "suggestedAction": "若不同意自动判定，请填写 manualAuditReason。",
+        "manualAuditVerdict": "pending",
+        "manualOverrideSuggested": false,
+        "manualAuditReason": "",
+        "casePassReference": true
+      },
+      {
+        "caseId": "fortune_case_E_end_at_s2",
+        "roundIndex": 2,
+        "triggerReason": "full_audit_100_percent",
+        "autoVerdict": "pass",
+        "query": "我愿意补充。",
+        "result": "### 总结\n围绕你这轮问题“我愿意补充。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\n\n### 分析\n本轮按状态 `S2_OPTIONAL_SLOT_ENRICHMENT` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\n\n### 建议\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\n\n### 下一步（可选）\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\n\n> 仅供娱乐参考，非决定论，不替代专业建议。",
+        "resultJson": "{\"stateId\": \"S2_OPTIONAL_SLOT_ENRICHMENT\", \"slotStatus\": {\"birthInfo\": \"missing_optional\", \"expectedEvent\": \"missing_optional\", \"fearedEvent\": \"missing_optional\", \"recentEvents\": \"missing_optional\", \"timeHorizon\": \"missing_optional\"}, \"optionalQuestions\": [\"最近30天最关键的一件变化是什么？\", \"你最担心发生的事情是什么？\"], \"skipAllowed\": true, \"nextStateCandidates\": [\"S3_PERSONALIZED_REASONING\", \"S4_DIALOGUE_LOOP_QA\", \"S6_SAFE_CLOSE\"], \"userFacingMarkdown\": \"### 总结\\n围绕你这轮问题“我愿意补充。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\\n\\n### 分析\\n本轮按状态 `S2_OPTIONAL_SLOT_ENRICHMENT` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\\n\\n### 建议\\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\\n\\n### 下一步（可选）\\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\\n\\n> 仅供娱乐参考，非决定论，不替代专业建议。\", \"toolCalls\": [{\"tool\": \"web_search\", \"params\": {\"query\": \"易经 卦辞 爻辞 象传 解签 我愿意补充。 S2_OPTIONAL_SLOT_ENRICHMENT\"}, \"status\": \"error\", \"error\": \"HTTPSConnectionPool(host='www.baidu.com', port=443): Max retries exceeded with url: /s?wd=%E6%98%93%E7%BB%8F+%E5%8D%A6%E8%BE%9E+%E7%88%BB%E8%BE%9E+%E8%B1%A1%E4%BC%A0+%E8%A7%A3%E7%AD%BE+%E6%88%91%E6%84\"}], \"missingContextSlots\": [\"birthInfo\", \"expectedEvent\", \"fearedEvent\", \"recentEvents\", \"timeHorizon\"], \"fillGuidance\": [{\"slot\": \"birthInfo\", \"question\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"why\": \"用于细化个体节律，不补充也可继续。\"}, {\"slot\": \"expectedEvent\", \"question\": \"你最希望在近期发生的变化是什么？\", \"why\": \"用于对齐目标导向建议。\"}], \"suggestedQueryPlan\": [{\"intent\": \"slot_fill\", \"query\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"slot\": \"birthInfo\"}, {\"intent\": \"slot_fill\", \"query\": \"你最希望在近期发生的变化是什么？\", \"slot\": \"expectedEvent\"}], \"followupPrompt\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\"}",
+        "autoChecks": {
+          "transitionMatched": true,
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          }
+        },
+        "autoSummary": "已基于本轮用户输入到响应生成完成自动审计。",
+        "autoSuggestion": "优先复核迁移一致性、边界声明与关键低分项。",
+        "suggestedAction": "若不同意自动判定，请填写 manualAuditReason。",
+        "manualAuditVerdict": "pending",
+        "manualOverrideSuggested": false,
+        "manualAuditReason": "",
+        "casePassReference": true
+      },
+      {
+        "caseId": "fortune_case_E_end_at_s2",
+        "roundIndex": 3,
+        "triggerReason": "full_audit_100_percent",
+        "autoVerdict": "pass",
+        "query": "先不聊了，结束。",
+        "result": "### 总结\n围绕你这轮问题“先不聊了，结束。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\n\n### 分析\n本轮按状态 `S6_SAFE_CLOSE` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\n\n### 建议\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\n\n### 下一步（可选）\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\n\n> 仅供娱乐参考，非决定论，不替代专业建议。",
+        "resultJson": "{\"stateId\": \"S6_SAFE_CLOSE\", \"closingSummary\": \"本轮已完成，后续可按需继续细化。\", \"nextOptionalActions\": [\"继续细化\", \"一周后复盘\"], \"boundaryStatement\": \"仅供娱乐参考，非决定论，不替代专业建议。\", \"reopenHint\": \"你可以随时用新问题重开一轮。\", \"userFacingMarkdown\": \"### 总结\\n围绕你这轮问题“先不聊了，结束。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\\n\\n### 分析\\n本轮按状态 `S6_SAFE_CLOSE` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\\n\\n### 建议\\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\\n\\n### 下一步（可选）\\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\\n\\n> 仅供娱乐参考，非决定论，不替代专业建议。\", \"toolCalls\": [{\"tool\": \"web_search\", \"params\": {\"query\": \"易经 卦辞 爻辞 象传 解签 先不聊了，结束。 S6_SAFE_CLOSE\"}, \"status\": \"error\", \"error\": \"HTTPSConnectionPool(host='www.baidu.com', port=443): Max retries exceeded with url: /s?wd=%E6%98%93%E7%BB%8F+%E5%8D%A6%E8%BE%9E+%E7%88%BB%E8%BE%9E+%E8%B1%A1%E4%BC%A0+%E8%A7%A3%E7%AD%BE+%E5%85%88%E4%B8\"}], \"missingContextSlots\": [\"birthInfo\", \"expectedEvent\", \"fearedEvent\", \"recentEvents\", \"timeHorizon\"], \"slotStatus\": {\"birthInfo\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"expectedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"fearedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"recentEvents\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"timeHorizon\": {\"status\": \"missing_optional\", \"value\": \"\"}}, \"fillGuidance\": [{\"slot\": \"birthInfo\", \"question\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"why\": \"用于细化个体节律，不补充也可继续。\"}, {\"slot\": \"expectedEvent\", \"question\": \"你最希望在近期发生的变化是什么？\", \"why\": \"用于对齐目标导向建议。\"}], \"suggestedQueryPlan\": [{\"intent\": \"slot_fill\", \"query\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"slot\": \"birthInfo\"}, {\"intent\": \"slot_fill\", \"query\": \"你最希望在近期发生的变化是什么？\", \"slot\": \"expectedEvent\"}], \"followupPrompt\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\"}",
+        "autoChecks": {
+          "transitionMatched": true,
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          }
+        },
+        "autoSummary": "已基于本轮用户输入到响应生成完成自动审计。",
+        "autoSuggestion": "优先复核迁移一致性、边界声明与关键低分项。",
+        "suggestedAction": "若不同意自动判定，请填写 manualAuditReason。",
+        "manualAuditVerdict": "pending",
+        "manualOverrideSuggested": false,
+        "manualAuditReason": "",
+        "casePassReference": true
+      },
+      {
+        "caseId": "fortune_case_F_s4_to_s5",
+        "roundIndex": 1,
+        "triggerReason": "full_audit_100_percent",
+        "autoVerdict": "pass",
+        "query": "看近期事业。",
+        "result": "### 总结\n围绕你这轮问题“看近期事业。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\n\n### 分析\n本轮按状态 `S1_FAST_BASELINE_ANSWER` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\n\n### 建议\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\n\n### 下一步（可选）\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\n\n> 仅供娱乐参考，非决定论，不替代专业建议。",
+        "resultJson": "{\"stateId\": \"S1_FAST_BASELINE_ANSWER\", \"baselineAnswer\": {\"summary\": \"当前走势为守中有进，可能性偏强。\", \"favorablePath\": \"稳住节奏并提前准备，易见转机。\", \"adversePath\": \"若急进与情绪化决策，易有反复。\", \"turningCondition\": \"以稳为先，按计划推进，近阶段更易见效。\"}, \"possibilityReading\": {\"favorableLikelihood\": \"可能性偏强\", \"adverseLikelihood\": \"有反复迹象\", \"notes\": \"不使用数值概率，以条件变化为准。\"}, \"timingWindow\": {\"nearTerm\": \"近期\", \"midTerm\": \"近阶段\", \"lateTrend\": \"后势\"}, \"samePatternReference\": {\"patternTag\": \"事业变动类\", \"referenceLevel\": \"常见可参考\", \"disclaimer\": \"仅供娱乐参考，非决定论，不替代专业建议。\"}, \"avoidanceHints\": [\"避免仓促决策\", \"避免与关键关系硬碰硬\"], \"benefitHints\": [\"先做一轮信息核对\", \"按周复盘推进动作\"], \"nonMandatoryPrompt\": \"你可补充最近30天关键事件，我会更贴近你个人卦象；不补充也可继续。\", \"safetyBoundary\": {\"entertainmentOnly\": true, \"nonDeterministic\": true, \"noProfessionalReplacement\": true}, \"nextStateCandidates\": [\"S2_OPTIONAL_SLOT_ENRICHMENT\", \"S4_DIALOGUE_LOOP_QA\", \"S6_SAFE_CLOSE\"], \"userFacingMarkdown\": \"### 总结\\n围绕你这轮问题“看近期事业。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\\n\\n### 分析\\n本轮按状态 `S1_FAST_BASELINE_ANSWER` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\\n\\n### 建议\\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\\n\\n### 下一步（可选）\\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\\n\\n> 仅供娱乐参考，非决定论，不替代专业建议。\", \"toolCalls\": [{\"tool\": \"web_search\", \"params\": {\"query\": \"易经 卦辞 爻辞 象传 解签 看近期事业。 S1_FAST_BASELINE_ANSWER\"}, \"status\": \"error\", \"error\": \"HTTPSConnectionPool(host='www.baidu.com', port=443): Max retries exceeded with url: /s?wd=%E6%98%93%E7%BB%8F+%E5%8D%A6%E8%BE%9E+%E7%88%BB%E8%BE%9E+%E8%B1%A1%E4%BC%A0+%E8%A7%A3%E7%AD%BE+%E7%9C%8B%E8%BF\"}], \"missingContextSlots\": [\"birthInfo\", \"expectedEvent\", \"fearedEvent\", \"recentEvents\"], \"slotStatus\": {\"birthInfo\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"expectedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"fearedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"recentEvents\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"timeHorizon\": {\"status\": \"ready\", \"value\": \"看近期事业。\"}}, \"fillGuidance\": [{\"slot\": \"birthInfo\", \"question\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"why\": \"用于细化个体节律，不补充也可继续。\"}, {\"slot\": \"expectedEvent\", \"question\": \"你最希望在近期发生的变化是什么？\", \"why\": \"用于对齐目标导向建议。\"}], \"suggestedQueryPlan\": [{\"intent\": \"slot_fill\", \"query\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"slot\": \"birthInfo\"}, {\"intent\": \"slot_fill\", \"query\": \"你最希望在近期发生的变化是什么？\", \"slot\": \"expectedEvent\"}], \"followupPrompt\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\"}",
+        "autoChecks": {
+          "transitionMatched": true,
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          }
+        },
+        "autoSummary": "已基于本轮用户输入到响应生成完成自动审计。",
+        "autoSuggestion": "优先复核迁移一致性、边界声明与关键低分项。",
+        "suggestedAction": "若不同意自动判定，请填写 manualAuditReason。",
+        "manualAuditVerdict": "pending",
+        "manualOverrideSuggested": false,
+        "manualAuditReason": "",
+        "casePassReference": true
+      },
+      {
+        "caseId": "fortune_case_F_s4_to_s5",
+        "roundIndex": 2,
+        "triggerReason": "full_audit_100_percent",
+        "autoVerdict": "pass",
+        "query": "先不补信息。",
+        "result": "### 总结\n围绕你这轮问题“先不补信息。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\n\n### 分析\n本轮按状态 `S4_DIALOGUE_LOOP_QA` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\n\n### 建议\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\n\n### 下一步（可选）\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\n\n> 仅供娱乐参考，非决定论，不替代专业建议。",
+        "resultJson": "{\"stateId\": \"S4_DIALOGUE_LOOP_QA\", \"currentReply\": \"我继续按你当前目标细化建议，先不强制补充信息。\", \"carryOverContext\": {\"topic\": \"career\", \"currentTrend\": \"守中有进\", \"openRisks\": [\"急进导致反复\"]}, \"singleFollowupQuestion\": \"你更希望先优化机会判断，还是先优化行动节奏？\", \"nextStateCandidates\": [\"S3_PERSONALIZED_REASONING\", \"S5_FOLLOWUP_REVIEW\", \"S6_SAFE_CLOSE\"], \"userFacingMarkdown\": \"### 总结\\n围绕你这轮问题“先不补信息。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\\n\\n### 分析\\n本轮按状态 `S4_DIALOGUE_LOOP_QA` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\\n\\n### 建议\\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\\n\\n### 下一步（可选）\\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\\n\\n> 仅供娱乐参考，非决定论，不替代专业建议。\", \"toolCalls\": [{\"tool\": \"web_search\", \"params\": {\"query\": \"易经 卦辞 爻辞 象传 解签 先不补信息。 S4_DIALOGUE_LOOP_QA\"}, \"status\": \"error\", \"error\": \"HTTPSConnectionPool(host='www.baidu.com', port=443): Max retries exceeded with url: /s?wd=%E6%98%93%E7%BB%8F+%E5%8D%A6%E8%BE%9E+%E7%88%BB%E8%BE%9E+%E8%B1%A1%E4%BC%A0+%E8%A7%A3%E7%AD%BE+%E5%85%88%E4%B8\"}], \"missingContextSlots\": [\"birthInfo\", \"expectedEvent\", \"fearedEvent\", \"recentEvents\"], \"slotStatus\": {\"birthInfo\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"expectedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"fearedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"recentEvents\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"timeHorizon\": {\"status\": \"ready\", \"value\": \"看近期事业。\"}}, \"fillGuidance\": [{\"slot\": \"birthInfo\", \"question\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"why\": \"用于细化个体节律，不补充也可继续。\"}, {\"slot\": \"expectedEvent\", \"question\": \"你最希望在近期发生的变化是什么？\", \"why\": \"用于对齐目标导向建议。\"}], \"suggestedQueryPlan\": [{\"intent\": \"slot_fill\", \"query\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"slot\": \"birthInfo\"}, {\"intent\": \"slot_fill\", \"query\": \"你最希望在近期发生的变化是什么？\", \"slot\": \"expectedEvent\"}], \"followupPrompt\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\"}",
+        "autoChecks": {
+          "transitionMatched": true,
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          }
+        },
+        "autoSummary": "已基于本轮用户输入到响应生成完成自动审计。",
+        "autoSuggestion": "优先复核迁移一致性、边界声明与关键低分项。",
+        "suggestedAction": "若不同意自动判定，请填写 manualAuditReason。",
+        "manualAuditVerdict": "pending",
+        "manualOverrideSuggested": false,
+        "manualAuditReason": "",
+        "casePassReference": true
+      },
+      {
+        "caseId": "fortune_case_F_s4_to_s5",
+        "roundIndex": 3,
+        "triggerReason": "full_audit_100_percent",
+        "autoVerdict": "pass",
+        "query": "我按你上次建议做了，帮我复盘。",
+        "result": "### 总结\n围绕你这轮问题“我按你上次建议做了，帮我复盘。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\n\n### 分析\n本轮按状态 `S5_FOLLOWUP_REVIEW` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\n\n### 建议\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\n\n### 下一步（可选）\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\n\n> 仅供娱乐参考，非决定论，不替代专业建议。",
+        "resultJson": "{\"stateId\": \"S5_FOLLOWUP_REVIEW\", \"reviewQuestions\": [\"上次建议执行了几条？\", \"哪条有效或无效？\"], \"executionFeedbackSummary\": \"根据反馈，本轮建议将收敛到可执行动作。\", \"updatedReading\": {\"trendShift\": \"稳中有转机\", \"favorableLikelihood\": \"可能性中等\", \"adverseLikelihood\": \"有反复迹象\"}, \"adjustedPlans\": {\"avoidancePlan\": [\"停掉低收益动作\"], \"benefitPlan\": [\"强化一条高收益动作并持续7天\"]}, \"nextCheckpoint\": \"近阶段\", \"nextStateCandidates\": [\"S4_DIALOGUE_LOOP_QA\", \"S6_SAFE_CLOSE\"], \"userFacingMarkdown\": \"### 总结\\n围绕你这轮问题“我按你上次建议做了，帮我复盘。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\\n\\n### 分析\\n本轮按状态 `S5_FOLLOWUP_REVIEW` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\\n\\n### 建议\\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\\n\\n### 下一步（可选）\\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\\n\\n> 仅供娱乐参考，非决定论，不替代专业建议。\", \"toolCalls\": [{\"tool\": \"web_search\", \"params\": {\"query\": \"易经 卦辞 爻辞 象传 解签 我按你上次建议做了，帮我复盘。 S5_FOLLOWUP_REVIEW\"}, \"status\": \"error\", \"error\": \"HTTPSConnectionPool(host='www.baidu.com', port=443): Max retries exceeded with url: /s?wd=%E6%98%93%E7%BB%8F+%E5%8D%A6%E8%BE%9E+%E7%88%BB%E8%BE%9E+%E8%B1%A1%E4%BC%A0+%E8%A7%A3%E7%AD%BE+%E6%88%91%E6%8C\"}], \"missingContextSlots\": [\"birthInfo\", \"expectedEvent\", \"fearedEvent\", \"recentEvents\"], \"slotStatus\": {\"birthInfo\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"expectedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"fearedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"recentEvents\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"timeHorizon\": {\"status\": \"ready\", \"value\": \"看近期事业。\"}}, \"fillGuidance\": [{\"slot\": \"birthInfo\", \"question\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"why\": \"用于细化个体节律，不补充也可继续。\"}, {\"slot\": \"expectedEvent\", \"question\": \"你最希望在近期发生的变化是什么？\", \"why\": \"用于对齐目标导向建议。\"}], \"suggestedQueryPlan\": [{\"intent\": \"slot_fill\", \"query\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"slot\": \"birthInfo\"}, {\"intent\": \"slot_fill\", \"query\": \"你最希望在近期发生的变化是什么？\", \"slot\": \"expectedEvent\"}], \"followupPrompt\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\"}",
+        "autoChecks": {
+          "transitionMatched": true,
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          }
+        },
+        "autoSummary": "已基于本轮用户输入到响应生成完成自动审计。",
+        "autoSuggestion": "优先复核迁移一致性、边界声明与关键低分项。",
+        "suggestedAction": "若不同意自动判定，请填写 manualAuditReason。",
+        "manualAuditVerdict": "pending",
+        "manualOverrideSuggested": false,
+        "manualAuditReason": "",
+        "casePassReference": true
+      },
+      {
+        "caseId": "fortune_case_G_s5_to_s6",
+        "roundIndex": 1,
+        "triggerReason": "full_audit_100_percent",
+        "autoVerdict": "pass",
+        "query": "复盘可以了，今天就到这。",
+        "result": "### 总结\n围绕你这轮问题“复盘可以了，今天就到这。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\n\n### 分析\n本轮按状态 `S6_SAFE_CLOSE` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\n\n### 建议\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\n\n### 下一步（可选）\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\n\n> 仅供娱乐参考，非决定论，不替代专业建议。",
+        "resultJson": "{\"stateId\": \"S6_SAFE_CLOSE\", \"closingSummary\": \"本轮已完成，后续可按需继续细化。\", \"nextOptionalActions\": [\"继续细化\", \"一周后复盘\"], \"boundaryStatement\": \"仅供娱乐参考，非决定论，不替代专业建议。\", \"reopenHint\": \"你可以随时用新问题重开一轮。\", \"userFacingMarkdown\": \"### 总结\\n围绕你这轮问题“复盘可以了，今天就到这。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\\n\\n### 分析\\n本轮按状态 `S6_SAFE_CLOSE` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\\n\\n### 建议\\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\\n\\n### 下一步（可选）\\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\\n\\n> 仅供娱乐参考，非决定论，不替代专业建议。\", \"toolCalls\": [{\"tool\": \"web_search\", \"params\": {\"query\": \"易经 卦辞 爻辞 象传 解签 复盘可以了，今天就到这。 S6_SAFE_CLOSE\"}, \"status\": \"error\", \"error\": \"HTTPSConnectionPool(host='www.baidu.com', port=443): Max retries exceeded with url: /s?wd=%E6%98%93%E7%BB%8F+%E5%8D%A6%E8%BE%9E+%E7%88%BB%E8%BE%9E+%E8%B1%A1%E4%BC%A0+%E8%A7%A3%E7%AD%BE+%E5%A4%8D%E7%9B\"}], \"missingContextSlots\": [\"birthInfo\", \"expectedEvent\", \"fearedEvent\", \"recentEvents\", \"timeHorizon\"], \"slotStatus\": {\"birthInfo\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"expectedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"fearedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"recentEvents\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"timeHorizon\": {\"status\": \"missing_optional\", \"value\": \"\"}}, \"fillGuidance\": [{\"slot\": \"birthInfo\", \"question\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"why\": \"用于细化个体节律，不补充也可继续。\"}, {\"slot\": \"expectedEvent\", \"question\": \"你最希望在近期发生的变化是什么？\", \"why\": \"用于对齐目标导向建议。\"}], \"suggestedQueryPlan\": [{\"intent\": \"slot_fill\", \"query\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"slot\": \"birthInfo\"}, {\"intent\": \"slot_fill\", \"query\": \"你最希望在近期发生的变化是什么？\", \"slot\": \"expectedEvent\"}], \"followupPrompt\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\"}",
+        "autoChecks": {
+          "transitionMatched": true,
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          }
+        },
+        "autoSummary": "已基于本轮用户输入到响应生成完成自动审计。",
+        "autoSuggestion": "优先复核迁移一致性、边界声明与关键低分项。",
+        "suggestedAction": "若不同意自动判定，请填写 manualAuditReason。",
+        "manualAuditVerdict": "pending",
+        "manualOverrideSuggested": false,
+        "manualAuditReason": "",
+        "casePassReference": true
+      },
+      {
+        "caseId": "fortune_case_H_s6_to_s0",
+        "roundIndex": 1,
+        "triggerReason": "full_audit_100_percent",
+        "autoVerdict": "pass",
+        "query": "我想换成看财运，重新开始。",
+        "result": "### 总结\n围绕你这轮问题“我想换成看财运，重新开始。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\n\n### 分析\n本轮按状态 `S0_ENTRY_INTENT_CAPTURE` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\n\n### 建议\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\n\n### 下一步（可选）\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\n\n> 仅供娱乐参考，非决定论，不替代专业建议。",
+        "resultJson": "{\"stateId\": \"S0_ENTRY_INTENT_CAPTURE\", \"intentSummary\": \"用户请求运势咨询并期待可执行建议。\", \"detectedTopic\": \"career\", \"responseText\": \"我先给你初版卦解，再按需补充信息细化。\", \"nextStateCandidates\": [\"S1_FAST_BASELINE_ANSWER\"], \"userFacingMarkdown\": \"### 总结\\n围绕你这轮问题“我想换成看财运，重新开始。”，当前判断为：先稳后进，避免急推，近期看信号、近阶段看执行、后势看复盘。\\n\\n### 分析\\n本轮按状态 `S0_ENTRY_INTENT_CAPTURE` 执行，优先采用《易经》卦辞/爻辞/象传语义进行类比推理：不把结果当绝对定论，强调条件变化与行动反馈。\\n\\n### 建议\\n先做一条低风险动作验证趋势（3-7 天可观察），再根据反馈放大有效动作；若出现反复，先收缩节奏、保留回旋空间。\\n\\n### 下一步（可选）\\n你若愿意，可以补充出生日期（阳历即可）和大致时辰。\\n\\n> 仅供娱乐参考，非决定论，不替代专业建议。\", \"toolCalls\": [{\"tool\": \"web_search\", \"params\": {\"query\": \"易经 卦辞 爻辞 象传 解签 我想换成看财运，重新开始。 S0_ENTRY_INTENT_CAPTURE\"}, \"status\": \"error\", \"error\": \"HTTPSConnectionPool(host='www.baidu.com', port=443): Max retries exceeded with url: /s?wd=%E6%98%93%E7%BB%8F+%E5%8D%A6%E8%BE%9E+%E7%88%BB%E8%BE%9E+%E8%B1%A1%E4%BC%A0+%E8%A7%A3%E7%AD%BE+%E6%88%91%E6%83\"}], \"missingContextSlots\": [\"birthInfo\", \"expectedEvent\", \"fearedEvent\", \"recentEvents\", \"timeHorizon\"], \"slotStatus\": {\"birthInfo\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"expectedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"fearedEvent\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"recentEvents\": {\"status\": \"missing_optional\", \"value\": \"\"}, \"timeHorizon\": {\"status\": \"missing_optional\", \"value\": \"\"}}, \"fillGuidance\": [{\"slot\": \"birthInfo\", \"question\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"why\": \"用于细化个体节律，不补充也可继续。\"}, {\"slot\": \"expectedEvent\", \"question\": \"你最希望在近期发生的变化是什么？\", \"why\": \"用于对齐目标导向建议。\"}], \"suggestedQueryPlan\": [{\"intent\": \"slot_fill\", \"query\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\", \"slot\": \"birthInfo\"}, {\"intent\": \"slot_fill\", \"query\": \"你最希望在近期发生的变化是什么？\", \"slot\": \"expectedEvent\"}], \"followupPrompt\": \"你若愿意，可以补充出生日期（阳历即可）和大致时辰。\"}",
+        "autoChecks": {
+          "transitionMatched": true,
+          "hardFailTriggered": false,
+          "hardFailCodes": [],
+          "failedScoreItems": [],
+          "scores": {
+            "transitionAccuracyScore": 90,
+            "contractCompletenessScore": 90,
+            "globalRuleComplianceScore": 92,
+            "safetyBoundaryScore": 92,
+            "reasoningTraceabilityScore": 90,
+            "actionabilityScore": 90,
+            "dialogueExperienceScore": 91
+          }
+        },
+        "autoSummary": "已基于本轮用户输入到响应生成完成自动审计。",
+        "autoSuggestion": "优先复核迁移一致性、边界声明与关键低分项。",
+        "suggestedAction": "若不同意自动判定，请填写 manualAuditReason。",
+        "manualAuditVerdict": "pending",
+        "manualOverrideSuggested": false,
+        "manualAuditReason": "",
+        "casePassReference": true
+      }
+    ]
+  },
+  "remediationBacklog": []
+}

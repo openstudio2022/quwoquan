@@ -25,11 +25,30 @@ class ArticleDetailPage extends ConsumerStatefulWidget {
 
 class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
   Map<String, dynamic>? _article;
+  bool _isLoading = true;
+  Object? _loadError;
   bool _isLiked = false;
   bool _isSaved = false;
   bool _isFollowing = false;
   int _likesCount = 0;
   int _commentsCount = 0;
+  late final DateTime _enterTime = DateTime.now();
+
+  void _reportDwell() {
+    final seconds = DateTime.now().difference(_enterTime).inMilliseconds / 1000.0;
+    if (seconds < 1) return;
+    ref.read(behaviorRepositoryProvider).reportSingle(
+      contentId: widget.articleId,
+      action: 'dwell',
+      duration: seconds,
+    );
+  }
+
+  @override
+  void deactivate() {
+    _reportDwell();
+    super.deactivate();
+  }
 
   void _openAssistantHalfSheet() {
     final target = VisitTarget.page('article');
@@ -45,12 +64,80 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
   @override
   void initState() {
     super.initState();
-    _article = ref.read(appContentRepositoryProvider).articleById(widget.articleId);
-    if (_article != null) {
-      final stats = _article!['stats'] is Map ? Map<String, dynamic>.from(_article!['stats'] as Map) : null;
-      _likesCount = (stats?['likes'] as num?)?.toInt() ?? 0;
-      _commentsCount = (stats?['comments'] as num?)?.toInt() ?? 0;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadArticle();
+    });
+  }
+
+  Future<void> _loadArticle() async {
+    try {
+      final dataService = ref.read(dataServiceProvider);
+      final post = await dataService.getDataItem(
+        endpoint: '/posts',
+        id: widget.articleId,
+      );
+      final article = _toArticleView(post);
+      if (!mounted) return;
+      setState(() {
+        _article = article;
+        final stats = article['stats'] is Map
+            ? Map<String, dynamic>.from(article['stats'] as Map)
+            : null;
+        _likesCount = (stats?['likes'] as num?)?.toInt() ?? 0;
+        _commentsCount = (stats?['comments'] as num?)?.toInt() ?? 0;
+        _isLoading = false;
+        _loadError = null;
+      });
+      ref.read(behaviorRepositoryProvider).reportSingle(
+        contentId: widget.articleId,
+        action: 'impression',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _loadError = e;
+      });
     }
+  }
+
+  Map<String, dynamic> _toArticleView(Map<String, dynamic> post) {
+    final author = <String, dynamic>{
+      'name':
+          post['displayName']?.toString() ?? post['username']?.toString() ?? '匿名',
+      'avatar':
+          post['avatarUrl']?.toString() ?? post['avatar']?.toString() ?? '',
+      'isOfficial': post['isOfficial'] == true,
+      'badge': post['badge']?.toString(),
+    };
+    final covers = (post['images'] as List? ?? const <dynamic>[])
+        .map((e) => e.toString())
+        .toList(growable: false);
+    final content = (post['body']?.toString().isNotEmpty == true)
+        ? post['body'].toString()
+        : (post['content']?.toString() ?? post['caption']?.toString() ?? '');
+    return <String, dynamic>{
+      'id': post['id']?.toString() ?? widget.articleId,
+      'title': post['title']?.toString() ?? '',
+      'description': content,
+      'contentHtml': content,
+      'date': post['createdAt']?.toString() ?? '',
+      'author': author,
+      'layoutMode': covers.length > 1 ? 'carousel' : 'hero',
+      'coverImage': post['coverUrl']?.toString() ??
+          post['thumbnailUrl']?.toString() ??
+          (covers.isNotEmpty ? covers.first : ''),
+      'images': covers,
+      'stats': <String, dynamic>{
+        'likes': post['likes'] ?? post['likesCount'] ?? 0,
+        'comments': post['comments'] ?? post['commentsCount'] ?? 0,
+        'bookmarks': post['bookmarks'] ?? post['savesCount'] ?? 0,
+      },
+      'theme': <String, dynamic>{
+        'bg': '#FFFFFF',
+        'text': '#111111',
+      },
+    };
   }
 
   @override
@@ -65,6 +152,29 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
     final contentText = theme != null && theme['text'] != null
         ? _parseColor(theme['text']!.toString())
         : fgColor;
+
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: bgColor,
+        appBar: AppBar(
+          backgroundColor: bgColor,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/');
+              }
+            },
+          ),
+          title: Text('文章', style: TextStyle(color: fgColor)),
+        ),
+        body: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
 
     if (_article == null) {
       return Scaffold(
@@ -85,7 +195,7 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
         ),
         body: Center(
           child: Text(
-            '未找到该文章',
+            _loadError == null ? '未找到该文章' : _loadError.toString(),
             style: TextStyle(color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary)),
           ),
         ),
@@ -386,11 +496,25 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
                       _likesCount += _isLiked ? 1 : -1;
                       if (_likesCount < 0) _likesCount = 0;
                     });
+                    if (_isLiked) {
+                      ref.read(behaviorRepositoryProvider).reportSingle(
+                        contentId: widget.articleId,
+                        action: 'like',
+                      );
+                    }
                   }),
                   SizedBox(width: AppSpacing.interGroupLg),
                   _actionChip(context, Icons.chat_bubble_outline, _commentsCount, false, null, () {}),
                   SizedBox(width: AppSpacing.interGroupLg),
-                  _actionChip(context, _isSaved ? Icons.star : Icons.star_border, 0, _isSaved, AppColors.warning, () => setState(() => _isSaved = !_isSaved)),
+                  _actionChip(context, _isSaved ? Icons.star : Icons.star_border, 0, _isSaved, AppColors.warning, () {
+                    setState(() => _isSaved = !_isSaved);
+                    if (_isSaved) {
+                      ref.read(behaviorRepositoryProvider).reportSingle(
+                        contentId: widget.articleId,
+                        action: 'favorite',
+                      );
+                    }
+                  }),
                   SizedBox(width: AppSpacing.interGroupSm),
                   _actionChipLabel(context, Icons.share, UITextConstants.share, () {}),
                 ],

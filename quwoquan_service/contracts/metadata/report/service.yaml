@@ -1,0 +1,61 @@
+version: 1
+entity: Report
+
+service:
+  name: content-service
+  domain: content
+
+api_routes:
+  - method: POST
+    path: /v1/content/reports
+    operation: CreateReport
+    description: 提交举报
+
+  - method: GET
+    path: /v1/content/reports/{reportId}
+    operation: GetReport
+    description: 举报详情（运营）
+
+  - method: PATCH
+    path: /v1/content/reports/{reportId}
+    operation: ResolveReport
+    description: 处理举报（运营）
+
+consumers:
+  - name: app
+    capabilities: [create_report]
+  - name: platform-ops
+    capabilities: [read_report, resolve_report]
+
+contract_test:
+  mock_strategy:
+    app_side:
+      mock_target: content-service API (report)
+      scenarios:
+        - name: submit_report
+          route: POST /v1/content/reports
+          variants: [post, comment, user, circle, message]
+          assertions: [status_201, report_id_returned]
+
+    service_side:
+      description: 使用真实测试数据库，不 mock 存储层
+      real_engines:
+        postgres: embedded-postgres
+      spy_targets: [event_publisher]
+      data_management:
+        seed: fixture 工厂预制到真实 PG
+        cleanup: "TRUNCATE reports CASCADE"
+      scenarios:
+        - name: report_lifecycle
+          command: CreateReport → ResolveReport
+          seed: []
+          assertions:
+            - "SELECT * FROM reports WHERE id=? → status='pending'"
+            - "SELECT status FROM reports → 'reviewing' after review start"
+            - "SELECT status, resolution FROM reports → 'resolved' + resolution set"
+            - "eventSpy.AssertPublished('ReportCreated')"
+            - "eventSpy.AssertPublished('ReportResolved', {resolution})"
+
+  coverage_requirements:
+    - all target types covered
+    - state machine transitions tested

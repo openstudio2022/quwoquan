@@ -1,0 +1,158 @@
+version: 1
+aggregate: Conversation
+
+service:
+  name: chat-service
+  domain: chat
+  owner: backend-team
+  description: 会话管理、消息收发、群聊、联系人
+
+api_routes:
+  - method: GET
+    path: /v1/chat/conversations
+    operation: ListConversations
+    description: 会话列表
+    response_entity: Conversation
+
+  - method: POST
+    path: /v1/chat/conversations
+    operation: CreateConversation
+    description: 创建会话
+    request_entity: Conversation
+    writable_fields: [type, title, memberIds, circleId]
+
+  - method: GET
+    path: /v1/chat/conversations/{conversationId}
+    operation: GetConversation
+    description: 会话详情
+    response_entity: Conversation
+
+  - method: GET
+    path: /v1/chat/conversations/{conversationId}/messages
+    operation: ListMessages
+    description: 消息列表（时间倒序 + cursor 分页）
+    response_entity: Message
+
+  - method: POST
+    path: /v1/chat/conversations/{conversationId}/messages
+    operation: SendMessage
+    description: 发送消息
+    request_entity: Message
+    writable_fields: [type, content, mediaUrl, cardPayload, replyToMessageId, mentions]
+
+  - method: POST
+    path: /v1/chat/conversations/{conversationId}/messages/{messageId}/recall
+    operation: RecallMessage
+    description: 撤回消息
+
+  - method: POST
+    path: /v1/chat/conversations/{conversationId}/members
+    operation: AddMembers
+    description: 添加成员
+
+  - method: DELETE
+    path: /v1/chat/conversations/{conversationId}/members/{userId}
+    operation: RemoveMember
+    description: 移除成员
+
+  - method: PATCH
+    path: /v1/chat/conversations/{conversationId}/settings
+    operation: UpdateConversationSettings
+    description: 更新会话设置（mute/pin）
+
+  - method: GET
+    path: /v1/chat/contacts
+    operation: ListContacts
+    description: 联系人列表
+
+  - method: GET
+    path: /v1/chat/contacts/search
+    operation: SearchContacts
+    description: 联系人搜索
+
+consumers:
+  - name: app
+    capabilities: [list_conversations, create_conversation, send_message, recall_message, manage_members, update_settings, list_contacts, search_contacts]
+  - name: platform-ops
+    capabilities: [read_conversation, read_messages]
+  - name: assistant-service
+    capabilities: [read_conversation, read_messages, send_message]
+  - name: circle-service
+    capabilities: [create_conversation]
+
+contract_test:
+  mock_strategy:
+    app_side:
+      mock_target: chat-service API
+      data_source: fields.yaml
+      scenarios:
+        - name: conversation_list_tabs
+          route: GET /v1/chat/conversations
+          variants: [all, mentioned, unread]
+          assertions: [status_200, items_match_schema, sorted_by_last_message_time]
+
+        - name: send_message_types
+          route: POST /v1/chat/conversations/{id}/messages
+          variants: [text, image, video, card]
+          assertions: [status_201, message_id_returned]
+
+        - name: recall_message
+          route: POST /v1/chat/conversations/{id}/messages/{msgId}/recall
+          assertions: [status_200, message_status_recalled]
+
+        - name: group_chat_lifecycle
+          routes:
+            - POST /v1/chat/conversations
+            - POST /v1/chat/conversations/{id}/members
+            - DELETE /v1/chat/conversations/{id}/members/{uid}
+          assertions: [group_created, member_added, member_removed]
+
+    service_side:
+      description: 使用真实测试数据库，不 mock 存储层
+      real_engines:
+        mongodb: testcontainers (mongo:7)
+        redis: miniredis/v2
+      spy_targets: [event_publisher]
+      mock_targets: [cross_service_clients]
+      data_management:
+        seed: fixture 工厂预制到真实 MongoDB
+        cleanup: "DeleteMany for conversations, messages"
+        redis_cleanup: miniredis.FlushAll()
+      scenarios:
+        - name: send_message_full_flow
+          command: SendMessage
+          seed: [fixture.NewConversation(type='direct')]
+          assertions:
+            - "db.messages.FindOne({_id: result.id}) → document exists"
+            - "db.conversations.FindOne({_id}).lastMessagePreview → matches content"
+            - "db.conversations.FindOne({_id}).messageCount → incremented"
+            - "eventSpy.AssertPublished('MessageSent', {conversationId, senderId, type})"
+            - "miniredis.Exists('cache:conversation:{id}') → false (invalidated)"
+
+        - name: recall_within_time_limit
+          command: RecallMessage
+          seed: [fixture.NewConversation(), fixture.NewMessage(timestamp=now-1min)]
+          assertions:
+            - "db.messages.FindOne({_id}).status → 'recalled'"
+            - "db.messages.FindOne({_id}).recalledAt → NOT NULL"
+            - "eventSpy.AssertPublished('MessageRecalled')"
+
+        - name: recall_after_time_limit
+          command: RecallMessage
+          seed: [fixture.NewConversation(), fixture.NewMessage(timestamp=now-5min)]
+          assertions:
+            - "error returned: recall time exceeded"
+            - "db.messages.FindOne({_id}).status → 'sent' (unchanged)"
+
+        - name: create_circle_conversation
+          command: CreateConversation (type=circle)
+          seed: []
+          assertions:
+            - "db.conversations.FindOne({_id}).type → 'circle'"
+            - "db.conversations.FindOne({_id}).circleId → matches input"
+            - "eventSpy.AssertPublished('ConversationCreated', {type: 'circle'})"
+
+  coverage_requirements:
+    - all conversation types (direct/group/circle/encrypted/assistant) covered
+    - message status transitions covered
+    - search scenarios tested

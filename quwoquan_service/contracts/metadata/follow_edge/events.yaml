@@ -1,0 +1,36 @@
+version: 1
+entity: FollowEdge
+
+events:
+  - name: UserFollowed
+    description: 用户关注
+    producer: user-service
+    consumers: [recommendation-engine, notification-service]
+    channel: event_store
+    payload_fields: [followerId, followeeId, source]
+    recommend_impact: social_signal
+    side_effects:
+      - target: UserProfile
+        field: followerCount
+        operation: increment
+        on: followeeId
+      - target: UserProfile
+        field: followingCount
+        operation: increment
+        on: followerId
+
+  - name: UserUnfollowed
+    description: 用户取关
+    producer: user-service
+    consumers: [recommendation-engine]
+    channel: event_store
+    payload_fields: [followerId, followeeId]
+    side_effects:
+      - target: UserProfile
+        field: followerCount
+        operation: decrement
+        on: followeeId
+      - target: UserProfile
+        field: followingCount
+        operation: decrement
+        on: followerId

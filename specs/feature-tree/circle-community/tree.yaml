@@ -1,0 +1,55 @@
+version: 1
+l1: circle-community
+l2:
+  - feature: activity-member-governance
+    l3:
+      - feature: circle-lifecycle
+        l4:
+          - feature: circle-create-update-archive-contract
+            l5:
+              - feature: lifecycle-audit-guard
+      - feature: member-role-permission
+        l4:
+          - feature: role-permission-policy
+            l5:
+              - feature: permission-risk-guard
+      - feature: activity-stream-paging
+        l4:
+          - feature: activity-cursor-contract
+            l5:
+              - feature: stream-degrade-fallback
+  - feature: in-circle-recommendation-loop
+    l3:
+      - feature: behavior-ingestion
+        l4:
+          - feature: circle-behavior-event-schema
+            l5:
+              - feature: behavior-quality-guard
+      - feature: recommendation-ranking
+        l4:
+          - feature: in-circle-ranking-policy
+            l5:
+              - feature: ranking-fallback-guard
+      - feature: optimization-feedback
+        l4:
+          - feature: feedback-evaluation-report
+            l5:
+              - feature: optimization-release-gate
+  - feature: circle-management-and-stats
+    l3:
+      - feature: ops-dashboard
+        l4:
+          - feature: circle-kpi-dashboard-model
+            l5:
+              - feature: dashboard-data-quality-guard
+      - feature: moderation-governance
+        l4:
+          - feature: moderation-policy-contract
+            l5:
+              - feature: governance-audit-guard
+      - feature: kpi-reporting
+        l4:
+          - feature: periodic-report-generation
+            l5:
+              - feature: report-consistency-check
+

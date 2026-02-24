@@ -1,0 +1,163 @@
+version: 1
+aggregate: Circle
+
+service:
+  name: circle-service
+  domain: circle
+  owner: backend-team
+  description: 圈子管理、成员管理、圈子发现与推荐
+
+api_routes:
+  - method: GET
+    path: /v1/circles
+    operation: ListCircles
+    description: 圈子列表（分类 + 推荐）
+    query_params: [category, cursor, limit]
+    response_entity: Circle
+
+  - method: POST
+    path: /v1/circles
+    operation: CreateCircle
+    description: 创建圈子
+    request_entity: Circle
+    writable_fields: [name, description, coverUrl, category, tags, visibility, joinPolicy]
+
+  - method: GET
+    path: /v1/circles/{circleId}
+    operation: GetCircle
+    description: 圈子详情
+    response_entity: Circle
+
+  - method: PATCH
+    path: /v1/circles/{circleId}
+    operation: UpdateCircle
+    description: 更新圈子
+
+  - method: DELETE
+    path: /v1/circles/{circleId}
+    operation: ArchiveCircle
+    description: 归档圈子
+
+  - method: POST
+    path: /v1/circles/{circleId}/join
+    operation: JoinCircle
+    description: 加入圈子
+
+  - method: POST
+    path: /v1/circles/{circleId}/leave
+    operation: LeaveCircle
+    description: 退出圈子
+
+  - method: GET
+    path: /v1/circles/{circleId}/members
+    operation: ListCircleMembers
+    description: 成员列表
+    response_entity: CircleMember
+
+  - method: PATCH
+    path: /v1/circles/{circleId}/members/{userId}/role
+    operation: UpdateMemberRole
+    description: 更新成员角色
+
+  - method: GET
+    path: /v1/circles/{circleId}/feed
+    operation: GetCircleFeed
+    description: 圈子动态流
+
+  - method: GET
+    path: /v1/circles/{circleId}/stats
+    operation: GetCircleStats
+    description: 圈子统计
+
+  - method: POST
+    path: /v1/circles/behaviors
+    operation: ReportCircleBehavior
+    description: 圈子行为上报
+
+consumers:
+  - name: app
+    capabilities: [list_circles, create_circle, join, leave, read_feed, read_members, report_behavior]
+  - name: platform-ops
+    capabilities: [read_circle, update_circle, manage_members, read_stats]
+  - name: recommendation-engine
+    capabilities: [read_circle, read_members, search]
+  - name: assistant-service
+    capabilities: [read_circle, search]
+  - name: chat-service
+    capabilities: [read_circle]
+  - name: content-service
+    capabilities: [read_circle]
+
+contract_test:
+  mock_strategy:
+    app_side:
+      mock_target: circle-service API
+      data_source: fields.yaml
+      scenarios:
+        - name: circle_discovery
+          route: GET /v1/circles
+          query_params: [category=interest]
+          assertions: [status_200, items_match_schema, sorted_by_member_count]
+
+        - name: create_and_join_circle
+          routes:
+            - POST /v1/circles
+            - POST /v1/circles/{id}/join
+          assertions: [circle_created, member_added, member_count_incremented]
+
+        - name: circle_feed
+          route: GET /v1/circles/{id}/feed
+          assertions: [status_200, posts_within_circle]
+
+        - name: visibility_and_join_policy
+          variants: [public_open, private_approval, invite_only]
+          assertions: [policy_enforced]
+
+    service_side:
+      description: 使用真实测试数据库，不 mock 存储层
+      real_engines:
+        mongodb: testcontainers (mongo:7)
+        redis: miniredis/v2
+      spy_targets: [event_publisher]
+      mock_targets: [chat_service_client, cross_service_clients]
+      data_management:
+        seed: fixture 工厂预制到真实 MongoDB
+        cleanup: "DeleteMany for circles, circle_members"
+        redis_cleanup: miniredis.FlushAll()
+      scenarios:
+        - name: create_circle_with_owner
+          command: CreateCircle
+          seed: []
+          assertions:
+            - "db.circles.FindOne({_id}) → document exists with correct name/tags"
+            - "db.circle_members.FindOne({circleId, userId: ownerId}) → role='owner'"
+            - "db.circles.FindOne({_id}).memberCount → 1"
+            - "eventSpy.AssertPublished('CircleCreated', {name, ownerId, tags})"
+
+        - name: join_open_circle
+          command: JoinCircle (joinPolicy=open)
+          seed: [fixture.NewCircle(joinPolicy='open')]
+          assertions:
+            - "db.circle_members.FindOne({circleId, userId}) → role='member'"
+            - "db.circles.FindOne({_id}).memberCount → incremented"
+            - "eventSpy.AssertPublished('CircleMemberJoined')"
+            - "miniredis.Exists('cache:circle:{id}') → false (invalidated)"
+
+        - name: join_duplicate_idempotent
+          command: JoinCircle x2
+          seed: [fixture.NewCircle(), fixture.NewCircleMember()]
+          assertions:
+            - "db.circle_members.CountDocuments({circleId, userId}) → exactly 1"
+
+        - name: member_count_consistency
+          command: JoinCircle → LeaveCircle
+          seed: [fixture.NewCircle(memberCount=1)]
+          assertions:
+            - "db.circles.FindOne({_id}).memberCount → 2 after join"
+            - "db.circles.FindOne({_id}).memberCount → 1 after leave"
+            - "db.circle_members.CountDocuments({circleId}) → matches memberCount"
+
+  coverage_requirements:
+    - all visibility/joinPolicy combinations covered
+    - member role transitions (member → admin → owner) tested
+    - circle-conversation link tested

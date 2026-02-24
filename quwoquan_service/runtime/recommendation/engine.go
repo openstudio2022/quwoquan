@@ -1,0 +1,494 @@
+package recommendation
+
+import (
+	"context"
+	"log/slog"
+	"sort"
+	"sync"
+	"time"
+
+	experiments "quwoquan_service/runtime/experiments"
+)
+
+// FeedType identifies the kind of recommendation feed.
+type FeedType string
+
+const (
+	FeedDiscovery FeedType = "discovery"
+	FeedCircle    FeedType = "circle"
+	FeedFollow    FeedType = "follow"
+	FeedSimilar   FeedType = "similar"
+)
+
+// GetFeedRequest defines input for feed generation.
+type GetFeedRequest struct {
+	UserID    string
+	SessionID string
+	FeedType  FeedType
+	CircleID  string
+	Cursor    string
+	Limit     int
+}
+
+// FeedResponse holds the recommendation result.
+type FeedResponse struct {
+	Items      []FeedItem `json:"items"`
+	NextCursor string     `json:"nextCursor,omitempty"`
+}
+
+// FeedItem represents a single item in the feed.
+type FeedItem struct {
+	ContentID   string   `json:"contentId"`
+	ContentType string   `json:"contentType"`
+	AuthorID    string   `json:"authorId"`
+	Title       string   `json:"title,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+	Score       float64  `json:"score"`
+	RecallPath  string   `json:"recallPath,omitempty"`
+}
+
+// ContentCandidate is a candidate from the recall layer.
+type ContentCandidate struct {
+	ContentID    string
+	ContentType  string
+	AuthorID     string
+	Title        string
+	Tags         []string
+	PublishedAt  time.Time
+	ViewCount    int64
+	LikeCount    int64
+	CommentCount int64
+	ShareCount   int64
+	RecallPath   string
+}
+
+// CandidateSource provides content candidates for recall.
+type CandidateSource interface {
+	Recall(ctx context.Context, req RecallRequest) ([]ContentCandidate, error)
+}
+
+type RecallRequest struct {
+	FeedType FeedType
+	UserID   string
+	CircleID string
+	Tags     []string
+	Limit    int
+	Cursor   string
+}
+
+// ScoringWeights controls the relative importance of each scoring dimension.
+// Tunable via runtime/experiments AB framework.
+type ScoringWeights struct {
+	TagRelevance    float64
+	AuthorAffinity  float64
+	Popularity      float64
+	Freshness       float64
+	SocialPrior     float64
+	ExploreBoost    float64
+	NegativePenalty float64
+	DwellBonus      float64
+}
+
+// DefaultWeights returns production-default scoring weights.
+func DefaultWeights() ScoringWeights {
+	return ScoringWeights{
+		TagRelevance:    3.0,
+		AuthorAffinity:  1.5,
+		Popularity:      2.0,
+		Freshness:       1.5,
+		SocialPrior:     1.0,
+		ExploreBoost:    0.5,
+		NegativePenalty: 5.0,
+		DwellBonus:      0.8,
+	}
+}
+
+// Engine orchestrates the full recommendation pipeline:
+//
+//	Recall → PreRank → Filter → FeatureAssembly → ModelScore → Rerank
+//
+// Each stage is pluggable via interfaces, with sensible defaults.
+type Engine struct {
+	sessions SessionReader
+	sources  []CandidateSource
+	weights  ScoringWeights
+
+	scorer    ModelScorer
+	features  FeatureProvider
+	preRanker PreRanker
+
+	exploreFraction  float64
+	maxAuthorPerFeed int
+	recallTimeout    time.Duration
+	featureTimeout   time.Duration
+
+	expResolver experiments.Resolver
+	logger      *slog.Logger
+	feedback    *FeedbackRecorder
+}
+
+// EngineOption configures the Engine.
+type EngineOption func(*Engine)
+
+func WithWeights(w ScoringWeights) EngineOption {
+	return func(e *Engine) { e.weights = w }
+}
+
+func WithExploreFraction(f float64) EngineOption {
+	return func(e *Engine) { e.exploreFraction = f }
+}
+
+func WithMaxAuthorPerFeed(n int) EngineOption {
+	return func(e *Engine) { e.maxAuthorPerFeed = n }
+}
+
+func WithExperimentResolver(r experiments.Resolver) EngineOption {
+	return func(e *Engine) { e.expResolver = r }
+}
+
+func WithLogger(l *slog.Logger) EngineOption {
+	return func(e *Engine) { e.logger = l }
+}
+
+func WithFeedbackRecorder(f *FeedbackRecorder) EngineOption {
+	return func(e *Engine) { e.feedback = f }
+}
+
+// WithRecallTimeout sets the per-source recall deadline.
+func WithRecallTimeout(d time.Duration) EngineOption {
+	return func(e *Engine) { e.recallTimeout = d }
+}
+
+// WithScorer sets the model scorer (RuleScorer, RemoteModelScorer, CascadeScorer).
+func WithScorer(s ModelScorer) EngineOption {
+	return func(e *Engine) { e.scorer = s }
+}
+
+// WithFeatureProvider sets the user feature provider.
+func WithFeatureProvider(fp FeatureProvider) EngineOption {
+	return func(e *Engine) { e.features = fp }
+}
+
+// WithPreRanker sets the pre-ranking filter.
+func WithPreRanker(pr PreRanker) EngineOption {
+	return func(e *Engine) { e.preRanker = pr }
+}
+
+// NewEngine creates a recommendation engine.
+// sessions accepts *HotPath, *SessionCache, or any SessionReader.
+func NewEngine(sessions SessionReader, sources []CandidateSource, opts ...EngineOption) *Engine {
+	e := &Engine{
+		sessions:         sessions,
+		sources:          sources,
+		weights:          DefaultWeights(),
+		scorer:           &RuleScorer{},
+		features:         &NullFeatureProvider{},
+		preRanker:        &NullPreRanker{},
+		exploreFraction:  0.1,
+		maxAuthorPerFeed: 3,
+		recallTimeout:    150 * time.Millisecond,
+		featureTimeout:   50 * time.Millisecond,
+	}
+	for _, opt := range opts {
+		opt(e)
+	}
+	return e
+}
+
+// GetFeed generates a personalized feed.
+// Pipeline: Session → Recall → PreRank → Filter → Features → Score → Rerank
+func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse, error) {
+	pipelineStart := time.Now()
+
+	if req.Limit <= 0 {
+		req.Limit = 20
+	}
+
+	// Stage 1: Load session state (from SessionCache or HotPath)
+	session, err := e.sessions.GetSessionState(ctx, req.UserID, req.SessionID)
+	if err != nil {
+		session = &SessionState{UserID: req.UserID, SessionID: req.SessionID}
+	}
+
+	weights := e.weights
+	if e.expResolver != nil {
+		weights = ResolveWeights(ctx, e.expResolver, req.UserID)
+	}
+
+	// Stage 2: Parallel recall from all sources
+	recallStart := time.Now()
+	allCandidates := e.parallelRecall(ctx, req, session)
+	recallLatency := time.Since(recallStart)
+
+	// Stage 3: Pre-rank (lightweight filter before expensive scoring)
+	preranked := e.preRanker.PreRank(ctx, allCandidates, req.Limit*5)
+
+	// Stage 4: Filter exposed + negative + dedup
+	exposedSet := toSet(session.ExposedIDs)
+	negativeSet := toSet(session.NegativeIDs)
+	filtered := make([]ContentCandidate, 0, len(preranked)/2)
+	seen := make(map[string]bool, len(preranked))
+	for _, c := range preranked {
+		if exposedSet[c.ContentID] || negativeSet[c.ContentID] || seen[c.ContentID] {
+			continue
+		}
+		seen[c.ContentID] = true
+		filtered = append(filtered, c)
+	}
+
+	// Stage 5: Feature assembly (user features from feature store, with timeout)
+	var userFeatures *UserFeatureVector
+	if e.features != nil {
+		featCtx, featCancel := context.WithTimeout(ctx, e.featureTimeout)
+		userFeatures, _ = e.features.GetFeatures(featCtx, req.UserID)
+		featCancel()
+	}
+
+	scoringFeatures := &ScoringFeatures{
+		Session:     session,
+		User:        userFeatures,
+		Weights:     weights,
+		ExploreRate: e.exploreFraction,
+	}
+
+	// Stage 6: Model scoring (RuleScorer, RemoteModelScorer, or CascadeScorer)
+	scoreStart := time.Now()
+	scored, scoreErr := e.scorer.ScoreBatch(ctx, scoringFeatures, filtered)
+	if scoreErr != nil {
+		if e.logger != nil {
+			e.logger.Error("rec.score.error", slog.String("err", scoreErr.Error()))
+		}
+		scored = make([]ScoredCandidate, 0)
+	}
+	scoreLatency := time.Since(scoreStart)
+
+	// Sort by score (scorer returns unsorted)
+	sort.Slice(scored, func(i, j int) bool {
+		return scored[i].Score > scored[j].Score
+	})
+
+	// Stage 7: Rerank (diversity + author dedup)
+	rerankStart := time.Now()
+	reranked := e.rerank(scored, req.Limit)
+	rerankLatency := time.Since(rerankStart)
+
+	items := make([]FeedItem, 0, len(reranked))
+	for _, s := range reranked {
+		items = append(items, FeedItem{
+			ContentID:   s.Candidate.ContentID,
+			ContentType: s.Candidate.ContentType,
+			AuthorID:    s.Candidate.AuthorID,
+			Title:       s.Candidate.Title,
+			Tags:        s.Candidate.Tags,
+			Score:       s.Score,
+			RecallPath:  s.Candidate.RecallPath,
+		})
+	}
+
+	var nextCursor string
+	if len(items) == req.Limit {
+		nextCursor = items[len(items)-1].ContentID
+	}
+
+	resp := &FeedResponse{
+		Items:      items,
+		NextCursor: nextCursor,
+	}
+
+	// Observability: emit pipeline metrics
+	totalLatency := time.Since(pipelineStart)
+	if e.logger != nil {
+		sourceBreakdown := map[string]int{}
+		for _, c := range allCandidates {
+			sourceBreakdown[c.RecallPath]++
+		}
+		LogMetrics(e.logger, PipelineMetrics{
+			UserID:          req.UserID,
+			SessionID:       req.SessionID,
+			RecallLatency:   recallLatency,
+			ScoreLatency:    scoreLatency,
+			RerankLatency:   rerankLatency,
+			TotalLatency:    totalLatency,
+			CandidateCount:  len(allCandidates),
+			FilteredCount:   len(filtered),
+			ResultCount:     len(items),
+			SourceBreakdown: sourceBreakdown,
+		})
+	}
+
+	// Learning: record impressions asynchronously (fire-and-forget)
+	if e.feedback != nil {
+		feedbackItems := make([]FeedItem, len(items))
+		copy(feedbackItems, items)
+		go func() {
+			fbCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			_ = e.feedback.RecordImpression(fbCtx, req.UserID, req.SessionID, feedbackItems)
+		}()
+	}
+
+	return resp, nil
+}
+
+// parallelRecall fans out to all sources concurrently with per-source timeout.
+func (e *Engine) parallelRecall(ctx context.Context, req GetFeedRequest, session *SessionState) []ContentCandidate {
+	interestTags := topNTags(session.TagWeights, 10)
+	recallReq := RecallRequest{
+		FeedType: req.FeedType,
+		UserID:   req.UserID,
+		CircleID: req.CircleID,
+		Tags:     interestTags,
+		Limit:    req.Limit * 3,
+		Cursor:   req.Cursor,
+	}
+
+	recallCtx := ctx
+	if e.recallTimeout > 0 {
+		var cancel context.CancelFunc
+		recallCtx, cancel = context.WithTimeout(ctx, e.recallTimeout)
+		defer cancel()
+	}
+
+	if len(e.sources) <= 1 {
+		var all []ContentCandidate
+		for _, src := range e.sources {
+			candidates, err := src.Recall(recallCtx, recallReq)
+			if err != nil {
+				if e.logger != nil {
+					e.logger.Warn("rec.recall.source_error", slog.String("err", err.Error()))
+				}
+				continue
+			}
+			all = append(all, candidates...)
+		}
+		return all
+	}
+
+	type result struct {
+		candidates []ContentCandidate
+	}
+	results := make([]result, len(e.sources))
+	var wg sync.WaitGroup
+	for i, src := range e.sources {
+		wg.Add(1)
+		go func(idx int, s CandidateSource) {
+			defer wg.Done()
+			candidates, err := s.Recall(recallCtx, recallReq)
+			if err != nil {
+				if e.logger != nil {
+					e.logger.Warn("rec.recall.source_error", slog.String("err", err.Error()))
+				}
+				return
+			}
+			results[idx] = result{candidates: candidates}
+		}(i, src)
+	}
+	wg.Wait()
+
+	totalCap := 0
+	for _, r := range results {
+		totalCap += len(r.candidates)
+	}
+	all := make([]ContentCandidate, 0, totalCap)
+	for _, r := range results {
+		all = append(all, r.candidates...)
+	}
+	return all
+}
+
+// rerank applies diversity constraints: content type variety, author dedup, exploration injection.
+func (e *Engine) rerank(scored []ScoredCandidate, limit int) []ScoredCandidate {
+	if len(scored) == 0 {
+		return scored
+	}
+	if limit <= 0 || limit > len(scored) {
+		limit = len(scored)
+	}
+
+	typeCount := make(map[string]int)
+	authorCount := make(map[string]int)
+	maxPerType := (limit / 3) + 1
+	maxPerAuthor := e.maxAuthorPerFeed
+	if maxPerAuthor <= 0 {
+		maxPerAuthor = 3
+	}
+
+	var result []ScoredCandidate
+	for _, s := range scored {
+		if len(result) >= limit {
+			break
+		}
+		ct := s.Candidate.ContentType
+		author := s.Candidate.AuthorID
+
+		if typeCount[ct] >= maxPerType {
+			continue
+		}
+		if author != "" && authorCount[author] >= maxPerAuthor {
+			continue
+		}
+
+		result = append(result, s)
+		typeCount[ct]++
+		if author != "" {
+			authorCount[author]++
+		}
+	}
+
+	// Fill remaining slots (relax type constraint but keep author dedup)
+	if len(result) < limit {
+		existing := make(map[string]bool)
+		for _, r := range result {
+			existing[r.Candidate.ContentID] = true
+		}
+		for _, s := range scored {
+			if len(result) >= limit {
+				break
+			}
+			if existing[s.Candidate.ContentID] {
+				continue
+			}
+			author := s.Candidate.AuthorID
+			if author != "" && authorCount[author] >= maxPerAuthor {
+				continue
+			}
+			result = append(result, s)
+			if author != "" {
+				authorCount[author]++
+			}
+		}
+	}
+
+	return result
+}
+
+func topNTags(weights map[string]float64, n int) []string {
+	type tw struct {
+		tag    string
+		weight float64
+	}
+	var pairs []tw
+	for t, w := range weights {
+		if w > 0 {
+			pairs = append(pairs, tw{t, w})
+		}
+	}
+	sort.Slice(pairs, func(i, j int) bool { return pairs[i].weight > pairs[j].weight })
+
+	result := make([]string, 0, n)
+	for i, p := range pairs {
+		if i >= n {
+			break
+		}
+		result = append(result, p.tag)
+	}
+	return result
+}
+
+func toSet(ss []string) map[string]bool {
+	m := make(map[string]bool, len(ss))
+	for _, s := range ss {
+		m[s] = true
+	}
+	return m
+}

@@ -1,0 +1,174 @@
+openapi: 3.0.3
+info:
+  title: quwoquan common components
+  version: "v1"
+paths: {}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Create/ingest 幂等键。服务端需在 TTL 内去重。
+    XRequestId:
+      name: X-Request-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 请求 ID（建议分段：<SRC>.<PAGE>.<TS>.<RAND>，端侧/网关可注入）
+    XTraceId:
+      name: X-Trace-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Trace ID（建议分段：<SRC>.<SESSION>.<PAGE>.<TS>.<RAND>，端侧/网关可注入）
+    XParentTraceId:
+      name: X-Parent-Trace-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 异步链路父 traceId（MQ/定时任务等触发源头）
+    XCausationId:
+      name: X-Causation-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 异步触发载体 ID（messageId/topicOffset 的安全编码/jobRunId 等）
+    XPersonaId:
+      name: X-Persona-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 可选 persona 上下文（当前激活分身）
+    XClientPageId:
+      name: X-Client-Page-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 端侧来源标识（推荐三段式：模块.业务对象.页面名/动作，如 chat.conversation.list）
+    XClientSessionId:
+      name: X-Client-Session-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 端侧一次启动会话 ID（稳定），用于日志关联与影响范围分析
+    XClientSentAt:
+      name: X-Client-Sent-At
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 端侧发送时间（ISO8601），用于端云时延分析
+    XClientDevicePlatform:
+      name: X-Client-Device-Platform
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 端侧平台（android/ios/web/desktop 等）
+    XClientAppVersion:
+      name: X-Client-App-Version
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 端侧版本标识（用于回归与影响范围定位）
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+      description: 游标分页 cursor
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      description: 分页大小
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [code, userMessage, debugMessage, module, kind, reason]
+      properties:
+        code:
+          type: string
+          description: 统一错误码：<MODULE>.<KIND>.<REASON>
+          pattern: '^[A-Z_]+\.(USER|SYSTEM|NETWORK|MIDDLEWARE)\.[a-z0-9_]+$'
+        userMessage:
+          type: string
+          description: 面向用户的友好提示语（可 i18n）
+        debugMessage:
+          type: string
+          description: 面向定位的错误原因（需脱敏）
+        module:
+          type: string
+          description: 错误源模块（如 CONTENT/USER/CHAT/DB/MQ/CACHE）
+          enum:
+            - GATEWAY
+            - ORCH
+            - CONTENT
+            - CIRCLE
+            - USER
+            - CHAT
+            - OPS
+            - ASSISTANT
+            - DB
+            - MQ
+            - CACHE
+            - OSS
+            - CDN
+            - UNKNOWN
+        kind:
+          type: string
+          description: 错误类型（USER/SYSTEM/NETWORK/MIDDLEWARE）
+          enum:
+            - USER
+            - SYSTEM
+            - NETWORK
+            - MIDDLEWARE
+        reason:
+          type: string
+          description: 稳定原因码（如 invalid_argument/timeout/connection_refused）
+          pattern: '^[a-z0-9_]+$'
+        message:
+          type: string
+          description: 兼容字段（历史），建议等同 debugMessage
+        requestId:
+          type: string
+        traceId:
+          type: string
+        retryable:
+          type: boolean
+          description: 客户端是否可安全重试（提示/策略）
+        details:
+          type: object
+          additionalProperties: true
+    CursorPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {}
+        nextCursor:
+          type: string
+          nullable: true

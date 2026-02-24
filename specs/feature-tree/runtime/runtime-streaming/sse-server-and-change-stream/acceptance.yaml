@@ -1,0 +1,50 @@
+version: 1
+feature: "sse-server-and-change-stream"
+level: "L3_subfeature"
+template: "A1-A8"
+tree_context:
+  feature_level: "L3_subfeature"
+  feature_path: "capability.runtime.feature.runtime-streaming.subfeature.sse-server-and-change-stream"
+  parent_path: "capability.runtime.feature.runtime-streaming"
+  acceptance_inherits_from: "capability.runtime.feature.runtime-streaming"
+level_acceptance:
+  focus_groups:
+    - A1_functional
+    - A3_service_governance
+    - A8_test_automation
+  notes: "Core SSE Server + Change Stream 监听，支撑实时推送基础设施。"
+global_acceptance:
+  A1_functional:
+    scenarios:
+      - given: "用户已认证"
+        when: "建立 SSE 连接 GET /v1/stream/events"
+        then: "SSEServer 注册连接，按 userId 路由"
+      - given: "MongoDB 集合发生变更"
+        when: "ChangeStreamWatcher 监听"
+        then: "触发 SSE 推送或内部事件分发"
+      - given: "服务端向某 userId 推送事件"
+        when: "SSEServer.Push(userId, event)"
+        then: "该用户所有 SSE 连接收到推送"
+  A2_experience:
+    - "SSE 连接建立延迟 < 200ms"
+  A3_service_governance:
+    - "SSE 连接数上限可配置"
+    - "Change Stream 监听支持 resume token"
+  A4_observability:
+    - "SSE 连接数、Change Stream 延迟可监控"
+  A5_product_ops:
+    - "N/A"
+  A6_security_privacy:
+    - "SSE 连接需认证，按 userId 隔离"
+  A7_contract_metadata_consistency:
+    - "推送事件类型与 events.yaml 定义一致"
+  A8_test_automation:
+    - "SSE server 集成测试（连接/推送/断开）"
+    - "Change Stream watcher 集成测试（testcontainers mongo）"
+tests:
+  integration:
+    - "quwoquan_service/runtime/streaming/tests/sse_server_test.go"
+    - "quwoquan_service/runtime/streaming/tests/change_stream_test.go"
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"

@@ -1,0 +1,2532 @@
+version: 1
+updated_at: 2026-02-24T23:59:00.000000Z
+features:
+    - id: assistant-run-learning
+      name: assistant-run-learning
+      level: L1_domain
+      path: ../specs/feature-tree/assistant-run-learning
+      domain: ""
+      status: specified
+      tags: []
+      children:
+        - id: learning-event-feedback-injection
+          name: learning-event-feedback-injection
+          level: L2_feature
+          path: ../specs/feature-tree/assistant-run-learning/learning-event-feedback-injection
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: feedback-aggregation
+              name: feedback-aggregation
+              level: L3_component
+              path: ../specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/feedback-aggregation
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: distribution-and-score-aggregation
+                  name: distribution-and-score-aggregation
+                  level: L4_detail
+                  path: ../specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/feedback-aggregation/distribution-and-score-aggregation
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: aggregation-quality-guard
+                      name: aggregation-quality-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/feedback-aggregation/distribution-and-score-aggregation/aggregation-quality-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: feedback-context-injection
+              name: feedback-context-injection
+              level: L3_component
+              path: ../specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/feedback-context-injection
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: historical-feedback-context-builder
+                  name: historical-feedback-context-builder
+                  level: L4_detail
+                  path: ../specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/feedback-context-injection/historical-feedback-context-builder
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: context-injection-contract-guard
+                      name: context-injection-contract-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/feedback-context-injection/historical-feedback-context-builder/context-injection-contract-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: learning-event-ingestion
+              name: learning-event-ingestion
+              level: L3_component
+              path: ../specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/learning-event-ingestion
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: interactionevent-scorecard-schema
+                  name: interactionevent-scorecard-schema
+                  level: L4_detail
+                  path: ../specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/learning-event-ingestion/interactionevent-scorecard-schema
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: ingestion-dedup-and-idempotency
+                      name: ingestion-dedup-and-idempotency
+                      level: L5_leaf
+                      path: ../specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/learning-event-ingestion/interactionevent-scorecard-schema/ingestion-dedup-and-idempotency
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: profile-proposal-apply-loop
+          name: profile-proposal-apply-loop
+          level: L2_feature
+          path: ../specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: proposal-apply-audit
+              name: proposal-apply-audit
+              level: L3_component
+              path: ../specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-apply-audit
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: profile-apply-and-versioning
+                  name: profile-apply-and-versioning
+                  level: L4_detail
+                  path: ../specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-apply-audit/profile-apply-and-versioning
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: apply-rollback-and-audit-guard
+                      name: apply-rollback-and-audit-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-apply-audit/profile-apply-and-versioning/apply-rollback-and-audit-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: proposal-confirm-reject
+              name: proposal-confirm-reject
+              level: L3_component
+              path: ../specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-confirm-reject
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: proposal-state-transition-control
+                  name: proposal-state-transition-control
+                  level: L4_detail
+                  path: ../specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-confirm-reject/proposal-state-transition-control
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: transition-idempotency-guard
+                      name: transition-idempotency-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-confirm-reject/proposal-state-transition-control/transition-idempotency-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: proposal-create-review
+              name: proposal-create-review
+              level: L3_component
+              path: ../specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-create-review
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: proposal-generation-and-review-model
+                  name: proposal-generation-and-review-model
+                  level: L4_detail
+                  path: ../specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-create-review/proposal-generation-and-review-model
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: review-audit-trace-link
+                      name: review-audit-trace-link
+                      level: L5_leaf
+                      path: ../specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-create-review/proposal-generation-and-review-model/review-audit-trace-link
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: run-stream-policy
+          name: run-stream-policy
+          level: L2_feature
+          path: ../specs/feature-tree/assistant-run-learning/run-stream-policy
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: policy-template-routing
+              name: policy-template-routing
+              level: L3_component
+              path: ../specs/feature-tree/assistant-run-learning/run-stream-policy/policy-template-routing
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: domain-policy-template-selection
+                  name: domain-policy-template-selection
+                  level: L4_detail
+                  path: ../specs/feature-tree/assistant-run-learning/run-stream-policy/policy-template-routing/domain-policy-template-selection
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: policy-version-gray-release
+                      name: policy-version-gray-release
+                      level: L5_leaf
+                      path: ../specs/feature-tree/assistant-run-learning/run-stream-policy/policy-template-routing/domain-policy-template-selection/policy-version-gray-release
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: run-stream-protocol
+              name: run-stream-protocol
+              level: L3_component
+              path: ../specs/feature-tree/assistant-run-learning/run-stream-policy/run-stream-protocol
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: stream-event-ordering-and-finalization
+                  name: stream-event-ordering-and-finalization
+                  level: L4_detail
+                  path: ../specs/feature-tree/assistant-run-learning/run-stream-policy/run-stream-protocol/stream-event-ordering-and-finalization
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: stream-fallback-and-retry-guard
+                      name: stream-fallback-and-retry-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/assistant-run-learning/run-stream-policy/run-stream-protocol/stream-event-ordering-and-finalization/stream-fallback-and-retry-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: run-sync-contract
+              name: run-sync-contract
+              level: L3_component
+              path: ../specs/feature-tree/assistant-run-learning/run-stream-policy/run-sync-contract
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: assistant-run-io-contract
+                  name: assistant-run-io-contract
+                  level: L4_detail
+                  path: ../specs/feature-tree/assistant-run-learning/run-stream-policy/run-sync-contract/assistant-run-io-contract
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: run-error-mapping-governance
+                      name: run-error-mapping-governance
+                      level: L5_leaf
+                      path: ../specs/feature-tree/assistant-run-learning/run-stream-policy/run-sync-contract/assistant-run-io-contract/run-error-mapping-governance
+                      domain: ""
+                      status: specified
+                      tags: []
+    - id: chat-conversation
+      name: chat-conversation
+      level: L1_domain
+      path: ../specs/feature-tree/chat-conversation
+      domain: ""
+      status: specified
+      tags: []
+      children:
+        - id: contact-and-session-governance
+          name: contact-and-session-governance
+          level: L2_feature
+          path: ../specs/feature-tree/chat-conversation/contact-and-session-governance
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: contact-search-index
+              name: contact-search-index
+              level: L3_component
+              path: ../specs/feature-tree/chat-conversation/contact-and-session-governance/contact-search-index
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: search-query-contract
+                  name: search-query-contract
+                  level: L4_detail
+                  path: ../specs/feature-tree/chat-conversation/contact-and-session-governance/contact-search-index/search-query-contract
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: privacy-filter-guard
+                      name: privacy-filter-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/chat-conversation/contact-and-session-governance/contact-search-index/search-query-contract/privacy-filter-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: session-audit-observability
+              name: session-audit-observability
+              level: L3_component
+              path: ../specs/feature-tree/chat-conversation/contact-and-session-governance/session-audit-observability
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: session-log-metric-schema
+                  name: session-log-metric-schema
+                  level: L4_detail
+                  path: ../specs/feature-tree/chat-conversation/contact-and-session-governance/session-audit-observability/session-log-metric-schema
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: anomaly-alert-guard
+                      name: anomaly-alert-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/chat-conversation/contact-and-session-governance/session-audit-observability/session-log-metric-schema/anomaly-alert-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: session-governance-actions
+              name: session-governance-actions
+              level: L3_component
+              path: ../specs/feature-tree/chat-conversation/contact-and-session-governance/session-governance-actions
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: governance-action-policy
+                  name: governance-action-policy
+                  level: L4_detail
+                  path: ../specs/feature-tree/chat-conversation/contact-and-session-governance/session-governance-actions/governance-action-policy
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: action-audit-observability
+                      name: action-audit-observability
+                      level: L5_leaf
+                      path: ../specs/feature-tree/chat-conversation/contact-and-session-governance/session-governance-actions/governance-action-policy/action-audit-observability
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: group-creation-member-management
+          name: group-creation-member-management
+          level: L2_feature
+          path: ../specs/feature-tree/chat-conversation/group-creation-member-management
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: group-create-flow
+              name: group-create-flow
+              level: L3_component
+              path: ../specs/feature-tree/chat-conversation/group-creation-member-management/group-create-flow
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: group-creation-contract
+                  name: group-creation-contract
+                  level: L4_detail
+                  path: ../specs/feature-tree/chat-conversation/group-creation-member-management/group-create-flow/group-creation-contract
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: create-idempotency-and-rollback
+                      name: create-idempotency-and-rollback
+                      level: L5_leaf
+                      path: ../specs/feature-tree/chat-conversation/group-creation-member-management/group-create-flow/group-creation-contract/create-idempotency-and-rollback
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: group-settings
+              name: group-settings
+              level: L3_component
+              path: ../specs/feature-tree/chat-conversation/group-creation-member-management/group-settings
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: mute-pin-read-settings-contract
+                  name: mute-pin-read-settings-contract
+                  level: L4_detail
+                  path: ../specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/mute-pin-read-settings-contract
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: settings-sync-consistency-guard
+                      name: settings-sync-consistency-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/mute-pin-read-settings-contract/settings-sync-consistency-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: member-add-remove-policy
+              name: member-add-remove-policy
+              level: L3_component
+              path: ../specs/feature-tree/chat-conversation/group-creation-member-management/member-add-remove-policy
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: member-permission-audit
+                  name: member-permission-audit
+                  level: L4_detail
+                  path: ../specs/feature-tree/chat-conversation/group-creation-member-management/member-add-remove-policy/member-permission-audit
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: operation-risk-guard
+                      name: operation-risk-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/chat-conversation/group-creation-member-management/member-add-remove-policy/member-permission-audit/operation-risk-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: list-detail-message-delivery
+          name: list-detail-message-delivery
+          level: L2_feature
+          path: ../specs/feature-tree/chat-conversation/list-detail-message-delivery
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: conversation-list-source-switch
+              name: conversation-list-source-switch
+              level: L3_component
+              path: ../specs/feature-tree/chat-conversation/list-detail-message-delivery/conversation-list-source-switch
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: repository-mode-routing
+                  name: repository-mode-routing
+                  level: L4_detail
+                  path: ../specs/feature-tree/chat-conversation/list-detail-message-delivery/conversation-list-source-switch/repository-mode-routing
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: mode-switch-compatibility-guard
+                      name: mode-switch-compatibility-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/chat-conversation/list-detail-message-delivery/conversation-list-source-switch/repository-mode-routing/mode-switch-compatibility-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: delivery-and-read-receipt
+              name: delivery-and-read-receipt
+              level: L3_component
+              path: ../specs/feature-tree/chat-conversation/list-detail-message-delivery/delivery-and-read-receipt
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: status-transition-and-receipt-model
+                  name: status-transition-and-receipt-model
+                  level: L4_detail
+                  path: ../specs/feature-tree/chat-conversation/list-detail-message-delivery/delivery-and-read-receipt/status-transition-and-receipt-model
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: receipt-consistency-repair
+                      name: receipt-consistency-repair
+                      level: L5_leaf
+                      path: ../specs/feature-tree/chat-conversation/list-detail-message-delivery/delivery-and-read-receipt/status-transition-and-receipt-model/receipt-consistency-repair
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: message-paging-and-ordering
+              name: message-paging-and-ordering
+              level: L3_component
+              path: ../specs/feature-tree/chat-conversation/list-detail-message-delivery/message-paging-and-ordering
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: message-cursor-order-contract
+                  name: message-cursor-order-contract
+                  level: L4_detail
+                  path: ../specs/feature-tree/chat-conversation/list-detail-message-delivery/message-paging-and-ordering/message-cursor-order-contract
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: duplicate-message-dedup-guard
+                      name: duplicate-message-dedup-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/chat-conversation/list-detail-message-delivery/message-paging-and-ordering/message-cursor-order-contract/duplicate-message-dedup-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+    - id: circle-community
+      name: circle-community
+      level: L1_domain
+      path: ../specs/feature-tree/circle-community
+      domain: ""
+      status: specified
+      tags: []
+      children:
+        - id: activity-member-governance
+          name: activity-member-governance
+          level: L2_feature
+          path: ../specs/feature-tree/circle-community/activity-member-governance
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: activity-stream-paging
+              name: activity-stream-paging
+              level: L3_component
+              path: ../specs/feature-tree/circle-community/activity-member-governance/activity-stream-paging
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: activity-cursor-contract
+                  name: activity-cursor-contract
+                  level: L4_detail
+                  path: ../specs/feature-tree/circle-community/activity-member-governance/activity-stream-paging/activity-cursor-contract
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: stream-degrade-fallback
+                      name: stream-degrade-fallback
+                      level: L5_leaf
+                      path: ../specs/feature-tree/circle-community/activity-member-governance/activity-stream-paging/activity-cursor-contract/stream-degrade-fallback
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: circle-lifecycle
+              name: circle-lifecycle
+              level: L3_component
+              path: ../specs/feature-tree/circle-community/activity-member-governance/circle-lifecycle
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: circle-create-update-archive-contract
+                  name: circle-create-update-archive-contract
+                  level: L4_detail
+                  path: ../specs/feature-tree/circle-community/activity-member-governance/circle-lifecycle/circle-create-update-archive-contract
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: lifecycle-audit-guard
+                      name: lifecycle-audit-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/circle-community/activity-member-governance/circle-lifecycle/circle-create-update-archive-contract/lifecycle-audit-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: member-role-permission
+              name: member-role-permission
+              level: L3_component
+              path: ../specs/feature-tree/circle-community/activity-member-governance/member-role-permission
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: role-permission-policy
+                  name: role-permission-policy
+                  level: L4_detail
+                  path: ../specs/feature-tree/circle-community/activity-member-governance/member-role-permission/role-permission-policy
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: permission-risk-guard
+                      name: permission-risk-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/circle-community/activity-member-governance/member-role-permission/role-permission-policy/permission-risk-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: circle-management-and-stats
+          name: circle-management-and-stats
+          level: L2_feature
+          path: ../specs/feature-tree/circle-community/circle-management-and-stats
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: kpi-reporting
+              name: kpi-reporting
+              level: L3_component
+              path: ../specs/feature-tree/circle-community/circle-management-and-stats/kpi-reporting
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: periodic-report-generation
+                  name: periodic-report-generation
+                  level: L4_detail
+                  path: ../specs/feature-tree/circle-community/circle-management-and-stats/kpi-reporting/periodic-report-generation
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: report-consistency-check
+                      name: report-consistency-check
+                      level: L5_leaf
+                      path: ../specs/feature-tree/circle-community/circle-management-and-stats/kpi-reporting/periodic-report-generation/report-consistency-check
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: moderation-governance
+              name: moderation-governance
+              level: L3_component
+              path: ../specs/feature-tree/circle-community/circle-management-and-stats/moderation-governance
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: moderation-policy-contract
+                  name: moderation-policy-contract
+                  level: L4_detail
+                  path: ../specs/feature-tree/circle-community/circle-management-and-stats/moderation-governance/moderation-policy-contract
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: governance-audit-guard
+                      name: governance-audit-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/circle-community/circle-management-and-stats/moderation-governance/moderation-policy-contract/governance-audit-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: ops-dashboard
+              name: ops-dashboard
+              level: L3_component
+              path: ../specs/feature-tree/circle-community/circle-management-and-stats/ops-dashboard
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: circle-kpi-dashboard-model
+                  name: circle-kpi-dashboard-model
+                  level: L4_detail
+                  path: ../specs/feature-tree/circle-community/circle-management-and-stats/ops-dashboard/circle-kpi-dashboard-model
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: dashboard-data-quality-guard
+                      name: dashboard-data-quality-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/circle-community/circle-management-and-stats/ops-dashboard/circle-kpi-dashboard-model/dashboard-data-quality-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: in-circle-recommendation-loop
+          name: in-circle-recommendation-loop
+          level: L2_feature
+          path: ../specs/feature-tree/circle-community/in-circle-recommendation-loop
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: behavior-ingestion
+              name: behavior-ingestion
+              level: L3_component
+              path: ../specs/feature-tree/circle-community/in-circle-recommendation-loop/behavior-ingestion
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: circle-behavior-event-schema
+                  name: circle-behavior-event-schema
+                  level: L4_detail
+                  path: ../specs/feature-tree/circle-community/in-circle-recommendation-loop/behavior-ingestion/circle-behavior-event-schema
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: behavior-quality-guard
+                      name: behavior-quality-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/circle-community/in-circle-recommendation-loop/behavior-ingestion/circle-behavior-event-schema/behavior-quality-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: optimization-feedback
+              name: optimization-feedback
+              level: L3_component
+              path: ../specs/feature-tree/circle-community/in-circle-recommendation-loop/optimization-feedback
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: feedback-evaluation-report
+                  name: feedback-evaluation-report
+                  level: L4_detail
+                  path: ../specs/feature-tree/circle-community/in-circle-recommendation-loop/optimization-feedback/feedback-evaluation-report
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: optimization-release-gate
+                      name: optimization-release-gate
+                      level: L5_leaf
+                      path: ../specs/feature-tree/circle-community/in-circle-recommendation-loop/optimization-feedback/feedback-evaluation-report/optimization-release-gate
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: recommendation-ranking
+              name: recommendation-ranking
+              level: L3_component
+              path: ../specs/feature-tree/circle-community/in-circle-recommendation-loop/recommendation-ranking
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: in-circle-ranking-policy
+                  name: in-circle-ranking-policy
+                  level: L4_detail
+                  path: ../specs/feature-tree/circle-community/in-circle-recommendation-loop/recommendation-ranking/in-circle-ranking-policy
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: ranking-fallback-guard
+                      name: ranking-fallback-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/circle-community/in-circle-recommendation-loop/recommendation-ranking/in-circle-ranking-policy/ranking-fallback-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+    - id: discovery-content
+      name: discovery-content
+      level: L1_domain
+      path: ../specs/feature-tree/discovery-content
+      domain: ""
+      status: specified
+      tags: []
+      children:
+        - id: feed-orchestration-recommendation
+          name: feed-orchestration-recommendation
+          level: L2_feature
+          path: ../specs/feature-tree/discovery-content/feed-orchestration-recommendation
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: feed-fallback-degrade
+              name: feed-fallback-degrade
+              level: L3_component
+              path: ../specs/feature-tree/discovery-content/feed-orchestration-recommendation/feed-fallback-degrade
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: downstream-timeout-fallback
+                  name: downstream-timeout-fallback
+                  level: L4_detail
+                  path: ../specs/feature-tree/discovery-content/feed-orchestration-recommendation/feed-fallback-degrade/downstream-timeout-fallback
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: degraded-response-observability
+                      name: degraded-response-observability
+                      level: L5_leaf
+                      path: ../specs/feature-tree/discovery-content/feed-orchestration-recommendation/feed-fallback-degrade/downstream-timeout-fallback/degraded-response-observability
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: personalized-ranking
+              name: personalized-ranking
+              level: L3_component
+              path: ../specs/feature-tree/discovery-content/feed-orchestration-recommendation/personalized-ranking
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: ranking-signal-fusion
+                  name: ranking-signal-fusion
+                  level: L4_detail
+                  path: ../specs/feature-tree/discovery-content/feed-orchestration-recommendation/personalized-ranking/ranking-signal-fusion
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: ranking-fallback-guard
+                      name: ranking-fallback-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/discovery-content/feed-orchestration-recommendation/personalized-ranking/ranking-signal-fusion/ranking-fallback-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: unified-items-cursor
+              name: unified-items-cursor
+              level: L3_component
+              path: ../specs/feature-tree/discovery-content/feed-orchestration-recommendation/unified-items-cursor
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: feed-dto-cursor-contract
+                  name: feed-dto-cursor-contract
+                  level: L4_detail
+                  path: ../specs/feature-tree/discovery-content/feed-orchestration-recommendation/unified-items-cursor/feed-dto-cursor-contract
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: cursor-compatibility-guard
+                      name: cursor-compatibility-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/discovery-content/feed-orchestration-recommendation/unified-items-cursor/feed-dto-cursor-contract/cursor-compatibility-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: media-processing-helper-read
+          name: media-processing-helper-read
+          level: L2_feature
+          path: ../specs/feature-tree/discovery-content/media-processing-helper-read
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: helper-read-summary
+              name: helper-read-summary
+              level: L3_component
+              path: ../specs/feature-tree/discovery-content/media-processing-helper-read/helper-read-summary
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: summary-generation-contract
+                  name: summary-generation-contract
+                  level: L4_detail
+                  path: ../specs/feature-tree/discovery-content/media-processing-helper-read/helper-read-summary/summary-generation-contract
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: summary-quality-evaluation-guard
+                      name: summary-quality-evaluation-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/discovery-content/media-processing-helper-read/helper-read-summary/summary-generation-contract/summary-quality-evaluation-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: media-failure-recovery
+              name: media-failure-recovery
+              level: L3_component
+              path: ../specs/feature-tree/discovery-content/media-processing-helper-read/media-failure-recovery
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: recovery-and-rollback-policy
+                  name: recovery-and-rollback-policy
+                  level: L4_detail
+                  path: ../specs/feature-tree/discovery-content/media-processing-helper-read/media-failure-recovery/recovery-and-rollback-policy
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: recovery-audit-observability
+                      name: recovery-audit-observability
+                      level: L5_leaf
+                      path: ../specs/feature-tree/discovery-content/media-processing-helper-read/media-failure-recovery/recovery-and-rollback-policy/recovery-audit-observability
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: media-status-pipeline
+              name: media-status-pipeline
+              level: L3_component
+              path: ../specs/feature-tree/discovery-content/media-processing-helper-read/media-status-pipeline
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: media-processing-state-machine
+                  name: media-processing-state-machine
+                  level: L4_detail
+                  path: ../specs/feature-tree/discovery-content/media-processing-helper-read/media-status-pipeline/media-processing-state-machine
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: media-failure-retry-guard
+                      name: media-failure-retry-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/discovery-content/media-processing-helper-read/media-status-pipeline/media-processing-state-machine/media-failure-retry-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: publish-comment-reaction
+          name: publish-comment-reaction
+          level: L2_feature
+          path: ../specs/feature-tree/discovery-content/publish-comment-reaction
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: comment-thread
+              name: comment-thread
+              level: L3_component
+              path: ../specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: comment-reply-pagination-contract
+                  name: comment-reply-pagination-contract
+                  level: L4_detail
+                  path: ../specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/comment-reply-pagination-contract
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: moderation-delete-audit-guard
+                      name: moderation-delete-audit-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/comment-reply-pagination-contract/moderation-delete-audit-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: post-create-update
+              name: post-create-update
+              level: L3_component
+              path: ../specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: post-lifecycle-contract
+                  name: post-lifecycle-contract
+                  level: L4_detail
+                  path: ../specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update/post-lifecycle-contract
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: publish-idempotency-guard
+                      name: publish-idempotency-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update/post-lifecycle-contract/publish-idempotency-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: reaction-state-counter
+              name: reaction-state-counter
+              level: L3_component
+              path: ../specs/feature-tree/discovery-content/publish-comment-reaction/reaction-state-counter
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: reaction-counter-consistency
+                  name: reaction-counter-consistency
+                  level: L4_detail
+                  path: ../specs/feature-tree/discovery-content/publish-comment-reaction/reaction-state-counter/reaction-counter-consistency
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: eventual-consistency-repair-job
+                      name: eventual-consistency-repair-job
+                      level: L5_leaf
+                      path: ../specs/feature-tree/discovery-content/publish-comment-reaction/reaction-state-counter/reaction-counter-consistency/eventual-consistency-repair-job
+                      domain: ""
+                      status: specified
+                      tags: []
+    - id: gateway-orchestrator-foundation
+      name: gateway-orchestrator-foundation
+      level: L1_domain
+      path: ../specs/feature-tree/gateway-orchestrator-foundation
+      domain: ""
+      status: specified
+      tags: []
+      children:
+        - id: orchestration-degradation-rollback
+          name: orchestration-degradation-rollback
+          level: L2_feature
+          path: ../specs/feature-tree/gateway-orchestrator-foundation/orchestration-degradation-rollback
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: aggregation-contract-stability
+              name: aggregation-contract-stability
+              level: L3_component
+              path: ../specs/feature-tree/gateway-orchestrator-foundation/orchestration-degradation-rollback/aggregation-contract-stability
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: aggregated-response-compatibility
+                  name: aggregated-response-compatibility
+                  level: L4_detail
+                  path: ../specs/feature-tree/gateway-orchestrator-foundation/orchestration-degradation-rollback/aggregation-contract-stability/aggregated-response-compatibility
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: contract-drift-blocker
+                      name: contract-drift-blocker
+                      level: L5_leaf
+                      path: ../specs/feature-tree/gateway-orchestrator-foundation/orchestration-degradation-rollback/aggregation-contract-stability/aggregated-response-compatibility/contract-drift-blocker
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: downstream-timeout-fallback
+              name: downstream-timeout-fallback
+              level: L3_component
+              path: ../specs/feature-tree/gateway-orchestrator-foundation/orchestration-degradation-rollback/downstream-timeout-fallback
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: timeout-circuit-degrade-policy
+                  name: timeout-circuit-degrade-policy
+                  level: L4_detail
+                  path: ../specs/feature-tree/gateway-orchestrator-foundation/orchestration-degradation-rollback/downstream-timeout-fallback/timeout-circuit-degrade-policy
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: fallback-quality-guard
+                      name: fallback-quality-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/gateway-orchestrator-foundation/orchestration-degradation-rollback/downstream-timeout-fallback/timeout-circuit-degrade-policy/fallback-quality-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: rollback-playbook
+              name: rollback-playbook
+              level: L3_component
+              path: ../specs/feature-tree/gateway-orchestrator-foundation/orchestration-degradation-rollback/rollback-playbook
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: release-rollback-procedure
+                  name: release-rollback-procedure
+                  level: L4_detail
+                  path: ../specs/feature-tree/gateway-orchestrator-foundation/orchestration-degradation-rollback/rollback-playbook/release-rollback-procedure
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: rollback-audit-trace
+                      name: rollback-audit-trace
+                      level: L5_leaf
+                      path: ../specs/feature-tree/gateway-orchestrator-foundation/orchestration-degradation-rollback/rollback-playbook/release-rollback-procedure/rollback-audit-trace
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: request-context-propagation
+          name: request-context-propagation
+          level: L2_feature
+          path: ../specs/feature-tree/gateway-orchestrator-foundation/request-context-propagation
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: async-causation-link
+              name: async-causation-link
+              level: L3_component
+              path: ../specs/feature-tree/gateway-orchestrator-foundation/request-context-propagation/async-causation-link
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: parenttrace-causation-envelopes
+                  name: parenttrace-causation-envelopes
+                  level: L4_detail
+                  path: ../specs/feature-tree/gateway-orchestrator-foundation/request-context-propagation/async-causation-link/parenttrace-causation-envelopes
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: async-trace-link-validator
+                      name: async-trace-link-validator
+                      level: L5_leaf
+                      path: ../specs/feature-tree/gateway-orchestrator-foundation/request-context-propagation/async-causation-link/parenttrace-causation-envelopes/async-trace-link-validator
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: client-context-propagation
+              name: client-context-propagation
+              level: L3_component
+              path: ../specs/feature-tree/gateway-orchestrator-foundation/request-context-propagation/client-context-propagation
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: page-session-device-propagation
+                  name: page-session-device-propagation
+                  level: L4_detail
+                  path: ../specs/feature-tree/gateway-orchestrator-foundation/request-context-propagation/client-context-propagation/page-session-device-propagation
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: propagation-completeness-check
+                      name: propagation-completeness-check
+                      level: L5_leaf
+                      path: ../specs/feature-tree/gateway-orchestrator-foundation/request-context-propagation/client-context-propagation/page-session-device-propagation/propagation-completeness-check
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: request-trace-generation
+              name: request-trace-generation
+              level: L3_component
+              path: ../specs/feature-tree/gateway-orchestrator-foundation/request-context-propagation/request-trace-generation
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: id-generation-policy
+                  name: id-generation-policy
+                  level: L4_detail
+                  path: ../specs/feature-tree/gateway-orchestrator-foundation/request-context-propagation/request-trace-generation/id-generation-policy
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: id-collision-guard
+                      name: id-collision-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/gateway-orchestrator-foundation/request-context-propagation/request-trace-generation/id-generation-policy/id-collision-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: unified-entry-security
+          name: unified-entry-security
+          level: L2_feature
+          path: ../specs/feature-tree/gateway-orchestrator-foundation/unified-entry-security
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: authn-authz-chain
+              name: authn-authz-chain
+              level: L3_component
+              path: ../specs/feature-tree/gateway-orchestrator-foundation/unified-entry-security/authn-authz-chain
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: token-validation-and-context-injection
+                  name: token-validation-and-context-injection
+                  level: L4_detail
+                  path: ../specs/feature-tree/gateway-orchestrator-foundation/unified-entry-security/authn-authz-chain/token-validation-and-context-injection
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: auth-failure-safety-guard
+                      name: auth-failure-safety-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/gateway-orchestrator-foundation/unified-entry-security/authn-authz-chain/token-validation-and-context-injection/auth-failure-safety-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: edge-security-observability
+              name: edge-security-observability
+              level: L3_component
+              path: ../specs/feature-tree/gateway-orchestrator-foundation/unified-entry-security/edge-security-observability
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: security-event-log-schema
+                  name: security-event-log-schema
+                  level: L4_detail
+                  path: ../specs/feature-tree/gateway-orchestrator-foundation/unified-entry-security/edge-security-observability/security-event-log-schema
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: security-alert-link
+                      name: security-alert-link
+                      level: L5_leaf
+                      path: ../specs/feature-tree/gateway-orchestrator-foundation/unified-entry-security/edge-security-observability/security-event-log-schema/security-alert-link
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: rate-limit-protection
+              name: rate-limit-protection
+              level: L3_component
+              path: ../specs/feature-tree/gateway-orchestrator-foundation/unified-entry-security/rate-limit-protection
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: user-ip-quota-policy
+                  name: user-ip-quota-policy
+                  level: L4_detail
+                  path: ../specs/feature-tree/gateway-orchestrator-foundation/unified-entry-security/rate-limit-protection/user-ip-quota-policy
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: abuse-detection-guard
+                      name: abuse-detection-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/gateway-orchestrator-foundation/unified-entry-security/rate-limit-protection/user-ip-quota-policy/abuse-detection-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+    - id: platform-ops-governance
+      name: platform-ops-governance
+      level: L1_domain
+      path: ../specs/feature-tree/platform-ops-governance
+      domain: ""
+      status: specified
+      tags: []
+      children:
+        - id: config-and-reliability-governance
+          name: config-and-reliability-governance
+          level: L2_feature
+          path: ../specs/feature-tree/platform-ops-governance/config-and-reliability-governance
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: config-source-governance
+              name: config-source-governance
+              level: L3_component
+              path: ../specs/feature-tree/platform-ops-governance/config-and-reliability-governance/config-source-governance
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: risky-config-gray-release
+                  name: risky-config-gray-release
+                  level: L4_detail
+                  path: ../specs/feature-tree/platform-ops-governance/config-and-reliability-governance/config-source-governance/risky-config-gray-release
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: one-click-config-rollback
+                      name: one-click-config-rollback
+                      level: L5_leaf
+                      path: ../specs/feature-tree/platform-ops-governance/config-and-reliability-governance/config-source-governance/risky-config-gray-release/one-click-config-rollback
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: reliability-policy-control
+              name: reliability-policy-control
+              level: L3_component
+              path: ../specs/feature-tree/platform-ops-governance/config-and-reliability-governance/reliability-policy-control
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: timeout-retry-circuit-ratelimit-degrade
+                  name: timeout-retry-circuit-ratelimit-degrade
+                  level: L4_detail
+                  path: ../specs/feature-tree/platform-ops-governance/config-and-reliability-governance/reliability-policy-control/timeout-retry-circuit-ratelimit-degrade
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: reliability-drill-automation
+                      name: reliability-drill-automation
+                      level: L5_leaf
+                      path: ../specs/feature-tree/platform-ops-governance/config-and-reliability-governance/reliability-policy-control/timeout-retry-circuit-ratelimit-degrade/reliability-drill-automation
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: observability-and-alerting
+          name: observability-and-alerting
+          level: L2_feature
+          path: ../specs/feature-tree/platform-ops-governance/observability-and-alerting
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: log-metric-trace-unification
+              name: log-metric-trace-unification
+              level: L3_component
+              path: ../specs/feature-tree/platform-ops-governance/observability-and-alerting/log-metric-trace-unification
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: field-policy-and-dashboard-template
+                  name: field-policy-and-dashboard-template
+                  level: L4_detail
+                  path: ../specs/feature-tree/platform-ops-governance/observability-and-alerting/log-metric-trace-unification/field-policy-and-dashboard-template
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: incident-detection-escalation
+                      name: incident-detection-escalation
+                      level: L5_leaf
+                      path: ../specs/feature-tree/platform-ops-governance/observability-and-alerting/log-metric-trace-unification/field-policy-and-dashboard-template/incident-detection-escalation
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: slo-error-budget-governance
+              name: slo-error-budget-governance
+              level: L3_component
+              path: ../specs/feature-tree/platform-ops-governance/observability-and-alerting/slo-error-budget-governance
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: budget-burn-policy
+                  name: budget-burn-policy
+                  level: L4_detail
+                  path: ../specs/feature-tree/platform-ops-governance/observability-and-alerting/slo-error-budget-governance/budget-burn-policy
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: auto-alert-and-action-runbook
+                      name: auto-alert-and-action-runbook
+                      level: L5_leaf
+                      path: ../specs/feature-tree/platform-ops-governance/observability-and-alerting/slo-error-budget-governance/budget-burn-policy/auto-alert-and-action-runbook
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: security-privacy-audit
+          name: security-privacy-audit
+          level: L2_feature
+          path: ../specs/feature-tree/platform-ops-governance/security-privacy-audit
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: compliance-reporting
+              name: compliance-reporting
+              level: L3_component
+              path: ../specs/feature-tree/platform-ops-governance/security-privacy-audit/compliance-reporting
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: audit-trace-export
+                  name: audit-trace-export
+                  level: L4_detail
+                  path: ../specs/feature-tree/platform-ops-governance/security-privacy-audit/compliance-reporting/audit-trace-export
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: compliance-gate-blocker
+                      name: compliance-gate-blocker
+                      level: L5_leaf
+                      path: ../specs/feature-tree/platform-ops-governance/security-privacy-audit/compliance-reporting/audit-trace-export/compliance-gate-blocker
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: data-classification-policy
+              name: data-classification-policy
+              level: L3_component
+              path: ../specs/feature-tree/platform-ops-governance/security-privacy-audit/data-classification-policy
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: mask-encrypt-retention-enforcement
+                  name: mask-encrypt-retention-enforcement
+                  level: L4_detail
+                  path: ../specs/feature-tree/platform-ops-governance/security-privacy-audit/data-classification-policy/mask-encrypt-retention-enforcement
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: privacy-audit-sampling
+                      name: privacy-audit-sampling
+                      level: L5_leaf
+                      path: ../specs/feature-tree/platform-ops-governance/security-privacy-audit/data-classification-policy/mask-encrypt-retention-enforcement/privacy-audit-sampling
+                      domain: ""
+                      status: specified
+                      tags: []
+    - id: product-ops-growth
+      name: product-ops-growth
+      level: L1_domain
+      path: ../specs/feature-tree/product-ops-growth
+      domain: ""
+      status: specified
+      tags: []
+      children:
+        - id: event-ingestion-and-analytics
+          name: event-ingestion-and-analytics
+          level: L2_feature
+          path: ../specs/feature-tree/product-ops-growth/event-ingestion-and-analytics
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: analytics-metric-dictionary
+              name: analytics-metric-dictionary
+              level: L3_component
+              path: ../specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/analytics-metric-dictionary
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: metric-dimension-standard
+                  name: metric-dimension-standard
+                  level: L4_detail
+                  path: ../specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/analytics-metric-dictionary/metric-dimension-standard
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: report-consistency-check
+                      name: report-consistency-check
+                      level: L5_leaf
+                      path: ../specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/analytics-metric-dictionary/metric-dimension-standard/report-consistency-check
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: event-schema-governance
+              name: event-schema-governance
+              level: L3_component
+              path: ../specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/event-schema-governance
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: event-version-compatibility
+                  name: event-version-compatibility
+                  level: L4_detail
+                  path: ../specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/event-schema-governance/event-version-compatibility
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: schema-drift-blocker
+                      name: schema-drift-blocker
+                      level: L5_leaf
+                      path: ../specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/event-schema-governance/event-version-compatibility/schema-drift-blocker
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: experiment-bucketing-and-rollout
+          name: experiment-bucketing-and-rollout
+          level: L2_feature
+          path: ../specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: bucketing-strategy-engine
+              name: bucketing-strategy-engine
+              level: L3_component
+              path: ../specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/bucketing-strategy-engine
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: population-segmentation
+                  name: population-segmentation
+                  level: L4_detail
+                  path: ../specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/bucketing-strategy-engine/population-segmentation
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: rollout-safety-guard
+                      name: rollout-safety-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/bucketing-strategy-engine/population-segmentation/rollout-safety-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: rollout-audit-and-rollback
+              name: rollout-audit-and-rollback
+              level: L3_component
+              path: ../specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/rollout-audit-and-rollback
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: experiment-version-audit
+                  name: experiment-version-audit
+                  level: L4_detail
+                  path: ../specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/rollout-audit-and-rollback/experiment-version-audit
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: fast-rollback-workflow
+                      name: fast-rollback-workflow
+                      level: L5_leaf
+                      path: ../specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/rollout-audit-and-rollback/experiment-version-audit/fast-rollback-workflow
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: feedback-optimization-loop
+          name: feedback-optimization-loop
+          level: L2_feature
+          path: ../specs/feature-tree/product-ops-growth/feedback-optimization-loop
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: feedback-collection-unification
+              name: feedback-collection-unification
+              level: L3_component
+              path: ../specs/feature-tree/product-ops-growth/feedback-optimization-loop/feedback-collection-unification
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: feedback-quality-control
+                  name: feedback-quality-control
+                  level: L4_detail
+                  path: ../specs/feature-tree/product-ops-growth/feedback-optimization-loop/feedback-collection-unification/feedback-quality-control
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: noisy-feedback-filter
+                      name: noisy-feedback-filter
+                      level: L5_leaf
+                      path: ../specs/feature-tree/product-ops-growth/feedback-optimization-loop/feedback-collection-unification/feedback-quality-control/noisy-feedback-filter
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: optimization-evaluation-and-release
+              name: optimization-evaluation-and-release
+              level: L3_component
+              path: ../specs/feature-tree/product-ops-growth/feedback-optimization-loop/optimization-evaluation-and-release
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: baseline-comparison
+                  name: baseline-comparison
+                  level: L4_detail
+                  path: ../specs/feature-tree/product-ops-growth/feedback-optimization-loop/optimization-evaluation-and-release/baseline-comparison
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: optimization-release-gate
+                      name: optimization-release-gate
+                      level: L5_leaf
+                      path: ../specs/feature-tree/product-ops-growth/feedback-optimization-loop/optimization-evaluation-and-release/baseline-comparison/optimization-release-gate
+                      domain: ""
+                      status: specified
+                      tags: []
+    - id: runtime
+      name: runtime
+      level: L1_domain
+      path: ../specs/feature-tree/runtime
+      domain: ""
+      status: specified
+      tags: []
+      children:
+        - id: runtime-agentpack
+          name: runtime-agentpack
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-agentpack
+          domain: ""
+          status: completed
+          tags: []
+        - id: runtime-assistant
+          name: runtime-assistant
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-assistant
+          domain: ""
+          status: completed
+          tags: []
+        - id: runtime-codegen
+          name: runtime-codegen
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-codegen
+          domain: ""
+          status: completed
+          tags: []
+          children:
+            - id: struct-repo-handler-migration-generation
+              name: struct-repo-handler-migration-generation
+              level: L3_component
+              path: ../specs/feature-tree/runtime/runtime-codegen/struct-repo-handler-migration-generation
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: openapi-dart-dto-test-scaffold-generation
+                  name: openapi-dart-dto-test-scaffold-generation
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-codegen/struct-repo-handler-migration-generation/openapi-dart-dto-test-scaffold-generation
+                  domain: ""
+                  status: specified
+                  tags: []
+            - id: template-engine-and-metadata-reader
+              name: template-engine-and-metadata-reader
+              level: L3_component
+              path: ../specs/feature-tree/runtime/runtime-codegen/template-engine-and-metadata-reader
+              domain: ""
+              status: specified
+              tags: []
+        - id: runtime-config
+          name: runtime-config
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-config
+          domain: ""
+          status: in_progress
+          tags: []
+          children:
+            - id: config-provider-layering
+              name: config-provider-layering
+              level: L3_component
+              path: ../specs/feature-tree/runtime/runtime-config/config-provider-layering
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: env-file-secret-configcenter-provider
+                  name: env-file-secret-configcenter-provider
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-config/config-provider-layering/env-file-secret-configcenter-provider
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: dynamic-refresh-gray-rollback-audit
+                      name: dynamic-refresh-gray-rollback-audit
+                      level: L5_leaf
+                      path: ../specs/feature-tree/runtime/runtime-config/config-provider-layering/env-file-secret-configcenter-provider/dynamic-refresh-gray-rollback-audit
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: runtime-context
+          name: runtime-context
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-context
+          domain: ""
+          status: completed
+          tags: []
+          children:
+            - id: three-layer-context-model
+              name: three-layer-context-model
+              level: L3_component
+              path: ../specs/feature-tree/runtime/runtime-context/three-layer-context-model
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: page-session-longterm-assembly
+                  name: page-session-longterm-assembly
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-context/three-layer-context-model/page-session-longterm-assembly
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: holistic-profile-and-embedding
+                      name: holistic-profile-and-embedding
+                      level: L5_leaf
+                      path: ../specs/feature-tree/runtime/runtime-context/three-layer-context-model/page-session-longterm-assembly/holistic-profile-and-embedding
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: runtime-errors
+          name: runtime-errors
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-errors
+          domain: ""
+          status: in_progress
+          tags: []
+          children:
+            - id: error-code-and-response-envelope
+              name: error-code-and-response-envelope
+              level: L3_component
+              path: ../specs/feature-tree/runtime/runtime-errors/error-code-and-response-envelope
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: module-kind-reason-mapping
+                  name: module-kind-reason-mapping
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-errors/error-code-and-response-envelope/module-kind-reason-mapping
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: user-debug-separation-and-redaction
+                      name: user-debug-separation-and-redaction
+                      level: L5_leaf
+                      path: ../specs/feature-tree/runtime/runtime-errors/error-code-and-response-envelope/module-kind-reason-mapping/user-debug-separation-and-redaction
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: runtime-eventstore
+          name: runtime-eventstore
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-eventstore
+          domain: ""
+          status: completed
+          tags: []
+          children:
+            - id: event-persist-and-publish
+              name: event-persist-and-publish
+              level: L3_component
+              path: ../specs/feature-tree/runtime/runtime-eventstore/event-persist-and-publish
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: mongo-event-collection-and-mq-integration
+                  name: mongo-event-collection-and-mq-integration
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-eventstore/event-persist-and-publish/mongo-event-collection-and-mq-integration
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: event-replay-and-schema-evolution
+                      name: event-replay-and-schema-evolution
+                      level: L5_leaf
+                      path: ../specs/feature-tree/runtime/runtime-eventstore/event-persist-and-publish/mongo-event-collection-and-mq-integration/event-replay-and-schema-evolution
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: runtime-experiments
+          name: runtime-experiments
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-experiments
+          domain: ""
+          status: completed
+          tags: []
+          children:
+            - id: experiment-bucket-rollout-runtime
+              name: experiment-bucket-rollout-runtime
+              level: L3_component
+              path: ../specs/feature-tree/runtime/runtime-experiments/experiment-bucket-rollout-runtime
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: assignment-cache-and-audit-link
+                  name: assignment-cache-and-audit-link
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-experiments/experiment-bucket-rollout-runtime/assignment-cache-and-audit-link
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: fallback-and-rollback-strategy
+                      name: fallback-and-rollback-strategy
+                      level: L5_leaf
+                      path: ../specs/feature-tree/runtime/runtime-experiments/experiment-bucket-rollout-runtime/assignment-cache-and-audit-link/fallback-and-rollback-strategy
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: runtime-governance
+          name: runtime-governance
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-governance
+          domain: ""
+          status: completed
+          tags: []
+          children:
+            - id: resilience-policy-engine
+              name: resilience-policy-engine
+              level: L3_component
+              path: ../specs/feature-tree/runtime/runtime-governance/resilience-policy-engine
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: timeout-retry-circuit-rate-limit-degrade
+                  name: timeout-retry-circuit-rate-limit-degrade
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-governance/resilience-policy-engine/timeout-retry-circuit-rate-limit-degrade
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: health-readiness-graceful-shutdown
+                      name: health-readiness-graceful-shutdown
+                      level: L5_leaf
+                      path: ../specs/feature-tree/runtime/runtime-governance/resilience-policy-engine/timeout-retry-circuit-rate-limit-degrade/health-readiness-graceful-shutdown
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: runtime-http
+          name: runtime-http
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-http
+          domain: ""
+          status: in_progress
+          tags: []
+          children:
+            - id: http-server-client-pipeline
+              name: http-server-client-pipeline
+              level: L3_component
+              path: ../specs/feature-tree/runtime/runtime-http/http-server-client-pipeline
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: inbound-outbound-context-propagation
+                  name: inbound-outbound-context-propagation
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-http/http-server-client-pipeline/inbound-outbound-context-propagation
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: endpoint-normalization-and-policy-hooks
+                      name: endpoint-normalization-and-policy-hooks
+                      level: L5_leaf
+                      path: ../specs/feature-tree/runtime/runtime-http/http-server-client-pipeline/inbound-outbound-context-propagation/endpoint-normalization-and-policy-hooks
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: runtime-interceptor
+          name: runtime-interceptor
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-interceptor
+          domain: ""
+          status: completed
+          tags: []
+          children:
+            - id: read-write-middleware-chain
+              name: read-write-middleware-chain
+              level: L3_component
+              path: ../specs/feature-tree/runtime/runtime-interceptor/read-write-middleware-chain
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: field-filter-desensitize-validate
+                  name: field-filter-desensitize-validate
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-interceptor/read-write-middleware-chain/field-filter-desensitize-validate
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: event-hook-metric-emit-integration
+                      name: event-hook-metric-emit-integration
+                      level: L5_leaf
+                      path: ../specs/feature-tree/runtime/runtime-interceptor/read-write-middleware-chain/field-filter-desensitize-validate/event-hook-metric-emit-integration
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: runtime-learning
+          name: runtime-learning
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-learning
+          domain: ""
+          status: completed
+          tags: []
+          children:
+            - id: feedback-event-scorecard-runtime
+              name: feedback-event-scorecard-runtime
+              level: L3_component
+              path: ../specs/feature-tree/runtime/runtime-learning/feedback-event-scorecard-runtime
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: artifact-version-and-optimization-loop
+                  name: artifact-version-and-optimization-loop
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-learning/feedback-event-scorecard-runtime/artifact-version-and-optimization-loop
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: learning-closure-sli-binding
+                      name: learning-closure-sli-binding
+                      level: L5_leaf
+                      path: ../specs/feature-tree/runtime/runtime-learning/feedback-event-scorecard-runtime/artifact-version-and-optimization-loop/learning-closure-sli-binding
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: runtime-messaging
+          name: runtime-messaging
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-messaging
+          domain: ""
+          status: in_progress
+          tags: []
+          children:
+            - id: envelope-schema-idempotency
+              name: envelope-schema-idempotency
+              level: L3_component
+              path: ../specs/feature-tree/runtime/runtime-messaging/envelope-schema-idempotency
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: producer-consumer-retry-dlq
+                  name: producer-consumer-retry-dlq
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-messaging/envelope-schema-idempotency/producer-consumer-retry-dlq
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: outbox-inbox-consistency-pattern
+                      name: outbox-inbox-consistency-pattern
+                      level: L5_leaf
+                      path: ../specs/feature-tree/runtime/runtime-messaging/envelope-schema-idempotency/producer-consumer-retry-dlq/outbox-inbox-consistency-pattern
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: runtime-observability
+          name: runtime-observability
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-observability
+          domain: ""
+          status: in_progress
+          tags: []
+          children:
+            - id: log-schema-and-kv-policy
+              name: log-schema-and-kv-policy
+              level: L3_component
+              path: ../specs/feature-tree/runtime/runtime-observability/log-schema-and-kv-policy
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: io-process-exception-standardization
+                  name: io-process-exception-standardization
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-observability/log-schema-and-kv-policy/io-process-exception-standardization
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: contract-sync-and-sli-binding
+                      name: contract-sync-and-sli-binding
+                      level: L5_leaf
+                      path: ../specs/feature-tree/runtime/runtime-observability/log-schema-and-kv-policy/io-process-exception-standardization/contract-sync-and-sli-binding
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: metrics-trace-core
+              name: metrics-trace-core
+              level: L3_component
+              path: ../specs/feature-tree/runtime/runtime-observability/metrics-trace-core
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: otel-exporter-adapter
+                  name: otel-exporter-adapter
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-observability/metrics-trace-core/otel-exporter-adapter
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: dashboard-alert-template-binding
+                      name: dashboard-alert-template-binding
+                      level: L5_leaf
+                      path: ../specs/feature-tree/runtime/runtime-observability/metrics-trace-core/otel-exporter-adapter/dashboard-alert-template-binding
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: runtime-projector
+          name: runtime-projector
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-projector
+          domain: ""
+          status: completed
+          tags: []
+          children:
+            - id: projector-framework-and-readmodel
+              name: projector-framework-and-readmodel
+              level: L3_component
+              path: ../specs/feature-tree/runtime/runtime-projector/projector-framework-and-readmodel
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: five-core-projectors-implementation
+                  name: five-core-projectors-implementation
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-projector/projector-framework-and-readmodel/five-core-projectors-implementation
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: catchup-idempotency-and-lag-monitoring
+                      name: catchup-idempotency-and-lag-monitoring
+                      level: L5_leaf
+                      path: ../specs/feature-tree/runtime/runtime-projector/projector-framework-and-readmodel/five-core-projectors-implementation/catchup-idempotency-and-lag-monitoring
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: runtime-recommendation
+          name: runtime-recommendation
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-recommendation
+          domain: ""
+          status: completed
+          tags: []
+          children:
+            - id: dual-channel-recommendation-engine
+              name: dual-channel-recommendation-engine
+              level: L3_component
+              path: ../specs/feature-tree/runtime/runtime-recommendation/dual-channel-recommendation-engine
+              domain: ""
+              status: completed
+              tags: []
+              children:
+                - id: redis-hot-path-and-rule-engine
+                  name: redis-hot-path-and-rule-engine
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-recommendation/dual-channel-recommendation-engine/redis-hot-path-and-rule-engine
+                  domain: ""
+                  status: completed
+                  tags: []
+                  children:
+                    - id: ml-model-integration-and-ab-test
+                      name: ml-model-integration-and-ab-test
+                      level: L5_leaf
+                      path: ../specs/feature-tree/runtime/runtime-recommendation/dual-channel-recommendation-engine/redis-hot-path-and-rule-engine/ml-model-integration-and-ab-test
+                      domain: ""
+                      status: in_progress
+                      tags: []
+        - id: runtime-registry
+          name: runtime-registry
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-registry
+          domain: ""
+          status: completed
+          tags: []
+          children:
+            - id: metadata-loader-and-entity-registry
+              name: metadata-loader-and-entity-registry
+              level: L3_component
+              path: ../specs/feature-tree/runtime/runtime-registry/metadata-loader-and-entity-registry
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: v3-directory-parser-and-validator
+                  name: v3-directory-parser-and-validator
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-registry/metadata-loader-and-entity-registry/v3-directory-parser-and-validator
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: runtime-query-api-and-hot-reload
+                      name: runtime-query-api-and-hot-reload
+                      level: L5_leaf
+                      path: ../specs/feature-tree/runtime/runtime-registry/metadata-loader-and-entity-registry/v3-directory-parser-and-validator/runtime-query-api-and-hot-reload
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: runtime-repository
+          name: runtime-repository
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-repository
+          domain: ""
+          status: completed
+          tags: []
+          children:
+            - id: repository-interface-layering
+              name: repository-interface-layering
+              level: L3_component
+              path: ../specs/feature-tree/runtime/runtime-repository/repository-interface-layering
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: mongo-pg-vector-cache-adapters
+                  name: mongo-pg-vector-cache-adapters
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-repository/repository-interface-layering/mongo-pg-vector-cache-adapters
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: storage-routing-and-interceptor-chain
+                      name: storage-routing-and-interceptor-chain
+                      level: L5_leaf
+                      path: ../specs/feature-tree/runtime/runtime-repository/repository-interface-layering/mongo-pg-vector-cache-adapters/storage-routing-and-interceptor-chain
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: runtime-rpc
+          name: runtime-rpc
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-rpc
+          domain: ""
+          status: in_progress
+          tags: []
+          children:
+            - id: grpc-interceptor-runtime
+              name: grpc-interceptor-runtime
+              level: L3_component
+              path: ../specs/feature-tree/runtime/runtime-rpc/grpc-interceptor-runtime
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: metadata-propagation-and-status-mapping
+                  name: metadata-propagation-and-status-mapping
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-rpc/grpc-interceptor-runtime/metadata-propagation-and-status-mapping
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: rpc-observability-governance-binding
+                      name: rpc-observability-governance-binding
+                      level: L5_leaf
+                      path: ../specs/feature-tree/runtime/runtime-rpc/grpc-interceptor-runtime/metadata-propagation-and-status-mapping/rpc-observability-governance-binding
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: runtime-skill
+          name: runtime-skill
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-skill
+          domain: ""
+          status: in_progress
+          tags: []
+          children:
+            - id: skill-router-and-executor
+              name: skill-router-and-executor
+              level: L3_component
+              path: ../specs/feature-tree/runtime/runtime-skill/skill-router-and-executor
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: tool-registry-and-context-authorizer
+                  name: tool-registry-and-context-authorizer
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-skill/skill-router-and-executor/tool-registry-and-context-authorizer
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: skill-store-and-ecosystem
+                      name: skill-store-and-ecosystem
+                      level: L5_leaf
+                      path: ../specs/feature-tree/runtime/runtime-skill/skill-router-and-executor/tool-registry-and-context-authorizer/skill-store-and-ecosystem
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: runtime-skillstore
+          name: runtime-skillstore
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-skillstore
+          domain: ""
+          status: completed
+          tags: []
+        - id: runtime-sli
+          name: runtime-sli
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-sli
+          domain: ""
+          status: completed
+          tags: []
+        - id: runtime-streaming
+          name: runtime-streaming
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-streaming
+          domain: ""
+          status: completed
+          tags: []
+          children:
+            - id: sse-server-and-change-stream
+              name: sse-server-and-change-stream
+              level: L3_component
+              path: ../specs/feature-tree/runtime/runtime-streaming/sse-server-and-change-stream
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: assistant-stream-and-chat-push
+                  name: assistant-stream-and-chat-push
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-streaming/sse-server-and-change-stream/assistant-stream-and-chat-push
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: backpressure-and-reconnection
+                      name: backpressure-and-reconnection
+                      level: L5_leaf
+                      path: ../specs/feature-tree/runtime/runtime-streaming/sse-server-and-change-stream/assistant-stream-and-chat-push/backpressure-and-reconnection
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: runtime-testinfra
+          name: runtime-testinfra
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-testinfra
+          domain: ""
+          status: completed
+          tags: []
+          children:
+            - id: test-engine-and-fixture-framework
+              name: test-engine-and-fixture-framework
+              level: L3_component
+              path: ../specs/feature-tree/runtime/runtime-testinfra/test-engine-and-fixture-framework
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: embedded-pg-testcontainers-miniredis
+                  name: embedded-pg-testcontainers-miniredis
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-testinfra/test-engine-and-fixture-framework/embedded-pg-testcontainers-miniredis
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: codegen-test-and-ci-integration
+                      name: codegen-test-and-ci-integration
+                      level: L5_leaf
+                      path: ../specs/feature-tree/runtime/runtime-testinfra/test-engine-and-fixture-framework/embedded-pg-testcontainers-miniredis/codegen-test-and-ci-integration
+                      domain: ""
+                      status: specified
+                      tags: []
+    - id: user-identity-profile-relationship
+      name: user-identity-profile-relationship
+      level: L1_domain
+      path: ../specs/feature-tree/user-identity-profile-relationship
+      domain: ""
+      status: specified
+      tags: []
+      children:
+        - id: auth-profile-snapshot
+          name: auth-profile-snapshot
+          level: L2_feature
+          path: ../specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: auth-token-lifecycle
+              name: auth-token-lifecycle
+              level: L3_component
+              path: ../specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/auth-token-lifecycle
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: token-issue-refresh-revoke
+                  name: token-issue-refresh-revoke
+                  level: L4_detail
+                  path: ../specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/auth-token-lifecycle/token-issue-refresh-revoke
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: session-security-guard
+                      name: session-security-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/auth-token-lifecycle/token-issue-refresh-revoke/session-security-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: profile-read-update
+              name: profile-read-update
+              level: L3_component
+              path: ../specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: profile-field-contract
+                  name: profile-field-contract
+                  level: L4_detail
+                  path: ../specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/profile-field-contract
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: profile-write-validation-guard
+                      name: profile-write-validation-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/profile-field-contract/profile-write-validation-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: profile-snapshot-versioning
+              name: profile-snapshot-versioning
+              level: L3_component
+              path: ../specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-snapshot-versioning
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: snapshot-version-control
+                  name: snapshot-version-control
+                  level: L4_detail
+                  path: ../specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-snapshot-versioning/snapshot-version-control
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: version-conflict-repair
+                      name: version-conflict-repair
+                      level: L5_leaf
+                      path: ../specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-snapshot-versioning/snapshot-version-control/version-conflict-repair
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: onboarding-and-identity-entry
+          name: onboarding-and-identity-entry
+          level: L2_feature
+          path: ../specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: onboarding-consent-flow
+              name: onboarding-consent-flow
+              level: L3_component
+              path: ../specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/onboarding-consent-flow
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: consent-record-contract
+                  name: consent-record-contract
+                  level: L4_detail
+                  path: ../specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/onboarding-consent-flow/consent-record-contract
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: consent-audit-guard
+                      name: consent-audit-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/onboarding-consent-flow/consent-record-contract/consent-audit-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: post-login-landing
+              name: post-login-landing
+              level: L3_component
+              path: ../specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/post-login-landing
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: landing-bootstrap-context
+                  name: landing-bootstrap-context
+                  level: L4_detail
+                  path: ../specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/post-login-landing/landing-bootstrap-context
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: bootstrap-fallback-guard
+                      name: bootstrap-fallback-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/post-login-landing/landing-bootstrap-context/bootstrap-fallback-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: welcome-entry-routing
+              name: welcome-entry-routing
+              level: L3_component
+              path: ../specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/welcome-entry-routing
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: login-state-entry-policy
+                  name: login-state-entry-policy
+                  level: L4_detail
+                  path: ../specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/welcome-entry-routing/login-state-entry-policy
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: entry-consistency-guard
+                      name: entry-consistency-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/welcome-entry-routing/login-state-entry-policy/entry-consistency-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: persona-follow-graph
+          name: persona-follow-graph
+          level: L2_feature
+          path: ../specs/feature-tree/user-identity-profile-relationship/persona-follow-graph
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: follow-relationship
+              name: follow-relationship
+              level: L3_component
+              path: ../specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: follow-unfollow-contract
+                  name: follow-unfollow-contract
+                  level: L4_detail
+                  path: ../specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/follow-unfollow-contract
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: relationship-idempotency-guard
+                      name: relationship-idempotency-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/follow-unfollow-contract/relationship-idempotency-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: persona-management
+              name: persona-management
+              level: L3_component
+              path: ../specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: persona-lifecycle-contract
+                  name: persona-lifecycle-contract
+                  level: L4_detail
+                  path: ../specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/persona-lifecycle-contract
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: persona-activation-guard
+                      name: persona-activation-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/persona-lifecycle-contract/persona-activation-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: social-graph-read
+              name: social-graph-read
+              level: L3_component
+              path: ../specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/social-graph-read
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: followers-following-pagination
+                  name: followers-following-pagination
+                  level: L4_detail
+                  path: ../specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/social-graph-read/followers-following-pagination
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: graph-consistency-repair
+                      name: graph-consistency-repair
+                      level: L5_leaf
+                      path: ../specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/social-graph-read/followers-following-pagination/graph-consistency-repair
+                      domain: ""
+                      status: specified
+                      tags: []
+        - id: settings-and-device-token
+          name: settings-and-device-token
+          level: L2_feature
+          path: ../specs/feature-tree/user-identity-profile-relationship/settings-and-device-token
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: device-token-register
+              name: device-token-register
+              level: L3_component
+              path: ../specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/device-token-register
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: device-token-upsert-contract
+                  name: device-token-upsert-contract
+                  level: L4_detail
+                  path: ../specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/device-token-register/device-token-upsert-contract
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: duplicate-token-cleanup-guard
+                      name: duplicate-token-cleanup-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/device-token-register/device-token-upsert-contract/duplicate-token-cleanup-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: notification-privacy-settings
+              name: notification-privacy-settings
+              level: L3_component
+              path: ../specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/notification-privacy-settings
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: settings-read-write-contract
+                  name: settings-read-write-contract
+                  level: L4_detail
+                  path: ../specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/notification-privacy-settings/settings-read-write-contract
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: settings-audit-guard
+                      name: settings-audit-guard
+                      level: L5_leaf
+                      path: ../specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/notification-privacy-settings/settings-read-write-contract/settings-audit-guard
+                      domain: ""
+                      status: specified
+                      tags: []
+            - id: settings-audit
+              name: settings-audit
+              level: L3_component
+              path: ../specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/settings-audit
+              domain: ""
+              status: specified
+              tags: []
+              children:
+                - id: settings-change-trace-link
+                  name: settings-change-trace-link
+                  level: L4_detail
+                  path: ../specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/settings-audit/settings-change-trace-link
+                  domain: ""
+                  status: specified
+                  tags: []
+                  children:
+                    - id: compliance-audit-export
+                      name: compliance-audit-export
+                      level: L5_leaf
+                      path: ../specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/settings-audit/settings-change-trace-link/compliance-audit-export
+                      domain: ""
+                      status: specified
+                      tags: []

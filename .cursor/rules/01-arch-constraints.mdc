@@ -1,0 +1,281 @@
+---
+description: 端云结构约束（DDD + runtime + mock/remote + codegen + 0→1 严格遵从）
+alwaysApply: true
+---
+
+# 端云结构约束
+
+---
+
+## 1. Go 服务结构约束（0→1 严格遵从）
+
+> 当前无任何服务实现，第一个服务必须严格遵从以下约束，作为后续所有服务的标杆。
+
+### 1.1 服务目录结构（强制）
+
+```
+services/{service-name}/
+├── cmd/api/main.go                    # 标准启动：Registry → Repository → HTTP
+├── internal/
+│   ├── domain/                        # 领域层（codegen + 手写领域逻辑）
+│   │   ├── {entity}.go                # [codegen] Entity struct
+│   │   ├── {entity}_repository.go     # [codegen] Repository interface
+│   │   ├── {entity}_events.go         # [codegen] Event struct
+│   │   └── {entity}_service.go        # [手写] 领域服务
+│   ├── application/                   # 应用层（手写）
+│   │   └── {usecase}_service.go       # 用例编排、事务边界
+│   ├── adapters/                      # 适配器层
+│   │   ├── http/
+│   │   │   └── {entity}_handler.go    # [codegen 骨架 + 手写路由]
+│   │   └── mq/
+│   │       └── {event}_consumer.go    # [codegen 骨架 + 手写消费]
+│   └── infrastructure/                # 基础设施层
+│       ├── persistence/
+│       │   └── {entity}_{storage}_repo.go  # [codegen] Repository 实现
+│       ├── cache/
+│       │   └── {entity}_cache.go      # [codegen] Redis 缓存中间件
+│       └── migration/
+│           └── {version}_{entity}.up.{sql|js}  # [codegen] DDL/索引
+├── tests/
+│   ├── testmain_test.go               # [codegen] 测试引擎启动/关闭
+│   ├── fixture_test.go                # [codegen] Fixture 工厂
+│   └── {entity}_contract_test.go      # [codegen 骨架 + 手写断言]
+├── configs/config.yaml
+├── go.mod
+└── Makefile
+```
+
+**创建服务只能通过 `/qwq-extend new-service`，禁止手动 mkdir。**
+
+### 1.2 DDD 导入约束
+
+```
+domain ← application ← adapters ← infrastructure（单向依赖）
+```
+
+| 层 | 允许 import | 禁止 import |
+|----|-----------|------------|
+| `domain/` | 标准库, `quwoquan_service/runtime/` 接口 | application, adapters, infrastructure, 数据库驱动 |
+| `application/` | domain, 标准库, `quwoquan_service/runtime/` | adapters, infrastructure, 数据库驱动 |
+| `adapters/` | domain, application, 标准库, `quwoquan_service/runtime/` | infrastructure 内部（仅通过 domain 接口间接） |
+| `infrastructure/` | 全部内部层, `quwoquan_service/runtime/`, 数据库驱动 | — |
+
+数据库驱动（`go.mongodb.org`, `jackc/pgx`, `go-redis`, `database/sql`）仅允许在 `infrastructure/` 和 `tests/`。
+
+### 1.3 runtime 统一能力
+
+| 能力 | 必须使用 | 禁止 |
+|------|---------|------|
+| 错误处理 | `runtime/errors.AppError` | 自定义 error struct 返回 HTTP |
+| HTTP 服务 | `runtime/http.NewServer` + `runtime/observability` 中间件 | 裸 `net/http` 自建 server |
+| 配置读取 | `runtime/config.RuntimeConfigProvider` | `os.Getenv` 读业务配置 |
+| 消息发布 | `runtime/messaging.MessageEnvelope` | 自定义 MQ 序列化 |
+| Repository | `runtime/repository.Repository[T]` 接口 | 自定义 DAO/ORM |
+| 实体注册 | `runtime/registry.EntityRegistry` | 硬编码实体元数据 |
+| 拦截链 | `runtime/interceptor` | 手写字段过滤/脱敏 |
+| 可观测 | `runtime/observability` | 自建日志/指标/追踪 |
+| 治理 | `runtime/governance` | 自实现熔断/限流 |
+
+### 1.4 main.go 标准启动模板
+
+```go
+func main() {
+    // 1. 加载配置
+    cfg := config.MustLoad("configs/config.yaml")
+    // 2. 初始化 Observability
+    shutdown := observability.MustInit(cfg)
+    defer shutdown()
+    // 3. 加载 EntityRegistry（从 metadata）
+    reg := registry.MustLoad(cfg.MetadataDir)
+    // 4. 初始化 Repository（由 Registry 驱动存储路由）
+    repos := repository.MustInitFromRegistry(reg, cfg)
+    // 5. 构建 HTTP handler（注入 domain service + interceptor）
+    handler := http.NewServer(cfg, reg, repos)
+    // 6. 启动（含优雅关闭）
+    http.ListenAndServe(handler, cfg)
+}
+```
+
+禁止跳过 Registry/Repository/Interceptor 直接操作数据库。
+
+### 1.5 codegen 保护
+
+- `// Code generated ... DO NOT EDIT.` 标记的文件禁止手改
+- `make gate` 通过 hash 比对检测
+- 如需修改 codegen 产物的行为 → 修改 metadata YAML → 重新 `make codegen`
+
+---
+
+## 2. Dart 端侧结构约束
+
+> 基于当前已有代码模式，将其固化为强制约束。
+
+### 2.1 cloud/ 层目录结构（强制）
+
+```
+lib/cloud/
+├── runtime/
+│   ├── cloud_runtime_config.dart      # 网关地址（dart-define 注入）
+│   ├── cloud_request_headers.dart     # 请求头（追踪 + 鉴权）
+│   ├── field_policy.dart              # [codegen] 字段策略
+│   └── error_codes.dart               # [codegen] 错误码枚举
+├── models/
+│   └── {entity}_dto.dart              # [codegen] DTO（DO NOT EDIT）
+├── events/
+│   └── {entity}_events.dart           # [codegen] 事件类型
+└── services/
+    └── {domain}/
+        └── {domain}_repository.dart   # Abstract + Mock + Remote
+```
+
+### 2.2 Repository 三层模式（强制）
+
+每个云服务对应的 Repository 必须遵循当前已有的三层模式：
+
+```dart
+// ① Abstract 接口（与 service.yaml API 一一对应）
+abstract class XxxRepository {
+  Future<List<Map<String, dynamic>>> listItems({int limit = 20});
+  Future<Map<String, dynamic>> getItem(String id);
+  // ... 其他 service.yaml 中定义的 API
+}
+
+// ② Mock 实现（本地/原型数据，不发 HTTP）
+class MockXxxRepository implements XxxRepository {
+  @override
+  Future<List<Map<String, dynamic>>> listItems({int limit = 20}) async {
+    // 返回本地 mock 数据
+  }
+}
+
+// ③ Remote 实现（调用云侧 API）
+class RemoteXxxRepository implements XxxRepository {
+  final http.Client _client;
+  RemoteXxxRepository({http.Client? client}) : _client = client ?? http.Client();
+
+  @override
+  Future<List<Map<String, dynamic>>> listItems({int limit = 20}) async {
+    final url = Uri.parse('${CloudRuntimeConfig.gatewayBaseUrl}/v1/xxx/items?limit=$limit');
+    final resp = await _client.get(url, headers: CloudRequestHeaders.forPage('xxx.list'));
+    // 统一错误处理 ...
+  }
+}
+```
+
+**禁止行为**：
+- Mock 实现禁止发 HTTP 请求
+- Remote 实现必须使用 `CloudRuntimeConfig.gatewayBaseUrl`，禁止硬编码 URL
+- Remote 实现必须使用 `CloudRequestHeaders.forPage(pageId)`，禁止自建 headers
+- Remote 响应解析必须统一处理 ErrorResponse（对应云侧 `runtime/errors`）
+
+### 2.3 Mock/Remote 切换（强制 Provider 模式）
+
+切换必须通过 `lib/core/providers/app_providers.dart` 的 Riverpod Provider：
+
+```dart
+// lib/core/services/app_content_repository.dart — 数据源模式
+enum AppDataSourceMode { mock, remote }
+
+// lib/core/providers/app_providers.dart — Repository 工厂
+final xxxRepositoryProvider = Provider<XxxRepository>((ref) {
+  final mode = ref.watch(appDataSourceModeProvider);
+  return mode == AppDataSourceMode.remote
+      ? RemoteXxxRepository()
+      : MockXxxRepository();
+});
+```
+
+**禁止行为**：
+- 禁止 Feature 直接 `new MockXxxRepository()` 或 `new RemoteXxxRepository()`
+- 禁止 Feature 内自行判断 mock/remote（必须通过 Provider 透明切换）
+- 禁止在 Feature 代码中 import `AppDataSourceMode`
+- 新增 Repository → 必须同步在 `app_providers.dart` 注册 Provider
+
+### 2.4 Feature 层约束
+
+```
+lib/features/{name}/
+├── pages/          # 必须存在
+├── providers/      # 状态管理（Riverpod）
+├── models/         # 特性内部模型
+├── widgets/        # 特性内部组件
+└── components/     # 特性内部 UI
+```
+
+| 约束 | 说明 |
+|------|------|
+| 必须含 `pages/` | Feature 入口 |
+| 禁止 import 其他 Feature 内部 | 共享通过 `lib/core/` 或 `lib/cloud/` |
+| 必须通过 Provider 访问 Repository | `ref.read(xxxRepositoryProvider)` |
+| 错误处理必须 fallback | catch 异常 → 降级到 mock 或 UI 提示 |
+
+### 2.5 新增 Repository 端云对齐检查清单
+
+新增一个云服务 Repository 时，以下必须全部完成：
+
+```
+☐ contracts/metadata/{entity}/service.yaml 已定义 API
+☐ make codegen-app 已生成 DTO
+☐ lib/cloud/services/{domain}/{domain}_repository.dart 已创建（三层模式）
+☐ Abstract 接口方法与 service.yaml API 一一对应
+☐ Remote 实现 URL 路径与 service.yaml routes 一致
+☐ Remote 实现使用 CloudRuntimeConfig + CloudRequestHeaders
+☐ Mock 实现使用本地数据，不发 HTTP
+☐ lib/core/providers/app_providers.dart 已注册 Provider
+☐ Provider 使用 appDataSourceModeProvider 切换
+```
+
+### 2.6 现有代码适配路径
+
+当前已存在 3 个 Repository（content/user/chat）遵循三层模式但缺少 codegen 标记。适配策略：
+
+| 现有文件 | 处理方式 |
+|---------|---------|
+| `cloud/services/content/content_repository.dart` | 保留，后续 codegen 生成 Abstract 接口覆盖 |
+| `cloud/services/user/user_repository.dart` | 保留，后续 codegen 生成 Abstract 接口覆盖 |
+| `cloud/services/chat/chat_repository.dart` | 保留，后续 codegen 生成 Abstract 接口覆盖 |
+| `core/providers/app_providers.dart` | 保留，新增 Repository 追加注册 |
+| `core/services/app_content_repository.dart` | 保留 AppDataSourceMode，逐步迁移遗留 DataService |
+
+---
+
+## 3. 端云一致性约束
+
+### 3.1 接口一一对应
+
+| 云侧 | 端侧 | 一致性来源 |
+|------|------|-----------|
+| `internal/domain/{entity}.go` struct | `cloud/models/{entity}_dto.dart` | `fields.yaml` |
+| `internal/domain/{entity}_events.go` | `cloud/events/{entity}_events.dart` | `events.yaml` |
+| `internal/adapters/http/{entity}_handler.go` routes | `cloud/services/{domain}/{domain}_repository.dart` Abstract 方法 | `service.yaml` |
+| `runtime/errors` 错误码 | `cloud/runtime/error_codes.dart` | `contracts/error_codes.md` |
+| `runtime/interceptor` 字段策略 | `cloud/runtime/field_policy.dart` | `fields.yaml` |
+
+### 3.2 metadata↔代码同步
+
+- Go struct / Dart DTO / OpenAPI / Migration 必须与 metadata YAML 一致
+- `make verify` + `make gate` 自动校验
+- 不一致 → `make gate` 失败
+
+---
+
+## 4. 扩展场景约束
+
+**核心顺序**（每个扩展操作强制）：
+```
+metadata YAML → make verify → make codegen → 业务逻辑 → make test-contract → make gate
+```
+
+**禁止行为**：
+- 不经 `/qwq-extend` 或 metadata 直接创建 Go struct / Dart DTO / Repository
+- 不经 codegen 手写 Repository 实现或 migration
+- 手动创建 `services/{name}/` 目录（必须通过 `/qwq-extend new-service`）
+- 在 domain 层 import 数据库驱动
+- 在 application 层直接操作数据库
+- 不经 EntityRegistry 注册就创建 Repository
+- 绕过拦截链直接返回 SECRET/PII 字段
+- 不经 `make verify` 就执行 `make codegen`
+- 在 Feature 中直接实例化 Mock/Remote Repository
+- Remote 实现中硬编码 URL 或自建 headers
+
+**扩展入口**：`/qwq-extend <scenario>`，详见 `specs/runtime_extension_catalog.md`。

@@ -6,17 +6,85 @@
 
 ```
 quwoquan/
-├── quwoquan_app/          # Flutter 移动应用（子模块）
-├── quwoquan_service/      # 后端服务（待开发）
-└── social_content_app/    # 社交内容应用（待迁移）
+├── specs/                 # 全栈规范入口（Agent 入口、特性树、契约索引、端云协同）
+├── changes/               # 全量特性目录（特性台账 + 特性实例）
+├── scripts/               # 全栈自动化脚本（gate/verify/模板）
+├── .cursor/               # 全栈 AI 规则与命令
+├── openspec/              # OpenSpec 能力规格与变更（从根目录运行，不依赖子模块）
+├── quwoquan_app/          # Flutter 端侧（子模块）
+│   ├── .cursor/           #   端侧 AI 规则/命令/skills
+│   └── legacy/            #   归档文档（仅参考）
+├── quwoquan_service/      # Go 云侧
+│   ├── contracts/         #   端云契约（metadata + OpenAPI + 领域契约）
+│   ├── runtime/           #   公共运行时（横切能力统一实现）
+│   ├── specs/             #   各服务 API 规格
+│   └── platform/          #   可观测/配置平台
+└── Makefile               # verify + gate 入口
 ```
 
-## 子模块
+## 规范导航
 
-### quwoquan_app
-Flutter 移动应用，使用 Riverpod 进行状态管理。
+- **全局入口**：`specs/README.md`
+- **Agent 入口**：`specs/00_AGENT_MASTER_SPEC.md`
+- **唯一主线**：`specs/00_MASTER_DEVELOPMENT_FLOW.md`
+- **业务对象设计**：`quwoquan_service/contracts/metadata/DESIGN.md`
+
+## 端云一体化交付（特性粒度）
+
+本仓库以**特性粒度**推进“Ask/Plan → contracts-first → TDD/验收 → 实现 → 门禁 → 合入”，并要求端侧与云侧共同交付。
+
+- **创建特性目录（Ask/Plan 输出落盘）**：
+
+```bash
+bash scripts/new_feature_fullstack.sh "<slug>"
+```
+
+- **按 OpsX 规格驱动迁移/新建（Cursor 命令，统一在根目录）**：
+  - `/opsx-ff`、`/opsx-apply`、`/opsx-archive`（统一入口，委托给树命令）
+  - `/opsx-ff-tree`、`/opsx-apply-tree`、`/opsx-archive-tree`（树驱动）
+  - `/opsx-feature-migrate-fullstack`
+  - `/feature-init-fullstack`
+  - `/feature-verify-fullstack`
+  - `/release-readiness-fullstack`
+
+特性目录位于：`changes/<date>-<slug>/`（验收标准与任务拆解在此目录维护）。
+全量特性台账位于：`changes/feature_catalog.yaml`。
+目录层级特性树位于：`changes/feature_tree.yaml`。
+
+全局规范入口：`specs/README.md`。
 
 ## 开发指南
+
+### 统一质量门禁（禁止不遵从变更合入）
+
+- **快速门禁（本地必过）**：
+
+```bash
+make gate
+```
+
+- **全量门禁（包含端侧测试；CI/合入必需）**：
+
+```bash
+make gate-full
+```
+
+- **特性与元数据一致性检查（可单独执行）**：
+
+```bash
+bash scripts/verify_feature_traceability.sh
+bash scripts/verify_contract_metadata.sh
+bash scripts/verify_specs_l1_hierarchy.sh
+bash scripts/verify_feature_tree_refactor.sh
+```
+
+### 安装本地提交阻断（可选）
+
+安装 pre-commit hook：当 staged 变更涉及 `quwoquan_app/` 或 `quwoquan_service/` 时自动运行门禁。
+
+```bash
+bash scripts/install-hooks.sh
+```
 
 ### 初始化子模块
 

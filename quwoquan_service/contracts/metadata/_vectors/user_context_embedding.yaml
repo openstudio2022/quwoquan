@@ -1,0 +1,26 @@
+version: 1
+vector_entity: UserContextEmbedding
+
+description: |
+  用户上下文向量。从用户画像 + 行为汇总生成。
+  供用户兴趣匹配 + 助手个性化。
+
+source_entity: UserProfileView
+dimensions: 1536
+similarity: cosine
+
+storage:
+  backend: mongodb
+  collection: rm_user_profile_view
+  field: contextEmbedding
+  vector_index: vector_upv_context
+
+generation:
+  trigger: UserProfileView updated (periodic batch + real-time delta)
+  pipeline: user features → Embedding API → store
+  model: text-embedding-3-small
+  input_fields: [interestTags, contentPreference, recentBehaviors, bio]
+
+consumers:
+  - recommendation-engine (user similarity matching)
+  - assistant-service (personalized retrieval)

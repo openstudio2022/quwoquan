@@ -1,0 +1,32 @@
+version: 1
+domain: chat
+aggregate_root: Conversation
+
+description: |
+  会话聚合。直聊/群聊/圈子聊/加密/助手五种会话类型。
+  MongoDB 存储，支撑消息极高并发写入和时间序列查询。
+  成员列表嵌入 Conversation 文档（成员数通常 < 500）。
+
+storage_backend: mongodb
+cache_layer: redis
+cache_ttl_seconds: 300
+
+capabilities:
+  - queryable
+  - searchable
+
+taggable: true
+vector_enabled: false
+
+members:
+  - entity: Message
+    relation: 1:N
+    cascade_delete: true
+    description: 消息
+
+ddd_layer_mapping:
+  domain_model: internal/domain/chat/model
+  repository: internal/domain/chat/repository
+  application: internal/application/chat
+  adapter_rest: internal/adapter/rest/chat
+  adapter_event: internal/adapter/event/chat

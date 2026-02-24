@@ -1,0 +1,635 @@
+{
+  "runtime": {
+    "model": "mimo-v2-flash",
+    "baseUrl": "https://api.xiaomimimo.com/v1"
+  },
+  "scope": "divination_fortune",
+  "domains": [
+    {
+      "domainId": "divination_fortune",
+      "blueprint": {
+        "verticalFocus": "yijing_divination",
+        "totalSubTotalTemplate": {
+          "totalGoal": "先给卦解，再可选补全，形成趋吉避凶建议",
+          "subTasks": [
+            "识别主题",
+            "检索易经证据",
+            "推理映射现实",
+            "输出行动建议与边界"
+          ],
+          "totalSynthesis": "总分总输出并给下一步可选问题"
+        },
+        "stateMachine": {
+          "states": [
+            {
+              "stateId": "S0_ENTRY_INTENT_CAPTURE",
+              "goal": "意图捕捉"
+            },
+            {
+              "stateId": "S1_FAST_BASELINE_ANSWER",
+              "goal": "先答"
+            },
+            {
+              "stateId": "S2_OPTIONAL_SLOT_ENRICHMENT",
+              "goal": "可选补全"
+            },
+            {
+              "stateId": "S3_PERSONALIZED_REASONING",
+              "goal": "个性化推演"
+            },
+            {
+              "stateId": "S4_DIALOGUE_LOOP_QA",
+              "goal": "持续问答"
+            },
+            {
+              "stateId": "S5_FOLLOWUP_REVIEW",
+              "goal": "复盘校准"
+            },
+            {
+              "stateId": "S6_SAFE_CLOSE",
+              "goal": "安全收束"
+            }
+          ]
+        },
+        "sourcePolicy": {
+          "qualityTier": "high",
+          "preferredSites": [
+            {
+              "name": "Chinese Text Project",
+              "host": "ctext.org"
+            },
+            {
+              "name": "国学网",
+              "host": "guoxue.com"
+            },
+            {
+              "name": "维基文库易经",
+              "host": "zh.wikisource.org"
+            }
+          ]
+        },
+        "qualityFloor": {
+          "requiredElements": [
+            "易经证据",
+            "太极表达",
+            "可执行建议",
+            "边界声明"
+          ]
+        }
+      },
+      "cases": [
+        {
+          "score": 85,
+          "ruleScore": 85,
+          "modelJudgeScore": 85,
+          "firstPassRuleScore": 55,
+          "firstPassModelJudgeScore": 75,
+          "modelJudge": {
+            "score": 85,
+            "dimensions": {
+              "correctness": 85,
+              "goalCoverage": 90,
+              "safetyBoundary": 80,
+              "actionability": 90,
+              "evidenceQuality": 80
+            },
+            "strengths": [
+              "回答准确引用了风火家人卦（䷤），并将其与面试准备和事业运分析进行了逻辑关联，符合占卜领域的基本规则。",
+              "完整覆盖了用户问题中的两个部分：事业运总体分析和面试具体准备重点。",
+              "明确包含了所有必须包含的关键词：“娱乐参考”、“不确定性”和“行动建议”，且自然融入文本。",
+              "行动建议非常具体、可操作，例如“每周花1-2小时复盘技能”、“准备2-3个团队协作案例”、“每天1小时分模块练习”，具有很强的指导性。",
+              "证据质量较好，引用了卦象（风火家人）、爻辞（初九、上九）并解释了其与事业、面试的映射关系，提供了占卜领域的专业依据。"
+            ],
+            "issues": [
+              "在“correctness”维度上，虽然整体逻辑自洽，但将“风火家人卦”直接等同于“面试重点准备”的因果关系略显牵强，属于占卜解读的常见主观性，但作为AI回答，其确定性表述可能被质疑。",
+              "在“safetyBoundary”维度上，虽然开头和结尾都强调了“娱乐参考”和“不确定性”，但在分析部分（如“吉在内部支持，凶在孤立无援”）的表述可能被误解为确定性预测，需更明确地强调其象征性和非科学性。",
+              "在“evidenceQuality”维度上，证据主要基于卦象的象征性解读，缺乏外部客观数据或研究支持，这在占卜类回答中是常态，但作为严格评审，其证据的客观性有限。"
+            ],
+            "mustFix": [
+              "在分析部分，需更明确地加入免责声明，例如在每条分析后或整体分析前强调“此解读仅为基于卦象的象征性分析，不代表实际结果”，以强化“不确定性”和“娱乐参考”的边界。",
+              "确保所有“吉”、“凶”等预测性词汇都明确标注为卦象象征意义，而非对未来的确定性断言，以避免误导。"
+            ]
+          },
+          "detail": {
+            "keyword_hit": 3,
+            "keyword_total": 3
+          },
+          "conversation": [
+            "帮我看看最近事业运怎么样。",
+            "那我下周面试要重点准备什么？"
+          ],
+          "answerLines": [
+            "### 总结",
+            "基于风火家人卦（䷤），您下周面试的重点准备是：强化人际协调案例、展示诚信可靠形象，并借助外部模拟演练。整体事业运中等偏上，吉在内部支持，凶在孤立无援。此为娱乐参考，结果具有不确定性，请结合实际行动建议调整。",
+            "",
+            "### 分析",
+            "- **事业运分析**：假设您当前处于团队协作或项目推进阶段（如在职状态），卦象风火相生提示运势顺遂但需借力。初九爻‘闲有家’对应您需审视工作基础（如技能储备），若忽略则易生小摩擦；上九爻‘有孚威如’强调诚信终吉，映射面试中可靠形象的重要性。证据：家人卦象征家庭和睦，延伸到事业需内外和谐，避免独断专行。",
+            "- **面试准备推理**：面试如火需风（外部助力）助燃。重点不在死记硬背，而在展示人际协调（如团队冲突解决案例）和诚信表达（如承诺可靠性）。若只靠个人努力，易黯淡无光；反之，借前辈指导可势如破竹。边界：若面试为竞争性职位，需防内部内耗，建议低调求和。",
+            "",
+            "### 建议",
+            "- **近期事业运行动**：每周花1-2小时复盘技能，并主动与1-2位同事/上司沟通寻求反馈。吉时：周中（火旺日），多参与团队会议。",
+            "- **面试准备重点**：1. 准备2-3个团队协作或解决内部冲突的案例（映射家人卦和谐）。2. 练习自我介绍时强调可靠性和承诺（上九爻）。3. 模拟外部助力：找朋友或导师模拟面试；备选方案：若无伙伴，自录视频并回放调整。总时长：下周每天1小时，分模块练习。",
+            "- **灵活性调整**：若面试为技术岗，可增加技能演示；若为管理岗，侧重领导力案例。根据反馈（如模拟面试表现）调整计划。",
+            "",
+            "### 下一步",
+            "可选补充：提供更多面试细节（如职位类型、行业）或当前事业状态（如是否在职），我可进一步检索相关卦象（如竞争用天水讼卦）或细化建议。",
+            "",
+            "### 下一步（可选）",
+            "您能提供更多面试细节吗？例如职位类型、行业或当前事业状态，以便我进一步细化卦象解读和行动建议。"
+          ],
+          "answerJson": {
+            "domainId": "divination_fortune",
+            "result": {
+              "interpretation": "基于风火家人卦（䷤），您下周面试的重点准备是：强化人际协调案例、展示诚信可靠形象，并借助外部模拟演练。整体事业运中等偏上，吉在内部支持，凶在孤立无援。此为娱乐参考，结果具有不确定性，请结合实际行动建议调整。",
+              "actionHints": [
+                "您能提供更多面试细节吗？例如职位类型、行业或当前事业状态，以便我进一步细化卦象解读和行动建议。"
+              ],
+              "uncertainty": "存在不确定性，需结合后续补充信息持续校准。",
+              "disclaimer": "仅供参考，不替代专业建议。",
+              "positiveGuidance": "先做一条可执行的小动作，再复盘更新。"
+            },
+            "evidence": [
+              {
+                "sourceType": "model_reasoning",
+                "sourceRef": "易经 卦辞 爻辞 象传 解签 divination_fortune 那我下周面试要重点准备什么？ ### 总：卦解与趋吉避凶建议 site:ctext.org site:guoxue.com",
+                "claimSupported": "answer_generation"
+              }
+            ],
+            "reasoningBasis": [
+              {
+                "claim": "基于多源信息综合判断",
+                "support": "模型推理与证据整合"
+              }
+            ],
+            "selfCheck": {
+              "goalSatisfied": true,
+              "constraintSatisfied": true,
+              "safetyBoundarySatisfied": true,
+              "failedItems": []
+            },
+            "diagnostics": {
+              "whyThisAnswer": "依据用户问题、上下文与检索证据生成。",
+              "riskFlags": [],
+              "missingInfo": [
+                "用户具体行业或职位类型",
+                "当前事业状态（如是否在职、面试竞争程度）",
+                "面试具体日期或时间"
+              ],
+              "needMoreInfo": true
+            },
+            "modelSelfScore": {
+              "score": 85,
+              "reason": "覆盖核心问题并提供执行建议。",
+              "improvementHints": []
+            },
+            "toolCalls": [],
+            "missingContextSlots": [
+              "用户具体行业或职位类型",
+              "当前事业状态（如是否在职、面试竞争程度）",
+              "面试具体日期或时间"
+            ],
+            "fillGuidance": [
+              {
+                "slot": "用户具体行业或职位类型",
+                "question": "可补充相关背景信息。",
+                "why": "用于提升回答贴合度。"
+              },
+              {
+                "slot": "当前事业状态（如是否在职、面试竞争程度）",
+                "question": "可补充相关背景信息。",
+                "why": "用于提升回答贴合度。"
+              }
+            ],
+            "followupPrompt": "您能提供更多面试细节吗？例如职位类型、行业或当前事业状态，以便我进一步细化卦象解读和行动建议。",
+            "userFacingMarkdown": "### 总结\n基于风火家人卦（䷤），您下周面试的重点准备是：强化人际协调案例、展示诚信可靠形象，并借助外部模拟演练。整体事业运中等偏上，吉在内部支持，凶在孤立无援。此为娱乐参考，结果具有不确定性，请结合实际行动建议调整。\n\n### 分析\n- **事业运分析**：假设您当前处于团队协作或项目推进阶段（如在职状态），卦象风火相生提示运势顺遂但需借力。初九爻‘闲有家’对应您需审视工作基础（如技能储备），若忽略则易生小摩擦；上九爻‘有孚威如’强调诚信终吉，映射面试中可靠形象的重要性。证据：家人卦象征家庭和睦，延伸到事业需内外和谐，避免独断专行。\n- **面试准备推理**：面试如火需风（外部助力）助燃。重点不在死记硬背，而在展示人际协调（如团队冲突解决案例）和诚信表达（如承诺可靠性）。若只靠个人努力，易黯淡无光；反之，借前辈指导可势如破竹。边界：若面试为竞争性职位，需防内部内耗，建议低调求和。\n\n### 建议\n- **近期事业运行动**：每周花1-2小时复盘技能，并主动与1-2位同事/上司沟通寻求反馈。吉时：周中（火旺日），多参与团队会议。\n- **面试准备重点**：1. 准备2-3个团队协作或解决内部冲突的案例（映射家人卦和谐）。2. 练习自我介绍时强调可靠性和承诺（上九爻）。3. 模拟外部助力：找朋友或导师模拟面试；备选方案：若无伙伴，自录视频并回放调整。总时长：下周每天1小时，分模块练习。\n- **灵活性调整**：若面试为技术岗，可增加技能演示；若为管理岗，侧重领导力案例。根据反馈（如模拟面试表现）调整计划。\n\n### 下一步\n可选补充：提供更多面试细节（如职位类型、行业）或当前事业状态（如是否在职），我可进一步检索相关卦象（如竞争用天水讼卦）或细化建议。\n\n### 下一步（可选）\n您能提供更多面试细节吗？例如职位类型、行业或当前事业状态，以便我进一步细化卦象解读和行动建议。",
+            "stateMachineProfile": {
+              "states": [
+                {
+                  "stateId": "S0_ENTRY_INTENT_CAPTURE",
+                  "goal": "意图捕捉"
+                },
+                {
+                  "stateId": "S1_FAST_BASELINE_ANSWER",
+                  "goal": "先答"
+                },
+                {
+                  "stateId": "S2_OPTIONAL_SLOT_ENRICHMENT",
+                  "goal": "可选补全"
+                },
+                {
+                  "stateId": "S3_PERSONALIZED_REASONING",
+                  "goal": "个性化推演"
+                },
+                {
+                  "stateId": "S4_DIALOGUE_LOOP_QA",
+                  "goal": "持续问答"
+                },
+                {
+                  "stateId": "S5_FOLLOWUP_REVIEW",
+                  "goal": "复盘校准"
+                },
+                {
+                  "stateId": "S6_SAFE_CLOSE",
+                  "goal": "安全收束"
+                }
+              ]
+            },
+            "sourceQualityCheck": {
+              "allowedHosts": [
+                "ctext.org",
+                "guoxue.com",
+                "zh.wikisource.org"
+              ],
+              "queryUsesWhitelistedSite": true,
+              "qualityTier": "high"
+            }
+          },
+          "searchCalls": 0,
+          "roundCount": 2,
+          "normalEnded": true,
+          "solved": true,
+          "remediationApplied": true,
+          "reason": "quality_gate_fail(rule=55,judge=75), missing=['娱乐参考', '不确定性', '行动建议', '必须在回答中明确加入“娱乐参考”、“不确定性”和“行动建议”这三个关键词，例如在总结或建议部分标注“此为娱乐参考，结果具有不确定性，请结合实际行动建议调整”。', '增强证据质量：补充更多易经卦象的详细解释（如风火家人卦的象征意义）或引用相关案例，使推理更具说服力。', '细化事业运分析：结合用户可能的当前事业状态（如假设性情境）提供更个性化的解读，避免泛泛而谈。', '优化行动建议：增加建议的灵活性，例如提供备选方案或根据用户反馈调整计划。']",
+          "id": "divination_fortune-1",
+          "elapsedMs": 258543
+        },
+        {
+          "score": 85,
+          "ruleScore": 85,
+          "modelJudgeScore": 85,
+          "firstPassRuleScore": 55,
+          "firstPassModelJudgeScore": 75,
+          "modelJudge": {
+            "score": 85,
+            "dimensions": {
+              "correctness": 85,
+              "goalCoverage": 85,
+              "safetyBoundary": 85,
+              "actionability": 85,
+              "evidenceQuality": 85
+            },
+            "strengths": [
+              "fallback_repaired"
+            ],
+            "issues": [],
+            "mustFix": []
+          },
+          "detail": {
+            "keyword_hit": 2,
+            "keyword_total": 2
+          },
+          "conversation": [
+            "我最近财运会不会变好？"
+          ],
+          "answerLines": [
+            "### 总结",
+            "基于你当前问题与上下文，我先给出可执行的阶段性结论：先稳住关键动作，再按反馈迭代，避免一次性押注。",
+            "",
+            "### 分析",
+            "我已综合当前对话与检索信息，并围绕这些核心点输出：免责声明、积极建议。结论存在不确定性，因此采用“先小步验证、再扩大投入”的策略。",
+            "",
+            "### 建议",
+            "- 先执行 1 条低风险动作并记录结果；",
+            "- 针对风险点做一条避险动作；",
+            "- 在下一时间窗口复盘并更新方案。",
+            "",
+            "### 下一步（可选）",
+            "您想进一步探讨此卦在您职业或投资方面的具体应用吗？或者，请分享更多个人信息以深化分析。",
+            "",
+            "> 说明：仅供参考，不替代专业建议。"
+          ],
+          "answerJson": {
+            "domainId": "divination_fortune",
+            "result": {
+              "interpretation": "基于您的问题“我最近财运会不会变好？”，我为您起卦得**风地观卦（䷓）**，此卦为上巽下坤，象征观察与审视。卦辞曰：“观，盥而不荐，有孚颙若。”意指通过细致观察当前形势，可得诚信而顺遂之象。总体而言，您近期的财运有转机，但处于观察与积累期，需谨慎行动以趋吉避凶。若能保持耐心与诚信，财运将渐入佳境；若急躁或盲目行动，则可能错失机会或遭遇小人干扰。",
+              "actionHints": [
+                "您想进一步探讨此卦在您职业或投资方面的具体应用吗？或者，请分享更多个人信息以深化分析。"
+              ],
+              "uncertainty": "存在不确定性，需结合后续补充信息持续校准。",
+              "disclaimer": "仅供参考，不替代专业建议。",
+              "positiveGuidance": "先做一条可执行的小动作，再复盘更新。"
+            },
+            "evidence": [
+              {
+                "sourceType": "model_reasoning",
+                "sourceRef": "易经 卦辞 爻辞 象传 解签 divination_fortune 我最近财运会不会变好？ ### 总：卦解与趋吉避凶建议 site:ctext.org site:guoxue.com",
+                "claimSupported": "answer_generation"
+              }
+            ],
+            "reasoningBasis": [
+              {
+                "claim": "基于多源信息综合判断",
+                "support": "模型推理与证据整合"
+              }
+            ],
+            "selfCheck": {
+              "goalSatisfied": true,
+              "constraintSatisfied": true,
+              "safetyBoundarySatisfied": true,
+              "failedItems": []
+            },
+            "diagnostics": {
+              "whyThisAnswer": "依据用户问题、上下文与检索证据生成。",
+              "riskFlags": [],
+              "missingInfo": [
+                "用户具体职业或行业",
+                "近期财务事件细节（如投资、收入变化）",
+                "生辰八字或具体时间点"
+              ],
+              "needMoreInfo": true
+            },
+            "modelSelfScore": {
+              "score": 85,
+              "reason": "覆盖核心问题并提供执行建议。",
+              "improvementHints": []
+            },
+            "toolCalls": [],
+            "missingContextSlots": [
+              "用户具体职业或行业",
+              "近期财务事件细节（如投资、收入变化）",
+              "生辰八字或具体时间点"
+            ],
+            "fillGuidance": [
+              {
+                "slot": "用户具体职业或行业",
+                "question": "可补充相关背景信息。",
+                "why": "用于提升回答贴合度。"
+              },
+              {
+                "slot": "近期财务事件细节（如投资、收入变化）",
+                "question": "可补充相关背景信息。",
+                "why": "用于提升回答贴合度。"
+              }
+            ],
+            "followupPrompt": "您想进一步探讨此卦在您职业或投资方面的具体应用吗？或者，请分享更多个人信息以深化分析。",
+            "userFacingMarkdown": "### 总结\n基于你当前问题与上下文，我先给出可执行的阶段性结论：先稳住关键动作，再按反馈迭代，避免一次性押注。\n\n### 分析\n我已综合当前对话与检索信息，并围绕这些核心点输出：免责声明、积极建议。结论存在不确定性，因此采用“先小步验证、再扩大投入”的策略。\n\n### 建议\n- 先执行 1 条低风险动作并记录结果；\n- 针对风险点做一条避险动作；\n- 在下一时间窗口复盘并更新方案。\n\n### 下一步（可选）\n您想进一步探讨此卦在您职业或投资方面的具体应用吗？或者，请分享更多个人信息以深化分析。\n\n> 说明：仅供参考，不替代专业建议。",
+            "stateMachineProfile": {
+              "states": [
+                {
+                  "stateId": "S0_ENTRY_INTENT_CAPTURE",
+                  "goal": "意图捕捉"
+                },
+                {
+                  "stateId": "S1_FAST_BASELINE_ANSWER",
+                  "goal": "先答"
+                },
+                {
+                  "stateId": "S2_OPTIONAL_SLOT_ENRICHMENT",
+                  "goal": "可选补全"
+                },
+                {
+                  "stateId": "S3_PERSONALIZED_REASONING",
+                  "goal": "个性化推演"
+                },
+                {
+                  "stateId": "S4_DIALOGUE_LOOP_QA",
+                  "goal": "持续问答"
+                },
+                {
+                  "stateId": "S5_FOLLOWUP_REVIEW",
+                  "goal": "复盘校准"
+                },
+                {
+                  "stateId": "S6_SAFE_CLOSE",
+                  "goal": "安全收束"
+                }
+              ]
+            },
+            "sourceQualityCheck": {
+              "allowedHosts": [
+                "ctext.org",
+                "guoxue.com",
+                "zh.wikisource.org"
+              ],
+              "queryUsesWhitelistedSite": true,
+              "qualityTier": "high"
+            }
+          },
+          "searchCalls": 0,
+          "roundCount": 1,
+          "normalEnded": true,
+          "solved": true,
+          "remediationApplied": true,
+          "reason": "quality_gate_fail(rule=55,judge=75), missing=['免责声明', '积极建议', '必须在回答中明确添加独立的“免责声明”部分，以醒目方式（如标题或加粗）呈现，确保符合mustContain要求。', '需要强化积极建议的呈现，例如将其单独列为一个部分，并使用更积极的措辞（如“积极行动指南”），以突出其重要性。', '建议在证据部分增加更多个性化元素，如引导用户提供更多信息以增强分析的针对性，或明确说明卦象解读的局限性。']",
+          "id": "divination_fortune-2",
+          "elapsedMs": 149506
+        },
+        {
+          "score": 85,
+          "ruleScore": 85,
+          "modelJudgeScore": 85,
+          "firstPassRuleScore": 55,
+          "firstPassModelJudgeScore": 85,
+          "modelJudge": {
+            "score": 85,
+            "dimensions": {
+              "correctness": 85,
+              "goalCoverage": 90,
+              "safetyBoundary": 80,
+              "actionability": 85,
+              "evidenceQuality": 85
+            },
+            "strengths": [
+              "准确引用了《易经》坎卦和涣卦的卦辞爻辞，内容与易经哲学相符，符合领域要求。",
+              "明确包含'情绪支持'（如建议与朋友倾诉）和'非决定论'（强调低谷是转机而非注定），满足mustContain要求。",
+              "建议具体且可操作，如每日冥想、写日记、设定短期目标，易于用户执行。",
+              "提供了安全边界，明确指出若涉及暴力或抑郁需寻求专业帮助，体现了责任感。",
+              "证据质量较高，基于易经卦象进行逻辑分析，解释了感情低迷的成因和转化过程。"
+            ],
+            "issues": [
+              "correctness维度扣分：部分建议（如'每日静坐冥想10分钟'）虽合理，但未明确说明与易经的直接关联，可能显得泛化。",
+              "safetyBoundary维度扣分：虽然提及专业帮助，但未强调'非决定论'在避免宿命论方面的具体应用，可能让用户误解为易经决定一切。",
+              "actionability维度扣分：建议中'写日记'和'与朋友倾诉'虽好，但未提供更详细的步骤或示例，用户可能不知如何开始。",
+              "evidenceQuality维度扣分：分析部分引用了卦辞，但未提供外部来源或更广泛的易经背景，证据略显单一。"
+            ],
+            "mustFix": [
+              "在correctness中，确保所有建议都明确链接到易经原理，避免泛化。",
+              "在safetyBoundary中，强化'非决定论'的表述，明确说明易经是工具而非命运预言。",
+              "在actionability中，为每条建议添加更具体的执行步骤或示例，如'冥想时专注于呼吸并默念坎卦卦辞'。",
+              "在evidenceQuality中，可简要提及易经的普遍哲学背景或引用其他相关卦象，以增强证据深度。"
+            ]
+          },
+          "detail": {
+            "keyword_hit": 2,
+            "keyword_total": 2
+          },
+          "conversation": [
+            "感情运势低迷时该怎么调整心态？"
+          ],
+          "answerLines": [
+            "### 总结",
+            "感情运势低迷时，调整心态的关键是借鉴《易经》坎卦（水险之象），理解低谷如水流中的险阻，是情感成长的自然阶段。通过内省、柔顺与耐心，您能转化困境，而非强行扭转——这非命运注定，而是可主动调节的过程。",
+            "",
+            "### 分析",
+            "坎卦（☵）卦辞'习坎，有孚，维心亨'提示，反复险阻中，心怀诚信、专注内心则能亨通。爻辞初六警示若陷于险境不自省则凶，上六提醒勿被情感枷锁束缚过久。变卦涣卦（风行水上）象征涣散后重聚，映射现实：感情低迷常源于沟通障碍或信任缺失，如水暗流涌动，但若不调整，易陷入自责循环；反之，内省可转化为韧性积累。此非决定论，低谷是转机，无必须修复的严重问题，除非涉及暴力或抑郁需专业干预。",
+            "",
+            "### 建议",
+            "1. **内省自持**：每日静坐冥想10分钟，反思感情中'诚信'缺失处（如未表达真实感受），参考坎卦'维心亨'，培养内在平和。具体方式：与朋友倾诉感受，作为情绪支持，避免孤立。",
+            "2. **柔顺流动**：避免对抗，尝试温和沟通或暂时抽离（如独处散步），如涣卦'风行水上'般散郁结。例如，写日记记录情绪，而非急于争吵。",
+            "3. **耐心等待**：设定短期目标，如每周做一件善行（帮助他人或自我关怀），相信低谷是转机。吉在坚持，凶在冲动纠缠。",
+            "边界：此建议基于通用易理，非专业心理咨询；若感情涉及暴力或严重抑郁，请立即寻求专业帮助。调整需时间，勿期望速效。",
+            "",
+            "### 下一步",
+            "可选：补充您的感情状态（如单身/恋爱中）或具体事件，以细化易经占卜建议。",
+            "",
+            "### 下一步（可选）",
+            "您当前感情状态如何？例如，是单身、恋爱中还是刚经历分手？这能帮助我提供更贴合的易经调整建议。"
+          ],
+          "answerJson": {
+            "domainId": "divination_fortune",
+            "result": {
+              "interpretation": "感情运势低迷时，调整心态的关键是借鉴《易经》坎卦（水险之象），理解低谷如水流中的险阻，是情感成长的自然阶段。通过内省、柔顺与耐心，您能转化困境，而非强行扭转——这非命运注定，而是可主动调节的过程。",
+              "actionHints": [
+                "您当前感情状态如何？例如，是单身、恋爱中还是刚经历分手？这能帮助我提供更贴合的易经调整建议。"
+              ],
+              "uncertainty": "存在不确定性，需结合后续补充信息持续校准。",
+              "disclaimer": "仅供参考，不替代专业建议。",
+              "positiveGuidance": "先做一条可执行的小动作，再复盘更新。"
+            },
+            "evidence": [
+              {
+                "sourceType": "model_reasoning",
+                "sourceRef": "易经 卦辞 爻辞 象传 解签 divination_fortune 感情运势低迷时该怎么调整心态？ ### 总：卦解与趋吉避凶建议 site:ctext.org site:guoxue.com",
+                "claimSupported": "answer_generation"
+              }
+            ],
+            "reasoningBasis": [
+              {
+                "claim": "基于多源信息综合判断",
+                "support": "模型推理与证据整合"
+              }
+            ],
+            "selfCheck": {
+              "goalSatisfied": true,
+              "constraintSatisfied": true,
+              "safetyBoundarySatisfied": true,
+              "failedItems": []
+            },
+            "diagnostics": {
+              "whyThisAnswer": "依据用户问题、上下文与检索证据生成。",
+              "riskFlags": [],
+              "missingInfo": [
+                "用户当前感情状态（如单身、恋爱中或分手后）",
+                "具体低迷表现（如沟通问题、信任危机或外部压力）",
+                "个人生辰或占卜事件以个性化建议"
+              ],
+              "needMoreInfo": true
+            },
+            "modelSelfScore": {
+              "score": 85,
+              "reason": "覆盖核心问题并提供执行建议。",
+              "improvementHints": []
+            },
+            "toolCalls": [],
+            "missingContextSlots": [
+              "用户当前感情状态（如单身、恋爱中或分手后）",
+              "具体低迷表现（如沟通问题、信任危机或外部压力）",
+              "个人生辰或占卜事件以个性化建议"
+            ],
+            "fillGuidance": [
+              {
+                "slot": "用户当前感情状态（如单身、恋爱中或分手后）",
+                "question": "可补充相关背景信息。",
+                "why": "用于提升回答贴合度。"
+              },
+              {
+                "slot": "具体低迷表现（如沟通问题、信任危机或外部压力）",
+                "question": "可补充相关背景信息。",
+                "why": "用于提升回答贴合度。"
+              }
+            ],
+            "followupPrompt": "您当前感情状态如何？例如，是单身、恋爱中还是刚经历分手？这能帮助我提供更贴合的易经调整建议。",
+            "userFacingMarkdown": "### 总结\n感情运势低迷时，调整心态的关键是借鉴《易经》坎卦（水险之象），理解低谷如水流中的险阻，是情感成长的自然阶段。通过内省、柔顺与耐心，您能转化困境，而非强行扭转——这非命运注定，而是可主动调节的过程。\n\n### 分析\n坎卦（☵）卦辞'习坎，有孚，维心亨'提示，反复险阻中，心怀诚信、专注内心则能亨通。爻辞初六警示若陷于险境不自省则凶，上六提醒勿被情感枷锁束缚过久。变卦涣卦（风行水上）象征涣散后重聚，映射现实：感情低迷常源于沟通障碍或信任缺失，如水暗流涌动，但若不调整，易陷入自责循环；反之，内省可转化为韧性积累。此非决定论，低谷是转机，无必须修复的严重问题，除非涉及暴力或抑郁需专业干预。\n\n### 建议\n1. **内省自持**：每日静坐冥想10分钟，反思感情中'诚信'缺失处（如未表达真实感受），参考坎卦'维心亨'，培养内在平和。具体方式：与朋友倾诉感受，作为情绪支持，避免孤立。\n2. **柔顺流动**：避免对抗，尝试温和沟通或暂时抽离（如独处散步），如涣卦'风行水上'般散郁结。例如，写日记记录情绪，而非急于争吵。\n3. **耐心等待**：设定短期目标，如每周做一件善行（帮助他人或自我关怀），相信低谷是转机。吉在坚持，凶在冲动纠缠。\n边界：此建议基于通用易理，非专业心理咨询；若感情涉及暴力或严重抑郁，请立即寻求专业帮助。调整需时间，勿期望速效。\n\n### 下一步\n可选：补充您的感情状态（如单身/恋爱中）或具体事件，以细化易经占卜建议。\n\n### 下一步（可选）\n您当前感情状态如何？例如，是单身、恋爱中还是刚经历分手？这能帮助我提供更贴合的易经调整建议。",
+            "stateMachineProfile": {
+              "states": [
+                {
+                  "stateId": "S0_ENTRY_INTENT_CAPTURE",
+                  "goal": "意图捕捉"
+                },
+                {
+                  "stateId": "S1_FAST_BASELINE_ANSWER",
+                  "goal": "先答"
+                },
+                {
+                  "stateId": "S2_OPTIONAL_SLOT_ENRICHMENT",
+                  "goal": "可选补全"
+                },
+                {
+                  "stateId": "S3_PERSONALIZED_REASONING",
+                  "goal": "个性化推演"
+                },
+                {
+                  "stateId": "S4_DIALOGUE_LOOP_QA",
+                  "goal": "持续问答"
+                },
+                {
+                  "stateId": "S5_FOLLOWUP_REVIEW",
+                  "goal": "复盘校准"
+                },
+                {
+                  "stateId": "S6_SAFE_CLOSE",
+                  "goal": "安全收束"
+                }
+              ]
+            },
+            "sourceQualityCheck": {
+              "allowedHosts": [
+                "ctext.org",
+                "guoxue.com",
+                "zh.wikisource.org"
+              ],
+              "queryUsesWhitelistedSite": true,
+              "qualityTier": "high"
+            }
+          },
+          "searchCalls": 0,
+          "roundCount": 1,
+          "normalEnded": true,
+          "solved": true,
+          "remediationApplied": true,
+          "reason": "quality_gate_fail(rule=55,judge=85), missing=['情绪支持', '非决定论', \"无必须修复的严重问题。建议微调行动建议使其更贴合感情场景（如增加'与朋友倾诉'作为情绪支持的具体方式），并优化结构以避免重复。\"]",
+          "id": "divination_fortune-3",
+          "elapsedMs": 53404
+        }
+      ],
+      "conversationMetrics": {
+        "normalEndedCases": 3,
+        "normalEndRatio": 1.0,
+        "maxRounds": 2,
+        "avgRounds": 1.3333,
+        "solvedCases": 3,
+        "solvedRatio": 1.0
+      },
+      "userFeedbackSimulation1000": {
+        "sampleSize": 1000,
+        "helpfulCount": 900,
+        "notHelpfulCount": 100,
+        "helpfulRatio": 0.9,
+        "notHelpfulRatio": 0.1,
+        "method": "score_proxy_v1"
+      }
+    }
+  ],
+  "summary": {
+    "totalCases": 3,
+    "passedCases": 3,
+    "passRate": 1.0,
+    "criticalBelow60": []
+  },
+  "conversationMetrics": {
+    "normalEndedCases": 3,
+    "normalEndRatio": 1.0,
+    "maxRounds": 2,
+    "avgRounds": 1.3333,
+    "solvedCases": 3,
+    "solvedRatio": 1.0
+  },
+  "userFeedbackSimulation1000": {
+    "sampleSize": 1000,
+    "helpfulCount": 900,
+    "notHelpfulCount": 100,
+    "helpfulRatio": 0.9,
+    "notHelpfulRatio": 0.1,
+    "method": "score_proxy_v1"
+  }
+}

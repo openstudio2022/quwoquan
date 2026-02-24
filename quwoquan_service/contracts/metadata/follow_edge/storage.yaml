@@ -1,0 +1,12 @@
+version: 1
+entity: FollowEdge
+backend: mongodb
+
+collections:
+  follow_edges:
+    entity: FollowEdge
+    indexes:
+      - { name: idx_follow_follower, keys: { followerId: 1, createdAt: -1 } }
+      - { name: idx_follow_followee, keys: { followeeId: 1, createdAt: -1 } }
+      - { name: idx_follow_unique, keys: { followerId: 1, followeeId: 1 }, unique: true }
+      - { name: idx_follow_source, keys: { source: 1 }, sparse: true }

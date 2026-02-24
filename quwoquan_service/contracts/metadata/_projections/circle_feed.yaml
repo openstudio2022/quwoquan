@@ -1,0 +1,35 @@
+version: 1
+read_model: CircleFeed
+
+description: |
+  圈子动态流 ReadModel。聚合圈子内 Post + 成员行为。
+
+storage_backend: mongodb
+collection: rm_circle_feed
+
+source_entities:
+  - Post
+  - Circle
+  - CircleMember
+
+source_events:
+  - PostCreated
+  - CircleMemberJoined
+
+consumers:
+  - app (circle feed)
+
+fields:
+  - { name: circleId, type: ObjectId }
+  - { name: postId, type: ObjectId }
+  - { name: contentType, type: enum }
+  - { name: authorId, type: string }
+  - { name: title, type: string }
+  - { name: publishedAt, type: timestamp }
+  - { name: likeCount, type: int }
+  - { name: commentCount, type: int }
+  - { name: recScore, type: float }
+
+indexes:
+  - { name: idx_cf_circle_score, keys: { circleId: 1, recScore: -1 } }
+  - { name: idx_cf_circle_time, keys: { circleId: 1, publishedAt: -1 } }

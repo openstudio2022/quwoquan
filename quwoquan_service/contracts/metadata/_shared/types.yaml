@@ -1,0 +1,60 @@
+version: 1
+
+types:
+  GeoPoint:
+    fields:
+      - { name: latitude, type: float64 }
+      - { name: longitude, type: float64 }
+
+  Cursor:
+    description: 游标分页
+    fields:
+      - { name: value, type: string }
+      - { name: direction, type: enum, values: [forward, backward] }
+
+  Pagination:
+    fields:
+      - { name: cursor, type: string, nullable: true }
+      - { name: limit, type: int, default: 20, min: 1, max: 100 }
+
+enums:
+  ContentType: [image, video, micro, article]
+  PostStatus: [draft, pending_review, published, archived, deleted]
+  Visibility: [public, friends, private, circle]
+  ModerationStatus: [pending, approved, rejected]
+  MediaStatus: [uploaded, processing, ready, failed]
+  MediaType: [image, video, audio]
+  UserStatus: [active, suspended, deleted]
+  Gender: [male, female, other, unspecified]
+  ConversationType: [direct, group, circle, encrypted, assistant]
+  MessageType: [text, image, video, card, system, assistant]
+  MessageStatus: [sent, delivered, read, recalled]
+  CircleStatus: [active, archived, deleted]
+  CircleMemberRole: [owner, admin, member]
+  CircleVisibility: [public, private, invite_only]
+  CircleJoinPolicy: [open, approval, invite]
+  ProposalStatus: [created, confirmed, applied, rejected]
+  ProposalSource: [assistant, ops, user]
+  ReportTargetType: [post, comment, user, circle, message]
+  ReportReason: [spam, harassment, violence, adult, copyright, other]
+  ReportStatus: [pending, reviewing, resolved, dismissed]
+  ReportResolution: [warn, delete_content, suspend_user, ban, dismiss]
+  NotificationType: [social, content, circle, system, assistant]
+  RunStatus: [running, completed, failed, cancelled]
+  RunTriggerType: [user_query, suggested_action, skill_select]
+  InteractionEventType: [query, response, feedback, action_click, skill_trigger, tool_call, error]
+  FeedbackType: [thumbs_up, thumbs_down, rating, text]
+  BehaviorEventType: [impression, click, dwell, like, favorite, dislike, report, share]
+  Platform: [ios, android]
+  ProfileVisibility: [public, friends, private]
+
+classifications:
+  PUBLIC: 公开数据
+  PII: 个人可识别信息
+  SENSITIVE: 敏感数据
+  SECRET: 机密数据（凭证等）
+
+log_policies:
+  allow: 允许完整记录
+  mask: 脱敏记录（部分隐藏）
+  drop: 不记录

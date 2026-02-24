@@ -1,0 +1,27 @@
+version: 1
+vector_entity: ContentEmbedding
+
+description: |
+  内容语义向量。Post 创建时异步生成 embedding。
+  供内容相似推荐 + 助手语义检索。
+
+source_entity: Post
+source_field: embedding
+dimensions: 1536
+similarity: cosine
+
+storage:
+  backend: mongodb
+  collection: posts
+  field: embedding
+  vector_index: vector_posts_embedding
+
+generation:
+  trigger: PostCreated event
+  pipeline: content text → Embedding API → store
+  model: text-embedding-3-small
+  input_fields: [title, body, tags, locationName]
+
+consumers:
+  - recommendation-engine (content similarity)
+  - assistant-service (semantic search)

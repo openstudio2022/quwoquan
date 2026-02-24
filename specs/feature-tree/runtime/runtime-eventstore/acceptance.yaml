@@ -1,0 +1,47 @@
+version: 1
+feature: "runtime-eventstore"
+level: "L2_feature"
+template: "A1-A8"
+tree_context:
+  feature_level: "L2_feature"
+  feature_path: "capability.runtime.feature.runtime-eventstore"
+  parent_path: "capability.runtime"
+  acceptance_inherits_from: "capability.runtime"
+level_acceptance:
+  focus_groups:
+    - A1_functional
+    - A3_service_governance
+    - A7_contract_metadata_consistency
+    - A8_test_automation
+  notes: "Event Store 是 CQRS 基础，所有领域事件的持久化与发布依赖此组件。"
+global_acceptance:
+  A1_functional:
+    scenarios:
+      - given: "Post 通过 Repository.Save() 创建"
+        when: "写路径自动触发事件持久化"
+        then: "PostCreated 事件写入 MongoDB events 集合 + 发布到 RocketMQ"
+      - given: "事件已持久化"
+        when: "按 aggregate_id 查询事件流"
+        then: "返回该聚合的全部事件，按时间排序"
+  A2_experience:
+    - "事件发布对业务代码透明，通过拦截链自动触发"
+  A3_service_governance:
+    - "事件发布失败时 Outbox 模式保证最终一致性"
+    - "事件包含 traceID（OTEL 传播）"
+  A4_observability:
+    - "事件发布延迟和失败率可监控"
+  A5_product_ops:
+    - "运营可查看事件流日志"
+  A6_security_privacy:
+    - "事件 payload 遵循 fields.yaml 的 classification 策略"
+  A7_contract_metadata_consistency:
+    - "事件 schema 与 events.yaml 定义完全一致"
+  A8_test_automation:
+    - "Event Store 持久化 + MQ 发布均有契约测试"
+tests:
+  contract:
+    - "quwoquan_service/runtime/eventstore/tests/persist_contract_test.go"
+    - "quwoquan_service/runtime/eventstore/tests/publish_contract_test.go"
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"

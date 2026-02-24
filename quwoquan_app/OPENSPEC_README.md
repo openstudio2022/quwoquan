@@ -2,20 +2,21 @@
 
 本工程已集成 [OpenSpec](https://github.com/Fission-AI/OpenSpec)（Spec-driven development for AI coding assistants），用于在写代码前与 AI 对齐需求与规格。
 
+**OpenSpec 已统一安装在仓库根目录**（不依赖 quwoquan_app）。请在**仓库根**执行 `npm install` 与 `npm run openspec:*`。
+
 ## 环境要求
 
 - **Node.js 20.19.0 及以上**（OpenSpec 要求）
 
-## 已完成的集成
+## 已完成的集成（仓库根）
 
-- 已将 `@fission-ai/openspec` 加入 `package.json` 的 `devDependencies`
-- 已执行 `openspec init --tools cursor`，生成：
+- 根目录 `package.json` 已加入 `@fission-ai/openspec`（devDependencies）及脚本
+- 根目录下已存在：
   - `openspec/specs/`：**主规格**（当前系统行为，与实现对齐的单一事实来源）
   - `openspec/changes/`：待办/进行中的变更（每个变更一个目录）
-  - `.cursor/commands/`：斜杠命令（如 `/opsx:new`）
-  - `.cursor/skills/`：OpenSpec 相关技能
+- `.cursor/commands/`：斜杠命令（如 `/opsx:new`）
 
-**使用前请重启 Cursor IDE**，以便斜杠命令生效。
+**使用前请在仓库根执行 `npm install`，并重启 Cursor IDE** 以便斜杠命令生效。
 
 ## 主规格与归档
 
@@ -35,16 +36,12 @@
 | `/opsx:apply` | 按 tasks.md 实现代码 |
 | `/opsx:archive` | 归档当前变更并把 delta 合并进主规格 |
 
-在终端中使用 npm scripts：
+在**仓库根目录**使用 npm scripts：
 
 ```bash
-# 列出当前变更
+# 在仓库根执行
 npm run openspec:list
-
-# 打开交互式仪表盘
 npm run openspec:view
-
-# 升级 OpenSpec 后刷新 Cursor 指令
 npm run openspec:update
 ```
 

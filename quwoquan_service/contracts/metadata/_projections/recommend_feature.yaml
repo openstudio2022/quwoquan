@@ -1,0 +1,40 @@
+version: 1
+read_model: RecommendFeature
+
+description: |
+  推荐特征宽表 ReadModel。多源聚合用户特征 + 内容特征 + 上下文特征。
+  供推荐引擎做特征检索。
+
+storage_backend: mongodb
+collection: rm_recommend_feature
+
+source_entities:
+  - UserProfile
+  - Post
+  - FollowEdge
+  - ContentReaction
+  - Circle
+  - CircleMember
+  - VisitRecord
+
+source_events:
+  - UserProfileUpdated
+  - PostCreated
+  - ContentReacted
+  - BehaviorBatchReported
+  - CircleMemberJoined
+  - UserFollowed
+
+consumers:
+  - recommendation-engine
+
+fields:
+  - { name: userId, type: string }
+  - { name: userFeatures, type: object, description: 用户侧特征 }
+  - { name: contentFeatures, type: "[]object", description: 候选内容特征 }
+  - { name: socialFeatures, type: object, description: 社交图谱特征 }
+  - { name: contextFeatures, type: object, description: 上下文特征（时间/设备/位置） }
+  - { name: updatedAt, type: timestamp }
+
+indexes:
+  - { name: idx_rf_user, keys: { userId: 1 }, unique: true }

@@ -1,0 +1,55 @@
+version: 1
+l1: gateway-orchestrator-foundation
+l2:
+  - feature: unified-entry-security
+    l3:
+      - feature: authn-authz-chain
+        l4:
+          - feature: token-validation-and-context-injection
+            l5:
+              - feature: auth-failure-safety-guard
+      - feature: rate-limit-protection
+        l4:
+          - feature: user-ip-quota-policy
+            l5:
+              - feature: abuse-detection-guard
+      - feature: edge-security-observability
+        l4:
+          - feature: security-event-log-schema
+            l5:
+              - feature: security-alert-link
+  - feature: orchestration-degradation-rollback
+    l3:
+      - feature: downstream-timeout-fallback
+        l4:
+          - feature: timeout-circuit-degrade-policy
+            l5:
+              - feature: fallback-quality-guard
+      - feature: aggregation-contract-stability
+        l4:
+          - feature: aggregated-response-compatibility
+            l5:
+              - feature: contract-drift-blocker
+      - feature: rollback-playbook
+        l4:
+          - feature: release-rollback-procedure
+            l5:
+              - feature: rollback-audit-trace
+  - feature: request-context-propagation
+    l3:
+      - feature: request-trace-generation
+        l4:
+          - feature: id-generation-policy
+            l5:
+              - feature: id-collision-guard
+      - feature: client-context-propagation
+        l4:
+          - feature: page-session-device-propagation
+            l5:
+              - feature: propagation-completeness-check
+      - feature: async-causation-link
+        l4:
+          - feature: parenttrace-causation-envelopes
+            l5:
+              - feature: async-trace-link-validator
+

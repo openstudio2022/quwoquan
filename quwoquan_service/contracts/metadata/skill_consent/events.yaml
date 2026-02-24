@@ -1,0 +1,17 @@
+version: 1
+entity: SkillConsent
+
+events:
+  - name: SkillConsentGranted
+    description: Skill 授权
+    producer: assistant-service
+    consumers: []
+    channel: event_store
+    payload_fields: [id, userId, skillId, grantedScope]
+
+  - name: SkillConsentRevoked
+    description: Skill 授权撤销
+    producer: assistant-service
+    consumers: []
+    channel: event_store
+    payload_fields: [id, userId, skillId, revokedAt]

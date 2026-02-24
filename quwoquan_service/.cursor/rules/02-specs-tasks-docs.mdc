@@ -1,0 +1,14 @@
+---
+description: 兼容指引：文档一致性规则已迁移到仓库根目录
+globs: "**/*.md"
+alwaysApply: false
+---
+
+# 兼容指引（已迁移）
+
+文档一致性规则已上提到根目录：
+- `.cursor/rules/00-fullstack-core.mdc`
+- `.cursor/rules/02-feature-delivery-fullstack.mdc`
+
+本文件仅保留兼容入口，避免旧链接失效。
+

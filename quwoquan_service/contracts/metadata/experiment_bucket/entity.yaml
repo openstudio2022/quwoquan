@@ -1,0 +1,24 @@
+version: 1
+domain: ops
+entity: ExperimentBucket
+is_aggregate: false
+
+description: |
+  实验分桶。A/B 测试用户分组记录。
+  PostgreSQL 存储，分桶结果需确定性和一致性。
+
+storage_backend: postgres
+cache_layer: redis
+cache_ttl_seconds: 3600
+capabilities:
+  - queryable
+
+taggable: false
+vector_enabled: false
+
+ddd_layer_mapping:
+  domain_model: internal/domain/ops/model
+  repository: internal/domain/ops/repository
+  application: internal/application/ops
+  adapter_rest: internal/adapter/rest/ops
+  adapter_event: internal/adapter/event/ops

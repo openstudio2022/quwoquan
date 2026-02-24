@@ -1,0 +1,32 @@
+version: 1
+aggregate: Circle
+backend: mongodb
+
+collections:
+  circles:
+    entity: Circle
+    indexes:
+      - { name: idx_circles_owner, keys: { ownerId: 1 } }
+      - { name: idx_circles_category, keys: { category: 1, memberCount: -1 } }
+      - { name: idx_circles_tags, keys: { tags: 1 } }
+      - { name: idx_circles_status, keys: { status: 1, createdAt: -1 } }
+      - { name: idx_circles_weekly_active, keys: { weeklyActiveCount: -1 } }
+    search_indexes:
+      - name: search_circles_text
+        type: text
+        fields: [name, description, tags]
+        weights: { name: 10, tags: 5, description: 1 }
+
+  circle_members:
+    entity: CircleMember
+    indexes:
+      - { name: idx_cm_circle_user, keys: { circleId: 1, userId: 1 }, unique: true }
+      - { name: idx_cm_user, keys: { userId: 1, joinedAt: -1 } }
+      - { name: idx_cm_circle_role, keys: { circleId: 1, role: 1 } }
+      - { name: idx_cm_contribution, keys: { circleId: 1, contribution: -1 } }
+
+redis_cache:
+  - key: "cache:circle:{circleId}"
+    ttl_seconds: 600
+    entity: Circle
+    invalidate_on: [CircleUpdated, CircleMemberJoined, CircleMemberLeft]

@@ -1,0 +1,103 @@
+version: 1
+entity: Report
+
+fields:
+  - name: id
+    type: string
+    constraints: [PK]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: reporterId
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: targetType
+    type: enum
+    enum_ref: ReportTargetType
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+
+  - name: targetId
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+
+  - name: reason
+    type: enum
+    enum_ref: ReportReason
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+
+  - name: description
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+
+  - name: status
+    type: enum
+    enum_ref: ReportStatus
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read_write
+
+  - name: reviewerId
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+
+  - name: resolution
+    type: enum
+    enum_ref: ReportResolution
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read_write
+
+  - name: createdAt
+    type: timestamp
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: resolvedAt
+    type: timestamp
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+state_machine:
+  field: status
+  transitions:
+    - from: pending
+      to: [reviewing]
+    - from: reviewing
+      to: [resolved, dismissed]

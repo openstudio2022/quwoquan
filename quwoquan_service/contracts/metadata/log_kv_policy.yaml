@@ -1,0 +1,40 @@
+version: 1
+policies:
+  - model: Message
+    operation: create
+    input:
+      - key: conversationId
+        strategy: allow
+      - key: content
+        strategy: mask
+      - key: attachmentsCount
+        strategy: allow
+    output:
+      - key: messageId
+        strategy: allow
+      - key: sendStatus
+        strategy: allow
+  - model: AssistantRun
+    operation: create
+    input:
+      - key: prompt
+        strategy: mask
+      - key: personaId
+        strategy: allow
+    output:
+      - key: runId
+        strategy: allow
+      - key: modelVersion
+        strategy: allow
+  - model: DiscoveryFeed
+    operation: list
+    input:
+      - key: cursor
+        strategy: allow
+      - key: limit
+        strategy: allow
+    output:
+      - key: nextCursor
+        strategy: allow
+      - key: itemsCount
+        strategy: allow

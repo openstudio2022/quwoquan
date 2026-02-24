@@ -1,0 +1,15 @@
+---
+description: 兼容指引：特性交付规则已迁移到仓库根目录
+alwaysApply: false
+---
+
+# 兼容指引（已迁移）
+
+特性交付规则已迁移到：
+- `.cursor/rules/02-feature-delivery-fullstack.mdc`
+
+特性初始化命令（根目录）：
+- `bash scripts/new_feature_fullstack.sh "<slug>"`
+
+本文件仅保留兼容入口，避免旧链接失效。
+

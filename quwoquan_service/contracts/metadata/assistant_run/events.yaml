@@ -1,0 +1,51 @@
+version: 1
+aggregate: AssistantRun
+
+events:
+  - name: AssistantRunStarted
+    description: 助手执行开始
+    producer: assistant-service
+    consumers: []
+    channel: event_store
+    payload_entity: AssistantRun
+    payload_fields: [_id, userId, sessionId, skillId, triggerType, pageType]
+
+  - name: AssistantRunCompleted
+    description: 助手执行完成
+    producer: assistant-service
+    consumers: [recommendation-engine]
+    channel: event_store
+    payload_entity: AssistantRun
+    payload_fields: [_id, userId, status, toolsCalled, llmModel, llmTokensUsed, latencyMs, satisfactionScore]
+    recommend_impact: assistant_quality_signal
+
+  - name: AssistantFeedbackReceived
+    description: 用户对助手的反馈
+    producer: assistant-service
+    consumers: [recommendation-engine]
+    channel: event_store
+    payload_entity: InteractionEvent
+    payload_fields: [runId, userId, feedbackType, feedbackScore, feedbackText]
+    recommend_impact: learning_signal
+
+  - name: SkillTriggered
+    description: Skill 被触发
+    producer: assistant-service
+    consumers: []
+    channel: event_store
+    payload_fields: [runId, userId, skillId, pageType, pageObjectId]
+
+  - name: ToolCalled
+    description: Tool 被调用
+    producer: assistant-service
+    consumers: []
+    channel: event_store
+    payload_fields: [runId, userId, toolName, latencyMs, success]
+
+  - name: SuggestedActionClicked
+    description: 用户点击建议操作
+    producer: assistant-service
+    consumers: [recommendation-engine]
+    channel: direct
+    payload_fields: [runId, userId, actionId, pageType, pageObjectId]
+    recommend_impact: engagement_signal

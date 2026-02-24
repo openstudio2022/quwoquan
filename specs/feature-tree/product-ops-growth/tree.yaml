@@ -1,0 +1,40 @@
+version: 1
+l1: product-ops-growth
+l2:
+  - feature: event-ingestion-and-analytics
+    l3:
+      - feature: event-schema-governance
+        l4:
+          - feature: event-version-compatibility
+            l5:
+              - feature: schema-drift-blocker
+      - feature: analytics-metric-dictionary
+        l4:
+          - feature: metric-dimension-standard
+            l5:
+              - feature: report-consistency-check
+  - feature: experiment-bucketing-and-rollout
+    l3:
+      - feature: bucketing-strategy-engine
+        l4:
+          - feature: population-segmentation
+            l5:
+              - feature: rollout-safety-guard
+      - feature: rollout-audit-and-rollback
+        l4:
+          - feature: experiment-version-audit
+            l5:
+              - feature: fast-rollback-workflow
+  - feature: feedback-optimization-loop
+    l3:
+      - feature: feedback-collection-unification
+        l4:
+          - feature: feedback-quality-control
+            l5:
+              - feature: noisy-feedback-filter
+      - feature: optimization-evaluation-and-release
+        l4:
+          - feature: baseline-comparison
+            l5:
+              - feature: optimization-release-gate
+

@@ -9,10 +9,11 @@ import 'package:quwoquan_app/personal_assistant/protocol/run_request.dart';
 void main() {
   group('Assistant run E2E', () {
     test('问「深圳天气怎么样」能拿到回复且不出现「未配置可用模型」', () async {
-      TestWidgetsFlutterBinding.ensureInitialized();
-      const MethodChannel(
-        'plugins.flutter.io/path_provider',
-      ).setMockMethodCallHandler((MethodCall call) async {
+      final binding = TestWidgetsFlutterBinding.ensureInitialized();
+      const channel = MethodChannel('plugins.flutter.io/path_provider');
+      binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+        MethodCall call,
+      ) async {
         if (call.method == 'getApplicationDocumentsDirectory') {
           return Directory.systemTemp.path;
         }

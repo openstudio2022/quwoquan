@@ -1,0 +1,78 @@
+version: 1
+owner: quwoquan-platform
+source:
+  feature_tree: "changes/feature_tree.yaml"
+  canonical: "specs/feature-tree/tree_index.yaml"
+
+l1:
+  - category: functional
+    title: "内容发现与发布"
+    key: "discovery-content"
+    directory: "specs/feature-tree/discovery-content"
+    feature_path_prefix: "capability.discovery-content"
+    services: [orchestrator-service, content-service, gateway-service, product-ops]
+    app_modules: [home.discovery, content.article_detail, create.create]
+
+  - category: functional
+    title: "圈子社区"
+    key: "circle-community"
+    directory: "specs/feature-tree/circle-community"
+    feature_path_prefix: "capability.circle-community"
+    services: [circle-service, orchestrator-service, gateway-service, product-ops]
+    app_modules: [circles.circles_page, circles.circle_detail, circles.circle_stats]
+
+  - category: functional
+    title: "聊天与会话"
+    key: "chat-conversation"
+    directory: "specs/feature-tree/chat-conversation"
+    feature_path_prefix: "capability.chat-conversation"
+    services: [chat-service, gateway-service, orchestrator-service]
+    app_modules: [chat.chat_page, chat.chat_detail, chat.start_group_chat, chat.chat_settings]
+
+  - category: functional
+    title: "用户身份画像与关系"
+    key: "user-identity-profile-relationship"
+    directory: "specs/feature-tree/user-identity-profile-relationship"
+    feature_path_prefix: "capability.user-identity-profile-relationship"
+    services: [user-service, gateway-service, orchestrator-service]
+    app_modules: [welcome.welcome_screen, profile.my_profile, profile.edit_profile, profile.persona_management, settings.settings_page]
+
+  - category: functional
+    title: "助手运行与学习闭环"
+    key: "assistant-run-learning"
+    directory: "specs/feature-tree/assistant-run-learning"
+    feature_path_prefix: "capability.assistant-run-learning"
+    services: [assistant-service, user-service, product-ops, platform-ops]
+    app_modules: [assistant.assistant_home, assistant.assistant_management]
+
+  - category: nonfunctional
+    title: "产品运营增长"
+    key: "product-ops-growth"
+    directory: "specs/feature-tree/product-ops-growth"
+    feature_path_prefix: "capability.product-ops-growth"
+    services: [product-ops, content-service, circle-service, assistant-service]
+    app_modules: [home.discovery, chat.chat_page, assistant.assistant_home]
+
+  - category: nonfunctional
+    title: "平台运维治理"
+    key: "platform-ops-governance"
+    directory: "specs/feature-tree/platform-ops-governance"
+    feature_path_prefix: "capability.platform-ops-governance"
+    services: [platform-ops, gateway-service, orchestrator-service, content-service, chat-service, user-service, circle-service, assistant-service]
+    app_modules: []
+
+  - category: nonfunctional
+    title: "网关与编排基础能力"
+    key: "gateway-orchestrator-foundation"
+    directory: "specs/feature-tree/gateway-orchestrator-foundation"
+    feature_path_prefix: "capability.gateway-orchestrator-foundation"
+    services: [gateway-service, orchestrator-service]
+    app_modules: [all]
+
+  - category: nonfunctional
+    title: "统一运行时能力域"
+    key: "runtime"
+    directory: "specs/feature-tree/runtime"
+    feature_path_prefix: "capability.runtime"
+    services: [gateway-service, orchestrator-service, content-service, chat-service, user-service, circle-service, assistant-service, product-ops]
+    app_modules: []

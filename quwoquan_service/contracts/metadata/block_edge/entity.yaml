@@ -1,0 +1,25 @@
+version: 1
+domain: user
+entity: BlockEdge
+is_aggregate: false
+
+description: |
+  屏蔽关系。用户间屏蔽关系，必须强一致即时生效。
+  PostgreSQL 存储（数据量小 + 强 ACID）。
+  Redis 缓存 blocked_set:{userId} SET，消息/推荐/搜索时 O(1) 检查。
+
+storage_backend: postgres
+cache_layer: redis
+cache_ttl_seconds: 3600
+capabilities:
+  - queryable
+
+taggable: false
+vector_enabled: false
+
+ddd_layer_mapping:
+  domain_model: internal/domain/user/model
+  repository: internal/domain/user/repository
+  application: internal/application/user
+  adapter_rest: internal/adapter/rest/user
+  adapter_event: internal/adapter/event/user

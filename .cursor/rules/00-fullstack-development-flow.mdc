@@ -1,0 +1,104 @@
+---
+description: 端云一体化开发主线（唯一 master rule）— 开发流程 + 自动卡点 + 约束总纲
+alwaysApply: true
+---
+
+# 端云一体化开发主线
+
+> **本规则是所有开发活动的唯一入口约束**。主线文档：`specs/00_MASTER_DEVELOPMENT_FLOW.md`。
+
+## 开发流水线（5 阶段 × 自动卡点）
+
+```
+Plan(G0) → Create(G1) → Implement(G2) → Verify(G3) → Submit(G4)
+```
+
+每个阶段结束时 AI Agent **自动执行**对应卡点，无需人为触发。
+
+---
+
+## Plan 阶段（ask/plan 模式自动激活）
+
+进入 ask/plan 模式时，AI Agent 必须：
+1. 将需求映射到特性树节点（`specs/feature-tree/`）
+2. 确认涉及的业务对象（查 `contracts/metadata/`）
+3. 确认涉及的扩展场景（S01~S20）
+4. 生成的任务拆解必须遵循：**metadata → codegen → 业务逻辑 → 测试**
+
+禁止跳过 Plan 直接编码。禁止不经 metadata 直接创建 struct/DTO。
+
+---
+
+## Create 阶段（/opsx-ff 或 /qwq-extend）
+
+命令执行完毕后 **自动运行 G1**：
+```
+make verify → make codegen → make codegen-app
+```
+失败 → 停止 + 输出修复建议。
+
+---
+
+## Implement 阶段（/opsx-apply）
+
+每完成一个 task **自动运行 G2**：
+```
+make build → make test-contract
+```
+
+约束（实时强制）：
+- Go: DDD 层级单向依赖，domain 禁止 import application/adapters/infrastructure
+- Go: 仅 infrastructure + tests 可 import 数据库驱动
+- Go: 必须使用 runtime/errors、runtime/config、runtime/messaging、runtime/http
+- Go: codegen 文件 `DO NOT EDIT` 禁止手改
+- Dart: 禁止硬编码视觉字面量，必须用 AppTypography/AppSpacing/AppColors
+- Dart: 禁止相对路径 import
+- Dart: Feature 禁止直接 import 其他 Feature 内部
+
+---
+
+## Verify 阶段（/opsx-verify 或 /opsx-archive）
+
+**自动运行 G3**：
+```
+make gate-full
+```
+包含：metadata 一致性 + 结构约束 + codegen hash + 端侧语义 + 特性树 + 契约测试。
+
+---
+
+## Submit 阶段（/submit-with-gate）
+
+**自动运行 G4**：按 git status 变更范围智能审计 → 通过 → commit → push → merge。
+
+---
+
+## 核心原则
+
+- **metadata-first**：任何新实体/字段/事件 → 先更新 YAML → verify → codegen → 手写逻辑
+- **contracts-first**：先冻结接口契约，再实现
+- **DDD 分层**：domain ← application ← adapters ← infrastructure（单向）
+- **runtime 统一**：横切能力全部由 runtime 提供，领域服务禁止自实现
+- **真实数据库测试**：契约测试用 embedded-postgres/testcontainers-mongodb/miniredis
+- **codegen 保护**：DO NOT EDIT 文件通过 hash 比对守护
+
+## 规则集
+
+| 规则 | 守护 |
+|------|------|
+| `01-arch-constraints` | DDD 导入 + 数据库隔离 + runtime 统一 + codegen 保护 + 20 扩展场景 |
+| `02-dart-coding` | 设计系统 + 编码标准 + 状态管理 |
+| `03-testing` | 端云契约测试标准 |
+
+## 命令集
+
+| 命令 | 阶段 | 自动卡点 |
+|------|------|---------|
+| `/opsx-explore` | Plan | G0 |
+| `/opsx-ff` | Create | G1（verify + codegen） |
+| `/qwq-extend` | Create | G1（verify + codegen） |
+| `/opsx-apply` | Implement | G2（build + test per task） |
+| `/opsx-verify` | Verify | G3（gate-full） |
+| `/opsx-archive` | Verify | G3（gate-full） |
+| `/fullstack-audit` | 随时 | 全栈审计 |
+| `/submit-with-gate` | Submit | G4（审计 + commit） |

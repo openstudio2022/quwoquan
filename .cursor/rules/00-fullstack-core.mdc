@@ -1,0 +1,47 @@
+---
+description: quwoquan 端云一体核心规则（DDD + 契约 + 元数据 + runtime + 全栈看护）
+alwaysApply: true
+---
+
+# quwoquan 端云一体核心规则
+
+> 端侧不再单独维护规则和命令，所有开发均为端云一体化。
+> 唯一主线见 `specs/00_MASTER_DEVELOPMENT_FLOW.md`。
+
+## 核心原则
+
+- `contracts-first`：先 contracts/metadata YAML，再 codegen，再业务逻辑。
+- DDD 分层：domain → application → adapters → infrastructure（单向依赖，07 规则强制）。
+- 元数据驱动：字段策略由 `contracts/metadata/*` 声明，禁止硬编码（03 规则）。
+- 横切统一 `runtime`，领域服务禁止自行实现横切（07 规则 §1.3）。
+- 验收先行：`acceptance.yaml`、`traceability.yaml` 再实现（02 规则）。
+- 扩展遵从：20 个场景必须经 `/qwq-extend` 入口，metadata-first → codegen → 测试 → gate（08 规则）。
+- 门禁拦截：`make gate` / `make gate-full` 全部通过才可合入。
+
+## 看护卡点（G0~G7）
+
+```
+G0 规则常驻 → G1 扩展入口 → G2 codegen → G3 业务实现
+→ G4 契约测试 → G5 全栈审计 → G6 门禁 → G7 提交合入
+```
+
+## 规则集
+
+| 编号 | 守护内容 |
+|-----|---------|
+| 00 | 本规则：端云一体核心 |
+| 01~06 | 契约/交付/metadata/OpsX/特性树/文档权威 |
+| 07 | ArchUnit-like 结构约束（DDD 导入 + 数据库隔离 + runtime 统一 + codegen 保护） |
+| 08 | 20 个扩展场景约束（0→1 和 1→N） |
+| 09 | Dart 编码标准 + 设计系统 + 状态管理 |
+| 10 | 端云契约测试标准 |
+
+## 命令集
+
+| 命令 | 用途 |
+|------|------|
+| `/qwq-extend` | 对象级扩展入口（20 场景） |
+| `/opsx-ff` / `/opsx-apply` / `/opsx-archive` | 特性级创建/实施/归档 |
+| `/fullstack-audit` | 端云全栈审计 |
+| `/submit-with-gate` | 全栈提交（审计 + gate + commit） |
+

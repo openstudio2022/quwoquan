@@ -1,0 +1,174 @@
+---
+description: 端云契约测试标准
+globs: **/*_test.dart,**/test/**/*.dart,**/*_test.go,**/tests/**/*.go
+---
+
+# 端云契约测试标准
+
+---
+
+## 1. 测试金字塔
+
+```yaml
+端侧 (Dart):
+  单元测试: 70%    # 业务逻辑、工具类、服务类
+  Widget测试: 20%  # UI 组件、用户交互
+  集成测试: 10%    # 端到端功能
+  整体覆盖率: >80%
+
+云侧 (Go):
+  契约测试: 60%    # 接口契约 + 真实数据库
+  单元测试: 30%    # domain service 逻辑
+  集成测试: 10%    # 跨服务端到端
+  整体覆盖率: >80%
+```
+
+---
+
+## 2. 云侧契约测试（Go）
+
+### 2.1 测试数据库策略
+
+| 存储 | 测试引擎 | 特点 |
+|------|---------|------|
+| PostgreSQL | `embedded-postgres` | 真实 SQL 执行，无需外部依赖 |
+| MongoDB | `testcontainers-go/modules/mongodb` | 真实 MongoDB 实例 |
+| Redis | `miniredis/v2` | 内存兼容 Redis，命令一致 |
+
+### 2.2 Mock 范围（严格限定）
+
+| 允许 Mock | 说明 |
+|----------|------|
+| 跨服务 RPC 调用 | `ServiceClientFactory` 注入 mock |
+| 外部 AI API | LLM / Embedding 调用 |
+| 事件发布 | `EventPublisher` spy（验证发布内容） |
+
+| 禁止 Mock | 说明 |
+|----------|------|
+| 本服务数据库 | 使用真实测试数据库 |
+| 本服务 Repository | 使用真实实现 |
+| 本服务 Domain Service | 使用真实实现 |
+
+### 2.3 测试生命周期
+
+```go
+func TestMain(m *testing.M) {
+    // 启动测试数据库
+    db := testinfra.StartEmbeddedPostgres()
+    // 运行 migration
+    testinfra.RunMigrations(db)
+    // 执行测试
+    code := m.Run()
+    // 清理
+    testinfra.Cleanup(db)
+    os.Exit(code)
+}
+
+func TestCreateUser(t *testing.T) {
+    // Arrange: 预制数据
+    testinfra.SeedFixtures(db, "user_fixtures.yaml")
+    defer testinfra.CleanTable(db, "users")
+
+    // Act
+    resp := httptest.NewRequest("POST", "/v1/users", body)
+
+    // Assert
+    assert.Equal(t, 201, resp.StatusCode)
+}
+```
+
+### 2.4 覆盖要求
+
+- 每个 `service.yaml` API 端点至少 1 个契约测试
+- 每个 `events.yaml` 事件至少 1 个发布验证
+- 测试 fixture 从 metadata `fields.yaml` constraints 推导
+- 错误场景覆盖：400（验证失败）、401（未授权）、404（不存在）、409（冲突）
+
+---
+
+## 3. 端侧测试（Dart）
+
+### 3.1 单元测试
+
+```dart
+// AAA 模式: Arrange - Act - Assert
+test('should load posts successfully', () async {
+  // Arrange
+  when(mockPostService.getPosts(page: 1)).thenAnswer((_) async => mockPosts);
+  // Act
+  await homeNotifier.loadPosts();
+  // Assert
+  expect(homeNotifier.state.posts, equals(mockPosts));
+  expect(homeNotifier.state.isLoading, isFalse);
+});
+```
+
+### 3.2 Widget 测试
+
+```dart
+testWidgets('should display post information', (tester) async {
+  await tester.pumpWidget(
+    ProviderScope(
+      child: MaterialApp(home: Scaffold(body: PostCard(post: post))),
+    ),
+  );
+  expect(find.text('Test Post'), findsOneWidget);
+});
+```
+
+### 3.3 Mock 规范
+
+- 使用 `@GenerateMocks` 生成 Mock 类
+- Mock 仅用于外部服务调用
+- 端侧测试不依赖云端（隔离测试）
+
+### 3.4 覆盖场景
+
+每个测试必须覆盖：正常流程、异常流程、边界条件、参数验证、状态变化。
+
+---
+
+## 4. metadata 驱动测试
+
+### 4.1 测试骨架生成
+
+`make codegen` 从 metadata 自动生成：
+- Go 测试文件骨架（`*_contract_test.go`）
+- 测试 fixture YAML（从 `fields.yaml` constraints 推导）
+- EventPublisher spy 配置
+- 测试基础设施配置（`_shared/test_infra.yaml`）
+
+### 4.2 测试数据管理
+
+```yaml
+# contracts/metadata/_shared/test_infra.yaml
+test_databases:
+  postgres:
+    engine: embedded-postgres
+    go_package: github.com/fergusstrange/embedded-postgres
+  mongodb:
+    engine: testcontainers-mongodb
+    go_package: github.com/testcontainers/testcontainers-go/modules/mongodb
+  redis:
+    engine: miniredis
+    go_package: github.com/alicebob/miniredis/v2
+```
+
+---
+
+## 5. 执行命令
+
+```bash
+# 端侧
+cd quwoquan_app && flutter test                    # 全量
+cd quwoquan_app && flutter test test/unit           # 单元测试
+cd quwoquan_app && flutter test --coverage          # 覆盖率
+
+# 云侧
+cd quwoquan_service && make test-contract           # 契约测试（真实数据库）
+cd quwoquan_service && make test-unit               # 单元测试
+cd quwoquan_service && make test-all                # 全量
+
+# 门禁
+make gate                                           # 包含测试
+```

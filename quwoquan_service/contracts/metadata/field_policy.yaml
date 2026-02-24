@@ -1,0 +1,48 @@
+# 字段策略（classification / log / observe / ops）
+# 与 metadata 各聚合 fields.yaml 一致，供 gate 校验与运行时拦截链使用。
+version: 1
+policies:
+  - entity: Post
+    field: _id
+    classification: PUBLIC
+    log_policy: allow
+  - entity: Post
+    field: authorId
+    classification: PUBLIC
+    log_policy: allow
+  - entity: Post
+    field: title
+    classification: PUBLIC
+    log_policy: allow
+  - entity: Post
+    field: body
+    classification: PUBLIC
+    log_policy: allow
+  - entity: Comment
+    field: _id
+    classification: PUBLIC
+    log_policy: allow
+  - entity: UserProfile
+    field: _id
+    classification: PUBLIC
+    log_policy: allow
+  - entity: Message
+    field: conversationId
+    classification: PUBLIC
+    log_policy: allow
+  - entity: AssistantRun
+    field: _id
+    classification: PUBLIC
+    log_policy: allow
+  - entity: Notification
+    field: _id
+    classification: PUBLIC
+    log_policy: allow
+  - entity: Circle
+    field: _id
+    classification: PUBLIC
+    log_policy: allow
+  - entity: Conversation
+    field: _id
+    classification: PUBLIC
+    log_policy: allow

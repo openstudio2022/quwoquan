@@ -1,0 +1,14 @@
+---
+description: 兼容指引：核心规则已迁移到仓库根目录
+alwaysApply: false
+---
+
+# 兼容指引（已迁移）
+
+权威规则已迁移到根目录：
+- `.cursor/rules/00-fullstack-core.mdc`
+- `.cursor/rules/02-feature-delivery-fullstack.mdc`
+- `.cursor/rules/03-metadata-consistency-fullstack.mdc`
+
+本文件仅保留兼容入口，避免旧链接失效。
+

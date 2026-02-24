@@ -1,0 +1,86 @@
+version: 1
+entity: BlockEdge
+
+service:
+  name: user-service
+  domain: user
+
+api_routes:
+  - method: POST
+    path: /v1/user/block/{targetUserId}
+    operation: BlockUser
+    description: 屏蔽用户
+
+  - method: DELETE
+    path: /v1/user/block/{targetUserId}
+    operation: UnblockUser
+    description: 取消屏蔽
+
+  - method: GET
+    path: /v1/user/blocked
+    operation: ListBlockedUsers
+    description: 屏蔽列表
+
+consumers:
+  - name: app
+    capabilities: [block, unblock, list_blocked]
+  - name: chat-service
+    capabilities: [check_blocked]
+  - name: recommendation-engine
+    capabilities: [check_blocked]
+  - name: content-service
+    capabilities: [check_blocked]
+
+contract_test:
+  mock_strategy:
+    app_side:
+      mock_target: user-service API (block)
+      data_source: fields.yaml
+      scenarios:
+        - name: block_unblock_toggle
+          routes:
+            - POST /v1/user/block/{targetUserId}
+            - DELETE /v1/user/block/{targetUserId}
+          assertions: [block_created, block_removed]
+
+        - name: blocked_list
+          route: GET /v1/user/blocked
+          assertions: [status_200, items_match_schema]
+
+    service_side:
+      description: 使用真实测试数据库，不 mock 存储层
+      real_engines:
+        postgres: embedded-postgres
+        redis: miniredis/v2
+      spy_targets: [event_publisher]
+      mock_targets: [cross_service_clients]
+      data_management:
+        seed: fixture 工厂预制到真实 PG
+        cleanup: "TRUNCATE block_edges CASCADE"
+        redis_cleanup: miniredis.FlushAll()
+      scenarios:
+        - name: block_with_cache_sync
+          command: BlockUser
+          seed: []
+          assertions:
+            - "SELECT * FROM block_edges WHERE blocker_id=? AND blocked_id=? → row exists"
+            - "miniredis.SIsMember('blocked_set:{blockerId}', blockedId) → true"
+            - "eventSpy.AssertPublished('UserBlocked', {blockerId, blockedId})"
+
+        - name: unblock_with_cache_sync
+          command: UnblockUser
+          seed: [fixture.NewBlockEdge()]
+          assertions:
+            - "SELECT FROM block_edges WHERE id=? → not found"
+            - "miniredis.SIsMember('blocked_set:{blockerId}', blockedId) → false"
+            - "eventSpy.AssertPublished('UserUnblocked')"
+
+        - name: duplicate_block_rejected
+          command: BlockUser x2 (same pair)
+          seed: [fixture.NewBlockEdge()]
+          assertions:
+            - "PG unique violation error → handled gracefully"
+
+  coverage_requirements:
+    - Redis cache consistency verified
+    - cross-domain impact tested via events

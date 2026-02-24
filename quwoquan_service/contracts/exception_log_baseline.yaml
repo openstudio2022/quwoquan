@@ -1,0 +1,59 @@
+version: 1
+name: exception_log_baseline
+description: Unified exception log schema written to dedicated error sink.
+enums:
+  origin:
+    - app.http
+    - app.grpc
+    - service.http
+    - service.grpc
+    - service.mq
+    - job.internal
+    - cron.internal
+  direction:
+    - inbound
+    - outbound
+required_fields:
+  - schemaVersion
+  - service
+  - timestamp
+  - origin
+  - direction
+  - endpoint
+  - sourceId
+  - traceId
+  - requestId
+  - sessionId
+  - src
+  - errorCode
+  - errorModule
+  - errorKind
+  - errorReason
+  - userMessage
+source_specific_requirements:
+  app:
+    required:
+      - devicePlatform
+      - appVersion
+      - pageId
+  service:
+    required:
+      - serviceName
+      - serviceInstanceId
+io_kv:
+  input_field: io.inputKv
+  output_field: io.outputKv
+  source: metadata_driven
+  default_strategy: minimal
+forbidden_fields:
+  - headers
+  - statusCode
+  - logType
+  - env
+  - phase
+  - parentTraceId
+  - causationId
+error_code_format: "MODULE.KIND.REASON"
+notes:
+  - "exception_log always goes to dedicated error sink."
+  - "exception_log is emitted regardless of normal trace log level."

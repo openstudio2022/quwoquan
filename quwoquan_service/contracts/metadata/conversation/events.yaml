@@ -1,0 +1,49 @@
+version: 1
+aggregate: Conversation
+
+events:
+  - name: ConversationCreated
+    description: 会话创建
+    producer: chat-service
+    consumers: [notification-service]
+    channel: event_store
+    payload_entity: Conversation
+    payload_fields: [_id, type, creatorId, memberIds, circleId]
+
+  - name: MessageSent
+    description: 消息发送
+    producer: chat-service
+    consumers: [notification-service, assistant-service, recommendation-engine]
+    channel: event_store
+    payload_entity: Message
+    payload_fields: [_id, conversationId, senderId, type, content, mentions, timestamp]
+    recommend_impact: social_signal
+
+  - name: MessageRecalled
+    description: 消息撤回
+    producer: chat-service
+    consumers: [notification-service]
+    channel: event_store
+    payload_entity: Message
+    payload_fields: [_id, conversationId, senderId, recalledAt]
+
+  - name: MemberJoined
+    description: 成员加入
+    producer: chat-service
+    consumers: [notification-service]
+    channel: event_store
+    payload_fields: [conversationId, userId, role]
+
+  - name: MemberLeft
+    description: 成员退出
+    producer: chat-service
+    consumers: [notification-service]
+    channel: event_store
+    payload_fields: [conversationId, userId]
+
+  - name: ConversationArchived
+    description: 会话归档
+    producer: chat-service
+    consumers: []
+    channel: event_store
+    payload_fields: [_id, status]

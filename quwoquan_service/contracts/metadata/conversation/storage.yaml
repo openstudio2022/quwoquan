@@ -1,0 +1,40 @@
+version: 1
+aggregate: Conversation
+backend: mongodb
+
+collections:
+  conversations:
+    entity: Conversation
+    indexes:
+      - { name: idx_conv_members, keys: { memberIds: 1, lastMessageTime: -1 } }
+      - { name: idx_conv_type, keys: { type: 1, updatedAt: -1 } }
+      - { name: idx_conv_circle, keys: { circleId: 1 }, sparse: true }
+      - { name: idx_conv_status, keys: { status: 1 } }
+    search_indexes:
+      - name: search_conv_title
+        type: text
+        fields: [title]
+
+  messages:
+    entity: Message
+    indexes:
+      - { name: idx_msg_conv_time, keys: { conversationId: 1, timestamp: -1 } }
+      - { name: idx_msg_sender, keys: { senderId: 1, timestamp: -1 } }
+      - { name: idx_msg_mentions, keys: { mentions: 1, timestamp: -1 }, sparse: true }
+      - { name: idx_msg_status, keys: { conversationId: 1, status: 1 } }
+    search_indexes:
+      - name: search_msg_content
+        type: text
+        fields: [content]
+    change_streams:
+      - pipeline: [{ "$match": { "operationType": "insert" } }]
+        consumers: [notification-push, assistant-context-updater]
+    sharding:
+      key: { conversationId: 1, timestamp: -1 }
+      description: 按会话分片，保证同会话消息在同一分片
+
+redis_cache:
+  - key: "cache:conversation:{conversationId}"
+    ttl_seconds: 300
+    entity: Conversation
+    invalidate_on: [MessageSent, MemberJoined, MemberLeft]

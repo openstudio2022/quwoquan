@@ -1,0 +1,25 @@
+version: 1
+entity: ExperimentBucket
+backend: postgres
+
+tables:
+  experiment_buckets:
+    entity: ExperimentBucket
+    pk: id
+    columns:
+      - { name: id, type: VARCHAR(36), constraints: [PK] }
+      - { name: experiment_id, type: VARCHAR(64), constraints: [NOT_NULL] }
+      - { name: user_id, type: VARCHAR(36), constraints: [NOT_NULL] }
+      - { name: variant, type: VARCHAR(32), constraints: [NOT_NULL] }
+      - { name: assigned_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
+    indexes:
+      - { name: idx_exp_experiment, columns: [experiment_id, variant] }
+      - { name: idx_exp_user, columns: [user_id] }
+    unique_constraints:
+      - { name: uq_exp_user, columns: [experiment_id, user_id] }
+
+redis_cache:
+  - key: "cache:experiment:{experimentId}:{userId}"
+    ttl_seconds: 3600
+    type: string
+    description: 分桶结果缓存

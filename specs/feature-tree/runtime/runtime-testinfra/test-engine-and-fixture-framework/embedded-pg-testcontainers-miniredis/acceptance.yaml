@@ -1,0 +1,49 @@
+version: 1
+feature: "embedded-pg-testcontainers-miniredis"
+level: "L4_object_task"
+template: "A1-A8"
+tree_context:
+  feature_level: "L4_object_task"
+  feature_path: "capability.runtime.feature.runtime-testinfra.subfeature.test-engine-and-fixture-framework.object.embedded-pg-testcontainers-miniredis"
+  parent_path: "capability.runtime.feature.runtime-testinfra.subfeature.test-engine-and-fixture-framework"
+  acceptance_inherits_from: "capability.runtime.feature.runtime-testinfra"
+level_acceptance:
+  focus_groups:
+    - A1_functional
+    - A7_contract_metadata_consistency
+    - A8_test_automation
+  notes: "各测试引擎具体实现。"
+global_acceptance:
+  A1_functional:
+    scenarios:
+      - given: "pg_suite.go 实现"
+        when: "TestMain 调用 pg_suite.Start()"
+        then: "embedded-postgres 启动，migration 执行，可 CRUD"
+      - given: "mongo_suite.go 实现"
+        when: "TestMain 调用 mongo_suite.Start()"
+        then: "testcontainers MongoDB 启动，索引创建，可 CRUD"
+      - given: "redis_suite.go 实现"
+        when: "TestMain 调用 redis_suite.Start()"
+        then: "miniredis 启动，可 SET/GET/TTL"
+  A2_experience:
+    - "各引擎对测试代码透明"
+  A3_service_governance:
+    - "PG 启动 < 2s，Mongo < 3s，Redis < 1s"
+  A4_observability:
+    - "启动/清理日志输出"
+  A5_product_ops:
+    - "N/A"
+  A6_security_privacy:
+    - "测试数据隔离，无真实数据"
+  A7_contract_metadata_consistency:
+    - "引擎选型与 test_infra.yaml 一致"
+  A8_test_automation:
+    - "各引擎启动/CRUD/清理自测"
+tests:
+  unit:
+    - "quwoquan_service/runtime/testutil/tests/pg_suite_test.go"
+    - "quwoquan_service/runtime/testutil/tests/mongo_suite_test.go"
+    - "quwoquan_service/runtime/testutil/tests/redis_suite_test.go"
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"

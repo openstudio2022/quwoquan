@@ -1,0 +1,23 @@
+version: 1
+domain: content
+entity: Report
+is_aggregate: false
+
+description: |
+  举报记录。合规审计不可丢失，状态机需 ACID。
+  PostgreSQL 存储。支持举报帖子、评论、用户、圈子、消息。
+
+storage_backend: postgres
+cache_layer: none
+capabilities:
+  - queryable
+
+taggable: false
+vector_enabled: false
+
+ddd_layer_mapping:
+  domain_model: internal/domain/content/model
+  repository: internal/domain/content/repository
+  application: internal/application/content
+  adapter_rest: internal/adapter/rest/content
+  adapter_event: internal/adapter/event/content

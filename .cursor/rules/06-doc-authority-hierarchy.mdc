@@ -1,0 +1,24 @@
+# 兼容指引：文档权威层级已迁移
+
+请以以下文档为准：
+
+- `specs/00_MASTER_DEVELOPMENT_FLOW.md`（唯一主线）
+- `specs/00_AGENT_MASTER_SPEC.md`（Agent 入口）
+- `specs/feature-tree/`（特性树）
+---
+description: 文档权威层级：防止 Agent 引用过时文档
+alwaysApply: true
+---
+
+# 文档权威层级
+
+查找规范时按以下优先级：
+
+1. **全栈规范**：`specs/` → 权威（Agent 入口：`specs/00_AGENT_MASTER_SPEC.md`）
+2. **云侧契约**：`quwoquan_service/contracts/` → 权威（元数据 + OpenAPI + 领域契约）
+3. **云侧服务规格**：`quwoquan_service/specs/` → 权威（各服务 API 与领域边界）
+4. **App 编码规范**：`quwoquan_app/.cursor/rules/` → 权威（端侧编码/设计/测试）
+5. **App 能力规格**：`quwoquan_app/openspec/specs/` → 权威（personal-assistant 等）
+6. **归档文档**：`quwoquan_app/legacy/` → 仅参考，**不作为实现依据**
+
+导航入口：`specs/README.md`

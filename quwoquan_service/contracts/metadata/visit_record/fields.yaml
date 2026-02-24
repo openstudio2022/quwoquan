@@ -1,0 +1,70 @@
+version: 1
+entity: VisitRecord
+
+fields:
+  - name: userId
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+
+  - name: targetType
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+    description: page/post/circle/user
+
+  - name: targetKey
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+
+  - name: visitCount
+    type: int
+    constraints: [NOT_NULL, DEFAULT_1]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+
+  - name: lastSeenAt
+    type: timestamp
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+
+  - name: sessionId
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+    description: 超前
+
+  - name: source
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+    description: feed/search/share/notification（超前）
+
+  - name: timestamp
+    type: timestamp
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read

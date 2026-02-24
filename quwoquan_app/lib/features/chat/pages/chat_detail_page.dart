@@ -100,11 +100,10 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   @override
   void initState() {
     super.initState();
-    _messages = List.from(
-      ref
-          .read(appContentRepositoryProvider)
-          .chatMessagesFor(widget.conversationId),
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _loadMessages();
+    });
     _inputController.addListener(_onInputChanged);
     if (_isAssistantConversation) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -117,6 +116,25 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
               .toList(growable: false);
         });
       });
+    }
+  }
+
+  Future<void> _loadMessages() async {
+    try {
+      final repo = ref.read(chatRepositoryProvider);
+      final list = await repo.listMessages(
+        conversationId: widget.conversationId,
+        limit: 50,
+      );
+      if (!mounted) return;
+      setState(() => _messages = List<Map<String, dynamic>>.from(list));
+    } catch (e) {
+      // 保持页面可用：加载失败时回退到原型 mock 数据
+      final fallback = ref
+          .read(appContentRepositoryProvider)
+          .chatMessagesFor(widget.conversationId);
+      if (!mounted) return;
+      setState(() => _messages = List<Map<String, dynamic>>.from(fallback));
     }
   }
 

@@ -1,0 +1,61 @@
+version: 1
+name: process_trace_log_baseline
+description: Unified process trace log schema with metadata-driven kv.
+enums:
+  origin:
+    - app.http
+    - app.grpc
+    - service.http
+    - service.grpc
+    - service.mq
+    - job.internal
+    - cron.internal
+  direction:
+    - inbound
+    - outbound
+  level:
+    - info
+    - debug
+required_fields:
+  - schemaVersion
+  - service
+  - timestamp
+  - origin
+  - direction
+  - endpoint
+  - sourceId
+  - traceId
+  - requestId
+  - sessionId
+  - src
+  - step
+  - event
+  - result
+  - level
+source_specific_requirements:
+  app:
+    required:
+      - devicePlatform
+      - appVersion
+      - pageId
+  service:
+    required:
+      - serviceName
+      - serviceInstanceId
+io_kv:
+  input_field: io.inputKv
+  output_field: io.outputKv
+  source: metadata_driven
+  default_strategy: minimal
+forbidden_fields:
+  - headers
+  - statusCode
+  - errorCode
+  - logType
+  - env
+  - phase
+  - parentTraceId
+  - causationId
+notes:
+  - "Process trace logs do not carry error objects."
+  - "io.inputKv/io.outputKv only include fields allowed by metadata."

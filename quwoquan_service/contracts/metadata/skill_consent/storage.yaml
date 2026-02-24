@@ -1,0 +1,19 @@
+version: 1
+entity: SkillConsent
+backend: postgres
+
+tables:
+  skill_consents:
+    entity: SkillConsent
+    pk: id
+    columns:
+      - { name: id, type: VARCHAR(36), constraints: [PK] }
+      - { name: user_id, type: VARCHAR(36), constraints: [NOT_NULL] }
+      - { name: skill_id, type: VARCHAR(64), constraints: [NOT_NULL] }
+      - { name: granted_scope, type: JSONB, constraints: [NOT_NULL] }
+      - { name: granted_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
+      - { name: revoked_at, type: TIMESTAMPTZ }
+    indexes:
+      - { name: idx_consent_user_skill, columns: [user_id, skill_id] }
+    unique_constraints:
+      - { name: uq_consent_active, columns: [user_id, skill_id], condition: "revoked_at IS NULL" }

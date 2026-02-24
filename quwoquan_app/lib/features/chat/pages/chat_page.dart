@@ -105,15 +105,13 @@ class _ChatPageState extends ConsumerState<ChatPage>
     _lastScrollY = y;
   }
 
-  List<Map<String, dynamic>> _filteredConversations() {
-    final repository = ref.read(appContentRepositoryProvider);
-    final list = repository.chatMockConversations;
-    final sub = _mainTabIndex == 0 ? _messageSubTabs[_subTabIndex] : _contactsSubTabs[_subTabIndex];
-    if (_mainTabIndex != 0) return list;
-    if (sub == UITextConstants.atMe) return repository.chatMockConversationsAtMe;
-    if (sub == UITextConstants.unread) return list.where((c) => (c['unreadCount'] as int? ?? 0) > 0).toList();
-    if (sub == UITextConstants.secretMessage) return []; // 密信由 _buildSecretMessageContent 单独展示
-    return list;
+  Future<List<Map<String, dynamic>>> _loadConversations() async {
+    try {
+      final repo = ref.read(chatRepositoryProvider);
+      return await repo.listConversations(limit: 100);
+    } catch (_) {
+      return ref.read(appContentRepositoryProvider).chatMockConversations;
+    }
   }
 
   @override
@@ -419,45 +417,89 @@ class _ChatPageState extends ConsumerState<ChatPage>
     Color fgSecondary,
     Color borderColor,
   ) {
-    final convs = _filteredConversations();
-    final showAssistant = _mainTabIndex == 0 && _messageSubTabs[_subTabIndex] == '全部';
+    final showAssistant =
+        _mainTabIndex == 0 && _messageSubTabs[_subTabIndex] == '全部';
 
-    if (showAssistant == false && convs.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _loadConversations(),
+      builder: (context, snapshot) {
+        final rawList = snapshot.data ?? const <Map<String, dynamic>>[];
+        final convs = _filterConversationListForSubTab(rawList);
+
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            rawList.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: EdgeInsets.all(AppSpacing.lg),
+              child: CircularProgressIndicator(color: AppColors.primaryColor),
+            ),
+          );
+        }
+
+        if (showAssistant == false && convs.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.chat_bubble_outline, size: 64, color: fgSecondary),
+                SizedBox(height: AppSpacing.md),
+                Text(
+                  UITextConstants.noConversations,
+                  style: TextStyle(fontSize: 16, color: fgSecondary),
+                ),
+                Text(
+                  UITextConstants.startChatHint,
+                  style: TextStyle(fontSize: 14, color: fgSecondary),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView(
+          controller: _scrollController,
           children: [
-            Icon(Icons.chat_bubble_outline, size: 64, color: fgSecondary),
-            SizedBox(height: AppSpacing.md),
-            Text(UITextConstants.noConversations, style: TextStyle(fontSize: 16, color: fgSecondary)),
-            Text(UITextConstants.startChatHint, style: TextStyle(fontSize: 14, color: fgSecondary)),
+            if (showAssistant)
+              _ConversationTile(
+                conversation:
+                    ref.read(appContentRepositoryProvider).chatAssistantConversation,
+                isSpecial: true,
+                onTap: _openAssistantHalfSheet,
+                fgPrimary: fgPrimary,
+                fgSecondary: fgSecondary,
+                borderColor: borderColor,
+              ),
+            ...convs.map(
+              (c) => _ConversationTile(
+                conversation: c,
+                onTap: () => context.push('/chat/${c['id']}'),
+                fgPrimary: fgPrimary,
+                fgSecondary: fgSecondary,
+                borderColor: borderColor,
+              ),
+            ),
+            SizedBox(height: MediaQuery.of(context).padding.bottom + 80),
           ],
-        ),
-      );
-    }
-
-    return ListView(
-      controller: _scrollController,
-      children: [
-        if (showAssistant)
-          _ConversationTile(
-            conversation: ref.read(appContentRepositoryProvider).chatAssistantConversation,
-            isSpecial: true,
-            onTap: _openAssistantHalfSheet,
-            fgPrimary: fgPrimary,
-            fgSecondary: fgSecondary,
-            borderColor: borderColor,
-          ),
-        ...convs.map((c) => _ConversationTile(
-              conversation: c,
-              onTap: () => context.push('/chat/${c['id']}'),
-              fgPrimary: fgPrimary,
-              fgSecondary: fgSecondary,
-              borderColor: borderColor,
-            )),
-        SizedBox(height: MediaQuery.of(context).padding.bottom + 80),
-      ],
+        );
+      },
     );
+  }
+
+  List<Map<String, dynamic>> _filterConversationListForSubTab(
+    List<Map<String, dynamic>> list,
+  ) {
+    if (_mainTabIndex != 0) return list;
+    final sub = _messageSubTabs[_subTabIndex];
+    if (sub == UITextConstants.atMe) {
+      return list.where((c) => c['hasMention'] == true).toList();
+    }
+    if (sub == UITextConstants.unread) {
+      return list.where((c) => (c['unreadCount'] as int? ?? 0) > 0).toList();
+    }
+    if (sub == UITextConstants.secretMessage) {
+      return const <Map<String, dynamic>>[];
+    }
+    return list;
   }
 
   Widget _buildContactsContent(BuildContext context, Color fgPrimary, Color fgSecondary, Color borderColor) {

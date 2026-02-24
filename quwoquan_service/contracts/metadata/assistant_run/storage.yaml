@@ -1,0 +1,37 @@
+version: 1
+aggregate: AssistantRun
+backend: mongodb
+
+collections:
+  assistant_runs:
+    entity: AssistantRun
+    indexes:
+      - { name: idx_runs_user_created, keys: { userId: 1, createdAt: -1 } }
+      - { name: idx_runs_session, keys: { sessionId: 1, createdAt: -1 } }
+      - { name: idx_runs_skill, keys: { skillId: 1, createdAt: -1 }, sparse: true }
+      - { name: idx_runs_status, keys: { status: 1, createdAt: -1 } }
+      - { name: idx_runs_page, keys: { pageType: 1, pageObjectId: 1 }, sparse: true }
+    vector_indexes:
+      - name: vector_runs_context
+        field: contextEmbedding
+        dimensions: 1536
+        similarity: cosine
+
+  interaction_events:
+    entity: InteractionEvent
+    indexes:
+      - { name: idx_ie_run, keys: { runId: 1, timestamp: -1 } }
+      - { name: idx_ie_user_type, keys: { userId: 1, eventType: 1, timestamp: -1 } }
+      - { name: idx_ie_feedback, keys: { feedbackType: 1, timestamp: -1 }, sparse: true }
+      - { name: idx_ie_trace, keys: { traceId: 1 }, sparse: true }
+
+redis_cache:
+  - key: "page_ctx:{userId}"
+    ttl_seconds: 300
+    type: hash
+    description: 页面上下文
+
+  - key: "suggested_actions:{userId}:{pageType}:{objectId}"
+    ttl_seconds: 300
+    type: string
+    description: Suggested Actions 缓存

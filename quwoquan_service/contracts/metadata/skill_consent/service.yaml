@@ -1,0 +1,67 @@
+version: 1
+entity: SkillConsent
+
+service:
+  name: assistant-service
+  domain: assistant
+
+api_routes:
+  - method: POST
+    path: /v1/assistant/skills/{skillId}/consent
+    operation: GrantSkillConsent
+    description: 授权 Skill
+
+  - method: DELETE
+    path: /v1/assistant/skills/{skillId}/consent
+    operation: RevokeSkillConsent
+    description: 撤销 Skill 授权
+
+  - method: GET
+    path: /v1/assistant/consents
+    operation: ListConsents
+    description: 授权列表
+
+consumers:
+  - name: app
+    capabilities: [grant, revoke, list]
+  - name: platform-ops
+    capabilities: [read, revoke_any]
+
+contract_test:
+  mock_strategy:
+    app_side:
+      scenarios:
+        - name: consent_lifecycle
+          routes:
+            - POST /v1/assistant/skills/{skillId}/consent
+            - DELETE /v1/assistant/skills/{skillId}/consent
+          assertions: [consent_granted, consent_revoked]
+
+    service_side:
+      description: 使用真实测试数据库，不 mock 存储层
+      real_engines:
+        postgres: embedded-postgres
+      spy_targets: [event_publisher]
+      data_management:
+        seed: fixture 工厂预制到真实 PG
+        cleanup: "TRUNCATE skill_consents CASCADE"
+      scenarios:
+        - name: grant_consent
+          command: GrantSkillConsent
+          seed: []
+          assertions:
+            - "SELECT * FROM skill_consents WHERE user_id=? AND skill_id=? → row exists, revoked_at IS NULL"
+            - "eventSpy.AssertPublished('SkillConsentGranted', {skillId, grantedScope})"
+
+        - name: duplicate_consent_rejected
+          command: GrantSkillConsent x2 (same user+skill)
+          seed: [fixture.NewSkillConsent()]
+          assertions:
+            - "PG unique violation (partial index) → handled gracefully"
+
+        - name: revoke_consent
+          command: RevokeSkillConsent
+          seed: [fixture.NewSkillConsent()]
+          assertions:
+            - "SELECT revoked_at FROM skill_consents → NOT NULL"
+            - "eventSpy.AssertPublished('SkillConsentRevoked')"

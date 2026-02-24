@@ -1,0 +1,60 @@
+version: 1
+domain: user
+aggregate_root: UserProfile
+
+description: |
+  用户档案聚合。用户核心身份、认证、设备、设置和分身管理。
+  全部实体 PostgreSQL 存储，保障强 ACID 和关系约束。
+  热数据走 Redis 缓存（TTL 600s）。
+
+storage_backend: postgres
+cache_layer: redis
+cache_ttl_seconds: 600
+
+capabilities:
+  - queryable
+  - searchable
+
+taggable: true
+vector_enabled: false
+
+members:
+  - entity: Persona
+    relation: 1:N
+    cascade_delete: true
+    description: 多分身（匿名/私密身份）
+
+  - entity: UserAuth
+    relation: 1:1
+    cascade_delete: true
+    description: 认证凭证（安全隔离）
+
+  - entity: UserDevice
+    relation: 1:N
+    cascade_delete: true
+    description: 设备绑定与推送 token
+
+  - entity: UserSetting
+    relation: 1:1
+    cascade_delete: true
+    description: 通知 + 隐私设置
+
+  - entity: ProfileUpdateProposal
+    relation: 1:N
+    cascade_delete: true
+    description: 资料修改提案（状态机）
+
+ddd_layer_mapping:
+  domain_model: internal/domain/user/model
+  repository: internal/domain/user/repository
+  application: internal/application/user
+  adapter_rest: internal/adapter/rest/user
+  adapter_event: internal/adapter/event/user
+
+join_paths:
+  user_with_active_persona: >
+    UserProfile LEFT JOIN Persona WHERE isActive = true
+  user_with_settings: >
+    UserProfile INNER JOIN UserSetting
+  user_full_snapshot: >
+    UserProfile + 激活 Persona + UserSetting（供 Profile API 返回）

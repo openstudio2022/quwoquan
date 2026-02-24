@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+changed="$(git diff --cached --name-only)"
+
+has_service=false
+has_app=false
+
+if echo "$changed" | grep -qE '^quwoquan_service/'; then
+  has_service=true
+fi
+if echo "$changed" | grep -qE '^quwoquan_app/'; then
+  has_app=true
+fi
+
+if [[ "$has_service" == true && "$has_app" == true ]]; then
+  echo "[pre-commit] running repo gate (service+app)"
+  make gate
+elif [[ "$has_service" == true ]]; then
+  echo "[pre-commit] running gate (service)"
+  bash scripts/gate_repo.sh --scope service
+elif [[ "$has_app" == true ]]; then
+  echo "[pre-commit] running gate (app)"
+  bash scripts/gate_repo.sh --scope app
+fi
+

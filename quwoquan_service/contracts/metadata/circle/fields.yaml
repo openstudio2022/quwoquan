@@ -1,0 +1,218 @@
+version: 1
+aggregate: Circle
+
+entities:
+  Circle:
+    description: 圈子（聚合根）
+    fields:
+      - name: _id
+        type: ObjectId
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: name
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        recommend_feature: true
+        search_field: true
+
+      - name: description
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        recommend_feature: true
+        search_field: true
+
+      - name: coverUrl
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: ownerId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: category
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        recommend_feature: true
+
+      - name: tags
+        type: "[]string"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        recommend_feature: true
+        tag_taxonomy_ref: circle_tags
+
+      - name: memberCount
+        type: int
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: true
+
+      - name: postCount
+        type: int
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: true
+
+      - name: weeklyActiveCount
+        type: int
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: true
+        description: 周活跃成员数（超前）
+
+      - name: status
+        type: enum
+        enum_ref: CircleStatus
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read_write
+
+      - name: visibility
+        type: enum
+        enum_ref: CircleVisibility
+        constraints: [NOT_NULL, DEFAULT_PUBLIC]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 超前
+
+      - name: joinPolicy
+        type: enum
+        enum_ref: CircleJoinPolicy
+        constraints: [NOT_NULL, DEFAULT_OPEN]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 超前
+
+      - name: conversationId
+        type: ObjectId
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 关联群聊（超前）
+
+      - name: createdAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: true
+
+      - name: updatedAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+  CircleMember:
+    description: 圈子成员
+    fields:
+      - name: _id
+        type: ObjectId
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: circleId
+        type: ObjectId
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: userId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: role
+        type: enum
+        enum_ref: CircleMemberRole
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: joinedAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: lastActiveAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 超前
+
+      - name: contribution
+        type: int
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 贡献值（超前）
+
+    unique_constraints:
+      - columns: [circleId, userId]
+        description: 成员唯一

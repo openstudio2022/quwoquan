@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan/contracts/messages/envelope.schema.json",
+  "title": "MessageEnvelope",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "messageId": { "type": "string" },
+        "topic": { "type": "string" },
+        "src": {
+          "type": "string",
+          "description": "Source of envelope creation, aligned with traceId SRC concept.",
+          "enum": ["APP", "GW", "ORCH", "SVC", "MQ", "JOB", "CRON"]
+        },
+        "traceId": { "type": "string" },
+        "parentTraceId": { "type": "string" },
+        "causationId": { "type": "string" },
+        "sentAt": {
+          "type": "string",
+          "description": "ISO8601 timestamp when produced."
+        },
+        "producer": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "service": { "type": "string" },
+            "env": { "type": "string" },
+            "version": { "type": "string" }
+          },
+          "required": ["service"]
+        }
+      },
+      "required": ["messageId", "src", "traceId", "sentAt", "producer"]
+    },
+    "payload": {
+      "type": "object",
+      "description": "Event payload. Schema depends on topic/eventType."
+    }
+  },
+  "required": ["meta", "payload"]
+}

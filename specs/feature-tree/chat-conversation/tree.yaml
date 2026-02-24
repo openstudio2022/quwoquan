@@ -1,0 +1,55 @@
+version: 1
+l1: chat-conversation
+l2:
+  - feature: list-detail-message-delivery
+    l3:
+      - feature: conversation-list-source-switch
+        l4:
+          - feature: repository-mode-routing
+            l5:
+              - feature: mode-switch-compatibility-guard
+      - feature: message-paging-and-ordering
+        l4:
+          - feature: message-cursor-order-contract
+            l5:
+              - feature: duplicate-message-dedup-guard
+      - feature: delivery-and-read-receipt
+        l4:
+          - feature: status-transition-and-receipt-model
+            l5:
+              - feature: receipt-consistency-repair
+  - feature: group-creation-member-management
+    l3:
+      - feature: group-create-flow
+        l4:
+          - feature: group-creation-contract
+            l5:
+              - feature: create-idempotency-and-rollback
+      - feature: member-add-remove-policy
+        l4:
+          - feature: member-permission-audit
+            l5:
+              - feature: operation-risk-guard
+      - feature: group-settings
+        l4:
+          - feature: mute-pin-read-settings-contract
+            l5:
+              - feature: settings-sync-consistency-guard
+  - feature: contact-and-session-governance
+    l3:
+      - feature: contact-search-index
+        l4:
+          - feature: search-query-contract
+            l5:
+              - feature: privacy-filter-guard
+      - feature: session-governance-actions
+        l4:
+          - feature: governance-action-policy
+            l5:
+              - feature: action-audit-observability
+      - feature: session-audit-observability
+        l4:
+          - feature: session-log-metric-schema
+            l5:
+              - feature: anomaly-alert-guard
+

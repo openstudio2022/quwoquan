@@ -1,0 +1,45 @@
+version: 1
+read_model: UserProfileView
+
+description: |
+  用户画像 ReadModel。聚合 UserProfile + 标签 + 行为统计。
+  供推荐引擎和助手消费。
+
+storage_backend: mongodb
+collection: rm_user_profile_view
+
+source_entities:
+  - UserProfile
+  - FollowEdge
+  - ContentReaction
+  - VisitRecord
+
+source_events:
+  - UserProfileUpdated
+  - UserFollowed
+  - UserUnfollowed
+  - ContentReacted
+  - BehaviorBatchReported
+
+consumers:
+  - recommendation-engine
+  - assistant-service
+
+fields:
+  - { name: userId, type: string }
+  - { name: nickname, type: string }
+  - { name: bio, type: string }
+  - { name: region, type: string }
+  - { name: followerCount, type: int }
+  - { name: followingCount, type: int }
+  - { name: postCount, type: int }
+  - { name: interestTags, type: "[]string", description: 推断的兴趣标签 }
+  - { name: contentPreference, type: object, description: 内容偏好分布 }
+  - { name: activityLevel, type: string, description: 活跃度等级 }
+  - { name: recentBehaviors, type: "[]object", description: 最近行为摘要 }
+  - { name: updatedAt, type: timestamp }
+
+indexes:
+  - { name: idx_upv_user, keys: { userId: 1 }, unique: true }
+  - { name: idx_upv_activity, keys: { activityLevel: 1 } }
+  - { name: idx_upv_interest, keys: { interestTags: 1 } }

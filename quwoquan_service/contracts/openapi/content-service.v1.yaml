@@ -1,0 +1,293 @@
+openapi: 3.0.3
+info:
+  title: quwoquan content-service API
+  version: "v1"
+servers:
+  - url: http://localhost
+security:
+  - bearerAuth: []
+paths:
+  /v1/content/feed:
+    get:
+      summary: List content feed
+      parameters:
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [moment, photo, video, article]
+        - $ref: ./common.yaml#/components/parameters/Cursor
+        - $ref: ./common.yaml#/components/parameters/Limit
+        - $ref: ./common.yaml#/components/parameters/XPersonaId
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedPage"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: ./common.yaml#/components/schemas/ErrorResponse
+  /v1/content/behaviors:
+    post:
+      summary: Ingest content behavior events (batch)
+      parameters:
+        - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+        - $ref: ./common.yaml#/components/parameters/XPersonaId
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [events]
+              properties:
+                events:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/BehaviorEvent"
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: ./common.yaml#/components/schemas/ErrorResponse
+  /v1/content/posts/{postId}/comments:
+    get:
+      summary: List comments of a post
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: ./common.yaml#/components/parameters/Cursor
+        - $ref: ./common.yaml#/components/parameters/Limit
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommentPage"
+    post:
+      summary: Create comment (or reply)
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+        - $ref: ./common.yaml#/components/parameters/XPersonaId
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCommentRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateCommentResponse"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: ./common.yaml#/components/schemas/ErrorResponse
+  /v1/content/comments/{commentId}:
+    delete:
+      summary: Delete comment
+      parameters:
+        - name: commentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: ./common.yaml#/components/schemas/ErrorResponse
+  /v1/content/posts/{postId}/reactions:
+    get:
+      summary: Get reaction state for a user on a post
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: userId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 可选。若网关已注入 user 上下文，可省略。
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReactionState"
+  /v1/content/posts/{postId}/counters:
+    get:
+      summary: Get aggregated counters of a post
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Counters"
+  /v1/content/media/{mediaId}:
+    get:
+      summary: Get media asset status
+      parameters:
+        - name: mediaId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaAsset"
+components:
+  securitySchemes:
+    bearerAuth:
+      $ref: ./common.yaml#/components/securitySchemes/bearerAuth
+  schemas:
+    FeedPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/FeedItem"
+        nextCursor:
+          type: string
+          nullable: true
+    FeedItem:
+      type: object
+      required: [id, type]
+      properties:
+        id: { type: string }
+        type:
+          type: string
+          enum: [moment, image, video, article]
+        authorId: { type: string }
+        caption: { type: string }
+        images:
+          type: array
+          items: { type: string }
+        videoUrl: { type: string }
+        createdAt: { type: string }
+        counters:
+          $ref: "#/components/schemas/Counters"
+        metadata:
+          type: object
+          additionalProperties: true
+    BehaviorEvent:
+      type: object
+      required: [contentId, eventType, timestamp]
+      properties:
+        contentId: { type: string }
+        eventType:
+          type: string
+          enum: [impression, click, dwell, like, favorite, dislike, report, share]
+        timestamp: { type: string }
+        durationMs: { type: integer }
+        metadata:
+          type: object
+          additionalProperties: true
+    CommentPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Comment" }
+        nextCursor:
+          type: string
+          nullable: true
+    Comment:
+      type: object
+      required: [id, postId, content, createdAt]
+      properties:
+        id: { type: string }
+        postId: { type: string }
+        content: { type: string }
+        authorId: { type: string }
+        replyToCommentId: { type: string }
+        createdAt: { type: string }
+    CreateCommentRequest:
+      type: object
+      required: [content]
+      properties:
+        content: { type: string }
+        replyToCommentId: { type: string }
+    CreateCommentResponse:
+      type: object
+      required: [commentId]
+      properties:
+        commentId: { type: string }
+    ReactionState:
+      type: object
+      properties:
+        liked: { type: boolean }
+        favorited: { type: boolean }
+        reported: { type: boolean }
+    Counters:
+      type: object
+      properties:
+        likeCount: { type: integer }
+        commentCount: { type: integer }
+        favoriteCount: { type: integer }
+        shareCount: { type: integer }
+    MediaAsset:
+      type: object
+      required: [id, status]
+      properties:
+        id: { type: string }
+        status:
+          type: string
+          enum: [uploaded, processing, ready, failed]
+        originUrl: { type: string }
+        cdnUrl: { type: string }
+        derivatives:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        moderationStatus:
+          type: string
+          enum: [pending, approved, rejected]
+        errorCode: { type: string }

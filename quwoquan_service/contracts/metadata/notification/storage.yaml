@@ -1,0 +1,15 @@
+version: 1
+entity: Notification
+backend: mongodb
+
+collections:
+  notifications:
+    entity: Notification
+    indexes:
+      - { name: idx_notif_user_read, keys: { userId: 1, read: 1, createdAt: -1 } }
+      - { name: idx_notif_user_type, keys: { userId: 1, type: 1, createdAt: -1 } }
+      - { name: idx_notif_target, keys: { targetType: 1, targetId: 1 } }
+    ttl_index:
+      field: createdAt
+      expire_after_seconds: 7776000
+      description: 通知 90 天过期自动清理

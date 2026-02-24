@@ -15,9 +15,8 @@ enum VisitEntityKind {
 
 /// 被访问对象。支持页面型与实体型，具有唯一 [targetKey]。
 class VisitTarget {
-  const VisitTarget.page(String pageId)
+  const VisitTarget.page(String this.pageId)
       : type = VisitTargetType.page,
-        pageId = pageId,
         entityKind = null,
         entityId = null;
 

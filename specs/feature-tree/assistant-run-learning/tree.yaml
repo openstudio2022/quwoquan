@@ -1,0 +1,55 @@
+version: 1
+l1: assistant-run-learning
+l2:
+  - feature: run-stream-policy
+    l3:
+      - feature: run-sync-contract
+        l4:
+          - feature: assistant-run-io-contract
+            l5:
+              - feature: run-error-mapping-governance
+      - feature: run-stream-protocol
+        l4:
+          - feature: stream-event-ordering-and-finalization
+            l5:
+              - feature: stream-fallback-and-retry-guard
+      - feature: policy-template-routing
+        l4:
+          - feature: domain-policy-template-selection
+            l5:
+              - feature: policy-version-gray-release
+  - feature: learning-event-feedback-injection
+    l3:
+      - feature: learning-event-ingestion
+        l4:
+          - feature: interactionevent-scorecard-schema
+            l5:
+              - feature: ingestion-dedup-and-idempotency
+      - feature: feedback-aggregation
+        l4:
+          - feature: distribution-and-score-aggregation
+            l5:
+              - feature: aggregation-quality-guard
+      - feature: feedback-context-injection
+        l4:
+          - feature: historical-feedback-context-builder
+            l5:
+              - feature: context-injection-contract-guard
+  - feature: profile-proposal-apply-loop
+    l3:
+      - feature: proposal-create-review
+        l4:
+          - feature: proposal-generation-and-review-model
+            l5:
+              - feature: review-audit-trace-link
+      - feature: proposal-confirm-reject
+        l4:
+          - feature: proposal-state-transition-control
+            l5:
+              - feature: transition-idempotency-guard
+      - feature: proposal-apply-audit
+        l4:
+          - feature: profile-apply-and-versioning
+            l5:
+              - feature: apply-rollback-and-audit-guard
+

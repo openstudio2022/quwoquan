@@ -1,0 +1,53 @@
+version: 1
+feature: "storage-routing-and-interceptor-chain"
+level: "L5_cross_cutting"
+template: "A1-A8"
+tree_context:
+  feature_level: "L5_cross_cutting"
+  feature_path: "capability.runtime.feature.runtime-repository.subfeature.repository-interface-layering.object.mongo-pg-vector-cache-adapters.cross.storage-routing-and-interceptor-chain"
+  parent_path: "capability.runtime.feature.runtime-repository.subfeature.repository-interface-layering.object.mongo-pg-vector-cache-adapters"
+  acceptance_inherits_from: "capability.runtime.feature.runtime-repository"
+level_acceptance:
+  focus_groups:
+    - A3_service_governance
+    - A4_observability
+    - A7_contract_metadata_consistency
+  notes: "存储路由策略由 metadata 驱动，Repository 操作接入拦截链（观测、慢查询、治理）。"
+global_acceptance:
+  A1_functional:
+    scenarios:
+      - given: "EntityRegistry 中 Post storage_backend=mongodb"
+        when: "RepositoryFactory.Create(Post)"
+        then: "返回 MongoDB 适配器实例，无硬编码"
+      - given: "EntityRegistry 中 UserProfile storage_backend=postgres"
+        when: "RepositoryFactory.Create(UserProfile)"
+        then: "返回 PostgreSQL 适配器实例"
+      - given: "Repository 操作经过拦截链"
+        when: "Save/FindByID 执行"
+        then: "自动产生 OTEL span、延迟 metric、慢查询日志"
+  A2_experience:
+    - "路由与拦截对业务透明"
+  A3_service_governance:
+    - "连接池、慢查询阈值可通过 runtime-config 调整"
+    - "拦截链可配置启用/禁用"
+  A4_observability:
+    - "Repository 操作自动产生 OTEL span + 延迟 metric"
+    - "慢查询自动记录到 observability 日志"
+  A5_product_ops:
+    - "运营可查看存储路由与拦截链配置"
+  A6_security_privacy:
+    - "PII/SECRET 由拦截链处理，Repository 不感知"
+  A7_contract_metadata_consistency:
+    - "存储路由完全由 metadata storage_backend 驱动，禁止硬编码"
+  A8_test_automation:
+    - "存储工厂路由正确性测试"
+    - "拦截链集成测试"
+tests:
+  unit:
+    - "quwoquan_service/runtime/repository/tests/factory_test.go"
+    - "quwoquan_service/runtime/repository/tests/interceptor_chain_test.go"
+  contract:
+    - "quwoquan_service/runtime/repository/tests/storage_routing_contract_test.go"
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"
