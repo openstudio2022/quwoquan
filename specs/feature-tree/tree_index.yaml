@@ -810,6 +810,56 @@ features:
                       domain: ""
                       status: specified
                       tags: []
+        - id: content-display-journey-consistency
+          name: content-display-journey-consistency
+          level: L2_feature
+          path: ../specs/feature-tree/discovery-content/content-display-journey-consistency
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: feed-item-dto-contract
+              name: feed-item-dto-contract
+              level: L3_subfeature
+              path: ../specs/feature-tree/discovery-content/content-display-journey-consistency/feed-item-dto-contract
+              domain: ""
+              status: specified
+              tags: []
+            - id: content-action-intent-contract
+              name: content-action-intent-contract
+              level: L3_subfeature
+              path: ../specs/feature-tree/discovery-content/content-display-journey-consistency/content-action-intent-contract
+              domain: ""
+              status: specified
+              tags: []
+            - id: photo-display-journey
+              name: photo-display-journey
+              level: L3_subfeature
+              path: ../specs/feature-tree/discovery-content/content-display-journey-consistency/photo-display-journey
+              domain: ""
+              status: specified
+              tags: []
+            - id: video-display-journey
+              name: video-display-journey
+              level: L3_subfeature
+              path: ../specs/feature-tree/discovery-content/content-display-journey-consistency/video-display-journey
+              domain: ""
+              status: specified
+              tags: []
+            - id: article-display-journey
+              name: article-display-journey
+              level: L3_subfeature
+              path: ../specs/feature-tree/discovery-content/content-display-journey-consistency/article-display-journey
+              domain: ""
+              status: specified
+              tags: []
+            - id: moment-display-journey
+              name: moment-display-journey
+              level: L3_subfeature
+              path: ../specs/feature-tree/discovery-content/content-display-journey-consistency/moment-display-journey
+              domain: ""
+              status: specified
+              tags: []
         - id: media-processing-helper-read
           name: media-processing-helper-read
           level: L2_feature
@@ -1551,6 +1601,36 @@ features:
       status: specified
       tags: []
       children:
+        - id: runtime-client-foundation
+          name: runtime-client-foundation
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-client-foundation
+          domain: ""
+          status: in_progress
+          tags: []
+          children:
+            - id: app-locale-infrastructure
+              name: app-locale-infrastructure
+              level: L3_component
+              path: ../specs/feature-tree/runtime/runtime-client-foundation/app-locale-infrastructure
+              domain: ""
+              status: in_progress
+              tags: []
+              children:
+                - id: arb-gen-l10n-string-extraction
+                  name: arb-gen-l10n-string-extraction
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-client-foundation/app-locale-infrastructure/arb-gen-l10n-string-extraction
+                  domain: ""
+                  status: archived
+                  tags: []
+            - id: app-theme-infrastructure
+              name: app-theme-infrastructure
+              level: L3_component
+              path: ../specs/feature-tree/runtime/runtime-client-foundation/app-theme-infrastructure
+              domain: ""
+              status: planned
+              tags: []
         - id: runtime-agentpack
           name: runtime-agentpack
           level: L2_feature

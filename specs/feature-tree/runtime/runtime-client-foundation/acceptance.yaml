@@ -1,0 +1,45 @@
+version: 1
+feature: "runtime-client-foundation"
+level: "L2_feature"
+template: "A1-A8"
+tree_context:
+  feature_level: "L2_feature"
+  feature_path: "capability.runtime.feature.runtime-client-foundation"
+  parent_path: "capability.runtime"
+  acceptance_inherits_from: "capability.runtime"
+level_acceptance:
+  focus_groups:
+    - A1_functional
+    - A7_contract_metadata_consistency
+    - A8_test_automation
+  notes: "客户端平台基础设施层，当前交付 i18n 基础设施；主题切换为搁置任务。"
+global_acceptance:
+  A1_functional:
+    scenarios:
+      - given: "lib/ui/ 下的 Flutter widget"
+        when: "引用 context.l10n.xxx"
+        then: "编译通过，运行时显示正确中文文本"
+      - given: "UITextConstants 中的常量"
+        when: "执行 flutter gen-l10n"
+        then: "对应 AppLocalizations 方法存在且类型正确"
+  A2_experience:
+    - "context.l10n 访问方式简洁，与现有 AppColors/AppSpacing 使用模式一致"
+  A3_service_governance:
+    - "UITextConstants 保留用于非 widget 上下文，不强制删除"
+    - "lib/l10n/app_localizations*.dart 标注 DO NOT EDIT，门禁保护"
+  A4_observability:
+    - "flutter gen-l10n 执行无 warning/error"
+  A5_product_ops:
+    - "N/A（纯客户端基础设施，无服务端影响）"
+  A6_security_privacy:
+    - "ARB 文件不包含任何 PII 或 secret"
+  A7_contract_metadata_consistency:
+    - "app_zh.arb 的所有 key 覆盖 UITextConstants + AppStrings 全量条目"
+    - "app_en.arb 的 key 集合与 app_zh.arb 完全一致（值可为 TODO 占位）"
+  A8_test_automation:
+    - "flutter analyze 零报错"
+    - "flutter gen-l10n 零报错"
+    - "lib/ui/ 下无 CJK 字面量检查脚本通过"
+execution:
+  local_gate: "flutter analyze && flutter gen-l10n"
+  full_gate: "make gate-full（跳过 Go 服务端契约测试，补充客户端专项检查）"
