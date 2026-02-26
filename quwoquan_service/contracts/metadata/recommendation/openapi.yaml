@@ -28,13 +28,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./common.yaml#/components/schemas/ErrorResponse
+                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
         "504":
           description: Gateway Timeout（调用方 CascadeScorer 回退 RuleScorer）
           content:
             application/json:
               schema:
-                $ref: ./common.yaml#/components/schemas/ErrorResponse
+                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
   /health:
     get:
       summary: 健康检查

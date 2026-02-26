@@ -17,9 +17,9 @@ paths:
           schema:
             type: string
             enum: [moment, photo, video, article]
-        - $ref: ./common.yaml#/components/parameters/Cursor
-        - $ref: ./common.yaml#/components/parameters/Limit
-        - $ref: ./common.yaml#/components/parameters/XPersonaId
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/Cursor
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/Limit
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/XPersonaId
       responses:
         "200":
           description: OK
@@ -32,13 +32,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./common.yaml#/components/schemas/ErrorResponse
+                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
   /v1/content/behaviors:
     post:
       summary: Ingest content behavior events (batch)
       parameters:
-        - $ref: ./common.yaml#/components/parameters/IdempotencyKey
-        - $ref: ./common.yaml#/components/parameters/XPersonaId
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/IdempotencyKey
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/XPersonaId
       requestBody:
         required: true
         content:
@@ -59,7 +59,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./common.yaml#/components/schemas/ErrorResponse
+                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
   /v1/content/posts/{postId}/comments:
     get:
       summary: List comments of a post
@@ -69,8 +69,8 @@ paths:
           required: true
           schema:
             type: string
-        - $ref: ./common.yaml#/components/parameters/Cursor
-        - $ref: ./common.yaml#/components/parameters/Limit
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/Cursor
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/Limit
       responses:
         "200":
           description: OK
@@ -86,8 +86,8 @@ paths:
           required: true
           schema:
             type: string
-        - $ref: ./common.yaml#/components/parameters/IdempotencyKey
-        - $ref: ./common.yaml#/components/parameters/XPersonaId
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/IdempotencyKey
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/XPersonaId
       requestBody:
         required: true
         content:
@@ -106,7 +106,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./common.yaml#/components/schemas/ErrorResponse
+                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
   /v1/content/comments/{commentId}:
     delete:
       summary: Delete comment
@@ -124,7 +124,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./common.yaml#/components/schemas/ErrorResponse
+                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
   /v1/content/posts/{postId}/reactions:
     get:
       summary: Get reaction state for a user on a post
@@ -182,7 +182,7 @@ paths:
 components:
   securitySchemes:
     bearerAuth:
-      $ref: ./common.yaml#/components/securitySchemes/bearerAuth
+      $ref: ../_shared/openapi_common.yaml#/components/securitySchemes/bearerAuth
   schemas:
     FeedPage:
       type: object

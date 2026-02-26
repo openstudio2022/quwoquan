@@ -34,10 +34,12 @@ search() {
 }
 
 # 1) YAML syntax check (OpenAPI)
+# Domain-centric openapi.yaml files live at contracts/metadata/{domain}/openapi.yaml
+# contracts/openapi/ retains only common.yaml (shared $ref schemas)
 echo "[gate] validating OpenAPI yaml syntax"
 ruby -ryaml -e 'ARGV.each { |f| YAML.load_file(f) }' \
-  contracts/openapi/common.yaml \
-  contracts/openapi/*.yaml
+  contracts/metadata/_shared/openapi_common.yaml \
+  contracts/metadata/*/openapi.yaml
 
 # 1.1) OpenAPI <-> endpoint catalog consistency (subset)
 echo "[gate] checking OpenAPI <-> endpoint catalog consistency"
@@ -47,7 +49,7 @@ ruby -ryaml -e '
     exit 1
   end
 
-  openapi_files = Dir["contracts/openapi/*.yaml"].reject { |p| p.end_with?("/common.yaml") }
+  openapi_files = Dir["contracts/metadata/*/openapi.yaml"]
   paths = {}
   openapi_files.each do |f|
     doc = YAML.load_file(f) || {}
@@ -163,7 +165,7 @@ ruby -ryaml -e '
     exit 1
   end
 
-  openapi = YAML.load_file("contracts/openapi/common.yaml") || {}
+  openapi = YAML.load_file("contracts/metadata/_shared/openapi_common.yaml") || {}
   schema = (((openapi["components"] || {})["schemas"] || {})["ErrorResponse"] || {})
   props = schema["properties"] || {}
   module_enum = (props.dig("module", "enum") || []).map(&:to_s).sort

@@ -55,7 +55,7 @@ paths:
     post:
       summary: Create persona
       parameters:
-        - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/IdempotencyKey
       requestBody:
         required: true
         content:
@@ -113,7 +113,7 @@ paths:
           in: path
           required: true
           schema: { type: string }
-        - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/IdempotencyKey
       responses:
         "204": { description: No Content }
     delete:
@@ -173,7 +173,7 @@ paths:
     post:
       summary: Register push token
       parameters:
-        - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/IdempotencyKey
       requestBody:
         required: true
         content:
@@ -184,7 +184,7 @@ paths:
 components:
   securitySchemes:
     bearerAuth:
-      $ref: ./common.yaml#/components/securitySchemes/bearerAuth
+      $ref: ../_shared/openapi_common.yaml#/components/securitySchemes/bearerAuth
   schemas:
     LoginRequest:
       type: object

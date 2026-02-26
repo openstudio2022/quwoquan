@@ -65,103 +65,137 @@
 
 ```
 contracts/metadata/
-├── DESIGN.md                     # 本文档
-├── README.md                     # 使用指南
+├── DESIGN.md                         # 本文档
+├── README.md                         # 使用指南
 │
-├── _shared/                      # 跨聚合共享定义
-│   ├── tag_taxonomy.yaml         # 标签分类体系（四域）
-│   ├── types.yaml                # 共享类型（GeoPoint, Enum 等）
-│   └── redis_keyspace.yaml       # Redis 全局键空间设计
+├── _shared/                          # 跨域共享定义
+│   ├── tag_taxonomy.yaml             # 标签分类体系（四域）
+│   ├── types.yaml                    # 共享类型（GeoPoint, Enum 等）
+│   ├── redis_keyspace.yaml           # Redis 全局键空间设计
+│   └── openapi_common.yaml          # 共享 OpenAPI schema（ErrorResponse, 分页参数等）
 │
-├── post/                         # Post 聚合（content domain）
-│   ├── aggregate.yaml            # 聚合定义（Post + Comment + MediaAsset + ContentReaction）
-│   ├── fields.yaml               # 全部实体字段策略
-│   ├── events.yaml               # 领域事件
-│   ├── storage.yaml              # MongoDB 集合 + 索引 + 向量
-│   └── service.yaml              # content-service 归属 + API 路由
+├── content/                          # content-service 域容器
+│   ├── openapi.yaml                  # content-service OpenAPI（co-located）
+│   ├── post/                         # Post 聚合
+│   │   ├── aggregate.yaml            # Post + Comment + MediaAsset + ContentReaction
+│   │   ├── fields.yaml
+│   │   ├── events.yaml
+│   │   ├── storage.yaml
+│   │   ├── service.yaml
+│   │   ├── errors.yaml               # 端云统一错误码
+│   │   ├── behaviors.yaml            # 用户行为 + ML 特征
+│   │   ├── privacy.yaml              # 隐私与安全策略
+│   │   ├── ui_config.yaml            # UI 可配置化
+│   │   ├── projections/              # ReadModel 投影
+│   │   │   ├── discovery_feed.yaml
+│   │   │   ├── photo_post.yaml
+│   │   │   ├── video_post.yaml
+│   │   │   ├── article_post.yaml
+│   │   │   └── moment_post.yaml
+│   │   └── tests/                    # 三层测试契约
+│   │       ├── mock.yaml
+│   │       ├── contract.yaml
+│   │       └── e2e.yaml
+│   └── report/                       # Report 独立实体（content domain）
+│       ├── entity.yaml
+│       ├── fields.yaml
+│       ├── events.yaml
+│       ├── storage.yaml
+│       └── service.yaml
 │
-├── user_profile/                 # UserProfile 聚合（user domain）
-│   ├── aggregate.yaml
-│   ├── fields.yaml
-│   ├── events.yaml
-│   ├── storage.yaml              # PostgreSQL 表 + 关系映射
-│   └── service.yaml
+├── messages/                         # chat-service 域容器
+│   ├── openapi.yaml                  # chat-service OpenAPI（co-located）
+│   └── conversation/                 # Conversation 聚合
+│       ├── aggregate.yaml
+│       ├── fields.yaml
+│       ├── events.yaml
+│       ├── storage.yaml
+│       ├── service.yaml
+│       └── projections/
+│           └── chat_inbox.yaml
 │
-├── conversation/                 # Conversation 聚合（chat domain）
-│   ├── aggregate.yaml
-│   ├── fields.yaml
-│   ├── events.yaml
-│   ├── storage.yaml
-│   └── service.yaml
+├── user/                             # user-service 域容器
+│   ├── openapi.yaml                  # user-service OpenAPI（co-located）
+│   ├── user_profile/                 # UserProfile 聚合
+│   │   ├── aggregate.yaml
+│   │   ├── fields.yaml
+│   │   ├── events.yaml
+│   │   ├── storage.yaml
+│   │   ├── service.yaml
+│   │   └── projections/
+│   │       └── user_profile_view.yaml
+│   ├── follow_edge/                  # FollowEdge 独立实体
+│   │   ├── entity.yaml
+│   │   ├── fields.yaml
+│   │   ├── events.yaml
+│   │   ├── storage.yaml
+│   │   └── service.yaml
+│   └── block_edge/                   # BlockEdge 独立实体
+│       ├── entity.yaml
+│       ├── fields.yaml
+│       ├── events.yaml
+│       ├── storage.yaml
+│       └── service.yaml
 │
-├── circle/                       # Circle 聚合（circle domain）
-│   ├── aggregate.yaml
-│   ├── fields.yaml
-│   ├── events.yaml
-│   ├── storage.yaml
-│   └── service.yaml
+├── social/                           # circle-service 域容器
+│   └── circle/                       # Circle 聚合
+│       ├── aggregate.yaml
+│       ├── fields.yaml
+│       ├── events.yaml
+│       ├── storage.yaml
+│       ├── service.yaml
+│       └── projections/
+│           └── circle_feed.yaml
 │
-├── assistant_run/                # AssistantRun 聚合（assistant domain）
-│   ├── aggregate.yaml
-│   ├── fields.yaml
-│   ├── events.yaml
-│   ├── storage.yaml
-│   └── service.yaml
+├── assistant/                        # assistant-service 域容器
+│   ├── assistant_run/                # AssistantRun 聚合
+│   │   ├── aggregate.yaml
+│   │   ├── fields.yaml
+│   │   ├── events.yaml
+│   │   ├── storage.yaml
+│   │   └── service.yaml
+│   └── skill_consent/                # SkillConsent 独立实体
+│       ├── entity.yaml
+│       ├── fields.yaml
+│       ├── storage.yaml
+│       └── service.yaml
 │
-├── follow_edge/                  # 独立实体（user domain）
-│   ├── entity.yaml
-│   ├── fields.yaml
-│   ├── events.yaml
-│   ├── storage.yaml
-│   └── service.yaml
+├── notification/                     # notification-service 域容器
+│   └── notification/                 # Notification 独立实体
+│       ├── entity.yaml
+│       ├── fields.yaml
+│       ├── events.yaml
+│       ├── storage.yaml
+│       └── service.yaml
 │
-├── block_edge/                   # 独立实体（user domain）
-│   ├── entity.yaml
-│   ├── fields.yaml
-│   ├── events.yaml
-│   ├── storage.yaml
-│   └── service.yaml
+├── recommendation/                   # rec-model-service 域容器
+│   ├── openapi.yaml                  # rec-model-service OpenAPI（co-located）
+│   └── rec_model/                    # RecModel 服务实体
+│       ├── entity.yaml
+│       ├── fields.yaml
+│       ├── events.yaml
+│       ├── storage.yaml
+│       ├── service.yaml
+│       └── projections/
+│           ├── learning_events.yaml
+│           ├── model_registry.yaml
+│           ├── recommend_feature.yaml
+│           └── training_samples.yaml
 │
-├── report/                       # 独立实体（content domain）
-│   ├── entity.yaml
-│   ├── fields.yaml
-│   ├── events.yaml
-│   ├── storage.yaml
-│   └── service.yaml
+├── ops/                              # orchestrator/product-ops 域容器
+│   ├── openapi.yaml                  # orchestrator-service OpenAPI（co-located）
+│   ├── visit_record/                 # VisitRecord 独立实体
+│   │   ├── entity.yaml
+│   │   ├── fields.yaml
+│   │   ├── storage.yaml
+│   │   └── service.yaml
+│   └── experiment_bucket/            # ExperimentBucket 独立实体
+│       ├── entity.yaml
+│       ├── fields.yaml
+│       ├── storage.yaml
+│       └── service.yaml
 │
-├── notification/                 # 独立实体（notification domain）
-│   ├── entity.yaml
-│   ├── fields.yaml
-│   ├── events.yaml
-│   ├── storage.yaml
-│   └── service.yaml
-│
-├── skill_consent/                # 独立实体（assistant domain）
-│   ├── entity.yaml
-│   ├── fields.yaml
-│   ├── storage.yaml
-│   └── service.yaml
-│
-├── visit_record/                 # 独立实体（product-ops domain）
-│   ├── entity.yaml
-│   ├── fields.yaml
-│   ├── storage.yaml
-│   └── service.yaml
-│
-├── experiment_bucket/            # 独立实体（product-ops domain）
-│   ├── entity.yaml
-│   ├── fields.yaml
-│   ├── storage.yaml
-│   └── service.yaml
-│
-├── _projections/                 # ReadModel（跨聚合物化视图）
-│   ├── discovery_feed.yaml
-│   ├── circle_feed.yaml
-│   ├── chat_inbox.yaml
-│   ├── user_profile_view.yaml
-│   └── recommend_feature.yaml
-│
-└── _vectors/                     # 向量存储
+└── _vectors/                         # 向量存储
     ├── content_embedding.yaml
     └── user_context_embedding.yaml
 ```

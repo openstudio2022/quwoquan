@@ -23,9 +23,9 @@ paths:
           required: false
           schema:
             type: string
-        - $ref: ./common.yaml#/components/parameters/Cursor
-        - $ref: ./common.yaml#/components/parameters/Limit
-        - $ref: ./common.yaml#/components/parameters/XPersonaId
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/Cursor
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/Limit
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/XPersonaId
       responses:
         "200":
           description: OK
@@ -38,13 +38,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./common.yaml#/components/schemas/ErrorResponse
+                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: ./common.yaml#/components/schemas/ErrorResponse
+                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
   /v1/orch/circles/{circleId}/activities:
     get:
       summary: Aggregated circle activities (orchestrated)
@@ -53,8 +53,8 @@ paths:
           in: path
           required: true
           schema: { type: string }
-        - $ref: ./common.yaml#/components/parameters/Cursor
-        - $ref: ./common.yaml#/components/parameters/Limit
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/Cursor
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/Limit
       responses:
         "200":
           description: OK
@@ -67,11 +67,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./common.yaml#/components/schemas/ErrorResponse
+                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
 components:
   securitySchemes:
     bearerAuth:
-      $ref: ./common.yaml#/components/securitySchemes/bearerAuth
+      $ref: ../_shared/openapi_common.yaml#/components/securitySchemes/bearerAuth
   schemas:
     FeedPage:
       type: object
