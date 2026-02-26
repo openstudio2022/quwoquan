@@ -1,0 +1,44 @@
+version: 1
+feature: fullstack-error-behavior-contract
+level: L3_subfeature
+status: specified
+
+acceptance_criteria:
+  - id: A1
+    description: errors.yaml 结构完整
+    assertions:
+      - 含 CONTENT.USER.* 和 CONTENT.SYSTEM.* 两类
+      - 每个 code 含 dart_const / go_const / http_status / retryable / user_message.zh
+      - make verify-metadata PASS
+
+  - id: A2
+    description: 端侧错误码 codegen 正确
+    assertions:
+      - content_errors.g.dart 含 ContentErrorCode enum，成员数 == errors.yaml code 数
+      - ContentErrorMessages.zh 含全部 zh user_message
+      - CloudErrorMapper.fromCode("CONTENT.USER.post_not_found") == ContentErrorCode.postNotFound
+
+  - id: A3
+    description: 云侧错误码 codegen 正确
+    assertions:
+      - generated/errors.go 含全部 ErrXxx 常量
+      - 常量值 == errors.yaml code 字符串
+
+  - id: A4
+    description: behaviors.yaml 结构完整
+    assertions:
+      - impression/dwell/click/dislike 声明为 batch=true
+      - like/favorite 声明为 dedicated_route（不在 BehaviorTracker 中）
+      - 推荐特征字段类型与 fields.yaml 一致
+
+  - id: A5
+    description: Dart BehaviorTracker 生成正确
+    assertions:
+      - trackImpression/trackDwell/trackClick/trackDislike 方法均存在
+      - 批量路由 == service.yaml POST /v1/content/behaviors
+
+  - id: A6
+    description: Python schema 生成正确
+    assertions:
+      - ContentFeatures Pydantic model 存在
+      - 字段与 behaviors.yaml recommend_features 一一对应

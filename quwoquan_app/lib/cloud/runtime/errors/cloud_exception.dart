@@ -1,3 +1,5 @@
+import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
+
 enum CloudErrorType {
   timeout,
   network,
@@ -15,13 +17,20 @@ class CloudException implements Exception {
     required this.message,
     this.statusCode,
     this.code,
+    this.errorCode,
     this.cause,
   });
 
   final CloudErrorType type;
   final String message;
   final int? statusCode;
+
+  /// Raw error code string from the server response (e.g. "CONTENT.USER.post_not_found").
   final String? code;
+
+  /// Typed [ContentErrorCode] parsed from [code]. Null when not a content-domain error.
+  final ContentErrorCode? errorCode;
+
   final Object? cause;
 
   @override

@@ -1,0 +1,97 @@
+version: 1
+aggregate: Post
+
+events:
+  - name: PostCreated
+    description: 内容发布
+    producer: content-service
+    consumers: [recommendation-engine, notification-service, assistant-service]
+    channel: event_store
+    payload_entity: Post
+    payload_fields: [_id, authorId, contentType, title, tags, location, circleId, createdAt]
+    recommend_impact: content_index_refresh
+
+  - name: PostPublished
+    description: 内容通过审核后发布
+    producer: content-service
+    consumers: [recommendation-engine, notification-service]
+    channel: event_store
+    payload_entity: Post
+    payload_fields: [_id, authorId, contentType, status, publishedAt]
+
+  - name: PostUpdated
+    description: 内容更新
+    producer: content-service
+    consumers: [recommendation-engine]
+    channel: event_store
+    payload_entity: Post
+    payload_fields: [_id, title, body, tags, updatedAt]
+
+  - name: PostDeleted
+    description: 内容删除
+    producer: content-service
+    consumers: [recommendation-engine, notification-service]
+    channel: event_store
+    payload_entity: Post
+    payload_fields: [_id, authorId, status]
+
+  - name: CommentCreated
+    description: 新评论
+    producer: content-service
+    consumers: [notification-service, recommendation-engine, assistant-service]
+    channel: event_store
+    payload_entity: Comment
+    payload_fields: [_id, postId, authorId, content, replyToUserId]
+    recommend_impact: engagement_signal
+
+  - name: ContentReacted
+    description: 互动状态变更（点赞/收藏/分享/举报）
+    producer: content-service
+    consumers: [recommendation-engine, notification-service]
+    channel: direct
+    payload_entity: ContentReaction
+    payload_fields: [postId, userId, liked, favorited, shared, reported]
+    recommend_impact: hot_path_signal
+    description_detail: |
+      写入 Redis 推荐热路径（direct channel），同时写入 Event Store。
+      点赞/收藏等显式喜好信号 → 实时影响下一批推荐。
+
+  - name: ContentViewed
+    description: 内容浏览
+    producer: content-service
+    consumers: [recommendation-engine]
+    channel: direct
+    payload_fields: [postId, userId, dwellMs, sessionId]
+    recommend_impact: hot_path_signal
+
+  - name: ContentShared
+    description: 内容分享
+    producer: content-service
+    consumers: [recommendation-engine, notification-service]
+    channel: event_store
+    payload_fields: [postId, userId, target]
+    recommend_impact: engagement_signal
+
+  - name: MediaProcessed
+    description: 媒体处理完成
+    producer: content-service
+    consumers: []
+    channel: event_store
+    payload_entity: MediaAsset
+    payload_fields: [_id, postId, status, cdnUrl, thumbnailUrl]
+
+  - name: ContentModerated
+    description: 内容审核完成
+    producer: content-service
+    consumers: [notification-service]
+    channel: event_store
+    payload_entity: Post
+    payload_fields: [_id, moderationStatus]
+
+  - name: BehaviorBatchReported
+    description: 行为批量上报（impression/click/dwell 等）
+    producer: content-service
+    consumers: [recommendation-engine]
+    channel: direct
+    payload_fields: [userId, events]
+    recommend_impact: hot_path_signal

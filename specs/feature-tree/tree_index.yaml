@@ -726,6 +726,42 @@ features:
       status: specified
       tags: []
       children:
+        - id: content-service-contract-foundation
+          name: content-service-contract-foundation
+          level: L2_feature
+          path: ../specs/feature-tree/discovery-content/content-service-contract-foundation
+          domain: ""
+          status: completed
+          tags: [platform, metadata, codegen, cross-cutting]
+          children:
+            - id: metadata-domain-restructure
+              name: metadata-domain-restructure
+              level: L3_subfeature
+              path: ../specs/feature-tree/discovery-content/content-service-contract-foundation/metadata-domain-restructure
+              domain: ""
+              status: completed
+              tags: []
+            - id: fullstack-error-behavior-contract
+              name: fullstack-error-behavior-contract
+              level: L3_subfeature
+              path: ../specs/feature-tree/discovery-content/content-service-contract-foundation/fullstack-error-behavior-contract
+              domain: ""
+              status: completed
+              tags: []
+            - id: privacy-ui-config-contract
+              name: privacy-ui-config-contract
+              level: L3_subfeature
+              path: ../specs/feature-tree/discovery-content/content-service-contract-foundation/privacy-ui-config-contract
+              domain: ""
+              status: completed
+              tags: []
+            - id: three-layer-test-contract
+              name: three-layer-test-contract
+              level: L3_subfeature
+              path: ../specs/feature-tree/discovery-content/content-service-contract-foundation/three-layer-test-contract
+              domain: ""
+              status: completed
+              tags: []
         - id: content-type-framework
           name: content-type-framework
           level: L2_feature

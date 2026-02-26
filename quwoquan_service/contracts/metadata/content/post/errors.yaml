@@ -1,0 +1,163 @@
+version: 1
+aggregate: Post
+domain: CONTENT
+
+description: |
+  content 域结构化错误码声明。格式：MODULE.KIND.REASON。
+  codegen 从本文件生成 Dart ContentErrorCode enum + ContentErrorMessages，
+  以及 Go errors.go 常量（绑定 runtime/errors.AppError）。
+  CloudErrorMapper 解析 response body "code" 字段映射到 ContentErrorCode。
+
+errors:
+  # ── 用户侧错误（USER）────────────────────────────────────────────────
+
+  - code: CONTENT.USER.post_not_found
+    kind: USER
+    reason: not_found
+    http_status: 404
+    retryable: false
+    dart_const: postNotFound
+    go_const: ErrPostNotFound
+    user_message:
+      zh: "内容不存在或已删除"
+      en: "Post not found or deleted"
+
+  - code: CONTENT.USER.comment_not_found
+    kind: USER
+    reason: not_found
+    http_status: 404
+    retryable: false
+    dart_const: commentNotFound
+    go_const: ErrCommentNotFound
+    user_message:
+      zh: "评论不存在或已删除"
+      en: "Comment not found or deleted"
+
+  - code: CONTENT.USER.forbidden_edit
+    kind: USER
+    reason: forbidden
+    http_status: 403
+    retryable: false
+    dart_const: forbiddenEdit
+    go_const: ErrForbiddenEdit
+    user_message:
+      zh: "无权编辑此内容"
+      en: "Not allowed to edit this post"
+
+  - code: CONTENT.USER.forbidden_delete
+    kind: USER
+    reason: forbidden
+    http_status: 403
+    retryable: false
+    dart_const: forbiddenDelete
+    go_const: ErrForbiddenDelete
+    user_message:
+      zh: "无权删除此内容"
+      en: "Not allowed to delete this post"
+
+  - code: CONTENT.USER.unauthorized
+    kind: USER
+    reason: unauthorized
+    http_status: 401
+    retryable: false
+    dart_const: unauthorized
+    go_const: ErrUnauthorized
+    user_message:
+      zh: "请先登录"
+      en: "Please sign in to continue"
+
+  - code: CONTENT.USER.invalid_argument
+    kind: USER
+    reason: invalid_argument
+    http_status: 400
+    retryable: false
+    dart_const: invalidArgument
+    go_const: ErrInvalidArgument
+    user_message:
+      zh: "请求参数有误，请检查后重试"
+      en: "Invalid request, please check and retry"
+
+  - code: CONTENT.USER.invalid_content_type
+    kind: USER
+    reason: invalid_argument
+    http_status: 400
+    retryable: false
+    dart_const: invalidContentType
+    go_const: ErrInvalidContentType
+    user_message:
+      zh: "不支持的内容类型"
+      en: "Unsupported content type"
+
+  - code: CONTENT.USER.rate_limited
+    kind: USER
+    reason: rate_limited
+    http_status: 429
+    retryable: true
+    retry_after_seconds: 60
+    dart_const: rateLimited
+    go_const: ErrRateLimited
+    user_message:
+      zh: "操作太频繁，请稍后重试"
+      en: "Too many requests, please retry later"
+
+  - code: CONTENT.USER.content_too_long
+    kind: USER
+    reason: invalid_argument
+    http_status: 400
+    retryable: false
+    dart_const: contentTooLong
+    go_const: ErrContentTooLong
+    user_message:
+      zh: "内容超出长度限制"
+      en: "Content exceeds length limit"
+
+  - code: CONTENT.USER.media_not_ready
+    kind: USER
+    reason: invalid_argument
+    http_status: 400
+    retryable: true
+    retry_after_seconds: 3
+    dart_const: mediaNotReady
+    go_const: ErrMediaNotReady
+    user_message:
+      zh: "媒体文件正在处理中，请稍后发布"
+      en: "Media is still processing, please retry shortly"
+
+  # ── 系统侧错误（SYSTEM）──────────────────────────────────────────────
+
+  - code: CONTENT.SYSTEM.storage_write_failed
+    kind: SYSTEM
+    reason: internal_error
+    http_status: 500
+    retryable: true
+    retry_after_seconds: 5
+    dart_const: storageWriteFailed
+    go_const: ErrStorageWriteFailed
+    user_message:
+      zh: "操作失败，请稍后重试"
+      en: "Operation failed, please retry"
+
+  - code: CONTENT.SYSTEM.internal_error
+    kind: SYSTEM
+    reason: internal_error
+    http_status: 500
+    retryable: false
+    dart_const: internalError
+    go_const: ErrInternalError
+    user_message:
+      zh: "服务异常，请稍后重试"
+      en: "Service error, please try again later"
+
+  # ── 中间件/上游错误（MIDDLEWARE）─────────────────────────────────────
+
+  - code: CONTENT.MIDDLEWARE.upstream_timeout
+    kind: MIDDLEWARE
+    reason: timeout
+    http_status: 504
+    retryable: true
+    retry_after_seconds: 10
+    dart_const: upstreamTimeout
+    go_const: ErrUpstreamTimeout
+    user_message:
+      zh: "请求超时，请检查网络后重试"
+      en: "Request timed out, please check your connection"

@@ -100,6 +100,23 @@ func (v *validator) validateBusinessObjects() {
 		if !entry.IsDir() || strings.HasPrefix(entry.Name(), "_") {
 			continue
 		}
+		dir := filepath.Join(v.metadataDir, entry.Name())
+		// Domain container: directory without aggregate.yaml/entity.yaml → recurse one level.
+		if !fileExists(filepath.Join(dir, "aggregate.yaml")) && !fileExists(filepath.Join(dir, "entity.yaml")) {
+			subs, err := os.ReadDir(dir)
+			if err != nil {
+				v.errorf("cannot read domain dir %s: %v", entry.Name(), err)
+				continue
+			}
+			for _, sub := range subs {
+				if !sub.IsDir() || strings.HasPrefix(sub.Name(), "_") {
+					continue
+				}
+				v.validateObjectAt(entry.Name()+"/"+sub.Name(), filepath.Join(dir, sub.Name()))
+				v.objectCount++
+			}
+			continue
+		}
 		v.validateObject(entry.Name())
 		v.objectCount++
 	}
@@ -107,6 +124,10 @@ func (v *validator) validateBusinessObjects() {
 
 func (v *validator) validateObject(dirName string) {
 	dir := filepath.Join(v.metadataDir, dirName)
+	v.validateObjectAt(dirName, dir)
+}
+
+func (v *validator) validateObjectAt(dirName, dir string) {
 	fmt.Printf("  checking %s/ ...\n", dirName)
 
 	aggFile := filepath.Join(dir, "aggregate.yaml")

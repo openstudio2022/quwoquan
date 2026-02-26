@@ -281,5 +281,329 @@ if search "\\\\n[[:space:]]*$" contracts specs platform README.md design.md task
   fail "found literal \\n artifacts; please replace with real newlines"
 fi
 
+# 5) Feature tree consistency: structure + acceptance baseline integrity
+echo "[gate] checking feature tree consistency"
+ruby -ryaml -rdate -e '
+  def fail(msg)
+    STDERR.puts("[gate] FAIL: #{msg}")
+    exit 1
+  end
+
+  def warn(msg)
+    STDERR.puts("[gate] WARN: #{msg}")
+  end
+
+  def load_yaml(path)
+    YAML.safe_load(File.read(path), permitted_classes: [Time, Date, DateTime, Symbol], symbolize_names: false) || {}
+  rescue => e
+    nil
+  end
+
+  specs_root = File.expand_path("../specs/feature-tree", __dir__)
+  exit 0 unless Dir.exist?(specs_root)
+
+  warnings = []
+  blocking = []
+
+  # ── 5.1 每个节点目录必须具备四类文档 ──────────────────────────────
+  # design.md 仅在实施已开始（tasks.md 含任何 [x]）时强制要求；
+  # 纯规划阶段（全部 [ ]）缺少 design.md 仅输出 WARNING。
+  always_required = %w[spec.md tasks.md acceptance.yaml]
+  Dir.glob("#{specs_root}/**/*.yaml").
+    select { |f| File.basename(f) == "acceptance.yaml" }.
+    each do |acceptance_path|
+      node_dir = File.dirname(acceptance_path)
+      node_rel = node_dir.sub(specs_root + "/", "")
+
+      always_required.each do |doc|
+        path = File.join(node_dir, doc)
+        unless File.exist?(path)
+          blocking << "feature tree node missing #{doc}: #{node_rel}"
+        end
+      end
+
+      # design.md: 实施已开始则 BLOCKING，纯规划则 WARNING
+      design_path = File.join(node_dir, "design.md")
+      unless File.exist?(design_path)
+        tasks_path = File.join(node_dir, "tasks.md")
+        tasks_content = File.exist?(tasks_path) ? File.read(tasks_path) : ""
+        implementation_started = tasks_content.match?(/^- \[x\]/i)
+        if implementation_started
+          blocking << "feature tree node missing design.md (implementation started): #{node_rel}"
+        else
+          warnings << "feature tree node missing design.md (planning stage): #{node_rel}"
+        end
+      end
+
+      # ── 5.2 acceptance.yaml 结构检查 ────────────────────────────────
+      doc = load_yaml(acceptance_path)
+      if doc.nil?
+        blocking << "acceptance.yaml parse error: #{acceptance_path}"
+        next
+      end
+
+      feature = doc["feature"].to_s
+      level   = doc["level"].to_s
+
+      if feature.empty?
+        blocking << "acceptance.yaml missing feature field: #{acceptance_path}"
+      end
+      if level.empty?
+        blocking << "acceptance.yaml missing level field: #{acceptance_path}"
+      end
+
+      # ── 5.3 归档前状态检查：无 pending 项 ───────────────────────────
+      # 仅当 tasks.md 中所有当前交付任务均为 [x] 时才触发此检查（通过检测 archived 标记）
+      tasks_path = File.join(node_dir, "tasks.md")
+      tasks_content = File.exist?(tasks_path) ? File.read(tasks_path) : ""
+      all_tasks_done = !tasks_content.match?(/^- \[ \]/)  # 当前交付无未完成项
+
+      level_acceptance = doc["level_acceptance"] || {}
+      if all_tasks_done && level_acceptance.is_a?(Hash) && !level_acceptance.empty?
+        level_acceptance.each do |an, criterion|
+          next unless criterion.is_a?(Hash)
+          status = criterion["status"].to_s
+          if status == "pending"
+            blocking << "#{feature}/#{an}: status=pending but all tasks done; set to implemented/waived/deferred (#{acceptance_path})"
+          end
+
+          # ── 5.4 tests 链接验证：implemented 项的 tests[] 文件必须存在 ──
+          if status == "implemented"
+            tests = criterion["tests"] || []
+            if tests.empty?
+              warnings << "#{feature}/#{an}: status=implemented but tests[] is empty (#{acceptance_path})"
+            else
+              repo_root = File.expand_path("../..", __dir__)
+              tests.each do |t|
+                next unless t.is_a?(Hash)
+                test_file = t["file"].to_s
+                next if test_file.empty?
+                # Search in both app and service directories
+                candidates = [
+                  File.join(repo_root, "quwoquan_app", test_file),
+                  File.join(repo_root, "quwoquan_service", test_file),
+                  File.join(repo_root, test_file),
+                ]
+                exists = candidates.any? { |p| File.exist?(p) }
+                unless exists
+                  blocking << "#{feature}/#{an}: tests[].file not found: #{test_file}"
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+
+  # ── 5.5 tree_index.yaml 与目录结构双向同步 + lifecycle 一致性 ──────
+  service_root = File.expand_path(ARGV[0])   # quwoquan_service/
+  index_path   = File.join(specs_root, "tree_index.yaml")
+    valid_statuses = %w[specified in_progress completed archived cancelled deprecated planned]
+
+  if File.exist?(index_path)
+    index = load_yaml(index_path) || {}
+    features = index["features"] || []
+
+    indexed_dirs = []
+    check_index = lambda do |nodes|
+      nodes.each do |node|
+        next unless node.is_a?(Hash)
+        rel_path = node["path"].to_s
+        status   = node["status"].to_s
+
+        unless rel_path.empty?
+          # paths are relative to quwoquan_service/
+          abs_path = File.expand_path(rel_path, service_root)
+          indexed_dirs << abs_path
+
+          # ① tree_index 引用的目录必须存在（planned 节点目录未创建时为 WARNING）
+          unless Dir.exist?(abs_path)
+            if status == "planned"
+              warnings << "tree_index planned node directory not yet created: #{rel_path}"
+            else
+              blocking << "tree_index.yaml references non-existent directory: #{rel_path}"
+            end
+          end
+        end
+
+        # ② status 必须是合法值
+        unless status.empty? || valid_statuses.include?(status)
+          node_id = node["id"].to_s
+          blocking << "tree_index.yaml node #{node_id} has invalid status: #{status}"
+        end
+
+        # ③ lifecycle 一致性：completed 节点的 acceptance.yaml 必须有 archived: true
+        if status == "completed" && !rel_path.empty?
+          abs_path = File.expand_path(rel_path, service_root)
+          acc = File.join(abs_path, "acceptance.yaml")
+          if File.exist?(acc)
+            acc_doc = load_yaml(acc) || {}
+            unless acc_doc["archived"] == true
+              warnings << "tree_index status=completed but acceptance.yaml missing archived:true — #{rel_path}"
+            end
+          end
+        end
+
+        # ④ cancelled/deprecated 节点的 tasks.md 不应有未完成的当前交付任务
+        if %w[cancelled deprecated].include?(status) && !rel_path.empty?
+          abs_path = File.expand_path(rel_path, service_root)
+          tasks_f = File.join(abs_path, "tasks.md")
+          if File.exist?(tasks_f)
+            tasks_content = File.read(tasks_f)
+            if tasks_content.match?(/^- \[ \]/)
+              warnings << "#{status} node still has unchecked tasks (consider clearing): #{rel_path}"
+            end
+          end
+        end
+
+        check_index.call(node["children"] || [])
+      end
+    end
+    check_index.call(features)
+
+    # ⑤ 孤儿目录检测：目录存在但不在 tree_index 中
+    actual_node_dirs = Dir.glob("#{specs_root}/**/*/").map { |d| d.chomp("/") }
+    orphaned = actual_node_dirs.reject { |d| indexed_dirs.include?(d) }
+    orphaned.each do |d|
+      warnings << "feature tree orphan directory (not in tree_index.yaml): #{d.sub(specs_root + "/", "")}"
+    end
+  end
+
+  warnings.each { |w| STDERR.puts("[gate] WARN: #{w}") }
+  unless blocking.empty?
+    STDERR.puts("[gate] FAIL: feature tree consistency check failed:")
+    blocking.each { |b| STDERR.puts("  - #{b}") }
+    exit 1
+  end
+' "$(pwd)"
+
+# ── G4-G10: content metadata cross-cutting consistency checks ────────────────
+
+CONTENT_POST_DIR="contracts/metadata/content/post"
+SHARED_TYPES="contracts/metadata/_shared/types.yaml"
+
+# G4: errors.yaml codes all covered in tests/mock.yaml
+echo "[gate] G4: errors.yaml codes covered in tests/mock.yaml"
+if [ -f "$CONTENT_POST_DIR/errors.yaml" ] && [ -f "$CONTENT_POST_DIR/tests/mock.yaml" ]; then
+  ruby -ryaml -e '
+    errors_doc = YAML.load_file(ARGV[0]) || {}
+    mock_doc   = YAML.load_file(ARGV[1]) || {}
+    codes = (errors_doc["errors"] || []).map { |e| e["code"] }.compact
+    # Collect all string values from error_scenarios (input_code, expected_code, given_code, etc.)
+    err_scenarios = (mock_doc["error_scenarios"] || mock_doc["scenarios"] || [])
+    mock_codes = err_scenarios.flat_map { |s| s.values.select { |v| v.is_a?(String) } }.compact
+    missing = codes.reject { |c| mock_codes.any? { |mc| mc.include?(c) } }
+    # Soft check: warn if any code has zero coverage
+    if missing.any?
+      STDERR.puts("[gate] WARN G4: errors.yaml codes without mock scenarios: #{missing.join(", ")}")
+    end
+  ' "$CONTENT_POST_DIR/errors.yaml" "$CONTENT_POST_DIR/tests/mock.yaml" || true
+fi
+
+# G5: behaviors.yaml batch_route paths ⊆ service.yaml api_routes
+echo "[gate] G5: behaviors.yaml batch routes consistent with service.yaml"
+if [ -f "$CONTENT_POST_DIR/behaviors.yaml" ] && [ -f "$CONTENT_POST_DIR/service.yaml" ]; then
+  ruby -ryaml -e '
+    beh    = YAML.load_file(ARGV[0]) || {}
+    svc    = YAML.load_file(ARGV[1]) || {}
+    routes = (svc["api_routes"] || []).map { |r| [r["method"]&.upcase, r["path"]] }.compact.to_h { |m,p| "#{m} #{p}" }
+    (beh["behavior_events"] || []).each do |ev|
+      next unless ev["batch_route"]
+      r = ev["batch_route"].strip
+      unless routes.key?(r)
+        STDERR.puts("[gate] FAIL G5: behavior batch_route #{r} not in service.yaml api_routes")
+        exit 1
+      end
+    end
+  ' "$CONTENT_POST_DIR/behaviors.yaml" "$CONTENT_POST_DIR/service.yaml"
+fi
+
+# G6: ui_config.yaml contentTypes ⊆ _shared/types.yaml ContentType enum
+echo "[gate] G6: ui_config contentTypes valid"
+if [ -f "$CONTENT_POST_DIR/ui_config.yaml" ] && [ -f "$SHARED_TYPES" ]; then
+  ruby -ryaml -e '
+    ui   = YAML.load_file(ARGV[0]) || {}
+    shared = YAML.load_file(ARGV[1]) || {}
+    valid_types = (shared["enums"]["ContentType"] || []).map(&:to_s)
+    (ui["discovery_tabs"] || []).each do |tab|
+      ct = tab["content_type"].to_s
+      unless valid_types.include?(ct)
+        STDERR.puts("[gate] FAIL G6: ui_config content_type \"#{ct}\" not in _shared/types.yaml ContentType enum")
+        exit 1
+      end
+    end
+  ' "$CONTENT_POST_DIR/ui_config.yaml" "$SHARED_TYPES"
+fi
+
+# G7: tests/contract.yaml scenarios reference service.yaml routes
+echo "[gate] G7: contract.yaml scenarios cover service.yaml api_routes"
+if [ -f "$CONTENT_POST_DIR/tests/contract.yaml" ] && [ -f "$CONTENT_POST_DIR/service.yaml" ]; then
+  ruby -ryaml -e '
+    contract = YAML.load_file(ARGV[0]) || {}
+    svc      = YAML.load_file(ARGV[1]) || {}
+    ops      = (svc["api_routes"] || []).map { |r| r["operation"] }.compact
+    covered  = (contract["scenarios"] || []).map { |s| s["operation"] }.compact
+    missing  = ops.reject { |op| covered.include?(op) }
+    if missing.any?
+      STDERR.puts("[gate] WARN G7: service.yaml operations without contract scenarios: #{missing.join(", ")}")
+    end
+  ' "$CONTENT_POST_DIR/tests/contract.yaml" "$CONTENT_POST_DIR/service.yaml" || true
+fi
+
+# G8: PII/SENSITIVE fields declared in privacy.yaml app_log_policy
+echo "[gate] G8: PII/SENSITIVE fields have privacy.yaml declarations"
+if [ -f "$CONTENT_POST_DIR/fields.yaml" ] && [ -f "$CONTENT_POST_DIR/privacy.yaml" ]; then
+  ruby -ryaml -e '
+    fields  = YAML.load_file(ARGV[0]) || {}
+    privacy = YAML.load_file(ARGV[1]) || {}
+    pii_fields = []
+    (fields["entities"] || {}).each do |_, ent|
+      (ent["fields"] || []).each do |f|
+        c = f["classification"].to_s
+        pii_fields << f["name"] if %w[PII SENSITIVE].include?(c)
+      end
+    end
+    policy_fields = (privacy["app_log_policy"] || []).map { |p| p["field"] }.compact
+    missing = pii_fields.reject { |f| policy_fields.include?(f) }
+    if missing.any?
+      STDERR.puts("[gate] WARN G8: PII/SENSITIVE fields without privacy.yaml policy: #{missing.join(", ")}")
+    end
+  ' "$CONTENT_POST_DIR/fields.yaml" "$CONTENT_POST_DIR/privacy.yaml" || true
+fi
+
+# G9: behaviors.yaml behavior_event types ⊆ _shared/types.yaml BehaviorEventType
+echo "[gate] G9: behavior event types valid"
+if [ -f "$CONTENT_POST_DIR/behaviors.yaml" ] && [ -f "$SHARED_TYPES" ]; then
+  ruby -ryaml -e '
+    beh    = YAML.load_file(ARGV[0]) || {}
+    shared = YAML.load_file(ARGV[1]) || {}
+    valid_types = (shared["enums"]["BehaviorEventType"] || []).map(&:to_s)
+    if valid_types.empty?
+      # BehaviorEventType enum not yet declared – skip check
+      exit 0
+    end
+    (beh["behavior_events"] || []).each do |ev|
+      t = ev["type"].to_s
+      unless valid_types.include?(t)
+        STDERR.puts("[gate] WARN G9: behavior_event type \"#{t}\" not in _shared/types.yaml BehaviorEventType enum")
+      end
+    end
+  ' "$CONTENT_POST_DIR/behaviors.yaml" "$SHARED_TYPES" || true
+fi
+
+# G10: ui_config feature_flags keys cross-checked (advisory)
+echo "[gate] G10: feature_flags integrity (advisory)"
+if [ -f "$CONTENT_POST_DIR/ui_config.yaml" ]; then
+  ruby -ryaml -e '
+    ui = YAML.load_file(ARGV[0]) || {}
+    flags = ui["feature_flags"] || []
+    dup_keys = flags.map { |f| f["flag"] }.group_by { |k| k }.select { |_, v| v.size > 1 }.keys
+    if dup_keys.any?
+      STDERR.puts("[gate] FAIL G10: duplicate feature_flag keys in ui_config.yaml: #{dup_keys.join(", ")}")
+      exit 1
+    end
+  ' "$CONTENT_POST_DIR/ui_config.yaml"
+fi
+
 echo "[gate] OK"
 

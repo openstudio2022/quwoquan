@@ -33,6 +33,26 @@ func LoadFromDirectory(metadataDir string) (*EntityRegistry, error) {
 		}
 
 		dir := filepath.Join(metadataDir, entry.Name())
+
+		// Domain container: directory without aggregate.yaml/entity.yaml → recurse one level.
+		isDomain := !fileExists(filepath.Join(dir, "aggregate.yaml")) && !fileExists(filepath.Join(dir, "entity.yaml"))
+		if isDomain {
+			subEntries, err := os.ReadDir(dir)
+			if err != nil {
+				return nil, fmt.Errorf("read domain dir %s: %w", entry.Name(), err)
+			}
+			for _, sub := range subEntries {
+				if !sub.IsDir() || strings.HasPrefix(sub.Name(), "_") {
+					continue
+				}
+				subDir := filepath.Join(dir, sub.Name())
+				if err := reg.loadBusinessObject(subDir, sub.Name()); err != nil {
+					return nil, fmt.Errorf("load %s/%s: %w", entry.Name(), sub.Name(), err)
+				}
+			}
+			continue
+		}
+
 		if err := reg.loadBusinessObject(dir, entry.Name()); err != nil {
 			return nil, fmt.Errorf("load %s: %w", entry.Name(), err)
 		}
@@ -183,4 +203,9 @@ func readYAML(path string, out any) error {
 		return err
 	}
 	return yaml.Unmarshal(data, out)
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }

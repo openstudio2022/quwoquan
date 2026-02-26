@@ -1,0 +1,168 @@
+version: 1
+read_model: PhotoPost
+
+description: |
+  图片类帖子 ReadModel（美图频道）。
+  从 Post（contentType=image）投影，供发现页美图 Tab 消费。
+  width/height 在内容上传时写入，前端直接计算宽高比，无需运行时请求图片元数据。
+
+storage_backend: mongodb
+collection: rm_discovery_feed
+
+source_entities:
+  - Post
+
+consumers:
+  - app (discovery/photo tab)
+
+fields:
+  - { name: postId,         type: ObjectId }
+  - { name: contentType,    type: enum,   description: "固定为 image" }
+  - { name: authorId,              type: string }
+  - { name: authorNickname,        type: string, description: 作者昵称（反范式） }
+  - { name: authorAvatarUrl,       type: string, description: 作者头像（反范式） }
+  - { name: authorBackgroundUrl,   type: string, nullable: true, description: 作者主页背景图（反范式，null 表示未配置） }
+  - { name: body,                  type: string, description: 配文（可选） }
+  - { name: coverUrl,       type: string, description: 主图 URL }
+  - { name: mediaUrls,      type: "[]string", description: 图片列表 }
+  - { name: width,          type: int,    description: "主图宽度（px），上传时写入，用于布局计算宽高比" }
+  - { name: height,         type: int,    description: "主图高度（px），上传时写入，用于布局计算宽高比" }
+  - { name: likeCount,      type: int }
+  - { name: commentCount,   type: int }
+  - { name: favoriteCount,  type: int }
+  - { name: shareCount,     type: int }
+  - { name: publishedAt,    type: timestamp }
+
+# App 端契约（client_projection）
+# 由 codegen_app_metadata 读取，生成 PhotoPostDto（DO NOT EDIT 产物）
+# base_class: PostBaseDto（手写抽象基类，见 post_base_dto.dart）
+client_projection:
+  dart_class: PhotoPostDto
+  base_class: PostBaseDto
+  output_path: cloud/runtime/generated/content/photo_post_dto.g.dart
+  computed_getters:
+    - name: aspectRatio
+      dart_return_type: "double?"
+      nullable: true
+      description: "宽高比（w/h）。未记录尺寸时返回 null，调用方可使用默认比例。"
+      body: |
+        if (width == null || height == null || height! <= 0) return null;
+        return width! / height!;
+  fields:
+    - name: id
+      dart_type: String
+      nullable: false
+      source: postId
+      aliases: [postId, _id]
+      default: "''"
+
+    - name: type
+      dart_type: String
+      nullable: false
+      source: contentType
+      aliases: [contentType, category]
+      default: "'photo'"
+
+    - name: authorId
+      dart_type: String
+      nullable: false
+      source: authorId
+      aliases: [userId, author_id]
+      default: "''"
+
+    - name: displayName
+      dart_type: String
+      nullable: false
+      source: authorNickname
+      aliases: [authorNickname, nickname, username, displayName]
+      default: "''"
+
+    - name: avatarUrl
+      dart_type: String
+      nullable: false
+      source: authorAvatarUrl
+      aliases: [authorAvatarUrl, avatarUrl, avatar]
+      default: "''"
+
+    - name: authorBackgroundUrl
+      dart_type: String
+      nullable: true
+      source: authorBackgroundUrl
+      aliases: [authorBackgroundUrl]
+      default: "null"
+      description: "作者主页背景图（反范式）；null 时 UI 显示默认渐变背景"
+
+    - name: body
+      dart_type: String
+      nullable: true
+      source: body
+      aliases: [body, description, content, caption]
+      default: "null"
+      description: "配文（可选）"
+
+    - name: coverUrl
+      dart_type: String
+      nullable: false
+      source: coverUrl
+      aliases: [coverUrl, cover, thumbnail, thumbnailUrl]
+      default: "''"
+      description: "主图 URL（通常为第一张图）"
+
+    - name: imageUrls
+      dart_type: List<String>
+      nullable: false
+      source: mediaUrls
+      aliases: [mediaUrls, images, imageUrls, image_urls]
+      default: "<String>[]"
+      description: "图片列表（含全部图片）"
+
+    - name: width
+      dart_type: int
+      nullable: true
+      source: width
+      aliases: [width, imageWidth, image_width, w]
+      default: "null"
+      description: "主图宽度（px），上传时写入，布局计算用"
+
+    - name: height
+      dart_type: int
+      nullable: true
+      source: height
+      aliases: [height, imageHeight, image_height, h]
+      default: "null"
+      description: "主图高度（px），上传时写入，布局计算用"
+
+    - name: likeCount
+      dart_type: int
+      nullable: false
+      source: likeCount
+      aliases: [likeCount, likesCount, likes, like_count]
+      default: "0"
+
+    - name: commentCount
+      dart_type: int
+      nullable: false
+      source: commentCount
+      aliases: [commentCount, commentsCount, comments, comment_count]
+      default: "0"
+
+    - name: favoriteCount
+      dart_type: int
+      nullable: false
+      source: favoriteCount
+      aliases: [favoriteCount, savesCount, bookmarks, favorite_count]
+      default: "0"
+
+    - name: shareCount
+      dart_type: int
+      nullable: false
+      source: shareCount
+      aliases: [shareCount, shares, share_count]
+      default: "0"
+
+    - name: createdAt
+      dart_type: DateTime
+      nullable: false
+      source: publishedAt
+      aliases: [publishedAt, createdAt, created_at]
+      default: "DateTime(0)"

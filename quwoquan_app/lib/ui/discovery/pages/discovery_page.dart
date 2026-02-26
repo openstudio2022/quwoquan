@@ -24,6 +24,7 @@ import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.d
 import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
 import 'package:quwoquan_app/features/assistant/context/assistant_open_context.dart';
 import 'package:quwoquan_app/features/assistant/widgets/assistant_half_sheet.dart';
+import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 
 /// 发现页
 ///
@@ -48,15 +49,30 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   @override
   bool get wantKeepAlive => true;
 
-  /// 一级分类：微趣|美图|视频|文章（design-clarification-2026-02）
-  static const List<Map<String, String>> _categories = [
-    {'id': 'moment', 'label': UITextConstants.discoveryTabMoment},
-    {'id': 'photo', 'label': UITextConstants.discoveryTabPhoto},
-    {'id': 'video', 'label': UITextConstants.discoveryTabVideo},
-    {'id': 'article', 'label': UITextConstants.discoveryTabArticle},
-  ];
+  /// 一级分类从 ContentUIConfig.discoveryTabs 驱动，顺序/label/contentType 由 codegen 管理。
+  List<Map<String, String>> get _categories => ContentUIConfig.discoveryTabs
+      .map((tab) => <String, String>{'id': tab.id, 'label': _tabLabelFor(tab.labelKey)})
+      .toList(growable: false);
 
-  bool get _isVideoMode => _activeType == 'video';
+  /// Maps labelKey (from ui_config.yaml) to a localized display string.
+  static String _tabLabelFor(String labelKey) {
+    switch (labelKey) {
+      case 'tab_photo': return UITextConstants.discoveryTabPhoto;
+      case 'tab_video': return UITextConstants.discoveryTabVideo;
+      case 'tab_moment': return UITextConstants.discoveryTabMoment;
+      case 'tab_article': return UITextConstants.discoveryTabArticle;
+      default: return labelKey;
+    }
+  }
+
+  DiscoveryTabConfig? _tabConfigFor(String tabId) =>
+      ContentUIConfig.discoveryTabs.cast<DiscoveryTabConfig?>().firstWhere(
+        (t) => t!.id == tabId,
+        orElse: () => null,
+      );
+
+  bool get _isVideoMode =>
+      _tabConfigFor(_activeType)?.layout == 'full_width_vertical_pager';
 
   List<String> get _primaryTabIds =>
       _categories.map((category) => category['id']!).toList(growable: false);
@@ -271,16 +287,16 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   }
 
   /// 视频沉浸：竖滑列表、顶栏/右侧栏/左下文案常显；使用 discoveryFeedProvider 共享 feed
-  Widget _buildVideoImmersionView(bool isDark) {
+  Widget _buildVideoImmersionView(bool isDark, {String tabId = 'video'}) {
     final feedMap = ref.watch(discoveryFeedMapProvider);
-    final feedAsync = ref.watch(discoveryFeedProvider('video'));
+    final feedAsync = ref.watch(discoveryFeedProvider(tabId));
     final fallbackRaw = ref.watch(appContentRepositoryProvider).discoveryVideoData;
     final dtos = feedAsync.value?.items ??
         fallbackRaw.map(postBaseDtoFromMap).toList(growable: false);
     final videos = dtos;
-    if (!feedMap.containsKey('video')) {
+    if (!feedMap.containsKey(tabId)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref.read(discoveryFeedMapProvider.notifier).load('video');
+        ref.read(discoveryFeedMapProvider.notifier).load(tabId);
       });
     }
     if (feedAsync.isLoading && videos.isEmpty) {
@@ -314,40 +330,38 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       onFollowClick: (authorId, _) =>
           ref.read(discoveryStateProvider).toggleFollow(authorId),
       onVideoTap: (post, index) {
-        _onPostTap(post, index, feedPosts: videos.toList(), category: 'video');
+        _onPostTap(post, index, feedPosts: videos.toList(), category: tabId);
       },
     );
   }
 
   Widget _buildContentForTab(String tabId, bool isDark) {
-    switch (tabId) {
-      case 'video':
-        return _buildVideoImmersionView(isDark);
-      case 'moment':
-        return _buildMomentContent(isDark);
-      case 'article':
-        return _buildArticleContent(isDark);
-      case 'photo':
-        return _buildPhotoContent(isDark);
+    switch (_tabConfigFor(tabId)?.layout) {
+      case 'full_width_vertical_pager':
+        return _buildVideoImmersionView(isDark, tabId: tabId);
+      case 'list_with_optional_media':
+        return _buildMomentContent(isDark, tabId: tabId);
+      case 'list_with_cover':
+        return _buildArticleContent(isDark, tabId: tabId);
       default:
-        return _buildPhotoContent(isDark);
+        return _buildPhotoContent(isDark, tabId: tabId);
     }
   }
 
   double _contentHorizontalPadding(BuildContext context) =>
       AppSpacing.feedContentHorizontal(context);
 
-  Widget _buildMomentContent(bool isDark) {
+  Widget _buildMomentContent(bool isDark, {String tabId = 'moment'}) {
     final feedMap = ref.watch(discoveryFeedMapProvider);
-    final feedAsync = ref.watch(discoveryFeedProvider('moment'));
+    final feedAsync = ref.watch(discoveryFeedProvider(tabId));
     final fallbackRaw = ref.watch(appContentRepositoryProvider).discoveryMomentData;
     final dtos = feedAsync.value?.items ??
         fallbackRaw.map(postBaseDtoFromMap).toList(growable: false);
     final moments = dtos.whereType<MomentPostDto>().toList(growable: false);
     final horizontal = _contentHorizontalPadding(context);
-    if (!feedMap.containsKey('moment')) {
+    if (!feedMap.containsKey(tabId)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref.read(discoveryFeedMapProvider.notifier).load('moment');
+        ref.read(discoveryFeedMapProvider.notifier).load(tabId);
       });
     }
     if (feedAsync.isLoading && moments.isEmpty) {
@@ -402,17 +416,17 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     );
   }
 
-  Widget _buildArticleContent(bool isDark) {
+  Widget _buildArticleContent(bool isDark, {String tabId = 'article'}) {
     final feedMap = ref.watch(discoveryFeedMapProvider);
-    final feedAsync = ref.watch(discoveryFeedProvider('article'));
+    final feedAsync = ref.watch(discoveryFeedProvider(tabId));
     final fallbackRaw = ref.watch(appContentRepositoryProvider).discoveryArticleData;
     final dtos = feedAsync.value?.items ??
         fallbackRaw.map(postBaseDtoFromMap).toList(growable: false);
     final articles = dtos.whereType<ArticlePostDto>().toList(growable: false);
     final horizontal = _contentHorizontalPadding(context);
-    if (!feedMap.containsKey('article')) {
+    if (!feedMap.containsKey(tabId)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref.read(discoveryFeedMapProvider.notifier).load('article');
+        ref.read(discoveryFeedMapProvider.notifier).load(tabId);
       });
     }
     if (feedAsync.isLoading && articles.isEmpty) {
@@ -441,7 +455,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
                 isFirst: isFirst,
                 onTap: () {
                   _trackBehavior('click', dto);
-                  context.push('/article/${dto.id}');
+                  context.push('/article/${dto.id}');  // article route
                 },
                 onUserTap: () {
                   context.push('/user/${dto.authorId}', extra: <String, String?>{
@@ -507,10 +521,10 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     return post.favoriteCount > 0 ? post.favoriteCount : null;
   }
 
-  Widget _buildPhotoContent(bool isDark) {
+  Widget _buildPhotoContent(bool isDark, {String tabId = 'photo'}) {
     final homeState = ref.watch(discoveryStateProvider);
     final feedMap = ref.watch(discoveryFeedMapProvider);
-    final feedAsync = ref.watch(discoveryFeedProvider('photo'));
+    final feedAsync = ref.watch(discoveryFeedProvider(tabId));
     final fallbackRaw = ref.watch(appContentRepositoryProvider).discoveryPhotoData;
     final dtos = feedAsync.value?.items ??
         fallbackRaw.map(postBaseDtoFromMap).toList(growable: false);
@@ -522,9 +536,9 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     final cardWidth = (screenWidth - horizontalPadding - gap) / 2;
 
     // 仅在没有该 tab 的 feed 时拉取；从图片浏览返回后复用已有 feed，不刷新
-    if (!feedMap.containsKey('photo')) {
+    if (!feedMap.containsKey(tabId)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref.read(discoveryFeedMapProvider.notifier).load('photo');
+        ref.read(discoveryFeedMapProvider.notifier).load(tabId);
       });
     }
     if (feedAsync.isLoading && photos.isEmpty) {
@@ -555,7 +569,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
                 height: height,
                 child: _DiscoveryItemCard(
                   post: post,
-                  onTap: () => _onPostTap(post, index, feedPosts: photos, category: 'photo'),
+                  onTap: () => _onPostTap(post, index, feedPosts: photos, category: tabId),
                   isLiked: homeState.likedPosts.contains(post.id),
                   isSaved: homeState.savedPosts.contains(post.id),
                   likesCount: likesDisplay,
@@ -585,19 +599,24 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     String? category,
   }) {
     _trackBehavior('click', post);
-    if (post.type == 'article') {
+    // Resolve tab config by matching post.type (API ContentType) against ContentUIConfig.
+    final tabConfig = ContentUIConfig.discoveryTabs.cast<DiscoveryTabConfig?>().firstWhere(
+      (t) => t!.contentType == post.type,
+      orElse: () => null,
+    );
+    if (tabConfig?.layout == 'list_with_cover') {
       context.push('/article/${post.id}');
       return;
     }
     final postViews = feedPosts?.map(PostSummaryView.fromDto).toList();
-    if (post.type == 'video') {
+    if (tabConfig?.layout == 'full_width_vertical_pager') {
       if (postViews != null && postViews.isNotEmpty) {
         context.push(
           '/video-viewer/$mediaIndex',
           extra: MediaViewerExtra(
             posts: postViews,
             initialIndex: mediaIndex,
-            category: category ?? 'video',
+            category: category ?? tabConfig!.id,
           ),
         );
       } else {
@@ -611,7 +630,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
         extra: MediaViewerExtra(
           posts: postViews,
           initialIndex: mediaIndex,
-          category: category ?? 'photo',
+          category: category ?? (tabConfig?.id ?? 'photo'),
         ),
       );
     } else {
@@ -1321,7 +1340,12 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
       return;
     }
     final nextId = _primaryTabIds[nextIndex];
-    if (nextId != 'video') {
+    // Only switch to non-video tabs (video is handled via full-screen pager, not tab switch).
+    final nextTab = ContentUIConfig.discoveryTabs.cast<DiscoveryTabConfig?>().firstWhere(
+      (t) => t!.id == nextId,
+      orElse: () => null,
+    );
+    if (nextTab?.layout != 'full_width_vertical_pager') {
       widget.onTabChange(nextId);
     }
   }
@@ -1668,7 +1692,9 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                   transparentBackground: true,
                   leftAlignedCompactMode: true,
                   onTabChange: (id) {
-                    if (id != 'video') widget.onTabChange(id);
+                    final tab = ContentUIConfig.discoveryTabs.cast<DiscoveryTabConfig?>().firstWhere(
+                      (t) => t!.id == id, orElse: () => null);
+                    if (tab?.layout != 'full_width_vertical_pager') widget.onTabChange(id);
                   },
                   onHorizontalDragEnd: _onPrimaryDragEnd,
                   trailingActions: [
