@@ -1,6 +1,12 @@
 version: 1
 l1: discovery-content
 l2:
+  - feature: content-service-contract-foundation
+    l3:
+      - feature: metadata-domain-restructure
+      - feature: fullstack-error-behavior-contract
+      - feature: privacy-ui-config-contract
+      - feature: three-layer-test-contract
   - feature: feed-orchestration-recommendation
     l3:
       - feature: unified-items-cursor
@@ -35,6 +41,14 @@ l2:
           - feature: reaction-counter-consistency
             l5:
               - feature: eventual-consistency-repair-job
+  - feature: content-display-journey-consistency
+    l3:
+      - feature: feed-item-dto-contract
+      - feature: content-action-intent-contract
+      - feature: photo-display-journey
+      - feature: video-display-journey
+      - feature: article-display-journey
+      - feature: moment-display-journey
   - feature: media-processing-helper-read
     l3:
       - feature: media-status-pipeline

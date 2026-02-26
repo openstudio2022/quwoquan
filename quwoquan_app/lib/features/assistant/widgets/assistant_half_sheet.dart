@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:quwoquan_app/components/assistant_avatar.dart';
+import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/features/assistant/config/assistant_prompt_config.dart';
 import 'package:quwoquan_app/features/assistant/context/assistant_open_context.dart';

@@ -1,68 +1,32 @@
-# 业务对象目录（entity -> domain/service）
-# 与 metadata 各聚合/实体目录一致，供 gate 与字段策略校验使用。
-version: 1
+# Entity Catalog — root aggregator (canonical per-entity definitions are in domain subdirs)
+# New location: contracts/metadata/{domain}/{entity}/aggregate.yaml
 entities:
   - name: Post
     domain: content
-    service: content-service
+    canonical: contracts/metadata/content/post/aggregate.yaml
+    storage: mongodb
+    description: UGC post (image/video/article/moment)
+
   - name: Comment
     domain: content
-    service: content-service
-  - name: MediaAsset
-    domain: content
-    service: content-service
-  - name: ContentReaction
-    domain: content
-    service: content-service
-  - name: UserProfile
-    domain: user
-    service: user-service
-  - name: Persona
-    domain: user
-    service: user-service
+    canonical: contracts/metadata/content/post/aggregate.yaml
+    storage: mongodb
+    description: Comment on a Post
+
   - name: Conversation
-    domain: chat
-    service: chat-service
-  - name: Message
-    domain: chat
-    service: chat-service
-  - name: Circle
-    domain: circle
-    service: content-service
-  - name: CircleMember
-    domain: circle
-    service: content-service
+    domain: messages
+    canonical: contracts/metadata/messages/conversation/
+    storage: mongodb
+    description: Chat conversation between users
+
   - name: AssistantRun
     domain: assistant
-    service: orchestrator-service
-  - name: InteractionEvent
-    domain: assistant
-    service: orchestrator-service
-  - name: BlockEdge
-    domain: user
-    service: user-service
-  - name: FollowEdge
-    domain: user
-    service: user-service
-  - name: Report
-    domain: content
-    service: content-service
-  - name: Notification
-    domain: notification
-    service: notification-service
-  - name: SkillConsent
-    domain: assistant
-    service: orchestrator-service
-  - name: VisitRecord
-    domain: ops
-    service: content-service
-  - name: ExperimentBucket
-    domain: ops
-    service: content-service
-  # 推荐模型服务 API 契约实体（rec-model-service 无聚合根，仅 DTO）
-  - name: ModelScoreRequest
+    canonical: contracts/metadata/assistant/assistant_run/aggregate.yaml
+    storage: mongodb
+    description: AI assistant session run
+
+  - name: RecModel
     domain: recommendation
-    service: rec-model-service
-  - name: ModelScoreResponse
-    domain: recommendation
-    service: rec-model-service
+    canonical: contracts/metadata/recommendation/rec_model/
+    storage: mongodb
+    description: Recommendation model entity

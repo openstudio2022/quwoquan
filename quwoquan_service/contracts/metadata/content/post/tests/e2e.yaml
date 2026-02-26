@@ -7,15 +7,25 @@ description: |
   执行环境：staging。
   CI 策略：advisory（不阻塞 PR 合入，但发布前必须全绿）。
 
+  # 分层说明
+  # test_type: api_contract  — 无 UI driver，HTTP 直接断言，快（~10s/场景）
+  # test_type: ui_journey    — 需 UI driver（Patrol + Flutter integration_test），慢（~30s/场景）
+  # 两类场景在同一文件声明，由 CI pipeline 按 test_type 路由到不同执行器。
+
 execution:
   environment: staging
   ci_strategy: advisory
   trigger: daily + pre-release
+  runners:
+    api_contract: staging HTTP client（Go/Dart http）
+    ui_journey:   Patrol on Firebase Test Lab（iOS + Android real devices）
 
 # ── 核心用户旅程 ──────────────────────────────────────────────────────
 scenarios:
   - name: discovery_feed_load_and_render
     description: 发现页加载 → 渲染内容卡片（全链路）
+    test_type: ui_journey
+    patrol_flow: test/patrol/discovery/feed_load_test.dart
     actors:
       app: lib/ui/discovery/pages/discovery_page.dart
       gateway: /v1/orch/discovery/feed
@@ -37,6 +47,8 @@ scenarios:
 
   - name: like_post_realtime
     description: 点赞 → 计数实时更新 → 错误 UI 正确展示
+    test_type: ui_journey
+    patrol_flow: test/patrol/content/like_post_test.dart
     actors:
       app: post card like button
       service: content-service POST /v1/content/posts/{postId}/like
@@ -57,6 +69,7 @@ scenarios:
 
   - name: behavior_batch_report_reaches_service
     description: 行为事件批量上报从端侧到达服务
+    test_type: api_contract
     actors:
       app: ContentBehaviorTracker
       service: content-service POST /v1/content/behaviors
@@ -74,6 +87,7 @@ scenarios:
 
   - name: error_state_displayed_correctly
     description: 服务返回错误码 → 端侧显示正确 i18n 提示
+    test_type: api_contract
     steps:
       - service returns { code: "CONTENT.USER.post_not_found", userMessage: "..." }
       - app receives 404 response
@@ -84,6 +98,7 @@ scenarios:
 
   - name: feed_cursor_pagination_end_to_end
     description: 游标分页端到端（翻页加载更多）
+    test_type: api_contract
     steps:
       - app loads page 1 (limit=20)
       - response includes cursor
@@ -95,6 +110,8 @@ scenarios:
 
   - name: media_not_ready_graceful_error
     description: 媒体处理中发布 → 端侧友好提示 + 稍后重试
+    test_type: api_contract
+    # 注：UI 断言（toast 渲染）需配套 ui_journey 场景覆盖
     steps:
       - user uploads media
       - user immediately tries to publish before media is ready
@@ -102,3 +119,26 @@ scenarios:
     assertions:
       - UI shows ContentErrorMessages.zh[mediaNotReady] == "媒体文件正在处理中，请稍后发布"
       - isRetryable: true → UI shows retry option
+
+  - name: comment_on_post_journey
+    description: 评论内容旅程：发表评论 → 评论数更新 → 行为信号到达推荐服务
+    test_type: ui_journey
+    patrol_flow: test/patrol/content/comment_post_test.dart
+    actors:
+      app: lib/ui/content/pages/photo_detail_page.dart
+      service: content-service POST /v1/content/posts/{postId}/comments
+      storage: MongoDB comments collection + posts.commentCount
+    steps:
+      - user opens post detail (photo)
+      - user taps comment input bar
+      - user types comment text
+      - user submits comment
+      - app calls POST /v1/content/posts/{postId}/comments
+      - service creates comment + increments commentCount
+      - app receives response → updates comment list + counter
+    assertions:
+      - comment appears in thread within 500ms
+      - commentCount in post header incremented by 1
+      - event CommentCreated published with correct payload
+      - behavior signal NOT in batch queue (dedicated route)
+      - on CONTENT.USER.rate_limited: error toast shown + input re-enabled

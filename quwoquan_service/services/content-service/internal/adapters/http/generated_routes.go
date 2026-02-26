@@ -31,6 +31,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleNotImplemented(w, r, operation)
 	case "DeletePost":
 		h.handleNotImplemented(w, r, operation)
+	case "FavoritePost":
+		h.handleNotImplemented(w, r, operation)
 	case "GetCounters":
 		h.handleNotImplemented(w, r, operation)
 	case "GetFeed":
@@ -45,10 +47,16 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleNotImplemented(w, r, operation)
 	case "GetRecommendation":
 		h.handleGetRecommendation(w, r)
+	case "LikePost":
+		h.handleNotImplemented(w, r, operation)
 	case "ListComments":
 		h.handleNotImplemented(w, r, operation)
 	case "ReportBehaviors":
 		h.handleReportBehaviors(w, r)
+	case "UnfavoritePost":
+		h.handleNotImplemented(w, r, operation)
+	case "UnlikePost":
+		h.handleNotImplemented(w, r, operation)
 	case "UpdatePost":
 		h.handleUpdatePost(w, r)
 	default:
@@ -69,6 +77,10 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/comments", operation: "CreateComment"},
 	{method: "DELETE", pathTemplate: "/v1/content/posts/{postId}/comments/{commentId}", operation: "DeleteComment"},
 	{method: "GET", pathTemplate: "/v1/content/posts/{postId}/counters", operation: "GetCounters"},
+	{method: "DELETE", pathTemplate: "/v1/content/posts/{postId}/favorite", operation: "UnfavoritePost"},
+	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/favorite", operation: "FavoritePost"},
+	{method: "DELETE", pathTemplate: "/v1/content/posts/{postId}/like", operation: "UnlikePost"},
+	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/like", operation: "LikePost"},
 	{method: "GET", pathTemplate: "/v1/content/posts/{postId}/reactions", operation: "GetReactionState"},
 	{method: "POST", pathTemplate: "/v1/content/recommend", operation: "GetRecommendation"},
 	{method: "GET", pathTemplate: "/v1/orch/discovery/feed", operation: "GetFeed"},

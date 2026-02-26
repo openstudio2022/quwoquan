@@ -68,6 +68,19 @@ behavior_events:
     dart_method: null
     ml_signal: explicit_positive
 
+  - type: comment
+    description: |
+      用户在内容下发表评论（由 intent layer 处理，走专用路由）。
+      评论是比点赞更强的深度互动信号：用户需主动输入，代表高兴趣度。
+      payload 额外携带 commentLength，供推荐侧判断内容吸引力（长评 > 短评）。
+    dedicated_route: POST /v1/content/posts/{postId}/comments
+    dart_method: null
+    payload_fields: [postId, contentType, commentLength]
+    ml_signal: very_strong_positive
+    notes: |
+      like/favorite/comment/report 四个显式行为均走专用路由，不进批量队列，
+      以保证实时性和幂等语义。commentLength 从评论完成事件回调中获取。
+
   - type: report
     description: 举报（由专用路由处理）
     dedicated_route: POST /v1/content/posts/{postId}/report
@@ -139,6 +152,8 @@ training_sample:
   label_type: int                         # 1=正例，0=负例
 
   positive_signals:
+    - type: comment
+      weight: 4                            # 评论为最强深度互动信号
     - type: like
       weight: 3
     - type: favorite

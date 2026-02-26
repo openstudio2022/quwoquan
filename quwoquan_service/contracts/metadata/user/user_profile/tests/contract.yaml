@@ -1,0 +1,41 @@
+version: 1
+aggregate: UserProfile
+layer: service_side
+
+description: |
+  云侧契约测试场景（真实 PostgreSQL + Redis）。
+  执行：go test ./services/user-service/...
+
+real_engines:
+  postgres: embedded-postgres
+  redis: miniredis/v2
+
+spy_targets: [event_publisher]
+mock_targets: [cross_service_clients]
+
+scenarios:
+  - name: create_user_profile
+    command: RegisterUser
+    assertions:
+      - db_user_profile_exists
+      - db_persona_created_as_primary
+      - event_UserRegistered_published
+
+  - name: update_nickname_unique
+    command: UpdateProfile (nickname change)
+    assertions:
+      - db_nickname_updated
+      - conflict_on_duplicate_nickname → USER.USER.nickname_taken
+
+  - name: follow_unfollow_idempotent
+    command: FollowUser x2
+    assertions:
+      - follow_edge_count_exactly_1
+      - event_UserFollowed_published_once
+
+  - name: delete_user_cascade
+    command: DeleteUser
+    assertions:
+      - user_profile_soft_deleted
+      - all_personas_deleted
+      - all_devices_deleted

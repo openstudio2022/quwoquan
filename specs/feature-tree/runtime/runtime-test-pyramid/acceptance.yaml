@@ -1,0 +1,85 @@
+version: 1
+feature: runtime-test-pyramid
+level: L2_feature
+
+focus_groups:
+  - engineering
+  - platform
+
+execution:
+  environment: local + ci
+  trigger: on_merge + pre-release
+
+acceptance_criteria:
+
+  # ── Gate 绑定 ────────────────────────────────────────────────────
+  - id: A1
+    title: flutter test 纳入 PR gate
+    description: |
+      make gate 在本地（不设 QWQ_GATE_TESTS=1）和 CI 均执行 flutter test。
+      现有 6 个 L1a 测试全部通过。
+    verify: make gate (scope=app) 日志中出现 "All tests passed" 且无 "skip flutter test"
+
+  - id: A2
+    title: go test 纳入 PR gate
+    description: |
+      make gate (scope=service) 执行 go test ./services/content-service/...。
+      所有测试通过，包括 contract.yaml 声明的 go_func。
+    verify: gate.sh 日志中出现 "ok quwoquan_service/services/content-service/..."
+
+  - id: A3
+    title: L2 禁止 in-memory store
+    description: |
+      content-service contract tests 使用 testcontainers mongo:7。
+      禁止 persistence.NewPostStore(DefaultSeedPosts()) 出现在 tests/ 目录。
+    verify: |
+      go test ./services/content-service/tests/... 中 TestMain 启动 MongoDB container；
+      grep "NewPostStore" services/content-service/tests/ 返回空
+
+  - id: A4
+    title: contract.yaml go_func 全部实现
+    description: |
+      contract.yaml 中每个 go_func 字段（TestCreatePostAggregate 等）对应实际 Go 测试函数。
+      gate 检查存在性，缺失则 fail。
+    verify: gate.sh G7 变体检查通过，无 "go_func not implemented" 输出
+
+  - id: A5
+    title: L1b Widget Tests 补齐
+    description: |
+      以下三个 widget test 文件存在且通过：
+      - test/features/content/widgets/photo_post_card_widget_test.dart
+      - test/features/content/widgets/video_post_card_widget_test.dart
+      - test/features/content/widgets/comment_input_bar_widget_test.dart
+    verify: flutter test test/features/content/widgets/ 全绿
+
+  - id: A6
+    title: L1c Journey Tests 补齐
+    description: |
+      以下三条旅程测试存在且通过：
+      1. DiscoveryPage → PhotoDetailPage 路由传参正确
+      2. 点赞乐观更新 → 429 回滚 + Toast 错误文本正确
+      3. 评论提交 → MockRepo 调用 + 评论数 UI +1
+    verify: flutter test test/features/content/journeys/ 全绿
+
+  - id: A7
+    title: e2e.yaml patrol_flow 文件 warn 检查
+    description: |
+      make gate 对 e2e.yaml 中 patrol_flow 引用的文件做存在性检查。
+      文件不存在时输出 WARN 不 FAIL（L4 是渐进完善的）。
+    verify: make gate 输出中 e2e.yaml patrol_flow warn 可见但退出码为 0
+
+  - id: A8
+    title: mock.yaml widget/journey 场景声明对应实际测试
+    description: |
+      mock.yaml 中 widget_scenarios 和 journey_scenarios 的每个 dart_func
+      在 test/features/content/ 目录下有对应测试函数。
+    verify: gate 新增 mock.yaml dart_func 存在性检查通过
+
+  - id: A9
+    title: L4 Patrol 依赖 + TestKeys 就绪
+    description: |
+      pubspec.yaml 包含 patrol 依赖；
+      lib/core/test_keys.dart 存在并声明核心 Widget keys；
+      至少 3 个 Patrol 测试文件存在（对应 e2e.yaml ui_journey 场景）。
+    verify: flutter pub get 成功；test/patrol/content/ 下文件 ≥3
+    ci_strategy: advisory（pre-release 阻塞发布）

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
-import 'package:quwoquan_app/components/unified_emoji_picker.dart';
+import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
 export 'comment_viewer_modal.dart' show CommentViewer;
 
 

@@ -42,6 +42,7 @@ class DataServiceImpl implements DataService {
       'username': 'nature_photographer',
       'displayName': '不再举杯邀明月',
       'avatar': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
+      'backgroundImage': 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200&h=800&fit=crop',
       'bio': '关心时事、关注新闻、思考人生、思索生命',
       'location': 'IP属地: 四川',
       'followers': 17000,
@@ -56,6 +57,7 @@ class DataServiceImpl implements DataService {
       'username': 'travel_photographer',
       'displayName': '旅行摄影师',
       'avatar': 'https://images.unsplash.com/photo-1494790108755-2616b612b1d4?w=150&h=150&fit=crop&crop=face',
+      'backgroundImage': 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=1200&h=800&fit=crop',
       'bio': '✈️ 环球旅行摄影师\n📍 已走过40+国家\n📷 用镜头记录世界之美',
       'location': 'IP属地: 北京',
       'followers': 8200,
@@ -70,6 +72,7 @@ class DataServiceImpl implements DataService {
       'username': 'art_creator',
       'displayName': '艺术创作者',
       'avatar': 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
+      'backgroundImage': 'https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=1200&h=800&fit=crop',
       'bio': '🎨 数字艺术家\n💭 创意无界限\n✨ 分享灵感与创作',
       'location': 'IP属地: 上海',
       'followers': 3400,
@@ -84,6 +87,7 @@ class DataServiceImpl implements DataService {
       'username': 'quwooo_official',
       'displayName': '趣我圈官方',
       'avatar': 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face',
+      'backgroundImage': 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=1200&h=800&fit=crop',
       'bio': '🎯 趣我圈官方账号\n📢 新功能与活动发布\n🤝 与用户共建美好社区',
       'location': 'IP属地: 深圳',
       'followers': 156000,
@@ -98,6 +102,7 @@ class DataServiceImpl implements DataService {
       'username': 'foodie_life',
       'displayName': '美食生活家',
       'avatar': 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&h=150&fit=crop&crop=face',
+      'backgroundImage': 'https://images.unsplash.com/photo-1498837167922-ddd27525d352?w=1200&h=800&fit=crop',
       'bio': '🍝 意式料理爱好者\n📱 美食博主\n🥘 分享生活中的美味时刻',
       'location': 'IP属地: 广州',
       'followers': 8930,
@@ -227,10 +232,17 @@ class DataServiceImpl implements DataService {
         'isVerified': user['verified'] as bool? ?? false,
         'location': user['location'] as String?,
         'tags': _generateTags(category),
+        'author': {
+          'id': user['id'] as String? ?? username,
+          'username': username,
+          'name': user['displayName'],
+          'avatar': user['avatar'],
+        },
         'publisher': {
           'type': 'author',
           'id': user['id'] as String? ?? username,
           'username': username,
+          'displayName': user['displayName'],
           'avatar': user['avatar'],
           'verified': user['verified'] as bool? ?? false,
         },
@@ -243,7 +255,14 @@ class DataServiceImpl implements DataService {
           imageCount,
           (i) => _imagePool[(index * imageCount + i) % _imagePool.length],
         );
+        final width = 900 + (index % 4) * 120;
+        final height = 700 + (index % 5) * 160;
         post['images'] = images;
+        post['thumbnail'] = images.first;
+        post['thumbnailUrl'] = images.first;
+        post['width'] = width;
+        post['height'] = height;
+        post['aspectRatio'] = width / height;
         post['displayType'] = displayType;
         post['caption'] = _generateCaption(category, index);
       } else if (isVideo) {

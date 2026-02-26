@@ -15,6 +15,7 @@ import 'package:quwoquan_app/components/more_actions_popup/more_action_popup.dar
 import 'package:quwoquan_app/components/media/shared/toolbar/media_viewer_toolbar.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/media_assistant_panel.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/media_caption_widgets.dart';
+import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 
 /// 沉浸式图片查看器 - 基于Figma原型实现
 /// 支持与作者主页、评论和帖子的完整联动
@@ -23,20 +24,21 @@ class ImmersiveImageViewer extends ConsumerStatefulWidget {
   final VoidCallback onClose;
   final List<MediaItem> mediaItems;
   final int initialIndex;
-  final List<dynamic> posts;
+  final List<PostSummaryView> posts;
   final int initialPostIndex;
-  final Function(String) onUserClick;
+  /// username 必填；avatarUrl、displayName、backgroundUrl 可选，传入后作者页优先展示以与浏览页一致
+  final void Function(String username, {String? avatarUrl, String? displayName, String? backgroundUrl}) onUserClick;
   final Function(String, bool)? onFollowClick;
-  final Function(dynamic)? onCommentsClick;
-  final Function(dynamic)? onMoreClick;
-  final Function(dynamic)? onLikeClick;
-  final Function(dynamic)? onSaveClick;
-  final Function(dynamic)? onShareClick;
+  final Function(PostSummaryView)? onCommentsClick;
+  final Function(PostSummaryView)? onMoreClick;
+  final Function(PostSummaryView)? onLikeClick;
+  final Function(PostSummaryView)? onSaveClick;
+  final Function(PostSummaryView)? onShareClick;
   final Set<String>? followingUsers;
   final Set<String>? savedPosts;
   final Set<String>? likedPosts;
-  final Function(dynamic)? getPostLikesCount;
-  final Function(dynamic)? getPostBookmarksCount;
+  final Function(PostSummaryView)? getPostLikesCount;
+  final Function(PostSummaryView)? getPostBookmarksCount;
   final bool isBlocked;
   final String? source; // 'feed' | 'userProfile'
   final Map<String, dynamic>? userProfileData;
@@ -47,6 +49,8 @@ class ImmersiveImageViewer extends ConsumerStatefulWidget {
   final Function(String)? onHeroAnimationComplete;
   /// 私人助理入口（中间图标，点击跳转助理主页）
   final VoidCallback? onAssistantClick;
+  /// 滑动接近末尾时回调（用于加载更多）
+  final VoidCallback? onNearEnd;
 
   const ImmersiveImageViewer({
     super.key,
@@ -77,6 +81,7 @@ class ImmersiveImageViewer extends ConsumerStatefulWidget {
     this.heroAnimationSource,
     this.onHeroAnimationComplete,
     this.onAssistantClick,
+    this.onNearEnd,
   });
 
   @override
@@ -92,7 +97,8 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
   final ScrollController _assistantScrollController = ScrollController();
   final FocusNode _assistantInputFocusNode = FocusNode();
   
-  int _currentPostIndex = 0;
+  int _currentEntryIndex = 0;
+  List<_ViewerImageEntry> _mediaEntries = const <_ViewerImageEntry>[];
   bool _showControls = true;
   
   // 本地状态
@@ -107,13 +113,13 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
   bool _isPureMode = false;
   final Map<String, bool> _expandedCaptions = {};
   final Map<String, double> _imageAspectRatios = {};
+  final Set<String> _resolvingImageAspectRatios = <String>{};
 
   @override
   void initState() {
     super.initState();
-    _currentPostIndex = widget.initialPostIndex;
-    
-    _pageController = PageController(initialPage: _currentPostIndex);
+    _rebuildMediaEntries();
+    _pageController = PageController(initialPage: _currentEntryIndex);
     
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 300),
@@ -148,22 +154,97 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.likedPosts != widget.likedPosts ||
         oldWidget.savedPosts != widget.savedPosts ||
+        oldWidget.followingUsers != widget.followingUsers ||
+        oldWidget.posts != widget.posts ||
         oldWidget.getPostLikesCount != widget.getPostLikesCount ||
         oldWidget.getPostBookmarksCount != widget.getPostBookmarksCount) {
+      _rebuildMediaEntries(keepCurrent: true);
       _initializePostState();
     }
   }
 
+  _ViewerImageEntry? get _currentEntry =>
+      (_mediaEntries.isNotEmpty && _currentEntryIndex < _mediaEntries.length)
+          ? _mediaEntries[_currentEntryIndex]
+          : null;
+
+  int get _currentPostIndex => _currentEntry?.postIndex ?? 0;
+
+  PostSummaryView? get _currentPost =>
+      (widget.posts.isNotEmpty && _currentPostIndex < widget.posts.length)
+          ? widget.posts[_currentPostIndex]
+          : null;
+
+  List<String> _collectPostImageUrls(PostSummaryView post) {
+    final images = (post.images ?? const <String>[])
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList(growable: false);
+    final valid = images
+        .where((e) => e.startsWith('http://') || e.startsWith('https://'))
+        .toList(growable: false);
+    if (valid.isNotEmpty) return valid;
+    final thumb = post.thumbnail?.trim() ??
+        post.thumbnailUrl?.trim() ??
+        post.coverUrl?.trim() ??
+        '';
+    if (thumb.isNotEmpty) return <String>[thumb];
+    return const <String>[];
+  }
+
+  String? _usernameFromPost(PostSummaryView post) {
+    final username = post.authorId;
+    return username.isNotEmpty ? username : null;
+  }
+
+  void _rebuildMediaEntries({bool keepCurrent = false}) {
+    final oldEntry = keepCurrent ? _currentEntry : null;
+    final entries = <_ViewerImageEntry>[];
+    for (var postIndex = 0; postIndex < widget.posts.length; postIndex++) {
+      final post = widget.posts[postIndex];
+      final urls = _collectPostImageUrls(post);
+      for (var imageIndex = 0; imageIndex < urls.length; imageIndex++) {
+        entries.add(
+          _ViewerImageEntry(
+            postIndex: postIndex,
+            imageIndex: imageIndex,
+            imageUrl: urls[imageIndex],
+          ),
+        );
+      }
+    }
+    _mediaEntries = entries;
+    if (_mediaEntries.isEmpty) {
+      _currentEntryIndex = 0;
+      return;
+    }
+    if (keepCurrent && oldEntry != null) {
+      final preserved = _mediaEntries.indexWhere(
+        (e) => e.postIndex == oldEntry.postIndex && e.imageIndex == oldEntry.imageIndex,
+      );
+      if (preserved >= 0) {
+        _currentEntryIndex = preserved;
+        return;
+      }
+    }
+    final initialPost = widget.initialPostIndex.clamp(0, widget.posts.length - 1);
+    final firstOfPost = _mediaEntries.indexWhere((e) => e.postIndex == initialPost);
+    _currentEntryIndex = firstOfPost >= 0 ? firstOfPost : 0;
+  }
+
   void _initializePostState() {
-    if (widget.posts.isNotEmpty && _currentPostIndex < widget.posts.length) {
-      final currentPost = widget.posts[_currentPostIndex];
-      _isLiked = widget.likedPosts?.contains(currentPost['id']?.toString()) ?? false;
-      _isSaved = widget.savedPosts?.contains(currentPost['id']?.toString()) ?? false;
-      _isFollowing = widget.followingUsers?.contains(currentPost['username']) ?? false;
+    final currentPost = _currentPost;
+    if (currentPost != null) {
+      _isLiked = widget.likedPosts?.contains(currentPost.id) ?? false;
+      _isSaved = widget.savedPosts?.contains(currentPost.id) ?? false;
+      final username = _usernameFromPost(currentPost);
+      _isFollowing = username != null
+          ? (widget.followingUsers?.contains(username) ?? false)
+          : false;
       _likesCount = widget.getPostLikesCount?.call(currentPost) ?? 0;
       _savesCount = widget.getPostBookmarksCount?.call(currentPost) ?? 0;
-      _commentsCount = currentPost['commentsCount'] ?? 0;
-      _sharesCount = currentPost['sharesCount'] ?? currentPost['shareCount'] ?? 0;
+      _commentsCount = currentPost.commentsCount;
+      _sharesCount = currentPost.sharesCount;
     }
   }
 
@@ -234,9 +315,14 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
 
   void _handlePageChanged(int index) {
     setState(() {
-      _currentPostIndex = index;
+      _currentEntryIndex = index;
     });
     _initializePostState();
+    if (widget.onNearEnd != null &&
+        _mediaEntries.length > 1 &&
+        index >= _mediaEntries.length - 2) {
+      widget.onNearEnd!();
+    }
   }
 
   void _handleLikeClick() {
@@ -249,8 +335,9 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
       }
     });
     
-    if (widget.posts.isNotEmpty && _currentPostIndex < widget.posts.length) {
-      widget.onLikeClick?.call(widget.posts[_currentPostIndex]);
+    final currentPost = _currentPost;
+    if (currentPost != null) {
+      widget.onLikeClick?.call(currentPost);
     }
   }
 
@@ -264,34 +351,34 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
       }
     });
     
-    if (widget.posts.isNotEmpty && _currentPostIndex < widget.posts.length) {
-      widget.onSaveClick?.call(widget.posts[_currentPostIndex]);
+    final currentPost = _currentPost;
+    if (currentPost != null) {
+      widget.onSaveClick?.call(currentPost);
     }
   }
 
   void _handleFollowClick() {
-    if (widget.posts.isNotEmpty && _currentPostIndex < widget.posts.length) {
-      final currentPost = widget.posts[_currentPostIndex];
+    final currentPost = _currentPost;
+    if (currentPost != null) {
       setState(() {
         _isFollowing = !_isFollowing;
       });
-      final username = currentPost['username']?.toString() ??
-          currentPost['publisher']?['username']?.toString();
+      final username = _usernameFromPost(currentPost);
       if (username == null || username.isEmpty) return;
       widget.onFollowClick?.call(username, _isFollowing);
     }
   }
 
   void _handleCommentsClick() {
-    if (widget.posts.isNotEmpty && _currentPostIndex < widget.posts.length) {
-      final currentPost = widget.posts[_currentPostIndex];
+    final currentPost = _currentPost;
+    if (currentPost != null) {
       
       // 显示评论弹窗
       final commentConfig = CommentConfig();
 
       CommentViewer.showModal(
         context: context,
-        postId: currentPost['id'] ?? 'mock_post_id',
+        postId: currentPost.id.isNotEmpty ? currentPost.id : 'mock_post_id',
         initialComments: [],
         config: commentConfig,
         modalHeight: CommentModalHeight.adaptive,
@@ -318,17 +405,17 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
   }
 
   void _handleMoreClick() {
-    if (widget.posts.isNotEmpty && _currentPostIndex < widget.posts.length) {
-      final currentPost = widget.posts[_currentPostIndex];
+    final currentPost = _currentPost;
+    if (currentPost != null) {
       
       // 显示更多操作弹窗（1:1 PostActionSheet：复制链接、保存、举报等）
       final config = MediaPostMoreActionConfig(
         post: currentPost,
-        onReward: () => debugPrint('Reward post: ${currentPost['id']}'),
+        onReward: () => debugPrint('Reward post: ${currentPost.id}'),
         onSave: () => _handleSaveClick(),
-        onMessage: () => debugPrint('Message user: ${currentPost['username']}'),
+        onMessage: () => debugPrint('Message user: ${currentPost.authorId}'),
         onCopyLink: () {
-          final link = 'https://quwoquan.app/post/${currentPost['id'] ?? ''}';
+          final link = 'https://quwoquan.app/post/${currentPost.id}';
           Clipboard.setData(ClipboardData(text: link));
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -336,13 +423,13 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
             );
           }
         },
-        onViewOriginal: () => debugPrint('View original: ${currentPost['id']}'),
+        onViewOriginal: () => debugPrint('View original: ${currentPost.id}'),
         onFontSettings: () => debugPrint('Font settings'),
         onThemeToggle: () => debugPrint('Theme toggle'),
         onFeedback: () => debugPrint('Feedback'),
         onNotInterested: () => debugPrint('Not interested'),
-        onBlockUser: () => debugPrint('Block user: ${currentPost['username']}'),
-        onReport: () => debugPrint('Report post: ${currentPost['id']}'),
+        onBlockUser: () => debugPrint('Block user: ${currentPost.authorId}'),
+        onReport: () => debugPrint('Report post: ${currentPost.id}'),
       );
 
       MoreActionPopup.show(
@@ -353,23 +440,21 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
   }
 
   void _handleShareClick() {
-    if (widget.posts.isNotEmpty && _currentPostIndex < widget.posts.length) {
-      final currentPost = widget.posts[_currentPostIndex];
+    final currentPost = _currentPost;
+    if (currentPost != null) {
       widget.onShareClick?.call(currentPost);
     }
   }
 
   void _handleAssistantClick() {
-    final currentPost = widget.posts.isNotEmpty && _currentPostIndex < widget.posts.length
-        ? widget.posts[_currentPostIndex]
-        : null;
+    final currentPost = _currentPost;
     _showAssistantPanel(currentPost);
   }
 
-  void _showAssistantPanel(dynamic post) {
+  void _showAssistantPanel(PostSummaryView? post) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final suggestions = _buildAssistantSuggestions(post);
-    final contextId = post?['id']?.toString() ?? 'media-viewer';
+    final contextId = post?.id.isNotEmpty == true ? post!.id : 'media-viewer';
     AssistantChatStore.normalizeMessages();
     final summaryText = AssistantChatStore.buildSummary(
       contextId: contextId,
@@ -408,7 +493,7 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
     );
   }
 
-  List<String> _buildAssistantSuggestions(dynamic post) {
+  List<String> _buildAssistantSuggestions(PostSummaryView? post) {
     final suggestions = <String>[
       UITextConstants.assistantAskAboutSummary,
       UITextConstants.assistantAskAboutRecommendations,
@@ -442,54 +527,69 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
   }
 
   void _handleAuthorTap() {
-    if (widget.posts.isEmpty || _currentPostIndex >= widget.posts.length) return;
-    final currentPost = widget.posts[_currentPostIndex];
-    final username = currentPost['username']?.toString() ??
-        currentPost['publisher']?['username']?.toString();
-    if (username == null || username.isEmpty) return;
-    widget.onUserClick(username);
+    final currentPost = _currentPost;
+    if (currentPost == null) return;
+    final username = currentPost.authorId;
+    if (username.isEmpty) return;
+    final avatarUrl = currentPost.avatarUrl;
+    final displayName = currentPost.displayName;
+    final backgroundUrl = currentPost.backgroundImage;
+    widget.onUserClick(
+      username,
+      avatarUrl: avatarUrl.isEmpty ? null : avatarUrl,
+      displayName: displayName.isEmpty ? null : displayName,
+      backgroundUrl: (backgroundUrl ?? '').isEmpty ? null : backgroundUrl,
+    );
   }
 
   void _resolveImageAspectRatio(String imageUrl) {
-    if (_imageAspectRatios.containsKey(imageUrl)) return;
+    if (imageUrl.isEmpty ||
+        _imageAspectRatios.containsKey(imageUrl) ||
+        _resolvingImageAspectRatios.contains(imageUrl)) {
+      return;
+    }
+    _resolvingImageAspectRatios.add(imageUrl);
     final stream = NetworkImage(imageUrl).resolve(const ImageConfiguration());
     stream.addListener(
       ImageStreamListener((info, _) {
         final ratio = info.image.width / info.image.height;
+        _resolvingImageAspectRatios.remove(imageUrl);
+        if (_imageAspectRatios[imageUrl] == ratio) return;
+        _imageAspectRatios[imageUrl] = ratio;
         if (!mounted) return;
-        setState(() {
-          _imageAspectRatios[imageUrl] = ratio;
+        // 避免在 build 过程中触发 setState 导致异常
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          setState(() {});
         });
+      }, onError: (Object _, StackTrace? __) {
+        _resolvingImageAspectRatios.remove(imageUrl);
       }),
     );
   }
 
-  String _getPostTitle(dynamic post) {
-    final title = post?['title'];
-    return title?.toString() ?? '';
+  String _getPostTitle(PostSummaryView? post) {
+    return post?.title ?? '';
   }
 
-  String _getPostCaption(dynamic post) {
-    final content = post?['content'] ?? post?['caption'];
-    return content?.toString() ?? '';
+  String _getPostCaption(PostSummaryView? post) {
+    return post?.body ?? '';
   }
 
-  String _getAuthorName(dynamic post) {
-    return post?['displayName']?.toString() ??
-        post?['username']?.toString() ??
-        post?['publisher']?['displayName']?.toString() ??
-        post?['publisher']?['username']?.toString() ??
-        UITextConstants.unknownUser;
+  String _getAuthorName(PostSummaryView? post) {
+    if (post == null) return UITextConstants.unknownUser;
+    final name = post.author.name;
+    return name.isNotEmpty ? name : UITextConstants.unknownUser;
   }
 
-  String? _getAuthorAvatar(dynamic post) {
-    return post?['avatar']?.toString() ??
-        post?['publisher']?['avatar']?.toString();
+  String? _getAuthorAvatar(PostSummaryView? post) {
+    final avatar = post?.avatarUrl ?? post?.author.avatar;
+    return avatar?.isEmpty == true ? null : avatar;
   }
 
   Widget _buildMediaPage(
     BuildContext context,
-    dynamic post,
+    PostSummaryView post,
     MediaItem mediaItem,
     bool isDark,
     bool isActive,
@@ -499,7 +599,7 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
     final caption = _getPostCaption(post);
     final hasTextLayout = title.isNotEmpty || caption.isNotEmpty;
     final shouldShowCaption = showCaption && hasTextLayout;
-    final postId = post?['id']?.toString() ?? '';
+    final postId = post.id;
     final isExpanded = _expandedCaptions[postId] ?? false;
     final imageUrl = mediaItem.url;
 
@@ -600,7 +700,7 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
 
   Widget _buildMediaContent(
     BuildContext context,
-    dynamic post,
+    PostSummaryView post,
     MediaItem mediaItem,
   ) {
     if (mediaItem.url.isEmpty) {
@@ -632,7 +732,7 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
         minScale: PhotoViewComputedScale.contained,
         maxScale: PhotoViewComputedScale.covered * 2.0,
         heroAttributes: PhotoViewHeroAttributes(
-          tag: 'photo_${post['id']}_${mediaItem.url}',
+          tag: 'photo_${post.id}_${mediaItem.url}',
         ),
         onTapDown: (context, details, controllerValue) {
           _toggleControls();
@@ -666,9 +766,13 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
     if (!widget.isOpen) return const SizedBox.shrink();
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final currentPost = widget.posts.isNotEmpty && _currentPostIndex < widget.posts.length
-        ? widget.posts[_currentPostIndex]
-        : null;
+    final currentPost = _currentPost;
+    final currentEntry = _currentEntry;
+    final currentPostImages =
+        currentPost == null ? const <String>[] : _collectPostImageUrls(currentPost);
+    final positionText = currentEntry == null || currentPostImages.isEmpty
+        ? '1/1'
+        : '${currentEntry.imageIndex + 1}/${currentPostImages.length}';
 
     return Material(
       color: AppColors.black,
@@ -676,24 +780,22 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
         children: [
           PageView.builder(
             controller: _pageController,
-            itemCount: widget.posts.length,
+            itemCount: _mediaEntries.length,
             onPageChanged: _handlePageChanged,
             itemBuilder: (context, index) {
-              final post = widget.posts[index];
-              final mediaItem = widget.mediaItems.isNotEmpty
-                  ? widget.mediaItems[index % widget.mediaItems.length]
-                  : MediaItem(
-                      type: ContentTypeConstants.image,
-                      url: (post?['images'] is List && (post['images'] as List).isNotEmpty)
-                          ? (post['images'] as List).first.toString()
-                          : (post?['imageUrl']?.toString() ?? ''),
-                    );
+              final entry = _mediaEntries[index];
+              final post = widget.posts[entry.postIndex];
+              final mediaItem = MediaItem(
+                type: ContentTypeConstants.image,
+                url: entry.imageUrl,
+                aspectRatio: post.aspectRatio,
+              );
               return _buildMediaPage(
                 context,
                 post,
                 mediaItem,
                 isDark,
-                index == _currentPostIndex,
+                index == _currentEntryIndex,
                 !_isPureMode,
               );
             },
@@ -715,14 +817,14 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
                 children: [
                   MediaViewerTopBar(
                     onBack: widget.onClose,
-                    positionText: '${_currentPostIndex + 1}/${widget.posts.length}',
+                    positionText: positionText,
                     authorName: _getAuthorName(currentPost),
                     authorAvatarUrl: _getAuthorAvatar(currentPost),
                     isFollowing: _isFollowing,
                     onFollow: _handleFollowClick,
                     onAuthorTap: _handleAuthorTap,
                     onMore: _handleMoreClick,
-                    showPosition: widget.posts.length > 1,
+                    showPosition: _mediaEntries.length > 1,
                   ),
                   const Spacer(),
                   MediaViewerBottomBar(
@@ -746,4 +848,16 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
       ),
     );
   }
+}
+
+class _ViewerImageEntry {
+  final int postIndex;
+  final int imageIndex;
+  final String imageUrl;
+
+  const _ViewerImageEntry({
+    required this.postIndex,
+    required this.imageIndex,
+    required this.imageUrl,
+  });
 }

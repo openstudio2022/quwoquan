@@ -1,0 +1,24 @@
+version: 1
+aggregate: UserProfile
+layer: e2e
+
+description: |
+  端云集成测试场景（staging 环境）。
+  执行：CI staging，非 PR 门禁（advisory）。
+
+scenarios:
+  - name: register_and_view_profile
+    steps:
+      - app registers new user
+      - app fetches own profile
+    assertions:
+      - profile_matches_registration_input
+      - avatar_url_accessible
+
+  - name: follow_reflected_in_feed
+    steps:
+      - user A follows user B
+      - user A opens following feed
+    assertions:
+      - feed_contains_user_b_posts
+      - follow_count_incremented

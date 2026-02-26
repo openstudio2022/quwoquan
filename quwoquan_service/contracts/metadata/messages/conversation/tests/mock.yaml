@@ -1,0 +1,20 @@
+version: 1
+aggregate: Conversation
+layer: app_side
+
+description: |
+  端侧独立测试场景。执行：flutter test test/cloud/chat/
+
+scenarios:
+  - name: chat_inbox_dto_parse
+    description: ChatInboxDto 解析（含 lastMessage 预览截断）
+    assertions:
+      - required_fields_non_empty
+      - last_message_truncated_at_100chars
+
+  - name: error_code_mapping
+    cases:
+      - http_status: 429, code: CHAT.USER.rate_limited
+        expected_dart_const: rateLimited
+      - http_status: 400, code: CHAT.USER.message_too_long
+        expected_dart_const: messageTooLong

@@ -73,6 +73,8 @@ class SettingsPage extends ConsumerWidget {
             onTap: () {
               if (s.id == 'assistant') {
                 context.push('/assistant/management');
+              } else if (s.id == 'developer') {
+                context.push('/settings/developer');
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(

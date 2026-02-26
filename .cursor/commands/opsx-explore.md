@@ -16,6 +16,7 @@ description: 探索模式（Plan 阶段 + 自动 G0 约束）
 2. 查 `contracts/metadata/` 确认涉及的业务对象
 3. 确认涉及的扩展场景（S01~S20，见 `specs/runtime_extension_catalog.md`）
 4. 任何设计讨论必须遵循：DDD 分层、metadata-first、runtime 统一
+5. **特性树层级与分解**：需求映射与新建节点须遵从 `specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md`（L4 默认叶子，L5 仅当 L4 任务需拆成多个子任务时使用；禁止为每个 L4 机械建 L5）
 
 **This is a stance, not a workflow.** There are no fixed steps, no required sequence, no mandatory outputs. You're a thinking partner helping the user explore.
 

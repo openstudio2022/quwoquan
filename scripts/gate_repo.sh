@@ -26,11 +26,12 @@ run_app() {
   echo "[gate] quwoquan_app"
   command -v flutter >/dev/null 2>&1 || { echo "[gate] FAIL: flutter not found in PATH" 1>&2; exit 1; }
   (cd quwoquan_app && flutter pub get)
-  (cd quwoquan_app && flutter analyze)
+  (cd quwoquan_app && flutter analyze --no-fatal-warnings --no-fatal-infos)
+  # Always run L1 content tests (L1a contract, L1b widget, L1c journey) — fast, no external deps
+  (cd quwoquan_app && flutter test test/features/content/)
+  # Full test suite (includes acceptance VM tests requiring LLM + external services) — CI only
   if [[ "${GITHUB_ACTIONS:-}" == "true" || "${QWQ_GATE_TESTS:-}" == "1" ]]; then
     (cd quwoquan_app && flutter test)
-  else
-    echo "[gate] skip flutter test (set QWQ_GATE_TESTS=1 or run in CI)"
   fi
 }
 

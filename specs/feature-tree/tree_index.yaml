@@ -2337,6 +2337,14 @@ features:
                       domain: ""
                       status: specified
                       tags: []
+        - id: runtime-test-pyramid
+          name: runtime-test-pyramid
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-test-pyramid
+          domain: ""
+          status: specified
+          tags: [testing, gate, quality]
+          children: []
     - id: recommendation-platform
       name: recommendation-platform
       level: L1_domain

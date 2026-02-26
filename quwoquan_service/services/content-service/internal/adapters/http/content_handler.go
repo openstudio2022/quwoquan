@@ -80,7 +80,24 @@ func (h *ContentHandler) handleGetPost(w http.ResponseWriter, r *http.Request) {
 		))
 		return
 	}
-	writeJSON(w, http.StatusOK, post)
+	writeJSON(w, http.StatusOK, projectPostForClient(post))
+}
+
+// projectPostForClient strips fields that must never be client-visible:
+//   - embedding: privacy=never_expose (fields.yaml)
+//   - moderationStatus: visibility=platform-ops (fields.yaml)
+func projectPostForClient(post any) map[string]any {
+	b, err := json.Marshal(post)
+	if err != nil {
+		return map[string]any{}
+	}
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		return map[string]any{}
+	}
+	delete(m, "embedding")
+	delete(m, "moderationStatus")
+	return m
 }
 
 func (h *ContentHandler) handleCreatePost(w http.ResponseWriter, r *http.Request) {

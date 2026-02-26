@@ -1,4 +1,4 @@
-.PHONY: gate build test test-unit test-integration lint verify-metadata codegen-app codegen-content-service codegen-rec-model-python dev dev-down clean
+.PHONY: gate build test test-unit test-contract test-integration lint verify-metadata codegen-app codegen-content-service codegen-rec-model-python dev dev-down clean
 
 # ─── Quality Gate ────────────────────────────────────────────────────
 gate:
@@ -14,6 +14,9 @@ test: test-unit
 
 test-unit:
 	go test ./runtime/... ./services/content-service/... -v -count=1
+
+test-contract:
+	go test ./services/content-service/... -v -count=1
 
 test-integration:
 	go test ./runtime/... -v -count=1 -tags=integration

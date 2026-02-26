@@ -1,0 +1,30 @@
+version: 1
+aggregate: UserProfile
+layer: app_side
+
+description: |
+  端侧独立测试场景（不依赖云端）。
+  执行：flutter test test/cloud/user/
+
+scenarios:
+  - name: user_profile_dto_parse
+    description: UserProfileDto 字段解析（含 PII 字段 alias）
+    assertions:
+      - required_fields_non_empty
+      - pii_fields_not_exposed_in_logs
+
+  - name: error_code_mapping
+    description: user 域错误码端侧映射
+    cases:
+      - http_status: 404, code: USER.USER.not_found
+        expected_dart_const: userNotFound
+      - http_status: 409, code: USER.USER.nickname_taken
+        expected_dart_const: nicknameTaken
+      - http_status: 429, code: USER.USER.rate_limited
+        expected_dart_const: rateLimited
+
+  - name: privacy_log_sanitize
+    description: PII 字段日志过滤
+    assertions:
+      - phone_field_dropped_from_logs
+      - email_field_masked_to_domain_only

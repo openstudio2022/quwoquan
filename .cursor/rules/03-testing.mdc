@@ -1,174 +1,367 @@
 ---
-description: 端云契约测试标准
+description: 端云一体化四层测试金字塔（强制规则）
 globs: **/*_test.dart,**/test/**/*.dart,**/*_test.go,**/tests/**/*.go
 ---
 
-# 端云契约测试标准
+# 端云一体化四层测试金字塔
+
+> 规格来源：`specs/feature-tree/runtime/runtime-test-pyramid/spec.md`（spec 与本规则保持同步）
 
 ---
 
-## 1. 测试金字塔
+## 1. 金字塔总览与 Mock Wall
 
-```yaml
-端侧 (Dart):
-  单元测试: 70%    # 业务逻辑、工具类、服务类
-  Widget测试: 20%  # UI 组件、用户交互
-  集成测试: 10%    # 端到端功能
-  整体覆盖率: >80%
-
-云侧 (Go):
-  契约测试: 60%    # 接口契约 + 真实数据库
-  单元测试: 30%    # domain service 逻辑
-  集成测试: 10%    # 跨服务端到端
-  整体覆盖率: >80%
+```
+        ┌─────────────────────────────────────────────┐
+   L4   │  UI Journey (Patrol)                        │  pre-release, advisory
+        │  真实 iOS/Android 设备 + Firebase Test Lab   │
+        └─────────────────────────────────────────────┘
+        ┌─────────────────────────────────────────────┐
+   L3   │  API Contract (staging HTTP)                │  daily + pre-release, advisory
+        │  Dart HTTP client 打 staging                 │
+        └─────────────────────────────────────────────┘
+  ══════════════════════ Mock Wall ════════════════════  ← Repository 接口边界
+        ┌─────────────────────────────────────────────┐
+   L2   │  Cloud Contract Tests (Go)                  │  每次 PR，阻塞合入
+        │  testcontainers mongo:7 + miniredis/v2       │
+        └─────────────────────────────────────────────┘
+        ┌─────────────────────────────────────────────┐
+   L1c  │  Journey Tests (flutter_test + MockRepo)    │  每次 PR，阻塞合入
+        │  多屏旅程：发现→详情 / 点赞乐观回滚 / 评论   │
+   L1b  │  Widget Tests (flutter_test + MockRepo)     │  每次 PR，阻塞合入
+        │  组件渲染 + 状态响应                          │
+   L1a  │  Contract Tests (flutter_test, pure Dart)   │  每次 PR，阻塞合入
+        │  DTO / 错误码 / 行为格式 / UI配置             │
+        └─────────────────────────────────────────────┘
 ```
 
+**Mock Wall 原则**：
+- 墙左侧（L1a/b/c）：`flutter_test` 沙箱，MockRepository 注入，禁止发任何 HTTP 请求
+- 墙右侧（L2+）：真实存储层、staging 环境、真实设备
+- 边界由 Repository 接口（`XxxRepository` 抽象类）唯一确定
+
 ---
 
-## 2. 云侧契约测试（Go）
+## 2. 门禁绑定（强制）
 
-### 2.1 测试数据库策略
+| 门禁命令 | 触发时机 | 包含层 | 失败行为 |
+|---|---|---|---|
+| `make gate` | 每次 PR | L1a + L1b + L1c + L2 | ❌ 阻塞合入 |
+| `make gate-full` | daily + pre-release | + L3 | ⚠️ Advisory；pre-release 阻塞发布 |
+| Firebase Test Lab | pre-release | L4 | ❌ 阻塞发布 |
 
-| 存储 | 测试引擎 | 特点 |
-|------|---------|------|
-| PostgreSQL | `embedded-postgres` | 真实 SQL 执行，无需外部依赖 |
-| MongoDB | `testcontainers-go/modules/mongodb` | 真实 MongoDB 实例 |
-| Redis | `miniredis/v2` | 内存兼容 Redis，命令一致 |
+`make gate` 必须执行：
+```bash
+flutter test                                     # L1a + L1b + L1c
+go test ./services/content-service/... -count=1  # L2
+```
 
-### 2.2 Mock 范围（严格限定）
+**禁止跳过**：不得使用 `QWQ_GATE_TESTS=1` 或 `GITHUB_ACTIONS` 条件跳过 flutter test 的本地执行。
 
-| 允许 Mock | 说明 |
-|----------|------|
-| 跨服务 RPC 调用 | `ServiceClientFactory` 注入 mock |
-| 外部 AI API | LLM / Embedding 调用 |
-| 事件发布 | `EventPublisher` spy（验证发布内容） |
+---
 
-| 禁止 Mock | 说明 |
-|----------|------|
-| 本服务数据库 | 使用真实测试数据库 |
-| 本服务 Repository | 使用真实实现 |
-| 本服务 Domain Service | 使用真实实现 |
+## 3. L1a — Contract Tests（DTO / 错误码 / 行为 / UI配置）
 
-### 2.3 测试生命周期
+### 守护目标
+metadata → codegen → Dart 类型链的语义正确性
 
+### 覆盖要求
+- 每个 contentType 的 DTO dispatch 和字段解析（含 computed getter）
+- 每个 `errors.yaml` 错误码在 `ContentErrorCode` 枚举中存在，i18n 文本非空
+- `ContentBehaviorTracker` payload 字段与 `behaviors.yaml payload_fields` 一致
+- `ContentUIConfig` tab 顺序、feature_flag key 与 `ui_config.yaml` 一致
+
+### 代码规范
+```dart
+// 测试路径：test/features/content/
+// 文件命名：{topic}_contract_test.dart
+
+test('photo_aspect_ratio_computed', () {
+  final dto = PostViewProjection.fromJson({
+    'contentType': 'image', 'width': 1200, 'height': 800,
+  });
+  expect(dto.aspectRatio, closeTo(1.5, 0.001));
+});
+```
+
+### Mock 规范
+- fixture 数据从 `mock.yaml dto_scenarios` 派生，禁止随意硬编码
+- 不需要 MockRepository（纯 DTO 解析，无状态管理）
+
+---
+
+## 4. L1b — Widget Tests（组件渲染 + 状态响应）
+
+### 守护目标
+单个 Widget 在 MockRepository 注入下的渲染逻辑和 Provider 状态响应
+
+### 必须覆盖组件
+- `PhotoPostCard`：`show_author_avatar` 控制头像显隐、likeButton 触发 Notifier
+- `VideoPostCard`：封面渲染、durationMs 格式化
+- `CommentInputBar`：空文本时 submit disabled、enterText 后 enabled
+
+### 代码规范
+```dart
+// 测试路径：test/features/content/widgets/
+// 文件命名：{widget_name}_widget_test.dart
+
+testWidgets('likeButton_tap_triggers_optimistic_update', (tester) async {
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        contentRepositoryProvider.overrideWithValue(MockContentRepository()),
+      ],
+      child: MaterialApp(home: Scaffold(body: PhotoPostCard(post: fixture))),
+    ),
+  );
+  final initialCount = find.text('${fixture.likeCount}');
+  expect(initialCount, findsOneWidget);
+
+  await tester.tap(find.byKey(TestKeys.likeButton));
+  await tester.pump();
+  expect(find.text('${fixture.likeCount + 1}'), findsOneWidget);
+});
+```
+
+### Mock 规范
+- `MockContentRepository` 通过 `ProviderScope.overrides` 注入
+- 禁止在 Widget 测试中 `new MockContentRepository()` 绕开 Provider
+- fixture 使用 mock.yaml `widget_scenarios` 中声明的数据
+
+---
+
+## 5. L1c — Journey Tests（多屏旅程）
+
+### 守护目标
+多屏用户旅程的意图链完整性，发现状态管理、路由传参、错误处理三类断裂
+
+### 必须覆盖旅程
+1. **发现 → 详情**：DiscoveryPage → tap PostCard → PhotoDetailPage，GoRouter extra 传参正确
+2. **点赞乐观回滚**：tap likeButton → likeCount+1 → MockRepo 抛 RateLimitException → likeCount 回滚 + Toast 文本正确
+3. **评论发布**：PhotoDetailPage → tap CommentInputBar → enterText → tap Submit → MockRepo.createComment 调用 1 次 → commentCount UI+1
+
+### 代码规范
+```dart
+// 测试路径：test/features/content/journeys/
+// 文件命名：{journey_name}_journey_test.dart
+
+testWidgets('like_optimistic_rollback', (tester) async {
+  final mock = MockContentRepository()
+    ..throwOnLike = RateLimitException();
+
+  await tester.pumpWidget(ProviderScope(
+    overrides: [contentRepositoryProvider.overrideWithValue(mock)],
+    child: const MyApp(),
+  ));
+
+  // 导航至内容详情
+  await tester.tap(find.byType(PhotoPostCard).first);
+  await tester.pumpAndSettle();
+
+  final count = tester.widget<Text>(find.byKey(TestKeys.likeCountText)).data!;
+
+  // 点赞 → 乐观 +1
+  await tester.tap(find.byKey(TestKeys.likeButton));
+  await tester.pump();
+  expect(find.text('${int.parse(count) + 1}'), findsOneWidget);
+
+  // 服务返回 429 → 回滚 + Toast
+  await tester.pumpAndSettle();
+  expect(find.text(count), findsOneWidget); // 回到原值
+  expect(find.text(ContentErrorMessages.zh[ContentErrorCode.rateLimited]!), findsOneWidget);
+});
+```
+
+### Mock 规范
+- MockRepository 的 fixture 返回来自 mock.yaml `journey_scenarios`
+- 异常注入通过 MockRepository 的 `throwOnXxx` 配置字段
+
+---
+
+## 6. L2 — Cloud Contract Tests（Go）
+
+### 守护目标
+服务在真实存储层上的 API 行为、存储副作用、事件发布正确性
+
+### 存储引擎（严格要求）
+
+| 存储 | 测试引擎 | 禁止替代 |
+|---|---|---|
+| MongoDB | `testcontainers-go/modules/mongodb` (mongo:7) | ❌ in-memory store |
+| Redis | `miniredis/v2` | ✓ 已足够 |
+
+**in-memory store 零容忍**：`persistence.NewPostStore(DefaultSeedPosts())` 不得出现在 `tests/` 目录。gate 结构检测违反 → fail。
+
+### Mock 边界（严格限定）
+
+| 允许 Mock/Spy | 禁止 Mock |
+|---|---|
+| 跨服务 RPC（ServiceClientFactory） | 本服务 MongoDB/Redis |
+| 外部 AI API（LLM/Embedding） | 本服务 Repository |
+| 事件发布（EventPublisher spy） | 本服务 Domain Service |
+| 媒体处理异步回调 | — |
+
+### 测试生命周期
 ```go
+// tests/testmain_test.go
 func TestMain(m *testing.M) {
-    // 启动测试数据库
-    db := testinfra.StartEmbeddedPostgres()
-    // 运行 migration
-    testinfra.RunMigrations(db)
-    // 执行测试
+    suite := testinfra.NewSuite() // 启动 testcontainers MongoDB + miniredis
+    suite.RunMigrations()
     code := m.Run()
-    // 清理
-    testinfra.Cleanup(db)
+    suite.Teardown()
     os.Exit(code)
 }
 
-func TestCreateUser(t *testing.T) {
-    // Arrange: 预制数据
-    testinfra.SeedFixtures(db, "user_fixtures.yaml")
-    defer testinfra.CleanTable(db, "users")
-
+// tests/content_contract_test.go
+func TestCreatePostAggregate(t *testing.T) {
+    defer suite.CleanCollections(t, "posts", "media_assets")
+    // Arrange
+    req := httptest.NewRequest("POST", "/v1/content/posts", body)
     // Act
-    resp := httptest.NewRequest("POST", "/v1/users", body)
-
+    rec := httptest.NewRecorder()
+    handler.ServeHTTP(rec, req)
     // Assert
-    assert.Equal(t, 201, resp.StatusCode)
+    assert.Equal(t, 201, rec.Code)
+    suite.AssertMongoDB(t, "posts", bson.M{"_id": result.id}) // 真实 DB 断言
+    suite.AssertEventPublished(t, "PostCreated", expectedPayload)
 }
 ```
 
-### 2.4 覆盖要求
-
-- 每个 `service.yaml` API 端点至少 1 个契约测试
-- 每个 `events.yaml` 事件至少 1 个发布验证
-- 测试 fixture 从 metadata `fields.yaml` constraints 推导
-- 错误场景覆盖：400（验证失败）、401（未授权）、404（不存在）、409（冲突）
+### 覆盖要求
+- 每个 `service.yaml` API endpoint ≥1 个 Go contract test（`contract.yaml go_func` 驱动）
+- 每个 `events.yaml` 事件 ≥1 个发布验证（EventSpy）
+- 错误场景覆盖：400、401、404、409（对应 `errors.yaml` 中 http_status）
 
 ---
 
-## 3. 端侧测试（Dart）
+## 7. L3 — API Contract（staging HTTP）
 
-### 3.1 单元测试
+### 守护目标
+端云数据合约不漂移：cursor 分页语义、错误码格式、字段可见性
+
+### 驱动文件
+`e2e.yaml[test_type: api_contract]` — 无 UI driver，Dart HTTP client 直接断言
 
 ```dart
-// AAA 模式: Arrange - Act - Assert
-test('should load posts successfully', () async {
-  // Arrange
-  when(mockPostService.getPosts(page: 1)).thenAnswer((_) async => mockPosts);
-  // Act
-  await homeNotifier.loadPosts();
-  // Assert
-  expect(homeNotifier.state.posts, equals(mockPosts));
-  expect(homeNotifier.state.isLoading, isFalse);
+// test/cloud/content/api_contract_runner.dart
+test('discovery_feed_load_and_render', () async {
+  final url = Uri.parse('${Env.stagingBaseUrl}/v1/content/feed?type=image&limit=5');
+  final resp = await http.get(url, headers: CloudRequestHeaders.forPage('content.feed'));
+  expect(resp.statusCode, 200);
+  final items = (jsonDecode(resp.body)['items'] as List)
+      .map((e) => PostViewProjection.fromJson(e as Map<String, dynamic>))
+      .toList();
+  expect(items, everyElement(isA<PhotoPostDto>())); // 类型正确
+  for (final item in items) {
+    expect(item.aspectRatio, isNotNull); // computed getter 有值
+  }
 });
 ```
 
-### 3.2 Widget 测试
-
-```dart
-testWidgets('should display post information', (tester) async {
-  await tester.pumpWidget(
-    ProviderScope(
-      child: MaterialApp(home: Scaffold(body: PostCard(post: post))),
-    ),
-  );
-  expect(find.text('Test Post'), findsOneWidget);
-});
+### 执行
+```bash
+STAGING_BASE_URL=https://staging.api.quwoquan.com make test-api-contract
 ```
 
-### 3.3 Mock 规范
-
-- 使用 `@GenerateMocks` 生成 Mock 类
-- Mock 仅用于外部服务调用
-- 端侧测试不依赖云端（隔离测试）
-
-### 3.4 覆盖场景
-
-每个测试必须覆盖：正常流程、异常流程、边界条件、参数验证、状态变化。
+### CI 策略
+- daily 自动触发（staging 可用时）
+- pre-release 必须通过
+- staging 不可用 → skip + warn，不 fail
 
 ---
 
-## 4. metadata 驱动测试
+## 8. L4 — UI Journey（Patrol）
 
-### 4.1 测试骨架生成
+### 守护目标
+核心用户旅程在真实 iOS/Android 设备上的可感知一致性
 
-`make codegen` 从 metadata 自动生成：
-- Go 测试文件骨架（`*_contract_test.go`）
-- 测试 fixture YAML（从 `fields.yaml` constraints 推导）
-- EventPublisher spy 配置
-- 测试基础设施配置（`_shared/test_infra.yaml`）
+### 工具选型
+- **Patrol**（https://patrol.leancode.co/）：Flutter 原生，Dart 语言，支持 native 交互
+- **Firebase Test Lab**：真实设备，iOS 15/16 + Android 12/13
+- **Widget Key**：定位元素用 `Key(TestKeys.xxx)` 而非文本字符串（防 i18n 误报）
 
-### 4.2 测试数据管理
+### 场景约束
+- 场景数量 ≤10（`e2e.yaml[test_type: ui_journey]` 声明）
+- 对应 `patrol_flow` 文件在 `test/patrol/` 下存在
+- 只覆盖 flutter_test 无法替代的行为（native 权限弹窗、软键盘 IME、推送点击、相册 picker）
 
+```dart
+// test/patrol/content/like_post_patrol_test.dart
+void main() {
+  patrolTest('like_post_realtime', ($) async {
+    await $.pumpWidgetAndSettle(const MyApp());
+    await $(Key(TestKeys.photoPostCard)).tap();
+    await $.pumpAndSettle();
+    final countBefore = $(Key(TestKeys.likeCountText)).text;
+    await $(Key(TestKeys.likeButton)).tap();
+    await $.pumpAndSettle();
+    final countAfter = $(Key(TestKeys.likeCountText)).text;
+    expect(int.parse(countAfter!), int.parse(countBefore!) + 1);
+  });
+}
+```
+
+### CI 策略
+- pre-release 触发，advisory（不阻塞 PR 合入）
+- 失败 → 阻塞发布
+
+---
+
+## 9. metadata 驱动测试生成
+
+### 当前已支持
+- `mock.yaml dto_scenarios` → `typed_dto_contract_test.dart` 的 fixture 数据来源
+- `contract.yaml go_func` → gate 检查 Go 函数存在性
+- `e2e.yaml patrol_flow` → gate 检查 Patrol 文件存在性（warn 级）
+
+### 演进中
+- `mock.yaml widget_scenarios / journey_scenarios` → codegen 生成 Dart 测试骨架
+- `contract.yaml` → codegen 生成 Go 测试骨架（`TestXxx` 函数 stub + fixture 工厂）
+
+### fixture 数据管理
 ```yaml
-# contracts/metadata/_shared/test_infra.yaml
-test_databases:
-  postgres:
-    engine: embedded-postgres
-    go_package: github.com/fergusstrange/embedded-postgres
-  mongodb:
-    engine: testcontainers-mongodb
-    go_package: github.com/testcontainers/testcontainers-go/modules/mongodb
-  redis:
-    engine: miniredis
-    go_package: github.com/alicebob/miniredis/v2
+# mock.yaml（端侧 fixture 来源）
+widget_scenarios:
+  - name: photo_card_with_like_count
+    dart_func: testPhotoCardLikeCount
+    fixture: { contentType: image, likeCount: 42, authorId: "u1" }
+
+# contract.yaml（云侧 fixture 来源）
+data_management:
+  seed: fixture.NewPost()  # 从 fields.yaml NOT_NULL/DEFAULT 约束推导
+  cleanup: collection.DeleteMany per test
 ```
 
 ---
 
-## 5. 执行命令
+## 10. 执行命令参考
 
 ```bash
-# 端侧
-cd quwoquan_app && flutter test                    # 全量
-cd quwoquan_app && flutter test test/unit           # 单元测试
-cd quwoquan_app && flutter test --coverage          # 覆盖率
+# L1a/b/c — 端侧全量（每次 PR，阻塞）
+cd quwoquan_app && flutter test
 
-# 云侧
-cd quwoquan_service && make test-contract           # 契约测试（真实数据库）
-cd quwoquan_service && make test-unit               # 单元测试
-cd quwoquan_service && make test-all                # 全量
+# L1a 仅 contract（分类运行）
+cd quwoquan_app && flutter test test/features/content/
 
-# 门禁
-make gate                                           # 包含测试
+# L1b 仅 widget
+cd quwoquan_app && flutter test test/features/content/widgets/
+
+# L1c 仅 journey
+cd quwoquan_app && flutter test test/features/content/journeys/
+
+# L2 — 云侧 contract（每次 PR，阻塞）
+cd quwoquan_service && go test ./services/content-service/... -v -count=1
+
+# L2 仅 contract tag
+cd quwoquan_service && make test-contract
+
+# L3 — API Contract（staging，daily）
+STAGING_BASE_URL=https://staging.api.quwoquan.com make test-api-contract
+
+# L4 — Patrol（pre-release，真实设备）
+cd quwoquan_app && flutter test integration_test/ --dart-define=ENV=staging
+
+# 门禁（本地开发）
+make gate                # L1 + L2，阻塞合入
+make gate-full           # L1 + L2 + L3，pre-release
 ```

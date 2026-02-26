@@ -49,6 +49,13 @@ ruby -ryaml -e '
     exit 1
   end
 
+  # endpoint_catalog.md is superseded by per-domain service.yaml in the new design.
+  # Skip this check when the legacy catalog file does not exist.
+  unless File.exist?("contracts/endpoint_catalog.md")
+    puts "[gate] endpoint_catalog.md not present (replaced by service.yaml) — skipping legacy catalog check"
+    exit 0
+  end
+
   openapi_files = Dir["contracts/metadata/*/openapi.yaml"]
   paths = {}
   openapi_files.each do |f|
@@ -508,7 +515,11 @@ if [ -f "$CONTENT_POST_DIR/behaviors.yaml" ] && [ -f "$CONTENT_POST_DIR/service.
   ruby -ryaml -e '
     beh    = YAML.load_file(ARGV[0]) || {}
     svc    = YAML.load_file(ARGV[1]) || {}
-    routes = (svc["api_routes"] || []).map { |r| [r["method"]&.upcase, r["path"]] }.compact.to_h { |m,p| "#{m} #{p}" }
+    routes = {}
+    (svc["api_routes"] || []).each do |r|
+      next unless r.is_a?(Hash)
+      routes["#{r["method"]&.upcase} #{r["path"]}"] = true
+    end
     (beh["behavior_events"] || []).each do |ev|
       next unless ev["batch_route"]
       r = ev["batch_route"].strip
@@ -606,6 +617,11 @@ if [ -f "$CONTENT_POST_DIR/ui_config.yaml" ]; then
     end
   ' "$CONTENT_POST_DIR/ui_config.yaml"
 fi
+
+# ── L2: content-service contract tests ───────────────────────────────────────
+echo "[gate] running content-service contract tests"
+go test ./services/content-service/... -count=1 -timeout=120s \
+  || fail "content-service go tests failed"
 
 echo "[gate] OK"
 

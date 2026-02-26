@@ -1,0 +1,107 @@
+openapi: 3.0.3
+info:
+  title: quwoquan circle-service API
+  version: "v1"
+servers:
+  - url: http://localhost
+security:
+  - bearerAuth: []
+paths:
+  /v1/circles:
+    get:
+      summary: List circles (discovery + joined)
+      parameters:
+        - $ref: ./../_shared/openapi_common.yaml#/components/parameters/Cursor
+        - $ref: ./../_shared/openapi_common.yaml#/components/parameters/Limit
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CirclePage"
+        "401":
+          $ref: ./../_shared/openapi_common.yaml#/components/responses/Unauthorized
+
+  /v1/circles/{circleId}:
+    get:
+      summary: Circle detail
+      parameters:
+        - name: circleId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "404":
+          $ref: ./../_shared/openapi_common.yaml#/components/responses/NotFound
+
+  /v1/circles/{circleId}/join:
+    post:
+      summary: Join circle
+      parameters:
+        - name: circleId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+
+  /v1/circles/{circleId}/leave:
+    post:
+      summary: Leave circle
+      parameters:
+        - name: circleId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+
+  /v1/social/follow/{userId}:
+    post:
+      summary: Follow user
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+
+  /v1/social/follow/{userId}:
+    delete:
+      summary: Unfollow user
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+
+components:
+  securitySchemes:
+    bearerAuth:
+      $ref: ./../_shared/openapi_common.yaml#/components/securitySchemes/bearerAuth
+  schemas:
+    CirclePage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+        nextCursor:
+          type: string
+          nullable: true

@@ -1,0 +1,33 @@
+version: 1
+aggregate: Conversation
+layer: service_side
+
+description: |
+  云侧契约测试场景（真实 MongoDB + Redis）。
+  执行：go test ./services/chat-service/...
+
+real_engines:
+  mongodb: testcontainers (mongo:7)
+  redis: miniredis/v2
+
+spy_targets: [event_publisher]
+mock_targets: [cross_service_clients, push_notification_client]
+
+scenarios:
+  - name: send_message
+    command: SendMessage
+    assertions:
+      - db_message_exists
+      - conversation_last_message_updated
+      - event_MessageSent_published
+
+  - name: send_message_rate_limit
+    command: SendMessage > rate limit
+    assertions:
+      - error_CHAT.USER.rate_limited
+
+  - name: mark_messages_read
+    command: MarkRead
+    assertions:
+      - unread_count_decremented
+      - redis_unread_key_updated

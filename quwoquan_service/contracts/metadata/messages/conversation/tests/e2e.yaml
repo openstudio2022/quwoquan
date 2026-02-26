@@ -1,0 +1,15 @@
+version: 1
+aggregate: Conversation
+layer: e2e
+
+description: |
+  端云集成测试（staging）。
+
+scenarios:
+  - name: send_and_receive_message
+    steps:
+      - user A sends message to user B
+      - user B opens conversation
+    assertions:
+      - message_visible_in_thread
+      - unread_count_shows_1_for_user_b

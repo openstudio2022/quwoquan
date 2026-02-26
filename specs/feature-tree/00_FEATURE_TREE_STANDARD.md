@@ -54,23 +54,133 @@
 
 ### 2.4 acceptance.yaml
 
-- **必须包含**：`feature`、`level`、`template`（如 A1-A8）、`execution.local_gate` / `full_gate`；L4/L5 可含 `tree_context`、`level_acceptance` 的 scenarios 或检查项。
+- **必须包含**：`feature`、`level`、`template`（如 A1-A8）、`execution.local_gate` / `full_gate`；L4/L5 须含 `level_acceptance` 的 A1~An 验收项。
 - **一致性**：与 spec 中的验收重点、design 中的交付边界对齐；门禁脚本可依赖本文件做完整性检查。
+
+#### 验收项结构（交付后必须填写 status 与 tests）
+
+每个 A1~An 验收项须使用以下结构，**在实施阶段完成时回填**：
+
+```yaml
+level_acceptance:
+  A1:
+    criteria: "验收标准描述（与 spec 对齐）"
+    status: pending        # pending | implemented | waived | deferred
+    linked_tasks: [M1, C1] # 对应 tasks.md 中的任务编号
+    tests:                 # 实现后回填，机器可验证
+      - file: test/cloud/content/feed_item_dto_contract_test.dart
+        functions: [generates_from_metadata, has_do_not_edit_header]
+  A2:
+    criteria: "..."
+    status: implemented
+    tests:
+      - file: test/features/content/typed_dto_contract_test.dart
+        functions: [photo_dto_from_map, video_dto_alias_resolution]
+```
+
+**status 取值语义**：
+- `pending`：尚未实现（基线化时的初始状态）
+- `implemented`：已实现并有测试覆盖（tests[] 非空，且文件/函数存在）
+- `waived`：验收项豁免（须在 criteria 后写明豁免原因）
+- `deferred`：延期（须在 tasks.md 搁置任务中有对应条目）
+
+**归档前门禁要求**：所有 A1~An 的 status 必须为 `implemented` / `waived` / `deferred`，不得有 `pending`。
+`implemented` 项的 `tests[]` 不得为空；`gate.sh check-feature-tree-consistency` 会验证 tests[] 中每个 file/function 确实存在。
 
 ---
 
 ## 三、与命令、规则的衔接
 
 - **/opsx-ff**：创建或更新特性时，必须补齐或更新 **spec.md、design.md、tasks.md、acceptance.yaml**；不得生成四类以外的文档。
-- **/opsx-apply**：按 **tasks.md** 逐项执行；实现须符合 **spec.md** 与 **design.md**。
-- **/opsx-verify、/opsx-archive**：校验 **tasks.md** 完成度与 **acceptance.yaml** A1~A8；正确性对照 **spec.md** 与 **design.md**。
+- **/opsx-apply**：按 **tasks.md** 逐项执行；实现须符合 **spec.md** 与 **design.md**；自动将节点 status 推进为 `in_progress`。
+- **/opsx-deliver**：Apply 条件就绪后，**以 acceptance.yaml A1~A8 验收标准为驱动**，迭代完成开发 → 验证 → 归档 → 提交入库；一气呵成交付到合入。
+- **/opsx-verify、/opsx-archive**：校验 **tasks.md** 完成度与 **acceptance.yaml** A1~A8；正确性对照 **spec.md** 与 **design.md**；归档时回写 `status: completed` 和 `archived: true`。
+- **/opsx-prune**：检测并清理过期/作废节点；将节点标记为 `cancelled` 或 `deprecated`；更新 tree_index.yaml。
 - **/opsx-explore**：探索结论若需落档，应写入目标节点的 **spec/design/tasks**，不单独生成分析文档。
 
 详见 `.cursor/commands/` 下各命令与 `specs/00_MASTER_DEVELOPMENT_FLOW.md`。
 
 ---
 
-## 四、索引与树结构
+## 四、节点生命周期（Node Lifecycle）
+
+每个特性树节点在 `tree_index.yaml` 中通过 `status` 字段跟踪生命周期。
+
+### 4.1 合法 status 取值
+
+| status | 语义 | 触发命令 | 可否归档 |
+|--------|------|----------|----------|
+| `specified` | 已规格化，待实施（默认初始值） | `/opsx-ff` create | 否 |
+| `in_progress` | 实施中（tasks.md 出现首个 `[x]`） | `/opsx-apply` 自动推进 | 否 |
+| `completed` | 已归档交付 | `/opsx-archive` 自动回写 | 是 |
+| `cancelled` | 需求取消，节点作废 | `/opsx-prune cancel` | — |
+| `deprecated` | 被其他节点取代，保留历史 | `/opsx-prune deprecate` | — |
+
+**state machine**：
+```
+specified ──→ in_progress ──→ completed
+    │               │
+    └──→ cancelled  └──→ cancelled
+    └──→ deprecated └──→ deprecated
+```
+
+### 4.2 过期节点（Stale/Expired Node）定义
+
+以下情形视为**潜在过期节点**，由 `/opsx-prune` 或 `gate.sh` 检测并报告：
+
+| 判断条件 | 严重度 | 建议处理 |
+|----------|--------|----------|
+| `status=specified`，tasks.md 全为 `[ ]`，且 **90 天以上无 git 变更** | WARNING | `/opsx-prune cancel` 或重确认优先级 |
+| `status=in_progress`，acceptance.yaml 存在 pending 项，且 **60 天无 git 变更** | WARNING | 重启实施或降为 `specified`/`cancelled` |
+| `status=completed` 但 acceptance.yaml 无 `archived: true` | BLOCKING | `/opsx-archive` 回写 `archived: true` |
+| `status=cancelled/deprecated` 但 tasks.md 仍有 `[ ]` 任务 | BLOCKING | 清理 tasks.md 中残余任务 |
+| 节点目录存在但不在 `tree_index.yaml` 中（孤儿目录） | BLOCKING | 补充到 tree_index 或删除 |
+| `tree_index.yaml` 中节点路径指向不存在的目录 | BLOCKING | 修复路径或删除索引条目 |
+
+### 4.3 取消与废弃（Cancel vs Deprecate）
+
+- **`cancelled`**：需求被明确放弃，目录保留（历史参考），不再出现在 gate 报告的活跃检查中。
+  - 必须在 spec.md 顶部加注 `> **CANCELLED**: <取消日期> — <取消原因>`
+  - tasks.md 中 `[ ]` 任务须改为 `~~[ ]~~`（Markdown 删除线）或清空
+
+- **`deprecated`**：需求被更优方案取代，需要在 spec.md 中写明替代节点路径。
+  - 必须在 spec.md 顶部加注 `> **DEPRECATED**: 已由 <替代路径> 取代`
+  - acceptance.yaml 顶层加入 `superseded_by: <替代节点路径>`
+
+### 4.4 `/opsx-archive` 必须回写 tree_index
+
+归档命令执行成功后，必须更新 `tree_index.yaml`：
+```yaml
+status: completed   # 从 specified/in_progress 改为 completed
+```
+以及更新 `acceptance.yaml`：
+```yaml
+archived: true
+archived_at: 2026-03-01T00:00:00Z
+```
+
+---
+
+## 五、索引与树结构
 
 - 节点目录与层级以 **tree_index.yaml** 为准；新增节点时同步更新 tree_index。
 - 四类文档路径约定：`specs/feature-tree/<L1>/<L2>/.../spec.md`（及同目录下 design.md、tasks.md、acceptance.yaml）。
+- 节点 status 生命周期见第四节；gate.sh 的 `check-feature-tree-consistency` 会自动检查 lifecycle 一致性和孤儿目录。
+
+---
+
+## 六、L1-L5 层级定义（引用）
+
+L1~L5 的**唯一权威定义**及**与开发卡点的落实关系**见 `specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md`。
+
+**简要约定**：
+
+| 层级 | 语义 | 统一 level | 分解要点 |
+|------|------|------------|----------|
+| L1 | 能力域 | L1 | 固定 9 个，不新增 |
+| L2 | 特性 | L2_feature | 具备独立交付价值 |
+| L3 | 子特性/组件 | L3_subfeature | 有独立契约或模块边界 |
+| L4 | 契约/任务 | L4_object_task | **默认叶子层**，可对应具体契约、策略或实现任务 |
+| L5 | 子任务（可选） | L5 / L5_subtask | **仅当 L4 任务过大需拆成多个子任务时**使用 |
+
+**原则**：默认止于 L4；L5 仅当 L4 需 subtask 分解时添加。spec.md 与 acceptance.yaml 中 `level` 取值须与上表一致。

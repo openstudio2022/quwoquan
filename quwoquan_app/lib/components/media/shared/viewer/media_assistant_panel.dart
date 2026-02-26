@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/components/assistant_avatar.dart';
+import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
 
 class MediaAssistantPanel extends StatelessWidget {
   const MediaAssistantPanel({
