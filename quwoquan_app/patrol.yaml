@@ -1,0 +1,18 @@
+# Patrol E2E 配置
+# 文档：https://patrol.leancode.co/patrol-cli/configuration
+app_name: quwoquan
+
+android:
+  app_id: com.quwoquan.app
+  # 等待 app 启动（冷启动较慢，给足时间）
+  wait_for_app_launch_timeout: 30
+
+ios:
+  bundle_id: com.quwoquan.app
+  wait_for_app_launch_timeout: 30
+
+# 单个 patrolTest 超时（秒）
+test_timeout: 120
+
+# 允许 flaky 重试次数（1 = 最多重试 1 次）
+retry: 1

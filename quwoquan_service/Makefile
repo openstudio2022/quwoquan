@@ -1,4 +1,4 @@
-.PHONY: gate build test test-unit test-contract test-integration lint verify-metadata codegen-app codegen-content-service codegen-rec-model-python dev dev-down clean
+.PHONY: gate build test test-unit test-contract test-contract-local test-integration lint verify-metadata codegen-app codegen-content-service codegen-rec-model-python dev dev-down clean
 
 # ─── Quality Gate ────────────────────────────────────────────────────
 gate:
@@ -17,6 +17,19 @@ test-unit:
 
 test-contract:
 	go test ./services/content-service/... -v -count=1
+
+# Run L2 contract tests against a locally running MongoDB (no Docker required).
+# Usage:
+#   make test-contract-local                          # expects MongoDB at localhost:27017
+#   make test-contract-local MONGO_PORT=27018         # custom port
+#
+# Quick start without Docker:
+#   brew services start mongodb-community             # macOS via Homebrew
+#   make test-contract-local
+MONGO_PORT ?= 27017
+test-contract-local:
+	TEST_MONGO_URI=mongodb://localhost:$(MONGO_PORT) \
+	  go test ./services/content-service/... -v -count=1 -timeout=60s
 
 test-integration:
 	go test ./runtime/... -v -count=1 -tags=integration

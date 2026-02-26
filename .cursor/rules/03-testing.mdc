@@ -46,21 +46,258 @@ globs: **/*_test.dart,**/test/**/*.dart,**/*_test.go,**/tests/**/*.go
 
 | 门禁命令 | 触发时机 | 包含层 | 失败行为 |
 |---|---|---|---|
-| `make gate` | 每次 PR | L1a + L1b + L1c + L2 | ❌ 阻塞合入 |
-| `make gate-full` | daily + pre-release | + L3 | ⚠️ Advisory；pre-release 阻塞发布 |
-| Firebase Test Lab | pre-release | L4 | ❌ 阻塞发布 |
+| `make gate` | 每次 PR | L1a + L1b + L1c + L2 | 阻塞合入 |
+| `make gate-full` | daily + pre-release | + L3 | Advisory；pre-release 阻塞发布 |
+| Firebase Test Lab | pre-release | L4 | 阻塞发布 |
 
 `make gate` 必须执行：
 ```bash
-flutter test                                     # L1a + L1b + L1c
-go test ./services/content-service/... -count=1  # L2
+flutter test test/cloud/ test/components/ test/ui/  # L1a + L1b + L1c
+go test ./services/content-service/... -count=1     # L2
 ```
 
 **禁止跳过**：不得使用 `QWQ_GATE_TESTS=1` 或 `GITHUB_ACTIONS` 条件跳过 flutter test 的本地执行。
 
 ---
 
-## 3. L1a — Contract Tests（DTO / 错误码 / 行为 / UI配置）
+## 3. 测试目录结构（强制）
+
+### 3.1 Dart 目录层次
+
+目录命名规则：
+```
+test/{layer}/{service_domain}/{business_object}/{test_type}/
+```
+
+- `layer`：`cloud` | `components` | `ui`（对应 `lib/` 三个顶层域）
+- `service_domain`：与 `contracts/metadata/{domain}/` 一致（如 `content`、`assistant`、`chat`）
+- `business_object`：与 `contracts/metadata/{domain}/{entity}/` 一致（如 `post`、`comment`）
+- `test_type`：`contract` | `widgets` | `journeys`
+
+```
+test/
+├── cloud/                          # layer: cloud（mirrors lib/cloud/services/）
+│   └── {domain}/                   # service_domain（如 content）
+│       └── {entity}/               # business_object（如 post）
+│           └── contract/           # L1a：DTO/错误码/行为/UI配置 契约
+│               ├── {entity}_dto_contract_test.dart
+│               ├── {entity}_feed_dto_contract_test.dart
+│               ├── {entity}_behavior_tracker_contract_test.dart
+│               └── {entity}_error_code_contract_test.dart
+├── components/                     # layer: components（mirrors lib/components/）
+│   └── {domain}/                   # service_domain（如 content）
+│       └── {entity}/               # business_object（如 post）
+│           └── {entity}_card_widget_test.dart   # L1b：组件渲染+交互
+└── ui/                             # layer: ui（mirrors lib/ui/）
+    ├── {ui_domain}/                # UI 功能域（如 content）
+    │   └── {entity}/               # business_object（如 post）
+    │       └── contract/           # L1a：投影/UI配置 契约
+    │           ├── {entity}_view_projection_contract_test.dart
+    │           └── {entity}_ui_config_contract_test.dart
+    └── {ui_domain}/                # UI 功能域（如 discovery）
+        └── {entity}/               # business_object（如 post）
+            ├── widgets/            # L1b：Provider 状态+渲染
+            │   └── {ui_domain}_{entity}_feed_widget_test.dart
+            └── journeys/           # L1c：多屏旅程
+                ├── {ui_domain}_{entity}_feed_load_journey_test.dart
+                └── {ui_domain}_{entity}_interaction_journey_test.dart
+```
+
+当前 content/post 的具体路径：
+```
+test/
+├── cloud/content/post/contract/
+│   ├── post_dto_contract_test.dart
+│   ├── post_feed_dto_contract_test.dart
+│   ├── post_behavior_tracker_contract_test.dart
+│   └── post_error_code_contract_test.dart
+├── components/content/post/
+│   └── post_card_widget_test.dart
+└── ui/
+    ├── content/post/contract/
+    │   ├── post_view_projection_contract_test.dart
+    │   └── post_ui_config_contract_test.dart
+    └── discovery/post/
+        ├── widgets/
+        │   └── discovery_post_feed_widget_test.dart
+        └── journeys/
+            ├── discovery_post_feed_load_journey_test.dart
+            └── discovery_post_interaction_journey_test.dart
+```
+
+> `components` 层无需 `test_type` 子目录，组件只有 widget test 一种类型，文件直接放在 `business_object/` 下。
+
+### 3.2 Go 目录层次
+
+Go 包机制不支持 `tests/` 内子目录共享 TestMain，业务对象通过**文件名前缀**区分：
+
+```
+services/{service-name}/tests/
+├── testmain_test.go                         # 基础设施（无业务对象前缀）
+├── {entity}_crud_contract_test.go           # 正常 CRUD 操作
+├── {entity}_feed_contract_test.go           # 分页/Feed 查询
+├── {entity}_behavior_contract_test.go       # 行为上报/举报
+├── {entity}_compat_contract_test.go         # 向后兼容性
+└── {entity}_error_contract_test.go          # 错误路径
+```
+
+当前 content-service 的具体路径：
+```
+services/content-service/tests/
+├── testmain_test.go
+├── post_crud_contract_test.go
+├── post_feed_contract_test.go
+├── post_behavior_contract_test.go
+├── post_compat_contract_test.go
+└── post_error_contract_test.go
+```
+
+扩展示例（新增 `comment` 业务对象时）：
+```
+services/content-service/tests/
+├── ...（post 现有文件保留）
+├── comment_crud_contract_test.go
+└── comment_error_contract_test.go
+```
+
+---
+
+## 4. 文件命名约束（强制）
+
+### 4.1 Dart 文件命名规则
+
+```
+{business_object}_{what}_{test_type}_test.dart
+```
+
+- `{what}` 描述被测内容（`dto` / `feed_dto` / `behavior_tracker` / `error_code` / `view_projection` / `ui_config` / `card` / `feed`）
+- `{test_type}` 必须以 `contract` / `widget` / `journey` 结尾（便于 glob 批量运行）
+
+### 4.2 Go 文件命名规则
+
+```
+{business_object}_{category}_contract_test.go
+```
+
+- `{business_object}`：snake_case 实体名（`post`、`comment`、`user_profile`）
+- `{category}`：`crud` | `feed` | `behavior` | `compat` | `error`（固定枚举）
+- 只有 `testmain_test.go` 不加业务对象前缀
+
+### 4.3 Go 测试函数命名规则
+
+```
+Test{BusinessObject}{Action}（正常路径）
+Test{BusinessObject}{Action}_{ErrorScenario}（错误路径，加下划线描述场景）
+```
+
+文件名约束测试类别；函数名描述具体场景：
+
+```go
+// post_crud_contract_test.go — 正常路径
+func TestCreatePostAggregate(t *testing.T) { ... }
+func TestGetPostSuccess(t *testing.T) { ... }
+
+// post_error_contract_test.go — 错误路径
+func TestPost_InvalidContentType_Returns400(t *testing.T) { ... }
+func TestPost_MissingRequiredFields_Returns400(t *testing.T) { ... }
+
+// post_compat_contract_test.go — 兼容性
+func TestPost_ResponseShape_NoPrivateFields(t *testing.T) { ... }
+func TestPost_NewFieldBackfill_OldRecordsStillReadable(t *testing.T) { ... }
+```
+
+---
+
+## 5. 测试内容三维度约束（强制）
+
+每个测试文件必须覆盖三个维度。缺失任一维度 → `make gate` 检查 warn（未来将升级为 fail）。
+
+### 5.1 契约测试文件（`_contract_test.dart`）
+
+**三个顶层 group（必须全部存在）**：
+
+```dart
+group('{BusinessObject}{What} — 常规契约', () {
+  // 正常输入 → 正确输出（全字段解析/枚举匹配/计算属性正确）
+  test('正常解析全字段', () { ... });
+  test('computed getter 正确', () { ... });
+});
+
+group('{BusinessObject}{What} — 兼容性契约', () {
+  // 旧字段名/alias 仍正确解析；旧枚举值不崩溃；round-trip 稳定
+  test('alias 字段解析', () { ... });
+  test('toMap round-trip 正确', () { ... });
+  test('未知枚举值 → unknown 降级', () { ... });
+});
+
+group('{BusinessObject}{What} — 异常/边界契约', () {
+  // 缺失字段降级为零值；不崩溃；null 安全
+  test('全字段缺失不崩溃', () { ... });
+  test('null 值字段安全', () { ... });
+});
+```
+
+### 5.2 Widget 测试文件（`_widget_test.dart`）
+
+**三个顶层 group（必须全部存在）**：
+
+```dart
+group('{ComponentName} — 渲染契约', () {
+  // 数据正确渲染（文本/图片/计数 UI 验证）
+  testWidgets('正常数据渲染', (tester) async { ... });
+  testWidgets('展示作者信息', (tester) async { ... });
+});
+
+group('{ComponentName} — 交互契约', () {
+  // tap/callback 正确触发；Provider 状态变更
+  testWidgets('tap likeButton 触发回调', (tester) async { ... });
+  testWidgets('tap commentButton 触发回调', (tester) async { ... });
+});
+
+group('{ComponentName} — 错误态渲染', () {
+  // null/error 数据 → 降级渲染不崩溃
+  testWidgets('空数据安全渲染', (tester) async { ... });
+  testWidgets('图片加载失败降级', (tester) async { ... });
+});
+```
+
+### 5.3 Journey 测试文件（`_journey_test.dart`）
+
+**三个顶层 group（必须全部存在）**：
+
+```dart
+group('旅程正常路径', () {
+  // 完整流程 → 预期状态（多屏导航/数据加载/状态同步）
+  testWidgets('旅程 A1：发现页正常加载', (tester) async { ... });
+  testWidgets('旅程 A2：点击卡片进入详情', (tester) async { ... });
+});
+
+group('旅程错误路径', () {
+  // 异常注入 → 错误 UI 提示；状态回滚正确
+  testWidgets('旅程 B1：加载失败显示错误提示', (tester) async { ... });
+  testWidgets('旅程 B2：点赞失败回滚计数', (tester) async { ... });
+});
+
+group('旅程边界/幂等', () {
+  // 重复操作/空数据/极端状态 → 稳定不崩溃
+  testWidgets('旅程 C1：空列表安全渲染', (tester) async { ... });
+  testWidgets('旅程 C2：连续点赞幂等', (tester) async { ... });
+});
+```
+
+### 5.4 Go 测试维度分配
+
+| 文件后缀 | 测试维度 | 典型场景 |
+|---|---|---|
+| `_crud_contract_test.go` | 正常路径 | 创建/读取/更新/删除 |
+| `_feed_contract_test.go` | 正常路径 | 分页查询/光标延续/过滤 |
+| `_behavior_contract_test.go` | 正常路径 | 行为上报/举报/事件发布 |
+| `_compat_contract_test.go` | 兼容性 | 响应字段不缩减/旧值可读/私有字段不泄露 |
+| `_error_contract_test.go` | 错误路径 | 无效类型/缺字段/401/404/409 |
+
+---
+
+## 6. L1a — Contract Tests（DTO / 错误码 / 行为 / UI配置）
 
 ### 守护目标
 metadata → codegen → Dart 类型链的语义正确性
@@ -73,14 +310,31 @@ metadata → codegen → Dart 类型链的语义正确性
 
 ### 代码规范
 ```dart
-// 测试路径：test/features/content/
-// 文件命名：{topic}_contract_test.dart
+// 测试路径：test/cloud/{domain}/{entity}/contract/
+// 文件命名：{entity}_{what}_contract_test.dart
 
-test('photo_aspect_ratio_computed', () {
-  final dto = PostViewProjection.fromJson({
-    'contentType': 'image', 'width': 1200, 'height': 800,
+group('PostDto — 常规契约', () {
+  test('PhotoPostDto 解析全字段', () {
+    final dto = PhotoPostDto.fromMap({
+      'contentType': 'image', 'width': 1200, 'height': 800,
+      'id': 'p1', 'authorId': 'u1',
+    });
+    expect(dto.width, 1200);
+    expect(dto.aspectRatio, closeTo(1.5, 0.001));
   });
-  expect(dto.aspectRatio, closeTo(1.5, 0.001));
+});
+
+group('PostDto — 兼容性契约', () {
+  test('alias 字段 imageWidth 正确解析', () {
+    final dto = PhotoPostDto.fromMap({'imageWidth': 1920, 'imageHeight': 1080, ...});
+    expect(dto.width, 1920);
+  });
+});
+
+group('PostDto — 异常/边界契约', () {
+  test('全字段缺失不崩溃', () {
+    expect(() => PhotoPostDto.fromMap({}), returnsNormally);
+  });
 });
 ```
 
@@ -90,7 +344,7 @@ test('photo_aspect_ratio_computed', () {
 
 ---
 
-## 4. L1b — Widget Tests（组件渲染 + 状态响应）
+## 7. L1b — Widget Tests（组件渲染 + 状态响应）
 
 ### 守护目标
 单个 Widget 在 MockRepository 注入下的渲染逻辑和 Provider 状态响应
@@ -102,26 +356,49 @@ test('photo_aspect_ratio_computed', () {
 
 ### 代码规范
 ```dart
-// 测试路径：test/features/content/widgets/
-// 文件命名：{widget_name}_widget_test.dart
+// 测试路径：test/components/{domain}/{entity}/
+// 文件命名：{entity}_card_widget_test.dart
 
-testWidgets('likeButton_tap_triggers_optimistic_update', (tester) async {
-  await tester.pumpWidget(
-    ProviderScope(
-      overrides: [
-        contentRepositoryProvider.overrideWithValue(MockContentRepository()),
-      ],
+group('PostCard — 渲染契约', () {
+  testWidgets('likeCount 正确展示', (tester) async {
+    await tester.pumpWidget(ProviderScope(
+      overrides: [contentRepositoryProvider.overrideWithValue(MockContentRepository())],
       child: MaterialApp(home: Scaffold(body: PhotoPostCard(post: fixture))),
-    ),
-  );
-  final initialCount = find.text('${fixture.likeCount}');
-  expect(initialCount, findsOneWidget);
+    ));
+    expect(find.text('${fixture.likeCount}'), findsOneWidget);
+  });
+});
 
-  await tester.tap(find.byKey(TestKeys.likeButton));
-  await tester.pump();
-  expect(find.text('${fixture.likeCount + 1}'), findsOneWidget);
+group('PostCard — 交互契约', () {
+  testWidgets('likeButton tap 触发回调', (tester) async {
+    await tester.tap(find.byKey(TestKeys.likeButton));
+    await tester.pump();
+    expect(find.text('${fixture.likeCount + 1}'), findsOneWidget);
+  });
+});
+
+group('PostCard — 错误态渲染', () {
+  testWidgets('空 post 数据安全渲染', (tester) async {
+    expect(() async => await tester.pumpWidget(...), returnsNormally);
+  });
 });
 ```
+
+### UI 元素断言强制要求（L1b 核心约束）
+
+**每个 L1b `testWidgets` 测试必须包含至少一个 UI 元素断言**，仅调用回调/Repository 方法而不断言 Widget 树不算覆盖：
+
+| 允许的断言方式 | 禁止（不算 UI 断言） |
+|---|---|
+| `find.byKey(TestKeys.xxx)` | 只调用 `mock.likePostCallCount` |
+| `find.byType(SomeWidget)` | 只调用 `tester.tap()` 后无断言 |
+| `find.byIcon(CupertinoIcons.heart)` | 只断言 callback 参数值 |
+| `find.text('42')` | — |
+
+具体规则：
+- 渲染测试必须断言至少一个 `find.byKey` / `find.byType` / `find.text` / `find.byIcon`
+- 交互测试必须 `await tester.pump()` 后断言 UI 状态变化
+- 错误态测试必须断言降级 Widget（如 placeholder 图/空文本）可见
 
 ### Mock 规范
 - `MockContentRepository` 通过 `ProviderScope.overrides` 注入
@@ -130,7 +407,7 @@ testWidgets('likeButton_tap_triggers_optimistic_update', (tester) async {
 
 ---
 
-## 5. L1c — Journey Tests（多屏旅程）
+## 8. L1c — Journey Tests（多屏旅程）
 
 ### 守护目标
 多屏用户旅程的意图链完整性，发现状态管理、路由传参、错误处理三类断裂
@@ -140,35 +417,62 @@ testWidgets('likeButton_tap_triggers_optimistic_update', (tester) async {
 2. **点赞乐观回滚**：tap likeButton → likeCount+1 → MockRepo 抛 RateLimitException → likeCount 回滚 + Toast 文本正确
 3. **评论发布**：PhotoDetailPage → tap CommentInputBar → enterText → tap Submit → MockRepo.createComment 调用 1 次 → commentCount UI+1
 
+### testWidgets 强制要求（L1c 核心约束）
+
+**所有 L1c 测试必须使用 `testWidgets()` 而非 `test()`**。Journey 测试必须在真实 Widget 上下文中运行，原因：
+
+1. `ProviderContainer.read()` 在 `testWidgets` 外无法感知 `ProviderScope` 的 UI 重建
+2. `tester.pump()` / `tester.pumpAndSettle()` 才能推进 Flutter 帧，确保 UI 状态更新可见
+3. Journey 测试的意义是断言 UI 状态，纯 Dart `test()` 无法触及 Widget 树
+
+**强制模板**：
+```dart
+// ✅ 正确：testWidgets + ProviderScope + pump
+testWidgets('旅程 A1：...', (tester) async {
+  final mock = MockContentRepository();
+  await tester.pumpWidget(_scopedApp(mock: mock));   // 必须 pumpWidget
+  // ... 交互 ...
+  await tester.pump();                               // 必须 pump 后再断言
+  expect(find.xxx, findsOneWidget);                  // 必须断言 UI 元素
+});
+
+// ❌ 禁止：test() 直接调用 Provider
+test('加载 feed', () async {
+  final container = ProviderContainer(...);
+  await container.read(feedProvider.notifier).load('photo');  // 无 UI 上下文
+  // 无法验证 UI 状态变化
+});
+```
+
+**必须包含的元素**：
+- `pumpWidget(ProviderScope(child: MaterialApp(...)))`（每个 journey testWidgets）
+- `await tester.pump()` 后紧跟至少一个 UI 断言
+- 错误路径场景：MockRepo 注入异常 → 断言 Toast/错误文本
+
 ### 代码规范
 ```dart
-// 测试路径：test/features/content/journeys/
-// 文件命名：{journey_name}_journey_test.dart
+// 测试路径：test/ui/{ui_domain}/{entity}/journeys/
+// 文件命名：{ui_domain}_{entity}_{topic}_journey_test.dart
 
-testWidgets('like_optimistic_rollback', (tester) async {
-  final mock = MockContentRepository()
-    ..throwOnLike = RateLimitException();
+group('旅程正常路径', () {
+  testWidgets('旅程 A1：发现页正常加载 4 类内容', (tester) async { ... });
+});
 
-  await tester.pumpWidget(ProviderScope(
-    overrides: [contentRepositoryProvider.overrideWithValue(mock)],
-    child: const MyApp(),
-  ));
+group('旅程错误路径', () {
+  testWidgets('旅程 B1：点赞失败 → 回滚 + Toast', (tester) async {
+    final mock = MockContentRepository()..throwOnLike = RateLimitException();
+    await tester.pumpWidget(ProviderScope(
+      overrides: [contentRepositoryProvider.overrideWithValue(mock)],
+      child: const MyApp(),
+    ));
+    await tester.tap(find.byKey(TestKeys.likeButton));
+    await tester.pumpAndSettle();
+    expect(find.text(ContentErrorMessages.zh[ContentErrorCode.rateLimited]!), findsOneWidget);
+  });
+});
 
-  // 导航至内容详情
-  await tester.tap(find.byType(PhotoPostCard).first);
-  await tester.pumpAndSettle();
-
-  final count = tester.widget<Text>(find.byKey(TestKeys.likeCountText)).data!;
-
-  // 点赞 → 乐观 +1
-  await tester.tap(find.byKey(TestKeys.likeButton));
-  await tester.pump();
-  expect(find.text('${int.parse(count) + 1}'), findsOneWidget);
-
-  // 服务返回 429 → 回滚 + Toast
-  await tester.pumpAndSettle();
-  expect(find.text(count), findsOneWidget); // 回到原值
-  expect(find.text(ContentErrorMessages.zh[ContentErrorCode.rateLimited]!), findsOneWidget);
+group('旅程边界/幂等', () {
+  testWidgets('旅程 C1：连续点赞幂等，计数只 +1', (tester) async { ... });
 });
 ```
 
@@ -178,7 +482,7 @@ testWidgets('like_optimistic_rollback', (tester) async {
 
 ---
 
-## 6. L2 — Cloud Contract Tests（Go）
+## 9. L2 — Cloud Contract Tests（Go）
 
 ### 守护目标
 服务在真实存储层上的 API 行为、存储副作用、事件发布正确性
@@ -187,8 +491,8 @@ testWidgets('like_optimistic_rollback', (tester) async {
 
 | 存储 | 测试引擎 | 禁止替代 |
 |---|---|---|
-| MongoDB | `testcontainers-go/modules/mongodb` (mongo:7) | ❌ in-memory store |
-| Redis | `miniredis/v2` | ✓ 已足够 |
+| MongoDB | `testcontainers-go/modules/mongodb` (mongo:7) | in-memory store |
+| Redis | `miniredis/v2` | 已足够 |
 
 **in-memory store 零容忍**：`persistence.NewPostStore(DefaultSeedPosts())` 不得出现在 `tests/` 目录。gate 结构检测违反 → fail。
 
@@ -212,156 +516,496 @@ func TestMain(m *testing.M) {
     os.Exit(code)
 }
 
-// tests/content_contract_test.go
+// tests/post_crud_contract_test.go — 正常路径
 func TestCreatePostAggregate(t *testing.T) {
-    defer suite.CleanCollections(t, "posts", "media_assets")
-    // Arrange
+    defer suite.CleanCollections(t, "posts")
     req := httptest.NewRequest("POST", "/v1/content/posts", body)
-    // Act
     rec := httptest.NewRecorder()
-    handler.ServeHTTP(rec, req)
-    // Assert
+    testHandler.ServeHTTP(rec, req)
     assert.Equal(t, 201, rec.Code)
-    suite.AssertMongoDB(t, "posts", bson.M{"_id": result.id}) // 真实 DB 断言
+    suite.AssertMongoDB(t, "posts", bson.M{"_id": result.id})
     suite.AssertEventPublished(t, "PostCreated", expectedPayload)
 }
+
+// tests/post_compat_contract_test.go — 兼容性
+func TestPost_ResponseShape_NoPrivateFields(t *testing.T) { ... }
+
+// tests/post_error_contract_test.go — 错误路径
+func TestPost_InvalidContentType_Returns400(t *testing.T) { ... }
 ```
 
 ### 覆盖要求
 - 每个 `service.yaml` API endpoint ≥1 个 Go contract test（`contract.yaml go_func` 驱动）
 - 每个 `events.yaml` 事件 ≥1 个发布验证（EventSpy）
 - 错误场景覆盖：400、401、404、409（对应 `errors.yaml` 中 http_status）
+- 兼容性场景：响应字段不缩减、私有字段不泄露、旧记录可读
 
 ---
 
-## 7. L3 — API Contract（staging HTTP）
+## 10. L3 — API Contract（staging HTTP）
 
 ### 守护目标
-端云数据合约不漂移：cursor 分页语义、错误码格式、字段可见性
+端云数据合约不漂移：cursor 分页语义、错误码格式、字段可见性、响应时间 SLO
 
 ### 驱动文件
-`e2e.yaml[test_type: api_contract]` — 无 UI driver，Dart HTTP client 直接断言
+`e2e.yaml[test_type: api_contract]` — 无 UI driver，Dart HTTP client + DTO fromMap 断言
+
+### 文件结构（强制）
+
+```
+test/cloud/content/
+└── api_contract_runner.dart     # 所有 api_contract 场景合并在一个文件
+```
+
+### 覆盖三维度（强制）
+
+每个场景必须覆盖：
+
+| 维度 | 内容 |
+|------|------|
+| **协议层** | HTTP 状态码、Content-Type header |
+| **结构层** | 响应 JSON 字段完整性、DTO fromMap 可解析 |
+| **语义层** | computed getter 正确（aspectRatio等）、错误码枚举映射、isRetryable |
+
+### 代码规范
 
 ```dart
 // test/cloud/content/api_contract_runner.dart
-test('discovery_feed_load_and_render', () async {
-  final url = Uri.parse('${Env.stagingBaseUrl}/v1/content/feed?type=image&limit=5');
-  final resp = await http.get(url, headers: CloudRequestHeaders.forPage('content.feed'));
-  expect(resp.statusCode, 200);
-  final items = (jsonDecode(resp.body)['items'] as List)
-      .map((e) => PostViewProjection.fromJson(e as Map<String, dynamic>))
-      .toList();
-  expect(items, everyElement(isA<PhotoPostDto>())); // 类型正确
-  for (final item in items) {
-    expect(item.aspectRatio, isNotNull); // computed getter 有值
-  }
-});
-```
+import 'dart:convert';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
+import 'package:quwoquan_app/cloud/runtime/error_codes.dart';
 
-### 执行
-```bash
-STAGING_BASE_URL=https://staging.api.quwoquan.com make test-api-contract
-```
+const _stagingBase = String.fromEnvironment('STAGING_BASE_URL');
+const _testToken  = String.fromEnvironment('TEST_AUTH_TOKEN');
 
-### CI 策略
-- daily 自动触发（staging 可用时）
-- pre-release 必须通过
-- staging 不可用 → skip + warn，不 fail
-
----
-
-## 8. L4 — UI Journey（Patrol）
-
-### 守护目标
-核心用户旅程在真实 iOS/Android 设备上的可感知一致性
-
-### 工具选型
-- **Patrol**（https://patrol.leancode.co/）：Flutter 原生，Dart 语言，支持 native 交互
-- **Firebase Test Lab**：真实设备，iOS 15/16 + Android 12/13
-- **Widget Key**：定位元素用 `Key(TestKeys.xxx)` 而非文本字符串（防 i18n 误报）
-
-### 场景约束
-- 场景数量 ≤10（`e2e.yaml[test_type: ui_journey]` 声明）
-- 对应 `patrol_flow` 文件在 `test/patrol/` 下存在
-- 只覆盖 flutter_test 无法替代的行为（native 权限弹窗、软键盘 IME、推送点击、相册 picker）
-
-```dart
-// test/patrol/content/like_post_patrol_test.dart
 void main() {
-  patrolTest('like_post_realtime', ($) async {
-    await $.pumpWidgetAndSettle(const MyApp());
-    await $(Key(TestKeys.photoPostCard)).tap();
-    await $.pumpAndSettle();
-    final countBefore = $(Key(TestKeys.likeCountText)).text;
-    await $(Key(TestKeys.likeButton)).tap();
-    await $.pumpAndSettle();
-    final countAfter = $(Key(TestKeys.likeCountText)).text;
-    expect(int.parse(countAfter!), int.parse(countBefore!) + 1);
+  late http.Client client;
+  late String seededPostId;
+
+  setUpAll(() async {
+    // 探测 staging 可达性，不可达则 skip 全部场景
+    try {
+      final probe = await http.head(Uri.parse(_stagingBase))
+          .timeout(const Duration(seconds: 5));
+      if (probe.statusCode >= 500) throw Exception('staging unavailable');
+    } catch (_) {
+      markTestSkipped('L3: staging unreachable, all api_contract tests skipped');
+      return;
+    }
+    client = http.Client();
+    seededPostId = await _seedPhotoPost(client);  // POST /v1/content/posts
+  });
+
+  tearDownAll(() async {
+    await _deletePost(client, seededPostId);
+    client.close();
+  });
+
+  // ── 场景：feed_cursor_pagination_end_to_end ───────────────────────────────
+  test('feed_cursor_pagination_end_to_end', () async {
+    final url = Uri.parse('$_stagingBase/v1/content/feed?type=image&limit=5');
+    final sw = Stopwatch()..start();
+    final resp = await client.get(url,
+        headers: CloudRequestHeaders.forPage('content.feed')
+          ..['Authorization'] = 'Bearer $_testToken');
+    sw.stop();
+
+    expect(resp.statusCode, 200);
+    expect(sw.elapsedMilliseconds, lessThan(800), reason: 'feed API SLO <800ms');
+
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    final items = (body['items'] as List)
+        .map((e) => PostBaseDto.fromMap(e as Map<String, dynamic>))
+        .toList();
+    expect(items, isNotEmpty);
+    final cursor = body['cursor'] as String?;
+    expect(cursor, isNotNull, reason: 'response must include cursor for pagination');
+
+    // 第二页：无 item 重叠
+    final page2Url = Uri.parse('$_stagingBase/v1/content/feed?type=image&limit=5&cursor=$cursor');
+    final resp2 = await client.get(page2Url,
+        headers: CloudRequestHeaders.forPage('content.feed')
+          ..['Authorization'] = 'Bearer $_testToken');
+    expect(resp2.statusCode, 200);
+    final items2 = (jsonDecode(resp2.body)['items'] as List)
+        .map((e) => (e as Map)['_id'] as String)
+        .toSet();
+    final ids1 = items.map((e) => e.id).toSet();
+    expect(ids1.intersection(items2), isEmpty, reason: 'no item overlap between pages');
+  });
+
+  // ── 场景：error_state_displayed_correctly ────────────────────────────────
+  test('error_state_displayed_correctly', () async {
+    final resp = await client.get(
+        Uri.parse('$_stagingBase/v1/content/posts/nonexistent_post_id_00000'),
+        headers: CloudRequestHeaders.forPage('content.post')
+          ..['Authorization'] = 'Bearer $_testToken');
+
+    expect(resp.statusCode, 404);
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    expect(body['code'], 'CONTENT.USER.post_not_found');
+    expect(body['isRetryable'], false);
+
+    // 端侧 ErrorCode 映射正确
+    final code = ContentErrorCode.fromCode(body['code'] as String);
+    expect(code, ContentErrorCode.postNotFound);
+    expect(ContentErrorMessages.zh[code], '内容不存在或已删除');
   });
 }
 ```
 
+### 禁止行为
+
+| 禁止 | 原因 |
+|------|------|
+| 测试依赖 staging 固定存量数据 | staging 数据轮换后测试失效 |
+| 硬编码 token 或 URL | secrets 泄漏风险 |
+| `Future.delayed(Duration(seconds: n))` 等待 | 用 Stopwatch + expect 代替 |
+| 不做 staging 可达性探测就执行测试 | staging 不可用会误报失败 |
+
+### 环境配置（强制）
+
+```bash
+# 本地执行
+STAGING_BASE_URL=https://staging.api.quwoquan.com \
+TEST_AUTH_TOKEN=<staging_test_token> \
+make test-api-contract
+
+# Makefile target（根目录）
+test-api-contract:
+    @if [ -z "$(STAGING_BASE_URL)" ]; then \
+        echo "[L3] WARN: STAGING_BASE_URL not set, skipping"; exit 0; \
+    fi
+    cd quwoquan_app && flutter test test/cloud/content/api_contract_runner.dart \
+        --dart-define=STAGING_BASE_URL=$(STAGING_BASE_URL) \
+        --dart-define=TEST_AUTH_TOKEN=$(TEST_AUTH_TOKEN)
+
+gate-full: gate test-api-contract
+```
+
 ### CI 策略
-- pre-release 触发，advisory（不阻塞 PR 合入）
-- 失败 → 阻塞发布
+
+| 触发时机 | 行为 |
+|---------|------|
+| daily cron（UTC 02:00） | `.github/workflows/daily-api-contract.yml`，失败通知 advisory |
+| pre-release tag | release workflow 末尾调用，失败阻塞发布 |
+| PR | 不触发（太慢，staging 有状态） |
+| staging 不可用 | `markTestSkipped` → skip + warn，不 fail |
 
 ---
 
-## 9. metadata 驱动测试生成
+## 11. L4 — UI Journey（Patrol）
+
+### 守护目标
+用户可感知的核心旅程在真实 iOS/Android 设备上的一致性，覆盖 flutter_test **无法触及**的 native 层行为
+
+### 工具选型
+
+| 工具 | 决策 |
+|------|------|
+| **Patrol ^3.x** | Flutter 原生 E2E，`$.native` 支持系统弹窗 |
+| **Firebase Test Lab** | 真实设备 iOS 15/17 + Android 12/14 |
+| **TestKeys 常量** | 元素定位用 `Key(TestKeys.xxx)`，禁止 `find.text` |
+
+### 目录结构（强制）
+
+```
+quwoquan_app/
+├── patrol.yaml                         # Patrol 配置（app bundle ID、timeout、retry）
+├── integration_test/
+│   └── patrol_test_main.dart           # Patrol entry point
+└── test/patrol/
+    ├── discovery/
+    │   └── feed_load_test.dart         # e2e.yaml: discovery_feed_load_and_render
+    └── content/
+        ├── like_post_test.dart         # e2e.yaml: like_post_realtime
+        └── comment_post_test.dart      # e2e.yaml: comment_on_post_journey
+```
+
+### TestKeys 基础设施（强制）
+
+所有 Patrol 和 L1c 测试必须通过 `TestKeys` 常量定位元素，禁止直接用文本字符串：
+
+```dart
+// lib/core/test_keys.dart
+abstract final class TestKeys {
+  static const discoveryPage      = 'discovery_page';
+  static const photoFeedGrid      = 'photo_feed_grid';
+  static const photoPostCard      = 'photo_post_card';
+  static const likeButton         = 'like_button';
+  static const likeCountText      = 'like_count_text';
+  static const commentInputBar    = 'comment_input_bar';
+  static const commentInputField  = 'comment_input_field';
+  static const submitCommentButton= 'submit_comment_button';
+  static const commentCountText   = 'comment_count_text';
+  static const errorToast         = 'error_toast';
+  static const retryButton        = 'retry_button';
+}
+```
+
+生产 Widget 必须打 `Key(TestKeys.xxx)`（核心交互元素）。gate 检查 `TestKeys` 中每个常量在生产 Widget 中有对应 `Key(...)` 打桩。
+
+### Patrol 专属场景原则（强制）
+
+L4 只写 flutter_test **无法替代**的场景：
+
+| L4 必须测 | L4 不测（交给 L1c） |
+|-----------|---------------------|
+| 真实 IME 输入（中文/Emoji） | 模拟输入的点赞/评论流程 |
+| iOS/Android 系统权限弹窗 | GoRouter 路由传参 |
+| 推送通知点击进入 app | Provider 状态管理 |
+| 横竖屏切换后 UI 稳定性 | DTO 解析正确性 |
+| 相机/相册 picker native 交互 | 错误 Toast 渲染 |
+
+违反此原则会导致 L1c + L4 重复测同一事，拖慢 CI 且没有额外价值。
+
+### 代码规范
+
+```dart
+// test/patrol/content/like_post_test.dart
+import 'package:patrol/patrol.dart';
+import 'package:flutter/material.dart';
+import 'package:quwoquan_app/lib/core/test_keys.dart';
+
+void main() {
+  // setUp/tearDown 调用 staging API 管理测试数据
+  late String seededPostId;
+
+  setUp(() async {
+    seededPostId = await _seedPhotoPost();   // 创建 staging 测试帖子
+    await _resetTestUserLike(seededPostId);  // 确保初始未点赞
+  });
+
+  tearDown(() async {
+    await _deletePost(seededPostId);
+  });
+
+  patrolTest(
+    'like_post_realtime',
+    ($) async {
+      // 启动 app，staging 环境
+      await $.pumpWidgetAndSettle(const MyApp());
+
+      // 等待发现页加载
+      await $(Key(TestKeys.photoFeedGrid)).waitUntilVisible(
+          timeout: const Duration(seconds: 10));
+
+      // 读取初始点赞数
+      final countBefore = int.parse(
+          $(Key(TestKeys.likeCountText)).text ?? '0');
+
+      // tap 点赞（乐观更新：50ms 内 UI 更新）
+      await $(Key(TestKeys.likeButton)).tap();
+      await $.pumpAndSettle();
+
+      // 断言：乐观更新 +1
+      final countOptimistic = int.parse(
+          $(Key(TestKeys.likeCountText)).text ?? '0');
+      expect(countOptimistic, countBefore + 1);
+
+      // 等待 server 响应确认（最多 3s）
+      await $(Key(TestKeys.likeCountText)).waitUntilVisible(
+          timeout: const Duration(seconds: 3));
+      final countAfter = int.parse(
+          $(Key(TestKeys.likeCountText)).text ?? '0');
+      expect(countAfter, countBefore + 1);
+    },
+  );
+}
+```
+
+### 等待策略（强制）
+
+```dart
+// ❌ 禁止
+await Future.delayed(Duration(seconds: 3));
+
+// ✅ 响应式等待
+await $.pumpAndSettle();
+await $(Key(TestKeys.xxx)).waitUntilVisible(timeout: Duration(seconds: 5));
+```
+
+### 测试数据管理（强制）
+
+- `setUp` 中通过 staging API 创建测试数据，获取 ID
+- `tearDown` 中通过 staging API 删除测试数据
+- 禁止依赖 staging 中的固定存量数据
+- 测试用 staging test user 账号（token 从 `dart-define TEST_AUTH_TOKEN` 读取）
+
+### CI 策略
+
+| 触发时机 | 行为 |
+|---------|------|
+| pre-release tag | Firebase Test Lab 跑 4 台设备矩阵（iOS 15/17 + Android 12/14） |
+| PR | 不触发（需真实设备，慢） |
+| 失败 | advisory（不阻塞 PR 合入），**阻塞发布** |
+
+**FTL 设备矩阵**：
+
+```
+iOS 17 + iPhone 15   ← 最新旗舰
+iOS 15 + iPhone 12   ← 最低支持版本
+Android 14 + Pixel 7 ← 最新旗舰
+Android 12 + Pixel 4 ← 最低支持版本
+```
+
+### 本地调试（模拟器/真机）
+
+```bash
+# 连接真机或启动模拟器后
+cd quwoquan_app
+patrol test test/patrol/content/like_post_test.dart \
+    --dart-define=ENV=staging \
+    --dart-define=TEST_AUTH_TOKEN=<your_staging_token>
+
+# 全部 patrol 场景
+patrol test test/patrol/ --dart-define=ENV=staging
+```
+
+### patrol.yaml（强制存在）
+
+```yaml
+# quwoquan_app/patrol.yaml
+app_name: quwoquan
+android:
+  app_id: com.quwoquan.app
+  wait_for_app_launch_timeout: 30
+ios:
+  bundle_id: com.quwoquan.app
+  wait_for_app_launch_timeout: 30
+test_timeout: 120
+retry: 1        # 允许 flaky 重试 1 次
+```
+
+---
+
+## 12. 扩展模版：新增业务对象
+
+当 `contracts/metadata/{domain}/{entity}/` 建立后，对应测试路径如下（可由 codegen 自动生成框架）：
+
+```
+# 新增 content/comment 时：
+test/cloud/content/comment/contract/
+  ├── comment_dto_contract_test.dart          # 3 个 group（常规/兼容/异常）
+  └── comment_error_code_contract_test.dart   # 3 个 group
+test/ui/content/comment/contract/
+  └── comment_view_projection_contract_test.dart
+test/components/content/comment/
+  └── comment_bubble_widget_test.dart         # 3 个 group（渲染/交互/错误态）
+
+# 云侧：
+services/content-service/tests/
+  ├── comment_crud_contract_test.go
+  └── comment_error_contract_test.go
+```
+
+---
+
+## 13. metadata 驱动测试生成
 
 ### 当前已支持
 - `mock.yaml dto_scenarios` → `typed_dto_contract_test.dart` 的 fixture 数据来源
-- `contract.yaml go_func` → gate 检查 Go 函数存在性
+- `contract.yaml go_func` → gate 检查 Go 函数存在性（G11，BLOCKING）
+- `mock.yaml dart_func` → gate 检查 Dart 函数存在性（`verify_dart_func_coverage.py`，BLOCKING）
 - `e2e.yaml patrol_flow` → gate 检查 Patrol 文件存在性（warn 级）
+
+### dart_func / go_func 声明即覆盖原则（强制）
+
+**元数据声明等价于测试覆盖承诺**。一旦在 YAML 中声明 `dart_func` 或 `go_func`，对应函数**必须存在于测试文件中**，gate 检查失败则阻塞合入：
+
+| YAML 字段 | 所在文件 | 要求 | 豁免条件 |
+|---|---|---|---|
+| `dart_func: testXxx` | `mock.yaml` → `widget_scenarios` / `journey_scenarios` | `quwoquan_app/test/**/*_test.dart` 中必须有同名函数 | `status: pending` |
+| `go_func: TestXxx` | `contract.yaml` → `scenarios` | `services/.../tests/*_test.go` 中必须有同名函数 | `status: pending` |
+
+**工作流**：
+```
+# 新增场景时的正确顺序
+1. 在 YAML 中声明（mock.yaml dart_func 或 contract.yaml go_func）
+2. 如功能尚未实现，加 status: pending 暂时豁免 gate 检查
+3. 实现功能时，同步创建对应测试函数，并移除 status: pending
+4. 运行 make gate → 检查通过后合入
+```
+
+**禁止行为**：
+- 只在 YAML 中声明 `dart_func/go_func` 但不实现对应测试函数（无 `status: pending`）→ gate fail
+- 用 `status: pending` 长期豁免已有实现的场景 → 视为测试负债，sprint 内必须清零
+- 声明 `go_func` 后将测试函数命名为不同名称（如 `TestPost_InvalidContentType_Returns400` 代替 `TestCreatePostInvalidContentType`）→ gate 无法识别，必须对齐名称
 
 ### 演进中
 - `mock.yaml widget_scenarios / journey_scenarios` → codegen 生成 Dart 测试骨架
 - `contract.yaml` → codegen 生成 Go 测试骨架（`TestXxx` 函数 stub + fixture 工厂）
 
-### fixture 数据管理
-```yaml
-# mock.yaml（端侧 fixture 来源）
-widget_scenarios:
-  - name: photo_card_with_like_count
-    dart_func: testPhotoCardLikeCount
-    fixture: { contentType: image, likeCount: 42, authorId: "u1" }
-
-# contract.yaml（云侧 fixture 来源）
-data_management:
-  seed: fixture.NewPost()  # 从 fields.yaml NOT_NULL/DEFAULT 约束推导
-  cleanup: collection.DeleteMany per test
-```
-
 ---
 
-## 10. 执行命令参考
+## 14. 执行命令参考
 
 ```bash
-# L1a/b/c — 端侧全量（每次 PR，阻塞）
-cd quwoquan_app && flutter test
+# ── L1a/b/c — 端侧全量（每次 PR，阻塞）─────────────────────────────────────
+cd quwoquan_app && flutter test test/cloud/ test/components/ test/ui/
 
-# L1a 仅 contract（分类运行）
-cd quwoquan_app && flutter test test/features/content/
+# L1a 仅 cloud contract
+cd quwoquan_app && flutter test test/cloud/content/post/contract/
 
-# L1b 仅 widget
-cd quwoquan_app && flutter test test/features/content/widgets/
+# L1b 仅 component widget
+cd quwoquan_app && flutter test test/components/content/post/
 
 # L1c 仅 journey
-cd quwoquan_app && flutter test test/features/content/journeys/
+cd quwoquan_app && flutter test test/ui/discovery/post/journeys/
 
-# L2 — 云侧 contract（每次 PR，阻塞）
+# ── L2 — 云侧 contract（每次 PR，阻塞）─────────────────────────────────────
 cd quwoquan_service && go test ./services/content-service/... -v -count=1
 
-# L2 仅 contract tag
-cd quwoquan_service && make test-contract
+# L2 仅指定业务对象
+cd quwoquan_service && go test ./services/content-service/tests/... -run TestPost -v
 
-# L3 — API Contract（staging，daily）
-STAGING_BASE_URL=https://staging.api.quwoquan.com make test-api-contract
+# ── L3 — API Contract（staging，daily / pre-release）───────────────────────
+STAGING_BASE_URL=https://staging.api.quwoquan.com \
+TEST_AUTH_TOKEN=<your_staging_token> \
+make test-api-contract
 
-# L4 — Patrol（pre-release，真实设备）
-cd quwoquan_app && flutter test integration_test/ --dart-define=ENV=staging
+# ── L4 — Patrol（pre-release，真实设备 / 模拟器）────────────────────────────
+# 本地单场景调试（需先连接真机或启动模拟器）
+cd quwoquan_app && patrol test test/patrol/content/like_post_test.dart \
+    --dart-define=ENV=staging \
+    --dart-define=TEST_AUTH_TOKEN=<your_staging_token>
 
-# 门禁（本地开发）
-make gate                # L1 + L2，阻塞合入
-make gate-full           # L1 + L2 + L3，pre-release
+# 本地全部 L4 场景
+cd quwoquan_app && patrol test test/patrol/ --dart-define=ENV=staging
+
+# ── 门禁（本地开发）──────────────────────────────────────────────────────────
+make gate                # L1a+b+c + L2 + 静态分析，阻塞合入
+make gate-full           # 以上 + L3 API Contract，pre-release 阻塞发布
+# L4 FTL 由 .github/workflows/e2e.yaml 在 pre-release tag 时触发
+
+# ── 门禁（按 scope）──────────────────────────────────────────────────────────
+bash scripts/gate_repo.sh --scope app      # 仅端侧
+bash scripts/gate_repo.sh --scope service  # 仅云侧
+bash scripts/gate_repo.sh --scope all      # 全量（同 make gate）
+```
+
+## 15. 门禁全景
+
+```
+每次 PR
+  make gate
+  ├── flutter analyze
+  ├── flutter test test/cloud/ test/components/ test/ui/   [L1a+b+c]
+  ├── python3 scripts/verify_dart_func_coverage.py          [dart_func 覆盖，BLOCKING]
+  ├── go test ./services/content-service/... -count=1      [L2]
+  ├── gate.sh G11: contract.yaml go_func 存在性            [go_func 覆盖，BLOCKING]
+  ├── verify_metadata_internal
+  └── patrol_flow / api_contract 文件存在性检查（warn）
+
+daily CI + pre-release
+  make gate-full = make gate + make test-api-contract      [+L3]
+  └── staging 不可用 → skip + warn，pre-release 时升级为 fail
+
+pre-release tag（Firebase Test Lab）
+  patrol test test/patrol/                                  [L4]
+  └── FTL 4台设备矩阵，失败 → 阻塞发布
 ```

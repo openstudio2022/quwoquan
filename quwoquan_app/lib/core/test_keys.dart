@@ -4,14 +4,29 @@ import 'package:flutter/foundation.dart';
 ///
 /// Production widgets use these keys on key interaction elements so tests
 /// can locate them reliably without depending on i18n text strings.
+///
+/// 使用方式：
+///   生产代码：`key: TestKeys.likeButton`
+///   flutter_test：`find.byKey(TestKeys.likeButton)`
+///   Patrol：`$(TestKeys.likeButton).tap()`
 class TestKeys {
   TestKeys._();
 
-  // ── Feed / Post Card ────────────────────────────────────────────────
+  // ── Pages ───────────────────────────────────────────────────────────
+  static const discoveryPage = ValueKey<String>('discovery_page');
+
+  // ── Feed / Grid ──────────────────────────────────────────────────────
+  static const photoFeedGrid = ValueKey<String>('photo_feed_grid');
+  static const videoFeedList = ValueKey<String>('video_feed_list');
+
+  // ── Post Card ────────────────────────────────────────────────────────
   static const photoPostCard = ValueKey<String>('photo_post_card');
   static const videoPostCard = ValueKey<String>('video_post_card');
   static const articlePostCard = ValueKey<String>('article_post_card');
   static const momentPostCard = ValueKey<String>('moment_post_card');
+
+  // ── Video ────────────────────────────────────────────────────────────
+  static const videoDurationText = ValueKey<String>('video_duration_text');
 
   // ── Post Interaction ────────────────────────────────────────────────
   static const likeButton = ValueKey<String>('like_button');

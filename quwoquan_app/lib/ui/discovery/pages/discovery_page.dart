@@ -18,6 +18,7 @@ import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
@@ -230,6 +231,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     );
 
     return Scaffold(
+      key: TestKeys.discoveryPage,
       backgroundColor: _isVideoMode
           ? Colors.black
           : AppColorsFunctional.getColor(themeDark, ColorType.backgroundPrimary),
@@ -545,6 +547,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       return const Center(child: CircularProgressIndicator());
     }
     return CustomScrollView(
+      key: TestKeys.photoFeedGrid,
       slivers: [
         SliverPadding(
           padding: EdgeInsets.fromLTRB(
@@ -567,6 +570,10 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
               final bookmarksDisplay = _displayBookmarksCount(homeState, post);
               return SizedBox(
                 height: height,
+                // Use TestKeys.photoPostCard only on first item to avoid
+                // duplicate keys in the scrollable grid (Flutter constraint).
+                // L4 Patrol tests use this key to confirm at least one card rendered.
+                key: index == 0 ? TestKeys.photoPostCard : null,
                 child: _DiscoveryItemCard(
                   post: post,
                   onTap: () => _onPostTap(post, index, feedPosts: photos, category: tabId),

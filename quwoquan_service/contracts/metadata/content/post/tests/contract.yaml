@@ -146,8 +146,9 @@ scenarios:
     go_func: TestBehaviorBatchReport
     command: ReportBehaviors (batch of impression+dwell+click)
     assertions:
-      - http_status == 204
-      - no error
+      - http_status == 200
+      - response.status == "ok"
+      - response.accepted == 3
 
   - name: behavior_batch_empty
     go_func: TestBehaviorBatchEmpty
@@ -159,6 +160,7 @@ scenarios:
   # ── 计数回写场景 ──────────────────────────────────────────────────
   - name: counter_flush
     go_func: TestCounterFlush
+    status: pending
     command: FlushCounters (timer-triggered)
     seed: [fixture.NewPost()]
     setup:
@@ -170,6 +172,7 @@ scenarios:
   # ── 内容审核流转场景 ──────────────────────────────────────────────
   - name: post_moderation_flow
     go_func: TestPostModerationFlow
+    status: pending
     command: ModeratePost (pending → approved → rejected)
     seed: [fixture.NewPost(moderationStatus=pending)]
     assertions:

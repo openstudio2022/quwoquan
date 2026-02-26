@@ -1,5 +1,5 @@
 /// 跳转到作者主页时通过 GoRouter extra 传递的初始展示数据。
-/// 取代之前散落的 Map<String, String?> {'avatar':..., 'displayName':..., 'backgroundImage':...}
+/// 取代之前散落的 `Map<String, String?>` {'avatar':..., 'displayName':..., 'backgroundImage':...}
 class UserProfileRouteExtra {
   const UserProfileRouteExtra({
     this.avatar,

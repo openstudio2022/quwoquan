@@ -32,10 +32,10 @@ type BehaviorEventInput struct {
 
 type BehaviorService struct {
 	hotPath rtrec.SignalProcessor
-	store   *persistence.PostStore
+	store   persistence.PostRepository
 }
 
-func NewBehaviorService(hotPath rtrec.SignalProcessor, store *persistence.PostStore) *BehaviorService {
+func NewBehaviorService(hotPath rtrec.SignalProcessor, store persistence.PostRepository) *BehaviorService {
 	return &BehaviorService{
 		hotPath: hotPath,
 		store:   store,

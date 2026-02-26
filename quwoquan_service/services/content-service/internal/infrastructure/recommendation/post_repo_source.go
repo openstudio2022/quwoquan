@@ -10,10 +10,10 @@ import (
 )
 
 type PostRepositorySource struct {
-	store *persistence.PostStore
+	store persistence.PostRepository
 }
 
-func NewPostRepositorySource(store *persistence.PostStore) *PostRepositorySource {
+func NewPostRepositorySource(store persistence.PostRepository) *PostRepositorySource {
 	return &PostRepositorySource{store: store}
 }
 

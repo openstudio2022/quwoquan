@@ -562,7 +562,7 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
           if (!mounted) return;
           setState(() {});
         });
-      }, onError: (Object _, StackTrace? __) {
+      }, onError: (Object _, StackTrace? _) {
         _resolvingImageAspectRatios.remove(imageUrl);
       }),
     );

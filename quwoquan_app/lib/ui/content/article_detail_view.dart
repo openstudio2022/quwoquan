@@ -1,6 +1,6 @@
 /// 文章详情投射视图 — 由 projectArticleDetailView 生成，供 ArticleDetailPage 消费。
 ///
-/// 取代原来从 Map<String, dynamic> 中 article['stats']['likes']、
+/// 取代原来从 `Map<String, dynamic>` 中 article['stats']['likes']、
 /// article['author']['name'] 等写死字符串访问。
 class ArticleDetailView {
   const ArticleDetailView({

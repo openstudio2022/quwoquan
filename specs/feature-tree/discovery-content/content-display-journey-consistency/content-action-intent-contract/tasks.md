@@ -40,12 +40,16 @@
 
 ### 测试（T）
 
-- [ ] T1：Intent 单元测试（`test/content/content_intent_test.dart`）
-  - 场景 1：`like(postId)` → `HomeState.likedPosts` 立即包含 `postId`（乐观）
-  - 场景 2：`like(postId)` + 模拟 `ContentRepository.likePost` 失败 → `HomeState.likedPosts` 回滚
-  - 场景 3：`follow(userId)` → `HomeState.followingUsers` 立即包含 `userId`（乐观）
-  - 场景 4：`follow(userId)` + 模拟 `UserRepository.followUser` 失败 → 回滚
-- [ ] T2：`make gate` 通过（metadata 一致性 + 结构约束）
+- [ ] T1：Intent journey 测试（`test/ui/discovery/post/journeys/discovery_post_interaction_journey_test.dart`）
+  - group「旅程正常路径」：
+    - 场景 J1：`like(postId)` → `HomeState.likedPosts` 立即包含 `postId`（乐观）
+    - 场景 J2：`follow(userId)` → `HomeState.followingUsers` 立即包含 `userId`（乐观）
+  - group「旅程错误路径」：
+    - 场景 J3：`like(postId)` + MockRepo 抛异常 → `HomeState.likedPosts` 回滚
+    - 场景 J4：`follow(userId)` + MockRepo 抛异常 → `followingUsers` 回滚
+  - group「旅程边界/幂等」：
+    - 场景 J5：连续 like 同一 postId → 计数幂等，MockRepo.likePostCallCount = 1
+- [ ] T2：`make gate` 通过（metadata 一致性 + 结构约束 + flutter test test/ui/discovery/post/）
 
 ---
 

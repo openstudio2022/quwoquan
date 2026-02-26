@@ -3,6 +3,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 import 'package:quwoquan_app/components/content/media_post_card.dart';
+import 'package:quwoquan_app/core/test_keys.dart';
 
 /// 视频帖子卡片
 /// 继承自MediaPostCard，专门处理视频内容展示
@@ -24,13 +25,16 @@ class VideoPostCard extends MediaPostCard {
   Widget buildMediaContent(BuildContext context, bool isDark) {
     final videoUrl = post['videoUrl'] as String?;
     final thumbnailUrl = post['thumbnailUrl'] as String?;
-    final duration = post['duration'] as int?; // 秒数
-    
+
+    // Support both `duration` (seconds, int) and `durationMs` (milliseconds, int).
+    final rawDuration = post['duration'] ?? (post['durationMs'] != null ? ((post['durationMs'] as num) / 1000).round() : null);
+    final durationSecs = rawDuration is num ? rawDuration.toInt() : null;
+
     if (videoUrl == null || videoUrl.isEmpty) {
       return const SizedBox.shrink(); // 不显示任何内容
     }
 
-    return _buildVideoContent(context, isDark, videoUrl, thumbnailUrl, duration);
+    return _buildVideoContent(context, isDark, videoUrl, thumbnailUrl, durationSecs);
   }
 
   /// 构建视频内容
@@ -116,6 +120,33 @@ class VideoPostCard extends MediaPostCard {
                     ),
                   ),
                 ),
+
+                // 时长角标（右下角）
+                if (duration != null && duration > 0)
+                  Positioned(
+                    bottom: AppSpacing.xs.h,
+                    right: AppSpacing.xs.w,
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppSpacing.xs.w,
+                        vertical: 2.h,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.black.withValues(alpha: 0.65),
+                        borderRadius: BorderRadius.circular(AppSpacing.xs.r),
+                      ),
+                      child: Text(
+                        key: TestKeys.videoDurationText,
+                        _formatDuration(duration),
+                        style: TextStyle(
+                          fontSize: AppTypography.xs,
+                          color: AppColors.white,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           );
@@ -123,7 +154,18 @@ class VideoPostCard extends MediaPostCard {
       ),
     );
   }
-  
+
+  /// Formats total seconds as "M:SS" or "H:MM:SS" — matches YouTube/TikTok conventions.
+  static String _formatDuration(int totalSeconds) {
+    final h = totalSeconds ~/ 3600;
+    final m = (totalSeconds % 3600) ~/ 60;
+    final s = totalSeconds % 60;
+    if (h > 0) {
+      return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    }
+    return '$m:${s.toString().padLeft(2, '0')}';
+  }
+
   /// 获取视频长宽比（模拟实现，实际应该从视频元数据获取）
   double _getVideoAspectRatio(dynamic post) {
     // 模拟不同的视频长宽比

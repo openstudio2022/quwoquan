@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/components/more_actions_popup/configs/media_post_config.dart';
 import 'package:quwoquan_app/components/more_actions_popup/more_action_popup.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer.dart';
@@ -491,6 +492,8 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
             isActive: _isLiked,
             onTap: _handleLike,
             isDark: isDark,
+            buttonKey: TestKeys.likeButton,
+            countKey: TestKeys.likeCountText,
           ),
 
           SizedBox(
@@ -526,6 +529,8 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
             isActive: false,
             onTap: _handleComment,
             isDark: isDark,
+            buttonKey: TestKeys.commentButton,
+            countKey: TestKeys.commentCountText,
           ),
 
           SizedBox(
@@ -546,8 +551,11 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
     required bool isActive,
     required VoidCallback? onTap,
     required bool isDark,
+    Key? buttonKey,
+    Key? countKey,
   }) {
     return GestureDetector(
+      key: buttonKey,
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
@@ -575,6 +583,7 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
               width: 40.w,
               child: Text(
                 count > 0 ? _formatCount(count) : '',
+                key: countKey,
                 style: TextStyle(
                   fontSize: AppTypography.actionCount,
                   color: isDark

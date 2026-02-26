@@ -33,13 +33,10 @@
 
 ### 测试（T）
 
-- [x] T1：新增 `quwoquan_app/test/features/content/feed_item_dto_contract_test.dart`：9 个测试全部通过
-  - 四类内容（photo/video/moment/article）canonical 字段正确解析
-  - 全量 mock 数据 id/authorId/displayName 非空验证
-  - toMap round-trip 正确性
-  - copyWith 偏更新正确性
-  - 服务端 alias 字段解析（postId、authorNickname、likesCount）
-  - 缺失字段降级为零值
+- [x] T1：新增 `quwoquan_app/test/cloud/content/post/contract/post_feed_dto_contract_test.dart`：三维度覆盖全部通过
+  - group「PostFeedDto — 常规契约」：四类内容 canonical 字段解析、id/authorId/displayName 非空验证
+  - group「PostFeedDto — 兼容性契约」：alias 字段解析（postId/authorNickname/likesCount）、toMap round-trip、copyWith 偏更新
+  - group「PostFeedDto — 异常/边界契约」：缺失字段降级为零值、全字段缺失不崩溃
 - [x] T2：`make build` ✓ / `make verify-metadata` ✓ / `flutter analyze` 0 error 0 warning ✓
 
 ---
@@ -75,14 +72,11 @@
 
 ### 测试（T）
 
-- [x] T3：新增 `test/features/content/typed_dto_contract_test.dart` 23 个测试全部通过：
-  - `PhotoPostDto.fromMap` 正确解析 `width` / `height`
-  - `VideoPostDto.fromMap` 正确解析 `width` / `height` / `durationMs`
-  - `PostBaseDto` 多态：`List<PostBaseDto>` 中各类型正确实例化
-  - mock 数据中 photo/video 条目 `width > 0 && height > 0` ✅
-  - alias resolver（imageWidth/videoWidth 等）正确解析 ✅
-  - `toMap` round-trip、`copyWith` 偏更新 ✅
-- [x] T4：`flutter analyze lib/` 0 error 0 warning（5 info，均为旧 DO NOT EDIT 文件或本次未变动的组件）
+- [x] T3：新增 `test/cloud/content/post/contract/post_dto_contract_test.dart` 三维度覆盖：
+  - group「PostDto — 常规契约」：PhotoPostDto/VideoPostDto 解析 width/height/durationMs；PostBaseDto 多态；mock 数据 width>0&&height>0
+  - group「PostDto — 兼容性契约」：alias resolver（imageWidth/videoWidth）；toMap round-trip；copyWith 偏更新
+  - group「PostDto — 异常/边界契约」：全字段缺失不崩溃；null 值安全
+- [x] T4：`flutter analyze lib/` 0 error 0 warning ✓
 
 ---
 

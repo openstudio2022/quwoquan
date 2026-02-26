@@ -1,16 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:quwoquan_app/app/shell/main_app_shell.dart';
 import 'package:quwoquan_app/ui/user/pages/author_profile_page.dart';
-import 'package:quwoquan_app/components/media/image/viewer/immersive_image_viewer.dart';
-import 'package:quwoquan_app/components/media/video/viewer/immersive_video_viewer.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
-import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/features/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/ui/content/pages/article_detail_page.dart';
 import 'package:quwoquan_app/ui/content/pages/photo_detail_page.dart';
 import 'package:quwoquan_app/ui/content/pages/video_detail_page.dart';
@@ -31,8 +26,6 @@ import 'package:quwoquan_app/features/profile/pages/resonance_page.dart';
 import 'package:quwoquan_app/features/assistant/context/assistant_open_context.dart';
 import 'package:quwoquan_app/features/assistant/pages/assistant_home_page.dart';
 import 'package:quwoquan_app/features/assistant/pages/assistant_management_page.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(

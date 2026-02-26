@@ -88,13 +88,32 @@ scenarios:
   - name: error_state_displayed_correctly
     description: 服务返回错误码 → 端侧显示正确 i18n 提示
     test_type: api_contract
+    # 协议层/语义层由 L3 api_contract 覆盖；UI 渲染层（empty_state）由对应 ui_journey 覆盖
     steps:
       - service returns { code: "CONTENT.USER.post_not_found", userMessage: "..." }
       - app receives 404 response
     assertions:
       - CloudErrorMapper maps to ContentErrorCode.postNotFound
       - UI displays ContentErrorMessages.zh[postNotFound] == "内容不存在或已删除"
-      - post_not_found empty state rendered (from ContentUIConfig.empty_states)
+      - post_not_found empty state rendered (from ContentUIConfig.empty_states)  # → covered by error_empty_state_ui ui_journey
+
+  - name: error_empty_state_ui
+    description: 帖子不存在错误 → 端侧空状态 Widget 正确渲染
+    test_type: ui_journey
+    patrol_flow: test/patrol/content/error_empty_state_test.dart
+    # 补充 L3 error_state_displayed_correctly 中无法通过 HTTP 验证的 UI 渲染层
+    actors:
+      app: lib/ui/content/pages/photo_detail_page.dart
+      service: content-service GET /v1/content/posts/{nonExistentId}
+    steps:
+      - app navigates to photo detail with nonexistent postId
+      - service returns 404 CONTENT.USER.post_not_found
+      - app receives CloudException with errorCode=postNotFound
+    assertions:
+      - empty state Widget rendered (ContentUIConfig.empty_states.post_not_found)
+      - error message displays ContentErrorMessages.zh[postNotFound]
+      - retry button visible (or "back to discovery" CTA)
+      - no crash, no infinite loading spinner
 
   - name: feed_cursor_pagination_end_to_end
     description: 游标分页端到端（翻页加载更多）

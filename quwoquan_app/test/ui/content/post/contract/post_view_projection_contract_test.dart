@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/content/mock/content_mock_data.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/ui/content/article_detail_view.dart';
@@ -15,7 +16,7 @@ void main() {
   // ─────────────────────────────────────────────────────────────────────────
   // 辅助：构造最小合法 Photo/Video/Article raw map
   // ─────────────────────────────────────────────────────────────────────────
-  const Map<String, dynamic> _minPhoto = {
+  const Map<String, dynamic> minPhoto = {
     'postId': 'ph1',
     'contentType': 'image',
     'authorId': 'auth1',
@@ -32,7 +33,7 @@ void main() {
     'publishedAt': '2025-12-01T10:00:00Z',
   };
 
-  const Map<String, dynamic> _minVideo = {
+  const Map<String, dynamic> minVideo = {
     'postId': 'vd1',
     'contentType': 'video',
     'authorId': 'vauth1',
@@ -50,7 +51,7 @@ void main() {
     'publishedAt': '2026-01-10T00:00:00Z',
   };
 
-  const Map<String, dynamic> _minArticle = {
+  const Map<String, dynamic> minArticle = {
     'postId': 'art1',
     'contentType': 'article',
     'authorId': 'writer1',
@@ -71,33 +72,33 @@ void main() {
   // ─────────────────────────────────────────────────────────────────────────
   group('projectPostMap → PostSummaryView 公共字段投射', () {
     test('id 来自 DTO.id（postId 字段）', () {
-      final r = projectPostMap(_minPhoto);
+      final r = projectPostMap(minPhoto);
       expect(r, isA<PostSummaryView>());
       expect(r.id, equals('ph1'));
     });
 
     test('type 来自 DTO.type', () {
-      final r = projectPostMap(_minPhoto);
+      final r = projectPostMap(minPhoto);
       expect(r.type, isNotEmpty);
     });
 
     test('authorId 来自 DTO.authorId', () {
-      final r = projectPostMap(_minPhoto);
+      final r = projectPostMap(minPhoto);
       expect(r.authorId, equals('auth1'));
     });
 
     test('displayName 来自 DTO.displayName', () {
-      final r = projectPostMap(_minPhoto);
+      final r = projectPostMap(minPhoto);
       expect(r.displayName, equals('摄影师'));
     });
 
     test('avatarUrl 来自 DTO.avatarUrl', () {
-      final r = projectPostMap(_minPhoto);
+      final r = projectPostMap(minPhoto);
       expect(r.avatarUrl, equals('https://example.com/avatar.jpg'));
     });
 
     test('author 子对象包含 id/username/name/avatar', () {
-      final r = projectPostMap(_minPhoto);
+      final r = projectPostMap(minPhoto);
       expect(r.author, isA<PostAuthorSummary>());
       expect(r.author.id, equals('auth1'));
       expect(r.author.username, equals('auth1'));
@@ -106,14 +107,14 @@ void main() {
     });
 
     test('authorBackgroundUrl 投射到 backgroundImage', () {
-      final raw = Map<String, dynamic>.from(_minPhoto)
+      final raw = Map<String, dynamic>.from(minPhoto)
         ..['authorBackgroundUrl'] = 'https://example.com/bg.jpg';
       final r = projectPostMap(raw);
       expect(r.backgroundImage, equals('https://example.com/bg.jpg'));
     });
 
     test('createdAt 是 ISO8601 字符串', () {
-      final r = projectPostMap(_minPhoto);
+      final r = projectPostMap(minPhoto);
       expect(r.createdAt, isA<String>());
       expect(() => DateTime.parse(r.createdAt), returnsNormally);
     });
@@ -124,28 +125,28 @@ void main() {
   // ─────────────────────────────────────────────────────────────────────────
   group('projectPostMap → PostSummaryView 计数字段 & 0→1 回归', () {
     test('likeCount → likesCount 忠实保留原始计数', () {
-      final r = projectPostMap(_minPhoto);
+      final r = projectPostMap(minPhoto);
       expect(r.likesCount, equals(100),
           reason: '投射不得把 100 归零：0→1 bug');
     });
 
     test('commentCount → commentsCount 忠实保留原始计数', () {
-      final r = projectPostMap(_minPhoto);
+      final r = projectPostMap(minPhoto);
       expect(r.commentsCount, equals(20));
     });
 
     test('favoriteCount → savesCount 忠实保留原始计数', () {
-      final r = projectPostMap(_minPhoto);
+      final r = projectPostMap(minPhoto);
       expect(r.savesCount, equals(30));
     });
 
     test('shareCount → sharesCount 忠实保留原始计数', () {
-      final r = projectPostMap(_minPhoto);
+      final r = projectPostMap(minPhoto);
       expect(r.sharesCount, equals(5));
     });
 
     test('大数值计数也能忠实保留（不截断）', () {
-      final raw = Map<String, dynamic>.from(_minPhoto)
+      final raw = Map<String, dynamic>.from(minPhoto)
         ..['likeCount'] = 999999;
       final r = projectPostMap(raw);
       expect(r.likesCount, equals(999999));
@@ -194,21 +195,21 @@ void main() {
   // ─────────────────────────────────────────────────────────────────────────
   group('projectPostMap → PostSummaryView Photo 专属字段', () {
     test('images 来自 DTO.imageUrls（mediaUrls）', () {
-      final r = projectPostMap(_minPhoto);
+      final r = projectPostMap(minPhoto);
       expect(r.images, isNotNull);
       expect(r.images!.length, equals(2));
       expect(r.images!.first, contains('img1.jpg'));
     });
 
     test('thumbnail / thumbnailUrl / coverUrl 均来自 DTO.coverUrl', () {
-      final r = projectPostMap(_minPhoto);
+      final r = projectPostMap(minPhoto);
       expect(r.thumbnail, equals('https://example.com/cover.jpg'));
       expect(r.thumbnailUrl, equals('https://example.com/cover.jpg'));
       expect(r.coverUrl, equals('https://example.com/cover.jpg'));
     });
 
     test('aspectRatio 来自 DTO 计算（width/height）', () {
-      final r = projectPostMap(_minPhoto);
+      final r = projectPostMap(minPhoto);
       expect(r.aspectRatio, isNotNull);
       expect(r.aspectRatio!, closeTo(1200 / 900, 0.001));
     });
@@ -249,24 +250,24 @@ void main() {
   // ─────────────────────────────────────────────────────────────────────────
   group('projectPostMap → PostSummaryView Video 专属字段', () {
     test('videoUrl 来自 DTO.videoUrl', () {
-      final r = projectPostMap(_minVideo);
+      final r = projectPostMap(minVideo);
       expect(r.videoUrl, equals('https://example.com/video.mp4'));
     });
 
     test('thumbnail / thumbnailUrl / coverUrl 均来自 DTO.thumbnailUrl', () {
-      final r = projectPostMap(_minVideo);
+      final r = projectPostMap(minVideo);
       expect(r.thumbnail, equals('https://example.com/thumb.jpg'));
       expect(r.thumbnailUrl, equals('https://example.com/thumb.jpg'));
       expect(r.coverUrl, equals('https://example.com/thumb.jpg'));
     });
 
     test('duration 来自 DTO.durationMs', () {
-      final r = projectPostMap(_minVideo);
+      final r = projectPostMap(minVideo);
       expect(r.duration, equals(45000));
     });
 
     test('视频计数字段正确投射', () {
-      final r = projectPostMap(_minVideo);
+      final r = projectPostMap(minVideo);
       expect(r.likesCount, equals(500));
       expect(r.commentsCount, equals(80));
       expect(r.savesCount, equals(120));
@@ -279,23 +280,23 @@ void main() {
   // ─────────────────────────────────────────────────────────────────────────
   group('projectPostMap → PostSummaryView Article 专属字段', () {
     test('title 来自 DTO.title', () {
-      final r = projectPostMap(_minArticle);
+      final r = projectPostMap(minArticle);
       expect(r.title, equals('2026年技术趋势'));
     });
 
     test('body 来自 DTO.body', () {
-      final r = projectPostMap(_minArticle);
+      final r = projectPostMap(minArticle);
       expect(r.body, equals('这是文章内容，包含多段落...'));
     });
 
     test('coverUrl/thumbnailUrl 来自 DTO.coverUrl', () {
-      final r = projectPostMap(_minArticle);
+      final r = projectPostMap(minArticle);
       expect(r.coverUrl, equals('https://example.com/cover3.jpg'));
       expect(r.thumbnailUrl, equals('https://example.com/cover3.jpg'));
     });
 
     test('images 为 [coverUrl]（单图列表）', () {
-      final r = projectPostMap(_minArticle);
+      final r = projectPostMap(minArticle);
       expect(r.images, isNotNull);
       expect(r.images!.length, equals(1));
       expect(r.images!.first, equals('https://example.com/cover3.jpg'));
@@ -365,12 +366,12 @@ void main() {
   // ─────────────────────────────────────────────────────────────────────────
   group('projectArticleDetailView → ArticleDetailView 输出结构契约', () {
     test('返回 ArticleDetailView 强类型实例', () {
-      final r = projectArticleDetailView(_minArticle, fallbackArticleId: 'fb1');
+      final r = projectArticleDetailView(minArticle, fallbackArticleId: 'fb1');
       expect(r, isA<ArticleDetailView>());
     });
 
     test('id 从 raw.postId 解析', () {
-      final r = projectArticleDetailView(_minArticle, fallbackArticleId: 'fb1');
+      final r = projectArticleDetailView(minArticle, fallbackArticleId: 'fb1');
       expect(r.id, equals('art1'));
     });
 
@@ -390,18 +391,18 @@ void main() {
     });
 
     test('title 正确传递', () {
-      final r = projectArticleDetailView(_minArticle, fallbackArticleId: 'fb1');
+      final r = projectArticleDetailView(minArticle, fallbackArticleId: 'fb1');
       expect(r.title, equals('2026年技术趋势'));
     });
 
     test('description 和 contentHtml 均来自 body', () {
-      final r = projectArticleDetailView(_minArticle, fallbackArticleId: 'fb1');
+      final r = projectArticleDetailView(minArticle, fallbackArticleId: 'fb1');
       expect(r.description, equals('这是文章内容，包含多段落...'));
       expect(r.contentHtml, equals('这是文章内容，包含多段落...'));
     });
 
     test('author 强类型：包含 name / avatar / isOfficial / badge', () {
-      final r = projectArticleDetailView(_minArticle, fallbackArticleId: 'fb1');
+      final r = projectArticleDetailView(minArticle, fallbackArticleId: 'fb1');
       expect(r.author, isA<ArticleAuthorView>());
       expect(r.author.name, equals('技术作者'));
       expect(r.author.avatar, equals('https://example.com/wavatar.jpg'));
@@ -410,7 +411,7 @@ void main() {
     });
 
     test('author.isOfficial 来自 raw.isOfficial', () {
-      final raw = Map<String, dynamic>.from(_minArticle)
+      final raw = Map<String, dynamic>.from(minArticle)
         ..['isOfficial'] = true
         ..['badge'] = 'VIP';
       final r = projectArticleDetailView(raw, fallbackArticleId: 'fb1');
@@ -419,7 +420,7 @@ void main() {
     });
 
     test('stats 强类型：包含 likes / comments / bookmarks', () {
-      final r = projectArticleDetailView(_minArticle, fallbackArticleId: 'fb1');
+      final r = projectArticleDetailView(minArticle, fallbackArticleId: 'fb1');
       expect(r.stats, isA<ArticleStatsView>());
       expect(r.stats.likes, equals(1000));
       expect(r.stats.comments, equals(90));
@@ -427,19 +428,19 @@ void main() {
     });
 
     test('stats 计数与 DTO 一致（0→1 回归守护）', () {
-      final raw = Map<String, dynamic>.from(_minArticle)
+      final raw = Map<String, dynamic>.from(minArticle)
         ..['likeCount'] = 8888;
       final r = projectArticleDetailView(raw, fallbackArticleId: 'fb4');
       expect(r.stats.likes, equals(8888));
     });
 
     test('单图时 layoutMode 为 hero', () {
-      final r = projectArticleDetailView(_minArticle, fallbackArticleId: 'fb1');
+      final r = projectArticleDetailView(minArticle, fallbackArticleId: 'fb1');
       expect(r.layoutMode, equals('hero'));
     });
 
     test('coverImage 来自 coverUrl', () {
-      final r = projectArticleDetailView(_minArticle, fallbackArticleId: 'fb1');
+      final r = projectArticleDetailView(minArticle, fallbackArticleId: 'fb1');
       expect(r.coverImage, equals('https://example.com/cover3.jpg'));
     });
 
@@ -461,9 +462,99 @@ void main() {
     });
 
     test('images 非空（article 至少 [coverUrl]）', () {
-      final r = projectArticleDetailView(_minArticle, fallbackArticleId: 'fb1');
+      final r = projectArticleDetailView(minArticle, fallbackArticleId: 'fb1');
       expect(r.images, isNotEmpty);
       expect(r.images.first, equals('https://example.com/cover3.jpg'));
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────
+  // MomentPostDto 投影契约
+  // ──────────────────────────────────────────────────────────────────
+  group('MomentPostDto 投影契约', () {
+    final momentWithImages = <String, dynamic>{
+      'postId': 'moment_01',
+      'contentType': 'moment',
+      'authorId': 'u99',
+      'authorNickname': '小趣',
+      'authorAvatarUrl': 'https://example.com/avatar.jpg',
+      'body': '今天天气真好 ☀️',
+      'mediaUrls': ['https://example.com/img1.jpg', 'https://example.com/img2.jpg'],
+      'likeCount': 5,
+      'commentCount': 2,
+      'favoriteCount': 1,
+      'shareCount': 0,
+      'publishedAt': '2025-06-01T10:00:00Z',
+    };
+
+    final momentWithVideo = <String, dynamic>{
+      'postId': 'moment_02',
+      'contentType': 'micro',
+      'authorId': 'u88',
+      'authorNickname': '视频君',
+      'authorAvatarUrl': 'https://example.com/avatar2.jpg',
+      'body': '短视频时刻',
+      'mediaUrls': <String>[],
+      'videoUrl': 'https://example.com/moment_video.mp4',
+      'durationMs': 8000,
+      'likeCount': 12,
+      'commentCount': 3,
+      'favoriteCount': 0,
+      'shareCount': 1,
+      'publishedAt': '2025-06-01T11:00:00Z',
+    };
+
+    test('moment type dispatches to MomentPostDto', () {
+      final dto = postBaseDtoFromMap(momentWithImages);
+      expect(dto, isA<MomentPostDto>(),
+          reason: 'contentType=moment must dispatch to MomentPostDto');
+    });
+
+    test('micro type also dispatches to MomentPostDto', () {
+      final dto = postBaseDtoFromMap(momentWithVideo);
+      expect(dto, isA<MomentPostDto>(),
+          reason: 'contentType=micro must dispatch to MomentPostDto');
+    });
+
+    test('moment body is projected to PostSummaryView', () {
+      final view = projectPostMap(momentWithImages);
+      expect(view.body, equals('今天天气真好 ☀️'),
+          reason: 'moment body must be projected to PostSummaryView.body');
+    });
+
+    test('moment imageUrls projected correctly', () {
+      final dto = postBaseDtoFromMap(momentWithImages) as MomentPostDto;
+      expect(dto.imageUrls, hasLength(2));
+      expect(dto.imageUrls.first, contains('img1.jpg'));
+    });
+
+    test('moment videoUrl projected correctly', () {
+      final dto = postBaseDtoFromMap(momentWithVideo) as MomentPostDto;
+      expect(dto.videoUrl, equals('https://example.com/moment_video.mp4'));
+      expect(dto.durationMs, equals(8000));
+    });
+
+    test('moment stats projected to PostSummaryView', () {
+      final view = projectPostMap(momentWithImages);
+      expect(view.likesCount, equals(5));
+      expect(view.commentsCount, equals(2));
+    });
+
+    test('moment with no images has empty imageUrls list (not null)', () {
+      final dto = postBaseDtoFromMap(momentWithVideo) as MomentPostDto;
+      expect(dto.imageUrls, isEmpty,
+          reason: 'imageUrls must be an empty list when no images provided');
+    });
+
+    test('mock moment data dispatches to MomentPostDto', () {
+      final mockMoments = ContentMockData.discoveryMomentData;
+      expect(mockMoments, isNotEmpty,
+          reason: 'mock discovery moment data must not be empty');
+      for (final raw in mockMoments) {
+        final dto = postBaseDtoFromMap(raw);
+        expect(dto, isA<MomentPostDto>(),
+            reason: 'All mock micro data must dispatch to MomentPostDto');
+      }
     });
   });
 }

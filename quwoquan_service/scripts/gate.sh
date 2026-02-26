@@ -618,10 +618,87 @@ if [ -f "$CONTENT_POST_DIR/ui_config.yaml" ]; then
   ' "$CONTENT_POST_DIR/ui_config.yaml"
 fi
 
+# G11: contract.yaml go_func 存在性检查（status:pending 豁免）
+echo "[gate] G11: contract.yaml go_func coverage"
+if [ -f "$CONTENT_POST_DIR/tests/contract.yaml" ]; then
+  ruby -ryaml -e '
+    def fail(msg)
+      STDERR.puts("[gate] FAIL: #{msg}")
+      exit 1
+    end
+
+    contract = YAML.load_file(ARGV[0]) || {}
+    tests_dir = ARGV[1]
+
+    # Collect all func Test* names from *_test.go files in tests/
+    go_funcs = Dir.glob(File.join(tests_dir, "*_test.go")).flat_map do |f|
+      File.read(f).scan(/^func (Test\w+)\s*\(/).flatten
+    end.uniq
+
+    missing = []
+    (contract["scenarios"] || []).each do |s|
+      next unless s.is_a?(Hash)
+      func_name = s["go_func"].to_s
+      next if func_name.empty?
+      next if s["status"].to_s == "pending"
+      unless go_funcs.include?(func_name)
+        missing << "#{func_name} (scenario: #{s["name"]})"
+      end
+    end
+
+    unless missing.empty?
+      fail("contract.yaml go_func declarations without Go test functions:\n" + missing.map { |m| "  - #{m}" }.join("\n"))
+    end
+  ' "$CONTENT_POST_DIR/tests/contract.yaml" \
+    "services/content-service/tests"
+fi
+
 # ── L2: content-service contract tests ───────────────────────────────────────
 echo "[gate] running content-service contract tests"
 go test ./services/content-service/... -count=1 -timeout=120s \
   || fail "content-service go tests failed"
+
+# ── T38: e2e.yaml patrol_flow 文件存在性检查（warn 级别，不 fail）─────────────
+# 确保 e2e.yaml 中每个 ui_journey 场景的 patrol_flow 引用文件在 quwoquan_app 中存在。
+E2E_YAML="contracts/metadata/content/post/tests/e2e.yaml"
+APP_DIR="../quwoquan_app"
+if [ -f "$E2E_YAML" ] && command -v grep >/dev/null 2>&1; then
+  echo "[gate] checking patrol_flow file references in $E2E_YAML"
+  patrol_flows=$(grep "patrol_flow:" "$E2E_YAML" | sed 's/.*patrol_flow: *//')
+  for flow in $patrol_flows; do
+    flow=$(echo "$flow" | tr -d '[:space:]')
+    target="$APP_DIR/$flow"
+    if [ ! -f "$target" ]; then
+      echo "[gate] WARN: patrol_flow 引用文件不存在: $target"
+      echo "[gate] WARN: 请创建该文件或更新 e2e.yaml 中的 patrol_flow 路径"
+    else
+      echo "[gate] OK: patrol_flow 文件存在: $flow"
+    fi
+  done
+fi
+
+# ── T39: api_contract_runner.dart 场景覆盖率检查（warn 级别）────────────────
+# 检查 e2e.yaml 中每个 api_contract 场景在 api_contract_runner.dart 中有 test() 调用。
+# 场景名在 test_type: api_contract 之前的 name: 行，用 -B2 反向查找。
+RUNNER="$APP_DIR/test/cloud/content/api_contract_runner.dart"
+if [ -f "$E2E_YAML" ] && [ -f "$RUNNER" ]; then
+  echo "[gate] checking api_contract scenario coverage in $RUNNER"
+  # grep -B2 找 test_type: api_contract 的前 2 行，再从中提取 name 字段（保留换行）
+  api_names=$(grep -B2 "test_type: api_contract" "$E2E_YAML" \
+    | grep "name:" | sed "s/.*name: *//" | sed "s/[[:space:]]*$//" || true)
+  if [ -z "$api_names" ]; then
+    echo "[gate] INFO: no api_contract scenarios declared in $E2E_YAML"
+  else
+    echo "$api_names" | while IFS= read -r scenario; do
+      [ -z "$scenario" ] && continue
+      if ! grep -q "$scenario" "$RUNNER" 2>/dev/null; then
+        echo "[gate] WARN: api_contract 场景未在 api_contract_runner.dart 中找到: $scenario"
+      else
+        echo "[gate] OK: api_contract 场景已覆盖: $scenario"
+      fi
+    done
+  fi
+fi
 
 echo "[gate] OK"
 

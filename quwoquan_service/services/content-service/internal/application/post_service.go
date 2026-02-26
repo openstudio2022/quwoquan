@@ -7,6 +7,7 @@ import (
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
+	"quwoquan_service/runtime/repository"
 	rtrec "quwoquan_service/runtime/recommendation"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
 	"quwoquan_service/services/content-service/internal/generated"
@@ -14,11 +15,12 @@ import (
 )
 
 type PostService struct {
-	store    *persistence.PostStore
-	signaler rtrec.SignalProcessor
+	store     persistence.PostRepository
+	signaler  rtrec.SignalProcessor
+	publisher repository.EventPublisher
 }
 
-func NewPostService(store *persistence.PostStore, opts ...PostServiceOption) *PostService {
+func NewPostService(store persistence.PostRepository, opts ...PostServiceOption) *PostService {
 	s := &PostService{store: store}
 	for _, opt := range opts {
 		opt(s)
@@ -31,6 +33,11 @@ type PostServiceOption func(*PostService)
 // WithSignalProcessor enables recommendation pipeline notification on post creation.
 func WithSignalProcessor(sp rtrec.SignalProcessor) PostServiceOption {
 	return func(s *PostService) { s.signaler = sp }
+}
+
+// WithEventPublisher enables domain event publishing (e.g. PostCreated).
+func WithEventPublisher(pub repository.EventPublisher) PostServiceOption {
+	return func(s *PostService) { s.publisher = pub }
 }
 
 func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (*postmodel.Post, error) {
@@ -75,7 +82,7 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (*
 		)
 	}
 
-	// Notify recommendation pipeline so the new post enters recall immediately
+	// Notify recommendation pipeline so the new post enters recall immediately.
 	if s.signaler != nil {
 		tags := behaviorTagsFromPost(post)
 		_ = s.signaler.ProcessSignal(ctx, rtrec.BehaviorSignal{
@@ -84,6 +91,20 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (*
 			Action:    "impression",
 			Tags:      tags,
 			Timestamp: now,
+		})
+	}
+
+	// Publish PostCreated domain event for downstream consumers.
+	if s.publisher != nil {
+		_ = s.publisher.Publish(ctx, repository.DomainEvent{
+			Type:          "PostCreated",
+			AggregateType: "Post",
+			AggregateID:   post.ID,
+			Payload: map[string]any{
+				"authorId":    post.AuthorId,
+				"contentType": post.ContentType,
+			},
+			OccurredAt: now.Format(time.RFC3339),
 		})
 	}
 

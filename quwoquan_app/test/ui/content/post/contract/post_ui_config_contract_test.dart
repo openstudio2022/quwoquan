@@ -15,6 +15,18 @@ void main() {
       expect(ids, containsAll(['photo', 'video', 'moment', 'article']));
     });
 
+    test('discovery_tabs_order: photo → video → moment → article', () {
+      // Tab order defines the display order in DiscoveryPage's TabBar.
+      // Changing this order is a UI regression that MUST be caught by this test.
+      final ids = ContentUIConfig.discoveryTabs.map((t) => t.id).toList();
+      expect(ids.indexOf('photo'), lessThan(ids.indexOf('video')),
+          reason: 'photo tab must appear before video');
+      expect(ids.indexOf('video'), lessThan(ids.indexOf('moment')),
+          reason: 'video tab must appear before moment');
+      expect(ids.indexOf('moment'), lessThan(ids.indexOf('article')),
+          reason: 'moment tab must appear before article');
+    });
+
     test('photo tab uses waterfall_grid layout', () {
       final photoTab =
           ContentUIConfig.discoveryTabs.firstWhere((t) => t.id == 'photo');
