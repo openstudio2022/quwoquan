@@ -37,6 +37,21 @@ members:
     cascade_delete: true
     description: 用户互动状态（点赞/收藏/转发/举报）
 
+  - entity: PostCircleDistribution
+    relation: 1:N
+    cascade_delete: true
+    description: 作者主动分发到圈子的关系（发布后可增删）
+
+  - entity: PostCircleReshare
+    relation: 1:N
+    cascade_delete: true
+    description: 用户转发到圈子的关系（与作者主动分发分离）
+
+  - entity: DeletedPostTombstone
+    relation: 1:1
+    cascade_delete: false
+    description: 已删除内容墓碑，用于 URL 访问返回“已删除”
+
 ddd_layer_mapping:
   domain_model: internal/domain/content/model
   repository: internal/domain/content/repository

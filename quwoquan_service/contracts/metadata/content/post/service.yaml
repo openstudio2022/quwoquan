@@ -18,9 +18,9 @@ api_routes:
   - method: POST
     path: /v1/content/posts
     operation: CreatePost
-    description: 发布内容
+    description: 创建内容（可草稿或直发）
     request_entity: Post
-    writable_fields: [contentType, title, body, tags, mediaUrls, coverUrl, videoUrl, location, locationName, visibility, circleId]
+    writable_fields: [contentType, title, body, summary, tags, mediaUrls, coverUrl, videoUrl, illustrationAssetId, location, locationName, visibility, circleIds, sourcePostId, sourceType, deviceInfo, publishLocation]
 
   - method: GET
     path: /v1/content/posts/{postId}
@@ -31,12 +31,23 @@ api_routes:
   - method: PATCH
     path: /v1/content/posts/{postId}
     operation: UpdatePost
-    description: 更新内容
+    description: 更新内容（仅 draft 可改；published 后不可变）
+
+  - method: POST
+    path: /v1/content/posts/{postId}/publish
+    operation: PublishPost
+    description: 发布草稿（发布后内容本体不可修改）
 
   - method: DELETE
     path: /v1/content/posts/{postId}
     operation: DeletePost
-    description: 删除内容
+    description: 删除内容（级联下架作者分发与用户转发并写入墓碑）
+
+  - method: PATCH
+    path: /v1/content/posts/{postId}/circles
+    operation: UpdatePostCircles
+    description: 更新作者主动分发圈子关系（支持 add/remove，发布后允许）
+    auth: required
 
   - method: GET
     path: /v1/content/posts/{postId}/comments
@@ -96,11 +107,59 @@ api_routes:
     operation: ReportBehaviors
     description: 行为批量上报（impression/click/dwell/dislike/report/share；like/favorite 用专用路由）
 
+  - method: POST
+    path: /v1/content/posts/{postId}/repost
+    operation: RepostToCircle
+    description: 转发内容到圈子（独立于作者主动分发关系）
+    auth: required
+
+  - method: POST
+    path: /v1/content/posts/{postId}/quote
+    operation: QuoteToCircle
+    description: 引用内容后重新发布（按 moment 落库）
+    auth: required
+
+  - method: POST
+    path: /v1/content/media/uploads:init
+    operation: InitMediaUpload
+    description: 初始化媒体上传会话（返回上传凭证与 mediaId）
+    auth: required
+
+  - method: POST
+    path: /v1/content/media/uploads/{sessionId}:complete
+    operation: CompleteMediaUpload
+    description: 上传完成回调，触发媒体处理管线
+    auth: required
+
+  - method: POST
+    path: /v1/content/media/uploads/{sessionId}:abort
+    operation: AbortMediaUpload
+    description: 取消上传会话
+    auth: required
+
   - method: GET
     path: /v1/content/media/{mediaId}
     operation: GetMediaAsset
     description: 媒体资产状态
     response_entity: MediaAsset
+
+  - method: POST
+    path: /v1/content/media/{mediaId}/cover:auto
+    operation: SelectAutoVideoCover
+    description: 视频封面默认策略（首帧）
+    auth: required
+
+  - method: POST
+    path: /v1/content/media/{mediaId}/cover:manual
+    operation: SelectManualVideoCover
+    description: 手工指定视频封面
+    auth: required
+
+  - method: POST
+    path: /v1/content/articles/summary:generate
+    operation: GenerateArticleSummary
+    description: 为文章生成摘要草案（用户可编辑）
+    auth: required
 
   - method: GET
     path: /v1/content/helper-read/{contentId}

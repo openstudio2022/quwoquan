@@ -8,7 +8,7 @@ events:
     consumers: [recommendation-engine, notification-service, assistant-service]
     channel: event_store
     payload_entity: Post
-    payload_fields: [_id, authorId, contentType, title, tags, location, circleId, createdAt]
+    payload_fields: [_id, authorId, contentType, title, tags, location, circleIds, createdAt]
     recommend_impact: content_index_refresh
 
   - name: PostPublished
@@ -34,6 +34,27 @@ events:
     channel: event_store
     payload_entity: Post
     payload_fields: [_id, authorId, status]
+
+  - name: PostCircleDistributionUpdated
+    description: 作者主动分发圈子关系变更（add/remove）
+    producer: content-service
+    consumers: [recommendation-engine, circle-service]
+    channel: event_store
+    payload_fields: [postId, ownerAuthorId, addedCircleIds, removedCircleIds, updatedAt]
+
+  - name: PostReshared
+    description: 用户转发到圈子
+    producer: content-service
+    consumers: [notification-service, recommendation-engine, circle-service]
+    channel: event_store
+    payload_fields: [postId, resharerUserId, circleId, createdAt]
+
+  - name: PostQuoted
+    description: 用户引用后发布（按 moment 落库）
+    producer: content-service
+    consumers: [notification-service, recommendation-engine, circle-service]
+    channel: event_store
+    payload_fields: [postId, sourcePostId, resharerUserId, circleId, createdAt]
 
   - name: CommentCreated
     description: 新评论
@@ -80,6 +101,14 @@ events:
     payload_entity: MediaAsset
     payload_fields: [_id, postId, status, cdnUrl, thumbnailUrl]
 
+  - name: MediaMetaExtracted
+    description: 媒体元数据提取完成（分辨率/大小/时长）
+    producer: content-service
+    consumers: []
+    channel: event_store
+    payload_entity: MediaAsset
+    payload_fields: [_id, postId, width, height, durationMs, fileSizeBytes, updatedAt]
+
   - name: ContentModerated
     description: 内容审核完成
     producer: content-service
@@ -95,3 +124,17 @@ events:
     channel: direct
     payload_fields: [userId, events]
     recommend_impact: hot_path_signal
+
+  - name: PostDeletedCascadeApplied
+    description: 删除内容后级联下架分发与转发关系
+    producer: content-service
+    consumers: [circle-service, recommendation-engine]
+    channel: event_store
+    payload_fields: [postId, affectedDistributionCount, affectedReshareCount, deletedAt]
+
+  - name: PostTombstoned
+    description: 内容墓碑写入完成
+    producer: content-service
+    consumers: []
+    channel: event_store
+    payload_fields: [postId, deletedAt, reason]

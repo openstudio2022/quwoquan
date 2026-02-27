@@ -7,6 +7,7 @@ class GeneratedPostRuntimeMetadata {
 
   // Field defaults derived from post/fields.yaml constraints.
   static const Map<String, dynamic> postFieldDefaults = <String, dynamic>{
+    'circleIds': <String>[],
     'commentCount': 0,
     'embedding': <double>[],
     'favoriteCount': 0,
@@ -70,14 +71,20 @@ class GeneratedPostRuntimeMetadata {
     'contentType',
     'title',
     'body',
+    'summary',
     'tags',
     'mediaUrls',
     'coverUrl',
     'videoUrl',
+    'illustrationAssetId',
     'location',
     'locationName',
     'visibility',
-    'circleId',
+    'circleIds',
+    'sourcePostId',
+    'sourceType',
+    'deviceInfo',
+    'publishLocation',
   ];
 
   // Reaction mutation route paths (from post/service.yaml).

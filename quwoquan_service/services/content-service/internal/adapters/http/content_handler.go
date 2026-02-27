@@ -73,8 +73,17 @@ func (h *ContentHandler) handleGetPost(w http.ResponseWriter, r *http.Request) {
 		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid post id", "missing postId path segment"))
 		return
 	}
-	post, ok := h.feedService.GetPost(r.Context(), postID)
+	post, ok, deleted := h.postService.GetPostOrTombstone(r.Context(), postID)
 	if !ok {
+		if deleted {
+			writeHTTPError(w, rterr.NewAppError(
+				rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "conflict"),
+				"内容已删除",
+				"post deleted",
+				false,
+			))
+			return
+		}
 		writeHTTPError(w, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
 			"内容不存在",
@@ -145,6 +154,165 @@ func (h *ContentHandler) handleUpdatePost(w http.ResponseWriter, r *http.Request
 		return
 	}
 	writeJSON(w, http.StatusOK, post)
+}
+
+func (h *ContentHandler) handlePublishPost(w http.ResponseWriter, r *http.Request) {
+	postID := postIDFromPath(r.URL.Path)
+	post, err := h.postService.PublishPost(r.Context(), postID)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, post)
+}
+
+func (h *ContentHandler) handleDeletePost(w http.ResponseWriter, r *http.Request) {
+	postID := postIDFromPath(r.URL.Path)
+	if err := h.postService.DeletePost(r.Context(), postID, resolveUserID(r)); err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"postId": postID, "status": "deleted"})
+}
+
+func (h *ContentHandler) handleUpdatePostCircles(w http.ResponseWriter, r *http.Request) {
+	postID := postIDFromPath(r.URL.Path)
+	var body struct {
+		Add    []string `json:"add"`
+		Remove []string `json:"remove"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
+		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
+		return
+	}
+	resp, err := h.postService.UpdatePostCircles(r.Context(), postID, resolveUserID(r), body.Add, body.Remove)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *ContentHandler) handleRepostToCircle(w http.ResponseWriter, r *http.Request) {
+	postID := postIDFromPath(r.URL.Path)
+	var body struct {
+		CircleID string `json:"circleId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
+		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
+		return
+	}
+	resp, err := h.postService.RepostToCircle(r.Context(), postID, resolveUserID(r), body.CircleID, "")
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *ContentHandler) handleQuoteToCircle(w http.ResponseWriter, r *http.Request) {
+	postID := postIDFromPath(r.URL.Path)
+	var body struct {
+		CircleID string `json:"circleId"`
+		Quote    string `json:"quoteText"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
+		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
+		return
+	}
+	resp, err := h.postService.RepostToCircle(r.Context(), postID, resolveUserID(r), body.CircleID, body.Quote)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	resp["sourceType"] = "quote"
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *ContentHandler) handleInitMediaUpload(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		MediaType string `json:"mediaType"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	resp := h.postService.InitMediaUpload(r.Context(), resolveUserID(r), body.MediaType)
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *ContentHandler) handleCompleteMediaUpload(w http.ResponseWriter, r *http.Request) {
+	sessionID := pathParamAfter(r.URL.Path, "/v1/content/media/uploads/", ":complete")
+	asset, err := h.postService.CompleteMediaUpload(r.Context(), sessionID)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, asset)
+}
+
+func (h *ContentHandler) handleAbortMediaUpload(w http.ResponseWriter, r *http.Request) {
+	sessionID := pathParamAfter(r.URL.Path, "/v1/content/media/uploads/", ":abort")
+	if err := h.postService.AbortMediaUpload(r.Context(), sessionID); err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"sessionId": sessionID, "status": "aborted"})
+}
+
+func (h *ContentHandler) handleGetMediaAsset(w http.ResponseWriter, r *http.Request) {
+	mediaID := pathParamAfter(r.URL.Path, "/v1/content/media/", "")
+	if idx := strings.Index(mediaID, "/"); idx > 0 {
+		mediaID = mediaID[:idx]
+	}
+	asset, ok := h.postService.GetMediaAsset(mediaID)
+	if !ok {
+		writeHTTPError(w, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
+			"媒体不存在",
+			"media not found",
+			false,
+		))
+		return
+	}
+	writeJSON(w, http.StatusOK, asset)
+}
+
+func (h *ContentHandler) handleSelectAutoVideoCover(w http.ResponseWriter, r *http.Request) {
+	mediaID := pathParamAfter(r.URL.Path, "/v1/content/media/", "/cover:auto")
+	asset, err := h.postService.SelectAutoVideoCover(r.Context(), mediaID)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, asset)
+}
+
+func (h *ContentHandler) handleSelectManualVideoCover(w http.ResponseWriter, r *http.Request) {
+	mediaID := pathParamAfter(r.URL.Path, "/v1/content/media/", "/cover:manual")
+	var body struct {
+		CoverAssetID string `json:"coverAssetId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
+		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
+		return
+	}
+	asset, err := h.postService.SelectManualVideoCover(r.Context(), mediaID, body.CoverAssetID)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, asset)
+}
+
+func (h *ContentHandler) handleGenerateArticleSummary(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Title string `json:"title"`
+		Body  string `json:"body"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
+		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
+		return
+	}
+	summary := h.postService.GenerateArticleSummary(body.Title, body.Body)
+	writeJSON(w, http.StatusOK, map[string]any{"summary": summary})
 }
 
 func (h *ContentHandler) handleReportBehaviors(w http.ResponseWriter, r *http.Request) {
@@ -326,12 +494,76 @@ func postIDFromPath(path string) string {
 }
 
 func (h *ContentHandler) handleNotImplemented(w http.ResponseWriter, r *http.Request, operation string) {
+	switch operation {
+	case "LikePost":
+		h.handleLikePost(w, r, postIDFromPath(r.URL.Path))
+		return
+	case "UnlikePost":
+		h.handleUnlikePost(w, r, postIDFromPath(r.URL.Path))
+		return
+	case "FavoritePost":
+		h.handleFavoritePost(w, r, postIDFromPath(r.URL.Path))
+		return
+	case "UnfavoritePost":
+		h.handleUnfavoritePost(w, r, postIDFromPath(r.URL.Path))
+		return
+	case "GetReactionState":
+		h.handleGetReactionState(w, r, postIDFromPath(r.URL.Path))
+		return
+	case "CreateComment":
+		h.handleCreateComment(w, r, postIDFromPath(r.URL.Path))
+		return
+	case "PublishPost":
+		h.handlePublishPost(w, r)
+		return
+	case "DeletePost":
+		h.handleDeletePost(w, r)
+		return
+	case "UpdatePostCircles":
+		h.handleUpdatePostCircles(w, r)
+		return
+	case "RepostToCircle":
+		h.handleRepostToCircle(w, r)
+		return
+	case "QuoteToCircle":
+		h.handleQuoteToCircle(w, r)
+		return
+	case "InitMediaUpload":
+		h.handleInitMediaUpload(w, r)
+		return
+	case "CompleteMediaUpload":
+		h.handleCompleteMediaUpload(w, r)
+		return
+	case "AbortMediaUpload":
+		h.handleAbortMediaUpload(w, r)
+		return
+	case "GetMediaAsset":
+		h.handleGetMediaAsset(w, r)
+		return
+	case "SelectAutoVideoCover":
+		h.handleSelectAutoVideoCover(w, r)
+		return
+	case "SelectManualVideoCover":
+		h.handleSelectManualVideoCover(w, r)
+		return
+	case "GenerateArticleSummary":
+		h.handleGenerateArticleSummary(w, r)
+		return
+	}
 	writeHTTPError(w, rterr.NewAppError(
 		rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "unavailable"),
 		"接口暂未开放",
 		"operation not implemented: "+operation+" "+r.Method+" "+r.URL.Path,
 		true,
 	))
+}
+
+func pathParamAfter(path, prefix, suffix string) string {
+	v := strings.TrimSpace(strings.TrimPrefix(path, prefix))
+	if suffix != "" {
+		v = strings.TrimSuffix(v, suffix)
+	}
+	return strings.Trim(strings.TrimSpace(v), "/")
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {

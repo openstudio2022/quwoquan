@@ -123,6 +123,61 @@ errors:
       zh: "媒体文件正在处理中，请稍后发布"
       en: "Media is still processing, please retry shortly"
 
+  - code: CONTENT.USER.post_immutable_after_publish
+    kind: USER
+    reason: forbidden
+    http_status: 409
+    retryable: false
+    dart_const: postImmutableAfterPublish
+    go_const: ErrPostImmutableAfterPublish
+    user_message:
+      zh: "内容发布后不可修改"
+      en: "Published content is immutable"
+
+  - code: CONTENT.USER.public_required_for_circle_distribution
+    kind: USER
+    reason: invalid_argument
+    http_status: 400
+    retryable: false
+    dart_const: publicRequiredForCircleDistribution
+    go_const: ErrPublicRequiredForCircleDistribution
+    user_message:
+      zh: "发布到圈子前需设置为公开"
+      en: "Post must be public before distributing to circles"
+
+  - code: CONTENT.USER.invalid_moment_payload
+    kind: USER
+    reason: invalid_argument
+    http_status: 400
+    retryable: false
+    dart_const: invalidMomentPayload
+    go_const: ErrInvalidMomentPayload
+    user_message:
+      zh: "微趣内容为空，正文/图片/视频至少填写一项"
+      en: "Moment payload is empty; at least body/image/video is required"
+
+  - code: CONTENT.USER.content_deleted
+    kind: USER
+    reason: gone
+    http_status: 410
+    retryable: false
+    dart_const: contentDeleted
+    go_const: ErrContentDeleted
+    user_message:
+      zh: "内容已删除"
+      en: "Content has been deleted"
+
+  - code: CONTENT.USER.circle_distribution_forbidden
+    kind: USER
+    reason: forbidden
+    http_status: 403
+    retryable: false
+    dart_const: circleDistributionForbidden
+    go_const: ErrCircleDistributionForbidden
+    user_message:
+      zh: "无权修改圈子分发关系"
+      en: "Not allowed to modify circle distribution"
+
   # ── 系统侧错误（SYSTEM）──────────────────────────────────────────────
 
   - code: CONTENT.SYSTEM.storage_write_failed

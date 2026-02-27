@@ -23,13 +23,12 @@ func RegisterGeneratedRoutes(mux *http.ServeMux, h *ContentHandler) {
 
 func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.ResponseWriter, r *http.Request) {
 	switch operation {
+	case "AbortMediaUpload":
+		h.handleNotImplemented(w, r, operation)
+	case "CompleteMediaUpload":
+		h.handleNotImplemented(w, r, operation)
 	case "CreateComment":
-		postID := postIDFromPath(r.URL.Path)
-		if postID == "" {
-			h.handleNotImplemented(w, r, operation)
-			return
-		}
-		h.handleCreateComment(w, r, postID)
+		h.handleNotImplemented(w, r, operation)
 	case "CreatePost":
 		h.handleCreatePost(w, r)
 	case "DeleteComment":
@@ -37,12 +36,9 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	case "DeletePost":
 		h.handleNotImplemented(w, r, operation)
 	case "FavoritePost":
-		postID := postIDFromPath(r.URL.Path)
-		if postID == "" {
-			h.handleNotImplemented(w, r, operation)
-			return
-		}
-		h.handleFavoritePost(w, r, postID)
+		h.handleNotImplemented(w, r, operation)
+	case "GenerateArticleSummary":
+		h.handleNotImplemented(w, r, operation)
 	case "GetCounters":
 		h.handleNotImplemented(w, r, operation)
 	case "GetFeed":
@@ -54,55 +50,56 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	case "GetPost":
 		h.handleGetPost(w, r)
 	case "GetReactionState":
-		postID := postIDFromPath(r.URL.Path)
-		if postID == "" {
-			h.handleNotImplemented(w, r, operation)
-			return
-		}
-		h.handleGetReactionState(w, r, postID)
+		h.handleNotImplemented(w, r, operation)
 	case "GetRecommendation":
 		h.handleGetRecommendation(w, r)
+	case "InitMediaUpload":
+		h.handleNotImplemented(w, r, operation)
 	case "LikePost":
-		postID := postIDFromPath(r.URL.Path)
-		if postID == "" {
-			h.handleNotImplemented(w, r, operation)
-			return
-		}
-		h.handleLikePost(w, r, postID)
+		h.handleNotImplemented(w, r, operation)
 	case "ListComments":
+		h.handleNotImplemented(w, r, operation)
+	case "PublishPost":
+		h.handleNotImplemented(w, r, operation)
+	case "QuoteToCircle":
 		h.handleNotImplemented(w, r, operation)
 	case "ReportBehaviors":
 		h.handleReportBehaviors(w, r)
+	case "RepostToCircle":
+		h.handleNotImplemented(w, r, operation)
+	case "SelectAutoVideoCover":
+		h.handleNotImplemented(w, r, operation)
+	case "SelectManualVideoCover":
+		h.handleNotImplemented(w, r, operation)
 	case "UnfavoritePost":
-		postID := postIDFromPath(r.URL.Path)
-		if postID == "" {
-			h.handleNotImplemented(w, r, operation)
-			return
-		}
-		h.handleUnfavoritePost(w, r, postID)
+		h.handleNotImplemented(w, r, operation)
 	case "UnlikePost":
-		postID := postIDFromPath(r.URL.Path)
-		if postID == "" {
-			h.handleNotImplemented(w, r, operation)
-			return
-		}
-		h.handleUnlikePost(w, r, postID)
+		h.handleNotImplemented(w, r, operation)
 	case "UpdatePost":
 		h.handleUpdatePost(w, r)
+	case "UpdatePostCircles":
+		h.handleNotImplemented(w, r, operation)
 	default:
 		h.handleNotImplemented(w, r, operation)
 	}
 }
 
 var generatedRouteTable = []generatedRouteDef{
+	{method: "POST", pathTemplate: "/v1/content/articles/summary:generate", operation: "GenerateArticleSummary"},
 	{method: "POST", pathTemplate: "/v1/content/behaviors", operation: "ReportBehaviors"},
 	{method: "GET", pathTemplate: "/v1/content/feed", operation: "GetFeed"},
 	{method: "GET", pathTemplate: "/v1/content/helper-read/{contentId}", operation: "GetHelperRead"},
+	{method: "POST", pathTemplate: "/v1/content/media/uploads/{sessionId}:abort", operation: "AbortMediaUpload"},
+	{method: "POST", pathTemplate: "/v1/content/media/uploads/{sessionId}:complete", operation: "CompleteMediaUpload"},
+	{method: "POST", pathTemplate: "/v1/content/media/uploads:init", operation: "InitMediaUpload"},
 	{method: "GET", pathTemplate: "/v1/content/media/{mediaId}", operation: "GetMediaAsset"},
+	{method: "POST", pathTemplate: "/v1/content/media/{mediaId}/cover:auto", operation: "SelectAutoVideoCover"},
+	{method: "POST", pathTemplate: "/v1/content/media/{mediaId}/cover:manual", operation: "SelectManualVideoCover"},
 	{method: "POST", pathTemplate: "/v1/content/posts", operation: "CreatePost"},
 	{method: "DELETE", pathTemplate: "/v1/content/posts/{postId}", operation: "DeletePost"},
 	{method: "GET", pathTemplate: "/v1/content/posts/{postId}", operation: "GetPost"},
 	{method: "PATCH", pathTemplate: "/v1/content/posts/{postId}", operation: "UpdatePost"},
+	{method: "PATCH", pathTemplate: "/v1/content/posts/{postId}/circles", operation: "UpdatePostCircles"},
 	{method: "GET", pathTemplate: "/v1/content/posts/{postId}/comments", operation: "ListComments"},
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/comments", operation: "CreateComment"},
 	{method: "DELETE", pathTemplate: "/v1/content/posts/{postId}/comments/{commentId}", operation: "DeleteComment"},
@@ -111,7 +108,10 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/favorite", operation: "FavoritePost"},
 	{method: "DELETE", pathTemplate: "/v1/content/posts/{postId}/like", operation: "UnlikePost"},
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/like", operation: "LikePost"},
+	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/publish", operation: "PublishPost"},
+	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/quote", operation: "QuoteToCircle"},
 	{method: "GET", pathTemplate: "/v1/content/posts/{postId}/reactions", operation: "GetReactionState"},
+	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/repost", operation: "RepostToCircle"},
 	{method: "POST", pathTemplate: "/v1/content/recommend", operation: "GetRecommendation"},
 	{method: "GET", pathTemplate: "/v1/orch/discovery/feed", operation: "GetFeed"},
 }
@@ -196,17 +196,23 @@ var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
 		"replyToCommentId": {},
 	},
 	"CreatePost": {
-		"contentType":  {},
-		"title":        {},
-		"body":         {},
-		"tags":         {},
-		"mediaUrls":    {},
-		"coverUrl":     {},
-		"videoUrl":     {},
-		"location":     {},
-		"locationName": {},
-		"visibility":   {},
-		"circleId":     {},
+		"contentType":         {},
+		"title":               {},
+		"body":                {},
+		"summary":             {},
+		"tags":                {},
+		"mediaUrls":           {},
+		"coverUrl":            {},
+		"videoUrl":            {},
+		"illustrationAssetId": {},
+		"location":            {},
+		"locationName":        {},
+		"visibility":          {},
+		"circleIds":           {},
+		"sourcePostId":        {},
+		"sourceType":          {},
+		"deviceInfo":          {},
+		"publishLocation":     {},
 	},
 }
 

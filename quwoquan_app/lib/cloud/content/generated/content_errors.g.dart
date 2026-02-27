@@ -12,6 +12,11 @@ enum ContentErrorCode {
   rateLimited,
   contentTooLong,
   mediaNotReady,
+  postImmutableAfterPublish,
+  publicRequiredForCircleDistribution,
+  invalidMomentPayload,
+  contentDeleted,
+  circleDistributionForbidden,
   storageWriteFailed,
   internalError,
   upstreamTimeout,
@@ -51,6 +56,16 @@ enum ContentErrorCode {
         return ContentErrorCode.contentTooLong;
       case 'CONTENT.USER.media_not_ready':
         return ContentErrorCode.mediaNotReady;
+      case 'CONTENT.USER.post_immutable_after_publish':
+        return ContentErrorCode.postImmutableAfterPublish;
+      case 'CONTENT.USER.public_required_for_circle_distribution':
+        return ContentErrorCode.publicRequiredForCircleDistribution;
+      case 'CONTENT.USER.invalid_moment_payload':
+        return ContentErrorCode.invalidMomentPayload;
+      case 'CONTENT.USER.content_deleted':
+        return ContentErrorCode.contentDeleted;
+      case 'CONTENT.USER.circle_distribution_forbidden':
+        return ContentErrorCode.circleDistributionForbidden;
       case 'CONTENT.SYSTEM.storage_write_failed':
         return ContentErrorCode.storageWriteFailed;
       case 'CONTENT.SYSTEM.internal_error':
@@ -78,6 +93,11 @@ class ContentErrorMessages {
     ContentErrorCode.rateLimited: '操作太频繁，请稍后重试',
     ContentErrorCode.contentTooLong: '内容超出长度限制',
     ContentErrorCode.mediaNotReady: '媒体文件正在处理中，请稍后发布',
+    ContentErrorCode.postImmutableAfterPublish: '内容发布后不可修改',
+    ContentErrorCode.publicRequiredForCircleDistribution: '发布到圈子前需设置为公开',
+    ContentErrorCode.invalidMomentPayload: '微趣内容为空，正文/图片/视频至少填写一项',
+    ContentErrorCode.contentDeleted: '内容已删除',
+    ContentErrorCode.circleDistributionForbidden: '无权修改圈子分发关系',
     ContentErrorCode.storageWriteFailed: '操作失败，请稍后重试',
     ContentErrorCode.internalError: '服务异常，请稍后重试',
     ContentErrorCode.upstreamTimeout: '请求超时，请检查网络后重试',
@@ -94,6 +114,11 @@ class ContentErrorMessages {
     ContentErrorCode.rateLimited: 'Too many requests, please retry later',
     ContentErrorCode.contentTooLong: 'Content exceeds length limit',
     ContentErrorCode.mediaNotReady: 'Media is still processing, please retry shortly',
+    ContentErrorCode.postImmutableAfterPublish: 'Published content is immutable',
+    ContentErrorCode.publicRequiredForCircleDistribution: 'Post must be public before distributing to circles',
+    ContentErrorCode.invalidMomentPayload: 'Moment payload is empty; at least body/image/video is required',
+    ContentErrorCode.contentDeleted: 'Content has been deleted',
+    ContentErrorCode.circleDistributionForbidden: 'Not allowed to modify circle distribution',
     ContentErrorCode.storageWriteFailed: 'Operation failed, please retry',
     ContentErrorCode.internalError: 'Service error, please try again later',
     ContentErrorCode.upstreamTimeout: 'Request timed out, please check your connection',

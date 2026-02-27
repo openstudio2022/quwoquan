@@ -2,13 +2,30 @@ version: 1
 feature: "post-create-update"
 level: "L3"
 template: "A1-A8"
-focus_groups: []
+status: archived
+archived: true
+focus_groups: [metadata, create_publish, distribution, deletion, media_pipeline]
 tests:
-  mock: []
-  unit: []
-  contract: []
-  integration: []
-  uat: []
+  mock:
+    - "quwoquan_app/test/cloud/content/api_contract_runner.dart"
+  unit:
+    - "quwoquan_service/services/content/tests/post_validation_test.go"
+    - "quwoquan_service/services/content/tests/post_distribution_test.go"
+  contract:
+    - "quwoquan_service/services/content/tests/post_contract_test.go"
+  integration:
+    - "quwoquan_service/services/content/tests/post_delete_cascade_integration_test.go"
+  uat:
+    - "quwoquan_app/test/ui/discovery/post/journeys/discovery_post_interaction_journey_test.dart"
 execution:
-  local_gate: "make gate"
+  local_gate: "make verify-metadata && make codegen && make codegen-app && make gate"
   full_gate: "make gate-full"
+level_acceptance:
+  A1: "四类内容发布规则生效：moment 至少 body/image/video 一项；photo 允许无显式封面；video 默认首帧封面且可手工覆盖；article 标题必填且支持 summary+illustration"
+  A2: "visibility 仅 public/private，发布到圈子前提为 public；circle 不再作为权限语义"
+  A3: "作者主动分发与用户转发分离存储，可在查询与统计维度区分"
+  A4: "发布后内容本体不可修改，仅允许删除与圈子分发关系变更"
+  A5: "删除 Post 后，作者主动分发与用户转发关系均被级联下架，圈子流不可见"
+  A6: "URL 访问命中 tombstone 返回已删除提示；未命中 tombstone 返回内容不存在"
+  A7: "媒体元数据（图片/视频分辨率、大小、时长）及设备/地点信息入库并可回读"
+  A8: "make verify-metadata、make codegen、make codegen-app、make gate-full 全通过"

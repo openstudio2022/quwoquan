@@ -165,3 +165,108 @@ func TestCreatePostWithLocationField(t *testing.T) {
 		t.Errorf("expected latitude 39.9, got %v", loc["latitude"])
 	}
 }
+
+func TestMomentRequiresBodyOrMedia(t *testing.T) {
+	req := httptest.NewRequest(
+		"POST",
+		"/v1/content/posts",
+		bytes.NewBufferString(`{"contentType":"micro","body":"","mediaUrls":[],"videoUrl":""}`),
+	)
+	rec := httptest.NewRecorder()
+	newTestHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for empty moment payload, got %d", rec.Code)
+	}
+}
+
+func TestPostImmutableAfterPublish(t *testing.T) {
+	handler := newTestHandler()
+	createReq := httptest.NewRequest(
+		"POST",
+		"/v1/content/posts",
+		bytes.NewBufferString(`{"title":"t","body":"b","contentType":"article"}`),
+	)
+	createReq.Header.Set("X-Client-User-Id", "u1")
+	createRec := httptest.NewRecorder()
+	handler.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("unexpected create status: %d", createRec.Code)
+	}
+	var created map[string]any
+	_ = json.Unmarshal(createRec.Body.Bytes(), &created)
+	postID, _ := created["_id"].(string)
+
+	updateReq := httptest.NewRequest(
+		"PATCH",
+		"/v1/content/posts/"+postID,
+		bytes.NewBufferString(`{"title":"new title"}`),
+	)
+	updateRec := httptest.NewRecorder()
+	handler.ServeHTTP(updateRec, updateReq)
+	if updateRec.Code != http.StatusConflict {
+		t.Fatalf("expected 409 for immutable post, got %d", updateRec.Code)
+	}
+}
+
+func TestDeletePostAndTombstoneLookup(t *testing.T) {
+	handler := newTestHandler()
+	createReq := httptest.NewRequest(
+		"POST",
+		"/v1/content/posts",
+		bytes.NewBufferString(`{"title":"to delete","body":"b","contentType":"article"}`),
+	)
+	createReq.Header.Set("X-Client-User-Id", "u_delete")
+	createRec := httptest.NewRecorder()
+	handler.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("create failed: %d", createRec.Code)
+	}
+	var created map[string]any
+	_ = json.Unmarshal(createRec.Body.Bytes(), &created)
+	postID, _ := created["_id"].(string)
+
+	delReq := httptest.NewRequest("DELETE", "/v1/content/posts/"+postID, nil)
+	delReq.Header.Set("X-Client-User-Id", "u_delete")
+	delRec := httptest.NewRecorder()
+	handler.ServeHTTP(delRec, delReq)
+	if delRec.Code != http.StatusOK {
+		t.Fatalf("delete failed: %d", delRec.Code)
+	}
+
+	getReq := httptest.NewRequest("GET", "/v1/content/posts/"+postID, nil)
+	getRec := httptest.NewRecorder()
+	handler.ServeHTTP(getRec, getReq)
+	if getRec.Code != http.StatusConflict {
+		t.Fatalf("expected 409 for deleted tombstone, got %d", getRec.Code)
+	}
+}
+
+func TestUpdatePostCirclesRequiresPublic(t *testing.T) {
+	handler := newTestHandler()
+	createReq := httptest.NewRequest(
+		"POST",
+		"/v1/content/posts",
+		bytes.NewBufferString(`{"contentType":"article","title":"private","visibility":"private"}`),
+	)
+	createReq.Header.Set("X-Client-User-Id", "author1")
+	createRec := httptest.NewRecorder()
+	handler.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("create failed: %d", createRec.Code)
+	}
+	var created map[string]any
+	_ = json.Unmarshal(createRec.Body.Bytes(), &created)
+	postID, _ := created["_id"].(string)
+
+	circleReq := httptest.NewRequest(
+		"PATCH",
+		"/v1/content/posts/"+postID+"/circles",
+		bytes.NewBufferString(`{"add":["circle_a"]}`),
+	)
+	circleReq.Header.Set("X-Client-User-Id", "author1")
+	circleRec := httptest.NewRecorder()
+	handler.ServeHTTP(circleRec, circleReq)
+	if circleRec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 when private post distributed to circles, got %d", circleRec.Code)
+	}
+}
