@@ -175,6 +175,11 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         onBlockUser: () {
           ref.read(blockRepositoryProvider).blockUser(post.authorId);
         },
+        onBlockWords: () async {
+          final keyword = _keywordForPost(post);
+          if (keyword.isEmpty) return;
+          await ref.read(keywordBlockRepositoryProvider).addBlockedKeyword(keyword);
+        },
         onReport: () {
           ref.read(reportRepositoryProvider).createReport(
             targetId: post.id,
@@ -380,6 +385,20 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     });
   }
 
+  String _keywordForPost(PostBaseDto post) {
+    final raw = _rawPostById(post.id);
+    final source = [
+      raw?['title']?.toString() ?? '',
+      raw?['body']?.toString() ?? '',
+    ].where((e) => e.trim().isNotEmpty).join(' ');
+    final tokens = source
+        .split(RegExp(r'[^\\u4e00-\\u9fa5A-Za-z0-9_]+'))
+        .map((e) => e.trim())
+        .where((e) => e.length >= 2)
+        .toList();
+    return tokens.isEmpty ? '' : tokens.first;
+  }
+
   @override
   Widget build(BuildContext context) {
     final posts = _buildFeed();
@@ -563,6 +582,12 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       postId: postId,
       initialComments: const [],
       config: const CommentConfig(enabled: true),
+      onSubmitComment: (content) async {
+        await ref.read(contentRepositoryProvider).createComment(
+              postId: postId,
+              content: content,
+            );
+      },
     );
   }
 

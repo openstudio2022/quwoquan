@@ -1,6 +1,9 @@
 """
 content_feed scenario scorer.
-Rule-based placeholder; can be replaced by LightGBM when model is loaded from ModelRegistry.
+Rule-based baseline with sessionSignals integration:
+- tagWeights: per-session interest boost
+- exposedIds / negativeIds: hard penalty (de-prioritize)
+Can be replaced by LightGBM when model is loaded from ModelRegistry.
 """
 import math
 
@@ -19,14 +22,47 @@ def _rule_score(c: CandidateInput) -> float:
     return pop * 0.6 + fresh * 0.4
 
 
+def _session_boost(c: CandidateInput, session_signals: dict) -> tuple[float, bool]:
+    if not session_signals:
+        return 0.0, False
+
+    content_id = c.contentId or ""
+    exposed = set(session_signals.get("exposedIds") or [])
+    negative = set(session_signals.get("negativeIds") or [])
+    if content_id in negative or content_id in exposed:
+        return -1000.0, True
+
+    tag_weights = session_signals.get("tagWeights") or {}
+    tags = c.tags or []
+    boost = 0.0
+    for tag in tags:
+        w = tag_weights.get(tag, 0.0)
+        try:
+            boost += float(w)
+        except (TypeError, ValueError):
+            continue
+    return boost, False
+
+
 def score(req: ModelScoreRequest) -> list[CandidateScore]:
     """Return one CandidateScore per candidate, same order."""
     out: list[CandidateScore] = []
+    session_signals = req.sessionSignals or {}
     for c in req.candidates:
-        s = _rule_score(c)
+        base = _rule_score(c)
+        boost, filtered = _session_boost(c, session_signals)
+        s = base + boost
         content_id = c.contentId or ""
         out.append(
-            CandidateScore(contentId=content_id, score=s, detail={"rule": s})
+            CandidateScore(
+                contentId=content_id,
+                score=s,
+                detail={
+                    "rule_base": base,
+                    "session_boost": boost,
+                    "filtered": 1.0 if filtered else 0.0,
+                },
+            )
         )
     return out
 

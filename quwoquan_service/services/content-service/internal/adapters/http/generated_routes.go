@@ -24,7 +24,12 @@ func RegisterGeneratedRoutes(mux *http.ServeMux, h *ContentHandler) {
 func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.ResponseWriter, r *http.Request) {
 	switch operation {
 	case "CreateComment":
-		h.handleNotImplemented(w, r, operation)
+		postID := postIDFromPath(r.URL.Path)
+		if postID == "" {
+			h.handleNotImplemented(w, r, operation)
+			return
+		}
+		h.handleCreateComment(w, r, postID)
 	case "CreatePost":
 		h.handleCreatePost(w, r)
 	case "DeleteComment":
@@ -32,7 +37,12 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	case "DeletePost":
 		h.handleNotImplemented(w, r, operation)
 	case "FavoritePost":
-		h.handleNotImplemented(w, r, operation)
+		postID := postIDFromPath(r.URL.Path)
+		if postID == "" {
+			h.handleNotImplemented(w, r, operation)
+			return
+		}
+		h.handleFavoritePost(w, r, postID)
 	case "GetCounters":
 		h.handleNotImplemented(w, r, operation)
 	case "GetFeed":
@@ -44,19 +54,39 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	case "GetPost":
 		h.handleGetPost(w, r)
 	case "GetReactionState":
-		h.handleNotImplemented(w, r, operation)
+		postID := postIDFromPath(r.URL.Path)
+		if postID == "" {
+			h.handleNotImplemented(w, r, operation)
+			return
+		}
+		h.handleGetReactionState(w, r, postID)
 	case "GetRecommendation":
 		h.handleGetRecommendation(w, r)
 	case "LikePost":
-		h.handleNotImplemented(w, r, operation)
+		postID := postIDFromPath(r.URL.Path)
+		if postID == "" {
+			h.handleNotImplemented(w, r, operation)
+			return
+		}
+		h.handleLikePost(w, r, postID)
 	case "ListComments":
 		h.handleNotImplemented(w, r, operation)
 	case "ReportBehaviors":
 		h.handleReportBehaviors(w, r)
 	case "UnfavoritePost":
-		h.handleNotImplemented(w, r, operation)
+		postID := postIDFromPath(r.URL.Path)
+		if postID == "" {
+			h.handleNotImplemented(w, r, operation)
+			return
+		}
+		h.handleUnfavoritePost(w, r, postID)
 	case "UnlikePost":
-		h.handleNotImplemented(w, r, operation)
+		postID := postIDFromPath(r.URL.Path)
+		if postID == "" {
+			h.handleNotImplemented(w, r, operation)
+			return
+		}
+		h.handleUnlikePost(w, r, postID)
 	case "UpdatePost":
 		h.handleUpdatePost(w, r)
 	default:

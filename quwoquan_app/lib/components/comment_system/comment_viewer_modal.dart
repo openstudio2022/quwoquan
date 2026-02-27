@@ -13,6 +13,7 @@ class CommentViewer {
     required CommentConfig config,
     CommentModalHeight modalHeight = CommentModalHeight.adaptive,
     Function(String)? onCommentAdded,
+    Future<void> Function(String content)? onSubmitComment,
     Function(CommentModel)? onCommentLiked,
     Function(String, String)? onReplyAdded,
     Function(String)? onUserTapped,
@@ -29,6 +30,7 @@ class CommentViewer {
         config: config,
         modalHeight: modalHeight,
         onCommentAdded: onCommentAdded,
+        onSubmitComment: onSubmitComment,
         onCommentLiked: onCommentLiked,
         onReplyAdded: onReplyAdded,
         onUserTapped: onUserTapped,
@@ -45,6 +47,7 @@ class _CommentViewerModal extends StatefulWidget {
   final CommentConfig config;
   final CommentModalHeight modalHeight;
   final Function(String)? onCommentAdded;
+  final Future<void> Function(String content)? onSubmitComment;
   final Function(CommentModel)? onCommentLiked;
   final Function(String, String)? onReplyAdded;
   final Function(String)? onUserTapped;
@@ -57,6 +60,7 @@ class _CommentViewerModal extends StatefulWidget {
     required this.config,
     this.modalHeight = CommentModalHeight.adaptive,
     this.onCommentAdded,
+    this.onSubmitComment,
     this.onCommentLiked,
     this.onReplyAdded,
     this.onUserTapped,
@@ -71,6 +75,7 @@ class _CommentViewerModal extends StatefulWidget {
 class _CommentViewerModalState extends State<_CommentViewerModal> {
   final List<CommentModel> _comments = [];
   CommentModel? _replyTo;
+  bool _submitting = false;
 
   @override
   void initState() {
@@ -147,11 +152,23 @@ class _CommentViewerModalState extends State<_CommentViewerModal> {
           CommentInput(
             config: widget.config,
             replyTo: _replyTo,
-            onSubmit: (content) {
-              widget.onCommentAdded?.call('comment_${DateTime.now().millisecondsSinceEpoch}');
-              setState(() {
-                _replyTo = null;
-              });
+            onSubmit: (content) async {
+              if (_submitting) return;
+              setState(() => _submitting = true);
+              try {
+                if (widget.onSubmitComment != null) {
+                  await widget.onSubmitComment!(content);
+                }
+                widget.onCommentAdded?.call('comment_${DateTime.now().millisecondsSinceEpoch}');
+                if (!mounted) return;
+                setState(() {
+                  _replyTo = null;
+                });
+              } finally {
+                if (mounted) {
+                  setState(() => _submitting = false);
+                }
+              }
             },
             onCancelReply: () {
               setState(() {

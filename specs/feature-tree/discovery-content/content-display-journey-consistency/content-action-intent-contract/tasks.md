@@ -1,69 +1,50 @@
-# 开发任务：content-action-intent-contract
+# 开发任务：content-action-intent-contract（8 类反馈闭环）
 
 ## 当前交付任务
 
 ### metadata（M）
 
-- [ ] M1：确认 `follow_edge/service.yaml` 中 `FollowUser`（POST `/v1/user/follow/{targetUserId}`）和 `UnfollowUser`（DELETE `/v1/user/follow/{targetUserId}`）路由已存在（✅ 已验证存在），**无需新增**；确认 `UserRepository` 的 Remote 实现使用此路径
-- [ ] M2：确认 `post/service.yaml` 中 `LikePost`（POST `/v1/content/posts/{postId}/like`）、`UnlikePost`（DELETE）、`FavoritePost`（POST `/v1/content/posts/{postId}/favorite`）、`UnfavoritePost`（DELETE）路由已存在（✅ 已添加），无需再修改
-- [ ] M3：`make verify`（metadata 内部一致性通过）
+- [x] M1：`user_profile/fields.yaml` 为 `UserSetting` 新增 `blockedKeywords` 字段（string[]，read_write），并保持隐私分级可被推荐过滤消费
+- [x] M2：`content/post/behaviors.yaml` 中 `report.dedicated_route` 对齐为 `POST /v1/content/reports`
+- [x] M3：确认 8 类反馈路由与对象归属（content/post、content/report、user/block_edge、user/user_profile）在 metadata 中无冲突
+- [x] M4：执行 `make verify-metadata`（或仓库兼容命令 `make verify`）通过
 
 ---
 
 ### codegen（C）
 
-- [ ] C1：`make codegen`（如 metadata 变更影响端侧生成产物，执行 `make codegen-app`）
+- [x] C1：执行 `make codegen`
+- [x] C2：执行 `make codegen-app`
+- [ ] C3：若推荐请求 schema 变化，执行 `make codegen-rec-model-python`
 
 ---
 
 ### 业务逻辑（A）
 
-- [ ] A1：新建 `lib/core/providers/content_intent.dart`（`ContentIntentNotifier`）
-  - `like(String postId)`：乐观更新 `HomeState.likedPosts` → `ContentRepository.likePost(postId)`（调用 `POST /v1/content/posts/{postId}/like`），失败回滚
-  - `unlike(String postId)`：乐观更新 → `ContentRepository.unlikePost(postId)`（`DELETE /v1/content/posts/{postId}/like`），失败回滚
-  - `save(String postId)`：乐观更新 `HomeState.savedPosts` → `ContentRepository.favoritePost(postId)`（`POST /v1/content/posts/{postId}/favorite`），失败回滚
-  - `unsave(String postId)`：乐观更新 → `ContentRepository.unfavoritePost(postId)`，失败回滚
-- [ ] A2：新建 `lib/core/providers/user_intent.dart`（`UserIntentNotifier`）
-  - `follow(String userId)`：乐观更新 `HomeState.followingUsers` → `UserRepository.followUser(userId)`（调用 `POST /v1/user/follow/{targetUserId}`），失败回滚
-  - `unfollow(String userId)`：乐观更新 → `UserRepository.unfollowUser(userId)`（`DELETE /v1/user/follow/{targetUserId}`），失败回滚
-- [ ] A3：`ContentRepository` Abstract 接口增加 `likePost` / `unlikePost` / `favoritePost` / `unfavoritePost` 方法签名
-- [ ] A4：`MockContentRepository` 实现四个方法（更新本地计数/状态，不发 HTTP）
-- [ ] A5：`RemoteContentRepository` 实现四个方法（调用 `CloudRuntimeConfig.gatewayBaseUrl` + 对应路径，使用 `CloudRequestHeaders.forPage`）
-- [ ] A6：`UserRepository` Abstract 接口增加 `followUser(String targetUserId)` / `unfollowUser(String targetUserId)` 方法签名
-- [ ] A7：`MockUserRepository.followUser/unfollowUser` 实现（更新本地 mock following set，不发 HTTP）
-- [ ] A8：`RemoteUserRepository.followUser/unfollowUser` 实现（调用 `POST/DELETE /v1/user/follow/{targetUserId}`，使用 `CloudRuntimeConfig` + `CloudRequestHeaders`）
-- [ ] A9：新建 `lib/core/providers/intent_providers.dart`，注册：
-  - `contentIntentProvider = NotifierProvider<ContentIntentNotifier, void>`
-  - `userIntentProvider = NotifierProvider<UserIntentNotifier, void>`
+- [x] A1：端侧反馈入口全接线（Works/Moment）：like/favorite/share/comment/dislike/report/block user/block keywords
+- [x] A2：`comment` 从 UI 本地回调改为真实调用评论 API（createComment），并上报 commentLength 特征
+- [x] A3：`block keywords` 增加 Repository + Provider，接入用户设置读写
+- [x] A4：content-service 实现 like/unlike/favorite/unfavorite handler（当前为 not implemented）
+- [x] A5：建立专用路由反馈到推荐热链路的桥接（ContentReacted/BehaviorBatchReported 对齐）
+- [x] A6：补齐计数一致性策略：view/like/favorite/comment/share 的主存储写入与回读口径统一
+- [x] A7：推荐过滤接入 user block + keyword block（召回后过滤或预过滤，二选一并文档化）
+- [x] A8：rec-model-service transformer/scorer 接入 sessionSignals（至少读 tagWeights/exposed/negative）
 
 ---
 
 ### 测试（T）
 
-- [ ] T1：Intent journey 测试（`test/ui/discovery/post/journeys/discovery_post_interaction_journey_test.dart`）
-  - group「旅程正常路径」：
-    - 场景 J1：`like(postId)` → `HomeState.likedPosts` 立即包含 `postId`（乐观）
-    - 场景 J2：`follow(userId)` → `HomeState.followingUsers` 立即包含 `userId`（乐观）
-  - group「旅程错误路径」：
-    - 场景 J3：`like(postId)` + MockRepo 抛异常 → `HomeState.likedPosts` 回滚
-    - 场景 J4：`follow(userId)` + MockRepo 抛异常 → `followingUsers` 回滚
-  - group「旅程边界/幂等」：
-    - 场景 J5：连续 like 同一 postId → 计数幂等，MockRepo.likePostCallCount = 1
-- [ ] T2：`make gate` 通过（metadata 一致性 + 结构约束 + flutter test test/ui/discovery/post/）
+- [x] T1：L1 端侧 Journey：8 类反馈逐类覆盖（成功/失败/回滚）
+- [x] T2：L2 云侧契约：like/favorite/comment/report/block 路由行为与幂等语义
+- [x] T3：L3 API 契约：`/v1/content/behaviors`、`/v1/content/reports`、`/v1/user/block/*`、settings privacy patch
+- [x] T4：推荐回归：`dislike` 进入 negative 过滤、`share/like/comment` 改变排序、`block keywords` 过滤命中
+- [x] T5：执行 `make gate-full` 通过
 
 ---
 
 ## 搁置任务（带规划）
 
-| 任务 | 搁置原因 | 计划重启条件 |
-|------|----------|-------------|
-| Intent 操作幂等性（debounce） | 当前规模无需 | 出现重复点赞 bug 时启用 300ms debounce |
-| 操作日志上报（BehaviorRepository） | 依赖 behavior analytics 系统就绪 | analytics pipeline 完成后，Intent 内追加 `BehaviorRepository.track` 调用 |
-
----
-
-## 未来演进任务
-
-- `CircleIntentNotifier`（圈子关注）：复用 `UserIntentNotifier` 模式，新增 `circle_intent.dart`
-- Intent 重试策略：网络抖动时内部 retry（1次），减少回滚频率
-- 云侧反馈同步：like/save API 返回最新计数时，更新 `FeedItemDto` 对应字段
+| 任务 | 搁置原因 | 重启条件 |
+|------|----------|----------|
+| block keywords 语义检索（同义词扩展） | 先做精确词匹配闭环 | 基础闭环稳定后 |
+| 评论情感强度特征（NLP） | 依赖模型能力 | rec-model-service 引入文本模型后 |

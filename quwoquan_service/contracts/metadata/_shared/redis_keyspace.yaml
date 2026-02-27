@@ -1,77 +1,118 @@
 version: 1
 
+# Redis 键空间规范
+#
+# 场景分离（对应 config.yaml redis.rec / redis.general）：
+#   rec     — 推荐热路径（session signals / exposed / negative / realtime_interest）
+#             要求：高 QPS、低延迟（100ms）、可独立水平扩容
+#   general — 实体缓存、助手上下文、安全限流、计数缓冲、互动状态
+#             要求：读多写少、TTL 较长、延迟容忍度更高
+#
+# Redis Cluster 哈希标签约定（{tag}）：
+#   同一用户的所有 session 级键必须使用 {userId} 作为哈希标签，
+#   确保它们落在同一 slot，从而允许 pipeline 读和多键操作。
+#   实现位置：runtime/recommendation/hotpath.go sessionKey()
+#
+#   已应用哈希标签的键模式用 {<field>} 表示，例如：
+#     rec:session_signals:{<userId>}:<sessionId>
+#
+#   standalone 模式下 Redis 忽略花括号，行为与无标签完全一致。
+#
+# 多云兼容性：
+#   阿里云 Tair 集群版 / 火山引擎 VeCache 均遵循 Redis Cluster 协议，
+#   无需代码差异，仅配置差异（addrs / password / tls）。
+
 key_patterns:
-  # 实体缓存
+
+  # ─── rec 场景 ────────────────────────────────────────────────────────────
+  - pattern: "rec:session_signals:{<userId>}:<sessionId>"
+    redis_scene: rec
+    ttl_seconds: 1800
+    type: hash
+    hash_tag: userId
+    description: |
+      Session 内实时兴趣标签权重（HIncrByFloat）。
+      哈希标签 {userId} 与 rec:exposed / rec:negative 共享同一 slot，
+      使 GetSessionState pipeline 读在单个 RTT 内完成。
+
+  - pattern: "rec:exposed:{<userId>}:<sessionId>"
+    redis_scene: rec
+    ttl_seconds: 1800
+    type: set
+    hash_tag: userId
+    description: Session 内已曝光内容 ID，防止重复推送
+
+  - pattern: "rec:negative:{<userId>}:<sessionId>"
+    redis_scene: rec
+    ttl_seconds: 86400
+    type: set
+    hash_tag: userId
+    description: 负反馈过滤集（dislike / report），TTL 24h 跨 session 保持
+
+  - pattern: "rec:realtime_interest:{<userId>}:<sessionId>"
+    redis_scene: rec
+    ttl_seconds: 1800
+    type: string
+    hash_tag: userId
+    description: Session 实时兴趣向量（最近一次行为信号的 JSON 快照）
+
+  # ─── general 场景 ────────────────────────────────────────────────────────
   - pattern: "cache:{entity}:{id}"
+    redis_scene: general
     ttl_source: aggregate.cache_ttl_seconds
     type: string
     description: 实体级读缓存（Repository cache 中间件）
 
-  # 推荐热路径
-  - pattern: "rec:session_signals:{userId}:{sessionId}"
-    ttl_seconds: 1800
-    type: hash
-    description: Session 内实时兴趣标签权重
-
-  - pattern: "rec:exposed:{userId}:{sessionId}"
-    ttl_seconds: 1800
-    type: set
-    description: Session 内已曝光内容 ID
-
-  - pattern: "rec:negative:{userId}:{sessionId}"
-    ttl_seconds: 86400
-    type: set
-    description: 负反馈过滤集
-
-  - pattern: "rec:realtime_interest:{userId}:{sessionId}"
-    ttl_seconds: 1800
-    type: string
-    description: Session 实时兴趣向量
-
-  # 助手上下文
   - pattern: "page_ctx:{userId}"
+    redis_scene: general
     ttl_seconds: 300
     type: hash
-    description: 当前页面上下文
+    description: 助手当前页面上下文（多模态理解输入）
 
   - pattern: "content_analysis:{postId}"
+    redis_scene: general
     ttl_seconds: 86400
     type: hash
     description: 内容多模态分析缓存
 
   - pattern: "comment_summary:{postId}"
+    redis_scene: general
     ttl_seconds: 3600
     type: hash
     description: 评论总结缓存
 
   - pattern: "suggested_actions:{userId}:{pageType}:{objectId}"
+    redis_scene: general
     ttl_seconds: 300
     type: string
     description: Suggested Actions 缓存
 
-  # 安全与限流
   - pattern: "blocked_set:{userId}"
+    redis_scene: general
     ttl_seconds: 3600
     type: set
-    description: 屏蔽用户列表
+    description: 屏蔽用户列表（安全过滤）
 
   - pattern: "device_tokens:{userId}"
+    redis_scene: general
     ttl_seconds: 3600
     type: set
     description: 设备推送 token
 
   - pattern: "login_fail:{userId}"
+    redis_scene: general
     ttl_seconds: 1800
     type: string
-    description: 登录失败滑动窗口计数
+    description: 登录失败滑动窗口计数（限流）
 
-  # 热点计数缓冲
   - pattern: "counter:{postId}:{type}"
+    redis_scene: general
     ttl_seconds: null
     type: string
     description: 热点内容计数缓冲（异步回写 MongoDB）
 
   - pattern: "reaction:{userId}:{postId}"
+    redis_scene: general
     ttl_seconds: 300
     type: hash
-    description: 互动状态缓存
+    description: 互动状态缓存（like / favorite）

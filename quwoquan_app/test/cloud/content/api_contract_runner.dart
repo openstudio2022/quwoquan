@@ -387,6 +387,82 @@ void main() {
       expect(ContentErrorMessages.zh[code], '媒体文件正在处理中，请稍后发布');
     });
   });
+
+  // ── 场景 5：dedicated_feedback_and_user_block_contract ────────────────────
+  group('dedicated_feedback_and_user_block_contract', () {
+    late String postId;
+
+    setUpAll(() async {
+      if (!_stagingAvailable) return;
+      postId = await _seedPhotoPost();
+    });
+
+    tearDownAll(() async {
+      if (!_stagingAvailable) return;
+      await _deletePost(postId);
+    });
+
+    test('POST /v1/content/reports 可用', () async {
+      if (!_stagingAvailable) return markTestSkipped('staging unavailable');
+      final resp = await _client
+          .post(
+            Uri.parse('$_stagingBase/v1/content/reports'),
+            headers: {
+              ..._authHeaders('content.report.create'),
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'targetId': postId,
+              'targetType': 'post',
+              'reason': 'inappropriate',
+              'note': 'api contract',
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
+      expect([200, 201, 204].contains(resp.statusCode), isTrue,
+          reason: 'report route should be available and successful');
+    });
+
+    test('POST/DELETE /v1/user/block/{id} 可用', () async {
+      if (!_stagingAvailable) return markTestSkipped('staging unavailable');
+      const targetUserId = 'contract_block_target_001';
+      final blockResp = await _client
+          .post(
+            Uri.parse('$_stagingBase/v1/user/block/$targetUserId'),
+            headers: _authHeaders('user.block.create'),
+          )
+          .timeout(const Duration(seconds: 10));
+      expect([200, 201, 204].contains(blockResp.statusCode), isTrue,
+          reason: 'block user route should succeed');
+
+      final unblockResp = await _client
+          .delete(
+            Uri.parse('$_stagingBase/v1/user/block/$targetUserId'),
+            headers: _authHeaders('user.block.delete'),
+          )
+          .timeout(const Duration(seconds: 10));
+      expect([200, 204].contains(unblockResp.statusCode), isTrue,
+          reason: 'unblock user route should succeed');
+    });
+
+    test('PATCH /v1/user/settings/privacy 可写 blockedKeywords', () async {
+      if (!_stagingAvailable) return markTestSkipped('staging unavailable');
+      final patchResp = await _client
+          .patch(
+            Uri.parse('$_stagingBase/v1/user/settings/privacy'),
+            headers: {
+              ..._authHeaders('user.settings.privacy.patch'),
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'blockedKeywords': ['api_contract_kw'],
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
+      expect([200, 204].contains(patchResp.statusCode), isTrue,
+          reason: 'privacy patch should accept blockedKeywords');
+    });
+  });
 }
 
 // ─── Extension：http.Client headers 兼容 ─────────────────────────────────

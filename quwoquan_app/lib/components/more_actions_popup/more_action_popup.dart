@@ -155,7 +155,7 @@ class _MediaPostMoreActionSheetState extends ConsumerState<_MediaPostMoreActionS
         icon: Icons.filter_alt_outlined,
         label: AppStrings.blockWords,
         description: AppStrings.blockWordsDescription,
-        onTap: null, // 暂时没有回调
+        onTap: widget.config.onBlockWords,
       ),
       _BottomAction(
         id: 'report',

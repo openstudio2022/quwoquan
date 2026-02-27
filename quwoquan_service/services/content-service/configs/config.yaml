@@ -2,14 +2,71 @@ service:
   name: content-service
   http:
     addr: ":18080"
+
+# Redis 场景分离配置
+#
+# 设计原则：
+#   rec     — 推荐热路径（session signals / exposed / negative）
+#             高 QPS、短 TTL（30min/24h）、写密集，要求最低延迟
+#   general — 实体缓存、助手上下文、安全限流、计数缓冲
+#             读密集、TTL 较长，对延迟容忍度更高
+#
+# 两个场景可独立扩容：
+#   - 阿里云 Tair：在控制台对各实例独立「变配」/「自动扩缩容」
+#   - 火山引擎 VeCache：通过弹性变配 API 对各实例独立扩容
+#
+# mode: standalone（默认）| cluster
+#   standalone — 适用于本地开发、单节点部署（内存 Redis / Docker Redis）
+#   cluster    — 生产环境（阿里云 Tair 集群版 / 火山引擎 VeCache 集群版）
+#
+# 环境变量覆盖（CI/CD 注入，无需修改此文件）：
+#   CONTENT_REDIS_REC_MODE         standalone | cluster
+#   CONTENT_REDIS_REC_ADDR         host:port  （standalone）
+#   CONTENT_REDIS_REC_ADDRS        host1:port,host2:port,...  （cluster）
+#   CONTENT_REDIS_REC_PASSWORD     密码
+#   CONTENT_REDIS_REC_TLS          true | false
+#   CONTENT_REDIS_GENERAL_MODE     standalone | cluster
+#   CONTENT_REDIS_GENERAL_ADDR     host:port
+#   CONTENT_REDIS_GENERAL_ADDRS    host1:port,...
+#   CONTENT_REDIS_GENERAL_PASSWORD 密码
+#   CONTENT_REDIS_GENERAL_TLS      true | false
+#
+# 向后兼容：旧版 CONTENT_REDIS_ADDR / CONTENT_REDIS_PASSWORD 仍有效，
+# 会自动映射到 rec 场景的 standalone 配置。
 redis:
-  addr: ""
-  password: ""
-  db: 0
+  rec:
+    mode: standalone            # standalone | cluster
+    addr: ""                    # standalone: "127.0.0.1:6379"
+    addrs: []                   # cluster:  ["node1:6379","node2:6379","node3:6379"]
+    password: ""
+    db: 0                       # cluster 模式忽略此字段
+    tls: false                  # 公网/加密传输时置 true（阿里云/火山引擎公网端点）
+    pool:
+      size: 0                   # 0 = 自动（CPU × 20 standalone / CPU × 30 cluster）
+      min_idle: 0               # 0 = 自动（CPU × 5 standalone / CPU × 8 cluster）
+      read_timeout_ms: 100      # 推荐热路径 SLA：100ms
+      write_timeout_ms: 100
+      dial_timeout_ms: 500
+
+  general:
+    mode: standalone            # 当前 content-service 暂未使用此场景
+    addr: ""                    # 预留：实体缓存 / 计数缓冲 / 安全限流上线后启用
+    addrs: []
+    password: ""
+    db: 1
+    tls: false
+    pool:
+      size: 0                   # 0 = 自动
+      min_idle: 0
+      read_timeout_ms: 200      # 通用缓存对延迟容忍度更高
+      write_timeout_ms: 200
+      dial_timeout_ms: 500
+
 # rec-model-service: optional ML scoring; when disabled or unreachable, CascadeScorer falls back to RuleScorer
 rec_model_service:
   url: ""           # e.g. http://localhost:18090
   timeout_ms: 50
   enabled: false
+
 metadata:
   dir: "../../../contracts/metadata"

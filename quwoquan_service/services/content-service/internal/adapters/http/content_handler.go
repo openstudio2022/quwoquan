@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/services/content-service/internal/application"
@@ -46,12 +47,14 @@ func (h *ContentHandler) handleGetFeed(w http.ResponseWriter, r *http.Request) {
 	}
 	params := BindGeneratedGetFeedParams(r, 20)
 	resp, err := h.feedService.ListFeed(r.Context(), application.ListFeedRequest{
-		UserID:      resolveUserID(r),
-		SessionID:   resolveSessionID(r),
-		Type:        params.Type,
-		SubCategory: params.SubCategory,
-		Cursor:      params.Cursor,
-		Limit:       params.Limit,
+		UserID:          resolveUserID(r),
+		SessionID:       resolveSessionID(r),
+		Type:            params.Type,
+		SubCategory:     params.SubCategory,
+		Cursor:          params.Cursor,
+		Limit:           params.Limit,
+		BlockedUserIDs:  resolveBlockedUserIDs(r),
+		BlockedKeywords: resolveBlockedKeywords(r),
 	})
 	if err != nil {
 		writeHTTPError(w, err)
@@ -212,6 +215,116 @@ func (h *ContentHandler) handleGetRecommendation(w http.ResponseWriter, r *http.
 	writeJSON(w, http.StatusOK, resp)
 }
 
+func (h *ContentHandler) handleLikePost(w http.ResponseWriter, r *http.Request, postID string) {
+	likeCount, changed, err := h.postService.LikePost(r.Context(), postID, resolveUserID(r))
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"postId":    postID,
+		"liked":     true,
+		"changed":   changed,
+		"likeCount": likeCount,
+	})
+}
+
+func (h *ContentHandler) handleUnlikePost(w http.ResponseWriter, r *http.Request, postID string) {
+	likeCount, changed, err := h.postService.UnlikePost(r.Context(), postID, resolveUserID(r))
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"postId":    postID,
+		"liked":     false,
+		"changed":   changed,
+		"likeCount": likeCount,
+	})
+}
+
+func (h *ContentHandler) handleFavoritePost(w http.ResponseWriter, r *http.Request, postID string) {
+	favoriteCount, changed, err := h.postService.FavoritePost(r.Context(), postID, resolveUserID(r))
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"postId":        postID,
+		"favorited":     true,
+		"changed":       changed,
+		"favoriteCount": favoriteCount,
+	})
+}
+
+func (h *ContentHandler) handleUnfavoritePost(w http.ResponseWriter, r *http.Request, postID string) {
+	favoriteCount, changed, err := h.postService.UnfavoritePost(r.Context(), postID, resolveUserID(r))
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"postId":        postID,
+		"favorited":     false,
+		"changed":       changed,
+		"favoriteCount": favoriteCount,
+	})
+}
+
+func (h *ContentHandler) handleGetReactionState(w http.ResponseWriter, r *http.Request, postID string) {
+	liked, favorited := h.postService.GetReactionState(postID, resolveUserID(r))
+	writeJSON(w, http.StatusOK, map[string]any{
+		"postId":     postID,
+		"liked":      liked,
+		"favorited":  favorited,
+		"shared":     false,
+		"reported":   false,
+		"updatedAt":  time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
+func (h *ContentHandler) handleCreateComment(w http.ResponseWriter, r *http.Request, postID string) {
+	var body struct {
+		Content          string `json:"content"`
+		ReplyToCommentID string `json:"replyToCommentId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
+		return
+	}
+	comment, commentCount, err := h.postService.AddComment(
+		r.Context(),
+		postID,
+		resolveUserID(r),
+		body.Content,
+		body.ReplyToCommentID,
+	)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"comment":      comment,
+		"commentCount": commentCount,
+	})
+}
+
+func postIDFromPath(path string) string {
+	p := strings.TrimSpace(path)
+	if p == "" {
+		return ""
+	}
+	parts := strings.Split(strings.Trim(p, "/"), "/")
+	// /v1/content/posts/{postId}/...
+	if len(parts) < 4 {
+		return ""
+	}
+	if parts[0] != "v1" || parts[1] != "content" || parts[2] != "posts" {
+		return ""
+	}
+	return strings.TrimSpace(parts[3])
+}
+
 func (h *ContentHandler) handleNotImplemented(w http.ResponseWriter, r *http.Request, operation string) {
 	writeHTTPError(w, rterr.NewAppError(
 		rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "unavailable"),
@@ -245,4 +358,39 @@ func resolveUserID(r *http.Request) string {
 		return v
 	}
 	return strings.TrimSpace(r.Header.Get("X-Client-User-Id"))
+}
+
+// resolveBlockedUserIDs extracts blocked author IDs from:
+//   1) query: blockedUserIds=a,b
+//   2) header: X-Blocked-User-Ids: a,b
+func resolveBlockedUserIDs(r *http.Request) []string {
+	if v := strings.TrimSpace(r.URL.Query().Get("blockedUserIds")); v != "" {
+		return splitCSV(v)
+	}
+	return splitCSV(r.Header.Get("X-Blocked-User-Ids"))
+}
+
+// resolveBlockedKeywords extracts blocked keywords from:
+//   1) query: blockedKeywords=k1,k2
+//   2) header: X-Blocked-Keywords: k1,k2
+func resolveBlockedKeywords(r *http.Request) []string {
+	if v := strings.TrimSpace(r.URL.Query().Get("blockedKeywords")); v != "" {
+		return splitCSV(v)
+	}
+	return splitCSV(r.Header.Get("X-Blocked-Keywords"))
+}
+
+func splitCSV(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		v := strings.TrimSpace(p)
+		if v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }

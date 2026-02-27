@@ -218,6 +218,74 @@ func TestEngine_GetFeed_FiltersExposed(t *testing.T) {
 	}
 }
 
+func TestEngine_GetFeed_FiltersNegativeAfterDislike(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	hp.ProcessSignal(ctx, BehaviorSignal{UserID: "u1", SessionID: "s1", ContentID: "c2", Action: "dislike"})
+
+	source := &mockCandidateSource{
+		candidates: []ContentCandidate{
+			{ContentID: "c1", ContentType: "image", PublishedAt: time.Now()},
+			{ContentID: "c2", ContentType: "video", PublishedAt: time.Now()},
+		},
+	}
+
+	engine := NewEngine(hp, []CandidateSource{source})
+	resp, err := engine.GetFeed(ctx, GetFeedRequest{UserID: "u1", SessionID: "s1", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range resp.Items {
+		if item.ContentID == "c2" {
+			t.Fatal("disliked content c2 should be filtered by negative set")
+		}
+	}
+}
+
+func TestEngine_GetFeed_EngagementCountsAffectRanking(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+	now := time.Now()
+
+	source := &mockCandidateSource{
+		candidates: []ContentCandidate{
+			{
+				ContentID:    "high",
+				ContentType:  "image",
+				PublishedAt:  now,
+				LikeCount:    120,
+				CommentCount: 40,
+				ShareCount:   15,
+				ViewCount:    500,
+			},
+			{
+				ContentID:    "low",
+				ContentType:  "image",
+				PublishedAt:  now,
+				LikeCount:    3,
+				CommentCount: 1,
+				ShareCount:   0,
+				ViewCount:    100,
+			},
+		},
+	}
+
+	engine := NewEngine(hp, []CandidateSource{source}, WithExploreFraction(0))
+	resp, err := engine.GetFeed(ctx, GetFeedRequest{UserID: "u1", SessionID: "s1", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Items) < 2 {
+		t.Fatalf("expected at least 2 items, got %d", len(resp.Items))
+	}
+	if resp.Items[0].ContentID != "high" {
+		t.Fatalf("high engagement content should rank first, got %s", resp.Items[0].ContentID)
+	}
+}
+
 func TestEngine_GetFeed_ScoresByTagRelevance(t *testing.T) {
 	redis := newMockRedis()
 	hp := NewHotPath(redis)

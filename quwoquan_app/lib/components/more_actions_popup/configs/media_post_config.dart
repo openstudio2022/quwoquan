@@ -13,6 +13,7 @@ class MediaPostMoreActionConfig {
   final VoidCallback? onFeedback;
   final VoidCallback? onNotInterested;
   final VoidCallback? onBlockUser;
+  final VoidCallback? onBlockWords;
   final VoidCallback? onReport;
   final VoidCallback? onShare;
 
@@ -28,6 +29,7 @@ class MediaPostMoreActionConfig {
     this.onFeedback,
     this.onNotInterested,
     this.onBlockUser,
+    this.onBlockWords,
     this.onReport,
     this.onShare,
   });

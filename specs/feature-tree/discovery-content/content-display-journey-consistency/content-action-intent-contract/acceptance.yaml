@@ -2,15 +2,17 @@ version: 1
 feature: "content-action-intent-contract"
 level: "L3_subfeature"
 template: "A1-A8"
+status: archived
+archived: true
 execution:
-  local_gate: "make gate"
+  local_gate: "make verify-metadata && make codegen && make codegen-app && make gate"
   full_gate: "make gate-full"
 level_acceptance:
-  A1: user_profile/service.yaml 含 FollowUser（POST）和 UnfollowUser（DELETE）路由，make verify 通过
-  A2: UserRepository Abstract 接口含 followUser/unfollowUser，MockUserRepository 和 RemoteUserRepository 均已实现
-  A3: ContentIntentNotifier.like/save 调用后，HomeState.likedPosts/savedPosts 立即反映（无需等待 API）
-  A4: UserIntentNotifier.follow/unfollow 调用后，HomeState.followingUsers 立即反映
-  A5: 模拟 ContentRepository/UserRepository API 失败时，HomeState 回滚到操作前状态
-  A6: contentIntentProvider 和 userIntentProvider 在 intent_providers.dart 注册，可通过 ref.read 访问
-  A7: content_intent_test.dart 覆盖乐观更新 + 回滚四个场景，全部通过
-  A8: make gate 通过（metadata 一致性 + 结构约束检查）
+  A1: "8 类反馈（like/favorite/share/comment/dislike/report/block user/block keywords）均有明确 metadata 归属、路由与实体映射"
+  A2: "user_profile/fields.yaml 已新增 UserSetting.blockedKeywords 字段，并可通过设置接口读写"
+  A3: "content/post/behaviors.yaml 中 report 专用路由已与 content/report/service.yaml 对齐为 POST /v1/content/reports"
+  A4: "批量行为（impression/click/dwell/share/dislike）进入 HotPath 后可影响下一次推荐（过滤或排序）"
+  A5: "专用路由行为（like/favorite/comment/report）具备可测试的持久化与推荐桥接策略，不再停留在 UI 本地状态"
+  A6: "用户级负反馈（block user/block keywords）可在内容流中过滤命中，且具备回归测试"
+  A7: "计数链路（view/like/favorite/comment/share）具备对账策略，至少有契约测试覆盖幂等与回读一致性"
+  A8: "make verify-metadata、make codegen、make codegen-app、make gate-full 全通过"

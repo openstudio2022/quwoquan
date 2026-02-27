@@ -6,6 +6,7 @@ import 'package:quwoquan_app/cloud/services/content/content_interaction_reposito
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/report_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/block_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/keyword_block_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/design_system/providers/theme_provider.dart';
@@ -360,5 +361,13 @@ final reportRepositoryProvider = Provider<ReportRepository>((ref) {
   return mode == AppDataSourceMode.remote
       ? RemoteReportRepository()
       : MockReportRepository();
+});
+
+/// KeywordBlock Repository（屏蔽词设置）
+final keywordBlockRepositoryProvider = Provider<KeywordBlockRepository>((ref) {
+  final mode = ref.watch(appDataSourceModeProvider);
+  return mode == AppDataSourceMode.remote
+      ? RemoteKeywordBlockRepository()
+      : MockKeywordBlockRepository();
 });
 

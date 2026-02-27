@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
@@ -18,14 +19,24 @@ type PostService struct {
 	store     persistence.PostRepository
 	signaler  rtrec.SignalProcessor
 	publisher repository.EventPublisher
+	mu        sync.Mutex
+	reactions map[string]map[string]contentReactionState // postID -> userID -> state
 }
 
 func NewPostService(store persistence.PostRepository, opts ...PostServiceOption) *PostService {
-	s := &PostService{store: store}
+	s := &PostService{
+		store:     store,
+		reactions: map[string]map[string]contentReactionState{},
+	}
 	for _, opt := range opts {
 		opt(s)
 	}
 	return s
+}
+
+type contentReactionState struct {
+	Liked     bool
+	Favorited bool
 }
 
 type PostServiceOption func(*PostService)
@@ -155,6 +166,193 @@ func (s *PostService) UpdatePost(ctx context.Context, id string, payload map[str
 		)
 	}
 	return post, nil
+}
+
+func (s *PostService) LikePost(ctx context.Context, postID, userID string) (int64, bool, error) {
+	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
+	if !ok {
+		return 0, false, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
+			"内容不存在",
+			"post not found",
+			false,
+		)
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		userID = "guest"
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	byPost, ok := s.reactions[post.ID]
+	if !ok {
+		byPost = map[string]contentReactionState{}
+		s.reactions[post.ID] = byPost
+	}
+	state := byPost[userID]
+	changed := !state.Liked
+	if changed {
+		state.Liked = true
+		byPost[userID] = state
+		post.LikeCount++
+		post.UpdatedAt = time.Now().UTC()
+		_ = s.store.Update(ctx, post.ID, post)
+	}
+	return post.LikeCount, changed, nil
+}
+
+func (s *PostService) UnlikePost(ctx context.Context, postID, userID string) (int64, bool, error) {
+	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
+	if !ok {
+		return 0, false, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
+			"内容不存在",
+			"post not found",
+			false,
+		)
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		userID = "guest"
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	byPost, ok := s.reactions[post.ID]
+	if !ok {
+		byPost = map[string]contentReactionState{}
+		s.reactions[post.ID] = byPost
+	}
+	state := byPost[userID]
+	changed := state.Liked
+	if changed {
+		state.Liked = false
+		byPost[userID] = state
+		if post.LikeCount > 0 {
+			post.LikeCount--
+		}
+		post.UpdatedAt = time.Now().UTC()
+		_ = s.store.Update(ctx, post.ID, post)
+	}
+	return post.LikeCount, changed, nil
+}
+
+func (s *PostService) FavoritePost(ctx context.Context, postID, userID string) (int64, bool, error) {
+	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
+	if !ok {
+		return 0, false, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
+			"内容不存在",
+			"post not found",
+			false,
+		)
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		userID = "guest"
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	byPost, ok := s.reactions[post.ID]
+	if !ok {
+		byPost = map[string]contentReactionState{}
+		s.reactions[post.ID] = byPost
+	}
+	state := byPost[userID]
+	changed := !state.Favorited
+	if changed {
+		state.Favorited = true
+		byPost[userID] = state
+		post.FavoriteCount++
+		post.UpdatedAt = time.Now().UTC()
+		_ = s.store.Update(ctx, post.ID, post)
+	}
+	return post.FavoriteCount, changed, nil
+}
+
+func (s *PostService) UnfavoritePost(ctx context.Context, postID, userID string) (int64, bool, error) {
+	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
+	if !ok {
+		return 0, false, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
+			"内容不存在",
+			"post not found",
+			false,
+		)
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		userID = "guest"
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	byPost, ok := s.reactions[post.ID]
+	if !ok {
+		byPost = map[string]contentReactionState{}
+		s.reactions[post.ID] = byPost
+	}
+	state := byPost[userID]
+	changed := state.Favorited
+	if changed {
+		state.Favorited = false
+		byPost[userID] = state
+		if post.FavoriteCount > 0 {
+			post.FavoriteCount--
+		}
+		post.UpdatedAt = time.Now().UTC()
+		_ = s.store.Update(ctx, post.ID, post)
+	}
+	return post.FavoriteCount, changed, nil
+}
+
+func (s *PostService) GetReactionState(postID, userID string) (liked, favorited bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	byPost, ok := s.reactions[strings.TrimSpace(postID)]
+	if !ok {
+		return false, false
+	}
+	state, ok := byPost[strings.TrimSpace(userID)]
+	if !ok {
+		return false, false
+	}
+	return state.Liked, state.Favorited
+}
+
+func (s *PostService) AddComment(ctx context.Context, postID, userID, content, replyToCommentID string) (map[string]any, int64, error) {
+	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
+	if !ok {
+		return nil, 0, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
+			"内容不存在",
+			"post not found",
+			false,
+		)
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		userID = "guest"
+	}
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return nil, 0, rterr.NewInvalidArgument(rterr.ModuleContent, "评论内容不能为空", "empty comment content")
+	}
+	now := time.Now().UTC()
+	post.CommentCount++
+	post.UpdatedAt = now
+	_ = s.store.Update(ctx, post.ID, post)
+	comment := map[string]any{
+		"_id":              fmt.Sprintf("comment_%d", now.UnixNano()),
+		"postId":           post.ID,
+		"authorId":         userID,
+		"content":          content,
+		"replyToCommentId": strings.TrimSpace(replyToCommentID),
+		"createdAt":        now.Format(time.RFC3339),
+	}
+	return comment, post.CommentCount, nil
 }
 
 func asString(v any) string {

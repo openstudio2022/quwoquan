@@ -459,6 +459,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
           );
         },
         onPostTap: (post, index) => _trackBehavior('click', post),
+        onMoreTap: (post) => _onMomentMoreTap(context, post),
       );
     }
     switch (_tabConfigFor(tabId)?.layout) {

@@ -151,3 +151,51 @@ func TestListFeedWithPagination(t *testing.T) {
 		t.Error("first page: expected at least one item in feed")
 	}
 }
+
+// TestGetFeedFiltersBlockedUser verifies recall-post filtering can exclude
+// blocked authors via request header.
+func TestGetFeedFiltersBlockedUser(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/v1/content/feed?limit=10", nil)
+	req.Header.Set("X-Blocked-User-Ids", "user_1002")
+	rec := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var page struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	for _, item := range page.Items {
+		if item["authorId"] == "user_1002" {
+			t.Fatalf("blocked author should be filtered, got item=%v", item["id"])
+		}
+	}
+}
+
+// TestGetFeedFiltersBlockedKeyword verifies recall-post filtering can exclude
+// content whose title/body/tags hit blocked keywords.
+func TestGetFeedFiltersBlockedKeyword(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/v1/content/feed?limit=10", nil)
+	req.Header.Set("X-Blocked-Keywords", "winter")
+	rec := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var page struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	for _, item := range page.Items {
+		if item["id"] == "post_photo_001" {
+			t.Fatalf("keyword-hit post should be filtered, got post_photo_001")
+		}
+	}
+}

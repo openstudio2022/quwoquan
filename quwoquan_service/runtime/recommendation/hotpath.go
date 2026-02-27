@@ -59,11 +59,19 @@ type SignalProcessor interface {
 	ProcessSignalBatch(ctx context.Context, signals []BehaviorSignal) error
 }
 
-// Key patterns aligned with contracts/metadata/_shared/redis_keyspace.yaml:
-//   rec:session_signals:{userId}:{sessionId}  → hash   TTL 1800s
-//   rec:exposed:{userId}:{sessionId}          → set    TTL 1800s
-//   rec:negative:{userId}:{sessionId}         → set    TTL 86400s
-//   rec:realtime_interest:{userId}:{sessionId}→ string TTL 1800s
+// Key patterns aligned with contracts/metadata/_shared/redis_keyspace.yaml.
+//
+// Redis Cluster hash-tag convention: {userId} is wrapped in braces so that all
+// session-scoped keys for the same user land on the same cluster slot, enabling
+// pipeline reads and atomic multi-key operations without cross-slot errors.
+//
+// Actual key format (cluster-safe):
+//   rec:session_signals:{<userId>}:<sessionId>  → hash   TTL 1800s
+//   rec:exposed:{<userId>}:<sessionId>          → set    TTL 1800s
+//   rec:negative:{<userId>}:<sessionId>         → set    TTL 86400s
+//   rec:realtime_interest:{<userId>}:<sessionId>→ string TTL 1800s
+//
+// In standalone mode Redis ignores the braces and treats the key verbatim.
 const (
 	sessionTTL  = 30 * time.Minute
 	negativeTTL = 24 * time.Hour
@@ -106,11 +114,18 @@ func NewHotPath(redis RedisClient) *HotPath {
 	return &HotPath{redis: redis}
 }
 
+// sessionKey builds a Redis key suffix with a cluster hash tag on userId.
+// Format: {<userId>}:<sessionId>
+//
+// The hash tag {userId} ensures that rec:session_signals, rec:exposed, and
+// rec:negative keys for the same user always map to the same Redis Cluster slot,
+// making pipeline reads and multi-key operations safe in cluster mode.
+// Standalone Redis ignores the braces — behaviour is identical.
 func sessionKey(userID, sessionID string) string {
 	if sessionID == "" {
 		sessionID = "default"
 	}
-	return userID + ":" + sessionID
+	return "{" + userID + "}:" + sessionID
 }
 
 // ProcessSignal updates session-level state from a behavior signal.

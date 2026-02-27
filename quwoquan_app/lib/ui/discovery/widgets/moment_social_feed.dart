@@ -102,6 +102,12 @@ class MomentSocialFeed extends ConsumerWidget {
                     postId: dto.id,
                     initialComments: [],
                     config: const CommentConfig(enabled: true),
+                    onSubmitComment: (content) async {
+                      await ref.read(contentRepositoryProvider).createComment(
+                            postId: dto.id,
+                            content: content,
+                          );
+                    },
                   );
                 },
                 onShareTap: () {
@@ -121,6 +127,11 @@ class MomentSocialFeed extends ConsumerWidget {
                         },
                         onBlockUser: () {
                           ref.read(blockRepositoryProvider).blockUser(dto.authorId);
+                        },
+                        onBlockWords: () async {
+                          final keyword = _extractKeyword(dto.body);
+                          if (keyword.isEmpty) return;
+                          await ref.read(keywordBlockRepositoryProvider).addBlockedKeyword(keyword);
                         },
                         onReport: () {
                           ref.read(reportRepositoryProvider).createReport(
@@ -165,6 +176,15 @@ class MomentSocialFeed extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  String _extractKeyword(String text) {
+    final tokens = text
+        .split(RegExp(r'[^\\u4e00-\\u9fa5A-Za-z0-9_]+'))
+        .map((e) => e.trim())
+        .where((e) => e.length >= 2)
+        .toList();
+    return tokens.isEmpty ? '' : tokens.first;
   }
 }
 

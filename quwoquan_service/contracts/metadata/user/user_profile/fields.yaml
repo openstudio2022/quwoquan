@@ -488,6 +488,15 @@ entities:
         ops_exposure: read
         description: 小趣助手开关
 
+      - name: blockedKeywords
+        type: string[]
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 用户级内容屏蔽词（命中过滤，不参与公开画像）
+
       - name: updatedAt
         type: timestamp
         constraints: [NOT_NULL]

@@ -39,12 +39,33 @@ class ContentFeedScorer:
 
     def score(self, req: ModelScoreRequest) -> ModelScoreResponse:
         rows = build_candidate_features(req)
+        session = req.sessionSignals or {}
+        tag_weights = session.get("tagWeights") or {}
+        exposed_ids = set(session.get("exposedIds") or [])
+        negative_ids = set(session.get("negativeIds") or [])
         scores_list: list[CandidateScore] = []
         for row in rows:
             sc, detail = score_candidate(row)
+            content_id = row["contentId"]
+            if content_id in exposed_ids or content_id in negative_ids:
+                sc -= 1000.0
+                detail["filtered"] = 1.0
+            else:
+                detail["filtered"] = 0.0
+
+            # Session-level tag preference boost.
+            boost = 0.0
+            for tag in row.get("tags", []):
+                try:
+                    boost += float(tag_weights.get(tag, 0.0))
+                except (TypeError, ValueError):
+                    continue
+            sc += boost
+            detail["sessionTagBoost"] = boost
+            detail["total"] = sc
             scores_list.append(
                 CandidateScore(
-                    contentId=row["contentId"],
+                    contentId=content_id,
                     score=sc,
                     detail=detail,
                 )

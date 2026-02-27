@@ -83,7 +83,7 @@ behavior_events:
 
   - type: report
     description: 举报（由专用路由处理）
-    dedicated_route: POST /v1/content/posts/{postId}/report
+    dedicated_route: POST /v1/content/reports
     dart_method: null
     ml_signal: explicit_negative
 

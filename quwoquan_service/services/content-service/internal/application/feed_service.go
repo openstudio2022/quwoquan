@@ -32,6 +32,8 @@ type ListFeedRequest struct {
 	SubCategory string
 	Cursor      string
 	Limit       int
+	BlockedUserIDs  []string
+	BlockedKeywords []string
 }
 
 type FeedItemView struct {
@@ -77,9 +79,17 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (*ListF
 
 	views := make([]FeedItemView, 0, limit)
 	requestedType := normalizeRequestType(req.Type)
+	blockedUsers := toLowerSet(req.BlockedUserIDs)
+	blockedKeywords := toLowerSet(req.BlockedKeywords)
 	for _, item := range recResp.Items {
 		post, ok := s.postReader.GetByID(ctx, item.ContentID)
 		if !ok {
+			continue
+		}
+		if _, blocked := blockedUsers[strings.ToLower(strings.TrimSpace(post.AuthorId))]; blocked {
+			continue
+		}
+		if containsBlockedKeyword(post, blockedKeywords) {
 			continue
 		}
 		viewType := mapContentTypeToViewType(post.ContentType)
@@ -193,6 +203,42 @@ func toString(v any) string {
 	default:
 		return ""
 	}
+}
+
+func toLowerSet(items []string) map[string]struct{} {
+	out := make(map[string]struct{}, len(items))
+	for _, item := range items {
+		v := strings.ToLower(strings.TrimSpace(item))
+		if v != "" {
+			out[v] = struct{}{}
+		}
+	}
+	return out
+}
+
+func containsBlockedKeyword(post *postmodel.Post, blocked map[string]struct{}) bool {
+	if len(blocked) == 0 {
+		return false
+	}
+	targets := []string{
+		post.Title,
+		post.Body,
+	}
+	if tags := toStringSlice(post.Tags); len(tags) > 0 {
+		targets = append(targets, tags...)
+	}
+	for _, text := range targets {
+		normalized := strings.ToLower(strings.TrimSpace(text))
+		if normalized == "" {
+			continue
+		}
+		for keyword := range blocked {
+			if strings.Contains(normalized, keyword) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func SortPostsByCreatedAtDesc(posts []postmodel.Post) {
