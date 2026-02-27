@@ -28,6 +28,7 @@ l2:
     l3:
       - feature: post-create-update
         l4:
+          - feature: create-entry-location-visibility-circle
           - feature: post-lifecycle-contract
             l5:
               - feature: publish-idempotency-guard

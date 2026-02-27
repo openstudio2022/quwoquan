@@ -11,5 +11,12 @@ class CloudRuntimeConfig {
     'CLOUD_GATEWAY_BASE_URL',
     defaultValue: 'http://127.0.0.1:18080',
   );
-}
 
+  /// 地图供应商（baidu / amap）。
+  ///
+  /// 通过 `--dart-define=MAP_PROVIDER=baidu|amap` 注入。
+  static const String mapProvider = String.fromEnvironment(
+    'MAP_PROVIDER',
+    defaultValue: 'baidu',
+  );
+}

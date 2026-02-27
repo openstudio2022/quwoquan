@@ -12,6 +12,13 @@
 - 文章摘要与插图能力补齐（标题必填、summary 生成后可编辑、插图可选）。
 - 媒体上传与处理契约补齐（上传会话、首帧封面、手工封面、元数据提取）。
 - 端侧 codegen 契约同步（writable fields、路由、错误码）。
+- 子节点 `create-entry-location-visibility-circle` 负责补齐创作页“位置/公开/圈子选择”入口交互与 payload 映射。
+- 本节点当前不包含“更多功能按钮反馈”闭环能力（明确排除）。
+
+## 适用范围与约束
+- 适用于 discovery-content 下的内容创作与发布主链路（create -> post -> discovery feed）。
+- 适用于服务侧可见性与分发语义治理，以及端侧发布参数对齐。
+- 不适用于创作后反馈行为（不感兴趣/屏蔽/投诉）策略收敛，该部分在后续节点处理。
 
 ## 关键约束
 - `moment`：`body` 非必填，但 `body/image/video` 至少一项存在。

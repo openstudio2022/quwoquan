@@ -2,32 +2,40 @@ class UITextConstants {
   // ==================== 导航 ====================
   static const String home = '首页';
   static const String discovery = '发现';
+
   /// 发现页 Tab（1:1 对应 DiscoveryFeed.tsx CATEGORIES）
   static const String discoveryTabMoment = '微趣';
   static const String discoveryTabPhoto = '美图';
   static const String discoveryTabVideo = '视频';
   static const String discoveryTabArticle = '文章';
+
   /// 双轨道架构主 Rail 标签
   static const String discoveryRailMoment = '微趣';
   static const String discoveryRailWorks = '作品';
+
   /// 作品频道二级过滤器
   static const String discoveryWorksFilterAll = '全部';
   static const String discoveryWorksFilterVideo = '视频';
   static const String discoveryWorksFilterImage = '美图';
   static const String discoveryWorksFilterArticle = '文章';
+
   /// 发现页 V1：帮读/美图/视频
   static const String discoveryTabHelperRead = '帮读';
   static const String discoveryHelperSummaryTitle = '小趣已为你读完';
   static const String discoveryHelperSummarySubtitle = '今日值得看 3 条，已筛选 27 条重复信息';
+
   /// 帮读一句话综述占位（自上次阅读后…）
   static const String discoveryHelperOneLinerTemplate = '自上次阅读以来，%s';
+
   /// 帮读分维度展开的维度标题
   static const String discoveryHelperDimensionFriendPublish = '趣友新动态';
   static const String discoveryHelperDimensionNewFollowPublish = '刚加入的趣友';
-  static const String discoveryHelperDimensionDormantFriendPublish = '久未发·最近有互动';
+  static const String discoveryHelperDimensionDormantFriendPublish =
+      '久未发·最近有互动';
   static const String discoveryHelperDimensionCircleMoment = '圈子发生了什么';
   static const String discoveryHelperDimensionInteractionWithYou = '谁与你互动';
   static const String discoveryHelperDimensionExplore = '探索推荐';
+
   /// 时间线分组
   static const String discoveryHelperTimelineToday = '今天';
   static const String discoveryHelperTimelineYesterday = '昨天';
@@ -56,10 +64,13 @@ class UITextConstants {
   static const String assistantFeedbackAddedToLater = '已加入稍后处理';
   static const String assistantEntryFind = '找小趣';
   static const String assistantEntryAskLegacy = '问小趣';
+
   /// 半弹窗：进入完整对话按钮
   static const String assistantHalfSheetEnterFullChat = '进入完整对话';
+
   /// 半弹窗：输入框占位
   static const String assistantHalfSheetInputPlaceholder = '说点什么或选上面试试';
+
   /// 半弹窗：「当前适合干啥」区块标题
   static const String assistantHalfSheetSuggestionTitle = '当前适合干啥';
   static const String search = '搜索';
@@ -76,6 +87,7 @@ class UITextConstants {
   static const String welcomeSubtitle = '以兴趣为半径，画出我们的交集';
   static const String welcomeMainSlogan = '专注你的热爱，其余交给小趣';
   static const String welcomeButtonLabel = '开启发现之旅';
+
   /// 欢迎页底部署名（中文表达，居中）
   static const String welcomeFooterCredit = '小趣私人助手 · 与你相伴';
 
@@ -93,8 +105,10 @@ class UITextConstants {
   static const String following = '已关注';
   static const String unknownUser = '未知用户';
   static const String copyLink = '复制链接';
+
   /// 分享目标：微信
   static const String shareTargetWechat = '微信';
+
   /// 分享目标：朋友圈
   static const String shareTargetMoments = '朋友圈';
   static const String loadFailed = '加载失败';
@@ -163,7 +177,8 @@ class UITextConstants {
   static const String assistantAskAboutRecommendations = '给出相关推荐';
   static const String assistantAskAboutComments = '结合评论给出观点';
   static const String assistantInitialSummaryPrefix = '我已经浏览了当前内容：';
-  static const String assistantInitialSummaryNoContent = '我已经浏览了当前图片，可以帮你总结亮点、推荐类似内容或解析拍摄信息。';
+  static const String assistantInitialSummaryNoContent =
+      '我已经浏览了当前图片，可以帮你总结亮点、推荐类似内容或解析拍摄信息。';
   static const String assistantInitialSummaryTitleLabel = '标题：';
   static const String assistantInitialSummaryCaptionLabel = '配文：';
   static const String assistantPromptFollowUp = '你还可以继续问我：';
@@ -191,8 +206,10 @@ class UITextConstants {
   static const String startChatHint = '开始与圈友聊天吧！';
   static const String contactsTabAll = '全部';
   static const String contactsTabCircles = '圈子';
+
   /// 同好一级 Tab 下的二级：同好（原好友）
   static const String contactsTabSameInterest = '同好';
+
   /// 同好一级 Tab 下的二级：趣群（原群聊）
   static const String contactsTabFunGroup = '趣群';
   static const String contactsTabFriends = '好友';
@@ -200,6 +217,7 @@ class UITextConstants {
   static const String starredFriends = '星标朋友';
   static const String encryptedMessagePreview = '[加密消息] 查看需要验证身份';
   static const String copiedToClipboard = '已复制';
+
   /// 消息长按菜单（1:1 对应 MessageActionMenu.tsx）
   static const String messageActionForward = '转发';
   static const String messageActionSelect = '多选';
@@ -209,8 +227,10 @@ class UITextConstants {
   static const String inputHint = '输入消息...';
   static const String send = '发送';
   static const String emoji = '表情';
+
   /// 统一 emoji 选择器「最近」Tab
   static const String emojiRecent = '最近';
+
   /// Mac 风格 emoji 面板分类（与键盘同高、Tab 切换）
   static const String emojiCategorySmileys = '表情';
   static const String emojiCategoryAnimals = '动物';
@@ -232,6 +252,7 @@ class UITextConstants {
   static const String clearChatHistory = '清空聊天记录';
   static const String exitGroupChat = '退出群聊';
   static const String addMember = '添加成员';
+
   /// 发起群聊页（图一）
   static const String startGroupChat = '发起群聊';
   static const String createNewGroupChat = '创建新群聊';
@@ -245,10 +266,13 @@ class UITextConstants {
   static const String selectAll = '全选';
   static const String selectAction = '选择';
   static const String friendsCount = '个朋友';
+
   /// 聊天信息页：超过首屏成员时展开入口
   static const String moreMembers = '更多群成员';
+
   /// 聊天信息页：收起成员列表
   static const String collapseMembers = '收起来';
+
   /// 聊天底部「更多」面板（图二：两行六项）
   static const String chatMorePhoto = '照片';
   static const String chatMoreShoot = '拍摄';
@@ -259,9 +283,11 @@ class UITextConstants {
   static const String timeFormatAM = '上午';
   static const String timeFormatPM = '下午';
   static const String assistantHome = '助理主页';
+
   /// 助手 run 失败时展示的通用提示（会话/存储/模型等任一步骤异常均会触发）
   static const String assistantUnavailable = '助手暂时不可用，请稍后重试。';
-  static const String assistantModelUnavailable = '当前未配置可用模型，请先在模型配置中接入远程模型或桥接服务。';
+  static const String assistantModelUnavailable =
+      '当前未配置可用模型，请先在模型配置中接入远程模型或桥接服务。';
   static const String assistantRunningHint = '小趣正在规划与执行中...';
   static const String assistantFeedbackHelpful = '有帮助';
   static const String assistantFeedbackUnhelpful = '没帮助';
@@ -288,8 +314,7 @@ class UITextConstants {
   static const String assistantSearchingReferenceCount = '参考 %s 篇资料';
   static const String assistantReferenceCopied = '链接已复制';
   static const String assistantReferenceOpenFailed = '链接打开失败，已复制到剪贴板';
-  static const String assistantReferenceHostBlocked =
-      '该链接域名未通过安全白名单，已复制到剪贴板';
+  static const String assistantReferenceHostBlocked = '该链接域名未通过安全白名单，已复制到剪贴板';
   static const String assistantBookmarked = '已收藏';
   static const String assistantDevReplayTitle = '助理开发态回放';
   static const String assistantDevReplayOpen = '回放';
@@ -301,9 +326,11 @@ class UITextConstants {
   static const String assistantDevReplayRounds = '轮次轨迹';
   static const String assistantDevReplayScore = '评分聚合快照';
   static const String assistantNoReplayData = '暂无回放数据';
+
   /// 身份/分身（1:1 对应 PersonaSwitcher.tsx）
   static const String personaManage = '管理分身';
   static const String personaPrimary = '主账号';
+
   /// 我的主页统计与子页（关注数用 follow，此处为统计栏标题）
   static const String myResonance = '我的交集';
   static const String profileEditLabel = '资料编辑';
@@ -319,9 +346,17 @@ class UITextConstants {
   static const String publish = '发表';
   static const String publishAction = '发布';
   static const String locationLabel = '所在位置';
+  static const String locationHidden = '不显示位置';
   static const String remindWhoLabel = '提醒谁看';
   static const String whoCanSeeLabel = '谁可以看';
   static const String visibilityPublic = '公开';
+  static const String visibilityPrivate = '私密';
+  static const String isPublicLabel = '是否公开';
+  static const String selectPublishCirclesLabel = '选择要发布的圈子';
+  static const String noCirclesAvailable = '暂无可选圈子';
+  static const String locationSearchHint = '搜索地点';
+  static const String locationNearbyTitle = '附近位置';
+
   /// 图片选择/编辑（微趣、美图、文章共用）
   static const String addCover = '添加封面';
   static const String articleCoverOptionNone = '无图封面';
@@ -333,6 +368,7 @@ class UITextConstants {
   static const String selectFromGallery = '从相册选择';
   static const String editImage = '编辑图片';
   static const String imageEditDone = '完成';
+
   /// 图片编辑器（图四 Snapseed 式）
   static const String imageEditTools = '工具';
   static const String imageEditStyles = '样式';
@@ -349,6 +385,7 @@ class UITextConstants {
   static const String imageEditFaded = '褪色';
   static const String imageEditNostalgic = '怀旧';
   static const String imageEditCompare = '对比';
+
   /// 图片编辑器底栏工具（重建后三段式布局）
   static const String imageEditorRotate = '旋转';
   static const String imageEditorCrop = '裁剪';
@@ -358,10 +395,12 @@ class UITextConstants {
   static const String imageEditorFrame = '相框';
   static const String imageEditorText = '文字';
   static const String imageEditorMosaic = '马赛克';
+
   /// 图片编辑器历史与操作面板
   static const String imageEditorHistory = '历史';
   static const String imageEditorRemoveStep = '删除步骤';
   static const String imageEditorRedoStep = '重做';
+
   /// 裁剪比例
   static const String imageEditorCropFree = '自由';
   static const String imageEditorCropOriginal = '原始';
@@ -374,6 +413,7 @@ class UITextConstants {
   static const String imageEditorCropRatio16x9 = '16:9';
   static const String imageEditorCropReset = '重置';
   static const String imageEditorRotateRestore = '还原';
+
   /// 滤镜分类（面板顶部分类）
   static const String imageEditorFilterRecommended = '推荐';
   static const String imageEditorFilterFrequent = '常用';
@@ -383,6 +423,7 @@ class UITextConstants {
   static const String imageEditorFilterVivid = '鲜明';
   static const String imageEditorFilterHighSat = '高饱和';
   static const String imageEditorFilterDehaze = '去灰';
+
   /// 专业修图子工具（曲线/白平衡等参数标签）
   static const String imageEditorProBrightness = '亮度';
   static const String imageEditorProLightSense = '光感';
@@ -416,6 +457,7 @@ class UITextConstants {
   static const String imageEditorFrameSimple = '简洁';
   static const String imageEditorFrameFilm = '胶片';
   static const String imageEditorFrameWhite = '留白';
+
   /// 专业修图子工具
   static const String imageEditorProCurve = '曲线';
   static const String imageEditorProWhiteBalance = '白平衡';
@@ -468,12 +510,14 @@ class UITextConstants {
   static const String imageEditorProChannelMagenta = '洋红';
   static const String imageEditorProColorPicker = '取色器';
   static const String imageEditorProBwLevels = '黑白色阶';
+
   /// 旋转快捷：向左90°、向右90°、水平翻转、垂直翻转
   static const String imageEditorRotateLeft90 = '向左90°';
   static const String imageEditorRotateRight90 = '向右90°';
   static const String imageEditorFlipHorizontal = '水平翻转';
   static const String imageEditorFlipVertical = '垂直翻转';
   static const String imageSavedSuccess = '保存图片成功';
+
   /// 发微趣图片区小字提示（原型 1:1）
   static const String momentImageReorderHint = '拖动图片可以调整顺序，点击可以编辑图片';
   static const String momentPublished = '已发表';
@@ -489,11 +533,13 @@ class UITextConstants {
   static const String draftVideo = '视频草稿';
   static const String draftArticle = '文章草稿';
   static const String unlabeled = '[未填写]';
+
   /// 创作页表单占位（美图/视频/文章）
   static const String createTitleHint = '标题';
   static const String createDescriptionHint = '描述';
   static const String createVideoTitleHint = '视频标题';
   static const String createArticleBodyHint = '正文...';
+
   /// 美图（UnifiedImagePostCard 1:1）
   static const String photoTitleHint = '添加作品标题...';
   static const String photoBodyHint = '添加作品配文...';
@@ -502,6 +548,7 @@ class UITextConstants {
   static const String photoAddLabel = '添加图片作品';
   static const String photoShowMorePictures = '显示更多图片';
   static const String photoCollapseLabel = '收起';
+
   /// 视频（VideoEditorCard 1:1）
   static const String videoShortTypeName = '视频';
   static const String videoTitlePlaceholder = '视频标题';
@@ -529,6 +576,7 @@ class UITextConstants {
   static const String cameraCaptureFailed = '拍摄失败，请重试';
   static const String cameraPhotoMode = '拍照';
   static const String cameraVideoMode = '录像';
+
   /// 文章（ArticleEditorCard 1:1）
   static const String articleTitlePlaceholder = '请输入标题';
 }

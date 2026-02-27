@@ -16,16 +16,15 @@ import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/features/create/components/create_entry_sheet.dart';
 import 'package:quwoquan_app/features/create/models/create_media_models.dart';
+import 'package:quwoquan_app/features/create/models/publish_settings_models.dart';
+import 'package:quwoquan_app/features/create/services/publish_settings_services.dart';
 
 /// 创作页
 ///
 /// 1:1 复制自 趣我圈2026/src CreatePage.tsx
 /// 四 Tab moment|photo|video|article、草稿箱、退出确认、10 秒自动保存、hasContent 判断
 class CreatePage extends ConsumerStatefulWidget {
-  const CreatePage({
-    super.key,
-    this.initialType,
-  });
+  const CreatePage({super.key, this.initialType});
 
   final CreateEntryType? initialType;
 
@@ -52,53 +51,96 @@ class _CreatePageState extends ConsumerState<CreatePage>
   Timer? _autoSaveTimer;
   static const String _draftsStorageKey = 'create_drafts_list';
   static const String _currentDraftIdKey = 'create_current_draft_id';
+
   /// 发微趣编辑态：全屏、无一级 Tab、底部 emoji 栏、键盘弹起（图二）
   bool _isMomentEditingMode = false;
+
   /// 发美图编辑态：底部 TabBar 隐退（参考微趣编辑态）
   bool _isPhotoEditingMode = false;
   final FocusNode _momentFocusNode = FocusNode();
+
   /// 添加图片按钮焦点：进入时边框渐深，离开变回（图一）
   final FocusNode _momentAddImageFocusNode = FocusNode();
+
   /// 底部 emoji 面板展开时隐藏键盘、与键盘高度一致
   bool _showEmojiPanel = false;
   late final TextEditingController _momentContentController;
   static const int _kMomentMaxLength = 1000;
+
   /// 美图缩略图是否展开（超过 4 行时第四行之下显示“显示更多图片”，展开后全部之下显示“收起”）
   bool _photoThumbnailsExpanded = false;
+
   /// 一行 5 个；4 行 = 19 缩略图 + 1 添加（参考群聊群信息更多群成员/收起）
   static const int _kPhotoThumbnailsPerRow = 5;
-  static const int _kPhotoSlotsCollapsed = (_kPhotoThumbnailsPerRow * 4) - 1; // 19
+  static const int _kPhotoSlotsCollapsed =
+      (_kPhotoThumbnailsPerRow * 4) - 1; // 19
   final PageController _photoPageController = PageController();
+  final CreateLocationService _locationService = const CreateLocationService();
+  final CreateCircleService _circleService = const CreateCircleService();
 
   static Map<String, dynamic> _emptyData() {
     return {
-      'moment': {'content': '', 'images': <String>[]},
-      'photo': {'title': '', 'description': '', 'images': <String>[]},
+      'moment': {
+        'content': '',
+        'images': <String>[],
+        'visibility': 'public',
+        'circleIds': <String>[],
+        'circleNames': <String>[],
+        'locationName': '',
+        'location': <String, dynamic>{},
+      },
+      'photo': {
+        'title': '',
+        'description': '',
+        'images': <String>[],
+        'visibility': 'public',
+        'circleIds': <String>[],
+        'circleNames': <String>[],
+        'locationName': '',
+        'location': <String, dynamic>{},
+      },
       'video': {
         'title': '',
         'description': '',
         'videoPath': '',
         'thumbnail': '',
         'durationMs': 0,
-          'storyboardImages': <String>[],
+        'storyboardImages': <String>[],
+        'visibility': 'public',
+        'circleIds': <String>[],
+        'circleNames': <String>[],
+        'locationName': '',
+        'location': <String, dynamic>{},
       },
-      'article': {'title': '', 'content': '', 'covers': <String>[]},
+      'article': {
+        'title': '',
+        'content': '',
+        'covers': <String>[],
+        'visibility': 'public',
+        'circleIds': <String>[],
+        'circleNames': <String>[],
+        'locationName': '',
+        'location': <String, dynamic>{},
+      },
     };
   }
 
   final List<Map<String, dynamic>> _savedDrafts = [];
 
   void _recordCreateVisit(String tabId) {
-    ref.read(visitRecorderServiceProvider).recordVisit(
-          VisitTarget.page('create_$tabId'),
-        );
+    ref
+        .read(visitRecorderServiceProvider)
+        .recordVisit(VisitTarget.page('create_$tabId'));
   }
 
   @override
   void initState() {
     super.initState();
     _momentContentController = TextEditingController(
-      text: (_currentData['moment'] as Map<String, dynamic>)['content'] as String? ?? '',
+      text:
+          (_currentData['moment'] as Map<String, dynamic>)['content']
+              as String? ??
+          '',
     );
     final initialIndex = _tabIndexFromType(widget.initialType);
     _tabController = TabController(
@@ -162,7 +204,10 @@ class _CreatePageState extends ConsumerState<CreatePage>
     if (_isPhotoEditingMode) return;
     final photoData = _currentData['photo'] as Map<String, dynamic>? ?? {};
     final images = List<String>.from(photoData['images'] as List? ?? []);
-    final currentIndex = (photoData['_photoCurrentIndex'] as int? ?? 0).clamp(0, images.isEmpty ? 0 : images.length - 1);
+    final currentIndex = (photoData['_photoCurrentIndex'] as int? ?? 0).clamp(
+      0,
+      images.isEmpty ? 0 : images.length - 1,
+    );
     setState(() => _isPhotoEditingMode = true);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_photoPageController.hasClients) return;
@@ -185,20 +230,35 @@ class _CreatePageState extends ConsumerState<CreatePage>
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                title: Text(UITextConstants.articleCoverOptionNone, style: TextStyle(color: fg)),
-                subtitle: Text(UITextConstants.articleCoverOptionNoneDesc, style: TextStyle(color: secondary)),
+                title: Text(
+                  UITextConstants.articleCoverOptionNone,
+                  style: TextStyle(color: fg),
+                ),
+                subtitle: Text(
+                  UITextConstants.articleCoverOptionNoneDesc,
+                  style: TextStyle(color: secondary),
+                ),
                 onTap: () => Navigator.of(context).pop(0),
               ),
               ListTile(
-                title: Text(UITextConstants.articleCoverOptionOne, style: TextStyle(color: fg)),
+                title: Text(
+                  UITextConstants.articleCoverOptionOne,
+                  style: TextStyle(color: fg),
+                ),
                 onTap: () => Navigator.of(context).pop(1),
               ),
               ListTile(
-                title: Text(UITextConstants.articleCoverOptionTwo, style: TextStyle(color: fg)),
+                title: Text(
+                  UITextConstants.articleCoverOptionTwo,
+                  style: TextStyle(color: fg),
+                ),
                 onTap: () => Navigator.of(context).pop(2),
               ),
               ListTile(
-                title: Text(UITextConstants.articleCoverOptionThree, style: TextStyle(color: fg)),
+                title: Text(
+                  UITextConstants.articleCoverOptionThree,
+                  style: TextStyle(color: fg),
+                ),
                 onTap: () => Navigator.of(context).pop(3),
               ),
             ],
@@ -210,12 +270,14 @@ class _CreatePageState extends ConsumerState<CreatePage>
     if (selection == 0) {
       setState(() {
         _currentData = Map.from(_currentData);
-        (_currentData['article'] as Map<String, dynamic>)['covers'] = <String>[];
+        (_currentData['article'] as Map<String, dynamic>)['covers'] =
+            <String>[];
       });
       return;
     }
     final currentCovers = List<String>.from(
-      ((_currentData['article'] as Map<String, dynamic>?)?['covers'] as List?) ??
+      ((_currentData['article'] as Map<String, dynamic>?)?['covers']
+              as List?) ??
           <String>[],
     );
     final paths = await _pickImages(
@@ -237,9 +299,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
     final payload = _buildPostPayload('moment');
     if (payload == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(UITextConstants.loadFailed)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(UITextConstants.loadFailed)));
       }
       return;
     }
@@ -248,26 +310,29 @@ class _CreatePageState extends ConsumerState<CreatePage>
       await dataService.createDataItem(endpoint: '/posts', data: payload);
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(UITextConstants.loadFailed)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(UITextConstants.loadFailed)));
       }
       return;
     }
     if (_currentDraftId != null) {
-      final nextDrafts =
-          _savedDrafts.where((e) => e['id'] != _currentDraftId).toList();
+      final nextDrafts = _savedDrafts
+          .where((e) => e['id'] != _currentDraftId)
+          .toList();
       setState(() {
-        _savedDrafts..clear()..addAll(nextDrafts);
+        _savedDrafts
+          ..clear()
+          ..addAll(nextDrafts);
         _currentDraftId = null;
       });
       _persistDrafts(nextDrafts, null);
     }
     _exitMomentEditingMode();
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(UITextConstants.momentPublished)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(UITextConstants.momentPublished)));
       _doClose();
     }
   }
@@ -277,9 +342,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
     final payload = _buildPostPayload(tab);
     if (payload == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(UITextConstants.loadFailed)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(UITextConstants.loadFailed)));
       }
       return;
     }
@@ -287,28 +352,32 @@ class _CreatePageState extends ConsumerState<CreatePage>
       final dataService = ref.read(dataServiceProvider);
       await dataService.createDataItem(endpoint: '/posts', data: payload);
       if (_currentDraftId != null) {
-        final nextDrafts =
-            _savedDrafts.where((e) => e['id'] != _currentDraftId).toList();
+        final nextDrafts = _savedDrafts
+            .where((e) => e['id'] != _currentDraftId)
+            .toList();
         setState(() {
-          _savedDrafts..clear()..addAll(nextDrafts);
+          _savedDrafts
+            ..clear()
+            ..addAll(nextDrafts);
           _currentDraftId = null;
         });
         await _persistDrafts(nextDrafts, null);
       }
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(UITextConstants.momentPublished)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(UITextConstants.momentPublished)));
       _doClose();
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(UITextConstants.loadFailed)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(UITextConstants.loadFailed)));
     }
   }
 
   Map<String, dynamic>? _buildPostPayload(String tab) {
+    final publishFields = _buildPublishPayloadFields(tab);
     switch (tab) {
       case 'moment':
         final d = _currentData['moment'] as Map<String, dynamic>? ?? {};
@@ -318,7 +387,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
           'mediaUrls': List<String>.from(d['images'] as List? ?? <String>[]),
           'title': '',
           'tags': <String>[],
-          'visibility': 'public',
+          ...publishFields,
         };
       case 'photo':
         final d = _currentData['photo'] as Map<String, dynamic>? ?? {};
@@ -327,15 +396,13 @@ class _CreatePageState extends ConsumerState<CreatePage>
           'title': (d['title'] as String? ?? '').trim(),
           'body': (d['description'] as String? ?? '').trim(),
           'mediaUrls': List<String>.from(d['images'] as List? ?? <String>[]),
-          'visibility': 'public',
           'tags': <String>[],
+          ...publishFields,
         };
       case 'video':
         final d = _currentData['video'] as Map<String, dynamic>? ?? {};
         final videoPath = (d['videoPath'] as String? ?? '').trim();
-        final mediaUrls = <String>[
-          if (videoPath.isNotEmpty) videoPath,
-        ];
+        final mediaUrls = <String>[if (videoPath.isNotEmpty) videoPath];
         return <String, dynamic>{
           'contentType': 'video',
           'title': (d['title'] as String? ?? '').trim(),
@@ -343,8 +410,8 @@ class _CreatePageState extends ConsumerState<CreatePage>
           'videoUrl': videoPath,
           'mediaUrls': mediaUrls,
           'coverUrl': (d['thumbnail'] as String? ?? '').trim(),
-          'visibility': 'public',
           'tags': <String>[],
+          ...publishFields,
         };
       case 'article':
         final d = _currentData['article'] as Map<String, dynamic>? ?? {};
@@ -355,12 +422,63 @@ class _CreatePageState extends ConsumerState<CreatePage>
           'body': (d['content'] as String? ?? '').trim(),
           'coverUrl': covers.isNotEmpty ? covers.first : '',
           'mediaUrls': covers,
-          'visibility': 'public',
           'tags': <String>[],
+          ...publishFields,
         };
       default:
         return null;
     }
+  }
+
+  Map<String, dynamic> _tabData(String tab) {
+    final data =
+        _currentData[tab] as Map<String, dynamic>? ?? <String, dynamic>{};
+    if (!data.containsKey('visibility')) data['visibility'] = 'public';
+    if (!data.containsKey('circleIds')) data['circleIds'] = <String>[];
+    if (!data.containsKey('circleNames')) data['circleNames'] = <String>[];
+    if (!data.containsKey('locationName')) data['locationName'] = '';
+    if (!data.containsKey('location')) data['location'] = <String, dynamic>{};
+    return data;
+  }
+
+  bool _isPublic(String tab) =>
+      (_tabData(tab)['visibility']?.toString() ?? 'public').toLowerCase() ==
+      'public';
+
+  String _locationDisplay(String tab) {
+    final name = (_tabData(tab)['locationName'] as String? ?? '').trim();
+    return name.isEmpty ? UITextConstants.locationHidden : name;
+  }
+
+  String _circlesDisplay(String tab) {
+    final names = List<String>.from(
+      _tabData(tab)['circleNames'] as List? ?? const <String>[],
+    );
+    if (names.isEmpty) return UITextConstants.noCirclesAvailable;
+    return names.join(', ');
+  }
+
+  Map<String, dynamic> _buildPublishPayloadFields(String tab) {
+    final data = _tabData(tab);
+    final isPublic = _isPublic(tab);
+    final locationName = (data['locationName'] as String? ?? '').trim();
+    final location = Map<String, dynamic>.from(
+      data['location'] as Map? ?? const <String, dynamic>{},
+    );
+    final circleIds = isPublic
+        ? List<String>.from(data['circleIds'] as List? ?? const <String>[])
+        : <String>[];
+    final payload = <String, dynamic>{
+      'visibility': isPublic ? 'public' : 'private',
+      'circleIds': circleIds,
+    };
+    if (locationName.isNotEmpty) {
+      payload['locationName'] = locationName;
+    }
+    if (location.containsKey('latitude') && location.containsKey('longitude')) {
+      payload['location'] = location;
+    }
+    return payload;
   }
 
   int _tabIndexFromType(CreateEntryType? type) {
@@ -436,7 +554,10 @@ class _CreatePageState extends ConsumerState<CreatePage>
     }
   }
 
-  Future<void> _persistDrafts(List<Map<String, dynamic>> drafts, String? currentId) async {
+  Future<void> _persistDrafts(
+    List<Map<String, dynamic>> drafts,
+    String? currentId,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_draftsStorageKey, jsonEncode(drafts));
     if (currentId == null) {
@@ -466,10 +587,12 @@ class _CreatePageState extends ConsumerState<CreatePage>
     }
     if (nextId == null) {
       nextId = now.toString();
-      nextDrafts.insert(
-        0,
-        {'id': nextId, 'type': tab, 'updatedAt': now, 'data': dataToSave},
-      );
+      nextDrafts.insert(0, {
+        'id': nextId,
+        'type': tab,
+        'updatedAt': now,
+        'data': dataToSave,
+      });
     }
     setState(() {
       _savedDrafts
@@ -504,8 +627,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
 
   void _handleDiscardAndExit() {
     if (_currentDraftId != null) {
-      final nextDrafts =
-          _savedDrafts.where((e) => e['id'] != _currentDraftId).toList();
+      final nextDrafts = _savedDrafts
+          .where((e) => e['id'] != _currentDraftId)
+          .toList();
       setState(() {
         _savedDrafts
           ..clear()
@@ -577,23 +701,28 @@ class _CreatePageState extends ConsumerState<CreatePage>
       child: Material(
         color: bg,
         borderRadius: BorderRadius.circular(
-            SettingsSemanticConstants.actionButtonBorderRadius),
+          SettingsSemanticConstants.actionButtonBorderRadius,
+        ),
         child: InkWell(
           onTap: enabled ? onPressed : null,
           borderRadius: BorderRadius.circular(
-              SettingsSemanticConstants.actionButtonBorderRadius),
+            SettingsSemanticConstants.actionButtonBorderRadius,
+          ),
           child: SizedBox(
             height: SettingsSemanticConstants.actionButtonHeightInToolbar,
             child: Padding(
               padding: EdgeInsets.symmetric(
-                horizontal: SettingsSemanticConstants.actionButtonPaddingHorizontalInToolbar,
-                vertical: SettingsSemanticConstants.actionButtonPaddingVerticalInToolbar,
+                horizontal: SettingsSemanticConstants
+                    .actionButtonPaddingHorizontalInToolbar,
+                vertical: SettingsSemanticConstants
+                    .actionButtonPaddingVerticalInToolbar,
               ),
               child: Center(
                 child: Text(
                   text,
                   style: TextStyle(
-                    fontSize: SettingsSemanticConstants.actionButtonTextSizeInToolbar,
+                    fontSize:
+                        SettingsSemanticConstants.actionButtonTextSizeInToolbar,
                     fontWeight: FontWeight.w600,
                     color: fg,
                   ),
@@ -661,7 +790,10 @@ class _CreatePageState extends ConsumerState<CreatePage>
   }
 
   void _applyOneTapMovieSelection(List<CreateMediaItem> items) {
-    final imagePaths = items.where((item) => item.isImage).map((item) => item.path).toList();
+    final imagePaths = items
+        .where((item) => item.isImage)
+        .map((item) => item.path)
+        .toList();
     if (imagePaths.isEmpty) return;
     setState(() {
       _currentData = Map.from(_currentData);
@@ -678,13 +810,16 @@ class _CreatePageState extends ConsumerState<CreatePage>
 
   /// 打开创作媒体选择器并返回视频路径（发视频使用）
   Future<String?> _pickVideo() async {
-    final currentVideo = (_currentData['video'] as Map<String, dynamic>?)?['videoPath']
+    final currentVideo =
+        (_currentData['video'] as Map<String, dynamic>?)?['videoPath']
             ?.toString() ??
         '';
     final result = await _openCreateMediaPicker(
       mode: MediaPickerEntryMode.video,
       maxSelection: 1,
-      initialPaths: currentVideo.isEmpty ? const <String>[] : <String>[currentVideo],
+      initialPaths: currentVideo.isEmpty
+          ? const <String>[]
+          : <String>[currentVideo],
     );
     if (!mounted || result == null || result.items.isEmpty) return null;
     final firstVideo = result.items.firstWhere(
@@ -791,10 +926,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
       final parsedIndex = rawIndex is int
           ? rawIndex
           : int.tryParse(rawIndex?.toString() ?? '');
-      return (
-        index: parsedIndex ?? fallbackIndex,
-        path: path,
-      );
+      return (index: parsedIndex ?? fallbackIndex, path: path);
     }
     return null;
   }
@@ -809,7 +941,8 @@ class _CreatePageState extends ConsumerState<CreatePage>
     setState(() {
       _currentData = Map.from(_currentData);
       final tab = Map<String, dynamic>.from(
-          _currentData[tabKey] as Map<String, dynamic>? ?? {});
+        _currentData[tabKey] as Map<String, dynamic>? ?? {},
+      );
       final list = List<String>.from(tab['images'] as List? ?? []);
       if (list.isEmpty) return;
       final safeIndex = parsed.index.clamp(0, list.length - 1);
@@ -845,7 +978,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
     final pageBg = SettingsSemanticConstants.createPageBackground(isDark);
-    final blockSurface = SettingsSemanticConstants.createPageBlockBackground(isDark);
+    final blockSurface = SettingsSemanticConstants.createPageBlockBackground(
+      isDark,
+    );
     final fgColor = SettingsSemanticConstants.labelColor(isDark);
     final fgSecondary = SettingsSemanticConstants.secondaryColor(isDark);
     final hasContent = _hasContent();
@@ -869,7 +1004,8 @@ class _CreatePageState extends ConsumerState<CreatePage>
                   _tabTitles[_tabController.index],
                   style: TextStyle(
                     color: fgColor,
-                    fontSize: SettingsSemanticConstants.createToolbarTitleFontSize,
+                    fontSize:
+                        SettingsSemanticConstants.createToolbarTitleFontSize,
                     fontWeight: FontWeight.normal,
                   ),
                 );
@@ -925,7 +1061,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
               Expanded(
                 child: TabBarView(
                   controller: _tabController,
-                  physics: _isPhotoEditingMode ? const NeverScrollableScrollPhysics() : null,
+                  physics: _isPhotoEditingMode
+                      ? const NeverScrollableScrollPhysics()
+                      : null,
                   children: _tabIds.asMap().entries.map((e) {
                     return _buildEditorPlaceholder(
                       context,
@@ -953,19 +1091,26 @@ class _CreatePageState extends ConsumerState<CreatePage>
                         });
                       },
                       child: Container(
-                        height: SettingsSemanticConstants.toolbarHeightOverKeyboard,
+                        height:
+                            SettingsSemanticConstants.toolbarHeightOverKeyboard,
                         width: double.infinity,
                         padding: EdgeInsets.symmetric(
-                          horizontal: SettingsSemanticConstants.blockHorizontalPadding,
-                          vertical: (SettingsSemanticConstants.toolbarHeightOverKeyboard -
-                                  SettingsSemanticConstants.createToolbarIconSize) /
+                          horizontal:
+                              SettingsSemanticConstants.blockHorizontalPadding,
+                          vertical:
+                              (SettingsSemanticConstants
+                                      .toolbarHeightOverKeyboard -
+                                  SettingsSemanticConstants
+                                      .createToolbarIconSize) /
                               2,
                         ),
                         decoration: BoxDecoration(
                           color: blockSurface,
                           border: Border(
                             top: BorderSide(
-                              color: SettingsSemanticConstants.dividerColor(isDark),
+                              color: SettingsSemanticConstants.dividerColor(
+                                isDark,
+                              ),
                             ),
                           ),
                         ),
@@ -974,9 +1119,12 @@ class _CreatePageState extends ConsumerState<CreatePage>
                           child: Align(
                             alignment: Alignment.centerLeft,
                             child: Icon(
-                              _showEmojiPanel ? Icons.keyboard_outlined : Icons.emoji_emotions_outlined,
+                              _showEmojiPanel
+                                  ? Icons.keyboard_outlined
+                                  : Icons.emoji_emotions_outlined,
                               color: fgColor,
-                              size: SettingsSemanticConstants.createToolbarIconSize,
+                              size: SettingsSemanticConstants
+                                  .createToolbarIconSize,
                             ),
                           ),
                         ),
@@ -986,12 +1134,22 @@ class _CreatePageState extends ConsumerState<CreatePage>
                       UnifiedEmojiPicker(
                         onEmojiSelected: (char) {
                           final t = _momentContentController;
-                          final pos = t.selection.baseOffset.clamp(0, t.text.length);
-                          t.text = t.text.substring(0, pos) + char + t.text.substring(pos);
-                          t.selection = TextSelection.collapsed(offset: pos + char.length);
+                          final pos = t.selection.baseOffset.clamp(
+                            0,
+                            t.text.length,
+                          );
+                          t.text =
+                              t.text.substring(0, pos) +
+                              char +
+                              t.text.substring(pos);
+                          t.selection = TextSelection.collapsed(
+                            offset: pos + char.length,
+                          );
                           setState(() {
                             _currentData = Map.from(_currentData);
-                            (_currentData['moment'] as Map<String, dynamic>)['content'] = t.text;
+                            (_currentData['moment']
+                                    as Map<String, dynamic>)['content'] =
+                                t.text;
                           });
                         },
                       ),
@@ -1019,12 +1177,14 @@ class _CreatePageState extends ConsumerState<CreatePage>
                       labelColor: fgColor,
                       unselectedLabelColor: fgSecondary,
                       labelStyle: TextStyle(
-                        fontSize: SettingsSemanticConstants.createToolbarTitleFontSize,
+                        fontSize: SettingsSemanticConstants
+                            .createToolbarTitleFontSize,
                         fontWeight: FontWeight.w600,
                         color: fgColor,
                       ),
                       unselectedLabelStyle: TextStyle(
-                        fontSize: SettingsSemanticConstants.createToolbarTitleFontSize,
+                        fontSize: SettingsSemanticConstants
+                            .createToolbarTitleFontSize,
                         fontWeight: FontWeight.normal,
                         color: fgSecondary,
                       ),
@@ -1051,11 +1211,15 @@ class _CreatePageState extends ConsumerState<CreatePage>
   ) {
     final tabId = _tabIds[tabIndex];
     final data = _currentData[tabId] as Map<String, dynamic>? ?? {};
-    final blockSurface = SettingsSemanticConstants.createPageBlockBackground(isDark);
+    final blockSurface = SettingsSemanticConstants.createPageBlockBackground(
+      isDark,
+    );
     final blockBorderColor = SettingsSemanticConstants.blockBorderColor(isDark);
     final blockDecoration = BoxDecoration(
       color: blockSurface,
-      borderRadius: BorderRadius.circular(SettingsSemanticConstants.blockBorderRadius),
+      borderRadius: BorderRadius.circular(
+        SettingsSemanticConstants.blockBorderRadius,
+      ),
       border: Border.all(color: blockBorderColor),
     );
     final blockSpacing = SettingsSemanticConstants.blockSpacing;
@@ -1115,7 +1279,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
               ),
             ),
             if (optionsBlock != null) ...[
-              SizedBox(height: SettingsSemanticConstants.createStripSeparatorHeight),
+              SizedBox(
+                height: SettingsSemanticConstants.createStripSeparatorHeight,
+              ),
               Container(
                 width: double.infinity,
                 decoration: blockDecoration,
@@ -1131,7 +1297,12 @@ class _CreatePageState extends ConsumerState<CreatePage>
     if (tabId == 'photo') {
       final photoBlocks = _buildPhotoFields(data, fgColor, fgSecondary, isDark);
       return SingleChildScrollView(
-        padding: EdgeInsets.only(left: 0, right: 0, top: SettingsSemanticConstants.createContentTopPadding, bottom: blockSpacing),
+        padding: EdgeInsets.only(
+          left: 0,
+          right: 0,
+          top: SettingsSemanticConstants.createContentTopPadding,
+          bottom: blockSpacing,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: photoBlocks.asMap().entries.map((e) {
@@ -1140,7 +1311,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
               child: Container(
                 width: double.infinity,
                 decoration: blockDecoration,
-                padding: e.key == photoBlocks.length - 1 ? EdgeInsets.zero : EdgeInsets.all(blockPad),
+                padding: e.key == photoBlocks.length - 1
+                    ? EdgeInsets.zero
+                    : EdgeInsets.all(blockPad),
                 child: e.value,
               ),
             );
@@ -1152,7 +1325,12 @@ class _CreatePageState extends ConsumerState<CreatePage>
     if (tabId == 'video') {
       final videoBlocks = _buildVideoFields(data, fgColor, fgSecondary, isDark);
       return SingleChildScrollView(
-        padding: EdgeInsets.only(left: 0, right: 0, top: SettingsSemanticConstants.createContentTopPadding, bottom: blockSpacing),
+        padding: EdgeInsets.only(
+          left: 0,
+          right: 0,
+          top: SettingsSemanticConstants.createContentTopPadding,
+          bottom: blockSpacing,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: videoBlocks.asMap().entries.map((e) {
@@ -1161,7 +1339,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
               child: Container(
                 width: double.infinity,
                 decoration: blockDecoration,
-                padding: e.key == videoBlocks.length - 1 ? EdgeInsets.zero : EdgeInsets.all(blockPad),
+                padding: e.key == videoBlocks.length - 1
+                    ? EdgeInsets.zero
+                    : EdgeInsets.all(blockPad),
                 child: e.value,
               ),
             );
@@ -1171,9 +1351,19 @@ class _CreatePageState extends ConsumerState<CreatePage>
     }
 
     if (tabId == 'article') {
-      final articleBlocks = _buildArticleFields(data, fgColor, fgSecondary, isDark);
+      final articleBlocks = _buildArticleFields(
+        data,
+        fgColor,
+        fgSecondary,
+        isDark,
+      );
       return SingleChildScrollView(
-        padding: EdgeInsets.only(left: 0, right: 0, top: SettingsSemanticConstants.createContentTopPadding, bottom: blockSpacing),
+        padding: EdgeInsets.only(
+          left: 0,
+          right: 0,
+          top: SettingsSemanticConstants.createContentTopPadding,
+          bottom: blockSpacing,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: articleBlocks.asMap().entries.map((e) {
@@ -1182,7 +1372,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
               child: Container(
                 width: double.infinity,
                 decoration: blockDecoration,
-                padding: e.key == articleBlocks.length - 1 ? EdgeInsets.zero : EdgeInsets.all(blockPad),
+                padding: e.key == articleBlocks.length - 1
+                    ? EdgeInsets.zero
+                    : EdgeInsets.all(blockPad),
                 child: e.value,
               ),
             );
@@ -1245,12 +1437,12 @@ class _CreatePageState extends ConsumerState<CreatePage>
               (_currentData['moment'] as Map<String, dynamic>)['content'] = v;
             }),
             contextMenuBuilder: (context, editableTextState) {
-              final items = editableTextState.contextMenuButtonItems
-                  .where((item) {
-                    final label = item.label?.toLowerCase() ?? '';
-                    return !label.contains('scan') && !label.contains('扫描');
-                  })
-                  .toList();
+              final items = editableTextState.contextMenuButtonItems.where((
+                item,
+              ) {
+                final label = item.label?.toLowerCase() ?? '';
+                return !label.contains('scan') && !label.contains('扫描');
+              }).toList();
               return AdaptiveTextSelectionToolbar.buttonItems(
                 anchors: editableTextState.contextMenuAnchors,
                 buttonItems: items,
@@ -1284,7 +1476,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
                 child: Row(
                   children: List.generate(3, (col) {
                     final index = row * 3 + col;
-                    if (index >= totalCells) return SizedBox(width: cellSize, height: cellSize);
+                    if (index >= totalCells) {
+                      return SizedBox(width: cellSize, height: cellSize);
+                    }
                     if (index == images.length) {
                       return Padding(
                         padding: EdgeInsets.only(right: col < 2 ? gap : 0),
@@ -1304,10 +1498,15 @@ class _CreatePageState extends ConsumerState<CreatePage>
                             });
                             if (!mounted) return;
                             final merged = List<String>.from(
-                              (_currentData['moment'] as Map)['images'] as List? ?? [],
+                              (_currentData['moment'] as Map)['images']
+                                      as List? ??
+                                  [],
                             );
                             if (merged.isEmpty) return;
-                            final targetIndex = oldLength.clamp(0, merged.length - 1);
+                            final targetIndex = oldLength.clamp(
+                              0,
+                              merged.length - 1,
+                            );
                             final result = await _openEditImage(
                               'moment',
                               merged[targetIndex],
@@ -1326,11 +1525,15 @@ class _CreatePageState extends ConsumerState<CreatePage>
                             isDark: isDark,
                             width: cellSize,
                             height: cellSize,
-                            borderRadius: SettingsSemanticConstants.createAddTileBorderRadius,
+                            borderRadius: SettingsSemanticConstants
+                                .createAddTileBorderRadius,
                             child: Icon(
                               Icons.add,
                               size: AppSpacing.iconLarge + AppSpacing.iconSmall,
-                              color: SettingsSemanticConstants.createAddTileIconColor(isDark),
+                              color:
+                                  SettingsSemanticConstants.createAddTileIconColor(
+                                    isDark,
+                                  ),
                             ),
                           ),
                         ),
@@ -1368,39 +1571,11 @@ class _CreatePageState extends ConsumerState<CreatePage>
           ),
         ),
       SizedBox(height: AppSpacing.interGroupLg),
-      // 3. 列表选项：所在位置、提醒谁看、谁可以看（语义与设置页一致）
-      Column(
-        children: [
-          _momentListTile(
-            icon: Icons.location_on_outlined,
-            label: UITextConstants.locationLabel,
-            trailing: null,
-            fgColor: fgColor,
-            fgSecondary: fgSecondary,
-            isDark: isDark,
-            onTap: () {},
-          ),
-          _createOptionDivider(isDark),
-          _momentListTile(
-            icon: Icons.alternate_email,
-            label: UITextConstants.remindWhoLabel,
-            trailing: null,
-            fgColor: fgColor,
-            fgSecondary: fgSecondary,
-            isDark: isDark,
-            onTap: () {},
-          ),
-          _createOptionDivider(isDark),
-          _momentListTile(
-            icon: Icons.person_outline,
-            label: UITextConstants.whoCanSeeLabel,
-            trailing: UITextConstants.visibilityPublic,
-            fgColor: fgColor,
-            fgSecondary: fgSecondary,
-            isDark: isDark,
-            onTap: () {},
-          ),
-        ],
+      _buildPublishSettingsSection(
+        tabKey: 'moment',
+        fgColor: fgColor,
+        fgSecondary: fgSecondary,
+        isDark: isDark,
       ),
     ];
   }
@@ -1416,6 +1591,252 @@ class _CreatePageState extends ConsumerState<CreatePage>
     );
   }
 
+  Widget _buildPublishSettingsSection({
+    required String tabKey,
+    required Color fgColor,
+    required Color fgSecondary,
+    required bool isDark,
+  }) {
+    final locationText = _locationDisplay(tabKey);
+    final isPublic = _isPublic(tabKey);
+    final circlesText = _circlesDisplay(tabKey);
+    final blue = AppColors.primaryColor;
+    final isLocationSelected = locationText != UITextConstants.locationHidden;
+
+    return Column(
+      children: [
+        _momentListTile(
+          icon: Icons.location_on_outlined,
+          label: UITextConstants.locationLabel,
+          trailing: locationText,
+          trailingColor: isLocationSelected
+              ? blue
+              : SettingsSemanticConstants.createSettingItemValueColor(isDark),
+          fgColor: fgColor,
+          fgSecondary: fgSecondary,
+          isDark: isDark,
+          onTap: () => _selectLocation(tabKey),
+        ),
+        _createOptionDivider(isDark),
+        _momentListTile(
+          icon: Icons.public,
+          label: UITextConstants.isPublicLabel,
+          fgColor: fgColor,
+          fgSecondary: fgSecondary,
+          isDark: isDark,
+          showChevron: false,
+          trailingWidget: Checkbox(
+            value: isPublic,
+            activeColor: blue,
+            onChanged: (v) {
+              final next = v ?? true;
+              setState(() {
+                final nextData = Map<String, dynamic>.from(_tabData(tabKey));
+                nextData['visibility'] = next ? 'public' : 'private';
+                if (!next) {
+                  nextData['circleIds'] = <String>[];
+                  nextData['circleNames'] = <String>[];
+                }
+                _currentData = Map<String, dynamic>.from(_currentData)
+                  ..[tabKey] = nextData;
+              });
+            },
+          ),
+          onTap: () {
+            setState(() {
+              final nextPublic = !_isPublic(tabKey);
+              final nextData = Map<String, dynamic>.from(_tabData(tabKey));
+              nextData['visibility'] = nextPublic ? 'public' : 'private';
+              if (!nextPublic) {
+                nextData['circleIds'] = <String>[];
+                nextData['circleNames'] = <String>[];
+              }
+              _currentData = Map<String, dynamic>.from(_currentData)
+                ..[tabKey] = nextData;
+            });
+          },
+        ),
+        if (isPublic) ...[
+          _createOptionDivider(isDark),
+          _momentListTile(
+            icon: Icons.groups_outlined,
+            label: UITextConstants.selectPublishCirclesLabel,
+            trailing: circlesText,
+            trailingColor: circlesText == UITextConstants.noCirclesAvailable
+                ? SettingsSemanticConstants.createSettingItemValueColor(isDark)
+                : blue,
+            fgColor: fgColor,
+            fgSecondary: fgSecondary,
+            isDark: isDark,
+            onTap: () => _selectCircles(tabKey),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _selectLocation(String tabKey) async {
+    final nearby = await _locationService.nearby();
+    if (!mounted) return;
+    final result = await showModalBottomSheet<CreateLocationOption>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        final blue = AppColors.primaryColor;
+        final all = nearby;
+        final TextEditingController searchController = TextEditingController();
+        List<CreateLocationOption> filtered = all;
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            void doFilter(String keyword) async {
+              final next = await _locationService.search(keyword);
+              setModalState(() => filtered = next);
+            }
+
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.interGroupLg,
+                  AppSpacing.interGroupLg,
+                  AppSpacing.interGroupLg,
+                  AppSpacing.interGroupLg +
+                      MediaQuery.of(context).viewInsets.bottom,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: searchController,
+                      decoration: InputDecoration(
+                        hintText: UITextConstants.locationSearchHint,
+                        prefixIcon: const Icon(Icons.search),
+                      ),
+                      onChanged: doFilter,
+                    ),
+                    SizedBox(height: AppSpacing.interGroupSm),
+                    Text(
+                      UITextConstants.locationNearbyTitle,
+                      style: TextStyle(
+                        color: blue,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    SizedBox(height: AppSpacing.intraGroupXs),
+                    Flexible(
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: filtered.length + 1,
+                        itemBuilder: (context, index) {
+                          if (index == 0) {
+                            return ListTile(
+                              title: const Text(UITextConstants.locationHidden),
+                              onTap: () => Navigator.of(context).pop(
+                                const CreateLocationOption(
+                                  name: '',
+                                  latitude: 0,
+                                  longitude: 0,
+                                ),
+                              ),
+                            );
+                          }
+                          final item = filtered[index - 1];
+                          return ListTile(
+                            title: Text(item.name),
+                            onTap: () => Navigator.of(context).pop(item),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (!mounted || result == null) return;
+    setState(() {
+      final nextData = Map<String, dynamic>.from(_tabData(tabKey));
+      if (result.name.isEmpty) {
+        nextData['locationName'] = '';
+        nextData['location'] = <String, dynamic>{};
+      } else {
+        nextData['locationName'] = result.name;
+        nextData['location'] = result.toLocationMap();
+      }
+      _currentData = Map<String, dynamic>.from(_currentData)
+        ..[tabKey] = nextData;
+    });
+  }
+
+  Future<void> _selectCircles(String tabKey) async {
+    final dataService = ref.read(dataServiceProvider);
+    final circles = await _circleService.listCircles(dataService);
+    if (!mounted || circles.isEmpty) return;
+    final selectedIds = List<String>.from(
+      _tabData(tabKey)['circleIds'] as List? ?? const <String>[],
+    );
+    final selectedNames = List<String>.from(
+      _tabData(tabKey)['circleNames'] as List? ?? const <String>[],
+    );
+    final selected = <String, String>{};
+    for (var i = 0; i < selectedIds.length; i++) {
+      selected[selectedIds[i]] = i < selectedNames.length
+          ? selectedNames[i]
+          : selectedIds[i];
+    }
+    final result = await showModalBottomSheet<Map<String, String>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        final temp = Map<String, String>.from(selected);
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return SafeArea(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final circle in circles)
+                    CheckboxListTile(
+                      value: temp.containsKey(circle.id),
+                      activeColor: AppColors.primaryColor,
+                      title: Text(circle.name),
+                      onChanged: (checked) {
+                        setModalState(() {
+                          if (checked == true) {
+                            temp[circle.id] = circle.name;
+                          } else {
+                            temp.remove(circle.id);
+                          }
+                        });
+                      },
+                    ),
+                  Padding(
+                    padding: EdgeInsets.all(AppSpacing.interGroupLg),
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(temp),
+                      child: Text(UITextConstants.imageEditDone),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (!mounted || result == null) return;
+    setState(() {
+      final nextData = Map<String, dynamic>.from(_tabData(tabKey));
+      nextData['circleIds'] = result.keys.toList();
+      nextData['circleNames'] = result.values.toList();
+      _currentData = Map<String, dynamic>.from(_currentData)
+        ..[tabKey] = nextData;
+    });
+  }
+
   Widget _momentListTile({
     required IconData icon,
     required String label,
@@ -1423,6 +1844,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
     required Color fgSecondary,
     required bool isDark,
     String? trailing,
+    Color? trailingColor,
+    Widget? trailingWidget,
+    bool showChevron = true,
     required VoidCallback onTap,
   }) {
     return InkWell(
@@ -1439,22 +1863,35 @@ class _CreatePageState extends ConsumerState<CreatePage>
             Text(
               label,
               style: TextStyle(
-                fontSize: SettingsSemanticConstants.createSettingItemLabelFontSize,
+                fontSize:
+                    SettingsSemanticConstants.createSettingItemLabelFontSize,
                 fontWeight: FontWeight.normal,
                 color: fgColor,
               ),
             ),
             const Spacer(),
-            if (trailing != null)
+            ...?(trailingWidget == null ? null : <Widget>[trailingWidget]),
+            if (trailingWidget == null && trailing != null)
               Text(
                 trailing,
                 style: TextStyle(
-                  fontSize: SettingsSemanticConstants.createSettingItemValueFontSize,
-                  color: SettingsSemanticConstants.createSettingItemValueColor(isDark),
+                  fontSize:
+                      SettingsSemanticConstants.createSettingItemValueFontSize,
+                  color:
+                      trailingColor ??
+                      SettingsSemanticConstants.createSettingItemValueColor(
+                        isDark,
+                      ),
                 ),
               ),
-            if (trailing != null) SizedBox(width: AppSpacing.interGroupXs),
-            Icon(Icons.chevron_right, size: AppSpacing.iconMedium, color: fgSecondary),
+            if (trailing != null || trailingWidget != null)
+              SizedBox(width: AppSpacing.interGroupXs),
+            if (showChevron)
+              Icon(
+                Icons.chevron_right,
+                size: AppSpacing.iconMedium,
+                color: fgSecondary,
+              ),
           ],
         ),
       ),
@@ -1504,8 +1941,14 @@ class _CreatePageState extends ConsumerState<CreatePage>
           setState(() {
             _currentData = Map.from(_currentData);
             final list = List<String>.from(
-                (_currentData['moment'] as Map)['images'] as List? ?? []);
-            if (from < 0 || from >= list.length || index < 0 || index >= list.length) return;
+              (_currentData['moment'] as Map)['images'] as List? ?? [],
+            );
+            if (from < 0 ||
+                from >= list.length ||
+                index < 0 ||
+                index >= list.length) {
+              return;
+            }
             final a = list[from];
             list[from] = list[index];
             list[index] = a;
@@ -1522,24 +1965,26 @@ class _CreatePageState extends ConsumerState<CreatePage>
               width: cellSize,
               height: cellSize,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+                borderRadius: BorderRadius.circular(
+                  AppSpacing.largeBorderRadius,
+                ),
               ),
               child: GestureDetector(
                 onTap: () async {
                   onEnterEditing?.call();
-                    final result = await _openEditImage(
-                      'moment',
-                      path,
-                      index,
-                      total: images.length,
-                      allPaths: images,
-                    );
-                    if (!mounted) return;
-                    _applyEditedImageToTab(
-                      tabKey: 'moment',
-                      fallbackIndex: index,
-                      result: result,
-                    );
+                  final result = await _openEditImage(
+                    'moment',
+                    path,
+                    index,
+                    total: images.length,
+                    allPaths: images,
+                  );
+                  if (!mounted) return;
+                  _applyEditedImageToTab(
+                    tabKey: 'moment',
+                    fallbackIndex: index,
+                    result: result,
+                  );
                 },
                 child: _momentImageCell(
                   path,
@@ -1547,7 +1992,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
                     setState(() {
                       _currentData = Map.from(_currentData);
                       final list = List<String>.from(
-                          (_currentData['moment'] as Map)['images'] as List? ?? []);
+                        (_currentData['moment'] as Map)['images'] as List? ??
+                            [],
+                      );
                       list.removeAt(index);
                       (_currentData['moment'] as Map)['images'] = list;
                     });
@@ -1563,20 +2010,29 @@ class _CreatePageState extends ConsumerState<CreatePage>
 
   /// 发微趣媒体区：与添加格同大的图片格，仅删除按钮；点击整格由外层打开编辑页，无编辑笔（原型：小字提示点击编辑）
   Widget _momentImageCell(String path, {required VoidCallback onRemove}) {
-    final isFilePath = path.startsWith('/') ||
+    final isFilePath =
+        path.startsWith('/') ||
         (path.length > 1 && path[1] == ':' && path.length > 2);
     final image = isFilePath
         ? Image.file(
             File(path),
             fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) =>
-                Container(color: AppColorsFunctional.getColor(ref.read(isDarkProvider), ColorType.backgroundSecondary)),
+            errorBuilder: (context, error, stackTrace) => Container(
+              color: AppColorsFunctional.getColor(
+                ref.read(isDarkProvider),
+                ColorType.backgroundSecondary,
+              ),
+            ),
           )
         : Image.network(
             path,
             fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) =>
-                Container(color: AppColorsFunctional.getColor(ref.read(isDarkProvider), ColorType.backgroundSecondary)),
+            errorBuilder: (context, error, stackTrace) => Container(
+              color: AppColorsFunctional.getColor(
+                ref.read(isDarkProvider),
+                ColorType.backgroundSecondary,
+              ),
+            ),
           );
     return Stack(
       fit: StackFit.expand,
@@ -1615,9 +2071,14 @@ class _CreatePageState extends ConsumerState<CreatePage>
     bool isDark,
   ) {
     final images = List<String>.from(data['images'] as List? ?? []);
-    final currentIndex = images.isEmpty ? 0 : (data['_photoCurrentIndex'] as int? ?? 0).clamp(0, images.length - 1);
+    final currentIndex = images.isEmpty
+        ? 0
+        : (data['_photoCurrentIndex'] as int? ?? 0).clamp(0, images.length - 1);
 
-    final blockBg = AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
+    final blockBg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
 
     final imageBlock = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1647,7 +2108,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
                         });
                         if (!mounted) return;
                         final list = List<String>.from(
-                            (_currentData['photo'] as Map)['images'] as List? ?? []);
+                          (_currentData['photo'] as Map)['images'] as List? ??
+                              [],
+                        );
                         if (list.isEmpty) return;
                         final targetIndex = oldLength.clamp(0, list.length - 1);
                         final result = await _openEditImage(
@@ -1671,9 +2134,10 @@ class _CreatePageState extends ConsumerState<CreatePage>
                         child: Icon(
                           Icons.add,
                           size: AppSpacing.largeButtonSize,
-                          color: SettingsSemanticConstants.createAddTileIconColor(
-                            isDark,
-                          ),
+                          color:
+                              SettingsSemanticConstants.createAddTileIconColor(
+                                isDark,
+                              ),
                         ),
                       ),
                     )
@@ -1701,10 +2165,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
             padding: EdgeInsets.only(top: AppSpacing.intraGroupSm),
             child: Text(
               UITextConstants.photoReorderHint,
-              style: TextStyle(
-                fontSize: AppTypography.sm,
-                color: fgSecondary,
-              ),
+              style: TextStyle(fontSize: AppTypography.sm, color: fgSecondary),
             ),
           ),
         ],
@@ -1762,7 +2223,8 @@ class _CreatePageState extends ConsumerState<CreatePage>
               _enterPhotoEditingMode();
               setState(() {
                 _currentData = Map.from(_currentData);
-                (_currentData['photo'] as Map<String, dynamic>)['description'] = v;
+                (_currentData['photo'] as Map<String, dynamic>)['description'] =
+                    v;
               });
             },
           ),
@@ -1776,45 +2238,14 @@ class _CreatePageState extends ConsumerState<CreatePage>
         mainAxisSize: MainAxisSize.min,
         children: [
           imageBlock,
-          Padding(
-            padding: EdgeInsets.only(top: 8),
-            child: titleDescBlock,
-          ),
+          Padding(padding: EdgeInsets.only(top: 8), child: titleDescBlock),
         ],
       ),
-      // 2. 三选项（所在位置 / 提醒谁看 / 谁可以看，语义与设置页一致）
-      Column(
-        children: [
-          _momentListTile(
-            icon: Icons.location_on_outlined,
-            label: UITextConstants.locationLabel,
-            trailing: null,
-            fgColor: fgColor,
-            fgSecondary: fgSecondary,
-            isDark: isDark,
-            onTap: () {},
-          ),
-          _createOptionDivider(isDark),
-          _momentListTile(
-            icon: Icons.alternate_email,
-            label: UITextConstants.remindWhoLabel,
-            trailing: null,
-            fgColor: fgColor,
-            fgSecondary: fgSecondary,
-            isDark: isDark,
-            onTap: () {},
-          ),
-          _createOptionDivider(isDark),
-          _momentListTile(
-            icon: Icons.person_outline,
-            label: UITextConstants.whoCanSeeLabel,
-            trailing: UITextConstants.visibilityPublic,
-            fgColor: fgColor,
-            fgSecondary: fgSecondary,
-            isDark: isDark,
-            onTap: () {},
-          ),
-        ],
+      _buildPublishSettingsSection(
+        tabKey: 'photo',
+        fgColor: fgColor,
+        fgSecondary: fgSecondary,
+        isDark: isDark,
       ),
     ];
   }
@@ -1842,7 +2273,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
               return GestureDetector(
                 onTap: () => _openPhotoImageEditorAt(index),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+                  borderRadius: BorderRadius.circular(
+                    AppSpacing.largeBorderRadius,
+                  ),
                   child: _photoImage(images[index], fgSecondary),
                 ),
               );
@@ -1858,11 +2291,16 @@ class _CreatePageState extends ConsumerState<CreatePage>
               ),
               decoration: BoxDecoration(
                 color: Colors.black54,
-                borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+                borderRadius: BorderRadius.circular(
+                  AppSpacing.circularBorderRadius,
+                ),
               ),
               child: Text(
                 '${currentIndex + 1} / ${images.length}',
-                style: TextStyle(color: Colors.white, fontSize: AppTypography.sm),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: AppTypography.sm,
+                ),
               ),
             ),
           ),
@@ -1874,18 +2312,25 @@ class _CreatePageState extends ConsumerState<CreatePage>
                 setState(() {
                   _currentData = Map.from(_currentData);
                   final list = List<String>.from(
-                      (_currentData['photo'] as Map)['images'] as List? ?? []);
+                    (_currentData['photo'] as Map)['images'] as List? ?? [],
+                  );
                   list.removeAt(currentIndex);
                   (_currentData['photo'] as Map)['images'] = list;
                   int next = (data['_photoCurrentIndex'] as int? ?? 0);
-                  if (next >= list.length) next = list.isNotEmpty ? list.length - 1 : 0;
+                  if (next >= list.length) {
+                    next = list.isNotEmpty ? list.length - 1 : 0;
+                  }
                   (_currentData['photo'] as Map)['_photoCurrentIndex'] = next;
                 });
               },
               child: CircleAvatar(
                 radius: AppSpacing.iconButtonMinSizeSm / 2,
                 backgroundColor: Colors.black54,
-                child: Icon(Icons.close, size: AppSpacing.iconMedium, color: Colors.white),
+                child: Icon(
+                  Icons.close,
+                  size: AppSpacing.iconMedium,
+                  color: Colors.white,
+                ),
               ),
             ),
           ),
@@ -1918,11 +2363,16 @@ class _CreatePageState extends ConsumerState<CreatePage>
               ),
               decoration: BoxDecoration(
                 color: Colors.black54,
-                borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+                borderRadius: BorderRadius.circular(
+                  AppSpacing.circularBorderRadius,
+                ),
               ),
               child: Text(
                 '${currentIndex + 1} / ${images.length}',
-                style: TextStyle(color: Colors.white, fontSize: AppTypography.sm),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: AppTypography.sm,
+                ),
               ),
             ),
           ),
@@ -1934,18 +2384,25 @@ class _CreatePageState extends ConsumerState<CreatePage>
               setState(() {
                 _currentData = Map.from(_currentData);
                 final list = List<String>.from(
-                    (_currentData['photo'] as Map)['images'] as List? ?? []);
+                  (_currentData['photo'] as Map)['images'] as List? ?? [],
+                );
                 list.removeAt(currentIndex);
                 (_currentData['photo'] as Map)['images'] = list;
                 int next = (data['_photoCurrentIndex'] as int? ?? 0);
-                if (next >= list.length) next = list.isNotEmpty ? list.length - 1 : 0;
+                if (next >= list.length) {
+                  next = list.isNotEmpty ? list.length - 1 : 0;
+                }
                 (_currentData['photo'] as Map)['_photoCurrentIndex'] = next;
               });
             },
             child: CircleAvatar(
               radius: AppSpacing.iconButtonMinSizeSm / 2,
               backgroundColor: Colors.black54,
-              child: Icon(Icons.close, size: AppSpacing.iconMedium, color: Colors.white),
+              child: Icon(
+                Icons.close,
+                size: AppSpacing.iconMedium,
+                color: Colors.white,
+              ),
             ),
           ),
         ),
@@ -1963,11 +2420,16 @@ class _CreatePageState extends ConsumerState<CreatePage>
                 ),
                 decoration: BoxDecoration(
                   color: Colors.black54,
-                  borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+                  borderRadius: BorderRadius.circular(
+                    AppSpacing.circularBorderRadius,
+                  ),
                 ),
                 child: Text(
                   UITextConstants.photoTapToEdit,
-                  style: TextStyle(color: Colors.white, fontSize: AppTypography.base),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: AppTypography.base,
+                  ),
                 ),
               ),
             ),
@@ -1989,7 +2451,8 @@ class _CreatePageState extends ConsumerState<CreatePage>
   }) {
     const gap = 8.0;
     final crossCount = _kPhotoThumbnailsPerRow;
-    final visibleCount = images.length > _kPhotoSlotsCollapsed && !_photoThumbnailsExpanded
+    final visibleCount =
+        images.length > _kPhotoSlotsCollapsed && !_photoThumbnailsExpanded
         ? _kPhotoSlotsCollapsed
         : images.length;
     final showMoreOrCollapse = images.length > _kPhotoSlotsCollapsed;
@@ -2036,8 +2499,14 @@ class _CreatePageState extends ConsumerState<CreatePage>
                 setState(() {
                   _currentData = Map.from(_currentData);
                   final list = List<String>.from(
-                      (_currentData['photo'] as Map)['images'] as List? ?? []);
-                  if (from < 0 || from >= list.length || index < 0 || index >= list.length) return;
+                    (_currentData['photo'] as Map)['images'] as List? ?? [],
+                  );
+                  if (from < 0 ||
+                      from >= list.length ||
+                      index < 0 ||
+                      index >= list.length) {
+                    return;
+                  }
                   final a = list[from];
                   list[from] = list[index];
                   list[index] = a;
@@ -2062,9 +2531,13 @@ class _CreatePageState extends ConsumerState<CreatePage>
                     height: size,
                     decoration: BoxDecoration(
                       color: blockBg,
-                      borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.borderRadius,
+                      ),
                       border: Border.all(
-                        color: isCurrent ? AppColors.primaryColor : fgSecondary.withValues(alpha: 0.2),
+                        color: isCurrent
+                            ? AppColors.primaryColor
+                            : fgSecondary.withValues(alpha: 0.2),
                         width: isCurrent
                             ? AppSpacing.toolPanelItemBorderWidthSelected
                             : AppSpacing.toolPanelItemBorderWidthUnselected,
@@ -2075,11 +2548,12 @@ class _CreatePageState extends ConsumerState<CreatePage>
                       child: InkWell(
                         onTap: () => setState(() {
                           _currentData = Map.from(_currentData);
-                          (_currentData['photo'] as Map)['_photoCurrentIndex'] = index;
+                          (_currentData['photo'] as Map)['_photoCurrentIndex'] =
+                              index;
                         }),
-                        borderRadius:
-                            BorderRadius.circular(AppSpacing.smallBorderRadius +
-                                AppSpacing.xs / 2),
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.smallBorderRadius + AppSpacing.xs / 2,
+                        ),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(
                             AppSpacing.smallBorderRadius + AppSpacing.xs / 2,
@@ -2138,14 +2612,15 @@ class _CreatePageState extends ConsumerState<CreatePage>
                 isDark: isDark,
                 width: size,
                 height: size,
-                borderRadius: SettingsSemanticConstants.createAddTileBorderRadius,
-                  child: Icon(
-                    Icons.add,
-                    color: SettingsSemanticConstants.createAddTileIconColor(
-                      isDark,
-                    ),
-                    size: AppSpacing.iconLarge - AppSpacing.xs,
+                borderRadius:
+                    SettingsSemanticConstants.createAddTileBorderRadius,
+                child: Icon(
+                  Icons.add,
+                  color: SettingsSemanticConstants.createAddTileIconColor(
+                    isDark,
                   ),
+                  size: AppSpacing.iconLarge - AppSpacing.xs,
+                ),
               ),
             ),
           );
@@ -2162,9 +2637,13 @@ class _CreatePageState extends ConsumerState<CreatePage>
                 child: Row(
                   children: List.generate(crossCount, (col) {
                     final idx = row * crossCount + col;
-                    if (idx >= cells.length) return SizedBox(width: size, height: size);
+                    if (idx >= cells.length) {
+                      return SizedBox(width: size, height: size);
+                    }
                     return Padding(
-                      padding: EdgeInsets.only(right: col < crossCount - 1 ? gap : 0),
+                      padding: EdgeInsets.only(
+                        right: col < crossCount - 1 ? gap : 0,
+                      ),
                       child: cells[idx],
                     );
                   }),
@@ -2175,12 +2654,16 @@ class _CreatePageState extends ConsumerState<CreatePage>
               SizedBox(height: AppSpacing.xs),
               Center(
                 child: GestureDetector(
-                  onTap: () => setState(() => _photoThumbnailsExpanded = !_photoThumbnailsExpanded),
+                  onTap: () => setState(
+                    () => _photoThumbnailsExpanded = !_photoThumbnailsExpanded,
+                  ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        _photoThumbnailsExpanded ? UITextConstants.photoCollapseLabel : UITextConstants.photoShowMorePictures,
+                        _photoThumbnailsExpanded
+                            ? UITextConstants.photoCollapseLabel
+                            : UITextConstants.photoShowMorePictures,
                         style: TextStyle(
                           fontSize: AppTypography.md,
                           color: fgColor.withValues(alpha: 0.75),
@@ -2188,7 +2671,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
                       ),
                       SizedBox(width: AppSpacing.xs),
                       Icon(
-                        _photoThumbnailsExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                        _photoThumbnailsExpanded
+                            ? Icons.keyboard_arrow_up
+                            : Icons.keyboard_arrow_down,
                         size: AppSpacing.iconMedium,
                         color: fgColor.withValues(alpha: 0.75),
                       ),
@@ -2210,13 +2695,25 @@ class _CreatePageState extends ConsumerState<CreatePage>
       return Image.file(
         File(path),
         fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) => Container(color: errorBg, child: Icon(Icons.broken_image_outlined, color: fgSecondary.withValues(alpha: 0.5))),
+        errorBuilder: (context, error, stackTrace) => Container(
+          color: errorBg,
+          child: Icon(
+            Icons.broken_image_outlined,
+            color: fgSecondary.withValues(alpha: 0.5),
+          ),
+        ),
       );
     }
     return Image.network(
       path,
       fit: BoxFit.cover,
-      errorBuilder: (context, error, stackTrace) => Container(color: errorBg, child: Icon(Icons.broken_image_outlined, color: fgSecondary.withValues(alpha: 0.5))),
+      errorBuilder: (context, error, stackTrace) => Container(
+        color: errorBg,
+        child: Icon(
+          Icons.broken_image_outlined,
+          color: fgSecondary.withValues(alpha: 0.5),
+        ),
+      ),
     );
   }
 
@@ -2240,7 +2737,8 @@ class _CreatePageState extends ConsumerState<CreatePage>
     double? height,
     double? borderRadius,
   }) {
-    final radius = borderRadius ?? SettingsSemanticConstants.createAddTileBorderRadius;
+    final radius =
+        borderRadius ?? SettingsSemanticConstants.createAddTileBorderRadius;
     final bg = SettingsSemanticConstants.createAddTileBackground(isDark);
     final border = SettingsSemanticConstants.createAddTileBorderColor(isDark);
     Widget content = CustomPaint(
@@ -2270,11 +2768,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
         },
       );
     }
-    return SizedBox(
-      width: width,
-      height: height,
-      child: content,
-    );
+    return SizedBox(width: width, height: height, child: content);
   }
 
   /// VideoEditorCard：上传区+标题描述一体块 / 三选项（与美图添加图片背景一致，无分割条）
@@ -2284,13 +2778,22 @@ class _CreatePageState extends ConsumerState<CreatePage>
     Color fgSecondary,
     bool isDark,
   ) {
-    final blockBg = AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
+    final blockBg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
     final rawVideo = data['videoPath'] as String? ?? '';
     final rawThumb = data['thumbnail'] as String? ?? '';
-    final storyboardImages = List<String>.from(data['storyboardImages'] as List? ?? const <String>[]);
-    final legacyVideo = rawVideo.isEmpty && _isVideoFilePath(rawThumb) ? rawThumb : '';
+    final storyboardImages = List<String>.from(
+      data['storyboardImages'] as List? ?? const <String>[],
+    );
+    final legacyVideo = rawVideo.isEmpty && _isVideoFilePath(rawThumb)
+        ? rawThumb
+        : '';
     final videoPath = rawVideo.isNotEmpty ? rawVideo : legacyVideo;
-    final thumb = rawVideo.isNotEmpty ? rawThumb : (legacyVideo.isNotEmpty ? '' : rawThumb);
+    final thumb = rawVideo.isNotEmpty
+        ? rawThumb
+        : (legacyVideo.isNotEmpty ? '' : rawThumb);
     final hasVideo = videoPath.isNotEmpty;
     final hasStoryboard = storyboardImages.isNotEmpty;
     final uploadBlock = AspectRatio(
@@ -2300,119 +2803,137 @@ class _CreatePageState extends ConsumerState<CreatePage>
           color: blockBg,
           borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
         ),
-          child: hasVideo
-              ? Stack(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(
-                        AppSpacing.largeBorderRadius,
-                      ),
-                      child: thumb.isNotEmpty
-                          ? _photoImage(thumb, fgSecondary)
-                          : _buildVideoPlaceholder(fgSecondary),
+        child: hasVideo
+            ? Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(
+                      AppSpacing.largeBorderRadius,
                     ),
-                    Center(
-                      child: Container(
-                        width: AppSpacing.bottomNavHeight + AppSpacing.sm,
-                        height: AppSpacing.bottomNavHeight + AppSpacing.sm,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.9),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(color: Colors.black12, blurRadius: 8),
-                          ],
-                        ),
-                        child: Icon(
-                          Icons.play_arrow,
-                          size: AppSpacing.iconLarge + AppSpacing.xs,
-                          color: Colors.black87,
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: AppSpacing.containerSm,
-                      right: AppSpacing.containerSm,
-                      child: Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: AppSpacing.intraGroupMd,
-                          vertical: AppSpacing.intraGroupXs,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(AppSpacing.smallBorderRadius),
-                        ),
-                        child: Text(
-                          '00:00',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: AppTypography.sm,
-                          ),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: AppSpacing.containerSm,
-                      right: AppSpacing.containerSm,
-                      child: TextButton(
-                        onPressed: _handlePickVideo,
-                        child: Text(
-                          UITextConstants.videoChangeCover,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: AppTypography.sm,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                )
-              : GestureDetector(
-                  onTap: _handlePickVideo,
-                  child: _buildDashedAddTile(
-                    isDark: isDark,
-                    borderRadius: 12,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          hasStoryboard ? Icons.movie_creation_outlined : Icons.upload_outlined,
-                          size: AppSpacing.iconLarge,
-                          color: SettingsSemanticConstants.createAddTileIconColor(isDark),
-                        ),
-                        SizedBox(height: AppSpacing.interGroupSm),
-                        Text(
-                          hasStoryboard
-                              ? '${UITextConstants.mediaPickerOneTapMovie} (${storyboardImages.length})'
-                              : UITextConstants.videoUploadLabel,
-                          style: TextStyle(
-                            fontSize: SettingsSemanticConstants.createInputBodyFontSize,
-                            fontWeight: FontWeight.w500,
-                            color: SettingsSemanticConstants.createAddTileIconColor(isDark),
-                          ),
-                        ),
-                        if (hasStoryboard) ...[
-                          SizedBox(height: AppSpacing.intraGroupXs),
-                          Text(
-                            UITextConstants.mediaPickerOneTapMovieQueued,
-                            style: TextStyle(
-                              fontSize: AppTypography.sm,
-                              color: SettingsSemanticConstants.createAddTileIconColor(isDark),
-                            ),
-                          ),
-                        ] else if (UITextConstants.videoUploadHint.isNotEmpty) ...[
-                          SizedBox(height: AppSpacing.intraGroupXs),
-                          Text(
-                            UITextConstants.videoUploadHint,
-                            style: TextStyle(
-                              fontSize: AppTypography.sm,
-                              color: SettingsSemanticConstants.createAddTileIconColor(isDark),
-                            ),
-                          ),
+                    child: thumb.isNotEmpty
+                        ? _photoImage(thumb, fgSecondary)
+                        : _buildVideoPlaceholder(fgSecondary),
+                  ),
+                  Center(
+                    child: Container(
+                      width: AppSpacing.bottomNavHeight + AppSpacing.sm,
+                      height: AppSpacing.bottomNavHeight + AppSpacing.sm,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.9),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(color: Colors.black12, blurRadius: 8),
                         ],
-                      ],
+                      ),
+                      child: Icon(
+                        Icons.play_arrow,
+                        size: AppSpacing.iconLarge + AppSpacing.xs,
+                        color: Colors.black87,
+                      ),
                     ),
                   ),
+                  Positioned(
+                    bottom: AppSpacing.containerSm,
+                    right: AppSpacing.containerSm,
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppSpacing.intraGroupMd,
+                        vertical: AppSpacing.intraGroupXs,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.smallBorderRadius,
+                        ),
+                      ),
+                      child: Text(
+                        '00:00',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: AppTypography.sm,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: AppSpacing.containerSm,
+                    right: AppSpacing.containerSm,
+                    child: TextButton(
+                      onPressed: _handlePickVideo,
+                      child: Text(
+                        UITextConstants.videoChangeCover,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: AppTypography.sm,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            : GestureDetector(
+                onTap: _handlePickVideo,
+                child: _buildDashedAddTile(
+                  isDark: isDark,
+                  borderRadius: 12,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        hasStoryboard
+                            ? Icons.movie_creation_outlined
+                            : Icons.upload_outlined,
+                        size: AppSpacing.iconLarge,
+                        color: SettingsSemanticConstants.createAddTileIconColor(
+                          isDark,
+                        ),
+                      ),
+                      SizedBox(height: AppSpacing.interGroupSm),
+                      Text(
+                        hasStoryboard
+                            ? '${UITextConstants.mediaPickerOneTapMovie} (${storyboardImages.length})'
+                            : UITextConstants.videoUploadLabel,
+                        style: TextStyle(
+                          fontSize:
+                              SettingsSemanticConstants.createInputBodyFontSize,
+                          fontWeight: FontWeight.w500,
+                          color:
+                              SettingsSemanticConstants.createAddTileIconColor(
+                                isDark,
+                              ),
+                        ),
+                      ),
+                      if (hasStoryboard) ...[
+                        SizedBox(height: AppSpacing.intraGroupXs),
+                        Text(
+                          UITextConstants.mediaPickerOneTapMovieQueued,
+                          style: TextStyle(
+                            fontSize: AppTypography.sm,
+                            color:
+                                SettingsSemanticConstants.createAddTileIconColor(
+                                  isDark,
+                                ),
+                          ),
+                        ),
+                      ] else if (UITextConstants
+                          .videoUploadHint
+                          .isNotEmpty) ...[
+                        SizedBox(height: AppSpacing.intraGroupXs),
+                        Text(
+                          UITextConstants.videoUploadHint,
+                          style: TextStyle(
+                            fontSize: AppTypography.sm,
+                            color:
+                                SettingsSemanticConstants.createAddTileIconColor(
+                                  isDark,
+                                ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
+              ),
       ),
     );
     final titleDescBlock = Column(
@@ -2460,7 +2981,8 @@ class _CreatePageState extends ConsumerState<CreatePage>
             maxLines: 2,
             onChanged: (v) => setState(() {
               _currentData = Map.from(_currentData);
-              (_currentData['video'] as Map<String, dynamic>)['description'] = v;
+              (_currentData['video'] as Map<String, dynamic>)['description'] =
+                  v;
             }),
           ),
         ),
@@ -2473,45 +2995,14 @@ class _CreatePageState extends ConsumerState<CreatePage>
         mainAxisSize: MainAxisSize.min,
         children: [
           uploadBlock,
-          Padding(
-            padding: EdgeInsets.only(top: 8),
-            child: titleDescBlock,
-          ),
+          Padding(padding: EdgeInsets.only(top: 8), child: titleDescBlock),
         ],
       ),
-      // 2. 三选项（语义与设置页一致）
-      Column(
-        children: [
-          _momentListTile(
-            icon: Icons.location_on_outlined,
-            label: UITextConstants.locationLabel,
-            trailing: null,
-            fgColor: fgColor,
-            fgSecondary: fgSecondary,
-            isDark: isDark,
-            onTap: () {},
-          ),
-          _createOptionDivider(isDark),
-          _momentListTile(
-            icon: Icons.alternate_email,
-            label: UITextConstants.remindWhoLabel,
-            trailing: null,
-            fgColor: fgColor,
-            fgSecondary: fgSecondary,
-            isDark: isDark,
-            onTap: () {},
-          ),
-          _createOptionDivider(isDark),
-          _momentListTile(
-            icon: Icons.person_outline,
-            label: UITextConstants.whoCanSeeLabel,
-            trailing: UITextConstants.visibilityPublic,
-            fgColor: fgColor,
-            fgSecondary: fgSecondary,
-            isDark: isDark,
-            onTap: () {},
-          ),
-        ],
+      _buildPublishSettingsSection(
+        tabKey: 'video',
+        fgColor: fgColor,
+        fgSecondary: fgSecondary,
+        isDark: isDark,
       ),
     ];
   }
@@ -2529,14 +3020,16 @@ class _CreatePageState extends ConsumerState<CreatePage>
       covers.add(legacyCover);
     }
     final titleText = (data['title'] as String? ?? '').trim();
-    final titleDisplay =
-        titleText.isEmpty ? UITextConstants.articleTitlePlaceholder : titleText;
+    final titleDisplay = titleText.isEmpty
+        ? UITextConstants.articleTitlePlaceholder
+        : titleText;
     final titleColor = titleText.isEmpty
         ? SettingsSemanticConstants.createInputHintColor(isDark)
         : fgColor;
 
     Widget buildCoverImage(String path) {
-      final isFilePath = path.isNotEmpty &&
+      final isFilePath =
+          path.isNotEmpty &&
           (path.startsWith('/') || (path.length > 1 && path[1] == ':'));
       return ClipRRect(
         borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
@@ -2581,7 +3074,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
             SizedBox(height: AppSpacing.interGroupXs),
             Text(
               UITextConstants.addCover,
-              style: TextStyle(color: SettingsSemanticConstants.createAddTileIconColor(isDark)),
+              style: TextStyle(
+                color: SettingsSemanticConstants.createAddTileIconColor(isDark),
+              ),
             ),
           ],
         ),
@@ -2688,57 +3183,32 @@ class _CreatePageState extends ConsumerState<CreatePage>
                 hintText: UITextConstants.createArticleBodyHint,
                 hintStyle: TextStyle(
                   color: SettingsSemanticConstants.createInputHintColor(isDark),
-                  fontSize: SettingsSemanticConstants.createInputArticleBodyFontSize,
+                  fontSize:
+                      SettingsSemanticConstants.createInputArticleBodyFontSize,
                 ),
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.zero,
               ),
               style: TextStyle(
                 color: fgColor,
-                fontSize: SettingsSemanticConstants.createInputArticleBodyFontSize,
+                fontSize:
+                    SettingsSemanticConstants.createInputArticleBodyFontSize,
               ),
               maxLines: 8,
               onChanged: (v) => setState(() {
                 _currentData = Map.from(_currentData);
-                (_currentData['article'] as Map<String, dynamic>)['content'] = v;
+                (_currentData['article'] as Map<String, dynamic>)['content'] =
+                    v;
               }),
             ),
           ),
         ],
       ),
-      // 3. 三选项（语义与设置页一致）
-      Column(
-        children: [
-          _momentListTile(
-            icon: Icons.location_on_outlined,
-            label: UITextConstants.locationLabel,
-            trailing: null,
-            fgColor: fgColor,
-            fgSecondary: fgSecondary,
-            isDark: isDark,
-            onTap: () {},
-          ),
-          _createOptionDivider(isDark),
-          _momentListTile(
-            icon: Icons.alternate_email,
-            label: UITextConstants.remindWhoLabel,
-            trailing: null,
-            fgColor: fgColor,
-            fgSecondary: fgSecondary,
-            isDark: isDark,
-            onTap: () {},
-          ),
-          _createOptionDivider(isDark),
-          _momentListTile(
-            icon: Icons.person_outline,
-            label: UITextConstants.whoCanSeeLabel,
-            trailing: UITextConstants.visibilityPublic,
-            fgColor: fgColor,
-            fgSecondary: fgSecondary,
-            isDark: isDark,
-            onTap: () {},
-          ),
-        ],
+      _buildPublishSettingsSection(
+        tabKey: 'article',
+        fgColor: fgColor,
+        fgSecondary: fgSecondary,
+        isDark: isDark,
       ),
     ];
   }
@@ -2757,8 +3227,12 @@ class _CreatePageState extends ConsumerState<CreatePage>
               padding: EdgeInsets.all(AppSpacing.interGroupLg),
               decoration: BoxDecoration(
                 color: AppColorsFunctional.getColor(
-                    isDark, ColorType.backgroundPrimary),
-                borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+                  isDark,
+                  ColorType.backgroundPrimary,
+                ),
+                borderRadius: BorderRadius.circular(
+                  AppSpacing.largeBorderRadius,
+                ),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -2783,7 +3257,8 @@ class _CreatePageState extends ConsumerState<CreatePage>
                             color: fgSecondary,
                             size: AppSpacing.iconMedium,
                           ),
-                          onPressed: () => setState(() => _showExitConfirm = false),
+                          onPressed: () =>
+                              setState(() => _showExitConfirm = false),
                           style: IconButton.styleFrom(
                             minimumSize: Size.square(
                               AppSpacing.iconButtonMinSizeSm,
@@ -2838,8 +3313,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
   }
 
   Widget _buildDraftsList(bool isDark, Color fgColor, Color fgSecondary) {
-    final sorted = List<Map<String, dynamic>>.from(_savedDrafts)
-      ..sort((a, b) => (b['updatedAt'] as int).compareTo(a['updatedAt'] as int));
+    final sorted = List<Map<String, dynamic>>.from(
+      _savedDrafts,
+    )..sort((a, b) => (b['updatedAt'] as int).compareTo(a['updatedAt'] as int));
     return Material(
       color: Colors.black54,
       child: Center(
@@ -2848,7 +3324,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
           constraints: BoxConstraints(maxWidth: 400, maxHeight: 400),
           decoration: BoxDecoration(
             color: AppColorsFunctional.getColor(
-                isDark, ColorType.backgroundPrimary),
+              isDark,
+              ColorType.backgroundPrimary,
+            ),
             borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
           ),
           child: Column(
@@ -2881,10 +3359,16 @@ class _CreatePageState extends ConsumerState<CreatePage>
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.inventory_2_outlined,
-                                size: AppSpacing.iconLarge, color: fgSecondary.withValues(alpha: 0.5)),
+                            Icon(
+                              Icons.inventory_2_outlined,
+                              size: AppSpacing.iconLarge,
+                              color: fgSecondary.withValues(alpha: 0.5),
+                            ),
                             SizedBox(height: AppSpacing.interGroupXs),
-                            Text(UITextConstants.noDraft, style: TextStyle(color: fgSecondary)),
+                            Text(
+                              UITextConstants.noDraft,
+                              style: TextStyle(color: fgSecondary),
+                            ),
                           ],
                         ),
                       )
@@ -2900,17 +3384,24 @@ class _CreatePageState extends ConsumerState<CreatePage>
                           final title = type == 'moment'
                               ? UITextConstants.draftMoment
                               : type == 'photo'
-                                  ? UITextConstants.draftPhoto
-                                  : type == 'video'
-                                      ? UITextConstants.draftVideo
-                                      : UITextConstants.draftArticle;
+                              ? UITextConstants.draftPhoto
+                              : type == 'video'
+                              ? UITextConstants.draftVideo
+                              : UITextConstants.draftArticle;
                           final data = d['data'] as Map<String, dynamic>? ?? {};
-                          final desc = (data['content'] ?? data['title'] ?? '') as String;
-                          final date = DateTime.fromMillisecondsSinceEpoch(d['updatedAt'] as int);
+                          final desc =
+                              (data['content'] ?? data['title'] ?? '')
+                                  as String;
+                          final date = DateTime.fromMillisecondsSinceEpoch(
+                            d['updatedAt'] as int,
+                          );
                           final dateStr =
                               '${date.month}/${date.day} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
                           return ListTile(
-                            title: Text(title, style: TextStyle(fontWeight: FontWeight.w700)),
+                            title: Text(
+                              title,
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
                             subtitle: Text(
                               desc.isEmpty ? UITextConstants.unlabeled : desc,
                               maxLines: 2,
@@ -2936,7 +3427,8 @@ class _CreatePageState extends ConsumerState<CreatePage>
                                     size: AppSpacing.iconMedium,
                                     color: fgSecondary,
                                   ),
-                                  onPressed: () => _handleDeleteDraft(d['id'] as String),
+                                  onPressed: () =>
+                                      _handleDeleteDraft(d['id'] as String),
                                 ),
                               ],
                             ),

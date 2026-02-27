@@ -1012,6 +1012,13 @@ features:
               status: specified
               tags: []
               children:
+                - id: create-entry-location-visibility-circle
+                  name: create-entry-location-visibility-circle
+                  level: L4_detail
+                  path: ../specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update/create-entry-location-visibility-circle
+                  domain: ""
+                  status: specified
+                  tags: [moment, create, location, visibility, circle]
                 - id: post-lifecycle-contract
                   name: post-lifecycle-contract
                   level: L4_detail

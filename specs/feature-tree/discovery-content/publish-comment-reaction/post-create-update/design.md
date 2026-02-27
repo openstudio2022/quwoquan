@@ -63,3 +63,12 @@
 - Metadata YAML 为唯一事实源；codegen 文件禁止手改。
 - DDD 依赖方向不变：domain <- application <- adapters <- infrastructure。
 - 错误码统一走 `runtime/errors`，端侧经 codegen 映射。
+
+## 6. 适用场景与约束
+- 适用：内容创作发布主链路、可见性与圈子分发语义、删除一致性链路。
+- 适用：子节点 `create-entry-location-visibility-circle` 对创作入口进行 UI 和 payload 的补齐。
+- 不适用：创作后“更多功能按钮反馈”闭环，本期不纳入该节点交付范围。
+
+## 7. 未来演进
+- 将创作入口位置与圈子策略与推荐系统联动，支持发布前智能建议。
+- 补齐反馈行为（不感兴趣/屏蔽/投诉）进入推荐与治理闭环，并形成独立可验收节点。

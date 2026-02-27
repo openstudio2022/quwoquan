@@ -103,11 +103,14 @@ class _MockReport {
     required String reason,
     String? note,
   }) async {
-    submitted.add({
+    final payload = <String, dynamic>{
       'targetId': targetId,
       'targetType': targetType,
       'reason': reason,
-      if (note != null) 'note': note,
-    });
+    };
+    if (note != null) {
+      payload['note'] = note;
+    }
+    submitted.add(payload);
   }
 }
