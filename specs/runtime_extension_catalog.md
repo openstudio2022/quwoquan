@@ -283,12 +283,18 @@ qwq new service --name=<service-name> --port=<port>
 
 | 步骤 | 操作 | 产出 |
 |------|------|------|
-| ① 创建服务目录 | 标准 DDD 目录结构 | `services/{svc}/cmd/api/main.go` + `internal/domain/` + `application/` + `adapters/` + `infrastructure/` + `tests/` + `configs/` + `go.mod` + `Makefile` |
-| ② 生成 main.go | 标准启动模板 | 加载 metadata → Registry → Repository 初始化 → HTTP server |
-| ③ 注册到工程 | 更新 root Makefile | 新增 `gate-{svc}` 目标 |
-| ④ 创建 spec | 服务规范目录 | `quwoquan_service/specs/{svc}/spec.md` + `design.md` |
-| ⑤ 注册到 errors | 新增模块枚举 | `runtime/errors/errors.go` 新增 MODULE |
-| ⑥ 注册到 observability | 新增客户端工厂 | `runtime/observability/service_client_factory.go` + `runtime/http/http.go` |
+| ① 创建服务目录 | 执行 `scripts/new_service_fullstack.sh --name {svc} --port {port}` | `services/{svc}/cmd/api/main.go` + `internal/domain/` + `application/` + `adapters/` + `infrastructure/` + `tests/` + `configs/` + `go.mod` + `Makefile` |
+| ② 自动生成配置目录 | `new_service_fullstack.sh` 内置调用 `scripts/bootstrap_service_config_layout.sh --service {svc}` | `configs/default|local|integration|prod/config.yaml` + `releases/config/{svc}/README.md` |
+| ③ 生成 main.go | 标准启动模板 | 加载 metadata → Registry → Repository 初始化 → HTTP server |
+| ④ 注册到工程 | 更新 root Makefile | 新增 `gate-{svc}` 目标 |
+| ⑤ 创建 spec | 服务规范目录 | `quwoquan_service/specs/{svc}/spec.md` + `design.md` |
+| ⑥ 注册到 errors | 新增模块枚举 | `runtime/errors/errors.go` 新增 MODULE |
+| ⑦ 注册到 observability | 新增客户端工厂 | `runtime/observability/service_client_factory.go` + `runtime/http/http.go` |
+
+**发布化配置门禁（S04 强制）**
+- 必须通过 `scripts/verify_service_config_layout.sh`
+- 生产部署清单必须声明：`APP_ENV/SERVICE_NAME/CONFIG_VERSION/IMAGE_VERSION/CONFIG_ROOT`
+- 新服务上线前必须准备至少一个版本配置快照：`releases/config/{svc}/v*.yaml`
 
 ---
 

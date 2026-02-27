@@ -21,8 +21,10 @@
 - [x] 测试：基准测试（HotPath 并行读/写 + SessionCache） → `bench_test.go`
 - [x] gate：集成到 make gate
 
-## 下一步
+## 下一步（已在 redis-storage-elastic-infra 跟踪）
 
-- [ ] 优化：Redis Pipeline 替换并行 goroutine（3 RTT → 1 RTT）
-- [ ] 优化：Bloom Filter 处理超大 exposed_set
+- [x] 优化：Redis Pipeline 替换并行 goroutine（3 RTT → 1 RTT）
+  - 已实现：`PipelineRead` 接口 + `RedisClientAdapter.PipelineRead` + `RedisClusterAdapter.PipelineRead`
+  - 详见：`redis-storage-elastic-infra/redis-cluster-protocol` 节点
+- [ ] 优化：Bloom Filter 处理超大 exposed_set（见 `redis-cluster-protocol` 未来演进任务）
 - [ ] 优化：sync.Pool 复用 candidate 切片

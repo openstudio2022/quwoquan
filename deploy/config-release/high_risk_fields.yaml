@@ -1,0 +1,21 @@
+version: 1
+policy:
+  name: config-high-risk-whitelist
+  require_approval: true
+  require_gray_release: true
+  require_rollback_plan: true
+
+high_risk_fields:
+  - "redis.rec.mode"
+  - "redis.rec.addr"
+  - "redis.rec.addrs"
+  - "redis.rec.password"
+  - "redis.rec.tls"
+  - "service.http.addr"
+  - "rec_model_service.url"
+
+approval:
+  min_approvers: 2
+  roles:
+    - "backend-owner"
+    - "platform-owner"

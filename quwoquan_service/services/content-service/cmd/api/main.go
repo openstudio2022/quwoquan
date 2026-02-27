@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -36,6 +38,12 @@ type redisSceneCfg struct {
 }
 
 type config struct {
+	Config struct {
+		Version         string `yaml:"version"`
+		MinImageVersion string `yaml:"min_image_version"`
+		MaxImageVersion string `yaml:"max_image_version"`
+	} `yaml:"config"`
+
 	Service struct {
 		HTTP struct {
 			Addr string `yaml:"addr"`
@@ -58,8 +66,22 @@ type config struct {
 }
 
 func main() {
-	cfg := loadConfig("configs/config.yaml")
+	serviceName, appEnv, configRoot, configVersion, imageVersion, err := resolveRuntimeIdentity()
+	if err != nil {
+		log.Fatalf("content-service runtime identity invalid: %v", err)
+	}
+
+	cfg, err := loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion)
+	if err != nil {
+		log.Fatalf("content-service config load failed: %v", err)
+	}
 	applyEnvOverrides(&cfg)
+	if err := validateRuntimeCompatibility(cfg, configVersion, imageVersion); err != nil {
+		log.Fatalf("content-service config compatibility failed: %v", err)
+	}
+	if err := preflightConfig(cfg, appEnv); err != nil {
+		log.Fatalf("content-service config preflight failed: %v", err)
+	}
 
 	addr := getenvOrDefault("CONTENT_SERVICE_ADDR", cfg.Service.HTTP.Addr)
 	if addr == "" {
@@ -117,6 +139,23 @@ func main() {
 	}
 }
 
+func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {
+	serviceName = getenvOrDefault("SERVICE_NAME", "content-service")
+	appEnv = getenvOrDefault("APP_ENV", "local")
+	configRoot = os.Getenv("CONFIG_ROOT")
+	configVersion = os.Getenv("CONFIG_VERSION")
+	imageVersion = os.Getenv("IMAGE_VERSION")
+
+	if appEnv != "local" && appEnv != "integration" && appEnv != "prod" {
+		return "", "", "", "", "", fmt.Errorf("APP_ENV must be one of local|integration|prod, got %q", appEnv)
+	}
+	// Enforce explicit config version in prod so rollout always binds image+config.
+	if appEnv == "prod" && strings.TrimSpace(configVersion) == "" {
+		return "", "", "", "", "", fmt.Errorf("CONFIG_VERSION is required when APP_ENV=prod")
+	}
+	return serviceName, appEnv, configRoot, configVersion, imageVersion, nil
+}
+
 func getenvOrDefault(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
@@ -134,6 +173,148 @@ func loadConfig(path string) config {
 		log.Printf("content-service config parse failed: %v", err)
 	}
 	return cfg
+}
+
+func mergeConfigFile(cfg *config, path string) error {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if err := yaml.Unmarshal(raw, cfg); err != nil {
+		return fmt.Errorf("parse %s: %w", path, err)
+	}
+	return nil
+}
+
+func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (config, error) {
+	cfg := config{}
+
+	// External mounted config root mode:
+	//   <root>/configs/<service>/default/config.yaml
+	//   <root>/configs/<service>/<env>/config.yaml
+	//   <root>/releases/config/<service>/<version>.yaml
+	if strings.TrimSpace(configRoot) != "" {
+		defaultFile := filepath.Join(configRoot, "configs", serviceName, "default", "config.yaml")
+		envFile := filepath.Join(configRoot, "configs", serviceName, appEnv, "config.yaml")
+
+		if err := mergeConfigFile(&cfg, defaultFile); err != nil {
+			return config{}, fmt.Errorf("read default config: %w", err)
+		}
+		if err := mergeConfigFile(&cfg, envFile); err != nil {
+			return config{}, fmt.Errorf("read env config: %w", err)
+		}
+		if strings.TrimSpace(configVersion) != "" {
+			versionFile := filepath.Join(configRoot, "releases", "config", serviceName, configVersion+".yaml")
+			if err := mergeConfigFile(&cfg, versionFile); err != nil {
+				return config{}, fmt.Errorf("read version config: %w", err)
+			}
+		}
+		return cfg, nil
+	}
+
+	// Repository local mode (service-relative):
+	//   configs/default/config.yaml + configs/<env>/config.yaml (+ optional version under releases/)
+	localDefault := filepath.Join("configs", "default", "config.yaml")
+	localEnv := filepath.Join("configs", appEnv, "config.yaml")
+	if _, err := os.Stat(localDefault); err == nil {
+		if err := mergeConfigFile(&cfg, localDefault); err != nil {
+			return config{}, fmt.Errorf("read local default config: %w", err)
+		}
+		if err := mergeConfigFile(&cfg, localEnv); err != nil {
+			return config{}, fmt.Errorf("read local env config: %w", err)
+		}
+		if strings.TrimSpace(configVersion) != "" {
+			versionFile := filepath.Join("..", "..", "..", "releases", "config", serviceName, configVersion+".yaml")
+			if _, err := os.Stat(versionFile); err == nil {
+				if err := mergeConfigFile(&cfg, versionFile); err != nil {
+					return config{}, fmt.Errorf("read local version config: %w", err)
+				}
+			}
+		}
+		return cfg, nil
+	}
+
+	// Legacy fallback mode.
+	return loadConfig(filepath.Join("configs", "config.yaml")), nil
+}
+
+func validateRuntimeCompatibility(cfg config, configVersion, imageVersion string) error {
+	if strings.TrimSpace(configVersion) != "" && strings.TrimSpace(cfg.Config.Version) != "" && cfg.Config.Version != configVersion {
+		return fmt.Errorf("CONFIG_VERSION mismatch: env=%s file=%s", configVersion, cfg.Config.Version)
+	}
+	if strings.TrimSpace(imageVersion) == "" {
+		// Allow local dev without image version.
+		return nil
+	}
+	if cfg.Config.MinImageVersion != "" && compareSemver(imageVersion, cfg.Config.MinImageVersion) < 0 {
+		return fmt.Errorf("IMAGE_VERSION=%s below min_image_version=%s", imageVersion, cfg.Config.MinImageVersion)
+	}
+	if cfg.Config.MaxImageVersion != "" && compareSemver(imageVersion, cfg.Config.MaxImageVersion) > 0 {
+		return fmt.Errorf("IMAGE_VERSION=%s above max_image_version=%s", imageVersion, cfg.Config.MaxImageVersion)
+	}
+	return nil
+}
+
+func preflightConfig(cfg config, appEnv string) error {
+	mode := strings.ToLower(strings.TrimSpace(cfg.Redis.Rec.Mode))
+	if mode == "" {
+		mode = "standalone"
+	}
+	if mode != "standalone" && mode != "cluster" {
+		return fmt.Errorf("redis.rec.mode must be standalone|cluster, got %q", cfg.Redis.Rec.Mode)
+	}
+	if mode == "cluster" && len(cfg.Redis.Rec.Addrs) == 0 {
+		return fmt.Errorf("redis.rec.mode=cluster requires redis.rec.addrs")
+	}
+	if appEnv == "prod" {
+		if mode == "standalone" && strings.TrimSpace(cfg.Redis.Rec.Addr) == "" {
+			return fmt.Errorf("prod requires redis.rec.addr when mode=standalone")
+		}
+		if mode == "cluster" && len(cfg.Redis.Rec.Addrs) == 0 {
+			return fmt.Errorf("prod requires redis.rec.addrs when mode=cluster")
+		}
+	}
+	// Preflight connectivity when remote redis is configured.
+	if mode == "standalone" && strings.TrimSpace(cfg.Redis.Rec.Addr) != "" {
+		client := recinfra.NewRedisClientAdapterWithPool(cfg.Redis.Rec.Addr, cfg.Redis.Rec.Password, cfg.Redis.Rec.DB, resolvePoolConfig(cfg.Redis.Rec))
+		ctx, cancel := context.WithTimeout(context.Background(), 800*time.Millisecond)
+		defer cancel()
+		if err := client.Set(ctx, "__content_service_preflight__", "1", time.Second); err != nil {
+			return fmt.Errorf("redis standalone preflight failed: %w", err)
+		}
+	}
+	if mode == "cluster" && len(cfg.Redis.Rec.Addrs) > 0 {
+		client := recinfra.NewRedisClusterAdapter(cfg.Redis.Rec.Addrs, cfg.Redis.Rec.Password, cfg.Redis.Rec.TLS, resolvePoolConfig(cfg.Redis.Rec))
+		ctx, cancel := context.WithTimeout(context.Background(), 800*time.Millisecond)
+		defer cancel()
+		if err := client.Set(ctx, "__content_service_preflight__", "1", time.Second); err != nil {
+			return fmt.Errorf("redis cluster preflight failed: %w", err)
+		}
+	}
+	return nil
+}
+
+func compareSemver(a, b string) int {
+	parse := func(v string) [3]int {
+		var out [3]int
+		parts := strings.Split(strings.TrimPrefix(strings.TrimSpace(v), "v"), ".")
+		for i := 0; i < len(parts) && i < 3; i++ {
+			n, _ := strconv.Atoi(parts[i])
+			out[i] = n
+		}
+		return out
+	}
+	av := parse(a)
+	bv := parse(b)
+	for i := 0; i < 3; i++ {
+		if av[i] > bv[i] {
+			return 1
+		}
+		if av[i] < bv[i] {
+			return -1
+		}
+	}
+	return 0
 }
 
 // applyEnvOverrides applies environment variable overrides to all config sections.

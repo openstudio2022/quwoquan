@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: content-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: content-service
+  template:
+    metadata:
+      labels:
+        app: content-service
+    spec:
+      containers:
+        - name: content-service
+          image: quwoquan/content-service:1.0.0
+          env:
+            - name: APP_ENV
+              value: prod
+            - name: SERVICE_NAME
+              value: content-service
+            - name: CONFIG_VERSION
+              value: v2026.02.28.0
+            - name: IMAGE_VERSION
+              value: "1.0.0"
+            - name: CONFIG_ROOT
+              value: /etc/qwq-config

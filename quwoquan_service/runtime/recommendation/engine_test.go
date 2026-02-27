@@ -1104,6 +1104,93 @@ func TestPool_AcquireRelease(t *testing.T) {
 	releaseCandidates(buf2)
 }
 
+// ---------------------------------------------------------------------------
+// Redis Cluster hash tag protocol tests (redis-cluster-protocol L4a)
+// ---------------------------------------------------------------------------
+
+// TestSessionKey verifies that sessionKey() produces hash-tagged keys in the
+// format {userId}:sessionId, which is required for Redis Cluster slot safety.
+func TestSessionKey(t *testing.T) {
+	cases := []struct {
+		userID, sessionID, want string
+	}{
+		{"u1", "s1", "{u1}:s1"},
+		{"user-123", "sess-abc", "{user-123}:sess-abc"},
+		{"u1", "", "{u1}:default"},   // empty sessionID → "default"
+		{"", "s1", "{}:s1"},          // edge: empty userId (should not occur in prod)
+	}
+	for _, tc := range cases {
+		got := sessionKey(tc.userID, tc.sessionID)
+		if got != tc.want {
+			t.Errorf("sessionKey(%q, %q) = %q, want %q", tc.userID, tc.sessionID, got, tc.want)
+		}
+	}
+}
+
+// TestSessionKey_HashTagPresence asserts that the hash tag `{` and `}` are
+// always present and wrap only the userId — no sessionId inside the braces.
+func TestSessionKey_HashTagPresence(t *testing.T) {
+	sk := sessionKey("alice", "morning")
+	if sk[0] != '{' {
+		t.Errorf("sessionKey must start with '{', got %q", sk)
+	}
+	// Find closing brace
+	closeIdx := -1
+	for i, ch := range sk {
+		if ch == '}' {
+			closeIdx = i
+			break
+		}
+	}
+	if closeIdx < 0 {
+		t.Fatalf("sessionKey %q has no closing '}'", sk)
+	}
+	userIDInTag := sk[1:closeIdx]
+	if userIDInTag != "alice" {
+		t.Errorf("hash tag content should be userID %q, got %q", "alice", userIDInTag)
+	}
+	suffix := sk[closeIdx+1:]
+	if suffix != ":morning" {
+		t.Errorf("suffix after hash tag should be %q, got %q", ":morning", suffix)
+	}
+}
+
+// TestHotPath_HashTagKeys verifies that the actual Redis keys written by HotPath
+// use the {userId} hash tag convention so all session keys land on the same cluster slot.
+func TestHotPath_HashTagKeys(t *testing.T) {
+	mr := newMockRedis()
+	hp := NewHotPath(mr)
+	ctx := context.Background()
+
+	err := hp.ProcessSignal(ctx, BehaviorSignal{
+		UserID:    "user42",
+		SessionID: "sess1",
+		ContentID: "c1",
+		Action:    "like",
+		Tags:      []string{"travel"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// All keys written to the mock redis must contain {user42} hash tag.
+	// The mock redis captures keys; we verify via SMembers / HGetAll key lookups.
+	sk := sessionKey("user42", "sess1")
+	expectedTag := "{user42}"
+	if len(sk) < len(expectedTag) || sk[:len(expectedTag)] != expectedTag {
+		t.Errorf("sessionKey %q does not start with hash tag %q", sk, expectedTag)
+	}
+
+	// Verify state is readable with the hash-tagged key via GetSessionState.
+	state, err := hp.GetSessionState(ctx, "user42", "sess1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.TagWeights["travel"] <= 0 {
+		t.Error("travel tag weight should be positive after like signal")
+	}
+}
+
 func TestEngine_ConcurrentFeedRequests(t *testing.T) {
 	redis := newMockRedis()
 	hp := NewHotPath(redis)

@@ -1,0 +1,19 @@
+version: 1
+policy:
+  name: config-release-slo-gate
+
+thresholds:
+  error_rate:
+    warn: 0.01
+    critical: 0.03
+  p95_ms:
+    warn: 300
+    critical: 600
+  redis_error_rate:
+    warn: 0.01
+    critical: 0.03
+
+decisions:
+  continue_when: "all metrics below warn"
+  pause_when: "any metric >= warn and all metrics < critical"
+  rollback_when: "any metric >= critical"

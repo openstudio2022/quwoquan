@@ -2,6 +2,11 @@
 .PHONY: verify
 .PHONY: codegen-app
 .PHONY: codegen-content-service
+.PHONY: bootstrap-service-config
+.PHONY: new-service
+.PHONY: config-gray-rollout
+.PHONY: config-rollback
+.PHONY: config-slo-gate
 
 gate:
 	@bash scripts/gate_repo.sh
@@ -15,12 +20,63 @@ verify:
 	@bash scripts/verify_engineering_directory.sh
 	@bash scripts/verify_opsx_ff_8services_consistency.sh
 	@bash scripts/verify_runtime_packaging.sh
+	@bash scripts/verify_ff_config_contract.sh
 
 codegen-app:
 	@$(MAKE) -C quwoquan_service codegen-app
 
 codegen-content-service:
 	@$(MAKE) -C quwoquan_service codegen-content-service
+
+# Bootstrap env-split config layout for a service.
+# Usage:
+#   make bootstrap-service-config SERVICE=content-service
+bootstrap-service-config:
+	@if [ -z "$(SERVICE)" ]; then \
+		echo "FAIL: SERVICE is required. Example: make bootstrap-service-config SERVICE=content-service"; \
+		exit 2; \
+	fi
+	@bash scripts/bootstrap_service_config_layout.sh --service "$(SERVICE)"
+
+# Create a new service scaffold and auto-bootstrap env-split config layout.
+# Usage:
+#   make new-service SERVICE=user-service PORT=18081
+new-service:
+	@if [ -z "$(SERVICE)" ]; then \
+		echo "FAIL: SERVICE is required. Example: make new-service SERVICE=user-service PORT=18081"; \
+		exit 2; \
+	fi
+	@bash scripts/new_service_fullstack.sh --name "$(SERVICE)" --port "$(if $(PORT),$(PORT),18080)"
+
+# Progressive rollout state update for config release.
+# Example:
+# make config-gray-rollout SERVICE=content-service FROM_IMAGE=1.7.2 TO_IMAGE=1.8.0 FROM_CONFIG=v2026.02.27.1 TO_CONFIG=v2026.02.28.0 STEP=25
+config-gray-rollout:
+	@if [ -z "$(SERVICE)" ] || [ -z "$(FROM_IMAGE)" ] || [ -z "$(TO_IMAGE)" ] || [ -z "$(FROM_CONFIG)" ] || [ -z "$(TO_CONFIG)" ] || [ -z "$(STEP)" ]; then \
+		echo "FAIL: SERVICE/FROM_IMAGE/TO_IMAGE/FROM_CONFIG/TO_CONFIG/STEP are required"; \
+		exit 2; \
+	fi
+	@bash scripts/config_release_gray_rollout.sh --service "$(SERVICE)" --from-image "$(FROM_IMAGE)" --to-image "$(TO_IMAGE)" --from-config "$(FROM_CONFIG)" --to-config "$(TO_CONFIG)" --step "$(STEP)"
+
+# Idempotent rollback to a target config version.
+# Example:
+# make config-rollback SERVICE=content-service TO_CONFIG=v2026.02.27.1
+config-rollback:
+	@if [ -z "$(SERVICE)" ] || [ -z "$(TO_CONFIG)" ]; then \
+		echo "FAIL: SERVICE and TO_CONFIG are required"; \
+		exit 2; \
+	fi
+	@bash scripts/config_release_rollback.sh --service "$(SERVICE)" --to-config-version "$(TO_CONFIG)"
+
+# Evaluate SLO gate decision for a rollout stage.
+# Example:
+# make config-slo-gate ERROR_RATE=0.005 P95_MS=180 REDIS_ERROR_RATE=0.001
+config-slo-gate:
+	@if [ -z "$(ERROR_RATE)" ] || [ -z "$(P95_MS)" ] || [ -z "$(REDIS_ERROR_RATE)" ]; then \
+		echo "FAIL: ERROR_RATE/P95_MS/REDIS_ERROR_RATE are required"; \
+		exit 2; \
+	fi
+	@bash scripts/config_release_slo_gate.sh --error-rate "$(ERROR_RATE)" --p95-ms "$(P95_MS)" --redis-error-rate "$(REDIS_ERROR_RATE)"
 
 .PHONY: gate-full test-api-contract
 

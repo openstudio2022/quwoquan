@@ -1,14 +1,31 @@
 version: 1
 feature: "risky-config-gray-release"
-level: "L4"
+level: "L4_detail"
 template: "A1-A8"
-focus_groups: []
-tests:
-  mock: []
-  unit: []
-  contract: []
-  integration: []
-  uat: []
+level_acceptance:
+  focus_groups: [A1_functional, A3_service_governance, A4_observability, A8_test_automation]
+  notes: "高风险配置灰度发布机制。"
+global_acceptance:
+  A1_functional:
+    scenarios:
+      - given: "发布高风险配置版本"
+        when: "执行灰度流程"
+        then: "配置按阶段渐进生效"
+      - given: "Stable/Canary 并行"
+        when: "灰度进行中"
+        then: "Stable 保持旧 CONFIG_VERSION，Canary 使用新 CONFIG_VERSION"
+      - given: "生产实例启动"
+        when: "APP_ENV=prod 且配置发布流程生效"
+        then: "仅允许绑定已发布 CONFIG_VERSION 的实例进入灰度"
+  A3_service_governance:
+    - "高风险配置必须审批并走灰度"
+    - "配置发布全流程审计可追踪"
+  A4_observability:
+    - "每阶段有成功/失败指标与日志"
+  A8_test_automation:
+    - "灰度阶段推进逻辑有自动化测试"
+    - "失败场景自动回滚联调测试通过"
+    - "门禁可阻断缺失 CONFIG_VERSION 绑定或版本文件不存在的发布"
 execution:
   local_gate: "make gate"
   full_gate: "make gate-full"

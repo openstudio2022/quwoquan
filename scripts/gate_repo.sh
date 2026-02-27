@@ -19,6 +19,13 @@ run_service() {
   bash scripts/verify_engineering_directory.sh
   bash scripts/verify_opsx_ff_8services_consistency.sh
   bash scripts/verify_runtime_packaging.sh
+  bash scripts/verify_ff_config_contract.sh
+  # Config release guardrails (skeleton; strict mode via QWQ_CONFIG_GATE_STRICT=1)
+  bash scripts/verify_service_config_layout.sh
+  bash scripts/verify_service_env_contract.sh
+  bash scripts/verify_config_release_version_mapping.sh
+  bash scripts/verify_config_image_compat.sh
+  bash scripts/verify_config_pr_policy.sh
   (cd quwoquan_service && make gate)
 }
 

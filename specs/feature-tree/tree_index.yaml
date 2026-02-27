@@ -1419,16 +1419,16 @@ features:
                   level: L4_detail
                   path: ../specs/feature-tree/platform-ops-governance/config-and-reliability-governance/config-source-governance/risky-config-gray-release
                   domain: ""
-                  status: specified
-                  tags: []
+                  status: in_progress
+                  tags: [config-release, gray, risk-control]
                   children:
                     - id: one-click-config-rollback
                       name: one-click-config-rollback
                       level: L5_leaf
                       path: ../specs/feature-tree/platform-ops-governance/config-and-reliability-governance/config-source-governance/risky-config-gray-release/one-click-config-rollback
                       domain: ""
-                      status: specified
-                      tags: []
+                      status: in_progress
+                      tags: [rollback, config, emergency]
             - id: reliability-policy-control
               name: reliability-policy-control
               level: L3_component
@@ -1488,8 +1488,8 @@ features:
               level: L3_component
               path: ../specs/feature-tree/platform-ops-governance/observability-and-alerting/slo-error-budget-governance
               domain: ""
-              status: specified
-              tags: []
+              status: in_progress
+              tags: [slo, error-budget, config-release-gate]
               children:
                 - id: budget-burn-policy
                   name: budget-burn-policy
@@ -1825,7 +1825,7 @@ features:
               level: L3_component
               path: ../specs/feature-tree/runtime/runtime-config/config-provider-layering
               domain: ""
-              status: specified
+              status: in_progress
               tags: []
               children:
                 - id: env-file-secret-configcenter-provider
@@ -1843,6 +1843,13 @@ features:
                       domain: ""
                       status: specified
                       tags: []
+                - id: env-overlay-config-release
+                  name: env-overlay-config-release
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-config/config-provider-layering/env-overlay-config-release
+                  domain: ""
+                  status: specified
+                  tags: [config, env-overlay, config-release]
         - id: runtime-context
           name: runtime-context
           level: L2_feature
@@ -2212,9 +2219,31 @@ features:
           level: L2_feature
           path: ../specs/feature-tree/runtime/runtime-recommendation
           domain: ""
-          status: completed
+          status: in_progress
           tags: []
           children:
+            - id: redis-storage-elastic-infra
+              name: redis-storage-elastic-infra
+              level: L3_component
+              path: ../specs/feature-tree/runtime/runtime-recommendation/redis-storage-elastic-infra
+              domain: ""
+              status: completed
+              tags: [redis, multi-cloud, elasticity, infra]
+              children:
+                - id: redis-cluster-protocol
+                  name: redis-cluster-protocol
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-recommendation/redis-storage-elastic-infra/redis-cluster-protocol
+                  domain: ""
+                  status: completed
+                  tags: [redis-cluster, hash-tag, cluster-adapter]
+                - id: redis-service-multicloud-config
+                  name: redis-service-multicloud-config
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-recommendation/redis-storage-elastic-infra/redis-service-multicloud-config
+                  domain: ""
+                  status: completed
+                  tags: [config, multi-cloud, alibaba-cloud, volcengine]
             - id: dual-channel-recommendation-engine
               name: dual-channel-recommendation-engine
               level: L3_component

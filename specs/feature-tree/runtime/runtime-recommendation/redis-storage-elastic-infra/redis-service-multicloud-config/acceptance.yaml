@@ -1,0 +1,80 @@
+version: 1
+feature: "redis-service-multicloud-config"
+level: "L4_object_task"
+template: "A1-A8"
+tree_context:
+  feature_level: "L4_object_task"
+  feature_path: "capability.runtime.feature.runtime-recommendation.component.redis-storage-elastic-infra.object.redis-service-multicloud-config"
+  parent_path: "capability.runtime.feature.runtime-recommendation.component.redis-storage-elastic-infra"
+  acceptance_inherits_from: "capability.runtime.feature.runtime-recommendation.component.redis-storage-elastic-infra"
+level_acceptance:
+  focus_groups:
+    - A1_functional
+    - A3_service_governance
+    - A7_contract_metadata_consistency
+  notes: >
+    多场景 Redis 配置 schema + 多云 env 覆盖 + 键空间文档。
+    验收重点：配置字段解析正确，env 覆盖优先级链正确，向后兼容。
+global_acceptance:
+  A1_functional:
+    scenarios:
+      - given: "config.yaml redis.rec.mode=cluster + addrs=[n1,n2,n3]"
+        when: "buildRecRedisClient(cfg)"
+        then: "返回 RedisClusterAdapter"
+      - given: "config.yaml redis.rec.mode=standalone + addr=localhost:6379"
+        when: "buildRecRedisClient(cfg)"
+        then: "返回 RedisClientAdapter"
+      - given: "config.yaml addr 和 addrs 均为空"
+        when: "buildRecRedisClient(cfg)"
+        then: "返回 MemoryRedis（fallback）"
+      - given: "CONTENT_REDIS_REC_MODE=cluster 环境变量"
+        when: "applyEnvOverrides(&cfg)"
+        then: "cfg.Redis.Rec.Mode = \"cluster\"，覆盖 yaml 中 standalone"
+      - given: "旧版 CONTENT_REDIS_ADDR=localhost:6379"
+        when: "applyEnvOverrides(&cfg)，且 cfg.Redis.Rec.Addr 为空"
+        then: "cfg.Redis.Rec.Addr = \"localhost:6379\"（向后兼容）"
+      - given: "config pool.size=0, mode=cluster"
+        when: "resolvePoolConfig(rcfg)"
+        then: "PoolSize = CPU×30（DefaultClusterPoolConfig）"
+  A3_service_governance:
+    - "阿里云 Tair 和火山引擎 VeCache 可通过相同 env 变量集部署"
+    - "TLS 通过 CONTENT_REDIS_REC_TLS=true 启用"
+    - "db 字段在 cluster 模式下被忽略，不影响启动"
+  A7_contract_metadata_consistency:
+    - "redis_keyspace.yaml 每条 key 模式有 redis_scene 和 hash_tag 字段"
+    - "rec:* key 的 hash_tag 均为 userId"
+level_acceptance:
+  A1:
+    criteria: "buildRecRedisClient 根据 mode 创建正确 adapter"
+    status: implemented
+    linked_tasks: [C4]
+    tests:
+      - note: "目前无 live Redis 依赖测试；场景由 TestApplyEnvOverrides_NewRecOverrides 间接覆盖"
+  A2:
+    criteria: "env 变量覆盖 yaml 值"
+    status: implemented
+    linked_tasks: [C3, T1, T2]
+    tests:
+      - file: quwoquan_service/services/content-service/cmd/api/main_test.go
+        functions: [TestApplyRedisSceneEnv_Mode, TestApplyEnvOverrides_NewRecOverrides]
+  A3:
+    criteria: "旧版 env 变量向后兼容"
+    status: implemented
+    linked_tasks: [C3, T2]
+    tests:
+      - file: quwoquan_service/services/content-service/cmd/api/main_test.go
+        functions: [TestApplyEnvOverrides_LegacyAddr, TestApplyEnvOverrides_LegacyAddrNotOverrideExisting, TestApplyEnvOverrides_LegacyPassword]
+  A4:
+    criteria: "pool.size=0 时使用 CPU 基准默认值"
+    status: implemented
+    linked_tasks: [C5, T3]
+    tests:
+      - file: quwoquan_service/services/content-service/cmd/api/main_test.go
+        functions: [TestResolvePoolConfig_StandaloneDefaults, TestResolvePoolConfig_ClusterDefaults, TestResolvePoolConfig_ZeroFieldsKeptAsDefault]
+  A7:
+    criteria: "redis_keyspace.yaml 完整含 hash_tag + redis_scene"
+    status: implemented
+    linked_tasks: [K1]
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"

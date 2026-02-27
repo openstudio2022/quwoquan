@@ -1,0 +1,38 @@
+version: 1
+feature: "env-overlay-config-release"
+level: "L4_detail"
+template: "A1-A8"
+tree_context:
+  feature_level: "L4_detail"
+  feature_path: "capability.runtime.feature.runtime-config.component.config-provider-layering.detail.env-overlay-config-release"
+  parent_path: "capability.runtime.feature.runtime-config.component.config-provider-layering"
+  acceptance_inherits_from: "capability.runtime.feature.runtime-config.component.config-provider-layering"
+level_acceptance:
+  focus_groups: [A1_functional, A3_service_governance, A8_test_automation]
+  notes: "配置分层加载、环境识别、版本兼容与启动校验。"
+global_acceptance:
+  A1_functional:
+    scenarios:
+      - given: "存在 default 与 local 配置"
+        when: "APP_ENV=local 启动"
+        then: "默认配置被 local 覆盖，得到可预测结果"
+      - given: "CONFIG_ROOT=/etc/qwq-config 且 CONFIG_VERSION=v2026.02.28.0"
+        when: "容器启动"
+        then: "从公共挂载目录读取对应版本配置并生效"
+      - given: "存在环境变量覆盖"
+        when: "服务启动"
+        then: "环境变量优先于文件配置"
+      - given: "APP_ENV=unknown"
+        when: "服务启动"
+        then: "启动失败并输出明确错误"
+  A3_service_governance:
+    - "CONFIG_VERSION 与 IMAGE_VERSION 兼容校验可阻断不兼容启动"
+    - "高风险配置变更通过滚动发布生效"
+  A8_test_automation:
+    - "覆盖顺序和非法环境有单测"
+    - "三环境加载行为有集成测试"
+    - "目录结构与版本文件映射门禁脚本自动校验并可阻断"
+    - "S04 新建服务自动生成配置目录的回归测试通过"
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"
