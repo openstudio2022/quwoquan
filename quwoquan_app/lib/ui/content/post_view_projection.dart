@@ -20,6 +20,22 @@ ArticleDetailView projectArticleDetailView(
       .where((e) => e.isNotEmpty)
       .toList(growable: false);
   final body = post.body ?? '';
+  final rawCards = (raw['cards'] is List)
+      ? (raw['cards'] as List<dynamic>)
+      : const <dynamic>[];
+  final cards = rawCards
+      .whereType<Map<String, dynamic>>()
+      .map(
+        (card) => ArticleCardView(
+          title: card['title']?.toString() ?? '',
+          body: card['body']?.toString() ?? '',
+          layout: card['layout']?.toString() ?? 'full',
+          imageUrl: card['imageUrl']?.toString(),
+          caption: card['caption']?.toString(),
+        ),
+      )
+      .where((card) => card.title.isNotEmpty || card.body.isNotEmpty)
+      .toList(growable: false);
 
   return ArticleDetailView(
     id: post.id.isNotEmpty ? post.id : fallbackArticleId,
@@ -45,5 +61,6 @@ ArticleDetailView projectArticleDetailView(
       comments: post.commentsCount,
       bookmarks: post.savesCount,
     ),
+    cards: cards,
   );
 }

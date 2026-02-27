@@ -1,0 +1,28 @@
+feature: works-glass-drawer
+level: L4_object_task
+template: A1-A4
+archived: false
+execution:
+  local_gate: make build && make test-contract
+  full_gate: make gate-full
+level_acceptance:
+  A1:
+    criteria: "右侧 40% 热区点击 → Drawer slide-in 动画（280ms），宽度 = 屏幕宽度 × 0.4"
+    status: pending
+    linked_tasks: [D2, D3]
+    tests: []
+  A2:
+    criteria: "BackdropFilter sigmaX/sigmaY = 20，背景带深蓝倾向（#0A0E14 80% opacity）"
+    status: pending
+    linked_tasks: [D4]
+    tests: []
+  A3:
+    criteria: "Drawer 内评论列表滚动不触发外层 PageView 垂直或水平换页"
+    status: pending
+    linked_tasks: [D6]
+    tests: []
+  A4:
+    criteria: "Drawer 关闭后 BackdropFilter 完全卸载（Visibility maintainState: false），不持续占用 GPU"
+    status: pending
+    linked_tasks: [D5]
+    tests: []

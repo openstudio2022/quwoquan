@@ -1,0 +1,18 @@
+feature: moment-image-grid
+level: L4_object_task
+template: A1-A2
+archived: false
+execution:
+  local_gate: make build && make test-contract
+  full_gate: make gate-full
+level_acceptance:
+  A1:
+    criteria: "1图全宽（高度≤400px），2图两列，3-9图3列宫格，图片圆角4px"
+    status: pending
+    linked_tasks: [Im1]
+    tests: []
+  A2:
+    criteria: "点击任意图片 → 全屏浏览器打开（黑背景），初始页 = 点击图索引，左右滑切换，点击关闭退出"
+    status: pending
+    linked_tasks: [Im2, Im3]
+    tests: []

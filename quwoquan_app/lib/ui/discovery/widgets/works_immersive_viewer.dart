@@ -1,0 +1,1862 @@
+// ignore_for_file: unnecessary_non_null_assertion
+import 'dart:async';
+import 'dart:math' show max;
+import 'dart:ui' show ImageFilter;
+
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/components/comment_system/comment_models.dart';
+import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
+
+class WorksImmersiveViewer extends ConsumerStatefulWidget {
+  const WorksImmersiveViewer({
+    super.key,
+    required this.showWorksToolbar,
+    required this.onUserTap,
+    required this.onAssistantTap,
+    this.onSwitchToMoment,
+    this.onRevealSystemNav,
+    this.onHideSystemNav,
+  });
+
+  final bool showWorksToolbar;
+  final void Function(
+    String userId, {
+    String? avatarUrl,
+    String? displayName,
+    String? backgroundUrl,
+  }) onUserTap;
+  final VoidCallback onAssistantTap;
+  final VoidCallback? onSwitchToMoment;
+  final VoidCallback? onRevealSystemNav;
+  final VoidCallback? onHideSystemNav;
+
+  @override
+  ConsumerState<WorksImmersiveViewer> createState() =>
+      _WorksImmersiveViewerState();
+}
+
+class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
+    with TickerProviderStateMixin {
+  static bool _didAutoExpandInSession = false;
+  static const double _toolbarReservedHeight = 108;
+
+  String? _filterType;
+  bool _isFilterExpanded = false;
+  int _currentPage = 0;
+
+  final Set<String> _likedPosts = <String>{};
+  final Set<String> _savedPosts = <String>{};
+  final Set<String> _followingUsers = <String>{};
+  final Map<String, int> _photoInnerIndex = <String, int>{};
+  final Map<String, int> _articleInnerIndex = <String, int>{};
+  final Map<String, int> _videoInnerIndex = <String, int>{};
+
+  Timer? _autoCollapseTimer;
+  // Follow-button delayed reveal: 3 s for photos, 5 s for video/article.
+  Timer? _followButtonTimer;
+  bool _showFollowButton = false;
+
+  late final PageController _pageController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+    WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
+      for (final tabId in <String>['photo', 'video', 'article']) {
+        final feedMap = ref.read(discoveryFeedMapProvider);
+        if (!feedMap.containsKey(tabId)) {
+          ref.read(discoveryFeedMapProvider.notifier).load(tabId);
+        }
+      }
+      _runOneTimeAutoExpand();
+      // Kick off the follow-button timer for the first visible post.
+      final posts = _buildFeed();
+      if (posts.isNotEmpty) {
+        _startFollowButtonTimer(posts[0]);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _autoCollapseTimer?.cancel();
+    _followButtonTimer?.cancel();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  /// Resets follow-button visibility and starts the appropriate reveal strategy:
+  /// - Already following: show immediately (state is established, no discovery needed).
+  /// - Not following: delayed reveal — 3 s for photos, 5 s for video / article.
+  void _startFollowButtonTimer(PostBaseDto post) {
+    _followButtonTimer?.cancel();
+    if (_followingUsers.contains(post.authorId)) {
+      // Already following → show right away, no animation delay.
+      if (!_showFollowButton) setState(() => _showFollowButton = true);
+      return;
+    }
+    if (_showFollowButton) setState(() => _showFollowButton = false);
+    final delay = post is PhotoPostDto
+        ? const Duration(seconds: 3)
+        : const Duration(seconds: 5);
+    _followButtonTimer = Timer(delay, () {
+      if (mounted) setState(() => _showFollowButton = true);
+    });
+  }
+
+  void _runOneTimeAutoExpand() {
+    if (_didAutoExpandInSession) return;
+    _didAutoExpandInSession = true;
+    setState(() => _isFilterExpanded = true);
+    _autoCollapseTimer?.cancel();
+    _autoCollapseTimer = Timer(const Duration(milliseconds: 1500), () {
+      if (!mounted) return;
+      setState(() => _isFilterExpanded = false);
+    });
+  }
+
+  void _toggleFilterPanel() {
+    _autoCollapseTimer?.cancel();
+    setState(() => _isFilterExpanded = !_isFilterExpanded);
+  }
+
+  void _collapseFilterPanel() {
+    if (!_isFilterExpanded) return;
+    _autoCollapseTimer?.cancel();
+    setState(() => _isFilterExpanded = false);
+  }
+
+  /// Opens the post-level more-options sheet for the currently visible post.
+  /// Deliberately does NOT open the assistant — that remains the assistant
+  /// avatar button on the primary tab bar.
+  void _showWorksMoreSheet(BuildContext context) {
+    final posts = _buildFeed();
+    final post = posts.isEmpty
+        ? null
+        : posts[_currentPage.clamp(0, posts.length - 1)];
+    showModalBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _WorksMoreOptionsSheet(
+        post: post,
+        isSaved: post != null && _savedPosts.contains(post.id),
+        onSaveToggle: post == null
+            ? null
+            : () {
+                setState(() {
+                  if (_savedPosts.contains(post.id)) {
+                    _savedPosts.remove(post.id);
+                  } else {
+                    _savedPosts.add(post.id);
+                  }
+                });
+              },
+      ),
+    );
+  }
+
+  List<PostBaseDto> _buildFeed() {
+    final photos = ref.watch(discoveryFeedProvider('photo')).value?.items ?? [];
+    final videos = ref.watch(discoveryFeedProvider('video')).value?.items ?? [];
+    final articles =
+        ref.watch(discoveryFeedProvider('article')).value?.items ?? [];
+
+    if (_filterType == 'image') return photos;
+    if (_filterType == 'video') return videos;
+    if (_filterType == 'article') return articles;
+
+    final result = <PostBaseDto>[];
+    final maxLen = max(photos.length, max(videos.length, articles.length));
+    for (var i = 0; i < maxLen; i++) {
+      if (i < photos.length) result.add(photos[i]);
+      if (i < videos.length) result.add(videos[i]);
+      if (i < articles.length) result.add(articles[i]);
+    }
+    return result;
+  }
+
+  int _articleCardCount(String postId) {
+    final raw = ref.watch(appContentRepositoryProvider).discoveryArticleData;
+    final target = raw.cast<Map<String, dynamic>?>().firstWhere(
+          (item) => item?['postId']?.toString() == postId,
+          orElse: () => null,
+        );
+    final cards = target?['cards'];
+    if (cards is List) return cards.length.clamp(1, 99);
+    return 1;
+  }
+
+  List<Map<String, dynamic>> _articleCardsForPost(String postId) {
+    final raw = ref.watch(appContentRepositoryProvider).discoveryArticleData;
+    final target = raw.cast<Map<String, dynamic>?>().firstWhere(
+          (item) => item?['postId']?.toString() == postId,
+          orElse: () => null,
+        );
+    final cards = target?['cards'];
+    if (cards is List) {
+      return cards
+          .whereType<Map<String, dynamic>>()
+          .toList(growable: false);
+    }
+    return const <Map<String, dynamic>>[];
+  }
+
+  ({int current, int total}) _innerProgress(List<PostBaseDto> posts) {
+    if (posts.isEmpty) return (current: 1, total: 1);
+    final idx = _currentPage.clamp(0, posts.length - 1);
+    final current = posts[idx];
+    if (current is PhotoPostDto) {
+      final total = current.imageUrls.isEmpty ? 1 : current.imageUrls.length;
+      final currentIndex =
+          (_photoInnerIndex[current.id] ?? 0).clamp(0, total - 1) + 1;
+      return (current: currentIndex, total: total);
+    }
+    if (current is ArticlePostDto) {
+      final total = (_articleCardCount(current.id) + 1).clamp(1, 99);
+      final currentCard =
+          (_articleInnerIndex[current.id] ?? 0).clamp(0, total - 1) + 1;
+      return (current: currentCard, total: total);
+    }
+    if (current is VideoPostDto) {
+      final episodes = _videoEpisodesForCurrent(current, posts);
+      final total = episodes.length.clamp(1, 99);
+      final currentEpisode =
+          (_videoInnerIndex[current.id] ?? 0).clamp(0, total - 1) + 1;
+      return (current: currentEpisode, total: total);
+    }
+    return (current: 1, total: 1);
+  }
+
+  List<VideoPostDto> _videoEpisodesForCurrent(
+    VideoPostDto current,
+    List<PostBaseDto> posts,
+  ) {
+    final episodes = posts
+        .whereType<VideoPostDto>()
+        .where((v) => v.authorId == current.authorId)
+        .toList(growable: false);
+    if (episodes.isEmpty) return <VideoPostDto>[current];
+    return episodes;
+  }
+
+  void _applyFilter(String? type) {
+    setState(() {
+      _filterType = type;
+      _currentPage = 0;
+      _pageController.jumpToPage(0);
+    });
+  }
+
+  String _formatCount(int n) {
+    if (n < 10000) return '$n';
+    if (n >= 100000) return '10万+';
+    // 10 000 ≤ n < 100 000: show as x.y万+ floored to one decimal.
+    // e.g. 32 999 → 3.2万+  |  10 001 → 1万+  |  15 000 → 1.5万+
+    final tenK = (n / 10000 * 10).floor() / 10;
+    final s = (tenK * 10).round() % 10 == 0
+        ? '${tenK.truncate()}万+'
+        : '$tenK万+';
+    return s;
+  }
+
+  Map<String, dynamic>? _rawPostById(String postId) {
+    final repo = ref.watch(appContentRepositoryProvider);
+    final all = <Map<String, dynamic>>[
+      ...repo.discoveryPhotoData,
+      ...repo.discoveryVideoData,
+      ...repo.discoveryArticleData,
+      ...repo.discoveryMomentData,
+    ];
+    return all.cast<Map<String, dynamic>?>().firstWhere(
+          (item) => item?['postId']?.toString() == postId,
+          orElse: () => null,
+        );
+  }
+
+  String _circleIdForPost(PostBaseDto post) {
+    final raw = _rawPostById(post.id);
+    final rawCircleId = raw?['circleId']?.toString();
+    if (rawCircleId != null && rawCircleId.isNotEmpty) return rawCircleId;
+    return post.authorId;
+  }
+
+  String _circleNameForPost(PostBaseDto post) {
+    final raw = _rawPostById(post.id);
+    final circleName = raw?['circleName']?.toString();
+    if (circleName != null && circleName.isNotEmpty) return circleName;
+    return '圈子${_circleIdForPost(post)}';
+  }
+
+  void _onLike(PostBaseDto post) {
+    setState(() {
+      if (_likedPosts.contains(post.id)) {
+        _likedPosts.remove(post.id);
+      } else {
+        _likedPosts.add(post.id);
+      }
+    });
+  }
+
+  void _onFavorite(PostBaseDto post) {
+    setState(() {
+      if (_savedPosts.contains(post.id)) {
+        _savedPosts.remove(post.id);
+      } else {
+        _savedPosts.add(post.id);
+      }
+    });
+  }
+
+  void _onFollow(PostBaseDto post) {
+    setState(() {
+      if (_followingUsers.contains(post.authorId)) {
+        _followingUsers.remove(post.authorId);
+      } else {
+        _followingUsers.add(post.authorId);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final posts = _buildFeed();
+    final currentPost =
+        posts.isEmpty ? null : posts[_currentPage.clamp(0, posts.length - 1)];
+    final progress = _innerProgress(posts);
+    return GestureDetector(
+      behavior: HitTestBehavior.deferToChild,
+      onTap: () {
+        if (!widget.showWorksToolbar) widget.onHideSystemNav?.call();
+      },
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: PageView.builder(
+            controller: _pageController,
+            scrollDirection: Axis.vertical,
+            physics: const PageScrollPhysics(),
+            itemCount: posts.isEmpty ? 1 : posts.length,
+            onPageChanged: (index) {
+              if (_currentPage != index) {
+                setState(() => _currentPage = index);
+                // Reset + restart the follow-button timer for the new post.
+                _startFollowButtonTimer(posts[index.clamp(0, posts.length - 1)]);
+              }
+            },
+            itemBuilder: (context, index) {
+              if (posts.isEmpty) {
+                return Center(
+                  child: CircularProgressIndicator(
+                    color: AppColors.worksAccent,
+                  ),
+                );
+              }
+              return _buildPostCanvas(posts[index]);
+            },
+          ),
+        ),
+
+        if (_isFilterExpanded)
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: _collapseFilterPanel,
+              child: const SizedBox.expand(),
+            ),
+          ),
+
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _WorksPrimaryTopBar(
+                  isFilterExpanded: _isFilterExpanded,
+                  onTapClose: widget.onSwitchToMoment,
+                  onTapMore: () => _showWorksMoreSheet(context),
+                  onTapMoment: widget.onSwitchToMoment,
+                  onTapWorksArrow: _toggleFilterPanel,
+                ),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 420),
+                  switchInCurve: Curves.elasticOut,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, animation) => SizeTransition(
+                    sizeFactor: animation,
+                    axisAlignment: -1,
+                    child: FadeTransition(opacity: animation, child: child),
+                  ),
+                  child: _isFilterExpanded
+                      ? _WorksSecondaryFilterBar(
+                          key: const ValueKey<String>('works-filter-open'),
+                          activeFilter: _filterType,
+                          onFilterChange: _applyFilter,
+                        )
+                      : const SizedBox.shrink(
+                          key: ValueKey<String>('works-filter-close'),
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        if (currentPost != null && progress.total > 1)
+          Positioned(
+            left: AppSpacing.containerLg,
+            right: AppSpacing.containerLg,
+            bottom: _toolbarReservedHeight + AppSpacing.containerSm,
+            child: Center(
+              child: _WorksCapsuleIndicator(
+                total: progress.total,
+                current: progress.current,
+              ),
+            ),
+          ),
+
+        if (currentPost != null && widget.showWorksToolbar)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: _WorksBottomToolbar(
+              post: currentPost,
+              circleName: _circleNameForPost(currentPost),
+              isLiked: _likedPosts.contains(currentPost.id),
+              isSaved: _savedPosts.contains(currentPost.id),
+              isFollowing: _followingUsers.contains(currentPost.authorId),
+              showFollowButton: _showFollowButton,
+              onUserTap: () => widget.onUserTap(
+                currentPost.authorId,
+                avatarUrl: currentPost.avatarUrl,
+                displayName: currentPost.displayName,
+                backgroundUrl: currentPost.authorBackgroundUrl,
+              ),
+              onCircleTap: () => context.push('/circle/${_circleIdForPost(currentPost)}'),
+              onFollowTap: () => _onFollow(currentPost),
+              onLikeTap: () => _onLike(currentPost),
+              onFavoriteTap: () => _onFavorite(currentPost),
+              onCommentTap: () => _openCommentFor(context, currentPost.id),
+              onShareTap: () => _sharePost(context),
+              onRevealSystemNav: widget.onRevealSystemNav,
+              formatCount: _formatCount,
+            ),
+          ),
+
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPostCanvas(PostBaseDto post) {
+    return _buildTypedCanvas(post);
+  }
+
+  Widget _buildTypedCanvas(PostBaseDto post) {
+    if (post is PhotoPostDto) {
+      return _WorksPhotoCanvas(
+        post: post,
+        onImageChanged: (index) => setState(() => _photoInnerIndex[post.id] = index),
+      );
+    }
+    if (post is VideoPostDto) {
+      final episodes = _videoEpisodesForCurrent(post, _buildFeed());
+      return _WorksVideoCanvas(
+        post: post,
+        episodes: episodes,
+        onEpisodeChanged: (idx) => setState(() => _videoInnerIndex[post.id] = idx),
+      );
+    }
+    if (post is ArticlePostDto) {
+      final cards = _articleCardsForPost(post.id);
+      return _WorksArticleCanvas(
+        post: post,
+        cards: cards,
+        onPageChanged: (index) => setState(() => _articleInnerIndex[post.id] = index),
+      );
+    }
+    return Container(color: AppColors.worksBackground);
+  }
+
+  void _openCommentFor(BuildContext ctx, String postId) {
+    CommentViewer.showModal(
+      context: ctx,
+      postId: postId,
+      initialComments: const [],
+      config: const CommentConfig(enabled: true),
+    );
+  }
+
+  void _sharePost(BuildContext ctx) {
+    showModalBottomSheet<void>(
+      context: ctx,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.all(AppSpacing.containerMd),
+          child: ListTile(
+            leading: const Icon(Icons.link),
+            title: Text(UITextConstants.copyLink),
+            onTap: () => Navigator.pop(context),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WorksPrimaryTopBar extends StatelessWidget {
+  const _WorksPrimaryTopBar({
+    required this.isFilterExpanded,
+    required this.onTapWorksArrow,
+    this.onTapClose,
+    this.onTapMore,
+    this.onTapMoment,
+  });
+
+  final bool isFilterExpanded;
+  final VoidCallback onTapWorksArrow;
+  final VoidCallback? onTapClose;
+  final VoidCallback? onTapMore;
+  final VoidCallback? onTapMoment;
+
+  @override
+  Widget build(BuildContext context) {
+    // Height is pinned to tabNavigationHeight (48px) — identical to
+    // _DiscoveryPage._buildHeader — so tabs never jump vertically on switch.
+
+    // Responsive font size and tab gap follow the same breakpoints used by
+    // AppTypography.responsive / AppSpacing.responsiveValue everywhere else:
+    //   compact  < 360 px → lg (16px) / gap 16px
+    //   regular  360–599  → xl (18px) / gap 24px
+    //   expanded ≥ 600 px → xxl(20px) / gap 32px
+    final tabFontSize = AppTypography.responsive(
+      context,
+      compact: AppTypography.lg,
+      regular: AppTypography.xl,
+      expanded: AppTypography.xxl,
+    );
+    final tabGap = AppSpacing.responsiveValue(
+      context,
+      compact: AppSpacing.interGroupSm,
+      regular: AppSpacing.interGroupMd,
+      expanded: AppSpacing.interGroupLg,
+    );
+
+    return SizedBox(
+      height: AppSpacing.tabNavigationHeight,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
+        child: Row(
+          children: [
+            SizedBox(
+              width: AppSpacing.iconButtonMinSizeSm,
+              child: IconButton(
+                onPressed: onTapClose,
+                icon: Icon(
+                  Icons.close_rounded,
+                  color: AppColors.worksBodyText,
+                  size: AppSpacing.iconMedium,
+                ),
+                style: IconButton.styleFrom(
+                  minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+                ),
+              ),
+            ),
+            Expanded(
+              child: Center(
+                // No fixed width — Row sizes to its content so the tab pair
+                // centres naturally within the Expanded area on any screen width.
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Balance slot mirrors the arrow slot width so the tab
+                    // pair is optically centred: arrowXs(4) + iconSmall+2(18) = 22 px.
+                    const SizedBox(
+                      width: AppSpacing.intraGroupXs + AppSpacing.iconSmall + 2,
+                    ),
+                    GestureDetector(
+                      onTap: onTapMoment,
+                      behavior: HitTestBehavior.opaque,
+                      child: Text(
+                        UITextConstants.discoveryRailMoment,
+                        style: TextStyle(
+                          color: AppColors.worksBodyText.withValues(alpha: 0.74),
+                          fontSize: tabFontSize,
+                          fontWeight: AppTypography.bold,
+                        ),
+                      ),
+                    ),
+                    // Responsive breathing gap between the two primary tabs.
+                    SizedBox(width: tabGap),
+                    GestureDetector(
+                      onTap: onTapWorksArrow,
+                      behavior: HitTestBehavior.opaque,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            UITextConstants.discoveryRailWorks,
+                            style: TextStyle(
+                              color: AppColors.worksTitle,
+                              fontSize: tabFontSize,
+                              fontWeight: AppTypography.bold,
+                            ),
+                          ),
+                          // Arrow slot: intraGroupXs(4) + iconSmall+2(18) = 22 px.
+                          const SizedBox(width: AppSpacing.intraGroupXs),
+                          SizedBox(
+                            width: AppSpacing.iconSmall + 2,
+                            child: Icon(
+                              isFilterExpanded
+                                  ? Icons.keyboard_arrow_up
+                                  : Icons.keyboard_arrow_down,
+                              color: AppColors.worksBodyText.withValues(alpha: 0.8),
+                              size: AppSpacing.iconSmall + 1,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(
+              width: AppSpacing.iconButtonMinSizeSm,
+              child: IconButton(
+                onPressed: onTapMore,
+                icon: Icon(
+                  Icons.more_horiz_rounded,
+                  color: AppColors.worksBodyText,
+                  size: AppSpacing.iconMedium,
+                ),
+                style: IconButton.styleFrom(
+                  minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Works more-options bottom sheet ─────────────────────────────────────────
+// Opened by the ⋯ button on the top bar.  Does NOT open the assistant.
+// Shows post-specific actions (save, share, download) and feedback actions
+// (not-interested, report) separated by a visual divider.
+
+class _WorksMoreOptionsSheet extends StatelessWidget {
+  const _WorksMoreOptionsSheet({
+    this.post,
+    this.isSaved = false,
+    this.onSaveToggle,
+  });
+
+  final PostBaseDto? post;
+  final bool isSaved;
+  final VoidCallback? onSaveToggle;
+
+  static const _kRadius = 20.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final isPhoto = post is PhotoPostDto;
+    final isVideo = post != null && post is! PhotoPostDto && post is! ArticlePostDto;
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+            AppSpacing.containerMd, 0, AppSpacing.containerMd, AppSpacing.containerMd),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ── Group 1: positive post actions ───────────────────────────
+            _SheetGroup(
+              radius: _kRadius,
+              children: [
+                if (isPhoto || isVideo)
+                  _SheetItem(
+                    icon: isPhoto
+                        ? CupertinoIcons.photo_on_rectangle
+                        : CupertinoIcons.arrow_down_circle,
+                    label: isPhoto ? UITextConstants.savePhoto : UITextConstants.saveVideo,
+                    onTap: () => Navigator.of(context).pop(),
+                  ),
+                _SheetItem(
+                  icon: isSaved ? CupertinoIcons.star_fill : CupertinoIcons.star,
+                  label: isSaved ? UITextConstants.savedLabel : UITextConstants.savePost,
+                  iconColor: isSaved ? AppColors.warning : null,
+                  onTap: () {
+                    onSaveToggle?.call();
+                    Navigator.of(context).pop();
+                  },
+                ),
+                _SheetItem(
+                  icon: CupertinoIcons.arrowshape_turn_up_right,
+                  label: UITextConstants.share,
+                  onTap: () => Navigator.of(context).pop(),
+                ),
+                _SheetItem(
+                  icon: CupertinoIcons.link,
+                  label: UITextConstants.copyLink,
+                  onTap: () => Navigator.of(context).pop(),
+                  isLast: true,
+                ),
+              ],
+            ),
+
+            const SizedBox(height: AppSpacing.intraGroupSm),
+
+            // ── Group 2: feedback / negative actions ─────────────────────
+            _SheetGroup(
+              radius: _kRadius,
+              children: [
+                _SheetItem(
+                  icon: CupertinoIcons.hand_thumbsdown,
+                  label: UITextConstants.notInterested,
+                  onTap: () => Navigator.of(context).pop(),
+                ),
+                _SheetItem(
+                  icon: CupertinoIcons.flag,
+                  label: UITextConstants.report,
+                  labelColor: AppColors.error.withValues(alpha: 0.85),
+                  iconColor: AppColors.error.withValues(alpha: 0.85),
+                  onTap: () => Navigator.of(context).pop(),
+                  isLast: true,
+                ),
+              ],
+            ),
+
+            const SizedBox(height: AppSpacing.intraGroupSm),
+
+            // ── Cancel ───────────────────────────────────────────────────
+            _SheetGroup(
+              radius: _kRadius,
+              children: [
+                _SheetItem(
+                  label: UITextConstants.cancel,
+                  labelAlign: TextAlign.center,
+                  onTap: () => Navigator.of(context).pop(),
+                  isLast: true,
+                  bold: true,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A rounded card container used for option groups in the sheet.
+class _SheetGroup extends StatelessWidget {
+  const _SheetGroup({required this.children, required this.radius});
+
+  final List<Widget> children;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.worksDrawerBg,
+        borderRadius: BorderRadius.circular(radius),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(mainAxisSize: MainAxisSize.min, children: children),
+    );
+  }
+}
+
+/// A single row inside a [_SheetGroup].
+class _SheetItem extends StatelessWidget {
+  const _SheetItem({
+    this.icon,
+    required this.label,
+    this.labelAlign,
+    this.iconColor,
+    this.labelColor,
+    required this.onTap,
+    this.isLast = false,
+    this.bold = false,
+  });
+
+  final IconData? icon;
+  final String label;
+  final TextAlign? labelAlign;
+  final Color? iconColor;
+  final Color? labelColor;
+  final VoidCallback onTap;
+  final bool isLast;
+  final bool bold;
+
+  @override
+  Widget build(BuildContext context) {
+    final effectiveFg = labelColor ?? AppColors.worksBodyText;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            height: 52.0,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
+              child: Row(
+                children: [
+                  if (icon != null) ...[
+                    Icon(icon,
+                        size: AppSpacing.iconMedium,
+                        color: iconColor ?? AppColors.worksBodyText),
+                    const SizedBox(width: AppSpacing.intraGroupMd),
+                  ],
+                  Expanded(
+                    child: Text(
+                      label,
+                      textAlign: labelAlign,
+                      style: TextStyle(
+                        color: effectiveFg,
+                        fontSize: AppTypography.base,
+                        fontWeight: bold ? AppTypography.semiBold : AppTypography.normal,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (!isLast)
+          Divider(
+            height: 0.5,
+            thickness: 0.5,
+            color: AppColors.worksBodyText.withValues(alpha: 0.12),
+            indent: AppSpacing.containerMd,
+          ),
+      ],
+    );
+  }
+}
+
+class _WorksSecondaryFilterBar extends StatelessWidget {
+  const _WorksSecondaryFilterBar({
+    super.key,
+    required this.activeFilter,
+    required this.onFilterChange,
+  });
+
+  final String? activeFilter;
+  final void Function(String?) onFilterChange;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.center,
+      child: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.intraGroupSm,
+              vertical: AppSpacing.intraGroupXs,
+            ),
+            decoration: BoxDecoration(
+              color: AppColors.worksDrawerBg.withValues(alpha: 0.54),
+              borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+              border: Border.all(
+                color: AppColors.worksBodyText.withValues(alpha: 0.22),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _chip(null, UITextConstants.discoveryWorksFilterAll),
+                SizedBox(width: AppSpacing.intraGroupSm),
+                _chip('image', UITextConstants.discoveryWorksFilterImage),
+                SizedBox(width: AppSpacing.intraGroupSm),
+                _chip('video', UITextConstants.discoveryWorksFilterVideo),
+                SizedBox(width: AppSpacing.intraGroupSm),
+                _chip('article', UITextConstants.discoveryWorksFilterArticle),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _chip(String? type, String label) {
+    final selected = activeFilter == type;
+    return GestureDetector(
+      onTap: () => onFilterChange(type),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: AppSpacing.containerSm,
+          vertical: AppSpacing.intraGroupXs,
+        ),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.worksTitle.withValues(alpha: 0.14)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+          border: Border.all(
+            color: selected
+                ? AppColors.worksTitle.withValues(alpha: 0.5)
+                : AppColors.worksBodyText.withValues(alpha: 0.2),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: AppTypography.base,
+            color: selected ? AppColors.worksTitle : AppColors.worksBodyText,
+            fontWeight: AppTypography.semiBold,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WorksPhotoCanvas extends StatefulWidget {
+  const _WorksPhotoCanvas({
+    required this.post,
+    required this.onImageChanged,
+  });
+
+  final PhotoPostDto post;
+  final void Function(int index) onImageChanged;
+
+  @override
+  State<_WorksPhotoCanvas> createState() => _WorksPhotoCanvasState();
+}
+
+class _WorksPhotoCanvasState extends State<_WorksPhotoCanvas> {
+  late final PageController _imgController;
+
+  @override
+  void initState() {
+    super.initState();
+    _imgController = PageController();
+    WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
+      widget.onImageChanged(0);
+    });
+  }
+
+  @override
+  void dispose() {
+    _imgController.dispose();
+    super.dispose();
+  }
+
+  List<String> get _images {
+    if (widget.post.imageUrls.isNotEmpty) return widget.post.imageUrls;
+    if (widget.post.coverUrl.isNotEmpty) return <String>[widget.post.coverUrl];
+    return const <String>[];
+  }
+
+  // ── Horizontal gesture handlers ───────────────────────────────────────────
+  // The photo canvas lives inside an outer *vertical* PageView. Flutter's
+  // gesture arena separates vertical vs. horizontal recognisers, but the
+  // overlay DecoratedBox (full-screen, no child) can still introduce hit-test
+  // timing ambiguity in some runtime conditions. To guarantee reliable swipe:
+  //   1. Outer GestureDetector (opaque) explicitly owns horizontal drags.
+  //   2. It drives _imgController directly so the page follows the finger.
+  //   3. Inner PageView uses NeverScrollableScrollPhysics — no gesture
+  //      competition from a second HorizontalDragGestureRecognizer.
+  //   4. The gradient overlay is wrapped in IgnorePointer so it is fully
+  //      removed from hit-test consideration.
+
+  void _onHorizontalDragUpdate(DragUpdateDetails details) {
+    final images = _images;
+    if (images.length <= 1) return;
+    final pageWidth = MediaQuery.of(context).size.width;
+    final maxOffset = (images.length - 1) * pageWidth;
+    _imgController.jumpTo(
+      (_imgController.offset - details.delta.dx).clamp(0.0, maxOffset),
+    );
+  }
+
+  void _onHorizontalDragEnd(DragEndDetails details) {
+    final images = _images;
+    if (images.length <= 1) return;
+    final velocity = details.primaryVelocity ?? 0;
+    final currentPage = _imgController.page ?? 0;
+    final int targetPage;
+    if (velocity < -500) {
+      targetPage = (currentPage.round() + 1).clamp(0, images.length - 1);
+    } else if (velocity > 500) {
+      targetPage = (currentPage.round() - 1).clamp(0, images.length - 1);
+    } else {
+      targetPage = currentPage.round().clamp(0, images.length - 1);
+    }
+    _imgController.animateToPage(
+      targetPage,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final images = _images;
+    final multiImage = images.length > 1;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragUpdate: multiImage ? _onHorizontalDragUpdate : null,
+      onHorizontalDragEnd: multiImage ? _onHorizontalDragEnd : null,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          PageView.builder(
+            controller: _imgController,
+            // NeverScrollableScrollPhysics — gestures handled by the outer
+            // GestureDetector above; this removes the second competing
+            // HorizontalDragGestureRecognizer from the arena entirely.
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: images.isEmpty ? 1 : images.length,
+            onPageChanged: (i) {
+              widget.onImageChanged(i);
+            },
+            itemBuilder: (context, i) {
+              if (images.isEmpty) return Container(color: AppColors.worksBackground);
+              return CachedNetworkImage(
+                imageUrl: images[i],
+                fit: BoxFit.cover,
+                placeholder: (context, url) => Container(color: AppColors.worksBackground),
+                errorWidget: (context, url, error) => Container(color: AppColors.worksBackground),
+              );
+            },
+          ),
+          Positioned.fill(
+            // IgnorePointer removes the gradient box from hit testing entirely,
+            // so it can never compete with the GestureDetector above.
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.06),
+                      Colors.black.withValues(alpha: 0.58),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WorksVideoCanvas extends StatefulWidget {
+  const _WorksVideoCanvas({
+    required this.post,
+    required this.episodes,
+    required this.onEpisodeChanged,
+  });
+
+  final VideoPostDto post;
+  final List<VideoPostDto> episodes;
+  final ValueChanged<int> onEpisodeChanged;
+
+  @override
+  State<_WorksVideoCanvas> createState() => _WorksVideoCanvasState();
+}
+
+class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
+  late final PageController _episodeController;
+
+  int get _initialIndex {
+    final idx = widget.episodes.indexWhere((e) => e.id == widget.post.id);
+    return idx < 0 ? 0 : idx;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _episodeController = PageController(initialPage: _initialIndex);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onEpisodeChanged(_initialIndex);
+    });
+  }
+
+  @override
+  void dispose() {
+    _episodeController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final episodes = widget.episodes.isEmpty
+        ? <VideoPostDto>[widget.post]
+        : widget.episodes;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        PageView.builder(
+          controller: _episodeController,
+          scrollDirection: Axis.horizontal,
+          itemCount: episodes.length,
+          onPageChanged: widget.onEpisodeChanged,
+          itemBuilder: (context, index) {
+            final episode = episodes[index];
+            if (episode.thumbnailUrl.isNotEmpty) {
+              return CachedNetworkImage(
+                imageUrl: episode.thumbnailUrl,
+                fit: BoxFit.cover,
+                placeholder: (context, url) =>
+                    Container(color: AppColors.worksBackground),
+                errorWidget: (context, url, error) =>
+                    Container(color: AppColors.worksBackground),
+              );
+            }
+            return Container(color: AppColors.worksBackground);
+          },
+        ),
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withValues(alpha: 0.08),
+                  Colors.black.withValues(alpha: 0.62),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Center(
+          child: Container(
+            width: AppSpacing.largeButtonSize,
+            height: AppSpacing.largeButtonSize,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.2),
+              shape: BoxShape.circle,
+              border:
+                  Border.all(color: Colors.white.withValues(alpha: 0.5), width: 1.5),
+            ),
+            child: Icon(
+              CupertinoIcons.play_fill,
+              color: Colors.white.withValues(alpha: 0.9),
+              size: AppSpacing.iconLarge,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _WorksArticleCanvas extends StatelessWidget {
+  const _WorksArticleCanvas({
+    required this.post,
+    required this.cards,
+    required this.onPageChanged,
+  });
+
+  final ArticlePostDto post;
+  final List<Map<String, dynamic>> cards;
+  final ValueChanged<int> onPageChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final pages = <Map<String, dynamic>>[
+      <String, dynamic>{'__guide__': true},
+      ...cards,
+    ];
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Container(color: AppColors.worksBackground),
+        if (post.coverUrl.isNotEmpty)
+          Positioned.fill(
+            child: Opacity(
+              opacity: 0.08,
+              child: CachedNetworkImage(
+                imageUrl: post.coverUrl,
+                fit: BoxFit.cover,
+                placeholder: (context, url) =>
+                    Container(color: AppColors.worksBackground),
+                errorWidget: (context, url, error) =>
+                    Container(color: AppColors.worksBackground),
+              ),
+            ),
+          ),
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withValues(alpha: 0.08),
+                  AppColors.worksBackground.withValues(alpha: 0.92),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          left: AppSpacing.containerMd,
+          right: AppSpacing.containerMd,
+          top: MediaQuery.of(context).padding.top + AppSpacing.containerLg,
+          bottom: _WorksImmersiveViewerState._toolbarReservedHeight + AppSpacing.containerMd,
+          child: PageView.builder(
+            itemCount: pages.length,
+            onPageChanged: onPageChanged,
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return _ArticleGuideCard(post: post);
+              }
+              final card = pages[index];
+              final title = card['title']?.toString() ?? post.title;
+              final body = card['body']?.toString() ?? post.body;
+              return _ArticleReadingCard(
+                title: title,
+                body: body,
+                imageUrl: card['imageUrl']?.toString(),
+                caption: card['caption']?.toString(),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _WorksCapsuleIndicator extends StatelessWidget {
+  const _WorksCapsuleIndicator({required this.total, required this.current});
+
+  final int total;
+  final int current;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.intraGroupSm,
+        vertical: AppSpacing.intraGroupXs,
+      ),
+      decoration: BoxDecoration(
+        // 中性黑背景，避免 worksDrawerBg 海军蓝在暖色图片上产生色相冲突
+        color: Colors.black.withValues(alpha: 0.26),
+        borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(total.clamp(1, 10), (i) {
+          final selected = i == current - 1;
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+            margin: EdgeInsets.symmetric(horizontal: AppSpacing.xs / 2),
+            width: selected ? AppSpacing.containerSm : AppSpacing.intraGroupSm,
+            height: AppSpacing.intraGroupSm,
+            decoration: BoxDecoration(
+              color: selected
+                  ? AppColors.worksTitle.withValues(alpha: 0.72)
+                  : AppColors.worksTitle.withValues(alpha: 0.32),
+              borderRadius: BorderRadius.circular(AppSpacing.intraGroupSm),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+}
+
+class _ArticleGuideCard extends StatelessWidget {
+  const _ArticleGuideCard({required this.post});
+
+  final ArticlePostDto post;
+
+  static const String _serifFamily = 'SourceHanSerifSC';
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(AppSpacing.containerLg),
+      decoration: BoxDecoration(
+        color: AppColors.worksDrawerBg.withValues(alpha: 0.74),
+        borderRadius: BorderRadius.circular(AppSpacing.borderRadius + 4),
+        border: Border.all(
+          color: AppColors.worksBodyText.withValues(alpha: 0.16),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  post.title,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: _serifFamily,
+                    fontSize: AppTypography.xl + 4,
+                    fontWeight: AppTypography.bold,
+                    color: AppColors.worksTitle,
+                    height: 1.42,
+                  ),
+                ),
+                SizedBox(height: AppSpacing.intraGroupSm),
+                Text(
+                  post.body,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: _serifFamily,
+                    fontSize: AppTypography.base,
+                    fontWeight: AppTypography.medium,
+                    color: AppColors.worksBodyText,
+                    height: 2,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(width: AppSpacing.intraGroupSm),
+          SizedBox(
+            width: MediaQuery.of(context).size.width * 0.28,
+            child: _GuideThumb(imageUrl: post.coverUrl),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GuideThumb extends StatelessWidget {
+  const _GuideThumb({required this.imageUrl});
+
+  final String imageUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.worksAccent.withValues(alpha: 0.22),
+            blurRadius: 16,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+        child: AspectRatio(
+          aspectRatio: 3 / 4,
+          child: imageUrl.isEmpty
+              ? Container(color: AppColors.worksBackground)
+              : CachedNetworkImage(
+                  imageUrl: imageUrl,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) =>
+                      Container(color: AppColors.worksBackground),
+                  errorWidget: (context, url, error) =>
+                      Container(color: AppColors.worksBackground),
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ArticleReadingCard extends StatelessWidget {
+  const _ArticleReadingCard({
+    required this.title,
+    required this.body,
+    this.imageUrl,
+    this.caption,
+  });
+
+  final String title;
+  final String body;
+  final String? imageUrl;
+  final String? caption;
+
+  static const String _serifFamily = 'SourceHanSerifSC';
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(AppSpacing.containerMd),
+      decoration: BoxDecoration(
+        color: AppColors.worksDrawerBg.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+        border: Border.all(
+          color: AppColors.worksBodyText.withValues(alpha: 0.16),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: _serifFamily,
+              fontSize: AppTypography.xl,
+              color: AppColors.worksTitle,
+              fontWeight: AppTypography.bold,
+              height: 1.4,
+            ),
+          ),
+          SizedBox(height: AppSpacing.intraGroupSm),
+          if ((imageUrl ?? '').isNotEmpty) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+              child: AspectRatio(
+                aspectRatio: 16 / 9,
+                child: CachedNetworkImage(
+                  imageUrl: imageUrl!,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) =>
+                      Container(color: AppColors.worksBackground),
+                  errorWidget: (context, url, error) =>
+                      Container(color: AppColors.worksBackground),
+                ),
+              ),
+            ),
+            if ((caption ?? '').isNotEmpty) ...[
+              SizedBox(height: AppSpacing.intraGroupXs),
+              Text(
+                caption!,
+                style: TextStyle(
+                  fontFamily: _serifFamily,
+                  fontSize: AppTypography.xs,
+                  color: AppColors.worksCaption,
+                  height: 1.5,
+                ),
+              ),
+            ],
+            SizedBox(height: AppSpacing.intraGroupSm),
+          ],
+          Expanded(
+            child: Text(
+              body,
+              maxLines: 9,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: _serifFamily,
+                fontSize: AppTypography.base,
+                color: AppColors.worksBodyText,
+                height: 2,
+                letterSpacing: 0.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WorksBottomToolbar extends StatelessWidget {
+  const _WorksBottomToolbar({
+    required this.post,
+    required this.circleName,
+    required this.isLiked,
+    required this.isSaved,
+    required this.isFollowing,
+    required this.showFollowButton,
+    required this.onUserTap,
+    required this.onCircleTap,
+    required this.onFollowTap,
+    required this.onLikeTap,
+    required this.onFavoriteTap,
+    required this.formatCount,
+    this.onRevealSystemNav,
+    this.onCommentTap,
+    this.onShareTap,
+  });
+
+  final PostBaseDto post;
+  final String circleName;
+  final bool isLiked;
+  final bool isSaved;
+  final bool isFollowing;
+  /// Whether the follow button has been "unlocked" for this post view.
+  /// Managed by the parent timer: 3 s for photos, 5 s for video/article.
+  /// Already-following authors skip the timer and show the button immediately.
+  final bool showFollowButton;
+  final VoidCallback onUserTap;
+  final VoidCallback onCircleTap;
+  final VoidCallback onFollowTap;
+  final VoidCallback onLikeTap;
+  final VoidCallback onFavoriteTap;
+  final String Function(int n) formatCount;
+  final VoidCallback? onRevealSystemNav;
+  final VoidCallback? onCommentTap;
+  final VoidCallback? onShareTap;
+
+  static const double _kFollowBtnWidth = AppSpacing.followButtonWidthCompact;
+
+  // ── Responsive action dimensions ────────────────────────────────────────
+  // All three tiers align with AppSpacing.compactBreakpoint (360)
+  // and AppSpacing.expandedBreakpoint (600), matching the existing
+  // semantic breakpoint system used across the design system.
+
+  /// Action cell width per tier:
+  ///   compact  < 360 px → 40 px  (icon 24 px + 8 px each side)
+  ///   regular  360–599  → 44 px  (icon 24 px + 10 px each side)
+  ///   expanded ≥ 600 px → 52 px  (icon 24 px + 14 px each side)
+  static double _cellWidth(BuildContext ctx) => AppSpacing.responsiveValue(
+        ctx,
+        compact: 40.0,
+        regular: 44.0,
+        expanded: 52.0,
+      );
+
+  /// Gap between adjacent action icons:
+  ///   compact  → intraGroupXs (4 px)
+  ///   regular  → intraGroupSm (6 px)
+  ///   expanded → intraGroupMd (8 px)
+  static double _actionGap(BuildContext ctx) => AppSpacing.responsiveValue(
+        ctx,
+        compact: AppSpacing.intraGroupXs,
+        regular: AppSpacing.intraGroupSm,
+        expanded: AppSpacing.intraGroupMd,
+      );
+
+  /// Gap between author area and action group (≈ actionGap × 1.33,
+  /// one semantic step wider to signal cross-group boundary):
+  ///   compact  → intraGroupSm  (6 px)
+  ///   regular  → intraGroupMd  (8 px)
+  ///   expanded → intraGroupLg  (12 px)
+  static double _dividerGap(BuildContext ctx) => AppSpacing.responsiveValue(
+        ctx,
+        compact: AppSpacing.intraGroupSm,
+        regular: AppSpacing.intraGroupMd,
+        expanded: AppSpacing.intraGroupLg,
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    final cellWidth = _cellWidth(context);
+    final actionGap = _actionGap(context);
+    final divider = _dividerGap(context);
+
+    // Text compression: triggered only when the follow CTA is newly appearing
+    // AND the author is not yet followed.  Already-following shows immediately
+    // with no layout shift (the muted chip is visually lighter).
+    final compressText = showFollowButton && !isFollowing;
+
+    return GestureDetector(
+      onVerticalDragUpdate: (details) {
+        if (details.delta.dy < -4) onRevealSystemNav?.call();
+      },
+      child: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: Container(
+            padding: EdgeInsets.fromLTRB(
+              AppSpacing.containerMd,
+              AppSpacing.intraGroupSm,
+              AppSpacing.containerMd,
+              AppSpacing.containerMd + bottomInset,
+            ),
+            color: AppColors.worksBackground.withValues(alpha: 0.88),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // ── Author avatar ────────────────────────────────────────
+                GestureDetector(
+                  onTap: onUserTap,
+                  behavior: HitTestBehavior.opaque,
+                  child: CircleAvatar(
+                    radius: AppSpacing.avatarUserMd * 0.5,
+                    backgroundImage: post.avatarUrl.isNotEmpty
+                        ? NetworkImage(post.avatarUrl)
+                        : null,
+                    backgroundColor: AppColors.worksCaption,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.intraGroupSm),
+
+                // ── Author info + optional follow button ─────────────────
+                // Expanded absorbs all remaining space so the action group
+                // is always right-anchored regardless of name length or
+                // whether the follow button is visible.
+                Expanded(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      // Name column — Flexible lets it shrink when the follow
+                      // button occupies space.  AnimatedDefaultTextStyle
+                      // smoothly scales both lines down when the follow CTA
+                      // appears (only for non-following state).
+                      //
+                      // When the follow button is visible, long names are
+                      // hidden by a right-side gradient fade (ShaderMask +
+                      // TextOverflow.clip) instead of an ellipsis "..." so
+                      // the text blends smoothly into the button.
+                      Flexible(
+                        child: showFollowButton
+                            ? ShaderMask(
+                                // Fixed 18 px fade at the right edge so the
+                                // gradient stays proportional regardless of
+                                // how narrow the name column gets.
+                                shaderCallback: (bounds) {
+                                  const fadeWidth = 18.0;
+                                  final start = ((bounds.width - fadeWidth) /
+                                          bounds.width)
+                                      .clamp(0.0, 1.0);
+                                  return LinearGradient(
+                                    begin: Alignment.centerLeft,
+                                    end: Alignment.centerRight,
+                                    stops: [start, 1.0],
+                                    colors: const [
+                                      Colors.white,
+                                      Colors.transparent
+                                    ],
+                                  ).createShader(bounds);
+                                },
+                                blendMode: BlendMode.dstIn,
+                                child: _nameColumn(
+                                    compressText: compressText, clip: true),
+                              )
+                            : _nameColumn(
+                                compressText: compressText, clip: false),
+                      ),
+
+                      // Follow button — slides in from the RIGHT (near the
+                      // action group) via AnimatedSize(alignment: centerRight).
+                      // alignment: Alignment.centerRight anchors the right
+                      // edge so the widget expands leftward, giving the
+                      // visual impression the button emerges from near the
+                      // action icons, not from behind the name text.
+                      AnimatedSize(
+                        duration: const Duration(milliseconds: 260),
+                        curve: Curves.easeOutCubic,
+                        alignment: Alignment.centerRight,
+                        child: showFollowButton
+                            ? Padding(
+                                padding: const EdgeInsets.only(
+                                    left: AppSpacing.intraGroupSm),
+                                child: GestureDetector(
+                                  onTap: onFollowTap,
+                                  behavior: HitTestBehavior.opaque,
+                                  child: Container(
+                                    width: _kFollowBtnWidth,
+                                    height: AppSpacing.buttonHeightXs,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      color: isFollowing
+                                          ? AppColors.followingButtonOnDark
+                                          : AppColors.worksAccent,
+                                      borderRadius: BorderRadius.circular(
+                                        AppSpacing.circularBorderRadius,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      isFollowing
+                                          ? UITextConstants.following
+                                          : '+${UITextConstants.follow}',
+                                      style: TextStyle(
+                                        color: isFollowing
+                                            ? AppColors.worksBodyText
+                                                .withValues(alpha: 0.72)
+                                            : AppColors.white,
+                                        fontSize: AppTypography.xs,
+                                        fontWeight: AppTypography.semiBold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // ── Responsive cross-group divider ───────────────────────
+                SizedBox(width: divider),
+
+                // ── Action group — responsive cell width + gap ───────────
+                // The group width is calculated from context once per build
+                // and is identical for every post on a given device →
+                // actions never shift between posts.
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _action(
+                      icon: Icon(
+                        isLiked
+                            ? CupertinoIcons.heart_fill
+                            : CupertinoIcons.heart,
+                        color: isLiked
+                            ? AppColors.worksLike
+                            : AppColors.worksTitle,
+                        size: AppSpacing.iconMedium,
+                      ),
+                      label: formatCount(post.likeCount + (isLiked ? 1 : 0)),
+                      onTap: onLikeTap,
+                      cellWidth: cellWidth,
+                    ),
+                    SizedBox(width: actionGap),
+                    _action(
+                      icon: Icon(
+                        CupertinoIcons.arrowshape_turn_up_right,
+                        color: AppColors.worksTitle,
+                        size: AppSpacing.iconMedium,
+                      ),
+                      label: formatCount(post.shareCount),
+                      onTap: onShareTap,
+                      cellWidth: cellWidth,
+                    ),
+                    SizedBox(width: actionGap),
+                    _action(
+                      icon: Icon(
+                        isSaved
+                            ? CupertinoIcons.star_fill
+                            : CupertinoIcons.star,
+                        color: isSaved
+                            ? AppColors.worksSave
+                            : AppColors.worksTitle,
+                        size: AppSpacing.iconMedium,
+                      ),
+                      label: formatCount(
+                          post.favoriteCount + (isSaved ? 1 : 0)),
+                      onTap: onFavoriteTap,
+                      cellWidth: cellWidth,
+                    ),
+                    SizedBox(width: actionGap),
+                    _action(
+                      icon: Icon(
+                        CupertinoIcons.chat_bubble,
+                        color: AppColors.worksTitle,
+                        size: AppSpacing.iconMedium,
+                      ),
+                      label: formatCount(post.commentCount),
+                      onTap: onCommentTap,
+                      cellWidth: cellWidth,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Name + circle-name column with responsive font sizes.
+  /// [clip] = true when the ShaderMask parent handles overflow visually;
+  ///          TextOverflow.clip avoids the "..." appearing under the fade.
+  Widget _nameColumn({required bool compressText, required bool clip}) {
+    final overflow = clip ? TextOverflow.clip : TextOverflow.ellipsis;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          style: TextStyle(
+            color: AppColors.worksTitle,
+            fontSize:
+                compressText ? AppTypography.sm : AppTypography.base,
+            fontWeight: AppTypography.bold,
+          ),
+          child: Text(post.displayName, maxLines: 1, overflow: overflow),
+        ),
+        SizedBox(height: AppSpacing.intraGroupXs / 2),
+        AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          style: TextStyle(
+            color: AppColors.worksBodyText.withValues(alpha: 0.72),
+            fontSize:
+                compressText ? AppTypography.xxs : AppTypography.xs,
+            fontWeight: AppTypography.medium,
+          ),
+          child: GestureDetector(
+            onTap: onCircleTap,
+            behavior: HitTestBehavior.opaque,
+            child: Text(circleName, maxLines: 1, overflow: overflow),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _action({
+    required Widget icon,
+    required String label,
+    required double cellWidth,
+    VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: cellWidth,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            icon,
+            SizedBox(height: AppSpacing.intraGroupXs / 2),
+            Text(
+              label,
+              style: TextStyle(
+                color: AppColors.worksBodyText,
+                fontSize: AppTypography.xs,
+                fontWeight: AppTypography.medium,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+

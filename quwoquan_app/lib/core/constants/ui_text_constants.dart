@@ -7,6 +7,14 @@ class UITextConstants {
   static const String discoveryTabPhoto = '美图';
   static const String discoveryTabVideo = '视频';
   static const String discoveryTabArticle = '文章';
+  /// 双轨道架构主 Rail 标签
+  static const String discoveryRailMoment = '微趣';
+  static const String discoveryRailWorks = '作品';
+  /// 作品频道二级过滤器
+  static const String discoveryWorksFilterAll = '全部';
+  static const String discoveryWorksFilterVideo = '视频';
+  static const String discoveryWorksFilterImage = '美图';
+  static const String discoveryWorksFilterArticle = '文章';
   /// 发现页 V1：帮读/美图/视频
   static const String discoveryTabHelperRead = '帮读';
   static const String discoveryHelperSummaryTitle = '小趣已为你读完';
@@ -91,7 +99,12 @@ class UITextConstants {
   static const String shareTargetMoments = '朋友圈';
   static const String loadFailed = '加载失败';
   static const String report = '举报';
+  static const String notInterested = '不感兴趣';
   static const String shareTo = '分享到';
+  static const String savePhoto = '保存图片';
+  static const String saveVideo = '保存视频';
+  static const String savePost = '收藏';
+  static const String savedLabel = '已收藏';
   static const String unknown = '未知';
   static const String commentSent = '评论已发送';
   static const String replySent = '回复已发送';

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 class AppTypography {
+  /// Minimum legible caption size used for compressed toolbar states.
+  static const double xxs = 9.0;
   static const double xs = 10.0;
   static const double sm = 12.0;
   static const double md = 14.0;

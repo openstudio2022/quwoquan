@@ -14,6 +14,7 @@ class ArticleDetailView {
     required this.coverImage,
     required this.images,
     required this.stats,
+    required this.cards,
   });
 
   final String id;
@@ -28,6 +29,7 @@ class ArticleDetailView {
   final String coverImage;
   final List<String> images;
   final ArticleStatsView stats;
+  final List<ArticleCardView> cards;
 }
 
 class ArticleAuthorView {
@@ -54,4 +56,20 @@ class ArticleStatsView {
   final int likes;
   final int comments;
   final int bookmarks;
+}
+
+class ArticleCardView {
+  const ArticleCardView({
+    required this.title,
+    required this.body,
+    required this.layout,
+    this.imageUrl,
+    this.caption,
+  });
+
+  final String title;
+  final String body;
+  final String layout; // full | half | third
+  final String? imageUrl;
+  final String? caption;
 }

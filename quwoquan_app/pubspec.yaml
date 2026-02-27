@@ -70,6 +70,8 @@ dependency_overrides:
   # 强制升级传递依赖到最新版本
   analyzer: ^10.0.0
   _fe_analyzer_shared: ^94.0.0
+  # 暂时锁定到不依赖 objective_c native asset 的版本，规避 iOS 启动白屏
+  path_provider_foundation: 2.5.1
   characters: ^1.4.1
   matcher: ^0.12.18
   meta: ^1.18.0

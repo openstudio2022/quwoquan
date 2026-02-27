@@ -1,4 +1,5 @@
 // ignore_for_file: unnecessary_non_null_assertion
+import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -26,11 +27,13 @@ import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
 import 'package:quwoquan_app/features/assistant/context/assistant_open_context.dart';
 import 'package:quwoquan_app/features/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
+import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
+import 'package:quwoquan_app/ui/discovery/widgets/moment_social_feed.dart';
 
-/// 发现页
+/// 发现页 — 双轨道架构
 ///
-/// 1:1 复制自 趣我圈2026/src/components/Home.tsx → DiscoveryFeed.tsx
-/// Tab: 微趣(moment)/美图(photo)/视频(video)/文章(article)，与 CATEGORIES 一致
+/// 主轨道：[微趣] 社交信息流  |  [作品] 沉浸式美图/视频/文章混合频道
+/// 切换时背景色在 400ms 内从浅色平滑过渡至墨浆蓝（#0A0E14）
 class DiscoveryPage extends ConsumerStatefulWidget {
   const DiscoveryPage({super.key});
 
@@ -40,31 +43,31 @@ class DiscoveryPage extends ConsumerStatefulWidget {
 
 class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
-  /// 与 design-clarification-2026-02：微趣|美图|视频|文章，默认美图
-  String _activeType = 'photo';
+  static String _lastActiveType = 'moment';
+  /// 双轨道主 Rail：'moment' | 'works'，默认微趣
+  String _activeType = _lastActiveType;
   /// 保存 notifier 供 dispose 回调使用，避免 dispose 后使用 ref
   VideoForceDarkNotifier? _videoForceDarkNotifier;
   BottomNavHiddenNotifier? _bottomNavHiddenNotifier;
   late PageController _primaryPageController;
+  Timer? _systemNavAutoHideTimer;
 
   @override
   bool get wantKeepAlive => true;
 
-  /// 一级分类从 ContentUIConfig.discoveryTabs 驱动，顺序/label/contentType 由 codegen 管理。
-  List<Map<String, String>> get _categories => ContentUIConfig.discoveryTabs
-      .map((tab) => <String, String>{'id': tab.id, 'label': _tabLabelFor(tab.labelKey)})
-      .toList(growable: false);
-
-  /// Maps labelKey (from ui_config.yaml) to a localized display string.
-  static String _tabLabelFor(String labelKey) {
-    switch (labelKey) {
-      case 'tab_photo': return UITextConstants.discoveryTabPhoto;
-      case 'tab_video': return UITextConstants.discoveryTabVideo;
-      case 'tab_moment': return UITextConstants.discoveryTabMoment;
-      case 'tab_article': return UITextConstants.discoveryTabArticle;
-      default: return labelKey;
-    }
-  }
+  /// 双轨道 Rail 列表：[微趣, 作品]
+  static const List<Map<String, String>> _railCategories =
+      <Map<String, String>>[
+    <String, String>{
+      'id': 'moment',
+      'label': UITextConstants.discoveryRailMoment,
+    },
+    <String, String>{
+      'id': 'works',
+      'label': UITextConstants.discoveryRailWorks,
+    },
+  ];
+  List<Map<String, String>> get _categories => _railCategories;
 
   DiscoveryTabConfig? _tabConfigFor(String tabId) =>
       ContentUIConfig.discoveryTabs.cast<DiscoveryTabConfig?>().firstWhere(
@@ -72,14 +75,19 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
         orElse: () => null,
       );
 
+  /// 作品频道 & 视频全屏均触发深色模式 + 隐藏底部导航
   bool get _isVideoMode =>
+      _activeType == 'works' ||
       _tabConfigFor(_activeType)?.layout == 'full_width_vertical_pager';
 
   List<String> get _primaryTabIds =>
       _categories.map((category) => category['id']!).toList(growable: false);
 
   void _setActiveType(String id) {
-    setState(() => _activeType = id);
+    setState(() {
+      _activeType = id;
+      _lastActiveType = id;
+    });
     _ensureFeedLoaded(id);
     _recordDiscoveryVisit(id);
     _applyVideoForceDark();
@@ -103,28 +111,26 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     }
   }
 
-  void _switchPrimaryByDelta(int delta) {
-    final ids = _primaryTabIds;
-    final currentIndex = ids.indexOf(_activeType);
-    if (currentIndex < 0) return;
-    final nextIndex = currentIndex + delta;
-    if (nextIndex < 0 || nextIndex >= ids.length) {
-      HapticFeedback.selectionClick();
-      return;
-    }
-    _setActiveType(ids[nextIndex]);
-  }
-
-  void _onPrimaryDragEnd(DragEndDetails details) {
-    final velocity = details.primaryVelocity ?? 0;
-    if (velocity.abs() < 220) return;
-    _switchPrimaryByDelta(velocity < 0 ? 1 : -1);
-  }
-
   /// 在非 build/initState/dispose 中更新，避免 “modify provider while building”
   void _applyVideoForceDark() {
     ref.read(videoForceDarkProvider.notifier).setForceDark(_isVideoMode);
     ref.read(bottomNavHiddenProvider.notifier).setHidden(_isVideoMode);
+  }
+
+  void _revealSystemBottomNav() {
+    _systemNavAutoHideTimer?.cancel();
+    ref.read(bottomNavHiddenProvider.notifier).setHidden(false);
+    _systemNavAutoHideTimer = Timer(const Duration(seconds: 5), () {
+      if (!mounted) return;
+      _hideSystemBottomNav();
+    });
+  }
+
+  void _hideSystemBottomNav() {
+    _systemNavAutoHideTimer?.cancel();
+    if (_activeType == 'works') {
+      ref.read(bottomNavHiddenProvider.notifier).setHidden(true);
+    }
   }
 
   void _trackBehavior(String action, dynamic post, {double? duration}) {
@@ -169,14 +175,14 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       _bottomNavHiddenNotifier = ref.read(bottomNavHiddenProvider.notifier);
       _applyVideoForceDark();
       _recordDiscoveryVisit(_activeType);
-      for (final id in _primaryTabIds) {
-        _ensureFeedLoaded(id);
-      }
+      // 默认预加载微趣 feed
+      _ensureFeedLoaded('moment');
     });
   }
 
   @override
   void dispose() {
+    _systemNavAutoHideTimer?.cancel();
     _primaryPageController.dispose();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _videoForceDarkNotifier?.setForceDark(false);
@@ -218,7 +224,10 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
             onPageChanged: (index) {
               final id = _primaryTabIds[index];
               if (id != _activeType) {
-                setState(() => _activeType = id);
+                setState(() {
+                  _activeType = id;
+                  _lastActiveType = id;
+                });
                 _applyVideoForceDark();
               }
             },
@@ -230,13 +239,34 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       ],
     );
 
+    final targetBg = _activeType == 'works'
+        ? AppColors.worksBackground
+        : _isVideoMode
+            ? Colors.black
+            : AppColorsFunctional.getColor(themeDark, ColorType.backgroundPrimary);
+
     return Scaffold(
       key: TestKeys.discoveryPage,
-      backgroundColor: _isVideoMode
-          ? Colors.black
-          : AppColorsFunctional.getColor(themeDark, ColorType.backgroundPrimary),
-      body: _isVideoMode
-          ? AnnotatedRegion<SystemUiOverlayStyle>(
+      backgroundColor: Colors.transparent,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeInOutCubic,
+            color: targetBg,
+          ),
+          if (_activeType == 'works')
+            AnnotatedRegion<SystemUiOverlayStyle>(
+              value: const SystemUiOverlayStyle(
+                statusBarColor: Colors.transparent,
+                statusBarIconBrightness: Brightness.light,
+                statusBarBrightness: Brightness.dark,
+              ),
+              child: _buildWorksView(),
+            )
+          else if (_isVideoMode)
+            AnnotatedRegion<SystemUiOverlayStyle>(
               value: const SystemUiOverlayStyle(
                 statusBarColor: Colors.transparent,
                 statusBarIconBrightness: Brightness.light,
@@ -244,45 +274,89 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
               ),
               child: _buildVideoImmersionView(isDark),
             )
-          : body,
+          else
+            body,
+        ],
+      ),
     );
   }
 
   /// 发现页主导航：与圈子/首页复用同一 Tab 组件与字级。
   Widget _buildHeader(bool isDark) {
-    final tabs = _categories
-        .map((cat) => TabItem(id: cat['id']!, label: cat['label']!))
-        .toList(growable: false);
-
     return Container(
-      decoration: BoxDecoration(
-        color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
-        border: Border(
-          bottom: BorderSide(
-            color: AppColorsFunctional.getColor(isDark, ColorType.borderPrimary),
-            width: 1,
-          ),
-        ),
-      ),
+      color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
       child: SafeArea(
         bottom: false,
-        child: CenteredScrollableTabBar(
-          tabs: tabs,
-          activeTab: _activeType,
-          isDark: isDark,
-          leftAlignedCompactMode: true,
-          onTabChange: _setActiveType,
-          onHorizontalDragEnd: _onPrimaryDragEnd,
-          trailingActions: [
-            IconButton(
-              tooltip: UITextConstants.assistantEntryFind,
-              icon: AssistantAvatar(radius: AppSpacing.iconMedium / 2),
-              onPressed: _openAssistantHalfSheet,
-              style: IconButton.styleFrom(
-                minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+        child: SizedBox(
+          height: AppSpacing.tabNavigationHeight,
+          child: Row(
+            children: [
+              SizedBox(width: AppSpacing.iconButtonMinSizeSm),
+              Expanded(
+                child: Center(
+                  child: SizedBox(
+                    width: 214,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // Left balance = right arrow slot (22 px each) — the pair
+                        // [微趣][作品] is optically centred regardless of state.
+                        const SizedBox(
+                          width: AppSpacing.intraGroupXs + AppSpacing.iconSmall + 2,
+                        ),
+                        GestureDetector(
+                          onTap: () => _setActiveType(_categories[0]['id']!),
+                          behavior: HitTestBehavior.opaque,
+                          child: Text(
+                            _categories[0]['label']!,
+                            style: TextStyle(
+                              fontSize: AppTypography.xl,
+                              fontWeight: AppTypography.bold,
+                              color: _activeType == _categories[0]['id']
+                                  ? AppColorsFunctional.getColor(
+                                      isDark,
+                                      ColorType.foregroundPrimary,
+                                    )
+                                  : AppColorsFunctional.getColor(
+                                      isDark,
+                                      ColorType.foregroundSecondary,
+                                    ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.intraGroupMd),
+                        GestureDetector(
+                          onTap: () => _setActiveType(_categories[1]['id']!),
+                          behavior: HitTestBehavior.opaque,
+                          child: Text(
+                            _categories[1]['label']!,
+                            style: TextStyle(
+                              fontSize: AppTypography.xl,
+                              fontWeight: AppTypography.bold,
+                              color: _activeType == _categories[1]['id']
+                                  ? AppColorsFunctional.getColor(
+                                      isDark,
+                                      ColorType.foregroundPrimary,
+                                    )
+                                  : AppColorsFunctional.getColor(
+                                      isDark,
+                                      ColorType.foregroundSecondary,
+                                    ),
+                            ),
+                          ),
+                        ),
+                        // Right phantom — mirrors real arrow in _WorksPrimaryTopBar.
+                        const SizedBox(
+                          width: AppSpacing.intraGroupXs + AppSpacing.iconSmall + 2,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ],
+              SizedBox(width: AppSpacing.iconButtonMinSizeSm),
+            ],
+          ),
         ),
       ),
     );
@@ -337,7 +411,56 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     );
   }
 
+  /// 作品频道全屏视图（独立于 PageView 之外，由 Scaffold body 直接渲染）
+  Widget _buildWorksView() {
+    final isSystemNavVisible = !ref.watch(bottomNavHiddenProvider).hidden;
+    return WorksImmersiveViewer(
+      showWorksToolbar: !isSystemNavVisible,
+      onUserTap: (userId,
+          {String? avatarUrl,
+          String? displayName,
+          String? backgroundUrl}) {
+        context.push(
+          '/user/$userId',
+          extra: UserProfileRouteExtra(
+            avatar: avatarUrl,
+            displayName: displayName,
+            backgroundImage: backgroundUrl,
+          ),
+        );
+      },
+      onAssistantTap: _openAssistantHalfSheet,
+      onSwitchToMoment: () => _setActiveType('moment'),
+      onRevealSystemNav: _revealSystemBottomNav,
+      onHideSystemNav: _hideSystemBottomNav,
+    );
+  }
+
   Widget _buildContentForTab(String tabId, bool isDark) {
+    // 作品频道由 _buildWorksView 直接挂在 Scaffold，不经过 PageView 路径
+    if (tabId == 'works') {
+      return const SizedBox.shrink();
+    }
+    // 微趣频道：新 Weibo 风格信息流
+    if (tabId == 'moment') {
+      return MomentSocialFeed(
+        isDark: isDark,
+        onUserTap: (userId,
+            {String? avatarUrl,
+            String? displayName,
+            String? backgroundUrl}) {
+          context.push(
+            '/user/$userId',
+            extra: UserProfileRouteExtra(
+              avatar: avatarUrl,
+              displayName: displayName,
+              backgroundImage: backgroundUrl,
+            ),
+          );
+        },
+        onPostTap: (post, index) => _trackBehavior('click', post),
+      );
+    }
     switch (_tabConfigFor(tabId)?.layout) {
       case 'full_width_vertical_pager':
         return _buildVideoImmersionView(isDark, tabId: tabId);
@@ -591,7 +714,9 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   }
 
   /// 触发指定 tab 的 feed 加载（若已有数据则跳过）
+  /// 'works' 是伪 Rail，feeds 由 WorksImmersiveViewer 内部管理，不在此处加载。
   void _ensureFeedLoaded(String tabId) {
+    if (tabId == 'works') return;
     final feedMap = ref.read(discoveryFeedMapProvider);
     if (!feedMap.containsKey(tabId)) {
       ref.read(discoveryFeedMapProvider.notifier).load(tabId);
@@ -869,61 +994,52 @@ class _MomentPostCardState extends State<_MomentPostCard>
             ),
           ],
           SizedBox(height: AppSpacing.interGroupSm),
+          // Action row — same icon set and order as the works channel:
+          // like · share · save · comment, distributed with equal spacing.
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  GestureDetector(
-                    onTap: () {
-                      setState(() => _isLiked = !_isLiked);
-                      _likeAnimationController.forward(from: 0);
-                      _likeAnimationController.reverse();
-                      if (_isLiked) widget.onBehavior?.call('like', item);
-                    },
-                    child: _actionChip(
-                      _isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
-                      '${item.likeCount + (_isLiked ? 1 : 0)}',
-                      isDark,
-                      iconColor: likeColor,
-                    ),
-                  ),
-                  SizedBox(width: AppSpacing.intraGroupMd),
-                  GestureDetector(
-                    onTap: () {
-                      setState(() => _isBookmarked = !_isBookmarked);
-                      if (_isBookmarked) widget.onBehavior?.call('favorite', item);
-                    },
-                    child: _actionChipWidget(
-                      AppStarIcon(
-                        size: AppSpacing.iconMedium,
-                        color: bookmarkColor,
-                      ),
-                      '${item.favoriteCount + (_isBookmarked ? 1 : 0)}',
-                      isDark,
-                    ),
-                  ),
-                  SizedBox(width: AppSpacing.intraGroupMd),
-                  GestureDetector(
-                    onTap: () => widget.onCommentTap?.call(item),
-                    child: _actionChipWidget(
-                      AppBubbleIcon(
-                        size: AppSpacing.iconMedium,
-                        color: AppColorsFunctional.getColor(
-                          isDark,
-                          ColorType.foregroundSecondary,
-                        ),
-                      ),
-                      '${item.commentCount}',
-                      isDark,
-                    ),
-                  ),
-                ],
+              GestureDetector(
+                onTap: () {
+                  setState(() => _isLiked = !_isLiked);
+                  _likeAnimationController.forward(from: 0);
+                  _likeAnimationController.reverse();
+                  if (_isLiked) widget.onBehavior?.call('like', item);
+                },
+                child: _actionChip(
+                  _isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
+                  _formatCount(item.likeCount + (_isLiked ? 1 : 0)),
+                  isDark,
+                  iconColor: likeColor,
+                ),
               ),
-              const Spacer(),
               GestureDetector(
                 onTap: () => widget.onShareTap?.call(item),
-                child: _actionChip(CupertinoIcons.arrowshape_turn_up_right, UITextConstants.share, isDark),
+                child: _actionChip(
+                  CupertinoIcons.arrowshape_turn_up_right,
+                  _formatCount(item.shareCount),
+                  isDark,
+                ),
+              ),
+              GestureDetector(
+                onTap: () {
+                  setState(() => _isBookmarked = !_isBookmarked);
+                  if (_isBookmarked) widget.onBehavior?.call('favorite', item);
+                },
+                child: _actionChip(
+                  _isBookmarked ? CupertinoIcons.star_fill : CupertinoIcons.star,
+                  _formatCount(item.favoriteCount + (_isBookmarked ? 1 : 0)),
+                  isDark,
+                  iconColor: bookmarkColor,
+                ),
+              ),
+              GestureDetector(
+                onTap: () => widget.onCommentTap?.call(item),
+                child: _actionChip(
+                  CupertinoIcons.chat_bubble,
+                  _formatCount(item.commentCount),
+                  isDark,
+                ),
               ),
             ],
           ),
@@ -932,27 +1048,23 @@ class _MomentPostCardState extends State<_MomentPostCard>
     );
   }
 
+  /// Mirrors the same logic as _WorksImmersiveViewerState._formatCount.
+  /// < 10 000 : raw number  |  10 000–99 999 : x.y万+  |  ≥ 100 000 : 10万+
+  String _formatCount(int n) {
+    if (n < 10000) return '$n';
+    if (n >= 100000) return '10万+';
+    final tenK = (n / 10000 * 10).floor() / 10;
+    return (tenK * 10).round() % 10 == 0
+        ? '${tenK.truncate()}万+'
+        : '$tenK万+';
+  }
+
   Widget _actionChip(IconData icon, String count, bool isDark, {Color? iconColor}) {
     final muted = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, size: AppSpacing.iconMedium, color: iconColor ?? muted),
-        SizedBox(width: AppSpacing.intraGroupXs),
-        Text(
-          count,
-          style: TextStyle(fontSize: AppTypography.sm, color: muted),
-        ),
-      ],
-    );
-  }
-
-  Widget _actionChipWidget(Widget iconWidget, String count, bool isDark) {
-    final muted = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        iconWidget,
         SizedBox(width: AppSpacing.intraGroupXs),
         Text(
           count,

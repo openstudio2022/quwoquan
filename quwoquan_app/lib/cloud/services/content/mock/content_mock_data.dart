@@ -374,6 +374,26 @@ class ContentMockData {
           'thumbnailUrl':
               'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=800',
           'mediaUrls': ['https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=800'],
+          'cards': [
+            {
+              'title': '范式变化',
+              'body': '服务端组件把数据获取前移，前端从“拉数据渲染”转向“组合响应流”。',
+              'layout': 'half',
+              'imageUrl': 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=800',
+            },
+            {
+              'title': '边缘部署',
+              'body': '计算更靠近用户后，首屏延迟大幅下降，交互稳定性更容易保障。',
+              'layout': 'third',
+              'imageUrl': 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=800',
+              'caption': '边缘节点覆盖图',
+            },
+            {
+              'title': '团队协作',
+              'body': '组件边界更清晰，前后端职责重新划分，项目交付效率提升。',
+              'layout': 'full',
+            },
+          ],
           'likeCount': 1240,
           'commentCount': 56,
           'favoriteCount': 0,
@@ -392,6 +412,26 @@ class ContentMockData {
           'coverUrl': 'https://images.unsplash.com/photo-1545996124-0501eb296251?w=800',
           'thumbnailUrl':
               'https://images.unsplash.com/photo-1545996124-0501eb296251?w=800',
+          'cards': [
+            {
+              'title': '起笔与呼吸',
+              'body': '书法讲究提按顿挫，线条里的呼吸感来自手腕节奏。',
+              'layout': 'half',
+              'imageUrl': 'https://images.unsplash.com/photo-1545996124-0501eb296251?w=800',
+            },
+            {
+              'title': '留白空间',
+              'body': '字与字之间的留白，是视觉平衡与精神张力的关键。',
+              'layout': 'third',
+              'imageUrl': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800',
+            },
+            {
+              'title': '当代表达',
+              'body': '传统笔法与现代版式并不冲突，关键在节制和秩序。',
+              'layout': 'full',
+              'caption': '作品局部细节',
+            },
+          ],
           'likeCount': 892,
           'commentCount': 34,
           'favoriteCount': 0,
@@ -410,6 +450,31 @@ class ContentMockData {
           'coverUrl': 'https://images.unsplash.com/photo-1498579150354-977475b7ea0b?w=800',
           'thumbnailUrl':
               'https://images.unsplash.com/photo-1498579150354-977475b7ea0b?w=800',
+          'cards': [
+            {
+              'title': '博洛尼亚肉酱',
+              'body': '慢炖让番茄酸度柔和，牛肉香气层层释放。',
+              'layout': 'half',
+              'imageUrl': 'https://images.unsplash.com/photo-1498579150354-977475b7ea0b?w=800',
+            },
+            {
+              'title': '青酱基底',
+              'body': '罗勒、松子与橄榄油的比例决定口感厚度。',
+              'layout': 'third',
+              'imageUrl': 'https://images.unsplash.com/photo-1466637574441-749b8f19452f?w=800',
+            },
+            {
+              'title': '奶油白酱',
+              'body': '火候要轻，避免过度还原导致口感发腻。',
+              'layout': 'full',
+              'caption': '装盘示意',
+            },
+            {
+              'title': '出餐节奏',
+              'body': '家庭场景建议分锅并行，保证面条口感弹性。',
+              'layout': 'full',
+            },
+          ],
           'likeCount': 2105,
           'commentCount': 142,
           'favoriteCount': 0,
@@ -428,6 +493,31 @@ class ContentMockData {
           'coverUrl': 'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=800',
           'thumbnailUrl':
               'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=800',
+          'cards': [
+            {
+              'title': '色彩心理',
+              'body': '高饱和冷色常用于理性、科技和专业感塑造。',
+              'layout': 'half',
+              'imageUrl': 'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=800',
+            },
+            {
+              'title': '布局节奏',
+              'body': '信息密度过高会制造疲劳，层级留白决定阅读效率。',
+              'layout': 'third',
+              'imageUrl': 'https://images.unsplash.com/photo-1467232004584-a241de8bcf5d?w=800',
+            },
+            {
+              'title': '认知负担',
+              'body': '统一交互语言可显著减少切换成本，提升沉浸感。',
+              'layout': 'full',
+            },
+            {
+              'title': '商业转化',
+              'body': '视觉系统不是装饰，而是用户决策路径的一部分。',
+              'layout': 'full',
+              'caption': '设计评审样例',
+            },
+          ],
           'likeCount': 3200,
           'commentCount': 120,
           'favoriteCount': 0,

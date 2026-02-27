@@ -14,7 +14,7 @@ features:
           level: L2_feature
           path: ../specs/feature-tree/assistant-run-learning/learning-event-feedback-injection
           domain: ""
-          status: specified
+          status: in_progress
           tags: []
           children:
             - id: feedback-aggregation
@@ -45,7 +45,7 @@ features:
               level: L3_component
               path: ../specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/feedback-context-injection
               domain: ""
-              status: specified
+              status: in_progress
               tags: []
               children:
                 - id: historical-feedback-context-builder
@@ -53,7 +53,7 @@ features:
                   level: L4_detail
                   path: ../specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/feedback-context-injection/historical-feedback-context-builder
                   domain: ""
-                  status: specified
+                  status: in_progress
                   tags: []
                   children:
                     - id: context-injection-contract-guard
@@ -76,7 +76,7 @@ features:
                   level: L4_detail
                   path: ../specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/learning-event-ingestion/interactionevent-scorecard-schema
                   domain: ""
-                  status: specified
+                  status: in_progress
                   tags: []
                   children:
                     - id: ingestion-dedup-and-idempotency
@@ -107,7 +107,7 @@ features:
                   level: L4_detail
                   path: ../specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-apply-audit/profile-apply-and-versioning
                   domain: ""
-                  status: specified
+                  status: in_progress
                   tags: []
                   children:
                     - id: apply-rollback-and-audit-guard
@@ -130,7 +130,7 @@ features:
                   level: L4_detail
                   path: ../specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-confirm-reject/proposal-state-transition-control
                   domain: ""
-                  status: specified
+                  status: in_progress
                   tags: []
                   children:
                     - id: transition-idempotency-guard
@@ -153,7 +153,7 @@ features:
                   level: L4_detail
                   path: ../specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-create-review/proposal-generation-and-review-model
                   domain: ""
-                  status: specified
+                  status: in_progress
                   tags: []
                   children:
                     - id: review-audit-trace-link
@@ -184,7 +184,7 @@ features:
                   level: L4_detail
                   path: ../specs/feature-tree/assistant-run-learning/run-stream-policy/policy-template-routing/domain-policy-template-selection
                   domain: ""
-                  status: specified
+                  status: in_progress
                   tags: []
                   children:
                     - id: policy-version-gray-release
@@ -199,7 +199,7 @@ features:
               level: L3_component
               path: ../specs/feature-tree/assistant-run-learning/run-stream-policy/run-stream-protocol
               domain: ""
-              status: specified
+              status: in_progress
               tags: []
               children:
                 - id: stream-event-ordering-and-finalization
@@ -222,7 +222,7 @@ features:
               level: L3_component
               path: ../specs/feature-tree/assistant-run-learning/run-stream-policy/run-sync-contract
               domain: ""
-              status: specified
+              status: in_progress
               tags: []
               children:
                 - id: assistant-run-io-contract
@@ -230,7 +230,7 @@ features:
                   level: L4_detail
                   path: ../specs/feature-tree/assistant-run-learning/run-stream-policy/run-sync-contract/assistant-run-io-contract
                   domain: ""
-                  status: specified
+                  status: in_progress
                   tags: []
                   children:
                     - id: run-error-mapping-governance
@@ -269,7 +269,7 @@ features:
                   level: L4_detail
                   path: ../specs/feature-tree/chat-conversation/contact-and-session-governance/contact-search-index/search-query-contract
                   domain: ""
-                  status: specified
+                  status: in_progress
                   tags: []
                   children:
                     - id: privacy-filter-guard
@@ -292,7 +292,7 @@ features:
                   level: L4_detail
                   path: ../specs/feature-tree/chat-conversation/contact-and-session-governance/session-audit-observability/session-log-metric-schema
                   domain: ""
-                  status: specified
+                  status: in_progress
                   tags: []
                   children:
                     - id: anomaly-alert-guard
@@ -1050,6 +1050,107 @@ features:
                       domain: ""
                       status: specified
                       tags: []
+        - id: dual-rail-discovery-redesign
+          name: dual-rail-discovery-redesign
+          level: L2_feature
+          path: ../specs/feature-tree/discovery-content/dual-rail-discovery-redesign
+          domain: ""
+          status: in_progress
+          tags: [ux-redesign, dual-rail, works, moment, immersive]
+          children:
+            - id: works-unified-feed
+              name: works-unified-feed
+              level: L3_subfeature
+              path: ../specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-unified-feed
+              domain: ""
+              status: specified
+              tags: [api-contract, codegen, works-feed]
+            - id: works-immersive-viewer
+              name: works-immersive-viewer
+              level: L3_subfeature
+              path: ../specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer
+              domain: ""
+              status: in_progress
+              tags: [ui, gesture, dark-theme, pageview]
+              children:
+                - id: works-tab-filter
+                  name: works-tab-filter
+                  level: L4_object_task
+                  path: ../specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/works-tab-filter
+                  domain: ""
+                  status: in_progress
+                  tags: []
+                - id: photo-gallery-swipe
+                  name: photo-gallery-swipe
+                  level: L4_object_task
+                  path: ../specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/photo-gallery-swipe
+                  domain: ""
+                  status: in_progress
+                  tags: []
+                - id: video-series-swipe
+                  name: video-series-swipe
+                  level: L4_object_task
+                  path: ../specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/video-series-swipe
+                  domain: ""
+                  status: in_progress
+                  tags: []
+                - id: article-magazine-cover
+                  name: article-magazine-cover
+                  level: L4_object_task
+                  path: ../specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/article-magazine-cover
+                  domain: ""
+                  status: in_progress
+                  tags: []
+                - id: works-glass-drawer
+                  name: works-glass-drawer
+                  level: L4_object_task
+                  path: ../specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/works-glass-drawer
+                  domain: ""
+                  status: in_progress
+                  tags: []
+                - id: works-annotation-dot
+                  name: works-annotation-dot
+                  level: L4_object_task
+                  path: ../specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/works-annotation-dot
+                  domain: ""
+                  status: in_progress
+                  tags: []
+            - id: article-rich-content-blocks
+              name: article-rich-content-blocks
+              level: L3_subfeature
+              path: ../specs/feature-tree/discovery-content/dual-rail-discovery-redesign/article-rich-content-blocks
+              domain: ""
+              status: in_progress
+              tags: [api-contract, codegen, article, dto]
+            - id: moment-social-feed
+              name: moment-social-feed
+              level: L3_subfeature
+              path: ../specs/feature-tree/discovery-content/dual-rail-discovery-redesign/moment-social-feed
+              domain: ""
+              status: in_progress
+              tags: [ui, moment, social]
+              children:
+                - id: moment-image-grid
+                  name: moment-image-grid
+                  level: L4_object_task
+                  path: ../specs/feature-tree/discovery-content/dual-rail-discovery-redesign/moment-social-feed/moment-image-grid
+                  domain: ""
+                  status: in_progress
+                  tags: []
+                - id: moment-text-expand
+                  name: moment-text-expand
+                  level: L4_object_task
+                  path: ../specs/feature-tree/discovery-content/dual-rail-discovery-redesign/moment-social-feed/moment-text-expand
+                  domain: ""
+                  status: in_progress
+                  tags: []
+                - id: moment-video-autoplay
+                  name: moment-video-autoplay
+                  level: L4_object_task
+                  path: ../specs/feature-tree/discovery-content/dual-rail-discovery-redesign/moment-social-feed/moment-video-autoplay
+                  domain: ""
+                  status: in_progress
+                  tags: []
     - id: gateway-orchestrator-foundation
       name: gateway-orchestrator-foundation
       level: L1_domain

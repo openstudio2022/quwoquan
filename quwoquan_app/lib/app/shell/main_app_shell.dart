@@ -136,9 +136,21 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                 left: 0,
                 right: 0,
                 bottom: 0,
-                child: BottomNavigationWidget(
-                  currentIndex: _currentIndex,
-                  onTap: _handleBottomNavTap,
+                // Use viewPadding.bottom (physical safe-area, never consumed by
+                // parent Scaffold) so the background fill always reaches the
+                // very bottom of the screen regardless of nested Scaffold state.
+                child: Container(
+                  color: AppColorsFunctional.getColor(
+                    isDark,
+                    ColorType.backgroundPrimary,
+                  ),
+                  padding: EdgeInsets.only(
+                    bottom: MediaQuery.viewPaddingOf(context).bottom,
+                  ),
+                  child: BottomNavigationWidget(
+                    currentIndex: _currentIndex,
+                    onTap: _handleBottomNavTap,
+                  ),
                 ),
               ),
           ],

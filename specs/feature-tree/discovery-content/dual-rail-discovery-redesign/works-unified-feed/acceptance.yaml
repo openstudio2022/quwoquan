@@ -1,0 +1,39 @@
+feature: works-unified-feed
+level: L3_subfeature
+template: A1-A5
+archived: false
+
+execution:
+  local_gate: make build && make test-contract
+  full_gate: make gate-full
+
+level_acceptance:
+  A1:
+    criteria: "service.yaml 中存在 works-feed 端点定义（GET /v1/content/works-feed，含 filter_type/cursor/limit 参数），make codegen 成功生成对应 Repository 方法签名"
+    status: pending
+    linked_tasks: [M1, C1]
+    tests: []
+
+  A2:
+    criteria: "MockContentRepository.listWorksFeedPage 返回三类 DTO 混排（PhotoPostDto/VideoPostDto/ArticlePostDto 各 ≥ 1 条），postBaseDtoFromMap 正确派发类型"
+    status: pending
+    linked_tasks: [R2]
+    tests: []
+
+  A3:
+    criteria: "filter_type=image 只返回 PhotoPostDto；filter_type=video 只返回 VideoPostDto；filter_type=null 返回混排"
+    status: pending
+    linked_tasks: [R2, R3]
+    tests: []
+
+  A4:
+    criteria: "cursor 分页：第二页请求使用上次响应的 next_cursor，结果追加到列表末尾，无重复；next_cursor 为 null 时不再请求"
+    status: pending
+    linked_tasks: [P1]
+    tests: []
+
+  A5:
+    criteria: "RemoteContentRepository 使用 CloudRuntimeConfig.gatewayBaseUrl 拼接 URL，使用 CloudRequestHeaders.forPage('works.feed')，不硬编码任何 URL 或 header"
+    status: pending
+    linked_tasks: [R3]
+    tests: []
