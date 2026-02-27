@@ -49,7 +49,7 @@
 ## 2. Content 服务
 
 - [ ] 2.0 接入全服务统一能力（见 §0，必须使用公共库）
-- [ ] 2.1 定义 Content 服务 API 契约（OpenAPI 或等价）
+- [x] 2.1 定义 Content 服务 API 契约（OpenAPI 或等价）
 - [ ] 2.2 实现 Feed 接口 mock 或 stub
 - [ ] 2.3 实现内容行为上报接口 mock
 - [ ] 2.4 实现推荐接口 mock（含输入输出 schema）
@@ -115,7 +115,7 @@
 
 ## 10. 端云集成准备
 
-- [ ] 10.1 端侧 DataService 增加 Content API 适配层（可切 Mock/Remote）
+- [x] 10.1 端侧 DataService 增加 Content API 适配层（可切 Mock/Remote）
 - [ ] 10.2 端侧 CloudStubSyncAdapter 替换为真实 Assistant learning 上报
 - [ ] 10.3 端侧 _buildAssistantContextScope 注入 historicalRetrievalFeedback
 - [ ] 10.4 端侧 comment_system 接入 Content 评论接口

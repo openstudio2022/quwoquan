@@ -26,15 +26,34 @@ run_app() {
   echo "[gate] quwoquan_app"
   command -v flutter >/dev/null 2>&1 || { echo "[gate] FAIL: flutter not found in PATH" 1>&2; exit 1; }
   (cd quwoquan_app && flutter pub get)
-  (cd quwoquan_app && flutter analyze)
+  (cd quwoquan_app && flutter analyze --no-fatal-warnings --no-fatal-infos)
+  # Always run L1 content tests (L1a contract, L1b widget, L1c journey) — fast, no external deps
+  # Paths follow: test/{layer}/{domain}/{entity}/{test_type}/ (see .cursor/rules/03-testing.mdc §3)
+  (cd quwoquan_app && flutter test test/cloud/ test/components/ test/ui/)
+  # Full test suite (includes acceptance VM tests requiring LLM + external services) — CI only
   if [[ "${GITHUB_ACTIONS:-}" == "true" || "${QWQ_GATE_TESTS:-}" == "1" ]]; then
     (cd quwoquan_app && flutter test)
+  fi
+
+  # dart_func 覆盖率检查：mock.yaml 声明的 dart_func 必须在 Dart 测试文件中存在
+  if command -v python3 >/dev/null 2>&1; then
+    python3 scripts/verify_dart_func_coverage.py || exit 1
   else
-    echo "[gate] skip flutter test (set QWQ_GATE_TESTS=1 or run in CI)"
+    echo "[gate] WARN: python3 not found — skipping dart_func coverage check"
   fi
 }
 
 echo "[gate] repo quality gate (scope=$scope)"
+
+run_patrol_local() {
+  # L4 Patrol（本地调试用，CI 由 FTL workflow 承载）
+  if ! command -v patrol >/dev/null 2>&1; then
+    echo "[gate] SKIP: patrol CLI not found — L4 skipped (install: dart pub global activate patrol_cli)"
+    return 0
+  fi
+  echo "[gate] L4 Patrol (local device)"
+  (cd quwoquan_app && patrol test test/patrol/ --dart-define=ENV=staging)
+}
 
 case "$scope" in
   all)
@@ -47,8 +66,11 @@ case "$scope" in
   app)
     run_app
     ;;
+  patrol)
+    run_patrol_local
+    ;;
   *)
-    echo "[gate] FAIL: invalid scope: $scope (expected all|service|app)" 1>&2
+    echo "[gate] FAIL: invalid scope: $scope (expected all|service|app|patrol)" 1>&2
     exit 2
     ;;
 esac

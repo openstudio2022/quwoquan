@@ -1,0 +1,176 @@
+version: 1
+read_model: DiscoveryFeed
+
+description: |
+  发现流 ReadModel。聚合 Post + 用户行为 + 推荐特征，
+  供 App 信息流消费。由 Projector 从 Post 和行为事件投影构建。
+
+storage_backend: mongodb
+collection: rm_discovery_feed
+
+source_entities:
+  - Post
+  - ContentReaction
+  - VisitRecord
+
+source_events:
+  - PostCreated
+  - PostPublished
+  - ContentReacted
+  - BehaviorBatchReported
+
+consumers:
+  - app (feed)
+  - recommendation-engine
+
+fields:
+  - { name: postId, type: ObjectId }
+  - { name: contentType, type: enum }
+  - { name: authorId, type: string }
+  - { name: title, type: string }
+  - { name: tags, type: "[]string" }
+  - { name: coverUrl, type: string }
+  - { name: likeCount, type: int }
+  - { name: commentCount, type: int }
+  - { name: favoriteCount, type: int }
+  - { name: viewCount, type: int }
+  - { name: publishedAt, type: timestamp }
+  - { name: recScore, type: float, description: 推荐分（实时计算） }
+  - { name: authorNickname, type: string, description: 作者昵称（反范式） }
+  - { name: authorAvatarUrl, type: string, description: 作者头像（反范式） }
+
+indexes:
+  - { name: idx_df_rec_score, keys: { recScore: -1, publishedAt: -1 } }
+  - { name: idx_df_type, keys: { contentType: 1, recScore: -1 } }
+  - { name: idx_df_author, keys: { authorId: 1, publishedAt: -1 } }
+
+# App 端契约（client_projection）
+# 由 codegen_app_metadata 读取，生成 FeedItemDto（DO NOT EDIT 产物）
+# aliases：旧字段名兼容列表，fromMap 的 alias resolver 由 codegen 自动生成
+client_projection:
+  dart_class: FeedItemDto
+  output_path: cloud/runtime/generated/content/feed_item_dto.g.dart
+  fields:
+    - name: id
+      dart_type: String
+      nullable: false
+      source: postId            # 服务侧字段名
+      aliases: [postId, _id]
+      default: "''"
+
+    - name: type
+      dart_type: String
+      nullable: false
+      source: contentType
+      aliases: [contentType, category]
+      default: "''"
+      description: "photo / video / article / moment（客户端展示类型，micro→moment 在服务侧已处理）"
+
+    - name: authorId
+      dart_type: String
+      nullable: false
+      source: authorId
+      aliases: [userId, author_id]
+      default: "''"
+
+    - name: displayName
+      dart_type: String
+      nullable: false
+      source: authorNickname    # 反范式字段
+      aliases: [authorNickname, nickname, username, displayName]
+      default: "''"
+
+    - name: avatarUrl
+      dart_type: String
+      nullable: false
+      source: authorAvatarUrl   # 反范式字段
+      aliases: [authorAvatarUrl, avatarUrl, avatar]
+      default: "''"
+
+    - name: title
+      dart_type: String
+      nullable: true
+      source: title
+      aliases: [title]
+      default: "null"
+
+    - name: body
+      dart_type: String
+      nullable: true
+      source: body
+      aliases: [body, description, content]
+      default: "null"
+      description: "微趣/文章正文；图片/视频可选配文"
+
+    - name: coverUrl
+      dart_type: String
+      nullable: false
+      source: coverUrl
+      aliases: [coverUrl, cover, thumbnail, thumbnailUrl]
+      default: "''"
+
+    - name: thumbnailUrl
+      dart_type: String
+      nullable: false
+      source: coverUrl          # 降级使用 coverUrl
+      aliases: [thumbnailUrl, thumbnail, coverUrl]
+      default: "''"
+      description: "视频封面/图片缩略图；优先 thumbnailUrl，回退 coverUrl"
+
+    - name: videoUrl
+      dart_type: String
+      nullable: true
+      source: videoUrl
+      aliases: [videoUrl, video_url]
+      default: "null"
+
+    - name: imageUrls
+      dart_type: List<String>
+      nullable: false
+      source: mediaUrls
+      aliases: [mediaUrls, images, imageUrls, image_urls]
+      default: "<String>[]"
+      description: "图片帖子的图片列表"
+
+    - name: durationMs
+      dart_type: int
+      nullable: true
+      source: durationMs
+      aliases: [durationMs, duration_ms, duration]
+      default: "null"
+      description: "视频时长（毫秒）；图片帖子为 null"
+
+    - name: likeCount
+      dart_type: int
+      nullable: false
+      source: likeCount
+      aliases: [likeCount, likesCount, likes, like_count]
+      default: "0"
+
+    - name: commentCount
+      dart_type: int
+      nullable: false
+      source: commentCount
+      aliases: [commentCount, commentsCount, comments, comment_count]
+      default: "0"
+
+    - name: favoriteCount
+      dart_type: int
+      nullable: false
+      source: favoriteCount
+      aliases: [favoriteCount, savesCount, bookmarks, favorite_count]
+      default: "0"
+
+    - name: shareCount
+      dart_type: int
+      nullable: false
+      source: shareCount
+      aliases: [shareCount, shares, share_count]
+      default: "0"
+
+    - name: createdAt
+      dart_type: DateTime
+      nullable: false
+      source: publishedAt
+      aliases: [publishedAt, createdAt, created_at]
+      default: "DateTime(0)"

@@ -1,0 +1,174 @@
+version: 1
+aggregate: Post
+
+description: |
+  Post 实体端侧 UI 可配置项声明。
+  codegen 从本文件生成 Dart ContentUIConfig（DO NOT EDIT），
+  端侧 UI 代码通过 ContentUIConfig 消费配置，消除硬编码。
+  label_key 引用 UITextConstants，icon 引用 Material Icons name（字符串）。
+  feature_flags 为编译期常量（修改需发版）；
+  预留 runtime_overridable: true 标记，便于未来接入 Remote Config 覆盖。
+
+# ── 一、发现页 Tab 配置 ─────────────────────────────────────────────────
+discovery_tabs:
+  - id: photo
+    label_key: tab_photo
+    icon: photo_camera_outlined
+    content_type: image                 # 对应 fields.yaml ContentType 枚举
+    layout: waterfall_grid
+    columns: 2
+    card_aspect_ratio: from_metadata    # 从 width/height 字段动态计算
+    preload_count: 4
+    order: 0
+
+  - id: video
+    label_key: tab_video
+    icon: play_circle_outline
+    content_type: video
+    layout: full_width_vertical_pager
+    card_aspect_ratio: "9:16"
+    autoplay: true
+    mute_by_default: true
+    preload_count: 2
+    order: 1
+
+  - id: moment
+    label_key: tab_moment
+    icon: chat_bubble_outline
+    content_type: micro
+    layout: list_with_optional_media
+    card_aspect_ratio: dynamic
+    preload_count: 8
+    order: 2
+
+  - id: article
+    label_key: tab_article
+    icon: article_outlined
+    content_type: article
+    layout: list_with_cover
+    show_reading_time: true
+    preload_count: 6
+    order: 3
+
+# ── 二、内容卡片展示配置 ────────────────────────────────────────────────
+card_config:
+  photo:
+    show_author_avatar: true
+    show_author_name: true
+    show_like_count: true
+    show_comment_count: false           # 列表态不展示评论数
+    show_favorite_count: false
+    action_bar_position: overlay        # 覆盖在图片上
+    action_bar_items: [like, favorite, share]
+
+  video:
+    show_author_avatar: true
+    show_author_name: true
+    show_duration: true
+    show_like_count: true
+    show_comment_count: false
+    action_bar_position: right_side
+    action_bar_items: [like, comment, favorite, share]
+    progress_bar: true
+
+  moment:
+    show_author_avatar: true
+    show_author_name: true
+    show_like_count: true
+    show_comment_count: true
+    action_bar_position: bottom
+    action_bar_items: [like, comment, share]
+    max_image_grid_count: 9
+
+  article:
+    show_author_avatar: true
+    show_author_name: true
+    show_reading_time: true
+    show_like_count: true
+    show_comment_count: true
+    show_cover: true
+    action_bar_position: bottom
+    action_bar_items: [like, comment, favorite, share]
+
+# ── 三、互动操作 UI 配置 ─────────────────────────────────────────────────
+interaction_config:
+  like:
+    optimistic_update: true
+    animation: heart_burst
+    active_icon: favorite
+    inactive_icon: favorite_border
+    error_rollback: true
+    error_message_key: error_like_failed
+
+  favorite:
+    optimistic_update: true
+    animation: star_collect
+    active_icon: bookmark
+    inactive_icon: bookmark_border
+    error_rollback: true
+    error_message_key: error_favorite_failed
+
+  share:
+    optimistic_update: false            # 分享操作不做乐观更新
+    icon: share_outlined
+    sheet_title_key: share_post_title
+
+  comment:
+    icon: chat_bubble_outline
+    navigate_to_detail: true
+
+# ── 四、Feature Flags（编译期常量）─────────────────────────────────────
+feature_flags:
+  - flag: enable_helper_read
+    default: false
+    runtime_overridable: true
+    description: "AI 帮读摘要功能（content-service /helper-read 就绪后开启）"
+
+  - flag: enable_share_to_circle
+    default: true
+    runtime_overridable: false
+    description: "分享到圈子"
+
+  - flag: show_view_count
+    default: false
+    runtime_overridable: true
+    description: "展示浏览数（A/B 测试后决定是否常开）"
+
+  - flag: enable_behavior_tracking
+    default: true
+    runtime_overridable: false
+    description: "用户行为采集开关（隐私法规要求时可关闭）"
+
+  - flag: enable_photo_waterfall
+    default: true
+    runtime_overridable: false
+    description: "美图页瀑布流布局（关闭则降级为等比网格）"
+
+# ── 五、空状态 / 错误状态配置 ────────────────────────────────────────────
+empty_states:
+  feed_empty:
+    illustration: content_discover_empty
+    title_key: feed_empty_title
+    subtitle_key: feed_empty_subtitle
+    cta_label_key: explore_more
+    cta_action: scroll_to_recommendation
+
+  feed_error:
+    illustration: network_error
+    title_key: feed_load_error_title
+    subtitle_key: feed_load_error_subtitle
+    retry: true
+    retry_label_key: retry_load
+
+  feed_rate_limited:
+    illustration: slow_down
+    title_key: feed_rate_limited_title
+    subtitle_key: feed_rate_limited_subtitle
+    show_countdown: true                # 展示倒计时（retry_after_seconds 来自 errors.yaml）
+
+  post_not_found:
+    illustration: post_deleted
+    title_key: post_not_found_title
+    subtitle_key: post_not_found_subtitle
+    cta_label_key: back_to_feed
+    cta_action: navigate_back

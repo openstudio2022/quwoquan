@@ -1,0 +1,81 @@
+feature: works-immersive-viewer
+level: L3_subfeature
+template: A1-A5
+archived: false
+
+execution:
+  local_gate: make build && make test-contract
+  full_gate: make gate-full
+
+level_acceptance:
+  A1:
+    criteria: "垂直 PageView 强制分页，每次滑动切换一个完整作品；滑到底部时自动触发 appendNextPage，新内容追加到列表末尾"
+    status: pending
+    linked_tasks: [B2, B6]
+    tests: []
+
+  A2:
+    criteria: "手势角度过滤：drag 角度 < 45° 时子 Widget 水平手势优先，≥ 45° 时垂直换页；三类媒体的水平交互均不被垂直 PageView 拦截"
+    status: pending
+    linked_tasks: [B3]
+    tests: []
+
+  A3:
+    criteria: "屏幕左右边缘 15px 内的水平拖拽不被应用消费，iOS 系统返回手势可正常触发"
+    status: pending
+    linked_tasks: [B4]
+    tests: []
+
+  A4:
+    criteria: "进入作品轨时 worksForceDarkProvider 激活（背景色 #0A0E14），退出作品轨时恢复系统主题"
+    status: pending
+    linked_tasks: [B1]
+    tests: []
+
+  A5:
+    criteria: "Mock 模式下三类媒体（PhotoPostDto/VideoPostDto/ArticlePostDto）在垂直流中均可渲染，无报错"
+    status: pending
+    linked_tasks: [B5]
+    tests: []
+
+  A6:
+    criteria: "底部工具栏 action 组（赞/分享/收藏/评论）在同一设备上滚动到不同作品时位置严格不变；3 档位（compact/regular/expanded）响应式尺寸按预设参数渲染"
+    status: implemented
+    linked_tasks: [UI1]
+    tests: []
+
+  A7:
+    criteria: "关注按钮延迟显示：图片帖停留 3s 后显示，视频/文章帖停留 5s 后显示；已关注作者进入即同步显示；关注按钮从操作区左侧方向动画滑入（AnimatedSize.centerRight）"
+    status: implemented
+    linked_tasks: [UI2, UI3]
+    tests: []
+
+  A8:
+    criteria: "关注按钮可见且未关注状态：名字字号从 14 压缩到 12px，圈子名从 10 压缩到 9px（AnimatedDefaultTextStyle）；已关注状态不触发压缩；名字过长时用固定 18px ShaderMask 渐变遮挡，不出现 '...'"
+    status: implemented
+    linked_tasks: [UI4, UI5]
+    tests: []
+
+  A9:
+    criteria: "数字格式化：< 10 000 原值；10 000–99 999 显示 m.n万+（整数万省略小数）；≥ 100 000 显示 10万+；作品与微趣频道格式一致"
+    status: implemented
+    linked_tasks: [UI6]
+    tests: []
+
+  A10:
+    criteria: "一级 Tab（微趣/作品）字号与间距按档位自适应：compact 16px/12px，regular 18px/16px，expanded 20px/24px；无固定宽度约束"
+    status: implemented
+    linked_tasks: [UI7]
+    tests: []
+
+  A11:
+    criteria: "更多（⋯）按钮打开帖级操作面板：正向操作组（保存/收藏/分享/复制链接）、反馈组（不感兴趣/举报红色）、取消组，3 卡片布局，不打开助手对话"
+    status: implemented
+    linked_tasks: [UI8]
+    tests: []
+
+  A12:
+    criteria: "美图帖图片可水平滑动切换；水平滑动不触发垂直分页；渐变遮罩层不拦截手势"
+    status: implemented
+    linked_tasks: [UI10]
+    tests: []

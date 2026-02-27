@@ -1,0 +1,131 @@
+openapi: 3.0.3
+info:
+  title: quwoquan orchestrator-service API
+  version: "v1"
+servers:
+  - url: http://localhost
+security:
+  - bearerAuth: []
+paths:
+  /v1/orch/discovery/feed:
+    get:
+      summary: Aggregated discovery feed (orchestrated)
+      description: 聚合 User profileSnapshot、Ops 行为摘要（可选）与 Content 推荐结果，返回端侧可直接渲染的 feedItems。
+      parameters:
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [moment, photo, video, article]
+        - name: subCategory
+          in: query
+          required: false
+          schema:
+            type: string
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/Cursor
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/Limit
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/XPersonaId
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedPage"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+  /v1/orch/circles/{circleId}/activities:
+    get:
+      summary: Aggregated circle activities (orchestrated)
+      parameters:
+        - name: circleId
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/Cursor
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/Limit
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityPage"
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+components:
+  securitySchemes:
+    bearerAuth:
+      $ref: ../_shared/openapi_common.yaml#/components/securitySchemes/bearerAuth
+  schemas:
+    FeedPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/FeedItem"
+        nextCursor:
+          type: string
+          nullable: true
+    FeedItem:
+      type: object
+      required: [id, type]
+      properties:
+        id: { type: string }
+        type:
+          type: string
+          enum: [moment, image, video, article]
+        authorId: { type: string }
+        caption: { type: string }
+        images:
+          type: array
+          items: { type: string }
+        videoUrl: { type: string }
+        createdAt: { type: string }
+        counters:
+          type: object
+          additionalProperties: true
+        metadata:
+          type: object
+          additionalProperties: true
+    ActivityPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CircleActivity"
+        nextCursor:
+          type: string
+          nullable: true
+    CircleActivity:
+      type: object
+      required: [id, circleId, type]
+      properties:
+        id: { type: string }
+        circleId: { type: string }
+        type: { type: string }
+        title: { type: string }
+        status: { type: string }
+        metadata:
+          type: object
+          additionalProperties: true
+

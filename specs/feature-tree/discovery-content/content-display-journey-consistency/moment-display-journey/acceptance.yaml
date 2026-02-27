@@ -1,0 +1,13 @@
+version: 1
+feature: "moment-display-journey"
+level: "L3"
+template: "A1-A8"
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"
+level_acceptance:
+  A1: 列表、微趣详情、作者详情数据与 post 一致
+  A2: 关注/赞/收藏跨页面一致，重入后保持
+  A3: 作者详情关注变更返回同步
+  A4: 若有滑动，顺序与列表一致
+  A6: Mock/Remote 切换后正确

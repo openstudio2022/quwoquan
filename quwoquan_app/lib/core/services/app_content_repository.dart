@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/data/mock/prototype_mock_data.dart';
+import 'package:quwoquan_app/cloud/services/content/mock/content_mock_data.dart';
+import 'package:quwoquan_app/core/mock/prototype_mock_data.dart';
 
 enum AppDataSourceMode { mock, remote }
 
@@ -49,19 +50,19 @@ abstract class AppContentRepository {
 class MockAppContentRepository implements AppContentRepository {
   @override
   List<Map<String, dynamic>> get discoveryMomentData =>
-      PrototypeMockData.discoveryMomentData;
+      ContentMockData.discoveryMomentData;
 
   @override
   List<Map<String, dynamic>> get discoveryPhotoData =>
-      PrototypeMockData.discoveryPhotoData;
+      ContentMockData.discoveryPhotoData;
 
   @override
   List<Map<String, dynamic>> get discoveryArticleData =>
-      PrototypeMockData.discoveryArticleData;
+      ContentMockData.discoveryArticleData;
 
   @override
   List<Map<String, dynamic>> get discoveryVideoData =>
-      PrototypeMockData.discoveryVideoData;
+      ContentMockData.discoveryVideoData;
 
   @override
   Map<String, dynamic>? articleById(String id) => PrototypeMockData.articleById(id);

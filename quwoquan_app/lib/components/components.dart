@@ -3,12 +3,16 @@
 /// 组件模块统一导出门面
 /// 
 /// 提供应用中使用的所有通用组件，包括：
-/// - 帖子卡片组件（图片、视频、媒体）
-/// - 导航组件（标签导航、底部导航、子标签导航）
+/// - 内容卡片组件（图片、视频、媒体基类）
+/// - 导航组件（标签导航、子标签导航）
+/// - 助理组件（头像、悬浮球）
+/// - 输入组件（Emoji 选择器）
 /// - 媒体查看器组件（图片、视频、沉浸式）
 /// - 评论系统组件
 /// - 更多操作弹窗组件
-/// - 其他通用组件
+/// 
+/// 注意：底部导航（BottomNavigationWidget）已迁移至 lib/app/shell/，
+/// 由 MainAppShell 直接引用，不再通过此门面导出。
 /// 
 /// 使用示例：
 /// ```dart
@@ -24,16 +28,22 @@
 /// - 不依赖 features 模块（避免循环依赖）
 /// - 不依赖 app 模块（保持组件独立性）
 
-// ==================== 帖子卡片组件 ====================
-export 'image_post_card.dart';
-export 'video_post_card.dart';
-export 'media_post_card.dart';
+// ==================== 内容卡片组件 ====================
+export 'content/image_post_card.dart';
+export 'content/video_post_card.dart';
+export 'content/media_post_card.dart';
 
 // ==================== 导航组件 ====================
-export 'tab_navigation.dart';
-export 'centered_scrollable_tab_bar.dart';
-export 'bottom_navigation.dart';
+export 'navigation/tab_navigation.dart';
+export 'navigation/centered_scrollable_tab_bar.dart';
 export 'media/image/navigation/image_sub_tab_navigation.dart';
+
+// ==================== 助理组件 ====================
+export 'assistant/assistant_avatar.dart';
+export 'assistant/assistant_floating_ball.dart';
+
+// ==================== 输入组件 ====================
+export 'input/unified_emoji_picker.dart';
 
 // ==================== 媒体查看器组件 ====================
 export 'media/image/viewer/image_viewer.dart';
@@ -45,13 +55,8 @@ export 'media/shared/toolbar/media_viewer_toolbar.dart';
 export 'media/shared/viewer/media_assistant_panel.dart';
 export 'media/shared/viewer/media_caption_widgets.dart';
 
-// ==================== 内容区域组件 ====================
-export 'feed_section.dart';
-export 'post_list_section.dart';
-export 'stories_section.dart';
-
 // ==================== 用户相关组件 ====================
-export 'author_profile.dart';
+// AuthorProfile 已迁移至 lib/ui/user/pages/author_profile_page.dart
 
 // ==================== 评论系统组件 ====================
 export 'comment_system/comment_viewer.dart';

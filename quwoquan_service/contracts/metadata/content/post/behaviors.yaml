@@ -1,0 +1,181 @@
+version: 1
+aggregate: Post
+
+description: |
+  Post 实体的用户行为采集、推荐特征声明和训练样本 schema。
+  三块原散落于 _shared/types.yaml（枚举）、service.yaml（路由）、_projections/（ML schema）
+  的声明统一到此文件，由 codegen 生成：
+    - Dart:   ContentBehaviorTracker（批量缓冲 + auto-flush）
+    - Python: ContentFeatures + ContentTrainingSample（Pydantic BaseModel）
+
+# ── 一、用户行为事件 ────────────────────────────────────────────────────
+behavior_events:
+  - type: impression
+    description: 内容进入可视区域曝光
+    trigger: viewport_enter_50pct_100ms
+    batch: true
+    batch_route: POST /v1/content/behaviors
+    dart_method: trackImpression
+    payload_fields: [postId, contentType, feedPosition]
+    ml_signal: weak_positive
+
+  - type: dwell
+    description: 停留时长（视口内累计时长，单位毫秒）
+    trigger: viewport_exit_or_scroll_away
+    batch: true
+    batch_route: POST /v1/content/behaviors
+    dart_method: trackDwell
+    payload_fields: [postId, dwellMs, contentType]
+    ml_signal: strong_positive_if_gt_10s
+
+  - type: click
+    description: 点击内容卡片进入详情
+    trigger: tap_post_card
+    batch: false
+    batch_route: POST /v1/content/behaviors
+    dart_method: trackClick
+    payload_fields: [postId, contentType, feedPosition]
+    ml_signal: strong_positive
+
+  - type: dislike
+    description: 用户明确标记"不感兴趣"
+    trigger: user_action_long_press_or_menu
+    batch: true
+    batch_route: POST /v1/content/behaviors
+    dart_method: trackDislike
+    payload_fields: [postId, contentType]
+    ml_signal: explicit_negative
+
+  - type: share
+    description: 分享到外部/圈子
+    trigger: user_action_share_sheet
+    batch: true
+    batch_route: POST /v1/content/behaviors
+    dart_method: trackShare
+    payload_fields: [postId, contentType, shareTarget]
+    ml_signal: strong_positive
+
+  # like/favorite 走专用路由，不进 BehaviorTracker 批量队列
+  - type: like
+    description: 点赞（由 intent layer 处理，不走 BehaviorTracker）
+    dedicated_route: POST /v1/content/posts/{postId}/like
+    dart_method: null
+    ml_signal: explicit_positive
+
+  - type: favorite
+    description: 收藏（由 intent layer 处理，不走 BehaviorTracker）
+    dedicated_route: POST /v1/content/posts/{postId}/favorite
+    dart_method: null
+    ml_signal: explicit_positive
+
+  - type: comment
+    description: |
+      用户在内容下发表评论（由 intent layer 处理，走专用路由）。
+      评论是比点赞更强的深度互动信号：用户需主动输入，代表高兴趣度。
+      payload 额外携带 commentLength，供推荐侧判断内容吸引力（长评 > 短评）。
+    dedicated_route: POST /v1/content/posts/{postId}/comments
+    dart_method: null
+    payload_fields: [postId, contentType, commentLength]
+    ml_signal: very_strong_positive
+    notes: |
+      like/favorite/comment/report 四个显式行为均走专用路由，不进批量队列，
+      以保证实时性和幂等语义。commentLength 从评论完成事件回调中获取。
+
+  - type: report
+    description: 举报（由专用路由处理）
+    dedicated_route: POST /v1/content/posts/{postId}/report
+    dart_method: null
+    ml_signal: explicit_negative
+
+# ── 二、推荐特征声明 ────────────────────────────────────────────────────
+# 由 codegen_rec_model_python 生成 Python Pydantic ContentFeatures model
+# 特征权重由推荐服务内部决定，不在此声明
+recommend_features:
+  feature_group: content_features
+  update_trigger: PostCreated
+  python_class: ContentFeatures
+
+  features:
+    - name: content_type
+      source_field: contentType
+      type: categorical
+      python_type: str
+      description: 内容类型（image/video/micro/article）
+
+    - name: tag_count
+      source_field: tags
+      type: int
+      python_type: int
+      transform: list_length
+      description: 标签数量
+
+    - name: aspect_ratio
+      source_fields: [width, height]
+      type: float
+      python_type: "Optional[float]"
+      nullable: true
+      transform: "width / max(height, 1) if width and height else None"
+      description: 宽高比；未记录尺寸时为 null
+
+    - name: has_cover
+      source_field: coverUrl
+      type: bool
+      python_type: bool
+      transform: "bool(coverUrl)"
+      description: 是否有封面图
+
+    - name: body_length
+      source_field: body
+      type: int
+      python_type: int
+      transform: "len(body or '')"
+      description: 正文字符数
+
+    - name: engagement_rate_7d
+      type: float
+      python_type: float
+      derived: true
+      description: "(likeCount + commentCount) / max(viewCount, 1) 近7天，云侧计算"
+
+    - name: publish_hour
+      source_field: createdAt
+      type: int
+      python_type: int
+      transform: "createdAt.hour"
+      description: 发布时刻（0-23），用于时段偏好建模
+
+# ── 三、训练样本 schema ─────────────────────────────────────────────────
+# 由 codegen_rec_model_python 生成 Python Pydantic ContentTrainingSample model
+training_sample:
+  python_class: ContentTrainingSample
+  label_field: user_engaged
+  label_type: int                         # 1=正例，0=负例
+
+  positive_signals:
+    - type: comment
+      weight: 4                            # 评论为最强深度互动信号
+    - type: like
+      weight: 3
+    - type: favorite
+      weight: 3
+    - type: dwell
+      condition: dwellMs > 10000           # 停留超过10秒
+      weight: 2
+    - type: click
+      weight: 1
+
+  negative_signals:
+    - type: dislike
+      weight: 3
+    - type: report
+      weight: 5
+
+  context_fields:
+    - name: user_id
+      type: str
+    - name: session_id
+      type: str
+    - name: request_time_hour
+      type: int
+
+  item_features_ref: ContentFeatures      # 引用上面的特征 schema

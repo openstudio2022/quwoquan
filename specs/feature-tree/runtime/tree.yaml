@@ -1,6 +1,16 @@
 version: 1
 l1: runtime
 l2:
+  # ─── 客户端 App 平台基础设施层 ───
+  - feature: runtime-client-foundation
+    l3:
+      - feature: app-locale-infrastructure
+        l4:
+          - feature: arb-gen-l10n-string-extraction
+      - feature: app-theme-infrastructure
+        l4:
+          - feature: dark-light-token-switching
+
   # ─── 底座层：已有 runtime 能力组件 ───
   - feature: runtime-config
     l3:

@@ -1,0 +1,14 @@
+version: 1
+feature: "video-display-journey"
+level: "L3"
+template: "A1-A8"
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"
+level_acceptance:
+  A1: 列表、浏览器、作者详情数据与 post 一致
+  A2: 关注/赞/收藏跨页面一致，重入后保持
+  A3: 作者详情关注/取消后返回，浏览器展示更新
+  A4: 滑动顺序与列表一致，支持加载更多
+  A5: 能力与图片旅程一致
+  A6: Mock/Remote 切换后正确

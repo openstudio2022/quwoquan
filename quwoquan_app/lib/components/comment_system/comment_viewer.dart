@@ -3,8 +3,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
-import 'package:quwoquan_app/components/unified_emoji_picker.dart';
+import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
 export 'comment_viewer_modal.dart' show CommentViewer;
 
 
@@ -66,6 +67,7 @@ class _CommentInputState extends ConsumerState<CommentInput> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
     return Container(
+      key: TestKeys.commentInputBar,
       padding: CommentResponsive.getModalPadding(context),
       decoration: BoxDecoration(
         color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
@@ -183,6 +185,7 @@ class _CommentInputState extends ConsumerState<CommentInput> {
                 ),
               ),
               child: TextField(
+              key: TestKeys.commentTextField,
               controller: _controller,
               focusNode: _focusNode,
               enabled: widget.enabled && widget.config.canUserComment,
@@ -246,6 +249,7 @@ class _CommentInputState extends ConsumerState<CommentInput> {
                    widget.config.canUserComment;
     
     return GestureDetector(
+      key: TestKeys.submitCommentButton,
       onTap: canSend ? _onSubmit : null,
       child: Container(
         width: CommentResponsive.getCommentItemSize(context),

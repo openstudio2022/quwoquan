@@ -50,6 +50,19 @@ class CloudHttpClient {
     return _decodeBody(res.body, uri.path);
   }
 
+  Future<dynamic> deleteJson(
+    Uri uri, {
+    required Map<String, String> headers,
+  }) async {
+    final merged = await _mergeHeaders(headers);
+    final res = await _guardRequest(
+      () => _client.delete(uri, headers: merged).timeout(_timeout),
+    );
+    _guardStatus(res, uri.path);
+    if (res.body.isEmpty) return const <String, dynamic>{};
+    return _decodeBody(res.body, uri.path);
+  }
+
   Future<Map<String, String>> _mergeHeaders(Map<String, String> headers) async {
     final token = await _authTokenProvider.getAccessToken();
     if (token == null || token.isEmpty) return headers;

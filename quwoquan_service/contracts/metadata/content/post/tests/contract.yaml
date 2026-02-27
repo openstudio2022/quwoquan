@@ -1,0 +1,181 @@
+version: 1
+aggregate: Post
+layer: service_side
+
+description: |
+  云侧契约测试场景（从 service.yaml contract_test.service_side 迁出）。
+  服务只依赖自身，使用真实测试数据库，不 mock 存储层。
+  执行：go test ./services/content-service/...
+
+real_engines:
+  mongodb: testcontainers (mongo:7)
+  redis: miniredis/v2
+
+spy_targets: [event_publisher]
+mock_targets: [embedding_client, cross_service_clients, llm_client]
+
+data_management:
+  seed: 从 fields.yaml 生成 fixture 工厂（fixture.NewPost() 等）
+  cleanup: "collection.DeleteMany(ctx, bson.D{}) per test"
+  redis_cleanup: miniredis.FlushAll()
+
+# ── CRUD 场景 ────────────────────────────────────────────────────────
+scenarios:
+  - name: create_post_aggregate
+    go_func: TestCreatePostAggregate
+    command: CreatePost (image type)
+    seed: []
+    assertions:
+      - db.posts.FindOne({_id: result.id}) → document exists with correct fields
+      - db.media_assets.Find({postId: result.id}) → assets created
+      - eventSpy.AssertPublished("PostCreated", {_id, authorId, contentType, tags})
+      - embedding mock called with correct input fields
+
+  - name: create_post_all_types
+    go_func: TestCreatePostAllTypes
+    command: CreatePost
+    variants: [image, video, micro, article]
+    seed: []
+    assertions:
+      - each variant: db.posts.FindOne → contentType matches input
+      - each variant: eventSpy.AssertPublished("PostCreated")
+
+  - name: get_post_success
+    go_func: TestGetPostSuccess
+    command: GetPost
+    seed: [fixture.NewPost()]
+    assertions:
+      - response.postId == seeded.id
+      - response does not contain embedding field (privacy: never_expose)
+      - response does not contain moderationStatus (visibility: platform-ops only)
+
+  - name: get_post_not_found
+    go_func: TestGetPostNotFound
+    command: GetPost(nonExistentId)
+    seed: []
+    assertions:
+      - response.code == "CONTENT.USER.post_not_found"
+      - http_status == 404
+
+  - name: update_post_forbidden
+    go_func: TestUpdatePostForbidden
+    command: UpdatePost (wrong owner)
+    seed: [fixture.NewPost(authorId="user_a")]
+    caller: user_b
+    assertions:
+      - response.code == "CONTENT.USER.forbidden_edit"
+      - http_status == 403
+
+  - name: create_post_invalid_content_type
+    go_func: TestCreatePostInvalidContentType
+    command: CreatePost (contentType="invalid_type")
+    assertions:
+      - response.code == "CONTENT.USER.invalid_content_type"
+      - http_status == 400
+
+  # ── 互动计数场景 ──────────────────────────────────────────────────
+  - name: react_with_counter_strategy
+    go_func: TestReactWithCounterStrategy
+    command: LikePost
+    seed: [fixture.NewPost()]
+    assertions:
+      - db.content_reactions.FindOne({postId, userId}) → liked=true (upsert verified)
+      - miniredis.Get('counter:{postId}:like') → '1' (INCR verified)
+      - eventSpy.AssertPublished("ContentReacted", {postId, userId, liked: true})
+      - miniredis.Exists('cache:post:{postId}') → false (invalidated)
+
+  - name: react_idempotent
+    go_func: TestReactIdempotent
+    command: LikePost x2 on same post
+    seed: [fixture.NewPost()]
+    assertions:
+      - db.content_reactions.CountDocuments({postId, userId}) → exactly 1
+      - miniredis.Get('counter:{postId}:like') → '1' (not double counted)
+
+  - name: unlike_decrements_counter
+    go_func: TestUnlikeDecrementsCounter
+    command: LikePost then UnlikePost
+    seed: [fixture.NewPost()]
+    setup:
+      - LikePost to establish baseline
+    assertions:
+      - db.content_reactions.FindOne → liked=false
+      - miniredis.Get('counter:{postId}:like') → '0' (or not exist)
+      - eventSpy.AssertPublished("ContentReacted", {liked: false})
+
+  # ── 评论场景 ──────────────────────────────────────────────────────
+  - name: comment_with_notification
+    go_func: TestCommentWithNotification
+    command: CreateComment
+    seed: [fixture.NewPost()]
+    assertions:
+      - db.comments.FindOne({_id: result.id}) → document with correct postId + authorId
+      - db.posts.FindOne({_id: postId}).commentCount → incremented by 1
+      - eventSpy.AssertPublished("CommentCreated", {postId, authorId, content})
+
+  - name: comment_list_pagination
+    go_func: TestCommentListPagination
+    command: ListComments with cursor pagination
+    seed: [fixture.NewPost(), fixture.NewComments(count=25)]
+    assertions:
+      - first page: len(comments) == 20 (default limit)
+      - cursor present in response
+      - second page using cursor: len(comments) == 5
+      - no overlap between pages
+
+  # ── Feed 场景 ─────────────────────────────────────────────────────
+  - name: get_feed_by_type
+    go_func: TestGetFeedByType
+    command: GetFeed (type=image)
+    seed: [fixture.NewPosts(count=10, contentType=image), fixture.NewPosts(count=5, contentType=video)]
+    assertions:
+      - response.items all have contentType=image
+      - response.items.length == 10
+      - cursor present
+
+  - name: get_feed_cursor_pagination
+    go_func: TestGetFeedCursorPagination
+    command: GetFeed with cursor
+    seed: [fixture.NewPosts(count=30, contentType=image)]
+    assertions:
+      - first page: 20 items, cursor present
+      - second page using cursor: 10 items, no duplicate
+
+  # ── 行为上报场景 ──────────────────────────────────────────────────
+  - name: behavior_batch_report
+    go_func: TestBehaviorBatchReport
+    command: ReportBehaviors (batch of impression+dwell+click)
+    assertions:
+      - http_status == 200
+      - response.status == "ok"
+      - response.accepted == 3
+
+  - name: behavior_batch_empty
+    go_func: TestBehaviorBatchEmpty
+    command: ReportBehaviors (empty events array)
+    assertions:
+      - response.code == "CONTENT.USER.invalid_argument"
+      - http_status == 400
+
+  # ── 计数回写场景 ──────────────────────────────────────────────────
+  - name: counter_flush
+    go_func: TestCounterFlush
+    status: pending
+    command: FlushCounters (timer-triggered)
+    seed: [fixture.NewPost()]
+    setup:
+      - miniredis.Set('counter:{postId}:like', '42')
+    assertions:
+      - db.posts.FindOne({_id}).likeCount → 42 (flushed from Redis)
+      - miniredis.Exists('counter:{postId}:like') → false or reset
+
+  # ── 内容审核流转场景 ──────────────────────────────────────────────
+  - name: post_moderation_flow
+    go_func: TestPostModerationFlow
+    status: pending
+    command: ModeratePost (pending → approved → rejected)
+    seed: [fixture.NewPost(moderationStatus=pending)]
+    assertions:
+      - after approve: db.posts.FindOne.moderationStatus → 'approved'
+      - after reject: db.posts.FindOne.moderationStatus → 'rejected'
+      - eventSpy.AssertPublished("ContentModerated") for each transition

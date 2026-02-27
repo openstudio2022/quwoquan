@@ -1,0 +1,62 @@
+version: 1
+aggregate: UserProfile
+
+description: |
+  UserProfile 实体隐私与安全策略。
+  补充 fields.yaml classification 的端侧实现细节和 GDPR 数据生命周期。
+  codegen 从本文件生成 Dart UserPrivacyPolicy.sanitizeForLog()。
+
+# ── 端侧 app 日志字段过滤策略 ──────────────────────────────────────────
+app_log_policy:
+  - field: phone
+    classification: PII
+    app_log: drop
+    description: "手机号不记录任何日志"
+
+  - field: email
+    classification: PII
+    app_log: mask
+    mask_strategy: email_domain_only
+    description: "仅记录邮箱域名，如 ***@gmail.com"
+
+  - field: birthday
+    classification: PII
+    app_log: drop
+    description: "生日不记录日志"
+
+  - field: location
+    classification: PII
+    app_log: mask
+    mask_strategy: city_level_only
+
+  - field: bio
+    classification: PUBLIC
+    app_log: drop_if_gt_100chars
+
+# ── 数据生命周期（GDPR）─────────────────────────────────────────────────
+data_lifecycle:
+  retention_days: 3650
+  deletion_on_user_request: true
+  deletion_cascade:
+    - entity: Persona
+      strategy: hard_delete
+    - entity: UserAuth
+      strategy: hard_delete
+    - entity: UserDevice
+      strategy: hard_delete
+    - entity: UserSettings
+      strategy: hard_delete
+    - entity: ProfileUpdateProposal
+      strategy: hard_delete
+
+# ── 字段暴露范围 ─────────────────────────────────────────────────────────
+field_visibility:
+  - field: phone
+    visibility: [user-service-internal]
+    description: "手机号只在服务内部使用，不经过任何 API 暴露"
+  - field: email
+    visibility: [user-service-internal]
+  - field: birthday
+    visibility: [self, user-service-internal]
+  - field: gender
+    visibility: [self, platform-ops]

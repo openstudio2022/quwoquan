@@ -24,30 +24,50 @@ REQUIRED_FILES="aggregate.yaml entity.yaml fields.yaml events.yaml storage.yaml 
 AGGREGATE_OR_ENTITY="aggregate.yaml entity.yaml"
 OTHER_REQUIRED="fields.yaml events.yaml storage.yaml service.yaml"
 
-for dir in "$BASE"/*; do
-  [[ -d "$dir" ]] || continue
-  name="$(basename "$dir")"
-  [[ "$name" == _shared ]] && continue
-  [[ "$name" == _projections ]] && continue
-  [[ "$name" == _vectors ]] && continue
+_verify_entity_dir() {
+  local dir="$1"
+  local name="$2"
+  local has_agg=0 has_entity=0
 
-  has_agg=0
-  has_entity=0
-  if [[ -f "${dir}/aggregate.yaml" ]]; then has_agg=1; fi
-  if [[ -f "${dir}/entity.yaml" ]]; then has_entity=1; fi
+  [[ -f "${dir}/aggregate.yaml" ]] && has_agg=1
+  [[ -f "${dir}/entity.yaml" ]] && has_entity=1
+
   if (( has_agg + has_entity != 1 )); then
     echo "[verify] FAIL: $name must have exactly one of aggregate.yaml or entity.yaml"
     exit 1
   fi
 
   for f in fields.yaml events.yaml storage.yaml service.yaml; do
-    p="${dir}/${f}"
+    local p="${dir}/${f}"
     if [[ ! -f "$p" ]]; then
       echo "[verify] FAIL: missing $p"
       exit 1
     fi
     ruby -ryaml -e "YAML.load_file('$p')" || { echo "[verify] FAIL: invalid YAML $p"; exit 1; }
   done
+}
+
+for dir in "$BASE"/*; do
+  [[ -d "$dir" ]] || continue
+  name="$(basename "$dir")"
+  # Skip reserved/shared prefixes
+  [[ "$name" == _* ]] && continue
+  # Skip root-level non-entity files we added (entity_catalog, field_policy, etc.)
+  [[ -f "$dir" ]] && continue
+
+  # Domain container: no aggregate.yaml/entity.yaml at this level → recurse one level
+  if [[ ! -f "${dir}/aggregate.yaml" ]] && [[ ! -f "${dir}/entity.yaml" ]]; then
+    for sub in "${dir}"/*; do
+      [[ -d "$sub" ]] || continue
+      subname="$(basename "$sub")"
+      [[ "$subname" == _* ]] && continue
+      _verify_entity_dir "$sub" "$name/$subname"
+    done
+    continue
+  fi
+
+  # Entity at top level (legacy/flat layout)
+  _verify_entity_dir "$dir" "$name"
 done
 
 # 3) Optional: _projections and _vectors (syntax only if present)

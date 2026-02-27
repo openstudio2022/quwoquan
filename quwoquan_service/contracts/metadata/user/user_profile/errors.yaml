@@ -1,0 +1,87 @@
+version: 1
+domain: USER
+aggregate: UserProfile
+
+description: |
+  user 域结构化错误码声明。格式：MODULE.KIND.REASON。
+  codegen 从本文件生成 Dart UserErrorCode enum + UserErrorMessages，
+  以及 Go errors.go 常量（绑定 runtime/errors.AppError）。
+
+errors:
+  - code: USER.USER.not_found
+    kind: USER
+    reason: not_found
+    http_status: 404
+    retryable: false
+    dart_const: userNotFound
+    go_const: ErrUserNotFound
+    user_message:
+      zh: "用户不存在"
+      en: "User not found"
+
+  - code: USER.USER.unauthorized
+    kind: USER
+    reason: unauthorized
+    http_status: 401
+    retryable: false
+    dart_const: unauthorized
+    go_const: ErrUnauthorized
+    user_message:
+      zh: "请先登录"
+      en: "Please sign in to continue"
+
+  - code: USER.USER.forbidden
+    kind: USER
+    reason: forbidden
+    http_status: 403
+    retryable: false
+    dart_const: forbidden
+    go_const: ErrForbidden
+    user_message:
+      zh: "无权访问该资源"
+      en: "Access denied"
+
+  - code: USER.USER.nickname_taken
+    kind: USER
+    reason: conflict
+    http_status: 409
+    retryable: false
+    dart_const: nicknameTaken
+    go_const: ErrNicknameTaken
+    user_message:
+      zh: "该昵称已被使用，请换一个"
+      en: "Nickname already taken, please choose another"
+
+  - code: USER.USER.invalid_argument
+    kind: USER
+    reason: invalid_argument
+    http_status: 400
+    retryable: false
+    dart_const: invalidArgument
+    go_const: ErrInvalidArgument
+    user_message:
+      zh: "请求参数有误"
+      en: "Invalid request parameters"
+
+  - code: USER.USER.rate_limited
+    kind: USER
+    reason: rate_limited
+    http_status: 429
+    retryable: true
+    retry_after_seconds: 60
+    dart_const: rateLimited
+    go_const: ErrRateLimited
+    user_message:
+      zh: "操作太频繁，请稍后重试"
+      en: "Too many requests, please retry later"
+
+  - code: USER.SYSTEM.internal_error
+    kind: SYSTEM
+    reason: internal_error
+    http_status: 500
+    retryable: false
+    dart_const: internalError
+    go_const: ErrInternalError
+    user_message:
+      zh: "服务异常，请稍后重试"
+      en: "Service error, please try again later"

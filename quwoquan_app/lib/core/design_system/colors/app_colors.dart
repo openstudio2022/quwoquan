@@ -37,6 +37,26 @@ class AppColors {
   static const Color welcomeTitleGradientMid = Color(0xFF67E8F9); // cyan-300
   static const Color welcomeTitleGradientEnd = Color(0xFFC084FC); // purple-400
 
+  // ==================== 作品频道专用色 ====================
+  /// 墨浆蓝 #0A0E14 — 作品频道背景（强制深色）
+  static const Color worksBackground = Color(0xFF0A0E14);
+  /// 克莱因蓝 #002FA7 — 品牌主调
+  static const Color worksBrand = Color(0xFF002FA7);
+  /// 品牌蓝深色变体 #4A8BF5 — 深色背景上的强调色
+  static const Color worksAccent = Color(0xFF4A8BF5);
+  /// 银灰 #B8C0CC — 文章正文色
+  static const Color worksBodyText = Color(0xFFB8C0CC);
+  /// 近白 #E8EDF3 — 文章标题/主文字
+  static const Color worksTitle = Color(0xFFE8EDF3);
+  /// 暗灰 #6B7585 — 图注/次要信息
+  static const Color worksCaption = Color(0xFF6B7585);
+  /// 毛玻璃抽屉底色（带蓝色倾向）
+  static const Color worksDrawerBg = Color(0xFF0D1523);
+  /// 作品频道 — 点赞激活色（暗玫瑰，降低饱和度避免在深色背景过度刺眼）
+  static const Color worksLike = Color(0xFFD94F6A);
+  /// 作品频道 — 收藏激活色（琥珀棕，业界通行星标色调）
+  static const Color worksSave = Color(0xFFE0A850);
+
   /// 聊天页专用（1:1 图一）：对话区域背景、气泡色
   static const Color chatBackground = Color(0xFFF5F5F5);
   static const Color chatBubbleIncoming = Color(0xFFFFFFFF);

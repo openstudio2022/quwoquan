@@ -1,0 +1,63 @@
+version: 1
+domain: CIRCLE
+aggregate: Circle
+
+description: |
+  circle 域结构化错误码声明。格式：MODULE.KIND.REASON。
+
+errors:
+  - code: CIRCLE.USER.not_found
+    kind: USER
+    reason: not_found
+    http_status: 404
+    retryable: false
+    dart_const: circleNotFound
+    go_const: ErrCircleNotFound
+    user_message:
+      zh: "圈子不存在"
+      en: "Circle not found"
+
+  - code: CIRCLE.USER.join_approval_required
+    kind: USER
+    reason: forbidden
+    http_status: 403
+    retryable: false
+    dart_const: joinApprovalRequired
+    go_const: ErrJoinApprovalRequired
+    user_message:
+      zh: "该圈子需要审批才能加入"
+      en: "This circle requires approval to join"
+
+  - code: CIRCLE.USER.already_member
+    kind: USER
+    reason: conflict
+    http_status: 409
+    retryable: false
+    dart_const: alreadyMember
+    go_const: ErrAlreadyMember
+    user_message:
+      zh: "您已经是该圈子成员"
+      en: "You are already a member of this circle"
+
+  - code: CIRCLE.USER.rate_limited
+    kind: USER
+    reason: rate_limited
+    http_status: 429
+    retryable: true
+    retry_after_seconds: 60
+    dart_const: rateLimited
+    go_const: ErrRateLimited
+    user_message:
+      zh: "操作太频繁，请稍后重试"
+      en: "Too many requests, please retry later"
+
+  - code: CIRCLE.SYSTEM.internal_error
+    kind: SYSTEM
+    reason: internal_error
+    http_status: 500
+    retryable: false
+    dart_const: internalError
+    go_const: ErrInternalError
+    user_message:
+      zh: "服务异常，请稍后重试"
+      en: "Service error, please try again"

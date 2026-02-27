@@ -1,0 +1,65 @@
+version: 1
+domain: CHAT
+aggregate: Conversation
+
+description: |
+  chat 域结构化错误码声明。格式：MODULE.KIND.REASON。
+  codegen 从本文件生成 Dart ChatErrorCode enum + ChatErrorMessages，
+  以及 Go errors.go 常量。
+
+errors:
+  - code: CHAT.USER.conversation_not_found
+    kind: USER
+    reason: not_found
+    http_status: 404
+    retryable: false
+    dart_const: conversationNotFound
+    go_const: ErrConversationNotFound
+    user_message:
+      zh: "会话不存在"
+      en: "Conversation not found"
+
+  - code: CHAT.USER.unauthorized
+    kind: USER
+    reason: unauthorized
+    http_status: 401
+    retryable: false
+    dart_const: unauthorized
+    go_const: ErrUnauthorized
+    user_message:
+      zh: "请先登录"
+      en: "Please sign in"
+
+  - code: CHAT.USER.message_too_long
+    kind: USER
+    reason: invalid_argument
+    http_status: 400
+    retryable: false
+    dart_const: messageTooLong
+    go_const: ErrMessageTooLong
+    user_message:
+      zh: "消息内容超出长度限制"
+      en: "Message exceeds length limit"
+
+  - code: CHAT.USER.rate_limited
+    kind: USER
+    reason: rate_limited
+    http_status: 429
+    retryable: true
+    retry_after_seconds: 5
+    dart_const: rateLimited
+    go_const: ErrRateLimited
+    user_message:
+      zh: "发送太频繁，请稍后重试"
+      en: "Sending too frequently, please wait"
+
+  - code: CHAT.SYSTEM.internal_error
+    kind: SYSTEM
+    reason: internal_error
+    http_status: 500
+    retryable: false
+    dart_const: internalError
+    go_const: ErrInternalError
+    user_message:
+      zh: "消息服务异常，请稍后重试"
+      en: "Chat service error, please try again"

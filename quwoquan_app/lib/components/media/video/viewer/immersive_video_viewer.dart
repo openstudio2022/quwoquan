@@ -15,6 +15,7 @@ import 'package:quwoquan_app/components/more_actions_popup/more_action_popup.dar
 import 'package:quwoquan_app/components/media/shared/toolbar/media_viewer_toolbar.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/media_assistant_panel.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/media_caption_widgets.dart';
+import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 
 /// 沉浸式视频查看器 - 基于Figma原型实现
 /// 支持与作者主页、评论和帖子的完整联动
@@ -23,20 +24,20 @@ class ImmersiveVideoViewer extends ConsumerStatefulWidget {
   final VoidCallback onClose;
   final List<MediaItem> mediaItems;
   final int initialIndex;
-  final List<dynamic> posts;
+  final List<PostSummaryView> posts;
   final int initialPostIndex;
-  final Function(String) onUserClick;
+  final void Function(String username, {String? avatarUrl, String? displayName, String? backgroundUrl}) onUserClick;
   final Function(String, bool)? onFollowClick;
-  final Function(dynamic)? onCommentsClick;
-  final Function(dynamic)? onMoreClick;
-  final Function(dynamic)? onLikeClick;
-  final Function(dynamic)? onSaveClick;
-  final Function(dynamic)? onShareClick;
+  final Function(PostSummaryView)? onCommentsClick;
+  final Function(PostSummaryView)? onMoreClick;
+  final Function(PostSummaryView)? onLikeClick;
+  final Function(PostSummaryView)? onSaveClick;
+  final Function(PostSummaryView)? onShareClick;
   final Set<String>? followingUsers;
   final Set<String>? savedPosts;
   final Set<String>? likedPosts;
-  final Function(dynamic)? getPostLikesCount;
-  final Function(dynamic)? getPostBookmarksCount;
+  final Function(PostSummaryView)? getPostLikesCount;
+  final Function(PostSummaryView)? getPostBookmarksCount;
   final bool isBlocked;
   final String? source; // 'feed' | 'userProfile'
   final Map<String, dynamic>? userProfileData;
@@ -47,6 +48,8 @@ class ImmersiveVideoViewer extends ConsumerStatefulWidget {
   final Function(String)? onHeroAnimationComplete;
   /// 私人助理入口（中间图标，点击跳转助理主页）
   final VoidCallback? onAssistantClick;
+  /// 滑动接近末尾时回调（用于加载更多）
+  final VoidCallback? onNearEnd;
 
   const ImmersiveVideoViewer({
     super.key,
@@ -77,6 +80,7 @@ class ImmersiveVideoViewer extends ConsumerStatefulWidget {
     this.heroAnimationSource,
     this.onHeroAnimationComplete,
     this.onAssistantClick,
+    this.onNearEnd,
   });
 
   @override
@@ -148,6 +152,7 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.likedPosts != widget.likedPosts ||
         oldWidget.savedPosts != widget.savedPosts ||
+        oldWidget.followingUsers != widget.followingUsers ||
         oldWidget.getPostLikesCount != widget.getPostLikesCount ||
         oldWidget.getPostBookmarksCount != widget.getPostBookmarksCount) {
       _initializePostState();
@@ -157,13 +162,16 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
   void _initializePostState() {
     if (widget.posts.isNotEmpty && _currentPostIndex < widget.posts.length) {
       final currentPost = widget.posts[_currentPostIndex];
-      _isLiked = widget.likedPosts?.contains(currentPost['id']?.toString()) ?? false;
-      _isSaved = widget.savedPosts?.contains(currentPost['id']?.toString()) ?? false;
-      _isFollowing = widget.followingUsers?.contains(currentPost['username']) ?? false;
+      _isLiked = widget.likedPosts?.contains(currentPost.id) ?? false;
+      _isSaved = widget.savedPosts?.contains(currentPost.id) ?? false;
+      final followKey = currentPost.authorId;
+      _isFollowing = followKey.isNotEmpty
+          ? (widget.followingUsers?.contains(followKey) ?? false)
+          : false;
       _likesCount = widget.getPostLikesCount?.call(currentPost) ?? 0;
       _savesCount = widget.getPostBookmarksCount?.call(currentPost) ?? 0;
-      _commentsCount = currentPost['commentsCount'] ?? 0;
-      _sharesCount = currentPost['sharesCount'] ?? currentPost['shareCount'] ?? 0;
+      _commentsCount = currentPost.commentsCount;
+      _sharesCount = currentPost.sharesCount;
     }
   }
 
@@ -237,6 +245,11 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
       _currentPostIndex = index;
     });
     _initializePostState();
+    if (widget.onNearEnd != null &&
+        widget.posts.length > 1 &&
+        index >= widget.posts.length - 2) {
+      widget.onNearEnd!();
+    }
   }
 
   void _handleLikeClick() {
@@ -275,9 +288,8 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
       setState(() {
         _isFollowing = !_isFollowing;
       });
-      final username = currentPost['username']?.toString() ??
-          currentPost['publisher']?['username']?.toString();
-      if (username == null || username.isEmpty) return;
+      final username = currentPost.authorId;
+      if (username.isEmpty) return;
       widget.onFollowClick?.call(username, _isFollowing);
     }
   }
@@ -291,7 +303,7 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
 
       CommentViewer.showModal(
         context: context,
-        postId: currentPost['id'] ?? 'mock_post_id',
+        postId: currentPost.id.isNotEmpty ? currentPost.id : 'mock_post_id',
         initialComments: [],
         config: commentConfig,
         modalHeight: CommentModalHeight.adaptive,
@@ -324,11 +336,11 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
       // 显示更多操作弹窗（1:1 PostActionSheet：复制链接、保存、举报等）
       final config = MediaPostMoreActionConfig(
         post: currentPost,
-        onReward: () => debugPrint('Reward post: ${currentPost['id']}'),
+        onReward: () => debugPrint('Reward post: ${currentPost.id}'),
         onSave: () => _handleSaveClick(),
-        onMessage: () => debugPrint('Message user: ${currentPost['username']}'),
+        onMessage: () => debugPrint('Message user: ${currentPost.authorId}'),
         onCopyLink: () {
-          final link = 'https://quwoquan.app/post/${currentPost['id'] ?? ''}';
+          final link = 'https://quwoquan.app/post/${currentPost.id}';
           Clipboard.setData(ClipboardData(text: link));
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -336,13 +348,13 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
             );
           }
         },
-        onViewOriginal: () => debugPrint('View original: ${currentPost['id']}'),
+        onViewOriginal: () => debugPrint('View original: ${currentPost.id}'),
         onFontSettings: () => debugPrint('Font settings'),
         onThemeToggle: () => debugPrint('Theme toggle'),
         onFeedback: () => debugPrint('Feedback'),
         onNotInterested: () => debugPrint('Not interested'),
-        onBlockUser: () => debugPrint('Block user: ${currentPost['username']}'),
-        onReport: () => debugPrint('Report post: ${currentPost['id']}'),
+        onBlockUser: () => debugPrint('Block user: ${currentPost.authorId}'),
+        onReport: () => debugPrint('Report post: ${currentPost.id}'),
       );
 
       MoreActionPopup.show(
@@ -366,10 +378,10 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
     _showAssistantPanel(currentPost);
   }
 
-  void _showAssistantPanel(dynamic post) {
+  void _showAssistantPanel(PostSummaryView? post) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final suggestions = _buildAssistantSuggestions(post);
-    final contextId = post?['id']?.toString() ?? 'media-viewer';
+    final contextId = post?.id.isNotEmpty == true ? post!.id : 'media-viewer';
     AssistantChatStore.normalizeMessages();
     final summaryText = AssistantChatStore.buildSummary(
       contextId: contextId,
@@ -408,7 +420,7 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
     );
   }
 
-  List<String> _buildAssistantSuggestions(dynamic post) {
+  List<String> _buildAssistantSuggestions(PostSummaryView? post) {
     final suggestions = <String>[
       UITextConstants.assistantAskAboutSummary,
       UITextConstants.assistantAskAboutRecommendations,
@@ -444,10 +456,17 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
   void _handleAuthorTap() {
     if (widget.posts.isEmpty || _currentPostIndex >= widget.posts.length) return;
     final currentPost = widget.posts[_currentPostIndex];
-    final username = currentPost['username']?.toString() ??
-        currentPost['publisher']?['username']?.toString();
-    if (username == null || username.isEmpty) return;
-    widget.onUserClick(username);
+    final username = currentPost.authorId;
+    if (username.isEmpty) return;
+    final avatarUrl = currentPost.avatarUrl;
+    final displayName = currentPost.displayName;
+    final backgroundUrl = currentPost.backgroundImage;
+    widget.onUserClick(
+      username,
+      avatarUrl: avatarUrl.isEmpty ? null : avatarUrl,
+      displayName: displayName.isEmpty ? null : displayName,
+      backgroundUrl: (backgroundUrl ?? '').isEmpty ? null : backgroundUrl,
+    );
   }
 
   void _resolveImageAspectRatio(String imageUrl) {
@@ -464,32 +483,28 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
     );
   }
 
-  String _getPostTitle(dynamic post) {
-    final title = post?['title'];
-    return title?.toString() ?? '';
+  String _getPostTitle(PostSummaryView? post) {
+    return post?.title ?? '';
   }
 
-  String _getPostCaption(dynamic post) {
-    final content = post?['content'] ?? post?['caption'];
-    return content?.toString() ?? '';
+  String _getPostCaption(PostSummaryView? post) {
+    return post?.body ?? '';
   }
 
-  String _getAuthorName(dynamic post) {
-    return post?['displayName']?.toString() ??
-        post?['username']?.toString() ??
-        post?['publisher']?['displayName']?.toString() ??
-        post?['publisher']?['username']?.toString() ??
-        UITextConstants.unknownUser;
+  String _getAuthorName(PostSummaryView? post) {
+    if (post == null) return UITextConstants.unknownUser;
+    final name = post.author.name;
+    return name.isNotEmpty ? name : UITextConstants.unknownUser;
   }
 
-  String? _getAuthorAvatar(dynamic post) {
-    return post?['avatar']?.toString() ??
-        post?['publisher']?['avatar']?.toString();
+  String? _getAuthorAvatar(PostSummaryView? post) {
+    final avatar = post?.avatarUrl ?? post?.author.avatar;
+    return avatar?.isEmpty == true ? null : avatar;
   }
 
   Widget _buildMediaPage(
     BuildContext context,
-    dynamic post,
+    PostSummaryView post,
     MediaItem mediaItem,
     bool isDark,
     bool isActive,
@@ -499,7 +514,7 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
     final caption = _getPostCaption(post);
     final hasTextLayout = title.isNotEmpty || caption.isNotEmpty;
     final shouldShowCaption = showCaption && hasTextLayout;
-    final postId = post?['id']?.toString() ?? '';
+    final postId = post.id;
     final isExpanded = _expandedCaptions[postId] ?? false;
     final imageUrl = mediaItem.url;
 
@@ -602,7 +617,7 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
 
   Widget _buildMediaContent(
     BuildContext context,
-    dynamic post,
+    PostSummaryView post,
     MediaItem mediaItem,
     bool isActive,
   ) {
@@ -647,7 +662,7 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
         minScale: PhotoViewComputedScale.contained,
         maxScale: PhotoViewComputedScale.covered * 2.0,
         heroAttributes: PhotoViewHeroAttributes(
-          tag: 'photo_${post['id']}_${mediaItem.url}',
+          tag: 'photo_${post.id}_${mediaItem.url}',
         ),
         onTapDown: (context, details, controllerValue) {
           _toggleControls();
@@ -699,9 +714,9 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
                   ? widget.mediaItems[index % widget.mediaItems.length]
                   : MediaItem(
                       type: ContentTypeConstants.image,
-                      url: (post?['images'] is List && (post['images'] as List).isNotEmpty)
-                          ? (post['images'] as List).first.toString()
-                          : (post?['imageUrl']?.toString() ?? ''),
+                      url: (post.images?.isNotEmpty == true)
+                          ? post.images!.first
+                          : (post.thumbnailUrl ?? post.coverUrl ?? ''),
                     );
               return _buildMediaPage(
                 context,

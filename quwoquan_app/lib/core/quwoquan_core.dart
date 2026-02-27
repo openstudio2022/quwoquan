@@ -32,10 +32,10 @@ export 'design_system/providers/theme_provider.dart';
 export 'providers/app_providers.dart';
 export 'package:quwoquan_app/app/providers/app_state_provider.dart';
 export 'package:quwoquan_app/app/providers/accessibility_provider.dart';
-export 'package:quwoquan_app/features/home/providers/video_force_dark_provider.dart'
+export 'package:quwoquan_app/ui/discovery/providers/video_force_dark_provider.dart'
     show VideoForceDarkState, VideoForceDarkNotifier, videoForceDarkProvider,
         BottomNavHiddenState, BottomNavHiddenNotifier, bottomNavHiddenProvider;
-export 'package:quwoquan_app/features/home/providers/home_state.dart';
+export 'package:quwoquan_app/ui/discovery/providers/discovery_state.dart';
 
 // Services
 export 'services/data_service.dart';
@@ -43,7 +43,7 @@ export 'services/app_content_repository.dart';
 export 'services/assistant_chat_store.dart';
 
 // Models
-export 'package:quwoquan_app/features/home/models/post_models.dart';
-export 'package:quwoquan_app/features/home/models/story_models.dart';
-export 'package:quwoquan_app/features/home/models/user_models.dart';
+export 'package:quwoquan_app/core/models/post_models.dart';
+export 'package:quwoquan_app/core/models/story_models.dart';
+export 'package:quwoquan_app/core/models/user_models.dart';
 

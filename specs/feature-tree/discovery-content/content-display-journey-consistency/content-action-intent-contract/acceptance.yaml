@@ -1,0 +1,16 @@
+version: 1
+feature: "content-action-intent-contract"
+level: "L3_subfeature"
+template: "A1-A8"
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"
+level_acceptance:
+  A1: user_profile/service.yaml 含 FollowUser（POST）和 UnfollowUser（DELETE）路由，make verify 通过
+  A2: UserRepository Abstract 接口含 followUser/unfollowUser，MockUserRepository 和 RemoteUserRepository 均已实现
+  A3: ContentIntentNotifier.like/save 调用后，HomeState.likedPosts/savedPosts 立即反映（无需等待 API）
+  A4: UserIntentNotifier.follow/unfollow 调用后，HomeState.followingUsers 立即反映
+  A5: 模拟 ContentRepository/UserRepository API 失败时，HomeState 回滚到操作前状态
+  A6: contentIntentProvider 和 userIntentProvider 在 intent_providers.dart 注册，可通过 ref.read 访问
+  A7: content_intent_test.dart 覆盖乐观更新 + 回滚四个场景，全部通过
+  A8: make gate 通过（metadata 一致性 + 结构约束检查）

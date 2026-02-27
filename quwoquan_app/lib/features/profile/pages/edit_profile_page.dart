@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/components/unified_emoji_picker.dart';
+import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
 
 /// 编辑资料页（1:1 对应 EditProfilePage.tsx）
 /// 路由：/profile/edit

@@ -1,40 +1,36 @@
-version: 1
+# Log KV Policy — root aggregator for cross-cutting log field strategies
 policies:
-  - model: Message
-    operation: create
+  - model: content-service
+    operation: POST /v1/content/posts
+    input:
+      - key: contentType
+        strategy: plain
+      - key: authorId
+        strategy: hash
+    output:
+      - key: _id
+        strategy: plain
+      - key: contentType
+        strategy: plain
+
+  - model: content-service
+    operation: GET /v1/content/feed
+    input:
+      - key: type
+        strategy: plain
+      - key: limit
+        strategy: plain
+    output:
+      - key: items.length
+        strategy: plain
+
+  - model: messages-service
+    operation: POST /v1/chat/messages
     input:
       - key: conversationId
-        strategy: allow
-      - key: content
-        strategy: mask
-      - key: attachmentsCount
-        strategy: allow
+        strategy: plain
+      - key: senderId
+        strategy: hash
     output:
-      - key: messageId
-        strategy: allow
-      - key: sendStatus
-        strategy: allow
-  - model: AssistantRun
-    operation: create
-    input:
-      - key: prompt
-        strategy: mask
-      - key: personaId
-        strategy: allow
-    output:
-      - key: runId
-        strategy: allow
-      - key: modelVersion
-        strategy: allow
-  - model: DiscoveryFeed
-    operation: list
-    input:
-      - key: cursor
-        strategy: allow
-      - key: limit
-        strategy: allow
-    output:
-      - key: nextCursor
-        strategy: allow
-      - key: itemsCount
-        strategy: allow
+      - key: _id
+        strategy: plain

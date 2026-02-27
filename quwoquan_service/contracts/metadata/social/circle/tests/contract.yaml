@@ -1,0 +1,34 @@
+version: 1
+aggregate: Circle
+layer: service_side
+
+description: |
+  云侧契约测试场景（真实 MongoDB + Redis）。
+  执行：go test ./services/circle-service/...
+
+real_engines:
+  mongodb: testcontainers (mongo:7)
+  redis: miniredis/v2
+
+spy_targets: [event_publisher]
+mock_targets: [cross_service_clients]
+
+scenarios:
+  - name: join_circle_open
+    command: JoinCircle (open policy)
+    assertions:
+      - circle_member_created
+      - circle_member_count_incremented
+      - event_CircleMemberJoined_published
+
+  - name: join_circle_idempotent
+    command: JoinCircle x2
+    assertions:
+      - member_count_exactly_1
+      - error_CIRCLE.USER.already_member_on_second
+
+  - name: leave_circle
+    command: LeaveCircle
+    assertions:
+      - circle_member_deleted
+      - member_count_decremented

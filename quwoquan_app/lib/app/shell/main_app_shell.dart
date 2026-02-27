@@ -3,8 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/components/bottom_navigation.dart';
-import 'package:quwoquan_app/features/home/pages/discovery_page.dart';
+import 'package:quwoquan_app/app/shell/bottom_navigation.dart';
+import 'package:quwoquan_app/ui/discovery/pages/discovery_page.dart';
 import 'package:quwoquan_app/features/circles/pages/circles_page.dart';
 import 'package:quwoquan_app/features/chat/pages/chat_page.dart';
 import 'package:quwoquan_app/features/profile/pages/my_profile_page.dart';
@@ -136,9 +136,21 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                 left: 0,
                 right: 0,
                 bottom: 0,
-                child: BottomNavigationWidget(
-                  currentIndex: _currentIndex,
-                  onTap: _handleBottomNavTap,
+                // Use viewPadding.bottom (physical safe-area, never consumed by
+                // parent Scaffold) so the background fill always reaches the
+                // very bottom of the screen regardless of nested Scaffold state.
+                child: Container(
+                  color: AppColorsFunctional.getColor(
+                    isDark,
+                    ColorType.backgroundPrimary,
+                  ),
+                  padding: EdgeInsets.only(
+                    bottom: MediaQuery.viewPaddingOf(context).bottom,
+                  ),
+                  child: BottomNavigationWidget(
+                    currentIndex: _currentIndex,
+                    onTap: _handleBottomNavTap,
+                  ),
                 ),
               ),
           ],

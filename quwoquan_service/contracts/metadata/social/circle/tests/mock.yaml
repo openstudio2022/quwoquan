@@ -1,0 +1,20 @@
+version: 1
+aggregate: Circle
+layer: app_side
+
+description: |
+  端侧独立测试场景。执行：flutter test test/cloud/social/
+
+scenarios:
+  - name: circle_feed_dto_parse
+    description: CircleFeedDto 解析
+    assertions:
+      - required_fields_non_empty
+      - circle_visibility_field_valid
+
+  - name: error_code_mapping
+    cases:
+      - http_status: 409, code: CIRCLE.USER.already_member
+        expected_dart_const: alreadyMember
+      - http_status: 403, code: CIRCLE.USER.join_approval_required
+        expected_dart_const: joinApprovalRequired

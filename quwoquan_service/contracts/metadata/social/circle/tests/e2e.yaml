@@ -1,0 +1,22 @@
+version: 1
+aggregate: Circle
+layer: e2e
+
+description: |
+  端云集成测试（staging）。
+
+scenarios:
+  - name: join_and_see_circle_posts
+    steps:
+      - user joins circle
+      - user opens circle feed
+    assertions:
+      - circle_posts_visible
+      - member_count_incremented_in_ui
+
+  - name: leave_circle_removes_from_list
+    steps:
+      - user leaves circle
+      - user views joined circles list
+    assertions:
+      - circle_not_in_joined_list

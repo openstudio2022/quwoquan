@@ -1,0 +1,127 @@
+version: 1
+aggregate: Post
+
+service:
+  name: content-service
+  domain: content
+  owner: backend-team
+  description: 内容发布、浏览、互动、评论与媒体管理
+
+api_routes:
+  - method: GET
+    path: /v1/content/feed
+    operation: GetFeed
+    description: 发现流（推荐排序 + cursor 分页）
+    query_params: [type, cursor, limit, subCategory]
+    response_entity: Post
+
+  - method: POST
+    path: /v1/content/posts
+    operation: CreatePost
+    description: 发布内容
+    request_entity: Post
+    writable_fields: [contentType, title, body, tags, mediaUrls, coverUrl, videoUrl, location, locationName, visibility, circleId]
+
+  - method: GET
+    path: /v1/content/posts/{postId}
+    operation: GetPost
+    description: 内容详情
+    response_entity: Post
+
+  - method: PATCH
+    path: /v1/content/posts/{postId}
+    operation: UpdatePost
+    description: 更新内容
+
+  - method: DELETE
+    path: /v1/content/posts/{postId}
+    operation: DeletePost
+    description: 删除内容
+
+  - method: GET
+    path: /v1/content/posts/{postId}/comments
+    operation: ListComments
+    description: 评论列表
+    response_entity: Comment
+
+  - method: POST
+    path: /v1/content/posts/{postId}/comments
+    operation: CreateComment
+    description: 发表评论
+    request_entity: Comment
+    writable_fields: [content, replyToCommentId]
+
+  - method: DELETE
+    path: /v1/content/posts/{postId}/comments/{commentId}
+    operation: DeleteComment
+    description: 删除评论
+
+  - method: GET
+    path: /v1/content/posts/{postId}/reactions
+    operation: GetReactionState
+    description: 当前用户互动状态（liked/favorited 字段）
+    response_entity: ContentReaction
+
+  - method: POST
+    path: /v1/content/posts/{postId}/like
+    operation: LikePost
+    description: 点赞（幂等 upsert，立即更新 ContentReaction.liked + likeCount）
+    auth: required
+
+  - method: DELETE
+    path: /v1/content/posts/{postId}/like
+    operation: UnlikePost
+    description: 取消点赞（幂等，立即更新 ContentReaction.liked + likeCount）
+    auth: required
+
+  - method: POST
+    path: /v1/content/posts/{postId}/favorite
+    operation: FavoritePost
+    description: 收藏（幂等 upsert，立即更新 ContentReaction.favorited + favoriteCount）
+    auth: required
+
+  - method: DELETE
+    path: /v1/content/posts/{postId}/favorite
+    operation: UnfavoritePost
+    description: 取消收藏（幂等，立即更新 ContentReaction.favorited + favoriteCount）
+    auth: required
+
+  - method: GET
+    path: /v1/content/posts/{postId}/counters
+    operation: GetCounters
+    description: 聚合计数
+
+  - method: POST
+    path: /v1/content/behaviors
+    operation: ReportBehaviors
+    description: 行为批量上报（impression/click/dwell/dislike/report/share；like/favorite 用专用路由）
+
+  - method: GET
+    path: /v1/content/media/{mediaId}
+    operation: GetMediaAsset
+    description: 媒体资产状态
+    response_entity: MediaAsset
+
+  - method: GET
+    path: /v1/content/helper-read/{contentId}
+    operation: GetHelperRead
+    description: 帮读摘要
+
+  - method: POST
+    path: /v1/content/recommend
+    operation: GetRecommendation
+    description: 推荐请求
+
+consumers:
+  - name: app
+    capabilities: [read_feed, create_post, read_post, create_comment, react, report_behavior]
+  - name: platform-ops
+    capabilities: [read_post, moderate_post, moderate_media, read_stats]
+  - name: recommendation-engine
+    capabilities: [read_post, read_reactions, read_behaviors, search, vector_search]
+  - name: assistant-service
+    capabilities: [read_post, read_comments, helper_read, search, vector_search]
+  - name: circle-service
+    capabilities: [read_post]
+
+# 测试场景已迁移至 tests/contract.yaml（云侧）和 tests/mock.yaml（端侧）。

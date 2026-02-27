@@ -33,7 +33,7 @@ git status -sb
 - `quwoquan_app/` 变更 → 执行端侧审计
 - `quwoquan_service/` 变更 → 执行云侧审计
 - 两者都有变更 → 执行全栈审计
-- `specs/` 或 `changes/` 变更 → 执行特性树一致性检查
+- `specs/` 或 `changes/` 变更 → 执行特性树一致性检查（含 `specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md` 层级与分解遵从）
 
 ---
 
