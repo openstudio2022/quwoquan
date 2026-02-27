@@ -2,7 +2,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_metadata.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/content_interaction_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/report_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/block_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/design_system/providers/theme_provider.dart';
@@ -333,5 +336,29 @@ final userProfileRepositoryProvider = Provider<UserProfileRepository>((ref) {
   return mode == AppDataSourceMode.remote
       ? RemoteUserProfileRepository()
       : const MockUserProfileRepository();
+});
+
+/// ContentInteraction Repository（like/unlike/favorite/unfavorite）
+final contentInteractionRepositoryProvider = Provider<ContentInteractionRepository>((ref) {
+  final mode = ref.watch(appDataSourceModeProvider);
+  return mode == AppDataSourceMode.remote
+      ? RemoteContentInteractionRepository()
+      : MockContentInteractionRepository();
+});
+
+/// Block Repository（拉黑/取消拉黑用户）
+final blockRepositoryProvider = Provider<BlockRepository>((ref) {
+  final mode = ref.watch(appDataSourceModeProvider);
+  return mode == AppDataSourceMode.remote
+      ? RemoteBlockRepository()
+      : MockBlockRepository();
+});
+
+/// Report Repository（内容举报）
+final reportRepositoryProvider = Provider<ReportRepository>((ref) {
+  final mode = ref.watch(appDataSourceModeProvider);
+  return mode == AppDataSourceMode.remote
+      ? RemoteReportRepository()
+      : MockReportRepository();
 });
 

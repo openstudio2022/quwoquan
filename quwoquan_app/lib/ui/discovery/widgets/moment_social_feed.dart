@@ -10,6 +10,10 @@ import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
+import 'package:quwoquan_app/components/more_actions_popup/configs/media_post_config.dart';
+import 'package:quwoquan_app/components/more_actions_popup/more_action_popup.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
 
@@ -25,6 +29,7 @@ class MomentSocialFeed extends ConsumerWidget {
     required this.isDark,
     required this.onUserTap,
     this.onPostTap,
+    this.onMoreTap,
   });
 
   final bool isDark;
@@ -33,6 +38,7 @@ class MomentSocialFeed extends ConsumerWidget {
       String? displayName,
       String? backgroundUrl}) onUserTap;
   final void Function(PostBaseDto post, int index)? onPostTap;
+  final void Function(dynamic post)? onMoreTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -69,6 +75,10 @@ class MomentSocialFeed extends ConsumerWidget {
       itemCount: moments.length,
       itemBuilder: (context, index) {
         final dto = moments[index];
+        // 首次渲染时上报曝光（Tracker 内部去重）
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          ref.read(contentBehaviorTrackerProvider).trackImpression(dto.id);
+        });
         return Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -94,8 +104,35 @@ class MomentSocialFeed extends ConsumerWidget {
                     config: const CommentConfig(enabled: true),
                   );
                 },
-                onShareTap: () => _showShare(context),
-                onMoreTap: () {},
+                onShareTap: () {
+                  ref.read(contentBehaviorTrackerProvider).trackShare(dto.id);
+                  _showShare(context);
+                },
+                onMoreTap: () {
+                  if (onMoreTap != null) {
+                    onMoreTap!(dto);
+                  } else {
+                    MoreActionPopup.show(
+                      context: context,
+                      config: MediaPostMoreActionConfig(
+                        post: dto,
+                        onNotInterested: () {
+                          ref.read(contentBehaviorTrackerProvider).trackDislike(dto.id);
+                        },
+                        onBlockUser: () {
+                          ref.read(blockRepositoryProvider).blockUser(dto.authorId);
+                        },
+                        onReport: () {
+                          ref.read(reportRepositoryProvider).createReport(
+                            targetId: dto.id,
+                            targetType: 'post',
+                            reason: 'inappropriate',
+                          );
+                        },
+                      ),
+                    );
+                  }
+                },
               ),
             ),
             if (index < moments.length - 1)
@@ -135,7 +172,7 @@ class MomentSocialFeed extends ConsumerWidget {
 // 单条微趣卡片（微博风格）
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _MomentWeiboCard extends StatefulWidget {
+class _MomentWeiboCard extends ConsumerStatefulWidget {
   const _MomentWeiboCard({
     required this.item,
     required this.isDark,
@@ -155,10 +192,10 @@ class _MomentWeiboCard extends StatefulWidget {
   final VoidCallback onMoreTap;
 
   @override
-  State<_MomentWeiboCard> createState() => _MomentWeiboCardState();
+  ConsumerState<_MomentWeiboCard> createState() => _MomentWeiboCardState();
 }
 
-class _MomentWeiboCardState extends State<_MomentWeiboCard>
+class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
     with SingleTickerProviderStateMixin {
   static const int _maxLines = 5;
 
@@ -287,10 +324,26 @@ class _MomentWeiboCardState extends State<_MomentWeiboCard>
             isBookmarked: _isBookmarked,
             likeCtrl: _likeCtrl,
             onLike: () {
+              final wasLiked = _isLiked;
               setState(() => _isLiked = !_isLiked);
               _likeCtrl.forward(from: 0);
+              final repo = ref.read(contentInteractionRepositoryProvider);
+              if (wasLiked) {
+                repo.unlike(widget.item.id);
+              } else {
+                repo.like(widget.item.id);
+              }
             },
-            onBookmark: () => setState(() => _isBookmarked = !_isBookmarked),
+            onBookmark: () {
+              final wasBookmarked = _isBookmarked;
+              setState(() => _isBookmarked = !_isBookmarked);
+              final repo = ref.read(contentInteractionRepositoryProvider);
+              if (wasBookmarked) {
+                repo.unfavorite(widget.item.id);
+              } else {
+                repo.favorite(widget.item.id);
+              }
+            },
             onComment: widget.onCommentTap,
             onShare: widget.onShareTap,
           ),

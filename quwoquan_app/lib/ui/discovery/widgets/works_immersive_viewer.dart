@@ -11,11 +11,15 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
+import 'package:quwoquan_app/components/more_actions_popup/configs/media_post_config.dart';
+import 'package:quwoquan_app/components/more_actions_popup/more_action_popup.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 
 class WorksImmersiveViewer extends ConsumerStatefulWidget {
@@ -62,6 +66,9 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   final Map<String, int> _articleInnerIndex = <String, int>{};
   final Map<String, int> _videoInnerIndex = <String, int>{};
 
+  // Dwell tracking：记录当前帖子进入时间
+  DateTime? _pageEnterTime;
+
   Timer? _autoCollapseTimer;
   // Follow-button delayed reveal: 3 s for photos, 5 s for video/article.
   Timer? _followButtonTimer;
@@ -85,6 +92,9 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       final posts = _buildFeed();
       if (posts.isNotEmpty) {
         _startFollowButtonTimer(posts[0]);
+        // Track impression for the first post
+        _trackImpressionForPost(posts[0]);
+        _pageEnterTime = DateTime.now();
       }
     });
   }
@@ -139,32 +149,39 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   }
 
   /// Opens the post-level more-options sheet for the currently visible post.
+  /// Uses dev1.1 MoreActionPopup (MediaPostMoreActionConfig) for parity.
   /// Deliberately does NOT open the assistant — that remains the assistant
   /// avatar button on the primary tab bar.
   void _showWorksMoreSheet(BuildContext context) {
     final posts = _buildFeed();
     final post = posts.isEmpty
         ? null
-        : posts[_currentPage.clamp(0, posts.length - 1)];
-    showModalBottomSheet<void>(
+        : posts[_currentPage.clamp(0, posts.length - 1)] as PostBaseDto?;
+    if (post == null) return;
+    MoreActionPopup.show(
       context: context,
-      useRootNavigator: true,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => _WorksMoreOptionsSheet(
+      config: MediaPostMoreActionConfig(
         post: post,
-        isSaved: post != null && _savedPosts.contains(post.id),
-        onSaveToggle: post == null
-            ? null
-            : () {
-                setState(() {
-                  if (_savedPosts.contains(post.id)) {
-                    _savedPosts.remove(post.id);
-                  } else {
-                    _savedPosts.add(post.id);
-                  }
-                });
-              },
+        onSave: () => _onFavorite(post),
+        onCopyLink: () {
+          // TODO: copy link to clipboard
+        },
+        onShare: () {
+          ref.read(contentBehaviorTrackerProvider).trackShare(post.id);
+        },
+        onNotInterested: () {
+          ref.read(contentBehaviorTrackerProvider).trackDislike(post.id);
+        },
+        onBlockUser: () {
+          ref.read(blockRepositoryProvider).blockUser(post.authorId);
+        },
+        onReport: () {
+          ref.read(reportRepositoryProvider).createReport(
+            targetId: post.id,
+            targetType: 'post',
+            reason: 'inappropriate',
+          );
+        },
       ),
     );
   }
@@ -301,24 +318,56 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     return '圈子${_circleIdForPost(post)}';
   }
 
+  // ── 行为追踪辅助 ──────────────────────────────────────────────
+
+  void _trackImpressionForPost(PostBaseDto post) {
+    final tracker = ref.read(contentBehaviorTrackerProvider);
+    tracker.trackImpression(post.id);
+  }
+
+  void _flushDwell(PostBaseDto post) {
+    final enterTime = _pageEnterTime;
+    if (enterTime == null) return;
+    final durationSec = DateTime.now().difference(enterTime).inMilliseconds / 1000.0;
+    final tracker = ref.read(contentBehaviorTrackerProvider);
+    tracker.trackDwell(post.id, durationSeconds: durationSec);
+    _pageEnterTime = null;
+  }
+
+  // ── 互动操作（乐观 UI + 云侧 API 同步）────────────────────────
+
   void _onLike(PostBaseDto post) {
+    final isLiked = _likedPosts.contains(post.id);
     setState(() {
-      if (_likedPosts.contains(post.id)) {
+      if (isLiked) {
         _likedPosts.remove(post.id);
       } else {
         _likedPosts.add(post.id);
       }
     });
+    final repo = ref.read(contentInteractionRepositoryProvider);
+    if (isLiked) {
+      repo.unlike(post.id);
+    } else {
+      repo.like(post.id);
+    }
   }
 
   void _onFavorite(PostBaseDto post) {
+    final isSaved = _savedPosts.contains(post.id);
     setState(() {
-      if (_savedPosts.contains(post.id)) {
+      if (isSaved) {
         _savedPosts.remove(post.id);
       } else {
         _savedPosts.add(post.id);
       }
     });
+    final repo = ref.read(contentInteractionRepositoryProvider);
+    if (isSaved) {
+      repo.unfavorite(post.id);
+    } else {
+      repo.favorite(post.id);
+    }
   }
 
   void _onFollow(PostBaseDto post) {
@@ -357,9 +406,16 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
             itemCount: posts.isEmpty ? 1 : posts.length,
             onPageChanged: (index) {
               if (_currentPage != index) {
+                // Flush dwell time for the previous post
+                final prevPost = posts[_currentPage.clamp(0, posts.length - 1)];
+                _flushDwell(prevPost);
+
                 setState(() => _currentPage = index);
                 // Reset + restart the follow-button timer for the new post.
-                _startFollowButtonTimer(posts[index.clamp(0, posts.length - 1)]);
+                final newPost = posts[index.clamp(0, posts.length - 1)];
+                _startFollowButtonTimer(newPost);
+                _trackImpressionForPost(newPost);
+                _pageEnterTime = DateTime.now();
               }
             },
             itemBuilder: (context, index) {
@@ -662,206 +718,6 @@ class _WorksPrimaryTopBar extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-// ── Works more-options bottom sheet ─────────────────────────────────────────
-// Opened by the ⋯ button on the top bar.  Does NOT open the assistant.
-// Shows post-specific actions (save, share, download) and feedback actions
-// (not-interested, report) separated by a visual divider.
-
-class _WorksMoreOptionsSheet extends StatelessWidget {
-  const _WorksMoreOptionsSheet({
-    this.post,
-    this.isSaved = false,
-    this.onSaveToggle,
-  });
-
-  final PostBaseDto? post;
-  final bool isSaved;
-  final VoidCallback? onSaveToggle;
-
-  static const _kRadius = 20.0;
-
-  @override
-  Widget build(BuildContext context) {
-    final isPhoto = post is PhotoPostDto;
-    final isVideo = post != null && post is! PhotoPostDto && post is! ArticlePostDto;
-
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-            AppSpacing.containerMd, 0, AppSpacing.containerMd, AppSpacing.containerMd),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // ── Group 1: positive post actions ───────────────────────────
-            _SheetGroup(
-              radius: _kRadius,
-              children: [
-                if (isPhoto || isVideo)
-                  _SheetItem(
-                    icon: isPhoto
-                        ? CupertinoIcons.photo_on_rectangle
-                        : CupertinoIcons.arrow_down_circle,
-                    label: isPhoto ? UITextConstants.savePhoto : UITextConstants.saveVideo,
-                    onTap: () => Navigator.of(context).pop(),
-                  ),
-                _SheetItem(
-                  icon: isSaved ? CupertinoIcons.star_fill : CupertinoIcons.star,
-                  label: isSaved ? UITextConstants.savedLabel : UITextConstants.savePost,
-                  iconColor: isSaved ? AppColors.warning : null,
-                  onTap: () {
-                    onSaveToggle?.call();
-                    Navigator.of(context).pop();
-                  },
-                ),
-                _SheetItem(
-                  icon: CupertinoIcons.arrowshape_turn_up_right,
-                  label: UITextConstants.share,
-                  onTap: () => Navigator.of(context).pop(),
-                ),
-                _SheetItem(
-                  icon: CupertinoIcons.link,
-                  label: UITextConstants.copyLink,
-                  onTap: () => Navigator.of(context).pop(),
-                  isLast: true,
-                ),
-              ],
-            ),
-
-            const SizedBox(height: AppSpacing.intraGroupSm),
-
-            // ── Group 2: feedback / negative actions ─────────────────────
-            _SheetGroup(
-              radius: _kRadius,
-              children: [
-                _SheetItem(
-                  icon: CupertinoIcons.hand_thumbsdown,
-                  label: UITextConstants.notInterested,
-                  onTap: () => Navigator.of(context).pop(),
-                ),
-                _SheetItem(
-                  icon: CupertinoIcons.flag,
-                  label: UITextConstants.report,
-                  labelColor: AppColors.error.withValues(alpha: 0.85),
-                  iconColor: AppColors.error.withValues(alpha: 0.85),
-                  onTap: () => Navigator.of(context).pop(),
-                  isLast: true,
-                ),
-              ],
-            ),
-
-            const SizedBox(height: AppSpacing.intraGroupSm),
-
-            // ── Cancel ───────────────────────────────────────────────────
-            _SheetGroup(
-              radius: _kRadius,
-              children: [
-                _SheetItem(
-                  label: UITextConstants.cancel,
-                  labelAlign: TextAlign.center,
-                  onTap: () => Navigator.of(context).pop(),
-                  isLast: true,
-                  bold: true,
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// A rounded card container used for option groups in the sheet.
-class _SheetGroup extends StatelessWidget {
-  const _SheetGroup({required this.children, required this.radius});
-
-  final List<Widget> children;
-  final double radius;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.worksDrawerBg,
-        borderRadius: BorderRadius.circular(radius),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(mainAxisSize: MainAxisSize.min, children: children),
-    );
-  }
-}
-
-/// A single row inside a [_SheetGroup].
-class _SheetItem extends StatelessWidget {
-  const _SheetItem({
-    this.icon,
-    required this.label,
-    this.labelAlign,
-    this.iconColor,
-    this.labelColor,
-    required this.onTap,
-    this.isLast = false,
-    this.bold = false,
-  });
-
-  final IconData? icon;
-  final String label;
-  final TextAlign? labelAlign;
-  final Color? iconColor;
-  final Color? labelColor;
-  final VoidCallback onTap;
-  final bool isLast;
-  final bool bold;
-
-  @override
-  Widget build(BuildContext context) {
-    final effectiveFg = labelColor ?? AppColors.worksBodyText;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        InkWell(
-          onTap: onTap,
-          child: SizedBox(
-            height: 52.0,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
-              child: Row(
-                children: [
-                  if (icon != null) ...[
-                    Icon(icon,
-                        size: AppSpacing.iconMedium,
-                        color: iconColor ?? AppColors.worksBodyText),
-                    const SizedBox(width: AppSpacing.intraGroupMd),
-                  ],
-                  Expanded(
-                    child: Text(
-                      label,
-                      textAlign: labelAlign,
-                      style: TextStyle(
-                        color: effectiveFg,
-                        fontSize: AppTypography.base,
-                        fontWeight: bold ? AppTypography.semiBold : AppTypography.normal,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        if (!isLast)
-          Divider(
-            height: 0.5,
-            thickness: 0.5,
-            color: AppColors.worksBodyText.withValues(alpha: 0.12),
-            indent: AppSpacing.containerMd,
-          ),
-      ],
     );
   }
 }
