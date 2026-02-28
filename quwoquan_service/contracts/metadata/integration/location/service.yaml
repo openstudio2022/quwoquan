@@ -1,0 +1,33 @@
+version: 1
+aggregate: Location
+
+service:
+  name: integration-service
+  domain: integration
+  owner: backend-team
+  description: 外部能力集成网关（先覆盖 location）
+
+api_routes:
+  - method: GET
+    path: /v1/integration/location/nearby
+    operation: GetNearbyLocations
+    description: 获取当前位置附近 POI 列表（统一输出，不暴露供应商差异）
+    query_params: [lat, lng, radiusMeters, limit]
+    response_entity: LocationPoi
+
+  - method: GET
+    path: /v1/integration/location/search
+    operation: SearchLocations
+    description: 按关键词实时搜索 POI（支持城市与当前位置增强）
+    query_params: [q, cityCode, lat, lng, limit]
+    response_entity: LocationPoi
+
+consumers:
+  - name: app
+    capabilities: [location_nearby, location_search]
+  - name: content-service
+    capabilities: [location_nearby, location_search]
+  - name: circle-service
+    capabilities: [location_nearby, location_search]
+  - name: platform-ops
+    capabilities: [provider_switch, quota_management]

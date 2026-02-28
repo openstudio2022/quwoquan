@@ -1,0 +1,26 @@
+version: 1
+domain: integration
+aggregate_root: Location
+
+description: |
+  外部位置服务集成聚合。屏蔽百度/阿里差异，统一提供附近地点与关键词搜索。
+  该聚合不承载业务内容实体，仅承载外部集成能力与查询结果规范。
+
+storage_backend: mongodb
+cache_layer: redis
+cache_ttl_seconds: 60
+
+capabilities:
+  - queryable
+  - searchable
+  - aggregatable
+
+taggable: false
+vector_enabled: false
+
+ddd_layer_mapping:
+  domain_model: services/integration-service/internal/domain/location/model
+  repository: services/integration-service/internal/domain/location/repository
+  application: services/integration-service/internal/application/location
+  adapter_rest: services/integration-service/internal/adapters/http/location
+  adapter_event: services/integration-service/internal/adapters/mq/location

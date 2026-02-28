@@ -50,6 +50,7 @@ enums:
   FeedbackType: [thumbs_up, thumbs_down, rating, text]
   BehaviorEventType: [impression, click, dwell, like, favorite, dislike, report, share]
   Platform: [ios, android]
+  LocationProvider: [baidu, amap]
   ProfileVisibility: [public, friends, private]
 
 classifications:

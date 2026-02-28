@@ -10,6 +10,11 @@ l2:
       - feature: app-theme-infrastructure
         l4:
           - feature: dark-light-token-switching
+  - feature: runtime-external-integration
+    l3:
+      - feature: integration-service-foundation
+        l4:
+          - feature: location-nearby-search-gateway
 
   # ─── 底座层：已有 runtime 能力组件 ───
   - feature: runtime-config

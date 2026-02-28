@@ -1,0 +1,22 @@
+# local overrides (developer laptop)
+service:
+  http:
+    addr: ":18086"
+
+integration:
+  location:
+    provider: "baidu"
+    primary_provider: "baidu"
+    backup_provider: "amap"
+    timeout_ms: 1500
+    nearby_default_radius_meters: 3000
+    nearby_default_limit: 20
+    search_default_limit: 20
+    default_latitude: 30.6586
+    default_longitude: 104.0648
+
+redis:
+  rec:
+    mode: standalone
+    addr: "127.0.0.1:6379"
+    db: 0

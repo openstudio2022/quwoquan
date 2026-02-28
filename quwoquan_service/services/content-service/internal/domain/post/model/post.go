@@ -11,20 +11,6 @@ type GeoPoint struct {
 
 var _ = time.Now
 
-// Comment domain model.
-type Comment struct {
-	ID               string    `json:"_id" bson:"_id"`
-	PostId           string    `json:"postId" bson:"postId"`
-	AuthorId         string    `json:"authorId" bson:"authorId"`
-	PersonaId        string    `json:"personaId" bson:"personaId"`
-	Content          string    `json:"content" bson:"content"`
-	ReplyToCommentId string    `json:"replyToCommentId" bson:"replyToCommentId"`
-	ReplyToUserId    string    `json:"replyToUserId" bson:"replyToUserId"`
-	LikeCount        int64     `json:"likeCount" bson:"likeCount"`
-	Status           string    `json:"status" bson:"status"`
-	CreatedAt        time.Time `json:"createdAt" bson:"createdAt"`
-}
-
 // MediaAsset domain model.
 type MediaAsset struct {
 	ID                 string    `json:"_id" bson:"_id"`
@@ -131,4 +117,18 @@ type Post struct {
 	UpdatedAt           time.Time      `json:"updatedAt" bson:"updatedAt"`
 	PublishedAt         time.Time      `json:"publishedAt" bson:"publishedAt"`
 	DeletedAt           time.Time      `json:"deletedAt" bson:"deletedAt"`
+}
+
+// Comment domain model.
+type Comment struct {
+	ID               string    `json:"_id" bson:"_id"`
+	PostId           string    `json:"postId" bson:"postId"`
+	AuthorId         string    `json:"authorId" bson:"authorId"`
+	PersonaId        string    `json:"personaId" bson:"personaId"`
+	Content          string    `json:"content" bson:"content"`
+	ReplyToCommentId string    `json:"replyToCommentId" bson:"replyToCommentId"`
+	ReplyToUserId    string    `json:"replyToUserId" bson:"replyToUserId"`
+	LikeCount        int64     `json:"likeCount" bson:"likeCount"`
+	Status           string    `json:"status" bson:"status"`
+	CreatedAt        time.Time `json:"createdAt" bson:"createdAt"`
 }

@@ -2,7 +2,7 @@
 
 ## Context
 
-趣我圈 App 端侧当前使用 Mock 数据与 LocalMockSyncAdapter / CloudStubSyncAdapter，无真实云服务对接。云侧服务尚未有统一规格，导致端云契约、推荐闭环、助手学习回流等设计分散。本设计建立 **6 个业务单体 + Gateway + Orchestrator** 的整体架构、接口契约与数据流，作为实现与协作基线。
+趣我圈 App 端侧当前使用 Mock 数据与 LocalMockSyncAdapter / CloudStubSyncAdapter，无真实云服务对接。云侧服务尚未有统一规格，导致端云契约、推荐闭环、助手学习回流等设计分散。本设计建立 **6 个业务单体 + Gateway + Orchestrator** 的整体架构、接口契约与数据流，作为实现与协作基线。并在该基线下新增 `integration-service` 承接外部能力统一集成（首批 location）。
 
 ## Goals / Non-Goals
 

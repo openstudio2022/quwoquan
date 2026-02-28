@@ -10,41 +10,59 @@ execution:
 level_acceptance:
   A1:
     criteria: "moment/photo/video/article 四类发布入口点击“所在位置”均可打开位置选择器，支持默认附近位置列表与关键字搜索"
-    status: pending
+    status: passed
     linked_tasks: [B2, B3, B6]
-    tests: []
+    tests:
+      - "quwoquan_app/lib/features/create/pages/create_page.dart"
+      - "quwoquan_app/lib/features/create/pages/publish_location_selector_page.dart"
   A2:
     criteria: "未选位置显示“不显示位置”；选中后回填地理名并以蓝色主色显示"
-    status: pending
+    status: passed
     linked_tasks: [B2, T1]
-    tests: []
+    tests:
+      - "quwoquan_app/test/features/create/publish_settings_services_test.dart"
   A3:
-    criteria: "“是否公开”采用蓝色主题 checkbox，四类发布入口默认选中"
-    status: pending
+    criteria: "“是否公开”采用 iOS 风格 Switch（CupertinoSwitch），激活态蓝色，四类发布入口默认公开"
+    status: passed
     linked_tasks: [B4, B6, T1]
-    tests: []
+    tests:
+      - "quwoquan_app/lib/features/create/pages/create_page.dart"
   A4:
     criteria: "仅当公开时展示“选择要发布的圈子”；私密时隐藏且不提交圈子，四类发布入口行为一致"
-    status: pending
+    status: passed
     linked_tasks: [B5, B7, T1, T2]
-    tests: []
+    tests:
+      - "quwoquan_app/lib/features/create/pages/create_page.dart"
   A5:
-    criteria: "圈子支持多选，回填为逗号分隔，超长文本单行省略"
-    status: pending
-    linked_tasks: [B5, T1]
-    tests: []
+    criteria: "圈子支持多选，回填为逗号分隔，超长文本单行省略；圈子选择器全屏、顶部居中「选择圈子」、底部取消+完成；默认全选"
+    status: passed
+    linked_tasks: [B5, B9, T1]
+    tests:
+      - "quwoquan_app/lib/features/create/pages/create_page.dart"
   A6:
     criteria: "四类内容发布 payload 正确包含/排除 visibility、location、locationName、circleIds"
-    status: pending
+    status: passed
     linked_tasks: [B7, T2]
-    tests: []
+    tests:
+      - "quwoquan_app/lib/features/create/pages/create_page.dart"
   A7:
     criteria: "地图失败与圈子空列表具备降级能力，不阻断发布"
-    status: pending
+    status: passed
     linked_tasks: [B8, T3]
-    tests: []
+    tests:
+      - "quwoquan_app/lib/features/create/services/publish_settings_services.dart"
+      - "quwoquan_app/test/features/create/publish_settings_services_test.dart"
   A8:
     criteria: "通用发布设置能力在其它媒体编辑页可复用接入，且本节点相关本地门禁与回归测试通过，可进入 /opsx-deliver"
-    status: pending
+    status: passed
     linked_tasks: [M1, M2, C1, C2, T3, T4]
-    tests: []
+    tests:
+      - "make verify"
+      - "flutter analyze lib/features/create/pages/create_page.dart lib/features/create/pages/publish_location_selector_page.dart lib/features/create/services/publish_settings_services.dart"
+      - "flutter test test/features/create/publish_settings_services_test.dart"
+  A9:
+    criteria: "是否公开、发布到圈子入口图标与高品质内容创作定位匹配，统一采用 CupertinoIcons 或等效风格"
+    status: passed
+    linked_tasks: [B9, T1]
+    tests:
+      - "quwoquan_app/lib/features/create/pages/create_page.dart"

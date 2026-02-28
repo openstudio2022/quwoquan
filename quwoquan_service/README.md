@@ -1,6 +1,6 @@
 # 趣我圈云侧服务规格
 
-本目录为趣我圈云侧 **6 个业务服务 + Gateway + Orchestrator** 的统一功能规格输出，包含服务划分、业务对象、接口契约与端云集成设计。
+本目录为趣我圈云侧 **6 个业务服务 + Integration + Gateway + Orchestrator** 的统一功能规格输出，包含服务划分、业务对象、接口契约与端云集成设计。
 
 ## 目录结构
 
@@ -42,6 +42,7 @@
   - `product-ops/spec.md` — 产品运营服务（业务域）
   - `gateway-service/spec.md` — API 网关
   - `orchestrator-service/spec.md` — 编排服务
+  - `integration-service/spec.md` — 外部集成服务（location 起步）
   - `platform-ops/spec.md` — 运维/平台域（规范与交付物，非业务 API）
 
 ## 服务概览
@@ -54,6 +55,7 @@
 | Assistant | Run/ReAct、工具、模板、域配置、反馈同步、学习数据 |
 | Chat | 会话、消息投递、联系人 |
 | ProductOps（运营） | 策略、埋点、实验、访问记录（为推荐/运营分析提供数据） |
+| Integration | 外部能力集成网关（统一 location 等第三方能力） |
 | PlatformOps（运维/平台） | 可观测性、系统配置、服务治理、SLO/告警（规范与交付物） |
 
 ## 本地质量门禁（建议每次改动后运行）

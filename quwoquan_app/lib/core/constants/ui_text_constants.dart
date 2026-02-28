@@ -356,6 +356,11 @@ class UITextConstants {
   static const String noCirclesAvailable = '暂无可选圈子';
   static const String locationSearchHint = '搜索地点';
   static const String locationNearbyTitle = '附近位置';
+  static const String locationSearchingNearby = '正在搜索附近位置';
+  static const String locationLoadFailed = '暂时无法获取附近位置，请稍后重试';
+  static const String locationSearchTitle = '搜索位置';
+  static const String locationSearchEmpty = '未找到相关位置';
+  static const String circleSelectTitle = '选择圈子';
 
   /// 图片选择/编辑（微趣、美图、文章共用）
   static const String addCover = '添加封面';

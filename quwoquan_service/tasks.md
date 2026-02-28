@@ -151,3 +151,11 @@
 ## 14. 运维域 specs（specs/platform-ops）
 
 - [ ] 14.1 补齐运维/平台域规格与交付物说明（`specs/platform-ops/spec.md`）
+
+## 15. Integration（外部集成）服务
+
+- [ ] 15.0 接入全服务统一能力（见 §0，必须使用公共库）
+- [x] 15.1 新建 integration-service 骨架与分环境配置目录
+- [x] 15.2 定义 integration/location 元数据（aggregate/fields/storage/events/service/errors）
+- [x] 15.3 定义 location nearby/search API 契约（`specs/integration-service/spec.md`）
+- [ ] 15.4 落地 location provider adapter（百度/阿里可配置切换）

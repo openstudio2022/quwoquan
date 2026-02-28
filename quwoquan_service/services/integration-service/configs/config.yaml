@@ -1,0 +1,13 @@
+service:
+  name: integration-service
+  http:
+    addr: ":18086"
+
+integration:
+  location:
+    provider: "baidu"
+    primary_provider: "baidu"
+    backup_provider: "amap"
+    timeout_ms: 1200
+    default_latitude: 30.6586
+    default_longitude: 104.0648

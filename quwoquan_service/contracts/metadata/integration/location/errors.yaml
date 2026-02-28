@@ -1,0 +1,54 @@
+version: 1
+aggregate: Location
+domain: INTEGRATION
+
+description: |
+  integration/location 结构化错误码声明。
+
+errors:
+  - code: INTEGRATION.USER.location_unavailable
+    kind: USER
+    reason: unavailable
+    http_status: 400
+    retryable: true
+    retry_after_seconds: 3
+    dart_const: locationUnavailable
+    go_const: ErrLocationUnavailable
+    user_message:
+      zh: "暂时无法获取当前位置，请稍后重试"
+      en: "Current location is unavailable, please retry shortly"
+
+  - code: INTEGRATION.USER.location_permission_required
+    kind: USER
+    reason: permission_denied
+    http_status: 403
+    retryable: false
+    dart_const: locationPermissionRequired
+    go_const: ErrLocationPermissionRequired
+    user_message:
+      zh: "请开启定位权限后重试"
+      en: "Location permission is required"
+
+  - code: INTEGRATION.MIDDLEWARE.upstream_timeout
+    kind: MIDDLEWARE
+    reason: timeout
+    http_status: 504
+    retryable: true
+    retry_after_seconds: 5
+    dart_const: upstreamTimeout
+    go_const: ErrUpstreamTimeout
+    user_message:
+      zh: "位置服务响应超时，请稍后重试"
+      en: "Location upstream timed out, please retry"
+
+  - code: INTEGRATION.SYSTEM.internal_error
+    kind: SYSTEM
+    reason: internal_error
+    http_status: 500
+    retryable: true
+    retry_after_seconds: 5
+    dart_const: internalError
+    go_const: ErrInternalError
+    user_message:
+      zh: "位置服务异常，请稍后重试"
+      en: "Location service internal error"

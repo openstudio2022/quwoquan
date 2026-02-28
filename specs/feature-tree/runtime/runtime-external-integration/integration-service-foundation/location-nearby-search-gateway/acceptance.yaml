@@ -1,0 +1,30 @@
+version: 1
+feature: "location-nearby-search-gateway"
+level: "L4_detail"
+template: "A1-A8"
+status: specified
+level_acceptance:
+  A1:
+    criteria: "GET /v1/integration/location/nearby 契约完整并通过 metadata 验证"
+    status: passed
+    linked_tasks: [M1]
+    tests:
+      - "make verify && make -C quwoquan_service verify-metadata"
+      - "quwoquan_service/services/integration-service/internal/adapters/http/location_handler_test.go"
+  A2:
+    criteria: "GET /v1/integration/location/search 契约完整并支持实时输入请求"
+    status: passed
+    linked_tasks: [M1, B1]
+    tests:
+      - "quwoquan_service/services/integration-service/internal/adapters/http/location_handler_test.go"
+      - "quwoquan_app/test/features/create/publish_settings_services_test.dart"
+  A3:
+    criteria: "定位相关错误码与提示语定义完成并可映射"
+    status: passed
+    linked_tasks: [B2]
+    tests:
+      - "quwoquan_service/contracts/metadata/integration/location/errors.yaml"
+      - "quwoquan_service/services/integration-service/internal/application/location_service_test.go"
+execution:
+  local_gate: "make verify && make -C quwoquan_service verify-metadata"
+  full_gate: "make gate-full"

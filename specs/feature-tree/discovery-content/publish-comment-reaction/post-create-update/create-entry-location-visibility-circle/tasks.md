@@ -3,22 +3,23 @@
 ## 当前交付任务
 
 ### metadata
-- [ ] M1. 核对 `content/post` 现有元数据字段可覆盖本需求（`visibility/location/locationName/circleIds`）。
-- [ ] M2. 若发现缺口，仅补最小 metadata 变更并更新对应契约说明；无缺口则记录“无需变更”。
+- [x] M1. 核对 `content/post` 现有元数据字段可覆盖本需求（`visibility/location/locationName/circleIds`）。
+- [x] M2. 若发现缺口，仅补最小 metadata 变更并更新对应契约说明；无缺口则记录“无需变更”。
 
 ### codegen
-- [ ] C1. 执行 `make verify-metadata`。
-- [ ] C2. 仅在 metadata 发生变更时执行 `make codegen && make codegen-app` 并提交产物。
+- [x] C1. 执行 `make verify-metadata`。
+- [x] C2. 仅在 metadata 发生变更时执行 `make codegen && make codegen-app` 并提交产物。
 
 ### 业务逻辑
 - [ ] B1. 抽取通用发布设置状态模型（`PublishSettings`），承载位置/公开/圈子选择并支持多页面复用。
-- [ ] B2. 实现可复用“所在位置”入口与回填展示组件（未选默认不显示，选中后蓝色高亮）。
-- [ ] B3. 接入地图位置服务抽象，支持附近位置与关键字搜索，按配置切换百度/阿里。
-- [ ] B4. 实现可复用“是否公开”蓝色主题 checkbox，默认公开。
-- [ ] B5. 实现可复用“选择要发布的圈子”多选入口：仅公开时显示，回填逗号分隔并支持省略显示。
+- [x] B2. 实现可复用“所在位置”入口与回填展示组件（未选默认不显示，选中后蓝色高亮）。
+- [x] B3. 接入地图位置服务抽象，支持附近位置与关键字搜索，按配置切换百度/阿里。
+- [ ] B4. 实现可复用“是否公开”Switch（CupertinoSwitch，iOS 风格，激活态蓝色），默认公开。
+- [ ] B5. 实现可复用“选择要发布的圈子”多选入口：仅公开时显示，回填逗号分隔并支持省略显示；圈子选择器全屏、顶部居中「选择圈子」、底部取消+完成、默认全选，暂不加搜索框。
 - [ ] B6. 在 moment/photo/video/article 四类发布流程中接入通用发布设置组件。
 - [ ] B7. 修正统一发布 payload 映射：`visibility`、`location`、`locationName`、`circleIds` 按状态正确提交。
-- [ ] B8. 异常降级：地图失败可回退“不显示位置”；圈子列表为空可发布但给出空态提示。
+- [x] B8. 异常降级：地图失败可回退“不显示位置”；圈子列表为空可发布但给出空态提示。
+- [ ] B9. 统一发布设置图标：是否公开、发布到圈子入口采用与高品质内容创作定位匹配的 CupertinoIcons 或等效风格。
 
 ### 测试
 - [ ] T1. 通用组件 UI/状态单测：公开开关、圈子展示联动、位置与圈子回填文本。

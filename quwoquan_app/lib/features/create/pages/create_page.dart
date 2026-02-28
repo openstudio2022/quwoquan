@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -17,6 +18,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/features/create/components/create_entry_sheet.dart';
 import 'package:quwoquan_app/features/create/models/create_media_models.dart';
 import 'package:quwoquan_app/features/create/models/publish_settings_models.dart';
+import 'package:quwoquan_app/features/create/pages/publish_location_selector_page.dart';
 import 'package:quwoquan_app/features/create/services/publish_settings_services.dart';
 
 /// 创作页
@@ -75,7 +77,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
   static const int _kPhotoSlotsCollapsed =
       (_kPhotoThumbnailsPerRow * 4) - 1; // 19
   final PageController _photoPageController = PageController();
-  final CreateLocationService _locationService = const CreateLocationService();
+  final CreateLocationService _locationService = CreateLocationService();
   final CreateCircleService _circleService = const CreateCircleService();
 
   static Map<String, dynamic> _emptyData() {
@@ -1619,28 +1621,29 @@ class _CreatePageState extends ConsumerState<CreatePage>
         ),
         _createOptionDivider(isDark),
         _momentListTile(
-          icon: Icons.public,
+          icon: CupertinoIcons.globe,
           label: UITextConstants.isPublicLabel,
           fgColor: fgColor,
           fgSecondary: fgSecondary,
           isDark: isDark,
           showChevron: false,
-          trailingWidget: Checkbox(
-            value: isPublic,
-            activeColor: blue,
-            onChanged: (v) {
-              final next = v ?? true;
-              setState(() {
-                final nextData = Map<String, dynamic>.from(_tabData(tabKey));
-                nextData['visibility'] = next ? 'public' : 'private';
-                if (!next) {
-                  nextData['circleIds'] = <String>[];
-                  nextData['circleNames'] = <String>[];
-                }
-                _currentData = Map<String, dynamic>.from(_currentData)
-                  ..[tabKey] = nextData;
-              });
-            },
+          trailingWidget: CupertinoTheme(
+            data: CupertinoThemeData(primaryColor: blue),
+            child: CupertinoSwitch(
+              value: isPublic,
+              onChanged: (next) {
+                setState(() {
+                  final nextData = Map<String, dynamic>.from(_tabData(tabKey));
+                  nextData['visibility'] = next ? 'public' : 'private';
+                  if (!next) {
+                    nextData['circleIds'] = <String>[];
+                    nextData['circleNames'] = <String>[];
+                  }
+                  _currentData = Map<String, dynamic>.from(_currentData)
+                    ..[tabKey] = nextData;
+                });
+              },
+            ),
           ),
           onTap: () {
             setState(() {
@@ -1659,7 +1662,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
         if (isPublic) ...[
           _createOptionDivider(isDark),
           _momentListTile(
-            icon: Icons.groups_outlined,
+            icon: CupertinoIcons.person_2,
             label: UITextConstants.selectPublishCirclesLabel,
             trailing: circlesText,
             trailingColor: circlesText == UITextConstants.noCirclesAvailable
@@ -1676,85 +1679,11 @@ class _CreatePageState extends ConsumerState<CreatePage>
   }
 
   Future<void> _selectLocation(String tabKey) async {
-    final nearby = await _locationService.nearby();
-    if (!mounted) return;
-    final result = await showModalBottomSheet<CreateLocationOption>(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) {
-        final blue = AppColors.primaryColor;
-        final all = nearby;
-        final TextEditingController searchController = TextEditingController();
-        List<CreateLocationOption> filtered = all;
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            void doFilter(String keyword) async {
-              final next = await _locationService.search(keyword);
-              setModalState(() => filtered = next);
-            }
-
-            return SafeArea(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  AppSpacing.interGroupLg,
-                  AppSpacing.interGroupLg,
-                  AppSpacing.interGroupLg,
-                  AppSpacing.interGroupLg +
-                      MediaQuery.of(context).viewInsets.bottom,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    TextField(
-                      controller: searchController,
-                      decoration: InputDecoration(
-                        hintText: UITextConstants.locationSearchHint,
-                        prefixIcon: const Icon(Icons.search),
-                      ),
-                      onChanged: doFilter,
-                    ),
-                    SizedBox(height: AppSpacing.interGroupSm),
-                    Text(
-                      UITextConstants.locationNearbyTitle,
-                      style: TextStyle(
-                        color: blue,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    SizedBox(height: AppSpacing.intraGroupXs),
-                    Flexible(
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: filtered.length + 1,
-                        itemBuilder: (context, index) {
-                          if (index == 0) {
-                            return ListTile(
-                              title: const Text(UITextConstants.locationHidden),
-                              onTap: () => Navigator.of(context).pop(
-                                const CreateLocationOption(
-                                  name: '',
-                                  latitude: 0,
-                                  longitude: 0,
-                                ),
-                              ),
-                            );
-                          }
-                          final item = filtered[index - 1];
-                          return ListTile(
-                            title: Text(item.name),
-                            onTap: () => Navigator.of(context).pop(item),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+    final result = await Navigator.of(context).push<CreateLocationOption>(
+      CupertinoPageRoute<CreateLocationOption>(
+        builder: (context) =>
+            PublishLocationSelectorPage(locationService: _locationService),
+      ),
     );
     if (!mounted || result == null) return;
     setState(() {
@@ -1782,50 +1711,25 @@ class _CreatePageState extends ConsumerState<CreatePage>
       _tabData(tabKey)['circleNames'] as List? ?? const <String>[],
     );
     final selected = <String, String>{};
-    for (var i = 0; i < selectedIds.length; i++) {
-      selected[selectedIds[i]] = i < selectedNames.length
-          ? selectedNames[i]
-          : selectedIds[i];
+    if (selectedIds.isEmpty) {
+      for (final c in circles) {
+        selected[c.id] = c.name;
+      }
+    } else {
+      for (var i = 0; i < selectedIds.length; i++) {
+        selected[selectedIds[i]] = i < selectedNames.length
+            ? selectedNames[i]
+            : selectedIds[i];
+      }
     }
-    final result = await showModalBottomSheet<Map<String, String>>(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) {
-        final temp = Map<String, String>.from(selected);
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return SafeArea(
-              child: ListView(
-                shrinkWrap: true,
-                children: [
-                  for (final circle in circles)
-                    CheckboxListTile(
-                      value: temp.containsKey(circle.id),
-                      activeColor: AppColors.primaryColor,
-                      title: Text(circle.name),
-                      onChanged: (checked) {
-                        setModalState(() {
-                          if (checked == true) {
-                            temp[circle.id] = circle.name;
-                          } else {
-                            temp.remove(circle.id);
-                          }
-                        });
-                      },
-                    ),
-                  Padding(
-                    padding: EdgeInsets.all(AppSpacing.interGroupLg),
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.of(context).pop(temp),
-                      child: Text(UITextConstants.imageEditDone),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
+    final result = await Navigator.of(context).push<Map<String, String>>(
+      MaterialPageRoute<Map<String, String>>(
+        fullscreenDialog: true,
+        builder: (context) => _CircleSelectFullscreenPage(
+          circles: circles,
+          initialSelected: selected,
+        ),
+      ),
     );
     if (!mounted || result == null) return;
     setState(() {
@@ -3440,6 +3344,112 @@ class _CreatePageState extends ConsumerState<CreatePage>
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 全屏圈子选择页：顶部居中「选择圈子」、底部取消+完成、默认全选
+class _CircleSelectFullscreenPage extends StatefulWidget {
+  const _CircleSelectFullscreenPage({
+    required this.circles,
+    required this.initialSelected,
+  });
+
+  final List<CreateCircleOption> circles;
+  final Map<String, String> initialSelected;
+
+  @override
+  State<_CircleSelectFullscreenPage> createState() =>
+      _CircleSelectFullscreenPageState();
+}
+
+class _CircleSelectFullscreenPageState
+    extends State<_CircleSelectFullscreenPage> {
+  late Map<String, String> _selected;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = Map<String, String>.from(widget.initialSelected);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final fgPrimary = isDark ? Colors.white : Colors.black87;
+    final blue = AppColors.primaryColor;
+    return Scaffold(
+      appBar: AppBar(
+        centerTitle: true,
+        title: Text(
+          UITextConstants.selectCircle,
+          style: TextStyle(
+            fontSize: AppTypography.lg,
+            fontWeight: FontWeight.w600,
+            color: fgPrimary,
+          ),
+        ),
+        leading: IconButton(
+          icon: Icon(Icons.close, color: fgPrimary),
+          onPressed: () =>
+              Navigator.of(context).pop<Map<String, String>?>(null),
+        ),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              itemCount: widget.circles.length,
+              itemBuilder: (context, index) {
+                final circle = widget.circles[index];
+                final checked = _selected.containsKey(circle.id);
+                return CheckboxListTile(
+                  value: checked,
+                  activeColor: blue,
+                  title: Text(circle.name),
+                  onChanged: (v) {
+                    setState(() {
+                      if (v == true) {
+                        _selected[circle.id] = circle.name;
+                      } else {
+                        _selected.remove(circle.id);
+                      }
+                    });
+                  },
+                );
+              },
+            ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: SettingsSemanticConstants.blockHorizontalPadding,
+                vertical: AppSpacing.interGroupMd,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () =>
+                          Navigator.of(context).pop<Map<String, String>?>(null),
+                      child: Text(UITextConstants.cancel),
+                    ),
+                  ),
+                  SizedBox(width: AppSpacing.interGroupMd),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () => Navigator.of(
+                        context,
+                      ).pop<Map<String, String>>(_selected),
+                      child: Text(UITextConstants.imageEditDone),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

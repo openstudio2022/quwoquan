@@ -1,4 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/core/services/data_service.dart';
 import 'package:quwoquan_app/features/create/services/publish_settings_services.dart';
 
@@ -11,9 +16,7 @@ class _FakeDataService implements DataService {
   Future<Map<String, dynamic>> createDataItem({
     required String endpoint,
     required Map<String, dynamic> data,
-  }) async {
-    return <String, dynamic>{};
-  }
+  }) async => <String, dynamic>{};
 
   @override
   Future<void> deleteDataItem({
@@ -26,9 +29,7 @@ class _FakeDataService implements DataService {
     required String endpoint,
     required String id,
     Map<String, dynamic>? params,
-  }) async {
-    return <String, dynamic>{};
-  }
+  }) async => <String, dynamic>{};
 
   @override
   Future<List<Map<String, dynamic>>> getDataList({
@@ -37,7 +38,9 @@ class _FakeDataService implements DataService {
     int? limit,
     int? offset,
   }) async {
-    if (endpoint == '/circles') return circles;
+    if (endpoint == '/circles') {
+      return circles;
+    }
     return <Map<String, dynamic>>[];
   }
 
@@ -46,18 +49,97 @@ class _FakeDataService implements DataService {
     required String endpoint,
     required String id,
     required Map<String, dynamic> data,
-  }) async {
-    return <String, dynamic>{};
+  }) async => <String, dynamic>{};
+}
+
+class _StubCloudHttpClient extends CloudHttpClient {
+  _StubCloudHttpClient(this.handler) : super(client: http.Client());
+
+  final Future<dynamic> Function(Uri uri, Map<String, String> headers) handler;
+
+  @override
+  Future<dynamic> getJson(Uri uri, {required Map<String, String> headers}) {
+    return handler(uri, headers);
   }
 }
 
 void main() {
   group('CreateLocationService', () {
-    test('search returns filtered nearby locations', () async {
-      const service = CreateLocationService();
-      final result = await service.search('太古');
-      expect(result.isNotEmpty, isTrue);
-      expect(result.first.name.contains('太古'), isTrue);
+    test('nearby parses cloud response', () async {
+      final httpClient = _StubCloudHttpClient((_, headers) async {
+        expect(headers, isNotNull);
+        return jsonDecode(
+          jsonEncode({
+            'items': [
+              {
+                'name': '成都·天府广场',
+                'latitude': 30.6586,
+                'longitude': 104.0648,
+                'address': '锦江区',
+                'distanceMeters': 120,
+              },
+            ],
+          }),
+        );
+      });
+      final service = CreateLocationService(
+        httpClient: httpClient,
+        baseUrl: 'http://127.0.0.1:18080',
+      );
+      final nearby = await service.nearby();
+      expect(nearby, isNotEmpty);
+      expect(nearby.first.name, '成都·天府广场');
+    });
+
+    test('search parses cloud response', () async {
+      final httpClient = _StubCloudHttpClient((_, headers) async {
+        expect(headers, isNotNull);
+        return jsonDecode(
+          jsonEncode({
+            'items': [
+              {'name': '成都·太古里', 'latitude': 30.6548, 'longitude': 104.0839},
+            ],
+          }),
+        );
+      });
+      final service = CreateLocationService(
+        httpClient: httpClient,
+        baseUrl: 'http://127.0.0.1:18080',
+      );
+      final search = await service.search('太古');
+      expect(search, isNotEmpty);
+      expect(search.first.name, contains('太古'));
+    });
+
+    test('rate limit keeps last nearby list', () async {
+      var callCount = 0;
+      final httpClient = _StubCloudHttpClient((_, headers) async {
+        expect(headers, isNotNull);
+        callCount++;
+        if (callCount == 1) {
+          return jsonDecode(
+            jsonEncode({
+              'items': [
+                {'name': 'A', 'latitude': 1.0, 'longitude': 2.0},
+              ],
+            }),
+          );
+        }
+        throw CloudException(
+          type: CloudErrorType.unknown,
+          message: 'rate limited',
+          statusCode: 429,
+        );
+      });
+      final service = CreateLocationService(
+        httpClient: httpClient,
+        baseUrl: 'http://127.0.0.1:18080',
+      );
+      final first = await service.nearby();
+      final second = await service.nearby();
+      expect(first.length, 1);
+      expect(second.length, 1);
+      expect(second.first.name, 'A');
     });
   });
 

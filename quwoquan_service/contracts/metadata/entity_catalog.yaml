@@ -30,3 +30,9 @@ entities:
     canonical: contracts/metadata/recommendation/rec_model/
     storage: mongodb
     description: Recommendation model entity
+
+  - name: LocationPoi
+    domain: integration
+    canonical: contracts/metadata/integration/location/aggregate.yaml
+    storage: mongodb
+    description: External location provider normalized poi

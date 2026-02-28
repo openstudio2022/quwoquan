@@ -34,3 +34,29 @@ policies:
     output:
       - key: _id
         strategy: plain
+
+  - model: integration-service
+    operation: GET /v1/integration/location/nearby
+    input:
+      - key: lat
+        strategy: plain
+      - key: lng
+        strategy: plain
+      - key: radiusMeters
+        strategy: plain
+    output:
+      - key: items.length
+        strategy: plain
+
+  - model: integration-service
+    operation: GET /v1/integration/location/search
+    input:
+      - key: q
+        strategy: plain
+      - key: cityCode
+        strategy: plain
+      - key: limit
+        strategy: plain
+    output:
+      - key: items.length
+        strategy: plain

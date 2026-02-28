@@ -30,3 +30,13 @@ events:
     domain: assistant
     entity: AssistantRun
     canonical: contracts/metadata/assistant/assistant_run/events.yaml
+
+  - name: LocationNearbyQueried
+    domain: integration
+    entity: LocationPoi
+    canonical: contracts/metadata/integration/location/events.yaml
+
+  - name: LocationSearchQueried
+    domain: integration
+    entity: LocationPoi
+    canonical: contracts/metadata/integration/location/events.yaml

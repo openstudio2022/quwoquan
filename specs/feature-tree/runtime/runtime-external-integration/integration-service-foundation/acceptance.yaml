@@ -1,0 +1,19 @@
+version: 1
+feature: "integration-service-foundation"
+level: "L3_component"
+template: "A1-A8"
+status: specified
+level_acceptance:
+  A1:
+    criteria: "integration-service 目录与配置结构符合规范"
+    status: pending
+    linked_tasks: [1]
+    tests: []
+  A7:
+    criteria: "service.yaml 与 fields/storage/events 契约一致"
+    status: pending
+    linked_tasks: [2]
+    tests: []
+execution:
+  local_gate: "make verify && make -C quwoquan_service verify-metadata"
+  full_gate: "make gate-full"

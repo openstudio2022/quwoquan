@@ -1,0 +1,26 @@
+version: 1
+aggregate: Location
+backend: mongodb
+
+collections:
+  integration_location_cache:
+    entity: LocationPoi
+    indexes:
+      - { name: idx_loc_cache_provider, keys: { provider: 1, updatedAt: -1 } }
+      - { name: idx_loc_cache_geo, keys: { latitude: 1, longitude: 1 } }
+      - { name: idx_loc_cache_city, keys: { cityCode: 1, updatedAt: -1 } }
+    search_indexes:
+      - name: search_location_text
+        type: text
+        fields: [name, address, cityCode]
+        weights: { name: 10, address: 4, cityCode: 2 }
+
+redis_cache:
+  - key: "cache:integration:location:nearby:{lat}:{lng}:{radius}:{limit}"
+    ttl_seconds: 60
+    entity: LocationPoi
+    invalidate_on: [LocationProviderSwitched]
+  - key: "cache:integration:location:search:{q}:{cityCode}:{limit}"
+    ttl_seconds: 30
+    entity: LocationPoi
+    invalidate_on: [LocationProviderSwitched]

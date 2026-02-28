@@ -1,0 +1,19 @@
+config:
+  version: "v2026.02.27.0"
+  min_image_version: "1.0.0"
+  max_image_version: "2.0.0"
+
+service:
+  name: integration-service
+
+integration:
+  location:
+    provider: "baidu"
+    primary_provider: "baidu"
+    backup_provider: "amap"
+    timeout_ms: 1000
+    nearby_default_radius_meters: 3000
+    nearby_default_limit: 20
+    search_default_limit: 20
+    default_latitude: 30.6586
+    default_longitude: 104.0648

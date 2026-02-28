@@ -1,0 +1,23 @@
+# prod overrides (container/k8s)
+# Recommend injecting APP_ENV=prod, CONFIG_VERSION, IMAGE_VERSION, CONFIG_ROOT via env.
+service:
+  http:
+    addr: ":18086"
+
+integration:
+  location:
+    provider: "baidu"
+    primary_provider: "baidu"
+    backup_provider: "amap"
+    timeout_ms: 1000
+    nearby_default_radius_meters: 3000
+    nearby_default_limit: 20
+    search_default_limit: 20
+    default_latitude: 30.6586
+    default_longitude: 104.0648
+
+redis:
+  rec:
+    mode: cluster
+    addrs: []
+    tls: true

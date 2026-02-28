@@ -1,0 +1,24 @@
+version: 1
+aggregate: Location
+
+events:
+  - name: LocationNearbyQueried
+    description: 附近位置检索请求
+    producer: integration-service
+    consumers: [platform-ops]
+    channel: event_store
+    payload_fields: [provider, latitude, longitude, radiusMeters, limit]
+
+  - name: LocationSearchQueried
+    description: 关键词位置检索请求
+    producer: integration-service
+    consumers: [platform-ops]
+    channel: event_store
+    payload_fields: [provider, query, cityCode, limit]
+
+  - name: LocationProviderSwitched
+    description: 地图供应商切换
+    producer: platform-ops
+    consumers: [integration-service]
+    channel: direct
+    payload_fields: [fromProvider, toProvider, reason]

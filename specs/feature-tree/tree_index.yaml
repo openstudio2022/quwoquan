@@ -1775,6 +1775,29 @@ features:
               domain: ""
               status: planned
               tags: []
+        - id: runtime-external-integration
+          name: runtime-external-integration
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-external-integration
+          domain: ""
+          status: specified
+          tags: [integration, external, location]
+          children:
+            - id: integration-service-foundation
+              name: integration-service-foundation
+              level: L3_component
+              path: ../specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation
+              domain: ""
+              status: specified
+              tags: [service, foundation]
+              children:
+                - id: location-nearby-search-gateway
+                  name: location-nearby-search-gateway
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/location-nearby-search-gateway
+                  domain: ""
+                  status: specified
+                  tags: [location, nearby, search]
         - id: runtime-agentpack
           name: runtime-agentpack
           level: L2_feature

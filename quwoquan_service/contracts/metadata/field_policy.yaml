@@ -30,3 +30,27 @@ policies:
     classification: user_content
     log_policy: omit
     description: Comment text; never log
+
+  - entity: LocationPoi
+    field: name
+    classification: public
+    log_policy: plain
+    description: Normalized poi name
+
+  - entity: LocationPoi
+    field: address
+    classification: public
+    log_policy: plain
+    description: Normalized poi address
+
+  - entity: LocationPoi
+    field: latitude
+    classification: public
+    log_policy: plain
+    description: Latitude of poi
+
+  - entity: LocationPoi
+    field: longitude
+    classification: public
+    log_policy: plain
+    description: Longitude of poi
