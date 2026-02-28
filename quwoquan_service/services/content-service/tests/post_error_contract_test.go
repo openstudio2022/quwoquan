@@ -5,6 +5,7 @@ package tests
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -47,7 +48,7 @@ func TestPost_ErrorCases(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			var bodyReader *strings.Reader
+			var bodyReader io.Reader = http.NoBody
 			if tc.body != "" {
 				bodyReader = strings.NewReader(tc.body)
 			}
@@ -184,7 +185,7 @@ func TestPost_MissingRequiredBody_Returns400(t *testing.T) {
 func TestPost_LikeRoute_NotReturning404(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPost(t, `{"contentType":"image","title":"Rate limit test"}`)
+	created := createPost(t, `{"contentType":"image","title":"Rate limit test","mediaUrls":["https://example.com/img.jpg"]}`)
 	postID, _ := created["_id"].(string)
 	if postID == "" {
 		t.Fatal("no _id in created post")

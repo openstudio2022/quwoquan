@@ -18,7 +18,7 @@ import (
 func TestCreatePostAggregate(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	body := `{"title":"sunset over the lake","body":"golden hour photography","contentType":"image","tags":["photo","nature"]}`
+	body := `{"title":"sunset over the lake","body":"golden hour photography","contentType":"image","tags":["photo","nature"],"mediaUrls":["https://example.com/sunset.jpg"]}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/content/posts", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", "user_test_001")
@@ -85,7 +85,7 @@ func TestCreatePostAllTypes(t *testing.T) {
 func TestGetPostSuccess(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPost(t, `{"contentType":"image","title":"Test Get","body":"visible post"}`)
+	created := createPost(t, `{"contentType":"image","title":"Test Get","body":"visible post","mediaUrls":["https://example.com/img.jpg"]}`)
 	postID, _ := created["_id"].(string)
 	if postID == "" {
 		t.Fatal("created post has no _id")

@@ -24,7 +24,7 @@ func TestCommentWithNotification(t *testing.T) {
 
 	eventSpy.Reset()
 
-	created := createPost(t, `{"contentType":"image","title":"Comment notification test"}`)
+	created := createPost(t, `{"contentType":"image","title":"Comment notification test","mediaUrls":["https://example.com/img.jpg"]}`)
 	postID, _ := created["_id"].(string)
 	if postID == "" {
 		t.Fatal("no _id in created post")
@@ -60,7 +60,7 @@ func TestCommentWithNotification(t *testing.T) {
 func TestCommentListPagination(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPost(t, `{"contentType":"image","title":"Comment pagination test"}`)
+	created := createPost(t, `{"contentType":"image","title":"Comment pagination test","mediaUrls":["https://example.com/img.jpg"]}`)
 	postID, _ := created["_id"].(string)
 	if postID == "" {
 		t.Fatal("no _id in created post")

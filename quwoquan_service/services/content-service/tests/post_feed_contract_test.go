@@ -63,7 +63,7 @@ func TestGetFeedCursorPagination(t *testing.T) {
 	// Create enough posts for two pages
 	for i := range 6 {
 		createPost(t, fmt.Sprintf(
-			`{"contentType":"image","title":"Pager post %d","body":"content %d"}`, i, i,
+			`{"contentType":"image","title":"Pager post %d","body":"content %d","mediaUrls":["https://example.com/img%d.jpg"]}`, i, i, i,
 		))
 	}
 

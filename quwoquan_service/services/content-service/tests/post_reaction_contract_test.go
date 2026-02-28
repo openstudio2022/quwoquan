@@ -21,7 +21,7 @@ import (
 func TestReactWithCounterStrategy(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPost(t, `{"contentType":"image","title":"Like counter test"}`)
+	created := createPost(t, `{"contentType":"image","title":"Like counter test","mediaUrls":["https://example.com/img.jpg"]}`)
 	postID, _ := created["_id"].(string)
 	if postID == "" {
 		t.Fatal("no _id in created post")
@@ -50,7 +50,7 @@ func TestReactWithCounterStrategy(t *testing.T) {
 func TestReactIdempotent(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPost(t, `{"contentType":"image","title":"Idempotent like test"}`)
+	created := createPost(t, `{"contentType":"image","title":"Idempotent like test","mediaUrls":["https://example.com/img.jpg"]}`)
 	postID, _ := created["_id"].(string)
 	if postID == "" {
 		t.Fatal("no _id in created post")
@@ -90,7 +90,7 @@ func TestReactIdempotent(t *testing.T) {
 func TestUnlikeDecrementsCounter(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPost(t, `{"contentType":"image","title":"Unlike decrement test"}`)
+	created := createPost(t, `{"contentType":"image","title":"Unlike decrement test","mediaUrls":["https://example.com/img.jpg"]}`)
 	postID, _ := created["_id"].(string)
 	if postID == "" {
 		t.Fatal("no _id in created post")

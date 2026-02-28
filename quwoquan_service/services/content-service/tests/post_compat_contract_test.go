@@ -16,7 +16,7 @@ import (
 // Fields classified privacy:never_expose must never appear in public responses.
 func TestPost_ResponseShape_NoPrivateFields(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-	created := createPost(t, `{"contentType":"image","title":"Privacy check","body":"public content"}`)
+	created := createPost(t, `{"contentType":"image","title":"Privacy check","body":"public content","mediaUrls":["https://example.com/img.jpg"]}`)
 	postID, _ := created["_id"].(string)
 	if postID == "" {
 		t.Fatal("created post has no _id")
@@ -48,7 +48,7 @@ func TestPost_WritableFields_UnknownFieldRejected(t *testing.T) {
 	req := httptest.NewRequest(
 		http.MethodPost,
 		"/v1/content/posts",
-		bytes.NewBufferString(`{"unknownField":"x","contentType":"image"}`),
+		bytes.NewBufferString(`{"unknownField":"x","contentType":"image","mediaUrls":["https://example.com/img.jpg"]}`),
 	)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()

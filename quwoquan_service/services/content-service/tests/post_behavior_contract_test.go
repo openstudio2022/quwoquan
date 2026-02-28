@@ -22,7 +22,7 @@ import (
 // contract.yaml: react_with_counter_strategy / go_func: TestReactWithCounterStrategy
 func TestLikePost(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-	created := createPost(t, `{"contentType":"image","title":"Like target"}`)
+	created := createPost(t, `{"contentType":"image","title":"Like target","mediaUrls":["https://example.com/img.jpg"]}`)
 	postID, _ := created["_id"].(string)
 	if postID == "" {
 		t.Fatal("no _id in created post")
@@ -50,7 +50,7 @@ func TestLikePost(t *testing.T) {
 // contract.yaml: go_func: TestFavoritePost
 func TestFavoritePost(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-	created := createPost(t, `{"contentType":"image","title":"Favorite target"}`)
+	created := createPost(t, `{"contentType":"image","title":"Favorite target","mediaUrls":["https://example.com/img.jpg"]}`)
 	postID, _ := created["_id"].(string)
 	if postID == "" {
 		t.Fatal("no _id in created post")
@@ -77,7 +77,7 @@ func TestFavoritePost(t *testing.T) {
 // contract.yaml: behavior_batch_report
 func TestBehaviorBatchReport(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-	created := createPost(t, `{"contentType":"image","title":"Behavior batch target"}`)
+	created := createPost(t, `{"contentType":"image","title":"Behavior batch target","mediaUrls":["https://example.com/img.jpg"]}`)
 	postID, _ := created["_id"].(string)
 	if postID == "" {
 		t.Fatal("no _id in created post")
@@ -141,7 +141,7 @@ func TestBehaviorBatchEmpty(t *testing.T) {
 // contract.yaml: behavior_batch_report / go_func: TestBehaviorBatchReport
 func TestReportPost(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-	created := createPost(t, `{"contentType":"image","title":"Report target"}`)
+	created := createPost(t, `{"contentType":"image","title":"Report target","mediaUrls":["https://example.com/img.jpg"]}`)
 	postID, _ := created["_id"].(string)
 	if postID == "" {
 		t.Fatal("no _id in created post")

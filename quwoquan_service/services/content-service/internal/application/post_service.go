@@ -67,7 +67,12 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (*
 		return nil, rterr.NewInvalidArgument(rterr.ModuleContent, "contentType 必填", "missing contentType")
 	}
 	if _, ok := generated.AllowedContentTypes[contentType]; !ok {
-		return nil, rterr.NewInvalidArgument(rterr.ModuleContent, "contentType 不支持", "unsupported contentType")
+		return nil, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "invalid_content_type"),
+			"contentType 不支持",
+			"unsupported contentType",
+			false,
+		)
 	}
 	now := time.Now().UTC()
 	post := &postmodel.Post{
