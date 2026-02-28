@@ -39,10 +39,10 @@ ruby -ryaml -e '
 
   %w[integration prod].each do |env|
     process_map = env == "integration" ? integration : prod
-    qwq_domains = (process_map["quwoquan_service"] || {})["domains"] || []
-    fail("#{env}.quwoquan_service missing") if qwq_domains.empty?
-    if qwq_domains.include?("recommendation")
-      fail("#{env}.quwoquan_service must not include recommendation domain")
+    seed_box_domains = (process_map["seed-box"] || {})["domains"] || []
+    fail("#{env}.seed-box missing") if seed_box_domains.empty?
+    if seed_box_domains.include?("recommendation")
+      fail("#{env}.seed-box must not include recommendation domain")
     end
   end
 '

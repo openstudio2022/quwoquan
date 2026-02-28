@@ -28,11 +28,26 @@
 
 4. **门禁策略**
    - 校验同一环境内 domain 唯一归属
-   - 校验 process 名称规范（`*-service` 或 `quwoquan_service`）
+   - 校验 process 名称规范（`*-service` 或 `seed-box`）
    - 校验 `integration == prod` 映射
    - 接入 `make verify` 与 `scripts/gate_repo.sh`
    - `make gate-full` 必须包含并通过 `recommendation-service` Python 测试
    - recommendation-service 启动前执行配置分层与版本兼容校验；失败即 fail-fast
+
+5. **K8s Sidecar + Kustomize 参数化**
+   - all-in-one 采用单 Pod 双容器：`seed-box`（Go）+ `recommendation-service`（Python）
+   - 生产增强默认包含 `HPA + PDB + startupProbe + topologySpreadConstraints`
+   - 使用统一目录：`deploy/service/seed-box/kustomize/{base,overlays/*}`
+   - overlays 必须按环境参数化：
+     - `CONFIG_VERSION`
+     - `IMAGE_VERSION`
+     - `replicas`
+     - HPA 阈值（`min/max replicas`、`CPU/Memory` 目标利用率）
+
+6. **后续拆分独立 Pod 的兼容策略**
+   - 当前以 all-in-one Sidecar 为主，确保 API 契约稳定与低延迟协作
+   - 当某个领域服务需独立扩缩容时，沿用同一参数模型拆分为独立 Deployment
+   - 拆分仅改变进程编排，不改变领域路由契约与 process-domain 门禁约束
 
 ## 配置示例
 
@@ -46,12 +61,12 @@ environments:
   integration:
     recommendation-service:
       domains: [recommendation]
-    quwoquan_service:
+    seed-box:
       domains: [content, chat, integration, user, circle, assistant, gateway, orchestrator]
   prod:
     recommendation-service:
       domains: [recommendation]
-    quwoquan_service:
+    seed-box:
       domains: [content, chat, integration, user, circle, assistant, gateway, orchestrator]
 ```
 
@@ -64,3 +79,4 @@ environments:
 - 不允许一个 domain 在同一环境中多归属
 - 不允许 integration/prod 拓扑漂移
 - 不允许通过部署拓扑改写领域路由契约
+- 不允许绕过 overlays 直接在 base 中固化环境特定版本与扩缩容阈值

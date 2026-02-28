@@ -41,6 +41,14 @@
 - [x] D14 验证部署拓扑变化不改变 domain API 语义与错误码行为
 - [x] D15 产出 deliver 证据包（gate 日志、契约测试、回归结果）
 
+### Wave 5 — Sidecar all-in-one 与可拆分 Pod 基线
+
+- [x] D18 设计 all-in-one Sidecar 生产增强基线（Deployment + Service + HPA + PDB）
+- [x] D19 落地 `deploy/service/seed-box/kustomize/base` 基础清单
+- [x] D20 落地统一 overlays：`dev/integration/prod`
+- [x] D21 通过 replacements 参数化 `CONFIG_VERSION/IMAGE_VERSION/replicas/HPA` 阈值
+- [x] D22 补充“后续拆分独立 Pod”的迁移说明（保持 API 与门禁兼容）
+
 ## 后续演进任务
 
 - [x] D16 增加“变更影响报告”：当映射变更时自动输出受影响 domain 与进程

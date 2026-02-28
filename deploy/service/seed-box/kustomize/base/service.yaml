@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: seed-box
+  labels:
+    app.kubernetes.io/name: seed-box
+spec:
+  selector:
+    app.kubernetes.io/name: seed-box
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: http

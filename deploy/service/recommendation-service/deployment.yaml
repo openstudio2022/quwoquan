@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: recommendation-service
-          image: quwoquan/recommendation-service:1.0.0
+          image: seed-box/recommendation-service:1.0.0
           env:
             - name: APP_ENV
               value: prod
@@ -25,4 +25,4 @@ spec:
             - name: IMAGE_VERSION
               value: "1.0.0"
             - name: CONFIG_ROOT
-              value: /etc/qwq-config
+              value: /etc/seed-box-config

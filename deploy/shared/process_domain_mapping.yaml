@@ -19,11 +19,11 @@ environments:
   integration:
     recommendation-service:
       domains: [recommendation]
-    quwoquan_service:
+    seed-box:
       domains: [content, integration, chat, user, circle, assistant, gateway, orchestrator]
 
   prod:
     recommendation-service:
       domains: [recommendation]
-    quwoquan_service:
+    seed-box:
       domains: [content, integration, chat, user, circle, assistant, gateway, orchestrator]

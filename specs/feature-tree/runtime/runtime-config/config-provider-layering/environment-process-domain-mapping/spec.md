@@ -23,6 +23,9 @@
 - `recommendation` domain 固定归属 `recommendation-service`（python process）
 - Go 组合进程与 Python 进程独立部署，禁止合并为单进程
 - Python 配置校验失败策略为启动即失败（fail-fast）
+- 允许采用 K8s Sidecar 实现“逻辑耦合、物理隔离”：`seed-box` 与 `recommendation-service` 同 Pod 双进程
+- 同一套 Kustomize overlays（`dev/integration/prod`）必须参数化 `CONFIG_VERSION/IMAGE_VERSION/replicas/HPA` 阈值
+- 部署形态需支持后续将领域服务（如 content-service）拆解为独立 Pod，而不改变 domain API 语义
 
 ## 边界说明
 
@@ -42,3 +45,5 @@
 - A7：部署进程映射不改变领域 API 契约
 - A8：`make verify`/`make gate` 自动执行映射校验
 - A8：`make gate-full` 将 `recommendation-service` 的 Python 测试作为必过项
+- A1：all-in-one Sidecar 生产增强模板可在 Kustomize 下按环境参数化渲染
+- A3：从 all-in-one 到独立 Pod 拆分具备明确迁移路径与兼容策略

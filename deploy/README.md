@@ -10,3 +10,7 @@
 - 同时约束端云或全局流程：放 `shared/`
 - 仅服务端部署相关：放 `service/`
 - 仅端侧发布相关：放 `app/`
+
+当前推荐服务端组织（示例）：
+- `deploy/service/seed-box/kustomize/base`：all-in-one Sidecar 基础模板
+- `deploy/service/seed-box/kustomize/overlays/{dev,integration,prod}`：环境参数化覆盖层

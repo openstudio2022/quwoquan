@@ -35,12 +35,19 @@ global_acceptance:
         then: "仅允许 recommendation-service 独占 recommendation domain"
       - given: "Go 与 Python 部署拓扑"
         when: "integration/prod 环境发布"
-        then: "quwoquan_service 与 recommendation-service 以独立进程部署，不合并"
+        then: "seed-box 与 recommendation-service 以独立进程部署，不合并"
+      - given: "all-in-one Sidecar 部署"
+        when: "使用 deploy/service/seed-box/kustomize/overlays/{env} 渲染"
+        then: "可得到 Go+Python 双容器同 Pod 的可部署清单"
+      - given: "同一套 overlays 在 dev/integration/prod 复用"
+        when: "按环境注入参数"
+        then: "CONFIG_VERSION/IMAGE_VERSION/replicas/HPA 阈值均可被参数化替换"
   A2_experience:
     - "开发态保持独立服务调试体验，不引入额外目录分叉"
   A3_service_governance:
     - "拓扑映射作为显式配置受版本控制与审计"
     - "集成环境与生产环境拓扑强一致，降低发布漂移风险"
+    - "支持后续将领域服务拆分为独立 Pod，且不破坏现有门禁"
   A4_observability:
     - "门禁失败日志可明确指向冲突 domain 与进程名"
   A5_product_ops:
@@ -55,6 +62,7 @@ global_acceptance:
     - "脚本接入 make verify 与 gate_repo"
     - "recommendation-service Python 配置契约测试接入并通过"
     - "make gate-full 将 recommendation-service Python 测试设为必过项"
+    - "kustomize overlays 渲染结果可用于环境级回归检查"
 execution:
   local_gate: "make verify"
   full_gate: "make gate-full"

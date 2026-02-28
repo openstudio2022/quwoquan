@@ -28,8 +28,8 @@ ruby -ryaml -e '
     processes.each do |process_name, process_cfg|
       abort("[verify] FAIL: process name empty in #{env}") if process_name.to_s.strip.empty?
 
-      unless process_name == "quwoquan_service" || process_name.end_with?("-service")
-        abort("[verify] FAIL: invalid process name '#{process_name}' in #{env} (expect quwoquan_service or *-service)")
+      unless process_name == "seed-box" || process_name.end_with?("-service")
+        abort("[verify] FAIL: invalid process name '#{process_name}' in #{env} (expect seed-box or *-service)")
       end
 
       domains = process_cfg.is_a?(Hash) ? process_cfg["domains"] : nil
@@ -69,9 +69,9 @@ ruby -ryaml -e '
   end
 
   normalized.each do |env, process_map|
-    qwq = process_map["quwoquan_service"] || []
-    if qwq.include?("recommendation")
-      abort("[verify] FAIL: #{env}.quwoquan_service must not include recommendation domain; keep Python process independent")
+    seed_box = process_map["seed-box"] || []
+    if seed_box.include?("recommendation")
+      abort("[verify] FAIL: #{env}.seed-box must not include recommendation domain; keep Python process independent")
     end
   end
 

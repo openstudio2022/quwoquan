@@ -25,12 +25,12 @@ environments:
   integration:
     recommendation-service:
       domains: [recommendation]
-    quwoquan_service:
+    seed-box:
       domains: [content, integration, chat, user, circle, assistant, gateway, orchestrator]
   prod:
     recommendation-service:
       domains: [recommendation]
-    quwoquan_service:
+    seed-box:
       domains: [content, integration, chat, user, circle, assistant, gateway, orchestrator]
 ```
 
@@ -78,18 +78,18 @@ make verify
 bash scripts/verify_deployment_domain_mapping.sh
 ```
 
-2) 使用组合进程 `quwoquan_service` 启动 Go 聚合进程，Python 的 `recommendation-service` 保持独立进程（由部署编排注入环境变量）：
+2) 使用组合进程 `seed-box` 启动 Go 聚合进程，Python 的 `recommendation-service` 保持独立进程（由部署编排注入环境变量）：
 
 ```bash
-APP_ENV=integration SERVICE_NAME=quwoquan_service CONFIG_ROOT=/etc/qwq-config CONFIG_VERSION=<version> IMAGE_VERSION=<image> <start-command>
-APP_ENV=integration SERVICE_NAME=recommendation-service CONFIG_ROOT=/etc/qwq-config CONFIG_VERSION=<version> IMAGE_VERSION=<image> <python-start-command>
+APP_ENV=integration SERVICE_NAME=seed-box CONFIG_ROOT=/etc/seed-box-config CONFIG_VERSION=<version> IMAGE_VERSION=<image> <start-command>
+APP_ENV=integration SERVICE_NAME=recommendation-service CONFIG_ROOT=/etc/seed-box-config CONFIG_VERSION=<version> IMAGE_VERSION=<image> <python-start-command>
 ```
 
 生产同理，仅 `APP_ENV=prod`：
 
 ```bash
-APP_ENV=prod SERVICE_NAME=quwoquan_service CONFIG_ROOT=/etc/qwq-config CONFIG_VERSION=<version> IMAGE_VERSION=<image> <start-command>
-APP_ENV=prod SERVICE_NAME=recommendation-service CONFIG_ROOT=/etc/qwq-config CONFIG_VERSION=<version> IMAGE_VERSION=<image> <python-start-command>
+APP_ENV=prod SERVICE_NAME=seed-box CONFIG_ROOT=/etc/seed-box-config CONFIG_VERSION=<version> IMAGE_VERSION=<image> <start-command>
+APP_ENV=prod SERVICE_NAME=recommendation-service CONFIG_ROOT=/etc/seed-box-config CONFIG_VERSION=<version> IMAGE_VERSION=<image> <python-start-command>
 ```
 
 3) 发布前全量门禁：
@@ -100,7 +100,46 @@ make gate-full
 
 ---
 
-## 5. 常见失败与处理
+## 5. Kustomize（all-in-one Sidecar）
+
+目录：
+- `deploy/service/seed-box/kustomize/base`
+- `deploy/service/seed-box/kustomize/overlays/dev`
+- `deploy/service/seed-box/kustomize/overlays/integration`
+- `deploy/service/seed-box/kustomize/overlays/prod`
+
+约束：
+- base 只放跨环境稳定模板（Deployment/Service/HPA/PDB）
+- 环境差异仅在 overlays 注入
+- 参数化覆盖：`CONFIG_VERSION`、`IMAGE_VERSION`、`replicas`、HPA 阈值
+
+示例：
+
+```bash
+# 渲染 dev
+kustomize build deploy/service/seed-box/kustomize/overlays/dev
+
+# 渲染 integration
+kustomize build deploy/service/seed-box/kustomize/overlays/integration
+
+# 渲染 prod
+kustomize build deploy/service/seed-box/kustomize/overlays/prod
+```
+
+---
+
+## 6. 后续拆分独立 Pod（迁移指引）
+
+- 现态：`seed-box` + `recommendation-service` 同 Pod（Sidecar）
+- 拆分触发：某领域服务需要独立扩缩容/独立发布窗口/独立故障域
+- 拆分原则：
+  - 保持 `process_domain_mapping.yaml` 归属唯一与 integration/prod 一致性
+  - 保持领域 API 路径与契约不变
+  - 复用同一参数模型（`CONFIG_VERSION/IMAGE_VERSION/replicas/HPA`）
+
+---
+
+## 7. 常见失败与处理
 
 - 失败：`domain 'x' appears in both ...`
   - 处理：在同一环境内仅保留一个归属进程
@@ -109,11 +148,11 @@ make gate-full
   - 处理：将 `prod` 调整为与 `integration` 完全一致
 
 - 失败：进程名不合规
-  - 处理：使用 `*-service` 或 `quwoquan_service`
+  - 处理：使用 `*-service` 或 `seed-box`
 
 ---
 
-## 6. 变更流程（最小）
+## 8. 变更流程（最小）
 
 1) 修改 `deploy/shared/process_domain_mapping.yaml`  
 2) 执行 `bash scripts/verify_deployment_domain_mapping.sh`  
