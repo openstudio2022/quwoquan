@@ -29,24 +29,24 @@ metadata → codegen → 业务逻辑 → 测试
 
 | 任务 | 说明 | 状态 |
 |------|------|------|
-| T1 | 创建 `deploy/cloud-providers/aliyun/seed-box/overlays/{integration,prod}`，复用 base，注入阿里云特定 patch | 待执行 |
-| T2 | 创建 `deploy/cloud-providers/volcengine/seed-box/overlays/{integration,prod}`，火山引擎特定 patch | 待执行 |
-| T3 | 创建 `deploy/cloud-providers/huaweicloud/seed-box/overlays/{integration,prod}`，华为云特定 patch | 待执行 |
-| T4 | 编写 `scripts/deploy_to_integration.sh`，支持 `CLOUD_PROVIDER` 参数，调用 kustomize 构建并 apply | 待执行 |
-| T5 | 创建 `.github/workflows/pre-release-gate.yml`：v*-rc* 触发 gate-full → deploy integration → L3 → L4，全部通过输出「可灰度」 | 待执行 |
-| T6 | 串联 daily-api-contract、e2e.yaml 与 pre-release-gate（或合并为统一 pre-release workflow） | 待执行 |
-| T7 | 更新 `deploy/shared/deliver_to_production_runbook.md`，增加多云切换步骤与 `CLOUD_PROVIDER` 说明 | 待执行 |
-| T8 | 更新 Makefile：`deploy-integration CLOUD_PROVIDER=aliyun\|volcengine\|huaweicloud` | 待执行 |
+| T1 | 创建 `deploy/cloud-providers/aliyun/seed-box/overlays/{integration,prod}`，复用 base，注入阿里云特定 patch | [x] 已完成 |
+| T2 | 创建 `deploy/cloud-providers/volcengine/seed-box/overlays/{integration,prod}`，火山引擎特定 patch | [x] 已完成 |
+| T3 | 创建 `deploy/cloud-providers/huaweicloud/seed-box/overlays/{integration,prod}`，华为云特定 patch | [x] 已完成 |
+| T4 | 编写 `scripts/deploy_to_integration.sh`，支持 `CLOUD_PROVIDER` 参数，调用 kustomize 构建并 apply | [x] 已完成 |
+| T5 | 创建 `.github/workflows/pre-release-gate.yml`：v*-rc* 触发 gate-full → deploy integration → L3 → L4，全部通过输出「可灰度」 | [x] 已完成 |
+| T6 | 串联 daily-api-contract、e2e.yaml 与 pre-release-gate（或合并为统一 pre-release workflow） | [x] 已完成 |
+| T7 | 更新 `deploy/shared/deliver_to_production_runbook.md`，增加多云切换步骤与 `CLOUD_PROVIDER` 说明 | [x] 已完成 |
+| T8 | 更新 Makefile：`deploy-integration CLOUD_PROVIDER=aliyun\|volcengine\|huaweicloud` | [x] 已完成 |
 
 ### V — 测试 / 验证
 
 | 任务 | 说明 | 状态 |
 |------|------|------|
-| V1 | 验证 `kustomize build deploy/cloud-providers/aliyun/seed-box/overlays/integration` 无错误 | 待执行 |
-| V2 | 验证 `kustomize build deploy/cloud-providers/volcengine/seed-box/overlays/integration` 无错误 | 待执行 |
-| V3 | 验证 `kustomize build deploy/cloud-providers/huaweicloud/seed-box/overlays/integration` 无错误 | 待执行 |
-| V4 | 在至少一云（如阿里云）上执行端到端：deliver → deploy integration → L3 → L4 → 灰度 prod | 待执行 |
-| V5 | 演练多云切换：同一 manifest 在阿里云与火山引擎分别渲染，确认无硬编码云厂商路径 | 待执行 |
+| V1 | 验证 `kustomize build -f kustomization.aliyun.integration.yaml` 无错误（根路径） | [x] 已完成 |
+| V2 | 验证 `kustomize build -f kustomization.volcengine.integration.yaml` 无错误（根路径） | [x] 已完成 |
+| V3 | 验证 `kustomize build -f kustomization.huaweicloud.integration.yaml` 无错误（根路径） | [x] 已完成 |
+| V4 | 在至少一云（如阿里云）上执行端到端：deliver → deploy integration → L3 → L4 → 灰度 prod | 待执行（需集群） |
+| V5 | 演练多云切换：同一 manifest 在阿里云与火山引擎分别渲染，确认无硬编码云厂商路径 | [x] 已完成 |
 
 ---
 

@@ -24,6 +24,9 @@ jobs:
           cache: true
       - name: Gate (L1+L2+L3)
         run: make gate-full
+      - uses: syntaqx/setup-kustomize@v1
+      - name: Deploy kustomization build (G5a 验证)
+        run: make deploy-integration CLOUD_PROVIDER=aliyun | tail -5
 
   l4-android:
     name: L4 Patrol — Android (FTL)
