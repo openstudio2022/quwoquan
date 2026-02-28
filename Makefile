@@ -9,6 +9,9 @@
 .PHONY: config-slo-gate
 
 gate:
+	@bash scripts/verify_deployment_domain_mapping.sh
+	@bash scripts/verify_topology_contract_regression.sh
+	@bash scripts/report_deployment_mapping_impact.sh
 	@bash scripts/gate_repo.sh
 
 verify:

@@ -31,7 +31,7 @@ on:
 
 jobs:
   test:
-    name: Flutter 单元测试
+    name: Flutter analyze
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/v'))
     steps:
@@ -63,9 +63,7 @@ jobs:
         working-directory: quwoquan_app
         run: flutter analyze --no-fatal-warnings --no-fatal-infos
 
-      - name: Flutter 单元测试
-        working-directory: quwoquan_app
-        run: flutter test test/cloud/ test/components/ test/ui/
+      # L1 由 delivery-gate 负责，此处仅 analyze
 
       - name: 上传失败日志
         if: failure()

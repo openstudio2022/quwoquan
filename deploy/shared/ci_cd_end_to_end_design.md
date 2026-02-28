@@ -12,23 +12,22 @@
 
 | Workflow | 触发 | 职责 | 对应阶段 |
 |----------|------|------|----------|
-| `gate.yml` | PR / push main, dev1.0 | 拓扑校验、service gate、app gate | G0~G3 |
-| `service_pipeline.yml` | quwoquan_service/**、deploy/service/** | Go 构建、rec-model 镜像、kustomize 校验 | G2 |
-| `app_pipeline.yml` | quwoquan_app/** | Flutter analyze、单元测试；v* tag → macOS 构建 | G2 / 发布 |
-| `pre-release-gate.yml` | v*-rc* tag、手动 | gate-full、kustomize build、deploy integration、L3、L4 FTL | G3→G5b |
-| `daily-api-contract.yml` | cron 02:00 UTC、手动 | L3 API Contract（advisory，依赖 integration 已部署） | 健康检查 |
+| `delivery-gate.yml` | PR / push main, dev1.0 | 拓扑校验、L1+L2 质量门（PR/入库阶段） | G0~G3 |
+| `service_pipeline.yml` | quwoquan_service/**、deploy/** | Go 构建、rec-model 镜像、kustomize 校验（无 L2） | G2 |
+| `app_pipeline.yml` | quwoquan_app/** | Flutter analyze；v* tag → macOS 构建（无 L1） | G2 / 发布 |
+| `pre-release-gate.yml` | v*-rc* tag、手动 | gate(L1+L2) → deploy → L3 → L4 | G3→G5b |
 
 ### 1.2 当前 pre-release 链路（已实现）
 
 ```
 v*-rc* tag
-  → gate: make gate-full + kustomize build（G3）
+  → gate: make gate（L1+L2）+ kustomize build（G3）
   → deploy-integration: kubectl apply（G5a，需 INTEGRATION_KUBECONFIG）
-  → l3-api-contract: make test-api-contract（G5b）
-  → l4-android / l4-ios: Firebase Test Lab（G5b）
+  → l3-api-contract: make test-api-contract（G5b，部署完成后）
+  → l4-android / l4-ios: Firebase Test Lab（G5b，部署完成后）
 ```
 
-**已落实**：deploy-integration 含 `kubectl apply`；L3/L4 依赖 deploy-integration 完成后再执行。
+**已落实**：gate 仅 L1+L2；L3/L4 必须等待 deploy-integration 完成后执行，验证真实部署环境。
 
 ---
 
@@ -41,7 +40,7 @@ v*-rc* tag（或 main 合并后自动打 tag）
     ↓
 pre-release-gate
     │
-    ├─ Job1: gate（L1+L2+L3 gate-full）
+    ├─ Job1: gate（L1+L2）
     ├─ Job2: deploy-integration（kubectl apply）  ✓ 已实现
     ├─ Job3: l3-api-contract（需 Job2 完成）      ✓ 已实现
     ├─ Job4: l4-android（需 Job2 完成）           ✓ 已实现

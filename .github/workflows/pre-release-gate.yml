@@ -1,4 +1,4 @@
-# Pre-release 串联：gate-full → deploy integration → L3 → L4
+# Pre-release 串联：gate(L1+L2) → deploy integration → L3 → L4
 # 触发：v*-rc* tag；全部通过 → 可灰度到 prod
 # 端到端闭环见 deploy/shared/ci_cd_end_to_end_design.md
 # 当前部署目标：阿里云 ACK
@@ -15,22 +15,27 @@ env:
 
 jobs:
   gate:
-    name: G3 gate-full
+    name: Pre-release Gate — L1+L2 (pre-deploy)
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      STAGING_BASE_URL: ${{ secrets.STAGING_BASE_URL }}
-      TEST_AUTH_TOKEN: ${{ secrets.STAGING_TEST_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+      - name: 设置 Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: quwoquan_service/go.mod
+      - name: 安装 kustomize
+        uses: syntaqx/setup-kustomize@v1
+      - name: 安装 Python 依赖 (rec-model-service)
+        run: pip install -r quwoquan_service/services/rec-model-service/requirements.txt
       - name: 准备 personal_assistant/.env（CI 无 .gitignore 的 .env）
         run: cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
-      - name: Gate (L1+L2+L3)
-        run: make gate-full
+      - name: Gate (L1+L2)
+        run: make gate
       - uses: syntaqx/setup-kustomize@v1
       - name: Deploy kustomization build (G5a 构建验证)
         run: make deploy-integration CLOUD_PROVIDER=${{ env.CLOUD_PROVIDER }} | tail -5
@@ -70,7 +75,7 @@ jobs:
           fi
 
   l3-api-contract:
-    name: G5b L3 API Contract
+    name: Pre-release Gate — L3 (post-deploy)
     needs: [gate, deploy-integration]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -91,7 +96,7 @@ jobs:
         run: make test-api-contract
 
   l4-android:
-    name: L4 Patrol — Android (FTL)
+    name: Pre-release Gate — L4 Android (FTL)
     needs: [gate, deploy-integration]
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -133,7 +138,7 @@ jobs:
             --no-record-video
 
   l4-ios:
-    name: L4 Patrol — iOS (FTL)
+    name: Pre-release Gate — L4 iOS (FTL)
     needs: [gate, deploy-integration]
     runs-on: macos-latest
     timeout-minutes: 45

@@ -62,12 +62,14 @@ jobs:
       - name: Go 构建
         run: make build
 
-      - name: Go 测试
-        run: make test-unit
+      # L2 由 delivery-gate 负责，此处仅 build
 
   build-python:
     name: 构建 rec-model-service 镜像
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 

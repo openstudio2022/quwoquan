@@ -20,11 +20,9 @@ run_service() {
   bash scripts/verify_opsx_ff_8services_consistency.sh
   bash scripts/verify_runtime_packaging.sh
   bash scripts/verify_ff_config_contract.sh
-  bash scripts/verify_deployment_domain_mapping.sh
-  bash scripts/report_deployment_mapping_impact.sh
+  # topology 由 delivery-gate topology job / make gate 负责，避免重复
   bash scripts/verify_deploy_kustomization.sh
   bash scripts/verify_recommendation_service_contract.sh
-  bash scripts/verify_topology_contract_regression.sh
   bash scripts/verify_config_gray_parallel_binding.sh
   # Config release guardrails (skeleton; strict mode via QWQ_CONFIG_GATE_STRICT=1)
   bash scripts/verify_service_config_layout.sh

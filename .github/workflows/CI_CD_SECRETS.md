@@ -10,15 +10,14 @@
 
 | Workflow | 触发 | 职责 | 对应阶段 |
 |----------|------|------|----------|
-| **gate.yml** | PR / push main, dev1.0 | 拓扑校验、service gate、app gate | G0~G3 |
-| **service_pipeline.yml** | quwoquan_service/**、deploy/service/** | Go 构建、rec-model 镜像、kustomize 校验 | G2 |
-| **app_pipeline.yml** | quwoquan_app/**；v* tag → macOS 构建 | Flutter analyze、单元测试、macOS 构建 | G2 / 发布 |
-| **pre-release-gate.yml** | v*-rc* tag、手动 | gate-full、deploy integration、L3、L4 FTL | G3→G5b |
-| **daily-api-contract.yml** | cron 02:00 UTC、手动 | L3 API Contract（advisory，依赖 integration 已部署） | 健康检查 |
+| **delivery-gate.yml** | PR / push main, dev1.0 | 拓扑校验、L1+L2 质量门（PR/入库阶段） | G0~G3 |
+| **service_pipeline.yml** | quwoquan_service/**、deploy/** | Go 构建、rec-model 镜像、kustomize 校验 | G2 |
+| **app_pipeline.yml** | quwoquan_app/**；v* tag → macOS 构建 | Flutter analyze、macOS 构建（L1 由 delivery-gate 负责） | G2 / 发布 |
+| **pre-release-gate.yml** | v*-rc* tag、手动 | L1+L2 → deploy → L3 → L4（L3 统一整合） | G3→G5b |
 
 ---
 
-## 二、gate.yml
+## 二、Delivery Gate（delivery-gate.yml）
 
 **Secrets**：无。仅需仓库代码与脚本。
 
@@ -87,39 +86,22 @@
 
 ---
 
-## 六、Daily API Contract（daily-api-contract.yml）
-
-### 必须配置（L3 跑通时）
-
-| Secret | 用途 |
-|--------|------|
-| **STAGING_BASE_URL** | integration API 地址 |
-| **STAGING_TEST_AUTH_TOKEN** | L3 鉴权 Token（与 pre-release-gate 共用） |
-
-### 说明
-
-- cron 每日 02:00 UTC 执行；staging 不可用时 markTestSkipped，不 fail。
-- 手动触发时可设 `fail_on_error=true` 使失败阻塞。
-
----
-
-## 七、项目结构与路径
+## 六、项目结构与路径
 
 ```
 ├── quwoquan_service/     # Go monorepo + rec-model-service (Python)
 ├── quwoquan_app/         # Flutter 应用
 ├── deploy/service/seed-box/kustomize/overlays/
 └── .github/workflows/
-    ├── gate.yml
+    ├── delivery-gate.yml
     ├── service_pipeline.yml
     ├── app_pipeline.yml
-    ├── pre-release-gate.yml
-    └── daily-api-contract.yml
+    └── pre-release-gate.yml
 ```
 
 ---
 
-## 八、配置步骤
+## 七、配置步骤
 
 1. 进入仓库 **Settings → Secrets and variables → Actions**。
 2. 点击 **New repository secret**。
