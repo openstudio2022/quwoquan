@@ -2,7 +2,7 @@
 # 无聚合根，仅定义 API 契约与消费者，供端云一致性与门禁校验使用。
 version: 1
 service:
-  name: rec-model-service
+  name: recommendation-service
   domain: recommendation
   owner: ml-platform
   description: 推荐模型训练与多场景推理（content_feed / circle_discovery / friend_suggestion），为 content-service 等业务服务提供统一打分能力

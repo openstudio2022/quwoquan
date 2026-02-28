@@ -24,7 +24,7 @@
 
 ### Wave 2 — Python 运行时解耦与 fail-fast
 
-- [ ] D6 在 `recommendation-service` 增加配置分层加载（default->env->version->env vars）
+- [x] D6 在 `recommendation-service` 增加配置分层加载（default->env->version->env vars）
 - [x] D7 增加 `APP_ENV/SERVICE_NAME/CONFIG_VERSION/IMAGE_VERSION/CONFIG_ROOT` 契约校验
 - [x] D8 配置或版本兼容校验失败时启动立即失败（fail-fast）
 - [x] D9 更新 Python 服务 README/CONFIG.md 与 runbook 对齐新契约
@@ -33,13 +33,13 @@
 
 - [x] D10 将 `recommendation-service` Python 测试接入 `make gate-full` 必过
 - [x] D11 增加 Python 配置契约校验脚本并接入 `make verify`
-- [ ] D12 补齐 split-dev / integration-prod 拓扑回归测试与证据
+- [x] D12 补齐 split-dev / integration-prod 拓扑回归测试与证据
 
 ### Wave 4 — 端到端契约一致性
 
-- [ ] D13 验证 content-service 到 recommendation-service 调用契约稳定
-- [ ] D14 验证部署拓扑变化不改变 domain API 语义与错误码行为
-- [ ] D15 产出 deliver 证据包（gate 日志、契约测试、回归结果）
+- [x] D13 验证 content-service 到 recommendation-service 调用契约稳定
+- [x] D14 验证部署拓扑变化不改变 domain API 语义与错误码行为
+- [x] D15 产出 deliver 证据包（gate 日志、契约测试、回归结果）
 
 ## 后续演进任务
 

@@ -1,5 +1,5 @@
 service:
-  name: rec-model-service
+  name: recommendation-service
   http:
     addr: ":18080"
 

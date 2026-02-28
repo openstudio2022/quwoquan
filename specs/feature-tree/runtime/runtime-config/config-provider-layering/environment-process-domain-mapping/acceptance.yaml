@@ -1,6 +1,8 @@
 version: 1
 feature: "environment-process-domain-mapping"
 level: "L4_detail"
+archived: true
+archived_at: "2026-02-28T00:00:00+08:00"
 template: "A1-A8"
 tree_context:
   feature_level: "L4_detail"
