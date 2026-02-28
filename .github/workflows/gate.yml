@@ -25,6 +25,15 @@ jobs:
     needs: topology_regression
     steps:
       - uses: actions/checkout@v4
+      - name: 设置 Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: quwoquan_service/go.mod
+      - name: 安装 kustomize
+        uses: syntaqx/setup-kustomize@v1
+      - name: 安装 Python 依赖 (rec-model-service)
+        run: |
+          pip install -r quwoquan_service/services/rec-model-service/requirements.txt
       - name: Gate (quwoquan_service)
         run: |
           bash scripts/gate_repo.sh --scope service
