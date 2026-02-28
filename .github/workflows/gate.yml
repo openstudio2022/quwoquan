@@ -8,8 +8,21 @@ on:
       - main
 
 jobs:
+  topology_regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Environment Topology Regression
+        run: |
+          bash scripts/verify_deployment_domain_mapping.sh
+          bash scripts/verify_topology_contract_regression.sh
+          bash scripts/report_deployment_mapping_impact.sh
+
   quwoquan_service:
     runs-on: ubuntu-latest
+    needs: topology_regression
     steps:
       - uses: actions/checkout@v4
       - name: Gate (quwoquan_service)
@@ -18,6 +31,7 @@ jobs:
 
   quwoquan_app:
     runs-on: ubuntu-latest
+    needs: topology_regression
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2

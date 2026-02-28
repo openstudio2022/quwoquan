@@ -265,6 +265,46 @@ func TestLoadRuntimeConfig_LocalLayered(t *testing.T) {
 	}
 }
 
+func TestLoadRuntimeConfig_ExternalRootLayered(t *testing.T) {
+	root := t.TempDir()
+
+	must := func(err error) {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	must(os.MkdirAll(filepath.Join(root, "configs", "content-service", "default"), 0o755))
+	must(os.MkdirAll(filepath.Join(root, "configs", "content-service", "integration"), 0o755))
+	must(os.MkdirAll(filepath.Join(root, "releases", "config", "content-service"), 0o755))
+
+	must(os.WriteFile(
+		filepath.Join(root, "configs", "content-service", "default", "config.yaml"),
+		[]byte("service:\n  http:\n    addr: \":18080\"\nconfig:\n  version: \"v0.0.1\"\n"),
+		0o644,
+	))
+	must(os.WriteFile(
+		filepath.Join(root, "configs", "content-service", "integration", "config.yaml"),
+		[]byte("service:\n  http:\n    addr: \":19090\"\n"),
+		0o644,
+	))
+	must(os.WriteFile(
+		filepath.Join(root, "releases", "config", "content-service", "v2026.02.28.0.yaml"),
+		[]byte("config:\n  version: \"v2026.02.28.0\"\n"),
+		0o644,
+	))
+
+	cfg, err := loadRuntimeConfig("content-service", "integration", root, "v2026.02.28.0")
+	if err != nil {
+		t.Fatalf("loadRuntimeConfig external root failed: %v", err)
+	}
+	if cfg.Service.HTTP.Addr != ":19090" {
+		t.Fatalf("expected integration override addr :19090, got %q", cfg.Service.HTTP.Addr)
+	}
+	if cfg.Config.Version != "v2026.02.28.0" {
+		t.Fatalf("expected version overlay v2026.02.28.0, got %q", cfg.Config.Version)
+	}
+}
+
 func TestValidateRuntimeCompatibility(t *testing.T) {
 	cfg := config{}
 	cfg.Config.MinImageVersion = "1.2.0"

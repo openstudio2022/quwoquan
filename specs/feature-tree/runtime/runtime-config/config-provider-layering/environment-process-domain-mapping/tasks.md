@@ -43,5 +43,5 @@
 
 ## 后续演进任务
 
-- [ ] D16 增加“变更影响报告”：当映射变更时自动输出受影响 domain 与进程
-- [ ] D17 在 CI 中增加环境级回归（split dev / composed integration）对比测试
+- [x] D16 增加“变更影响报告”：当映射变更时自动输出受影响 domain 与进程
+- [x] D17 在 CI 中增加环境级回归（split dev / composed integration）对比测试

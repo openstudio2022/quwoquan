@@ -39,9 +39,13 @@ if [[ ! -f "$target_file" ]]; then
   exit 1
 fi
 
-deploy_file="$ROOT/deploy/$SERVICE/deployment.yaml"
+deploy_file="$ROOT/deploy/service/$SERVICE/deployment.yaml"
 if [[ ! -f "$deploy_file" ]]; then
-  echo "FAIL: deployment manifest not found: $deploy_file" >&2
+  # backward compatibility fallback
+  deploy_file="$ROOT/deploy/$SERVICE/deployment.yaml"
+fi
+if [[ ! -f "$deploy_file" ]]; then
+  echo "FAIL: deployment manifest not found under deploy/service or deploy root for service=$SERVICE" >&2
   exit 1
 fi
 

@@ -19,7 +19,7 @@
 
 ### Wave 2 — 门禁与测试（第二阶段）
 
-- [ ] C5 落地自动化测试矩阵（本地/集成/生产配置加载）
+- [x] C5 落地自动化测试矩阵（本地/集成/生产配置加载）
 - [x] C5.1 新建服务自动配置引导
   - 新增 `scripts/bootstrap_service_config_layout.sh`
   - S04 新建服务流程自动调用，生成 `default/local/integration/prod/config.yaml`
@@ -40,8 +40,8 @@
 ### Wave 3 — 进入 deliver 前置
 
 - [x] C8 验证单服务（content-service）通过完整 gate
-- [ ] C9 验证“灰度新老版本并行绑定”流程可执行（与 platform-ops 任务联调）
-- [ ] C10 输出 deliver 输入清单（测试报告、门禁报告、回滚演练记录）
+- [x] C9 验证“灰度新老版本并行绑定”流程可执行（与 platform-ops 任务联调）
+- [x] C10 输出 deliver 输入清单（测试报告、门禁报告、回滚演练记录）
 
 ## 搁置任务（带规划）
 

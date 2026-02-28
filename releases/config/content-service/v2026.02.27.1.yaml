@@ -1,0 +1,13 @@
+config:
+  version: "v2026.02.27.1"
+  min_image_version: "1.0.0"
+  max_image_version: "2.0.0"
+
+service:
+  name: content-service
+
+redis:
+  rec:
+    mode: standalone
+    addr: "redis-content-rec:6379"
+    tls: false
