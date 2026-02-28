@@ -1,6 +1,7 @@
 # Pre-release 串联：gate-full → deploy integration → L3 → L4
 # 触发：v*-rc* tag；全部通过 → 可灰度到 prod
 # 端到端闭环见 deploy/shared/ci_cd_end_to_end_design.md
+# 当前部署目标：阿里云 ACK
 name: pre-release-gate
 
 on:
@@ -56,7 +57,7 @@ jobs:
           mkdir -p ~/.kube
           echo "$INTEGRATION_KUBECONFIG" | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config
-          kustomize build -f kustomization.${{ env.CLOUD_PROVIDER }}.integration.yaml | kubectl apply -f - --server-side
+          kustomize build -f deploy/kustomization/${{ env.CLOUD_PROVIDER }}.integration.yaml | kubectl apply -f - --server-side
           touch .deploy-applied
       - name: Wait for rollout
         run: |

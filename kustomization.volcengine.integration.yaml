@@ -1,5 +1,0 @@
-# 火山引擎 VKE — integration，使用根路径
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - deploy/service/seed-box/kustomize/overlays/integration

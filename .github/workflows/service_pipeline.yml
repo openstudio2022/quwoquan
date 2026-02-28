@@ -1,8 +1,9 @@
 # =============================================================================
 # Service Pipeline — quwoquan_service CI/CD
 # =============================================================================
-# 触发条件：quwoquan_service/** 路径变动
+# 触发条件：quwoquan_service/**、deploy/** 路径变动
 # 流程：Go 构建与测试 + Python (rec-model-service) Docker 镜像 → kustomize 校验
+# 当前部署目标：阿里云 ACK（deploy/kustomization/aliyun.prod.yaml）
 #
 # 【必须配置的 GitHub Secrets】（部署时）
 #   DOCKER_REGISTRY     — Docker 镜像仓库地址，如 ghcr.io
@@ -19,14 +20,14 @@ on:
       - master
     paths:
       - 'quwoquan_service/**'
-      - 'deploy/service/**'
+      - 'deploy/**'
   pull_request:
     branches:
       - main
       - master
     paths:
       - 'quwoquan_service/**'
-      - 'deploy/service/**'
+      - 'deploy/**'
   workflow_dispatch:
 
 env:
@@ -110,5 +111,5 @@ jobs:
 
       - name: Kustomize build 校验
         run: |
-          kustomize build -f kustomization.aliyun.prod.yaml > /dev/null
+          kustomize build -f deploy/kustomization/aliyun.prod.yaml > /dev/null
           echo "Kustomize build OK"

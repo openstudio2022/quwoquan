@@ -45,18 +45,16 @@
 
 ## 4. G5a：部署到 integration
 
-1) 选择云厂商并渲染 deployment（使用根路径 kustomization）：
+1) 选择云厂商并渲染 deployment（入口：`deploy/kustomization/`）：
 
 ```bash
 # 阿里云（默认）
 CLOUD_PROVIDER=${CLOUD_PROVIDER:-aliyun}
-kustomize build -f kustomization.${CLOUD_PROVIDER}.integration.yaml
+kustomize build -f deploy/kustomization/${CLOUD_PROVIDER}.integration.yaml
 
 # 或 make deploy-integration
 make deploy-integration [CLOUD_PROVIDER=volcengine]
 ```
-
-根路径约定：所有 kustomization 从仓库根自顶向下表述，如 `deploy/service/seed-box/kustomize/overlays/integration`，不使用 `../` 相对路径。
 
 2) 应用部署（按实际 CI/CD 或 ArgoCD 流程）
 

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # 部署到 integration 环境，支持 CLOUD_PROVIDER 切换（aliyun|volcengine|huaweicloud）
-# 使用根路径 kustomization 文件：deploy/service/...
+# 入口文件：deploy/kustomization/${CLOUD_PROVIDER}.integration.yaml
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 CLOUD_PROVIDER="${CLOUD_PROVIDER:-aliyun}"
-KUSTOMIZATION="kustomization.${CLOUD_PROVIDER}.integration.yaml"
+KUSTOMIZATION="deploy/kustomization/${CLOUD_PROVIDER}.integration.yaml"
 
 if [[ ! -f "$KUSTOMIZATION" ]]; then
   echo "FAIL: kustomization not found: $KUSTOMIZATION" >&2
@@ -16,7 +16,7 @@ if [[ ! -f "$KUSTOMIZATION" ]]; then
 fi
 
 echo "[deploy] integration (CLOUD_PROVIDER=$CLOUD_PROVIDER)"
-echo "[deploy] building: $KUSTOMIZATION (paths from repo root)"
+echo "[deploy] building: $KUSTOMIZATION"
 
 if command -v kustomize &>/dev/null; then
   kustomize build -f "$KUSTOMIZATION"

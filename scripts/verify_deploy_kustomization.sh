@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 验证多云 kustomization 可构建（根路径 kustomization.${CLOUD_PROVIDER}.integration.yaml）
+# 验证多云 kustomization 可构建（deploy/kustomization/${CLOUD_PROVIDER}.integration.yaml）
 # kustomize 或 kubectl 未安装时跳过
 set -euo pipefail
 
@@ -20,7 +20,7 @@ fi
 
 FAIL=0
 for cloud in aliyun volcengine huaweicloud; do
-  kf="kustomization.${cloud}.integration.yaml"
+  kf="deploy/kustomization/${cloud}.integration.yaml"
   if [[ ! -f "$kf" ]]; then
     echo "[verify] FAIL: missing $kf" >&2
     FAIL=1
