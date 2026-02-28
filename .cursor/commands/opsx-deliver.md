@@ -9,6 +9,8 @@ description: 端到端交付（Apply 条件就绪后，验收驱动完成开发 
 
 在具备 `/opsx-apply` 条件后，**以 acceptance.yaml A1~A8 验收标准为驱动**，迭代完成开发，直至全部验收满足，再依次执行验证、归档与代码提交入库。适用于「一气呵成交付到合入」的场景。
 
+**端到端链路**：特性 → **deliver 入库（L1/L2 自测通过）** → **/opsx-deploy 集成验证（L3/L4）** → 灰度到生产。
+
 ---
 
 ## 前置条件检查（执行前必须满足）
@@ -127,6 +129,8 @@ G3 通过后，执行归档逻辑（与 `/opsx-archive` 一致）：
 
 **/opsx-deliver** = Apply（验收驱动循环）+ Verify + Archive + Submit，一气呵成完成从「apply 条件就绪」到「代码入库」的全流程。
 
+**后续步骤**：入库后执行 `/opsx-deploy`，完成部署到 integration、L3/L4 集成验证、灰度到 prod。
+
 ---
 
 ## 输出摘要
@@ -144,4 +148,6 @@ G3 通过后，执行归档逻辑（与 `/opsx-archive` 一致）：
 | 4. 提交入库 (G4) | 已 commit + push |
 
 变更摘要：<git diff --stat>
+
+后续：执行 /opsx-deploy 完成 integration 部署、L3/L4 验证、灰度到 prod。
 ```

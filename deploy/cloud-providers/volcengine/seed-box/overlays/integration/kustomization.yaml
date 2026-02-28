@@ -1,0 +1,6 @@
+# 火山引擎 VKE — integration 环境
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../../service/seed-box/kustomize/overlays/integration
+# 火山引擎 CLB/存储等 patch 可在此添加

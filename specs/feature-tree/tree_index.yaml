@@ -1798,6 +1798,59 @@ features:
                   domain: ""
                   status: specified
                   tags: [location, nearby, search]
+        - id: deliver-deploy-prod-pipeline
+          name: deliver-deploy-prod-pipeline
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/deliver-deploy-prod-pipeline
+          domain: ""
+          status: completed
+          tags: [deployment, deliver, deploy, multi-cloud]
+          children:
+            - id: integration-deploy-and-l3-l4-gate
+              name: integration-deploy-and-l3-l4-gate
+              level: L3_component
+              path: ../specs/feature-tree/runtime/deliver-deploy-prod-pipeline/integration-deploy-and-l3-l4-gate
+              domain: ""
+              status: completed
+              tags: [integration, l3, l4]
+              children:
+                - id: pre-release-workflow-chain
+                  name: pre-release-workflow-chain
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/deliver-deploy-prod-pipeline/integration-deploy-and-l3-l4-gate/pre-release-workflow-chain
+                  domain: ""
+                  status: completed
+                  tags: []
+            - id: multi-cloud-deploy-overlay
+              name: multi-cloud-deploy-overlay
+              level: L3_component
+              path: ../specs/feature-tree/runtime/deliver-deploy-prod-pipeline/multi-cloud-deploy-overlay
+              domain: ""
+              status: specified
+              tags: [multi-cloud, aliyun, volcengine, huaweicloud]
+              children:
+                - id: aliyun-volcengine-huaweicloud-overlays
+                  name: aliyun-volcengine-huaweicloud-overlays
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/deliver-deploy-prod-pipeline/multi-cloud-deploy-overlay/aliyun-volcengine-huaweicloud-overlays
+                  domain: ""
+                  status: completed
+                  tags: []
+            - id: gray-release-to-prod
+              name: gray-release-to-prod
+              level: L3_component
+              path: ../specs/feature-tree/runtime/deliver-deploy-prod-pipeline/gray-release-to-prod
+              domain: ""
+              status: completed
+              tags: [gray-release, slo]
+              children:
+                - id: config-rollout-slo-gate
+                  name: config-rollout-slo-gate
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/deliver-deploy-prod-pipeline/gray-release-to-prod/config-rollout-slo-gate
+                  domain: ""
+                  status: completed
+                  tags: []
         - id: runtime-agentpack
           name: runtime-agentpack
           level: L2_feature

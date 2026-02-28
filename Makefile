@@ -103,3 +103,9 @@ gate-full:
 	@bash scripts/gate_repo.sh
 	@$(MAKE) test-api-contract
 
+# Deploy to integration. CLOUD_PROVIDER=aliyun|volcengine|huaweicloud (default: aliyun).
+# Usage: make deploy-integration [CLOUD_PROVIDER=volcengine]
+.PHONY: deploy-integration
+deploy-integration:
+	@bash scripts/deploy_to_integration.sh
+

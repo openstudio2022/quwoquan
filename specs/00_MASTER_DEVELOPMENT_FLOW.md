@@ -5,19 +5,35 @@
 
 ---
 
-## 一、开发流水线（5 个阶段 × 自动卡点）
+## 一、开发流水线（6 个阶段 × 自动卡点）
 
 ```
-  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
-  │  Plan    │───▶│  Create  │───▶│ Implement│───▶│  Verify  │───▶│  Submit  │
-  │(需求澄清) │    │(特性创建) │    │ (实施)   │    │ (验收)   │    │ (提交)   │
-  └────┬─────┘    └────┬─────┘    └────┬─────┘    └────┬─────┘    └────┬─────┘
-       │               │               │               │               │
-   ┌───┴───┐       ┌───┴───┐       ┌───┴───┐       ┌───┴───┐       ┌───┴───┐
-   │ AUTO  │       │ AUTO  │       │ AUTO  │       │ AUTO  │       │ AUTO  │
-   │ GATE  │       │ GATE  │       │ GATE  │       │ GATE  │       │ GATE  │
-   │  G0   │       │  G1   │       │  G2   │       │  G3   │       │  G4   │
-   └───────┘       └───────┘       └───────┘       └───────┘       └───────┘
+  特性 → 入库(L1/L2) → 集成验证(L3/L4) → 生产(灰度)
+        deliver             deploy
+```
+
+```
+  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
+  │  Plan    │───▶│  Create  │───▶│ Implement│───▶│  Verify  │───▶│  Submit  │───▶│  Deploy  │
+  │(需求澄清) │    │(特性创建) │    │ (实施)   │    │ (验收)   │    │ (入库)   │    │ (部署)   │
+  └────┬─────┘    └────┬─────┘    └────┬─────┘    └────┬─────┘    └────┬─────┘    └────┬─────┘
+       │               │               │               │               │               │
+   ┌───┴───┐       ┌───┴───┐       ┌───┴───┐       ┌───┴───┐       ┌───┴───┐       ┌───┴───┐
+   │ AUTO  │       │ AUTO  │       │ AUTO  │       │ AUTO  │       │ AUTO  │       │ AUTO  │
+   │ GATE  │       │ GATE  │       │ GATE  │       │ GATE  │       │ GATE  │       │ GATE  │
+   │  G0   │       │  G1   │       │  G2   │       │  G3   │       │  G4   │       │  G5   │
+   └───────┘       └───────┘       └───────┘       └───────┘       └───────┘       └───────┘
+       │               │               │               │               │               │
+       │               │               │               │               │               ▼
+       │               │               │               │               │    ┌──────────────────┐
+       │               │               │               │               │    │ G5a 部署 integration│
+       │               │               │               │               │    │ G5b L3/L4 集成验证 │
+       │               │               │               │               │    │ G5c 灰度到 prod   │
+       │               │               │               │               │    └──────────────────┘
+       ▼               ▼               ▼               ▼               ▼
+  L1/L2 自测通过 ────────────────────────────────────────────────────────────────▶ 入库
+  L3/L4 集成验证 ─────────────────────────────────────────────────────────────────▶ integration
+  灰度/滚动发布 ──────────────────────────────────────────────────────────────────▶ prod
 ```
 
 每个阶段结束时 AI Agent **自动执行**对应卡点，不需要人为触发。
@@ -170,6 +186,37 @@ git status → 分析变更范围
 
 ---
 
+### 阶段 6：Deploy（部署）
+
+**入口**：`/opsx-deploy`
+
+**前置**：Submit（G4）已完成，代码已入库 main。目标：从特性到入库（L1/L2 自测通过），再到集成验证（L3/L4），再到生产端到端打通。
+
+**AI Agent 必须做的事**：
+1. **G5a：部署到 integration** — 将当前 main 构建物部署到 integration 环境（staging），使 L3/L4 可打该环境
+2. **G5b：L3/L4 集成验证** — 在 integration 上执行 L3 API Contract 与 L4 Patrol 测试，全部通过方可进入 G5c
+3. **G5c：灰度到 prod** — 按 `deploy/service/config-release/` 规范，执行灰度/滚动发布到生产；SLO 卡点通过则继续，否则回滚
+
+**自动卡点 G5**：
+```bash
+# G5a：部署到 integration（由 CI/CD 或人工触发，见 deploy/shared/deliver_to_production_runbook.md）
+# G5b：L3/L4 集成验证（阻塞）
+STAGING_BASE_URL=<integration-api-url> TEST_AUTH_TOKEN=<token> make test-api-contract   # L3
+patrol test test/patrol/ --dart-define=ENV=staging --dart-define=STAGING_BASE_URL=...   # L4
+# G5c：灰度/滚动发布到 prod
+make config-gray-rollout SERVICE=... FROM_IMAGE=... TO_IMAGE=... FROM_CONFIG=... TO_CONFIG=... STEP=25
+# 每步后 SLO 卡点：make config-slo-gate ERROR_RATE=... P95_MS=... REDIS_ERROR_RATE=...
+```
+
+**灰度发布要求**（见 `deploy/service/config-release/`）：
+- 滚动步进：5 → 25 → 50 → 100（%）
+- 每步后执行 SLO 卡点：错误率、P95 延迟、Redis 错误率
+- 超过阈值 → 暂停或回滚；`high_risk_fields` 变更须审批 + 灰度 + 回滚方案
+
+**使用命令**：`/opsx-deploy`（集成验证 + 灰度到生产）
+
+---
+
 ## 三、命令速查
 
 | 阶段 | 命令 | 作用 | 自动卡点 |
@@ -178,10 +225,11 @@ git status → 分析变更范围
 | Create | `/opsx-ff` | 创建特性（特性树 + acceptance + tasks） | G1（verify + codegen） |
 | Create | `/qwq-extend <scenario>` | 对象级扩展（20 个场景） | G1（verify + codegen） |
 | Implement | `/opsx-apply` | 按 tasks.md 逐项实施 | G2（build + test-contract per task） |
-| **Implement→Submit** | **`/opsx-deliver`** | **Apply 条件就绪后，验收驱动完成开发 → 验证 → 归档 → 提交入库** | G2 → G3 → G4 |
+| **Implement→Submit** | **`/opsx-deliver`** | **验收驱动开发 → 验证 → 归档 → 提交入库（L1/L2 自测通过）** | G2 → G3 → G4 |
 | Verify | `/opsx-verify` | 验证实现匹配制品 | G3（gate-full） |
 | Verify | `/fullstack-audit` | 独立调用全栈审计 | G3（全维度审计） |
 | Submit | `/submit-with-gate` | 提交合入 | G4（按范围审计 + commit） |
+| **Deploy** | **`/opsx-deploy`** | **部署到 integration → L3/L4 集成验证 → 灰度到 prod** | G5a → G5b → G5c |
 | Archive | `/opsx-archive` | 归档完成的特性 | G3（gate-full before archive） |
 
 单独调用门禁（随时可用）：
@@ -322,7 +370,8 @@ quwoquan/
 │       ├── opsx-explore.md             # 自由探索
 │       ├── qwq-extend.md              # 对象级扩展（含自动 G1）
 │       ├── fullstack-audit.md          # 独立审计
-│       └── submit-with-gate.md         # 提交（含自动 G4）
+│       ├── submit-with-gate.md         # 提交（含自动 G4）
+│       └── opsx-deploy.md              # 部署（含 G5a→G5b→G5c）
 │
 ├── specs/
 │   ├── 00_MASTER_DEVELOPMENT_FLOW.md   # ← 本文档（唯一主线）
@@ -355,3 +404,4 @@ quwoquan/
 | **特性树文档标准（四类文档）** | `specs/feature-tree/00_FEATURE_TREE_STANDARD.md` |
 | **L1-L5 层级定义与卡点落实** | `specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md` |
 | 元数据目录结构 | `contracts/metadata/DESIGN.md` |
+| **Deliver → Prod 端到端流程** | `deploy/shared/deliver_to_production_runbook.md` |

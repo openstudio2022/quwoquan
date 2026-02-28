@@ -16,6 +16,19 @@ l2:
         l4:
           - feature: location-nearby-search-gateway
 
+  # ─── 平台交付流水线：deliver → deploy → prod ───
+  - feature: deliver-deploy-prod-pipeline
+    l3:
+      - feature: integration-deploy-and-l3-l4-gate
+        l4:
+          - feature: pre-release-workflow-chain
+      - feature: multi-cloud-deploy-overlay
+        l4:
+          - feature: aliyun-volcengine-huaweicloud-overlays
+      - feature: gray-release-to-prod
+        l4:
+          - feature: config-rollout-slo-gate
+
   # ─── 底座层：已有 runtime 能力组件 ───
   - feature: runtime-config
     l3:
