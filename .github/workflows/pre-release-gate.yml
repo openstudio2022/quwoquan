@@ -23,6 +23,8 @@ jobs:
       TEST_AUTH_TOKEN: ${{ secrets.STAGING_TEST_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+      - name: 准备 personal_assistant/.env（CI 无 .gitignore 的 .env）
+        run: cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -78,6 +80,8 @@ jobs:
       TEST_AUTH_TOKEN: ${{ secrets.STAGING_TEST_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+      - name: 准备 personal_assistant/.env
+        run: cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -94,6 +98,8 @@ jobs:
     if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
     steps:
       - uses: actions/checkout@v4
+      - name: 准备 personal_assistant/.env
+        run: cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -134,6 +140,8 @@ jobs:
     if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
     steps:
       - uses: actions/checkout@v4
+      - name: 准备 personal_assistant/.env
+        run: cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
       - uses: subosito/flutter-action@v2
         with:
           channel: stable

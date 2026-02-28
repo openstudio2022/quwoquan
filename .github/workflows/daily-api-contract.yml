@@ -26,6 +26,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: 准备 personal_assistant/.env
+        run: cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}

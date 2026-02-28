@@ -43,6 +43,8 @@ jobs:
     needs: topology_regression
     steps:
       - uses: actions/checkout@v4
+      - name: 准备 personal_assistant/.env（CI 无 .gitignore 的 .env）
+        run: cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
