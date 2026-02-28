@@ -39,7 +39,7 @@
 
 - `FROM_IMAGE`、`TO_IMAGE`：当前与目标镜像版本
 - `FROM_CONFIG`、`TO_CONFIG`：当前与目标配置版本
-- `STEP`：5 → 25 → 50 → 100（依次执行）
+- `STEP`：当前 2 副本为 50（初始灰度 1 pod，全自动）→ 100（Carry-on 全量，需审批）。初始灰度 pod 数可配置；副本增加时可扩展中间阶段。
 
 ---
 
@@ -102,7 +102,7 @@ make config-gray-rollout \
   SERVICE=<service> \
   FROM_IMAGE=<old> TO_IMAGE=<new> \
   FROM_CONFIG=<old> TO_CONFIG=<new> \
-  STEP=5   # 依次 25, 50, 100
+  STEP=50  # 初始灰度（1 pod，全自动）；100 为 Carry-on 全量（需审批）
 ```
 
 ### 6.2 SLO 卡点（每步后）
@@ -139,7 +139,7 @@ make config-rollback SERVICE=<service> TO_CONFIG=<rollback-version>
 ☐ integration 已部署目标版本
 ☐ L3 test-api-contract 通过
 ☐ L4 patrol 通过（或 FTL 通过）
-☐ 灰度 STEP 5 → 25 → 50 → 100 依次执行
+☐ 灰度：初始灰度（1 pod，全自动）→ Carry-on 100%（审批后执行）
 ☐ 每步 SLO 卡点通过
 ☐ prod 100% 后监控稳定
 ```

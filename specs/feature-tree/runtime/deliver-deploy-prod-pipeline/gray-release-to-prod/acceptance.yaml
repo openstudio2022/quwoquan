@@ -1,0 +1,56 @@
+version: 1
+feature: "gray-release-to-prod"
+archived: true
+archived_at: "2026-02-28T00:00:00Z"
+level: "L3"
+template: "A1-A5"
+focus_groups: []
+tests:
+  contract:
+    - 场景：gray_rollout_stages.yaml 存在且可解析
+    - 场景：deploy-prod-gray workflow 支持 step 50/100
+  integration:
+    - 场景：初始灰度 STEP=50 可全自动执行
+    - 场景：Carry-on STEP=100 需 Environment approval 或 workflow_dispatch
+  uat:
+    - 场景：deliver_to_production_runbook 端到端可执行
+    - 场景：deploy_prod_design 与实现一致
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"
+level_acceptance:
+  A1:
+    criteria: "初始灰度（1 pod）可全自动执行，SLO 通过后进入 Carry-on 审批"
+    status: implemented
+    linked_tasks: [T2, T3]
+    tests:
+      - file: .github/workflows/deploy-prod-auto.yml
+        functions: [prepare, gray-initial, gray-carry-on]
+  A2:
+    criteria: "Carry-on 100% 需人工审批（Environment approval 或 workflow_dispatch 续跑）"
+    status: implemented
+    linked_tasks: [T2]
+    tests:
+      - file: .github/workflows/deploy-prod-auto.yml
+        functions: [environment production]
+  A3:
+    criteria: "gray_rollout_stages.yaml 可配置 replicas 与 auto，workflow 按配置计算 STEP"
+    status: implemented
+    linked_tasks: [M1, T3]
+    tests:
+      - file: scripts/verify_gray_rollout_stages.sh
+        functions: [parse]
+      - file: .github/workflows/deploy-prod-auto.yml
+        functions: [prepare]
+  A4:
+    criteria: "半自动 workflow_dispatch 支持 step 50 → 100（2 副本）"
+    status: implemented
+    linked_tasks: [T1]
+    tests:
+      - file: .github/workflows/deploy-prod-gray.yml
+        functions: [workflow_dispatch, step 50, step 100]
+  A5:
+    criteria: "deliver_to_production_runbook 与 deploy_prod_design 一致"
+    status: implemented
+    linked_tasks: [M2]
+    tests: []

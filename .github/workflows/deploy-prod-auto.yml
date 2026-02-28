@@ -1,0 +1,60 @@
+# 全自动灰度到 prod：pre-release 通过后自动触发
+# Stage 1 初始灰度全自动，Stage 2 100% 需 Environment approval
+# 设计见 deploy/shared/deploy_prod_design.md
+name: Deploy to Prod (Auto)
+
+on:
+  workflow_run:
+    workflows: [pre-release-gate]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  prepare:
+    name: Prepare (parse stages)
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      initial_step: ${{ steps.stages.outputs.initial_step }}
+      full_step: ${{ steps.stages.outputs.full_step }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse gray_rollout_stages
+        id: stages
+        run: |
+          total=$(grep '^total_replicas:' deploy/shared/gray_rollout_stages.yaml | awk '{print $2}')
+          total=${total:-2}
+          r1=$(awk '/name: initial/,/replicas:/{if(/replicas:/){print $2;exit}}' deploy/shared/gray_rollout_stages.yaml)
+          r2=$(awk '/name: full/,/replicas:/{if(/replicas:/){print $2;exit}}' deploy/shared/gray_rollout_stages.yaml)
+          r1=${r1:-1}; r2=${r2:-2}
+          s1=$((r1 * 100 / total)); s2=$((r2 * 100 / total))
+          for x in 5 25 50 100; do [[ $s1 -le $x ]] && { s1=$x; break; }; done
+          [[ $s1 -gt 100 ]] && s1=100
+          for x in 5 25 50 100; do [[ $s2 -le $x ]] && { s2=$x; break; }; done
+          [[ $s2 -gt 100 ]] && s2=100
+          echo "initial_step=$s1" >> $GITHUB_OUTPUT
+          echo "full_step=$s2" >> $GITHUB_OUTPUT
+
+  gray-initial:
+    name: Stage 1 — Initial (auto)
+    needs: [prepare]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Placeholder — deploy STEP=${{ needs.prepare.outputs.initial_step }}
+        run: |
+          echo "Stage 1 initial gray: STEP=${{ needs.prepare.outputs.initial_step }}"
+          echo "Deploy + SLO would run here (PROD_KUBECONFIG required)"
+          echo "Current: dry-run placeholder; wire PROD_KUBECONFIG for real deploy"
+
+  gray-carry-on:
+    name: Stage 2 — Carry-on 100% (approval)
+    needs: [prepare, gray-initial]
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Placeholder — deploy STEP=100
+        run: |
+          echo "Stage 2 carry-on: STEP=${{ needs.prepare.outputs.full_step }}"
+          echo "Deploy + SLO would run here (after Environment approval)"

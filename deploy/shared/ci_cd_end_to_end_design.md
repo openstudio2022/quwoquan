@@ -110,10 +110,10 @@ deploy-integration:
 
 **落实方式**：
 1. **人工**：pre-release 全通过后，运维执行 `make config-gray-rollout ...`
-2. **半自动**：新增 `deploy-prod-gray.yml` workflow，`workflow_dispatch` 触发，输入 `STEP`、`FROM_IMAGE` 等，内部调用 `config-gray-rollout` + `config-slo-gate`
-3. **全自动**：pre-release 通过后自动触发灰度 workflow（需强 SLO 与审批策略）
+2. **半自动**：新增 `deploy-prod-gray.yml` workflow，`workflow_dispatch` 触发，输入 STEP/版本/SLO 等，单步灰度 + SLO 卡点（详见 `deploy/shared/deploy_prod_design.md`）
+3. **全自动**：pre-release 通过后自动触发灰度；**初始灰度**（1 pod 可配置，全自动）→ **Carry-on 100%**（需人工审批）；SLO 从监控拉取；随副本增加可扩展阶段（详见 `deploy/shared/deploy_prod_design.md`）
 
-**建议**：先人工，待流程稳定后演进到半自动。
+**建议**：先人工，待流程稳定后演进到半自动，再视需要上全自动。
 
 ---
 

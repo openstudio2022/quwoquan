@@ -1,0 +1,156 @@
+# 半自动灰度到 prod：workflow_dispatch，单步灰度 + SLO 卡点
+# 设计见 deploy/shared/deploy_prod_design.md
+name: Deploy to Prod (Gray)
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: 'Service name'
+        required: true
+        default: content-service
+        type: choice
+        options:
+          - content-service
+          - recommendation-service
+      cloud_provider:
+        description: 'Cloud provider'
+        required: true
+        type: choice
+        options:
+          - aliyun
+          - volcengine
+          - huaweicloud
+      from_image:
+        description: 'Current prod image version'
+        required: true
+      to_image:
+        description: 'Target image version (match pre-release)'
+        required: true
+      from_config:
+        description: 'Current prod config version'
+        required: true
+      to_config:
+        description: 'Target config version'
+        required: true
+      step:
+        description: 'Gray step (50=initial, 100=full for 2 replicas)'
+        required: true
+        type: choice
+        options:
+          - '50'
+          - '100'
+      error_rate:
+        description: 'SLO: error rate (e.g. 0.005)'
+        required: true
+        default: '0.005'
+      p95_ms:
+        description: 'SLO: P95 latency ms'
+        required: true
+        default: '100'
+      redis_error_rate:
+        description: 'SLO: Redis error rate'
+        required: true
+        default: '0'
+      dry_run:
+        description: 'Dry run (no prod apply)'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  validate:
+    name: Validate step & config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check config file exists
+        run: |
+          cfg="releases/config/${{ github.event.inputs.service }}/${{ github.event.inputs.to_config }}.yaml"
+          if [[ ! -f "$cfg" ]]; then
+            echo "FAIL: config not found: $cfg"
+            exit 1
+          fi
+      - name: Check step sequence
+        run: |
+          state=".release-state/${{ github.event.inputs.service }}.state"
+          prev=0
+          if [[ -f "$state" ]]; then
+            prev=$(awk -F= '/^step=/{print $2}' "$state" || echo 0)
+          fi
+          step=${{ github.event.inputs.step }}
+          if [[ "$prev" -gt "$step" ]]; then
+            echo "FAIL: step cannot go backwards (prev=$prev, next=$step)"
+            exit 1
+          fi
+
+  deploy-prod-step:
+    name: Deploy prod (optional)
+    needs: [validate]
+    runs-on: ubuntu-latest
+    if: github.event.inputs.dry_run != 'true'
+    env:
+      PROD_KUBECONFIG: ${{ secrets.PROD_KUBECONFIG }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: syntaqx/setup-kustomize@v1
+      - name: Install kubectl
+        run: |
+          curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+      - name: Deploy to prod
+        run: |
+          step=${{ github.event.inputs.step }}
+          total=2
+          replicas=$((step * total / 100))
+          [[ $replicas -lt 1 ]] && replicas=1
+          CLOUD_PROVIDER=${{ github.event.inputs.cloud_provider }} \
+          IMAGE_VERSION=${{ github.event.inputs.to_image }} \
+          CONFIG_VERSION=${{ github.event.inputs.to_config }} \
+          REPLICAS=$replicas \
+          DRY_RUN=false \
+          PROD_KUBECONFIG="$PROD_KUBECONFIG" \
+          bash scripts/deploy_to_prod.sh
+      - name: Wait rollout
+        run: kubectl rollout status deployment/seed-box -n seed-box-prod --timeout=5m
+
+  gray-rollout-state:
+    name: Update rollout state
+    needs: [validate, deploy-prod-step]
+    if: always() && (needs.validate.result == 'success') && (needs.deploy-prod-step.result == 'success' || needs.deploy-prod-step.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Config gray rollout
+        run: |
+          make config-gray-rollout \
+            SERVICE=${{ github.event.inputs.service }} \
+            FROM_IMAGE=${{ github.event.inputs.from_image }} \
+            TO_IMAGE=${{ github.event.inputs.to_image }} \
+            FROM_CONFIG=${{ github.event.inputs.from_config }} \
+            TO_CONFIG=${{ github.event.inputs.to_config }} \
+            STEP=${{ github.event.inputs.step }}
+
+  slo-gate:
+    name: SLO gate
+    needs: [gray-rollout-state]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: SLO gate
+        id: slo
+        run: |
+          make config-slo-gate \
+            ERROR_RATE=${{ github.event.inputs.error_rate }} \
+            P95_MS=${{ github.event.inputs.p95_ms }} \
+            REDIS_ERROR_RATE=${{ github.event.inputs.redis_error_rate }} || true
+          exit_code=$?
+          echo "exitcode=$exit_code" >> $GITHUB_OUTPUT
+          exit $exit_code
+      - name: Rollback on SLO rollback
+        if: steps.slo.outputs.exitcode == '20'
+        run: |
+          make config-rollback \
+            SERVICE=${{ github.event.inputs.service }} \
+            TO_CONFIG=${{ github.event.inputs.from_config }}
+          echo "::error::SLO rollback triggered"

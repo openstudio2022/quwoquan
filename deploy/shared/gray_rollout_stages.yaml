@@ -1,0 +1,21 @@
+# 灰度阶段配置（可扩展）
+# 供 deploy-prod-auto 等 workflow 读取，计算 STEP 与各阶段是否需审批
+#
+# STEP 映射：STEP = (replicas / total_replicas) * 100，取最接近 5|25|50|100
+# 当前 2 副本：1 -> 50，2 -> 100
+
+total_replicas: 2
+stages:
+  - name: initial
+    replicas: 1
+    auto: true   # 全自动，无需审批
+  - name: full
+    replicas: 2  # 100%
+    auto: false  # 需人工审批
+
+# 未来 4 副本示例：
+# total_replicas: 4
+# stages:
+#   - { name: initial, replicas: 1, auto: true }
+#   - { name: mid, replicas: 2, auto: false }
+#   - { name: full, replicas: 4, auto: false }

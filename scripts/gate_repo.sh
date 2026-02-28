@@ -24,6 +24,7 @@ run_service() {
   bash scripts/verify_deploy_kustomization.sh
   bash scripts/verify_recommendation_service_contract.sh
   bash scripts/verify_config_gray_parallel_binding.sh
+  bash scripts/verify_gray_rollout_stages.sh
   # Config release guardrails (skeleton; strict mode via QWQ_CONFIG_GATE_STRICT=1)
   bash scripts/verify_service_config_layout.sh
   bash scripts/verify_service_env_contract.sh
