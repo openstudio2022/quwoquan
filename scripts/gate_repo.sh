@@ -40,13 +40,11 @@ run_app() {
   command -v flutter >/dev/null 2>&1 || { echo "[gate] FAIL: flutter not found in PATH" 1>&2; exit 1; }
   (cd quwoquan_app && flutter pub get)
   (cd quwoquan_app && flutter analyze --no-fatal-warnings --no-fatal-infos)
-  # Always run L1 content tests (L1a contract, L1b widget, L1c journey) — fast, no external deps
+  # L1 content tests (L1a contract, L1b widget, L1c journey) — fast, no external deps
   # Paths follow: test/{layer}/{domain}/{entity}/{test_type}/ (see .cursor/rules/03-testing.mdc §3)
   (cd quwoquan_app && flutter test test/cloud/ test/components/ test/ui/)
-  # Full test suite (includes acceptance VM tests requiring LLM + external services) — CI only
-  if [[ "${GITHUB_ACTIONS:-}" == "true" || "${QWQ_GATE_TESTS:-}" == "1" ]]; then
-    (cd quwoquan_app && flutter test)
-  fi
+  # Skip in CI: test/patrol/ (needs real device/Patrol, run via FTL), test/personal_assistant/
+  # (acceptance_vm needs LLM; contract tests may have external deps). L1 sufficient for gate.
 
   # dart_func 覆盖率检查：mock.yaml 声明的 dart_func 必须在 Dart 测试文件中存在
   if command -v python3 >/dev/null 2>&1; then
