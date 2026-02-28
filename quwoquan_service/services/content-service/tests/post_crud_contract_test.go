@@ -217,7 +217,7 @@ func TestCreatePostInvalidContentType(t *testing.T) {
 	req := httptest.NewRequest(
 		http.MethodPost,
 		"/v1/content/posts",
-		strings.NewReader(`{"contentType":"invalid_type","authorId":"u1","body":"test"}`),
+		strings.NewReader(`{"contentType":"invalid_type","body":"test"}`),
 	)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()

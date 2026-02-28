@@ -224,7 +224,7 @@ func HTTPStatusFromError(err *AppError) int {
 	kind := err.Code.Kind
 	if kind == KindUser {
 		switch reason {
-		case "invalid_argument":
+		case "invalid_argument", "invalid_content_type":
 			return http.StatusBadRequest
 		case "unauthorized":
 			return http.StatusUnauthorized
