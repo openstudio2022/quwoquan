@@ -58,6 +58,43 @@ go test ./services/content-service/... -count=1     # L2
 
 **禁止跳过**：不得使用 `QWQ_GATE_TESTS=1` 或 `GITHUB_ACTIONS` 条件跳过 flutter test 的本地执行。
 
+### 2.0 AI 编程助手提交门禁（强制）
+
+执行 `/submit-with-gate` 或 `/opsx-deliver` 时，**提交入库前必须自动执行 L1+L2 并通过**：
+
+| 层 | 命令 | 说明 |
+|----|------|------|
+| L1 | `cd quwoquan_app && flutter test test/cloud/ test/components/ test/ui/` | 端侧契约/组件/旅程测试 |
+| L2 | `cd quwoquan_service && make gate` | 云侧 metadata + 契约测试（content-service 等） |
+
+**推荐**：从仓库根执行 `make gate`，一次性覆盖 L1+L2。
+
+**不得跳过**：AI Agent 在执行提交流程时，必须显式执行上述门禁，失败则不得 commit。
+
+### 2.1 提交前本地 L2 验证（推荐）
+
+L2 测试依赖 MongoDB。CI 使用 testcontainers 自动启动；本地若无 Docker 或 testcontainers 失败，`make gate` 会跳过 L2，**易导致未本地验证就提交、CI 失败**。
+
+**提交前务必在本地跑通 L2**，任选其一：
+
+```bash
+# 方式 A：使用脚本（自动检测 MongoDB）
+./scripts/run_l2_content_tests.sh
+
+# 方式 B：手动启动 MongoDB + make
+cd quwoquan_service
+docker compose up -d mongodb   # 或 docker run -d -p 27017:27017 mongo:7-jammy
+make test-contract-local
+```
+
+MongoDB 启动方式：
+
+| 方式 | 命令 |
+|------|------|
+| docker compose | `cd quwoquan_service && docker compose up -d mongodb` |
+| Docker 单容器 | `docker run -d -p 27017:27017 --name mongo-l2 mongo:7-jammy` |
+| macOS Homebrew | `brew services start mongodb-community` |
+
 ---
 
 ## 3. 测试目录结构（强制）

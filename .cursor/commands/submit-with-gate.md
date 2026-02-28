@@ -2,12 +2,29 @@
 name: /submit-with-gate
 id: submit-with-gate
 category: Workflow
-description: 提交（自动 G4 卡点：审计 → gate → commit → push）
+description: 提交（自动 G4 卡点：L1+L2 门禁 → 审计 → commit → push）
 ---
 
 > 主线：`specs/00_MASTER_DEVELOPMENT_FLOW.md` — 阶段 5
 
-端云全栈提交：**按变更范围自动审计 → gate 门禁 → 通过则提交推送**。
+端云全栈提交：**提交入库前必须执行 L1+L2 门禁并通过**，再按变更范围审计，通过则提交推送。
+
+## AI 编程助手门禁要求（强制）
+
+**提交前必须自动执行 L1 和 L2 测试，不得跳过。**
+
+| 层 | 命令 | 失败行为 |
+|----|------|----------|
+| L1 | `cd quwoquan_app && flutter test test/cloud/ test/components/ test/ui/` | 阻塞提交 |
+| L2 | `cd quwoquan_service && make gate`（含 content-service 契约测试） | 阻塞提交 |
+
+**推荐**：从仓库根目录执行 `make gate`，一次性覆盖端云 L1+L2。
+
+L2 依赖 MongoDB。本地无 Docker 时可用：
+- `brew services start mongodb-community`（macOS）
+- `make l2-content` 或 `./scripts/run_l2_content_tests.sh`（需 MongoDB 已启动）
+
+---
 
 ## 前置条件
 
@@ -30,39 +47,38 @@ git status -sb
 ### 第二步：确定变更范围
 
 根据 `git status` 分析变更涉及的范围：
-- `quwoquan_app/` 变更 → 执行端侧审计
-- `quwoquan_service/` 变更 → 执行云侧审计
-- 两者都有变更 → 执行全栈审计
+- `quwoquan_app/` 变更 → 执行端侧 L1 + 审计
+- `quwoquan_service/` 变更 → 执行云侧 L2 + 审计
+- 两者都有变更 → 执行全栈 L1+L2 + 审计
 - `specs/` 或 `changes/` 变更 → 执行特性树一致性检查（含 `specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md` 层级与分解遵从）
 
 ---
 
-### 第三步：执行审计（按变更范围）
+### 第三步：执行 L1+L2 门禁 + 审计（提交前强制）
 
-**3.1 端侧审计（如涉及 quwoquan_app/）**
+**3.0 门禁执行（必须通过才可提交）**
 
-```bash
-cd quwoquan_app && flutter analyze
-```
-
-硬编码视觉字面量检查（仅检查本次变更的文件）：
-```bash
-git diff --name-only HEAD -- quwoquan_app/ | grep "\.dart$" | while read f; do
-  # 对每个变更文件执行硬编码检查
-done
-```
-
-**3.2 云侧审计（如涉及 quwoquan_service/）**
+按变更范围执行门禁，**L1/L2 任一失败则不得提交**：
 
 ```bash
-cd quwoquan_service && make gate
+# 全量（推荐，覆盖端云 L1+L2）
+make gate
+
+# 或按 scope 分别执行
+bash scripts/gate_repo.sh --scope service   # 云侧 L2 + metadata 等
+bash scripts/gate_repo.sh --scope app       # 端侧 L1 + flutter analyze
 ```
 
-包含：
-- metadata 一致性验证
-- DDD 层级导入约束
-- codegen 产物一致性
-- 契约测试
+**3.1 端侧（如涉及 quwoquan_app/）**
+
+- L1：`cd quwoquan_app && flutter test test/cloud/ test/components/ test/ui/`
+- `flutter analyze`
+- 硬编码视觉字面量检查（仅本次变更的 .dart 文件）
+
+**3.2 云侧（如涉及 quwoquan_service/）**
+
+- L2：`cd quwoquan_service && make gate`（含 content-service go test、metadata、codegen 等）
+- 云侧 L2 需 MongoDB；CI 用 testcontainers，本地见 `03-testing.mdc §2.1`
 
 **3.3 特性树审计（如涉及 specs/ 或 changes/）**
 

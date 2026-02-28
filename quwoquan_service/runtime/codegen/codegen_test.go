@@ -3,6 +3,7 @@ package codegen
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"quwoquan_service/runtime/registry"
@@ -33,7 +34,7 @@ func TestGenerateAll_ProducesFiles(t *testing.T) {
 
 	for _, name := range aggregates {
 		snake := toSnake(name)
-		pkg := name
+		pkg := strings.ToLower(name) // match buildTemplateData PackageName
 
 		modelDir := filepath.Join(outputDir, "domain", pkg, "model")
 		modelFile := filepath.Join(modelDir, snake+".go")
@@ -75,7 +76,8 @@ func TestGoModelTemplate_ValidGoSyntax(t *testing.T) {
 		t.Fatalf("GenerateForAggregate(Post): %v", err)
 	}
 
-	modelFile := filepath.Join(outputDir, "domain", "Post", "model", "post.go")
+	// PackageName is lowercased in buildTemplateData
+	modelFile := filepath.Join(outputDir, "domain", "post", "model", "post.go")
 	data, err := os.ReadFile(modelFile)
 	if err != nil {
 		t.Fatalf("read model file: %v", err)

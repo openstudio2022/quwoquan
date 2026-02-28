@@ -90,17 +90,18 @@ G3 通过后，执行归档逻辑（与 `/opsx-archive` 一致）：
 
 ### 阶段 4：提交入库（G4）——分支开发模式
 
-执行 `/submit-with-gate` 逻辑；**默认采用分支开发模式**：在分支上开发 → 提交到远程分支 → 合入主干 → 从远程主干同步到本地主干。
+执行 `/submit-with-gate` 逻辑；**提交前必须执行 L1+L2 门禁并通过**（`make gate`），否则不得 commit。**默认采用分支开发模式**：在分支上开发 → 提交到远程分支 → 合入主干 → 从远程主干同步到本地主干。
 
 1) 获取 `git status`、当前分支 `CURRENT_BRANCH`，分析变更范围  
-2) 按范围执行审计（端侧 / 云侧 / 特性树）  
-3) 审计通过后提交并推送**到当前分支**：
+2) **执行 L1+L2 门禁**（`make gate` 或按 scope）并通过  
+3) 按范围执行审计（端侧 / 云侧 / 特性树）  
+4) 审计通过后提交并推送**到当前分支**：
    ```bash
    git add -A
    git commit -m "<message>"
    git push origin <CURRENT_BRANCH>
    ```
-4) 若当前**不在 main**，按分支开发模式执行：同步主干 → 合并到开发分支 → 推送开发分支 → 合入主干
+5) 若当前**不在 main**，按分支开发模式执行：同步主干 → 合并到开发分支 → 推送开发分支 → 合入主干
    ```bash
    git checkout main
    git pull origin main                      # 同步主干到本地
@@ -112,7 +113,7 @@ G3 通过后，执行归档逻辑（与 `/opsx-archive` 一致）：
    git push origin main                      # 合入主干
    git checkout <CURRENT_BRANCH>             # 切回开发分支
    ```
-5) 若当前**已在 main**，则 push 后同步即可：`git pull origin main`（如有必要）
+6) 若当前**已在 main**，则 push 后同步即可：`git pull origin main`（如有必要）
 
 **前置**：工作区在仓库根、已配置 git 与 `origin`。若无待提交改动，跳过本阶段并提示。
 

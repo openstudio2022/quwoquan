@@ -167,21 +167,26 @@ make gate-full
 
 **AI Agent 必须做的事**：
 1. 分析 `git status` 确定变更范围
-2. **自动执行** 按变更范围的针对性审计
-3. 通过后自动 commit → push → merge main
+2. **提交前必须执行 L1+L2 门禁**（`make gate`）并通过
+3. **自动执行** 按变更范围的针对性审计
+4. 通过后自动 commit → push → merge main
 
 **自动卡点 G4**：
 ```
 git status → 分析变更范围
-├── quwoquan_app/ 变更 → 端侧审计（flutter analyze + 硬编码检查）
-├── quwoquan_service/ 变更 → 云侧审计 + make gate
-├── contracts/ 变更 → metadata 验证 + codegen hash
-├── specs/ 变更 → 特性树一致性（含 01_FEATURE_TREE_LEVEL_DEFINITIONS.md 层级与分解遵从）
-└── 多范围同时变更 → make gate-full 全量
      │
      ▼
- 通过 → git add -A → commit → push → merge main
- 失败 → 生成修复计划 → 自动修复 → 重审
+ 执行 L1+L2 门禁（make gate）─ 必须通过
+     │
+     ├── quwoquan_app/ 变更 → 端侧审计（L1 + flutter analyze + 硬编码检查）
+     ├── quwoquan_service/ 变更 → 云侧审计（L2 + metadata + make gate）
+     ├── contracts/ 变更 → metadata 验证 + codegen hash
+     ├── specs/ 变更 → 特性树一致性（含 01_FEATURE_TREE_LEVEL_DEFINITIONS.md 层级与分解遵从）
+     └── 多范围同时变更 → make gate 全量
+          │
+          ▼
+      通过 → git add -A → commit → push → merge main
+      失败 → 生成修复计划 → 自动修复 → 重审
 ```
 
 ---

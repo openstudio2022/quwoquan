@@ -83,7 +83,12 @@ config-slo-gate:
 	fi
 	@bash scripts/config_release_slo_gate.sh --error-rate "$(ERROR_RATE)" --p95-ms "$(P95_MS)" --redis-error-rate "$(REDIS_ERROR_RATE)"
 
-.PHONY: gate-full test-api-contract
+.PHONY: l2-content gate-full test-api-contract
+
+# 本地 L2 契约测试（content-service，需 MongoDB 在 localhost:27017）
+# 提交前运行以避免 CI 失败。详见 .cursor/rules/03-testing.mdc §2.1
+l2-content:
+	@bash scripts/run_l2_content_tests.sh
 
 # L3 API Contract runner (staging HTTP).
 # Requires: STAGING_BASE_URL, TEST_AUTH_TOKEN env vars.

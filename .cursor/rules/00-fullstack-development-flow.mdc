@@ -71,7 +71,9 @@ make gate-full
 
 ## Submit 阶段（/submit-with-gate）
 
-**自动运行 G4**：按 git status 变更范围智能审计 → 通过 → commit → push → merge。
+**自动运行 G4**：**提交前必须执行 L1+L2 门禁**（`make gate`）并通过 → 按 git status 变更范围智能审计 → 通过 → commit → push → merge。
+
+**AI 编程助手门禁要求**：执行 `/submit-with-gate` 或 `/opsx-deliver` 时，**必须自动执行 L1+L2**，不得跳过。L1=端侧 `flutter test test/cloud/ test/components/ test/ui/`；L2=云侧 `quwoquan_service make gate`（含 content-service 契约测试）。
 
 ---
 
@@ -105,4 +107,4 @@ make gate-full
 | `/opsx-verify` | Verify | G3（gate-full） |
 | `/opsx-archive` | Verify | G3（gate-full） |
 | `/fullstack-audit` | 随时 | 全栈审计 |
-| `/submit-with-gate` | Submit | G4（审计 + commit） |
+| `/submit-with-gate` | Submit | G4（L1+L2 门禁 + 审计 + commit） |

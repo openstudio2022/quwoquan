@@ -26,7 +26,7 @@
 ### 3.1 Deliver 阶段完成
 
 - 代码已合入 main
-- `make gate` 通过（L1a+b+c + L2）
+- `make gate` 通过（L1a+b+c + L2）。**AI 编程助手提交前必须自动执行 L1+L2 门禁**，不得跳过；见 `.cursor/commands/submit-with-gate.md`
 - `deploy/shared/process_domain_mapping.yaml` 合法，`verify_deployment_domain_mapping.sh` 通过
 
 ### 3.2 部署环境
