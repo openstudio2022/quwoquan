@@ -1,0 +1,118 @@
+# =============================================================================
+# App Pipeline — quwoquan_app CI/CD
+# =============================================================================
+# 触发条件：quwoquan_app/** 路径变动
+# 常规 Push：Flutter 单元测试 + analyze
+# Tag 发布：v* 标签时，macOS 构建（flutter build macos）
+#
+# 【可选 Secrets】（macOS 签名等）
+#   CODESIGN_IDENTITY   — macOS 签名身份
+#   MATCH_PASSWORD      — fastlane match 证书密码
+# =============================================================================
+
+name: App Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'quwoquan_app/**'
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+      - master
+    paths:
+      - 'quwoquan_app/**'
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Flutter 单元测试
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/v'))
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 缓存 Flutter 依赖
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            quwoquan_app/.dart_tool
+          key: "flutter-${{ runner.os }}-${{ hashFiles('quwoquan_app/pubspec.lock') }}"
+          restore-keys: |
+            flutter-${{ runner.os }}-
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: 安装依赖
+        working-directory: quwoquan_app
+        run: flutter pub get
+
+      - name: Flutter analyze
+        working-directory: quwoquan_app
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos
+
+      - name: Flutter 单元测试
+        working-directory: quwoquan_app
+        run: flutter test test/cloud/ test/components/ test/ui/
+
+      - name: 上传失败日志
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-fail-logs
+          path: |
+            quwoquan_app/**/*.log
+            quwoquan_app/build/
+          if-no-files-found: ignore
+
+  build-macos:
+    name: Flutter Build macOS
+    runs-on: macos-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 缓存 Flutter 依赖
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            quwoquan_app/.dart_tool
+          key: "flutter-macos-${{ runner.os }}-${{ hashFiles('quwoquan_app/pubspec.lock') }}"
+          restore-keys: |
+            flutter-macos-${{ runner.os }}-
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: 安装依赖
+        working-directory: quwoquan_app
+        run: flutter pub get
+
+      - name: Flutter Build macOS
+        working-directory: quwoquan_app
+        run: flutter build macos
+
+      - name: 上传 macOS 构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build-${{ github.ref_name }}
+          path: quwoquan_app/build/macos/Build/Products/Release/
+
+      - name: 上传构建失败日志
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build-fail-logs
+          path: quwoquan_app/build/

@@ -1,5 +1,6 @@
-# Pre-release 串联：gate-full → L3 → L4
+# Pre-release 串联：gate-full → deploy integration → L3 → L4
 # 触发：v*-rc* tag；全部通过 → 可灰度到 prod
+# 端到端闭环见 deploy/shared/ci_cd_end_to_end_design.md
 name: pre-release-gate
 
 on:
@@ -7,6 +8,9 @@ on:
     tags:
       - 'v*-rc*'
   workflow_dispatch:
+
+env:
+  CLOUD_PROVIDER: aliyun
 
 jobs:
   gate:
@@ -25,12 +29,65 @@ jobs:
       - name: Gate (L1+L2+L3)
         run: make gate-full
       - uses: syntaqx/setup-kustomize@v1
-      - name: Deploy kustomization build (G5a 验证)
-        run: make deploy-integration CLOUD_PROVIDER=aliyun | tail -5
+      - name: Deploy kustomization build (G5a 构建验证)
+        run: make deploy-integration CLOUD_PROVIDER=${{ env.CLOUD_PROVIDER }} | tail -5
+
+  deploy-integration:
+    name: G5a Deploy to integration
+    needs: [gate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    env:
+      INTEGRATION_KUBECONFIG: ${{ secrets.INTEGRATION_KUBECONFIG }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: syntaqx/setup-kustomize@v1
+      - name: Install kubectl
+        run: |
+          curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+      - name: Deploy to integration (kubectl apply)
+        run: |
+          if [ -z "$INTEGRATION_KUBECONFIG" ]; then
+            echo "::warning::INTEGRATION_KUBECONFIG not set — skipping apply (configure secret for end-to-end)"
+            exit 0
+          fi
+          mkdir -p ~/.kube
+          echo "$INTEGRATION_KUBECONFIG" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+          kustomize build -f kustomization.${{ env.CLOUD_PROVIDER }}.integration.yaml | kubectl apply -f - --server-side
+          touch .deploy-applied
+      - name: Wait for rollout
+        run: |
+          if [ -f .deploy-applied ]; then
+            kubectl rollout status deployment/seed-box -n seed-box-integration --timeout=5m
+          else
+            echo "Deploy skipped — no rollout wait"
+          fi
+
+  l3-api-contract:
+    name: G5b L3 API Contract
+    needs: [gate, deploy-integration]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    env:
+      STAGING_BASE_URL: ${{ secrets.STAGING_BASE_URL }}
+      TEST_AUTH_TOKEN: ${{ secrets.STAGING_TEST_AUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: cd quwoquan_app && flutter pub get
+      - name: L3 API Contract
+        run: make test-api-contract
 
   l4-android:
     name: L4 Patrol — Android (FTL)
-    needs: [gate]
+    needs: [gate, deploy-integration]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
@@ -70,7 +127,7 @@ jobs:
 
   l4-ios:
     name: L4 Patrol — iOS (FTL)
-    needs: [gate]
+    needs: [gate, deploy-integration]
     runs-on: macos-latest
     timeout-minutes: 45
     if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}

@@ -57,7 +57,7 @@ cd quwoquan_app && patrol test test/patrol/ \
   --dart-define=TEST_AUTH_TOKEN=<token>
 ```
 
-- 需连接真机或模拟器；CI 可用 Firebase Test Lab（见 `.github/workflows/e2e.yaml`）
+- 需连接真机或模拟器；CI 可用 Firebase Test Lab（见 `.github/workflows/pre-release-gate.yml` 的 l4-android / l4-ios job）
 - 失败 → 阻塞，不得进入 G5c
 
 ---

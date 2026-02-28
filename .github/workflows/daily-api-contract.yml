@@ -2,14 +2,11 @@ name: L3 API Contract (staging)
 
 # 触发时机：
 #   - daily cron 02:00 UTC（advisory，失败通知不阻塞 PR）
-#   - pre-release tag（pre-release 失败 → 阻塞发布）
 #   - 手动触发（调试用）
+# 说明：v*-rc* 的 L3 由 pre-release-gate.yml 负责，此处不重复触发
 on:
   schedule:
     - cron: '0 2 * * *'
-  push:
-    tags:
-      - 'v*-rc*'       # pre-release candidate tags
   workflow_dispatch:
     inputs:
       fail_on_error:
@@ -44,7 +41,7 @@ jobs:
         env:
           STAGING_BASE_URL: ${{ secrets.STAGING_BASE_URL }}
           TEST_AUTH_TOKEN: ${{ secrets.STAGING_TEST_AUTH_TOKEN }}
-        # staging 不可用时 markTestSkipped → 不 fail；pre-release 时 fail_on_error=true
+        # staging 不可用时 markTestSkipped → 不 fail；手动 fail_on_error=true 时阻塞
         run: |
           set +e
           flutter test test/cloud/content/api_contract_runner.dart \
@@ -54,9 +51,8 @@ jobs:
           EXIT_CODE=$?
           set -e
           if [ "$EXIT_CODE" -ne 0 ]; then
-            if [ "${{ github.event.inputs.fail_on_error }}" == "true" ] || \
-               [ "${{ github.ref_type }}" == "tag" ]; then
-              echo "::error::L3 API Contract tests FAILED (blocking on pre-release)"
+            if [ "${{ github.event.inputs.fail_on_error }}" == "true" ]; then
+              echo "::error::L3 API Contract tests FAILED (blocking mode)"
               exit $EXIT_CODE
             else
               echo "::warning::L3 API Contract tests failed (advisory — not blocking PR)"

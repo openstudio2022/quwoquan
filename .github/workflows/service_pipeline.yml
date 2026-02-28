@@ -1,0 +1,114 @@
+# =============================================================================
+# Service Pipeline — quwoquan_service CI/CD
+# =============================================================================
+# 触发条件：quwoquan_service/** 路径变动
+# 流程：Go 构建与测试 + Python (rec-model-service) Docker 镜像 → kustomize 校验
+#
+# 【必须配置的 GitHub Secrets】（部署时）
+#   DOCKER_REGISTRY     — Docker 镜像仓库地址，如 ghcr.io
+#   DOCKER_TOKEN        — 镜像仓库推送凭证
+#   KUBECONFIG          — 目标 K8s 集群 kubeconfig（base64 编码）
+# =============================================================================
+
+name: Service Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'quwoquan_service/**'
+      - 'deploy/service/**'
+  pull_request:
+    branches:
+      - main
+      - master
+    paths:
+      - 'quwoquan_service/**'
+      - 'deploy/service/**'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ${{ secrets.DOCKER_REGISTRY || 'ghcr.io' }}
+  IMAGE_PREFIX: ${{ github.repository }}
+
+jobs:
+  build-go:
+    name: Go 构建与测试
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: quwoquan_service
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 设置 Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: quwoquan_service/go.mod
+
+      - name: 缓存 Go 模块
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            quwoquan_service/.cache
+          key: go-mod-${{ runner.os }}-${{ hashFiles('quwoquan_service/go.sum') }}
+          restore-keys: |
+            go-mod-${{ runner.os }}-
+
+      - name: Go 构建
+        run: make build
+
+      - name: Go 测试
+        run: make test-unit
+
+  build-python:
+    name: 构建 rec-model-service 镜像
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 提取短 commit SHA
+        id: sha
+        run: echo "short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: 设置 Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 登录镜像仓库
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.DOCKER_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: 构建并推送 recommendation-service 镜像
+        uses: docker/build-push-action@v5
+        with:
+          context: quwoquan_service/services/rec-model-service
+          file: quwoquan_service/services/rec-model-service/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/recommendation-service:${{ steps.sha.outputs.short }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/recommendation-service:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  validate-deploy:
+    name: 校验 Kustomize 部署
+    needs:
+      - build-go
+      - build-python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 kustomize
+        uses: syntaqx/setup-kustomize@v1
+
+      - name: Kustomize build 校验
+        run: |
+          kustomize build -f kustomization.aliyun.prod.yaml > /dev/null
+          echo "Kustomize build OK"
