@@ -15,8 +15,8 @@
 - [x] R6 完成自动化演练：发布失败 -> 回滚成功
 - [x] R7 完成“老镜像+老配置 / 新镜像+新配置”回滚场景演练
 - [x] R8 输出回滚 Runbook 与演练报告（deliver 必备）
-  - `deploy/config-release/runbook.md`
-  - `deploy/config-release/reports/2026-02-27-config-release-drill.md`
+  - `deploy/service/config-release/runbook.md`
+  - `deploy/service/config-release/reports/2026-02-27-config-release-drill.md`
 
 ## 搁置任务（带规划）
 

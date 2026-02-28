@@ -24,6 +24,7 @@ l2:
           - feature: env-file-secret-configcenter-provider
             l5:
               - feature: dynamic-refresh-gray-rollback-audit
+          - feature: environment-process-domain-mapping
   - feature: runtime-errors
     l3:
       - feature: error-code-and-response-envelope

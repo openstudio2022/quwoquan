@@ -66,12 +66,17 @@
    - 校验配置 `min_image_version/max_image_version` 与 `IMAGE_VERSION` 兼容
 5. **不可变门禁**
    - 已发布版本配置文件禁止覆盖，只允许新增版本
+6. **部署拓扑门禁**
+   - `deploy/shared/process_domain_mapping.yaml` 必须声明 `dev/integration/prod` 三环境
+   - 同一环境中 domain 不可重复归属到多个部署进程
+   - `integration` 与 `prod` 的进程-领域映射必须一致
 
 ## 与治理主线协同
 
 - 运行时节点负责“如何加载和校验”
 - 平台治理节点负责“如何灰度发布与回滚”
 - SLO 节点负责“如何自动触发回滚”
+- 部署映射节点负责“进程打包拓扑如何声明并被门禁校验”
 
 ## 适用场景与约束
 

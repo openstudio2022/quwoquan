@@ -36,6 +36,7 @@
 3. 确认涉及哪些扩展场景（S01~S20，见附录 A）
 4. 生成任务拆解，强制顺序：metadata → codegen → 业务逻辑 → 测试
 5. **特性树分解遵从**：节点归属与新建须符合 `specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md`（L4 默认叶子，L5 仅当 L4 需 subtask 分解时使用）
+6. 涉及部署拓扑时，补充 `deploy/shared/process_domain_mapping.yaml`（`environments -> process -> domains`）
 
 **自动卡点 G0**：
 ```
@@ -241,6 +242,13 @@ domain ← application ← adapters ← infrastructure
 ### 5.5 codegen 保护
 
 `// Code generated ... DO NOT EDIT.` 标记的文件禁止手动修改。`make gate` 通过 hash 比对检测。
+
+### 5.6 部署拓扑与领域接口解耦
+
+- 部署进程是运维抽象，不是领域抽象
+- 对外接口仍按领域服务暴露，禁止被部署态影响
+- 同一环境中一个 domain 只能归属一个部署进程
+- `integration` 与 `prod` 的 process-domain 映射必须一致
 
 ---
 

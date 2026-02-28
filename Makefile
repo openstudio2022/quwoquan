@@ -21,6 +21,7 @@ verify:
 	@bash scripts/verify_opsx_ff_8services_consistency.sh
 	@bash scripts/verify_runtime_packaging.sh
 	@bash scripts/verify_ff_config_contract.sh
+	@bash scripts/verify_deployment_domain_mapping.sh
 
 codegen-app:
 	@$(MAKE) -C quwoquan_service codegen-app

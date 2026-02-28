@@ -1880,6 +1880,13 @@ features:
                   domain: ""
                   status: specified
                   tags: [config, env-overlay, config-release]
+                - id: environment-process-domain-mapping
+                  name: environment-process-domain-mapping
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-config/config-provider-layering/environment-process-domain-mapping
+                  domain: ""
+                  status: completed
+                  tags: [deployment, process-mapping, topology, gate]
         - id: runtime-context
           name: runtime-context
           level: L2_feature

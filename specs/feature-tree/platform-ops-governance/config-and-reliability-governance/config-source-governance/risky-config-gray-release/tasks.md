@@ -30,7 +30,7 @@
 - [x] G7 完成与 `one-click-config-rollback` 联调演练
 - [x] G8 完成与 `slo-error-budget-governance` 门禁联调演练
 - [x] G9 输出灰度发布与自动回滚演练报告（deliver 必备）
-  - `deploy/config-release/reports/2026-02-27-config-release-drill.md`
+  - `deploy/service/config-release/reports/2026-02-27-config-release-drill.md`
 
 ## 搁置任务（带规划）
 

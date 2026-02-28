@@ -310,5 +310,31 @@ metadata YAML → make verify → make codegen → 业务逻辑 → make test-co
 - 不经 `make verify` 就执行 `make codegen`
 - 在 Feature 中直接实例化 Mock/Remote Repository
 - Remote 实现中硬编码 URL 或自建 headers
+- 在同一环境将一个 domain 归属到多个部署进程
+- 允许 integration/prod 拓扑映射不一致
+- 通过部署拓扑变更对外领域 API 路由契约
+
+### 4.1 部署拓扑映射约束（新增）
+
+部署映射唯一真相：`deploy/shared/process_domain_mapping.yaml`
+
+结构：
+```yaml
+environments:
+  dev:
+    content-service:
+      domains: [content]
+  integration:
+    quwoquan_service:
+      domains: [content, chat, ...]
+  prod:
+    quwoquan_service:
+      domains: [content, chat, ...]
+```
+
+强制规则：
+- 同一环境中 domain 只能出现一次
+- `integration` 与 `prod` 映射必须一致
+- 进程名使用 `*-service` 或 `quwoquan_service`
 
 **扩展入口**：`/qwq-extend <scenario>`，详见 `specs/runtime_extension_catalog.md`。

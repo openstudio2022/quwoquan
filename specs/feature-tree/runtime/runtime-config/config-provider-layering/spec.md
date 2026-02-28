@@ -13,6 +13,8 @@
 - 显式环境识别：`APP_ENV=local|integration|prod`
 - 配置发布版本：`CONFIG_VERSION` 与 `IMAGE_VERSION` 兼容校验
 - 运行前校验：关键字段合法性与依赖连通性（如 Redis ping）
+- 统一部署映射：`environments -> deploy process -> domains`
+- 拓扑一致性：`integration` 与 `prod` 的进程-领域映射保持一致
 
 ## 目录与版本示例（实施标准）
 
@@ -50,6 +52,7 @@
 
 - `env-file-secret-configcenter-provider`：配置来源抽象（env/file/secret/config center）
 - `env-overlay-config-release`（新增）：环境覆盖与配置发布化落地
+- `environment-process-domain-mapping`（新增）：部署进程与领域归属三态映射与门禁
 
 ## 适用范围与约束
 
@@ -63,6 +66,8 @@
 - 高风险配置（连接拓扑、鉴权）不支持热更新，仅支持灰度滚动切换
 - 版本快照配置文件不可变（immutable），仅允许新增版本，不允许覆盖已发布版本
 - 密钥字段禁止进入版本快照，必须通过 Secret/env 注入
+- 同一环境内一个 domain 仅允许归属一个部署进程
+- 部署拓扑变化不允许修改领域对外 API 路由契约
 
 ## 验收概要
 

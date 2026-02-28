@@ -29,7 +29,7 @@
   - `verify_config_image_compat.sh`
 - [x] E11 将门禁接入 `make gate` / `make gate-full`
 - [x] E12 产出 deliver 证据包（test/gate 输出、示例配置、运行截图）
-  - `deploy/config-release/reports/2026-02-27-config-release-drill.md`
+  - `deploy/service/config-release/reports/2026-02-27-config-release-drill.md`
 
 ## 搁置任务（带规划）
 

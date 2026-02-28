@@ -13,8 +13,8 @@
 - [x] S4 对接灰度发布与回滚流程
 - [x] S5 完成故障注入演练测试
 - [x] S6 输出门禁阈值与回滚触发策略文档（deliver 必备）
-  - `deploy/config-release/slo_thresholds.yaml`
-  - `deploy/config-release/runbook.md`
+  - `deploy/service/config-release/slo_thresholds.yaml`
+  - `deploy/service/config-release/runbook.md`
 
 ## 搁置任务（带规划）
 

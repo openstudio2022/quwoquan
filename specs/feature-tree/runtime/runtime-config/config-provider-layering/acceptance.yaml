@@ -25,6 +25,7 @@ global_acceptance:
   A3_service_governance:
     - "高风险配置项定义清晰并强制灰度发布"
     - "配置发布与镜像发布可解耦"
+    - "部署进程拓扑映射在 integration/prod 保持一致"
   A7_contract_metadata_consistency:
     - "配置结构与运行时加载器字段一致"
     - "每个服务均具备 default/local/integration/prod 目录结构"
@@ -33,6 +34,7 @@ global_acceptance:
     - "local/integration/prod 三环境加载行为有集成测试"
     - "门禁脚本可阻断目录缺失、非法 APP_ENV、缺失 CONFIG_VERSION 映射"
     - "新建服务流程自动生成合规配置目录并通过门禁"
+    - "部署映射门禁可阻断 domain 重复归属和 integration/prod 拓扑漂移"
 execution:
   local_gate: "make gate"
   full_gate: "make gate-full"

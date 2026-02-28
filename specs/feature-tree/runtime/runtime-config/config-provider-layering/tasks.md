@@ -30,6 +30,10 @@
   - `scripts/verify_config_release_version_mapping.sh`
   - `scripts/verify_config_image_compat.sh`
 - [x] C7 将配置门禁接入 `make gate` / `make gate-full`
+- [x] C7.1 增加部署拓扑门禁
+  - `deploy/shared/process_domain_mapping.yaml` 声明三态映射
+  - `scripts/verify_deployment_domain_mapping.sh` 校验 domain 唯一归属与 integration/prod 一致
+  - 接入 `make verify` 与 `scripts/gate_repo.sh`
 
 ### Wave 3 — 进入 deliver 前置
 

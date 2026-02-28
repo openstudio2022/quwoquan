@@ -1,0 +1,23 @@
+version: 1
+
+# Deployment process -> domain ownership mapping by environment.
+# Rules:
+# 1) Within one environment, a domain can only belong to one process.
+# 2) integration and prod mapping must be identical.
+# 3) External API routes remain domain-based and cannot be changed by deployment topology.
+environments:
+  dev:
+    content-service:
+      domains: [content]
+    integration-service:
+      domains: [integration]
+    chat-service:
+      domains: [chat]
+
+  integration:
+    quwoquan_service:
+      domains: [content, integration, chat, user, circle, assistant, gateway, orchestrator]
+
+  prod:
+    quwoquan_service:
+      domains: [content, integration, chat, user, circle, assistant, gateway, orchestrator]
