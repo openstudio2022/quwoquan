@@ -8,7 +8,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY generated/ ./generated/
 COPY app/ ./app/
+COPY api/ ./api/
 COPY features/ ./features/
+COPY models/ ./models/
+COPY configs/ ./configs/
+COPY runtime_contract.py ./
 COPY main.py ./
 
 ENV PYTHONPATH=.
