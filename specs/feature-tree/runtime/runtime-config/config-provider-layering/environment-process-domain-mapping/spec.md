@@ -20,6 +20,9 @@
 - `integration` 与 `prod` 的进程-领域映射必须一致
 - 对外接口仍按领域服务暴露（`/v1/content/*`、`/v1/chat/*` 等），不受部署拓扑影响
 - 不新增 `all-in-one/`、`content-only/` 目录，代码目录保持按领域服务组织
+- `recommendation` domain 固定归属 `recommendation-service`（python process）
+- Go 组合进程与 Python 进程独立部署，禁止合并为单进程
+- Python 配置校验失败策略为启动即失败（fail-fast）
 
 ## 边界说明
 
@@ -38,3 +41,4 @@
 - A3：门禁可阻断 domain 重复归属与 integration/prod 漂移
 - A7：部署进程映射不改变领域 API 契约
 - A8：`make verify`/`make gate` 自动执行映射校验
+- A8：`make gate-full` 将 `recommendation-service` 的 Python 测试作为必过项

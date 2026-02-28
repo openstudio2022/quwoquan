@@ -1,4 +1,4 @@
-# rec-model-service
+# recommendation-service
 
 Recommendation model inference service. POST /v1/score (multi-scenario), GET /health.
 
@@ -6,7 +6,7 @@ Recommendation model inference service. POST /v1/score (multi-scenario), GET /he
 
 ```bash
 pip install -r requirements.txt
-PYTHONPATH=. uvicorn main:app --host 0.0.0.0 --port 18090
+SERVICE_NAME=recommendation-service APP_ENV=dev PYTHONPATH=. uvicorn main:app --host 0.0.0.0 --port 18090
 ```
 
 ## Test
@@ -15,9 +15,13 @@ PYTHONPATH=. uvicorn main:app --host 0.0.0.0 --port 18090
 PYTHONPATH=. pytest tests/ -v
 ```
 
-## Config / env
+## Config / env contract (fail-fast)
 
-- No required env for rule-based scoring. Optional: MongoDB/Redis/OSS for ModelRegistry (future).
+- `APP_ENV` must be one of `dev` / `integration` / `prod`.
+- `SERVICE_NAME` when provided must be `recommendation-service`.
+- For `integration` / `prod`, `CONFIG_VERSION` / `IMAGE_VERSION` / `CONFIG_ROOT` are required.
+- Contract mismatch causes startup to fail immediately (fail-fast).
+- Optional model envs (future): `REC_MODEL_CONTENT_FEED_PATH`, `REC_MODEL_CIRCLE_DISCOVERY_PATH`, `REC_MODEL_FRIEND_SUGGESTION_PATH`.
 - **content-service** integration: set `rec_model_service.url` (e.g. `http://localhost:18090` or `http://rec-model-service:8000` in same docker network), `rec_model_service.timeout_ms`, `rec_model_service.enabled: true`.
 
 ## Docker

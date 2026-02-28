@@ -700,5 +700,14 @@ if [ -f "$E2E_YAML" ] && [ -f "$RUNNER" ]; then
   fi
 fi
 
+# ── L2: recommendation-service python tests (mandatory) ──────────────────────
+echo "[gate] running recommendation-service python tests"
+PYTHON_TEST_RUNNER="python3"
+if [ -x "services/rec-model-service/.venv/bin/python" ]; then
+  PYTHON_TEST_RUNNER="services/rec-model-service/.venv/bin/python"
+fi
+"$PYTHON_TEST_RUNNER" -m pytest services/rec-model-service/tests -q \
+  || fail "recommendation-service python tests failed"
+
 echo "[gate] OK"
 

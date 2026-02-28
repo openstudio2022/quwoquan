@@ -60,5 +60,20 @@ ruby -ryaml -e '
     abort("[verify] FAIL: integration and prod process-domain mapping must be identical")
   end
 
+  %w[dev integration prod].each do |env|
+    rec = normalized[env]["recommendation-service"]
+    abort("[verify] FAIL: missing recommendation-service in #{env}") if rec.nil?
+    unless rec == ["recommendation"]
+      abort("[verify] FAIL: #{env}.recommendation-service must map exactly to domains: [recommendation]")
+    end
+  end
+
+  normalized.each do |env, process_map|
+    qwq = process_map["quwoquan_service"] || []
+    if qwq.include?("recommendation")
+      abort("[verify] FAIL: #{env}.quwoquan_service must not include recommendation domain; keep Python process independent")
+    end
+  end
+
   puts "[verify] OK: deployment mapping validated"
 '

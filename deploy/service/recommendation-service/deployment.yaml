@@ -1,25 +1,25 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: rec-model-service
+  name: recommendation-service
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: rec-model-service
+      app: recommendation-service
   template:
     metadata:
       labels:
-        app: rec-model-service
+        app: recommendation-service
     spec:
       containers:
-        - name: rec-model-service
-          image: quwoquan/rec-model-service:1.0.0
+        - name: recommendation-service
+          image: quwoquan/recommendation-service:1.0.0
           env:
             - name: APP_ENV
               value: prod
             - name: SERVICE_NAME
-              value: rec-model-service
+              value: recommendation-service
             - name: CONFIG_VERSION
               value: v2026.02.28.0
             - name: IMAGE_VERSION

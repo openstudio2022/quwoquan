@@ -11,13 +11,19 @@ environments:
       domains: [content]
     integration-service:
       domains: [integration]
+    recommendation-service:
+      domains: [recommendation]
     chat-service:
       domains: [chat]
 
   integration:
+    recommendation-service:
+      domains: [recommendation]
     quwoquan_service:
       domains: [content, integration, chat, user, circle, assistant, gateway, orchestrator]
 
   prod:
+    recommendation-service:
+      domains: [recommendation]
     quwoquan_service:
       domains: [content, integration, chat, user, circle, assistant, gateway, orchestrator]

@@ -1,8 +1,6 @@
 version: 1
 feature: "environment-process-domain-mapping"
 level: "L4_detail"
-archived: true
-archived_at: "2026-02-28T00:00:00+08:00"
 template: "A1-A8"
 tree_context:
   feature_level: "L4_detail"
@@ -30,6 +28,12 @@ global_acceptance:
       - given: "integration/prod 拓扑需要绑定配置发布版本"
         when: "服务以 CONFIG_VERSION 发布配置"
         then: "拓扑一致性门禁与配置版本门禁可同时通过"
+      - given: "recommendation domain"
+        when: "检查 process-domain 映射"
+        then: "仅允许 recommendation-service 独占 recommendation domain"
+      - given: "Go 与 Python 部署拓扑"
+        when: "integration/prod 环境发布"
+        then: "quwoquan_service 与 recommendation-service 以独立进程部署，不合并"
   A2_experience:
     - "开发态保持独立服务调试体验，不引入额外目录分叉"
   A3_service_governance:
@@ -47,6 +51,8 @@ global_acceptance:
     - "verify 脚本自动校验 domain 唯一归属"
     - "verify 脚本自动校验 integration/prod 拓扑一致"
     - "脚本接入 make verify 与 gate_repo"
+    - "recommendation-service Python 配置契约测试接入并通过"
+    - "make gate-full 将 recommendation-service Python 测试设为必过项"
 execution:
   local_gate: "make verify"
   full_gate: "make gate-full"

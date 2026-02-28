@@ -20,10 +20,16 @@ environments:
       domains: [content]
     integration-service:
       domains: [integration]
+    recommendation-service:
+      domains: [recommendation]
   integration:
+    recommendation-service:
+      domains: [recommendation]
     quwoquan_service:
       domains: [content, integration, chat, user, circle, assistant, gateway, orchestrator]
   prod:
+    recommendation-service:
+      domains: [recommendation]
     quwoquan_service:
       domains: [content, integration, chat, user, circle, assistant, gateway, orchestrator]
 ```
@@ -51,6 +57,9 @@ SERVICE_NAME=content-service APP_ENV=dev go run ./quwoquan_service/services/cont
 
 # integration-service
 SERVICE_NAME=integration-service APP_ENV=dev go run ./quwoquan_service/services/integration-service/cmd/api
+
+# recommendation-service (python)
+SERVICE_NAME=recommendation-service APP_ENV=dev PYTHONPATH=. uvicorn main:app --host 0.0.0.0 --port 18090
 ```
 
 3) 开发态校验：
@@ -69,16 +78,18 @@ make verify
 bash scripts/verify_deployment_domain_mapping.sh
 ```
 
-2) 使用组合进程 `quwoquan_service` 启动（由部署编排注入环境变量）：
+2) 使用组合进程 `quwoquan_service` 启动 Go 聚合进程，Python 的 `recommendation-service` 保持独立进程（由部署编排注入环境变量）：
 
 ```bash
 APP_ENV=integration SERVICE_NAME=quwoquan_service CONFIG_ROOT=/etc/qwq-config CONFIG_VERSION=<version> IMAGE_VERSION=<image> <start-command>
+APP_ENV=integration SERVICE_NAME=recommendation-service CONFIG_ROOT=/etc/qwq-config CONFIG_VERSION=<version> IMAGE_VERSION=<image> <python-start-command>
 ```
 
 生产同理，仅 `APP_ENV=prod`：
 
 ```bash
 APP_ENV=prod SERVICE_NAME=quwoquan_service CONFIG_ROOT=/etc/qwq-config CONFIG_VERSION=<version> IMAGE_VERSION=<image> <start-command>
+APP_ENV=prod SERVICE_NAME=recommendation-service CONFIG_ROOT=/etc/qwq-config CONFIG_VERSION=<version> IMAGE_VERSION=<image> <python-start-command>
 ```
 
 3) 发布前全量门禁：

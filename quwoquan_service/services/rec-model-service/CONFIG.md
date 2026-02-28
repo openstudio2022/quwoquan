@@ -1,9 +1,14 @@
-# rec-model-service 配置与运行
+# recommendation-service 配置与运行
 
 ## 环境变量
 
 | 变量 | 说明 | 默认 |
 |------|------|------|
+| `APP_ENV` | 运行态：`dev` / `integration` / `prod` | `dev` |
+| `SERVICE_NAME` | 服务名，必须为 `recommendation-service`（若设置） | - |
+| `CONFIG_VERSION` | 配置版本（`integration/prod` 必填） | - |
+| `IMAGE_VERSION` | 镜像版本（`integration/prod` 必填） | - |
+| `CONFIG_ROOT` | 配置根目录（`integration/prod` 必填） | - |
 | `PYTHONUNBUFFERED` | 建议设为 `1`，便于日志输出 | - |
 | `REC_MODEL_CONTENT_FEED_PATH` | content_feed 模型文件路径（可选；未设置时使用规则打分） | - |
 | `REC_MODEL_CIRCLE_DISCOVERY_PATH` | circle_discovery 模型路径（可选） | - |
@@ -14,11 +19,12 @@
 ```bash
 cd services/rec-model-service
 pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8000
+SERVICE_NAME=recommendation-service APP_ENV=dev uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
 - POST /v1/score：打分，请求体见 `contracts/openapi/rec-model-service.v1.yaml`
 - GET /health：健康检查
+- 配置契约不满足时，服务启动立即失败（fail-fast）
 
 ## Docker
 

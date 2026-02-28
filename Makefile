@@ -22,6 +22,7 @@ verify:
 	@bash scripts/verify_runtime_packaging.sh
 	@bash scripts/verify_ff_config_contract.sh
 	@bash scripts/verify_deployment_domain_mapping.sh
+	@bash scripts/verify_recommendation_service_contract.sh
 
 codegen-app:
 	@$(MAKE) -C quwoquan_service codegen-app
