@@ -57,7 +57,7 @@ jobs:
           mkdir -p ~/.kube
           echo "$INTEGRATION_KUBECONFIG" | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config
-          kustomize build -f deploy/kustomization/${{ env.CLOUD_PROVIDER }}.integration.yaml | kubectl apply -f - --server-side
+          kustomize build deploy/kustomization/${{ env.CLOUD_PROVIDER }}-integration | kubectl apply -f - --server-side
           touch .deploy-applied
       - name: Wait for rollout
         run: |

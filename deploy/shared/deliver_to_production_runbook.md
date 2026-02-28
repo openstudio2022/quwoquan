@@ -50,7 +50,7 @@
 ```bash
 # 阿里云（默认）
 CLOUD_PROVIDER=${CLOUD_PROVIDER:-aliyun}
-kustomize build -f deploy/kustomization/${CLOUD_PROVIDER}.integration.yaml
+kustomize build deploy/kustomization/${CLOUD_PROVIDER}-integration
 
 # 或 make deploy-integration
 make deploy-integration [CLOUD_PROVIDER=volcengine]

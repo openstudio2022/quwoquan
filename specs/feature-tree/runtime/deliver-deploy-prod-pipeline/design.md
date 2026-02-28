@@ -30,7 +30,7 @@
 | B：单一 overlay + 云参数 | `overlays/integration` + `CLOUD_PROVIDER` patch | 需大量 patch 条件 | 中 |
 | C：cloud-providers 顶层目录 | `cloud-providers/aliyun/`, `cloud-providers/volcengine/`, `cloud-providers/huaweicloud/` | 每云独立 base，共用 service 定义 | 高 |
 
-**选型**：**C** — `deploy/cloud-providers/{aliyun|volcengine|huaweicloud}/` 顶层目录，云特定 patches 置于各云下；**kustomization 入口统一置于 `deploy/kustomization/`**，命名 `{cloud}.{env}.yaml`，resources 使用相对路径 `../service/seed-box/kustomize/overlays/{env}`。切换时 `CLOUD_PROVIDER=volcengine kustomize build -f deploy/kustomization/volcengine.prod.yaml`。
+**选型**：**C** — `deploy/cloud-providers/{aliyun|volcengine|huaweicloud}/` 顶层目录，云特定 patches 置于各云下；**kustomization 入口统一置于 `deploy/kustomization/`**，命名 `{cloud}-{env}/` 目录（含 kustomization.yaml），kustomize build 仅接受目录参数。切换时 `CLOUD_PROVIDER=volcengine kustomize build deploy/kustomization/volcengine-prod`。
 
 ### 3. 云厂商差异抽象
 
@@ -75,7 +75,7 @@ deploy/
                 └── prod/
 ```
 
-**kustomization 约定**：入口文件位于 `deploy/kustomization/{cloud}.{env}.yaml`（如 `aliyun.integration.yaml`），resources 使用相对路径 `../service/seed-box/kustomize/overlays/{env}`。
+**kustomization 约定**：入口目录位于 `deploy/kustomization/{cloud}-{env}/`（如 `aliyun-integration`），含 `kustomization.yaml`，resources 使用相对路径 `../../service/seed-box/kustomize/overlays/{env}`。kustomize build 仅接受目录参数。
 
 每云 overlay 目录（`cloud-providers/*/overlays/*`）可含 `patches/`（LB/StorageClass/镜像等）；kustomization 引用云 patch 时用相对路径。
 

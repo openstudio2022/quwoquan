@@ -2,7 +2,7 @@
 
 > 目标：deliver 入库 → 部署 integration → L3/L4 验证 → 灰度 prod 全链路自动化或半自动化
 
-**当前部署目标**：CI/CD 仅考虑**阿里云 ACK** 部署。pre-release-gate、service_pipeline 使用 `CLOUD_PROVIDER=aliyun` 和 `deploy/kustomization/aliyun.*.yaml`。
+**当前部署目标**：CI/CD 仅考虑**阿里云 ACK** 部署。pre-release-gate、service_pipeline 使用 `CLOUD_PROVIDER=aliyun` 和 `deploy/kustomization/aliyun-integration`、`deploy/kustomization/aliyun-prod`。
 
 ---
 
@@ -85,7 +85,7 @@ deploy-integration:
     - name: Apply to integration
       run: |
         CLOUD_PROVIDER=${CLOUD_PROVIDER:-aliyun}
-        kustomize build -f deploy/kustomization/${CLOUD_PROVIDER}.integration.yaml | \
+        kustomize build deploy/kustomization/${CLOUD_PROVIDER}-integration | \
           kubectl apply -f - --server-side
     - name: Wait for rollout
       run: kubectl rollout status deployment/seed-box -n seed-box-integration --timeout=5m

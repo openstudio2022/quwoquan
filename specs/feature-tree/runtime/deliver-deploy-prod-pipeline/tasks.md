@@ -42,9 +42,9 @@ metadata → codegen → 业务逻辑 → 测试
 
 | 任务 | 说明 | 状态 |
 |------|------|------|
-| V1 | 验证 `kustomize build -f deploy/kustomization/aliyun.integration.yaml` 无错误 | [x] 已完成 |
-| V2 | 验证 `kustomize build -f deploy/kustomization/volcengine.integration.yaml` 无错误 | [x] 已完成 |
-| V3 | 验证 `kustomize build -f deploy/kustomization/huaweicloud.integration.yaml` 无错误 | [x] 已完成 |
+| V1 | 验证 `kustomize build deploy/kustomization/aliyun-integration` 无错误 | [x] 已完成 |
+| V2 | 验证 `kustomize build deploy/kustomization/volcengine-integration` 无错误 | [x] 已完成 |
+| V3 | 验证 `kustomize build deploy/kustomization/huaweicloud-integration` 无错误 | [x] 已完成 |
 | V4 | 在至少一云（如阿里云）上执行端到端：deliver → deploy integration → L3 → L4 → 灰度 prod | 待执行（需集群） |
 | V5 | 演练多云切换：同一 manifest 在阿里云与火山引擎分别渲染，确认无硬编码云厂商路径 | [x] 已完成 |
 
