@@ -1887,6 +1887,13 @@ features:
                   domain: ""
                   status: completed
                   tags: [deployment, process-mapping, topology, gate]
+                - id: future-evolution-closed-loop
+                  name: future-evolution-closed-loop
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-config/config-provider-layering/future-evolution-closed-loop
+                  domain: ""
+                  status: specified
+                  tags: [config, evolution, hot-reload, drift, gate]
         - id: runtime-context
           name: runtime-context
           level: L2_feature

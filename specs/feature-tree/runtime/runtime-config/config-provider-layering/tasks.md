@@ -47,8 +47,10 @@
 
 - [ ] C11 运行时热更新能力：仅针对低风险配置，待配置中心稳定后接入
   - 搁置原因：当前优先完成发布化与灰度回滚闭环
+  - 闭环包：`runtime/runtime-config/config-provider-layering/future-evolution-closed-loop`
 
 ## 未来演进任务
 
 - [ ] C12 提炼为 `runtime/config` 通用库，其他服务复用
 - [ ] C13 增加配置漂移检测（Git 期望值 vs 实际运行值）
+- 说明：C11~C13 的 spec/design/tasks/acceptance 与门禁草案已独立沉淀到 `future-evolution-closed-loop` 节点。

@@ -25,6 +25,7 @@ l2:
             l5:
               - feature: dynamic-refresh-gray-rollback-audit
           - feature: environment-process-domain-mapping
+          - feature: future-evolution-closed-loop
   - feature: runtime-errors
     l3:
       - feature: error-code-and-response-envelope

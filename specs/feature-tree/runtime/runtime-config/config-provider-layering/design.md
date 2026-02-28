@@ -94,3 +94,5 @@
 - 将加载器抽象到 `runtime/config` 公共库，服务端统一接入
 - 接入配置中心推送并保留 Git 版本真源
 - 将上述门禁脚本并入 `make gate-full` 的强制阶段
+- 对 C11~C13 的闭环拆解与门禁草案已落到：
+  - `runtime/runtime-config/config-provider-layering/future-evolution-closed-loop`

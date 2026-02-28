@@ -53,6 +53,7 @@
 - `env-file-secret-configcenter-provider`：配置来源抽象（env/file/secret/config center）
 - `env-overlay-config-release`（新增）：环境覆盖与配置发布化落地
 - `environment-process-domain-mapping`（新增）：部署进程与领域归属三态映射与门禁
+- `future-evolution-closed-loop`（新增）：C11~C13 未来演进闭环（spec/design/tasks/acceptance + 门禁草案）
 
 ## 适用范围与约束
 
