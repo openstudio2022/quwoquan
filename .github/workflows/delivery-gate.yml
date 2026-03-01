@@ -2,7 +2,7 @@
 # 触发：PR、push → dev1.0/main
 # 职责：拓扑校验 + metadata + L1(Flutter) + L2(Go contract)
 # 端到端闭环见 deploy/shared/ci_cd_end_to_end_design.md
-name: delivery-gate
+name: 03. Delivery Gate
 
 on:
   pull_request:

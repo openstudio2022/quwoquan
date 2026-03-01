@@ -167,6 +167,7 @@ func generatedSplitPath(raw string) []string {
 
 type GeneratedGetFeedParams struct {
 	Type        string
+	Sort        string
 	Cursor      string
 	SubCategory string
 	Limit       int
@@ -176,6 +177,7 @@ func BindGeneratedGetFeedParams(r *http.Request, defaultLimit int) GeneratedGetF
 	out := GeneratedGetFeedParams{Limit: defaultLimit}
 	q := r.URL.Query()
 	out.Type = strings.TrimSpace(q.Get("type"))
+	out.Sort = strings.TrimSpace(q.Get("sort"))
 	out.Cursor = strings.TrimSpace(q.Get("cursor"))
 	out.SubCategory = strings.TrimSpace(q.Get("subCategory"))
 	rawLimit := strings.TrimSpace(q.Get("limit"))

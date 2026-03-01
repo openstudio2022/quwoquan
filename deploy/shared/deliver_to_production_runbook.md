@@ -150,6 +150,7 @@ make config-rollback SERVICE=<service> TO_CONFIG=<rollback-version>
 
 - `specs/00_MASTER_DEVELOPMENT_FLOW.md` — 主流程（含 Deploy 阶段 G5）
 - `deploy/shared/ci_cd_end_to_end_design.md` — **CI/CD 端到端闭环落实方案**（pre-release workflow、secrets、实施顺序）
+- `deploy/shared/workflow_consolidation_plan.md` — **Workflow 命名规范**（01～06、02/03 去重）
 - `.cursor/commands/opsx-deploy.md` — 部署命令
 - `deploy/shared/process_domain_mapping_runbook.md` — 部署拓扑
 - `deploy/service/config-release/runbook.md` — 配置发布与灰度

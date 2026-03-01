@@ -80,11 +80,25 @@ make gate-full
 
 ### 阶段 3：归档
 
-G3 通过后，执行归档逻辑（与 `/opsx-archive` 一致）：
+G3 通过后，AI Agent **必须执行与 `/opsx-archive` 完全相同的归档逻辑**，回写以下两处，否则 CI 会报「status=completed 但 acceptance.yaml missing archived:true」：
 
-1) 标记特性为 `archived`  
-2) 生成复盘摘要  
-3) 进入阶段 4
+**3a. 更新目标节点的 `acceptance.yaml` 顶层**：
+```yaml
+archived: true
+archived_at: <ISO8601 当前时间>
+```
+
+**3b. 更新 `specs/feature-tree/tree_index.yaml`**：
+将目标节点（及其所有子节点，若也已完成）的 `status` 改为 `completed`。
+
+**3c. 归档前置（若尚未满足）**：
+- `tasks.md` 当前交付任务全部 `[x]`
+- `acceptance.yaml` 若有 `level_acceptance`，所有 A1~An 的 `status` 为 `implemented`/`waived`/`deferred`，不得有 `pending`
+
+> 若跳过或遗漏 3a/3b，CI gate 会输出 WARNING，导致「任务未完成」类告警。
+
+4) 生成复盘摘要  
+5) 进入阶段 4
 
 ---
 

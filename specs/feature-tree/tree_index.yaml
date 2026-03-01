@@ -805,7 +805,7 @@ features:
               level: L3_component
               path: ../specs/feature-tree/discovery-content/feed-orchestration-recommendation/personalized-ranking
               domain: ""
-              status: specified
+              status: completed
               tags: []
               children:
                 - id: ranking-signal-fusion
@@ -1821,6 +1821,13 @@ features:
                   domain: ""
                   status: completed
                   tags: []
+            - id: workflow-naming-consolidation
+              name: workflow-naming-consolidation
+              level: L3_component
+              path: ../specs/feature-tree/runtime/deliver-deploy-prod-pipeline/workflow-naming-consolidation
+              domain: ""
+              status: completed
+              tags: [workflow, naming, 02-03-duplicate-check]
             - id: multi-cloud-deploy-overlay
               name: multi-cloud-deploy-overlay
               level: L3_component

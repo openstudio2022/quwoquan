@@ -1,0 +1,41 @@
+version: 1
+feature: "workflow-naming-consolidation"
+level: "L3"
+template: "A1-A4"
+focus_groups: []
+tests:
+  contract:
+    - 场景：6 个 workflow name 含 01～06 序号
+    - 场景：deploy-prod-auto 的 workflow_run 引用 04. Pre-Release Gate
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"
+level_acceptance:
+  A1:
+    criteria: "6 个 workflow name 为 01～06 序号 + 首字母大写"
+    status: implemented
+    linked_tasks: [T1]
+    tests:
+      - file: .github/workflows/app_pipeline.yml
+        functions: [name]
+      - file: .github/workflows/delivery-gate.yml
+        functions: [name]
+  A2:
+    criteria: "workflow_consolidation_plan 含命名规范与 02/03 重复检查"
+    status: implemented
+    linked_tasks: [T3]
+    tests:
+      - file: deploy/shared/workflow_consolidation_plan.md
+        functions: [section 2, section 4.6]
+  A3:
+    criteria: "deploy-prod-auto workflow_run 正确引用 04. Pre-Release Gate"
+    status: implemented
+    linked_tasks: [T2]
+    tests:
+      - file: .github/workflows/deploy-prod-auto.yml
+        functions: [workflow_run]
+  A4:
+    criteria: "ci_cd_end_to_end_design、runbook 与规范一致"
+    status: implemented
+    linked_tasks: [T4]
+    tests: []

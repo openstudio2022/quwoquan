@@ -50,8 +50,8 @@ class _ErrorContentRepository implements ContentRepository {
     String? subCategory,
     int limit = 20,
     String? cursor,
-  }) async =>
-      throw Exception(_errorMessage);
+    String sort = kFeedSortRecommend,
+  }) async => throw Exception(_errorMessage);
 
   @override
   Future<List<PostBaseDto>> listDiscoveryFeed({
@@ -59,8 +59,8 @@ class _ErrorContentRepository implements ContentRepository {
     String? subCategory,
     int limit = 20,
     String? cursor,
-  }) async =>
-      throw Exception(_errorMessage);
+    String sort = kFeedSortRecommend,
+  }) async => throw Exception(_errorMessage);
 
   @override
   Future<CursorPage<FeedItemDto>> listDiscoveryFeedPageLegacy({
@@ -68,15 +68,15 @@ class _ErrorContentRepository implements ContentRepository {
     String? subCategory,
     int limit = 20,
     String? cursor,
-  }) async =>
-      throw Exception(_errorMessage);
+    String sort = kFeedSortRecommend,
+  }) async => throw Exception(_errorMessage);
 
   @override
   Future<Map<String, dynamic>> getPost({required String postId}) async => {};
   @override
-  Future<Map<String, dynamic>> createPost(
-          {required Map<String, dynamic> payload}) async =>
-      {};
+  Future<Map<String, dynamic>> createPost({
+    required Map<String, dynamic> payload,
+  }) async => {};
   @override
   Future<void> likePost({required String postId}) async {}
   @override
@@ -86,25 +86,30 @@ class _ErrorContentRepository implements ContentRepository {
   @override
   Future<void> unfavoritePost({required String postId}) async {}
   @override
-  Future<Map<String, dynamic>> getReactionState(
-          {required String postId}) async =>
-      {};
+  Future<Map<String, dynamic>> getReactionState({
+    required String postId,
+  }) async => {};
   @override
-  Future<List<Map<String, dynamic>>> listComments(
-          {required String postId, String? cursor, int limit = 20}) async =>
-      [];
+  Future<List<Map<String, dynamic>>> listComments({
+    required String postId,
+    String? cursor,
+    int limit = 20,
+  }) async => [];
   @override
-  Future<Map<String, dynamic>> createComment(
-          {required String postId,
-          required String content,
-          String? replyToCommentId}) async =>
-      {};
+  Future<Map<String, dynamic>> createComment({
+    required String postId,
+    required String content,
+    String? replyToCommentId,
+  }) async => {};
   @override
-  Future<void> deleteComment(
-      {required String postId, required String commentId}) async {}
+  Future<void> deleteComment({
+    required String postId,
+    required String commentId,
+  }) async {}
   @override
-  Future<void> reportBehaviors(
-      {required List<Map<String, dynamic>> events}) async {}
+  Future<void> reportBehaviors({
+    required List<Map<String, dynamic>> events,
+  }) async {}
   @override
   Future<Map<String, dynamic>> getCounters({required String postId}) async =>
       {};
@@ -117,13 +122,15 @@ void main() {
   // 旅程正常路径
   // ──────────────────────────────────────────────────────────────────
   group('旅程正常路径', () {
-    testWidgets('旅程 A1：切换到美图 Tab → Provider 调用 MockRepo → 返回 PhotoPostDto 列表',
-        (tester) async {
+    testWidgets('旅程 A1：切换到美图 Tab → Provider 调用 MockRepo → 返回 PhotoPostDto 列表', (
+      tester,
+    ) async {
       final mock = MockContentRepository();
       await tester.pumpWidget(_scopedApp(mock: mock));
 
-      final container =
-          ProviderScope.containerOf(tester.element(find.byType(MaterialApp)));
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(MaterialApp)),
+      );
 
       await container.read(discoveryFeedMapProvider.notifier).load('photo');
       await tester.pump();
@@ -133,8 +140,11 @@ void main() {
 
       final feed = feedAsync!.value!;
       expect(feed.items, isNotEmpty, reason: 'MockRepo 应返回 seeded photo 数据');
-      expect(feed.items, everyElement(isA<PhotoPostDto>()),
-          reason: 'contentType=image 应 dispatch 为 PhotoPostDto');
+      expect(
+        feed.items,
+        everyElement(isA<PhotoPostDto>()),
+        reason: 'contentType=image 应 dispatch 为 PhotoPostDto',
+      );
       expect(feed.error, isNull, reason: '正常加载不应有错误');
     });
 
@@ -142,14 +152,14 @@ void main() {
       final mock = MockContentRepository();
       await tester.pumpWidget(_scopedApp(mock: mock));
 
-      final container =
-          ProviderScope.containerOf(tester.element(find.byType(MaterialApp)));
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(MaterialApp)),
+      );
 
       await container.read(discoveryFeedMapProvider.notifier).load('video');
       await tester.pump();
 
-      final feed =
-          container.read(discoveryFeedMapProvider)['video']?.value;
+      final feed = container.read(discoveryFeedMapProvider)['video']?.value;
       expect(feed, isNotNull);
       expect(feed!.items, isNotEmpty);
       expect(feed.items.first, isA<VideoPostDto>());
@@ -163,34 +173,42 @@ void main() {
   group('旅程错误路径', () {
     testWidgets('旅程 B1：网络失败 → feed 状态携带 error，items 为空', (tester) async {
       final failRepo = _ErrorContentRepository('NETWORK_TIMEOUT');
-      await tester.pumpWidget(ProviderScope(
-        overrides: [contentRepositoryProvider.overrideWithValue(failRepo)],
-        child: const MaterialApp(home: SizedBox.shrink()),
-      ));
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [contentRepositoryProvider.overrideWithValue(failRepo)],
+          child: const MaterialApp(home: SizedBox.shrink()),
+        ),
+      );
 
-      final container =
-          ProviderScope.containerOf(tester.element(find.byType(MaterialApp)));
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(MaterialApp)),
+      );
 
       await container.read(discoveryFeedMapProvider.notifier).load('photo');
       await tester.pump();
 
-      final feed =
-          container.read(discoveryFeedMapProvider)['photo']?.value;
+      final feed = container.read(discoveryFeedMapProvider)['photo']?.value;
       expect(feed, isNotNull);
-      expect(feed!.error, contains('NETWORK_TIMEOUT'),
-          reason: '错误消息应传播到 feed state');
+      expect(
+        feed!.error,
+        contains('NETWORK_TIMEOUT'),
+        reason: '错误消息应传播到 feed state',
+      );
       expect(feed.items, isEmpty);
     });
 
     testWidgets('旅程 B2：服务抛异常 → provider 不传播未捕获异常给调用方', (tester) async {
       final failRepo = _ErrorContentRepository('SERVER_500');
-      await tester.pumpWidget(ProviderScope(
-        overrides: [contentRepositoryProvider.overrideWithValue(failRepo)],
-        child: const MaterialApp(home: SizedBox.shrink()),
-      ));
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [contentRepositoryProvider.overrideWithValue(failRepo)],
+          child: const MaterialApp(home: SizedBox.shrink()),
+        ),
+      );
 
-      final container =
-          ProviderScope.containerOf(tester.element(find.byType(MaterialApp)));
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(MaterialApp)),
+      );
 
       await expectLater(
         container.read(discoveryFeedMapProvider.notifier).load('photo'),
@@ -207,17 +225,20 @@ void main() {
       final mock = MockContentRepository();
       await tester.pumpWidget(_scopedApp(mock: mock));
 
-      final container =
-          ProviderScope.containerOf(tester.element(find.byType(MaterialApp)));
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(MaterialApp)),
+      );
 
       await container.read(discoveryFeedMapProvider.notifier).load('photo');
       await container.read(discoveryFeedMapProvider.notifier).load('video');
       await tester.pump();
 
-      final photoFeed =
-          container.read(discoveryFeedMapProvider)['photo']?.value;
-      final videoFeed =
-          container.read(discoveryFeedMapProvider)['video']?.value;
+      final photoFeed = container
+          .read(discoveryFeedMapProvider)['photo']
+          ?.value;
+      final videoFeed = container
+          .read(discoveryFeedMapProvider)['video']
+          ?.value;
 
       expect(photoFeed!.items, isNotEmpty);
       expect(videoFeed!.items, isNotEmpty);
@@ -229,15 +250,15 @@ void main() {
       final mock = MockContentRepository();
       await tester.pumpWidget(_scopedApp(mock: mock));
 
-      final container =
-          ProviderScope.containerOf(tester.element(find.byType(MaterialApp)));
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(MaterialApp)),
+      );
 
       await container.read(discoveryFeedMapProvider.notifier).load('photo');
       await container.read(discoveryFeedMapProvider.notifier).load('photo');
       await tester.pump();
 
-      final feed =
-          container.read(discoveryFeedMapProvider)['photo']?.value;
+      final feed = container.read(discoveryFeedMapProvider)['photo']?.value;
       expect(feed, isNotNull);
       expect(feed!.items, isNotEmpty);
       expect(feed.error, isNull);

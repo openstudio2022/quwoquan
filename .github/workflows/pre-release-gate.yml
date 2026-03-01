@@ -2,7 +2,7 @@
 # 触发：v*-rc* tag；全部通过 → 可灰度到 prod
 # 端到端闭环见 deploy/shared/ci_cd_end_to_end_design.md
 # 当前部署目标：阿里云 ACK
-name: pre-release-gate
+name: 04. Pre-Release Gate
 
 on:
   push:

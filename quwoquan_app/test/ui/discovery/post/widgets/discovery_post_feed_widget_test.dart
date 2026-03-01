@@ -26,19 +26,22 @@ void main() {
       expect(state, isEmpty);
     });
 
-    test('load(photo) populates feed items from MockContentRepository', () async {
-      final container = _container(MockContentRepository());
-      addTearDown(container.dispose);
+    test(
+      'load(photo) populates feed items from MockContentRepository',
+      () async {
+        final container = _container(MockContentRepository());
+        addTearDown(container.dispose);
 
-      await container.read(discoveryFeedMapProvider.notifier).load('photo');
+        await container.read(discoveryFeedMapProvider.notifier).load('photo');
 
-      final feedAsync = container.read(discoveryFeedMapProvider)['photo'];
-      expect(feedAsync, isNotNull);
-      final feed = feedAsync!.value;
-      expect(feed, isNotNull);
-      expect(feed!.items, isNotEmpty);
-      expect(feed.items.first, isA<PhotoPostDto>());
-    });
+        final feedAsync = container.read(discoveryFeedMapProvider)['photo'];
+        expect(feedAsync, isNotNull);
+        final feed = feedAsync!.value;
+        expect(feed, isNotNull);
+        expect(feed!.items, isNotEmpty);
+        expect(feed.items.first, isA<PhotoPostDto>());
+      },
+    );
 
     test('load(video) returns VideoPostDto items', () async {
       final container = _container(MockContentRepository());
@@ -71,11 +74,23 @@ void main() {
 
       await container.read(discoveryFeedMapProvider.notifier).load('photo');
       final beforeCount =
-          container.read(discoveryFeedMapProvider)['photo']?.value?.items.length ?? 0;
+          container
+              .read(discoveryFeedMapProvider)['photo']
+              ?.value
+              ?.items
+              .length ??
+          0;
 
-      await container.read(discoveryFeedMapProvider.notifier).appendNextPage('photo');
+      await container
+          .read(discoveryFeedMapProvider.notifier)
+          .appendNextPage('photo');
       final afterCount =
-          container.read(discoveryFeedMapProvider)['photo']?.value?.items.length ?? 0;
+          container
+              .read(discoveryFeedMapProvider)['photo']
+              ?.value
+              ?.items
+              .length ??
+          0;
 
       // MockContentRepository returns nextCursor: null → no new items loaded
       expect(afterCount, equals(beforeCount));
@@ -144,6 +159,7 @@ class _FailingContentRepository implements ContentRepository {
     String? subCategory,
     int limit = 20,
     String? cursor,
+    String sort = kFeedSortRecommend,
   }) async {
     throw Exception('network_error');
   }
@@ -154,6 +170,7 @@ class _FailingContentRepository implements ContentRepository {
     String? subCategory,
     int limit = 20,
     String? cursor,
+    String sort = kFeedSortRecommend,
   }) async => throw Exception('network_error');
 
   @override
@@ -162,6 +179,7 @@ class _FailingContentRepository implements ContentRepository {
     String? subCategory,
     int limit = 20,
     String? cursor,
+    String sort = kFeedSortRecommend,
   }) async => throw Exception('network_error');
 
   @override
@@ -182,7 +200,9 @@ class _FailingContentRepository implements ContentRepository {
   @override
   Future<void> unfavoritePost({required String postId}) async {}
   @override
-  Future<Map<String, dynamic>> getReactionState({required String postId}) async => {};
+  Future<Map<String, dynamic>> getReactionState({
+    required String postId,
+  }) async => {};
   @override
   Future<List<Map<String, dynamic>>> listComments({
     required String postId,
@@ -205,5 +225,6 @@ class _FailingContentRepository implements ContentRepository {
     required List<Map<String, dynamic>> events,
   }) async {}
   @override
-  Future<Map<String, dynamic>> getCounters({required String postId}) async => {};
+  Future<Map<String, dynamic>> getCounters({required String postId}) async =>
+      {};
 }

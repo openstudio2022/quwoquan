@@ -141,6 +141,24 @@ scenarios:
       - first page: 20 items, cursor present
       - second page using cursor: 10 items, no duplicate
 
+  - name: get_feed_recommend_sort_with_cursor
+    go_func: TestGetFeedRecommendSortWithCursor
+    command: GetFeed (sort=recommend) with cursor
+    seed: [fixture.NewPosts(count=30, contentType=image)]
+    assertions:
+      - first page: cursor present and opaque token format
+      - second page using cursor: no overlap with page1
+      - pagination remains stable for recommend sort
+
+  - name: get_feed_future_window_changes_only
+    go_func: TestGetFeedFutureWindowChangesOnly
+    command: GetFeed (sort=recommend) after feedback update
+    seed: [fixture.NewPosts(count=40, mixed contentType)]
+    assertions:
+      - items returned before cursor are treated as client-owned history
+      - strong feedback affects only future window after cursor
+      - future window keeps no duplicate guarantee
+
   # ── 行为上报场景 ──────────────────────────────────────────────────
   - name: behavior_batch_report
     go_func: TestBehaviorBatchReport

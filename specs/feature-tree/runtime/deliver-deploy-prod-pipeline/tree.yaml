@@ -5,6 +5,7 @@ l3:
   - feature: integration-deploy-and-l3-l4-gate
     l4:
       - feature: pre-release-workflow-chain
+  - feature: workflow-naming-consolidation
   - feature: multi-cloud-deploy-overlay
     l4:
       - feature: aliyun-volcengine-huaweicloud-overlays

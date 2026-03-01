@@ -9,6 +9,8 @@ import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/services/content/mock/content_mock_data.dart';
 
+const String kFeedSortRecommend = 'recommend';
+
 /// Content 域 Repository（端侧按业务对象组织的统一入口）。
 ///
 /// 输出统一为 [PostBaseDto] 子类（codegen 产物，DO NOT EDIT）：
@@ -28,6 +30,7 @@ abstract class ContentRepository {
     String? subCategory,
     int limit = GeneratedPostRuntimeMetadata.feedDefaultLimit,
     String? cursor,
+    String sort = kFeedSortRecommend,
   });
 
   Future<List<PostBaseDto>> listDiscoveryFeed({
@@ -35,6 +38,7 @@ abstract class ContentRepository {
     String? subCategory,
     int limit = GeneratedPostRuntimeMetadata.feedDefaultLimit,
     String? cursor,
+    String sort = kFeedSortRecommend,
   });
 
   /// @deprecated 兼容层：给尚未迁移到 PostBaseDto 的调用方使用。
@@ -44,11 +48,10 @@ abstract class ContentRepository {
     String? subCategory,
     int limit = GeneratedPostRuntimeMetadata.feedDefaultLimit,
     String? cursor,
+    String sort = kFeedSortRecommend,
   });
 
-  Future<Map<String, dynamic>> getPost({
-    required String postId,
-  });
+  Future<Map<String, dynamic>> getPost({required String postId});
 
   Future<Map<String, dynamic>> createPost({
     required Map<String, dynamic> payload,
@@ -69,7 +72,10 @@ abstract class ContentRepository {
     required String content,
     String? replyToCommentId,
   });
-  Future<void> deleteComment({required String postId, required String commentId});
+  Future<void> deleteComment({
+    required String postId,
+    required String commentId,
+  });
   Future<void> reportBehaviors({required List<Map<String, dynamic>> events});
   Future<Map<String, dynamic>> getCounters({required String postId});
 }
@@ -95,6 +101,7 @@ class MockContentRepository implements ContentRepository {
     String? subCategory,
     int limit = GeneratedPostRuntimeMetadata.feedDefaultLimit,
     String? cursor,
+    String sort = kFeedSortRecommend,
   }) async {
     final rawList = _getRawListForCategory(category);
     final items = rawList.map(postBaseDtoFromMap).toList(growable: false);
@@ -107,12 +114,14 @@ class MockContentRepository implements ContentRepository {
     String? subCategory,
     int limit = GeneratedPostRuntimeMetadata.feedDefaultLimit,
     String? cursor,
+    String sort = kFeedSortRecommend,
   }) async {
     final page = await listDiscoveryFeedPage(
       category: category,
       subCategory: subCategory,
       limit: limit,
       cursor: cursor,
+      sort: sort,
     );
     return page.items;
   }
@@ -123,17 +132,22 @@ class MockContentRepository implements ContentRepository {
     String? subCategory,
     int limit = GeneratedPostRuntimeMetadata.feedDefaultLimit,
     String? cursor,
+    String sort = kFeedSortRecommend,
   }) async {
     final page = await listDiscoveryFeedPage(
       category: category,
       subCategory: subCategory,
       limit: limit,
       cursor: cursor,
+      sort: sort,
     );
     final legacyItems = page.items
         .map((dto) => FeedItemDto.fromMap(dto.toMap()))
         .toList(growable: false);
-    return CursorPage<FeedItemDto>(items: legacyItems, nextCursor: page.nextCursor);
+    return CursorPage<FeedItemDto>(
+      items: legacyItems,
+      nextCursor: page.nextCursor,
+    );
   }
 
   @override
@@ -156,7 +170,10 @@ class MockContentRepository implements ContentRepository {
   Future<Map<String, dynamic>> createPost({
     required Map<String, dynamic> payload,
   }) async {
-    return <String, dynamic>{...payload, 'postId': 'local_${DateTime.now().millisecondsSinceEpoch}'};
+    return <String, dynamic>{
+      ...payload,
+      'postId': 'local_${DateTime.now().millisecondsSinceEpoch}',
+    };
   }
 
   @override
@@ -181,7 +198,9 @@ class MockContentRepository implements ContentRepository {
   Future<void> unfavoritePost({required String postId}) async {}
 
   @override
-  Future<Map<String, dynamic>> getReactionState({required String postId}) async {
+  Future<Map<String, dynamic>> getReactionState({
+    required String postId,
+  }) async {
     return reactionStateStub;
   }
 
@@ -211,19 +230,25 @@ class MockContentRepository implements ContentRepository {
       'authorId': 'mock_user',
       'createdAt': DateTime.now().toIso8601String(),
     };
-    if (replyToCommentId != null) comment['replyToCommentId'] = replyToCommentId;
+    if (replyToCommentId != null)
+      comment['replyToCommentId'] = replyToCommentId;
     commentsStub = [...commentsStub, comment];
     countersStubCommentCount++;
     return comment;
   }
 
   @override
-  Future<void> deleteComment({required String postId, required String commentId}) async {
+  Future<void> deleteComment({
+    required String postId,
+    required String commentId,
+  }) async {
     commentsStub = commentsStub.where((c) => c['_id'] != commentId).toList();
   }
 
   @override
-  Future<void> reportBehaviors({required List<Map<String, dynamic>> events}) async {}
+  Future<void> reportBehaviors({
+    required List<Map<String, dynamic>> events,
+  }) async {}
 
   @override
   Future<Map<String, dynamic>> getCounters({required String postId}) async {
@@ -234,7 +259,8 @@ class MockContentRepository implements ContentRepository {
   }
 
   List<Map<String, dynamic>> _getRawListForCategory(String category) {
-    final feedType = GeneratedPostRuntimeMetadata.feedCategoryToRequestType[category] ?? '';
+    final feedType =
+        GeneratedPostRuntimeMetadata.feedCategoryToRequestType[category] ?? '';
     switch (feedType) {
       case 'photo':
         return ContentMockData.discoveryPhotoData;
@@ -266,6 +292,7 @@ class RemoteContentRepository implements ContentRepository {
     String? subCategory,
     int limit = GeneratedPostRuntimeMetadata.feedDefaultLimit,
     String? cursor,
+    String sort = kFeedSortRecommend,
   }) async {
     final type = _mapCategoryToFeedType(category);
     final query = <String, String>{};
@@ -276,15 +303,18 @@ class RemoteContentRepository implements ContentRepository {
     if (keys.contains('cursor') && cursor?.isNotEmpty == true) {
       query['cursor'] = cursor!;
     }
+    if (keys.contains('sort') && sort.trim().isNotEmpty) {
+      query['sort'] = sort.trim();
+    }
     if (keys.contains('limit')) {
       query['limit'] = '$limit';
     }
     if (keys.contains('subCategory') && subCategory?.isNotEmpty == true) {
       query['subCategory'] = subCategory!;
     }
-    final uri = Uri.parse('$_baseUrl${GeneratedPostRuntimeMetadata.feedPath}').replace(
-      queryParameters: query,
-    );
+    final uri = Uri.parse(
+      '$_baseUrl${GeneratedPostRuntimeMetadata.feedPath}',
+    ).replace(queryParameters: query);
     final decoded = await _httpClient.getJson(
       uri,
       headers: CloudRequestHeaders.forPage('content.feed.list'),
@@ -293,8 +323,13 @@ class RemoteContentRepository implements ContentRepository {
       decoded,
       context: 'content.feed.list',
     );
-    final dtoItems = rawPage.items.map(postBaseDtoFromMap).toList(growable: false);
-    return CursorPage<PostBaseDto>(items: dtoItems, nextCursor: rawPage.nextCursor);
+    final dtoItems = rawPage.items
+        .map(postBaseDtoFromMap)
+        .toList(growable: false);
+    return CursorPage<PostBaseDto>(
+      items: dtoItems,
+      nextCursor: rawPage.nextCursor,
+    );
   }
 
   @override
@@ -303,12 +338,14 @@ class RemoteContentRepository implements ContentRepository {
     String? subCategory,
     int limit = GeneratedPostRuntimeMetadata.feedDefaultLimit,
     String? cursor,
+    String sort = kFeedSortRecommend,
   }) async {
     final page = await listDiscoveryFeedPage(
       category: category,
       subCategory: subCategory,
       limit: limit,
       cursor: cursor,
+      sort: sort,
     );
     return page.items;
   }
@@ -319,17 +356,22 @@ class RemoteContentRepository implements ContentRepository {
     String? subCategory,
     int limit = GeneratedPostRuntimeMetadata.feedDefaultLimit,
     String? cursor,
+    String sort = kFeedSortRecommend,
   }) async {
     final page = await listDiscoveryFeedPage(
       category: category,
       subCategory: subCategory,
       limit: limit,
       cursor: cursor,
+      sort: sort,
     );
     final legacyItems = page.items
         .map((dto) => FeedItemDto.fromMap(dto.toMap()))
         .toList(growable: false);
-    return CursorPage<FeedItemDto>(items: legacyItems, nextCursor: page.nextCursor);
+    return CursorPage<FeedItemDto>(
+      items: legacyItems,
+      nextCursor: page.nextCursor,
+    );
   }
 
   @override
@@ -356,38 +398,73 @@ class RemoteContentRepository implements ContentRepository {
       headers: CloudRequestHeaders.forPage('content.post.create'),
       body: payload,
     );
-    return CloudResponseDecoder.asObject(decoded, context: 'content.post.create');
+    return CloudResponseDecoder.asObject(
+      decoded,
+      context: 'content.post.create',
+    );
   }
 
   @override
   Future<void> likePost({required String postId}) async {
-    final uri = Uri.parse('$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/like');
-    await _httpClient.postJson(uri, headers: CloudRequestHeaders.forPage('content.post.like'), body: {});
+    final uri = Uri.parse(
+      '$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/like',
+    );
+    await _httpClient.postJson(
+      uri,
+      headers: CloudRequestHeaders.forPage('content.post.like'),
+      body: {},
+    );
   }
 
   @override
   Future<void> unlikePost({required String postId}) async {
-    final uri = Uri.parse('$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/like');
-    await _httpClient.deleteJson(uri, headers: CloudRequestHeaders.forPage('content.post.unlike'));
+    final uri = Uri.parse(
+      '$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/like',
+    );
+    await _httpClient.deleteJson(
+      uri,
+      headers: CloudRequestHeaders.forPage('content.post.unlike'),
+    );
   }
 
   @override
   Future<void> favoritePost({required String postId}) async {
-    final uri = Uri.parse('$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/favorite');
-    await _httpClient.postJson(uri, headers: CloudRequestHeaders.forPage('content.post.favorite'), body: {});
+    final uri = Uri.parse(
+      '$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/favorite',
+    );
+    await _httpClient.postJson(
+      uri,
+      headers: CloudRequestHeaders.forPage('content.post.favorite'),
+      body: {},
+    );
   }
 
   @override
   Future<void> unfavoritePost({required String postId}) async {
-    final uri = Uri.parse('$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/favorite');
-    await _httpClient.deleteJson(uri, headers: CloudRequestHeaders.forPage('content.post.unfavorite'));
+    final uri = Uri.parse(
+      '$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/favorite',
+    );
+    await _httpClient.deleteJson(
+      uri,
+      headers: CloudRequestHeaders.forPage('content.post.unfavorite'),
+    );
   }
 
   @override
-  Future<Map<String, dynamic>> getReactionState({required String postId}) async {
-    final uri = Uri.parse('$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/reactions');
-    final decoded = await _httpClient.getJson(uri, headers: CloudRequestHeaders.forPage('content.post.reactions'));
-    return CloudResponseDecoder.asObject(decoded, context: 'content.post.reactions');
+  Future<Map<String, dynamic>> getReactionState({
+    required String postId,
+  }) async {
+    final uri = Uri.parse(
+      '$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/reactions',
+    );
+    final decoded = await _httpClient.getJson(
+      uri,
+      headers: CloudRequestHeaders.forPage('content.post.reactions'),
+    );
+    return CloudResponseDecoder.asObject(
+      decoded,
+      context: 'content.post.reactions',
+    );
   }
 
   @override
@@ -398,10 +475,17 @@ class RemoteContentRepository implements ContentRepository {
   }) async {
     final query = <String, String>{'limit': '$limit'};
     if (cursor != null) query['cursor'] = cursor;
-    final uri = Uri.parse('$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/comments')
-        .replace(queryParameters: query);
-    final decoded = await _httpClient.getJson(uri, headers: CloudRequestHeaders.forPage('content.comment.list'));
-    final page = CloudResponseDecoder.asCursorPage(decoded, context: 'content.comment.list');
+    final uri = Uri.parse(
+      '$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/comments',
+    ).replace(queryParameters: query);
+    final decoded = await _httpClient.getJson(
+      uri,
+      headers: CloudRequestHeaders.forPage('content.comment.list'),
+    );
+    final page = CloudResponseDecoder.asCursorPage(
+      decoded,
+      context: 'content.comment.list',
+    );
     return page.items.cast<Map<String, dynamic>>();
   }
 
@@ -411,7 +495,9 @@ class RemoteContentRepository implements ContentRepository {
     required String content,
     String? replyToCommentId,
   }) async {
-    final uri = Uri.parse('$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/comments');
+    final uri = Uri.parse(
+      '$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/comments',
+    );
     final body = <String, dynamic>{'content': content};
     if (replyToCommentId != null) body['replyToCommentId'] = replyToCommentId;
     final decoded = await _httpClient.postJson(
@@ -419,19 +505,30 @@ class RemoteContentRepository implements ContentRepository {
       headers: CloudRequestHeaders.forPage('content.comment.create'),
       body: body,
     );
-    return CloudResponseDecoder.asObject(decoded, context: 'content.comment.create');
+    return CloudResponseDecoder.asObject(
+      decoded,
+      context: 'content.comment.create',
+    );
   }
 
   @override
-  Future<void> deleteComment({required String postId, required String commentId}) async {
+  Future<void> deleteComment({
+    required String postId,
+    required String commentId,
+  }) async {
     final uri = Uri.parse(
       '$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/comments/${Uri.encodeComponent(commentId)}',
     );
-    await _httpClient.deleteJson(uri, headers: CloudRequestHeaders.forPage('content.comment.delete'));
+    await _httpClient.deleteJson(
+      uri,
+      headers: CloudRequestHeaders.forPage('content.comment.delete'),
+    );
   }
 
   @override
-  Future<void> reportBehaviors({required List<Map<String, dynamic>> events}) async {
+  Future<void> reportBehaviors({
+    required List<Map<String, dynamic>> events,
+  }) async {
     final uri = Uri.parse('$_baseUrl/v1/content/behaviors');
     await _httpClient.postJson(
       uri,
@@ -442,9 +539,17 @@ class RemoteContentRepository implements ContentRepository {
 
   @override
   Future<Map<String, dynamic>> getCounters({required String postId}) async {
-    final uri = Uri.parse('$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/counters');
-    final decoded = await _httpClient.getJson(uri, headers: CloudRequestHeaders.forPage('content.post.counters'));
-    return CloudResponseDecoder.asObject(decoded, context: 'content.post.counters');
+    final uri = Uri.parse(
+      '$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/counters',
+    );
+    final decoded = await _httpClient.getJson(
+      uri,
+      headers: CloudRequestHeaders.forPage('content.post.counters'),
+    );
+    return CloudResponseDecoder.asObject(
+      decoded,
+      context: 'content.post.counters',
+    );
   }
 
   String? _mapCategoryToFeedType(String category) {

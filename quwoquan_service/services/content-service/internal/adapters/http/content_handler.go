@@ -50,6 +50,7 @@ func (h *ContentHandler) handleGetFeed(w http.ResponseWriter, r *http.Request) {
 		UserID:          resolveUserID(r),
 		SessionID:       resolveSessionID(r),
 		Type:            params.Type,
+		Sort:            params.Sort,
 		SubCategory:     params.SubCategory,
 		Cursor:          params.Cursor,
 		Limit:           params.Limit,
@@ -442,12 +443,12 @@ func (h *ContentHandler) handleUnfavoritePost(w http.ResponseWriter, r *http.Req
 func (h *ContentHandler) handleGetReactionState(w http.ResponseWriter, r *http.Request, postID string) {
 	liked, favorited := h.postService.GetReactionState(postID, resolveUserID(r))
 	writeJSON(w, http.StatusOK, map[string]any{
-		"postId":     postID,
-		"liked":      liked,
-		"favorited":  favorited,
-		"shared":     false,
-		"reported":   false,
-		"updatedAt":  time.Now().UTC().Format(time.RFC3339),
+		"postId":    postID,
+		"liked":     liked,
+		"favorited": favorited,
+		"shared":    false,
+		"reported":  false,
+		"updatedAt": time.Now().UTC().Format(time.RFC3339),
 	})
 }
 
@@ -593,8 +594,8 @@ func resolveUserID(r *http.Request) string {
 }
 
 // resolveBlockedUserIDs extracts blocked author IDs from:
-//   1) query: blockedUserIds=a,b
-//   2) header: X-Blocked-User-Ids: a,b
+//  1. query: blockedUserIds=a,b
+//  2. header: X-Blocked-User-Ids: a,b
 func resolveBlockedUserIDs(r *http.Request) []string {
 	if v := strings.TrimSpace(r.URL.Query().Get("blockedUserIds")); v != "" {
 		return splitCSV(v)
@@ -603,8 +604,8 @@ func resolveBlockedUserIDs(r *http.Request) []string {
 }
 
 // resolveBlockedKeywords extracts blocked keywords from:
-//   1) query: blockedKeywords=k1,k2
-//   2) header: X-Blocked-Keywords: k1,k2
+//  1. query: blockedKeywords=k1,k2
+//  2. header: X-Blocked-Keywords: k1,k2
 func resolveBlockedKeywords(r *http.Request) []string {
 	if v := strings.TrimSpace(r.URL.Query().Get("blockedKeywords")); v != "" {
 		return splitCSV(v)

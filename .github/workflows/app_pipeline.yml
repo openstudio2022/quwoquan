@@ -10,7 +10,7 @@
 #   MATCH_PASSWORD      — fastlane match 证书密码
 # =============================================================================
 
-name: App Pipeline
+name: 01. App Pipeline
 
 on:
   push:

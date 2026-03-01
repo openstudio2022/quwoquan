@@ -11,7 +11,7 @@
 #   KUBECONFIG          — 目标 K8s 集群 kubeconfig（base64 编码）
 # =============================================================================
 
-name: Service Pipeline
+name: 02. Service Pipeline
 
 on:
   push:

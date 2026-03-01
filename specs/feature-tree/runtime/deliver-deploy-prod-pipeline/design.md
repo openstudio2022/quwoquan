@@ -87,9 +87,11 @@ deploy/
 
 ### 3. pre-release 流水线串联
 
+Workflow 命名规范见 `workflow-naming-consolidation` 特性（01～06 序号 + 首字母大写）。
+
 ```
 v*-rc* tag
-  → pre-release-gate.yml
+  → 04. Pre-Release Gate (pre-release-gate.yml)
       1. make gate-full
       2. Deploy to integration（CLOUD_PROVIDER 可选）
       3. L3 test-api-contract（STAGING_BASE_URL=integration）

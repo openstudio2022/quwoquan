@@ -382,7 +382,7 @@ ruby -ryaml -rdate -e '
             if tests.empty?
               warnings << "#{feature}/#{an}: status=implemented but tests[] is empty (#{acceptance_path})"
             else
-              repo_root = File.expand_path("../..", __dir__)
+              repo_root = File.expand_path("..", __dir__)
               tests.each do |t|
                 next unless t.is_a?(Hash)
                 test_file = t["file"].to_s

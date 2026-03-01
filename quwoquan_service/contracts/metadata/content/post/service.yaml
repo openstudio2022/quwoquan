@@ -11,8 +11,8 @@ api_routes:
   - method: GET
     path: /v1/content/feed
     operation: GetFeed
-    description: 发现流（推荐排序 + cursor 分页）
-    query_params: [type, cursor, limit, subCategory]
+    description: 发现流（推荐排序 + cursor 分页；cursor 为 opaque token，仅用于 future window）
+    query_params: [type, sort, cursor, limit, subCategory]
     response_entity: Post
 
   - method: POST

@@ -62,6 +62,7 @@ class GeneratedPostRuntimeMetadata {
 
   static const List<String> feedQueryParams = <String>[
     'type',
+    'sort',
     'cursor',
     'limit',
     'subCategory',

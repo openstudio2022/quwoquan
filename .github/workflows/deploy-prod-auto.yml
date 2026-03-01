@@ -1,11 +1,11 @@
 # 全自动灰度到 prod：pre-release 通过后自动触发
 # Stage 1 初始灰度全自动，Stage 2 100% 需 Environment approval
 # 设计见 deploy/shared/deploy_prod_design.md
-name: Deploy to Prod (Auto)
+name: 06. Deploy To Prod (Auto)
 
 on:
   workflow_run:
-    workflows: [pre-release-gate]
+    workflows: ['04. Pre-Release Gate']
     types: [completed]
     branches: [main]
 

@@ -26,12 +26,13 @@ func NewFeedService(engine *rtrec.Engine, reader postReader) *FeedService {
 }
 
 type ListFeedRequest struct {
-	UserID      string
-	SessionID   string
-	Type        string
-	SubCategory string
-	Cursor      string
-	Limit       int
+	UserID          string
+	SessionID       string
+	Type            string
+	Sort            string
+	SubCategory     string
+	Cursor          string
+	Limit           int
 	BlockedUserIDs  []string
 	BlockedKeywords []string
 }
@@ -70,6 +71,7 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (*ListF
 		UserID:    req.UserID,
 		SessionID: req.SessionID,
 		FeedType:  rtrec.FeedDiscovery,
+		Sort:      normalizeFeedSort(req.Sort),
 		Cursor:    req.Cursor,
 		Limit:     limit * 2,
 	})
@@ -116,11 +118,7 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (*ListF
 			break
 		}
 	}
-	next := ""
-	if len(views) == limit {
-		next = views[len(views)-1].ID
-	}
-	return &ListFeedResponse{Items: views, NextCursor: next}, nil
+	return &ListFeedResponse{Items: views, NextCursor: recResp.NextCursor}, nil
 }
 
 func (s *FeedService) GetPost(ctx context.Context, id string) (*postmodel.Post, bool) {
@@ -147,9 +145,19 @@ func (s *FeedService) Recommend(ctx context.Context, req RecommendRequest) (*rtr
 		UserID:    userID,
 		SessionID: strings.TrimSpace(req.SessionID),
 		FeedType:  rtrec.FeedDiscovery,
+		Sort:      rtrec.FeedSortRecommend,
 		Cursor:    strings.TrimSpace(req.Cursor),
 		Limit:     limit,
 	})
+}
+
+func normalizeFeedSort(sortValue string) string {
+	switch strings.TrimSpace(strings.ToLower(sortValue)) {
+	case "", rtrec.FeedSortRecommend:
+		return rtrec.FeedSortRecommend
+	default:
+		return rtrec.FeedSortRecommend
+	}
 }
 
 func mapContentTypeToViewType(contentType string) string {

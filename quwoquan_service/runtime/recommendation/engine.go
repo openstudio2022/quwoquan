@@ -2,8 +2,11 @@ package recommendation
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"log/slog"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,11 +23,17 @@ const (
 	FeedSimilar   FeedType = "similar"
 )
 
+const (
+	FeedSortRecommend = "recommend"
+	defaultCursorTTL  = 10 * time.Minute
+)
+
 // GetFeedRequest defines input for feed generation.
 type GetFeedRequest struct {
 	UserID    string
 	SessionID string
 	FeedType  FeedType
+	Sort      string
 	CircleID  string
 	Cursor    string
 	Limit     int
@@ -45,6 +54,13 @@ type FeedItem struct {
 	Tags        []string `json:"tags,omitempty"`
 	Score       float64  `json:"score"`
 	RecallPath  string   `json:"recallPath,omitempty"`
+}
+
+type feedCursorState struct {
+	Version   int    `json:"v"`
+	SessionID string `json:"sid"`
+	Offset    int    `json:"off"`
+	ExpiresAt int64  `json:"exp"`
 }
 
 // ContentCandidate is a candidate from the recall layer.
@@ -203,6 +219,24 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	if req.Limit <= 0 {
 		req.Limit = 20
 	}
+	req.Sort = normalizeSort(req.Sort)
+
+	pagingOffset := 0
+	sessionID := strings.TrimSpace(req.SessionID)
+	rawCursor := strings.TrimSpace(req.Cursor)
+	if req.Sort == FeedSortRecommend && rawCursor != "" {
+		if state, ok := decodeFeedCursor(rawCursor, pipelineStart); ok {
+			pagingOffset = state.Offset
+			if sessionID == "" {
+				sessionID = state.SessionID
+			}
+		}
+		// recommend 模式下的 cursor 为 opaque token，不下传给 recall 层。
+		req.Cursor = ""
+	}
+	if sessionID != "" {
+		req.SessionID = sessionID
+	}
 
 	// Stage 1: Load session state (from SessionCache or HotPath)
 	session, err := e.sessions.GetSessionState(ctx, req.UserID, req.SessionID)
@@ -223,7 +257,8 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	recallLatency := time.Since(recallStart)
 
 	// Stage 3: Pre-rank (lightweight filter before expensive scoring)
-	preranked := e.preRanker.PreRank(ctx, allCandidates, req.Limit*5)
+	windowLimit := req.Limit*5 + pagingOffset + req.Limit
+	preranked := e.preRanker.PreRank(ctx, allCandidates, windowLimit)
 
 	// Stage 4: Filter exposed + negative + dedup
 	exposedSet := toSet(session.ExposedIDs)
@@ -276,12 +311,12 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 
 	// Stage 7: Rerank (diversity + author dedup)
 	rerankStart := time.Now()
-	reranked := e.rerank(scored, req.Limit)
+	reranked := e.rerank(scored, windowLimit)
 	rerankLatency := time.Since(rerankStart)
 
-	items := make([]FeedItem, 0, len(reranked))
+	allItems := make([]FeedItem, 0, len(reranked))
 	for _, s := range reranked {
-		items = append(items, FeedItem{
+		allItems = append(allItems, FeedItem{
 			ContentID:   s.Candidate.ContentID,
 			ContentType: s.Candidate.ContentType,
 			AuthorID:    s.Candidate.AuthorID,
@@ -292,8 +327,29 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 		})
 	}
 
+	start := pagingOffset
+	if start < 0 {
+		start = 0
+	}
+	if start > len(allItems) {
+		start = len(allItems)
+	}
+	end := start + req.Limit
+	if end > len(allItems) {
+		end = len(allItems)
+	}
+	items := allItems[start:end]
+
 	var nextCursor string
-	if len(items) == req.Limit {
+	if req.Sort == FeedSortRecommend && end < len(allItems) {
+		nextCursor = encodeFeedCursor(feedCursorState{
+			Version:   1,
+			SessionID: req.SessionID,
+			Offset:    end,
+			ExpiresAt: time.Now().Add(defaultCursorTTL).Unix(),
+		})
+	}
+	if req.Sort != FeedSortRecommend && end < len(allItems) && len(items) > 0 {
 		nextCursor = items[len(items)-1].ContentID
 	}
 
@@ -335,6 +391,41 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	}
 
 	return resp, nil
+}
+
+func normalizeSort(raw string) string {
+	switch strings.TrimSpace(strings.ToLower(raw)) {
+	case "", FeedSortRecommend:
+		return FeedSortRecommend
+	default:
+		return FeedSortRecommend
+	}
+}
+
+func decodeFeedCursor(raw string, now time.Time) (feedCursorState, bool) {
+	decoded, err := base64.RawURLEncoding.DecodeString(strings.TrimSpace(raw))
+	if err != nil {
+		return feedCursorState{}, false
+	}
+	var state feedCursorState
+	if err := json.Unmarshal(decoded, &state); err != nil {
+		return feedCursorState{}, false
+	}
+	if state.Version <= 0 || state.Offset < 0 {
+		return feedCursorState{}, false
+	}
+	if state.ExpiresAt > 0 && now.Unix() > state.ExpiresAt {
+		return feedCursorState{}, false
+	}
+	return state, true
+}
+
+func encodeFeedCursor(state feedCursorState) string {
+	raw, err := json.Marshal(state)
+	if err != nil {
+		return ""
+	}
+	return base64.RawURLEncoding.EncodeToString(raw)
 }
 
 // parallelRecallInto fans out to all sources concurrently with per-source timeout,

@@ -10,12 +10,14 @@
 
 ### 1.1 已有 Workflows（与 specs/00_MASTER_DEVELOPMENT_FLOW 阶段对应）
 
-| Workflow | 触发 | 职责 | 对应阶段 |
-|----------|------|------|----------|
-| `delivery-gate.yml` | PR / push main, dev1.0 | 拓扑校验、L1+L2 质量门（PR/入库阶段） | G0~G3 |
-| `service_pipeline.yml` | quwoquan_service/**、deploy/** | Go 构建、rec-model 镜像、kustomize 校验（无 L2） | G2 |
-| `app_pipeline.yml` | quwoquan_app/** | Flutter analyze；v* tag → macOS 构建（无 L1） | G2 / 发布 |
-| `pre-release-gate.yml` | v*-rc* tag、手动 | gate(L1+L2) → deploy → L3 → L4 | G3→G5b |
+命名规范见 `deploy/shared/workflow_consolidation_plan.md` §2；02/03 去重见 §4.6。
+
+| Workflow 名称 | 文件 | 触发 | 职责 | 对应阶段 |
+|---------------|------|------|------|----------|
+| 03. Delivery Gate | `delivery-gate.yml` | PR / push main, dev1.0 | 拓扑校验、L1+L2 质量门（PR/入库阶段） | G0~G3 |
+| 02. Service Pipeline | `service_pipeline.yml` | quwoquan_service/**、deploy/** | Go 构建、rec-model 镜像、kustomize 校验（无 L2） | G2 |
+| 01. App Pipeline | `app_pipeline.yml` | quwoquan_app/** | Flutter analyze；v* tag → macOS 构建（无 L1） | G2 / 发布 |
+| 04. Pre-Release Gate | `pre-release-gate.yml` | v*-rc* tag、手动 | gate(L1+L2) → deploy → L3 → L4 | G3→G5b |
 
 ### 1.2 当前 pre-release 链路（已实现）
 

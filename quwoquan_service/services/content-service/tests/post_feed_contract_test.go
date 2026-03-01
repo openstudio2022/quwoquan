@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -119,6 +121,167 @@ func TestGetFeedCursorPagination(t *testing.T) {
 	for _, item := range page2.Items {
 		if page1IDs[item["id"]] {
 			t.Errorf("page 2 item %v also found on page 1 — cursor pagination is broken", item["id"])
+		}
+	}
+}
+
+// TestGetFeedRecommendSortWithCursor verifies recommend sort and opaque cursor
+// can paginate without overlap.
+// contract.yaml: get_feed_recommend_sort_with_cursor / go_func: TestGetFeedRecommendSortWithCursor
+func TestGetFeedRecommendSortWithCursor(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+
+	for i := range 8 {
+		createPost(t, fmt.Sprintf(
+			`{"contentType":"image","title":"Recommend Pager %d","body":"content %d","mediaUrls":["https://example.com/img%d.jpg"]}`, i, i, i,
+		))
+	}
+
+	req1 := httptest.NewRequest(http.MethodGet, "/v1/content/feed?type=photo&sort=recommend&limit=4", nil)
+	rec1 := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec1, req1)
+	if rec1.Code != http.StatusOK {
+		t.Fatalf("first page: expected 200, got %d: %s", rec1.Code, rec1.Body.String())
+	}
+
+	var page1 struct {
+		Items      []map[string]any `json:"items"`
+		NextCursor string           `json:"nextCursor"`
+	}
+	if err := json.Unmarshal(rec1.Body.Bytes(), &page1); err != nil {
+		t.Fatalf("first page decode: %v", err)
+	}
+	if len(page1.Items) == 0 {
+		t.Fatal("first page should contain items")
+	}
+	if page1.NextCursor == "" {
+		t.Fatal("first page should return nextCursor")
+	}
+	if strings.HasPrefix(page1.NextCursor, "post_") {
+		t.Fatalf("nextCursor should be opaque token, got id-like value: %s", page1.NextCursor)
+	}
+
+	page1IDs := map[any]bool{}
+	for _, item := range page1.Items {
+		page1IDs[item["id"]] = true
+	}
+
+	req2 := httptest.NewRequest(
+		http.MethodGet,
+		"/v1/content/feed?type=photo&sort=recommend&limit=4&cursor="+url.QueryEscape(page1.NextCursor),
+		nil,
+	)
+	rec2 := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("second page: expected 200, got %d: %s", rec2.Code, rec2.Body.String())
+	}
+	var page2 struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(rec2.Body.Bytes(), &page2); err != nil {
+		t.Fatalf("second page decode: %v", err)
+	}
+	for _, item := range page2.Items {
+		if page1IDs[item["id"]] {
+			t.Fatalf("page 2 item %v also found on page 1", item["id"])
+		}
+	}
+}
+
+// TestGetFeedFutureWindowChangesOnly verifies strong feedback only impacts
+// items after the current cursor (future window), while already returned
+// history remains unchanged on client side.
+// contract.yaml: get_feed_future_window_changes_only / go_func: TestGetFeedFutureWindowChangesOnly
+func TestGetFeedFutureWindowChangesOnly(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+
+	for i := range 12 {
+		createPost(t, fmt.Sprintf(
+			`{"contentType":"image","title":"Future Window %d","body":"content %d","mediaUrls":["https://example.com/img%d.jpg"]}`, i, i, i,
+		))
+	}
+
+	req1 := httptest.NewRequest(http.MethodGet, "/v1/content/feed?type=photo&sort=recommend&limit=4", nil)
+	req1.Header.Set("X-Client-User-Id", "user_fw_01")
+	req1.Header.Set("X-Client-Session-Id", "session_fw_01")
+	rec1 := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec1, req1)
+	if rec1.Code != http.StatusOK {
+		t.Fatalf("page1 expected 200, got %d: %s", rec1.Code, rec1.Body.String())
+	}
+	var page1 struct {
+		Items      []map[string]any `json:"items"`
+		NextCursor string           `json:"nextCursor"`
+	}
+	if err := json.Unmarshal(rec1.Body.Bytes(), &page1); err != nil {
+		t.Fatalf("page1 decode: %v", err)
+	}
+	if len(page1.Items) != 4 || page1.NextCursor == "" {
+		t.Fatalf("page1 should contain 4 items and cursor, got items=%d cursor=%q", len(page1.Items), page1.NextCursor)
+	}
+
+	req2 := httptest.NewRequest(
+		http.MethodGet,
+		"/v1/content/feed?type=photo&sort=recommend&limit=4&cursor="+url.QueryEscape(page1.NextCursor),
+		nil,
+	)
+	req2.Header.Set("X-Client-User-Id", "user_fw_01")
+	req2.Header.Set("X-Client-Session-Id", "session_fw_01")
+	rec2 := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("page2 expected 200, got %d: %s", rec2.Code, rec2.Body.String())
+	}
+	var page2 struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(rec2.Body.Bytes(), &page2); err != nil {
+		t.Fatalf("page2 decode: %v", err)
+	}
+	if len(page2.Items) == 0 {
+		t.Fatal("page2 should contain items")
+	}
+
+	dislikeID, _ := page2.Items[0]["id"].(string)
+	if dislikeID == "" {
+		t.Fatal("page2 first item id should not be empty")
+	}
+	behaviorReq := httptest.NewRequest(
+		http.MethodPost,
+		"/v1/content/behaviors",
+		strings.NewReader(fmt.Sprintf(`{"events":[{"contentId":"%s","action":"dislike"}]}`, dislikeID)),
+	)
+	behaviorReq.Header.Set("Content-Type", "application/json")
+	behaviorReq.Header.Set("X-Client-User-Id", "user_fw_01")
+	behaviorReq.Header.Set("X-Client-Session-Id", "session_fw_01")
+	behaviorRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(behaviorRec, behaviorReq)
+	if behaviorRec.Code != http.StatusOK {
+		t.Fatalf("behavior expected 200, got %d: %s", behaviorRec.Code, behaviorRec.Body.String())
+	}
+
+	req2After := httptest.NewRequest(
+		http.MethodGet,
+		"/v1/content/feed?type=photo&sort=recommend&limit=4&cursor="+url.QueryEscape(page1.NextCursor),
+		nil,
+	)
+	req2After.Header.Set("X-Client-User-Id", "user_fw_01")
+	req2After.Header.Set("X-Client-Session-Id", "session_fw_01")
+	rec2After := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec2After, req2After)
+	if rec2After.Code != http.StatusOK {
+		t.Fatalf("page2 after feedback expected 200, got %d: %s", rec2After.Code, rec2After.Body.String())
+	}
+	var page2After struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(rec2After.Body.Bytes(), &page2After); err != nil {
+		t.Fatalf("page2 after decode: %v", err)
+	}
+	for _, item := range page2After.Items {
+		if item["id"] == dislikeID {
+			t.Fatalf("disliked content %s should be filtered from future window", dislikeID)
 		}
 	}
 }
