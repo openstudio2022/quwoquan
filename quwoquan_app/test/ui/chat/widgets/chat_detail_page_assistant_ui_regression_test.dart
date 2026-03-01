@@ -126,10 +126,13 @@ void main() {
 
   testWidgets('非白名单外链点击时拦截并提示', (tester) async {
     TestWidgetsFlutterBinding.ensureInitialized();
-    SystemChannels.platform.setMockMethodCallHandler((MethodCall methodCall) async {
-      if (methodCall.method == 'Clipboard.setData') return null;
-      return null;
-    });
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (MethodCall methodCall) async {
+        if (methodCall.method == 'Clipboard.setData') return null;
+        return null;
+      },
+    );
     const refTitle = '外部来源';
     final repository = _AssistantUiTestRepository(<Map<String, dynamic>>[
       <String, dynamic>{

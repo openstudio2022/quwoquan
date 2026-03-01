@@ -175,8 +175,9 @@ func TestGetFeedCursorPagination(t *testing.T) {
 func TestGetFeedRecommendSortWithCursor(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	// Use distinct authors so rerank (maxAuthorPerFeed=3) allows enough items for cursor pagination.
-	for i := range 8 {
+	// Engine is called with limit*2=8; nextCursor only when len(allItems) > 8. Create 12 posts
+	// with 4 distinct authors (maxAuthorPerFeed=3) so rerank yields 12 items for cursor.
+	for i := range 12 {
 		authorID := fmt.Sprintf("user_rec_%d", i%4)
 		createPostWithAuthor(t, authorID, fmt.Sprintf(
 			`{"contentType":"image","title":"Recommend Pager %d","body":"content %d","mediaUrls":["https://example.com/img%d.jpg"]}`, i, i, i,

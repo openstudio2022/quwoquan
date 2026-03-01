@@ -539,7 +539,7 @@ class _AssistantSkillCenterPageState
                     ),
                     CupertinoButton(
                       padding: EdgeInsets.zero,
-                      minSize: 20,
+                      minimumSize: const Size(20, 20),
                       onPressed: () {},
                       child: Text(
                         l10n.seeMore,
@@ -744,8 +744,7 @@ class _AssistantSkillCenterPageState
         _recentSessions = const <Map<String, dynamic>>[];
       });
     } finally {
-      if (!mounted) return;
-      setState(() => _loadingSessions = false);
+      if (mounted) setState(() => _loadingSessions = false);
     }
   }
 
@@ -1380,7 +1379,7 @@ class _AssistantSkillCenterPageState
                     color: fgPrimary,
                   ),
                 ),
-                SizedBox(height: 2),
+                SizedBox(height: AppSpacing.xs),
                 Text(
                   desc,
                   style: TextStyle(

@@ -9,7 +9,6 @@
 /// 注：App 已由 integration_test/patrol_test_main.dart 的 app.main() 启动。
 library;
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patrol/patrol.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -19,9 +18,9 @@ void main() {
     'error_empty_state_ui',
     ($) async {
       // 等待发现页加载后断言空态/错误态能力（具体断言待 L4 环境补齐）
-      await $(Key(TestKeys.discoveryPage))
+      await $(TestKeys.discoveryPage)
           .waitUntilVisible(timeout: const Duration(seconds: 15));
-      expect($(Key(TestKeys.discoveryPage)).visible, isTrue);
+      expect($(TestKeys.discoveryPage).visible, isTrue);
     },
   );
 }

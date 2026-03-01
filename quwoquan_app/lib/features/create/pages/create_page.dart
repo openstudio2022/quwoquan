@@ -1774,7 +1774,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
                         mainAxisSize: MainAxisSize.min,
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          if (trailingWidget case final widget?) widget,
+                          ...? (trailingWidget != null ? [trailingWidget] : null),
                           if (trailing != null)
                             Flexible(
                               child: Text(

@@ -38,7 +38,7 @@ Widget _wrap(Widget child) {
   return ProviderScope(
     child: ScreenUtilInit(
       designSize: const Size(375, 812),
-      builder: (_, __) => MaterialApp(
+      builder: (context, _) => MaterialApp(
         theme: ThemeData.dark(),
         home: Scaffold(body: child),
       ),
@@ -125,7 +125,7 @@ void main() {
         StatefulBuilder(
           builder: (context, setState) => ScreenUtilInit(
             designSize: const Size(375, 812),
-            builder: (_, __) => MaterialApp(
+            builder: (context, _) => MaterialApp(
               theme: ThemeData.dark(),
               home: Scaffold(
                 body: SizedBox(
