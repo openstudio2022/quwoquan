@@ -39,6 +39,13 @@ run_app() {
   command -v flutter >/dev/null 2>&1 || { echo "[gate] FAIL: flutter not found in PATH" 1>&2; exit 1; }
   (cd quwoquan_app && flutter pub get)
   (cd quwoquan_app && flutter analyze --no-fatal-warnings --no-fatal-infos)
+  # Dart 语义 token 检查：禁止硬编码 width/height/fontSize 等
+  if command -v python3 >/dev/null 2>&1; then
+    python3 scripts/verify_dart_semantic.py || exit 1
+    python3 scripts/verify_error_code_semantic.py || exit 1
+  else
+    echo "[gate] WARN: python3 not found — skipping verify_dart_semantic, verify_error_code_semantic"
+  fi
   # L1 content tests (L1a contract, L1b widget, L1c journey) — fast, no external deps
   # Paths follow: test/{layer}/{domain}/{entity}/{test_type}/ (see .cursor/rules/03-testing.mdc §3)
   (cd quwoquan_app && flutter test test/cloud/ test/components/ test/ui/)

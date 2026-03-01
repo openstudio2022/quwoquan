@@ -1,0 +1,62 @@
+version: 1
+read_model: LocationPoi
+
+description: |
+  integration/location 附近与搜索 API 返回的 POI 标准化视图。
+  与 fields.yaml 的 LocationPoi 对齐，端侧通过 fromMap 解析，禁止硬编码字段名。
+
+source_entities:
+  - LocationPoi
+
+consumers:
+  - app (create/entry location selector)
+
+# App 端契约（client_projection）
+# 由 codegen_app_metadata 读取，生成 LocationPoiDto（DO NOT EDIT 产物）
+# 无 base_class， standalone DTO
+client_projection:
+  dart_class: LocationPoiDto
+  base_class: ""
+  output_path: cloud/runtime/generated/integration/location_poi_dto.g.dart
+  fields:
+    - name: id
+      dart_type: String
+      nullable: false
+      source: _id
+      aliases: [_id, id]
+      default: "''"
+
+    - name: name
+      dart_type: String
+      nullable: false
+      source: name
+      aliases: [name]
+      default: "''"
+
+    - name: latitude
+      dart_type: double
+      nullable: false
+      source: latitude
+      aliases: [latitude, lat]
+      default: "0.0"
+
+    - name: longitude
+      dart_type: double
+      nullable: false
+      source: longitude
+      aliases: [longitude, lng]
+      default: "0.0"
+
+    - name: address
+      dart_type: String
+      nullable: true
+      source: address
+      aliases: [address]
+      default: "''"
+
+    - name: distanceMeters
+      dart_type: int
+      nullable: true
+      source: distanceMeters
+      aliases: [distanceMeters, distance]
+      default: "null"

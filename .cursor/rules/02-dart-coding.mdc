@@ -18,6 +18,9 @@ EdgeInsets.all(16.w)
 BorderRadius.circular(8)
 Color(0xFF1877F2)
 Container(width: 48.h, height: 48.h)
+SizedBox(width: 44, height: 44)
+leadingSize: 44
+CupertinoListTile(leadingSize: 44, ...)
 
 // ✅ 必须
 style: AppTypography.sm
@@ -31,11 +34,11 @@ constraints: BoxConstraints(minWidth: AppSpacing.buttonHeight, minHeight: AppSpa
 
 ```dart
 // ❌ 禁止
-import '../../features/home/pages/home_page.dart';
+import '../../ui/discovery/pages/discovery_page.dart';
 import '../components/media_post_card.dart';
 
-// ✅ 必须
-import 'package:quwoquan_app/features/home/pages/home_page.dart';
+// ✅ 必须（按领域 lib/ui/{domain}/，见 specs/01_APP_DIRECTORY_STRUCTURE_BY_DOMAIN）
+import 'package:quwoquan_app/ui/discovery/pages/discovery_page.dart';
 import 'package:quwoquan_app/components/media_post_card.dart';
 ```
 
@@ -43,12 +46,32 @@ import 'package:quwoquan_app/components/media_post_card.dart';
 
 ```dart
 // ❌ 禁止
-lib/features/xiaoqu/pages/xiaoqu_home_page.dart
+lib/ui/assistant/pages/xiaoqu_home_page.dart   // 产品名做路径
 if (msg['senderName'].toString().contains('小趣')) { }
 
-// ✅ 必须
-lib/features/assistant/pages/assistant_home_page.dart
+// ✅ 必须（按领域 lib/ui/{domain}/）
+lib/ui/assistant/pages/assistant_home_page.dart
 if (msg['senderId'] == AppConceptConstants.assistantSenderId) { }
+```
+
+### 1.4 错误码与用户文案
+
+错误码和用户可见文案由 `contracts/metadata/*/errors.yaml` 定义，经 codegen 生成 `*ErrorCode` 枚举。禁止硬编码 code 字符串或文案。
+
+```dart
+// ❌ 禁止
+switch (e.code) {
+  case 'INTEGRATION.USER.location_unavailable':
+    return '暂时无法获取当前位置';
+  ...
+}
+expect(actual.code, 'INTEGRATION.MIDDLEWARE.upstream_timeout');
+
+// ✅ 必须（UI 展示）
+IntegrationLocationErrorCode.fromCode(e.code).toDisplayMessage(context.l10n)
+
+// ✅ 必须（测试断言）
+expect(actual.code, IntegrationLocationErrorCode.upstreamTimeout.code)
 ```
 
 ---
@@ -75,6 +98,8 @@ if (msg['senderId'] == AppConceptConstants.assistantSenderId) { }
 | 图标 | `AppSpacing.iconSmall/iconMedium/iconLarge` | 图标尺寸 |
 | 布局 | `AppSpacing.bottomNavHeight/tabNavigationHeight/buttonHeight` | 固定高度 |
 | 圆角 | `AppSpacing.smallBorderRadius/borderRadius/largeBorderRadius` | 圆角 |
+| 触控/热区 | `AppSpacing.minInteractiveSize` | 可交互热区下限 44x44 |
+| 图标按钮 sm | `AppSpacing.iconButtonMinSizeSm` | 图标按钮最小点击区域 44 |
 
 **空值安全**：语义间距必须用 `?[]` + `??` 兜底。
 
@@ -135,12 +160,12 @@ AppException (abstract)
 
 ---
 
-## 5. Feature 层约束
+## 5. UI 层约束（按领域，见 specs/01_APP_DIRECTORY_STRUCTURE_BY_DOMAIN）
 
-- `lib/features/{name}/` 必须包含 `pages/` 子目录
-- Feature 不允许直接 import 其他 Feature 内部文件（通过 `core/` 或 `cloud/` 共享）
-- Feature Provider 必须使用 Riverpod 标准模式
-- 更新特性树 `acceptance.yaml` 与 `traceability.yaml`
+- `lib/ui/{domain}/` 必须包含 `pages/` 子目录（禁止在 `lib/features/` 下新建）
+- UI 模块不允许直接 import 其他 UI 模块内部文件（通过 `core/` 或 `cloud/` 共享）
+- Provider 必须使用 Riverpod 标准模式
+- 更新特性树 `acceptance.yaml` 与 traceability 路径
 
 ---
 

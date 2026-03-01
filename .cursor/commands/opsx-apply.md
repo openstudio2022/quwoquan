@@ -53,8 +53,10 @@ contracts/metadata → make verify → make codegen → 业务逻辑 → 测试
 每完成一个 task，AI Agent **必须立即自动执行**：
 
 ```bash
-make build                     # 编译通过
-make test-contract             # 契约测试通过
+make build                     # 编译通过（云侧）
+make test-contract             # 契约测试通过（云侧）
+# 若变更含 quwoquan_app/lib/**/*.dart，追加：
+python3 scripts/verify_dart_semantic.py   # Dart 语义 token 检查
 ```
 
 **失败 → 停止当前 task → 输出错误 + 修复建议 → 修复后重跑 → 通过后继续下一个 task。**
@@ -70,6 +72,7 @@ make test-contract             # 契约测试通过
 | Dart 设计系统 | 禁止硬编码视觉字面量 |
 | Dart 包引用 | 禁止相对路径 import |
 | Dart Feature 隔离 | Feature 禁止直接 import 其他 Feature |
+| 错误码禁止硬编码 | 云侧用 generated.AppErrorFrom*；端侧用 *ErrorCode.fromCode().toDisplayMessage(l10n)；测试用枚举.code |
 
 ### 4. 全部 task 完成后
 

@@ -11,17 +11,15 @@ class DeveloperSettingsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = ref.watch(isDarkProvider);
     final mode = ref.watch(appDataSourceModeProvider);
-    final bgColor =
-        AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
-    final fgPrimary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    final pageBg = SettingsSemanticConstants.pageBackground(isDark);
+    final blockBg = SettingsSemanticConstants.blockBackground(isDark);
+    final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
+    final fgSecondary = SettingsSemanticConstants.secondaryColor(isDark);
 
     return Scaffold(
-      backgroundColor: bgColor,
+      backgroundColor: pageBg,
       appBar: AppBar(
-        backgroundColor: bgColor,
+        backgroundColor: blockBg,
         leading: IconButton(
           onPressed: () => context.pop(),
           icon: Icon(Icons.arrow_back, color: fgPrimary),
@@ -36,7 +34,10 @@ class DeveloperSettingsPage extends ConsumerWidget {
         ),
       ),
       body: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 16),
+        padding: EdgeInsets.symmetric(
+          horizontal: SettingsSemanticConstants.blockHorizontalPadding,
+          vertical: SettingsSemanticConstants.blockSpacing,
+        ),
         children: [
           SwitchListTile(
             secondary: Icon(Icons.cloud, color: fgSecondary, size: 22),

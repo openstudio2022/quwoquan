@@ -1,0 +1,39 @@
+---
+description: 云端/网络错误与权限类统一语义约束
+globs: **/*.dart
+---
+
+# 错误与权限统一语义
+
+> 完整规范：`specs/ux/error-and-permission-semantics.md`  
+> 特性树：`runtime/runtime-client-foundation/error-permission-display-semantics`（L3）及子 L4
+
+## 云端/网络错误
+
+| 严重度 | 展示方式 | 适用场景 |
+|--------|----------|----------|
+| **阻塞性** | 内联占位（卡片式，持久） | 页面/列表首次加载失败、无降级数据 |
+| **次要** | SnackBar（floating，3–5s） | 提交失败、单次操作失败、可重试的瞬时错误 |
+
+**禁止**：阻塞性错误仅用 SnackBar；阻塞性错误必须提供「重试」或等效主操作。
+
+**Token**：错误文案用 `colorScheme.error`，字号 `bodyMedium`，间距 `AppSpacing.interGroup*`。
+
+**文案**：优先 `CloudException.code` → domain errors.yaml user_message；无 code 用 `loadFailed` / `submitFailed`。
+
+## 权限类
+
+| 状态 | 展示 | 主操作 |
+|------|------|--------|
+| 已拒绝（可再请求） | 权限卡片内联 | 引导再次 request 或「重试」 |
+| 永久拒绝 | 权限卡片内联 | **去设置**（openAppSettings / openLocationSettings） |
+
+**统一形态**：图标 + 主文案 + 可选副文案 + 主操作按钮；背景/圆角用 `AppSpacing`、`colorScheme`。
+
+**l10n**：`locationAppPermissionRequired`、`mediaPickerPermissionDenied`、`openSettings` 等，禁止硬编码。
+
+## 地图/位置特定
+
+- 加载：`locationFetchingResult` + `CircularProgressIndicator`
+- 权限未批：权限卡片 + 去设置
+- 云端错误：内联错误卡片 + 重试，文案来自 `integration/location/errors.yaml` 映射

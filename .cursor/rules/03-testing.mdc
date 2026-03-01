@@ -99,6 +99,8 @@ MongoDB 启动方式：
 
 ## 3. 测试目录结构（强制）
 
+**禁止**使用 `test/features/`。**禁止** `test/cloud/integration/` 作为顶层。测试必须按**业务领域**和**业务对象**划分，放入 `test/cloud/`、`test/components/`、`test/ui/` 下对应领域及实体路径。**集成归属到使用它的领域下**（如 content 使用 location → `content/location/`）。**领域与实体使用名词**，禁止动词（如 create、publish）；使用 entry（创作入口）、post、location、circle 等。
+
 ### 3.1 Dart 目录层次
 
 目录命名规则：
@@ -140,26 +142,38 @@ test/
                 └── {ui_domain}_{entity}_interaction_journey_test.dart
 ```
 
-当前 content/post 的具体路径：
+当前结构示例（content/post、content/location、content/entry、chat）：
 ```
 test/
-├── cloud/content/post/contract/
-│   ├── post_dto_contract_test.dart
-│   ├── post_feed_dto_contract_test.dart
-│   ├── post_behavior_tracker_contract_test.dart
-│   └── post_error_code_contract_test.dart
+├── cloud/
+│   └── content/
+│       ├── post/contract/
+│       │   ├── post_dto_contract_test.dart
+│       │   ├── post_feed_dto_contract_test.dart
+│       │   ├── post_behavior_tracker_contract_test.dart
+│       │   └── post_error_code_contract_test.dart
+│       └── location/contract/                 # content 领域使用的 location 集成
+│           # 错误码、Repository 契约（无顶层 integration/）
 ├── components/content/post/
 │   └── post_card_widget_test.dart
 └── ui/
-    ├── content/post/contract/
-    │   ├── post_view_projection_contract_test.dart
-    │   └── post_ui_config_contract_test.dart
-    └── discovery/post/
-        ├── widgets/
-        │   └── discovery_post_feed_widget_test.dart
-        └── journeys/
-            ├── discovery_post_feed_load_journey_test.dart
-            └── discovery_post_interaction_journey_test.dart
+    ├── content/
+    │   ├── post/contract/
+    │   │   ├── post_view_projection_contract_test.dart
+    │   │   └── post_ui_config_contract_test.dart
+    │   └── entry/                            # 创作入口（entry = 草稿/创作项，名词）
+    │       ├── contract/                     # CreateLocationService、CreateCircleService
+    │       │   └── location_circle_services_contract_test.dart
+    │       └── widgets/                      # 位置选择页、权限/错误态
+    │           └── location_selector_page_widget_test.dart
+    ├── discovery/post/
+    │   ├── widgets/
+    │   │   └── discovery_post_feed_widget_test.dart
+    │   └── journeys/
+    │       ├── discovery_post_feed_load_journey_test.dart
+    │       └── discovery_post_interaction_journey_test.dart
+    └── chat/widgets/
+        └── chat_detail_page_assistant_ui_regression_test.dart
 ```
 
 > `components` 层无需 `test_type` 子目录，组件只有 widget test 一种类型，文件直接放在 `business_object/` 下。

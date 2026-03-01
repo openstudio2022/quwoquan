@@ -1,6 +1,10 @@
 version: 1
 aggregate: Location
 
+# 列表响应根 key，与 integration-service location_handler 的 {"items": [...]} 一致。
+# codegen-app 据此生成 responseItemsKey 常量，禁止在业务/测试中硬编码。
+response_list_key: items
+
 service:
   name: integration-service
   domain: integration

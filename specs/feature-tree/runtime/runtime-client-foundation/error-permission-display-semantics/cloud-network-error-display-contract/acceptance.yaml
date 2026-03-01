@@ -1,0 +1,37 @@
+version: 1
+archived: true
+archived_at: "2026-03-01T07:10:00Z"
+feature: "cloud-network-error-display-contract"
+level: "L4_object_task"
+template: "A1-A8"
+tree_context:
+  feature_level: "L4_object_task"
+  feature_path: "capability.runtime.feature.runtime-client-foundation.subfeature.error-permission-display-semantics.task.cloud-network-error-display-contract"
+  parent_path: "capability.runtime.feature.runtime-client-foundation.subfeature.error-permission-display-semantics"
+level_acceptance:
+  A1:
+    criteria: "阻塞性错误使用内联占位"
+    status: implemented
+    tests: []
+  A2:
+    criteria: "次要错误使用 SnackBar floating"
+    status: implemented
+    tests: []
+  A7:
+    criteria: "错误码→l10n 映射契约 + 错误态 L1b 测试（交互异常为核心）"
+    status: implemented
+    linked_tasks: [T2, T3]
+    tests:
+      - file: test/cloud/content/location/contract/error_permission_l10n_contract_test.dart
+        functions: [l10n_keys_exist_for_error_permission_semantics]
+      - file: test/ui/content/entry/widgets/location_selector_page_widget_test.dart
+        functions: [cloud_error_shows_inline_placeholder_and_retry, loading_shows_locationFetchingResult]
+  A8:
+    criteria: "L1c 创作流位置错误 journey 测试"
+    status: implemented
+    linked_tasks: [T5]
+    tests:
+      - file: test/ui/content/entry/journeys/entry_location_error_journey_test.dart
+        functions: ["创作入口→选位置→云端超时→展示内联错误和重试"]
+execution:
+  local_gate: "flutter analyze"

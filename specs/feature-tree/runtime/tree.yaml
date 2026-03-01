@@ -10,6 +10,20 @@ l2:
       - feature: app-theme-infrastructure
         l4:
           - feature: dark-light-token-switching
+      - feature: error-permission-display-semantics
+        l4:
+          - feature: cloud-network-error-display-contract
+          - feature: permission-card-display-contract
+      - feature: page-layout-semantics
+        l4:
+          - feature: top-toolbar-and-selection-pattern
+          - feature: settings-page-structure
+      - feature: dart-semantic-gate
+        l4:
+          - feature: verify-script-and-gate-integration
+          - feature: rules-and-flow-enhancement
+          - feature: ff-deliver-semantic-checklist
+          - feature: design-token-metadata-registry
   - feature: runtime-external-integration
     l3:
       - feature: integration-service-foundation

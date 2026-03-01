@@ -15,14 +15,11 @@ class SettingsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = ref.watch(isDarkProvider);
-    final bgColor =
-        AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
-    final fgPrimary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
-    final borderColor =
-        AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
+    final pageBg = SettingsSemanticConstants.pageBackground(isDark);
+    final blockBg = SettingsSemanticConstants.blockBackground(isDark);
+    final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
+    final fgSecondary = SettingsSemanticConstants.secondaryColor(isDark);
+    final dividerClr = SettingsSemanticConstants.dividerColor(isDark);
 
     final sections = [
       _SettingsSection(id: 'display', label: '显示设置', icon: Icons.light_mode),
@@ -35,9 +32,9 @@ class SettingsPage extends ConsumerWidget {
     ];
 
     return Scaffold(
-      backgroundColor: bgColor,
+      backgroundColor: pageBg,
       appBar: AppBar(
-        backgroundColor: bgColor,
+        backgroundColor: blockBg,
         leading: IconButton(
           onPressed: () {
             if (context.canPop()) {
@@ -54,9 +51,13 @@ class SettingsPage extends ConsumerWidget {
         ),
       ),
       body: ListView.separated(
-        padding: EdgeInsets.symmetric(vertical: 8),
+        padding: EdgeInsets.symmetric(
+          horizontal: SettingsSemanticConstants.blockHorizontalPadding,
+          vertical: SettingsSemanticConstants.blockSpacing,
+        ),
         itemCount: sections.length,
-        separatorBuilder: (_, __) => Divider(height: 1, color: borderColor),
+        separatorBuilder: (_, __) =>
+            Divider(height: 1, color: dividerClr, thickness: SettingsSemanticConstants.dividerThickness),
         itemBuilder: (context, i) {
           final s = sections[i];
           return ListTile(

@@ -44,7 +44,7 @@ verify-metadata:
 	go run ./tools/verify_metadata/ contracts/metadata
 
 codegen-app:
-	go run ./tools/codegen_app_metadata --metadata-dir contracts/metadata --app-dir ../quwoquan_app
+	go run ./tools/codegen_app_metadata --metadata-dir contracts/metadata --app-dir ../quwoquan_app --integration-service-dir ./services/integration-service
 
 codegen-content-service:
 	go run ./tools/codegen_content_service --metadata-dir contracts/metadata --output-dir services/content-service/internal --aggregate Post

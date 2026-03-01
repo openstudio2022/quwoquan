@@ -15,8 +15,10 @@
 服务端：runtime-config / runtime-codegen / runtime-errors
           ↕ 端云一体，对称设计
 客户端：runtime-client-foundation
-         ├── app-locale-infrastructure  (对应 runtime-config：配置/文本资源注入)
-         └── app-theme-infrastructure   (对应 runtime-config：主题资源注入)
+         ├── app-locale-infrastructure       (对应 runtime-config：配置/文本资源注入)
+         ├── app-theme-infrastructure        (对应 runtime-config：主题资源注入)
+         ├── error-permission-display-semantics (云端错误与权限类统一展示语义)
+         └── page-layout-semantics (页面布局统一语义：顶部 leading、内容区、底部栏；不含用户/作者/圈子主页)
 ```
 
 ## 关键决策
@@ -29,7 +31,7 @@
 
 ## 适用场景与约束
 
-- **适用**：Flutter App 在 `lib/ui/`、`lib/features/`、`lib/components/` 中需要展示用户可见文本的所有 widget 上下文
+- **适用**：Flutter App 在 `lib/ui/`、`lib/components/` 中需要展示用户可见文本的所有 widget 上下文（`lib/features/` 已废弃，迁移中见 specs/01_APP_DIRECTORY_STRUCTURE_BY_DOMAIN）
 - **不适用**：Go 服务端错误消息（由 `runtime-errors` 负责）；Dart 代码中纯日志/调试字符串
 - **约束**：生成文件 `lib/l10n/app_localizations*.dart` 标注 `DO NOT EDIT`，与服务端 codegen 产物同等保护
 

@@ -272,6 +272,11 @@ class AppSpacing {
       filterTemplateItemWidth + filterTemplateItemGap;
   /// 功能项选中边框线宽（如裁剪比例框）
   static const double toolPanelItemBorderWidthSelected = 2.0;
+
+  /// 视频封面中央播放按钮尺寸（圆形）
+  static const double videoPlayOverlaySize = 52.0;
+  /// 视频封面中央播放图标尺寸
+  static const double videoPlayOverlayIconSize = 22.0;
   /// 功能项未选中边框线宽
   static const double toolPanelItemBorderWidthUnselected = 1.0;
 

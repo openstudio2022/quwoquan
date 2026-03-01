@@ -133,6 +133,14 @@ scenarios:
       - response.items.length == 10
       - cursor present
 
+  - name: get_feed_excludes_private_posts
+    go_func: TestGetFeedExcludesPrivatePosts
+    command: GetFeed (any type)
+    seed: [post(micro,visibility=public), post(micro,visibility=private)]
+    assertions:
+      - response.items do not contain the private post
+      - private content never appears in discovery feed
+
   - name: get_feed_cursor_pagination
     go_func: TestGetFeedCursorPagination
     command: GetFeed with cursor

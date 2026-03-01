@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
+/// 'full'：作品模式，含作者/关注/位置；'backOnly'：微趣模式，仅返回+更多
+typedef ToolbarMode = String;
+
 class MediaViewerTopBar extends StatelessWidget {
   final VoidCallback onBack;
   final String positionText;
@@ -13,6 +16,8 @@ class MediaViewerTopBar extends StatelessWidget {
   final VoidCallback? onAuthorTap;
   final VoidCallback onMore;
   final bool showPosition;
+  /// 'full'（默认）| 'backOnly'：backOnly 时仅显示返回、更多
+  final String toolbarMode;
 
   const MediaViewerTopBar({
     super.key,
@@ -25,19 +30,23 @@ class MediaViewerTopBar extends StatelessWidget {
     this.onFollow,
     this.onAuthorTap,
     this.showPosition = true,
+    this.toolbarMode = 'full',
   });
+
+  bool get _isBackOnly => toolbarMode == 'backOnly';
 
   @override
   Widget build(BuildContext context) {
     final horizontalPadding = context.safeGetContainerSpacing(SpacingSize.md);
     final verticalPadding = context.safeGetIntraGroupSpacing(SpacingSize.sm);
     final statusBarTop = MediaQuery.of(context).padding.top;
+    final showPositionInBar = showPosition && !_isBackOnly;
+    final showAuthorInBar = !_isBackOnly;
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // 左/右固定宽度，中间 Expanded，保证作者名+关注按钮有足够空间（8 字+渐变+按钮）
         final leftWidth = AppSpacing.buttonSize +
-            (showPosition
+            (showPositionInBar
                 ? context.safeGetIntraGroupSpacing(SpacingSize.sm) +
                     AppSpacing.mediaViewerPositionIndicatorWidth
                 : 0.0);
@@ -66,15 +75,15 @@ class MediaViewerTopBar extends StatelessWidget {
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: ClipRect(
-                    child: _buildLeftGroup(context),
+                    child: _buildLeftGroup(context, showPositionInBar),
                   ),
                 ),
               ),
               Expanded(
                 child: Center(
-                  child: ClipRect(
-                    child: _buildAuthorInfo(context),
-                  ),
+                  child: showAuthorInBar
+                      ? ClipRect(child: _buildAuthorInfo(context))
+                      : const SizedBox.shrink(),
                 ),
               ),
               SizedBox(
@@ -93,12 +102,12 @@ class MediaViewerTopBar extends StatelessWidget {
     );
   }
 
-  Widget _buildLeftGroup(BuildContext context) {
+  Widget _buildLeftGroup(BuildContext context, bool showPos) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         _buildBackButton(context),
-        if (showPosition) ...[
+        if (showPos) ...[
           SizedBox(width: context.safeGetIntraGroupSpacing(SpacingSize.sm)),
           _buildPositionIndicator(context),
         ],

@@ -14,9 +14,10 @@ type Kind string
 const (
 	ModuleGateway   Module = "GATEWAY"
 	ModuleOrch      Module = "ORCH"
-	ModuleContent   Module = "CONTENT"
-	ModuleCircle    Module = "CIRCLE"
-	ModuleUser      Module = "USER"
+	ModuleContent     Module = "CONTENT"
+	ModuleCircle      Module = "CIRCLE"
+	ModuleIntegration Module = "INTEGRATION"
+	ModuleUser        Module = "USER"
 	ModuleChat      Module = "CHAT"
 	ModuleOps       Module = "OPS"
 	ModuleAssistant Module = "ASSISTANT"
@@ -86,11 +87,12 @@ type HTTPWriteOptions struct {
 var reasonPattern = regexp.MustCompile(`^[a-z0-9_]+$`)
 
 var allowedModules = map[Module]struct{}{
-	ModuleGateway:   {},
-	ModuleOrch:      {},
-	ModuleContent:   {},
-	ModuleCircle:    {},
-	ModuleUser:      {},
+	ModuleGateway:     {},
+	ModuleOrch:        {},
+	ModuleContent:     {},
+	ModuleCircle:      {},
+	ModuleIntegration: {},
+	ModuleUser:        {},
 	ModuleChat:      {},
 	ModuleOps:       {},
 	ModuleAssistant: {},
@@ -236,13 +238,22 @@ func HTTPStatusFromError(err *AppError) int {
 			return http.StatusConflict
 		case "rate_limited":
 			return http.StatusTooManyRequests
+		case "location_unavailable":
+			return http.StatusBadRequest
+		case "permission_denied", "location_permission_required":
+			return http.StatusForbidden
 		}
 	}
 	if kind == KindNetwork && reason == "timeout" {
 		return http.StatusGatewayTimeout
 	}
-	if kind == KindMiddleware && reason == "unavailable" {
-		return http.StatusServiceUnavailable
+	if kind == KindMiddleware {
+		switch reason {
+		case "timeout", "upstream_timeout":
+			return http.StatusGatewayTimeout
+		case "unavailable":
+			return http.StatusServiceUnavailable
+		}
 	}
 	return http.StatusInternalServerError
 }

@@ -6,9 +6,12 @@ class MediaViewerExtra {
     required this.posts,
     required this.initialIndex,
     required this.category,
+    this.initialImageIndex = 0,
   });
 
   final List<PostSummaryView> posts;
-  final int initialIndex;
-  final String category; // 'photo' | 'video'
+  final int initialIndex; // post index for moment, image index for photo
+  final String category; // 'photo' | 'video' | 'moment'
+  /// 同微趣内图片索引（nested 模式使用，默认为 0）
+  final int initialImageIndex;
 }

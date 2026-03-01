@@ -16,59 +16,12 @@ alwaysApply: true
 
 # 提交前检查（必须执行）
 
-```bash
-flutter analyze lib/features/home/pages/discovery_page.dart \
-  lib/features/home/pages/home_page.dart \
-  lib/components/tab_navigation.dart \
-  lib/components/post_list_section.dart \
-  lib/features/circles/pages/circles_page.dart \
-  lib/features/circles/pages/circle_detail_page.dart \
-  lib/features/circles/pages/circle_stats_page.dart \
-  lib/features/create/pages/create_page.dart \
-  lib/components/media/image/editor/image_editor_page.dart \
-  lib/components/media/image/editor/panels/image_editor_operation_panel.dart \
-  lib/components/media/image/editor/panels/image_editor_rotate_overlay.dart \
-  lib/components/media/image/editor/tool_list/image_editor_tool_entry_chip.dart \
-  lib/components/media/image/editor/tool_list/image_editor_pro_tool_list.dart \
-  lib/components/media/image/editor/top_bar/image_editor_top_bar.dart \
-  lib/components/media/image/editor/bottom_bar/image_editor_bottom_bar.dart \
-  lib/core/design_system/spacing/app_spacing.dart \
-  lib/core/design_system/typography/app_typography.dart \
-  lib/core/constants/design_semantic_constants.dart
-```
+从仓库根目录执行，覆盖 quwoquan_app/lib/**/*.dart（白名单：design_system/、constants/、*_test.dart）：
 
 ```bash
-python3 - <<'PY'
-import pathlib
-import re
-
-targets = [
-    "lib/features/home/pages/discovery_page.dart",
-    "lib/features/home/pages/home_page.dart",
-    "lib/features/circles/pages/circles_page.dart",
-    "lib/components/tab_navigation.dart",
-    "lib/components/post_list_section.dart",
-    "lib/features/create/pages/create_page.dart",
-]
-targets += [str(p) for p in pathlib.Path("lib/components/media/image/editor").rglob("*.dart")]
-
-pattern = re.compile(
-    r"fontSize:\s*\d+(\.\d+)?(\.sp)?|"
-    r"size:\s*\d+(\.\d+)?(\.sp)?|"
-    r"BorderRadius\.circular\(\s*\d+(\.\d+)?\s*\)|"
-    r"EdgeInsets\.(all|symmetric|only)\(\s*\d+"
-)
-
-found = False
-for file in targets:
-    p = pathlib.Path(file)
-    if not p.exists():
-        continue
-    for i, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
-        if pattern.search(line):
-            print(f"{file}:{i}: {line.strip()}")
-            found = True
-if not found:
-    print("No hardcoded visual literals found in targeted scope.")
-PY
+# 仓库根目录
+flutter analyze quwoquan_app/lib/
+python3 scripts/verify_dart_semantic.py
 ```
+
+已知违规可先用 `python3 scripts/verify_dart_semantic.py --update-baseline` 写入基线，后续新增违规将失败。

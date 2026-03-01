@@ -8,6 +8,7 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 import 'package:quwoquan_app/components/more_actions_popup/configs/media_post_config.dart';
@@ -15,6 +16,7 @@ import 'package:quwoquan_app/components/more_actions_popup/more_action_popup.dar
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
+import 'package:quwoquan_app/ui/discovery/providers/discovery_state.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
 
 /// 微趣频道：微博风格社交信息流
@@ -37,11 +39,13 @@ class MomentSocialFeed extends ConsumerWidget {
       {String? avatarUrl,
       String? displayName,
       String? backgroundUrl}) onUserTap;
-  final void Function(PostBaseDto post, int index)? onPostTap;
+  /// 点击图片/视频时打开侵入式浏览器；若仅需埋点可传 (post, i) => _trackBehavior('click', post)
+  final void Function(PostBaseDto post, int index, {List<PostBaseDto>? feedPosts})? onPostTap;
   final void Function(dynamic post)? onMoreTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final discoveryState = ref.watch(discoveryStateProvider);
     final feedAsync = ref.watch(discoveryFeedProvider('moment'));
     final fallbackRaw =
         ref.watch(appContentRepositoryProvider).discoveryMomentData;
@@ -56,9 +60,38 @@ class MomentSocialFeed extends ConsumerWidget {
     final dtos = feedAsync.value?.items ??
         fallbackRaw.map(postBaseDtoFromMap).toList(growable: false);
     final moments = dtos.whereType<MomentPostDto>().toList(growable: false);
+    final hasError = feedAsync.value?.error != null;
 
-    if (feedAsync.isLoading && moments.isEmpty) {
+    if (feedAsync.isLoading && moments.isEmpty && !hasError) {
       return const Center(child: CircularProgressIndicator());
+    }
+
+    if (hasError && moments.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: EdgeInsets.all(AppSpacing.interGroupLg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                context.l10n.loadFailed,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                  fontSize: AppTypography.base,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              SizedBox(height: AppSpacing.interGroupMd),
+              TextButton.icon(
+                onPressed: () =>
+                    ref.read(discoveryFeedMapProvider.notifier).load('moment'),
+                icon: const Icon(Icons.refresh),
+                label: Text(context.l10n.retry),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     final horizontal = AppSpacing.feedContentHorizontal(context);
@@ -88,6 +121,16 @@ class MomentSocialFeed extends ConsumerWidget {
               child: _MomentWeiboCard(
                 item: dto,
                 isDark: isDark,
+                isLiked: discoveryState.likedPosts.contains(dto.id),
+                isBookmarked: discoveryState.savedPosts.contains(dto.id),
+                likeCount: (() {
+                  final n = discoveryState.getPostLikesCount(dto.id);
+                  return n > 0 ? n : dto.likeCount;
+                })(),
+                favoriteCount: (() {
+                  final n = discoveryState.getPostBookmarksCount(dto.id);
+                  return n > 0 ? n : dto.favoriteCount;
+                })(),
                 onUserTap: (id) => onUserTap(
                   id,
                   avatarUrl: dto.avatarUrl,
@@ -95,7 +138,7 @@ class MomentSocialFeed extends ConsumerWidget {
                   backgroundUrl: dto.authorBackgroundUrl,
                 ),
                 onImageTap: (imgIndex) =>
-                    onPostTap?.call(dto, imgIndex),
+                    onPostTap?.call(dto, imgIndex, feedPosts: moments),
                 onCommentTap: () {
                   CommentViewer.showModal(
                     context: context,
@@ -111,8 +154,21 @@ class MomentSocialFeed extends ConsumerWidget {
                   );
                 },
                 onShareTap: () {
+                  ref.read(discoveryStateProvider).incrementShares(dto.id);
                   ref.read(contentBehaviorTrackerProvider).trackShare(dto.id);
                   _showShare(context);
+                },
+                onLikeTap: () {
+                  ref.read(discoveryStateProvider).toggleLike(
+                    dto.id,
+                    baseLikesCount: dto.likeCount,
+                  );
+                },
+                onBookmarkTap: () {
+                  ref.read(discoveryStateProvider).toggleSave(
+                    dto.id,
+                    baseBookmarksCount: dto.favoriteCount,
+                  );
                 },
                 onMoreTap: () {
                   if (onMoreTap != null) {
@@ -196,19 +252,31 @@ class _MomentWeiboCard extends ConsumerStatefulWidget {
   const _MomentWeiboCard({
     required this.item,
     required this.isDark,
+    required this.isLiked,
+    required this.isBookmarked,
+    required this.likeCount,
+    required this.favoriteCount,
     required this.onUserTap,
     required this.onImageTap,
     required this.onCommentTap,
     required this.onShareTap,
+    required this.onLikeTap,
+    required this.onBookmarkTap,
     required this.onMoreTap,
   });
 
   final MomentPostDto item;
   final bool isDark;
+  final bool isLiked;
+  final bool isBookmarked;
+  final int likeCount;
+  final int favoriteCount;
   final void Function(String) onUserTap;
   final void Function(int imageIndex) onImageTap;
   final VoidCallback onCommentTap;
   final VoidCallback onShareTap;
+  final VoidCallback onLikeTap;
+  final VoidCallback onBookmarkTap;
   final VoidCallback onMoreTap;
 
   @override
@@ -220,8 +288,6 @@ class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
   static const int _maxLines = 5;
 
   bool _isExpanded = false;
-  bool _isLiked = false;
-  bool _isBookmarked = false;
   late AnimationController _likeCtrl;
 
   @override
@@ -340,29 +406,25 @@ class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
           _ActionRow(
             item: item,
             isDark: isDark,
-            isLiked: _isLiked,
-            isBookmarked: _isBookmarked,
+            isLiked: widget.isLiked,
+            isBookmarked: widget.isBookmarked,
+            likeCount: widget.likeCount,
+            favoriteCount: widget.favoriteCount,
             likeCtrl: _likeCtrl,
             onLike: () {
-              final wasLiked = _isLiked;
-              setState(() => _isLiked = !_isLiked);
+              final wasLiked = widget.isLiked;
               _likeCtrl.forward(from: 0);
+              widget.onLikeTap();
               final repo = ref.read(contentInteractionRepositoryProvider);
-              if (wasLiked) {
-                repo.unlike(widget.item.id);
-              } else {
-                repo.like(widget.item.id);
-              }
+              if (wasLiked) repo.unlike(widget.item.id);
+              if (!wasLiked) repo.like(widget.item.id);
             },
             onBookmark: () {
-              final wasBookmarked = _isBookmarked;
-              setState(() => _isBookmarked = !_isBookmarked);
+              final wasBookmarked = widget.isBookmarked;
+              widget.onBookmarkTap();
               final repo = ref.read(contentInteractionRepositoryProvider);
-              if (wasBookmarked) {
-                repo.unfavorite(widget.item.id);
-              } else {
-                repo.favorite(widget.item.id);
-              }
+              if (wasBookmarked) repo.unfavorite(widget.item.id);
+              if (!wasBookmarked) repo.favorite(widget.item.id);
             },
             onComment: widget.onCommentTap,
             onShare: widget.onShareTap,
@@ -405,7 +467,7 @@ class _ExpandableText extends StatelessWidget {
     final textStyle = TextStyle(
       fontSize: AppTypography.lg,
       color: fg,
-      height: 1.5,
+      height: AppTypography.lineHeightRelaxed,
     );
 
     return LayoutBuilder(builder: (context, constraints) {
@@ -596,17 +658,20 @@ class _MomentVideoCard extends StatelessWidget {
               // 中央播放按钮
               Center(
                 child: Container(
-                  width: 52,
-                  height: 52,
+                  width: AppSpacing.videoPlayOverlaySize,
+                  height: AppSpacing.videoPlayOverlaySize,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: Colors.black.withValues(alpha: 0.5),
-                    border: Border.all(color: Colors.white, width: 2),
+                    border: Border.all(
+                      color: Colors.white,
+                      width: AppSpacing.toolPanelItemBorderWidthSelected,
+                    ),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     CupertinoIcons.play_fill,
                     color: Colors.white,
-                    size: 22,
+                    size: AppSpacing.videoPlayOverlayIconSize,
                   ),
                 ),
               ),
@@ -663,6 +728,8 @@ class _ActionRow extends StatelessWidget {
     required this.isDark,
     required this.isLiked,
     required this.isBookmarked,
+    required this.likeCount,
+    required this.favoriteCount,
     required this.likeCtrl,
     required this.onLike,
     required this.onBookmark,
@@ -674,6 +741,8 @@ class _ActionRow extends StatelessWidget {
   final bool isDark;
   final bool isLiked;
   final bool isBookmarked;
+  final int likeCount;
+  final int favoriteCount;
   final AnimationController likeCtrl;
   final VoidCallback onLike;
   final VoidCallback onBookmark;
@@ -726,7 +795,7 @@ class _ActionRow extends StatelessWidget {
               color: likeColor,
             ),
           ),
-          label: _fmt(item.likeCount + (isLiked ? 1 : 0)),
+          label: _fmt(likeCount),
           muted: muted,
           onTap: onLike,
         ),
@@ -748,7 +817,7 @@ class _ActionRow extends StatelessWidget {
             size: AppSpacing.iconMedium,
             color: bookmarkColor,
           ),
-          label: _fmt(item.favoriteCount + (isBookmarked ? 1 : 0)),
+          label: _fmt(favoriteCount),
           muted: muted,
           onTap: onBookmark,
         ),

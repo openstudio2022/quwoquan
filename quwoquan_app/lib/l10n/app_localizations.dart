@@ -1712,6 +1712,156 @@ abstract class AppLocalizations {
   /// **'所在位置'**
   String get locationLabel;
 
+  /// No description provided for @locationHidden.
+  ///
+  /// In zh, this message translates to:
+  /// **'不显示位置'**
+  String get locationHidden;
+
+  /// No description provided for @isPublicLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'是否公开'**
+  String get isPublicLabel;
+
+  /// No description provided for @visibilityPrivate.
+  ///
+  /// In zh, this message translates to:
+  /// **'私密'**
+  String get visibilityPrivate;
+
+  /// No description provided for @selectPublishCirclesLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'发布的圈子'**
+  String get selectPublishCirclesLabel;
+
+  /// No description provided for @noCirclesAvailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'加入圈子，发现同好'**
+  String get noCirclesAvailable;
+
+  /// No description provided for @circleJoinedSection.
+  ///
+  /// In zh, this message translates to:
+  /// **'已加入'**
+  String get circleJoinedSection;
+
+  /// No description provided for @circleRecommendedSection.
+  ///
+  /// In zh, this message translates to:
+  /// **'推荐加入'**
+  String get circleRecommendedSection;
+
+  /// No description provided for @circleMemberCountJoined.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 人 · 已加入'**
+  String circleMemberCountJoined(int count);
+
+  /// No description provided for @circleFollowButton.
+  ///
+  /// In zh, this message translates to:
+  /// **'+ 关注'**
+  String get circleFollowButton;
+
+  /// No description provided for @circleRecommendedSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'{reason} · {count} 人'**
+  String circleRecommendedSubtitle(String reason, int count);
+
+  /// No description provided for @circleJoinedLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'已加入'**
+  String get circleJoinedLabel;
+
+  /// No description provided for @goToDiscovery.
+  ///
+  /// In zh, this message translates to:
+  /// **'去发现'**
+  String get goToDiscovery;
+
+  /// No description provided for @locationNearbyTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'附近位置'**
+  String get locationNearbyTitle;
+
+  /// No description provided for @locationFetchingResult.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在获取结果'**
+  String get locationFetchingResult;
+
+  /// No description provided for @locationSearchingNearby.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在搜索附近位置'**
+  String get locationSearchingNearby;
+
+  /// No description provided for @locationLoadFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂时无法获取当前位置，请稍后重试'**
+  String get locationLoadFailed;
+
+  /// No description provided for @locationPermissionRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'请开启定位权限后重试'**
+  String get locationPermissionRequired;
+
+  /// No description provided for @locationUpstreamTimeout.
+  ///
+  /// In zh, this message translates to:
+  /// **'位置服务响应超时，请稍后重试'**
+  String get locationUpstreamTimeout;
+
+  /// No description provided for @locationInternalError.
+  ///
+  /// In zh, this message translates to:
+  /// **'位置服务异常，请稍后重试'**
+  String get locationInternalError;
+
+  /// No description provided for @locationAppPermissionRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'请在设置中为本应用开启定位权限'**
+  String get locationAppPermissionRequired;
+
+  /// No description provided for @locationOpenSettings.
+  ///
+  /// In zh, this message translates to:
+  /// **'去设置'**
+  String get locationOpenSettings;
+
+  /// No description provided for @locationSearchTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'搜索位置'**
+  String get locationSearchTitle;
+
+  /// No description provided for @locationSearchHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'搜索地点'**
+  String get locationSearchHint;
+
+  /// No description provided for @locationSearchEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'未找到相关位置'**
+  String get locationSearchEmpty;
+
+  /// No description provided for @locationSearchKeywordRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'搜索关键词不能为空'**
+  String get locationSearchKeywordRequired;
+
   /// No description provided for @remindWhoLabel.
   ///
   /// In zh, this message translates to:

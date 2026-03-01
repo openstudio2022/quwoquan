@@ -1,5 +1,6 @@
-// ignore_for_file: unused_field, prefer_final_fields
+// ignore_for_file: unused_field, prefer_final_fields, unused_element
 
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,6 +13,7 @@ import 'package:quwoquan_app/components/more_actions_popup/configs/media_post_co
 import 'package:quwoquan_app/components/comment_system/comment_viewer.dart';
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 import 'package:quwoquan_app/components/more_actions_popup/more_action_popup.dart';
+import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagement_bar.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/media_viewer_toolbar.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/media_assistant_panel.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/media_caption_widgets.dart';
@@ -51,6 +53,12 @@ class ImmersiveImageViewer extends ConsumerStatefulWidget {
   final VoidCallback? onAssistantClick;
   /// 滑动接近末尾时回调（用于加载更多）
   final VoidCallback? onNearEnd;
+  /// flat：一维横向（作品/美图）；nested：外垂直（微趣）× 内横向（同微趣图）
+  final String layoutMode;
+  /// 同微趣内图片索引（nested 模式使用）
+  final int initialImageIndex;
+  /// 'full'（默认）| 'backOnly'：backOnly 时顶栏仅返回、更多
+  final String toolbarMode;
 
   const ImmersiveImageViewer({
     super.key,
@@ -82,6 +90,9 @@ class ImmersiveImageViewer extends ConsumerStatefulWidget {
     this.onHeroAnimationComplete,
     this.onAssistantClick,
     this.onNearEnd,
+    this.layoutMode = 'flat',
+    this.initialImageIndex = 0,
+    this.toolbarMode = 'full',
   });
 
   @override
@@ -91,6 +102,8 @@ class ImmersiveImageViewer extends ConsumerStatefulWidget {
 class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer> 
     with TickerProviderStateMixin {
   late PageController _pageController;
+  PageController? _outerPageController;
+  final Map<int, PageController> _innerControllers = {};
   late AnimationController _fadeController;
   late AnimationController _controlsController;
   final TextEditingController _assistantInputController = TextEditingController();
@@ -98,6 +111,8 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
   final FocusNode _assistantInputFocusNode = FocusNode();
   
   int _currentEntryIndex = 0;
+  int _currentPostIndex = 0;
+  int _currentImageIndex = 0;
   List<_ViewerImageEntry> _mediaEntries = const <_ViewerImageEntry>[];
   bool _showControls = true;
   
@@ -110,6 +125,8 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
   int _savesCount = 0;
   int _commentsCount = 0;
   int _sharesCount = 0;
+  bool _showFollowButton = false;
+  Timer? _followButtonTimer;
   bool _isPureMode = false;
   final Map<String, bool> _expandedCaptions = {};
   final Map<String, double> _imageAspectRatios = {};
@@ -119,6 +136,13 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
   void initState() {
     super.initState();
     _rebuildMediaEntries();
+    final useNested = widget.layoutMode == 'nested';
+    if (useNested && widget.posts.isNotEmpty) {
+      _currentPostIndex = widget.initialPostIndex.clamp(0, widget.posts.length - 1);
+      final urls = _collectPostImageUrls(widget.posts[_currentPostIndex]);
+      _currentImageIndex = widget.initialImageIndex.clamp(0, urls.isEmpty ? 0 : urls.length - 1);
+      _outerPageController = PageController(initialPage: _currentPostIndex);
+    }
     _pageController = PageController(initialPage: _currentEntryIndex);
     
     _fadeController = AnimationController(
@@ -140,11 +164,17 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
   @override
   void dispose() {
     _pageController.dispose();
+    _outerPageController?.dispose();
+    for (final c in _innerControllers.values) {
+      c.dispose();
+    }
+    _innerControllers.clear();
     _fadeController.dispose();
     _controlsController.dispose();
     _assistantInputController.dispose();
     _assistantScrollController.dispose();
     _assistantInputFocusNode.dispose();
+    _followButtonTimer?.cancel();
     _restoreSystemUiMode();
     super.dispose();
   }
@@ -168,11 +198,13 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
           ? _mediaEntries[_currentEntryIndex]
           : null;
 
-  int get _currentPostIndex => _currentEntry?.postIndex ?? 0;
+  int get _effectivePostIndex => widget.layoutMode == 'nested'
+      ? _currentPostIndex
+      : (_currentEntry?.postIndex ?? 0);
 
   PostSummaryView? get _currentPost =>
-      (widget.posts.isNotEmpty && _currentPostIndex < widget.posts.length)
-          ? widget.posts[_currentPostIndex]
+      (widget.posts.isNotEmpty && _effectivePostIndex < widget.posts.length)
+          ? widget.posts[_effectivePostIndex]
           : null;
 
   List<String> _collectPostImageUrls(PostSummaryView post) {
@@ -245,7 +277,21 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
       _savesCount = widget.getPostBookmarksCount?.call(currentPost) ?? 0;
       _commentsCount = currentPost.commentsCount;
       _sharesCount = currentPost.sharesCount;
+      _startFollowDelay();
     }
+  }
+
+  void _startFollowDelay() {
+    _followButtonTimer?.cancel();
+    if (mounted) {
+      setState(() => _showFollowButton = false);
+    } else {
+      _showFollowButton = false;
+    }
+    _followButtonTimer = Timer(const Duration(seconds: 3), () {
+      if (!mounted) return;
+      setState(() => _showFollowButton = true);
+    });
   }
 
   void _startAutoHideTimer() {
@@ -761,6 +807,65 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
     });
   }
 
+  Widget _buildNestedPageView(bool isDark) {
+    return PageView.builder(
+      controller: _outerPageController,
+      scrollDirection: Axis.vertical,
+      itemCount: widget.posts.length,
+      onPageChanged: (postIdx) {
+        setState(() {
+          _currentPostIndex = postIdx;
+          _currentImageIndex = 0;
+        });
+        _initializePostState();
+        if (widget.onNearEnd != null &&
+            postIdx >= widget.posts.length - 2) {
+          widget.onNearEnd!();
+        }
+      },
+      itemBuilder: (context, postIdx) {
+        final post = widget.posts[postIdx];
+        final urls = _collectPostImageUrls(post);
+        if (urls.isEmpty) {
+          return const Center(child: SizedBox.shrink());
+        }
+        final initialPage = postIdx == widget.initialPostIndex
+            ? widget.initialImageIndex.clamp(0, urls.length - 1)
+            : 0;
+        final controller = _innerControllers.putIfAbsent(
+          postIdx,
+          () => PageController(initialPage: initialPage),
+        );
+        return PageView.builder(
+          controller: controller,
+          scrollDirection: Axis.horizontal,
+          itemCount: urls.length,
+          onPageChanged: (imgIdx) {
+            if (postIdx == _currentPostIndex) {
+              setState(() => _currentImageIndex = imgIdx);
+            }
+          },
+          itemBuilder: (context, imgIdx) {
+            final mediaItem = MediaItem(
+              type: ContentTypeConstants.image,
+              url: urls[imgIdx],
+              aspectRatio: post.aspectRatio,
+            );
+            final isActive = postIdx == _currentPostIndex && imgIdx == _currentImageIndex;
+            return _buildMediaPage(
+              context,
+              post,
+              mediaItem,
+              isDark,
+              isActive,
+              !_isPureMode,
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!widget.isOpen) return const SizedBox.shrink();
@@ -770,36 +875,47 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
     final currentEntry = _currentEntry;
     final currentPostImages =
         currentPost == null ? const <String>[] : _collectPostImageUrls(currentPost);
-    final positionText = currentEntry == null || currentPostImages.isEmpty
-        ? '1/1'
-        : '${currentEntry.imageIndex + 1}/${currentPostImages.length}';
+    final useNested = widget.layoutMode == 'nested';
+    final positionText = useNested
+        ? (currentPostImages.isEmpty
+            ? '1/1'
+            : '${_currentImageIndex + 1}/${currentPostImages.length}')
+        : (currentEntry == null || currentPostImages.isEmpty
+            ? '1/1'
+            : '${currentEntry.imageIndex + 1}/${currentPostImages.length}');
+    final showPosition = useNested
+        ? (widget.posts.length > 1 || currentPostImages.length > 1)
+        : (_mediaEntries.length > 1);
 
     return Material(
       color: AppColors.black,
       child: Stack(
         children: [
-          PageView.builder(
-            controller: _pageController,
-            itemCount: _mediaEntries.length,
-            onPageChanged: _handlePageChanged,
-            itemBuilder: (context, index) {
-              final entry = _mediaEntries[index];
-              final post = widget.posts[entry.postIndex];
-              final mediaItem = MediaItem(
-                type: ContentTypeConstants.image,
-                url: entry.imageUrl,
-                aspectRatio: post.aspectRatio,
-              );
-              return _buildMediaPage(
-                context,
-                post,
-                mediaItem,
-                isDark,
-                index == _currentEntryIndex,
-                !_isPureMode,
-              );
-            },
-          ),
+          if (useNested)
+            _buildNestedPageView(isDark)
+          else
+            PageView.builder(
+              controller: _pageController,
+              itemCount: _mediaEntries.length,
+              onPageChanged: _handlePageChanged,
+              itemBuilder: (context, index) {
+                final entry = _mediaEntries[index];
+                final post = widget.posts[entry.postIndex];
+                final mediaItem = MediaItem(
+                  type: ContentTypeConstants.image,
+                  url: entry.imageUrl,
+                  aspectRatio: post.aspectRatio,
+                );
+                return _buildMediaPage(
+                  context,
+                  post,
+                  mediaItem,
+                  isDark,
+                  index == _currentEntryIndex,
+                  !_isPureMode,
+                );
+              },
+            ),
           // 控制栏始终构建以便淡出动画生效，用 IgnorePointer 在纯模式屏蔽点击
           Positioned.fill(
             child: AnimatedBuilder(
@@ -824,21 +940,29 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
                     onFollow: _handleFollowClick,
                     onAuthorTap: _handleAuthorTap,
                     onMore: _handleMoreClick,
-                    showPosition: _mediaEntries.length > 1,
+                    showPosition: showPosition,
+                    toolbarMode: widget.toolbarMode,
                   ),
                   const Spacer(),
-                  MediaViewerBottomBar(
-                    shareCount: _sharesCount,
-                    commentCount: _commentsCount,
+                  ImmersiveEngagementBar(
+                    avatarUrl: _getAuthorAvatar(currentPost) ?? '',
+                    displayName: _getAuthorName(currentPost),
+                    circleName: UITextConstants.discoveryRailMoment,
                     likeCount: _likesCount,
-                    saveCount: _savesCount,
+                    shareCount: _sharesCount,
+                    favoriteCount: _savesCount,
+                    commentCount: _commentsCount,
                     isLiked: _isLiked,
                     isSaved: _isSaved,
-                    onShare: _handleShareClick,
-                    onComment: _handleCommentsClick,
-                    onLike: _handleLikeClick,
-                    onSave: _handleSaveClick,
-                    onAssistant: _handleAssistantClick,
+                    isFollowing: _isFollowing,
+                    onUserTap: _handleAuthorTap,
+                    onCircleTap: () {},
+                    onFollowTap: _handleFollowClick,
+                    onLikeTap: _handleLikeClick,
+                    onFavoriteTap: _handleSaveClick,
+                    onCommentTap: _handleCommentsClick,
+                    onShareTap: _handleShareClick,
+                    showFollowButton: _showFollowButton,
                   ),
                 ],
               ),

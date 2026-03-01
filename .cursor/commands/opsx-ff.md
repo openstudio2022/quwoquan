@@ -93,7 +93,7 @@ description: 特性基线化（Plan → 文档 + 元数据 + 代码 一次完成
 | 新增字段 | 更新 `fields.yaml` | 字段定义 |
 | 新增领域事件 | 更新 `events.yaml` | 事件声明 |
 | 新增 ReadModel 投影 | 创建 `{entity}/projections/{name}.yaml` | 投影声明 |
-| 新增错误码层 | 创建 `{entity}/errors.yaml` | 结构化错误码声明 |
+| 新增错误码层 | 创建 `{entity}/errors.yaml` | 结构化错误码声明（含 l10n_key、user_message.zh/en）；云侧用 generated.AppErrorFrom*，端侧用 *ErrorCode.fromCode().toDisplayMessage(l10n)；禁止硬编码 |
 | 新增行为采集层 | 创建 `{entity}/behaviors.yaml` | 行为事件 + 推荐特征 + 训练样本 |
 | 新增隐私策略层 | 创建 `{entity}/privacy.yaml` | PII 日志策略 + 数据生命周期 |
 | 新增端侧配置层 | 创建 `{entity}/ui_config.yaml` | tab/布局/feature flags/空状态 |
@@ -105,6 +105,11 @@ description: 特性基线化（Plan → 文档 + 元数据 + 代码 一次完成
 **多意图组合**：一个特性可以包含多个意图，按上表顺序逐一执行，每项完成后继续下一项（不单独运行 verify，统一在步骤 4 一次性验证）。
 
 **骨架内容标准**：新建 YAML 时，从同类已有 YAML 中继承结构，预填已知字段，留 TODO 标记待补充项。禁止空文件。
+
+**新增错误码层时的检查清单**（见 `01-arch-constraints.mdc` §3.3）：
+- `errors.yaml` 必须含 code、l10n_key、user_message.zh/en、go_const、dart_const
+- design.md 须写明错误码与用户文案的映射（可引用 errors.yaml 表）
+- tasks 须含：metadata → codegen → Handler 使用 AppErrorFrom* → 端侧使用 toDisplayMessage → 测试使用枚举 .code
 
 ---
 

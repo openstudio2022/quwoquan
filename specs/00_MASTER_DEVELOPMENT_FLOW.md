@@ -122,9 +122,10 @@ flutter test test/cloud/ test/components/ test/ui/  # L1a+L1b+L1c
 | Go | 禁止直接 import 数据库驱动（仅 infrastructure 允许） | `01-arch-constraints` |
 | Go | 必须使用 runtime/errors、runtime/config、runtime/messaging | `01-arch-constraints` |
 | Go | codegen 文件（`DO NOT EDIT`）禁止手动修改 | `01-arch-constraints` |
-| Dart | 禁止硬编码 fontSize/EdgeInsets/Color/BorderRadius | `02-dart-coding` |
+| Dart | 禁止硬编码 fontSize/EdgeInsets/Color/BorderRadius/width/height/leadingSize | `02-dart-coding`、`verify_dart_semantic` |
 | Dart | 禁止相对路径 import，必须用 package: | `02-dart-coding` |
 | Dart | Feature 禁止直接 import 其他 Feature 内部文件 | `02-dart-coding` |
+| 错误码 | 云侧用 generated.AppErrorFrom*；端侧用 *ErrorCode.fromCode().toDisplayMessage；测试用枚举.code；禁止硬编码 | `01-arch-constraints` §3.3 |
 | 端云 | Go struct / Dart DTO / OpenAPI / Migration 必须与 metadata 一致 | `01-arch-constraints` |
 
 ---
@@ -153,6 +154,7 @@ make gate-full
 | `verify_arch_constraints` | DDD 导入 + 数据库隔离 + runtime 统一 |
 | `verify_codegen_hashes` | codegen 产物 hash 比对（防手改） |
 | `verify_dart_semantic` | 硬编码字面量 + 包引用 + Feature 隔离 |
+| `verify_error_code_semantic` | 端侧禁止硬编码错误码字符串，须用 *ErrorCode.fromCode / .code |
 | `verify_feature_tree` | tree.yaml ↔ 目录 + acceptance 完整性；特性树层级与分解须符合 `specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md` |
 | `flutter analyze` | Dart 静态分析 |
 | `go build ./...` | Go 编译 |
@@ -380,6 +382,8 @@ quwoquan/
 │
 ├── specs/
 │   ├── 00_MASTER_DEVELOPMENT_FLOW.md   # ← 本文档（唯一主线）
+│   ├── 01_APP_DIRECTORY_STRUCTURE_BY_DOMAIN.md  # 端侧 lib/ui、lib/cloud 按领域划分
+│   ├── 01_APP_DIRECTORY_MIGRATION_TASKS.md      # features→ui 迁移任务清单
 │   ├── runtime_framework_spec.md       # runtime 框架技术规范（附录）
 │   ├── runtime_framework_design.md     # runtime 框架设计（附录）
 │   ├── runtime_gap_analysis_and_plan.md # runtime 开发计划（附录）
@@ -408,5 +412,7 @@ quwoquan/
 | 特性树结构 | `specs/feature-tree/` |
 | **特性树文档标准（四类文档）** | `specs/feature-tree/00_FEATURE_TREE_STANDARD.md` |
 | **L1-L5 层级定义与卡点落实** | `specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md` |
+| **端侧目录结构（按领域 ui/cloud）** | `specs/01_APP_DIRECTORY_STRUCTURE_BY_DOMAIN.md` |
+| **端侧 features→ui 迁移任务** | `specs/01_APP_DIRECTORY_MIGRATION_TASKS.md` |
 | 元数据目录结构 | `contracts/metadata/DESIGN.md` |
 | **Deliver → Prod 端到端流程** | `deploy/shared/deliver_to_production_runbook.md` |

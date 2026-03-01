@@ -97,6 +97,7 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
       });
     }
 
+    final isMoment = widget.initialExtra?.category == 'moment';
     return ImmersiveImageViewer(
       isOpen: _isOpen,
       onClose: () {
@@ -107,6 +108,9 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
       initialIndex: _safeInitialIndex,
       posts: _posts,
       initialPostIndex: _safeInitialIndex,
+      layoutMode: isMoment ? 'nested' : 'flat',
+      initialImageIndex: widget.initialExtra?.initialImageIndex ?? 0,
+      toolbarMode: isMoment ? 'backOnly' : 'full',
       onUserClick: (username, {avatarUrl, displayName, backgroundUrl}) {
         context.push(
           '/user/$username',

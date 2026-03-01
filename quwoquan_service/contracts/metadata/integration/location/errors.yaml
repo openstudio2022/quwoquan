@@ -13,10 +13,23 @@ errors:
     retryable: true
     retry_after_seconds: 3
     dart_const: locationUnavailable
+    l10n_key: locationLoadFailed
     go_const: ErrLocationUnavailable
     user_message:
       zh: "暂时无法获取当前位置，请稍后重试"
       en: "Current location is unavailable, please retry shortly"
+
+  - code: INTEGRATION.USER.invalid_argument
+    kind: USER
+    reason: invalid_argument
+    http_status: 400
+    retryable: false
+    dart_const: invalidArgument
+    l10n_key: locationSearchKeywordRequired
+    go_const: ErrInvalidArgument
+    user_message:
+      zh: "搜索关键词不能为空"
+      en: "Search keyword cannot be empty"
 
   - code: INTEGRATION.USER.location_permission_required
     kind: USER
@@ -24,6 +37,7 @@ errors:
     http_status: 403
     retryable: false
     dart_const: locationPermissionRequired
+    l10n_key: locationPermissionRequired
     go_const: ErrLocationPermissionRequired
     user_message:
       zh: "请开启定位权限后重试"
@@ -36,6 +50,7 @@ errors:
     retryable: true
     retry_after_seconds: 5
     dart_const: upstreamTimeout
+    l10n_key: locationUpstreamTimeout
     go_const: ErrUpstreamTimeout
     user_message:
       zh: "位置服务响应超时，请稍后重试"
@@ -48,6 +63,7 @@ errors:
     retryable: true
     retry_after_seconds: 5
     dart_const: internalError
+    l10n_key: locationInternalError
     go_const: ErrInternalError
     user_message:
       zh: "位置服务异常，请稍后重试"

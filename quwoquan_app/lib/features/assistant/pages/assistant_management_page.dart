@@ -28,19 +28,17 @@ class _AssistantManagementPageState extends ConsumerState<AssistantManagementPag
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
-    final bgColor =
-        AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
-    final fgPrimary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
-    final borderColor =
-        AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
+    final pageBg = SettingsSemanticConstants.pageBackground(isDark);
+    final blockBg = SettingsSemanticConstants.blockBackground(isDark);
+    final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
+    final fgSecondary = SettingsSemanticConstants.secondaryColor(isDark);
+    final dividerClr = SettingsSemanticConstants.dividerColor(isDark);
+    final blockBorder = SettingsSemanticConstants.blockBorderColor(isDark);
 
     return Scaffold(
-      backgroundColor: bgColor,
+      backgroundColor: pageBg,
       appBar: AppBar(
-        backgroundColor: bgColor,
+        backgroundColor: blockBg,
         leading: IconButton(
           onPressed: widget.onBack,
           icon: Icon(Icons.arrow_back, color: fgPrimary),
@@ -56,7 +54,10 @@ class _AssistantManagementPageState extends ConsumerState<AssistantManagementPag
         centerTitle: false,
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        padding: EdgeInsets.symmetric(
+          horizontal: SettingsSemanticConstants.blockHorizontalPadding,
+          vertical: SettingsSemanticConstants.blockSpacing,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -76,20 +77,18 @@ class _AssistantManagementPageState extends ConsumerState<AssistantManagementPag
             SizedBox(height: 16),
             Container(
               decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.05)
-                    : Colors.black.withValues(alpha: 0.03),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: borderColor.withValues(alpha: 0.5)),
+                color: blockBg,
+                borderRadius: BorderRadius.circular(SettingsSemanticConstants.blockBorderRadius),
+                border: Border.all(color: blockBorder),
               ),
               child: Column(
                 children: [
                   _buildPermissionRow('允许读取聊天', _permChat, (v) => setState(() => _permChat = v), Icons.lock_outline),
-                  Divider(height: 1),
+                  Divider(height: 1, color: dividerClr, thickness: SettingsSemanticConstants.dividerThickness),
                   _buildPermissionRow('允许读取动态', _permDynamic, (v) => setState(() => _permDynamic = v), Icons.memory),
-                  Divider(height: 1),
+                  Divider(height: 1, color: dividerClr, thickness: SettingsSemanticConstants.dividerThickness),
                   _buildPermissionRow('允许访问位置', _permLocation, (v) => setState(() => _permLocation = v), Icons.location_on_outlined),
-                  Divider(height: 1),
+                  Divider(height: 1, color: dividerClr, thickness: SettingsSemanticConstants.dividerThickness),
                   _buildPermissionRow('系统通知', _permNotifications, (v) => setState(() => _permNotifications = v), Icons.notifications_outlined),
                 ],
               ),
@@ -150,13 +149,11 @@ class _AssistantManagementPageState extends ConsumerState<AssistantManagementPag
             _buildSectionTitle(Icons.schedule, '技能生效时间', fgSecondary),
             SizedBox(height: 16),
             Container(
-              padding: EdgeInsets.all(16),
+              padding: EdgeInsets.all(SettingsSemanticConstants.blockHorizontalPadding),
               decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.05)
-                    : Colors.black.withValues(alpha: 0.03),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: borderColor.withValues(alpha: 0.5)),
+                color: blockBg,
+                borderRadius: BorderRadius.circular(SettingsSemanticConstants.blockBorderRadius),
+                border: Border.all(color: blockBorder),
               ),
               child: Column(
                 children: [

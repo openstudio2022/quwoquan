@@ -370,13 +370,17 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     final dtos = feedAsync.value?.items ??
         fallbackRaw.map(postBaseDtoFromMap).toList(growable: false);
     final videos = dtos;
+    final hasError = feedAsync.value?.error != null;
     if (!feedMap.containsKey(tabId)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref.read(discoveryFeedMapProvider.notifier).load(tabId);
       });
     }
-    if (feedAsync.isLoading && videos.isEmpty) {
+    if (feedAsync.isLoading && videos.isEmpty && !hasError) {
       return const Center(child: CircularProgressIndicator());
+    }
+    if (hasError && videos.isEmpty) {
+      return _buildFeedErrorPlaceholder(context, tabId);
     }
     return _VideoImmersionView(
       categories: _categories,
@@ -458,7 +462,10 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
             ),
           );
         },
-        onPostTap: (post, index) => _trackBehavior('click', post),
+        onPostTap: (post, index, {feedPosts}) {
+          _trackBehavior('click', post);
+          _onPostTap(post, index, feedPosts: feedPosts, category: 'moment');
+        },
         onMoreTap: (post) => _onMomentMoreTap(context, post),
       );
     }
@@ -474,6 +481,34 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     }
   }
 
+  Widget _buildFeedErrorPlaceholder(BuildContext context, String tabId) {
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.all(AppSpacing.interGroupLg),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              context.l10n.loadFailed,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.error,
+                fontSize: AppTypography.base,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: AppSpacing.interGroupMd),
+            TextButton.icon(
+              onPressed: () =>
+                  ref.read(discoveryFeedMapProvider.notifier).load(tabId),
+              icon: const Icon(Icons.refresh),
+              label: Text(context.l10n.retry),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   double _contentHorizontalPadding(BuildContext context) =>
       AppSpacing.feedContentHorizontal(context);
 
@@ -484,14 +519,18 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     final dtos = feedAsync.value?.items ??
         fallbackRaw.map(postBaseDtoFromMap).toList(growable: false);
     final moments = dtos.whereType<MomentPostDto>().toList(growable: false);
+    final hasError = feedAsync.value?.error != null;
     final horizontal = _contentHorizontalPadding(context);
     if (!feedMap.containsKey(tabId)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref.read(discoveryFeedMapProvider.notifier).load(tabId);
       });
     }
-    if (feedAsync.isLoading && moments.isEmpty) {
+    if (feedAsync.isLoading && moments.isEmpty && !hasError) {
       return const Center(child: CircularProgressIndicator());
+    }
+    if (hasError && moments.isEmpty) {
+      return _buildFeedErrorPlaceholder(context, tabId);
     }
     return ListView.builder(
       padding: EdgeInsets.only(
@@ -521,7 +560,12 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
                     'backgroundImage': dto.authorBackgroundUrl,
                   });
                 },
-                onPostTap: (post, i) => _onPostTap(post, i),
+                onPostTap: (post, i) => _onPostTap(
+                  post,
+                  i,
+                  feedPosts: moments,
+                  category: tabId,
+                ),
                 onCommentTap: (post) => _onMomentCommentTap(context, post),
                 onShareTap: (post) => _onMomentShareTap(context, post),
                 onMoreTap: (post) => _onMomentMoreTap(context, post),
@@ -549,14 +593,18 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     final dtos = feedAsync.value?.items ??
         fallbackRaw.map(postBaseDtoFromMap).toList(growable: false);
     final articles = dtos.whereType<ArticlePostDto>().toList(growable: false);
+    final hasError = feedAsync.value?.error != null;
     final horizontal = _contentHorizontalPadding(context);
     if (!feedMap.containsKey(tabId)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref.read(discoveryFeedMapProvider.notifier).load(tabId);
       });
     }
-    if (feedAsync.isLoading && articles.isEmpty) {
+    if (feedAsync.isLoading && articles.isEmpty && !hasError) {
       return const Center(child: CircularProgressIndicator());
+    }
+    if (hasError && articles.isEmpty) {
+      return _buildFeedErrorPlaceholder(context, tabId);
     }
     return ListView.builder(
       padding: EdgeInsets.only(
@@ -655,6 +703,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     final dtos = feedAsync.value?.items ??
         fallbackRaw.map(postBaseDtoFromMap).toList(growable: false);
     final photos = dtos.whereType<PhotoPostDto>().toList(growable: false);
+    final hasError = feedAsync.value?.error != null;
     final screenWidth = MediaQuery.of(context).size.width;
     final horizontal = _contentHorizontalPadding(context);
     final horizontalPadding = horizontal * 2;
@@ -667,8 +716,11 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
         ref.read(discoveryFeedMapProvider.notifier).load(tabId);
       });
     }
-    if (feedAsync.isLoading && photos.isEmpty) {
+    if (feedAsync.isLoading && photos.isEmpty && !hasError) {
       return const Center(child: CircularProgressIndicator());
+    }
+    if (hasError && photos.isEmpty) {
+      return _buildFeedErrorPlaceholder(context, tabId);
     }
     return CustomScrollView(
       key: TestKeys.photoFeedGrid,
@@ -742,32 +794,43 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       return;
     }
     final postViews = feedPosts?.map(PostSummaryView.fromDto).toList();
-    if (tabConfig?.layout == 'full_width_vertical_pager') {
+    // For moment (multi-image per post): initialIndex = post index so viewer shows correct post
+    final initialIndex = (feedPosts != null && feedPosts.isNotEmpty)
+        ? feedPosts.indexWhere((p) => p.id == post.id).clamp(0, feedPosts.length - 1)
+        : mediaIndex;
+    // 微趣图片/视频分流：有 videoUrl 则进视频浏览器
+    final moment = post is MomentPostDto ? post : null;
+    final hasVideo = moment != null &&
+        moment.videoUrl != null &&
+        moment.videoUrl!.trim().isNotEmpty;
+    if (tabConfig?.layout == 'full_width_vertical_pager' || (category == 'moment' && hasVideo)) {
       if (postViews != null && postViews.isNotEmpty) {
         context.push(
-          '/video-viewer/$mediaIndex',
+          '/video-viewer/$initialIndex',
           extra: MediaViewerExtra(
             posts: postViews,
-            initialIndex: mediaIndex,
+            initialIndex: initialIndex,
             category: category ?? tabConfig!.id,
           ),
         );
       } else {
-        context.push('/video-viewer/$mediaIndex');
+        context.push('/video-viewer/$initialIndex');
       }
       return;
     }
     if (postViews != null && postViews.isNotEmpty) {
+      final isMoment = category == 'moment';
       context.push(
-        '/media-viewer/photo/$mediaIndex',
+        '/media-viewer/photo/$initialIndex',
         extra: MediaViewerExtra(
           posts: postViews,
-          initialIndex: mediaIndex,
+          initialIndex: initialIndex,
           category: category ?? (tabConfig?.id ?? 'photo'),
+          initialImageIndex: isMoment ? mediaIndex : 0,
         ),
       );
     } else {
-      context.push('/media-viewer/photo/$mediaIndex');
+      context.push('/media-viewer/photo/$initialIndex');
     }
   }
 
@@ -968,7 +1031,7 @@ class _MomentPostCardState extends State<_MomentPostCard>
             style: TextStyle(
               fontSize: AppTypography.lg,
               color: fg,
-              height: 1.4,
+              height: AppTypography.bodyLineHeight,
             ),
             maxLines: 10,
             overflow: TextOverflow.ellipsis,

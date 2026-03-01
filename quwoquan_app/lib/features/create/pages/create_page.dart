@@ -20,6 +20,8 @@ import 'package:quwoquan_app/features/create/models/create_media_models.dart';
 import 'package:quwoquan_app/features/create/models/publish_settings_models.dart';
 import 'package:quwoquan_app/features/create/pages/publish_location_selector_page.dart';
 import 'package:quwoquan_app/features/create/services/publish_settings_services.dart';
+import 'package:quwoquan_app/features/create/widgets/publish_circle_select_page.dart';
+import 'package:quwoquan_app/l10n/l10n.dart';
 
 /// 创作页
 ///
@@ -71,6 +73,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
 
   /// 美图缩略图是否展开（超过 4 行时第四行之下显示“显示更多图片”，展开后全部之下显示“收起”）
   bool _photoThumbnailsExpanded = false;
+
+  /// 创作设置行：右侧选项列固定宽度，确保三行右边缘对齐
+  static const double _kTrailingColumnWidth = 140.0;
 
   /// 一行 5 个；4 行 = 19 缩略图 + 1 添加（参考群聊群信息更多群成员/收起）
   static const int _kPhotoThumbnailsPerRow = 5;
@@ -303,7 +308,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(UITextConstants.loadFailed)));
+        ).showSnackBar(SnackBar(content: Text(context.l10n.loadFailed)));
       }
       return;
     }
@@ -314,7 +319,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(UITextConstants.loadFailed)));
+        ).showSnackBar(SnackBar(content: Text(context.l10n.loadFailed)));
       }
       return;
     }
@@ -346,7 +351,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(UITextConstants.loadFailed)));
+        ).showSnackBar(SnackBar(content: Text(context.l10n.loadFailed)));
       }
       return;
     }
@@ -374,7 +379,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(UITextConstants.loadFailed)));
+      ).showSnackBar(SnackBar(content: Text(context.l10n.loadFailed)));
     }
   }
 
@@ -447,40 +452,21 @@ class _CreatePageState extends ConsumerState<CreatePage>
       (_tabData(tab)['visibility']?.toString() ?? 'public').toLowerCase() ==
       'public';
 
-  String _locationDisplay(String tab) {
+  String _locationDisplay(String tab, AppLocalizations l10n) {
     final name = (_tabData(tab)['locationName'] as String? ?? '').trim();
-    return name.isEmpty ? UITextConstants.locationHidden : name;
+    return name.isEmpty ? l10n.locationHidden : name;
   }
 
-  String _circlesDisplay(String tab) {
+  String _circlesDisplay(String tab, AppLocalizations l10n) {
     final names = List<String>.from(
       _tabData(tab)['circleNames'] as List? ?? const <String>[],
     );
-    if (names.isEmpty) return UITextConstants.noCirclesAvailable;
+    if (names.isEmpty) return l10n.noCirclesAvailable;
     return names.join(', ');
   }
 
   Map<String, dynamic> _buildPublishPayloadFields(String tab) {
-    final data = _tabData(tab);
-    final isPublic = _isPublic(tab);
-    final locationName = (data['locationName'] as String? ?? '').trim();
-    final location = Map<String, dynamic>.from(
-      data['location'] as Map? ?? const <String, dynamic>{},
-    );
-    final circleIds = isPublic
-        ? List<String>.from(data['circleIds'] as List? ?? const <String>[])
-        : <String>[];
-    final payload = <String, dynamic>{
-      'visibility': isPublic ? 'public' : 'private',
-      'circleIds': circleIds,
-    };
-    if (locationName.isNotEmpty) {
-      payload['locationName'] = locationName;
-    }
-    if (location.containsKey('latitude') && location.containsKey('longitude')) {
-      payload['location'] = location;
-    }
-    return payload;
+    return PublishSettings.fromMap(_tabData(tab)).toPayloadFields();
   }
 
   int _tabIndexFromType(CreateEntryType? type) {
@@ -1599,17 +1585,18 @@ class _CreatePageState extends ConsumerState<CreatePage>
     required Color fgSecondary,
     required bool isDark,
   }) {
-    final locationText = _locationDisplay(tabKey);
+    final l10n = context.l10n;
+    final locationText = _locationDisplay(tabKey, l10n);
     final isPublic = _isPublic(tabKey);
-    final circlesText = _circlesDisplay(tabKey);
+    final circlesText = _circlesDisplay(tabKey, l10n);
     final blue = AppColors.primaryColor;
-    final isLocationSelected = locationText != UITextConstants.locationHidden;
+    final isLocationSelected = locationText != l10n.locationHidden;
 
     return Column(
       children: [
         _momentListTile(
-          icon: Icons.location_on_outlined,
-          label: UITextConstants.locationLabel,
+          icon: CupertinoIcons.location,
+          label: l10n.locationLabel,
           trailing: locationText,
           trailingColor: isLocationSelected
               ? blue
@@ -1622,16 +1609,15 @@ class _CreatePageState extends ConsumerState<CreatePage>
         _createOptionDivider(isDark),
         _momentListTile(
           icon: CupertinoIcons.globe,
-          label: UITextConstants.isPublicLabel,
+          label: l10n.isPublicLabel,
           fgColor: fgColor,
           fgSecondary: fgSecondary,
           isDark: isDark,
           showChevron: false,
-          trailingWidget: CupertinoTheme(
-            data: CupertinoThemeData(primaryColor: blue),
-            child: CupertinoSwitch(
-              value: isPublic,
-              onChanged: (next) {
+          trailingWidget: CupertinoSwitch(
+            value: isPublic,
+            activeTrackColor: blue,
+            onChanged: (next) {
                 setState(() {
                   final nextData = Map<String, dynamic>.from(_tabData(tabKey));
                   nextData['visibility'] = next ? 'public' : 'private';
@@ -1643,7 +1629,6 @@ class _CreatePageState extends ConsumerState<CreatePage>
                     ..[tabKey] = nextData;
                 });
               },
-            ),
           ),
           onTap: () {
             setState(() {
@@ -1663,9 +1648,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
           _createOptionDivider(isDark),
           _momentListTile(
             icon: CupertinoIcons.person_2,
-            label: UITextConstants.selectPublishCirclesLabel,
+            label: l10n.selectPublishCirclesLabel,
             trailing: circlesText,
-            trailingColor: circlesText == UITextConstants.noCirclesAvailable
+            trailingColor: circlesText == l10n.noCirclesAvailable
                 ? SettingsSemanticConstants.createSettingItemValueColor(isDark)
                 : blue,
             fgColor: fgColor,
@@ -1702,8 +1687,8 @@ class _CreatePageState extends ConsumerState<CreatePage>
 
   Future<void> _selectCircles(String tabKey) async {
     final dataService = ref.read(dataServiceProvider);
-    final circles = await _circleService.listCircles(dataService);
-    if (!mounted || circles.isEmpty) return;
+    final joinedCircles = await _circleService.listCircles(dataService);
+    if (!mounted) return;
     final selectedIds = List<String>.from(
       _tabData(tabKey)['circleIds'] as List? ?? const <String>[],
     );
@@ -1711,8 +1696,8 @@ class _CreatePageState extends ConsumerState<CreatePage>
       _tabData(tabKey)['circleNames'] as List? ?? const <String>[],
     );
     final selected = <String, String>{};
-    if (selectedIds.isEmpty) {
-      for (final c in circles) {
+    if (selectedIds.isEmpty && joinedCircles.isNotEmpty) {
+      for (final c in joinedCircles) {
         selected[c.id] = c.name;
       }
     } else {
@@ -1723,11 +1708,12 @@ class _CreatePageState extends ConsumerState<CreatePage>
       }
     }
     final result = await Navigator.of(context).push<Map<String, String>>(
-      MaterialPageRoute<Map<String, String>>(
+      CupertinoPageRoute<Map<String, String>>(
         fullscreenDialog: true,
-        builder: (context) => _CircleSelectFullscreenPage(
-          circles: circles,
+        builder: (context) => PublishCircleSelectPage(
+          joinedCircles: joinedCircles,
           initialSelected: selected,
+          recommendedCircles: mockRecommendedCircles,
         ),
       ),
     );
@@ -1764,38 +1750,63 @@ class _CreatePageState extends ConsumerState<CreatePage>
           children: [
             Icon(icon, size: AppSpacing.iconMedium, color: fgColor),
             SizedBox(width: AppSpacing.interGroupSm),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize:
-                    SettingsSemanticConstants.createSettingItemLabelFontSize,
-                fontWeight: FontWeight.normal,
-                color: fgColor,
+            Expanded(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize:
+                            SettingsSemanticConstants.createSettingItemLabelFontSize,
+                        fontWeight: FontWeight.normal,
+                        color: fgColor,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  SizedBox(width: AppSpacing.interGroupSm),
+                  SizedBox(
+                    width: _kTrailingColumnWidth,
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          if (trailingWidget != null) trailingWidget,
+                          if (trailing != null)
+                            Flexible(
+                              child: Text(
+                                trailing,
+                                style: TextStyle(
+                                  fontSize:
+                                      SettingsSemanticConstants.createSettingItemValueFontSize,
+                                  color:
+                                      trailingColor ??
+                                      SettingsSemanticConstants.createSettingItemValueColor(
+                                        isDark,
+                                      ),
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.end,
+                              ),
+                            ),
+                          if (showChevron) ...[
+                            SizedBox(width: AppSpacing.interGroupXs),
+                            Icon(
+                              Icons.chevron_right,
+                              size: AppSpacing.iconMedium,
+                              color: fgSecondary,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const Spacer(),
-            ...?(trailingWidget == null ? null : <Widget>[trailingWidget]),
-            if (trailingWidget == null && trailing != null)
-              Text(
-                trailing,
-                style: TextStyle(
-                  fontSize:
-                      SettingsSemanticConstants.createSettingItemValueFontSize,
-                  color:
-                      trailingColor ??
-                      SettingsSemanticConstants.createSettingItemValueColor(
-                        isDark,
-                      ),
-                ),
-              ),
-            if (trailing != null || trailingWidget != null)
-              SizedBox(width: AppSpacing.interGroupXs),
-            if (showChevron)
-              Icon(
-                Icons.chevron_right,
-                size: AppSpacing.iconMedium,
-                color: fgSecondary,
-              ),
           ],
         ),
       ),
@@ -2941,9 +2952,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
             ? Image.file(
                 File(path),
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Center(
+                errorBuilder: (ctx, error, stackTrace) => Center(
                   child: Text(
-                    UITextConstants.loadFailed,
+                    ctx.l10n.loadFailed,
                     style: TextStyle(color: fgSecondary),
                   ),
                 ),
@@ -2951,9 +2962,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
             : Image.network(
                 path,
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Center(
+                errorBuilder: (ctx, error, stackTrace) => Center(
                   child: Text(
-                    UITextConstants.loadFailed,
+                    ctx.l10n.loadFailed,
                     style: TextStyle(color: fgSecondary),
                   ),
                 ),
@@ -3344,112 +3355,6 @@ class _CreatePageState extends ConsumerState<CreatePage>
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// 全屏圈子选择页：顶部居中「选择圈子」、底部取消+完成、默认全选
-class _CircleSelectFullscreenPage extends StatefulWidget {
-  const _CircleSelectFullscreenPage({
-    required this.circles,
-    required this.initialSelected,
-  });
-
-  final List<CreateCircleOption> circles;
-  final Map<String, String> initialSelected;
-
-  @override
-  State<_CircleSelectFullscreenPage> createState() =>
-      _CircleSelectFullscreenPageState();
-}
-
-class _CircleSelectFullscreenPageState
-    extends State<_CircleSelectFullscreenPage> {
-  late Map<String, String> _selected;
-
-  @override
-  void initState() {
-    super.initState();
-    _selected = Map<String, String>.from(widget.initialSelected);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final fgPrimary = isDark ? Colors.white : Colors.black87;
-    final blue = AppColors.primaryColor;
-    return Scaffold(
-      appBar: AppBar(
-        centerTitle: true,
-        title: Text(
-          UITextConstants.selectCircle,
-          style: TextStyle(
-            fontSize: AppTypography.lg,
-            fontWeight: FontWeight.w600,
-            color: fgPrimary,
-          ),
-        ),
-        leading: IconButton(
-          icon: Icon(Icons.close, color: fgPrimary),
-          onPressed: () =>
-              Navigator.of(context).pop<Map<String, String>?>(null),
-        ),
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              itemCount: widget.circles.length,
-              itemBuilder: (context, index) {
-                final circle = widget.circles[index];
-                final checked = _selected.containsKey(circle.id);
-                return CheckboxListTile(
-                  value: checked,
-                  activeColor: blue,
-                  title: Text(circle.name),
-                  onChanged: (v) {
-                    setState(() {
-                      if (v == true) {
-                        _selected[circle.id] = circle.name;
-                      } else {
-                        _selected.remove(circle.id);
-                      }
-                    });
-                  },
-                );
-              },
-            ),
-          ),
-          SafeArea(
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: SettingsSemanticConstants.blockHorizontalPadding,
-                vertical: AppSpacing.interGroupMd,
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextButton(
-                      onPressed: () =>
-                          Navigator.of(context).pop<Map<String, String>?>(null),
-                      child: Text(UITextConstants.cancel),
-                    ),
-                  ),
-                  SizedBox(width: AppSpacing.interGroupMd),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: () => Navigator.of(
-                        context,
-                      ).pop<Map<String, String>>(_selected),
-                      child: Text(UITextConstants.imageEditDone),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

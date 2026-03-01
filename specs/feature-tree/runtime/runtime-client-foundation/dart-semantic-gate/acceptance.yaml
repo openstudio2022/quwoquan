@@ -1,0 +1,42 @@
+version: 1
+feature: "dart-semantic-gate"
+level: "L3_subfeature"
+template: "A1-A8"
+tree_context:
+  feature_level: "L3_subfeature"
+  feature_path: "capability.runtime.feature.runtime-client-foundation.subfeature.dart-semantic-gate"
+  parent_path: "capability.runtime.feature.runtime-client-foundation"
+level_acceptance:
+  focus_groups:
+    - A1_functional
+    - A7_contract_metadata_consistency
+  A1:
+    criteria: "verify_dart_semantic.py 存在且能检出 width/height/leadingSize 等硬编码"
+    status: implemented
+    linked_tasks: [M1]
+    tests:
+      - file: scripts/verify_dart_semantic.py
+        functions: [main, scan_file]
+  A2:
+    criteria: "gate_repo.sh run_app 调用 verify_dart_semantic"
+    status: implemented
+    linked_tasks: [M2]
+    tests: []
+  A3:
+    criteria: "02-dart-coding 含 width/height/leadingSize 禁止示例与触控尺寸 API 表"
+    status: implemented
+    linked_tasks: [M3]
+    tests: []
+  A4:
+    criteria: "FF 模板含编码规范小节；opsx-apply 对 Dart 变更执行语义检查"
+    status: implemented
+    linked_tasks: [M4]
+    tests: []
+  A7:
+    criteria: "06-semantic-consistency-audit、00_MASTER_DEVELOPMENT_FLOW 与特性树一致"
+    status: implemented
+    linked_tasks: [M3]
+    tests: []
+execution:
+  local_gate: "python3 scripts/verify_dart_semantic.py && flutter analyze quwoquan_app/lib/"
+  full_gate: "make gate"

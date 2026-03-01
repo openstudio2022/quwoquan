@@ -291,6 +291,44 @@
   "publish": "发表",
   "publishAction": "发布",
   "locationLabel": "所在位置",
+  "locationHidden": "不显示位置",
+  "isPublicLabel": "是否公开",
+  "visibilityPrivate": "私密",
+  "selectPublishCirclesLabel": "发布的圈子",
+  "noCirclesAvailable": "加入圈子，发现同好",
+  "circleJoinedSection": "已加入",
+  "circleRecommendedSection": "推荐加入",
+  "circleMemberCountJoined": "{count} 人 · 已加入",
+  "@circleMemberCountJoined": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "circleFollowButton": "+ 关注",
+  "circleRecommendedSubtitle": "{reason} · {count} 人",
+  "@circleRecommendedSubtitle": {
+    "placeholders": {
+      "reason": {"type": "String"},
+      "count": {"type": "int"}
+    }
+  },
+  "circleJoinedLabel": "已加入",
+  "goToDiscovery": "去发现",
+  "locationNearbyTitle": "附近位置",
+  "locationFetchingResult": "正在获取结果",
+  "locationSearchingNearby": "正在搜索附近位置",
+  "locationLoadFailed": "暂时无法获取当前位置，请稍后重试",
+  "locationPermissionRequired": "请开启定位权限后重试",
+  "locationUpstreamTimeout": "位置服务响应超时，请稍后重试",
+  "locationInternalError": "位置服务异常，请稍后重试",
+  "locationAppPermissionRequired": "请在设置中为本应用开启定位权限",
+  "locationOpenSettings": "去设置",
+  "locationSearchTitle": "搜索位置",
+  "locationSearchHint": "搜索地点",
+  "locationSearchEmpty": "未找到相关位置",
+  "locationSearchKeywordRequired": "搜索关键词不能为空",
   "remindWhoLabel": "提醒谁看",
   "whoCanSeeLabel": "谁可以看",
   "visibilityPublic": "公开",

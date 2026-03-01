@@ -823,6 +823,85 @@ class AppLocalizationsZh extends AppLocalizations {
   String get locationLabel => '所在位置';
 
   @override
+  String get locationHidden => '不显示位置';
+
+  @override
+  String get isPublicLabel => '是否公开';
+
+  @override
+  String get visibilityPrivate => '私密';
+
+  @override
+  String get selectPublishCirclesLabel => '发布的圈子';
+
+  @override
+  String get noCirclesAvailable => '加入圈子，发现同好';
+
+  @override
+  String get circleJoinedSection => '已加入';
+
+  @override
+  String get circleRecommendedSection => '推荐加入';
+
+  @override
+  String circleMemberCountJoined(int count) {
+    return '$count 人 · 已加入';
+  }
+
+  @override
+  String get circleFollowButton => '+ 关注';
+
+  @override
+  String circleRecommendedSubtitle(String reason, int count) {
+    return '$reason · $count 人';
+  }
+
+  @override
+  String get circleJoinedLabel => '已加入';
+
+  @override
+  String get goToDiscovery => '去发现';
+
+  @override
+  String get locationNearbyTitle => '附近位置';
+
+  @override
+  String get locationFetchingResult => '正在获取结果';
+
+  @override
+  String get locationSearchingNearby => '正在搜索附近位置';
+
+  @override
+  String get locationLoadFailed => '暂时无法获取当前位置，请稍后重试';
+
+  @override
+  String get locationPermissionRequired => '请开启定位权限后重试';
+
+  @override
+  String get locationUpstreamTimeout => '位置服务响应超时，请稍后重试';
+
+  @override
+  String get locationInternalError => '位置服务异常，请稍后重试';
+
+  @override
+  String get locationAppPermissionRequired => '请在设置中为本应用开启定位权限';
+
+  @override
+  String get locationOpenSettings => '去设置';
+
+  @override
+  String get locationSearchTitle => '搜索位置';
+
+  @override
+  String get locationSearchHint => '搜索地点';
+
+  @override
+  String get locationSearchEmpty => '未找到相关位置';
+
+  @override
+  String get locationSearchKeywordRequired => '搜索关键词不能为空';
+
+  @override
   String get remindWhoLabel => '提醒谁看';
 
   @override

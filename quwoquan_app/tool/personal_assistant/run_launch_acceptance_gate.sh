@@ -68,9 +68,9 @@ flutter analyze \
   lib/personal_assistant/engine/react_runtime.dart \
   lib/core/constants/app_concept_constants.dart \
   lib/core/constants/ui_text_constants.dart \
-  test/features/chat/chat_detail_page_assistant_ui_regression_test.dart
+  test/ui/chat/widgets/chat_detail_page_assistant_ui_regression_test.dart
 
 echo "[gate] Step 3/3: flutter tests"
-flutter test test/features/chat/chat_detail_page_assistant_ui_regression_test.dart
+flutter test test/ui/chat/widgets/chat_detail_page_assistant_ui_regression_test.dart
 
 echo "[gate] PASS: launch acceptance gate passed"

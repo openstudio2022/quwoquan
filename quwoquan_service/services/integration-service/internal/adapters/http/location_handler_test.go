@@ -10,6 +10,7 @@ import (
 
 	"quwoquan_service/services/integration-service/internal/application"
 	"quwoquan_service/services/integration-service/internal/domain/location/model"
+	"quwoquan_service/services/integration-service/internal/generated"
 )
 
 type fakeProviderClient struct {
@@ -49,7 +50,7 @@ func TestNearbyUsesDefaultCenterWhenLatLngMissing(t *testing.T) {
 	)
 
 	handler := NewHandler(svc, 3000, 20, 20, 30.1, 104.2).Routes()
-	req := httptest.NewRequest(http.MethodGet, "/v1/integration/location/nearby?limit=1", nil)
+	req := httptest.NewRequest(http.MethodGet, generated.NearbyPath+"?"+generated.QueryParamLimit+"=1", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -69,15 +70,20 @@ func TestSearchEmptyQueryReturnsBadRequest(t *testing.T) {
 		nil,
 	)
 	handler := NewHandler(svc, 3000, 20, 20, 30.1, 104.2).Routes()
-	req := httptest.NewRequest(http.MethodGet, "/v1/integration/location/search", nil)
+	req := httptest.NewRequest(http.MethodGet, generated.SearchPath, nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d, want=400 body=%s", rr.Code, rr.Body.String())
 	}
+	var body map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &body)
+	if body["code"] != generated.ErrInvalidArgument.Error() {
+		t.Fatalf("code=%v, want %s", body["code"], generated.ErrInvalidArgument.Error())
+	}
 }
 
-func TestNearbyBothProvidersFailReturns503(t *testing.T) {
+func TestNearbyBothProvidersFailReturns500WithIntegrationErrorCode(t *testing.T) {
 	fail := &fakeProviderClient{
 		name: model.ProviderBaidu,
 		nearbyFn: func(model.NearbyQuery) ([]model.POI, error) {
@@ -106,15 +112,64 @@ func TestNearbyBothProvidersFailReturns503(t *testing.T) {
 		nil,
 	)
 	handler := NewHandler(svc, 3000, 20, 20, 30.1, 104.2).Routes()
-	req := httptest.NewRequest(http.MethodGet, "/v1/integration/location/nearby", nil)
+	req := httptest.NewRequest(http.MethodGet, generated.NearbyPath, nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
-	if rr.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status=%d, want=503 body=%s", rr.Code, rr.Body.String())
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d, want=500 body=%s", rr.Code, rr.Body.String())
 	}
 	var body map[string]any
 	_ = json.Unmarshal(rr.Body.Bytes(), &body)
-	if body["code"] == nil {
-		t.Fatalf("error response missing code: %v", body)
+	if body["code"] != generated.ErrInternalError.Error() {
+		t.Fatalf("code=%v, want %s", body["code"], generated.ErrInternalError.Error())
+	}
+}
+
+func TestNearbyNoProvidersReturns400WithLocationUnavailableCode(t *testing.T) {
+	svc := application.NewService(
+		model.ProviderBaidu,
+		model.ProviderAMap,
+		map[model.Provider]model.ProviderClient{},
+		nil,
+	)
+	handler := NewHandler(svc, 3000, 20, 20, 30.1, 104.2).Routes()
+	req := httptest.NewRequest(http.MethodGet, generated.NearbyPath, nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d, want=400 body=%s", rr.Code, rr.Body.String())
+	}
+	var body map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &body)
+	if body["code"] != generated.ErrLocationUnavailable.Error() {
+		t.Fatalf("code=%v, want %s", body["code"], generated.ErrLocationUnavailable.Error())
+	}
+}
+
+func TestNearbyTimeoutReturns504WithUpstreamTimeoutCode(t *testing.T) {
+	timeoutClient := &fakeProviderClient{
+		name: model.ProviderBaidu,
+		nearbyFn: func(model.NearbyQuery) ([]model.POI, error) {
+			return nil, context.DeadlineExceeded
+		},
+		searchFn: func(model.SearchQuery) ([]model.POI, error) { return nil, nil },
+	}
+	svc := application.NewService(
+		model.ProviderBaidu,
+		model.ProviderAMap,
+		map[model.Provider]model.ProviderClient{model.ProviderBaidu: timeoutClient},
+		nil,
+	)
+	handler := NewHandler(svc, 3000, 20, 20, 30.1, 104.2).Routes()
+	req := httptest.NewRequest(http.MethodGet, generated.NearbyPath, nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusGatewayTimeout {
+		t.Fatalf("status=%d, want=504 body=%s", rr.Code, rr.Body.String())
+	}
+	var body map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &body)
+	if body["code"] != generated.ErrUpstreamTimeout.Error() {
+		t.Fatalf("code=%v, want %s", body["code"], generated.ErrUpstreamTimeout.Error())
 	}
 }

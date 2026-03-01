@@ -127,6 +127,7 @@ components:
             - ORCH
             - CONTENT
             - CIRCLE
+            - INTEGRATION
             - USER
             - CHAT
             - OPS

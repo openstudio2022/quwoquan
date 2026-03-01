@@ -1,5 +1,6 @@
-// ignore_for_file: unused_field, prefer_final_fields
+// ignore_for_file: unused_field, prefer_final_fields, unused_element
 
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,6 +13,7 @@ import 'package:quwoquan_app/components/more_actions_popup/configs/media_post_co
 import 'package:quwoquan_app/components/comment_system/comment_viewer.dart';
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 import 'package:quwoquan_app/components/more_actions_popup/more_action_popup.dart';
+import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagement_bar.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/media_viewer_toolbar.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/media_assistant_panel.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/media_caption_widgets.dart';
@@ -50,6 +52,8 @@ class ImmersiveVideoViewer extends ConsumerStatefulWidget {
   final VoidCallback? onAssistantClick;
   /// 滑动接近末尾时回调（用于加载更多）
   final VoidCallback? onNearEnd;
+  /// 'full'（默认）| 'backOnly'：backOnly 时顶栏仅返回、更多
+  final String toolbarMode;
 
   const ImmersiveVideoViewer({
     super.key,
@@ -81,6 +85,7 @@ class ImmersiveVideoViewer extends ConsumerStatefulWidget {
     this.onHeroAnimationComplete,
     this.onAssistantClick,
     this.onNearEnd,
+    this.toolbarMode = 'full',
   });
 
   @override
@@ -108,6 +113,8 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
   int _savesCount = 0;
   int _commentsCount = 0;
   int _sharesCount = 0;
+  bool _showFollowButton = false;
+  Timer? _followButtonTimer;
   bool _isPureMode = false;
   final Map<String, bool> _expandedCaptions = {};
   final Map<String, double> _imageAspectRatios = {};
@@ -143,6 +150,7 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
     _assistantInputController.dispose();
     _assistantScrollController.dispose();
     _assistantInputFocusNode.dispose();
+    _followButtonTimer?.cancel();
     _restoreSystemUiMode();
     super.dispose();
   }
@@ -172,7 +180,21 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
       _savesCount = widget.getPostBookmarksCount?.call(currentPost) ?? 0;
       _commentsCount = currentPost.commentsCount;
       _sharesCount = currentPost.sharesCount;
+      _startFollowDelay();
     }
+  }
+
+  void _startFollowDelay() {
+    _followButtonTimer?.cancel();
+    if (mounted) {
+      setState(() => _showFollowButton = false);
+    } else {
+      _showFollowButton = false;
+    }
+    _followButtonTimer = Timer(const Duration(seconds: 5), () {
+      if (!mounted) return;
+      setState(() => _showFollowButton = true);
+    });
   }
 
   void _startAutoHideTimer() {
@@ -753,20 +775,28 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
                     onAuthorTap: _handleAuthorTap,
                     onMore: _handleMoreClick,
                     showPosition: widget.posts.length > 1,
+                    toolbarMode: widget.toolbarMode,
                   ),
                   const Spacer(),
-                  MediaViewerBottomBar(
-                    shareCount: _sharesCount,
-                    commentCount: _commentsCount,
+                  ImmersiveEngagementBar(
+                    avatarUrl: _getAuthorAvatar(currentPost) ?? '',
+                    displayName: _getAuthorName(currentPost),
+                    circleName: UITextConstants.discoveryRailMoment,
                     likeCount: _likesCount,
-                    saveCount: _savesCount,
+                    shareCount: _sharesCount,
+                    favoriteCount: _savesCount,
+                    commentCount: _commentsCount,
                     isLiked: _isLiked,
                     isSaved: _isSaved,
-                    onShare: _handleShareClick,
-                    onComment: _handleCommentsClick,
-                    onLike: _handleLikeClick,
-                    onSave: _handleSaveClick,
-                    onAssistant: _handleAssistantClick,
+                    isFollowing: _isFollowing,
+                    onUserTap: _handleAuthorTap,
+                    onCircleTap: () {},
+                    onFollowTap: _handleFollowClick,
+                    onLikeTap: _handleLikeClick,
+                    onFavoriteTap: _handleSaveClick,
+                    onCommentTap: _handleCommentsClick,
+                    onShareTap: _handleShareClick,
+                    showFollowButton: _showFollowButton,
                   ),
                 ],
               ),

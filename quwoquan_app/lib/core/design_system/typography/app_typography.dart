@@ -24,6 +24,11 @@ class AppTypography {
   /// 欢迎页主标题（hero）
   static const double welcomeHeroTitle = 48.0;
 
+  /// 正文行高倍数（TextStyle.height）
+  static const double bodyLineHeight = 1.4;
+  /// 宽松行高倍数（展开文本等）
+  static const double lineHeightRelaxed = 1.5;
+
   static const FontWeight normal = FontWeight.w400;
   static const FontWeight medium = FontWeight.w500;
   static const FontWeight semiBold = FontWeight.w600;

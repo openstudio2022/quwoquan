@@ -230,8 +230,9 @@ class MockContentRepository implements ContentRepository {
       'authorId': 'mock_user',
       'createdAt': DateTime.now().toIso8601String(),
     };
-    if (replyToCommentId != null)
+    if (replyToCommentId != null) {
       comment['replyToCommentId'] = replyToCommentId;
+    }
     commentsStub = [...commentsStub, comment];
     countersStubCommentCount++;
     return comment;

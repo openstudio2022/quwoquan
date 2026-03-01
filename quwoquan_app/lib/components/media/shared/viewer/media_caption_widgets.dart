@@ -82,25 +82,49 @@ class MediaCaptionBlock extends StatelessWidget {
 
         return GestureDetector(
           onTap: onToggle,
-          child: Text.rich(
-            TextSpan(
-              children: [
-                TextSpan(
-                  text: isExpanded
-                      ? caption
-                      : _truncateCaption(caption, overflowPainter, constraints.maxWidth),
-                  style: captionStyle,
-                ),
-                TextSpan(
-                  text: isExpanded ? UITextConstants.collapse : UITextConstants.fullText,
-                  style: captionStyle.copyWith(
-                    color: AppColors.primaryColor,
-                    fontWeight: FontWeight.w600,
+          child: isExpanded
+              ? ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: (captionStyle.fontSize ?? AppTypography.base) * 12,
+                  ),
+                  child: SingleChildScrollView(
+                    child: Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(text: caption, style: captionStyle),
+                          TextSpan(
+                            text: UITextConstants.collapse,
+                            style: captionStyle.copyWith(
+                              color: AppColors.primaryColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                )
+              : Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: _truncateCaption(
+                          caption,
+                          overflowPainter,
+                          constraints.maxWidth,
+                        ),
+                        style: captionStyle,
+                      ),
+                      TextSpan(
+                        text: UITextConstants.fullText,
+                        style: captionStyle.copyWith(
+                          color: AppColors.primaryColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
-          ),
         );
       },
     );

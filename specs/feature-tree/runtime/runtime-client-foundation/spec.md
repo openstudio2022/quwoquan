@@ -8,6 +8,9 @@
 |---|---|
 | `app-locale-infrastructure` | 国际化（i18n）基础设施：ARB 文件 + `flutter gen-l10n` 代码生成 + 字符串常量迁移 |
 | `app-theme-infrastructure` | 主题基础设施：dark/light 模式切换机制（待后续交付） |
+| `error-permission-display-semantics` | 云端/网络错误与权限类统一展示语义：内联 vs SnackBar、权限卡片、token 约束（规范见 `specs/ux/error-and-permission-semantics.md`） |
+| `page-layout-semantics` | 页面布局统一语义：Modal/Stack leading、选择器模式、设置页结构（规范见 `specs/ux/page-layout-semantics.md`；不含用户/作者/圈子主页） |
+| `dart-semantic-gate` | Dart 编码规范自动化守门：verify_dart_semantic 脚本 + gate 集成 + 规则增强 + FF 前置 |
 
 ## 职责边界
 
@@ -18,7 +21,7 @@
 ## 与父/子节点关系
 
 - 父节点：`runtime` L1（基础设施与运行时层）
-- 子节点：`app-locale-infrastructure`（L3）、`app-theme-infrastructure`（L3，待建）
+- 子节点：`app-locale-infrastructure`（L3）、`app-theme-infrastructure`（L3，待建）、`error-permission-display-semantics`（L3）、`page-layout-semantics`（L3）、`dart-semantic-gate`（L3）
 
 ## 约束
 

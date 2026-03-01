@@ -352,12 +352,14 @@ class UITextConstants {
   static const String visibilityPublic = '公开';
   static const String visibilityPrivate = '私密';
   static const String isPublicLabel = '是否公开';
-  static const String selectPublishCirclesLabel = '选择要发布的圈子';
-  static const String noCirclesAvailable = '暂无可选圈子';
+  /// 创作页圈子入口/空态；国际化请用 l10n.selectPublishCirclesLabel / l10n.noCirclesAvailable
+  static const String selectPublishCirclesLabel = '发布的圈子';
+  static const String noCirclesAvailable = '加入圈子，发现同好';
   static const String locationSearchHint = '搜索地点';
   static const String locationNearbyTitle = '附近位置';
   static const String locationSearchingNearby = '正在搜索附近位置';
-  static const String locationLoadFailed = '暂时无法获取附近位置，请稍后重试';
+  /// 与 integration/location/errors.location_unavailable 保持一致
+  static const String locationLoadFailed = '暂时无法获取当前位置，请稍后重试';
   static const String locationSearchTitle = '搜索位置';
   static const String locationSearchEmpty = '未找到相关位置';
   static const String circleSelectTitle = '选择圈子';

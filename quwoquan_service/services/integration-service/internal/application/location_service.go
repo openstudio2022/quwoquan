@@ -6,8 +6,8 @@ import (
 	"log"
 	"strings"
 
-	rerrors "quwoquan_service/runtime/errors"
 	"quwoquan_service/services/integration-service/internal/domain/location/model"
+	"quwoquan_service/services/integration-service/internal/generated"
 )
 
 type Service struct {
@@ -54,11 +54,7 @@ func (s *Service) withFallback(
 	_ = ctx
 	providers := s.providerSequence()
 	if len(providers) == 0 {
-		return nil, rerrors.NewUnavailable(
-			rerrors.ModuleUnknown,
-			"位置服务暂不可用，请稍后重试",
-			"no location providers configured",
-		)
+		return nil, generated.AppErrorFromLocationUnavailable("no location providers configured")
 	}
 
 	var lastErr error
@@ -86,11 +82,10 @@ func (s *Service) withFallback(
 	if lastErr != nil {
 		debugMessage = fmt.Sprintf("location provider attempts exhausted: %v", lastErr)
 	}
-	return nil, rerrors.NewUnavailable(
-		rerrors.ModuleUnknown,
-		"位置服务暂不可用，请稍后重试",
-		debugMessage,
-	)
+	if generated.IsTimeout(lastErr) {
+		return nil, generated.AppErrorFromUpstreamTimeout(debugMessage)
+	}
+	return nil, generated.AppErrorFromInternalError(debugMessage)
 }
 
 func (s *Service) providerSequence() []model.Provider {

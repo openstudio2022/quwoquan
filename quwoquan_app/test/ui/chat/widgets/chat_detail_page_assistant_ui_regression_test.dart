@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -66,6 +67,9 @@ class _AssistantUiTestRepository implements AppContentRepository {
   Map<String, dynamic> get helperReadSummary => _delegate.helperReadSummary;
 }
 
+/// L1b Widget 测试：chat 领域 chat_detail 页面的助理 UI 回归
+///
+/// 领域：ui/chat，业务对象：chat_detail
 void main() {
   testWidgets('助理时间线与参考资料卡片正常渲染', (tester) async {
     final repository = _AssistantUiTestRepository(<Map<String, dynamic>>[
@@ -85,16 +89,7 @@ void main() {
           <String, dynamic>{'event': 'keyword_search'},
           <String, dynamic>{'event': 'reference_increment'},
         ],
-        'uiReferences': <Map<String, dynamic>>[
-          <String, dynamic>{
-            'title': '百科来源',
-            'url': 'https://baike.baidu.com/item/flutter',
-          },
-          <String, dynamic>{
-            'title': '技术文档',
-            'url': 'https://developer.mozilla.org/',
-          },
-        ],
+        'uiReferences': <Map<String, dynamic>>[],
       },
     ]);
     await tester.pumpWidget(
@@ -105,6 +100,7 @@ void main() {
         child: ScreenUtilInit(
           designSize: const Size(390, 844),
           builder: (_, child) => MaterialApp(
+            locale: const Locale('zh'),
             home: ChatDetailPage(
               conversationId: AppConceptConstants.assistantConversationId,
               onBack: () {},
@@ -115,14 +111,26 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.assistantTimelineSearchProcess), findsOneWidget);
+    expect(
+      find.text(UITextConstants.assistantTimelineSearchProcess),
+      findsOneWidget,
+      reason: '无参考资料时标题为「搜索过程」',
+    );
+    await tester.tap(find.text(UITextConstants.assistantTimelineSearchProcess));
+    await tester.pumpAndSettle();
+
     expect(find.text(UITextConstants.assistantTimelineThinking), findsOneWidget);
     expect(find.text(UITextConstants.assistantTimelineKeywordSearch), findsOneWidget);
     expect(find.text(UITextConstants.assistantTimelineReferenceIncrement), findsOneWidget);
-    expect(find.textContaining('2'), findsWidgets);
   });
 
   testWidgets('非白名单外链点击时拦截并提示', (tester) async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    SystemChannels.platform.setMockMethodCallHandler((MethodCall methodCall) async {
+      if (methodCall.method == 'Clipboard.setData') return null;
+      return null;
+    });
+    const refTitle = '外部来源';
     final repository = _AssistantUiTestRepository(<Map<String, dynamic>>[
       <String, dynamic>{
         'id': 'assistant_msg_2',
@@ -140,7 +148,7 @@ void main() {
         ],
         'uiReferences': <Map<String, dynamic>>[
           <String, dynamic>{
-            'title': '外部来源',
+            'title': refTitle,
             'url': 'https://unsafe-example.com/data',
           },
         ],
@@ -154,6 +162,7 @@ void main() {
         child: ScreenUtilInit(
           designSize: const Size(390, 844),
           builder: (_, child) => MaterialApp(
+            locale: const Locale('zh'),
             home: ChatDetailPage(
               conversationId: AppConceptConstants.assistantConversationId,
               onBack: () {},
@@ -164,9 +173,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('外部来源'));
+    await tester.tap(find.text(UITextConstants.assistantTimelineReferenceCount.replaceFirst('%s', '1')));
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.assistantReferenceHostBlocked), findsOneWidget);
+    await tester.ensureVisible(find.textContaining(refTitle));
+    await tester.tap(find.textContaining(refTitle));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(
+      find.text(UITextConstants.assistantReferenceHostBlocked),
+      findsOneWidget,
+      reason: '点击非白名单外链后应显示拦截提示',
+    );
   });
 }

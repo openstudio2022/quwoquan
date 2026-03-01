@@ -1,0 +1,39 @@
+version: 1
+archived: true
+archived_at: "2026-03-01T07:10:00Z"
+feature: "error-permission-display-semantics"
+level: "L3_subfeature"
+template: "A1-A8"
+tree_context:
+  feature_level: "L3_subfeature"
+  feature_path: "capability.runtime.feature.runtime-client-foundation.subfeature.error-permission-display-semantics"
+  parent_path: "capability.runtime.feature.runtime-client-foundation"
+level_acceptance:
+  focus_groups:
+    - A1_functional
+    - A7_contract_metadata_consistency
+  notes: "云端/网络错误与权限类统一展示语义；规范见 specs/ux/error-and-permission-semantics.md"
+  A1:
+    criteria: "云端阻塞性错误使用内联占位，次要错误使用 SnackBar"
+    status: implemented
+    linked_tasks: [cloud-network-error-display-contract]
+    tests: []
+  A2:
+    criteria: "错误/权限展示均使用 AppTypography、AppSpacing、AppColors"
+    status: implemented
+    linked_tasks: [cloud-network-error-display-contract, permission-card-display-contract]
+    tests: []
+  A3:
+    criteria: "权限永久拒绝时展示「去设置」主操作"
+    status: implemented
+    linked_tasks: [permission-card-display-contract]
+    tests: []
+  A7:
+    criteria: "specs/ux/error-and-permission-semantics.md 与 07-error-permission-semantics.mdc 与特性树一致"
+    status: implemented
+    linked_tasks: []
+    tests: []
+execution:
+  # 迁移后 lib/features/create/ → lib/ui/content/entry/（specs/01_APP_DIRECTORY_MIGRATION_TASKS）
+  local_gate: "flutter analyze lib/features/create/ lib/ui/discovery/"
+  full_gate: "make gate"

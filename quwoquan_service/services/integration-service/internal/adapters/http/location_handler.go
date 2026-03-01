@@ -9,6 +9,7 @@ import (
 	rerrors "quwoquan_service/runtime/errors"
 	"quwoquan_service/services/integration-service/internal/application"
 	"quwoquan_service/services/integration-service/internal/domain/location/model"
+	"quwoquan_service/services/integration-service/internal/generated"
 )
 
 type Handler struct {
@@ -44,8 +45,8 @@ func (h *Handler) Routes() http.Handler {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
-	mux.HandleFunc("/v1/integration/location/nearby", h.handleNearby)
-	mux.HandleFunc("/v1/integration/location/search", h.handleSearch)
+	mux.HandleFunc(generated.NearbyPath, h.handleNearby)
+	mux.HandleFunc(generated.SearchPath, h.handleSearch)
 	return mux
 }
 
@@ -56,16 +57,16 @@ func (h *Handler) handleNearby(w http.ResponseWriter, r *http.Request) {
 	}
 
 	lat := parseOptionalFloatWithFallback(
-		r.URL.Query().Get("lat"),
+		r.URL.Query().Get(generated.QueryParamLat),
 		h.defaultLatitude,
 	)
 	lng := parseOptionalFloatWithFallback(
-		r.URL.Query().Get("lng"),
+		r.URL.Query().Get(generated.QueryParamLng),
 		h.defaultLongitude,
 	)
 
-	radius := parsePositiveInt(r.URL.Query().Get("radiusMeters"), h.defaultNearbyRadius)
-	limit := parsePositiveInt(r.URL.Query().Get("limit"), h.defaultNearbyLimit)
+	radius := parsePositiveInt(r.URL.Query().Get(generated.QueryParamRadiusMeters), h.defaultNearbyRadius)
+	limit := parsePositiveInt(r.URL.Query().Get(generated.QueryParamLimit), h.defaultNearbyLimit)
 	items, serviceErr := h.service.Nearby(r.Context(), model.NearbyQuery{
 		Lat:          lat,
 		Lng:          lng,
@@ -76,7 +77,7 @@ func (h *Handler) handleNearby(w http.ResponseWriter, r *http.Request) {
 		rerrors.WriteHTTPError(w, serviceErr, rerrors.HTTPWriteOptions{})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	writeJSON(w, http.StatusOK, map[string]any{generated.ResponseListKey: poiToClientItems(items)})
 }
 
 func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
@@ -85,22 +86,22 @@ func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	query := strings.TrimSpace(r.URL.Query().Get(generated.QueryParamQ))
 	if query == "" {
 		rerrors.WriteHTTPError(
 			w,
-			rerrors.NewInvalidArgument(rerrors.ModuleUnknown, "搜索关键词不能为空", "query parameter q is empty"),
+			generated.AppErrorFromInvalidArgument("query parameter " + generated.QueryParamQ + " is empty"),
 			rerrors.HTTPWriteOptions{},
 		)
 		return
 	}
 
-	lat, _ := parseOptionalFloat(r.URL.Query().Get("lat"))
-	lng, _ := parseOptionalFloat(r.URL.Query().Get("lng"))
-	limit := parsePositiveInt(r.URL.Query().Get("limit"), h.defaultSearchLimit)
+	lat, _ := parseOptionalFloat(r.URL.Query().Get(generated.QueryParamLat))
+	lng, _ := parseOptionalFloat(r.URL.Query().Get(generated.QueryParamLng))
+	limit := parsePositiveInt(r.URL.Query().Get(generated.QueryParamLimit), h.defaultSearchLimit)
 	items, serviceErr := h.service.Search(r.Context(), model.SearchQuery{
 		Query:    query,
-		CityCode: strings.TrimSpace(r.URL.Query().Get("cityCode")),
+		CityCode: strings.TrimSpace(r.URL.Query().Get(generated.QueryParamCityCode)),
 		Lat:      lat,
 		Lng:      lng,
 		Limit:    limit,
@@ -109,7 +110,29 @@ func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 		rerrors.WriteHTTPError(w, serviceErr, rerrors.HTTPWriteOptions{})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	writeJSON(w, http.StatusOK, map[string]any{generated.ResponseListKey: poiToClientItems(items)})
+}
+
+// poiToClientItems 按 integration/location/projections/location_poi client_projection 输出，
+// 不暴露 provider，与 LocationPoiDto 字段对齐。
+func poiToClientItems(items []model.POI) []map[string]any {
+	out := make([]map[string]any, len(items))
+	for i, p := range items {
+		m := map[string]any{
+			generated.FieldKeyId:       p.ID,
+			generated.FieldKeyName:     p.Name,
+			generated.FieldKeyLatitude: p.Latitude,
+			generated.FieldKeyLongitude: p.Longitude,
+		}
+		if p.Address != "" {
+			m[generated.FieldKeyAddress] = p.Address
+		}
+		if p.DistanceMeters > 0 {
+			m[generated.FieldKeyDistanceMeters] = p.DistanceMeters
+		}
+		out[i] = m
+	}
+	return out
 }
 
 func parseOptionalFloat(raw string) (float64, bool) {

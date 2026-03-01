@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/integration/integration_location_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/core/services/data_service.dart';
 import 'package:quwoquan_app/features/create/services/publish_settings_services.dart';
@@ -63,6 +64,10 @@ class _StubCloudHttpClient extends CloudHttpClient {
   }
 }
 
+/// L1a 契约测试：content 领域 entry（创作入口）的 CreateLocationService / CreateCircleService 行为
+///
+/// 规范：specs/ux/error-and-permission-semantics.md
+/// 领域：content，实体：entry（创作草稿/入口）
 void main() {
   group('CreateLocationService', () {
     test('nearby parses cloud response', () async {
@@ -70,7 +75,7 @@ void main() {
         expect(headers, isNotNull);
         return jsonDecode(
           jsonEncode({
-            'items': [
+            IntegrationLocationMetadata.responseItemsKey: [
               {
                 'name': '成都·天府广场',
                 'latitude': 30.6586,
@@ -96,7 +101,7 @@ void main() {
         expect(headers, isNotNull);
         return jsonDecode(
           jsonEncode({
-            'items': [
+            IntegrationLocationMetadata.responseItemsKey: [
               {'name': '成都·太古里', 'latitude': 30.6548, 'longitude': 104.0839},
             ],
           }),
@@ -119,7 +124,7 @@ void main() {
         if (callCount == 1) {
           return jsonDecode(
             jsonEncode({
-              'items': [
+              IntegrationLocationMetadata.responseItemsKey: [
                 {'name': 'A', 'latitude': 1.0, 'longitude': 2.0},
               ],
             }),

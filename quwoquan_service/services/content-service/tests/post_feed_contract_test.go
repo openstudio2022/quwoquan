@@ -56,6 +56,50 @@ func TestGetFeedByType(t *testing.T) {
 	}
 }
 
+// TestGetFeedExcludesPrivatePosts verifies that feed only returns visibility=public
+// content; private posts must never appear in discovery.
+// contract.yaml: get_feed_excludes_private_posts / go_func: TestGetFeedExcludesPrivatePosts
+func TestGetFeedExcludesPrivatePosts(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+
+	// Create one public and one private moment
+	pub := createPost(t, `{"contentType":"micro","body":"Public moment","visibility":"public"}`)
+	priv := createPost(t, `{"contentType":"micro","body":"Private moment","visibility":"private"}`)
+
+	privateID, _ := priv["_id"].(string)
+	if privateID == "" {
+		privateID, _ = priv["id"].(string)
+	}
+	if privateID == "" {
+		t.Fatal("private post missing id")
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/content/feed?type=moment&limit=20", nil)
+	rec := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var page struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	for _, item := range page.Items {
+		id, _ := item["id"].(string)
+		if id == "" {
+			id, _ = item["_id"].(string)
+		}
+		if id == privateID {
+			t.Errorf("private post %q must not appear in discovery feed", privateID)
+		}
+	}
+	// Public post may or may not be in first page (depends on sort/rec) — key assertion is private excluded
+	_ = pub
+}
+
 // TestGetFeedCursorPagination verifies cursor-based pagination returns
 // non-overlapping pages and that the second page cursor differs from the first.
 // contract.yaml: get_feed_cursor_pagination / go_func: TestGetFeedCursorPagination

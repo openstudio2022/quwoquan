@@ -167,7 +167,7 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
         backgroundColor: bg,
         foregroundColor: fg,
         leading: IconButton(
-          icon: const Icon(Icons.close),
+          icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),
         ),
         title: Text(

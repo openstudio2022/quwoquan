@@ -205,35 +205,47 @@ final xxxRepositoryProvider = Provider<XxxRepository>((ref) {
 - 禁止在 UI 代码中 import `AppDataSourceMode`
 - 新增 Repository → 必须同步在 `app_providers.dart` 注册 Provider
 
-### 2.4 UI 层约束（原 Feature 层）
+### 2.4 UI 层约束（按领域服务划分）
 
-> `lib/features/` 已重命名为 `lib/ui/`，历史代码逐步迁移，**新代码必须在 `lib/ui/` 下创建**。
+> **规划文档**：`specs/01_APP_DIRECTORY_STRUCTURE_BY_DOMAIN.md`  
+> `lib/features/` 已废弃，**新建领域服务及页面必须在 `lib/ui/{domain}/` 下**，与 metadata 领域对齐。
 
 ```
-lib/ui/{name}/
+lib/ui/{domain}/              # domain 与 contracts/metadata 一致
 ├── pages/          # 必须存在（页面入口 Widget）
 ├── providers/      # 状态管理（Riverpod Notifier/Provider）
 ├── widgets/        # 页面专属子组件
 └── models/         # 仅页面可见的 ViewModel（非 cloud DTO）
 ```
 
-**Discovery 域独立示例：**
+**领域示例**：`content`（含 entry 创作入口）、`discovery`、`chat`、`user`、`circle`、`assistant`、`settings`、`welcome`。
+
+**Discovery 域示例：**
 ```
 lib/ui/discovery/
 ├── pages/
-│   └── discovery_page.dart         # 发现页（从 features/home/pages/ 迁出）
+│   └── discovery_page.dart         # 发现页
 ├── providers/
 │   └── discovery_feed_provider.dart
 └── widgets/
-    ├── photo_feed_grid.dart         # 美图 Tab 独立渲染
-    ├── video_feed_view.dart         # 视频 Tab 独立渲染
-    ├── article_feed_list.dart       # 文章 Tab 独立渲染
-    └── moment_feed_list.dart        # 微趣 Tab 独立渲染
+    ├── photo_feed_grid.dart
+    ├── video_feed_view.dart
+    └── ...
+```
+
+**创作入口（content/entry）示例：**
+```
+lib/ui/content/entry/               # 创作入口，归属 content 域
+├── pages/
+│   ├── create_page.dart
+│   └── publish_location_selector_page.dart
+├── providers/
+└── widgets/
 ```
 
 | 约束 | 说明 |
 |------|------|
-| 目录必须在 `lib/ui/` 下 | 禁止在 `lib/features/` 下新建页面（历史存留逐步迁移） |
+| 目录必须在 `lib/ui/{domain}/` 下 | **禁止**在 `lib/features/` 下新建页面或领域模块 |
 | 必须含 `pages/` | UI 模块入口 |
 | 禁止 import 其他 UI 模块内部 | 共享通过 `lib/core/` 或 `lib/cloud/` |
 | 必须通过 Provider 访问 Repository | `ref.read(xxxRepositoryProvider)` |
@@ -258,13 +270,17 @@ lib/ui/discovery/
 
 ### 2.6 现有代码适配路径
 
-当前已存在代码的迁移策略（历史存留，逐步重构）：
+当前已存在代码的迁移策略（历史存留，逐步重构）。**完整规划**见 `specs/01_APP_DIRECTORY_STRUCTURE_BY_DOMAIN.md`。
 
 | 现有文件/目录 | 目标位置 | 处理方式 |
 |-------------|---------|---------|
-| `lib/features/home/pages/discovery_page.dart` | `lib/ui/discovery/pages/discovery_page.dart` | 逐步迁移，暂时存留 |
-| `lib/features/discovery/providers/` | `lib/ui/discovery/providers/` | 逐步迁移 |
-| `lib/features/{other}/` | `lib/ui/{other}/` | 各 Feature 独立迁移，不强制一次完成 |
+| `lib/features/create/` | `lib/ui/content/entry/` | 创作入口归属 content 域 |
+| `lib/features/chat/` | `lib/ui/chat/` | 按领域迁移 |
+| `lib/features/circles/` | `lib/ui/circle/` | 按领域迁移 |
+| `lib/features/profile/` | `lib/ui/user/` | 与 ui/user 合并 |
+| `lib/features/assistant/` | `lib/ui/assistant/` | 按领域迁移 |
+| `lib/features/settings/` | `lib/ui/settings/` | 按领域迁移 |
+| `lib/features/welcome/` | `lib/ui/welcome/` | 按领域迁移 |
 | `cloud/runtime/generated/feed_item_dto.g.dart` | `cloud/runtime/generated/content/photo_post_dto.g.dart` 等 | 拆分为类型化 DTO，逐步替换 |
 | `cloud/services/content/content_repository.dart` | 保留，返回类型由 `FeedItemDto` 改为 `PostBaseDto` 子类 | 分类型返回，逐类迁移 |
 | `core/providers/app_providers.dart` | 保留，新增 Repository 追加注册 | 持续演进 |
@@ -290,6 +306,19 @@ lib/ui/discovery/
 - `make verify` + `make gate` 自动校验
 - 不一致 → `make gate` 失败
 
+### 3.3 错误码 metadata 约束
+
+错误码与用户可见文案**唯一定义于** `contracts/metadata/{domain}/{entity}/errors.yaml`，禁止在业务代码中硬编码。
+
+| 层级 | 必须使用 | 禁止 |
+|------|----------|------|
+| **metadata** | `errors.yaml` 定义 code、l10n_key、user_message.zh/en、go_const、dart_const | 无 errors.yaml 就手写错误码/文案 |
+| **云侧 Handler** | `generated.AppErrorFrom*(debugMessage)` 等 codegen 产出的方法 | 硬编码 user_message、code 字符串 |
+| **端侧 UI/Repository** | `*ErrorCode.fromCode(e.code).toDisplayMessage(context.l10n)` | switch/case 硬编码 code 字符串或文案 |
+| **测试** | 枚举 `.code`（如 `IntegrationLocationErrorCode.upstreamTimeout.code`） | 硬编码 `'INTEGRATION.MIDDLEWARE.upstream_timeout'` 等字符串 |
+
+**顺序**：metadata → make verify-metadata → make codegen / make codegen-app → 业务逻辑。门禁 `verify_error_code_semantic.py` 检测端侧错误码字符串硬编码。
+
 ---
 
 ## 4. 扩展场景约束
@@ -300,6 +329,7 @@ metadata YAML → make verify → make codegen → 业务逻辑 → make test-co
 ```
 
 **禁止行为**：
+- 不经 metadata 直接硬编码错误码或 user_message（必须 errors.yaml → codegen）
 - 不经 `/qwq-extend` 或 metadata 直接创建 Go struct / Dart DTO / Repository
 - 不经 codegen 手写 Repository 实现或 migration
 - 手动创建 `services/{name}/` 目录（必须通过 `/qwq-extend new-service`）

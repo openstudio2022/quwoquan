@@ -81,7 +81,7 @@
   "copyLink": "TODO: translate",
   "shareTargetWechat": "TODO: translate",
   "shareTargetMoments": "TODO: translate",
-  "loadFailed": "TODO: translate",
+  "loadFailed": "Load failed",
   "report": "TODO: translate",
   "shareTo": "TODO: translate",
   "unknown": "TODO: translate",
@@ -289,7 +289,45 @@
   "postArticle": "TODO: translate",
   "publish": "TODO: translate",
   "publishAction": "TODO: translate",
-  "locationLabel": "TODO: translate",
+  "locationLabel": "Location",
+  "locationHidden": "Don't show location",
+  "isPublicLabel": "Public",
+  "visibilityPrivate": "Private",
+  "selectPublishCirclesLabel": "Publish to circles",
+  "noCirclesAvailable": "Join circles, discover like-minded people",
+  "circleJoinedSection": "Joined",
+  "circleRecommendedSection": "Recommended",
+  "circleMemberCountJoined": "{count} members · Joined",
+  "@circleMemberCountJoined": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "circleFollowButton": "+ Follow",
+  "circleRecommendedSubtitle": "{reason} · {count} members",
+  "@circleRecommendedSubtitle": {
+    "placeholders": {
+      "reason": {"type": "String"},
+      "count": {"type": "int"}
+    }
+  },
+  "circleJoinedLabel": "Joined",
+  "goToDiscovery": "Discover",
+  "locationNearbyTitle": "Nearby",
+  "locationFetchingResult": "Getting results...",
+  "locationSearchingNearby": "Searching nearby...",
+  "locationLoadFailed": "Current location is unavailable, please retry shortly",
+  "locationPermissionRequired": "Location permission is required",
+  "locationUpstreamTimeout": "Location upstream timed out, please retry",
+  "locationInternalError": "Location service internal error",
+  "locationAppPermissionRequired": "Please enable location permission for this app in Settings",
+  "locationOpenSettings": "Open Settings",
+  "locationSearchTitle": "Search location",
+  "locationSearchHint": "Search for a place",
+  "locationSearchEmpty": "No results found",
+  "locationSearchKeywordRequired": "Search keyword cannot be empty",
   "remindWhoLabel": "TODO: translate",
   "whoCanSeeLabel": "TODO: translate",
   "visibilityPublic": "TODO: translate",

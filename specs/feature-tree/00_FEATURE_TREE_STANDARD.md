@@ -37,6 +37,7 @@
   - **「适用场景与约束」**：当前选定方案的**适用场景**（在什么业务/规模/技术条件下成立）、**约束与局限性**（不适用情形、前置条件、已知限制）。任何方案都有局限性或适应场景，design 中必须显式写出，便于回顾与决策。
   - **「未来演进」**：演进方向、目标态与当前态的差距、前置条件或触发条件、与 tasks 中「搁置任务」「未来演进任务」的对应关系；若当前即为目标态则简要说明「暂无演进项」。
 - **建议**：部署形态、服务清单、接口归属用表格表达；规划类清单放在 tasks.md，design 中保留演进原则与契约兼容说明。
+- **涉及 UI 时**：design 可选增加「编码规范与设计 token」小节，列出将用的 AppSpacing/AppTypography/AppColors；禁止硬编码 width/height/leadingSize/fontSize/EdgeInsets。
 
 **设计原则（design 必须遵循）**：
 
@@ -51,11 +52,14 @@
   - **「搁置任务（带规划）」**：因依赖/资源/优先级等原因暂不实施的任务，须写明**搁置原因、计划何时/在何条件下重启、由谁或何节点承接**，便于回顾审视与后续跟进。
   - **「未来演进任务」**：与 design 中「未来演进」对应的中长期演进项（可勾选、不阻塞当前交付）；新开特性时在对应节点 spec/design/tasks 中细化。若无搁置或演进，可写「无」或「暂无」，但章节标题须保留以便统一回顾。
 - 以上三小节为**标准化结构**，便于门禁与复盘时一致检查；design 采用轻量方案时，「未来演进任务」必须非空且与 design 的「未来演进」对应。
+- **含 UI 的 task**：实施完成后须执行 `python3 scripts/verify_dart_semantic.py`，无新增硬编码视觉字面量。
+- **含错误码的 task**：须创建/更新 `errors.yaml`（含 l10n_key、user_message.zh/en），云侧 Handler 使用 generated.AppErrorFrom*，端侧使用 *ErrorCode.fromCode().toDisplayMessage(l10n)，测试使用枚举 .code；实施后执行 `python3 scripts/verify_error_code_semantic.py`。
 
 ### 2.4 acceptance.yaml
 
 - **必须包含**：`feature`、`level`、`template`（如 A1-A8）、`execution.local_gate` / `full_gate`；L4/L5 须含 `level_acceptance` 的 A1~An 验收项。
 - **一致性**：与 spec 中的验收重点、design 中的交付边界对齐；门禁脚本可依赖本文件做完整性检查。
+- **含错误码时**：须有验收项「错误码由 errors.yaml 驱动，云侧无硬编码 user_message，端侧无硬编码 code 字符串」；tests 可引用 `*_error_code_contract_test` 或 journey 测试。
 
 #### 验收项结构（交付后必须填写 status 与 tests）
 

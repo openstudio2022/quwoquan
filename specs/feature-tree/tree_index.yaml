@@ -894,7 +894,7 @@ features:
               level: L3_subfeature
               path: ../specs/feature-tree/discovery-content/content-display-journey-consistency/moment-display-journey
               domain: ""
-              status: specified
+              status: completed
               tags: []
         - id: media-processing-helper-read
           name: media-processing-helper-read
@@ -1775,6 +1775,50 @@ features:
               domain: ""
               status: planned
               tags: []
+            - id: error-permission-display-semantics
+              name: error-permission-display-semantics
+              level: L3_component
+              path: ../specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics
+              domain: ""
+              status: completed
+              tags: [error, permission, ux]
+              children:
+                - id: cloud-network-error-display-contract
+                  name: cloud-network-error-display-contract
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/cloud-network-error-display-contract
+                  domain: ""
+                  status: completed
+                  tags: []
+                - id: permission-card-display-contract
+                  name: permission-card-display-contract
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/permission-card-display-contract
+                  domain: ""
+                  status: completed
+                  tags: []
+            - id: page-layout-semantics
+              name: page-layout-semantics
+              level: L3_component
+              path: ../specs/feature-tree/runtime/runtime-client-foundation/page-layout-semantics
+              domain: ""
+              status: in_progress
+              tags: [page, layout, ux]
+              children:
+                - id: top-toolbar-and-selection-pattern
+                  name: top-toolbar-and-selection-pattern
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-client-foundation/page-layout-semantics/top-toolbar-and-selection-pattern
+                  domain: ""
+                  status: in_progress
+                  tags: []
+                - id: settings-page-structure
+                  name: settings-page-structure
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-client-foundation/page-layout-semantics/settings-page-structure
+                  domain: ""
+                  status: in_progress
+                  tags: []
         - id: runtime-external-integration
           name: runtime-external-integration
           level: L2_feature

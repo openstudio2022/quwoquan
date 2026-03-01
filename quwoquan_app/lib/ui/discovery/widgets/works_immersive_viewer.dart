@@ -1,4 +1,4 @@
-// ignore_for_file: unnecessary_non_null_assertion
+// ignore_for_file: unnecessary_non_null_assertion, unused_element, unused_element_parameter
 import 'dart:async';
 import 'dart:math' show max;
 import 'dart:ui' show ImageFilter;
@@ -11,6 +11,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
+import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagement_bar.dart';
 import 'package:quwoquan_app/components/more_actions_popup/configs/media_post_config.dart';
 import 'package:quwoquan_app/components/more_actions_popup/more_action_popup.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -517,9 +518,14 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
             left: 0,
             right: 0,
             bottom: 0,
-            child: _WorksBottomToolbar(
-              post: currentPost,
+            child: ImmersiveEngagementBar(
+              avatarUrl: currentPost.avatarUrl,
+              displayName: currentPost.displayName,
               circleName: _circleNameForPost(currentPost),
+              likeCount: currentPost.likeCount + (_likedPosts.contains(currentPost.id) ? 1 : 0),
+              shareCount: currentPost.shareCount,
+              favoriteCount: currentPost.favoriteCount + (_savedPosts.contains(currentPost.id) ? 1 : 0),
+              commentCount: currentPost.commentCount,
               isLiked: _likedPosts.contains(currentPost.id),
               isSaved: _savedPosts.contains(currentPost.id),
               isFollowing: _followingUsers.contains(currentPost.authorId),
@@ -774,7 +780,7 @@ class _WorksSecondaryFilterBar extends StatelessWidget {
               borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
               border: Border.all(
                 color: AppColors.worksBodyText.withValues(alpha: 0.22),
-                width: 1,
+                width: AppSpacing.toolPanelItemBorderWidthUnselected,
               ),
             ),
             child: Row(
@@ -1051,7 +1057,10 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
               color: Colors.white.withValues(alpha: 0.2),
               shape: BoxShape.circle,
               border:
-                  Border.all(color: Colors.white.withValues(alpha: 0.5), width: 1.5),
+                  Border.all(
+                    color: Colors.white.withValues(alpha: 0.5),
+                    width: AppSpacing.toolPanelItemBorderWidthSelected,
+                  ),
             ),
             child: Icon(
               CupertinoIcons.play_fill,
@@ -1218,7 +1227,7 @@ class _ArticleGuideCard extends StatelessWidget {
                     fontSize: AppTypography.xl + 4,
                     fontWeight: AppTypography.bold,
                     color: AppColors.worksTitle,
-                    height: 1.42,
+                    height: AppTypography.bodyLineHeight,
                   ),
                 ),
                 SizedBox(height: AppSpacing.intraGroupSm),
@@ -1231,7 +1240,7 @@ class _ArticleGuideCard extends StatelessWidget {
                     fontSize: AppTypography.base,
                     fontWeight: AppTypography.medium,
                     color: AppColors.worksBodyText,
-                    height: 2,
+                    height: AppTypography.lineHeightRelaxed,
                     letterSpacing: 0.4,
                   ),
                 ),
@@ -1325,7 +1334,7 @@ class _ArticleReadingCard extends StatelessWidget {
               fontSize: AppTypography.xl,
               color: AppColors.worksTitle,
               fontWeight: AppTypography.bold,
-              height: 1.4,
+              height: AppTypography.bodyLineHeight,
             ),
           ),
           SizedBox(height: AppSpacing.intraGroupSm),
@@ -1352,7 +1361,7 @@ class _ArticleReadingCard extends StatelessWidget {
                   fontFamily: _serifFamily,
                   fontSize: AppTypography.xs,
                   color: AppColors.worksCaption,
-                  height: 1.5,
+                  height: AppTypography.lineHeightRelaxed,
                 ),
               ),
             ],
@@ -1367,7 +1376,7 @@ class _ArticleReadingCard extends StatelessWidget {
                 fontFamily: _serifFamily,
                 fontSize: AppTypography.base,
                 color: AppColors.worksBodyText,
-                height: 2,
+                height: AppTypography.lineHeightRelaxed,
                 letterSpacing: 0.4,
               ),
             ),

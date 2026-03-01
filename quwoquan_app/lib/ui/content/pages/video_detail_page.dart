@@ -84,6 +84,7 @@ class _VideoDetailPageState extends ConsumerState<VideoDetailPage> {
 
     final discoveryState = ref.watch(discoveryStateProvider);
     final feedCategory = widget.initialExtra?.category;
+    final isMoment = feedCategory == 'moment';
     if (feedCategory != null && feedCategory.isNotEmpty) {
       ref.listen<AsyncValue<DiscoveryFeedState>>(discoveryFeedProvider(feedCategory), (prev, next) {
         final value = next.value;
@@ -116,6 +117,7 @@ class _VideoDetailPageState extends ConsumerState<VideoDetailPage> {
       initialIndex: _safeInitialIndex,
       posts: _posts,
       initialPostIndex: _safeInitialIndex,
+      toolbarMode: isMoment ? 'backOnly' : 'full',
       onUserClick: (username, {avatarUrl, displayName, backgroundUrl}) {
         context.push(
           '/user/$username',

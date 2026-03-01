@@ -233,7 +233,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shareTargetMoments => 'TODO: translate';
 
   @override
-  String get loadFailed => 'TODO: translate';
+  String get loadFailed => 'Load failed';
 
   @override
   String get report => 'TODO: translate';
@@ -819,7 +819,89 @@ class AppLocalizationsEn extends AppLocalizations {
   String get publishAction => 'TODO: translate';
 
   @override
-  String get locationLabel => 'TODO: translate';
+  String get locationLabel => 'Location';
+
+  @override
+  String get locationHidden => 'Don\'t show location';
+
+  @override
+  String get isPublicLabel => 'Public';
+
+  @override
+  String get visibilityPrivate => 'Private';
+
+  @override
+  String get selectPublishCirclesLabel => 'Publish to circles';
+
+  @override
+  String get noCirclesAvailable => 'Join circles, discover like-minded people';
+
+  @override
+  String get circleJoinedSection => 'Joined';
+
+  @override
+  String get circleRecommendedSection => 'Recommended';
+
+  @override
+  String circleMemberCountJoined(int count) {
+    return '$count members · Joined';
+  }
+
+  @override
+  String get circleFollowButton => '+ Follow';
+
+  @override
+  String circleRecommendedSubtitle(String reason, int count) {
+    return '$reason · $count members';
+  }
+
+  @override
+  String get circleJoinedLabel => 'Joined';
+
+  @override
+  String get goToDiscovery => 'Discover';
+
+  @override
+  String get locationNearbyTitle => 'Nearby';
+
+  @override
+  String get locationFetchingResult => 'Getting results...';
+
+  @override
+  String get locationSearchingNearby => 'Searching nearby...';
+
+  @override
+  String get locationLoadFailed =>
+      'Current location is unavailable, please retry shortly';
+
+  @override
+  String get locationPermissionRequired => 'Location permission is required';
+
+  @override
+  String get locationUpstreamTimeout =>
+      'Location upstream timed out, please retry';
+
+  @override
+  String get locationInternalError => 'Location service internal error';
+
+  @override
+  String get locationAppPermissionRequired =>
+      'Please enable location permission for this app in Settings';
+
+  @override
+  String get locationOpenSettings => 'Open Settings';
+
+  @override
+  String get locationSearchTitle => 'Search location';
+
+  @override
+  String get locationSearchHint => 'Search for a place';
+
+  @override
+  String get locationSearchEmpty => 'No results found';
+
+  @override
+  String get locationSearchKeywordRequired => 'Search keyword cannot be empty';
 
   @override
   String get remindWhoLabel => 'TODO: translate';
