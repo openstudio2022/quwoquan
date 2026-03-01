@@ -1,0 +1,17 @@
+version: 1
+feature: "app-theme-infrastructure"
+level: "L3_subfeature"
+template: "A1-A8"
+tree_context:
+  feature_level: "L3_subfeature"
+  feature_path: "capability.runtime.feature.runtime-client-foundation.subfeature.app-theme-infrastructure"
+  parent_path: "capability.runtime.feature.runtime-client-foundation"
+  acceptance_inherits_from: "capability.runtime.feature.runtime-client-foundation"
+level_acceptance:
+  focus_groups:
+    - A1_functional
+    - A8_test_automation
+  notes: "主题与设计 token 基础设施，规划阶段。"
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"

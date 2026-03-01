@@ -1775,6 +1775,13 @@ features:
               domain: ""
               status: planned
               tags: []
+            - id: dart-semantic-gate
+              name: dart-semantic-gate
+              level: L3_component
+              path: ../specs/feature-tree/runtime/runtime-client-foundation/dart-semantic-gate
+              domain: ""
+              status: in_progress
+              tags: []
             - id: error-permission-display-semantics
               name: error-permission-display-semantics
               level: L3_component

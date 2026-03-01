@@ -1,5 +1,6 @@
 version: 1
-archived: false
+archived: true
+archived_at: "2026-03-01T00:00:00Z"
 feature: "moment-display-journey"
 level: "L3_subfeature"
 template: "A1-A10"

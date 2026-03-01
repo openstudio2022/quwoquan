@@ -154,6 +154,22 @@ error_scenarios:
     input_status: 500
     expected_dart_const: internalError
 
+  - name: parse_post_immutable_after_publish
+    input_code: "CONTENT.USER.post_immutable_after_publish"
+    expected_dart_const: postImmutableAfterPublish
+  - name: parse_public_required_for_circle_distribution
+    input_code: "CONTENT.USER.public_required_for_circle_distribution"
+    expected_dart_const: publicRequiredForCircleDistribution
+  - name: parse_invalid_moment_payload
+    input_code: "CONTENT.USER.invalid_moment_payload"
+    expected_dart_const: invalidMomentPayload
+  - name: parse_content_deleted
+    input_code: "CONTENT.USER.content_deleted"
+    expected_dart_const: contentDeleted
+  - name: parse_circle_distribution_forbidden
+    input_code: "CONTENT.USER.circle_distribution_forbidden"
+    expected_dart_const: circleDistributionForbidden
+
 # ── 行为上报格式场景 ─────────────────────────────────────────────────
 behavior_scenarios:
   - name: impression_goes_to_batch

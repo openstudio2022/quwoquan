@@ -1,6 +1,8 @@
 version: 1
 feature: "workflow-naming-consolidation"
 level: "L3"
+archived: true
+archived_at: "2026-03-01T00:00:00Z"
 template: "A1-A4"
 focus_groups: []
 tests:
@@ -38,4 +40,5 @@ level_acceptance:
     criteria: "ci_cd_end_to_end_design、runbook 与规范一致"
     status: implemented
     linked_tasks: [T4]
-    tests: []
+    tests:
+      - file: scripts/gate.sh

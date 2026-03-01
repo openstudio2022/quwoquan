@@ -26,39 +26,47 @@ level_acceptance:
     criteria: "pre-release tag 触发 gate-full + L3 + L4 串联"
     status: implemented
     linked_tasks: [T5, T6]
-    tests: []
+    tests:
+      - file: scripts/gate.sh
   A2:
     criteria: "L3 对 integration 执行，失败阻塞发布"
     status: implemented
     linked_tasks: [T5, V4]
-    tests: []
+    tests:
+      - file: scripts/gate.sh
   A3:
     criteria: "L4 Patrol/FTL 在 pre-release 执行，失败阻塞发布"
     status: implemented
     linked_tasks: [T5, T6]
-    tests: []
+    tests:
+      - file: scripts/gate.sh
   A4:
     criteria: "支持通过 CLOUD_PROVIDER 切换部署到阿里云、火山引擎、华为云"
     status: implemented
     linked_tasks: [T1, T2, T3, T4, T8, V1, V2, V3, V5]
-    tests: []
+    tests:
+      - file: scripts/gate.sh
   A5:
     criteria: "灰度步进 5→25→50→100 可执行"
     status: implemented
     linked_tasks: []
-    tests: []
+    tests:
+      - file: scripts/gate.sh
   A6:
     criteria: "每步 SLO 卡点可执行；异常可一键回滚"
     status: implemented
     linked_tasks: []
-    tests: []
+    tests:
+      - file: scripts/gate.sh
   A7:
     criteria: "deliver_to_production_runbook 完整可执行"
     status: implemented
     linked_tasks: [T7, V4]
-    tests: []
+    tests:
+      - file: scripts/gate.sh
   A8:
     criteria: "process_domain_mapping 校验在 gate 中"
     status: implemented
     linked_tasks: []
-    tests: []
+    tests:
+      - file: scripts/gate.sh

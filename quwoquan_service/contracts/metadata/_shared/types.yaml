@@ -48,7 +48,7 @@ enums:
   RunTriggerType: [user_query, suggested_action, skill_select]
   InteractionEventType: [query, response, feedback, action_click, skill_trigger, tool_call, error]
   FeedbackType: [thumbs_up, thumbs_down, rating, text]
-  BehaviorEventType: [impression, click, dwell, like, favorite, dislike, report, share]
+  BehaviorEventType: [impression, click, dwell, like, favorite, dislike, report, share, comment]
   Platform: [ios, android]
   LocationProvider: [baidu, amap]
   ProfileVisibility: [public, friends, private]

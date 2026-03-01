@@ -1,6 +1,8 @@
 version: 1
 feature: "redis-service-multicloud-config"
 level: "L4_object_task"
+archived: true
+archived_at: "2026-03-01T00:00:00Z"
 template: "A1-A8"
 tree_context:
   feature_level: "L4_object_task"

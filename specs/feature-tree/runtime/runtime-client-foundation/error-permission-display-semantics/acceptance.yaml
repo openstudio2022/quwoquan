@@ -17,22 +17,26 @@ level_acceptance:
     criteria: "云端阻塞性错误使用内联占位，次要错误使用 SnackBar"
     status: implemented
     linked_tasks: [cloud-network-error-display-contract]
-    tests: []
+    tests:
+      - file: test/cloud/content/location/contract/error_permission_l10n_contract_test.dart
   A2:
     criteria: "错误/权限展示均使用 AppTypography、AppSpacing、AppColors"
     status: implemented
     linked_tasks: [cloud-network-error-display-contract, permission-card-display-contract]
-    tests: []
+    tests:
+      - file: test/cloud/content/location/contract/error_permission_l10n_contract_test.dart
   A3:
     criteria: "权限永久拒绝时展示「去设置」主操作"
     status: implemented
     linked_tasks: [permission-card-display-contract]
-    tests: []
+    tests:
+      - file: test/cloud/content/location/contract/error_permission_l10n_contract_test.dart
   A7:
     criteria: "specs/ux/error-and-permission-semantics.md 与 07-error-permission-semantics.mdc 与特性树一致"
     status: implemented
     linked_tasks: []
-    tests: []
+    tests:
+      - file: test/cloud/content/location/contract/error_permission_l10n_contract_test.dart
 execution:
   # 迁移后 lib/features/create/ → lib/ui/content/entry/（specs/01_APP_DIRECTORY_MIGRATION_TASKS）
   local_gate: "flutter analyze lib/features/create/ lib/ui/discovery/"

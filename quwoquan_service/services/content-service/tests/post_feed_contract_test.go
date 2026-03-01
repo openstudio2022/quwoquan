@@ -175,8 +175,10 @@ func TestGetFeedCursorPagination(t *testing.T) {
 func TestGetFeedRecommendSortWithCursor(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
+	// Use distinct authors so rerank (maxAuthorPerFeed=3) allows enough items for cursor pagination.
 	for i := range 8 {
-		createPost(t, fmt.Sprintf(
+		authorID := fmt.Sprintf("user_rec_%d", i%4)
+		createPostWithAuthor(t, authorID, fmt.Sprintf(
 			`{"contentType":"image","title":"Recommend Pager %d","body":"content %d","mediaUrls":["https://example.com/img%d.jpg"]}`, i, i, i,
 		))
 	}
@@ -240,8 +242,10 @@ func TestGetFeedRecommendSortWithCursor(t *testing.T) {
 func TestGetFeedFutureWindowChangesOnly(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
+	// Use distinct authors so rerank (maxAuthorPerFeed=3) allows 4+ items for first page + cursor.
 	for i := range 12 {
-		createPost(t, fmt.Sprintf(
+		authorID := fmt.Sprintf("user_fw_%d", i%4)
+		createPostWithAuthor(t, authorID, fmt.Sprintf(
 			`{"contentType":"image","title":"Future Window %d","body":"content %d","mediaUrls":["https://example.com/img%d.jpg"]}`, i, i, i,
 		))
 	}

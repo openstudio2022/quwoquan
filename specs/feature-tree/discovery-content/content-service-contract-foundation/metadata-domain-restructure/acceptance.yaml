@@ -2,6 +2,8 @@ version: 1
 feature: metadata-domain-restructure
 level: L3_subfeature
 status: specified
+archived: true
+archived_at: "2026-03-01T00:00:00Z"
 
 acceptance_criteria:
   - id: A1

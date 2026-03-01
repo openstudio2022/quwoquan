@@ -46,4 +46,5 @@ level_acceptance:
     criteria: "deliver_to_production_runbook、ci_cd_end_to_end_design 与 branch_strategy 一致"
     status: implemented
     linked_tasks: [T4]
-    tests: []
+    tests:
+      - file: scripts/gate.sh

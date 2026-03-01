@@ -51,6 +51,18 @@ app_log_policy:
     app_log: count_only
     description: "仅记录数量，不记录完整 URL 列表"
 
+  - field: publishLocation
+    classification: PII
+    app_log: mask
+    mask_strategy: city_level_only
+    description: "发布位置仅记录城市级别，不记录精确信息"
+
+  - field: deviceInfo
+    classification: PII
+    app_log: mask
+    mask_strategy: strip_detail
+    description: "设备信息脱敏，不记录完整型号/版本"
+
 # ── 二、数据生命周期（GDPR）────────────────────────────────────────────
 data_lifecycle:
   retention_days: 1825                    # 5年
