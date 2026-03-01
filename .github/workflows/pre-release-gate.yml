@@ -1,5 +1,5 @@
 # Pre-release 串联：gate(L1+L2) → deploy integration → L3 → L4
-# 触发：v*-rc* tag；全部通过 → 可灰度到 prod
+# 触发：v*-rc* tag、push to main（日节奏 merge 后）、workflow_dispatch
 # 端到端闭环见 deploy/shared/ci_cd_end_to_end_design.md
 # 当前部署目标：阿里云 ACK
 name: 04. Pre-Release Gate
@@ -8,6 +8,8 @@ on:
   push:
     tags:
       - 'v*-rc*'
+    branches:
+      - main
   workflow_dispatch:
 
 env:
@@ -45,7 +47,7 @@ jobs:
     needs: [gate]
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
     env:
       INTEGRATION_KUBECONFIG: ${{ secrets.INTEGRATION_KUBECONFIG }}
     steps:
@@ -79,7 +81,7 @@ jobs:
     needs: [gate, deploy-integration]
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
     env:
       STAGING_BASE_URL: ${{ secrets.STAGING_BASE_URL }}
       TEST_AUTH_TOKEN: ${{ secrets.STAGING_TEST_AUTH_TOKEN }}
@@ -100,7 +102,7 @@ jobs:
     needs: [gate, deploy-integration]
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main') }}
     steps:
       - uses: actions/checkout@v4
       - name: 准备 personal_assistant/.env
@@ -142,7 +144,7 @@ jobs:
     needs: [gate, deploy-integration]
     runs-on: macos-latest
     timeout-minutes: 45
-    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main') }}
     steps:
       - uses: actions/checkout@v4
       - name: 准备 personal_assistant/.env

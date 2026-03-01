@@ -17,7 +17,8 @@
 | 03. Delivery Gate | `delivery-gate.yml` | PR / push main, dev1.0 | 拓扑校验、L1+L2 质量门（PR/入库阶段） | G0~G3 |
 | 02. Service Pipeline | `service_pipeline.yml` | quwoquan_service/**、deploy/** | Go 构建、rec-model 镜像、kustomize 校验（无 L2） | G2 |
 | 01. App Pipeline | `app_pipeline.yml` | quwoquan_app/** | Flutter analyze；v* tag → macOS 构建（无 L1） | G2 / 发布 |
-| 04. Pre-Release Gate | `pre-release-gate.yml` | v*-rc* tag、手动 | gate(L1+L2) → deploy → L3 → L4 | G3→G5b |
+| 04. Pre-Release Gate | `pre-release-gate.yml` | v*-rc* tag、push to main（日节奏）、手动 | gate(L1+L2) → deploy → L3 → L4 | G3→G5b |
+| 07. Merge dev1.0 To Main | `merge-dev1.0-to-main.yml` | 定时 6:00、workflow_dispatch | merge dev1.0 → main | 日节奏 |
 
 ### 1.2 当前 pre-release 链路（已实现）
 
@@ -35,10 +36,12 @@ v*-rc* tag
 
 ## 2. 端到端闭环目标（已落实）
 
+**分支策略**：日常 PR 合入 dev1.0；main 仅由定时 merge 更新，见 `deploy/shared/branch_strategy.md`。
+
 ```
-deliver 入库(main)
+deliver 入库(dev1.0) → 定时 merge → main
     ↓
-v*-rc* tag（或 main 合并后自动打 tag）
+v*-rc* tag 或 push to main（日节奏 merge 后）
     ↓
 pre-release-gate
     │
@@ -162,6 +165,7 @@ deploy-integration:
 
 ## 6. 参考
 
+- `deploy/shared/branch_strategy.md` — 分支策略（dev1.0 日常合入、main 定时 merge）
 - `deploy/shared/deliver_to_production_runbook.md` — 端到端运行手册
 - `.github/workflows/pre-release-gate.yml` — 当前 pre-release 流程
 - `scripts/deploy_to_integration.sh` — 构建脚本（需扩展或新建 apply 脚本）

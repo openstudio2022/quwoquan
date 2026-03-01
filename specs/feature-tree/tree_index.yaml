@@ -1806,6 +1806,13 @@ features:
           status: completed
           tags: [deployment, deliver, deploy, multi-cloud]
           children:
+            - id: daily-merge-release-strategy
+              name: daily-merge-release-strategy
+              level: L3_component
+              path: ../specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy
+              domain: ""
+              status: completed
+              tags: [branch-strategy, merge, dev1.0]
             - id: integration-deploy-and-l3-l4-gate
               name: integration-deploy-and-l3-l4-gate
               level: L3_component
