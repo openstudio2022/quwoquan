@@ -166,6 +166,9 @@ AppException (abstract)
 - UI 模块不允许直接 import 其他 UI 模块内部文件（通过 `core/` 或 `cloud/` 共享）
 - Provider 必须使用 Riverpod 标准模式
 - 更新特性树 `acceptance.yaml` 与 traceability 路径
+- 选择器/创作等 Cupertino 页面遵循 iOS 语义 v1：Modal leading 统一 `CupertinoIcons.xmark`，Stack 子页使用 `CupertinoIcons.back/chevron_back`
+- `CupertinoPageScaffold` 场景禁止混用 Material 交互组件（如 `Checkbox`、`SnackBar`）；选择态使用 Cupertino 或语义化自绘组件
+- 禁止跨域借用文案 key（如图片编辑的“完成”用于圈子选择页）
 
 ---
 
@@ -184,4 +187,4 @@ flutter analyze
 python3 scripts/verify_dart_semantic.py
 ```
 
-检查项：所有颜色/间距/文本/类型使用语义标签，无硬编码，无相对路径 import，无产品名做标识符。
+检查项：所有颜色/间距/文本/类型使用语义标签，无硬编码，无相对路径 import，无产品名做标识符；同时检查 iOS 语义（行尾箭头、Cupertino 页面组件边界、selector leading）。

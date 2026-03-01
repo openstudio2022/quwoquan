@@ -56,6 +56,8 @@ make build → make test-contract
 - Dart: 禁止硬编码视觉字面量，必须用 AppTypography/AppSpacing/AppColors
 - Dart: 禁止相对路径 import
 - Dart: Feature 禁止直接 import 其他 Feature 内部
+- Dart UI：全局遵循 iOS 语义规范 v1（见 `specs/ux/page-layout-semantics.md`），尤其是选择器/创作页的 Modal vs Stack 导航语义
+- Dart UI：`CupertinoPageScaffold` 场景禁止混用 Material 交互组件（`Checkbox`、`SnackBar` 等）
 
 ---
 

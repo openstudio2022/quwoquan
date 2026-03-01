@@ -2,9 +2,12 @@
 """
 verify_dart_semantic.py
 
-Scans quwoquan_app/lib/**/*.dart for hardcoded visual literals (width, height,
-leadingSize, fontSize, size, EdgeInsets, BorderRadius, Color(0x)) that should
-use design system tokens (AppSpacing, AppTypography, AppColors).
+Scans quwoquan_app/lib/**/*.dart for:
+1) hardcoded visual literals (width, height, leadingSize, fontSize, size,
+   EdgeInsets, BorderRadius, Color(0x)) that should use design system tokens
+   (AppSpacing, AppTypography, AppColors).
+2) iOS semantic style violations (chevron icon semantics, Cupertino page
+   mixing Material interaction components, selector leading semantics).
 
 Excluded paths: lib/core/design_system/, lib/core/constants/, *_test.dart
 
@@ -42,6 +45,12 @@ PATTERNS = [
     (r"Color\(0x[0-9A-Fa-f]+\b", "应使用 AppColors.*"),
 ]
 
+# iOS 语义风格检查（增量门禁）
+IOS_STYLE_EXCLUDE_FILES = {
+    "quwoquan_app/lib/ui/user/pages/author_profile_page.dart",
+    "quwoquan_app/lib/features/profile/pages/my_profile_page.dart",
+}
+
 # Path substrings to exclude from scanning
 EXCLUDE_SUBSTRINGS = [
     os.path.join("lib", "core", "design_system"),
@@ -59,21 +68,70 @@ def should_skip(path: str, lib_root: str) -> bool:
     return False
 
 
-def scan_file(path: str, lib_root: str) -> list[tuple[int, str, str]]:
+def scan_file(path: str, lib_root: str, repo_root: str) -> list[tuple[int, str, str]]:
     """Return list of (line_no, line_content, hint) for violations."""
     violations = []
-    rel_path = os.path.relpath(path, lib_root).replace("\\", "/")
+    rel_path = os.path.relpath(path, repo_root).replace("\\", "/")
     try:
         with open(path, encoding="utf-8") as f:
-            for i, line in enumerate(f, 1):
-                # Skip comment-only lines
-                stripped = line.strip()
-                if stripped.startswith("//"):
-                    continue
-                for pattern, hint in PATTERNS:
-                    if re.search(pattern, line):
-                        violations.append((i, line.rstrip(), hint))
-                        break
+            lines = f.readlines()
+            content = "".join(lines)
+
+        for i, line in enumerate(lines, 1):
+            # Skip comment-only lines
+            stripped = line.strip()
+            if stripped.startswith("//"):
+                continue
+            for pattern, hint in PATTERNS:
+                if re.search(pattern, line):
+                    violations.append((i, line.rstrip(), hint))
+                    break
+
+        # iOS 全局语义：统一行尾箭头使用 CupertinoIcons.chevron_forward
+        if rel_path not in IOS_STYLE_EXCLUDE_FILES:
+            for i, line in enumerate(lines, 1):
+                if "Icons.chevron_right" in line:
+                    violations.append(
+                        (
+                            i,
+                            line.rstrip(),
+                            "iOS 语义：行尾箭头应使用 CupertinoIcons.chevron_forward",
+                        )
+                    )
+
+        # iOS 选择器语义：CupertinoPageScaffold 页面不允许混用 Material 交互组件
+        if "CupertinoPageScaffold(" in content:
+            ios_forbidden = [
+                (
+                    r"\bCheckbox\(",
+                    "iOS 语义：CupertinoPageScaffold 页面禁止使用 Material Checkbox",
+                ),
+                (
+                    r"\bScaffoldMessenger\.of\(",
+                    "iOS 语义：CupertinoPageScaffold 页面禁止使用 ScaffoldMessenger",
+                ),
+                (
+                    r"\bSnackBar\(",
+                    "iOS 语义：CupertinoPageScaffold 页面禁止使用 Material SnackBar",
+                ),
+            ]
+            for pattern, hint in ios_forbidden:
+                for m in re.finditer(pattern, content):
+                    line_no = content.count("\n", 0, m.start()) + 1
+                    line_content = lines[line_no - 1].rstrip() if line_no - 1 < len(lines) else ""
+                    violations.append((line_no, line_content, hint))
+
+        # iOS 选择器语义：selector 页面应使用 xmark 关闭，不使用 back
+        if rel_path.endswith("_selector_page.dart"):
+            for i, line in enumerate(lines, 1):
+                if "CupertinoIcons.back" in line:
+                    violations.append(
+                        (
+                            i,
+                            line.rstrip(),
+                            "iOS 语义：selector 页面 leading 应为 CupertinoIcons.xmark",
+                        )
+                    )
     except OSError as e:
         print(f"verify_dart_semantic: ERROR reading {rel_path}: {e}", file=sys.stderr)
     return violations
@@ -131,7 +189,7 @@ def main() -> int:
             if should_skip(path, lib_root):
                 continue
             rel = os.path.relpath(path, root).replace("\\", "/")
-            for line_no, line_content, hint in scan_file(path, lib_root):
+            for line_no, line_content, hint in scan_file(path, lib_root, root):
                 entry = f"{rel}:{line_no}"
                 if entry not in baseline:
                     all_violations.append((rel, line_no, line_content, hint))
@@ -147,7 +205,7 @@ def main() -> int:
                 if should_skip(path, lib_root):
                     continue
                 rel = os.path.relpath(path, root).replace("\\", "/")
-                for line_no, _lc, _h in scan_file(path, lib_root):
+                for line_no, _lc, _h in scan_file(path, lib_root, root):
                     baseline_entries.add(f"{rel}:{line_no}")
         save_baseline(baseline_entries)
         print(f"verify_dart_semantic: baseline 已更新，共 {len(baseline_entries)} 条")

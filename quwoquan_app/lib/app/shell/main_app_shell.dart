@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -36,6 +38,9 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
   late String _currentLocation;
   late String _currentPageVisitId;
   late DateTime _currentPageEnterAt;
+  AssistantCenterVisualState _assistantVisualState =
+      AssistantCenterVisualState.silent;
+  Timer? _assistantStateTimer;
 
   @override
   void initState() {
@@ -57,6 +62,10 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.currentLocation != widget.currentLocation) {
       _currentIndex = _getIndexFromLocation(widget.currentLocation);
+      if (_isAssistantConversationRoute(oldWidget.currentLocation) &&
+          _isMainTabRoute(widget.currentLocation)) {
+        _enterAssistantListeningState();
+      }
       _logPageReturn(
         location: _currentLocation,
         pageVisitId: _currentPageVisitId,
@@ -74,6 +83,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
 
   @override
   void dispose() {
+    _assistantStateTimer?.cancel();
     _logPageReturn(
       location: _currentLocation,
       pageVisitId: _currentPageVisitId,
@@ -87,7 +97,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       return 0; // 发现
     } else if (location == '/circles') {
       return 1; // 圈子
-    } else if (location == '/chat') {
+    } else if (location.startsWith('/chat')) {
       return 3; // 趣聊
     } else if (location == '/profile') {
       return 4; // 我的
@@ -97,7 +107,12 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = ref.watch(isDarkProvider);
+    final themeDark = ref.watch(isDarkProvider);
+    final forceDark = ref.watch(videoForceDarkProvider).forceDark;
+    final isDark = themeDark || forceDark;
+    final shellBackground = forceDark
+        ? AppColors.worksBackground
+        : AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
     final bottomNavHidden = ref.watch(bottomNavHiddenProvider).hidden;
 
     final statusBarStyle = SystemUiOverlayStyle(
@@ -113,10 +128,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: statusBarStyle,
       child: Scaffold(
-        backgroundColor: AppColorsFunctional.getColor(
-          isDark,
-          ColorType.backgroundPrimary,
-        ),
+        backgroundColor: shellBackground,
         body: Stack(
           children: [
             // 主内容区域 - 使用 IndexedStack 保持各频道状态
@@ -125,7 +137,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
               children: const [
                 DiscoveryPage(), // 0: 发现
                 CirclesPage(), // 1: 圈子
-                SizedBox.shrink(), // 2: 创作（不占路由，通过 Overlay）
+                SizedBox.shrink(), // 2: 小趣入口（独立路由）
                 ChatPage(), // 3: 趣聊
                 MyProfilePage(), // 4: 我的
               ],
@@ -140,16 +152,14 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                 // parent Scaffold) so the background fill always reaches the
                 // very bottom of the screen regardless of nested Scaffold state.
                 child: Container(
-                  color: AppColorsFunctional.getColor(
-                    isDark,
-                    ColorType.backgroundPrimary,
-                  ),
+                  color: shellBackground,
                   padding: EdgeInsets.only(
                     bottom: MediaQuery.viewPaddingOf(context).bottom,
                   ),
                   child: BottomNavigationWidget(
                     currentIndex: _currentIndex,
                     onTap: _handleBottomNavTap,
+                    assistantVisualState: _assistantVisualState,
                   ),
                 ),
               ),
@@ -165,10 +175,13 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       meta: <String, dynamic>{'fromIndex': _currentIndex, 'toIndex': index},
     );
     if (index == 2) {
-      context.go('/create');
+      ref.read(lastMainTabBeforeAssistantProvider.notifier).set(_currentIndex);
+      _triggerAssistantWakeState();
+      context.go('/chat/${AppConceptConstants.assistantConversationId}');
       return;
     }
 
+    _setAssistantVisualState(AssistantCenterVisualState.silent);
     setState(() {
       _currentIndex = index;
     });
@@ -187,6 +200,44 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         context.go('/profile');
         break;
     }
+  }
+
+  bool _isAssistantConversationRoute(String location) {
+    return location.startsWith(
+      '/chat/${AppConceptConstants.assistantConversationId}',
+    );
+  }
+
+  bool _isMainTabRoute(String location) {
+    return location == '/' ||
+        location == '/circles' ||
+        location == '/chat' ||
+        location == '/profile';
+  }
+
+  void _triggerAssistantWakeState() {
+    _assistantStateTimer?.cancel();
+    _setAssistantVisualState(AssistantCenterVisualState.wake);
+  }
+
+  void _enterAssistantListeningState() {
+    _assistantStateTimer?.cancel();
+    _setAssistantVisualState(AssistantCenterVisualState.listening);
+    _assistantStateTimer = Timer(const Duration(seconds: 3), () {
+      if (!mounted) {
+        return;
+      }
+      _setAssistantVisualState(AssistantCenterVisualState.silent);
+    });
+  }
+
+  void _setAssistantVisualState(AssistantCenterVisualState value) {
+    if (_assistantVisualState == value) {
+      return;
+    }
+    setState(() {
+      _assistantVisualState = value;
+    });
   }
 
   String _routeNameFromLocation(String location) {

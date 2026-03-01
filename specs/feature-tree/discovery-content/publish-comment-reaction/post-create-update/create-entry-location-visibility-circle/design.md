@@ -123,6 +123,7 @@
 - 分组标题：`AppTypography.sm` 或 `base`，灰色
 - 小字标注：`AppTypography.xs`，`SettingsSemanticConstants.createSettingItemValueColor`
 - 分组用 `ListTile` 或 `Section` 语义，避免与顶部工具栏混淆
+- Cupertino 页面不混用 Material `Checkbox`、`SnackBar` 等交互组件，选择态采用 iOS 语义图标（圆圈/勾选圆圈）
 
 **空态与无圈子**：
 - 创作页入口无圈子时：「加入圈子，发现同好」
@@ -135,6 +136,12 @@
 - `circleIds` 仅在公开时提交。
 - 本迭代不新增后端路由；若圈子列表接口缺失，先对接现有仓储能力并提供空态。
 - 四类内容在 `_buildPostPayload` 的内容特有字段之外，共享同一组发布设置映射逻辑。
+
+## 4.1 iOS 语义 v1 落地范围（本轮）
+
+- `PublishLocationSelectorPage`：附近页 + 搜索页统一 Modal `xmark` 关闭语义
+- `PublishCircleSelectPage`：多选交互统一 iOS 选择态，移除与“关注圈子”相关的混杂动作
+- 当前 `CreatePage` 发布设置区：行尾箭头统一为 `CupertinoIcons.chevron_forward`，与选择器语义一致
 
 ## 5. 适用场景与约束
 - 适用于 Flutter 创作页与图片/视频/文章编辑页的统一发布设置区域。

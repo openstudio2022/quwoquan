@@ -13,6 +13,7 @@
 
 - [x] 新建 `scripts/verify_dart_semantic.py`
 - [x] 正则：width、height、leadingSize、fontSize、size、EdgeInsets、BorderRadius、Color(0x)
+- [x] 新增 iOS 语义规则：`Icons.chevron_right`、`CupertinoPageScaffold` 混用 Material 交互、selector leading back
 - [x] 白名单：lib/core/design_system/、lib/core/constants/
 - [x] 输出 path:line:snippet，失败 exit 1
 - [x] 能检出 publish_circle_select_page 历史硬编码（回归验证）
@@ -21,6 +22,7 @@
 
 - [x] 在 gate_repo.sh run_app 中，flutter analyze 之后追加调用
 - [x] `python3 scripts/verify_dart_semantic.py || exit 1`
+- [x] gate 文案明确包含 iOS 语义门禁说明
 
 ### M3：规则与流程
 

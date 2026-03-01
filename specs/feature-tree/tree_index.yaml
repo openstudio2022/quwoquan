@@ -1819,6 +1819,13 @@ features:
                   domain: ""
                   status: in_progress
                   tags: []
+                - id: circles-channel-management-panel
+                  name: circles-channel-management-panel
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-client-foundation/page-layout-semantics/circles-channel-management-panel
+                  domain: ""
+                  status: specified
+                  tags: [circles, channel, tab]
         - id: runtime-external-integration
           name: runtime-external-integration
           level: L2_feature

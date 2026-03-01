@@ -780,6 +780,125 @@ class AppLocalizationsEn extends AppLocalizations {
   String get assistantNoReplayData => 'TODO: translate';
 
   @override
+  String get assistantSkillCenterTitle => 'Skill Center';
+
+  @override
+  String get assistantSkillCenterDefaultAllSubscribedTitle =>
+      'Default all subscriptions enabled';
+
+  @override
+  String get assistantSkillCenterDefaultAllSubscribedDesc =>
+      'All assistant capabilities are ready by default; execution is still gated by risk policy and scene gates.';
+
+  @override
+  String get assistantSkillCenterRestoreDefaultAll =>
+      'Restore default all subscriptions';
+
+  @override
+  String get assistantSkillCenterSimpleMode => 'Simple mode';
+
+  @override
+  String get assistantSkillCenterPackagesTitle => 'Capability packages';
+
+  @override
+  String get assistantSkillCenterPackageLife => 'Life Assistant';
+
+  @override
+  String get assistantSkillCenterPackageWork => 'Work Assistant';
+
+  @override
+  String get assistantSkillCenterPackageKnowledge => 'Knowledge Assistant';
+
+  @override
+  String get assistantSkillCenterPackageCompanion => 'Companion Assistant';
+
+  @override
+  String get assistantSkillCenterNoMappedSkills => 'No mapped skills';
+
+  @override
+  String assistantSkillCenterContainsCount(int count) {
+    return 'Contains $count items';
+  }
+
+  @override
+  String get assistantSkillCenterRiskPolicyTitle => 'Risk Policy';
+
+  @override
+  String get assistantSkillCenterLowRiskAuto => 'Auto run for low risk';
+
+  @override
+  String get assistantSkillCenterLowRiskDesc =>
+      'Search, summary and Q&A run automatically';
+
+  @override
+  String get assistantSkillCenterMediumRiskConfirm =>
+      'Light confirm for medium risk';
+
+  @override
+  String get assistantSkillCenterMediumRiskDesc =>
+      'Creating reminders and tasks requires confirmation';
+
+  @override
+  String get assistantSkillCenterHighRiskDoubleConfirm =>
+      'Double confirmation for high risk';
+
+  @override
+  String get assistantSkillCenterHighRiskDesc =>
+      'Transactions and external submissions require double confirmation';
+
+  @override
+  String get assistantSkillCenterHighRiskRequired =>
+      'High-risk actions must keep double confirmation';
+
+  @override
+  String get assistantSkillCenterSceneGateTitle => 'Scene Gates';
+
+  @override
+  String get assistantSkillCenterSceneDiscovery => 'Discovery';
+
+  @override
+  String get assistantSkillCenterSceneDiscoveryDesc =>
+      'Only gentle hints while browsing, no interruption';
+
+  @override
+  String get assistantSkillCenterSceneCircle => 'Circles';
+
+  @override
+  String get assistantSkillCenterSceneCircleDesc =>
+      'Trigger circle discussion suggestions on demand';
+
+  @override
+  String get assistantSkillCenterSceneChat => 'Chat';
+
+  @override
+  String get assistantSkillCenterSceneChatDesc =>
+      'Participate by invitation by default (@assistant or manual tap)';
+
+  @override
+  String get assistantSkillCenterSceneSystem => 'External Scenes';
+
+  @override
+  String get assistantSkillCenterSceneSystemDesc =>
+      'Cross-scene capabilities like clipboard, images and links';
+
+  @override
+  String get assistantSkillCenterRecentSessionsTitle => 'Recent Sessions';
+
+  @override
+  String get assistantSkillCenterNoRecentSessions => 'No session history';
+
+  @override
+  String assistantSkillCenterMessagesCount(int count) {
+    return '$count messages';
+  }
+
+  @override
+  String get assistantSkillCenterNoLastMessage => 'No recent message';
+
+  @override
+  String get assistantSkillCenterAllSkillsTitle => 'All Skills';
+
+  @override
   String get personaManage => 'TODO: translate';
 
   @override

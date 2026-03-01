@@ -26,6 +26,22 @@ import 'package:quwoquan_app/features/profile/pages/resonance_page.dart';
 import 'package:quwoquan_app/features/assistant/context/assistant_open_context.dart';
 import 'package:quwoquan_app/features/assistant/pages/assistant_home_page.dart';
 import 'package:quwoquan_app/features/assistant/pages/assistant_management_page.dart';
+import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_center_page.dart';
+
+String _routeFromMainTabIndex(int index) {
+  switch (index) {
+    case 0:
+      return '/';
+    case 1:
+      return '/circles';
+    case 3:
+      return '/chat';
+    case 4:
+      return '/profile';
+    default:
+      return '/chat';
+  }
+}
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -267,6 +283,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
+        path: '/assistant/skills',
+        builder: (context, state) {
+          return AssistantSkillCenterPage(
+            onBack: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/assistant');
+              }
+            },
+          );
+        },
+      ),
+      GoRoute(
         path: '/settings',
         builder: (context, state) {
           return const SettingsPage();
@@ -313,11 +343,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final assistantOpenContext = state.extra is AssistantOpenContext
               ? state.extra as AssistantOpenContext
               : null;
+          final isAssistant =
+              id == AppConceptConstants.assistantConversationId;
           return ChatDetailPage(
             conversationId: id,
             onBack: () {
               if (context.canPop()) {
                 context.pop();
+              } else if (isAssistant) {
+                final lastTab =
+                    ref.read(lastMainTabBeforeAssistantProvider);
+                ref.read(lastMainTabBeforeAssistantProvider.notifier)
+                    .set(null);
+                final route = lastTab != null
+                    ? _routeFromMainTabIndex(lastTab)
+                    : '/chat';
+                context.go(route);
               } else {
                 context.go('/chat');
               }

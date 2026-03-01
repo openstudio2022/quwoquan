@@ -7,7 +7,7 @@ import 'package:quwoquan_app/l10n/l10n.dart';
 
 /// 发布圈子选择页（design §3.7）
 ///
-/// 已加入 / 推荐加入 分区，小字标注，Cupertino 风格，底部取消+完成。
+/// 已加入 / 推荐圈子分区，Cupertino 语义，底部取消+确认。
 /// 无已加入圈子时展示空态「加入圈子，发现同好」+ 发现页 CTA。
 class PublishCircleSelectPage extends StatefulWidget {
   const PublishCircleSelectPage({
@@ -38,7 +38,7 @@ class _PublishCircleSelectPageState extends State<PublishCircleSelectPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
     final fgSecondary = SettingsSemanticConstants.secondaryColor(isDark);
     final blockBg = SettingsSemanticConstants.blockBackground(isDark);
@@ -75,7 +75,8 @@ class _PublishCircleSelectPageState extends State<PublishCircleSelectPage> {
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: EdgeInsets.symmetric(
-                          horizontal: SettingsSemanticConstants.blockHorizontalPadding,
+                          horizontal:
+                              SettingsSemanticConstants.blockHorizontalPadding,
                           vertical: AppSpacing.interGroupMd,
                         ),
                         child: Text(
@@ -93,7 +94,8 @@ class _PublishCircleSelectPageState extends State<PublishCircleSelectPage> {
                     SliverToBoxAdapter(
                       child: Container(
                         margin: EdgeInsets.symmetric(
-                          horizontal: SettingsSemanticConstants.blockHorizontalPadding,
+                          horizontal:
+                              SettingsSemanticConstants.blockHorizontalPadding,
                           vertical: AppSpacing.sm,
                         ),
                         decoration: BoxDecoration(
@@ -102,17 +104,24 @@ class _PublishCircleSelectPageState extends State<PublishCircleSelectPage> {
                             SettingsSemanticConstants.blockBorderRadius,
                           ),
                           border: Border.all(
-                            color: SettingsSemanticConstants.blockBorderColor(isDark),
+                            color: SettingsSemanticConstants.blockBorderColor(
+                              isDark,
+                            ),
                           ),
                         ),
                         child: Column(
                           children: [
-                            for (var i = 0; i < widget.joinedCircles.length; i++) ...[
+                            for (
+                              var i = 0;
+                              i < widget.joinedCircles.length;
+                              i++
+                            ) ...[
                               if (i > 0)
                                 Divider(
                                   height: 1,
                                   color: dividerClr,
-                                  thickness: SettingsSemanticConstants.dividerThickness,
+                                  thickness: SettingsSemanticConstants
+                                      .dividerThickness,
                                 ),
                               _buildJoinedTile(
                                 widget.joinedCircles[i],
@@ -132,7 +141,8 @@ class _PublishCircleSelectPageState extends State<PublishCircleSelectPage> {
                     SliverToBoxAdapter(
                       child: Container(
                         margin: EdgeInsets.symmetric(
-                          horizontal: SettingsSemanticConstants.blockHorizontalPadding,
+                          horizontal:
+                              SettingsSemanticConstants.blockHorizontalPadding,
                           vertical: AppSpacing.sm,
                         ),
                         decoration: BoxDecoration(
@@ -141,19 +151,24 @@ class _PublishCircleSelectPageState extends State<PublishCircleSelectPage> {
                             SettingsSemanticConstants.blockBorderRadius,
                           ),
                           border: Border.all(
-                            color: SettingsSemanticConstants.blockBorderColor(isDark),
+                            color: SettingsSemanticConstants.blockBorderColor(
+                              isDark,
+                            ),
                           ),
                         ),
                         child: Column(
                           children: [
-                            for (var i = 0;
-                                i < widget.recommendedCircles.length;
-                                i++) ...[
+                            for (
+                              var i = 0;
+                              i < widget.recommendedCircles.length;
+                              i++
+                            ) ...[
                               if (i > 0)
                                 Divider(
                                   height: 1,
                                   color: dividerClr,
-                                  thickness: SettingsSemanticConstants.dividerThickness,
+                                  thickness: SettingsSemanticConstants
+                                      .dividerThickness,
                                 ),
                               _buildRecommendedTile(
                                 widget.recommendedCircles[i],
@@ -181,7 +196,7 @@ class _PublishCircleSelectPageState extends State<PublishCircleSelectPage> {
                 vertical: AppSpacing.interGroupMd,
               ),
               decoration: BoxDecoration(
-                color: Theme.of(context).scaffoldBackgroundColor,
+                color: SettingsSemanticConstants.pageBackground(isDark),
               ),
               child: Row(
                 children: [
@@ -196,7 +211,7 @@ class _PublishCircleSelectPageState extends State<PublishCircleSelectPage> {
                   Expanded(
                     child: CupertinoButton.filled(
                       onPressed: () => Navigator.of(context).pop(_selected),
-                      child: Text(l10n.imageEditDone),
+                      child: Text(l10n.confirm),
                     ),
                   ),
                 ],
@@ -221,7 +236,7 @@ class _PublishCircleSelectPageState extends State<PublishCircleSelectPage> {
           title,
           style: TextStyle(
             fontSize: AppTypography.sm,
-            fontWeight: FontWeight.w700,
+            fontWeight: AppTypography.semiBold,
             color: color,
           ),
         ),
@@ -236,67 +251,15 @@ class _PublishCircleSelectPageState extends State<PublishCircleSelectPage> {
     Color fgSecondary,
     Color blue,
   ) {
-    final checked = _selected.containsKey(circle.id);
     final subtitle = circle.memberCount != null
         ? l10n.circleMemberCountJoined(circle.memberCount!)
         : l10n.circleJoinedLabel;
-
-    return CupertinoListTile(
-      leadingSize: AppSpacing.minInteractiveSize,
-      leading: CircleAvatar(
-        radius: 20,
-        backgroundColor: blue.withValues(alpha: 0.2),
-        child: Text(
-          circle.name.isNotEmpty ? circle.name[0] : '?',
-          style: TextStyle(color: blue, fontWeight: FontWeight.w600),
-        ),
-      ),
-      title: Text(
-        circle.name,
-        style: TextStyle(
-          fontSize: AppTypography.lg,
-          fontWeight: FontWeight.w500,
-          color: fgPrimary,
-        ),
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Text(
-        subtitle,
-        style: TextStyle(
-          fontSize: AppTypography.xs,
-          color: fgSecondary,
-        ),
-        overflow: TextOverflow.ellipsis,
-      ),
-      trailing: Material(
-        type: MaterialType.transparency,
-        child: SizedBox(
-          width: AppSpacing.minInteractiveSize,
-          height: AppSpacing.minInteractiveSize,
-          child: Checkbox(
-            value: checked,
-            activeColor: blue,
-            onChanged: (v) {
-            setState(() {
-              if (v == true) {
-                _selected[circle.id] = circle.name;
-              } else {
-                _selected.remove(circle.id);
-              }
-            });
-          },
-        ),
-        ),
-      ),
-      onTap: () {
-        setState(() {
-          if (checked) {
-            _selected.remove(circle.id);
-          } else {
-            _selected[circle.id] = circle.name;
-          }
-        });
-      },
+    return _buildSelectableTile(
+      circle: circle,
+      subtitle: subtitle,
+      fgPrimary: fgPrimary,
+      fgSecondary: fgSecondary,
+      blue: blue,
     );
   }
 
@@ -311,19 +274,36 @@ class _PublishCircleSelectPageState extends State<PublishCircleSelectPage> {
     final subtitle = reason.isNotEmpty && count > 0
         ? l10n.circleRecommendedSubtitle(reason, count)
         : count > 0
-            ? '$count ${l10n.circleMembers}'
-            : null;
+        ? '$count ${l10n.circleMembers}'
+        : null;
+    return _buildSelectableTile(
+      circle: circle,
+      subtitle: subtitle,
+      fgPrimary: fgPrimary,
+      fgSecondary: fgSecondary,
+      blue: AppColors.primaryColor,
+    );
+  }
 
+  Widget _buildSelectableTile({
+    required CreateCircleOption circle,
+    required String? subtitle,
+    required Color fgPrimary,
+    required Color fgSecondary,
+    required Color blue,
+  }) {
+    final checked = _selected.containsKey(circle.id);
     return CupertinoListTile(
       leadingSize: AppSpacing.minInteractiveSize,
       leading: CircleAvatar(
-        radius: 20,
-        backgroundColor: AppColors.primaryColor.withValues(alpha: 0.2),
+        radius: AppSpacing.avatarUserMd / 2,
+        backgroundColor: blue.withValues(alpha: 0.16),
         child: Text(
           circle.name.isNotEmpty ? circle.name[0] : '?',
           style: TextStyle(
-            color: AppColors.primaryColor,
-            fontWeight: FontWeight.w600,
+            color: blue,
+            fontSize: AppTypography.sm,
+            fontWeight: AppTypography.semiBold,
           ),
         ),
       ),
@@ -331,44 +311,59 @@ class _PublishCircleSelectPageState extends State<PublishCircleSelectPage> {
         circle.name,
         style: TextStyle(
           fontSize: AppTypography.lg,
-          fontWeight: FontWeight.w500,
+          fontWeight: AppTypography.medium,
           color: fgPrimary,
         ),
         overflow: TextOverflow.ellipsis,
       ),
-      subtitle: subtitle != null
-          ? Text(
+      subtitle: subtitle == null
+          ? null
+          : Text(
               subtitle,
-              style: TextStyle(
-                fontSize: AppTypography.xs,
-                color: fgSecondary,
-              ),
+              style: TextStyle(fontSize: AppTypography.xs, color: fgSecondary),
               overflow: TextOverflow.ellipsis,
-            )
-          : null,
-      trailing: CupertinoButton(
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.sm,
-          vertical: AppSpacing.xs,
-        ),
-        child: Text(
-          l10n.circleFollowButton,
-          style: TextStyle(
-            fontSize: AppTypography.sm,
-            color: AppColors.primaryColor,
-            fontWeight: FontWeight.w600,
+            ),
+      trailing: _buildSelectionIndicator(
+        checked: checked,
+        onTap: () => _toggleSelection(circle),
+      ),
+      onTap: () => _toggleSelection(circle),
+    );
+  }
+
+  Widget _buildSelectionIndicator({
+    required bool checked,
+    required VoidCallback onTap,
+  }) {
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      onPressed: onTap,
+      child: SizedBox(
+        width: AppSpacing.minInteractiveSize,
+        height: AppSpacing.minInteractiveSize,
+        child: Center(
+          child: Icon(
+            checked
+                ? CupertinoIcons.check_mark_circled_solid
+                : CupertinoIcons.circle,
+            size: AppSpacing.iconMedium,
+            color: checked
+                ? AppColors.primaryColor
+                : CupertinoColors.systemGrey2,
           ),
         ),
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${circle.name}（关注功能待接入）'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        },
       ),
     );
+  }
+
+  void _toggleSelection(CreateCircleOption circle) {
+    setState(() {
+      if (_selected.containsKey(circle.id)) {
+        _selected.remove(circle.id);
+      } else {
+        _selected[circle.id] = circle.name;
+      }
+    });
   }
 
   Widget _buildEmptyState(
@@ -378,7 +373,9 @@ class _PublishCircleSelectPageState extends State<PublishCircleSelectPage> {
   ) {
     return Center(
       child: Padding(
-        padding: EdgeInsets.all(SettingsSemanticConstants.blockHorizontalPadding),
+        padding: EdgeInsets.all(
+          SettingsSemanticConstants.blockHorizontalPadding,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

@@ -11,6 +11,42 @@ type GeoPoint struct {
 
 var _ = time.Now
 
+// Comment domain model.
+type Comment struct {
+	ID               string    `json:"_id" bson:"_id"`
+	PostId           string    `json:"postId" bson:"postId"`
+	AuthorId         string    `json:"authorId" bson:"authorId"`
+	PersonaId        string    `json:"personaId" bson:"personaId"`
+	Content          string    `json:"content" bson:"content"`
+	ReplyToCommentId string    `json:"replyToCommentId" bson:"replyToCommentId"`
+	ReplyToUserId    string    `json:"replyToUserId" bson:"replyToUserId"`
+	LikeCount        int64     `json:"likeCount" bson:"likeCount"`
+	Status           string    `json:"status" bson:"status"`
+	CreatedAt        time.Time `json:"createdAt" bson:"createdAt"`
+}
+
+// MediaAsset domain model.
+type MediaAsset struct {
+	ID                 string    `json:"_id" bson:"_id"`
+	PostId             string    `json:"postId" bson:"postId"`
+	Type               string    `json:"type" bson:"type"`
+	OriginUrl          string    `json:"originUrl" bson:"originUrl"`
+	CdnUrl             string    `json:"cdnUrl" bson:"cdnUrl"`
+	ThumbnailUrl       string    `json:"thumbnailUrl" bson:"thumbnailUrl"`
+	Width              int64     `json:"width" bson:"width"`
+	Height             int64     `json:"height" bson:"height"`
+	DurationMs         int64     `json:"durationMs" bson:"durationMs"`
+	FileSizeBytes      int64     `json:"fileSizeBytes" bson:"fileSizeBytes"`
+	MimeType           string    `json:"mimeType" bson:"mimeType"`
+	Status             string    `json:"status" bson:"status"`
+	ModerationStatus   string    `json:"moderationStatus" bson:"moderationStatus"`
+	Derivatives        any       `json:"derivatives" bson:"derivatives"`
+	CoverStrategy      string    `json:"coverStrategy" bson:"coverStrategy"`
+	ManualCoverAssetId string    `json:"manualCoverAssetId" bson:"manualCoverAssetId"`
+	CreatedAt          time.Time `json:"createdAt" bson:"createdAt"`
+	UpdatedAt          time.Time `json:"updatedAt" bson:"updatedAt"`
+}
+
 // ContentReaction domain model.
 type ContentReaction struct {
 	ID          string    `json:"_id" bson:"_id"`
@@ -95,40 +131,4 @@ type Post struct {
 	UpdatedAt           time.Time      `json:"updatedAt" bson:"updatedAt"`
 	PublishedAt         time.Time      `json:"publishedAt" bson:"publishedAt"`
 	DeletedAt           time.Time      `json:"deletedAt" bson:"deletedAt"`
-}
-
-// Comment domain model.
-type Comment struct {
-	ID               string    `json:"_id" bson:"_id"`
-	PostId           string    `json:"postId" bson:"postId"`
-	AuthorId         string    `json:"authorId" bson:"authorId"`
-	PersonaId        string    `json:"personaId" bson:"personaId"`
-	Content          string    `json:"content" bson:"content"`
-	ReplyToCommentId string    `json:"replyToCommentId" bson:"replyToCommentId"`
-	ReplyToUserId    string    `json:"replyToUserId" bson:"replyToUserId"`
-	LikeCount        int64     `json:"likeCount" bson:"likeCount"`
-	Status           string    `json:"status" bson:"status"`
-	CreatedAt        time.Time `json:"createdAt" bson:"createdAt"`
-}
-
-// MediaAsset domain model.
-type MediaAsset struct {
-	ID                 string    `json:"_id" bson:"_id"`
-	PostId             string    `json:"postId" bson:"postId"`
-	Type               string    `json:"type" bson:"type"`
-	OriginUrl          string    `json:"originUrl" bson:"originUrl"`
-	CdnUrl             string    `json:"cdnUrl" bson:"cdnUrl"`
-	ThumbnailUrl       string    `json:"thumbnailUrl" bson:"thumbnailUrl"`
-	Width              int64     `json:"width" bson:"width"`
-	Height             int64     `json:"height" bson:"height"`
-	DurationMs         int64     `json:"durationMs" bson:"durationMs"`
-	FileSizeBytes      int64     `json:"fileSizeBytes" bson:"fileSizeBytes"`
-	MimeType           string    `json:"mimeType" bson:"mimeType"`
-	Status             string    `json:"status" bson:"status"`
-	ModerationStatus   string    `json:"moderationStatus" bson:"moderationStatus"`
-	Derivatives        any       `json:"derivatives" bson:"derivatives"`
-	CoverStrategy      string    `json:"coverStrategy" bson:"coverStrategy"`
-	ManualCoverAssetId string    `json:"manualCoverAssetId" bson:"manualCoverAssetId"`
-	CreatedAt          time.Time `json:"createdAt" bson:"createdAt"`
-	UpdatedAt          time.Time `json:"updatedAt" bson:"updatedAt"`
 }

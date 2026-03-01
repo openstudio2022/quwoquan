@@ -1,6 +1,7 @@
 // ignore_for_file: unnecessary_underscores
 
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -58,25 +59,25 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
   late List<Map<String, dynamic>> _users;
   late List<Map<String, dynamic>> _groups;
   static List<Map<String, dynamic>> get _mockLikes => [
-        {
-          'id': 'i1',
-          'userName': '陈一发',
-          'userAvatar':
-              'https://images.unsplash.com/photo-1630939687530-241d630735df?q=80&w=100',
-          'content': '赞了圈内作品',
-          'targetTitle': '《川西秘境摄影集》',
-          'time': '14:20',
-        },
-        {
-          'id': 'i2',
-          'userName': '王小明',
-          'userAvatar':
-              'https://images.unsplash.com/photo-1643816831234-e7cb32194e92?q=80&w=100',
-          'content': '赞了圈内评论',
-          'targetTitle': '摄影器材交流区',
-          'time': '10:05',
-        },
-      ];
+    {
+      'id': 'i1',
+      'userName': '陈一发',
+      'userAvatar':
+          'https://images.unsplash.com/photo-1630939687530-241d630735df?q=80&w=100',
+      'content': '赞了圈内作品',
+      'targetTitle': '《川西秘境摄影集》',
+      'time': '14:20',
+    },
+    {
+      'id': 'i2',
+      'userName': '王小明',
+      'userAvatar':
+          'https://images.unsplash.com/photo-1643816831234-e7cb32194e92?q=80&w=100',
+      'content': '赞了圈内评论',
+      'targetTitle': '摄影器材交流区',
+      'time': '10:05',
+    },
+  ];
 
   @override
   void initState() {
@@ -124,8 +125,7 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
     if (_searchQuery.isEmpty) return _users;
     final q = _searchQuery.toLowerCase();
     return _users
-        .where((u) =>
-            (u['name'] as String?)?.toLowerCase().contains(q) == true)
+        .where((u) => (u['name'] as String?)?.toLowerCase().contains(q) == true)
         .toList();
   }
 
@@ -133,8 +133,7 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
     if (_searchQuery.isEmpty) return _groups;
     final q = _searchQuery.toLowerCase();
     return _groups
-        .where((u) =>
-            (u['name'] as String?)?.toLowerCase().contains(q) == true)
+        .where((u) => (u['name'] as String?)?.toLowerCase().contains(q) == true)
         .toList();
   }
 
@@ -142,24 +141,35 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
     if (_searchQuery.isEmpty) return _mockLikes;
     final q = _searchQuery.toLowerCase();
     return _mockLikes
-        .where((i) =>
-            (i['userName'] as String?)?.toLowerCase().contains(q) == true)
+        .where(
+          (i) => (i['userName'] as String?)?.toLowerCase().contains(q) == true,
+        )
         .toList();
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
-    final bg =
-        AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
-    final fg =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
-    final borderColor =
-        AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
-    final inputBg =
-        AppColorsFunctional.getColor(isDark, ColorType.backgroundTertiary);
+    final bg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
+    final fg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final borderColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.borderPrimary,
+    );
+    final inputBg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundTertiary,
+    );
 
     return Scaffold(
       backgroundColor: bg,
@@ -207,8 +217,8 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
             child: _type == 'likes'
                 ? _buildLikesList(fg, fgSecondary, borderColor, bg)
                 : _type == 'groups'
-                    ? _buildGroupsList(fg, fgSecondary, borderColor)
-                    : _buildUsersList(fg, fgSecondary, borderColor, bg),
+                ? _buildGroupsList(fg, fgSecondary, borderColor)
+                : _buildUsersList(fg, fgSecondary, borderColor, bg),
           ),
         ],
       ),
@@ -216,7 +226,11 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
   }
 
   Widget _buildUsersList(
-      Color fg, Color fgSecondary, Color borderColor, Color bg) {
+    Color fg,
+    Color fgSecondary,
+    Color borderColor,
+    Color bg,
+  ) {
     final list = _filteredUsers;
     if (list.isEmpty) {
       return Center(
@@ -229,8 +243,8 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
     return ListView.separated(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       itemCount: list.length,
-      separatorBuilder: (_, __) => Divider(
-          height: 1, color: borderColor.withValues(alpha: 0.3)),
+      separatorBuilder: (_, __) =>
+          Divider(height: 1, color: borderColor.withValues(alpha: 0.3)),
       itemBuilder: (context, i) {
         final u = list[i];
         final name = u['name'] as String? ?? '';
@@ -247,8 +261,9 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
               children: [
                 CircleAvatar(
                   radius: 24,
-                  backgroundImage:
-                      avatar.isNotEmpty ? NetworkImage(avatar) : null,
+                  backgroundImage: avatar.isNotEmpty
+                      ? NetworkImage(avatar)
+                      : null,
                   onBackgroundImageError: (_, __) {},
                   child: avatar.isEmpty
                       ? Icon(Icons.person, color: fgSecondary)
@@ -301,10 +316,13 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
                     backgroundColor: isFollowed
                         ? borderColor.withValues(alpha: 0.3)
                         : AppColors.primaryColor.withValues(alpha: 0.12),
-                    foregroundColor:
-                        isFollowed ? fgSecondary : AppColors.primaryColor,
+                    foregroundColor: isFollowed
+                        ? fgSecondary
+                        : AppColors.primaryColor,
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 8),
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     minimumSize: const Size(72, 32),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20),
@@ -328,8 +346,7 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
     );
   }
 
-  Widget _buildGroupsList(
-      Color fg, Color fgSecondary, Color borderColor) {
+  Widget _buildGroupsList(Color fg, Color fgSecondary, Color borderColor) {
     final list = _filteredGroups;
     if (list.isEmpty) {
       return Center(
@@ -342,8 +359,8 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
     return ListView.separated(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       itemCount: list.length,
-      separatorBuilder: (_, __) => Divider(
-          height: 1, color: borderColor.withValues(alpha: 0.3)),
+      separatorBuilder: (_, __) =>
+          Divider(height: 1, color: borderColor.withValues(alpha: 0.3)),
       itemBuilder: (context, i) {
         final g = list[i];
         final name = g['name'] as String? ?? '';
@@ -390,7 +407,11 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
                     ],
                   ),
                 ),
-                Icon(Icons.chevron_right, color: fgSecondary, size: 24),
+                Icon(
+                  CupertinoIcons.chevron_forward,
+                  color: fgSecondary,
+                  size: 24,
+                ),
               ],
             ),
           ),
@@ -400,7 +421,11 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
   }
 
   Widget _buildLikesList(
-      Color fg, Color fgSecondary, Color borderColor, Color bg) {
+    Color fg,
+    Color fgSecondary,
+    Color borderColor,
+    Color bg,
+  ) {
     final list = _filteredLikes;
     if (list.isEmpty) {
       return Center(
@@ -413,8 +438,8 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
     return ListView.separated(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       itemCount: list.length,
-      separatorBuilder: (_, __) => Divider(
-          height: 1, color: borderColor.withValues(alpha: 0.3)),
+      separatorBuilder: (_, __) =>
+          Divider(height: 1, color: borderColor.withValues(alpha: 0.3)),
       itemBuilder: (context, i) {
         final item = list[i];
         final userName = item['userName'] as String? ?? '';

@@ -39,7 +39,7 @@ run_app() {
   command -v flutter >/dev/null 2>&1 || { echo "[gate] FAIL: flutter not found in PATH" 1>&2; exit 1; }
   (cd quwoquan_app && flutter pub get)
   (cd quwoquan_app && flutter analyze --no-fatal-warnings --no-fatal-infos)
-  # Dart 语义 token 检查：禁止硬编码 width/height/fontSize 等
+  # Dart 语义门禁：视觉 token + iOS 语义风格（chevron / Cupertino 组件边界）
   if command -v python3 >/dev/null 2>&1; then
     python3 scripts/verify_dart_semantic.py || exit 1
     python3 scripts/verify_error_code_semantic.py || exit 1

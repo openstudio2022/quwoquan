@@ -1,6 +1,7 @@
 // ignore_for_file: unnecessary_underscores
 
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -23,11 +24,27 @@ class SettingsPage extends ConsumerWidget {
 
     final sections = [
       _SettingsSection(id: 'display', label: '显示设置', icon: Icons.light_mode),
-      _SettingsSection(id: 'accessibility', label: '无障碍', icon: Icons.accessibility_new),
-      _SettingsSection(id: 'notifications', label: '通知', icon: Icons.notifications_outlined),
+      _SettingsSection(
+        id: 'accessibility',
+        label: '无障碍',
+        icon: Icons.accessibility_new,
+      ),
+      _SettingsSection(
+        id: 'notifications',
+        label: '通知',
+        icon: Icons.notifications_outlined,
+      ),
       _SettingsSection(id: 'privacy', label: '隐私', icon: Icons.shield_outlined),
-      _SettingsSection(id: 'assistant', label: AppConceptConstants.assistantLabel, icon: Icons.auto_awesome),
-      _SettingsSection(id: 'developer', label: '开发者', icon: Icons.developer_mode),
+      _SettingsSection(
+        id: 'assistant',
+        label: AppConceptConstants.assistantLabel,
+        icon: Icons.auto_awesome,
+      ),
+      _SettingsSection(
+        id: 'developer',
+        label: '开发者',
+        icon: Icons.developer_mode,
+      ),
       _SettingsSection(id: 'about', label: '关于', icon: Icons.favorite_border),
     ];
 
@@ -47,7 +64,11 @@ class SettingsPage extends ConsumerWidget {
         ),
         title: Text(
           UITextConstants.settings,
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: fgPrimary),
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: fgPrimary,
+          ),
         ),
       ),
       body: ListView.separated(
@@ -56,8 +77,11 @@ class SettingsPage extends ConsumerWidget {
           vertical: SettingsSemanticConstants.blockSpacing,
         ),
         itemCount: sections.length,
-        separatorBuilder: (_, __) =>
-            Divider(height: 1, color: dividerClr, thickness: SettingsSemanticConstants.dividerThickness),
+        separatorBuilder: (_, __) => Divider(
+          height: 1,
+          color: dividerClr,
+          thickness: SettingsSemanticConstants.dividerThickness,
+        ),
         itemBuilder: (context, i) {
           final s = sections[i];
           return ListTile(
@@ -70,7 +94,11 @@ class SettingsPage extends ConsumerWidget {
                 color: fgPrimary,
               ),
             ),
-            trailing: Icon(Icons.chevron_right, color: fgSecondary, size: 20),
+            trailing: Icon(
+              CupertinoIcons.chevron_forward,
+              color: fgSecondary,
+              size: 20,
+            ),
             onTap: () {
               if (s.id == 'assistant') {
                 context.push('/assistant/management');

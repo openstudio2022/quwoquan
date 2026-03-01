@@ -283,78 +283,63 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
 
   /// 发现页主导航：与圈子/首页复用同一 Tab 组件与字级。
   Widget _buildHeader(bool isDark) {
+    final rightActionsWidth =
+        AppSpacing.minInteractiveSize + AppSpacing.intraGroupMd;
+    // 预留左侧动作位（未来新增图标）并与右侧取同宽锚点，避免中轴漂移。
+    final leftActionsWidth = AppSpacing.discoveryHeaderSideAnchorMinWidth;
+    final sideAnchorWidth = leftActionsWidth > rightActionsWidth
+        ? leftActionsWidth
+        : rightActionsWidth;
     return Container(
       color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
       child: SafeArea(
         bottom: false,
         child: SizedBox(
           height: AppSpacing.tabNavigationHeight,
-          child: Row(
-            children: [
-              SizedBox(width: AppSpacing.iconButtonMinSizeSm),
-              Expanded(
-                child: Center(
-                  child: SizedBox(
-                    width: 214,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        // Left balance = right arrow slot (22 px each) — the pair
-                        // [微趣][作品] is optically centred regardless of state.
-                        const SizedBox(
-                          width: AppSpacing.intraGroupXs + AppSpacing.iconSmall + 2,
+          child: CenteredScrollableTabBar(
+            tabs: _categories
+                .map((c) => TabItem(id: c['id']!, label: c['label']!))
+                .toList(growable: false),
+            activeTab: _activeType,
+            isDark: isDark,
+            excludeUnderlineTabIds: const ['works'],
+            onTabChange: _setActiveType,
+            leadingActions: [
+              // 左侧锚点占位可直接替换成图标，不影响中轴。
+              SizedBox(width: sideAnchorWidth),
+            ],
+            trailingActions: [
+              SizedBox(
+                width: sideAnchorWidth,
+                child: CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  onPressed: () => context.go('/create'),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        CupertinoIcons.add_circled,
+                        size: AppSpacing.iconMedium,
+                        color: AppColorsFunctional.getColor(
+                          isDark,
+                          ColorType.foregroundPrimary,
                         ),
-                        GestureDetector(
-                          onTap: () => _setActiveType(_categories[0]['id']!),
-                          behavior: HitTestBehavior.opaque,
-                          child: Text(
-                            _categories[0]['label']!,
-                            style: TextStyle(
-                              fontSize: AppTypography.xl,
-                              fontWeight: AppTypography.bold,
-                              color: _activeType == _categories[0]['id']
-                                  ? AppColorsFunctional.getColor(
-                                      isDark,
-                                      ColorType.foregroundPrimary,
-                                    )
-                                  : AppColorsFunctional.getColor(
-                                      isDark,
-                                      ColorType.foregroundSecondary,
-                                    ),
-                            ),
+                      ),
+                      SizedBox(height: AppSpacing.intraGroupXs / 2),
+                      Text(
+                        context.l10n.publish,
+                        style: TextStyle(
+                          fontSize: AppTypography.xs,
+                          color: AppColorsFunctional.getColor(
+                            isDark,
+                            ColorType.foregroundSecondary,
                           ),
                         ),
-                        const SizedBox(width: AppSpacing.intraGroupMd),
-                        GestureDetector(
-                          onTap: () => _setActiveType(_categories[1]['id']!),
-                          behavior: HitTestBehavior.opaque,
-                          child: Text(
-                            _categories[1]['label']!,
-                            style: TextStyle(
-                              fontSize: AppTypography.xl,
-                              fontWeight: AppTypography.bold,
-                              color: _activeType == _categories[1]['id']
-                                  ? AppColorsFunctional.getColor(
-                                      isDark,
-                                      ColorType.foregroundPrimary,
-                                    )
-                                  : AppColorsFunctional.getColor(
-                                      isDark,
-                                      ColorType.foregroundSecondary,
-                                    ),
-                            ),
-                          ),
-                        ),
-                        // Right phantom — mirrors real arrow in _WorksPrimaryTopBar.
-                        const SizedBox(
-                          width: AppSpacing.intraGroupXs + AppSpacing.iconSmall + 2,
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-              SizedBox(width: AppSpacing.iconButtonMinSizeSm),
             ],
           ),
         ),
@@ -893,6 +878,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       config: MediaPostMoreActionConfig(post: post),
     );
   }
+
 }
 
 String _toTimeAgo(DateTime time, AppLocalizations l10n) {
@@ -1874,6 +1860,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                   isDark: true,
                   transparentBackground: true,
                   leftAlignedCompactMode: true,
+                  excludeUnderlineTabIds: const ['works'],
                   onTabChange: (id) {
                     final tab = ContentUIConfig.discoveryTabs.cast<DiscoveryTabConfig?>().firstWhere(
                       (t) => t!.id == id, orElse: () => null);
@@ -1986,3 +1973,4 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
     );
   }
 }
+

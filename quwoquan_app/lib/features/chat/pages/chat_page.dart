@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
+import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
+import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/features/assistant/context/assistant_open_context.dart';
@@ -165,61 +167,37 @@ class _ChatPageState extends ConsumerState<ChatPage>
 
   Widget _buildMainTabs(BuildContext context, Color bgColor, Color fgPrimary,
       Color fgSecondary) {
-    final tabs = [AppConceptConstants.messages, AppConceptConstants.contacts];
+    final tabs = <TabItem>[
+      TabItem(id: 'messages', label: AppConceptConstants.messages),
+      TabItem(id: 'contacts', label: AppConceptConstants.contacts),
+    ];
+    final activeTabId = _mainTabIndex == 0 ? 'messages' : 'contacts';
     return Container(
-      height: 56,
-      padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
       decoration: BoxDecoration(
         color: bgColor,
         border: Border(
           bottom: BorderSide(
-            color: AppColorsFunctional.getColor(
-                ref.read(isDarkProvider), ColorType.borderPrimary),
+            color: AppColorsFunctional.getColor(ref.read(isDarkProvider), ColorType.borderPrimary),
           ),
         ),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Row(
-              children: List.generate(tabs.length, (i) {
-                final isActive = i == _mainTabIndex;
-                return GestureDetector(
-                  onTap: () => setState(() {
-                    _mainTabIndex = i;
-                    _subTabIndex = 0;
-                  }),
-                  child: Container(
-                    padding: EdgeInsets.symmetric(
-                        horizontal: AppSpacing.md, vertical: 16),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(
-                          color: isActive
-                              ? AppColors.primaryColor
-                              : Colors.transparent,
-                          width: 2,
-                        ),
-                      ),
-                    ),
-                    child: Text(
-                      tabs[i],
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: isActive
-                            ? AppColors.primaryColor
-                            : fgSecondary,
-                      ),
-                    ),
-                  ),
-                );
-              }),
-            ),
-          ),
+      child: CenteredScrollableTabBar(
+        tabs: tabs,
+        activeTab: activeTabId,
+        isDark: ref.read(isDarkProvider),
+        onTabChange: (id) {
+          setState(() {
+            _mainTabIndex = id == 'messages' ? 0 : 1;
+            _subTabIndex = 0;
+          });
+        },
+        trailingActions: [
           IconButton(
             icon: Icon(Icons.search, color: fgSecondary),
             onPressed: () {},
+            style: IconButton.styleFrom(
+              minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+            ),
           ),
         ],
       ),

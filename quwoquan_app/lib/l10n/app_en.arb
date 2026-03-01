@@ -276,6 +276,54 @@
   "assistantDevReplayRounds": "TODO: translate",
   "assistantDevReplayScore": "TODO: translate",
   "assistantNoReplayData": "TODO: translate",
+  "assistantSkillCenterTitle": "Skill Center",
+  "assistantSkillCenterDefaultAllSubscribedTitle": "Default all subscriptions enabled",
+  "assistantSkillCenterDefaultAllSubscribedDesc": "All assistant capabilities are ready by default; execution is still gated by risk policy and scene gates.",
+  "assistantSkillCenterRestoreDefaultAll": "Restore default all subscriptions",
+  "assistantSkillCenterSimpleMode": "Simple mode",
+  "assistantSkillCenterPackagesTitle": "Capability packages",
+  "assistantSkillCenterPackageLife": "Life Assistant",
+  "assistantSkillCenterPackageWork": "Work Assistant",
+  "assistantSkillCenterPackageKnowledge": "Knowledge Assistant",
+  "assistantSkillCenterPackageCompanion": "Companion Assistant",
+  "assistantSkillCenterNoMappedSkills": "No mapped skills",
+  "assistantSkillCenterContainsCount": "Contains {count} items",
+  "@assistantSkillCenterContainsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "assistantSkillCenterRiskPolicyTitle": "Risk Policy",
+  "assistantSkillCenterLowRiskAuto": "Auto run for low risk",
+  "assistantSkillCenterLowRiskDesc": "Search, summary and Q&A run automatically",
+  "assistantSkillCenterMediumRiskConfirm": "Light confirm for medium risk",
+  "assistantSkillCenterMediumRiskDesc": "Creating reminders and tasks requires confirmation",
+  "assistantSkillCenterHighRiskDoubleConfirm": "Double confirmation for high risk",
+  "assistantSkillCenterHighRiskDesc": "Transactions and external submissions require double confirmation",
+  "assistantSkillCenterHighRiskRequired": "High-risk actions must keep double confirmation",
+  "assistantSkillCenterSceneGateTitle": "Scene Gates",
+  "assistantSkillCenterSceneDiscovery": "Discovery",
+  "assistantSkillCenterSceneDiscoveryDesc": "Only gentle hints while browsing, no interruption",
+  "assistantSkillCenterSceneCircle": "Circles",
+  "assistantSkillCenterSceneCircleDesc": "Trigger circle discussion suggestions on demand",
+  "assistantSkillCenterSceneChat": "Chat",
+  "assistantSkillCenterSceneChatDesc": "Participate by invitation by default (@assistant or manual tap)",
+  "assistantSkillCenterSceneSystem": "External Scenes",
+  "assistantSkillCenterSceneSystemDesc": "Cross-scene capabilities like clipboard, images and links",
+  "assistantSkillCenterRecentSessionsTitle": "Recent Sessions",
+  "assistantSkillCenterNoRecentSessions": "No session history",
+  "assistantSkillCenterMessagesCount": "{count} messages",
+  "@assistantSkillCenterMessagesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "assistantSkillCenterNoLastMessage": "No recent message",
+  "assistantSkillCenterAllSkillsTitle": "All Skills",
   "personaManage": "TODO: translate",
   "personaPrimary": "TODO: translate",
   "myResonance": "TODO: translate",

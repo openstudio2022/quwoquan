@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
@@ -6,10 +7,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 ///
 /// 性格选择（温柔/严厉/极简）、隐私权限、记忆管理、技能生效时间
 class AssistantManagementPage extends ConsumerStatefulWidget {
-  const AssistantManagementPage({
-    super.key,
-    required this.onBack,
-  });
+  const AssistantManagementPage({super.key, required this.onBack});
 
   final VoidCallback onBack;
 
@@ -18,7 +16,8 @@ class AssistantManagementPage extends ConsumerStatefulWidget {
       _AssistantManagementPageState();
 }
 
-class _AssistantManagementPageState extends ConsumerState<AssistantManagementPage> {
+class _AssistantManagementPageState
+    extends ConsumerState<AssistantManagementPage> {
   String _personality = 'gentle'; // gentle | strict | minimal
   bool _permChat = true;
   bool _permDynamic = true;
@@ -78,18 +77,52 @@ class _AssistantManagementPageState extends ConsumerState<AssistantManagementPag
             Container(
               decoration: BoxDecoration(
                 color: blockBg,
-                borderRadius: BorderRadius.circular(SettingsSemanticConstants.blockBorderRadius),
+                borderRadius: BorderRadius.circular(
+                  SettingsSemanticConstants.blockBorderRadius,
+                ),
                 border: Border.all(color: blockBorder),
               ),
               child: Column(
                 children: [
-                  _buildPermissionRow('允许读取聊天', _permChat, (v) => setState(() => _permChat = v), Icons.lock_outline),
-                  Divider(height: 1, color: dividerClr, thickness: SettingsSemanticConstants.dividerThickness),
-                  _buildPermissionRow('允许读取动态', _permDynamic, (v) => setState(() => _permDynamic = v), Icons.memory),
-                  Divider(height: 1, color: dividerClr, thickness: SettingsSemanticConstants.dividerThickness),
-                  _buildPermissionRow('允许访问位置', _permLocation, (v) => setState(() => _permLocation = v), Icons.location_on_outlined),
-                  Divider(height: 1, color: dividerClr, thickness: SettingsSemanticConstants.dividerThickness),
-                  _buildPermissionRow('系统通知', _permNotifications, (v) => setState(() => _permNotifications = v), Icons.notifications_outlined),
+                  _buildPermissionRow(
+                    '允许读取聊天',
+                    _permChat,
+                    (v) => setState(() => _permChat = v),
+                    Icons.lock_outline,
+                  ),
+                  Divider(
+                    height: 1,
+                    color: dividerClr,
+                    thickness: SettingsSemanticConstants.dividerThickness,
+                  ),
+                  _buildPermissionRow(
+                    '允许读取动态',
+                    _permDynamic,
+                    (v) => setState(() => _permDynamic = v),
+                    Icons.memory,
+                  ),
+                  Divider(
+                    height: 1,
+                    color: dividerClr,
+                    thickness: SettingsSemanticConstants.dividerThickness,
+                  ),
+                  _buildPermissionRow(
+                    '允许访问位置',
+                    _permLocation,
+                    (v) => setState(() => _permLocation = v),
+                    Icons.location_on_outlined,
+                  ),
+                  Divider(
+                    height: 1,
+                    color: dividerClr,
+                    thickness: SettingsSemanticConstants.dividerThickness,
+                  ),
+                  _buildPermissionRow(
+                    '系统通知',
+                    _permNotifications,
+                    (v) => setState(() => _permNotifications = v),
+                    Icons.notifications_outlined,
+                  ),
                 ],
               ),
             ),
@@ -119,7 +152,11 @@ class _AssistantManagementPageState extends ConsumerState<AssistantManagementPag
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.delete_outline, color: AppColors.error, size: 20),
+                      Icon(
+                        Icons.delete_outline,
+                        color: AppColors.error,
+                        size: 20,
+                      ),
                       SizedBox(width: 12),
                       Text(
                         '一键清除记忆',
@@ -130,7 +167,10 @@ class _AssistantManagementPageState extends ConsumerState<AssistantManagementPag
                         ),
                       ),
                       Spacer(),
-                      Icon(Icons.chevron_right, color: AppColors.error.withValues(alpha: 0.7)),
+                      Icon(
+                        CupertinoIcons.chevron_forward,
+                        color: AppColors.error.withValues(alpha: 0.7),
+                      ),
                     ],
                   ),
                 ),
@@ -139,20 +179,20 @@ class _AssistantManagementPageState extends ConsumerState<AssistantManagementPag
             SizedBox(height: 12),
             Text(
               AppConceptConstants.assistantClearMemoryWarning,
-              style: TextStyle(
-                fontSize: 11,
-                color: fgSecondary,
-                height: 1.4,
-              ),
+              style: TextStyle(fontSize: 11, color: fgSecondary, height: 1.4),
             ),
             SizedBox(height: 32),
             _buildSectionTitle(Icons.schedule, '技能生效时间', fgSecondary),
             SizedBox(height: 16),
             Container(
-              padding: EdgeInsets.all(SettingsSemanticConstants.blockHorizontalPadding),
+              padding: EdgeInsets.all(
+                SettingsSemanticConstants.blockHorizontalPadding,
+              ),
               decoration: BoxDecoration(
                 color: blockBg,
-                borderRadius: BorderRadius.circular(SettingsSemanticConstants.blockBorderRadius),
+                borderRadius: BorderRadius.circular(
+                  SettingsSemanticConstants.blockBorderRadius,
+                ),
                 border: Border.all(color: blockBorder),
               ),
               child: Column(
@@ -184,7 +224,9 @@ class _AssistantManagementPageState extends ConsumerState<AssistantManagementPag
                     child: LinearProgressIndicator(
                       value: 0.85,
                       backgroundColor: fgSecondary.withValues(alpha: 0.2),
-                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryColor),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppColors.primaryColor,
+                      ),
                       minHeight: 6,
                     ),
                   ),
@@ -215,20 +257,28 @@ class _AssistantManagementPageState extends ConsumerState<AssistantManagementPag
   }
 
   Widget _buildPersonalityChip(
-      String id, String label, String desc, IconData icon) {
+    String id,
+    String label,
+    String desc,
+    IconData icon,
+  ) {
     final isDark = ref.watch(isDarkProvider);
-    final fgPrimary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
     final active = _personality == id;
     return Expanded(
       child: Material(
         color: active
             ? AppColors.primaryColor.withValues(alpha: 0.1)
             : (isDark
-                ? Colors.white.withValues(alpha: 0.05)
-                : Colors.black.withValues(alpha: 0.03)),
+                  ? Colors.white.withValues(alpha: 0.05)
+                  : Colors.black.withValues(alpha: 0.03)),
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
           onTap: () => setState(() => _personality = id),
@@ -238,9 +288,7 @@ class _AssistantManagementPageState extends ConsumerState<AssistantManagementPag
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: active
-                    ? AppColors.primaryColor
-                    : Colors.transparent,
+                color: active ? AppColors.primaryColor : Colors.transparent,
                 width: 2,
               ),
             ),
@@ -260,13 +308,7 @@ class _AssistantManagementPageState extends ConsumerState<AssistantManagementPag
                     color: active ? AppColors.primaryColor : fgPrimary,
                   ),
                 ),
-                Text(
-                  desc,
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: fgSecondary,
-                  ),
-                ),
+                Text(desc, style: TextStyle(fontSize: 10, color: fgSecondary)),
               ],
             ),
           ),
@@ -276,12 +318,20 @@ class _AssistantManagementPageState extends ConsumerState<AssistantManagementPag
   }
 
   Widget _buildPermissionRow(
-      String label, bool value, ValueChanged<bool> onChanged, IconData icon) {
+    String label,
+    bool value,
+    ValueChanged<bool> onChanged,
+    IconData icon,
+  ) {
     final isDark = ref.watch(isDarkProvider);
-    final fgPrimary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(

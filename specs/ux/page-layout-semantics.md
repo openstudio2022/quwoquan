@@ -1,4 +1,4 @@
-# 页面布局语义规范
+# 页面布局语义规范（iOS 设计语言 v1）
 
 > 适用于创作、选择、设置、聊天等页面；**不含用户主页、作者主页、圈子主页**（见 §6 遗留事项）。  
 > **特性树**：`runtime/runtime-client-foundation/page-layout-semantics`（L3）  
@@ -49,14 +49,14 @@
 
 ---
 
-## 3. 顶部工具栏规范
+## 3. 顶部工具栏规范（iOS v1）
 
 ### 3.1 页面模式与 leading
 
 | 模式 | leading | 语义 | 适用页面 |
 |------|---------|------|----------|
-| **Modal** | `Icons.close` | 关闭当前模态，放弃/取消 | 创作、编辑、选择器 |
-| **Stack** | `Icons.arrow_back` | 返回上一级 | 设置、详情、管理、列表 |
+| **Modal** | `CupertinoIcons.xmark` | 关闭当前模态，放弃/取消 | 创作、编辑、选择器 |
+| **Stack** | `CupertinoIcons.back` / `CupertinoIcons.chevron_back` | 返回上一级 | 设置、详情、管理、列表 |
 
 ### 3.2 规则
 
@@ -66,6 +66,7 @@
 | **R2** | title 居中（Modal）或左对齐/居中（Stack），使用 `AppTypography` |
 | **R3** | 主操作（发布、完成、确定）放在 `actions`；次操作（草稿、搜索）可放 `actions` |
 | **R4** | 选择器页面采用 **iOS 统一方案**：`CupertinoPageScaffold` + `CupertinoNavigationBar`，leading 用 `CupertinoIcons.xmark` |
+| **R5** | `CupertinoPageScaffold` 场景禁止混入 Material 交互组件（`Checkbox`、`SnackBar` 等），选择态与反馈必须使用 Cupertino 或语义化自绘组件 |
 
 ### 3.3 选择器统一
 
@@ -151,6 +152,15 @@
 | 地点选择 | 单选 | tap 即返回，无底部 ✓ |
 | 圈子选择 | 多选 | 底部 取消+完成 ✓ |
 
+### 6.3 iOS 语义细化（v1）
+
+| 语义点 | 规范 |
+|--------|------|
+| 行尾箭头 | 统一使用 `CupertinoIcons.chevron_forward`，避免 Material `Icons.chevron_right` |
+| 选择态 | 单选/多选的选中图标使用 iOS 语义（如 `check_mark_circled_solid`），禁止 Material Checkbox |
+| 操作文案 | 选择器页使用通用动作语义（取消/确认/完成），禁止借用无关域文案（如图片编辑文案） |
+| 页面职责 | 发布选择器只承载“选择并返回”，不得混入关注、举报等增长/治理动作 |
+
 ---
 
 ## 7. 实现约束（强制）
@@ -159,6 +169,7 @@
 - 颜色、字号、间距必须使用 `AppTypography`、`AppSpacing`、`AppColors` / `SettingsSemanticConstants`
 - 设置类页面必须使用 `SettingsSemanticConstants` 和统一块/行结构
 - 选择器 leading 统一为 `close`（Modal）
+- 创作入口设置行（位置/可见性/圈子）统一使用 iOS 语义图标、行高和 trailing 规则
 
 ---
 
@@ -168,3 +179,16 @@
 |------|------|
 | 用户主页、作者主页、圈子主页 | 后续单独规范「主页设计」，统一顶部/内容/底部语义 |
 | CreateMediaPickerPage 自定义顶栏 | 当前保留；若后续统一为 AppBar，需同步更新本规范 |
+
+## 9. v1 第二批推广清单
+
+| 模块 | 页面 | 已对齐项 |
+|------|------|----------|
+| 设置 | SettingsPage | 行尾箭头统一为 iOS 语义 |
+| 助理 | AssistantManagementPage / AssistantHomePage | 行尾箭头统一为 iOS 语义 |
+| 聊天 | ChatSettingsPage | 行尾箭头统一为 iOS 语义 |
+| 圈子 | CircleStatsPage | 行尾箭头统一为 iOS 语义 |
+| 聊天选择器 | StartGroupChatPage | 多选选择态改为 iOS 语义图标（替换 Material Checkbox） |
+| 圈子频道管理 | CirclesPage | 一级 tab 下方滑出频道管理面板；我的频道支持拖拽排序；+/- 互转；动作色为蓝色主色 |
+
+> 门禁：`scripts/verify_dart_semantic.py` 已新增 iOS 语义风格检查，并由 `scripts/gate_repo.sh` 在 app gate 阶段执行。

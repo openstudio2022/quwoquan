@@ -17,6 +17,7 @@ class CenteredScrollableTabBar extends ConsumerStatefulWidget {
   final String activeTab;
   final ValueChanged<String> onTabChange;
   final bool? isDark;
+  final List<Widget> leadingActions;
   final List<Widget> trailingActions;
   final GestureDragEndCallback? onHorizontalDragEnd;
 
@@ -32,18 +33,23 @@ class CenteredScrollableTabBar extends ConsumerStatefulWidget {
   /// 发现页等使用：简单左对齐滚动模式，不使用固定芯片宽度和锚定逻辑
   final bool leftAlignedCompactMode;
 
+  /// 不显示蓝色下划线的 Tab ID（如作品），保持深色模式样式
+  final List<String> excludeUnderlineTabIds;
+
   const CenteredScrollableTabBar({
     super.key,
     required this.tabs,
     required this.activeTab,
     required this.onTabChange,
     this.isDark,
+    this.leadingActions = const [],
     this.trailingActions = const [],
     this.onHorizontalDragEnd,
     this.anchorTabId,
     this.visibleTabCount,
     this.transparentBackground = false,
     this.leftAlignedCompactMode = false,
+    this.excludeUnderlineTabIds = const [],
   });
 
   @override
@@ -328,16 +334,10 @@ class _CenteredScrollableTabBarState
       currentIsDark,
       ColorType.foregroundPrimary,
     );
-    final fgSecondary = AppColorsFunctional.getColor(
+    final fgUnselected = AppColorsFunctional.getColor(
       currentIsDark,
-      ColorType.foregroundSecondary,
+      ColorType.tabUnselected,
     );
-    final fgUnselected = isVideoImmersion && currentIsDark
-        ? AppColorsFunctional.getColor(
-            currentIsDark,
-            ColorType.foregroundTertiary,
-          )
-        : fgSecondary;
     final borderColor = AppColorsFunctional.getColor(
       currentIsDark,
       ColorType.borderPrimary,
@@ -360,6 +360,10 @@ class _CenteredScrollableTabBarState
       padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
       child: Row(
         children: [
+          if (widget.leadingActions.isNotEmpty) ...[
+            ...widget.leadingActions,
+            SizedBox(width: AppSpacing.intraGroupXs),
+          ],
           Expanded(
             child: GestureDetector(
               behavior: HitTestBehavior.translucent,
@@ -388,7 +392,13 @@ class _CenteredScrollableTabBarState
         if (_isAnchorPinned && _anchorIndex >= 0) {
           return _buildPinnedLayout(isDark, fg, fgUnselected, bg);
         }
-        return _buildNormalLayout(isDark, fg, fgUnselected, bg);
+        return _buildNormalLayout(
+          isDark,
+          fg,
+          fgUnselected,
+          bg,
+          constraints.maxWidth,
+        );
       },
     );
   }
@@ -396,7 +406,26 @@ class _CenteredScrollableTabBarState
   // --------------- 正常模式 ---------------
 
   Widget _buildNormalLayout(
-      bool isDark, Color fg, Color fgUnselected, Color bg) {
+    bool isDark,
+    Color fg,
+    Color fgUnselected,
+    Color bg,
+    double availableWidth,
+  ) {
+    final contentWidth = widget.tabs.length * _chipStep;
+    // 内容未超过可用宽度时使用居中静态布局，保证发现/圈子/趣聊一级 Tab 居中且切换不位移。
+    if (contentWidth <= availableWidth + AppSpacing.primaryTabAnchorTolerance) {
+      return Center(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (int i = 0; i < widget.tabs.length; i++)
+              _buildChipSlot(widget.tabs[i], isDark, fg, fgUnselected),
+          ],
+        ),
+      );
+    }
+
     final offset =
         _normalController.hasClients ? _normalController.offset : 0.0;
     final maxExt = _normalController.hasClients
@@ -519,16 +548,18 @@ class _CenteredScrollableTabBarState
     required Color fgUnselected,
     required VoidCallback onTap,
   }) {
-    final chipFontSize = AppTypography.responsive(
-      context,
-      compact: AppTypography.base,
-      regular: AppTypography.lg,
-      expanded: AppTypography.xl,
-    );
+    final isExcluded = widget.excludeUnderlineTabIds.contains(tab.id);
+    final chipFontSize = AppTypography.primaryTabLabel;
+    final selectedColor = isDark ? fg : Colors.black;
+    final showBlueUnderline =
+        !isExcluded && !isDark && selected;
+    final underlineColor =
+        showBlueUnderline ? AppColors.primaryColor : (selected ? fg : Colors.transparent);
+
     final textStyle = TextStyle(
       fontSize: chipFontSize,
-      fontWeight: selected ? AppTypography.bold : AppTypography.medium,
-      color: selected ? fg : fgUnselected,
+      fontWeight: AppTypography.primaryTabLabelWeight,
+      color: selected ? selectedColor : fgUnselected,
     );
     final textPainter = TextPainter(
       text: TextSpan(text: tab.label, style: textStyle),
@@ -547,11 +578,10 @@ class _CenteredScrollableTabBarState
             minWidth: AppSpacing.minInteractiveSize,
             minHeight: AppSpacing.minInteractiveSize,
           ),
-          // 无额外内部 padding；文字左对齐以保证首字符与内容区左边缘对齐
           child: Column(
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Text(
                 tab.label,
@@ -566,7 +596,7 @@ class _CenteredScrollableTabBarState
                   duration: const Duration(milliseconds: 200),
                   height: AppSpacing.intraGroupXs / 2,
                   decoration: BoxDecoration(
-                    color: selected ? fg : Colors.transparent,
+                    color: isExcluded ? Colors.transparent : underlineColor,
                     borderRadius: BorderRadius.circular(
                       AppSpacing.intraGroupXs / 4,
                     ),

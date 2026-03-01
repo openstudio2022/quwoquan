@@ -1,18 +1,18 @@
 // ignore_for_file: unnecessary_underscores
 
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/features/assistant/context/assistant_open_context.dart';
-import 'package:quwoquan_app/features/assistant/widgets/assistant_half_sheet.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// 圈子页
 ///
@@ -29,9 +29,22 @@ class CirclesPage extends ConsumerStatefulWidget {
 class _CirclesPageState extends ConsumerState<CirclesPage>
     with AutomaticKeepAliveClientMixin {
   static const double _circleCoverAspectRatio = 4 / 3;
+  static const String _channelPrefsKey = 'circles.selected_channels.v1';
+  static const Set<String> _defaultUnselectedChannelIds = <String>{
+    'car',
+    'humanity',
+    'sports',
+  };
+  static const List<String> _fixedCategoryOrder = <String>[
+    'following',
+    'all',
+  ];
 
   String _selectedDimension = 'all';
   String _selectedSubCategory = UITextConstants.circleSubAll;
+  bool _isChannelPanelOpen = false;
+  String? _draggingChannelId;
+  List<String>? _selectedCategoryIds;
   final Map<String, String> _subCategoryByDimension = {};
   late PageController _primaryPageController;
 
@@ -44,25 +57,13 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
         );
   }
 
-  /// 打开小趣半弹窗（搜索、频道管理等统一由此入口）
-  void _openAssistantHalfSheet() {
-    final target = VisitTarget.page('circles_$_selectedDimension');
-    final service = ref.read(visitRecorderServiceProvider);
-    final ctx = AssistantOpenContext(
-      source: AssistantSource.circles,
-      dimension: _selectedDimension,
-      visitTarget: target,
-      experienceLevel: service.getExperience(target),
-    );
-    AssistantHalfSheet.show(context, ctx);
-  }
-
   @override
   void initState() {
     super.initState();
     _primaryPageController = PageController(
       initialPage: _primaryTabIds.indexOf(_selectedDimension).clamp(0, _primaryTabIds.length - 1),
     );
+    unawaited(_restoreChannelSelection());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _recordCirclesVisit(_selectedDimension);
     });
@@ -75,15 +76,170 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
   }
 
   /// 与 DiscoveryView myCategories 一致：关注 + CATEGORY_CONFIG
-  List<Map<String, String>> get _categories {
+  List<Map<String, String>> get _allCategories {
     final config = ref.read(appContentRepositoryProvider).circlesCategoryConfig;
-    final list = <Map<String, String>>[
-      {'id': 'following', 'label': '关注'},
-    ];
-    for (final e in config.entries) {
-      list.add({'id': e.key, 'label': e.value['label'] as String});
+    final list = <Map<String, String>>[];
+    final seen = <String>{};
+    void addCategory(String id, String label) {
+      if (!seen.add(id)) return;
+      list.add({'id': id, 'label': label});
+    }
+
+    // 固定频道始终放在最前，并且不允许在后续配置中重复注入。
+    addCategory('following', '关注');
+    addCategory('all', (config['all']?['label'] as String?) ?? '推荐');
+
+    for (final entry in config.entries) {
+      final id = entry.key;
+      if (_fixedCategoryOrder.contains(id)) {
+        continue;
+      }
+      addCategory(id, entry.value['label'] as String);
     }
     return list;
+  }
+
+  Map<String, String> get _categoryLabelMap {
+    return {
+      for (final item in _allCategories) item['id']!: item['label']!,
+    };
+  }
+
+  List<String> get _fixedCategoryIds {
+    final allIds = _allCategories.map((entry) => entry['id']!).toSet();
+    return _fixedCategoryOrder.where(allIds.contains).toList(growable: false);
+  }
+
+  List<String> get _manageableAllCategoryIds {
+    final fixedSet = _fixedCategoryIds.toSet();
+    return _allCategories
+        .map((entry) => entry['id']!)
+        .where((id) => !fixedSet.contains(id))
+        .toList(growable: false);
+  }
+
+  List<String> get _defaultSelectedCategoryIds {
+    return _manageableAllCategoryIds
+        .where((id) => !_defaultUnselectedChannelIds.contains(id))
+        .toList(growable: false);
+  }
+
+  List<String> _normalizedSelectedCategoryIds(List<String>? source) {
+    final allIds = _manageableAllCategoryIds;
+    final allIdSet = allIds.toSet();
+    final selected = <String>[];
+    for (final id in source ?? _defaultSelectedCategoryIds) {
+      if (allIdSet.contains(id) && !selected.contains(id)) {
+        selected.add(id);
+      }
+    }
+    if (selected.isEmpty) {
+      selected.addAll(_defaultSelectedCategoryIds);
+    }
+    // 配置新增频道时默认归入未选，避免打断既有排序。
+    if (source == null) {
+      return selected;
+    }
+    return selected;
+  }
+
+  Future<void> _restoreChannelSelection() async {
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getStringList(_channelPrefsKey);
+    final normalized = _normalizedSelectedCategoryIds(stored);
+    if (!mounted) return;
+    setState(() {
+      _selectedCategoryIds = normalized;
+      if (!_primaryTabIds.contains(_selectedDimension)) {
+        _selectedDimension = _primaryTabIds.first;
+        _selectedSubCategory =
+            _subCategoryByDimension[_selectedDimension] ?? UITextConstants.circleSubAll;
+      }
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _syncPrimaryPageWithActiveTab(animate: false);
+    });
+  }
+
+  Future<void> _persistChannelSelection() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_channelPrefsKey, _manageableSelectedCategoryIds);
+  }
+
+  void _syncPrimaryPageWithActiveTab({required bool animate}) {
+    final index = _primaryTabIds.indexOf(_selectedDimension);
+    if (index < 0 || !_primaryPageController.hasClients) return;
+    final current = (_primaryPageController.page ?? _primaryPageController.initialPage.toDouble())
+        .round();
+    if (current == index) return;
+    if (animate) {
+      _primaryPageController.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    } else {
+      _primaryPageController.jumpToPage(index);
+    }
+  }
+
+  void _applySelectedCategoryIds(
+    List<String> nextIds, {
+    required bool persist,
+    bool closePanel = false,
+  }) {
+    final normalized = _normalizedSelectedCategoryIds(nextIds);
+    setState(() {
+      _selectedCategoryIds = normalized;
+      if (!_primaryTabIds.contains(_selectedDimension)) {
+        _selectedDimension = _primaryTabIds.first;
+        _selectedSubCategory =
+            _subCategoryByDimension[_selectedDimension] ?? UITextConstants.circleSubAll;
+      }
+      if (closePanel) {
+        _isChannelPanelOpen = false;
+      }
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _syncPrimaryPageWithActiveTab(animate: false);
+    });
+    if (persist) {
+      unawaited(_persistChannelSelection());
+    }
+  }
+
+  void _moveToUnselected(String id) {
+    final selected = List<String>.from(_manageableSelectedCategoryIds);
+    if (!selected.contains(id) || selected.length <= 1) return;
+    selected.remove(id);
+    _applySelectedCategoryIds(selected, persist: true);
+  }
+
+  void _moveToSelected(String id) {
+    final selected = List<String>.from(_manageableSelectedCategoryIds);
+    if (selected.contains(id)) return;
+    selected.add(id);
+    _applySelectedCategoryIds(selected, persist: true);
+  }
+
+  void _reorderSelectedBefore(String sourceId, String targetId) {
+    if (sourceId == targetId) return;
+    final selected = List<String>.from(_manageableSelectedCategoryIds);
+    final sourceIndex = selected.indexOf(sourceId);
+    final targetIndex = selected.indexOf(targetId);
+    if (sourceIndex < 0 || targetIndex < 0) return;
+    final removed = selected.removeAt(sourceIndex);
+    final nextIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+    selected.insert(nextIndex, removed);
+    _applySelectedCategoryIds(selected, persist: true);
+  }
+
+  void _toggleChannelPanel() {
+    setState(() {
+      _isChannelPanelOpen = !_isChannelPanelOpen;
+    });
   }
 
   List<Map<String, dynamic>> _filteredCirclesFor(String dimensionId) {
@@ -150,8 +306,27 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
   List<Map<String, dynamic>> get _discoveryPosts =>
       _discoveryPostsFor(_selectedDimension, _selectedSubCategory);
 
-  List<String> get _primaryTabIds =>
-      _categories.map((category) => category['id']!).toList(growable: false);
+  List<String> get _manageableSelectedCategoryIds =>
+      (_selectedCategoryIds ?? _defaultSelectedCategoryIds).toList(growable: false);
+
+  List<String> get _primaryTabIds => <String>[
+        ..._fixedCategoryIds,
+        ..._manageableSelectedCategoryIds,
+      ];
+
+  List<Map<String, String>> get _selectedCategories {
+    final labelMap = _categoryLabelMap;
+    return _primaryTabIds
+        .map((id) => <String, String>{'id': id, 'label': labelMap[id] ?? id})
+        .toList(growable: false);
+  }
+
+  List<String> get _unselectedCategoryIds {
+    final selectedSet = _manageableSelectedCategoryIds.toSet();
+    return _manageableAllCategoryIds
+        .where((id) => !selectedSet.contains(id))
+        .toList(growable: false);
+  }
 
   List<String> _getSubCategoriesFor(String dimensionId) {
     final config = ref.read(appContentRepositoryProvider).circlesCategoryConfig[dimensionId];
@@ -267,46 +442,60 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
         bottom: false,
         child: Column(
           children: [
-            _buildHeader(context, isDark, fgPrimary, fgSecondary),
+            _buildHeader(context, isDark, fgSecondary),
             Expanded(
-              child: PageView(
-                  controller: _primaryPageController,
-                  // 禁用 PageView 自带的滑动切换，一级 Tab 切换完全由
-                  // 各区域的 GestureDetector 通过 animateToPage 程序驱动
-                  physics: const NeverScrollableScrollPhysics(),
-                  onPageChanged: (index) {
-                    final id = _primaryTabIds[index];
-                    if (id != _selectedDimension) {
-                      setState(() {
-                        _selectedDimension = id;
-                        _selectedSubCategory = _subCategoryByDimension[id] ?? UITextConstants.circleSubAll;
-                        _recordCirclesVisit(id);
-                      });
-                    }
-                  },
-                  children: _primaryTabIds.map((id) {
-                    if (id == 'following') {
-                      // 关注页无二级 Tab，整页水平拖拽切换一级 Tab
-                      return GestureDetector(
-                        behavior: HitTestBehavior.translucent,
-                        onHorizontalDragEnd: _onPrimaryDragEnd,
-                        child: _buildFollowingPlaceholder(fgSecondary),
+              child: Stack(
+                children: [
+                  PageView(
+                    controller: _primaryPageController,
+                    // 禁用 PageView 自带的滑动切换，一级 Tab 切换完全由
+                    // 各区域的 GestureDetector 通过 animateToPage 程序驱动
+                    physics: const NeverScrollableScrollPhysics(),
+                    onPageChanged: (index) {
+                      final id = _primaryTabIds[index];
+                      if (id != _selectedDimension) {
+                        setState(() {
+                          _selectedDimension = id;
+                          _selectedSubCategory = _subCategoryByDimension[id] ?? UITextConstants.circleSubAll;
+                          _recordCirclesVisit(id);
+                        });
+                      }
+                    },
+                    children: _primaryTabIds.map((id) {
+                      if (id == 'following') {
+                        // 关注页无二级 Tab，整页水平拖拽切换一级 Tab
+                        return GestureDetector(
+                          behavior: HitTestBehavior.translucent,
+                          onHorizontalDragEnd: _onPrimaryDragEnd,
+                          child: _buildFollowingPlaceholder(fgSecondary),
+                        );
+                      }
+                      return _buildDimensionContent(
+                        context, id, isDark, fgPrimary, fgSecondary, borderColor,
                       );
-                    }
-                    return _buildDimensionContent(
-                      context, id, isDark, fgPrimary, fgSecondary, borderColor,
-                    );
-                  }).toList(),
-                ),
+                    }).toList(),
+                  ),
+                  if (_isChannelPanelOpen)
+                    Positioned.fill(
+                      child: _buildChannelPanel(
+                        context,
+                        isDark,
+                        bottomInset:
+                            MediaQuery.viewPaddingOf(context).bottom +
+                            AppSpacing.bottomNavHeight,
+                      ),
+                    ),
+                ],
               ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildHeader(BuildContext context, bool isDark, Color fgPrimary, Color fgSecondary) {
-    final tabs = _categories
+  Widget _buildHeader(BuildContext context, bool isDark, Color fgSecondary) {
+    final tabs = _selectedCategories
         .map((entry) => TabItem(id: entry['id']!, label: entry['label']!))
         .toList(growable: false);
 
@@ -316,14 +505,13 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
         border: Border(
           bottom: BorderSide(
             color: AppColorsFunctional.getColor(isDark, ColorType.borderPrimary),
-            width: 1,
+            width: AppSpacing.intraGroupXs / 2,
           ),
         ),
       ),
       child: CenteredScrollableTabBar(
         tabs: tabs,
         activeTab: _selectedDimension,
-        anchorTabId: 'all',
         isDark: isDark,
         onTabChange: (id) {
           setState(() {
@@ -342,16 +530,198 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
         },
         // Tab 栏区域：手指滑动只滚动 Tab 栏，不切换 Tab
         trailingActions: [
-          IconButton(
-            tooltip: UITextConstants.assistantEntryFind,
-            icon: AssistantAvatar(radius: AppSpacing.iconMedium / 2),
-            onPressed: _openAssistantHalfSheet,
-            style: IconButton.styleFrom(
-              minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+          SizedBox(
+            width: AppSpacing.minInteractiveSize + AppSpacing.intraGroupMd,
+            child: CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: _toggleChannelPanel,
+              child: Icon(
+                CupertinoIcons.line_horizontal_3_decrease,
+                size: AppSpacing.iconMedium,
+                color: fgSecondary,
+              ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildChannelPanel(
+    BuildContext context,
+    bool isDark, {
+    double bottomInset = 0,
+  }) {
+    final bg = AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
+    final fgPrimary = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
+    final fgSecondary = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    final unselectedIds = _unselectedCategoryIds;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _toggleChannelPanel,
+      child: ColoredBox(
+        color: bg,
+        child: SingleChildScrollView(
+          physics: const ClampingScrollPhysics(),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {},
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.feedContentHorizontal(context),
+                AppSpacing.containerMd,
+                AppSpacing.feedContentHorizontal(context),
+                AppSpacing.containerMd + bottomInset,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        UITextConstants.circleMyChannels,
+                        style: TextStyle(
+                          fontSize: AppTypography.lg,
+                          fontWeight: AppTypography.semiBold,
+                          color: fgPrimary,
+                        ),
+                      ),
+                      SizedBox(width: AppSpacing.intraGroupSm),
+                      Text(
+                        UITextConstants.circleDragToSort,
+                        style: TextStyle(
+                          fontSize: AppTypography.sm,
+                          color: fgSecondary,
+                        ),
+                      ),
+                      const Spacer(),
+                      CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        onPressed: _toggleChannelPanel,
+                        child: Text(
+                          UITextConstants.done,
+                          style: TextStyle(
+                            fontSize: AppTypography.base,
+                            fontWeight: AppTypography.medium,
+                            color: AppColors.primaryColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: AppSpacing.interGroupSm),
+                  _buildChannelGrid(
+                    context: context,
+                    channelIds: _manageableSelectedCategoryIds,
+                    canRemove: true,
+                    onTapIcon: _moveToUnselected,
+                  ),
+                  SizedBox(height: AppSpacing.interGroupLg),
+                  Row(
+                    children: [
+                      Text(
+                        UITextConstants.circleAllChannels,
+                        style: TextStyle(
+                          fontSize: AppTypography.lg,
+                          fontWeight: AppTypography.semiBold,
+                          color: fgPrimary,
+                        ),
+                      ),
+                      SizedBox(width: AppSpacing.intraGroupSm),
+                      Text(
+                        UITextConstants.circleTapToAdd,
+                        style: TextStyle(
+                          fontSize: AppTypography.sm,
+                          color: fgSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: AppSpacing.interGroupSm),
+                  _buildChannelGrid(
+                    context: context,
+                    channelIds: unselectedIds,
+                    canRemove: false,
+                    onTapIcon: _moveToSelected,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChannelGrid({
+    required BuildContext context,
+    required List<String> channelIds,
+    required bool canRemove,
+    required ValueChanged<String> onTapIcon,
+  }) {
+    final labelMap = _categoryLabelMap;
+    final spacing = AppSpacing.intraGroupSm;
+    final panelTileHeight = AppSpacing.bottomNavHeight;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final totalSpacing = spacing * 3;
+        final tileWidth = (constraints.maxWidth - totalSpacing) / 4;
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: channelIds.map((id) {
+            final label = labelMap[id] ?? id;
+            final tile = _ChannelTile(
+              width: tileWidth,
+              height: panelTileHeight,
+              label: label,
+              canRemove: canRemove,
+              isDragging: _draggingChannelId == id,
+              onIconTap: () => onTapIcon(id),
+            );
+            if (!canRemove) return tile;
+            return SizedBox(
+              width: tileWidth,
+              height: panelTileHeight,
+              child: DragTarget<String>(
+                onWillAcceptWithDetails: (details) => details.data != id,
+                onAcceptWithDetails: (details) {
+                  _reorderSelectedBefore(details.data, id);
+                },
+                builder: (context, _, __) {
+                  return LongPressDraggable<String>(
+                    data: id,
+                    onDragStarted: () {
+                      setState(() => _draggingChannelId = id);
+                    },
+                    onDragEnd: (_) {
+                      if (mounted) {
+                        setState(() => _draggingChannelId = null);
+                      }
+                    },
+                    feedback: Material(
+                      color: Colors.transparent,
+                      child: _ChannelTile(
+                        width: tileWidth,
+                        height: panelTileHeight,
+                        label: label,
+                        canRemove: true,
+                        isDragging: false,
+                        onIconTap: () {},
+                      ),
+                    ),
+                    childWhenDragging: Opacity(
+                      opacity: 0.2,
+                      child: tile,
+                    ),
+                    child: tile,
+                  );
+                },
+              ),
+            );
+          }).toList(growable: false),
+        );
+      },
     );
   }
 
@@ -733,7 +1103,7 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
                           color: selected
                               ? (isDark ? Colors.white.withValues(alpha: 0.2) : AppColors.primaryColor.withValues(alpha: 0.25))
                               : fgSecondary.withValues(alpha: 0.2),
-                          width: 0.5,
+                          width: AppSpacing.intraGroupXs / 4,
                         ),
                       ),
                       child: Text(
@@ -922,6 +1292,102 @@ class _DiscoveryPostCard extends StatelessWidget {
             ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChannelTile extends StatelessWidget {
+  const _ChannelTile({
+    required this.width,
+    required this.height,
+    required this.label,
+    required this.canRemove,
+    required this.isDragging,
+    required this.onIconTap,
+  });
+
+  final double width;
+  final double height;
+  final String label;
+  final bool canRemove;
+  final bool isDragging;
+  final VoidCallback onIconTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = canRemove
+        ? AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary)
+        : AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
+    final borderColor = canRemove
+        ? Colors.transparent
+        : AppColorsFunctional.getColor(isDark, ColorType.borderPrimary).withValues(alpha: 0.5);
+    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
+    final iconBg = AppColorsFunctional.getColor(isDark, ColorType.backgroundTertiary);
+
+    return SizedBox(
+      width: width,
+      height: height,
+      child: Opacity(
+        opacity: isDragging ? 0.45 : 1,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: width,
+              height: height,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                border: Border.all(color: borderColor),
+              ),
+              child: Text(
+                canRemove ? label : '+ $label',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: AppTypography.base,
+                  color: fg,
+                  fontWeight: AppTypography.medium,
+                ),
+              ),
+            ),
+            if (canRemove)
+              Positioned(
+                top: -AppSpacing.intraGroupXs,
+                right: -AppSpacing.intraGroupXs,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onIconTap,
+                  child: Container(
+                    width: AppSpacing.minInteractiveSize / 2,
+                    height: AppSpacing.minInteractiveSize / 2,
+                    decoration: BoxDecoration(
+                      color: iconBg,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      CupertinoIcons.xmark,
+                      size: AppSpacing.iconSmall,
+                      color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),
+                    ),
+                  ),
+                ),
+              )
+            else
+              Positioned.fill(
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                    onTap: onIconTap,
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );

@@ -20,6 +20,20 @@ final isDarkProvider = Provider<bool>((ref) {
   return ref.watch(themeProvider).isDark;
 });
 
+/// 从小趣对话返回时恢复的 tab 索引（0=发现 1=圈子 3=趣聊 4=我的）
+/// 由底部栏 C 位进入小趣时写入，返回时读取并跳转
+final lastMainTabBeforeAssistantProvider =
+    NotifierProvider<LastMainTabBeforeAssistantNotifier, int?>(
+  LastMainTabBeforeAssistantNotifier.new,
+);
+
+class LastMainTabBeforeAssistantNotifier extends Notifier<int?> {
+  @override
+  int? build() => null;
+
+  void set(int? value) => state = value;
+}
+
 /// 用户数据Provider
 class UserDataNotifier extends Notifier<User?> {
   @override

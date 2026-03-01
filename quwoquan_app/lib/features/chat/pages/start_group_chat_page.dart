@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -39,27 +40,120 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   ];
 
   static const List<Map<String, String>> _mockGroupMembers = [
-    {'name': '用户一', 'username': 'user1', 'avatar': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200'},
-    {'name': '用户二', 'username': 'user2', 'avatar': 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200'},
-    {'name': '用户三', 'username': 'user3', 'avatar': 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200'},
-    {'name': '用户四', 'username': 'user4', 'avatar': 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200'},
-    {'name': '用户五', 'username': 'user5', 'avatar': 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200'},
-    {'name': '用户六', 'username': 'user6', 'avatar': 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200'},
-    {'name': '用户七', 'username': 'user7', 'avatar': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200'},
-    {'name': '用户八', 'username': 'user8', 'avatar': 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200'},
-    {'name': '用户九', 'username': 'user9', 'avatar': 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200'},
+    {
+      'name': '用户一',
+      'username': 'user1',
+      'avatar':
+          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
+    },
+    {
+      'name': '用户二',
+      'username': 'user2',
+      'avatar':
+          'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
+    },
+    {
+      'name': '用户三',
+      'username': 'user3',
+      'avatar':
+          'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200',
+    },
+    {
+      'name': '用户四',
+      'username': 'user4',
+      'avatar':
+          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
+    },
+    {
+      'name': '用户五',
+      'username': 'user5',
+      'avatar':
+          'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200',
+    },
+    {
+      'name': '用户六',
+      'username': 'user6',
+      'avatar':
+          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
+    },
+    {
+      'name': '用户七',
+      'username': 'user7',
+      'avatar':
+          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
+    },
+    {
+      'name': '用户八',
+      'username': 'user8',
+      'avatar':
+          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
+    },
+    {
+      'name': '用户九',
+      'username': 'user9',
+      'avatar':
+          'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
+    },
   ];
 
   /// 相关同好 mock：带首字母用于分组（A-Z, #），仅用通用占位名
   static const List<Map<String, dynamic>> _mockRelatedFriends = [
-    {'name': '同好A1', 'username': 'friend_a1', 'avatar': 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200', 'letter': 'A'},
-    {'name': '同好A2', 'username': 'friend_a2', 'avatar': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200', 'letter': 'A'},
-    {'name': '同好A3', 'username': 'friend_a3', 'avatar': 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200', 'letter': 'A'},
-    {'name': '同好B1', 'username': 'friend_b1', 'avatar': 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200', 'letter': 'B'},
-    {'name': '同好B2', 'username': 'friend_b2', 'avatar': 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200', 'letter': 'B'},
-    {'name': '同好C1', 'username': 'friend_c1', 'avatar': 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200', 'letter': 'C'},
-    {'name': '同好C2', 'username': 'friend_c2', 'avatar': 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200', 'letter': 'C'},
-    {'name': '同好D1', 'username': 'friend_d1', 'avatar': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200', 'letter': 'D'},
+    {
+      'name': '同好A1',
+      'username': 'friend_a1',
+      'avatar':
+          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
+      'letter': 'A',
+    },
+    {
+      'name': '同好A2',
+      'username': 'friend_a2',
+      'avatar':
+          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
+      'letter': 'A',
+    },
+    {
+      'name': '同好A3',
+      'username': 'friend_a3',
+      'avatar':
+          'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200',
+      'letter': 'A',
+    },
+    {
+      'name': '同好B1',
+      'username': 'friend_b1',
+      'avatar':
+          'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
+      'letter': 'B',
+    },
+    {
+      'name': '同好B2',
+      'username': 'friend_b2',
+      'avatar':
+          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
+      'letter': 'B',
+    },
+    {
+      'name': '同好C1',
+      'username': 'friend_c1',
+      'avatar':
+          'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200',
+      'letter': 'C',
+    },
+    {
+      'name': '同好C2',
+      'username': 'friend_c2',
+      'avatar':
+          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
+      'letter': 'C',
+    },
+    {
+      'name': '同好D1',
+      'username': 'friend_d1',
+      'avatar':
+          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
+      'letter': 'D',
+    },
   ];
 
   @override
@@ -80,7 +174,8 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
         onSelectGroup: (group) {
           Navigator.of(context).pop();
           _openMemberSelectSheet(
-            title: '${group['name']} (${group['count']}${UITextConstants.friendsCount})',
+            title:
+                '${group['name']} (${group['count']}${UITextConstants.friendsCount})',
             members: _mockGroupMembers,
             onConfirm: (selected) {
               messenger.showSnackBar(
@@ -105,7 +200,8 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
         onSelectCircle: (circle) {
           Navigator.of(context).pop();
           _openMemberSelectSheet(
-            title: '${circle['name']} (${circle['count']}${UITextConstants.friendsCount})',
+            title:
+                '${circle['name']} (${circle['count']}${UITextConstants.friendsCount})',
             members: _mockGroupMembers,
             onConfirm: (selected) {
               messenger.showSnackBar(
@@ -138,16 +234,23 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   }
 
   /// 按首字母分组：A-Z, #，返回有序 keys 与 map
-  static ({List<String> keys, Map<String, List<Map<String, dynamic>>> map}) _groupByLetter(List<Map<String, dynamic>> list) {
+  static ({List<String> keys, Map<String, List<Map<String, dynamic>>> map})
+  _groupByLetter(List<Map<String, dynamic>> list) {
     final map = <String, List<Map<String, dynamic>>>{};
     for (final m in list) {
       final name = m['name'] as String? ?? '';
-      final letter = m['letter'] as String? ?? (name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '#');
-      final key = RegExp(r'[A-Za-z]').hasMatch(letter) ? letter.toUpperCase() : '#';
+      final letter =
+          m['letter'] as String? ??
+          (name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '#');
+      final key = RegExp(r'[A-Za-z]').hasMatch(letter)
+          ? letter.toUpperCase()
+          : '#';
       map.putIfAbsent(key, () => []).add(m);
     }
     for (final key in map.keys) {
-      map[key]!.sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
+      map[key]!.sort(
+        (a, b) => (a['name'] as String).compareTo(b['name'] as String),
+      );
     }
     final keys = map.keys.toList()..sort();
     if (keys.contains('#')) {
@@ -160,10 +263,22 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
-    final bgColor = AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
-    final fgPrimary = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
-    final borderColor = AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
+    final bgColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final borderColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.borderPrimary,
+    );
     final grouped = _groupByLetter(List.from(_mockRelatedFriends));
     final indexLetters = ['↑', '☆', ...grouped.keys];
 
@@ -175,7 +290,10 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     final topChildren = <Widget>[
       Text(
         UITextConstants.createNewGroupChat,
-        style: TextStyle(fontSize: AppTypography.md, color: fgPrimary.withValues(alpha: 0.6)),
+        style: TextStyle(
+          fontSize: AppTypography.md,
+          color: fgPrimary.withValues(alpha: 0.6),
+        ),
       ),
       SizedBox(height: AppSpacing.sm),
       _SectionRow(
@@ -192,31 +310,41 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
       SizedBox(height: AppSpacing.lg),
       Text(
         UITextConstants.relatedSameInterest,
-        style: TextStyle(fontSize: AppTypography.md, color: fgPrimary.withValues(alpha: 0.6)),
+        style: TextStyle(
+          fontSize: AppTypography.md,
+          color: fgPrimary.withValues(alpha: 0.6),
+        ),
       ),
       SizedBox(height: AppSpacing.sm),
     ];
 
     final relatedChildren = <Widget>[];
     for (final letter in grouped.keys) {
-      relatedChildren.add(Container(
-        key: letterKeys[letter],
-        margin: EdgeInsets.only(top: relatedChildren.isEmpty ? 0 : AppSpacing.sm),
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.md] ?? AppSpacing.containerMd,
-          vertical: AppSpacing.xs,
-        ),
-        color: borderColor.withValues(alpha: 0.15),
-        alignment: Alignment.centerLeft,
-        child: Text(
-          letter,
-          style: TextStyle(
-            fontSize: AppTypography.sm,
-            fontWeight: FontWeight.w600,
-            color: fgSecondary,
+      relatedChildren.add(
+        Container(
+          key: letterKeys[letter],
+          margin: EdgeInsets.only(
+            top: relatedChildren.isEmpty ? 0 : AppSpacing.sm,
+          ),
+          padding: EdgeInsets.symmetric(
+            horizontal:
+                AppSpacing.semantic[DesignSemanticConstants
+                    .container]?[DesignSemanticConstants.md] ??
+                AppSpacing.containerMd,
+            vertical: AppSpacing.xs,
+          ),
+          color: borderColor.withValues(alpha: 0.15),
+          alignment: Alignment.centerLeft,
+          child: Text(
+            letter,
+            style: TextStyle(
+              fontSize: AppTypography.sm,
+              fontWeight: FontWeight.w600,
+              color: fgSecondary,
+            ),
           ),
         ),
-      ));
+      );
       for (final m in grouped.map[letter]!) {
         final username = m['username'] as String? ?? '';
         final selected = _relatedSelected[username] ?? false;
@@ -245,7 +373,11 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
         ),
         title: Text(
           UITextConstants.startGroupChat,
-          style: TextStyle(color: fgPrimary, fontSize: AppTypography.xl, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            color: fgPrimary,
+            fontSize: AppTypography.xl,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
       body: Column(
@@ -253,21 +385,35 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
         children: [
           Padding(
             padding: EdgeInsets.symmetric(
-              horizontal: AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.md] ?? AppSpacing.containerMd,
+              horizontal:
+                  AppSpacing.semantic[DesignSemanticConstants
+                      .container]?[DesignSemanticConstants.md] ??
+                  AppSpacing.containerMd,
               vertical: AppSpacing.sm,
             ),
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
                 hintText: UITextConstants.search,
-                prefixIcon: Icon(Icons.search, size: AppSpacing.iconMedium, color: fgPrimary.withValues(alpha: 0.5)),
+                prefixIcon: Icon(
+                  Icons.search,
+                  size: AppSpacing.iconMedium,
+                  color: fgPrimary.withValues(alpha: 0.5),
+                ),
                 filled: true,
-                fillColor: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.white,
+                fillColor: isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : Colors.white,
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppSpacing.borderRadius * 2),
+                  borderRadius: BorderRadius.circular(
+                    AppSpacing.borderRadius * 2,
+                  ),
                   borderSide: BorderSide.none,
                 ),
-                contentPadding: EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.sm,
+                ),
               ),
             ),
           ),
@@ -277,8 +423,15 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                 ListView(
                   controller: _listScrollController,
                   padding: EdgeInsets.only(
-                    left: AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.md] ?? AppSpacing.containerMd,
-                    right: (AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.md] ?? AppSpacing.containerMd) + 28,
+                    left:
+                        AppSpacing.semantic[DesignSemanticConstants
+                            .container]?[DesignSemanticConstants.md] ??
+                        AppSpacing.containerMd,
+                    right:
+                        (AppSpacing.semantic[DesignSemanticConstants
+                                .container]?[DesignSemanticConstants.md] ??
+                            AppSpacing.containerMd) +
+                        28,
                     bottom: AppSpacing.lg,
                   ),
                   children: [...topChildren, ...relatedChildren],
@@ -345,7 +498,11 @@ class _SectionRow extends StatelessWidget {
                 style: TextStyle(fontSize: AppTypography.lg, color: fgPrimary),
               ),
             ),
-            Icon(Icons.chevron_right, size: AppSpacing.iconMedium, color: fgPrimary.withValues(alpha: 0.5)),
+            Icon(
+              CupertinoIcons.chevron_forward,
+              size: AppSpacing.iconMedium,
+              color: fgPrimary.withValues(alpha: 0.5),
+            ),
           ],
         ),
       ),
@@ -374,33 +531,13 @@ class _RelatedFriendRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return InkWell(
       onTap: onTap,
       child: Padding(
         padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
         child: Row(
           children: [
-            Transform.scale(
-              scale: SettingsSemanticConstants.checkboxScale,
-              alignment: Alignment.centerLeft,
-              child: Checkbox(
-                value: selected,
-                onChanged: (_) => onTap(),
-                activeColor: SettingsSemanticConstants.checkboxSelectedColor,
-                fillColor: WidgetStateProperty.resolveWith((states) {
-                  if (states.contains(WidgetState.selected)) {
-                    return SettingsSemanticConstants.checkboxSelectedColor;
-                  }
-                  return SettingsSemanticConstants.checkboxUnselectedFillColor(isDark);
-                }),
-                side: BorderSide(
-                  color: SettingsSemanticConstants.checkboxUnselectedBorderColor(isDark),
-                  width: SettingsSemanticConstants.checkboxUnselectedBorderWidth,
-                ),
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-            ),
+            _SelectionIndicator(selected: selected, onTap: onTap),
             GestureDetector(
               onTap: onAvatarTap,
               child: CircleAvatar(
@@ -458,6 +595,32 @@ class _LetterIndex extends StatelessWidget {
   }
 }
 
+class _SelectionIndicator extends StatelessWidget {
+  const _SelectionIndicator({required this.selected, required this.onTap});
+
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      iconSize: AppSpacing.iconMedium,
+      padding: EdgeInsets.zero,
+      constraints: BoxConstraints(
+        minWidth: AppSpacing.minInteractiveSize,
+        minHeight: AppSpacing.minInteractiveSize,
+      ),
+      onPressed: onTap,
+      icon: Icon(
+        selected
+            ? CupertinoIcons.check_mark_circled_solid
+            : CupertinoIcons.circle,
+        color: selected ? AppColors.primaryColor : CupertinoColors.systemGrey2,
+      ),
+    );
+  }
+}
+
 /// 选择群聊底部 sheet（图二）
 class _SelectGroupChatSheet extends StatelessWidget {
   const _SelectGroupChatSheet({
@@ -480,7 +643,9 @@ class _SelectGroupChatSheet extends StatelessWidget {
       height: MediaQuery.of(context).size.height * 0.7,
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppSpacing.interGroupMd)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppSpacing.interGroupMd),
+        ),
       ),
       child: Column(
         children: [
@@ -496,7 +661,11 @@ class _SelectGroupChatSheet extends StatelessWidget {
                   child: Text(
                     UITextConstants.selectGroupChat,
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: AppTypography.xl, fontWeight: FontWeight.w600, color: fgPrimary),
+                    style: TextStyle(
+                      fontSize: AppTypography.xl,
+                      fontWeight: FontWeight.w600,
+                      color: fgPrimary,
+                    ),
                   ),
                 ),
                 SizedBox(width: AppSpacing.largeButtonSize),
@@ -508,11 +677,21 @@ class _SelectGroupChatSheet extends StatelessWidget {
             child: TextField(
               decoration: InputDecoration(
                 hintText: UITextConstants.searchGroupChatHint,
-                prefixIcon: Icon(Icons.search, size: AppSpacing.iconMedium, color: fgPrimary.withValues(alpha: 0.5)),
+                prefixIcon: Icon(
+                  Icons.search,
+                  size: AppSpacing.iconMedium,
+                  color: fgPrimary.withValues(alpha: 0.5),
+                ),
                 filled: true,
                 fillColor: fgPrimary.withValues(alpha: 0.08),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSpacing.borderRadius), borderSide: BorderSide.none),
-                contentPadding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm, vertical: AppSpacing.sm),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.containerSm,
+                  vertical: AppSpacing.sm,
+                ),
               ),
             ),
           ),
@@ -525,12 +704,33 @@ class _SelectGroupChatSheet extends StatelessWidget {
                 return ListTile(
                   leading: CircleAvatar(
                     radius: AppSpacing.avatarUserXs,
-                    backgroundColor: AppColors.primaryColor.withValues(alpha: 0.2),
-                    child: Icon(Icons.group, color: AppColors.primaryColor, size: AppSpacing.iconLarge),
+                    backgroundColor: AppColors.primaryColor.withValues(
+                      alpha: 0.2,
+                    ),
+                    child: Icon(
+                      Icons.group,
+                      color: AppColors.primaryColor,
+                      size: AppSpacing.iconLarge,
+                    ),
                   ),
-                  title: Text(g['name']!, style: TextStyle(fontSize: AppTypography.lg, color: fgPrimary)),
-                  subtitle: Text('${g['count']}${UITextConstants.friendsCount}', style: TextStyle(fontSize: AppTypography.sm, color: fgPrimary.withValues(alpha: 0.6))),
-                  trailing: Icon(Icons.chevron_right, color: fgPrimary.withValues(alpha: 0.5)),
+                  title: Text(
+                    g['name']!,
+                    style: TextStyle(
+                      fontSize: AppTypography.lg,
+                      color: fgPrimary,
+                    ),
+                  ),
+                  subtitle: Text(
+                    '${g['count']}${UITextConstants.friendsCount}',
+                    style: TextStyle(
+                      fontSize: AppTypography.sm,
+                      color: fgPrimary.withValues(alpha: 0.6),
+                    ),
+                  ),
+                  trailing: Icon(
+                    CupertinoIcons.chevron_forward,
+                    color: fgPrimary.withValues(alpha: 0.5),
+                  ),
                   onTap: () => onSelectGroup(g),
                 );
               },
@@ -564,7 +764,9 @@ class _SelectCircleSheet extends StatelessWidget {
       height: MediaQuery.of(context).size.height * 0.7,
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppSpacing.interGroupMd)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppSpacing.interGroupMd),
+        ),
       ),
       child: Column(
         children: [
@@ -580,7 +782,11 @@ class _SelectCircleSheet extends StatelessWidget {
                   child: Text(
                     UITextConstants.selectCircle,
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: AppTypography.xl, fontWeight: FontWeight.w600, color: fgPrimary),
+                    style: TextStyle(
+                      fontSize: AppTypography.xl,
+                      fontWeight: FontWeight.w600,
+                      color: fgPrimary,
+                    ),
                   ),
                 ),
                 SizedBox(width: AppSpacing.largeButtonSize),
@@ -592,11 +798,21 @@ class _SelectCircleSheet extends StatelessWidget {
             child: TextField(
               decoration: InputDecoration(
                 hintText: UITextConstants.searchCircleHint,
-                prefixIcon: Icon(Icons.search, size: AppSpacing.iconMedium, color: fgPrimary.withValues(alpha: 0.5)),
+                prefixIcon: Icon(
+                  Icons.search,
+                  size: AppSpacing.iconMedium,
+                  color: fgPrimary.withValues(alpha: 0.5),
+                ),
                 filled: true,
                 fillColor: fgPrimary.withValues(alpha: 0.08),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSpacing.borderRadius), borderSide: BorderSide.none),
-                contentPadding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm, vertical: AppSpacing.sm),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.containerSm,
+                  vertical: AppSpacing.sm,
+                ),
               ),
             ),
           ),
@@ -609,12 +825,33 @@ class _SelectCircleSheet extends StatelessWidget {
                 return ListTile(
                   leading: CircleAvatar(
                     radius: AppSpacing.avatarUserXs,
-                    backgroundColor: AppColors.secondaryColor.withValues(alpha: 0.2),
-                    child: Icon(Icons.people_outline, color: AppColors.secondaryColor, size: AppSpacing.iconLarge),
+                    backgroundColor: AppColors.secondaryColor.withValues(
+                      alpha: 0.2,
+                    ),
+                    child: Icon(
+                      Icons.people_outline,
+                      color: AppColors.secondaryColor,
+                      size: AppSpacing.iconLarge,
+                    ),
                   ),
-                  title: Text(c['name']!, style: TextStyle(fontSize: AppTypography.lg, color: fgPrimary)),
-                  subtitle: Text('${c['count']}${UITextConstants.friendsCount}', style: TextStyle(fontSize: AppTypography.sm, color: fgPrimary.withValues(alpha: 0.6))),
-                  trailing: Icon(Icons.chevron_right, color: fgPrimary.withValues(alpha: 0.5)),
+                  title: Text(
+                    c['name']!,
+                    style: TextStyle(
+                      fontSize: AppTypography.lg,
+                      color: fgPrimary,
+                    ),
+                  ),
+                  subtitle: Text(
+                    '${c['count']}${UITextConstants.friendsCount}',
+                    style: TextStyle(
+                      fontSize: AppTypography.sm,
+                      color: fgPrimary.withValues(alpha: 0.6),
+                    ),
+                  ),
+                  trailing: Icon(
+                    CupertinoIcons.chevron_forward,
+                    color: fgPrimary.withValues(alpha: 0.5),
+                  ),
                   onTap: () => onSelectCircle(c),
                 );
               },
@@ -669,7 +906,9 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
       height: MediaQuery.of(context).size.height * 0.75,
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppSpacing.interGroupMd)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppSpacing.interGroupMd),
+        ),
       ),
       child: Column(
         children: [
@@ -682,7 +921,11 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
             ),
             title: Text(
               widget.title,
-              style: TextStyle(fontSize: AppTypography.xl, fontWeight: FontWeight.w600, color: fgPrimary),
+              style: TextStyle(
+                fontSize: AppTypography.xl,
+                fontWeight: FontWeight.w600,
+                color: fgPrimary,
+              ),
             ),
           ),
           Expanded(
@@ -702,36 +945,23 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
                     });
                   },
                   child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                      vertical: AppSpacing.sm,
+                    ),
                     child: Row(
                       children: [
-                        Transform.scale(
-                          scale: SettingsSemanticConstants.checkboxScale,
-                          alignment: Alignment.centerLeft,
-                          child: Checkbox(
-                            value: selected,
-                            onChanged: (_) {
-                              setState(() {
-                                if (selected) {
-                                  _selected.remove(index);
-                                } else {
-                                  _selected.add(index);
-                                }
-                              });
-                            },
-                            activeColor: SettingsSemanticConstants.checkboxSelectedColor,
-                            fillColor: WidgetStateProperty.resolveWith((states) {
-                              if (states.contains(WidgetState.selected)) {
-                                return SettingsSemanticConstants.checkboxSelectedColor;
+                        _SelectionIndicator(
+                          selected: selected,
+                          onTap: () {
+                            setState(() {
+                              if (selected) {
+                                _selected.remove(index);
+                              } else {
+                                _selected.add(index);
                               }
-                              return SettingsSemanticConstants.checkboxUnselectedFillColor(isDark);
-                            }),
-                            side: BorderSide(
-                              color: SettingsSemanticConstants.checkboxUnselectedBorderColor(isDark),
-                              width: SettingsSemanticConstants.checkboxUnselectedBorderWidth,
-                            ),
-                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
+                            });
+                          },
                         ),
                         CircleAvatar(
                           radius: AppSpacing.avatarSize / 2,
@@ -741,7 +971,10 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
                         Expanded(
                           child: Text(
                             m['name'] ?? '',
-                            style: TextStyle(fontSize: AppTypography.lg, color: fgPrimary),
+                            style: TextStyle(
+                              fontSize: AppTypography.lg,
+                              color: fgPrimary,
+                            ),
                           ),
                         ),
                       ],
@@ -760,51 +993,52 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Transform.scale(
-                        scale: SettingsSemanticConstants.checkboxScale,
-                        alignment: Alignment.centerLeft,
-                        child: Checkbox(
-                          value: _allSelected,
-                          onChanged: (_) => _toggleAll(),
-                          activeColor: SettingsSemanticConstants.checkboxSelectedColor,
-                          fillColor: WidgetStateProperty.resolveWith((states) {
-                            if (states.contains(WidgetState.selected)) {
-                              return SettingsSemanticConstants.checkboxSelectedColor;
-                            }
-                            return SettingsSemanticConstants.checkboxUnselectedFillColor(isDark);
-                          }),
-                          side: BorderSide(
-                            color: SettingsSemanticConstants.checkboxUnselectedBorderColor(isDark),
-                            width: SettingsSemanticConstants.checkboxUnselectedBorderWidth,
-                          ),
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      _SelectionIndicator(
+                        selected: _allSelected,
+                        onTap: _toggleAll,
+                      ),
+                      Text(
+                        UITextConstants.selectAll,
+                        style: TextStyle(
+                          fontSize: AppTypography.lg,
+                          color: fgPrimary,
                         ),
                       ),
-                      Text(UITextConstants.selectAll, style: TextStyle(fontSize: AppTypography.lg, color: fgPrimary)),
                     ],
                   ),
                 ),
                 const Spacer(),
                 Material(
                   color: _selected.isEmpty
-                      ? SettingsSemanticConstants.actionButtonDisabledBackground(isDark)
+                      ? SettingsSemanticConstants.actionButtonDisabledBackground(
+                          isDark,
+                        )
                       : SettingsSemanticConstants.actionButtonPrimaryBackground,
-                  borderRadius: BorderRadius.circular(SettingsSemanticConstants.actionButtonBorderRadius),
+                  borderRadius: BorderRadius.circular(
+                    SettingsSemanticConstants.actionButtonBorderRadius,
+                  ),
                   child: InkWell(
                     onTap: _selected.isEmpty
                         ? null
                         : () {
-                            final list = _selected.map((i) => widget.members[i]).toList();
+                            final list = _selected
+                                .map((i) => widget.members[i])
+                                .toList();
                             Navigator.of(context).pop();
                             widget.onConfirm(list);
                           },
-                    borderRadius: BorderRadius.circular(SettingsSemanticConstants.actionButtonBorderRadius),
+                    borderRadius: BorderRadius.circular(
+                      SettingsSemanticConstants.actionButtonBorderRadius,
+                    ),
                     child: SizedBox(
-                      height: SettingsSemanticConstants.actionButtonHeightMedium,
+                      height:
+                          SettingsSemanticConstants.actionButtonHeightMedium,
                       child: Padding(
                         padding: EdgeInsets.symmetric(
-                          horizontal: SettingsSemanticConstants.actionButtonPaddingHorizontal,
-                          vertical: SettingsSemanticConstants.actionButtonPaddingVertical,
+                          horizontal: SettingsSemanticConstants
+                              .actionButtonPaddingHorizontal,
+                          vertical: SettingsSemanticConstants
+                              .actionButtonPaddingVertical,
                         ),
                         child: Center(
                           child: Text(
@@ -813,8 +1047,11 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
                               fontSize: AppTypography.lg,
                               fontWeight: FontWeight.w500,
                               color: _selected.isEmpty
-                                  ? SettingsSemanticConstants.actionButtonDisabledForeground(isDark)
-                                  : SettingsSemanticConstants.actionButtonPrimaryForeground,
+                                  ? SettingsSemanticConstants.actionButtonDisabledForeground(
+                                      isDark,
+                                    )
+                                  : SettingsSemanticConstants
+                                        .actionButtonPrimaryForeground,
                             ),
                           ),
                         ),

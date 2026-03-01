@@ -1618,17 +1618,17 @@ class _CreatePageState extends ConsumerState<CreatePage>
             value: isPublic,
             activeTrackColor: blue,
             onChanged: (next) {
-                setState(() {
-                  final nextData = Map<String, dynamic>.from(_tabData(tabKey));
-                  nextData['visibility'] = next ? 'public' : 'private';
-                  if (!next) {
-                    nextData['circleIds'] = <String>[];
-                    nextData['circleNames'] = <String>[];
-                  }
-                  _currentData = Map<String, dynamic>.from(_currentData)
-                    ..[tabKey] = nextData;
-                });
-              },
+              setState(() {
+                final nextData = Map<String, dynamic>.from(_tabData(tabKey));
+                nextData['visibility'] = next ? 'public' : 'private';
+                if (!next) {
+                  nextData['circleIds'] = <String>[];
+                  nextData['circleNames'] = <String>[];
+                }
+                _currentData = Map<String, dynamic>.from(_currentData)
+                  ..[tabKey] = nextData;
+              });
+            },
           ),
           onTap: () {
             setState(() {
@@ -1757,8 +1757,8 @@ class _CreatePageState extends ConsumerState<CreatePage>
                     child: Text(
                       label,
                       style: TextStyle(
-                        fontSize:
-                            SettingsSemanticConstants.createSettingItemLabelFontSize,
+                        fontSize: SettingsSemanticConstants
+                            .createSettingItemLabelFontSize,
                         fontWeight: FontWeight.normal,
                         color: fgColor,
                       ),
@@ -1774,14 +1774,14 @@ class _CreatePageState extends ConsumerState<CreatePage>
                         mainAxisSize: MainAxisSize.min,
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          if (trailingWidget != null) trailingWidget,
+                          if (trailingWidget case final widget?) widget,
                           if (trailing != null)
                             Flexible(
                               child: Text(
                                 trailing,
                                 style: TextStyle(
-                                  fontSize:
-                                      SettingsSemanticConstants.createSettingItemValueFontSize,
+                                  fontSize: SettingsSemanticConstants
+                                      .createSettingItemValueFontSize,
                                   color:
                                       trailingColor ??
                                       SettingsSemanticConstants.createSettingItemValueColor(
@@ -1795,7 +1795,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
                           if (showChevron) ...[
                             SizedBox(width: AppSpacing.interGroupXs),
                             Icon(
-                              Icons.chevron_right,
+                              CupertinoIcons.chevron_forward,
                               size: AppSpacing.iconMedium,
                               color: fgSecondary,
                             ),

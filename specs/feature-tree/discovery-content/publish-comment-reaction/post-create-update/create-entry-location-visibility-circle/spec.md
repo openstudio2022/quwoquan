@@ -29,6 +29,7 @@
 - 圈子选择器：全屏页面，顶部工具栏居中显示「选择圈子」，底部工具栏「取消」「完成」双按钮；暂不加搜索框。
 - **发现页可见性**：发现页（微趣、美图、视频、文章）仅展示 `visibility=public` 的内容；私密内容不出现在发现流。
 - 图标与高品质内容创作定位匹配：是否公开、发布到圈子入口采用统一风格的图标。
+- **iOS 语义 v1（本轮新增）**：选择器页面统一 `CupertinoPageScaffold + CupertinoNavigationBar`，Modal 一律 `xmark` 关闭语义；Cupertino 页面禁止混用 Material 交互组件（如 Checkbox、SnackBar）。
 
 ## 验收标准（概要）
 - A1：四类内容发布入口均可使用位置选择（附近+搜索）。

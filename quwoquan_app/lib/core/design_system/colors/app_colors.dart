@@ -91,6 +91,9 @@ class AppColorsFunctional {
   static Color getColor(bool isDark, ColorType colorType) {
     // 背景色与原型保持一致
     switch (colorType) {
+      case ColorType.tabUnselected:
+        // 一级 Tab / 底部栏未选中：深色保持中灰；浅色较之前加深一档
+        return isDark ? Colors.grey[500]! : Colors.grey[600]!;
       case ColorType.foregroundTertiary:
         return isDark ? Colors.grey[400]! : Colors.grey[600]!;
       case ColorType.foregroundSecondary:
@@ -136,6 +139,7 @@ class AppColorsFunctional {
 }
 
 enum ColorType {
+  tabUnselected,
   foregroundTertiary,
   foregroundSecondary,
   backgroundTertiary,

@@ -276,6 +276,54 @@
   "assistantDevReplayRounds": "轮次轨迹",
   "assistantDevReplayScore": "评分聚合快照",
   "assistantNoReplayData": "暂无回放数据",
+  "assistantSkillCenterTitle": "技能中心",
+  "assistantSkillCenterDefaultAllSubscribedTitle": "默认全订阅已开启",
+  "assistantSkillCenterDefaultAllSubscribedDesc": "开箱即用全部助理能力；执行时仍受风险策略与场景闸门约束。",
+  "assistantSkillCenterRestoreDefaultAll": "恢复默认全订阅",
+  "assistantSkillCenterSimpleMode": "极简模式",
+  "assistantSkillCenterPackagesTitle": "能力包",
+  "assistantSkillCenterPackageLife": "生活助理",
+  "assistantSkillCenterPackageWork": "工作助理",
+  "assistantSkillCenterPackageKnowledge": "知识助理",
+  "assistantSkillCenterPackageCompanion": "陪伴助理",
+  "assistantSkillCenterNoMappedSkills": "暂无对应技能",
+  "assistantSkillCenterContainsCount": "包含 {count} 项",
+  "@assistantSkillCenterContainsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "assistantSkillCenterRiskPolicyTitle": "风险策略",
+  "assistantSkillCenterLowRiskAuto": "低风险自动执行",
+  "assistantSkillCenterLowRiskDesc": "检索、总结、问答默认执行",
+  "assistantSkillCenterMediumRiskConfirm": "中风险轻确认",
+  "assistantSkillCenterMediumRiskDesc": "创建提醒、生成待办需确认",
+  "assistantSkillCenterHighRiskDoubleConfirm": "高风险二次确认",
+  "assistantSkillCenterHighRiskDesc": "交易、外部提交等必须二次确认",
+  "assistantSkillCenterHighRiskRequired": "高风险动作必须保留二次确认",
+  "assistantSkillCenterSceneGateTitle": "场景闸门",
+  "assistantSkillCenterSceneDiscovery": "发现页",
+  "assistantSkillCenterSceneDiscoveryDesc": "浏览时仅轻提示，不主动打断",
+  "assistantSkillCenterSceneCircle": "圈子",
+  "assistantSkillCenterSceneCircleDesc": "圈内讨论建议按需触发",
+  "assistantSkillCenterSceneChat": "趣聊",
+  "assistantSkillCenterSceneChatDesc": "默认受邀参与（@小趣或手动点击）",
+  "assistantSkillCenterSceneSystem": "系统外场景",
+  "assistantSkillCenterSceneSystemDesc": "剪贴板、图片、外链等跨场景能力",
+  "assistantSkillCenterRecentSessionsTitle": "最近会话",
+  "assistantSkillCenterNoRecentSessions": "暂无会话记录",
+  "assistantSkillCenterMessagesCount": "{count} 条消息",
+  "@assistantSkillCenterMessagesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "assistantSkillCenterNoLastMessage": "暂无最近消息",
+  "assistantSkillCenterAllSkillsTitle": "全部技能",
   "personaManage": "管理分身",
   "personaPrimary": "主账号",
   "myResonance": "我的交集",

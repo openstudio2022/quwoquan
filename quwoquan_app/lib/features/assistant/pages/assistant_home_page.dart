@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/personal_assistant/app/assistant_engine_provider.dart';
 
@@ -26,12 +28,18 @@ class _AssistantHomePageState extends ConsumerState<AssistantHomePage> {
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
-    final bgColor =
-        AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
-    final fgPrimary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    final bgColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -47,8 +55,8 @@ class _AssistantHomePageState extends ConsumerState<AssistantHomePage> {
                 child: _activeTab == 'memory'
                     ? _buildMemoryContent(fgPrimary, fgSecondary)
                     : _activeTab == 'tasks'
-                        ? _buildTasksContent(fgPrimary, fgSecondary)
-                        : _buildSkillsContent(fgPrimary, fgSecondary),
+                    ? _buildTasksContent(fgPrimary, fgSecondary)
+                    : _buildSkillsContent(fgPrimary, fgSecondary),
               ),
             ),
           ],
@@ -57,7 +65,11 @@ class _AssistantHomePageState extends ConsumerState<AssistantHomePage> {
     );
   }
 
-  Widget _buildHeader(BuildContext context, Color fgPrimary, Color fgSecondary) {
+  Widget _buildHeader(
+    BuildContext context,
+    Color fgPrimary,
+    Color fgSecondary,
+  ) {
     final secondary = AppColorsFunctional.getColor(
       ref.watch(isDarkProvider),
       ColorType.foregroundSecondary,
@@ -108,8 +120,8 @@ class _AssistantHomePageState extends ConsumerState<AssistantHomePage> {
               child: Material(
                 color: active
                     ? (isDark
-                        ? Colors.white.withValues(alpha: 0.12)
-                        : Colors.white)
+                          ? Colors.white.withValues(alpha: 0.12)
+                          : Colors.white)
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(8),
                 child: InkWell(
@@ -138,7 +150,9 @@ class _AssistantHomePageState extends ConsumerState<AssistantHomePage> {
   }
 
   Widget _buildMemoryContent(Color fgPrimary, Color fgSecondary) {
-    final memoryData = ref.watch(appContentRepositoryProvider).assistantMemoryData;
+    final memoryData = ref
+        .watch(appContentRepositoryProvider)
+        .assistantMemoryData;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -150,7 +164,8 @@ class _AssistantHomePageState extends ConsumerState<AssistantHomePage> {
             prefixIcon: Icon(Icons.search, size: 20, color: fgSecondary),
             filled: true,
             fillColor: Colors.white.withValues(
-                alpha: ref.watch(isDarkProvider) ? 0.08 : 0.06),
+              alpha: ref.watch(isDarkProvider) ? 0.08 : 0.06,
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,
@@ -172,7 +187,11 @@ class _AssistantHomePageState extends ConsumerState<AssistantHomePage> {
             children: [
               Row(
                 children: [
-                  Icon(Icons.auto_awesome, size: 16, color: AppColors.primaryColor),
+                  Icon(
+                    Icons.auto_awesome,
+                    size: 16,
+                    color: AppColors.primaryColor,
+                  ),
                   SizedBox(width: 8),
                   Text(
                     '今日日报',
@@ -187,11 +206,7 @@ class _AssistantHomePageState extends ConsumerState<AssistantHomePage> {
               SizedBox(height: 12),
               Text(
                 '今天你发布了1篇关于极简主义的文章，收到了12个赞。在"4:5美学"圈子里与3位同好讨论了光影处理。总体活跃度击败了88%的用户。',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: fgSecondary,
-                  height: 1.5,
-                ),
+                style: TextStyle(fontSize: 14, color: fgSecondary, height: 1.5),
               ),
             ],
           ),
@@ -259,7 +274,11 @@ class _AssistantHomePageState extends ConsumerState<AssistantHomePage> {
                           ],
                         ),
                       ),
-                      Icon(Icons.chevron_right, color: fgSecondary, size: 20),
+                      Icon(
+                        CupertinoIcons.chevron_forward,
+                        color: fgSecondary,
+                        size: 20,
+                      ),
                     ],
                   ),
                 ),
@@ -272,17 +291,16 @@ class _AssistantHomePageState extends ConsumerState<AssistantHomePage> {
   }
 
   Widget _buildTasksContent(Color fgPrimary, Color fgSecondary) {
-    final tasksData = ref.watch(appContentRepositoryProvider).assistantTasksData;
+    final tasksData = ref
+        .watch(appContentRepositoryProvider)
+        .assistantTasksData;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(height: 24),
         Row(
           children: [
-            Text(
-              '日',
-              style: TextStyle(fontSize: 10, color: fgSecondary),
-            ),
+            Text('日', style: TextStyle(fontSize: 10, color: fgSecondary)),
             Text('一', style: TextStyle(fontSize: 10, color: fgSecondary)),
             Text('二', style: TextStyle(fontSize: 10, color: fgSecondary)),
             Text('三', style: TextStyle(fontSize: 10, color: fgSecondary)),
@@ -297,7 +315,11 @@ class _AssistantHomePageState extends ConsumerState<AssistantHomePage> {
           children: [
             Text(
               '事项',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: fgSecondary),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: fgSecondary,
+              ),
             ),
             IconButton(
               onPressed: () {},
@@ -351,14 +373,17 @@ class _AssistantHomePageState extends ConsumerState<AssistantHomePage> {
                           children: [
                             Container(
                               padding: EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 color: ref.watch(isDarkProvider)
                                     ? Colors.white.withValues(alpha: 0.1)
                                     : Colors.black.withValues(alpha: 0.06),
                                 borderRadius: BorderRadius.circular(6),
                                 border: Border.all(
-                                    color: fgSecondary.withValues(alpha: 0.3)),
+                                  color: fgSecondary.withValues(alpha: 0.3),
+                                ),
                               ),
                               child: Text(
                                 task['category'] as String? ?? '',
@@ -385,9 +410,7 @@ class _AssistantHomePageState extends ConsumerState<AssistantHomePage> {
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w700,
-                            color: completed
-                                ? fgSecondary
-                                : fgPrimary,
+                            color: completed ? fgSecondary : fgPrimary,
                             decoration: completed
                                 ? TextDecoration.lineThrough
                                 : null,
@@ -411,120 +434,165 @@ class _AssistantHomePageState extends ConsumerState<AssistantHomePage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(height: 24),
-        ...skillsValue.when(
-          data: (skillsData) => skillsData.map((skill) {
-            final active = skill.enabled;
-            return Padding(
-              padding: EdgeInsets.only(bottom: 16),
-              child: Material(
-                color: ref.watch(isDarkProvider)
-                    ? Colors.white.withValues(alpha: 0.05)
-                    : Colors.black.withValues(alpha: 0.03),
-                borderRadius: BorderRadius.circular(16),
-                child: InkWell(
-                  onTap: () async {
-                    if (skill.isDefaultFree) {
-                      return;
-                    }
-                    await ref
-                        .read(assistantGatewayProvider)
-                        .setSkillEnabled(skill.manifest.id, !active);
-                    ref.invalidate(assistantSkillMarketProvider);
-                  },
-                  borderRadius: BorderRadius.circular(16),
-                  child: Padding(
-                    padding: EdgeInsets.all(20),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: ref.watch(isDarkProvider)
-                                ? Colors.white.withValues(alpha: 0.1)
-                                : Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.06),
-                                blurRadius: 8,
-                                offset: Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Icon(
-                            Icons.widgets,
-                            color: active ? AppColors.primaryColor : fgSecondary,
-                            size: 24,
-                          ),
-                        ),
-                        SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                skill.manifest.name,
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                  color: fgPrimary,
-                                ),
-                              ),
-                              SizedBox(height: 4),
-                              Text(
-                                skill.manifest.description,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: fgSecondary,
-                                ),
-                              ),
-                              SizedBox(height: 2),
-                              Text(
-                                '${skill.category} · v${skill.version}',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: fgSecondary.withValues(alpha: 0.8),
-                                ),
-                              ),
-                              Text(
-                                skill.isDefaultFree ? '默认能力 · 免订阅' : '${skill.tier.toUpperCase()} 订阅能力',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: skill.isDefaultFree
-                                      ? AppColors.success
-                                      : fgSecondary.withValues(alpha: 0.8),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: active
-                                ? AppColors.primaryColor
-                                : fgSecondary.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            skill.isDefaultFree
-                                ? '默认启用'
-                                : (active ? '已启用' : '点击订阅'),
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: active ? Colors.white : fgSecondary,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+        Container(
+          padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: ref.watch(isDarkProvider)
+                ? Colors.white.withValues(alpha: 0.05)
+                : Colors.black.withValues(alpha: 0.03),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppColors.primaryColor.withValues(alpha: 0.25),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.tune,
+                size: 18,
+                color: AppColors.primaryColor,
+              ),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '默认全订阅已开启，去技能中心做精细管理',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: fgSecondary,
                   ),
                 ),
               ),
-            );
-          }).toList(growable: false),
+              TextButton(
+                onPressed: () => context.push('/assistant/skills'),
+                child: const Text('进入'),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: 16),
+        ...skillsValue.when(
+          data: (skillsData) => skillsData
+              .map((skill) {
+                final active = skill.enabled;
+                return Padding(
+                  padding: EdgeInsets.only(bottom: 16),
+                  child: Material(
+                    color: ref.watch(isDarkProvider)
+                        ? Colors.white.withValues(alpha: 0.05)
+                        : Colors.black.withValues(alpha: 0.03),
+                    borderRadius: BorderRadius.circular(16),
+                    child: InkWell(
+                      onTap: () async {
+                        if (skill.isDefaultFree) {
+                          return;
+                        }
+                        await ref
+                            .read(assistantGatewayProvider)
+                            .setSkillEnabled(skill.manifest.id, !active);
+                        ref.invalidate(assistantSkillMarketProvider);
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Padding(
+                        padding: EdgeInsets.all(20),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: ref.watch(isDarkProvider)
+                                    ? Colors.white.withValues(alpha: 0.1)
+                                    : Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.06),
+                                    blurRadius: 8,
+                                    offset: Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Icon(
+                                Icons.widgets,
+                                color: active
+                                    ? AppColors.primaryColor
+                                    : fgSecondary,
+                                size: 24,
+                              ),
+                            ),
+                            SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    skill.manifest.name,
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                      color: fgPrimary,
+                                    ),
+                                  ),
+                                  SizedBox(height: 4),
+                                  Text(
+                                    skill.manifest.description,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: fgSecondary,
+                                    ),
+                                  ),
+                                  SizedBox(height: 2),
+                                  Text(
+                                    '${skill.category} · v${skill.version}',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: fgSecondary.withValues(alpha: 0.8),
+                                    ),
+                                  ),
+                                  Text(
+                                    skill.isDefaultFree
+                                        ? '默认能力 · 免订阅'
+                                        : '${skill.tier.toUpperCase()} 订阅能力',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: skill.isDefaultFree
+                                          ? AppColors.success
+                                          : fgSecondary.withValues(alpha: 0.8),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: active
+                                    ? AppColors.primaryColor
+                                    : fgSecondary.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                skill.isDefaultFree
+                                    ? '默认启用'
+                                    : (active ? '已启用' : '点击订阅'),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: active ? Colors.white : fgSecondary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              })
+              .toList(growable: false),
           loading: () => <Widget>[
             Padding(
               padding: EdgeInsets.only(top: 12),

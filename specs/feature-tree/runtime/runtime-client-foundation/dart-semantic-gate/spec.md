@@ -2,7 +2,11 @@
 
 ## 功能说明
 
-端侧 Dart 编码规范的**自动化守门**，在 Plan→Create→Implement→Verify→Submit 全链路拦截硬编码视觉字面量（width/height/leadingSize、fontSize、EdgeInsets、Color 等），确保设计系统 token（AppSpacing、AppTypography、AppColors）被强制执行。
+端侧 Dart 编码规范的**自动化守门**，在 Plan→Create→Implement→Verify→Submit 全链路拦截：
+- 硬编码视觉字面量（width/height/leadingSize、fontSize、EdgeInsets、Color 等）
+- iOS 语义风格违规（行尾箭头语义、Cupertino 页面混用 Material 交互、selector leading 语义）
+
+确保设计系统 token（AppSpacing、AppTypography、AppColors）与 iOS 全局语义被持续执行。
 
 | L4 子节点 | 职责 |
 |-----------|------|
@@ -14,6 +18,7 @@
 ## 范围
 
 - **必检**：width、height、leadingSize、fontSize、size、EdgeInsets、BorderRadius、Color(0x)
+- **必检（iOS 语义）**：`Icons.chevron_right`、`CupertinoPageScaffold` 中 `Checkbox`/`SnackBar`/`ScaffoldMessenger`、selector 页面 `CupertinoIcons.back`
 - **白名单**：lib/core/design_system/、lib/core/constants/、*_test.dart fixture
 - **不负责**：云侧 Go 代码、非 Dart 文件
 

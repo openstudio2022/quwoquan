@@ -18,6 +18,7 @@ l2:
         l4:
           - feature: top-toolbar-and-selection-pattern
           - feature: settings-page-structure
+          - feature: circles-channel-management-panel
       - feature: dart-semantic-gate
         l4:
           - feature: verify-script-and-gate-integration

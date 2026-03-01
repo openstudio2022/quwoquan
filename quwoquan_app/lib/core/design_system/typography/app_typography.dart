@@ -21,6 +21,16 @@ class AppTypography {
   static const double toolPanelItemLabel = base;
   static const double toolPanelCategoryLabel = base;
   static const double actionCount = lg;
+  /// 一级 Tab 字号（发现/圈子/趣聊统一）
+  static const double primaryTabLabel = xl;
+  /// 一级 Tab 字重（选中/未选中统一，避免切换时布局抖动）
+  static const FontWeight primaryTabLabelWeight = medium;
+  /// 底部栏未选中字号（与一级 Tab 一致）
+  static const double bottomNavLabelUnselected = primaryTabLabel;
+  /// 底部栏选中字号（比未选中大一档）
+  static const double bottomNavLabelSelected = xxl;
+  /// 底部栏字重（选中不加粗）
+  static const FontWeight bottomNavLabelWeight = medium;
   /// 欢迎页主标题（hero）
   static const double welcomeHeroTitle = 48.0;
 

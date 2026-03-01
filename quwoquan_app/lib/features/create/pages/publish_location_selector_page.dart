@@ -77,8 +77,9 @@ class _PublishLocationSelectorPageState
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error =
-            IntegrationLocationErrorCode.fromCode(e.code).toDisplayMessage(context.l10n);
+        _error = IntegrationLocationErrorCode.fromCode(
+          e.code,
+        ).toDisplayMessage(context.l10n);
       });
     } catch (_) {
       if (!mounted) return;
@@ -113,15 +114,16 @@ class _PublishLocationSelectorPageState
           child: const Icon(CupertinoIcons.search),
           onPressed: () async {
             final navigator = Navigator.of(context);
-            final result = await Navigator.of(context).push<CreateLocationOption>(
-              CupertinoPageRoute<CreateLocationOption>(
-                builder: (_) => PublishLocationSearchPage(
-                  locationService: widget.locationService,
-                  lat: _lastLat,
-                  lng: _lastLng,
-                ),
-              ),
-            );
+            final result = await Navigator.of(context)
+                .push<CreateLocationOption>(
+                  CupertinoPageRoute<CreateLocationOption>(
+                    builder: (_) => PublishLocationSearchPage(
+                      locationService: widget.locationService,
+                      lat: _lastLat,
+                      lng: _lastLng,
+                    ),
+                  ),
+                );
             if (!mounted || result == null) return;
             navigator.pop(result);
           },
@@ -148,19 +150,17 @@ class _PublishLocationSelectorPageState
                 ),
               )
             : _error != null
-                ? Center(
-                    child: _buildErrorCard(l10n, isDark),
-                  )
-                : ListView(
-                    children: [
-                      CupertinoListTile(
-                        title: Text(l10n.locationHidden),
-                        onTap: () => Navigator.of(context)
-                            .pop(CreateLocationOption.hidden),
-                      ),
-                      for (final item in _items) _buildLocationTile(item),
-                    ],
+            ? Center(child: _buildErrorCard(l10n, isDark))
+            : ListView(
+                children: [
+                  CupertinoListTile(
+                    title: Text(l10n.locationHidden),
+                    onTap: () =>
+                        Navigator.of(context).pop(CreateLocationOption.hidden),
                   ),
+                  for (final item in _items) _buildLocationTile(item),
+                ],
+              ),
       ),
     );
   }
@@ -194,10 +194,7 @@ class _PublishLocationSelectorPageState
           SizedBox(height: AppSpacing.interGroupMd),
           Text(
             _error!,
-            style: TextStyle(
-              fontSize: AppTypography.lg,
-              color: errorColor,
-            ),
+            style: TextStyle(fontSize: AppTypography.lg, color: errorColor),
             textAlign: TextAlign.center,
           ),
           SizedBox(height: AppSpacing.interGroupLg),
@@ -228,8 +225,7 @@ class _PublishLocationSelectorPageState
     }
     return CupertinoListTile(
       title: Text(item.name),
-      subtitle:
-          subtitleParts.isEmpty ? null : Text(subtitleParts.join(' · ')),
+      subtitle: subtitleParts.isEmpty ? null : Text(subtitleParts.join(' · ')),
       onTap: () => Navigator.of(context).pop(item),
     );
   }
@@ -303,8 +299,9 @@ class _PublishLocationSearchPageState extends State<PublishLocationSearchPage> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error =
-            IntegrationLocationErrorCode.fromCode(e.code).toDisplayMessage(context.l10n);
+        _error = IntegrationLocationErrorCode.fromCode(
+          e.code,
+        ).toDisplayMessage(context.l10n);
       });
     } catch (_) {
       if (!mounted) return;
@@ -331,7 +328,7 @@ class _PublishLocationSearchPageState extends State<PublishLocationSearchPage> {
         ),
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
-          child: const Icon(CupertinoIcons.back),
+          child: const Icon(CupertinoIcons.xmark),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
@@ -351,33 +348,30 @@ class _PublishLocationSearchPageState extends State<PublishLocationSearchPage> {
               child: _loading
                   ? const Center(child: CupertinoActivityIndicator())
                   : _error != null
-                      ? Center(
-                          child: _buildErrorCard(l10n, isDark),
-                        )
-                      : _items.isEmpty
-                            ? Center(
-                                child: Text(
-                                  l10n.locationSearchEmpty,
-                                  style: TextStyle(
-                                    color: CupertinoColors.systemGrey,
-                                    fontSize: AppTypography.body,
-                                  ),
-                                ),
-                              )
-                          : ListView.builder(
-                              itemCount: _items.length,
-                              itemBuilder: (context, index) {
-                                final item = _items[index];
-                                return CupertinoListTile(
-                                  title: Text(item.name),
-                                  subtitle: item.address.trim().isEmpty
-                                      ? null
-                                      : Text(item.address.trim()),
-                                  onTap: () =>
-                                      Navigator.of(context).pop(item),
-                                );
-                              },
-                            ),
+                  ? Center(child: _buildErrorCard(l10n, isDark))
+                  : _items.isEmpty
+                  ? Center(
+                      child: Text(
+                        l10n.locationSearchEmpty,
+                        style: TextStyle(
+                          color: CupertinoColors.systemGrey,
+                          fontSize: AppTypography.body,
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: _items.length,
+                      itemBuilder: (context, index) {
+                        final item = _items[index];
+                        return CupertinoListTile(
+                          title: Text(item.name),
+                          subtitle: item.address.trim().isEmpty
+                              ? null
+                              : Text(item.address.trim()),
+                          onTap: () => Navigator.of(context).pop(item),
+                        );
+                      },
+                    ),
             ),
           ],
         ),
@@ -413,10 +407,7 @@ class _PublishLocationSearchPageState extends State<PublishLocationSearchPage> {
           SizedBox(height: AppSpacing.interGroupMd),
           Text(
             _error!,
-            style: TextStyle(
-              fontSize: AppTypography.lg,
-              color: errorColor,
-            ),
+            style: TextStyle(fontSize: AppTypography.lg, color: errorColor),
             textAlign: TextAlign.center,
           ),
           SizedBox(height: AppSpacing.interGroupLg),

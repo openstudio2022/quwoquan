@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 /// 聊天设置/聊天信息页（1:1 图二）
 class ChatSettingsPage extends ConsumerStatefulWidget {
-  const ChatSettingsPage({
-    super.key,
-    required this.conversationId,
-  });
+  const ChatSettingsPage({super.key, required this.conversationId});
 
   final String conversationId;
 
@@ -23,33 +21,141 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
   bool _membersExpanded = false;
 
   static const int _memberColumns = 5;
+
   /// 收起时最多 4 行，添加按钮与成员同一行（不单独成行、无空行）
-  static const int _memberSlotsCollapsed = (_memberColumns * 4) - 1; // 19 成员 + 1 添加 = 20 格 = 4 行
+  static const int _memberSlotsCollapsed =
+      (_memberColumns * 4) - 1; // 19 成员 + 1 添加 = 20 格 = 4 行
   /// 展开时最多 5 行
-  static const int _memberSlotsExpanded = (_memberColumns * 5) - 1; // 24 成员 + 1 添加 = 25 格 = 5 行
+  static const int _memberSlotsExpanded =
+      (_memberColumns * 5) - 1; // 24 成员 + 1 添加 = 25 格 = 5 行
 
   static const List<Map<String, String>> _mockMembers = [
-    {'name': '成员一', 'username': 'member1', 'avatar': 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200'},
-    {'name': '成员二', 'username': 'member2', 'avatar': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200'},
-    {'name': '成员三', 'username': 'member3', 'avatar': 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200'},
-    {'name': '成员四', 'username': 'member4', 'avatar': 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200'},
-    {'name': '成员五', 'username': 'member5', 'avatar': 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200'},
-    {'name': '成员六', 'username': 'member6', 'avatar': 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200'},
-    {'name': '成员七', 'username': 'member7', 'avatar': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200'},
-    {'name': '成员八', 'username': 'member8', 'avatar': 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200'},
-    {'name': '成员九', 'username': 'member9', 'avatar': 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200'},
-    {'name': '成员十', 'username': 'member10', 'avatar': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200'},
-    {'name': '成员十一', 'username': 'member11', 'avatar': 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200'},
-    {'name': '成员十二', 'username': 'member12', 'avatar': 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200'},
-    {'name': '成员十三', 'username': 'member13', 'avatar': 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200'},
-    {'name': '成员十四', 'username': 'member14', 'avatar': 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200'},
-    {'name': '成员十五', 'username': 'member15', 'avatar': 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200'},
-    {'name': '成员十六', 'username': 'member16', 'avatar': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200'},
-    {'name': '成员十七', 'username': 'member17', 'avatar': 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200'},
-    {'name': '成员十八', 'username': 'member18', 'avatar': 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200'},
-    {'name': '成员十九', 'username': 'member19', 'avatar': 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200'},
-    {'name': '成员二十', 'username': 'member20', 'avatar': 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200'},
-    {'name': '成员廿一', 'username': 'member21', 'avatar': 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200'},
+    {
+      'name': '成员一',
+      'username': 'member1',
+      'avatar':
+          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
+    },
+    {
+      'name': '成员二',
+      'username': 'member2',
+      'avatar':
+          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
+    },
+    {
+      'name': '成员三',
+      'username': 'member3',
+      'avatar':
+          'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
+    },
+    {
+      'name': '成员四',
+      'username': 'member4',
+      'avatar':
+          'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200',
+    },
+    {
+      'name': '成员五',
+      'username': 'member5',
+      'avatar':
+          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
+    },
+    {
+      'name': '成员六',
+      'username': 'member6',
+      'avatar':
+          'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200',
+    },
+    {
+      'name': '成员七',
+      'username': 'member7',
+      'avatar':
+          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
+    },
+    {
+      'name': '成员八',
+      'username': 'member8',
+      'avatar':
+          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
+    },
+    {
+      'name': '成员九',
+      'username': 'member9',
+      'avatar':
+          'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200',
+    },
+    {
+      'name': '成员十',
+      'username': 'member10',
+      'avatar':
+          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
+    },
+    {
+      'name': '成员十一',
+      'username': 'member11',
+      'avatar':
+          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
+    },
+    {
+      'name': '成员十二',
+      'username': 'member12',
+      'avatar':
+          'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
+    },
+    {
+      'name': '成员十三',
+      'username': 'member13',
+      'avatar':
+          'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200',
+    },
+    {
+      'name': '成员十四',
+      'username': 'member14',
+      'avatar':
+          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
+    },
+    {
+      'name': '成员十五',
+      'username': 'member15',
+      'avatar':
+          'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200',
+    },
+    {
+      'name': '成员十六',
+      'username': 'member16',
+      'avatar':
+          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
+    },
+    {
+      'name': '成员十七',
+      'username': 'member17',
+      'avatar':
+          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
+    },
+    {
+      'name': '成员十八',
+      'username': 'member18',
+      'avatar':
+          'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200',
+    },
+    {
+      'name': '成员十九',
+      'username': 'member19',
+      'avatar':
+          'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
+    },
+    {
+      'name': '成员二十',
+      'username': 'member20',
+      'avatar':
+          'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200',
+    },
+    {
+      'name': '成员廿一',
+      'username': 'member21',
+      'avatar':
+          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
+    },
   ];
 
   @override
@@ -59,7 +165,10 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
     final blockSurface = SettingsSemanticConstants.blockBackground(isDark);
     final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
     final secondaryColor = SettingsSemanticConstants.secondaryColor(isDark);
-    final borderColor = AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
+    final borderColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.borderPrimary,
+    );
     final memberCount = _mockMembers.length;
 
     final dividerColor = SettingsSemanticConstants.dividerColor(isDark);
@@ -75,7 +184,11 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
         ),
         title: Text(
           '${UITextConstants.chatInfoTitle}($memberCount)',
-          style: TextStyle(color: fgPrimary, fontSize: AppTypography.xl, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            color: fgPrimary,
+            fontSize: AppTypography.xl,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         actions: [
           if (memberCount > 5)
@@ -90,10 +203,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(
-            height: 1,
-            color: dividerColor,
-          ),
+          child: Container(height: 1, color: dividerColor),
         ),
       ),
       body: SizedBox.expand(
@@ -106,186 +216,264 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
             bottom: AppSpacing.xl + MediaQuery.paddingOf(context).bottom,
           ),
           children: [
-          _section(context, blockSurface: blockSurface, child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final maxMembers = _membersExpanded ? _memberSlotsExpanded : _memberSlotsCollapsed;
-                    final visibleCount = _mockMembers.length > maxMembers ? maxMembers : _mockMembers.length;
-                    final totalCells = visibleCount + 1;
-                    return GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: _memberColumns,
-                        childAspectRatio: 0.85,
-                        crossAxisSpacing: AppSpacing.sm,
-                        mainAxisSpacing: AppSpacing.sm,
-                      ),
-                      itemCount: totalCells,
-                      itemBuilder: (context, index) {
-                        if (index == visibleCount) {
-                          return Align(
-                            alignment: Alignment.topCenter,
-                            child: _AddMemberPlaceholder(
-                              borderColor: borderColor,
-                              avatarHeight: AppSpacing.largeButtonSize,
-                              onTap: () => context.push('/chat/${widget.conversationId}/add-members'),
-                            ),
+            _section(
+              context,
+              blockSurface: blockSurface,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final maxMembers = _membersExpanded
+                          ? _memberSlotsExpanded
+                          : _memberSlotsCollapsed;
+                      final visibleCount = _mockMembers.length > maxMembers
+                          ? maxMembers
+                          : _mockMembers.length;
+                      final totalCells = visibleCount + 1;
+                      return GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: _memberColumns,
+                          childAspectRatio: 0.85,
+                          crossAxisSpacing: AppSpacing.sm,
+                          mainAxisSpacing: AppSpacing.sm,
+                        ),
+                        itemCount: totalCells,
+                        itemBuilder: (context, index) {
+                          if (index == visibleCount) {
+                            return Align(
+                              alignment: Alignment.topCenter,
+                              child: _AddMemberPlaceholder(
+                                borderColor: borderColor,
+                                avatarHeight: AppSpacing.largeButtonSize,
+                                onTap: () => context.push(
+                                  '/chat/${widget.conversationId}/add-members',
+                                ),
+                              ),
+                            );
+                          }
+                          final m = _mockMembers[index];
+                          final username = m['username'] ?? 'user_$index';
+                          return _MemberAvatar(
+                            name: m['name']!,
+                            avatarUrl: m['avatar'] ?? '',
+                            textColor: fgPrimary,
+                            username: username,
+                            onTap: () => context.push('/user/$username'),
                           );
-                        }
-                        final m = _mockMembers[index];
-                        final username = m['username'] ?? 'user_$index';
-                        return _MemberAvatar(
-                          name: m['name']!,
-                          avatarUrl: m['avatar'] ?? '',
-                          textColor: fgPrimary,
-                          username: username,
-                          onTap: () => context.push('/user/$username'),
-                        );
-                      },
-                    );
-                  },
-                ),
-                if (_mockMembers.length > _memberSlotsCollapsed) ...[
-                  SizedBox(height: AppSpacing.xs),
-                  Center(
-                    child: GestureDetector(
-                      onTap: () => setState(() => _membersExpanded = !_membersExpanded),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            _membersExpanded ? UITextConstants.collapseMembers : UITextConstants.moreMembers,
-                            style: TextStyle(
-                              fontSize: AppTypography.md,
+                        },
+                      );
+                    },
+                  ),
+                  if (_mockMembers.length > _memberSlotsCollapsed) ...[
+                    SizedBox(height: AppSpacing.xs),
+                    Center(
+                      child: GestureDetector(
+                        onTap: () => setState(
+                          () => _membersExpanded = !_membersExpanded,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _membersExpanded
+                                  ? UITextConstants.collapseMembers
+                                  : UITextConstants.moreMembers,
+                              style: TextStyle(
+                                fontSize: AppTypography.md,
+                                color: fgPrimary.withValues(alpha: 0.75),
+                              ),
+                            ),
+                            SizedBox(width: AppSpacing.xs),
+                            Icon(
+                              _membersExpanded
+                                  ? Icons.keyboard_arrow_up
+                                  : Icons.keyboard_arrow_down,
+                              size: AppSpacing.iconMedium,
                               color: fgPrimary.withValues(alpha: 0.75),
                             ),
-                          ),
-                          SizedBox(width: AppSpacing.xs),
-                          Icon(
-                            _membersExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                            size: AppSpacing.iconMedium,
-                            color: fgPrimary.withValues(alpha: 0.75),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            SizedBox(height: SettingsSemanticConstants.blockSpacing),
+            _section(
+              context,
+              blockSurface: blockSurface,
+              child: Column(
+                children: [
+                  _SettingsRow(
+                    label: UITextConstants.groupName,
+                    fgPrimary: fgPrimary,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '示例群聊',
+                          style: TextStyle(
+                            fontSize: AppTypography.md,
+                            color: fgPrimary,
+                          ),
+                        ),
+                        Icon(
+                          CupertinoIcons.chevron_forward,
+                          size: AppSpacing.iconMedium,
+                          color: secondaryColor,
+                        ),
+                      ],
+                    ),
+                    onTap: () {},
+                  ),
+                  _divider(isDark),
+                  _SettingsRow(
+                    label: UITextConstants.qrCode,
+                    fgPrimary: fgPrimary,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.qr_code_2,
+                          size: AppSpacing.iconMedium,
+                          color: fgPrimary,
+                        ),
+                        Icon(
+                          CupertinoIcons.chevron_forward,
+                          size: AppSpacing.iconMedium,
+                          color: secondaryColor,
+                        ),
+                      ],
+                    ),
+                    onTap: () {},
+                  ),
+                  _divider(isDark),
+                  _SettingsRow(
+                    label: UITextConstants.groupAnnouncement,
+                    fgPrimary: fgPrimary,
+                    trailing: Icon(
+                      CupertinoIcons.chevron_forward,
+                      size: AppSpacing.iconMedium,
+                      color: secondaryColor,
+                    ),
+                    onTap: () {},
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: SettingsSemanticConstants.blockSpacing),
+            _section(
+              context,
+              blockSurface: blockSurface,
+              child: Column(
+                children: [
+                  _SettingsRow(
+                    label: UITextConstants.muteNotifications,
+                    trailing: _buildSettingSwitch(
+                      isDark: isDark,
+                      value: _mute,
+                      onChanged: (v) => setState(() => _mute = v),
+                    ),
+                  ),
+                  _divider(isDark),
+                  _SettingsRow(
+                    label: UITextConstants.pinChat,
+                    trailing: _buildSettingSwitch(
+                      isDark: isDark,
+                      value: _pin,
+                      onChanged: (v) => setState(() => _pin = v),
+                    ),
+                  ),
+                  _divider(isDark),
+                  _SettingsRow(
+                    label: UITextConstants.privacyShield,
+                    trailing: _buildSettingSwitch(
+                      isDark: isDark,
+                      value: _privacyShield,
+                      onChanged: (v) => setState(() => _privacyShield = v),
                     ),
                   ),
                 ],
-              ],
+              ),
             ),
-          ),
-          SizedBox(height: SettingsSemanticConstants.blockSpacing),
-          _section(context, blockSurface: blockSurface, child: Column(
-              children: [
-                _SettingsRow(
-                  label: UITextConstants.groupName,
-                  fgPrimary: fgPrimary,
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('示例群聊', style: TextStyle(fontSize: AppTypography.md, color: fgPrimary)),
-                      Icon(Icons.chevron_right, size: AppSpacing.iconMedium, color: secondaryColor),
-                    ],
+            SizedBox(height: SettingsSemanticConstants.blockSpacing),
+            _section(
+              context,
+              blockSurface: blockSurface,
+              child: Column(
+                children: [
+                  _SettingsRow(
+                    label: UITextConstants.setChatBackground,
+                    fgPrimary: fgPrimary,
+                    trailing: Icon(
+                      CupertinoIcons.chevron_forward,
+                      size: AppSpacing.iconMedium,
+                      color: secondaryColor,
+                    ),
+                    onTap: () {},
                   ),
-                  onTap: () {},
-                ),
-                _divider(isDark),
-                _SettingsRow(
-                  label: UITextConstants.qrCode,
-                  fgPrimary: fgPrimary,
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.qr_code_2, size: AppSpacing.iconMedium, color: fgPrimary),
-                      Icon(Icons.chevron_right, size: AppSpacing.iconMedium, color: secondaryColor),
-                    ],
+                  _divider(isDark),
+                  _SettingsRow(
+                    label: UITextConstants.clearChatHistory,
+                    fgPrimary: fgPrimary,
+                    trailing: Icon(
+                      CupertinoIcons.chevron_forward,
+                      size: AppSpacing.iconMedium,
+                      color: secondaryColor,
+                    ),
+                    onTap: () {},
                   ),
-                  onTap: () {},
-                ),
-                _divider(isDark),
-                _SettingsRow(
-                  label: UITextConstants.groupAnnouncement,
-                  fgPrimary: fgPrimary,
-                  trailing: Icon(Icons.chevron_right, size: AppSpacing.iconMedium, color: secondaryColor),
-                  onTap: () {},
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          SizedBox(height: SettingsSemanticConstants.blockSpacing),
-          _section(context, blockSurface: blockSurface, child: Column(
-              children: [
-                _SettingsRow(
-                  label: UITextConstants.muteNotifications,
-                  trailing: _buildSettingSwitch(isDark: isDark, value: _mute, onChanged: (v) => setState(() => _mute = v)),
-                ),
-                _divider(isDark),
-                _SettingsRow(
-                  label: UITextConstants.pinChat,
-                  trailing: _buildSettingSwitch(isDark: isDark, value: _pin, onChanged: (v) => setState(() => _pin = v)),
-                ),
-                _divider(isDark),
-                _SettingsRow(
-                  label: UITextConstants.privacyShield,
-                  trailing: _buildSettingSwitch(isDark: isDark, value: _privacyShield, onChanged: (v) => setState(() => _privacyShield = v)),
-                ),
-              ],
-            ),
-          ),
-          SizedBox(height: SettingsSemanticConstants.blockSpacing),
-          _section(context, blockSurface: blockSurface, child: Column(
-              children: [
-                _SettingsRow(
-                  label: UITextConstants.setChatBackground,
-                  fgPrimary: fgPrimary,
-                  trailing: Icon(Icons.chevron_right, size: AppSpacing.iconMedium, color: secondaryColor),
-                  onTap: () {},
-                ),
-                _divider(isDark),
-                _SettingsRow(
-                  label: UITextConstants.clearChatHistory,
-                  fgPrimary: fgPrimary,
-                  trailing: Icon(Icons.chevron_right, size: AppSpacing.iconMedium, color: secondaryColor),
-                  onTap: () {},
-                ),
-              ],
-            ),
-          ),
-          SizedBox(height: SettingsSemanticConstants.blockSpacing),
-          _section(context, blockSurface: blockSurface, child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('${UITextConstants.exitGroupChat}（开发中）')),
-                );
-              },
-              child: SizedBox(
-                width: double.infinity,
-                height: AppSpacing.buttonHeight,
-                child: Center(
-                  child: Text(
-                    UITextConstants.exitGroupChat,
-                    style: TextStyle(
-                      fontSize: AppTypography.lg,
-                      fontWeight: FontWeight.w500,
-                      color: SettingsSemanticConstants.exitActionColor(isDark),
+            SizedBox(height: SettingsSemanticConstants.blockSpacing),
+            _section(
+              context,
+              blockSurface: blockSurface,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('${UITextConstants.exitGroupChat}（开发中）'),
+                      ),
+                    );
+                  },
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: AppSpacing.buttonHeight,
+                    child: Center(
+                      child: Text(
+                        UITextConstants.exitGroupChat,
+                        style: TextStyle(
+                          fontSize: AppTypography.lg,
+                          fontWeight: FontWeight.w500,
+                          color: SettingsSemanticConstants.exitActionColor(
+                            isDark,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          )),
-        ],
+          ],
         ),
       ),
     );
   }
 
-  Widget _section(BuildContext context, {required Color blockSurface, required Widget child}) {
+  Widget _section(
+    BuildContext context, {
+    required Color blockSurface,
+    required Widget child,
+  }) {
     return Container(
       width: double.infinity,
       padding: EdgeInsets.only(
@@ -296,8 +484,14 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
       ),
       decoration: BoxDecoration(
         color: blockSurface,
-        borderRadius: BorderRadius.circular(SettingsSemanticConstants.blockBorderRadius),
-        border: Border.all(color: SettingsSemanticConstants.blockBorderColor(ref.watch(isDarkProvider))),
+        borderRadius: BorderRadius.circular(
+          SettingsSemanticConstants.blockBorderRadius,
+        ),
+        border: Border.all(
+          color: SettingsSemanticConstants.blockBorderColor(
+            ref.watch(isDarkProvider),
+          ),
+        ),
       ),
       child: child,
     );
@@ -328,10 +522,14 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
         value: value,
         onChanged: onChanged,
         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        trackOutlineWidth: WidgetStateProperty.all(SettingsSemanticConstants.switchTrackOutlineWidth),
+        trackOutlineWidth: WidgetStateProperty.all(
+          SettingsSemanticConstants.switchTrackOutlineWidth,
+        ),
         activeTrackColor: SettingsSemanticConstants.switchActiveTrackColor,
         activeThumbColor: SettingsSemanticConstants.switchActiveThumbColor,
-        inactiveTrackColor: SettingsSemanticConstants.switchInactiveTrackColor(isDark),
+        inactiveTrackColor: SettingsSemanticConstants.switchInactiveTrackColor(
+          isDark,
+        ),
         thumbColor: WidgetStateProperty.all(Colors.white),
       ),
     );

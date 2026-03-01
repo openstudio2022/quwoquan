@@ -163,6 +163,12 @@ class UITextConstants {
   static const String circlesRecommendedTitle = '推荐圈子';
   static const String circlesFollowingEmpty = '关注暂无内容';
   static const String discoveryEndHint = '已经到底啦';
+  static const String circleManageChannels = '频道管理';
+  static const String circleMyChannels = '我的频道';
+  static const String circleAllChannels = '全部频道';
+  static const String circleDragToSort = '拖动排序';
+  static const String circleTapToAdd = '点击添加频道';
+  static const String done = '完成';
   static const String seeMore = '查看更多';
   static const String fullText = '全文';
   static const String collapse = '收起';
