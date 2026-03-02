@@ -1,18 +1,12 @@
 # 半自动灰度到 prod：workflow_dispatch，单步灰度 + SLO 卡点
 # 设计见 deploy/shared/deploy_prod_design.md
+# 版本号来源与灰度对象（整颗 seed-box）见 deploy/shared/deliver_to_production_runbook.md §3.4、§6.0
 name: 05. Deploy To Prod (Gray)
 
 on:
   workflow_dispatch:
     inputs:
-      service:
-        description: 'Service name'
-        required: true
-        default: content-service
-        type: choice
-        options:
-          - content-service
-          - recommendation-service
+      # 灰度对象固定为整颗 seed-box（Go + recommendation 两容器一起），不按服务区分
       cloud_provider:
         description: 'Cloud provider'
         required: true
@@ -21,17 +15,18 @@ on:
           - aliyun
           - volcengine
           - huaweicloud
+      # 留空则从 .release-state/seed-box.state 自动读取（每天新版本时只需填 target）
       from_image:
-        description: 'Current prod image version'
-        required: true
+        description: 'Current prod image (empty = auto from .release-state/seed-box.state)'
+        required: false
       to_image:
-        description: 'Target image version (match pre-release)'
+        description: 'Target image version (must match pre-release integration)'
         required: true
       from_config:
-        description: 'Current prod config version'
-        required: true
+        description: 'Current prod config (empty = auto from .release-state/seed-box.state)'
+        required: false
       to_config:
-        description: 'Target config version'
+        description: 'Target config version (must match pre-release integration)'
         required: true
       step:
         description: 'Gray step (50=initial, 100=full for 2 replicas)'
@@ -59,21 +54,48 @@ on:
         type: boolean
 
 jobs:
+  resolve-versions:
+    name: Resolve current prod versions
+    runs-on: ubuntu-latest
+    outputs:
+      from_image: ${{ steps.resolve.outputs.from_image }}
+      from_config: ${{ steps.resolve.outputs.from_config }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: resolve
+        run: |
+          SERVICE="seed-box"
+          FROM_IMG="${{ github.event.inputs.from_image }}"
+          FROM_CFG="${{ github.event.inputs.from_config }}"
+          STATE=".release-state/${SERVICE}.state"
+          if [[ -z "$FROM_IMG" || -z "$FROM_CFG" ]]; then
+            if [[ ! -f "$STATE" ]]; then
+              echo "::error::Current prod version needed but .release-state/$SERVICE.state not found. Either fill 'Current prod' fields or run first rollout with them set."
+              exit 1
+            fi
+            FROM_IMG=$(awk -F= '/^to_image=/{print $2; exit}' "$STATE")
+            FROM_CFG=$(awk -F= '/^to_config=/{print $2; exit}' "$STATE")
+            echo "Resolved from .release-state/$SERVICE.state: from_image=$FROM_IMG from_config=$FROM_CFG"
+          fi
+          echo "from_image=$FROM_IMG" >> $GITHUB_OUTPUT
+          echo "from_config=$FROM_CFG" >> $GITHUB_OUTPUT
+
   validate:
     name: Validate step & config
+    needs: resolve-versions
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Check config file exists
         run: |
-          cfg="releases/config/${{ github.event.inputs.service }}/${{ github.event.inputs.to_config }}.yaml"
+          cfg="releases/config/seed-box/${{ github.event.inputs.to_config }}.yaml"
           if [[ ! -f "$cfg" ]]; then
             echo "FAIL: config not found: $cfg"
             exit 1
           fi
       - name: Check step sequence
         run: |
-          state=".release-state/${{ github.event.inputs.service }}.state"
+          state=".release-state/seed-box.state"
           prev=0
           if [[ -f "$state" ]]; then
             prev=$(awk -F= '/^step=/{print $2}' "$state" || echo 0)
@@ -116,7 +138,7 @@ jobs:
 
   gray-rollout-state:
     name: Update rollout state
-    needs: [validate, deploy-prod-step]
+    needs: [validate, deploy-prod-step, resolve-versions]
     if: always() && (needs.validate.result == 'success') && (needs.deploy-prod-step.result == 'success' || needs.deploy-prod-step.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
@@ -124,16 +146,16 @@ jobs:
       - name: Config gray rollout
         run: |
           make config-gray-rollout \
-            SERVICE=${{ github.event.inputs.service }} \
-            FROM_IMAGE=${{ github.event.inputs.from_image }} \
+            SERVICE=seed-box \
+            FROM_IMAGE=${{ needs.resolve-versions.outputs.from_image }} \
             TO_IMAGE=${{ github.event.inputs.to_image }} \
-            FROM_CONFIG=${{ github.event.inputs.from_config }} \
+            FROM_CONFIG=${{ needs.resolve-versions.outputs.from_config }} \
             TO_CONFIG=${{ github.event.inputs.to_config }} \
             STEP=${{ github.event.inputs.step }}
 
   slo-gate:
     name: SLO gate
-    needs: [gray-rollout-state]
+    needs: [gray-rollout-state, resolve-versions]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -151,6 +173,6 @@ jobs:
         if: steps.slo.outputs.exitcode == '20'
         run: |
           make config-rollback \
-            SERVICE=${{ github.event.inputs.service }} \
-            TO_CONFIG=${{ github.event.inputs.from_config }}
+            SERVICE=seed-box \
+            TO_CONFIG=${{ needs.resolve-versions.outputs.from_config }}
           echo "::error::SLO rollback triggered"

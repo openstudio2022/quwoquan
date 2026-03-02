@@ -1,0 +1,7 @@
+service=seed-box
+from_image=1.7.2
+to_image=1.8.0
+from_config=v2026.02.27.1
+to_config=v2026.02.28.0
+step=5
+updated_at=2026-02-28T10:14:09Z

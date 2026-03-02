@@ -91,7 +91,10 @@ func (p *QualityPreRanker) PreRank(_ context.Context, candidates []ContentCandid
 	}
 
 	sort.Slice(items, func(i, j int) bool {
-		return items[i].score > items[j].score
+		if items[i].score != items[j].score {
+			return items[i].score > items[j].score
+		}
+		return items[i].idx < items[j].idx
 	})
 
 	result := make([]ContentCandidate, 0, limit)

@@ -41,6 +41,22 @@
 - `FROM_CONFIG`、`TO_CONFIG`：当前与目标配置版本
 - `STEP`：当前 2 副本为 50（初始灰度 1 pod，全自动）→ 100（Carry-on 全量，需审批）。初始灰度 pod 数可配置；副本增加时可扩展中间阶段。
 
+### 3.4 版本号从哪里获取（图一表单四个字段）
+
+**要区分两个东西**：
+
+- **`.release-state/seed-box.state`** 是**状态文件**，记录「上一次灰度完成后 prod 正在跑的版本」：里面的 `to_image`、`to_config` 就是**当前 prod** 的镜像/配置版本。表单里的 **Current prod** 应从**这个 state 文件**取，不是从 `releases/config/` 取。
+- **`releases/config/seed-box/v*.yaml`** 是**某次发布用的配置内容**（该版本的配置快照），用于校验「目标配置版本」是否存在；不表示“当前 prod 版本号”。
+
+| 字段 | 含义 | 获取方式 |
+|------|------|----------|
+| **Current prod image version** | 当前生产正在使用的镜像版本 | 从 **`.release-state/seed-box.state`** 的 **`to_image`** 读取（上次灰度完成后写入）；若无则从集群查：`kubectl get deployment seed-box -n seed-box-prod -o jsonpath='{.spec.template.spec.containers[0].image}'` 取 tag |
+| **Target image version (match pre-release)** | 本次要上的镜像版本，须与预发布一致 | 来自 **pre-release** 部署到 integration 的版本：tag 触发用该 tag 或解析值；push main 见 `deploy/service/seed-box/kustomize/overlays/integration/kustomization.yaml` 的 `IMAGE_VERSION` 或当日约定（如 `vYYYY.MM.DD.0`） |
+| **Current prod config version** | 当前生产正在使用的配置版本 | 从 **`.release-state/seed-box.state`** 的 **`to_config`** 读取；若无则从 deployment 环境变量 `CONFIG_VERSION` 读取 |
+| **Target config version** | 本次要上的配置版本 | 与 target image 对应，来自 pre-release 的 `CONFIG_VERSION`（同上） |
+
+**约定**：Target 必须与 pre-release 在 integration 验证通过的版本一致。Workflow 支持**留空 Current prod 两栏**时自动从 `.release-state/seed-box.state` 读取（见下文）。
+
 ---
 
 ## 4. G5a：部署到 integration
@@ -93,13 +109,17 @@ CI 可用 `.github/workflows/pre-release-gate.yml` 在 Firebase Test Lab 执行 
 
 ## 6. G5c：灰度/滚动发布到 prod
 
+### 6.0 灰度对象：整颗 seed-box（不按服务区分）
+
+在 **integration / prod** 只有一个 K8s Deployment：**seed-box**，内有两个容器（Go seed-box + Python recommendation-service），**一起发布、同一镜像/配置版本**。灰度就是整颗 seed-box 一起滚，不按“服务”拆开。配置与状态统一用 seed-box：`releases/config/seed-box/`、`.release-state/seed-box.state`。见 `deploy/shared/process_domain_mapping.yaml` 与 `deploy/service/seed-box/kustomize/base/deployment.yaml`。
+
 ### 6.1 灰度步进
 
-每步执行：
+每步执行（灰度对象固定为 seed-box）：
 
 ```bash
 make config-gray-rollout \
-  SERVICE=<service> \
+  SERVICE=seed-box \
   FROM_IMAGE=<old> TO_IMAGE=<new> \
   FROM_CONFIG=<old> TO_CONFIG=<new> \
   STEP=50  # 初始灰度（1 pod，全自动）；100 为 Carry-on 全量（需审批）
@@ -117,7 +137,7 @@ make config-slo-gate \
 ### 6.3 异常回滚
 
 ```bash
-make config-rollback SERVICE=<service> TO_CONFIG=<rollback-version>
+make config-rollback SERVICE=seed-box TO_CONFIG=<rollback-version>
 ```
 
 ### 6.4 high_risk_fields

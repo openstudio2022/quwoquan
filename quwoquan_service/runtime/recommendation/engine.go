@@ -254,6 +254,10 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	recallBuf := acquireCandidates()
 	e.parallelRecallInto(ctx, req, session, recallBuf)
 	allCandidates := *recallBuf
+	// Stable order for cursor pagination: same candidate set yields same order across requests.
+	sort.Slice(allCandidates, func(i, j int) bool {
+		return allCandidates[i].ContentID < allCandidates[j].ContentID
+	})
 	recallLatency := time.Since(recallStart)
 
 	// Stage 3: Pre-rank (lightweight filter before expensive scoring)
@@ -300,9 +304,12 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	}
 	scoreLatency := time.Since(scoreStart)
 
-	// Sort by score (scorer returns unsorted)
+	// Sort by score (scorer returns unsorted). Tie-break by ContentID for stable pagination.
 	sort.Slice(scored, func(i, j int) bool {
-		return scored[i].Score > scored[j].Score
+		if scored[i].Score != scored[j].Score {
+			return scored[i].Score > scored[j].Score
+		}
+		return scored[i].Candidate.ContentID < scored[j].Candidate.ContentID
 	})
 
 	// Release intermediate pooled buffers after scoring
