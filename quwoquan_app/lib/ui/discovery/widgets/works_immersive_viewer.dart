@@ -1198,8 +1198,6 @@ class _ArticleGuideCard extends StatelessWidget {
 
   final ArticlePostDto post;
 
-  static const String _serifFamily = 'SourceHanSerifSC';
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1223,7 +1221,6 @@ class _ArticleGuideCard extends StatelessWidget {
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontFamily: _serifFamily,
                     fontSize: AppTypography.xl + 4,
                     fontWeight: AppTypography.bold,
                     color: AppColors.worksTitle,
@@ -1236,7 +1233,6 @@ class _ArticleGuideCard extends StatelessWidget {
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontFamily: _serifFamily,
                     fontSize: AppTypography.base,
                     fontWeight: AppTypography.medium,
                     color: AppColors.worksBodyText,
@@ -1309,8 +1305,6 @@ class _ArticleReadingCard extends StatelessWidget {
   final String? imageUrl;
   final String? caption;
 
-  static const String _serifFamily = 'SourceHanSerifSC';
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1330,7 +1324,6 @@ class _ArticleReadingCard extends StatelessWidget {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontFamily: _serifFamily,
               fontSize: AppTypography.xl,
               color: AppColors.worksTitle,
               fontWeight: AppTypography.bold,
@@ -1358,7 +1351,6 @@ class _ArticleReadingCard extends StatelessWidget {
               Text(
                 caption!,
                 style: TextStyle(
-                  fontFamily: _serifFamily,
                   fontSize: AppTypography.xs,
                   color: AppColors.worksCaption,
                   height: AppTypography.lineHeightRelaxed,
@@ -1373,7 +1365,6 @@ class _ArticleReadingCard extends StatelessWidget {
               maxLines: 9,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontFamily: _serifFamily,
                 fontSize: AppTypography.base,
                 color: AppColors.worksBodyText,
                 height: AppTypography.lineHeightRelaxed,

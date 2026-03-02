@@ -287,10 +287,11 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	}
 
 	scoringFeatures := &ScoringFeatures{
-		Session:     session,
-		User:        userFeatures,
-		Weights:     weights,
-		ExploreRate: e.exploreFraction,
+		Session:      session,
+		User:         userFeatures,
+		Weights:      weights,
+		ExploreRate:  e.exploreFraction,
+		Deterministic: req.Sort == FeedSortRecommend, // stable ordering for recommend + cursor pagination (no random explore boost)
 	}
 
 	// Stage 6: Model scoring (RuleScorer, RemoteModelScorer, or CascadeScorer)

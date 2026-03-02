@@ -17,10 +17,11 @@ type ScoredCandidate struct {
 
 // ScoringFeatures packages all inputs needed by a scorer.
 type ScoringFeatures struct {
-	Session     *SessionState
-	User        *UserFeatureVector
-	Weights     ScoringWeights
-	ExploreRate float64
+	Session      *SessionState
+	User         *UserFeatureVector
+	Weights      ScoringWeights
+	ExploreRate  float64
+	Deterministic bool // when true (e.g. cursor pagination), skip random explore boost for stable ordering
 }
 
 // ModelScorer assigns scores to a batch of candidates.
@@ -97,9 +98,9 @@ func (s *RuleScorer) ScoreBatch(_ context.Context, features *ScoringFeatures, ca
 		freshness := math.Exp(-ageHours / 24.0)
 		detail["freshness"] = freshness
 
-		// Exploration boost: random perturbation for diversity
+		// Exploration boost: random perturbation for diversity (disabled when Deterministic for cursor pagination)
 		exploreBoost := 0.0
-		if features.ExploreRate > 0 {
+		if features.ExploreRate > 0 && !features.Deterministic {
 			exploreBoost = rand.Float64() * features.ExploreRate
 		}
 		detail["exploreBoost"] = exploreBoost

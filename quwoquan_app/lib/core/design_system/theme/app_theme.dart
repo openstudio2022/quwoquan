@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// Source Han Serif CN 等效字体（思源宋体简体）
-const String _kDefaultFontFamily = 'Noto Serif SC';
+/// 全局无衬线黑体（思源黑体简体）
+const String _kDefaultFontFamily = 'Noto Sans SC';
 
 class AppTheme {
   static ThemeData get lightTheme {
@@ -14,7 +14,7 @@ class AppTheme {
         brightness: Brightness.light,
       ),
       fontFamily: _kDefaultFontFamily,
-      textTheme: GoogleFonts.notoSerifScTextTheme(),
+      textTheme: GoogleFonts.notoSansScTextTheme(),
     );
   }
 
@@ -27,7 +27,7 @@ class AppTheme {
         brightness: Brightness.dark,
       ),
       fontFamily: _kDefaultFontFamily,
-      textTheme: GoogleFonts.notoSerifScTextTheme(
+      textTheme: GoogleFonts.notoSansScTextTheme(
         ThemeData.dark().textTheme,
       ),
     );
