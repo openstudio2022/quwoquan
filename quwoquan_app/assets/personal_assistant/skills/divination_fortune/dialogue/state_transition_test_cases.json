@@ -1,0 +1,24 @@
+{
+  "domainId": "divination_fortune",
+  "contractId": "fortune-daily.state_transition_v1",
+  "cases": [
+    {
+      "caseId": "fortune_intent_to_fill",
+      "from": "S0_意图识别",
+      "event": "E_运势意图命中",
+      "expectTo": "S1_信息补全"
+    },
+    {
+      "caseId": "fill_to_render_when_ready",
+      "from": "S1_信息补全",
+      "event": "E_信息已就绪",
+      "expectTo": "S3_结果渲染"
+    },
+    {
+      "caseId": "fill_to_external_when_needed",
+      "from": "S1_信息补全",
+      "event": "E_需要外部证据",
+      "expectTo": "S2_外部信息补充"
+    }
+  ]
+}

@@ -1,9 +1,0 @@
-{
-  "templateId": "domain.emotion_companion.answer",
-  "version": "2026.02.18",
-  "stage": "answer",
-  "domainId": "emotion_companion",
-  "requiredVariables": ["userQuery", "domainResults", "contextSlots", "userProfileSnapshot"],
-  "outputContract": "domain_answer_v2026_02_18",
-  "selfCheckRules": ["constraint_satisfied", "coverage_satisfied", "safety_satisfied", "disclaimer_satisfied", "no_crisis_override"]
-}

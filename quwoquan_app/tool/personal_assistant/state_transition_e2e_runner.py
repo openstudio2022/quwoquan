@@ -12,10 +12,10 @@ import requests
 ROOT = Path("/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app")
 ENV_FILE = ROOT / "personal_assistant/.env"
 CONFIG_FILE = ROOT / "personal_assistant/config.json"
-CONTRACT_FILE = ROOT / "assets/personal_assistant/prompts/domains/divination_fortune/dialogue/state_transition_contract.json"
-TEST_CASES_FILE = ROOT / "assets/personal_assistant/prompts/domains/divination_fortune/dialogue/state_transition_test_cases.json"
-JUDGE_PROMPT_FILE = ROOT / "assets/personal_assistant/prompts/domains/divination_fortune/dialogue/dialogue_judge_prompt.md"
-STATE_PROMPTS_FILE = ROOT / "assets/personal_assistant/prompts/domains/divination_fortune/dialogue/state_prompts.md"
+CONTRACT_FILE = ROOT / "assets/personal_assistant/skills/divination_fortune/dialogue/state_transition_contract.json"
+TEST_CASES_FILE = ROOT / "assets/personal_assistant/skills/divination_fortune/dialogue/state_transition_test_cases.json"
+JUDGE_PROMPT_FILE = ROOT / "assets/personal_assistant/skills/divination_fortune/dialogue/dialogue_judge_prompt.md"
+STATE_PROMPTS_FILE = ROOT / "assets/personal_assistant/skills/divination_fortune/dialogue/state_prompts.md"
 DOMAIN_ROUTING_FILE = ROOT / "assets/personal_assistant/prompts/domain_routing/domain_routing_catalog.json"
 EVENT_DETECTION_FILE = ROOT / "assets/personal_assistant/prompts/domain_routing/event_detection_catalog.json"
 
@@ -965,7 +965,7 @@ def render_spotcheck_md(report: Dict[str, Any]) -> str:
 
 
 def _resolve_domain_asset_paths(domain_id: str) -> Dict[str, Path]:
-    base = ROOT / "assets/personal_assistant/prompts/domains" / domain_id / "dialogue"
+    base = ROOT / "assets/personal_assistant/skills" / domain_id / "dialogue"
     return {
         "contract": base / "state_transition_contract.json",
         "testcases": base / "state_transition_test_cases.json",
@@ -1449,7 +1449,7 @@ def main() -> None:
     parser.add_argument(
         "--all-domains",
         action="store_true",
-        help="Run all 19 domains using dialogue assets under prompts/domains/*/dialogue.",
+        help="Run all 19 domains using dialogue assets under skills/*/dialogue.",
     )
     parser.add_argument(
         "--output-root",

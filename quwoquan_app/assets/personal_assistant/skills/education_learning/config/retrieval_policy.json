@@ -1,0 +1,28 @@
+{
+  "contractVersion": "retrieval_policy_v1",
+  "domainId": "education_learning",
+  "allowedTimeScopes": [
+    "latest",
+    "today",
+    "last_7d",
+    "last_30d",
+    "last_1y",
+    "year_to_date",
+    "custom",
+    "year",
+    "year_month",
+    "year_month_day"
+  ],
+  "defaultTimeScope": "last_30d",
+  "authorityRequired": true,
+  "authorityDomains": [
+    "moe.gov.cn",
+    "neea.edu.cn",
+    "edu.cn"
+  ],
+  "contextConstraints": [
+    "课程标准",
+    "学段",
+    "考试大纲"
+  ]
+}

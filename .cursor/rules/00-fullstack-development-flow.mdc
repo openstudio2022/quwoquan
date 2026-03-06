@@ -3,48 +3,83 @@ description: 端云一体化开发主线（唯一 master rule）— 开发流程
 alwaysApply: true
 ---
 
-# 端云一体化开发主线
+# 端云一体化开发主线（SDD：Spec-Driven Development）
 
 > **本规则是所有开发活动的唯一入口约束**。主线文档：`specs/00_MASTER_DEVELOPMENT_FLOW.md`。
 
-## 开发流水线（5 阶段 × 自动卡点）
+## SDD 开发流水线（阶段 × 自动卡点）
 
 ```
-Plan(G0) → Create(G1) → Implement(G2) → Verify(G3) → Submit(G4)
+explore → prd(G0) → design(G1) → dev(G2) → archive/commit(G3/G4) → deploy(G5)
 ```
 
-每个阶段结束时 AI Agent **自动执行**对应卡点，无需人为触发。
+每个阶段进入时 AI Agent **自动执行阶段准入自检（Phase Gate）**，每个阶段结束时**自动执行卡点**，无需人为触发。
+
+**原型快速通道**（跳过特性树分解，所有编码约束完整遵从）：
+```
+try → land → commit → deploy
+```
 
 ---
 
-## Plan 阶段（ask/plan 模式自动激活）
+## explore 阶段（ask/plan 模式自动激活）
 
 进入 ask/plan 模式时，AI Agent 必须：
 1. 将需求映射到特性树节点（`specs/feature-tree/`）
 2. 确认涉及的业务对象（查 `contracts/metadata/`）
-3. 确认涉及的扩展场景（S01~S20）
+3. 确认涉及的扩展场景（S01~S25）
 4. 生成的任务拆解必须遵循：**metadata → codegen → 业务逻辑 → 测试**
 5. 特性树节点仅使用四类文档：**spec.md、design.md、tasks.md、acceptance.yaml**；禁止在节点下生成 analysis-*.md、README、独立规划书等，详见 `specs/feature-tree/00_FEATURE_TREE_STANDARD.md`。
 6. 若涉及部署拓扑，必须同步设计 `deploy/shared/process_domain_mapping.yaml`（`environments -> process -> domains`）
 
-禁止跳过 Plan 直接编码。禁止不经 metadata 直接创建 struct/DTO。
+禁止跳过 explore 直接编码（/try 除外）。禁止不经 metadata 直接创建 struct/DTO。
 
 ---
 
-## Create 阶段（/opsx-ff 或 /qwq-extend）
+## prd 阶段（PRD Gate → G0）
 
-命令执行完毕后 **自动运行 G1**：
-```
-make verify → make codegen → make codegen-app
+**PRD Gate 自检**（进入前必须通过）：
+- P1: 能用一句话描述目标用户 + 核心问题？
+- P2: 特性树 L4 路径已确定？
+- P3: 业务对象已识别（已存在/需新建）？
+- P4: 至少 3 条可量化验收标准？
+- P5: 范围边界（out-of-scope）已明确？
+
+未通过 → GATE_BLOCK，停止执行。
+
+**产出物**：`spec.md` + `acceptance.yaml` 草稿（A1~An，status=pending）。
+
+---
+
+## design 阶段（Design Gate → G1）
+
+**Design Gate 自检**（进入前必须通过）：
+- D1: spec.md 已存在且稳定？
+- D2: acceptance.yaml A1~An 已定义？
+- D3: 设计约束已识别（DDD 分层、metadata 范围）？
+- D4: ≥2 个方案可供比较？
+- D5: 无未解决的阻塞依赖？
+
+**自动运行 G1**（完成后）：
+```bash
+make verify-metadata → make codegen → make codegen-app
 ```
 失败 → 停止 + 输出修复建议。
 
+**产出物**：`design.md` + `tasks.md` + metadata YAML 基线 + codegen 产物。
+
 ---
 
-## Implement 阶段（/opsx-apply）
+## dev 阶段（Dev Gate → G2）
+
+**Dev Gate 自检**（进入前必须通过）：
+- V1: design.md 已存在且关键决策已冻结？
+- V2: codegen 已通过？
+- V3: tasks.md 任务列表清晰、有序？
+- V4: acceptance.yaml An 有明确判定方式？
 
 每完成一个 task **自动运行 G2**：
-```
+```bash
 make build → make test-contract
 ```
 
@@ -56,12 +91,12 @@ make build → make test-contract
 - Dart: 禁止硬编码视觉字面量，必须用 AppTypography/AppSpacing/AppColors
 - Dart: 禁止相对路径 import
 - Dart: Feature 禁止直接 import 其他 Feature 内部
-- Dart UI：全局遵循 iOS 语义规范 v1（见 `specs/ux/page-layout-semantics.md`），尤其是选择器/创作页的 Modal vs Stack 导航语义
-- Dart UI：`CupertinoPageScaffold` 场景禁止混用 Material 交互组件（`Checkbox`、`SnackBar` 等）
+- Dart UI：全局遵循 iOS 语义规范 v1（见 `specs/ux/page-layout-semantics.md`）
+- Dart UI：`CupertinoPageScaffold` 场景禁止混用 Material 交互组件
 
 ---
 
-## Verify 阶段（/opsx-verify 或 /opsx-archive）
+## verify 阶段（G3）
 
 **自动运行 G3**：
 ```
@@ -69,18 +104,32 @@ make gate-full
 ```
 包含：metadata 一致性 + 结构约束 + codegen hash + 端侧语义 + 特性树 + 契约测试。
 
+`/verify`：特性级漂移检测（spec↔实现漂移 D1-D4）+ G3。
+`/audit`：代码库级结构健康度检查（DDD、metadata、语义）。
+
 ---
 
-## Submit 阶段（/submit-with-gate）
+## commit 阶段（G4）
 
-**自动运行 G4**：**提交前必须执行 L1+L2 门禁**（`make gate`）并通过 → 按 git status 变更范围智能审计 → 通过 → commit → push → merge。
+**自动运行 G4**：归档（archived=true + status=completed）→ **提交前必须执行 L1+L2 门禁**（`make gate`）并通过 → 按变更范围智能审计 → 通过 → commit → push → merge。
 
-**AI 编程助手门禁要求**：执行 `/submit-with-gate` 或 `/opsx-deliver` 时，**必须自动执行 L1+L2**，不得跳过。L1=端侧 `flutter test test/cloud/ test/components/ test/ui/`；L2=云侧 `quwoquan_service make gate`（含 content-service 契约测试）。
+**AI 编程助手门禁要求**：执行 `/commit` 或 `/deliver` 时，**必须自动执行 L1+L2**，不得跳过。L1=端侧 `flutter test test/cloud/ test/components/ test/ui/`；L2=云侧 `make gate`（含契约测试）。
+
+---
+
+## try 阶段（原型模式）
+
+**豁免**：不要求创建特性树节点（spec/design/tasks/acceptance）。
+
+**完整遵从**：所有其他核心约束——DDD 分层、metadata-first、runtime 统一、Dart 编码规范、错误码规范、codegen 保护——**一条不豁免**。
+
+验证成功后执行 `/land` 将原型成果基线化。
 
 ---
 
 ## 核心原则
 
+- **spec-first**：需求规格（spec + acceptance）先于设计，设计先于实现
 - **metadata-first**：任何新实体/字段/事件 → 先更新 YAML → verify → codegen → 手写逻辑
 - **contracts-first**：先冻结接口契约，再实现
 - **DDD 分层**：domain ← application ← adapters ← infrastructure（单向）
@@ -94,19 +143,25 @@ make gate-full
 
 | 规则 | 守护 |
 |------|------|
-| `01-arch-constraints` | DDD 导入 + 数据库隔离 + runtime 统一 + codegen 保护 + 20 扩展场景 |
+| `01-arch-constraints` | DDD 导入 + 数据库隔离 + runtime 统一 + codegen 保护 + 25 扩展场景 |
 | `02-dart-coding` | 设计系统 + 编码标准 + 状态管理 |
 | `03-testing` | 端云契约测试标准 |
 
-## 命令集
+## SDD 命令集
 
-| 命令 | 阶段 | 自动卡点 |
-|------|------|---------|
-| `/opsx-explore` | Plan | G0 |
-| `/opsx-ff` | Create | G1（verify + codegen） |
-| `/qwq-extend` | Create | G1（verify + codegen） |
-| `/opsx-apply` | Implement | G2（build + test per task） |
-| `/opsx-verify` | Verify | G3（gate-full） |
-| `/opsx-archive` | Verify | G3（gate-full） |
-| `/fullstack-audit` | 随时 | 全栈审计 |
-| `/submit-with-gate` | Submit | G4（L1+L2 门禁 + 审计 + commit） |
+| 命令 | 阶段 | 自动卡点 | 说明 |
+|------|------|---------|------|
+| `/explore` | 探索 | G0 准入自检 | 思考、不写代码 |
+| `/prd` | PRD | PRD Gate | 需求规格 + acceptance 草稿 |
+| `/design` | 设计 | Design Gate + G1 | 设计决策 + metadata + codegen |
+| `/dev` | 实施 | Dev Gate + G2/task | 逐 task 实施 |
+| `/archive` | 归档 | G3（gate-full） | 仅归档，不提交 |
+| `/commit` | 提交 | G3 + G4（L1+L2 + 审计） | 归档 + 提交入库 |
+| `/deploy` | 部署 | G5（integration → prod） | 集成验证 + 灰度发布 |
+| `/deliver` | 全链路 | Deliver Gate + G2~G4 | dev + archive + commit 一气呵成 |
+| `/verify` | 质量 | G3（gate-full） | 特性级漂移检测 |
+| `/audit` | 质量 | 随时 | 代码库级结构审计 |
+| `/try` | 原型 | G2（每次主要变更后） | 快速验证，豁免特性树分解 |
+| `/land` | 原型落地 | G3（gate-full） | try 验证成功后基线化 |
+| `/extend` | 增量扩展 | G1（verify + codegen） | 实施阶段新增字段/事件/端点 |
+| `/prune` | 维护 | 随时 | 清理过期特性树节点 |

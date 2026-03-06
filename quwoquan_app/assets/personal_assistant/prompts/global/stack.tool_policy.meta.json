@@ -1,0 +1,9 @@
+{
+  "templateId": "stack.tool_policy",
+  "version": "2026.03.05",
+  "stage": "global",
+  "domainId": "global",
+  "requiredVariables": ["availableTools"],
+  "outputContract": "none",
+  "selfCheckRules": ["tool_budget", "slot_first"]
+}

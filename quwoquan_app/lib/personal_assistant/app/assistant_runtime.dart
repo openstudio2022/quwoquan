@@ -6,16 +6,8 @@ import 'package:quwoquan_app/personal_assistant/engine/session_manager.dart';
 import 'package:quwoquan_app/personal_assistant/intent_bridge/android_intent_adapter.dart';
 import 'package:quwoquan_app/personal_assistant/intent_bridge/ios_intent_adapter.dart';
 import 'package:quwoquan_app/personal_assistant/intent_bridge/method_channel_adapter.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/personal_assistant/memory/memory_repository.dart';
 import 'package:quwoquan_app/personal_assistant/memory/objectbox_store.dart';
-import 'package:quwoquan_app/personal_assistant/retrieval/providers/conversation_retrieval_provider.dart';
-import 'package:quwoquan_app/personal_assistant/retrieval/providers/memory_retrieval_provider.dart';
-import 'package:quwoquan_app/personal_assistant/retrieval/providers/page_context_retrieval_provider.dart';
-import 'package:quwoquan_app/personal_assistant/retrieval/providers/web_retrieval_provider.dart';
-import 'package:quwoquan_app/personal_assistant/retrieval/retrieval_provider.dart';
-import 'package:quwoquan_app/personal_assistant/retrieval/retrieval_router.dart';
-import 'package:quwoquan_app/personal_assistant/retrieval/retrieval_service.dart';
 import 'package:quwoquan_app/personal_assistant/skills/market/skill_market_service.dart';
 import 'package:quwoquan_app/personal_assistant/skills/skill_executor.dart';
 import 'package:quwoquan_app/personal_assistant/skills/skill_loader.dart';
@@ -24,11 +16,12 @@ import 'package:quwoquan_app/personal_assistant/template_runtime/template_runtim
 import 'package:quwoquan_app/personal_assistant/tools/intent_bridge_tool.dart';
 import 'package:quwoquan_app/personal_assistant/tools/local_context_tool.dart';
 import 'package:quwoquan_app/personal_assistant/tools/media_gallery_tool.dart';
+import 'package:quwoquan_app/personal_assistant/tools/memory_search_tool.dart';
 import 'package:quwoquan_app/personal_assistant/tools/metadata/tool_metadata_registry.dart';
 import 'package:quwoquan_app/personal_assistant/tools/tool_registry.dart';
+import 'package:quwoquan_app/personal_assistant/tools/web_fetch_tool.dart';
 import 'dart:io';
 
-import 'package:quwoquan_app/personal_assistant/tools/unified_retrieval_tool.dart';
 import 'package:quwoquan_app/personal_assistant/tools/websearch_tool.dart';
 
 class AssistantRuntime {
@@ -75,31 +68,21 @@ class AssistantRuntime {
     final androidAdapter = AndroidIntentAdapter(channelAdapter);
     final sessionManager = AssistantSessionManager();
     final memoryRepository = AssistantMemoryRepository(memoryStore);
-    final appContentRepository = MockAppContentRepository();
-    final retrievalService = AssistentRetrievalService(
-      router: const AssistentRetrievalRouter(),
-      providers: <AssistentRetrievalProvider>[
-        WebRetrievalProvider(),
-        MemoryRetrievalProvider(memoryRepository),
-        ConversationRetrievalProvider(sessionManager),
-        PageContextRetrievalProvider(appContentRepository),
-      ],
-    );
-    final toolRegistry = AssistantToolRegistry()
-      ..register(WebSearchTool())
-      ..register(UnifiedRetrievalTool(retrievalService))
-      ..register(LocalContextTool(channelAdapter))
-      ..register(MediaGalleryTool(channelAdapter))
-      ..register(
-        IntentBridgeTool(
-          iosAdapter: iosAdapter,
-          androidAdapter: androidAdapter,
-        ),
-      );
-    final templateRuntime = PromptTemplateRuntime(
-      registry: TemplateRegistry(),
-    );
     final toolMetadataRegistry = ToolMetadataRegistry();
+    final toolRegistry =
+        AssistantToolRegistry(metadataRegistry: toolMetadataRegistry)
+          ..register(WebSearchTool())
+          ..register(WebFetchTool())
+          ..register(MemorySearchTool(memoryRepository: memoryRepository))
+          ..register(LocalContextTool(channelAdapter))
+          ..register(MediaGalleryTool(channelAdapter))
+          ..register(
+            IntentBridgeTool(
+              iosAdapter: iosAdapter,
+              androidAdapter: androidAdapter,
+            ),
+          );
+    final templateRuntime = PromptTemplateRuntime(registry: TemplateRegistry());
     final switchableProvider = SwitchableAssistantLlmProvider(
       fallbackProvider: const HeuristicLocalLlmProvider(),
       templateRuntime: templateRuntime,
@@ -146,6 +129,11 @@ class AssistantRuntime {
 
   List<String> listAvailableModels() => llmProvider.availableModelRefs;
 
+  List<String> selectedModels() => llmProvider.selectedModelRefs;
+
+  bool setSelectedModels(List<String> modelRefs) =>
+      llmProvider.setSelectedModels(modelRefs);
+
   String? currentModel() => llmProvider.activeModelRef;
 
   /// 异步加载远程模型配置并注册。优先 bundled asset（App 内 config + .env），再工程目录、应用存储，保证端到端问天气等流程可用。
@@ -160,5 +148,4 @@ class AssistantRuntime {
       llmProvider.registerRemoteModel(config);
     }
   }
-
 }

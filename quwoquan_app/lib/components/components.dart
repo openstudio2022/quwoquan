@@ -44,6 +44,7 @@ export 'assistant/assistant_floating_ball.dart';
 
 // ==================== 输入组件 ====================
 export 'input/unified_emoji_picker.dart';
+export 'input/customizable_chat_input_bar.dart';
 
 // ==================== 媒体查看器组件 ====================
 export 'media/image/viewer/image_viewer.dart';

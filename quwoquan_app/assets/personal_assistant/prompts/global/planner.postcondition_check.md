@@ -20,7 +20,7 @@
 - 对每个证据做时效性和冲突检查。
 
 ## 输出格式
-输出契约：`domain_plan_v2026_02_18`
+输出 JSON，必须包含：`ready`、`reason`、`failedChecks`、`gapFillTasks`。
 
 ## 反思与自检
 - 是否遗漏任何子意图？  

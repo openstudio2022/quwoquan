@@ -1,0 +1,15 @@
+{
+  "templateId": "summarize_session",
+  "version": "2026.03.03",
+  "stage": "utility",
+  "domainId": "global",
+  "requiredVariables": [
+    "sessionTranscript"
+  ],
+  "outputContract": "plain_text",
+  "selfCheckRules": [
+    "no_hallucination",
+    "key_slots_retained",
+    "length_within_limit"
+  ]
+}

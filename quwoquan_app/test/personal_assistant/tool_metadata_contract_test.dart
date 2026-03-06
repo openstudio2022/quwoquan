@@ -26,7 +26,6 @@ void main() {
         .map((item) => item['toolName']?.toString() ?? '')
         .where((name) => name.isNotEmpty)
         .toSet();
-    expect(toolNames.contains('unified_retrieval'), isTrue);
     expect(toolNames.contains('web_search'), isTrue);
 
     final domainMatrix =
@@ -41,8 +40,20 @@ void main() {
     final allowed =
         (divination['allowedTools'] as List?)?.whereType<String>().toList() ??
         const <String>[];
-    expect(allowed.contains('unified_retrieval'), isTrue);
     expect(allowed.contains('web_search'), isTrue);
+
+    final weather = domainMatrix
+        .whereType<Map>()
+        .firstWhere(
+          (item) => item['domainId']?.toString() == 'weather',
+          orElse: () => <String, dynamic>{},
+        );
+    expect(weather.isNotEmpty, isTrue);
+    final weatherAllowed =
+        (weather['allowedTools'] as List?)?.whereType<String>().toList() ??
+        const <String>[];
+    expect(weatherAllowed.contains('local_context'), isTrue);
+    expect(weatherAllowed.contains('web_search'), isTrue);
   });
 }
 

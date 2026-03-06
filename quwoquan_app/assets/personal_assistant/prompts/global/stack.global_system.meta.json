@@ -1,0 +1,14 @@
+{
+  "templateId": "stack.global_system",
+  "version": "2026.02.18",
+  "stage": "policy",
+  "domainId": "global",
+  "requiredVariables": [
+    "userQuery"
+  ],
+  "outputContract": "assistant_turn_v2",
+  "selfCheckRules": [
+    "privacy_boundary",
+    "no_fabrication"
+  ]
+}

@@ -22,27 +22,27 @@ Future<void> main() async {
     final cases =
         (domain['cases'] as List?)?.whereType<Map>().toList(growable: false) ??
         const <Map>[];
-    final answerMd = File(
-      'assets/personal_assistant/prompts/domains/$domainId/domain.$domainId.answer.md',
+    final skillFile = File(
+      'assets/personal_assistant/skills/$domainId/SKILL.md',
     );
-    final planMd = File(
-      'assets/personal_assistant/prompts/domains/$domainId/domain.$domainId.plan.md',
-    );
-    final answerText = answerMd.existsSync() ? answerMd.readAsStringSync() : '';
-    final planText = planMd.existsSync() ? planMd.readAsStringSync() : '';
-    final corpus = '$answerText\n$planText';
+    final skillText = skillFile.existsSync()
+        ? skillFile.readAsStringSync()
+        : '';
+    final corpus = skillText;
     stdout.writeln('\n[$domainId]');
     var passCount = 0;
     for (final qa in cases) {
       final id = (qa['id'] ?? '').toString();
       final mustContain =
-          (qa['mustContain'] as List?)?.whereType<String>().toList(growable: false) ??
-              const <String>[];
+          (qa['mustContain'] as List?)?.whereType<String>().toList(
+            growable: false,
+          ) ??
+          const <String>[];
       final hit = mustContain.where(corpus.contains).length;
       final ratio = mustContain.isEmpty ? 1.0 : hit / mustContain.length;
       final modelJudgeScore = _modelJudgeScore(
         ratio: ratio,
-        answerText: answerText,
+        answerText: skillText,
         domainId: domainId,
       );
       final passed = modelJudgeScore >= 0.75;
@@ -52,7 +52,8 @@ Future<void> main() async {
         '(hit=$hit/${mustContain.length}, score=${modelJudgeScore.toStringAsFixed(2)}, multiTurn=${qa['multiTurn'] == true})',
       );
     }
-    final domainPass = cases.isNotEmpty && passCount >= ((cases.length * 0.8).ceil());
+    final domainPass =
+        cases.isNotEmpty && passCount >= ((cases.length * 0.8).ceil());
     stdout.writeln(' => domain result: ${domainPass ? 'PASS' : 'FAIL'}');
     if (!domainPass) {
       failed.add(domainId);
@@ -73,7 +74,7 @@ double _modelJudgeScore({
   required String domainId,
 }) {
   var score = 0.4 + (ratio * 0.4);
-  if (answerText.contains('## 约束') && answerText.contains('## 反思与自检')) {
+  if (answerText.contains('## 双轨输出契约') && answerText.contains('## 轮次状态定义')) {
     score += 0.1;
   }
   if (_highRiskDomains.contains(domainId)) {
@@ -94,4 +95,3 @@ const Set<String> _highRiskDomains = <String>{
   'astrology_constellation',
   'family_parenting',
 };
-

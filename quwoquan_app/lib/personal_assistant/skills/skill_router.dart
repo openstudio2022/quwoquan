@@ -8,29 +8,8 @@ class PersonalAssistantSkillRouter {
     List<PersonalAssistantSkillManifest> skills,
   ) {
     final normalized = userText.toLowerCase();
-    final knowledgeKeywords = <String>[
-      '搜索',
-      'search',
-      '财经',
-      '天气',
-      '出行',
-      '旅行',
-      '情感',
-      '疾病',
-      '健康',
-      '易经',
-      '卜卦',
-      '百科',
-      '知识',
-    ];
-    if (knowledgeKeywords.any(normalized.contains)) {
-      for (final skill in skills) {
-        final id = skill.id.toLowerCase();
-        if (id == 'knowledge_qa' || id.contains('quick_search')) {
-          return skill;
-        }
-      }
-    }
+    final matchedByTrigger = _matchByTriggerKeywords(normalized, skills);
+    if (matchedByTrigger != null) return matchedByTrigger;
     for (final skill in skills) {
       final skillName = skill.name.toLowerCase();
       final skillId = skill.id.toLowerCase();
@@ -38,9 +17,36 @@ class PersonalAssistantSkillRouter {
         return skill;
       }
     }
-    if (normalized.contains('搜索') || normalized.contains('search')) {
-      for (final skill in skills) {
-        if (skill.id.toLowerCase().contains('search')) {
+    return null;
+  }
+
+  PersonalAssistantSkillManifest? resolveSkillForDomain({
+    required String userText,
+    required String domainId,
+    required List<PersonalAssistantSkillManifest> skills,
+  }) {
+    final normalized = userText.toLowerCase();
+    final inDomain = skills
+        .where((skill) => skill.domainId.trim() == domainId.trim())
+        .toList(growable: false);
+    if (inDomain.isNotEmpty) {
+      final byTrigger = _matchByTriggerKeywords(normalized, inDomain);
+      if (byTrigger != null) return byTrigger;
+      return inDomain.first;
+    }
+    return resolveSkill(userText, skills);
+  }
+
+  PersonalAssistantSkillManifest? _matchByTriggerKeywords(
+    String normalizedUserText,
+    List<PersonalAssistantSkillManifest> skills,
+  ) {
+    for (final skill in skills) {
+      if (skill.triggerKeywords.isEmpty) continue;
+      for (final keyword in skill.triggerKeywords) {
+        final token = keyword.trim().toLowerCase();
+        if (token.isEmpty) continue;
+        if (normalizedUserText.contains(token)) {
           return skill;
         }
       }

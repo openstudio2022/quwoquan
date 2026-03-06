@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:quwoquan_app/personal_assistant/observability/logging/app_log_models.dart';
 import 'package:quwoquan_app/personal_assistant/observability/logging/app_log_service.dart';
 import 'package:quwoquan_app/personal_assistant/observability/logging/app_run_interaction_collector.dart';
+import 'package:quwoquan_app/personal_assistant/tools/search_cache.dart';
 import 'package:quwoquan_app/personal_assistant/tools/tool_schema.dart';
 
 enum AssistantSearchProvider {
@@ -25,6 +26,7 @@ class WebSearchTool implements AssistantTool {
     String? openclawBaseUrl,
     String? openclawToken,
     AssistantSearchProvider? defaultProvider,
+    SearchResultCache? searchCache,
   }) : _braveApiKey =
            braveApiKey ??
            const String.fromEnvironment('PERSONAL_ASSISTANT_BRAVE_API_KEY'),
@@ -42,7 +44,8 @@ class WebSearchTool implements AssistantTool {
        _openclawToken =
            openclawToken ??
            const String.fromEnvironment('PERSONAL_ASSISTANT_OPENCLAW_TOKEN'),
-       _defaultProvider = defaultProvider ?? AssistantSearchProvider.duckduckgo;
+       _defaultProvider = defaultProvider ?? AssistantSearchProvider.duckduckgo,
+       _searchCache = searchCache ?? SearchResultCache();
 
   final String _braveApiKey;
   final String _perplexityApiKey;
@@ -50,7 +53,11 @@ class WebSearchTool implements AssistantTool {
   final String _openclawBaseUrl;
   final String _openclawToken;
   final AssistantSearchProvider _defaultProvider;
+  final SearchResultCache _searchCache;
   static const Duration _networkTimeout = Duration(seconds: 8);
+
+  /// Access to the search cache for external reset (e.g. new session).
+  SearchResultCache get searchCache => _searchCache;
 
   @override
   String get name => 'web_search';
@@ -60,7 +67,20 @@ class WebSearchTool implements AssistantTool {
 
   @override
   Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
-    final query = (arguments['query'] as String?)?.trim() ?? '';
+    // Layer 1: 优先使用 queryNormalization.normalizedQuery 作为主查询词
+    // queryVariants 由 retrieval_service 通过 AssistentRetrievalRequest 并发执行（Layer 2）
+    // websearch_tool 自身仍执行单次搜索，多路并发在 retrieval_service 层处理
+    final rawQuery = (arguments['query'] as String?)?.trim() ?? '';
+    final queryNorm = arguments['queryNormalization'];
+    final normalizedQuery = queryNorm is Map
+        ? ((queryNorm['normalizedQuery'] as String?)?.trim() ?? rawQuery)
+        : rawQuery;
+    final query = normalizedQuery.isNotEmpty ? normalizedQuery : rawQuery;
+    final domainId =
+        ((arguments['domainId'] as String?)?.trim().isNotEmpty == true
+            ? (arguments['domainId'] as String).trim()
+            : (arguments['__domainId'] as String?)?.trim()) ??
+        '';
     final sessionId = (arguments['__sessionId'] as String?)?.trim() ?? '';
     final runId = (arguments['__runId'] as String?)?.trim() ?? '';
     final traceId = (arguments['__traceId'] as String?)?.trim() ?? '';
@@ -72,7 +92,38 @@ class WebSearchTool implements AssistantTool {
         errorCode: AssistantErrorCode.invalidArguments,
       );
     }
+
+    // Check search cache before hitting the network
+    final cached = _searchCache.get(query);
+    if (cached != null) {
+      return AssistantToolResult(
+        success: true,
+        message: cached['message'] as String? ?? '检索结果（缓存）',
+        data: <String, dynamic>{...cached, 'cacheHit': true},
+      );
+    }
+
     final runtimeConfig = await _resolveRuntimeConfig();
+    final timeContract = await _loadRetrievalTimeContract();
+    final domainPolicy = await _loadDomainRetrievalPolicy(domainId);
+    final timeConstraint = _resolveTimeConstraint(
+      arguments: arguments,
+      domainPolicy: domainPolicy,
+      timeContract: timeContract,
+    );
+    final baseScopedQuery = _withTimeConstraintQuery(
+      query: query,
+      constraint: timeConstraint,
+    );
+    final scopedQuery = _withDomainContextQuery(
+      query: baseScopedQuery,
+      arguments: arguments,
+      domainPolicy: domainPolicy,
+    );
+    final authorityDomains = _resolveAuthorityDomains(
+      arguments: arguments,
+      domainPolicy: domainPolicy,
+    );
     final provider = _resolveProvider(
       raw: arguments['provider'] as String?,
       config: runtimeConfig,
@@ -86,9 +137,12 @@ class WebSearchTool implements AssistantTool {
           'kind': 'search',
           'provider': 'none',
           'request': <String, dynamic>{
-            'query': query,
+            'query': scopedQuery,
             'count': count,
             'providerHint': (arguments['provider'] as String?) ?? '',
+            'timeConstraint': timeConstraint.toJson(),
+            'authorityDomains': authorityDomains,
+            if (domainId.isNotEmpty) 'domainId': domainId,
           },
           'error': '未发现可用搜索 provider',
         },
@@ -109,7 +163,7 @@ class WebSearchTool implements AssistantTool {
     try {
       final decoded = await _runProviderSearch(
         provider: provider,
-        query: query,
+        query: scopedQuery,
         count: count,
         config: runtimeConfig,
       );
@@ -121,6 +175,11 @@ class WebSearchTool implements AssistantTool {
         provider: provider,
         decoded: decoded,
       );
+      final evidenceStats = _buildEvidenceStats(
+        references: references,
+        authorityDomains: authorityDomains,
+        timeConstraint: timeConstraint,
+      );
       await _logSearchInteraction(
         sessionId: sessionId,
         runId: runId,
@@ -129,9 +188,12 @@ class WebSearchTool implements AssistantTool {
           'kind': 'search',
           'provider': provider.name,
           'request': <String, dynamic>{
-            'query': query,
+            'query': scopedQuery,
             'count': count,
             'providerHint': (arguments['provider'] as String?) ?? '',
+            'timeConstraint': timeConstraint.toJson(),
+            'authorityDomains': authorityDomains,
+            if (domainId.isNotEmpty) 'domainId': domainId,
           },
           'response': <String, dynamic>{'summary': summary, 'raw': decoded},
           'diagnostics': runtimeConfig.toDiagnostics(
@@ -140,23 +202,58 @@ class WebSearchTool implements AssistantTool {
         },
       );
       final message = summary.isEmpty ? '检索成功，但未获得可用摘要。' : '检索结果：$summary';
+      // 权威域内无任何匹配时，标记为信息不足，让 LLM 降级回复而非用无关内容糊弄用户。
+      final primaryAuthorityScore =
+          (evidenceStats['authorityScore'] as double?) ?? 0.0;
+      final primaryAuthCount =
+          (evidenceStats['authoritativeCount'] as int?) ?? 0;
+      final primaryIsLowQuality = primaryAuthCount == 0 &&
+          primaryAuthorityScore == 0.0 &&
+          authorityDomains.isNotEmpty;
+      if (primaryIsLowQuality) {
+        return AssistantToolResult(
+          success: false,
+          message: '检索完成但信息不足：返回结果与目标领域（${authorityDomains.join('/')}）无关联，建议降级回复。',
+          errorCode: AssistantErrorCode.executionFailed,
+          data: <String, dynamic>{
+            'provider': provider.name,
+            'summary': summary,
+            'references': references,
+            'timeConstraint': timeConstraint.toJson(),
+            'authorityDomains': authorityDomains,
+            if (domainId.isNotEmpty) 'domainId': domainId,
+            ...evidenceStats,
+            'raw': decoded,
+            'diagnostics': runtimeConfig.toDiagnostics(
+              selectedProvider: provider.name,
+            ),
+          },
+        );
+      }
+      final resultData = <String, dynamic>{
+        'provider': provider.name,
+        'summary': summary,
+        'references': references,
+        'timeConstraint': timeConstraint.toJson(),
+        'authorityDomains': authorityDomains,
+        if (domainId.isNotEmpty) 'domainId': domainId,
+        ...evidenceStats,
+        'raw': decoded,
+        'diagnostics': runtimeConfig.toDiagnostics(
+          selectedProvider: provider.name,
+        ),
+        'message': message,
+      };
+      _searchCache.put(query, resultData);
       return AssistantToolResult(
         success: true,
         message: message,
-        data: <String, dynamic>{
-          'provider': provider.name,
-          'summary': summary,
-          'references': references,
-          'raw': decoded,
-          'diagnostics': runtimeConfig.toDiagnostics(
-            selectedProvider: provider.name,
-          ),
-        },
+        data: resultData,
       );
     } catch (error) {
       final fallback = await _tryFallbackSearch(
         primaryProvider: provider,
-        query: query,
+        query: scopedQuery,
         count: count,
         config: runtimeConfig,
       );
@@ -168,6 +265,11 @@ class WebSearchTool implements AssistantTool {
           provider: fallbackProvider,
           decoded: fallback.raw,
         );
+        final evidenceStats = _buildEvidenceStats(
+          references: fallbackReferences,
+          authorityDomains: authorityDomains,
+          timeConstraint: timeConstraint,
+        );
         await _logSearchInteraction(
           sessionId: sessionId,
           runId: runId,
@@ -176,9 +278,12 @@ class WebSearchTool implements AssistantTool {
             'kind': 'search',
             'provider': fallback.providerLabel,
             'request': <String, dynamic>{
-              'query': query,
+              'query': scopedQuery,
               'count': count,
               'fallbackFrom': provider.name,
+              'timeConstraint': timeConstraint.toJson(),
+              'authorityDomains': authorityDomains,
+              if (domainId.isNotEmpty) 'domainId': domainId,
             },
             'response': <String, dynamic>{
               'summary': fallback.summary,
@@ -192,6 +297,36 @@ class WebSearchTool implements AssistantTool {
         final fallbackMessage = fallback.summary.isEmpty
             ? '检索成功，但未获得可用摘要。'
             : '检索结果：${fallback.summary}';
+        // 当权威域内无任何匹配结果时，标记为检索信息不足，让 LLM 知道需要降级。
+        final fallbackAuthorityScore =
+            (evidenceStats['authorityScore'] as double?) ?? 0.0;
+        final fallbackAuthCount =
+            (evidenceStats['authoritativeCount'] as int?) ?? 0;
+        final fallbackIsLowQuality = fallbackAuthCount == 0 &&
+            fallbackAuthorityScore == 0.0 &&
+            authorityDomains.isNotEmpty;
+        if (fallbackIsLowQuality) {
+          return AssistantToolResult(
+            success: false,
+            message: '检索完成但信息不足：返回结果与目标领域（${authorityDomains.join('/')}）无关联，建议降级回复。',
+            errorCode: AssistantErrorCode.executionFailed,
+            data: <String, dynamic>{
+              'provider': fallback.providerLabel,
+              'summary': fallback.summary,
+              'references': fallbackReferences,
+              'timeConstraint': timeConstraint.toJson(),
+              'authorityDomains': authorityDomains,
+              if (domainId.isNotEmpty) 'domainId': domainId,
+              ...evidenceStats,
+              'raw': fallback.raw,
+              'fallbackFrom': provider.name,
+              'primaryError': error.toString(),
+              'diagnostics': runtimeConfig.toDiagnostics(
+                selectedProvider: fallback.providerLabel,
+              ),
+            },
+          );
+        }
         return AssistantToolResult(
           success: true,
           message: fallbackMessage,
@@ -199,6 +334,10 @@ class WebSearchTool implements AssistantTool {
             'provider': fallback.providerLabel,
             'summary': fallback.summary,
             'references': fallbackReferences,
+            'timeConstraint': timeConstraint.toJson(),
+            'authorityDomains': authorityDomains,
+            if (domainId.isNotEmpty) 'domainId': domainId,
+            ...evidenceStats,
             'raw': fallback.raw,
             'fallbackFrom': provider.name,
             'primaryError': error.toString(),
@@ -215,7 +354,13 @@ class WebSearchTool implements AssistantTool {
         payload: <String, dynamic>{
           'kind': 'search',
           'provider': provider.name,
-          'request': <String, dynamic>{'query': query, 'count': count},
+          'request': <String, dynamic>{
+            'query': scopedQuery,
+            'count': count,
+            'timeConstraint': timeConstraint.toJson(),
+            'authorityDomains': authorityDomains,
+            if (domainId.isNotEmpty) 'domainId': domainId,
+          },
           'error': error.toString(),
           'diagnostics': runtimeConfig.toDiagnostics(
             selectedProvider: provider.name,
@@ -235,6 +380,460 @@ class WebSearchTool implements AssistantTool {
         errorCode: AssistantErrorCode.networkUnavailable,
         degraded: true,
       );
+    }
+  }
+
+  Map<String, dynamic> _buildEvidenceStats({
+    required List<Map<String, dynamic>> references,
+    required List<String> authorityDomains,
+    required _SearchTimeConstraint timeConstraint,
+  }) {
+    final freshnessHours = _estimateFreshnessHours(
+      references: references,
+      timeConstraint: timeConstraint,
+    );
+    final total = references.length;
+    var authoritative = 0;
+    for (final ref in references) {
+      final url = (ref['url'] as String?)?.trim() ?? '';
+      final host = Uri.tryParse(url)?.host.toLowerCase() ?? '';
+      if (host.isEmpty) continue;
+      if (authorityDomains.any((d) => host == d || host.endsWith('.$d'))) {
+        authoritative += 1;
+      }
+    }
+    final coverage = total <= 0 ? 0.0 : (total / 4).clamp(0.0, 1.0).toDouble();
+    final authorityScore = total <= 0 ? 0.0 : (authoritative / total).clamp(0.0, 1.0);
+    // Layer 3 综合质量评分：权威性(0.4) + 时效性(0.35) + 覆盖量(0.25)
+    // 时效性：freshnessHours 越小越好，超过上限则线性惩罚至0
+    final freshScore = freshnessHours <= timeConstraint.freshnessHoursMax
+        ? 1.0
+        : (timeConstraint.freshnessHoursMax / freshnessHours).clamp(0.0, 1.0);
+    final qualityScore =
+        (authorityScore * 0.4 + freshScore * 0.35 + coverage * 0.25)
+            .clamp(0.0, 1.0)
+            .toDouble();
+    // 保留向后兼容的 confidence 字段
+    final confidence = qualityScore;
+    return <String, dynamic>{
+      'freshnessHours': freshnessHours,
+      'freshScore': freshScore,
+      'coverage': coverage,
+      'confidence': confidence,
+      'qualityScore': qualityScore,
+      'authorityScore': authorityScore,
+      'authoritativeCount': authoritative,
+      'totalReferences': total,
+    };
+  }
+
+  double _estimateFreshnessHours({
+    required List<Map<String, dynamic>> references,
+    required _SearchTimeConstraint timeConstraint,
+  }) {
+    final now = DateTime.now();
+    final candidates = <double>[];
+    for (final ref in references) {
+      final observedAt = (ref['observedAt'] as String?)?.trim() ?? '';
+      final publishedAt = (ref['publishedAt'] as String?)?.trim() ?? '';
+      DateTime? ts;
+      if (observedAt.isNotEmpty) {
+        ts = DateTime.tryParse(observedAt);
+      }
+      ts ??= DateTime.tryParse(publishedAt);
+      if (ts == null) {
+        final snippet = (ref['snippet'] as String?)?.trim() ?? '';
+        ts = _parseDateFromText(snippet);
+      }
+      if (ts == null) continue;
+      final hours = now.difference(ts.toLocal()).inMinutes / 60.0;
+      if (hours.isFinite && hours >= 0) {
+        candidates.add(hours);
+      }
+    }
+    if (candidates.isNotEmpty) {
+      candidates.sort();
+      return candidates.first;
+    }
+    // No explicit date signal: keep conservative for realtime scopes.
+    if (timeConstraint.isRealtimeLike) {
+      return 9999;
+    }
+    return timeConstraint.freshnessHoursMax.toDouble();
+  }
+
+  DateTime? _parseDateFromText(String text) {
+    if (text.isEmpty) return null;
+    final iso = RegExp(
+      r'(20\d{2})[-/年\.](\d{1,2})[-/月\.](\d{1,2})',
+    ).firstMatch(text);
+    if (iso == null) return null;
+    final y = int.tryParse(iso.group(1) ?? '');
+    final m = int.tryParse(iso.group(2) ?? '');
+    final d = int.tryParse(iso.group(3) ?? '');
+    if (y == null || m == null || d == null) return null;
+    return DateTime(y, m, d);
+  }
+
+  _SearchTimeConstraint _resolveTimeConstraint({
+    required Map<String, dynamic> arguments,
+    required _DomainRetrievalPolicy domainPolicy,
+    required _RetrievalTimeContract timeContract,
+  }) {
+    final now = DateTime.now();
+    final explicitScope =
+        (arguments['timeScope'] as String?)?.trim().toLowerCase() ?? '';
+    final explicitFreshness = (arguments['freshnessHoursMax'] as num?)?.toInt();
+    final startRaw = (arguments['timeRangeStart'] as String?)?.trim() ?? '';
+    final endRaw = (arguments['timeRangeEnd'] as String?)?.trim() ?? '';
+    final start = DateTime.tryParse(startRaw);
+    final end = DateTime.tryParse(endRaw);
+    final allowedScopes = domainPolicy.allowedTimeScopes.isEmpty
+        ? timeContract.supportedScopes
+        : domainPolicy.allowedTimeScopes;
+    var scope = explicitScope.isNotEmpty
+        ? explicitScope
+        : domainPolicy.defaultTimeScope;
+    if (scope.isEmpty) {
+      scope = timeContract.defaultScope;
+    }
+    if (!allowedScopes.contains(scope)) {
+      scope =
+          domainPolicy.defaultTimeScope.isNotEmpty &&
+              allowedScopes.contains(domainPolicy.defaultTimeScope)
+          ? domainPolicy.defaultTimeScope
+          : (allowedScopes.isNotEmpty
+                ? allowedScopes.first
+                : timeContract.defaultScope);
+    }
+    if (start != null && end != null && !end.isBefore(start)) {
+      final maxHours =
+          explicitFreshness ??
+          timeContract.freshnessHoursMaxByScope[scope] ??
+          now.difference(start).inHours.clamp(1, 24 * 366);
+      return _SearchTimeConstraint(
+        scope: scope,
+        start: start,
+        end: end,
+        freshnessHoursMax: maxHours,
+      );
+    }
+    final calendarPointRange = _resolveRangeByCalendarPoint(
+      arguments: arguments,
+      now: now,
+      scope: scope,
+    );
+    if (calendarPointRange != null) {
+      final maxHours =
+          explicitFreshness ??
+          timeContract.freshnessHoursMaxByScope[calendarPointRange.scope] ??
+          now
+              .difference(calendarPointRange.range.start)
+              .inHours
+              .clamp(24, 24 * 3650);
+      return _SearchTimeConstraint(
+        scope: calendarPointRange.scope,
+        start: calendarPointRange.range.start,
+        end: calendarPointRange.range.end,
+        freshnessHoursMax: maxHours,
+      );
+    }
+    final resolvedRange = _resolveRangeByScope(
+      scope: scope,
+      now: now,
+      timeContract: timeContract,
+    );
+    final maxHours =
+        explicitFreshness ??
+        timeContract.freshnessHoursMaxByScope[scope] ??
+        timeContract.defaultFreshnessHoursMax;
+    return _SearchTimeConstraint(
+      scope: scope,
+      start: resolvedRange.start,
+      end: resolvedRange.end,
+      freshnessHoursMax: maxHours,
+    );
+  }
+
+  _CalendarPointRange? _resolveRangeByCalendarPoint({
+    required Map<String, dynamic> arguments,
+    required DateTime now,
+    required String scope,
+  }) {
+    final normalizedScope = _normalizeCalendarScope(scope);
+    final year = _asInt(arguments['timeYear']);
+    final month = _asInt(arguments['timeMonth']);
+    final day = _asInt(arguments['timeDay']);
+    final fallbackPoint = _parseCalendarPoint(
+      (arguments['timePoint'] as String?)?.trim() ?? '',
+    );
+    final y = year ?? fallbackPoint?.year;
+    final m = month ?? fallbackPoint?.month;
+    final d = day ?? fallbackPoint?.day;
+    if (y == null || y <= 0) return null;
+    if (m != null && (m < 1 || m > 12)) return null;
+    if (d != null && (d < 1 || d > 31)) return null;
+    if (y > now.year + 1) return null;
+
+    if (normalizedScope == 'year_month_day' || d != null) {
+      if (m == null || d == null) return null;
+      final start = DateTime(y, m, d);
+      if (start.year != y || start.month != m || start.day != d) return null;
+      return _CalendarPointRange(
+        scope: 'year_month_day',
+        range: _ResolvedTimeRange(
+          start: start,
+          end: DateTime(y, m, d, 23, 59, 59, 999),
+        ),
+      );
+    }
+    if (normalizedScope == 'year_month' || m != null) {
+      if (m == null) return null;
+      final start = DateTime(y, m, 1);
+      final end = DateTime(
+        y,
+        m + 1,
+        1,
+      ).subtract(const Duration(milliseconds: 1));
+      return _CalendarPointRange(
+        scope: 'year_month',
+        range: _ResolvedTimeRange(start: start, end: end),
+      );
+    }
+    return _CalendarPointRange(
+      scope: 'year',
+      range: _ResolvedTimeRange(
+        start: DateTime(y, 1, 1),
+        end: DateTime(y + 1, 1, 1).subtract(const Duration(milliseconds: 1)),
+      ),
+    );
+  }
+
+  String _normalizeCalendarScope(String scope) {
+    switch (scope) {
+      case 'yearly':
+      case 'calendar_year':
+        return 'year';
+      case 'monthly':
+      case 'calendar_month':
+        return 'year_month';
+      case 'daily':
+      case 'calendar_day':
+        return 'year_month_day';
+      default:
+        return scope;
+    }
+  }
+
+  _CalendarPoint? _parseCalendarPoint(String raw) {
+    if (raw.isEmpty) return null;
+    final ymd = RegExp(
+      r'^(\d{4})[-/年](\d{1,2})[-/月](\d{1,2})(?:日)?$',
+    ).firstMatch(raw);
+    if (ymd != null) {
+      return _CalendarPoint(
+        year: int.tryParse(ymd.group(1) ?? ''),
+        month: int.tryParse(ymd.group(2) ?? ''),
+        day: int.tryParse(ymd.group(3) ?? ''),
+      );
+    }
+    final ym = RegExp(r'^(\d{4})[-/年](\d{1,2})(?:月)?$').firstMatch(raw);
+    if (ym != null) {
+      return _CalendarPoint(
+        year: int.tryParse(ym.group(1) ?? ''),
+        month: int.tryParse(ym.group(2) ?? ''),
+      );
+    }
+    final y = RegExp(r'^(\d{4})(?:年)?$').firstMatch(raw);
+    if (y != null) {
+      return _CalendarPoint(year: int.tryParse(y.group(1) ?? ''));
+    }
+    return null;
+  }
+
+  int? _asInt(dynamic raw) {
+    if (raw is int) return raw;
+    if (raw is num) return raw.toInt();
+    if (raw is String) return int.tryParse(raw.trim());
+    return null;
+  }
+
+  _ResolvedTimeRange _resolveRangeByScope({
+    required String scope,
+    required DateTime now,
+    required _RetrievalTimeContract timeContract,
+  }) {
+    final configuredHours = timeContract.windowHoursByScope[scope];
+    if (configuredHours != null && configuredHours > 0) {
+      return _ResolvedTimeRange(
+        start: now.subtract(Duration(hours: configuredHours)),
+        end: now,
+      );
+    }
+    if (scope == 'today') {
+      return _ResolvedTimeRange(
+        start: DateTime(now.year, now.month, now.day),
+        end: now,
+      );
+    }
+    if (scope == 'year_to_date') {
+      return _ResolvedTimeRange(start: DateTime(now.year, 1, 1), end: now);
+    }
+    return _ResolvedTimeRange(
+      start: now.subtract(const Duration(days: 30)),
+      end: now,
+    );
+  }
+
+  String _withTimeConstraintQuery({
+    required String query,
+    required _SearchTimeConstraint constraint,
+  }) {
+    final start = constraint.start.toIso8601String().substring(0, 10);
+    final end = constraint.end.toIso8601String().substring(0, 10);
+    return '$query 时间范围:$start..$end';
+  }
+
+  String _withDomainContextQuery({
+    required String query,
+    required Map<String, dynamic> arguments,
+    required _DomainRetrievalPolicy domainPolicy,
+  }) {
+    final contextConstraints =
+        (arguments['contextConstraints'] as List?)
+            ?.whereType<String>()
+            .map((item) => item.trim())
+            .where((item) => item.isNotEmpty)
+            .toList(growable: false) ??
+        const <String>[];
+    final scopedHints = <String>[
+      ...contextConstraints,
+      ...domainPolicy.contextConstraints,
+    ];
+    if (scopedHints.isEmpty) return query;
+    final hintText = scopedHints.toSet().join(' ');
+    return '$query 上下文限定:$hintText';
+  }
+
+  List<String> _resolveAuthorityDomains({
+    required Map<String, dynamic> arguments,
+    required _DomainRetrievalPolicy domainPolicy,
+  }) {
+    final explicit =
+        (arguments['authorityDomains'] as List?)
+            ?.whereType<String>()
+            .map((item) => item.trim().toLowerCase())
+            .where((item) => item.isNotEmpty)
+            .toSet()
+            .toList(growable: false) ??
+        const <String>[];
+    if (explicit.isNotEmpty) return explicit;
+    return domainPolicy.authorityDomains;
+  }
+
+  Future<_RetrievalTimeContract> _loadRetrievalTimeContract() async {
+    const path =
+        'assets/personal_assistant/config/retrieval_time_contract.json';
+    try {
+      final content = await _loadText(path);
+      final decoded = jsonDecode(content);
+      if (decoded is! Map) return const _RetrievalTimeContract();
+      final map = decoded.cast<String, dynamic>();
+      return _RetrievalTimeContract(
+        defaultScope:
+            (map['defaultScope'] as String?)?.trim().isNotEmpty == true
+            ? (map['defaultScope'] as String).trim()
+            : 'last_30d',
+        defaultFreshnessHoursMax:
+            (map['defaultFreshnessHoursMax'] as num?)?.toInt() ?? 72,
+        supportedScopes:
+            (map['supportedScopes'] as List?)
+                ?.whereType<String>()
+                .map((item) => item.trim())
+                .where((item) => item.isNotEmpty)
+                .toList(growable: false) ??
+            const <String>[
+              'latest',
+              'today',
+              'last_7d',
+              'last_30d',
+              'last_1y',
+              'year_to_date',
+              'year',
+              'year_month',
+              'year_month_day',
+              'custom',
+              'unspecified',
+            ],
+        windowHoursByScope: _toIntMap(map['windowHoursByScope']),
+        freshnessHoursMaxByScope: _toIntMap(map['freshnessHoursMaxByScope']),
+      );
+    } catch (_) {
+      return const _RetrievalTimeContract();
+    }
+  }
+
+  Future<_DomainRetrievalPolicy> _loadDomainRetrievalPolicy(
+    String domainId,
+  ) async {
+    if (domainId.trim().isEmpty) return const _DomainRetrievalPolicy();
+    final path =
+        'assets/personal_assistant/skills/$domainId/config/retrieval_policy.json';
+    try {
+      final content = await _loadText(path);
+      final decoded = jsonDecode(content);
+      if (decoded is! Map) return const _DomainRetrievalPolicy();
+      final map = decoded.cast<String, dynamic>();
+      return _DomainRetrievalPolicy(
+        defaultTimeScope: (map['defaultTimeScope'] as String?)?.trim() ?? '',
+        allowedTimeScopes:
+            (map['allowedTimeScopes'] as List?)
+                ?.whereType<String>()
+                .map((item) => item.trim())
+                .where((item) => item.isNotEmpty)
+                .toList(growable: false) ??
+            const <String>[],
+        authorityDomains:
+            (map['authorityDomains'] as List?)
+                ?.whereType<String>()
+                .map((item) => item.trim().toLowerCase())
+                .where((item) => item.isNotEmpty)
+                .toList(growable: false) ??
+            const <String>[],
+        contextConstraints:
+            (map['contextConstraints'] as List?)
+                ?.whereType<String>()
+                .map((item) => item.trim())
+                .where((item) => item.isNotEmpty)
+                .toList(growable: false) ??
+            const <String>[],
+      );
+    } catch (_) {
+      return const _DomainRetrievalPolicy();
+    }
+  }
+
+  Map<String, int> _toIntMap(dynamic raw) {
+    if (raw is! Map) return const <String, int>{};
+    final out = <String, int>{};
+    for (final entry in raw.entries) {
+      final key = entry.key.toString().trim();
+      final value = (entry.value as num?)?.toInt();
+      if (key.isEmpty || value == null) continue;
+      out[key] = value;
+    }
+    return out;
+  }
+
+  Future<String> _loadText(String path) async {
+    try {
+      return await rootBundle.loadString(path);
+    } catch (_) {
+      final file = File(path);
+      if (await file.exists()) {
+        return await file.readAsString();
+      }
+      rethrow;
     }
   }
 
@@ -259,6 +858,12 @@ class WebSearchTool implements AssistantTool {
         sessionId: sessionId,
         runId: runId,
         traceId: traceId,
+        correlationId: runId,
+        sourceDomain: 'assistant',
+        sourceService: 'quwoquan_app',
+        component: 'search_tool',
+        target: 'search_provider',
+        action: 'execute_tool',
       ),
       payload: entry,
       summaryPayload: <String, dynamic>{
@@ -308,19 +913,22 @@ class WebSearchTool implements AssistantTool {
 
   List<Map<String, dynamic>> _extractBraveReferences(dynamic decoded) {
     if (decoded is! Map) return const <Map<String, dynamic>>[];
-    final results = ((decoded['web'] as Map?)?['results'] as List?)
+    final results =
+        ((decoded['web'] as Map?)?['results'] as List?)
             ?.whereType<Map>()
             .map((item) => item.cast<String, dynamic>())
             .toList(growable: false) ??
         const <Map<String, dynamic>>[];
     return results
         .take(12)
-        .map((item) => <String, dynamic>{
-              'title': (item['title'] as String?)?.trim() ?? '',
-              'url': (item['url'] as String?)?.trim() ?? '',
-              'snippet': (item['description'] as String?)?.trim() ?? '',
-              'provider': AssistantSearchProvider.brave.name,
-            })
+        .map(
+          (item) => <String, dynamic>{
+            'title': (item['title'] as String?)?.trim() ?? '',
+            'url': (item['url'] as String?)?.trim() ?? '',
+            'snippet': (item['description'] as String?)?.trim() ?? '',
+            'provider': AssistantSearchProvider.brave.name,
+          },
+        )
         .where((item) => (item['url'] as String).isNotEmpty)
         .toList(growable: false);
   }
@@ -328,7 +936,8 @@ class WebSearchTool implements AssistantTool {
   List<Map<String, dynamic>> _extractDuckduckgoReferences(dynamic decoded) {
     if (decoded is! Map) return const <Map<String, dynamic>>[];
     final refs = <Map<String, dynamic>>[];
-    final related = (decoded['RelatedTopics'] as List?)
+    final related =
+        (decoded['RelatedTopics'] as List?)
             ?.whereType<Map>()
             .map((item) => item.cast<String, dynamic>())
             .toList(growable: false) ??
@@ -344,7 +953,8 @@ class WebSearchTool implements AssistantTool {
           'provider': AssistantSearchProvider.duckduckgo.name,
         });
       }
-      final topics = (item['Topics'] as List?)
+      final topics =
+          (item['Topics'] as List?)
               ?.whereType<Map>()
               .map((entry) => entry.cast<String, dynamic>())
               .toList(growable: false) ??
@@ -366,7 +976,8 @@ class WebSearchTool implements AssistantTool {
 
   List<Map<String, dynamic>> _extractPerplexityReferences(dynamic decoded) {
     if (decoded is! Map) return const <Map<String, dynamic>>[];
-    final citations = (decoded['citations'] as List?)
+    final citations =
+        (decoded['citations'] as List?)
             ?.whereType<String>()
             .map((item) => item.trim())
             .where((item) => item.isNotEmpty)
@@ -374,49 +985,57 @@ class WebSearchTool implements AssistantTool {
         const <String>[];
     return citations
         .take(12)
-        .map((url) => <String, dynamic>{
-              'title': url,
-              'url': url,
-              'snippet': '',
-              'provider': AssistantSearchProvider.perplexity.name,
-            })
+        .map(
+          (url) => <String, dynamic>{
+            'title': url,
+            'url': url,
+            'snippet': '',
+            'provider': AssistantSearchProvider.perplexity.name,
+          },
+        )
         .toList(growable: false);
   }
 
   List<Map<String, dynamic>> _extractSerpApiReferences(dynamic decoded) {
     if (decoded is! Map) return const <Map<String, dynamic>>[];
-    final organic = (decoded['organic_results'] as List?)
+    final organic =
+        (decoded['organic_results'] as List?)
             ?.whereType<Map>()
             .map((item) => item.cast<String, dynamic>())
             .toList(growable: false) ??
         const <Map<String, dynamic>>[];
     return organic
         .take(12)
-        .map((item) => <String, dynamic>{
-              'title': (item['title'] as String?)?.trim() ?? '',
-              'url': (item['link'] as String?)?.trim() ?? '',
-              'snippet': (item['snippet'] as String?)?.trim() ?? '',
-              'provider': AssistantSearchProvider.serpapi.name,
-            })
+        .map(
+          (item) => <String, dynamic>{
+            'title': (item['title'] as String?)?.trim() ?? '',
+            'url': (item['link'] as String?)?.trim() ?? '',
+            'snippet': (item['snippet'] as String?)?.trim() ?? '',
+            'provider': AssistantSearchProvider.serpapi.name,
+          },
+        )
         .where((item) => (item['url'] as String).isNotEmpty)
         .toList(growable: false);
   }
 
   List<Map<String, dynamic>> _extractOpenclawReferences(dynamic decoded) {
     if (decoded is! Map) return const <Map<String, dynamic>>[];
-    final rawRefs = (decoded['references'] as List?)
+    final rawRefs =
+        (decoded['references'] as List?)
             ?.whereType<Map>()
             .map((item) => item.cast<String, dynamic>())
             .toList(growable: false) ??
         const <Map<String, dynamic>>[];
     return rawRefs
         .take(12)
-        .map((item) => <String, dynamic>{
-              'title': (item['title'] as String?)?.trim() ?? '',
-              'url': (item['url'] as String?)?.trim() ?? '',
-              'snippet': (item['snippet'] as String?)?.trim() ?? '',
-              'provider': AssistantSearchProvider.openclawProxy.name,
-            })
+        .map(
+          (item) => <String, dynamic>{
+            'title': (item['title'] as String?)?.trim() ?? '',
+            'url': (item['url'] as String?)?.trim() ?? '',
+            'snippet': (item['snippet'] as String?)?.trim() ?? '',
+            'provider': AssistantSearchProvider.openclawProxy.name,
+          },
+        )
         .where((item) => (item['url'] as String).isNotEmpty)
         .toList(growable: false);
   }
@@ -540,7 +1159,7 @@ class WebSearchTool implements AssistantTool {
     return input.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
-  String _truncate(String input, {int maxChars = 220}) {
+  String _truncate(String input, {int maxChars = 1200}) {
     if (input.length <= maxChars) return input;
     return '${input.substring(0, maxChars)}...';
   }
@@ -1088,78 +1707,7 @@ class WebSearchTool implements AssistantTool {
         continue;
       }
     }
-    if (!_looksLikeWeatherQuery(query)) return null;
-    final weather = await _queryPublicWeather(query);
-    if (weather == null || weather.summary.trim().isEmpty) return null;
-    return weather;
-  }
-
-  bool _looksLikeWeatherQuery(String query) {
-    final lowered = query.toLowerCase();
-    return lowered.contains('天气') ||
-        lowered.contains('气温') ||
-        lowered.contains('降雨') ||
-        lowered.contains('预报') ||
-        lowered.contains('temperature') ||
-        lowered.contains('weather');
-  }
-
-  Future<_BackupSearchResult?> _queryPublicWeather(String query) async {
-    final city = _extractCityName(query);
-    if (city.isEmpty) return null;
-    try {
-      final url = Uri.parse('https://wttr.in/$city').replace(
-        queryParameters: <String, String>{'format': 'j1', 'lang': 'zh'},
-      );
-      final response = await http.get(url).timeout(_networkTimeout);
-      if (response.statusCode >= 400) return null;
-      final decoded = jsonDecode(response.body);
-      if (decoded is! Map) return null;
-      final current = (decoded['current_condition'] as List?)?.firstOrNull;
-      if (current is! Map) return null;
-      final tempC = (current['temp_C'] as String?)?.trim() ?? '';
-      final feelsLike = (current['FeelsLikeC'] as String?)?.trim() ?? '';
-      final weatherList = current['lang_zh'] as List?;
-      String weatherDesc = '';
-      if (weatherList is List && weatherList.isNotEmpty) {
-        final first = weatherList.first;
-        if (first is Map) {
-          weatherDesc = (first['value'] as String?)?.trim() ?? '';
-        }
-      }
-      final humidity = (current['humidity'] as String?)?.trim() ?? '';
-      final summary = _compressWhitespace(
-        '$city 当前天气${weatherDesc.isEmpty ? "" : "：$weatherDesc"}'
-        '${tempC.isEmpty ? "" : "，气温 $tempC°C"}'
-        '${feelsLike.isEmpty ? "" : "，体感 $feelsLike°C"}'
-        '${humidity.isEmpty ? "" : "，湿度 $humidity%"}',
-      );
-      if (summary.isEmpty) return null;
-      return _BackupSearchResult(
-        providerLabel: 'public_weather_wttr',
-        summary: summary,
-        raw: decoded,
-      );
-    } catch (_) {
-      return null;
-    }
-  }
-
-  String _extractCityName(String query) {
-    final text = query.trim();
-    final cityWithSuffix = RegExp(
-      r'([\u4e00-\u9fa5]{2,8}(?:市|区|县))',
-    ).firstMatch(text)?.group(1);
-    if (cityWithSuffix != null && cityWithSuffix.trim().isNotEmpty) {
-      return cityWithSuffix.trim();
-    }
-    final citySimple = RegExp(
-      r'([\u4e00-\u9fa5]{2,6})天气',
-    ).firstMatch(text)?.group(1);
-    if (citySimple != null && citySimple.trim().isNotEmpty) {
-      return citySimple.trim();
-    }
-    return '';
+    return null;
   }
 }
 
@@ -1261,4 +1809,109 @@ class _WebSearchProfile {
       serpApiKeyRaw.isNotEmpty ||
       perplexityBaseUrl.isNotEmpty ||
       perplexityModel.isNotEmpty;
+}
+
+class _SearchTimeConstraint {
+  const _SearchTimeConstraint({
+    required this.scope,
+    required this.start,
+    required this.end,
+    required this.freshnessHoursMax,
+  });
+
+  final String scope;
+  final DateTime start;
+  final DateTime end;
+  final int freshnessHoursMax;
+
+  bool get isRealtimeLike =>
+      scope == 'latest' || scope == 'today' || scope == 'last_7d';
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'scope': scope,
+      'timeRangeStart': start.toIso8601String(),
+      'timeRangeEnd': end.toIso8601String(),
+      'freshnessHoursMax': freshnessHoursMax,
+    };
+  }
+}
+
+class _ResolvedTimeRange {
+  const _ResolvedTimeRange({required this.start, required this.end});
+
+  final DateTime start;
+  final DateTime end;
+}
+
+class _RetrievalTimeContract {
+  const _RetrievalTimeContract({
+    this.defaultScope = 'last_30d',
+    this.defaultFreshnessHoursMax = 72,
+    this.supportedScopes = const <String>[
+      'latest',
+      'today',
+      'last_7d',
+      'last_30d',
+      'last_1y',
+      'year_to_date',
+      'year',
+      'year_month',
+      'year_month_day',
+      'custom',
+      'unspecified',
+    ],
+    this.windowHoursByScope = const <String, int>{
+      'latest': 24,
+      'last_7d': 24 * 7,
+      'last_30d': 24 * 30,
+      'last_1y': 24 * 365,
+    },
+    this.freshnessHoursMaxByScope = const <String, int>{
+      'latest': 6,
+      'today': 12,
+      'last_7d': 72,
+      'last_30d': 24 * 30,
+      'last_1y': 24 * 365,
+      'year_to_date': 24 * 180,
+      'year': 24 * 365 * 5,
+      'year_month': 24 * 365 * 3,
+      'year_month_day': 24 * 365 * 2,
+    },
+  });
+
+  final String defaultScope;
+  final int defaultFreshnessHoursMax;
+  final List<String> supportedScopes;
+  final Map<String, int> windowHoursByScope;
+  final Map<String, int> freshnessHoursMaxByScope;
+}
+
+class _DomainRetrievalPolicy {
+  const _DomainRetrievalPolicy({
+    this.defaultTimeScope = '',
+    this.allowedTimeScopes = const <String>[],
+    this.authorityDomains = const <String>[],
+    this.contextConstraints = const <String>[],
+  });
+
+  final String defaultTimeScope;
+  final List<String> allowedTimeScopes;
+  final List<String> authorityDomains;
+  final List<String> contextConstraints;
+}
+
+class _CalendarPointRange {
+  const _CalendarPointRange({required this.scope, required this.range});
+
+  final String scope;
+  final _ResolvedTimeRange range;
+}
+
+class _CalendarPoint {
+  const _CalendarPoint({this.year, this.month, this.day});
+
+  final int? year;
+  final int? month;
+  final int? day;
 }

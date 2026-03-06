@@ -7,7 +7,12 @@
     "defaults": {
       "model": {
         "primary": "mimo/mimo-v2-flash",
-        "fallbacks": []
+        "fallbacks": [
+          "modelscope/MiniMax/MiniMax-M2.5",
+          "modelscope/ZhipuAI/GLM-5",
+          "modelscope/deepseek-ai/DeepSeek-V3.2",
+          "modelscope/fabaogege/nss-qianwen3-0_6B-334"
+        ]
       }
     }
   },
@@ -16,12 +21,35 @@
     "providers": {
       "mimo": {
         "baseUrl": "https://api.xiaomimimo.com/v1",
-        "apiKey": "${MIMO_API_KEY}",
+        "apiKey": "${PERSONAL_ASSISTANT_MIMO_API_KEY}",
         "api": "openai-completions",
         "models": [
           {
             "id": "mimo-v2-flash",
             "name": "MiMo V2 Flash"
+          }
+        ]
+      },
+      "modelscope": {
+        "baseUrl": "https://api-inference.modelscope.cn/v1",
+        "apiKey": "ms-118b9aa1-ff84-4e6a-925a-aa8bc439ef81",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "MiniMax/MiniMax-M2.5",
+            "name": "MiniMax M2.5"
+          },
+          {
+            "id": "ZhipuAI/GLM-5",
+            "name": "GLM-5"
+          },
+          {
+            "id": "deepseek-ai/DeepSeek-V3.2",
+            "name": "DeepSeek-V3.2"
+          },
+          {
+            "id": "fabaogege/nss-qianwen3-0_6B-334",
+            "name": "nss-qianwen3-0_6B-334"
           }
         ]
       }

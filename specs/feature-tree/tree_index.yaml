@@ -240,6 +240,14 @@ features:
                       domain: ""
                       status: specified
                       tags: []
+        - id: world-class-trinity-experience-baseline
+          name: world-class-trinity-experience-baseline
+          level: L2_feature
+          path: ../specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline
+          domain: ""
+          status: specified
+          tags: [assistant, content, social, markdown, ux]
+          children: []
     - id: chat-conversation
       name: chat-conversation
       level: L1_domain

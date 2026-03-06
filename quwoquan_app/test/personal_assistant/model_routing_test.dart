@@ -31,6 +31,15 @@ void main() {
       expect(provider.switchModel('p/m2'), isTrue);
       expect(provider.activeModelRef, equals('p/m2'));
       expect(provider.switchModel('not-exist'), isFalse);
+      expect(
+        provider.setSelectedModels(const <String>['p/m1', 'p/m2']),
+        isTrue,
+      );
+      expect(
+        provider.selectedModelRefs,
+        equals(const <String>['p/m1', 'p/m2']),
+      );
+      expect(provider.setSelectedModels(const <String>['not-exist']), isFalse);
     });
 
     test('falls back to local strategy when no config exists', () async {

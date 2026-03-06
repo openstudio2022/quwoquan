@@ -1,9 +1,0 @@
-{
-  "templateId": "domain.family_parenting.plan",
-  "version": "2026.02.18",
-  "stage": "plan",
-  "domainId": "family_parenting",
-  "requiredVariables": ["userQuery", "contextEnvelope", "userProfileSnapshot", "historicalRetrievalFeedback", "domainLearningSignals"],
-  "outputContract": "domain_plan_v2026_02_18",
-  "selfCheckRules": ["coverage", "slot_completeness", "safety_boundary", "disclaimer_satisfied", "child_safety_first", "family_diversity_respected"]
-}

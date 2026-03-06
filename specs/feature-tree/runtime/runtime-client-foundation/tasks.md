@@ -15,5 +15,5 @@
 ## 未来演进任务
 
 - 英文翻译填充（`app_en.arb` TODO 占位 → 真实翻译）：接入翻译流程后批量填充
-- `lib/features/`、`lib/components/` 中硬编码中文字符串迁移：按功能域逐步展开
+- `lib/ui/`、`lib/components/` 中硬编码中文字符串迁移：按功能域逐步展开
 - `verify_dart_semantic.py` 扩展 CJK 字面量永久卡点：与 lint 脚本同步提交（由 dart-semantic-gate 子节点落地）

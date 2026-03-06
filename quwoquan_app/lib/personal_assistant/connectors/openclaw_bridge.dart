@@ -2,14 +2,54 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/personal_assistant/app/assistant_gateway.dart';
+import 'package:quwoquan_app/personal_assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/run_response.dart';
 
-class OpenClawBridge {
-  OpenClawBridge({
-    required this.baseUrl,
-    this.authToken,
+enum OpenClawRemoteStreamEventType { chunk, trace, completed, failed }
+
+class OpenClawRemoteStreamEvent {
+  const OpenClawRemoteStreamEvent._({
+    required this.type,
+    this.chunkText,
+    this.trace,
+    this.response,
+    this.errorMessage,
   });
+
+  factory OpenClawRemoteStreamEvent.chunk(String chunkText) =>
+      OpenClawRemoteStreamEvent._(
+        type: OpenClawRemoteStreamEventType.chunk,
+        chunkText: chunkText,
+      );
+
+  factory OpenClawRemoteStreamEvent.trace(AssistantTraceEvent trace) =>
+      OpenClawRemoteStreamEvent._(
+        type: OpenClawRemoteStreamEventType.trace,
+        trace: trace,
+      );
+
+  factory OpenClawRemoteStreamEvent.completed(AssistantRunResponse response) =>
+      OpenClawRemoteStreamEvent._(
+        type: OpenClawRemoteStreamEventType.completed,
+        response: response,
+      );
+
+  factory OpenClawRemoteStreamEvent.failed(String errorMessage) =>
+      OpenClawRemoteStreamEvent._(
+        type: OpenClawRemoteStreamEventType.failed,
+        errorMessage: errorMessage,
+      );
+
+  final OpenClawRemoteStreamEventType type;
+  final String? chunkText;
+  final AssistantTraceEvent? trace;
+  final AssistantRunResponse? response;
+  final String? errorMessage;
+}
+
+class OpenClawBridge {
+  OpenClawBridge({required this.baseUrl, this.authToken});
 
   final String baseUrl;
   final String? authToken;
@@ -22,9 +62,7 @@ class OpenClawBridge {
   }
 
   Map<String, String> _headers() {
-    final headers = <String, String>{
-      'Content-Type': 'application/json',
-    };
+    final headers = <String, String>{'Content-Type': 'application/json'};
     final token = authToken?.trim() ?? '';
     if (token.isNotEmpty) {
       headers['Authorization'] = 'Bearer $token';
@@ -39,7 +77,9 @@ class OpenClawBridge {
         Uri.parse('$baseUrl/v1/run'),
         headers: _headers(),
         body: jsonEncode(<String, dynamic>{
-          'messages': request.messages.map((m) => m.toJson()).toList(growable: false),
+          'messages': request.messages
+              .map((m) => m.toJson())
+              .toList(growable: false),
           'sessionId': request.sessionId,
           'userId': request.userId,
           'deviceProfile': request.deviceProfile,
@@ -87,6 +127,69 @@ class OpenClawBridge {
     }
   }
 
+  Stream<OpenClawRemoteStreamEvent> runRemoteStream(
+    AssistantRunRequest request,
+  ) async* {
+    if (baseUrl.isEmpty) return;
+    final client = http.Client();
+    try {
+      final req = http.Request('POST', Uri.parse('$baseUrl/v1/run/stream'))
+        ..headers.addAll(_headers())
+        ..body = jsonEncode(<String, dynamic>{
+          'messages': request.messages
+              .map((m) => m.toJson())
+              .toList(growable: false),
+          'sessionId': request.sessionId,
+          'userId': request.userId,
+          'deviceProfile': request.deviceProfile,
+          'channel': request.channel,
+          'traceId': request.traceId,
+          'capabilityCatalog': request.capabilityCatalog,
+          'contextScopeHint': request.contextScopeHint,
+          'privacyProfile': request.privacyProfile,
+          'privacyPolicy': request.privacyPolicy,
+        });
+      final response = await client.send(req);
+      if (response.statusCode >= 400) {
+        final reason = _extractErrorMessage(
+          await response.stream.bytesToString(),
+        );
+        yield OpenClawRemoteStreamEvent.failed(
+          'remote stream failed: HTTP ${response.statusCode}${reason.isEmpty ? '' : ' - $reason'}',
+        );
+        return;
+      }
+
+      final buffer = StringBuffer();
+      await for (final piece in response.stream.transform(utf8.decoder)) {
+        buffer.write(piece);
+        var current = buffer.toString();
+        var splitIndex = current.indexOf('\n\n');
+        while (splitIndex >= 0) {
+          final frame = current.substring(0, splitIndex);
+          current = current.substring(splitIndex + 2);
+          final event = _parseSseFrame(frame);
+          if (event != null) {
+            yield event;
+          }
+          splitIndex = current.indexOf('\n\n');
+        }
+        buffer
+          ..clear()
+          ..write(current);
+      }
+      final tail = buffer.toString().trim();
+      if (tail.isNotEmpty) {
+        final event = _parseSseFrame(tail);
+        if (event != null) yield event;
+      }
+    } catch (e) {
+      yield OpenClawRemoteStreamEvent.failed('remote stream exception: $e');
+    } finally {
+      client.close();
+    }
+  }
+
   Future<Map<String, dynamic>?> invokeSkillRemote({
     required String skillId,
     required Map<String, dynamic> arguments,
@@ -131,6 +234,68 @@ class OpenClawBridge {
     return '${trimmed.substring(0, 160)}...';
   }
 
+  OpenClawRemoteStreamEvent? _parseSseFrame(String frame) {
+    if (frame.trim().isEmpty) return null;
+    var eventName = '';
+    final dataLines = <String>[];
+    for (final rawLine in frame.split('\n')) {
+      final line = rawLine.trimRight();
+      if (line.startsWith('event:')) {
+        eventName = line.substring('event:'.length).trim();
+      } else if (line.startsWith('data:')) {
+        dataLines.add(line.substring('data:'.length).trim());
+      }
+    }
+    if (dataLines.isEmpty) return null;
+    final payloadRaw = dataLines.join('\n');
+    final decoded = _tryDecodeMap(payloadRaw);
+
+    if (eventName == 'trace') {
+      if (decoded != null) {
+        return OpenClawRemoteStreamEvent.trace(
+          AssistantTraceEvent.fromJson(decoded),
+        );
+      }
+      return null;
+    }
+    if (eventName == 'chunk' || eventName == 'delta' || eventName == 'token') {
+      if (decoded != null) {
+        final chunk = (decoded['chunk'] as String?)?.trim().isNotEmpty == true
+            ? (decoded['chunk'] as String)
+            : ((decoded['text'] as String?) ?? '');
+        if (chunk.isNotEmpty) return OpenClawRemoteStreamEvent.chunk(chunk);
+      }
+      return OpenClawRemoteStreamEvent.chunk(payloadRaw);
+    }
+    if (eventName == 'final' || eventName == 'completed') {
+      if (decoded != null) {
+        return OpenClawRemoteStreamEvent.completed(
+          AssistantRunResponse.fromJson(decoded),
+        );
+      }
+      return OpenClawRemoteStreamEvent.completed(
+        AssistantRunResponse(finalText: payloadRaw, traces: const []),
+      );
+    }
+    if (decoded != null && decoded.containsKey('finalText')) {
+      return OpenClawRemoteStreamEvent.completed(
+        AssistantRunResponse.fromJson(decoded),
+      );
+    }
+    return null;
+  }
+
+  Map<String, dynamic>? _tryDecodeMap(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) return decoded.cast<String, dynamic>();
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<Map<String, dynamic>> invokeSkillLocally({
     required String skillId,
     required Map<String, dynamic> arguments,
@@ -165,9 +330,7 @@ class OpenClawBridge {
       skillId: 'web.quick_search',
       arguments: <String, dynamic>{
         'toolName': 'web_search',
-        'toolArgs': <String, dynamic>{
-          'query': trimmed,
-        },
+        'toolArgs': <String, dynamic>{'query': trimmed},
       },
     );
     if (result == null) {

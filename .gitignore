@@ -47,3 +47,6 @@ target/
 logs/
 *.log
 
+# Assistant reference implementations (synced from upstream, do not commit)
+assistant_ref/
+

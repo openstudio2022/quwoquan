@@ -21,7 +21,7 @@
 - 生成补查建议或放行结论。
 
 ## 输出格式
-输出契约：`web_evidence_pack_v2026_02_18`
+输出 JSON，必须包含：`coverage`、`confidence`、`freshnessHours`、`facts`、`gaps`、`eligible`。
 
 ## 反思与自检
 - 阈值判定是否准确？  

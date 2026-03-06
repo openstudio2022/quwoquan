@@ -17,9 +17,10 @@ void main() {
 
     setUp(() async {
       tempRoot = await Directory.systemTemp.createTemp('quwoquan_log_test_');
+      // 使用当前日期，避免 keepDays 剪枝删除测试写入的文件
       testPaths = _TestAppLogPaths(
         rootPath: '${tempRoot.path}/quwoquan_logs',
-        day: DateTime(2026, 2, 18, 12, 0, 0),
+        day: DateTime.now(),
       );
       service = AppLogService.forTesting(
         writer: AppLogWriter(paths: testPaths, keepDays: 7),
@@ -122,7 +123,7 @@ void main() {
 
     test('导出结果包含路径、run 数量与时间范围摘要', () async {
       final root = await testPaths.rootDirectory();
-      final dayDir = Directory('${root.path}/2026-02-18');
+      final dayDir = await testPaths.dayDirectory(DateTime.now());
       final agentDir = Directory('${dayDir.path}/agent');
       final integrationDir = Directory('${dayDir.path}/integrations');
       agentDir.createSync(recursive: true);
@@ -208,7 +209,9 @@ void main() {
       );
 
       final root = await testPaths.rootDirectory();
-      const today = '2026-02-18';
+      final now = DateTime.now();
+      final today =
+          '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
       final runFile = File('${root.path}/$today/agent/run_$runId.json');
       final llmLogFile = File('${root.path}/$today/integrations/llm.jsonl');
       final searchLogFile = File(

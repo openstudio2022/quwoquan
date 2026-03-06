@@ -1,0 +1,28 @@
+{
+  "contractVersion": "retrieval_policy_v1",
+  "domainId": "health_wellness",
+  "allowedTimeScopes": [
+    "latest",
+    "today",
+    "last_7d",
+    "last_30d",
+    "last_1y",
+    "custom",
+    "year",
+    "year_month",
+    "year_month_day"
+  ],
+  "defaultTimeScope": "last_30d",
+  "authorityRequired": true,
+  "authorityDomains": [
+    "who.int",
+    "nhc.gov.cn",
+    "cdc.gov",
+    "nih.gov"
+  ],
+  "contextConstraints": [
+    "临床指南",
+    "循证",
+    "适用人群"
+  ]
+}

@@ -377,15 +377,34 @@ class AssistantModelConfigLoader {
     final envMatch = RegExp(r'^\$\{([A-Z0-9_]+)\}$').firstMatch(raw);
     if (envMatch == null) return raw;
     final envName = envMatch.group(1)!;
-    final fromDefines = _resolveFromDartDefines(envName);
+    final aliases = _envAliasesFor(envName);
+    String fromDefines = '';
+    for (final name in aliases) {
+      fromDefines = _resolveFromDartDefines(name);
+      if (fromDefines.isNotEmpty) break;
+    }
     if (fromDefines.isNotEmpty) return fromDefines;
-    final fromProcessEnv = (Platform.environment[envName] ?? '').trim();
-    if (fromProcessEnv.isNotEmpty) return fromProcessEnv;
-    final fromDotEnv = (dotenv[envName] ?? '').trim();
-    if (fromDotEnv.isNotEmpty) return fromDotEnv;
+    for (final name in aliases) {
+      final fromProcessEnv = (Platform.environment[name] ?? '').trim();
+      if (fromProcessEnv.isNotEmpty) return fromProcessEnv;
+    }
+    for (final name in aliases) {
+      final fromDotEnv = (dotenv[name] ?? '').trim();
+      if (fromDotEnv.isNotEmpty) return fromDotEnv;
+    }
     final fromMoltbotConfig = _resolveFromMoltbotConfig(envName);
     if (fromMoltbotConfig.isNotEmpty) return fromMoltbotConfig;
     return '';
+  }
+
+  List<String> _envAliasesFor(String envName) {
+    if (envName == 'MIMO_API_KEY') {
+      return const <String>['MIMO_API_KEY', 'PERSONAL_ASSISTANT_MIMO_API_KEY'];
+    }
+    if (envName == 'PERSONAL_ASSISTANT_MIMO_API_KEY') {
+      return const <String>['PERSONAL_ASSISTANT_MIMO_API_KEY', 'MIMO_API_KEY'];
+    }
+    return <String>[envName];
   }
 
   Map<String, String> _readSharedDotEnvsSync() {
@@ -450,7 +469,9 @@ class AssistantModelConfigLoader {
     final sharedEnv = _readSharedDotEnvsSync();
     final mimoApiKey =
         (Platform.environment['MIMO_API_KEY'] ??
+                Platform.environment['PERSONAL_ASSISTANT_MIMO_API_KEY'] ??
                 sharedEnv['MIMO_API_KEY'] ??
+                sharedEnv['PERSONAL_ASSISTANT_MIMO_API_KEY'] ??
                 '')
             .trim();
     final resolvedApiKey = mimoApiKey.isNotEmpty
@@ -518,6 +539,8 @@ class AssistantModelConfigLoader {
     switch (envName) {
       case 'MIMO_API_KEY':
         return const String.fromEnvironment('MIMO_API_KEY');
+      case 'PERSONAL_ASSISTANT_MIMO_API_KEY':
+        return const String.fromEnvironment('PERSONAL_ASSISTANT_MIMO_API_KEY');
       case 'OPENAI_API_KEY':
         return const String.fromEnvironment('OPENAI_API_KEY');
       case 'PERSONAL_ASSISTANT_MODEL_API_KEY':

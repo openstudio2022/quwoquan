@@ -1,0 +1,23 @@
+{
+  "suiteId": "calendar_task.state_transition_suite",
+  "cases": [
+    {
+      "caseId": "case_intent_to_slot",
+      "from": "S0_意图识别",
+      "event": "E_意图命中",
+      "expectTo": "S1_槽位补全"
+    },
+    {
+      "caseId": "case_slot_to_tool",
+      "from": "S1_槽位补全",
+      "event": "E_槽位已就绪",
+      "expectTo": "S2_工具执行"
+    },
+    {
+      "caseId": "case_tool_to_render",
+      "from": "S2_工具执行",
+      "event": "E_工具成功",
+      "expectTo": "S3_结果渲染"
+    }
+  ]
+}

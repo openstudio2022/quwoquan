@@ -60,5 +60,5 @@ Widget 中使用：`context.l10n.allCommentsCount(_commentsCount)`
 ## 未来演进
 
 - 英文翻译：`app_en.arb` TODO 占位全部填充后，切换 `main.dart` 默认 locale 测试
-- `lib/features/` + `lib/components/` 迁移：按需在各域 tasks.md 中追加任务
+- `lib/ui/` + `lib/components/` 迁移：按需在各域 tasks.md 中追加任务
 - 非 widget 上下文 locale 感知：通过 `LocaleProvider` (Riverpod) 在 StateNotifier 中获取 locale，替换 `UITextConstants` 的剩余用途

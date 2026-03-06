@@ -8,6 +8,50 @@ enum AssistantTraceEventType {
   skillStart,
   skillResult,
   skillError,
+  subagentStart,
+  subagentResult,
+  subagentError,
+  /// Real-time streaming token delta from synthesis LLM (SSE).
+  streamDelta,
+
+  // v2 semantic event types for granular UI rendering
+  planStarted,
+  planCompleted,
+  searchQueryGenerated,
+  searchStarted,
+  searchCompleted,
+  thinkingStarted,
+  thinkingProgress,
+  answerStarted,
+  answerDelta,
+  answerCompleted,
+  replanTriggered,
+  selfCheckResult,
+}
+
+/// User-facing phase events, decoupled from internal trace types.
+/// Used by the event translation layer (capability_gateway) and UI rendering.
+enum UserPhaseEventType {
+  // Fixed phases
+  understandingStarted,
+  understandingThinking,
+  analyzingStarted,
+  analyzingThinking,
+  answeringStarted,
+  answeringDelta,
+  answeringCompleted,
+
+  // Generic tool phases (tool-agnostic, specific labels from metadata)
+  toolReasoningStarted,
+  toolReasoningThinking,
+  toolExecutionStarted,
+  toolExecutionProgress,
+  toolExecutionCompleted,
+
+  // Assessment phase (post-tool evaluation)
+  toolAssessmentStarted,
+  toolAssessmentResult,
+  loopDegraded,
 }
 
 AssistantTraceEventType parseAssistantTraceEventType(String raw) {
@@ -51,9 +95,12 @@ class AssistantTraceEvent {
   factory AssistantTraceEvent.fromJson(Map<String, dynamic> json) {
     final ts = (json['timestamp'] as String?)?.trim() ?? '';
     return AssistantTraceEvent(
-      type: parseAssistantTraceEventType((json['type'] as String?)?.trim() ?? ''),
+      type: parseAssistantTraceEventType(
+        (json['type'] as String?)?.trim() ?? '',
+      ),
       message: (json['message'] as String?) ?? '',
-      timestamp: DateTime.tryParse(ts) ?? DateTime.fromMillisecondsSinceEpoch(0),
+      timestamp:
+          DateTime.tryParse(ts) ?? DateTime.fromMillisecondsSinceEpoch(0),
       data: (json['data'] as Map?)?.cast<String, dynamic>(),
       runId: json['runId'] as String?,
       traceId: json['traceId'] as String?,

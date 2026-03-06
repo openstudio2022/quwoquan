@@ -4,6 +4,26 @@ import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
 /// 应用间距常量
 /// 根据设计规则文档 (03_DESIGN_RULES.md) 定义
 class AppSpacing {
+  // ==================== 扩展语义尺寸（用于历史页面去字面量） ====================
+  static const double one = 1.0;
+  static const double oneHalf = 1.5;
+  static const double twoPointFour = 2.4;
+  static const double three = 3.0;
+  static const double seven = 7.0;
+  static const double ten = 10.0;
+  static const double fourteen = 14.0;
+  static const double eighteen = 18.0;
+  static const double twenty = 20.0;
+  static const double twentyEight = 28.0;
+  static const double forty = 40.0;
+  static const double oneHundred = 100.0;
+  static const double twoHundredTwenty = 220.0;
+  static const double threeHundredTwenty = 320.0;
+  static const double radiusTen = 10.0;
+  static const double radiusTwenty = 20.0;
+  static const double radiusTwentyEight = 28.0;
+  static const double radiusNinetyNine = 99.0;
+
   // ==================== 响应式断点 ====================
   static const double compactBreakpoint = 360.0;
   static const double expandedBreakpoint = 600.0;

@@ -15,6 +15,10 @@ class PersonalAssistantSkillManifest {
     this.versionPolicy = 'semver',
     this.permissionScopes = const <String>[],
     this.defaultEnabled = false,
+    this.allowedTools = const <String>[],
+    this.triggerKeywords = const <String>[],
+    this.domainId = '',
+    this.skillInstructionMarkdown = '',
   });
 
   final String id;
@@ -32,6 +36,10 @@ class PersonalAssistantSkillManifest {
   final String versionPolicy;
   final List<String> permissionScopes;
   final bool defaultEnabled;
+  final List<String> allowedTools;
+  final List<String> triggerKeywords;
+  final String domainId;
+  final String skillInstructionMarkdown;
 
   factory PersonalAssistantSkillManifest.fromMap(Map<String, dynamic> map) {
     return PersonalAssistantSkillManifest(
@@ -39,31 +47,60 @@ class PersonalAssistantSkillManifest {
       name: (map['name'] as String?)?.trim() ?? '',
       description: (map['description'] as String?)?.trim() ?? '',
       version: (map['version'] as String?)?.trim() ?? '1.0.0',
-      executionTarget: (map['executionTarget'] as String?)?.trim() ?? 'tool_chain',
+      executionTarget:
+          (map['executionTarget'] as String?)?.trim() ?? 'tool_chain',
       parametersSchema: Map<String, dynamic>.from(
         map['parametersSchema'] as Map? ?? const <String, dynamic>{},
       ),
-      permissions: (map['permissions'] as List?)
+      permissions:
+          (map['permissions'] as List?)
               ?.map((e) => e.toString())
               .toList(growable: false) ??
           const <String>[],
       visibility: (map['visibility'] as String?)?.trim() ?? 'app_only',
       category: (map['category'] as String?)?.trim() ?? 'general',
       tier: (map['tier'] as String?)?.trim() ?? 'free',
-      channelScopes: (map['channelScopes'] as List?)
+      channelScopes:
+          (map['channelScopes'] as List?)
               ?.map((e) => e.toString())
               .toList(growable: false) ??
           const <String>['app'],
-      deviceScopes: (map['deviceScopes'] as List?)
+      deviceScopes:
+          (map['deviceScopes'] as List?)
               ?.map((e) => e.toString())
               .toList(growable: false) ??
           const <String>['mobile', 'tablet', 'pc'],
       versionPolicy: (map['versionPolicy'] as String?)?.trim() ?? 'semver',
-      permissionScopes: (map['permissionScopes'] as List?)
+      permissionScopes:
+          (map['permissionScopes'] as List?)
               ?.map((e) => e.toString())
               .toList(growable: false) ??
           const <String>[],
       defaultEnabled: map['defaultEnabled'] == true,
+      allowedTools:
+          (map['allowedTools'] as List?)
+              ?.map((e) => e.toString())
+              .toList(growable: false) ??
+          (map['allowed_tools'] as List?)
+              ?.map((e) => e.toString())
+              .toList(growable: false) ??
+          const <String>[],
+      triggerKeywords:
+          (map['triggerKeywords'] as List?)
+              ?.map((e) => e.toString())
+              .toList(growable: false) ??
+          (map['trigger_keywords'] as List?)
+              ?.map((e) => e.toString())
+              .toList(growable: false) ??
+          const <String>[],
+      domainId:
+          (map['domainId'] as String?)?.trim() ??
+          (map['domain'] as String?)?.trim() ??
+          '',
+      skillInstructionMarkdown:
+          (map['skillInstructionMarkdown'] as String?)?.trim() ??
+          (map['skill_markdown'] as String?)?.trim() ??
+          '',
     );
   }
 

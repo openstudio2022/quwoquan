@@ -55,6 +55,13 @@ void main() {
       expect(structured.containsKey('reasoningBasis'), isTrue);
       expect(structured.containsKey('selfCheck'), isTrue);
       expect(structured.containsKey('diagnostics'), isTrue);
+      expect(structured.containsKey('qualityMetrics'), isTrue);
+      final quality =
+          (structured['qualityMetrics'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      expect(quality.containsKey('decisionParseSuccess'), isTrue);
+      expect(quality.containsKey('renderFallback'), isTrue);
+      expect(quality.containsKey('heuristicFallbackUsed'), isTrue);
     });
   });
 }

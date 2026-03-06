@@ -1,5 +1,23 @@
 {
   "contracts": {
+    "assistant_turn_v3": {
+      "required": ["contractVersion", "decision", "userMarkdown"],
+      "decisionNextActionEnum": [
+        "tool_call",
+        "answer",
+        "ask_user",
+        "retry",
+        "abort"
+      ],
+      "messageKindEnum": [
+        "progress",
+        "answer",
+        "ask_user",
+        "error",
+        "fallback"
+      ],
+      "renderIntentEnum": ["markdown", "plain_text", "none"]
+    },
     "domain_plan_v2026_02_18": {
       "required": [
         "domainId",

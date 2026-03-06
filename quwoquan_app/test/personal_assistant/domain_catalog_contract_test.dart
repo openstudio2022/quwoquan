@@ -5,57 +5,93 @@ import 'package:test/test.dart';
 
 void main() {
   group('Domain catalog contract', () {
-    test('routing catalog domains match template assets', () {
-      final routingCatalog = File(
-        'assets/personal_assistant/prompts/domain_routing/domain_routing_catalog.json',
-      );
-      expect(routingCatalog.existsSync(), isTrue);
-      final routingDecoded = jsonDecode(routingCatalog.readAsStringSync()) as Map;
-      final domains = ((routingDecoded['domains'] as List?) ?? const <dynamic>[])
-          .whereType<Map>()
-          .map((item) => (item['domainId'] as String?)?.trim() ?? '')
-          .where((id) => id.isNotEmpty)
-          .toSet()
-          .toList(growable: false);
-      expect(domains.length, equals(19));
-      expect(domains.contains('social_companion_chat'), isTrue);
-      expect(domains.contains('fallback_general_search'), isTrue);
-
-      for (final domainId in domains) {
-        final domainDir = Directory(
-          'assets/personal_assistant/prompts/domains/$domainId',
+    test(
+      'routing catalog keeps 19 domains and all domains use skill dialogue',
+      () {
+        final routingCatalog = File(
+          'assets/personal_assistant/prompts/domain_routing/domain_routing_catalog.json',
         );
-        expect(domainDir.existsSync(), isTrue, reason: 'missing $domainId dir');
-        for (final stage in const <String>['plan', 'answer']) {
-          final md = File('${
-              domainDir.path}/domain.$domainId.$stage.md');
-          final meta = File('${
-              domainDir.path}/domain.$domainId.$stage.meta.json');
-          expect(md.existsSync(), isTrue, reason: 'missing ${md.path}');
-          expect(meta.existsSync(), isTrue, reason: 'missing ${meta.path}');
-          final content = md.readAsStringSync();
-          expect(content.contains('## 任务背景'), isTrue);
-          expect(content.contains('## 任务目标'), isTrue);
-          expect(content.contains('## 约束'), isTrue);
-          expect(content.contains('## 执行要求'), isTrue);
-          expect(content.contains('=== CONTEXT_DATA_START ==='), isTrue);
-          expect(content.contains('=== CONTEXT_DATA_END ==='), isTrue);
+        expect(routingCatalog.existsSync(), isTrue);
+        final routingDecoded =
+            jsonDecode(routingCatalog.readAsStringSync()) as Map;
+        final domainItems =
+            ((routingDecoded['domains'] as List?) ?? const <dynamic>[])
+                .whereType<Map>()
+                .toList(growable: false);
+        final domains = domainItems
+            .map((item) => (item['domainId'] as String?)?.trim() ?? '')
+            .where((id) => id.isNotEmpty)
+            .toSet()
+            .toList(growable: false);
+        expect(domains.length, equals(19));
+        expect(domains.contains('social_companion_chat'), isTrue);
+        expect(domains.contains('fallback_general_search'), isTrue);
 
-          final metaDecoded = jsonDecode(meta.readAsStringSync()) as Map;
-          expect(metaDecoded['templateId'], equals('domain.$domainId.$stage'));
-          expect(metaDecoded['version'], equals('2026.02.18'));
-          expect(metaDecoded['domainId'], equals(domainId));
-          expect((metaDecoded['requiredVariables'] as List?)?.isNotEmpty, isTrue);
+        for (final item in domainItems) {
+          final domainId = (item['domainId'] as String?)?.trim() ?? '';
+          if (domainId.isEmpty) continue;
+          final dialoguePath = (item['dialoguePath'] as String?)?.trim() ?? '';
           expect(
-            metaDecoded['outputContract'],
-            equals(
-              stage == 'plan'
-                  ? 'domain_plan_v2026_02_18'
-                  : 'domain_answer_v2026_02_18',
-            ),
+            dialoguePath.isNotEmpty,
+            isTrue,
+            reason: '$domainId missing dialoguePath',
           );
+          expect(
+            dialoguePath.startsWith('assets/personal_assistant/skills/'),
+            isTrue,
+            reason: '$domainId must use skills dialogue path',
+          );
+          final suffix = '/dialogue';
+          expect(
+            dialoguePath.endsWith(suffix),
+            isTrue,
+            reason: '$domainId dialoguePath must end with /dialogue',
+          );
+          final skillRoot = dialoguePath.substring(
+            0,
+            dialoguePath.length - suffix.length,
+          );
+          final skillFile = File('$skillRoot/SKILL.md');
+          expect(
+            skillFile.existsSync(),
+            isTrue,
+            reason: 'missing ${skillFile.path}',
+          );
+          for (final rel in const <String>[
+            'dialogue/state_machine.md',
+            'dialogue/state_prompts.md',
+            'dialogue/state_transition_contract.json',
+          ]) {
+            final target = File('$skillRoot/$rel');
+            expect(
+              target.existsSync(),
+              isTrue,
+              reason: 'missing ${target.path}',
+            );
+          }
         }
-      }
+      },
+    );
+
+    test('all domain prompt templates are removed from manifest', () {
+      final manifest = File('assets/personal_assistant/prompts/manifest.json');
+      expect(manifest.existsSync(), isTrue);
+      final decoded = jsonDecode(manifest.readAsStringSync()) as Map;
+      final templates =
+          (decoded['templates'] as List?)?.whereType<Map>().toList() ??
+          const <Map>[];
+      final allMetaPaths = templates
+          .map((item) => (item['metaPath'] as String?)?.trim() ?? '')
+          .where((path) => path.isNotEmpty)
+          .toList(growable: false);
+      expect(
+        allMetaPaths.any(
+          (path) =>
+              path.startsWith('assets/personal_assistant/prompts/domains/'),
+        ),
+        isFalse,
+        reason: 'manifest should not keep legacy domain prompt templates',
+      );
     });
 
     test('routing catalog contains dynamic routing policies', () {
@@ -68,9 +104,10 @@ void main() {
       expect(decoded['fallbackDomainId'], equals('fallback_general_search'));
       final pageTypeFallbacks =
           (decoded['pageTypeFallbacks'] as Map?)?.cast<String, dynamic>() ??
-              const <String, dynamic>{};
+          const <String, dynamic>{};
       expect(pageTypeFallbacks['chat'], equals('social_companion_chat'));
-      final domains = (decoded['domains'] as List?)?.whereType<Map>().toList() ??
+      final domains =
+          (decoded['domains'] as List?)?.whereType<Map>().toList() ??
           const <Map>[];
       expect(domains, isNotEmpty);
       for (final item in domains) {
@@ -79,19 +116,27 @@ void main() {
         expect(item['priority'], isNotNull);
         expect(item['enabled'], isNotNull);
       }
+      final weather = domains.firstWhere(
+        (item) => (item['domainId'] as String?)?.trim() == 'weather',
+        orElse: () => const <String, dynamic>{},
+      );
+      expect(weather.isNotEmpty, isTrue);
+      final weatherKeywords =
+          (weather['intentKeywords'] as List?)
+              ?.whereType<String>()
+              .map((item) => item.trim().toLowerCase())
+              .where((item) => item.isNotEmpty)
+              .toList(growable: false) ??
+          const <String>[];
+      expect(weatherKeywords.contains('tianqi'), isTrue);
+      expect(weatherKeywords.contains('weather'), isTrue);
     });
 
-    test('fallback template enforces online/offline boundary rule', () {
-      final fallbackMeta = File(
-        'assets/personal_assistant/prompts/domains/fallback_general_search/domain.fallback_general_search.answer.meta.json',
+    test('legacy prompt domain directory is removed', () {
+      final legacyDomains = Directory(
+        'assets/personal_assistant/prompts/domains',
       );
-      expect(fallbackMeta.existsSync(), isTrue);
-      final decoded = jsonDecode(fallbackMeta.readAsStringSync()) as Map;
-      final rules =
-          (decoded['selfCheckRules'] as List?)?.whereType<String>().toList() ??
-          const <String>[];
-      expect(rules.contains('online_offline_boundary_defined'), isTrue);
-      expect(rules.contains('offline_boundary_explicit'), isTrue);
+      expect(legacyDomains.existsSync(), isFalse);
     });
   });
 }

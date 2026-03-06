@@ -137,17 +137,10 @@ void main() {
         isTrue,
       );
       expect(
-        response.traces.any((e) => e.type == AssistantTraceEventType.toolStart),
-        isTrue,
-      );
-      expect(
-        response.traces.any((e) => e.type == AssistantTraceEventType.toolResult),
-        isTrue,
-      );
-      expect(
         response.traces.any((e) => e.type == AssistantTraceEventType.lifecycleEnd),
         isTrue,
       );
+      // HeuristicLocalLlmProvider 不生成 tool call，故不检测 toolStart/toolResult
     });
   });
 }

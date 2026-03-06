@@ -55,6 +55,11 @@ class AssistantGateway {
 
   List<String> listAvailableModels() => _runtime.listAvailableModels();
 
+  List<String> selectedModels() => _runtime.selectedModels();
+
+  bool setSelectedModels(List<String> modelRefs) =>
+      _runtime.setSelectedModels(modelRefs);
+
   String? currentModel() => _runtime.currentModel();
 
   bool switchModel(String modelRef) => _runtime.switchModel(modelRef);
@@ -65,6 +70,10 @@ class AssistantGateway {
 
   Future<Map<String, dynamic>?> sessionDetail(String sessionId) async {
     return _runtime.agentLoop.sessionDetail(sessionId);
+  }
+
+  Future<void> switchSession(String sessionId) {
+    return _runtime.agentLoop.switchSession(sessionId);
   }
 
   Future<AssistantToolResult> invokeSkill({

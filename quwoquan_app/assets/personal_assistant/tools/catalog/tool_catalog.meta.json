@@ -1,45 +1,11 @@
 {
   "catalogId": "assistant.tool_catalog",
-  "version": "2026.02.18",
+  "version": "2026.03.06",
   "sourceModel": "mcp-like-tool-catalog",
   "tools": [
     {
-      "toolName": "unified_retrieval",
-      "displayName": "Unified Retrieval",
-      "purpose": "统一检索页面、会话、长期记忆与Web信息",
-      "whenToUse": [
-        "需要证据检索",
-        "需要跨来源信息拼接"
-      ],
-      "supportedSkills": [
-        "retrieval.multi_source",
-        "reasoning.evidence_pack"
-      ],
-      "parameterSummary": [
-        {"name": "query", "type": "string", "required": true, "description": "检索问题"},
-        {"name": "requestedCapabilities", "type": "array<string>", "required": false, "description": "能力列表"},
-        {"name": "providerHint", "type": "string", "required": false, "description": "provider偏好"}
-      ],
-      "openAiFunction": {
-        "name": "unified_retrieval",
-        "description": "统一检索：按能力路由查询页面上下文、会话历史、长期记忆与 Web。",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "query": {"type": "string", "description": "要检索的问题或关键词。"},
-            "requestedCapabilities": {"type": "array", "items": {"type": "string"}, "description": "候选能力ID列表。"},
-            "contextScopeHint": {"type": "object", "description": "页面与会话上下文锚点。"},
-            "privacyProfile": {"type": "string", "description": "隐私配置名。"},
-            "providerHint": {"type": "string", "description": "可选 provider 提示。"},
-            "maxItems": {"type": "integer", "description": "检索条数上限。"}
-          },
-          "required": ["query"]
-        }
-      }
-    },
-    {
       "toolName": "web_search",
-      "displayName": "Web Search",
+      "displayName": "网络搜索",
       "purpose": "网络检索最新公开信息",
       "whenToUse": [
         "需要实时信息",
@@ -49,11 +15,45 @@
         "retrieval.web",
         "evidence.freshness_check"
       ],
+      "userInteraction": {
+        "phaseTitle": "搜索资料",
+        "phaseIcon": "search",
+        "reasoning": {
+          "label": "搜索策略设计",
+          "promptHint": "请在 thinkingText 中用自然语言向用户解释：1. 为什么需要搜索 2. 你设计的搜索关键词及理由 3. 你期望找到什么信息",
+          "example": "用户询问深圳天气，这是一个实时天气查询。我将搜索'深圳 实时天气 今天'和'深圳 天气预报'来获取权威气象数据。"
+        },
+        "executing": {
+          "startLabel": "正在搜索相关资料",
+          "progressTemplate": "检索查询：{{query}}",
+          "completedTemplate": "已找到 {{referenceCount}} 篇相关资料"
+        },
+        "resultDisplay": {
+          "showKeywords": true,
+          "showReferences": true,
+          "referenceCountPath": "references.length",
+          "referenceTitlePath": "references[].title",
+          "referenceSourcePath": "references[].source"
+        },
+        "replanLabel": "补充搜索更多资料"
+      },
       "parameterSummary": [
         {"name": "query", "type": "string", "required": true, "description": "查询文本"},
         {"name": "provider", "type": "string", "required": false, "description": "搜索引擎"},
-        {"name": "count", "type": "integer", "required": false, "description": "结果条数"}
+        {"name": "count", "type": "integer", "required": false, "description": "结果条数"},
+        {"name": "domainId", "type": "string", "required": false, "description": "当前垂类ID，用于自动选择权威来源"},
+        {"name": "contextConstraints", "type": "array<string>", "required": false, "description": "垂类上下文限定词"},
+        {"name": "timeScope", "type": "string", "required": false, "description": "时间范围语义，如 latest/today/last_30d/year_to_date/year/year_month/year_month_day"},
+        {"name": "timeYear", "type": "integer", "required": false, "description": "年份槽位，如 2024"},
+        {"name": "timeMonth", "type": "integer", "required": false, "description": "月份槽位，1-12"},
+        {"name": "timeDay", "type": "integer", "required": false, "description": "日期槽位，1-31"},
+        {"name": "timePoint", "type": "string", "required": false, "description": "可选时间锚点，支持 YYYY / YYYY-MM / YYYY-MM-DD"},
+        {"name": "timeRangeStart", "type": "string", "required": false, "description": "时间窗起点 ISO8601"},
+        {"name": "timeRangeEnd", "type": "string", "required": false, "description": "时间窗终点 ISO8601"},
+        {"name": "freshnessHoursMax", "type": "integer", "required": false, "description": "允许最大时效小时数"},
+        {"name": "authorityDomains", "type": "array<string>", "required": false, "description": "权威来源域名白名单"}
       ],
+      "requiredOutputPaths": ["provider", "summary", "references"],
       "openAiFunction": {
         "name": "web_search",
         "description": "网络检索最新信息。",
@@ -62,7 +62,24 @@
           "properties": {
             "query": {"type": "string"},
             "provider": {"type": "string"},
-            "count": {"type": "integer"}
+            "count": {"type": "integer"},
+            "domainId": {"type": "string"},
+            "contextConstraints": {
+              "type": "array",
+              "items": {"type": "string"}
+            },
+            "timeScope": {"type": "string"},
+            "timeYear": {"type": "integer"},
+            "timeMonth": {"type": "integer"},
+            "timeDay": {"type": "integer"},
+            "timePoint": {"type": "string"},
+            "timeRangeStart": {"type": "string"},
+            "timeRangeEnd": {"type": "string"},
+            "freshnessHoursMax": {"type": "integer"},
+            "authorityDomains": {
+              "type": "array",
+              "items": {"type": "string"}
+            }
           },
           "required": ["query"]
         }
@@ -70,24 +87,75 @@
     },
     {
       "toolName": "local_context",
-      "displayName": "Local Context",
-      "purpose": "获取设备本地上下文",
+      "displayName": "本地上下文",
+      "purpose": "获取设备上下文与地理位置信息（不包含相册数据）",
       "whenToUse": [
-        "需要设备态信息"
+        "需要设备态信息",
+        "需要城市或位置信息"
       ],
       "supportedSkills": [
         "device.context"
       ],
-      "parameterSummary": [],
+      "userInteraction": {
+        "phaseTitle": "获取位置",
+        "phaseIcon": "location",
+        "reasoning": {
+          "label": "位置获取",
+          "promptHint": "请在 thinkingText 中向用户解释：你需要获取用户当前位置来精准回答问题",
+          "example": "为了查询您所在城市的天气，我需要获取您的位置信息。"
+        },
+        "executing": {
+          "startLabel": "正在获取您的位置",
+          "progressTemplate": "读取设备信息...",
+          "completedTemplate": "已定位到 {{city}}"
+        },
+        "resultDisplay": {
+          "showKeywords": false,
+          "showReferences": false,
+          "summaryPath": "city"
+        },
+        "replanLabel": null
+      },
+      "parameterSummary": [
+        {"name": "requestedFields", "type": "array<string>", "required": false, "description": "按需请求字段，例如 location permissions device"},
+        {"name": "needPreciseLocation", "type": "boolean", "required": false, "description": "是否请求高精度位置"},
+        {"name": "maxAgeSeconds", "type": "integer", "required": false, "description": "可接受的缓存秒数"}
+      ],
+      "responseSummary": [
+        {"name": "contextVersion", "type": "string", "description": "上下文契约版本，固定 local_context_v1"},
+        {"name": "city", "type": "string", "description": "当前城市"},
+        {"name": "location", "type": "object", "description": "位置对象，含经纬度与精度"},
+        {"name": "permissions", "type": "object", "description": "权限状态对象"},
+        {"name": "device", "type": "object", "description": "设备信息对象"},
+        {"name": "media.included", "type": "boolean", "description": "是否包含相册数据，固定 false"}
+      ],
+      "requiredOutputPaths": ["contextVersion", "location", "permissions", "media.included"],
       "openAiFunction": {
         "name": "local_context",
-        "description": "获取设备本地上下文。",
-        "parameters": {"type": "object", "properties": {}}
+        "description": "获取设备本地上下文和地理位置信息。注意：不包含相册内容，相册请使用 media_gallery。",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "requestedFields": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "按需请求字段: location, permissions, device"
+            },
+            "needPreciseLocation": {
+              "type": "boolean",
+              "description": "是否请求高精度位置"
+            },
+            "maxAgeSeconds": {
+              "type": "integer",
+              "description": "可接受的缓存秒数"
+            }
+          }
+        }
       }
     },
     {
       "toolName": "media_gallery",
-      "displayName": "Media Gallery",
+      "displayName": "相册媒体",
       "purpose": "访问设备媒体资源",
       "whenToUse": [
         "用户请求相册或媒体处理"
@@ -95,6 +163,25 @@
       "supportedSkills": [
         "media.asset_access"
       ],
+      "userInteraction": {
+        "phaseTitle": "浏览相册",
+        "phaseIcon": "photo",
+        "reasoning": {
+          "label": "相册访问",
+          "promptHint": "请在 thinkingText 中向用户解释：你需要访问哪些媒体资源、为什么",
+          "example": "您提到了照片，我需要访问您的相册来查找相关图片。"
+        },
+        "executing": {
+          "startLabel": "正在浏览相册",
+          "progressTemplate": "访问媒体库...",
+          "completedTemplate": "已获取 {{count}} 张媒体"
+        },
+        "resultDisplay": {
+          "showKeywords": false,
+          "showReferences": false
+        },
+        "replanLabel": null
+      },
       "parameterSummary": [
         {"name": "mode", "type": "string", "required": false, "description": "媒体访问模式"}
       ],
@@ -111,7 +198,7 @@
     },
     {
       "toolName": "intent_bridge",
-      "displayName": "Intent Bridge",
+      "displayName": "系统动作桥接",
       "purpose": "执行系统Intent或URL跳转",
       "whenToUse": [
         "需要跨应用打开或系统动作"
@@ -119,6 +206,25 @@
       "supportedSkills": [
         "device.intent_bridge"
       ],
+      "userInteraction": {
+        "phaseTitle": "执行操作",
+        "phaseIcon": "launch",
+        "reasoning": {
+          "label": "操作准备",
+          "promptHint": "请在 thinkingText 中向用户解释：你需要执行什么操作、为什么",
+          "example": "您需要设置日程提醒，我来帮您打开系统日历。"
+        },
+        "executing": {
+          "startLabel": "正在执行操作",
+          "progressTemplate": "处理中...",
+          "completedTemplate": "操作已完成"
+        },
+        "resultDisplay": {
+          "showKeywords": false,
+          "showReferences": false
+        },
+        "replanLabel": null
+      },
       "parameterSummary": [
         {"name": "target", "type": "string", "required": false, "description": "目标对象"},
         {"name": "action", "type": "string", "required": false, "description": "动作标识"}
@@ -134,13 +240,214 @@
           }
         }
       }
+    },
+    {
+      "toolName": "web_fetch",
+      "displayName": "网页阅读",
+      "purpose": "抓取指定 URL 的网页内容，提取正文转换为可读文本",
+      "whenToUse": [
+        "需要深入阅读某个搜索结果页面",
+        "需要抓取特定 URL 的详细内容"
+      ],
+      "supportedSkills": [
+        "retrieval.deep_read",
+        "evidence.source_verify"
+      ],
+      "userInteraction": {
+        "phaseTitle": "阅读网页",
+        "phaseIcon": "article",
+        "reasoning": {
+          "label": "深度阅读",
+          "promptHint": "请在 thinkingText 中解释为什么需要深入阅读这个页面、你期望从中获取什么关键信息",
+          "example": "搜索结果中有一篇气象局的详细预报，我来仔细阅读获取精确数据。"
+        },
+        "executing": {
+          "startLabel": "正在阅读网页内容",
+          "progressTemplate": "抓取：{{url}}",
+          "completedTemplate": "已阅读 {{charCount}} 字内容"
+        },
+        "resultDisplay": {
+          "showKeywords": false,
+          "showReferences": false,
+          "summaryPath": "title"
+        },
+        "replanLabel": "阅读更多来源"
+      },
+      "parameterSummary": [
+        {"name": "url", "type": "string", "required": true, "description": "要抓取的 URL"},
+        {"name": "maxChars", "type": "integer", "required": false, "description": "最大字符数，默认 10000"}
+      ],
+      "requiredOutputPaths": ["url", "content"],
+      "openAiFunction": {
+        "name": "web_fetch",
+        "description": "抓取指定 URL 的网页内容，提取正文转换为可读文本。适用于深入阅读搜索结果中的具体页面。",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "url": {"type": "string", "description": "要抓取的完整 URL（http/https）"},
+            "maxChars": {"type": "integer", "description": "最大返回字符数，默认 10000"}
+          },
+          "required": ["url"]
+        }
+      }
+    },
+    {
+      "toolName": "memory_search",
+      "displayName": "记忆检索",
+      "purpose": "搜索用户的长期记忆，包括偏好、历史对话要点、重要日期等",
+      "whenToUse": [
+        "用户提到过去的对话或偏好",
+        "需要用户个人上下文来个性化回答",
+        "涉及用户习惯、喜好或历史记录"
+      ],
+      "supportedSkills": [
+        "memory.recall",
+        "context.personalization"
+      ],
+      "userInteraction": {
+        "phaseTitle": "回忆相关信息",
+        "phaseIcon": "memory",
+        "reasoning": {
+          "label": "记忆检索",
+          "promptHint": "请在 thinkingText 中解释你为什么要检索记忆、你期望找到什么相关信息",
+          "example": "用户之前提到过喜欢粤菜，我来回忆一下相关偏好。"
+        },
+        "executing": {
+          "startLabel": "正在回忆相关信息",
+          "progressTemplate": "检索：{{query}}",
+          "completedTemplate": "回忆起 {{resultCount}} 条相关信息"
+        },
+        "resultDisplay": {
+          "showKeywords": false,
+          "showReferences": false,
+          "summaryPath": "results[0].text"
+        },
+        "replanLabel": null
+      },
+      "parameterSummary": [
+        {"name": "query", "type": "string", "required": true, "description": "语义搜索查询"},
+        {"name": "maxResults", "type": "integer", "required": false, "description": "最大返回数，默认 5"}
+      ],
+      "requiredOutputPaths": ["query", "resultCount"],
+      "openAiFunction": {
+        "name": "memory_search",
+        "description": "搜索用户的长期记忆，包括偏好、历史对话要点、重要日期等。用于个性化回答。",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {"type": "string", "description": "语义搜索查询"},
+            "maxResults": {"type": "integer", "description": "最大返回数，默认 5"}
+          },
+          "required": ["query"]
+        }
+      }
     }
   ],
   "domainToolMatrix": [
     {
+      "domainId": "weather",
+      "allowedTools": [
+        "local_context",
+        "web_search",
+        "web_fetch",
+        "memory_search"
+      ],
+      "preferredTools": [
+        "local_context",
+        "web_search"
+      ],
+      "skillHints": [
+        "weather.city_resolution",
+        "weather.realtime_search"
+      ]
+    },
+    {
+      "domainId": "travel_transport",
+      "allowedTools": ["web_search", "local_context"],
+      "preferredTools": ["web_search", "local_context"],
+      "skillHints": ["transport.route_lookup", "transport.realtime_traffic"]
+    },
+    {
+      "domainId": "travel_planning",
+      "allowedTools": ["web_search", "local_context"],
+      "preferredTools": ["web_search"],
+      "skillHints": ["travel.itinerary_plan", "travel.poi_research"]
+    },
+    {
+      "domainId": "local_life",
+      "allowedTools": ["web_search", "local_context"],
+      "preferredTools": ["local_context", "web_search"],
+      "skillHints": ["local.poi_search", "local.service_lookup"]
+    },
+    {
+      "domainId": "calendar_task",
+      "allowedTools": ["intent_bridge", "local_context"],
+      "preferredTools": ["intent_bridge"],
+      "skillHints": ["calendar.schedule_create", "task.reminder_setup"]
+    },
+    {
+      "domainId": "knowledge_general",
+      "allowedTools": ["web_search", "web_fetch", "memory_search"],
+      "preferredTools": ["web_search", "web_fetch"],
+      "skillHints": ["knowledge.explain", "knowledge.reference_trace"]
+    },
+    {
+      "domainId": "finance_consumer",
+      "allowedTools": ["web_search"],
+      "preferredTools": ["web_search"],
+      "skillHints": ["finance.budget_advice", "finance.risk_notice"]
+    },
+    {
+      "domainId": "health_wellness",
+      "allowedTools": ["web_search", "local_context"],
+      "preferredTools": ["web_search"],
+      "skillHints": ["health.wellness_advice", "health.boundary_notice"]
+    },
+    {
+      "domainId": "education_learning",
+      "allowedTools": ["web_search"],
+      "preferredTools": ["web_search"],
+      "skillHints": ["learning.plan", "learning.resource_lookup"]
+    },
+    {
+      "domainId": "work_productivity",
+      "allowedTools": ["web_search"],
+      "preferredTools": ["web_search"],
+      "skillHints": ["work.task_breakdown", "career.interview_support"]
+    },
+    {
+      "domainId": "shopping_decision",
+      "allowedTools": ["web_search"],
+      "preferredTools": ["web_search"],
+      "skillHints": ["shopping.compare", "shopping.recommendation"]
+    },
+    {
+      "domainId": "policy_public_service",
+      "allowedTools": ["web_search", "local_context"],
+      "preferredTools": ["web_search", "local_context"],
+      "skillHints": ["policy.lookup", "gov.service_process"]
+    },
+    {
+      "domainId": "emotion_companion",
+      "allowedTools": ["web_search"],
+      "preferredTools": ["web_search"],
+      "skillHints": ["emotion.support", "emotion.safe_boundary"]
+    },
+    {
+      "domainId": "social_companion_chat",
+      "allowedTools": ["local_context"],
+      "preferredTools": ["local_context"],
+      "skillHints": ["chat.small_talk", "chat.contextual_response"]
+    },
+    {
+      "domainId": "relationship_matchmaking",
+      "allowedTools": ["web_search"],
+      "preferredTools": ["web_search"],
+      "skillHints": ["relationship.communication", "relationship.boundary"]
+    },
+    {
       "domainId": "divination_fortune",
       "allowedTools": [
-        "unified_retrieval",
         "web_search"
       ],
       "preferredTools": [
@@ -151,6 +458,24 @@
         "fortune.safety_boundary",
         "retrieval.web"
       ]
+    },
+    {
+      "domainId": "astrology_constellation",
+      "allowedTools": ["web_search"],
+      "preferredTools": ["web_search"],
+      "skillHints": ["astrology.chart_read", "astrology.daily_summary"]
+    },
+    {
+      "domainId": "family_parenting",
+      "allowedTools": ["web_search"],
+      "preferredTools": ["web_search"],
+      "skillHints": ["parenting.guidance", "family.communication"]
+    },
+    {
+      "domainId": "fallback_general_search",
+      "allowedTools": ["web_search", "web_fetch", "local_context", "memory_search"],
+      "preferredTools": ["web_search"],
+      "skillHints": ["fallback.general_query", "fallback.context_hint"]
     }
   ]
 }

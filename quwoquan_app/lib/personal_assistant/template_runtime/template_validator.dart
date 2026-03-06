@@ -24,6 +24,15 @@ class TemplateValidator {
     required String templateId,
     required String content,
   }) {
+    if (templateId.startsWith('stack.') || templateId.startsWith('phase.')) {
+      final trimmed = content.trim();
+      if (trimmed.isEmpty) {
+        return TemplateValidationResult(
+          errors: <String>['$templateId template content is empty'],
+        );
+      }
+      return const TemplateValidationResult(errors: <String>[]);
+    }
     final errors = <String>[];
     for (final section in _requiredSections) {
       if (!content.contains(section)) {
@@ -38,7 +47,8 @@ class TemplateValidator {
     }
     final beforeData = content.substring(0, start);
     final dataBlock = content.substring(start, end);
-    if (beforeData.contains('{{') && beforeData.contains('CONTEXT_DATA_START')) {
+    if (beforeData.contains('{{') &&
+        beforeData.contains('CONTEXT_DATA_START')) {
       errors.add('$templateId instruction area contains data marker misuse');
     }
     if (dataBlock.contains('## ')) {
@@ -47,4 +57,3 @@ class TemplateValidator {
     return TemplateValidationResult(errors: errors);
   }
 }
-

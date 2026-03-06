@@ -1,0 +1,27 @@
+{
+  "contractId": "weather-realtime.state_transition_v1",
+  "domainId": "weather",
+  "initialState": "S0_意图识别",
+  "stateIds": [
+    "S0_意图识别",
+    "S1_城市补全",
+    "S2_天气检索",
+    "S3_结果渲染"
+  ],
+  "events": [
+    "E_天气意图命中",
+    "E_城市已就绪",
+    "E_城市缺失",
+    "E_检索成功",
+    "E_检索失败",
+    "E_渲染完成"
+  ],
+  "transitions": [
+    {"from": "S0_意图识别", "event": "E_天气意图命中", "to": "S1_城市补全"},
+    {"from": "S1_城市补全", "event": "E_城市已就绪", "to": "S2_天气检索"},
+    {"from": "S1_城市补全", "event": "E_城市缺失", "to": "S1_城市补全"},
+    {"from": "S2_天气检索", "event": "E_检索成功", "to": "S3_结果渲染"},
+    {"from": "S2_天气检索", "event": "E_检索失败", "to": "S2_天气检索"},
+    {"from": "S3_结果渲染", "event": "E_渲染完成", "to": "S3_结果渲染"}
+  ]
+}

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:quwoquan_app/personal_assistant/engine/domain_config_governance.dart';
@@ -91,12 +92,12 @@ class DomainRoutingCatalogRuntime {
       if (rule.domainId != domainId) continue;
       if (rule.dialoguePath.trim().isNotEmpty) return rule.dialoguePath.trim();
     }
-    return 'assets/personal_assistant/prompts/domains/$domainId/dialogue';
+    return 'assets/personal_assistant/skills/$domainId/dialogue';
   }
 
   Future<void> _load() async {
     try {
-      final raw = await rootBundle.loadString(assetPath);
+      final raw = await _loadText(assetPath);
       final decoded = jsonDecode(raw);
       if (decoded is! Map) return;
       final parsedCatalog = _parseCatalogMap(decoded.cast<String, dynamic>());
@@ -107,6 +108,18 @@ class DomainRoutingCatalogRuntime {
       }
     } catch (_) {
       return;
+    }
+  }
+
+  Future<String> _loadText(String path) async {
+    try {
+      return await rootBundle.loadString(path);
+    } catch (_) {
+      final file = File(path);
+      if (await file.exists()) {
+        return await file.readAsString();
+      }
+      rethrow;
     }
   }
 
@@ -129,7 +142,8 @@ class DomainRoutingCatalogRuntime {
             ?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     if (rollback['enabled'] == true) {
-      final targetVersion = (rollback['targetVersion'] as String?)?.trim() ?? '';
+      final targetVersion =
+          (rollback['targetVersion'] as String?)?.trim() ?? '';
       final rollbackCatalog = _catalogsByVersion[targetVersion];
       if (rollbackCatalog != null) return rollbackCatalog;
     }
@@ -143,13 +157,16 @@ class DomainRoutingCatalogRuntime {
   }) {
     if (envelope.isEmpty) return null;
     final verified = _governance.verifyEnvelopeSignature(envelope);
-    final allowUnsigned = envelope['allowUnsignedDebug'] == true &&
+    final allowUnsigned =
+        envelope['allowUnsignedDebug'] == true &&
         contextScopeHint['allowUnsignedDomainConfig'] == true;
     if (!verified && !allowUnsigned) return null;
     final catalogRaw = envelope['catalog'];
     if (catalogRaw is! Map) return null;
-    final parsed =
-        _parseCatalogMap(catalogRaw.cast<String, dynamic>(), allowEmptyId: false);
+    final parsed = _parseCatalogMap(
+      catalogRaw.cast<String, dynamic>(),
+      allowEmptyId: false,
+    );
     if (parsed == null) return null;
     if (!_governance.allowByGrayRelease(
       envelope: envelope,
@@ -164,13 +181,14 @@ class DomainRoutingCatalogRuntime {
     Map<String, dynamic> map, {
     bool allowEmptyId = true,
   }) {
-    final rulesRaw = (map['domains'] as List?)?.whereType<Map>().toList() ??
-        const <Map>[];
+    final rulesRaw =
+        (map['domains'] as List?)?.whereType<Map>().toList() ?? const <Map>[];
     final rules = <DomainRoutingRule>[];
     for (final item in rulesRaw) {
       final domainId = (item['domainId'] as String?)?.trim() ?? '';
       if (domainId.isEmpty) continue;
-      final keywords = (item['intentKeywords'] as List?)
+      final keywords =
+          (item['intentKeywords'] as List?)
               ?.whereType<String>()
               .map((token) => token.trim())
               .where((token) => token.isNotEmpty)
@@ -205,8 +223,8 @@ class DomainRoutingCatalogRuntime {
     return DomainRoutingCatalog(
       catalogId: catalogId,
       version: version,
-      fallbackDomainId: (map['fallbackDomainId'] as String?)?.trim().isNotEmpty ==
-              true
+      fallbackDomainId:
+          (map['fallbackDomainId'] as String?)?.trim().isNotEmpty == true
           ? (map['fallbackDomainId'] as String).trim()
           : 'fallback_general_search',
       pageTypeFallbacks: fallbacks,

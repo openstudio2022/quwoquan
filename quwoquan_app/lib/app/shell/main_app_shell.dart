@@ -8,7 +8,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/app/shell/bottom_navigation.dart';
 import 'package:quwoquan_app/ui/discovery/pages/discovery_page.dart';
 import 'package:quwoquan_app/features/circles/pages/circles_page.dart';
-import 'package:quwoquan_app/features/chat/pages/chat_page.dart';
+import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_app/features/profile/pages/my_profile_page.dart';
 import 'package:quwoquan_app/personal_assistant/observability/logging/app_log_models.dart';
 import 'package:quwoquan_app/personal_assistant/observability/logging/app_log_service.dart';

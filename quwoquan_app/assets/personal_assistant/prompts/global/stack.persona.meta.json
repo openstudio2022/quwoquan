@@ -1,0 +1,9 @@
+{
+  "templateId": "stack.persona",
+  "version": "2026.03.05",
+  "stage": "global",
+  "domainId": "global",
+  "requiredVariables": ["skillPersona"],
+  "outputContract": "none",
+  "selfCheckRules": ["tone_check"]
+}

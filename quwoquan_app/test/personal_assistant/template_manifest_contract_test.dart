@@ -24,7 +24,13 @@ void main() {
       expect(contentFile.existsSync(), isTrue, reason: 'missing $contentPath');
       final meta = jsonDecode(metaFile.readAsStringSync()) as Map;
       expect((meta['templateId'] as String?)?.isNotEmpty, isTrue);
-      expect(meta['version'], equals('2026.02.18'));
+      final version = (meta['version'] as String?)?.trim() ?? '';
+      expect(version, isNotEmpty, reason: 'version 字段不得为空');
+      expect(
+        RegExp(r'^\d{4}\.\d{2}\.\d{2}$').hasMatch(version),
+        isTrue,
+        reason: 'version 格式应为 YYYY.MM.DD，实际为: $version',
+      );
       expect((meta['stage'] as String?)?.isNotEmpty, isTrue);
       expect((meta['requiredVariables'] as List?)?.isNotEmpty, isTrue);
       expect((meta['outputContract'] as String?)?.isNotEmpty, isTrue);

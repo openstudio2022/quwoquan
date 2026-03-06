@@ -14,7 +14,17 @@ class AppLogContext {
     this.runId = '',
     this.traceId = '',
     this.spanId = '',
+    this.parentSpanId = '',
     this.requestId = '',
+    this.cloudRequestId = '',
+    this.pythonJobId = '',
+    this.correlationId = '',
+    this.turnId = '',
+    this.sourceDomain = 'assistant',
+    this.sourceService = 'quwoquan_app',
+    this.component = '',
+    this.target = '',
+    this.action = '',
   });
 
   final String sessionId;
@@ -23,7 +33,17 @@ class AppLogContext {
   final String runId;
   final String traceId;
   final String spanId;
+  final String parentSpanId;
   final String requestId;
+  final String cloudRequestId;
+  final String pythonJobId;
+  final String correlationId;
+  final String turnId;
+  final String sourceDomain;
+  final String sourceService;
+  final String component;
+  final String target;
+  final String action;
 }
 
 class AppLogService {
@@ -97,7 +117,19 @@ class AppLogService {
       runId: context.runId,
       traceId: context.traceId,
       spanId: context.spanId,
+      parentSpanId: context.parentSpanId,
       requestId: context.requestId,
+      cloudRequestId: context.cloudRequestId,
+      pythonJobId: context.pythonJobId,
+      correlationId: context.correlationId,
+      turnId: context.turnId,
+      sourceDomain: context.sourceDomain,
+      sourceService: context.sourceService,
+      component: context.component.isNotEmpty
+          ? context.component
+          : _defaultComponentFor(logType),
+      target: context.target.isNotEmpty ? context.target : _defaultTargetFor(logType),
+      action: context.action,
       payload: redactedPayload,
     );
 
@@ -178,6 +210,44 @@ class AppLogService {
         return const _LogTarget(subDir: 'perf', fileName: 'stats.jsonl');
       case AppLogType.error:
         return const _LogTarget(subDir: 'errors', fileName: 'errors.jsonl');
+    }
+  }
+
+  String _defaultComponentFor(AppLogType type) {
+    switch (type) {
+      case AppLogType.pageAccess:
+        return 'ui';
+      case AppLogType.agentRun:
+        return 'agent_loop';
+      case AppLogType.llm:
+        return 'llm_provider';
+      case AppLogType.search:
+        return 'search_tool';
+      case AppLogType.cloudApi:
+        return 'gateway_client';
+      case AppLogType.perf:
+        return 'perf_probe';
+      case AppLogType.error:
+        return 'runtime';
+    }
+  }
+
+  String _defaultTargetFor(AppLogType type) {
+    switch (type) {
+      case AppLogType.pageAccess:
+        return 'ui_context';
+      case AppLogType.agentRun:
+        return 'session';
+      case AppLogType.llm:
+        return 'llm';
+      case AppLogType.search:
+        return 'search_provider';
+      case AppLogType.cloudApi:
+        return 'cloud_service';
+      case AppLogType.perf:
+        return 'runtime';
+      case AppLogType.error:
+        return 'runtime';
     }
   }
 

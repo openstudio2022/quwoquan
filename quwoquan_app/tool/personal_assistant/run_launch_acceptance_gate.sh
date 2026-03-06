@@ -61,7 +61,7 @@ PY
 
 echo "[gate] Step 2/3: flutter analyze"
 flutter analyze \
-  lib/features/chat/pages/chat_detail_page.dart \
+  lib/ui/chat/pages/chat_detail_page.dart \
   lib/personal_assistant/app/capability_gateway.dart \
   lib/personal_assistant/app/assistant_gateway.dart \
   lib/personal_assistant/engine/agent_loop.dart \

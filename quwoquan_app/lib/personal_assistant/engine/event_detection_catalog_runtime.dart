@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:quwoquan_app/personal_assistant/engine/domain_config_governance.dart';
@@ -93,7 +94,8 @@ class EventDetectionCatalogRuntime {
             ?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     if (rollback['enabled'] == true) {
-      final targetVersion = (rollback['targetVersion'] as String?)?.trim() ?? '';
+      final targetVersion =
+          (rollback['targetVersion'] as String?)?.trim() ?? '';
       final rollbackCatalog = _catalogsByVersion[targetVersion];
       if (rollbackCatalog != null) return rollbackCatalog;
     }
@@ -103,7 +105,7 @@ class EventDetectionCatalogRuntime {
 
   Future<void> _load() async {
     try {
-      final raw = await rootBundle.loadString(assetPath);
+      final raw = await _loadText(assetPath);
       final decoded = jsonDecode(raw);
       if (decoded is! Map) return;
       final parsed = _parseCatalogMap(decoded.cast<String, dynamic>());
@@ -117,13 +119,26 @@ class EventDetectionCatalogRuntime {
     }
   }
 
+  Future<String> _loadText(String path) async {
+    try {
+      return await rootBundle.loadString(path);
+    } catch (_) {
+      final file = File(path);
+      if (await file.exists()) {
+        return await file.readAsString();
+      }
+      rethrow;
+    }
+  }
+
   EventDetectionCatalog? _parseRemoteCatalog({
     required Map<String, dynamic> envelope,
     required Map<String, dynamic> contextScopeHint,
   }) {
     if (envelope.isEmpty) return null;
     final verified = _governance.verifyEnvelopeSignature(envelope);
-    final allowUnsigned = envelope['allowUnsignedDebug'] == true &&
+    final allowUnsigned =
+        envelope['allowUnsignedDebug'] == true &&
         contextScopeHint['allowUnsignedDomainConfig'] == true;
     if (!verified && !allowUnsigned) return null;
     if (!_governance.allowByGrayRelease(
@@ -161,7 +176,8 @@ class EventDetectionCatalogRuntime {
       defaultEvent: (map['defaultEvent'] as String?)?.trim().isNotEmpty == true
           ? (map['defaultEvent'] as String).trim()
           : 'E_USER_QUERY_RECEIVED',
-      emptyTextEvent: (map['emptyTextEvent'] as String?)?.trim().isNotEmpty == true
+      emptyTextEvent:
+          (map['emptyTextEvent'] as String?)?.trim().isNotEmpty == true
           ? (map['emptyTextEvent'] as String).trim()
           : 'E_USER_REQUEST_EXPLAIN',
       globalRules: globalRules,
@@ -174,13 +190,15 @@ class EventDetectionCatalogRuntime {
     for (final item in rulesRaw) {
       final event = (item['event'] as String?)?.trim() ?? '';
       if (event.isEmpty) continue;
-      final keywords = (item['keywords'] as List?)
+      final keywords =
+          (item['keywords'] as List?)
               ?.whereType<String>()
               .map((token) => token.trim())
               .where((token) => token.isNotEmpty)
               .toList(growable: false) ??
           const <String>[];
-      final stateBeforeIn = (item['stateBeforeIn'] as List?)
+      final stateBeforeIn =
+          (item['stateBeforeIn'] as List?)
               ?.whereType<String>()
               .map((state) => state.trim())
               .where((state) => state.isNotEmpty)

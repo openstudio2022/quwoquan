@@ -56,6 +56,10 @@ dependencies:
   share_plus: ^12.0.1
   geolocator: ^13.0.2
   google_fonts: ^6.2.1
+  flutter_markdown: ^0.7.7+1
+  file_picker: ^10.3.10
+  permission_handler: ^12.0.1
+  speech_to_text: ^7.3.0
 
 dev_dependencies:
   flutter_test:
@@ -89,50 +93,102 @@ flutter:
   
   assets:
     - assets/filters/filter_presets.json
+    - assets/personal_assistant/config/
+    # skills — 根目录 + 每个垂类所有子目录
     - assets/personal_assistant/skills/
+    - assets/personal_assistant/skills/astrology_constellation/
+    - assets/personal_assistant/skills/astrology_constellation/dialogue/
+    - assets/personal_assistant/skills/astrology_constellation/references/
+    - assets/personal_assistant/skills/astrology_constellation/scripts/
+    - assets/personal_assistant/skills/calendar_task/
+    - assets/personal_assistant/skills/calendar_task/dialogue/
+    - assets/personal_assistant/skills/calendar_task/references/
+    - assets/personal_assistant/skills/calendar_task/scripts/
+    - assets/personal_assistant/skills/divination_fortune/
+    - assets/personal_assistant/skills/divination_fortune/dialogue/
+    - assets/personal_assistant/skills/divination_fortune/references/
+    - assets/personal_assistant/skills/divination_fortune/scripts/
+    - assets/personal_assistant/skills/education_learning/
+    - assets/personal_assistant/skills/education_learning/config/
+    - assets/personal_assistant/skills/education_learning/dialogue/
+    - assets/personal_assistant/skills/education_learning/references/
+    - assets/personal_assistant/skills/education_learning/scripts/
+    - assets/personal_assistant/skills/emotion_companion/
+    - assets/personal_assistant/skills/emotion_companion/dialogue/
+    - assets/personal_assistant/skills/emotion_companion/references/
+    - assets/personal_assistant/skills/emotion_companion/scripts/
+    - assets/personal_assistant/skills/fallback_general_search/
+    - assets/personal_assistant/skills/fallback_general_search/dialogue/
+    - assets/personal_assistant/skills/fallback_general_search/references/
+    - assets/personal_assistant/skills/fallback_general_search/scripts/
+    - assets/personal_assistant/skills/family_parenting/
+    - assets/personal_assistant/skills/family_parenting/dialogue/
+    - assets/personal_assistant/skills/family_parenting/references/
+    - assets/personal_assistant/skills/family_parenting/scripts/
+    - assets/personal_assistant/skills/finance_consumer/
+    - assets/personal_assistant/skills/finance_consumer/config/
+    - assets/personal_assistant/skills/finance_consumer/dialogue/
+    - assets/personal_assistant/skills/finance_consumer/references/
+    - assets/personal_assistant/skills/finance_consumer/scripts/
+    - assets/personal_assistant/skills/health_wellness/
+    - assets/personal_assistant/skills/health_wellness/config/
+    - assets/personal_assistant/skills/health_wellness/dialogue/
+    - assets/personal_assistant/skills/health_wellness/references/
+    - assets/personal_assistant/skills/health_wellness/scripts/
+    - assets/personal_assistant/skills/knowledge_general/
+    - assets/personal_assistant/skills/knowledge_general/config/
+    - assets/personal_assistant/skills/knowledge_general/dialogue/
+    - assets/personal_assistant/skills/knowledge_general/references/
+    - assets/personal_assistant/skills/knowledge_general/scripts/
+    - assets/personal_assistant/skills/local_life/
+    - assets/personal_assistant/skills/local_life/dialogue/
+    - assets/personal_assistant/skills/local_life/references/
+    - assets/personal_assistant/skills/local_life/scripts/
+    - assets/personal_assistant/skills/policy_public_service/
+    - assets/personal_assistant/skills/policy_public_service/dialogue/
+    - assets/personal_assistant/skills/policy_public_service/references/
+    - assets/personal_assistant/skills/policy_public_service/scripts/
+    - assets/personal_assistant/skills/relationship_matchmaking/
+    - assets/personal_assistant/skills/relationship_matchmaking/dialogue/
+    - assets/personal_assistant/skills/relationship_matchmaking/references/
+    - assets/personal_assistant/skills/relationship_matchmaking/scripts/
+    - assets/personal_assistant/skills/shopping_decision/
+    - assets/personal_assistant/skills/shopping_decision/dialogue/
+    - assets/personal_assistant/skills/shopping_decision/references/
+    - assets/personal_assistant/skills/shopping_decision/scripts/
+    - assets/personal_assistant/skills/social_companion_chat/
+    - assets/personal_assistant/skills/social_companion_chat/dialogue/
+    - assets/personal_assistant/skills/social_companion_chat/references/
+    - assets/personal_assistant/skills/social_companion_chat/scripts/
+    - assets/personal_assistant/skills/travel_planning/
+    - assets/personal_assistant/skills/travel_planning/dialogue/
+    - assets/personal_assistant/skills/travel_planning/references/
+    - assets/personal_assistant/skills/travel_planning/scripts/
+    - assets/personal_assistant/skills/travel_transport/
+    - assets/personal_assistant/skills/travel_transport/dialogue/
+    - assets/personal_assistant/skills/travel_transport/references/
+    - assets/personal_assistant/skills/travel_transport/scripts/
+    - assets/personal_assistant/skills/weather/
+    - assets/personal_assistant/skills/weather/config/
+    - assets/personal_assistant/skills/weather/dialogue/
+    - assets/personal_assistant/skills/weather/references/
+    - assets/personal_assistant/skills/weather/scripts/
+    - assets/personal_assistant/skills/work_productivity/
+    - assets/personal_assistant/skills/work_productivity/dialogue/
+    - assets/personal_assistant/skills/work_productivity/references/
+    - assets/personal_assistant/skills/work_productivity/scripts/
+    # prompts — 根目录 + 所有子目录
     - assets/personal_assistant/prompts/manifest.json
     - assets/personal_assistant/prompts/global/
     - assets/personal_assistant/prompts/web/
     - assets/personal_assistant/prompts/domain_routing/
-    - assets/personal_assistant/prompts/domains/weather/
-    - assets/personal_assistant/prompts/domains/weather/dialogue/
-    - assets/personal_assistant/prompts/domains/travel_transport/
-    - assets/personal_assistant/prompts/domains/travel_transport/dialogue/
-    - assets/personal_assistant/prompts/domains/travel_planning/
-    - assets/personal_assistant/prompts/domains/travel_planning/dialogue/
-    - assets/personal_assistant/prompts/domains/local_life/
-    - assets/personal_assistant/prompts/domains/local_life/dialogue/
-    - assets/personal_assistant/prompts/domains/calendar_task/
-    - assets/personal_assistant/prompts/domains/calendar_task/dialogue/
-    - assets/personal_assistant/prompts/domains/knowledge_general/
-    - assets/personal_assistant/prompts/domains/knowledge_general/dialogue/
-    - assets/personal_assistant/prompts/domains/finance_consumer/
-    - assets/personal_assistant/prompts/domains/finance_consumer/dialogue/
-    - assets/personal_assistant/prompts/domains/health_wellness/
-    - assets/personal_assistant/prompts/domains/health_wellness/dialogue/
-    - assets/personal_assistant/prompts/domains/education_learning/
-    - assets/personal_assistant/prompts/domains/education_learning/dialogue/
-    - assets/personal_assistant/prompts/domains/work_productivity/
-    - assets/personal_assistant/prompts/domains/work_productivity/dialogue/
-    - assets/personal_assistant/prompts/domains/shopping_decision/
-    - assets/personal_assistant/prompts/domains/shopping_decision/dialogue/
-    - assets/personal_assistant/prompts/domains/policy_public_service/
-    - assets/personal_assistant/prompts/domains/policy_public_service/dialogue/
-    - assets/personal_assistant/prompts/domains/emotion_companion/
-    - assets/personal_assistant/prompts/domains/emotion_companion/dialogue/
-    - assets/personal_assistant/prompts/domains/social_companion_chat/
-    - assets/personal_assistant/prompts/domains/social_companion_chat/dialogue/
-    - assets/personal_assistant/prompts/domains/relationship_matchmaking/
-    - assets/personal_assistant/prompts/domains/relationship_matchmaking/dialogue/
-    - assets/personal_assistant/prompts/domains/divination_fortune/
-    - assets/personal_assistant/prompts/domains/divination_fortune/dialogue/
-    - assets/personal_assistant/prompts/domains/astrology_constellation/
-    - assets/personal_assistant/prompts/domains/astrology_constellation/dialogue/
-    - assets/personal_assistant/prompts/domains/family_parenting/
-    - assets/personal_assistant/prompts/domains/family_parenting/dialogue/
-    - assets/personal_assistant/prompts/domains/fallback_general_search/
-    - assets/personal_assistant/prompts/domains/fallback_general_search/dialogue/
+    - assets/personal_assistant/prompts/_standards/
+    - assets/personal_assistant/prompts/domain_dialogue/
+    - assets/personal_assistant/prompts/planner/
+    - assets/personal_assistant/prompts/synthesizer/
+    # tools — 根目录 + catalog 子目录（包含 openAiFunction schema，必须注册）
     - assets/personal_assistant/tools/
+    - assets/personal_assistant/tools/catalog/
     - personal_assistant/config.json
     - personal_assistant/.env
   

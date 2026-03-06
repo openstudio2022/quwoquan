@@ -12,7 +12,7 @@ Flutter App 国际化（i18n）基础设施模块，建立 ARB + `flutter gen-l1
 ## 职责边界
 
 - 负责：i18n 基础设施搭建 + `lib/ui/` 范围内硬编码字符串清除
-- 不负责：`lib/features/`、`lib/components/` 的迁移（列为搁置任务）
+- 不负责：`lib/ui/`、`lib/components/` 的迁移（列为搁置任务）
 - 不负责：`UITextConstants` 删除（双轨共存，非 widget 上下文继续使用）
 - 不负责：英文翻译内容填充（`app_en.arb` 使用 TODO 占位）
 

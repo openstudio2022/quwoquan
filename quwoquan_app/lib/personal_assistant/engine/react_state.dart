@@ -4,12 +4,15 @@ class ReactPlanStep {
     required this.description,
     required this.toolName,
     required this.arguments,
+    this.toolCallId = '',
   });
 
   final String id;
   final String description;
   final String toolName;
   final Map<String, dynamic> arguments;
+  /// OpenAI function calling 协议的 tool_call id，用于构建 tool result message。
+  final String toolCallId;
 }
 
 class ReactRunState {
@@ -29,6 +32,11 @@ class ReactRunState {
   int iteration = 0;
   int usedTools = 0;
   String? stopReason;
+
+  /// Tracks consecutive iterations where the model produced no text and no
+  /// tool calls.  Used as a deadlock safety valve: if this reaches the
+  /// threshold the loop force-exits.
+  int consecutiveEmptyIterations = 0;
 
   bool get shouldStopByBudget => usedTools >= toolBudget;
   bool get shouldStopByIteration => iteration >= maxIterations;

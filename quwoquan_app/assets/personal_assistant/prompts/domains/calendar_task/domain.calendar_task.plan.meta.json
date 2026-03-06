@@ -1,9 +1,0 @@
-{
-  "templateId": "domain.calendar_task.plan",
-  "version": "2026.02.18",
-  "stage": "plan",
-  "domainId": "calendar_task",
-  "requiredVariables": ["userQuery", "contextEnvelope", "userProfileSnapshot", "timeSlots", "calendarTaskSlots", "existingCalendarSnapshot"],
-  "outputContract": "domain_plan_v2026_02_18",
-  "selfCheckRules": ["time_resolved", "conflict_check_for_create_modify", "deadline_reminder_valid", "high_risk_confirmation", "target_calendar_explicit", "slot_completeness"]
-}

@@ -4,12 +4,15 @@ class AppTypography {
   /// Minimum legible caption size used for compressed toolbar states.
   static const double xxs = 9.0;
   static const double xs = 10.0;
+  static const double xsPlus = 11.0;
   static const double sm = 12.0;
+  static const double smPlus = 13.0;
   static const double md = 14.0;
   static const double base = 14.0;
   static const double lg = 16.0;
   static const double xl = 18.0;
   static const double xxl = 20.0;
+  static const double xxxl = 22.0;
 
   static const double title = xl;
   static const double sectionTitle = lg;

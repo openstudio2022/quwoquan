@@ -13,47 +13,47 @@ level_acceptance:
     status: implemented
     linked_tasks: [B1, B2]
     tests:
-      - quwoquan_app/lib/features/circles/pages/circles_page.dart
+      - quwoquan_app/lib/ui/circle/pages/circles_page.dart
   A2:
     criteria: "频道管理面板覆盖内容区（不含底部工具栏），布局分为“我的频道/全部频道”，微博式样式"
     status: implemented
     linked_tasks: [B2, B2.1]
     tests:
-      - quwoquan_app/lib/features/circles/pages/circles_page.dart
+      - quwoquan_app/lib/ui/circle/pages/circles_page.dart
   A3:
     criteria: "我的频道点击 x 进入未选；全部频道点击 + 进入已选，且新增项插入到已选末尾"
     status: implemented
     linked_tasks: [B3]
     tests:
-      - quwoquan_app/lib/features/circles/pages/circles_page.dart
+      - quwoquan_app/lib/ui/circle/pages/circles_page.dart
   A4:
     criteria: "我的频道支持拖拽排序，排序结果即时映射到圈子一级 tab 的展示顺序"
     status: implemented
     linked_tasks: [B4]
     tests:
-      - quwoquan_app/lib/features/circles/pages/circles_page.dart
+      - quwoquan_app/lib/ui/circle/pages/circles_page.dart
   A5:
     criteria: "首装默认策略生效：car、humanity、sports 不在“我的频道”中；关注与推荐不参与管理"
     status: implemented
     linked_tasks: [B5]
     tests:
-      - quwoquan_app/lib/features/circles/pages/circles_page.dart
+      - quwoquan_app/lib/ui/circle/pages/circles_page.dart
   A6:
     criteria: "频道偏好本地保存，重启后可恢复选中状态与顺序"
     status: implemented
     linked_tasks: [B6]
     tests:
-      - quwoquan_app/lib/features/circles/pages/circles_page.dart
+      - quwoquan_app/lib/ui/circle/pages/circles_page.dart
   A7:
     criteria: "管理面板主动作（完成/强调）使用蓝色主色（AppColors.primaryColor），不出现橘色动作语义"
     status: implemented
     linked_tasks: [B7]
     tests:
-      - quwoquan_app/lib/features/circles/pages/circles_page.dart
+      - quwoquan_app/lib/ui/circle/pages/circles_page.dart
   A8:
     criteria: "通过端侧语义门禁与静态检查，且不引入 contracts/metadata 变更；圈子一级 tab 满足推荐可见、选中居中、过中线锚定并在滚动/切换/开合无跳变"
     status: deferred
     linked_tasks: [M1, C1, B2.2, T1.1, T2, L1]
     deferred_reason: "现阶段频道管理功能先行交付，一级 Tab 锚定状态机恢复复杂度较高，短期作为遗留问题单独处理"
     tests:
-      - quwoquan_app/lib/features/circles/pages/circles_page.dart
+      - quwoquan_app/lib/ui/circle/pages/circles_page.dart

@@ -1,0 +1,121 @@
+version: 1
+feature: "world-class-trinity-experience-baseline"
+level: "L2_feature"
+template: "A1-A8"
+focus_groups:
+  - assistant
+  - content
+  - social
+  - markdown-output
+  - streaming
+level_acceptance:
+  A1:
+    criteria: "助理主链路可用：remotePreferred 流式 + local 回退 + 三入口可触达，且会话不中断"
+    status: pending
+    linked_tasks: [P0-3, I1, I2, U3]
+    tests: []
+  A2:
+    criteria: "响应统一 markdown 展示，结构块可稳定解析，失败自动降级"
+    status: pending
+    linked_tasks: [I1, U1, U2]
+    tests: []
+  A3:
+    criteria: "工具失败可恢复：模型基于结构化 observation 决定 ask/retry/fallback，不阻断对话"
+    status: pending
+    linked_tasks: [M2, I2, I3, T1, T6]
+    tests:
+      # L1 纯 VM（桶 A）
+      - quwoquan_app/test/personal_assistant/degraded_response_root_cause_contract_test.dart
+      - quwoquan_app/test/personal_assistant/history_contamination_guard_test.dart
+      - quwoquan_app/test/personal_assistant/message_history_protocol_contract_test.dart
+      # L2 引擎集成（桶 B）
+      - quwoquan_app/test/personal_assistant/react_runtime_tool_observation_contract_test.dart
+      - quwoquan_app/test/personal_assistant/dual_gate_integration_test.dart
+      - quwoquan_app/test/personal_assistant/agent_loop_context_gate_test.dart
+      # L3 UI 契约（dart test）
+      - quwoquan_app/test/ui/assistant/contract/assistant_message_history_contract_test.dart
+  A4:
+    criteria: "runId/traceId/关键动作/子代理事件可观测并可回放"
+    status: pending
+    linked_tasks: [S2-1, S2-2, S2-4, T3, T5]
+    tests:
+      # L1 纯 VM（桶 A）
+      - quwoquan_app/test/personal_assistant/observability_root_cause_contract_test.dart
+      # L2 引擎集成（桶 B）
+      - quwoquan_app/test/personal_assistant/observability_completeness_test.dart
+      - quwoquan_app/test/personal_assistant/observability_log_pipeline_test.dart
+      - quwoquan_app/test/personal_assistant/log_completeness_contract_test.dart
+      # L3 UI 回归（桶 C）
+      - quwoquan_app/test/ui/chat/widgets/chat_detail_page_assistant_ui_regression_test.dart
+  A5:
+    criteria: "主会话可执行动作与子任务回注形成闭环，关键动作可追踪"
+    status: pending
+    linked_tasks: [S2-2, S2-3, U4, T5]
+    tests: []
+  A6:
+    criteria: "授权与隐私语义完整：设备能力调用遵循策略网关，追问文案 i18n 合规"
+    status: pending
+    linked_tasks: [M2, I4, X3, T2]
+    tests: []
+  A7:
+    criteria: "metadata/codegen/接口契约一致；关键路径移除字符串判断与硬编码错误文案"
+    status: pending
+    linked_tasks: [M1, M2, M3, C1, C2, C3, P0-1, T4]
+    tests: []
+  A8:
+    criteria: "mock/unit/contract/integration 覆盖可复跑，新增协议路径有回归保障"
+    status: pending
+    linked_tasks: [T1, T2, T3, T4, T5, T6]
+    tests:
+      # L0 静态分析（Python gate）
+      - scripts/verify_degraded_response_contract.py
+      # L1 纯 VM 契约（桶 A）
+      - quwoquan_app/test/personal_assistant/degraded_response_root_cause_contract_test.dart
+      - quwoquan_app/test/personal_assistant/message_history_protocol_contract_test.dart
+      - quwoquan_app/test/personal_assistant/observability_root_cause_contract_test.dart
+      - quwoquan_app/test/personal_assistant/quality_metrics_gate_test.dart
+      - quwoquan_app/test/personal_assistant/history_contamination_guard_test.dart
+      # L2 引擎集成（桶 B）
+      - quwoquan_app/test/personal_assistant/structured_response_contract_test.dart
+      - quwoquan_app/test/personal_assistant/protocol_compatibility_test.dart
+      - quwoquan_app/test/personal_assistant/tool_registry_contract_test.dart
+      - quwoquan_app/test/personal_assistant/tool_metadata_contract_test.dart
+      - quwoquan_app/test/personal_assistant/react_runtime_tool_observation_contract_test.dart
+      # L3 UI 契约（dart test）
+      - quwoquan_app/test/ui/assistant/contract/assistant_message_history_contract_test.dart
+  A9:
+    criteria: "结构化决策稳定性达标：decision_json 解析成功率 >= 99.5%"
+    status: pending
+    linked_tasks: [I1, T1, T4, R3]
+    tests:
+      - quwoquan_app/test/personal_assistant/quality_metrics_gate_test.dart
+      - quwoquan_app/test/personal_assistant/structured_response_contract_test.dart
+      - quwoquan_app/test/personal_assistant/json_answer_parse_integration_test.dart
+      - quwoquan_app/test/personal_assistant/domain_quality_benchmark_test.dart
+  A10:
+    criteria: "渲染稳定性达标：markdown 结构块降级率 < 1%，且无崩溃"
+    status: pending
+    linked_tasks: [U1, U2, T3, R3]
+    tests:
+      - quwoquan_app/test/ui/chat/widgets/chat_detail_page_assistant_ui_regression_test.dart
+      - quwoquan_app/test/personal_assistant/structured_response_contract_test.dart
+      - quwoquan_app/test/personal_assistant/json_answer_parse_integration_test.dart
+      - quwoquan_app/test/personal_assistant/quality_metrics_gate_test.dart
+  A11:
+    criteria: "天气垂类补槽成功率达标：城市缺失场景补槽完成率 >= 95%"
+    status: pending
+    linked_tasks: [I3, T6, R1, R3]
+    tests: []
+  A12:
+    criteria: "设计交付件标准化：design.md 含组件/包图、用例图、流程图，并具备实现/验收映射"
+    status: pending
+    linked_tasks: [D2, D4]
+    tests: []
+  A13:
+    criteria: "全流程规范落地：文档不再仅限 Skill，覆盖 Plan/Create/Implement/Verify/Submit"
+    status: pending
+    linked_tasks: [D1, D3, D5]
+    tests: []
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"

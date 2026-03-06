@@ -1,0 +1,31 @@
+{
+  "contractVersion": "retrieval_policy_v1",
+  "domainId": "finance_consumer",
+  "defaultTimeScope": "latest",
+  "defaultFreshnessHoursMax": 6,
+  "authorityRequired": true,
+  "allowedTimeScopes": [
+    "latest",
+    "today",
+    "last_7d",
+    "last_30d",
+    "last_1y",
+    "year_to_date",
+    "custom",
+    "year",
+    "year_month",
+    "year_month_day"
+  ],
+  "authorityDomains": [
+    "cninfo.com.cn",
+    "sse.com.cn",
+    "szse.cn",
+    "csindex.com.cn",
+    "eastmoney.com"
+  ],
+  "contextConstraints": [
+    "行情日期",
+    "财务口径",
+    "风险提示"
+  ]
+}

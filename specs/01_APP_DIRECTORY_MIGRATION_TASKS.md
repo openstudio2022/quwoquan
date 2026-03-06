@@ -47,10 +47,10 @@
 
 | 任务 | 说明 |
 |------|------|
-| M2.1 | 创建 `lib/ui/chat/` |
-| M2.2 | 迁移 `features/chat/` → `ui/chat/` |
-| M2.3 | 更新 import、路由、acceptance、06-semantic-consistency-audit |
-| M2.4 | 删除 `lib/features/chat/` |
+| M2.1 | ✅ 创建 `lib/ui/chat/` |
+| M2.2 | ✅ 迁移 `features/chat/` → `ui/chat/` |
+| M2.3 | ✅ 更新 import、路由、acceptance、06-semantic-consistency-audit |
+| M2.4 | ✅ 删除 `lib/features/chat/` |
 
 ---
 

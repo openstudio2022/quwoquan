@@ -160,7 +160,90 @@ AppException (abstract)
 
 ---
 
-## 5. UI 层约束（按领域，见 specs/01_APP_DIRECTORY_STRUCTURE_BY_DOMAIN）
+## 5. PersonalAssistant 引擎契约约束
+
+> 守护范围：`lib/personal_assistant/engine/`、`lib/personal_assistant/contracts/`。
+
+### 5.1 输出契约字段必须类型化（禁止在引擎逻辑中直接写字段名字符串）
+
+LLM 输出契约（`assistant_turn_v4`）的字段唯一定义于
+`lib/personal_assistant/contracts/assistant_turn_contract.dart` 的 `AssistantTurnOutput` 类。
+
+```dart
+// ❌ 禁止：在引擎逻辑代码中直接写字段名字符串
+final userMd = (parsed['userMarkdown'] as String?)?.trim() ?? '';
+final decision = (parsed['decision'] as Map?)?.cast<String, dynamic>() ?? {};
+final slotState = turnV2['slotState'];
+
+// ✅ 必须：通过 AssistantTurnOutput.tryParse() 类型化访问
+final turn = AssistantTurnOutput.tryParse(parsed);
+final userMd = turn?.userMarkdown ?? '';
+final decision = turn?.decision ?? const {};
+final slotState = turn?.slotState ?? const {};
+```
+
+**唯一允许出现字段名字符串字面量的地方**：`AssistantTurnOutput.fromJson()` / `tryParse()` 方法内部。
+
+### 5.2 完整契约字段清单（AssistantTurnOutput 必须覆盖）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `contractVersion` | `String` | 契约版本标识 |
+| `decision` | `Map<String, dynamic>` | 含 `nextAction`、`confidence`、`reasoning` |
+| `messageKind` | `String` | `progress`/`answer`/`ask_user`/`error`/`fallback` |
+| `userMarkdown` | `String` | 面向用户的 Markdown 回答 |
+| `result` | `Map<String, dynamic>` | 含 `text`、`summary`、`actionHints`、`interpretation` |
+| `evidence` | `List<Map>` | 证据列表，每项含 `text`/`url` |
+| `reasoningBasis` | `List<Map>` | 推理路径 |
+| `selfCheck` | `Map<String, dynamic>` | 自检结果 |
+| `diagnostics` | `Map<String, dynamic>` | 含 `emergedTags` |
+| `modelSelfScore` | `Map<String, dynamic>` | 含 `score`、`reason` |
+| `toolCalls` | `List<Map>` | 含 `toolName`/`name`、`arguments`、`toolCallId` |
+| `slotState` | `Map<String, dynamic>` | 槽位状态 |
+| `askUser` | `Map<String, dynamic>` | 追问信息 |
+| `subagentPlan` | `List<Map>` | 含 `goal` |
+| `toolPlan` | `List<Map>` | 含 `tool`、`arguments` |
+| `missingContextSlots` | `List<String>` | 缺失上下文槽 |
+| `fillGuidance` | `List<Map>` | 含 `guidance` |
+| `followupPrompt` | `String` | 追问提示 |
+
+### 5.3 版本管理：最多两个活跃版本
+
+- **当前版本**：`assistant_turn_v4`（prompt 模板输出，代码内标准格式）
+- **兼容遗留版本**：`assistant_turn_v3`（加载旧历史数据时识别，读后立即升级）
+- **禁止**：同时存在三个及以上版本的识别路径（如 v2 || v3 || v4）
+- **迁移要求**：`AssistantSessionManager.load()` 必须在读取完成后调用 `_migrateSessionsToCurrentVersion()`，将 content 中的 v2/v3 格式升级为 v4
+
+```dart
+// ❌ 禁止：三路版本判断
+if (version == 'assistant_turn_v2' || version == 'assistant_turn_v3' || version == 'assistant_turn_v4')
+
+// ✅ 必须：最多两版本（当前 + 一个遗留）
+if (version == 'assistant_turn_v4' || version == 'assistant_turn_v3')
+// 旧包裹格式兼容
+final wrapped = parsed['assistant_turn_v2'];
+```
+
+### 5.4 修改契约字段的强制流程
+
+```
+1. 修改 prompt 模板（assets/personal_assistant/prompts/global/phase.output_contract.*.md）
+2. 更新 assets/personal_assistant/prompts/_standards/output_contracts.json
+3. 更新 AssistantTurnOutput 类（contracts/assistant_turn_contract.dart）
+4. 检查 _ensureAssistantTurnEnvelopeText / session 迁移逻辑是否需同步
+5. flutter test test/personal_assistant/
+```
+
+**禁止**：修改 prompt 模板字段后不同步更新 `AssistantTurnOutput`，或直接在引擎逻辑中加字符串 key 访问新字段。
+
+### 5.5 遗留字段清理规范
+
+- `userFacingMarkdown`：旧字段名，禁止在新代码中使用；已有引用须替换为 `userMarkdown`
+- `assistant_turn_v2` 作为 `contractVersion` 值：禁止在新写入的 session 数据中使用；仅作为旧包裹格式解包的 key 保留
+
+---
+
+## 6. UI 层约束（按领域，见 specs/01_APP_DIRECTORY_STRUCTURE_BY_DOMAIN）
 
 - `lib/ui/{domain}/` 必须包含 `pages/` 子目录（禁止在 `lib/features/` 下新建）
 - UI 模块不允许直接 import 其他 UI 模块内部文件（通过 `core/` 或 `cloud/` 共享）
@@ -172,7 +255,7 @@ AppException (abstract)
 
 ---
 
-## 6. 响应式设计
+## 7. 响应式设计
 
 - 断点语义：`compact < 360` / `regular 360-599` / `expanded >= 600`
 - 通过 `AppSpacing.responsiveValue` / `AppTypography.responsive` 控制差异
@@ -180,7 +263,7 @@ AppException (abstract)
 
 ---
 
-## 7. 提交前检查
+## 8. 提交前检查
 
 ```bash
 flutter analyze

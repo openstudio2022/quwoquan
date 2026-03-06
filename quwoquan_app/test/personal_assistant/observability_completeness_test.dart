@@ -17,6 +17,7 @@ void main() {
       'webEvidencePacks',
       'webEvidenceGate',
       'webPipeline',
+      'qualityMetrics',
     ]) {
       expect(text.contains(key), isTrue, reason: 'missing observability key: $key');
     }

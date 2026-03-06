@@ -1,0 +1,99 @@
+{
+  "suiteId": "huawei_cloud_qa.state_transition_suite",
+  "cases": [
+    {
+      "caseId": "case_l1_intent_to_slot",
+      "description": "L1 事实性问题直接命中",
+      "userInput": "盘古大模型怎么收费",
+      "from": "S0_意图识别",
+      "event": "E_意图命中",
+      "expectTo": "S1_槽位补全",
+      "expectedSlots": {"product": "盘古大模型", "phase": "presale", "level": "L1", "subtype": "entity"}
+    },
+    {
+      "caseId": "case_vague_intent",
+      "description": "意图模糊需澄清",
+      "userInput": "华为云怎么样",
+      "from": "S0_意图识别",
+      "event": "E_意图模糊",
+      "expectTo": "S1_槽位补全"
+    },
+    {
+      "caseId": "case_slot_to_search",
+      "description": "槽位就绪进入检索",
+      "from": "S1_槽位补全",
+      "event": "E_槽位已就绪",
+      "expectTo": "S2_知识检索"
+    },
+    {
+      "caseId": "case_slot_missing",
+      "description": "缺少关键槽位需追问",
+      "userInput": "怎么开通",
+      "from": "S1_槽位补全",
+      "event": "E_槽位缺失",
+      "expectTo": "S1_槽位补全"
+    },
+    {
+      "caseId": "case_search_to_reason",
+      "description": "检索成功进入推理",
+      "from": "S2_知识检索",
+      "event": "E_检索成功",
+      "expectTo": "S3_推理整合"
+    },
+    {
+      "caseId": "case_search_insufficient",
+      "description": "检索不足扩大范围",
+      "from": "S2_知识检索",
+      "event": "E_检索不足",
+      "expectTo": "S2_知识检索"
+    },
+    {
+      "caseId": "case_search_fail_fallback",
+      "description": "检索失败回退到模型知识",
+      "from": "S2_知识检索",
+      "event": "E_检索失败",
+      "expectTo": "S3_推理整合"
+    },
+    {
+      "caseId": "case_reason_to_render",
+      "description": "推理完成进入渲染",
+      "from": "S3_推理整合",
+      "event": "E_推理完成",
+      "expectTo": "S4_结果渲染"
+    },
+    {
+      "caseId": "case_reason_need_more",
+      "description": "推理中发现需补充检索",
+      "from": "S3_推理整合",
+      "event": "E_需要补充检索",
+      "expectTo": "S2_知识检索"
+    },
+    {
+      "caseId": "case_l2d_fault_diagnosis",
+      "description": "L2d 故障诊断链完整流程",
+      "userInput": "ECS 连不上了 报错 Connection refused",
+      "from": "S0_意图识别",
+      "event": "E_意图命中",
+      "expectTo": "S1_槽位补全",
+      "expectedSlots": {"product": "ECS", "phase": "aftersale", "level": "L2", "subtype": "diagnosis"}
+    },
+    {
+      "caseId": "case_l2c_comparison",
+      "description": "L2c 竞品对比",
+      "userInput": "华为云和阿里云大模型服务哪个好",
+      "from": "S0_意图识别",
+      "event": "E_意图命中",
+      "expectTo": "S1_槽位补全",
+      "expectedSlots": {"product": "大模型服务", "phase": "presale", "level": "L2", "subtype": "comparison"}
+    },
+    {
+      "caseId": "case_l4a_solution",
+      "description": "L4a 方案设计",
+      "userInput": "帮我设计一套金融行业上云方案",
+      "from": "S0_意图识别",
+      "event": "E_意图命中",
+      "expectTo": "S1_槽位补全",
+      "expectedSlots": {"phase": "presale", "level": "L4", "subtype": "design"}
+    }
+  ]
+}

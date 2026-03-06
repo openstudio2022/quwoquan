@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:quwoquan_app/personal_assistant/engine/domain_routing_catalog_runtime.dart';
@@ -97,29 +98,40 @@ class DialogueStateRuntime {
     required Map<String, dynamic> contextScopeHint,
     bool forceRefreshCatalog = false,
   }) async {
-    await _routingCatalogRuntime.ensureLoaded(forceRefresh: forceRefreshCatalog);
+    await _routingCatalogRuntime.ensureLoaded(
+      forceRefresh: forceRefreshCatalog,
+    );
     await _eventCatalogRuntime.ensureLoaded(forceRefresh: forceRefreshCatalog);
     if (forceRefreshCatalog) {
       _cache.clear();
       _loading.clear();
     }
     if (domainId.isEmpty || domainId == 'global') {
-      return _fallbackScript(domainId: domainId, reasonState: 'S0_ENTRY_INTENT_CAPTURE');
+      return _fallbackScript(
+        domainId: domainId,
+        reasonState: 'S0_ENTRY_INTENT_CAPTURE',
+      );
     }
     final assets = await _ensureDomainAssets(
       domainId: domainId,
       contextScopeHint: contextScopeHint,
     );
     if (assets == null) {
-      return _fallbackScript(domainId: domainId, reasonState: 'S0_ENTRY_INTENT_CAPTURE');
+      return _fallbackScript(
+        domainId: domainId,
+        reasonState: 'S0_ENTRY_INTENT_CAPTURE',
+      );
     }
     final contract = assets.transitionContract;
-    final selectedRoutingCatalog =
-        _routingCatalogRuntime.resolveCatalogForRequest(contextScopeHint);
-    final selectedEventCatalog =
-        _eventCatalogRuntime.resolveCatalogForRequest(contextScopeHint);
+    final selectedRoutingCatalog = _routingCatalogRuntime
+        .resolveCatalogForRequest(contextScopeHint);
+    final selectedEventCatalog = _eventCatalogRuntime.resolveCatalogForRequest(
+      contextScopeHint,
+    );
     final stateIds =
-        (contract['stateIds'] as List?)?.whereType<String>().toList(growable: false) ??
+        (contract['stateIds'] as List?)?.whereType<String>().toList(
+          growable: false,
+        ) ??
         const <String>[];
     final currentStateId = _resolveCurrentState(
       contextScopeHint: contextScopeHint,
@@ -132,12 +144,12 @@ class DialogueStateRuntime {
       contextScopeHint: contextScopeHint,
     );
     final transitions =
-        (contract['transitions'] as List?)?.whereType<Map>().toList(growable: false) ??
+        (contract['transitions'] as List?)?.whereType<Map>().toList(
+          growable: false,
+        ) ??
         const <Map>[];
     final nextStateCandidates = transitions
-        .where(
-          (item) => (item['from']?.toString() ?? '') == currentStateId,
-        )
+        .where((item) => (item['from']?.toString() ?? '') == currentStateId)
         .map((item) => (item['to']?.toString() ?? '').trim())
         .where((item) => item.isNotEmpty)
         .toSet()
@@ -146,7 +158,9 @@ class DialogueStateRuntime {
       transitions: transitions,
       currentStateId: currentStateId,
       detectedEvent: detectedEvent,
-      fallback: nextStateCandidates.isNotEmpty ? nextStateCandidates.first : currentStateId,
+      fallback: nextStateCandidates.isNotEmpty
+          ? nextStateCandidates.first
+          : currentStateId,
     );
     final requiredFieldsByState =
         (contract['requiredFieldsByState'] as Map?)?.cast<String, dynamic>() ??
@@ -156,7 +170,8 @@ class DialogueStateRuntime {
             ?.whereType<String>()
             .toList(growable: false) ??
         const <String>[];
-    final globalRules = (contract['globalRules'] as Map?)?.cast<String, dynamic>() ??
+    final globalRules =
+        (contract['globalRules'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final enrichmentPolicy =
         (globalRules['enrichmentPolicy'] as Map?)?.cast<String, dynamic>() ??
@@ -168,9 +183,10 @@ class DialogueStateRuntime {
         ((contract['passCriteria'] as Map?)?['roundPass'] as Map?)
             ?.cast<String, dynamic>() ??
         const <String, dynamic>{};
-    final hardFailCodes = (contract['hardFailCodes'] as List?)
-            ?.whereType<String>()
-            .toList(growable: false) ??
+    final hardFailCodes =
+        (contract['hardFailCodes'] as List?)?.whereType<String>().toList(
+          growable: false,
+        ) ??
         const <String>[];
     return DialogueRoundScript(
       domainId: domainId,
@@ -202,10 +218,9 @@ class DialogueStateRuntime {
     required String domainId,
     required Map<String, dynamic> contextScopeHint,
   }) async {
-    final selectedRoutingCatalog =
-        _routingCatalogRuntime.resolveCatalogForRequest(contextScopeHint);
-    final fallbackPath =
-        'assets/personal_assistant/prompts/domains/$domainId/dialogue';
+    final selectedRoutingCatalog = _routingCatalogRuntime
+        .resolveCatalogForRequest(contextScopeHint);
+    final fallbackPath = 'assets/personal_assistant/skills/$domainId/dialogue';
     final selectedRule = selectedRoutingCatalog.rules.firstWhere(
       (rule) => rule.domainId == domainId,
       orElse: () => DomainRoutingRule(
@@ -216,8 +231,9 @@ class DialogueStateRuntime {
         dialoguePath: fallbackPath,
       ),
     );
-    final basePath =
-        selectedRule.dialoguePath.trim().isNotEmpty ? selectedRule.dialoguePath.trim() : fallbackPath;
+    final basePath = selectedRule.dialoguePath.trim().isNotEmpty
+        ? selectedRule.dialoguePath.trim()
+        : fallbackPath;
     final cacheKey = '$domainId@$basePath';
     final cached = _cache[cacheKey];
     if (cached != null) return cached;
@@ -229,11 +245,11 @@ class DialogueStateRuntime {
 
   Future<_DomainDialogueAssets?> _loadDomainAssets(String base) async {
     try {
-      final transitionContractRaw = await rootBundle.loadString(
+      final transitionContractRaw = await _loadText(
         '$base/state_transition_contract.json',
       );
-      final statePromptsRaw = await rootBundle.loadString('$base/state_prompts.md');
-      final stateMachineRaw = await rootBundle.loadString('$base/state_machine.md');
+      final statePromptsRaw = await _loadText('$base/state_prompts.md');
+      final stateMachineRaw = await _loadText('$base/state_machine.md');
       final decoded = jsonDecode(transitionContractRaw);
       if (decoded is! Map) return null;
       return _DomainDialogueAssets(
@@ -246,6 +262,18 @@ class DialogueStateRuntime {
     }
   }
 
+  Future<String> _loadText(String path) async {
+    try {
+      return await rootBundle.loadString(path);
+    } catch (_) {
+      final file = File(path);
+      if (await file.exists()) {
+        return await file.readAsString();
+      }
+      rethrow;
+    }
+  }
+
   String _resolveCurrentState({
     required Map<String, dynamic> contextScopeHint,
     required List<String> allowedStateIds,
@@ -254,10 +282,15 @@ class DialogueStateRuntime {
         (contextScopeHint['dialogueState'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final fromHint = (dialogueHint['currentStateId'] as String?)?.trim() ?? '';
-    if (fromHint.isNotEmpty && allowedStateIds.contains(fromHint)) return fromHint;
-    final fromScope = (contextScopeHint['currentStateId'] as String?)?.trim() ?? '';
-    if (fromScope.isNotEmpty && allowedStateIds.contains(fromScope)) return fromScope;
-    return allowedStateIds.isNotEmpty ? allowedStateIds.first : 'S0_ENTRY_INTENT_CAPTURE';
+    if (fromHint.isNotEmpty && allowedStateIds.contains(fromHint))
+      return fromHint;
+    final fromScope =
+        (contextScopeHint['currentStateId'] as String?)?.trim() ?? '';
+    if (fromScope.isNotEmpty && allowedStateIds.contains(fromScope))
+      return fromScope;
+    return allowedStateIds.isNotEmpty
+        ? allowedStateIds.first
+        : 'S0_ENTRY_INTENT_CAPTURE';
   }
 
   String _resolveNextState({
@@ -283,8 +316,9 @@ class DialogueStateRuntime {
     required String stateBefore,
     required Map<String, dynamic> contextScopeHint,
   }) {
-    final eventCatalog =
-        _eventCatalogRuntime.resolveCatalogForRequest(contextScopeHint);
+    final eventCatalog = _eventCatalogRuntime.resolveCatalogForRequest(
+      contextScopeHint,
+    );
     final text = userQuery.trim();
     if (text.isEmpty) return eventCatalog.emptyTextEvent;
     final rules = <EventDetectionRule>[

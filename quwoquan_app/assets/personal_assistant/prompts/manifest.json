@@ -1,6 +1,50 @@
 {
   "templates": [
     {
+      "metaPath": "assets/personal_assistant/prompts/global/stack.identity.meta.json",
+      "contentPath": "assets/personal_assistant/prompts/global/stack.identity.md"
+    },
+    {
+      "metaPath": "assets/personal_assistant/prompts/global/stack.safety.meta.json",
+      "contentPath": "assets/personal_assistant/prompts/global/stack.safety.md"
+    },
+    {
+      "metaPath": "assets/personal_assistant/prompts/global/stack.persona.meta.json",
+      "contentPath": "assets/personal_assistant/prompts/global/stack.persona.md"
+    },
+    {
+      "metaPath": "assets/personal_assistant/prompts/global/stack.tool_policy.meta.json",
+      "contentPath": "assets/personal_assistant/prompts/global/stack.tool_policy.md"
+    },
+    {
+      "metaPath": "assets/personal_assistant/prompts/global/phase.output_contract.plan.meta.json",
+      "contentPath": "assets/personal_assistant/prompts/global/phase.output_contract.plan.md"
+    },
+    {
+      "metaPath": "assets/personal_assistant/prompts/global/phase.output_contract.answer.meta.json",
+      "contentPath": "assets/personal_assistant/prompts/global/phase.output_contract.answer.md"
+    },
+    {
+      "metaPath": "assets/personal_assistant/prompts/global/phase.output_contract.ask_user.meta.json",
+      "contentPath": "assets/personal_assistant/prompts/global/phase.output_contract.ask_user.md"
+    },
+    {
+      "metaPath": "assets/personal_assistant/prompts/global/stack.global_system.meta.json",
+      "contentPath": "assets/personal_assistant/prompts/global/stack.global_system.md"
+    },
+    {
+      "metaPath": "assets/personal_assistant/prompts/global/stack.runtime_policy.meta.json",
+      "contentPath": "assets/personal_assistant/prompts/global/stack.runtime_policy.md"
+    },
+    {
+      "metaPath": "assets/personal_assistant/prompts/global/stack.recovery_policy.meta.json",
+      "contentPath": "assets/personal_assistant/prompts/global/stack.recovery_policy.md"
+    },
+    {
+      "metaPath": "assets/personal_assistant/prompts/global/stack.output_contract.meta.json",
+      "contentPath": "assets/personal_assistant/prompts/global/stack.output_contract.md"
+    },
+    {
       "metaPath": "assets/personal_assistant/prompts/global/planner.global_plan.meta.json",
       "contentPath": "assets/personal_assistant/prompts/global/planner.global_plan.md"
     },
@@ -11,6 +55,14 @@
     {
       "metaPath": "assets/personal_assistant/prompts/global/synthesizer.final_answer.meta.json",
       "contentPath": "assets/personal_assistant/prompts/global/synthesizer.final_answer.md"
+    },
+    {
+      "metaPath": "assets/personal_assistant/prompts/global/synthesizer.multi_skill_fusion.meta.json",
+      "contentPath": "assets/personal_assistant/prompts/global/synthesizer.multi_skill_fusion.md"
+    },
+    {
+      "metaPath": "assets/personal_assistant/prompts/global/summarize_session.meta.json",
+      "contentPath": "assets/personal_assistant/prompts/global/summarize_session.md"
     },
     {
       "metaPath": "assets/personal_assistant/prompts/web/domain.web_query_plan.meta.json",
@@ -27,158 +79,6 @@
     {
       "metaPath": "assets/personal_assistant/prompts/web/domain.web_evidence_pack.meta.json",
       "contentPath": "assets/personal_assistant/prompts/web/domain.web_evidence_pack.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/weather/domain.weather.plan.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/weather/domain.weather.plan.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/weather/domain.weather.answer.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/weather/domain.weather.answer.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/travel_transport/domain.travel_transport.plan.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/travel_transport/domain.travel_transport.plan.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/travel_transport/domain.travel_transport.answer.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/travel_transport/domain.travel_transport.answer.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/travel_planning/domain.travel_planning.plan.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/travel_planning/domain.travel_planning.plan.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/travel_planning/domain.travel_planning.answer.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/travel_planning/domain.travel_planning.answer.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/local_life/domain.local_life.plan.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/local_life/domain.local_life.plan.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/local_life/domain.local_life.answer.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/local_life/domain.local_life.answer.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/calendar_task/domain.calendar_task.plan.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/calendar_task/domain.calendar_task.plan.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/calendar_task/domain.calendar_task.answer.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/calendar_task/domain.calendar_task.answer.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/knowledge_general/domain.knowledge_general.plan.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/knowledge_general/domain.knowledge_general.plan.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/knowledge_general/domain.knowledge_general.answer.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/knowledge_general/domain.knowledge_general.answer.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/finance_consumer/domain.finance_consumer.plan.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/finance_consumer/domain.finance_consumer.plan.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/finance_consumer/domain.finance_consumer.answer.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/finance_consumer/domain.finance_consumer.answer.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/health_wellness/domain.health_wellness.plan.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/health_wellness/domain.health_wellness.plan.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/health_wellness/domain.health_wellness.answer.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/health_wellness/domain.health_wellness.answer.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/education_learning/domain.education_learning.plan.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/education_learning/domain.education_learning.plan.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/education_learning/domain.education_learning.answer.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/education_learning/domain.education_learning.answer.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/work_productivity/domain.work_productivity.plan.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/work_productivity/domain.work_productivity.plan.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/work_productivity/domain.work_productivity.answer.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/work_productivity/domain.work_productivity.answer.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/shopping_decision/domain.shopping_decision.plan.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/shopping_decision/domain.shopping_decision.plan.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/shopping_decision/domain.shopping_decision.answer.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/shopping_decision/domain.shopping_decision.answer.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/policy_public_service/domain.policy_public_service.plan.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/policy_public_service/domain.policy_public_service.plan.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/policy_public_service/domain.policy_public_service.answer.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/policy_public_service/domain.policy_public_service.answer.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/emotion_companion/domain.emotion_companion.plan.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/emotion_companion/domain.emotion_companion.plan.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/emotion_companion/domain.emotion_companion.answer.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/emotion_companion/domain.emotion_companion.answer.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/social_companion_chat/domain.social_companion_chat.plan.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/social_companion_chat/domain.social_companion_chat.plan.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/social_companion_chat/domain.social_companion_chat.answer.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/social_companion_chat/domain.social_companion_chat.answer.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/relationship_matchmaking/domain.relationship_matchmaking.plan.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/relationship_matchmaking/domain.relationship_matchmaking.plan.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/relationship_matchmaking/domain.relationship_matchmaking.answer.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/relationship_matchmaking/domain.relationship_matchmaking.answer.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/divination_fortune/domain.divination_fortune.plan.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/divination_fortune/domain.divination_fortune.plan.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/divination_fortune/domain.divination_fortune.answer.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/divination_fortune/domain.divination_fortune.answer.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/astrology_constellation/domain.astrology_constellation.plan.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/astrology_constellation/domain.astrology_constellation.plan.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/astrology_constellation/domain.astrology_constellation.answer.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/astrology_constellation/domain.astrology_constellation.answer.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/family_parenting/domain.family_parenting.plan.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/family_parenting/domain.family_parenting.plan.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/family_parenting/domain.family_parenting.answer.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/family_parenting/domain.family_parenting.answer.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/fallback_general_search/domain.fallback_general_search.plan.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/fallback_general_search/domain.fallback_general_search.plan.md"
-    },
-    {
-      "metaPath": "assets/personal_assistant/prompts/domains/fallback_general_search/domain.fallback_general_search.answer.meta.json",
-      "contentPath": "assets/personal_assistant/prompts/domains/fallback_general_search/domain.fallback_general_search.answer.md"
     }
   ]
 }

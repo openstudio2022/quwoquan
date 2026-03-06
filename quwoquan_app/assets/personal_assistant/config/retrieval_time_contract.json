@@ -1,0 +1,35 @@
+{
+  "contractVersion": "retrieval_time_contract_v1",
+  "defaultScope": "last_30d",
+  "defaultFreshnessHoursMax": 72,
+  "supportedScopes": [
+    "latest",
+    "today",
+    "last_7d",
+    "last_30d",
+    "last_1y",
+    "year_to_date",
+    "year",
+    "year_month",
+    "year_month_day",
+    "custom",
+    "unspecified"
+  ],
+  "windowHoursByScope": {
+    "latest": 24,
+    "last_7d": 168,
+    "last_30d": 720,
+    "last_1y": 8760
+  },
+  "freshnessHoursMaxByScope": {
+    "latest": 6,
+    "today": 12,
+    "last_7d": 72,
+    "last_30d": 720,
+    "last_1y": 8760,
+    "year_to_date": 4320,
+    "year": 43800,
+    "year_month": 26280,
+    "year_month_day": 17520
+  }
+}

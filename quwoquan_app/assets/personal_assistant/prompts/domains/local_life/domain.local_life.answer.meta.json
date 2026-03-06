@@ -1,9 +1,0 @@
-{
-  "templateId": "domain.local_life.answer",
-  "version": "2026.02.18",
-  "stage": "answer",
-  "domainId": "local_life",
-  "requiredVariables": ["domainResults", "contextSlots", "localLifeEvidencePacks", "userProfileSnapshot", "locationSlots", "categoryTimeSlots", "preferenceSlots"],
-  "outputContract": "domain_answer_v2026_02_18",
-  "selfCheckRules": ["location_hours_consistency", "evidence_per_recommendation", "promo_validity", "no_closed_merchants", "distance_annotated", "booking_navigation_complete"]
-}

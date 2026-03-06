@@ -9,73 +9,80 @@
   },
   "domains": [
     {
+      "domainId": "huawei_cloud_qa",
+      "enabled": true,
+      "priority": 101,
+      "dialoguePath": "assets/personal_assistant/skills/huawei_cloud_qa/dialogue",
+      "intentKeywords": ["华为云", "huaweicloud", "ECS", "OBS", "CCE", "盘古", "ModelArts", "MaaS", "昇腾", "鲲鹏", "GaussDB", "950808", "工单", "云服务器", "对象存储", "容器引擎", "弹性云", "云硬盘", "EVS", "VPC", "EIP", "ELB", "FunctionGraph", "DCS", "RDS", "DDS", "DWS", "WAF", "Anti-DDoS", "云备份", "CBR", "NAT网关", "CDN", "大模型服务", "华为云服务"]
+    },
+    {
       "domainId": "weather",
       "enabled": true,
       "priority": 100,
-      "dialoguePath": "assets/personal_assistant/prompts/domains/weather/dialogue",
-      "intentKeywords": ["天气", "降雨", "温度", "台风", "空气质量"]
+      "dialoguePath": "assets/personal_assistant/skills/weather/dialogue",
+      "intentKeywords": ["天气", "降雨", "温度", "台风", "空气质量", "tianqi", "weather", "forecast", "rain", "temperature"]
     },
     {
       "domainId": "travel_transport",
       "enabled": true,
       "priority": 99,
-      "dialoguePath": "assets/personal_assistant/prompts/domains/travel_transport/dialogue",
+      "dialoguePath": "assets/personal_assistant/skills/travel_transport/dialogue",
       "intentKeywords": ["地铁", "公交", "打车", "高铁", "火车", "路线"]
     },
     {
       "domainId": "travel_planning",
       "enabled": true,
       "priority": 98,
-      "dialoguePath": "assets/personal_assistant/prompts/domains/travel_planning/dialogue",
+      "dialoguePath": "assets/personal_assistant/skills/travel_planning/dialogue",
       "intentKeywords": ["旅游", "旅行", "行程", "景点", "酒店", "攻略"]
     },
     {
       "domainId": "local_life",
       "enabled": true,
       "priority": 97,
-      "dialoguePath": "assets/personal_assistant/prompts/domains/local_life/dialogue",
+      "dialoguePath": "assets/personal_assistant/skills/local_life/dialogue",
       "intentKeywords": ["吃饭", "餐厅", "美食", "团购", "附近", "本地"]
     },
     {
       "domainId": "calendar_task",
       "enabled": true,
       "priority": 96,
-      "dialoguePath": "assets/personal_assistant/prompts/domains/calendar_task/dialogue",
+      "dialoguePath": "assets/personal_assistant/skills/calendar_task/dialogue",
       "intentKeywords": ["日程", "待办", "提醒", "会议", "安排"]
     },
     {
       "domainId": "knowledge_general",
       "enabled": true,
       "priority": 95,
-      "dialoguePath": "assets/personal_assistant/prompts/domains/knowledge_general/dialogue",
+      "dialoguePath": "assets/personal_assistant/skills/knowledge_general/dialogue",
       "intentKeywords": ["是什么", "原理", "科普", "百科", "知识"]
     },
     {
       "domainId": "finance_consumer",
       "enabled": true,
       "priority": 94,
-      "dialoguePath": "assets/personal_assistant/prompts/domains/finance_consumer/dialogue",
+      "dialoguePath": "assets/personal_assistant/skills/finance_consumer/dialogue",
       "intentKeywords": ["理财", "基金", "保险", "信用卡", "贷款", "预算"]
     },
     {
       "domainId": "health_wellness",
       "enabled": true,
       "priority": 93,
-      "dialoguePath": "assets/personal_assistant/prompts/domains/health_wellness/dialogue",
+      "dialoguePath": "assets/personal_assistant/skills/health_wellness/dialogue",
       "intentKeywords": ["健康", "症状", "饮食", "睡眠", "运动", "减肥"]
     },
     {
       "domainId": "education_learning",
       "enabled": true,
       "priority": 92,
-      "dialoguePath": "assets/personal_assistant/prompts/domains/education_learning/dialogue",
+      "dialoguePath": "assets/personal_assistant/skills/education_learning/dialogue",
       "intentKeywords": ["学习", "考试", "课程", "刷题", "作业", "备考"]
     },
     {
       "domainId": "work_productivity",
       "enabled": true,
       "priority": 91,
-      "dialoguePath": "assets/personal_assistant/prompts/domains/work_productivity/dialogue",
+      "dialoguePath": "assets/personal_assistant/skills/work_productivity/dialogue",
       "intentKeywords": [
         "效率",
         "任务拆解",
@@ -96,63 +103,63 @@
       "domainId": "shopping_decision",
       "enabled": true,
       "priority": 90,
-      "dialoguePath": "assets/personal_assistant/prompts/domains/shopping_decision/dialogue",
+      "dialoguePath": "assets/personal_assistant/skills/shopping_decision/dialogue",
       "intentKeywords": ["买哪个", "对比", "选购", "参数", "测评"]
     },
     {
       "domainId": "policy_public_service",
       "enabled": true,
       "priority": 89,
-      "dialoguePath": "assets/personal_assistant/prompts/domains/policy_public_service/dialogue",
+      "dialoguePath": "assets/personal_assistant/skills/policy_public_service/dialogue",
       "intentKeywords": ["政策", "办理", "政务", "社保", "公积金", "落户"]
     },
     {
       "domainId": "emotion_companion",
       "enabled": true,
       "priority": 88,
-      "dialoguePath": "assets/personal_assistant/prompts/domains/emotion_companion/dialogue",
+      "dialoguePath": "assets/personal_assistant/skills/emotion_companion/dialogue",
       "intentKeywords": ["难过", "焦虑", "压力", "崩溃", "陪我聊聊"]
     },
     {
       "domainId": "social_companion_chat",
       "enabled": true,
       "priority": 87,
-      "dialoguePath": "assets/personal_assistant/prompts/domains/social_companion_chat/dialogue",
+      "dialoguePath": "assets/personal_assistant/skills/social_companion_chat/dialogue",
       "intentKeywords": ["闲聊", "聊天", "在吗", "哈哈", "随便聊"]
     },
     {
       "domainId": "relationship_matchmaking",
       "enabled": true,
       "priority": 86,
-      "dialoguePath": "assets/personal_assistant/prompts/domains/relationship_matchmaking/dialogue",
-      "intentKeywords": ["恋爱", "婚配", "分手", "相处", "关系"]
+      "dialoguePath": "assets/personal_assistant/skills/relationship_matchmaking/dialogue",
+      "intentKeywords": ["恋爱", "婚配", "婚嫁", "婚姻", "结婚", "分手", "相处", "关系"]
     },
     {
       "domainId": "divination_fortune",
       "enabled": true,
       "priority": 93,
-      "dialoguePath": "assets/personal_assistant/prompts/domains/divination_fortune/dialogue",
+      "dialoguePath": "assets/personal_assistant/skills/divination_fortune/dialogue",
       "intentKeywords": ["算命", "卜卦", "求签", "八字", "运势", "气运", "时运"]
     },
     {
       "domainId": "astrology_constellation",
       "enabled": true,
       "priority": 84,
-      "dialoguePath": "assets/personal_assistant/prompts/domains/astrology_constellation/dialogue",
+      "dialoguePath": "assets/personal_assistant/skills/astrology_constellation/dialogue",
       "intentKeywords": ["星座", "上升", "水逆", "星盘"]
     },
     {
       "domainId": "family_parenting",
       "enabled": true,
       "priority": 83,
-      "dialoguePath": "assets/personal_assistant/prompts/domains/family_parenting/dialogue",
+      "dialoguePath": "assets/personal_assistant/skills/family_parenting/dialogue",
       "intentKeywords": ["育儿", "孩子", "亲子", "家庭教育", "青春期"]
     },
     {
       "domainId": "fallback_general_search",
       "enabled": true,
       "priority": 1,
-      "dialoguePath": "assets/personal_assistant/prompts/domains/fallback_general_search/dialogue",
+      "dialoguePath": "assets/personal_assistant/skills/fallback_general_search/dialogue",
       "intentKeywords": []
     }
   ]

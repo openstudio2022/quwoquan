@@ -37,6 +37,6 @@ level_acceptance:
     linked_tasks: [circles-channel-management-panel]
     tests: []
 execution:
-  # 迁移后 lib/features/* → lib/ui/{domain}/（specs/01_APP_DIRECTORY_MIGRATION_TASKS）
-  local_gate: "flutter analyze lib/features/create/ lib/features/settings/ lib/features/chat/ lib/features/assistant/"
+  # 迁移后统一使用 lib/ui/{domain}/（specs/01_APP_DIRECTORY_MIGRATION_TASKS）
+  local_gate: "flutter analyze lib/ui/content/entry/ lib/ui/settings/ lib/ui/chat/ lib/ui/assistant/"
   full_gate: "make gate"

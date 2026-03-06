@@ -101,13 +101,12 @@ Future<void> main() async {
       }
       final hasSearch = response.traces.any((trace) {
         final msg = trace.message.toLowerCase();
-        if (msg.contains('calling web_search') ||
-            msg.contains('calling unified_retrieval')) {
+        if (msg.contains('calling web_search')) {
           return true;
         }
         final data = trace.data ?? const <String, dynamic>{};
         final toolName = (data['toolName'] ?? '').toString().toLowerCase();
-        return toolName == 'web_search' || toolName == 'unified_retrieval';
+        return toolName == 'web_search';
       });
       stdout.writeln(
         ' - $id => ${passed ? 'PASS' : 'FAIL'} score=$score '
@@ -140,7 +139,6 @@ int _scoreResponse({
   final hasSearch = response.traces.any((trace) {
     final msg = trace.message.toLowerCase();
     return msg.contains('calling web_search') ||
-        msg.contains('calling unified_retrieval') ||
         msg.contains('检索结果');
   });
   if (hasSearch) score += 20;

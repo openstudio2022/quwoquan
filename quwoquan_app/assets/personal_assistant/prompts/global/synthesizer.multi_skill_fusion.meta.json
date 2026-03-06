@@ -1,0 +1,22 @@
+{
+  "templateId": "synthesizer.multi_skill_fusion",
+  "version": "2026.03.03",
+  "stage": "answer",
+  "domainId": "global",
+  "requiredVariables": [
+    "userQuery",
+    "subagentRuns",
+    "domainResults",
+    "contextSlots",
+    "webEvidencePacks",
+    "userProfileSnapshot"
+  ],
+  "outputContract": "assistant_turn_v2",
+  "selfCheckRules": [
+    "constraint_satisfied",
+    "coverage_satisfied",
+    "safety_satisfied",
+    "consistency_satisfied",
+    "conflict_resolved"
+  ]
+}

@@ -2,10 +2,13 @@ class AssistantToolCall {
   const AssistantToolCall({
     required this.name,
     required this.arguments,
+    this.id = '',
   });
 
   final String name;
   final Map<String, dynamic> arguments;
+  /// OpenAI function calling 协议中的 tool_call id，用于构建 tool message。
+  final String id;
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{

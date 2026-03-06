@@ -296,7 +296,10 @@ class AssistentLearningService {
   }
 
   double _scoreRelevance(String answerText) {
-    if (answerText.contains('我已理解你的需求。你可以让我执行')) return 2.0;
+    if (answerText.contains('我已理解你的需求。你可以让我执行') ||
+        answerText.contains('我已理解你的问题。为保护隐私')) {
+      return 2.0;
+    }
     if (answerText.trim().isEmpty) return 1.0;
     return 4.0;
   }

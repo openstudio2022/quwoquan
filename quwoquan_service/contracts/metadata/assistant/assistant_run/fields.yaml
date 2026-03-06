@@ -106,6 +106,96 @@ entities:
         api_exposure: read
         ops_exposure: read
 
+      - name: uiPhaseTimelineV1
+        type: "[]object"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 对话过程阶段化时间线（phaseType/status/summary/details/references）
+
+      - name: uiUsageStatsV1
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 模型使用统计（modelCallCount/totalTokens/maxTokensPerCall）
+
+      - name: responseMarkdown
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 助手统一 Markdown 输出正文（专业级结构化排版主载体）
+
+      - name: responseBlocks
+        type: "[]object"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: Markdown 结构块（compare/trend/diagram 等）解析后的标准块数组
+
+      - name: responseFormatVersion
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: Markdown 输出协议版本（例如 md.v1）
+
+      - name: decisionJson
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: assistant_turn_v2 机器决策通道（nextAction/toolPlan/slotState/askUser）
+
+      - name: toolObservations
+        type: "[]object"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 工具观测标准化数组（tool_observation_v1）
+
+      - name: subagentRuns
+        type: "[]object"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 子代理任务计划与结果摘要
+
+      - name: renderMode
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 展示模式（markdown_only/md_json_dual/fallback_text）
+
+      - name: contractVersion
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 回合协议版本（assistant_turn_v2 等）
+
       - name: toolsCalled
         type: "[]string"
         constraints: [NULLABLE]

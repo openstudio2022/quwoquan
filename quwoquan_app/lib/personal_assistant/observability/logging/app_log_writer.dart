@@ -25,9 +25,8 @@ class AppLogWriter {
       subDir.createSync(recursive: true);
     }
     final file = File('${subDir.path}/$fileName');
-    final pretty = const JsonEncoder.withIndent('  ').convert(payload);
     file.writeAsStringSync(
-      '$pretty\n\n',
+      '${jsonEncode(payload)}\n',
       mode: FileMode.append,
       flush: true,
     );

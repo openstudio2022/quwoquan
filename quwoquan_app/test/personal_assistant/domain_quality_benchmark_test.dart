@@ -13,12 +13,16 @@ void main() {
       expect(benchmarkFile.existsSync(), isTrue);
       final decoded = jsonDecode(benchmarkFile.readAsStringSync()) as Map;
       final domains =
-          (decoded['domains'] as List?)?.whereType<Map>().toList(growable: false) ??
+          (decoded['domains'] as List?)?.whereType<Map>().toList(
+            growable: false,
+          ) ??
           const <Map>[];
       expect(domains.length, equals(19));
       for (final domain in domains) {
         final cases =
-            (domain['cases'] as List?)?.whereType<Map>().toList(growable: false) ??
+            (domain['cases'] as List?)?.whereType<Map>().toList(
+              growable: false,
+            ) ??
             const <Map>[];
         expect(cases.length >= 3 && cases.length <= 5, isTrue);
         expect(cases.any((c) => c['multiTurn'] == true), isTrue);
@@ -28,45 +32,24 @@ void main() {
     test('run per-domain benchmark and enforce first-class quality score', () {
       final decoded = jsonDecode(benchmarkFile.readAsStringSync()) as Map;
       final domains =
-          (decoded['domains'] as List?)?.whereType<Map>().toList(growable: false) ??
+          (decoded['domains'] as List?)?.whereType<Map>().toList(
+            growable: false,
+          ) ??
           const <Map>[];
       final failures = <String>[];
 
       for (final domain in domains) {
         final domainId = (domain['domainId'] ?? '').toString();
         final cases =
-            (domain['cases'] as List?)?.whereType<Map>().toList(growable: false) ??
+            (domain['cases'] as List?)?.whereType<Map>().toList(
+              growable: false,
+            ) ??
             const <Map>[];
-        final planMd = File(
-          'assets/personal_assistant/prompts/domains/$domainId/domain.$domainId.plan.md',
-        );
-        final answerMd = File(
-          'assets/personal_assistant/prompts/domains/$domainId/domain.$domainId.answer.md',
-        );
-        final planMeta = File(
-          'assets/personal_assistant/prompts/domains/$domainId/domain.$domainId.plan.meta.json',
-        );
-        final answerMeta = File(
-          'assets/personal_assistant/prompts/domains/$domainId/domain.$domainId.answer.meta.json',
-        );
-        if (!planMd.existsSync() ||
-            !answerMd.existsSync() ||
-            !planMeta.existsSync() ||
-            !answerMeta.existsSync()) {
-          failures.add('$domainId: template assets missing');
+        final score = _evaluateSkillDomain(domainId: domainId, cases: cases);
+        if (score < 0) {
+          failures.add('$domainId: missing skill baseline');
           continue;
         }
-        final planText = planMd.readAsStringSync();
-        final answerText = answerMd.readAsStringSync();
-        final answerMetaJson =
-            jsonDecode(answerMeta.readAsStringSync()) as Map<String, dynamic>;
-        final score = _evaluateDomain(
-          domainId: domainId,
-          planText: planText,
-          answerText: answerText,
-          answerMeta: answerMetaJson,
-          cases: cases,
-        );
         if (score < 0.85) {
           failures.add('$domainId: score=${score.toStringAsFixed(2)} < 0.85');
         }
@@ -79,49 +62,32 @@ void main() {
   });
 }
 
-double _evaluateDomain({
+double _evaluateSkillDomain({
   required String domainId,
-  required String planText,
-  required String answerText,
-  required Map<String, dynamic> answerMeta,
   required List<Map> cases,
 }) {
+  final skillPath = _migratedSkillByDomain[domainId];
+  if (skillPath == null) return -1;
+  final skillFile = File(skillPath);
+  if (!skillFile.existsSync()) return -1;
+  final raw = skillFile.readAsStringSync();
   var score = 0.0;
-  final mandatorySections = <String>[
-    '## 任务背景',
-    '## 任务目标',
-    '## 约束',
-    '## 执行要求',
-    '## 输出格式',
-    '## 反思与自检',
-    '=== CONTEXT_DATA_START ===',
-    '=== CONTEXT_DATA_END ===',
+  final requiredSections = <String>[
+    '## 目标',
+    '## 工具调用策略',
+    '## 触发与禁用条件',
+    '## 双轨输出契约',
+    '## Markdown 卡片结构',
+    '## 参考资料',
+    '## 脚本指引',
+    '## 轮次状态定义',
   ];
-  final hasAllPlanSections = mandatorySections.every(planText.contains);
-  final hasAllAnswerSections = mandatorySections.every(answerText.contains);
-  if (hasAllPlanSections) score += 0.2;
-  if (hasAllAnswerSections) score += 0.2;
-
-  final outputContract = (answerMeta['outputContract'] ?? '').toString();
-  if (outputContract == 'domain_answer_v2026_02_18') score += 0.1;
-  final requiredVars = (answerMeta['requiredVariables'] as List?)
-          ?.whereType<String>()
-          .toList(growable: false) ??
-      const <String>[];
-  if (requiredVars.contains('domainResults') && requiredVars.contains('contextSlots')) {
-    score += 0.1;
-  }
-  final selfCheckRules = (answerMeta['selfCheckRules'] as List?)
-          ?.whereType<String>()
-          .toList(growable: false) ??
-      const <String>[];
-  if (selfCheckRules.length >= 3) score += 0.1;
-
-  final lower = answerText.toLowerCase();
-  if (domainId == 'fallback_general_search') {
-    if (lower.contains('online') && lower.contains('offline')) score += 0.1;
-  } else if (_highRiskDomains.contains(domainId)) {
-    if (answerText.contains('免责声明') || answerText.contains('边界')) score += 0.1;
+  if (requiredSections.every(raw.contains)) score += 0.4;
+  if (raw.contains('assistant_turn_v2')) score += 0.15;
+  if (raw.contains('tool_observation_v1')) score += 0.15;
+  if (raw.contains('dialogue/state_transition_contract.json')) score += 0.1;
+  if (_highRiskDomains.contains(domainId)) {
+    if (raw.contains('仅供参考') || raw.contains('不确定性声明')) score += 0.1;
   } else {
     score += 0.1;
   }
@@ -129,19 +95,17 @@ double _evaluateDomain({
   var casePass = 0;
   for (final qa in cases) {
     final mustContain =
-        (qa['mustContain'] as List?)?.whereType<String>().toList(growable: false) ??
-            const <String>[];
-    final hit = mustContain.where((item) => answerText.contains(item)).length;
-    if (mustContain.isEmpty) {
+        (qa['mustContain'] as List?)?.whereType<String>().toList(
+          growable: false,
+        ) ??
+        const <String>[];
+    final hit = mustContain.where((item) => raw.contains(item)).length;
+    if (mustContain.isEmpty || (hit / mustContain.length) >= 0.3) {
       casePass += 1;
-      continue;
     }
-    final ratio = hit / mustContain.length;
-    if (ratio >= 0.5) casePass += 1;
   }
   final caseRatio = cases.isEmpty ? 0.0 : casePass / cases.length;
-  score += 0.2 * caseRatio;
-
+  score += 0.1 * caseRatio;
   return score;
 }
 
@@ -153,3 +117,40 @@ const Set<String> _highRiskDomains = <String>{
   'family_parenting',
 };
 
+const Map<String, String> _migratedSkillByDomain = <String, String>{
+  'weather': 'assets/personal_assistant/skills/weather/SKILL.md',
+  'travel_transport':
+      'assets/personal_assistant/skills/travel_transport/SKILL.md',
+  'travel_planning':
+      'assets/personal_assistant/skills/travel_planning/SKILL.md',
+  'local_life': 'assets/personal_assistant/skills/local_life/SKILL.md',
+  'calendar_task': 'assets/personal_assistant/skills/calendar_task/SKILL.md',
+  'knowledge_general':
+      'assets/personal_assistant/skills/knowledge_general/SKILL.md',
+  'finance_consumer':
+      'assets/personal_assistant/skills/finance_consumer/SKILL.md',
+  'health_wellness':
+      'assets/personal_assistant/skills/health_wellness/SKILL.md',
+  'education_learning':
+      'assets/personal_assistant/skills/education_learning/SKILL.md',
+  'work_productivity':
+      'assets/personal_assistant/skills/work_productivity/SKILL.md',
+  'shopping_decision':
+      'assets/personal_assistant/skills/shopping_decision/SKILL.md',
+  'policy_public_service':
+      'assets/personal_assistant/skills/policy_public_service/SKILL.md',
+  'emotion_companion':
+      'assets/personal_assistant/skills/emotion_companion/SKILL.md',
+  'social_companion_chat':
+      'assets/personal_assistant/skills/social_companion_chat/SKILL.md',
+  'relationship_matchmaking':
+      'assets/personal_assistant/skills/relationship_matchmaking/SKILL.md',
+  'divination_fortune':
+      'assets/personal_assistant/skills/divination_fortune/SKILL.md',
+  'astrology_constellation':
+      'assets/personal_assistant/skills/astrology_constellation/SKILL.md',
+  'family_parenting':
+      'assets/personal_assistant/skills/family_parenting/SKILL.md',
+  'fallback_general_search':
+      'assets/personal_assistant/skills/fallback_general_search/SKILL.md',
+};

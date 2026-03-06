@@ -2,115 +2,146 @@
 
 > **本文档是整个项目开发的唯一主线**。所有 rules、commands、specs 从此文档索引。
 > 不要看其它文档来理解开发流程 — 本文档即全貌。
+>
+> **从属关系（强制）**：任何子域规范（包括但不限于个人助理、推荐、内容、聊天）都只能作为本主线的“子规范补充”，不得覆盖或绕过本主线与特性树标准。若冲突，以本文件与 `specs/feature-tree/00_FEATURE_TREE_STANDARD.md` 为准。
 
 ---
 
-## 一、开发流水线（6 个阶段 × 自动卡点）
+## 一、SDD 开发流水线（Spec-Driven Development）
+
+### 标准主流程
 
 ```
-  特性 → 入库(L1/L2) → 集成验证(L3/L4) → 生产(灰度)
-        deliver             deploy
+explore → prd → design → dev → archive → commit → deploy
+                           └────── deliver（= dev + archive + commit）──────┘
 ```
 
 ```
-  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
-  │  Plan    │───▶│  Create  │───▶│ Implement│───▶│  Verify  │───▶│  Submit  │───▶│  Deploy  │
-  │(需求澄清) │    │(特性创建) │    │ (实施)   │    │ (验收)   │    │ (入库)   │    │ (部署)   │
-  └────┬─────┘    └────┬─────┘    └────┬─────┘    └────┬─────┘    └────┬─────┘    └────┬─────┘
-       │               │               │               │               │               │
-   ┌───┴───┐       ┌───┴───┐       ┌───┴───┐       ┌───┴───┐       ┌───┴───┐       ┌───┴───┐
-   │ AUTO  │       │ AUTO  │       │ AUTO  │       │ AUTO  │       │ AUTO  │       │ AUTO  │
-   │ GATE  │       │ GATE  │       │ GATE  │       │ GATE  │       │ GATE  │       │ GATE  │
-   │  G0   │       │  G1   │       │  G2   │       │  G3   │       │  G4   │       │  G5   │
-   └───────┘       └───────┘       └───────┘       └───────┘       └───────┘       └───────┘
-       │               │               │               │               │               │
-       │               │               │               │               │               ▼
-       │               │               │               │               │    ┌──────────────────┐
-       │               │               │               │               │    │ G5a 部署 integration│
-       │               │               │               │               │    │ G5b L3/L4 集成验证 │
-       │               │               │               │               │    │ G5c 灰度到 prod   │
-       │               │               │               │               │    └──────────────────┘
-       ▼               ▼               ▼               ▼               ▼
-  L1/L2 自测通过 ────────────────────────────────────────────────────────────────▶ 入库
-  L3/L4 集成验证 ─────────────────────────────────────────────────────────────────▶ integration
-  灰度/滚动发布 ──────────────────────────────────────────────────────────────────▶ prod
+  ┌─────────┐  ┌─────────┐  ┌──────────┐  ┌─────────┐  ┌──────────┐  ┌─────────┐  ┌─────────┐
+  │ explore │─▶│   prd   │─▶│  design  │─▶│   dev   │─▶│  archive │─▶│ commit  │─▶│ deploy  │
+  │ (探索)   │  │(需求规格)│  │ (设计基线)│  │ (实施)  │  │ (归档)  │  │(提交入库)│  │ (部署)  │
+  └────┬────┘  └────┬────┘  └────┬─────┘  └────┬────┘  └────┬─────┘  └────┬────┘  └────┬────┘
+       │             │            │              │             │             │             │
+    G0 准入       PRD Gate    Design Gate     Dev Gate       G3            G4            G5
+    自检（思考）    + G0          + G1          + G2        gate-full    L1+L2+审计   integration
+                                                                                      → prod
 ```
 
-每个阶段结束时 AI Agent **自动执行**对应卡点，不需要人为触发。
+### 原型快速通道（豁免特性树分解，所有编码约束完整遵从）
+
+```
+try → [验证通过] → land → [人工确认] → commit → deploy
+```
+
+每个阶段进入时 AI Agent **自动执行阶段准入自检（Phase Gate）**，每个阶段结束时**自动执行卡点（G0~G5）**，不需要人为触发。
 
 ---
 
 ## 二、各阶段详解
 
-### 阶段 1：Plan（需求澄清与任务规划）
+### 阶段 0：explore（探索）
 
-**入口**：用户提出需求（ask/plan 模式自动激活约束）
+**入口**：`/explore`（ask/plan 模式自动激活约束）
 
 **AI Agent 必须做的事**：
 1. 确认需求属于哪个特性树节点（`specs/feature-tree/`）
 2. 确认涉及哪些业务对象（查 `contracts/metadata/`）
-3. 确认涉及哪些扩展场景（S01~S20，见附录 A）
+3. 确认涉及哪些扩展场景（S01~S25，见附录 A）
 4. 生成任务拆解，强制顺序：metadata → codegen → 业务逻辑 → 测试
 5. **特性树分解遵从**：节点归属与新建须符合 `specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md`（L4 默认叶子，L5 仅当 L4 需 subtask 分解时使用）
-6. 涉及部署拓扑时，补充 `deploy/shared/process_domain_mapping.yaml`（`environments -> process -> domains`）
+6. 涉及部署拓扑时，补充 `deploy/shared/process_domain_mapping.yaml`
+
+**禁止**：在 explore 阶段写任何实现代码。
+
+**使用命令**：`/explore`（思考）→ `/prd`（需求规格）
+
+---
+
+### 阶段 1：prd（需求规格）
+
+**入口**：`/prd`
+
+**PRD Gate 自检**（进入前全部通过，否则 GATE_BLOCK）：
+- P1: 能用一句话描述目标用户 + 核心问题？
+- P2: 特性树 L4 路径已确定？
+- P3: 业务对象已识别（已存在/需新建）？
+- P4: 至少 3 条可量化验收标准？
+- P5: out-of-scope 已明确？
+
+**AI Agent 必须做的事**：
+1. 创建/更新特性树节点，**仅使用四类文档**（禁止生成 analysis-*.md、README、独立规划书等；详见 `specs/feature-tree/00_FEATURE_TREE_STANDARD.md`）
+2. 撰写 `spec.md`（背景/目标用户/功能范围/Out of Scope/约束/验收重点）
+3. 撰写 `acceptance.yaml` 草稿（A1~An，status=pending，至少 3 条 SMART 验收标准）
+4. 若涉及部署拓扑，补充 `deploy/shared/process_domain_mapping.yaml`
 
 **自动卡点 G0**：
 ```
-✓ 需求已映射到特性树节点
-✓ 涉及的业务对象已在 metadata 注册（或标记为需新建）
-✓ 任务拆解遵循 metadata-first 顺序
-✓ 如涉及新实体/字段/事件 → 任务首项必须是更新 metadata
-✓ 特性树分解符合层级定义（见 01_FEATURE_TREE_LEVEL_DEFINITIONS.md 一、二）
+✓ spec.md 已创建（包含 Out of Scope）
+✓ acceptance.yaml 已创建，至少 3 条 An（status=pending）
+✓ 特性树节点已在 tree_index.yaml 中注册（status: specified）
+✓ 特性树分解符合层级定义（见 01_FEATURE_TREE_LEVEL_DEFINITIONS.md）
 ```
 
-**使用命令**：`/opsx-explore`（思考）→ `/opsx-ff`（创建特性）
+**使用命令**：`/prd`
 
 ---
 
 ### 阶段 2：Create（特性创建与 metadata 就绪）
 
-**入口**：`/opsx-ff` 或 `/qwq-extend`
+**入口**：`/design`
+
+**Design Gate 自检**（进入前全部通过，否则 GATE_BLOCK）：
+- D1: spec.md 已存在且稳定？
+- D2: acceptance.yaml A1~An 已定义？
+- D3: 设计约束已识别（DDD 分层、metadata 范围）？
+- D4: ≥2 个方案可供比较？
+- D5: 无未解决的阻塞依赖？
 
 **AI Agent 必须做的事**：
-1. 创建/更新特性目录，**仅使用四类文档**：`spec.md`、`design.md`、`tasks.md`、`acceptance.yaml`；禁止在节点下生成 analysis-*.md、README、独立规划书等（详见 `specs/feature-tree/00_FEATURE_TREE_STANDARD.md`）。**design 须遵循设计原则**：业界最佳实践与标杆对比、多备选方案对比、选定最优或可演进到最优；若采用轻量方案，design 与 tasks 中必须写明未来演进与遗留带规划任务。
-2. **特性树层级与分解**：新建节点路径与层级须符合 `specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md`；`acceptance.yaml` 的 `level` 使用统一取值（L2_feature / L3_subfeature / L4_object_task / L5 或 L5_subtask）；同步更新对应 L1 的 `tree.yaml` 及 `tree_index.yaml`（若使用）。
-3. 如需新建业务对象 → 执行 `/qwq-extend new-aggregate|entity|service`
-4. 如需扩展已有对象 → 执行 `/qwq-extend add-field|capability|event|...`
-5. 更新 metadata YAML（5 文件一组）
-6. **自动执行** `make verify`
+1. 创建/更新 `design.md`（≥2 方案对比、选型决策、未来演进；若轻量方案必须写明演进路径）
+2. 创建/更新 `tasks.md`（顺序：metadata → codegen → 业务逻辑 → 测试）
+3. **特性树层级与分解**：节点路径须符合 `specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md`；acceptance.yaml 的 `level` 使用统一取值（L4_object_task 等）
+4. 如需新建业务对象 → 执行 `/extend new-aggregate|entity|service`（或由 /design 自动调用）
+5. 如需扩展已有对象 → 执行 `/extend add-field|capability|event|...`
+6. 更新 metadata YAML（5 文件一组）
 
 **自动卡点 G1**：
 ```bash
-# /opsx-ff 和 /qwq-extend 命令执行完毕后自动运行：
-make verify-metadata           # 或 make verify：metadata 内部一致性（quwoquan_service 当前为 verify-metadata）
+# /design 执行完毕后自动运行：
+make verify-metadata           # metadata 内部一致性
 make codegen                   # 从 metadata 生成 Go 骨架代码
 make codegen-app               # 从 metadata 生成端侧代码
-# 若涉及 rec-model-service（推荐平台下模型服务，Python）：
-make codegen-rec-model-python  # 生成 Pydantic 模型与 FastAPI 路由骨架至 services/rec-model-service/generated
+# 若涉及 rec-model-service：
+make codegen-rec-model-python  # 生成 Pydantic 模型与 FastAPI 路由骨架
 ```
 失败 → 停止，输出错误 + 修复建议，修复后重新执行。
 
+**使用命令**：`/design`
+
 ---
 
-### 阶段 3：Implement（实施）
+### 阶段 3：dev（实施）
 
-**入口**：`/opsx-apply`
+**入口**：`/dev`（或 `/deliver` 一气呵成）
+
+**Dev Gate 自检**（进入前全部通过，否则 GATE_BLOCK）：
+- V1: design.md 已存在且关键设计决策已冻结？
+- V2: codegen 已通过？
+- V3: tasks.md 任务按正确顺序排列？
+- V4: acceptance.yaml An 有明确判定方式？
 
 **AI Agent 必须做的事**：
-1. 按 `tasks.md` 逐项实施（任务与特性树节点对应：L4 节点下 task 对应 L4 范围；若有 L5 子节点，子任务可分组或由 L5 节点 tasks 承载，见 `01_FEATURE_TREE_LEVEL_DEFINITIONS.md` 八、8.3）
+1. 按 `tasks.md` 逐项实施（L4 节点下 task 对应 L4 范围；L5 子任务由 L5 节点 tasks 承载）
 2. 仅在非 codegen 区域手写业务逻辑（domain_service / application_service / feature pages）
-3. 遵从 DDD 层级约束（domain 禁止 import infrastructure）
-4. 遵从设计系统（Dart 禁止硬编码字面量）
-5. 遵从 runtime 统一能力（禁止绕过 runtime/errors、runtime/config 等）
-6. **每完成一个 task 自动执行**契约测试
+3. 遵从 DDD 层级约束、Dart 编码规范、runtime 统一能力、错误码规范
+4. **每完成一个 task 自动执行 G2**
 
 **自动卡点 G2**（每个 task 完成后）：
 ```bash
-# /opsx-apply 每完成一个 task 后自动运行：
 make build                     # 编译通过
 make test-contract             # 契约测试通过（真实数据库）
 # 端侧变更时追加：
-flutter test test/cloud/ test/components/ test/ui/  # L1a+L1b+L1c
+flutter test test/cloud/ test/components/ test/ui/
 ```
 失败 → 停止当前 task，输出错误 + 修复建议。
 
@@ -122,27 +153,29 @@ flutter test test/cloud/ test/components/ test/ui/  # L1a+L1b+L1c
 | Go | 禁止直接 import 数据库驱动（仅 infrastructure 允许） | `01-arch-constraints` |
 | Go | 必须使用 runtime/errors、runtime/config、runtime/messaging | `01-arch-constraints` |
 | Go | codegen 文件（`DO NOT EDIT`）禁止手动修改 | `01-arch-constraints` |
-| Dart | 禁止硬编码 fontSize/EdgeInsets/Color/BorderRadius/width/height/leadingSize | `02-dart-coding`、`verify_dart_semantic` |
+| Dart | 禁止硬编码 fontSize/EdgeInsets/Color/BorderRadius/width/height | `02-dart-coding` |
 | Dart | 禁止相对路径 import，必须用 package: | `02-dart-coding` |
 | Dart | Feature 禁止直接 import 其他 Feature 内部文件 | `02-dart-coding` |
-| 错误码 | 云侧用 generated.AppErrorFrom*；端侧用 *ErrorCode.fromCode().toDisplayMessage；测试用枚举.code；禁止硬编码 | `01-arch-constraints` §3.3 |
+| 错误码 | 云侧用 generated.AppErrorFrom*；端侧用 *ErrorCode.fromCode().toDisplayMessage；测试用枚举.code | `01-arch-constraints §3.3` |
 | 端云 | Go struct / Dart DTO / OpenAPI / Migration 必须与 metadata 一致 | `01-arch-constraints` |
+
+**使用命令**：`/dev`
 
 ---
 
-### 阶段 4：Verify（验收）
+### 阶段 4：verify（验证）
 
-**入口**：`/opsx-verify` 或 `/fullstack-audit`
+**入口**：`/verify`（特性级）或 `/audit`（代码库级）
 
 **AI Agent 必须做的事**：
 1. 确认所有 tasks.md 任务已完成
-2. 确认 acceptance.yaml A1~A8 全部满足
-3. **特性树一致性**：tree.yaml ↔ 目录 ↔ 四类文档；acceptance 的 level 与 `specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md` 约定一致
-4. **自动执行** 全栈审计 + 门禁
+2. 确认 acceptance.yaml A1~An 全部满足（status 非 pending）
+3. 检测漂移（SPEC_DRIFT / IMPL_DRIFT / DESIGN_DRIFT / TASK_DRIFT）
+4. **特性树一致性**：tree_index.yaml ↔ 目录 ↔ 四类文档
+5. **自动执行** 全栈审计 + 门禁
 
 **自动卡点 G3**：
 ```bash
-# /opsx-verify 或 /opsx-archive 自动运行全量门禁：
 make gate-full
 ```
 
@@ -163,19 +196,20 @@ make gate-full
 
 ---
 
-### 阶段 5：Submit（提交合入）
+### 阶段 5：commit（提交入库）
 
-**入口**：`/submit-with-gate`
+**入口**：`/commit`（= /archive + 提交）
 
 **AI Agent 必须做的事**：
-1. 分析 `git status` 确定变更范围
-2. **提交前必须执行 L1+L2 门禁**（`make gate`）并通过
-3. **自动执行** 按变更范围的针对性审计
-4. 通过后自动 commit → push → merge main
+1. 若未归档，先执行归档（acceptance.yaml archived=true + tree_index status=completed）
+2. 分析 `git status` 确定变更范围
+3. **提交前必须执行 L1+L2 门禁**（`make gate`）并通过
+4. **自动执行** 按变更范围的针对性审计
+5. 通过后自动 commit → push → merge main
 
 **自动卡点 G4**：
 ```
-git status → 分析变更范围
+归档检查（archived=true）→ git status → 分析变更范围
      │
      ▼
  执行 L1+L2 门禁（make gate）─ 必须通过
@@ -191,13 +225,15 @@ git status → 分析变更范围
       失败 → 生成修复计划 → 自动修复 → 重审
 ```
 
+**使用命令**：`/commit`
+
 ---
 
-### 阶段 6：Deploy（部署）
+### 阶段 6：deploy（部署）
 
-**入口**：`/opsx-deploy`
+**入口**：`/deploy`
 
-**前置**：Submit（G4）已完成，代码已入库 main。目标：从特性到入库（L1/L2 自测通过），再到集成验证（L3/L4），再到生产端到端打通。
+**前置**：commit（G4）已完成，代码已入库 main。目标：从特性到入库（L1/L2 自测通过），再到集成验证（L3/L4），再到生产端到端打通。
 
 **AI Agent 必须做的事**：
 1. **G5a：部署到 integration** — 将当前 main 构建物部署到 integration 环境（staging），使 L3/L4 可打该环境
@@ -307,37 +343,47 @@ domain ← application ← adapters ← infrastructure
 
 ---
 
-## 六、20 个扩展场景速查
+## 六、25 个扩展场景速查（/extend）
 
 ### 0→1（新建）
 
 | # | 场景 | 命令 |
 |---|------|------|
-| S01 | 新建聚合根 | `/qwq-extend new-aggregate --name --service --storage` |
-| S02 | 新建聚合成员 | `/qwq-extend new-member --aggregate --name` |
-| S03 | 新建独立实体 | `/qwq-extend new-entity --name --service --storage` |
-| S04 | 新建服务 | `/qwq-extend new-service --name --port` |
-| S05 | 新建 API 端点 | `/qwq-extend new-endpoint --service --entity --method --path` |
-| S06 | 新建领域事件 | `/qwq-extend new-event --aggregate --name --channel` |
-| S07 | 新建投影 | `/qwq-extend new-projection --name --source-events` |
-| S08 | 新建向量实体 | `/qwq-extend new-vector --name --source --field` |
-| S09 | 新建 Skill | `/qwq-extend new-skill --name --trigger-scenes` |
-| S10 | 新建端侧 Feature | `/qwq-extend new-feature --name --pages` |
+| S01 | 新建聚合根 | `/extend new-aggregate --name --service --storage` |
+| S02 | 新建聚合成员 | `/extend new-member --aggregate --name` |
+| S03 | 新建独立实体 | `/extend new-entity --name --service --storage` |
+| S04 | 新建服务 | `/extend new-service --name --port` |
+| S05 | 新建 API 端点 | `/extend new-endpoint --service --entity --method --path` |
+| S06 | 新建领域事件 | `/extend new-event --aggregate --name --channel` |
+| S07 | 新建投影 | `/extend new-projection --name --source-events` |
+| S08 | 新建向量实体 | `/extend new-vector --name --source --field` |
+| S09 | 新建 Skill | `/extend new-skill --name --trigger-scenes` |
+| S10 | 新建端侧 Feature | `/extend new-feature --name --pages` |
 
 ### 1→N（扩展）
 
 | # | 场景 | 命令 |
 |---|------|------|
-| S11 | 新增字段 | `/qwq-extend add-field --entity --name --type --classification` |
-| S12 | 新增能力 | `/qwq-extend add-capability --entity --capability` |
-| S13 | 新增事件消费者 | `/qwq-extend add-consumer --event --consumer` |
-| S14 | 新增索引 | `/qwq-extend add-index --entity --fields --unique` |
-| S15 | 新增 API 操作 | `/qwq-extend add-endpoint --service --route --method` |
-| S16 | 新增投影字段 | `/qwq-extend add-projection-field --projection --field` |
-| S17 | 变更存储 | `/qwq-extend migrate-storage --entity --from --to` |
-| S18 | 新增缓存 | `/qwq-extend add-cache --entity --ttl` |
-| S19 | 新增 Tool | `/qwq-extend add-tool --skill --tool` |
-| S20 | 新增测试场景 | `/qwq-extend add-test --entity --scenario` |
+| S11 | 新增字段 | `/extend add-field --entity --name --type --classification` |
+| S12 | 新增能力 | `/extend add-capability --entity --capability` |
+| S13 | 新增事件消费者 | `/extend add-consumer --event --consumer` |
+| S14 | 新增索引 | `/extend add-index --entity --fields --unique` |
+| S15 | 新增 API 操作 | `/extend add-endpoint --service --route --method` |
+| S16 | 新增投影字段 | `/extend add-projection-field --projection --field` |
+| S17 | 变更存储 | `/extend migrate-storage --entity --from --to` |
+| S18 | 新增缓存 | `/extend add-cache --entity --ttl` |
+| S19 | 新增 Tool | `/extend add-tool --skill --tool` |
+| S20 | 新增测试场景 | `/extend add-test --entity --scenario` |
+
+### 横切层扩展（S21-S25）
+
+| # | 场景 | 命令 |
+|---|------|------|
+| S21 | 新增错误码层 | `/extend add-errors --entity --domain` |
+| S22 | 新增端侧 UI 配置层 | `/extend add-ui-config --entity --domain` |
+| S23 | 新增行为采集层 | `/extend add-behaviors --entity --domain` |
+| S24 | 新增隐私策略层 | `/extend add-privacy --entity --domain` |
+| S25 | 新增三层测试契约 | `/extend add-test-contracts --entity --domain` |
 
 每个场景执行后自动运行 G1 卡点（verify + codegen）。
 
@@ -370,15 +416,21 @@ quwoquan/
 │   │   ├── 01-arch-constraints.mdc             # 结构约束 + 扩展场景
 │   │   ├── 02-dart-coding.mdc                  # Dart 编码标准
 │   │   └── 03-testing.mdc                      # 测试标准
-│   └── commands/                       # 命令
-│       ├── opsx-ff.md                  # 特性创建（含自动 G1）
-│       ├── opsx-apply.md               # 特性实施（含自动 G2）
-│       ├── opsx-archive.md             # 特性归档（含自动 G3）
-│       ├── opsx-explore.md             # 自由探索
-│       ├── qwq-extend.md              # 对象级扩展（含自动 G1）
-│       ├── fullstack-audit.md          # 独立审计
-│       ├── submit-with-gate.md         # 提交（含自动 G4）
-│       └── opsx-deploy.md              # 部署（含 G5a→G5b→G5c）
+│   └── commands/                       # SDD 命令集
+│       ├── explore.md                  # 探索（G0 准入自检）
+│       ├── prd.md                      # 需求规格（PRD Gate + G0）
+│       ├── design.md                   # 设计基线（Design Gate + G1）
+│       ├── dev.md                      # 实施（Dev Gate + G2/task）
+│       ├── archive.md                  # 仅归档（G3）
+│       ├── commit.md                   # 归档+提交（G3 + G4）
+│       ├── deploy.md                   # 部署（G5a→G5b→G5c）
+│       ├── deliver.md                  # 全链路：dev+archive+commit
+│       ├── verify.md                   # 特性级漂移检测（G3）
+│       ├── audit.md                    # 代码库级结构审计
+│       ├── try.md                      # 原型模式（豁免特性树）
+│       ├── land.md                     # 原型落地基线化
+│       ├── extend.md                   # 对象级扩展（S01~S25，G1）
+│       └── prune.md                    # 清理过期特性树节点
 │
 ├── specs/
 │   ├── 00_MASTER_DEVELOPMENT_FLOW.md   # ← 本文档（唯一主线）

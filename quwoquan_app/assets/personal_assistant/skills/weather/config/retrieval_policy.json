@@ -1,0 +1,22 @@
+{
+  "contractVersion": "retrieval_policy_v1",
+  "domainId": "weather",
+  "defaultTimeScope": "latest",
+  "defaultFreshnessHoursMax": 1,
+  "authorityRequired": true,
+  "allowedTimeScopes": ["latest", "today", "last_7d", "custom", "unspecified"],
+  "authorityDomains": [
+    "weather.com.cn",
+    "nmc.cn",
+    "cma.gov.cn",
+    "weather.gov",
+    "bbc.com",
+    "accuweather.com",
+    "meteoblue.com"
+  ],
+  "contextConstraints": [
+    "优先返回实时天气关键指标",
+    "必须覆盖温度湿度风速和体感温度",
+    "若无法获取实时指标需明确说明并给出重试策略"
+  ]
+}

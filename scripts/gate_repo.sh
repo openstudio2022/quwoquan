@@ -43,14 +43,56 @@ run_app() {
   if command -v python3 >/dev/null 2>&1; then
     python3 scripts/verify_dart_semantic.py || exit 1
     python3 scripts/verify_error_code_semantic.py || exit 1
+    # L0 PA 降级响应契约静态分析（阻断）：
+    #   - degraded:true 必须有 errorCode
+    #   - finalText 不得泄漏 JSON envelope key
+    #   - catch 块必须保留 $error 根因信息
+    #   - acceptance.yaml 引用的测试文件必须存在
+    python3 scripts/verify_degraded_response_contract.py || exit 1
   else
-    echo "[gate] WARN: python3 not found — skipping verify_dart_semantic, verify_error_code_semantic"
+    echo "[gate] WARN: python3 not found — skipping verify_dart_semantic, verify_error_code_semantic, verify_degraded_response_contract"
   fi
   # L1 content tests (L1a contract, L1b widget, L1c journey) — fast, no external deps
   # Paths follow: test/{layer}/{domain}/{entity}/{test_type}/ (see .cursor/rules/03-testing.mdc §3)
-  (cd quwoquan_app && flutter test test/cloud/ test/components/ test/ui/)
-  # Skip in CI: test/patrol/ (needs real device/Patrol, run via FTL), test/personal_assistant/
-  # (acceptance_vm needs LLM; contract tests may have external deps). L1 sufficient for gate.
+  local flutter_l1_output=""
+  if ! flutter_l1_output="$(
+    cd quwoquan_app && flutter test test/cloud/ test/components/ test/ui/ 2>&1
+  )"; then
+    echo "$flutter_l1_output"
+    if [[ "$flutter_l1_output" == *"Connection closed before full header was received"* ]]; then
+      echo ""
+      echo "[gate] FAIL: flutter_tester loopback bootstrap failed — Proxifier Network Extension is intercepting 127.0.0.1 TCP connections."
+      echo ""
+      echo "[gate] ROOT CAUSE DIAGNOSIS:"
+      echo "  Proxifier (com.initex.proxifier.v3.macos.ProxifierExtension) is active and redirecting"
+      echo "  ALL TCP connections (including loopback 127.0.0.1) to the Clash Verge proxy at 127.0.0.1:7899."
+      echo "  flutter_tester connects to flutter tools HTTP listener on a random 127.0.0.1 port, but"
+      echo "  Proxifier intercepts it before the server can accept, causing the WebSocket upgrade to fail."
+      echo ""
+      echo "[gate] FIX — Proxifier rules UI (one-time setup, permanent fix):"
+      echo "  1. Open Proxifier.app → menu: Profile → Rules…"
+      echo "  2. Click '+' to add a new rule at the TOP of the list"
+      echo "  3. Set rule name: 'Localhost Direct'"
+      echo "  4. Applications: <Any>"
+      echo "  5. Target hosts: 127.0.0.1; ::1; localhost"
+      echo "  6. Target ports: <Any>"
+      echo "  7. Action: Direct"
+      echo "  8. Click OK and save profile"
+      echo ""
+      echo "  After adding the rule, re-run: make gate"
+      echo ""
+      echo "[gate] ALTERNATIVE (temporary — for single test session):"
+      echo "  Quit Proxifier.app before running 'make gate', then reopen after."
+      echo ""
+    fi
+    return 1
+  else
+    echo "$flutter_l1_output"
+  fi
+  # PA Core（桶 A 协议契约 + 桶 B 引擎集成 + 桶 C UI 契约）默认全部阻断。
+  # 桶 A 覆盖降级响应根因/消息历史协议/可观测字段，失败即退。
+  bash scripts/run_pa_core_tests.sh
+  # Skip in CI: test/patrol/ (needs real device/Patrol, run via FTL).
 
   # dart_func 覆盖率检查：mock.yaml 声明的 dart_func 必须在 Dart 测试文件中存在
   if command -v python3 >/dev/null 2>&1; then

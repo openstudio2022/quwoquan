@@ -1,0 +1,29 @@
+{
+  "contractVersion": "retrieval_policy_v1",
+  "domainId": "knowledge_general",
+  "allowedTimeScopes": [
+    "latest",
+    "today",
+    "last_7d",
+    "last_30d",
+    "last_1y",
+    "custom",
+    "unspecified",
+    "year",
+    "year_month",
+    "year_month_day"
+  ],
+  "defaultTimeScope": "unspecified",
+  "authorityRequired": true,
+  "authorityDomains": [
+    "wikipedia.org",
+    "britannica.com",
+    "nature.com",
+    "science.org"
+  ],
+  "contextConstraints": [
+    "定义",
+    "事实来源",
+    "更新时间"
+  ]
+}

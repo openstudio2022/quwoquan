@@ -1,0 +1,14 @@
+{
+  "templateId": "stack.runtime_policy",
+  "version": "2026.02.18",
+  "stage": "policy",
+  "domainId": "global",
+  "requiredVariables": [
+    "availableTools"
+  ],
+  "outputContract": "assistant_turn_v2",
+  "selfCheckRules": [
+    "tool_budget",
+    "slot_first"
+  ]
+}

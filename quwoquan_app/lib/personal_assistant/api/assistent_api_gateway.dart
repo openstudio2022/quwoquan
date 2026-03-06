@@ -99,6 +99,67 @@ class AssistentApiGateway {
         );
         return;
       }
+      if (method == 'GET' && path == '/v1/assistent/models') {
+        await _writeJson(
+          request: request,
+          statusCode: HttpStatus.ok,
+          data: <String, dynamic>{
+            'currentModel': _assistantGateway.currentModel(),
+            'selectedModels': _assistantGateway.selectedModels(),
+            'availableModels': _assistantGateway.listAvailableModels(),
+          },
+        );
+        return;
+      }
+      if (method == 'POST' && path == '/v1/assistent/models/select') {
+        final payload = await _decodeBody(request);
+        final selectedModels =
+            ((payload['selectedModels'] as List?) ?? const <dynamic>[])
+                .whereType<String>()
+                .map((item) => item.trim())
+                .where((item) => item.isNotEmpty)
+                .toList(growable: false);
+        final modelRef = (payload['modelRef'] as String?)?.trim() ?? '';
+
+        var selectedApplied = false;
+        if (selectedModels.isNotEmpty) {
+          selectedApplied = _assistantGateway.setSelectedModels(selectedModels);
+        }
+
+        final switchTarget = modelRef.isNotEmpty
+            ? modelRef
+            : (selectedModels.isNotEmpty ? selectedModels.first : '');
+        var switched = false;
+        if (switchTarget.isNotEmpty) {
+          switched = _assistantGateway.switchModel(switchTarget);
+        }
+
+        if ((!selectedApplied && selectedModels.isNotEmpty) ||
+            (!switched && switchTarget.isNotEmpty)) {
+          await _writeJson(
+            request: request,
+            statusCode: HttpStatus.badRequest,
+            data: <String, dynamic>{
+              'error': 'model_select_failed',
+              'availableModels': _assistantGateway.listAvailableModels(),
+              'selectedModels': _assistantGateway.selectedModels(),
+              'currentModel': _assistantGateway.currentModel(),
+            },
+          );
+          return;
+        }
+        await _writeJson(
+          request: request,
+          statusCode: HttpStatus.ok,
+          data: <String, dynamic>{
+            'ok': true,
+            'currentModel': _assistantGateway.currentModel(),
+            'selectedModels': _assistantGateway.selectedModels(),
+            'availableModels': _assistantGateway.listAvailableModels(),
+          },
+        );
+        return;
+      }
       if (method == 'POST' &&
           path.startsWith('/v1/assistent/providers/') &&
           path.endsWith('/recover')) {
@@ -365,9 +426,37 @@ class AssistentApiGateway {
               (payload['privacyPolicy'] as Map?)?.cast<String, dynamic>() ??
               const <String, dynamic>{},
         );
-        final selectedProvider = await _selectProviderForRun(runReq);
-        if (selectedProvider != null) {
-          _assistantGateway.switchModel(selectedProvider.id);
+        final requestedModelRef =
+            (payload['modelRef'] as String?)?.trim() ?? '';
+        final requestedSelectedModels =
+            ((payload['selectedModels'] as List?) ?? const <dynamic>[])
+                .whereType<String>()
+                .map((item) => item.trim())
+                .where((item) => item.isNotEmpty)
+                .toList(growable: false);
+        AssistentProviderDescriptor? selectedProvider;
+        if (requestedSelectedModels.isNotEmpty) {
+          _assistantGateway.setSelectedModels(requestedSelectedModels);
+        }
+        if (requestedModelRef.isNotEmpty) {
+          final switched = _assistantGateway.switchModel(requestedModelRef);
+          if (!switched) {
+            await _writeJson(
+              request: request,
+              statusCode: HttpStatus.badRequest,
+              data: <String, dynamic>{
+                'error': 'invalid_model_ref',
+                'requestedModelRef': requestedModelRef,
+                'availableModels': _assistantGateway.listAvailableModels(),
+              },
+            );
+            return;
+          }
+        } else {
+          selectedProvider = await _selectProviderForRun(runReq);
+          if (selectedProvider != null) {
+            _assistantGateway.switchModel(selectedProvider.id);
+          }
         }
         final runStartedAt = DateTime.now();
         final runRes = await _assistantGateway.run(runReq);

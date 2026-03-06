@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "1.0",
+  "phases": {
+    "understanding": {
+      "systemHint": "[阶段提示：理解问题]\n请在 thinkingText 中用自然语言描述你的分析过程，用户会实时看到。\n内容应包括：\n1. 你理解用户想知道什么\n2. 你决定使用哪些工具、为什么\n3. 工具调用参数的设计理由\n\n注意：thinkingText 面向用户，用自然中文，禁止 JSON 键名或技术术语。",
+      "userLabel": "理解问题",
+      "userDescription": "正在分析您的问题..."
+    },
+    "analyzing": {
+      "systemHint": "[阶段提示：分析资料]\n你已获得工具执行结果。请在 thinkingText 中用自然语言描述分析过程。\n内容应包括：\n1. 工具返回了哪些关键信息\n2. 哪些信息最可靠\n3. 你从中得出的结论\n\n注意：thinkingText 面向用户，展示推理过程。",
+      "userLabel": "分析整理",
+      "userDescription": "正在分析获取到的信息..."
+    },
+    "answering": {
+      "systemHint": "[阶段提示：组织回答]\n基于已收集的证据，在 thinkingText 中简要说明你的回答思路，然后在 userMarkdown 中输出完整答案。",
+      "userLabel": "组织回答",
+      "userDescription": "正在组织回答..."
+    }
+  },
+  "toolHintPrefix": "当前可用工具的思考指引：\n",
+  "toolHintSuffix": "\n\n请在 thinkingText 中覆盖上述工具的使用思考。"
+}

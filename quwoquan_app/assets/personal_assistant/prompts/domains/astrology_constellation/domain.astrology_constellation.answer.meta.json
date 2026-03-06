@@ -1,9 +1,0 @@
-{
-  "templateId": "domain.astrology_constellation.answer",
-  "version": "2026.02.18",
-  "stage": "answer",
-  "domainId": "astrology_constellation",
-  "requiredVariables": ["userQuery", "domainResults", "contextSlots", "userProfileSnapshot"],
-  "outputContract": "domain_answer_v2026_02_18",
-  "selfCheckRules": ["constraint_satisfied", "coverage_satisfied", "disclaimer_satisfied", "entertainment_only", "no_reality_decision_claim"]
-}

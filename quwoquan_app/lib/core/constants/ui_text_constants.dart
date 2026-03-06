@@ -282,10 +282,17 @@ class UITextConstants {
   /// 聊天底部「更多」面板（图二：两行六项）
   static const String chatMorePhoto = '照片';
   static const String chatMoreShoot = '拍摄';
+  static const String chatMoreFile = '文件';
   static const String chatMoreBurnAfterRead = '阅后即焚';
   static const String chatMoreLocation = '位置';
   static const String chatMoreAudioVideo = '音视频';
   static const String chatMoreRedPacket = '红包';
+  static const String chatAttachmentTypeConflict = '图片与文件不能同时添加';
+  static const String chatAttachmentMaxCount = '最多添加 %s 个';
+  static const String chatVoiceHoldToTalk = '按住说话';
+  static const String chatVoiceHoldTip = '按住开始录音';
+  static const String chatVoiceReleaseToSend = '松开发送';
+  static const String chatVoicePermissionDenied = '未获得录音权限';
   static const String timeFormatAM = '上午';
   static const String timeFormatPM = '下午';
   static const String assistantHome = '助理主页';
@@ -295,6 +302,20 @@ class UITextConstants {
   static const String assistantModelUnavailable =
       '当前未配置可用模型，请先在模型配置中接入远程模型或桥接服务。';
   static const String assistantRunningHint = '小趣正在规划与执行中...';
+  /// v3 用户视角阶段：理解问题
+  static const String assistantPhaseUnderstanding = '理解问题';
+  /// v3 用户视角阶段：搜索资料（工具执行，由元数据覆盖）
+  static const String assistantPhaseSearching = '搜索资料';
+  /// v3 用户视角阶段：分析整理
+  static const String assistantPhaseAnalyzing = '分析整理';
+  /// v3 用户视角阶段：组织回答
+  static const String assistantPhaseAnswering = '组织回答';
+  /// v3 用户视角阶段：检查结果
+  static const String assistantPhaseAssessing = '检查结果';
+  /// 旧版兼容：等待
+  static const String assistantPhaseWaiting = '理解问题';
+  /// 旧版兼容：深度思考
+  static const String assistantPhaseThinking = '分析整理';
   static const String assistantFeedbackHelpful = '有帮助';
   static const String assistantFeedbackUnhelpful = '没帮助';
   static const String assistantFeedbackCorrect = '纠正';
@@ -311,12 +332,21 @@ class UITextConstants {
   static const String assistantActionBrief = '更加简洁';
   static const String assistantActionDetailed = '更加详细';
   static const String assistantActionSwitchModel = '模型切换';
+  static const String assistantModelSelectorEntry = '模型';
+  static const String assistantModelSelectorSingle = '单模型';
+  static const String assistantModelSelectorCount = '%s 个模型';
+  static const String assistantModelSelectorEmpty = '未选择';
+  static const String assistantModelSelectorTitle = '选择模型';
+  static const String assistantModelSelectorHint = '选择当前对话使用的模型';
+  static const String assistantModelSelectorConfirm = '应用';
+  static const String assistantModelSelectorApplied = '已切换为 %m';
   static const String assistantTimelineSearchProcess = '搜索过程';
   static const String assistantTimelineReferenceCount = '可参考 %s 篇资料';
   static const String assistantTimelineThinking = '正在思考';
   static const String assistantTimelineKeywordSearch = '发起关键词检索';
   static const String assistantTimelineReferenceIncrement = '检索到资料';
   static const String assistantTimelineReady = '可参考资料已准备';
+  static const String assistantTimelineSubagentProgress = '子任务执行进度';
   static const String assistantSearchingReferenceCount = '参考 %s 篇资料';
   static const String assistantReferenceCopied = '链接已复制';
   static const String assistantReferenceOpenFailed = '链接打开失败，已复制到剪贴板';
@@ -332,6 +362,16 @@ class UITextConstants {
   static const String assistantDevReplayRounds = '轮次轨迹';
   static const String assistantDevReplayScore = '评分聚合快照';
   static const String assistantNoReplayData = '暂无回放数据';
+  static const String assistantSettingsModel = '选择模型';
+  static const String assistantSettingsTraceSession = '跟踪会话';
+  static const String assistantSettingsConversationHistory = '对话历史';
+  static const String assistantViewHistory = '查看历史';
+  static const String assistantWelcomeHeadline = 'Hi，今天从哪儿开始？';
+  static const String assistantHistoryAll = '全部历史';
+  static const String assistantHistoryAllSubtitle = '共 %s 个独立会话';
+  static const String assistantHistoryMessageCount = '%s 条消息';
+  static const String assistantHistoryUntitled = '未命名会话';
+  static const String assistantHistoryEmpty = '暂无对话历史';
 
   /// 身份/分身（1:1 对应 PersonaSwitcher.tsx）
   static const String personaManage = '管理分身';
@@ -358,12 +398,14 @@ class UITextConstants {
   static const String visibilityPublic = '公开';
   static const String visibilityPrivate = '私密';
   static const String isPublicLabel = '是否公开';
+
   /// 创作页圈子入口/空态；国际化请用 l10n.selectPublishCirclesLabel / l10n.noCirclesAvailable
   static const String selectPublishCirclesLabel = '发布的圈子';
   static const String noCirclesAvailable = '加入圈子，发现同好';
   static const String locationSearchHint = '搜索地点';
   static const String locationNearbyTitle = '附近位置';
   static const String locationSearchingNearby = '正在搜索附近位置';
+
   /// 与 integration/location/errors.location_unavailable 保持一致
   static const String locationLoadFailed = '暂时无法获取当前位置，请稍后重试';
   static const String locationSearchTitle = '搜索位置';

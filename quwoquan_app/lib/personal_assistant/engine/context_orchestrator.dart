@@ -78,7 +78,9 @@ class PersonalAssistantContextOrchestrator {
 
     final lat = _numValue(gpsLocation['lat'] ?? contextScopeHint['lat']);
     final lng = _numValue(gpsLocation['lng'] ?? contextScopeHint['lng']);
-    final city = _strValue(gpsLocation['city'] ?? contextScopeHint['city']);
+    final detectedCityFromQuery = _extractCityFromQuery(query);
+    final cityFromContext = _strValue(gpsLocation['city'] ?? contextScopeHint['city']);
+    final city = cityFromContext.isNotEmpty ? cityFromContext : detectedCityFromQuery;
     final precision = _strValue(
       gpsLocation['locationPrecision'] ?? contextScopeHint['locationPrecision'],
     );
@@ -92,18 +94,9 @@ class PersonalAssistantContextOrchestrator {
     final missingSlots = <String>[];
     final fillTasks = <ContextFillTask>[];
 
-    if (hasRealtimeNeed && !hasPreciseLocation && !hasCoarseLocation) {
-      missingSlots.add('gps_or_city_location');
-      fillTasks.add(
-        const ContextFillTask(
-          fillType: 'context_fill',
-          targetSlot: 'gps_or_city_location',
-          reason: '该问题涉及实时本地信息，需要 GPS 或城市位置信息。',
-          generatedQueryConditions: <String>['定位授权', '城市名称'],
-          scopeExpansionPolicy: 'fallback_city_level',
-        ),
-      );
-    }
+    // 实时问题优先进入垂类流程：
+    // 1) 问句中已有城市名时直接使用；
+    // 2) 若无城市名，交由运行时先尝试本地定位/上下文获取，再失败时追问城市。
     if (hasLongtermNeed && !hasLongtermMemory) {
       missingSlots.add('longterm_memory');
       fillTasks.add(
@@ -116,6 +109,9 @@ class PersonalAssistantContextOrchestrator {
         ),
       );
     }
+
+    // 从记忆文本中提取城市提及，用于 slotFillHints
+    final recentCityMentions = _extractCityMentions(recalledTexts);
 
     final contextEnvelope = <String, dynamic>{
       'sourceStatus': <String, dynamic>{
@@ -144,10 +140,34 @@ class PersonalAssistantContextOrchestrator {
         'lat': lat,
         'lng': lng,
         'city': city,
+        'citySource': cityFromContext.isNotEmpty
+            ? 'device_or_scope'
+            : (detectedCityFromQuery.isNotEmpty ? 'user_query' : ''),
         'locationPrecision': precision,
         'locationTimestamp': locationTimestamp,
       },
       'longtermMemorySummary': recalledTexts.take(3).join('\n'),
+      // LLM 槽位补全信号聚合：让模型在规划阶段自行判断槽位，不依赖规则提取
+      // 包含 GPS、历史摘要、记忆城市提及，支持拼音/英文/口语输入的自动理解
+      'slotFillHints': <String, dynamic>{
+        'gpsCity': city,
+        'gpsCityConfidence': hasPreciseLocation
+            ? 'high'
+            : (hasCoarseLocation ? 'medium' : 'none'),
+        'gpsLat': lat,
+        'gpsLng': lng,
+        'recentCityMentions': recentCityMentions,
+        'historySummarySnippet': historySummary.length > 150
+            ? historySummary.substring(0, 150)
+            : historySummary,
+        'ruleExtractedCity': detectedCityFromQuery,
+        'ruleExtractedCityConfidence': detectedCityFromQuery.isNotEmpty ? 'medium' : 'none',
+        'slotFillInstruction':
+            '请根据以上信号（gpsCity/gpsLat/gpsLng/recentCityMentions/historySummarySnippet）'
+            '结合用户原始输入（含拼音/英文/口语）自动补全关键槽位（city/timeScope等）。'
+            '若输入是拼音或英文，请识别其中文含义并填入对应槽位。'
+            '若所有信号均无法确定某槽位，输出 slotFillAction=ask_user。',
+      },
     };
     final summaryText =
         'ContextAssembly:\n'
@@ -216,6 +236,28 @@ class PersonalAssistantContextOrchestrator {
     return double.tryParse(text);
   }
 
+  String _extractCityFromQuery(String query) {
+    final q = query.trim();
+    if (q.isEmpty) return '';
+    final m1 = RegExp(r'([\u4e00-\u9fa5]{2,8}(?:市|区|县)?)天气').firstMatch(q);
+    if (m1 != null) {
+      final city = (m1.group(1) ?? '').trim();
+      if (_isLikelyCityToken(city)) return city;
+    }
+    final m2 = RegExp(r'([\u4e00-\u9fa5]{2,8}(?:市|区|县)?)').firstMatch(q);
+    final city = (m2?.group(1) ?? '').trim();
+    if (_isLikelyCityToken(city)) return city;
+    return '';
+  }
+
+  bool _isLikelyCityToken(String token) {
+    final t = token.trim();
+    if (t.isEmpty) return false;
+    if (_realtimeKeywordsZh.any((k) => t == k)) return false;
+    const blocked = <String>{'明天', '后天', '今日', '昨日', '当地', '本地', '最近'};
+    return !blocked.contains(t);
+  }
+
   static const List<String> _realtimeKeywords = <String>[
     'weather',
     'travel',
@@ -251,6 +293,30 @@ class PersonalAssistantContextOrchestrator {
     '上次',
     '去年',
   ];
+  /// 从记忆文本列表中提取城市名提及，作为 slotFillHints 的辅助信号。
+  /// 仅做快速规则提取，结果最终由 LLM 判断是否可信。
+  List<String> _extractCityMentions(List<String> texts) {
+    final seen = <String>{};
+    final result = <String>[];
+    for (final text in texts) {
+      final matches = RegExp(r'[\u4e00-\u9fa5]{2,6}(?:市|区|县|省)?').allMatches(text);
+      for (final m in matches) {
+        final token = m.group(0) ?? '';
+        if (token.isEmpty) continue;
+        if (_realtimeKeywordsZh.contains(token)) continue;
+        if (_longtermKeywordsZh.contains(token)) continue;
+        const noise = <String>{'明天', '后天', '今日', '昨日', '当地', '本地', '最近', '用户'};
+        if (noise.contains(token)) continue;
+        if (seen.contains(token)) continue;
+        seen.add(token);
+        result.add(token);
+        if (result.length >= 5) break;
+      }
+      if (result.length >= 5) break;
+    }
+    return result;
+  }
+
   static const List<String> _insufficientAnswerMarkers = <String>[
     '信息不足',
     '证据不足',

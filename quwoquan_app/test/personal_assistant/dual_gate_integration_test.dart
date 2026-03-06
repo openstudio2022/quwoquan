@@ -44,7 +44,8 @@ void main() {
         const AssistantRunRequest(
           sessionId: 'dual-pre',
           messages: <AssistantRunMessage>[
-            AssistantRunMessage(role: 'user', content: '深圳天气怎么样'),
+            // 含"历史"关键词触发 hasLongtermNeed，无记忆时 canEnterDomain = false
+            AssistantRunMessage(role: 'user', content: '上次我们聊的历史记录是什么'),
           ],
         ),
       );

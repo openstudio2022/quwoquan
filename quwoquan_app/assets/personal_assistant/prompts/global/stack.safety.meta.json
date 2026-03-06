@@ -1,0 +1,9 @@
+{
+  "templateId": "stack.safety",
+  "version": "2026.03.05",
+  "stage": "global",
+  "domainId": "global",
+  "requiredVariables": ["_static"],
+  "outputContract": "none",
+  "selfCheckRules": ["privacy_boundary", "no_fabrication", "crisis_protocol"]
+}

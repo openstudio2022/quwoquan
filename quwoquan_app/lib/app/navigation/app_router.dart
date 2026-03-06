@@ -16,9 +16,9 @@ import 'package:quwoquan_app/components/media/image/editor/image_editor_page.dar
 import 'package:quwoquan_app/features/create/pages/create_page.dart';
 import 'package:quwoquan_app/features/settings/pages/developer_settings_page.dart';
 import 'package:quwoquan_app/features/settings/pages/settings_page.dart';
-import 'package:quwoquan_app/features/chat/pages/chat_detail_page.dart';
-import 'package:quwoquan_app/features/chat/pages/chat_settings_page.dart';
-import 'package:quwoquan_app/features/chat/pages/start_group_chat_page.dart';
+import 'package:quwoquan_app/ui/chat/pages/chat_detail_page.dart';
+import 'package:quwoquan_app/ui/chat/pages/chat_settings_page.dart';
+import 'package:quwoquan_app/ui/chat/pages/start_group_chat_page.dart';
 import 'package:quwoquan_app/features/profile/pages/edit_profile_page.dart';
 import 'package:quwoquan_app/features/profile/pages/persona_management_page.dart';
 import 'package:quwoquan_app/features/profile/pages/profile_stats_page.dart';

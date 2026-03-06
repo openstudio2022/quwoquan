@@ -1,15 +1,41 @@
-# 设计说明（规划阶段占位）
+# 设计说明：端云一体日志统一模型
 
 ## 设计动因
 
-本节点处于规划阶段，详细设计待实施时根据 spec.md 与 tasks.md 补充。
+当前日志可用但语义不统一，存在：
 
-## 适用场景与约束
+- `logType` 与交互对象混用
+- 跨端云/跨 Python 关联字段缺失
+- 同类故障无法稳定聚合（failureCode 非标准）
 
-- **适用**：按 spec.md 定义的职责边界与验收标准实施后成立。
-- **约束**：与父节点及上下游契约保持一致；实施时须满足四类文档（spec / design / tasks / acceptance）一致。
-- **局限性**：当前为占位文档，具体方案与业界对标在实施阶段补充。
+目标是把“人工拼图式排障”升级为“单 Run 可回放 + 跨栈可归因”。
 
-## 未来演进
+## 设计决策
 
-实施时在本文档中补充演进方向与目标态；若当前即为目标态则注明「暂无演进项」。
+1. **统一五元组**
+   - `logType`（类型）+ `level`（级别）+ `component`（组件）+ `target`（对象）+ `action`（动作）
+2. **两层来源标识**
+   - `sourceDomain`（assistant/content/discovery/chat/create）
+   - `sourceService`（quwoquan_app/quwoquan_service/python_worker）
+3. **关联键标准化**
+   - `correlationId + traceId + spanId + requestId`
+4. **兼容策略**
+   - 新增 `legacyLogType`，避免历史看板立即失效
+
+## 方案对比
+
+- 方案 A（仅补字段不改语义）：成本低，但后续仍会混乱
+- 方案 B（统一语义 + 兼容旧字段）：一次改透，后续治理成本最低（采纳）
+
+## 风险与缓解
+
+- 风险：日志查询脚本依赖旧 `logType`
+  - 缓解：保留 `legacyLogType`，迁移期双读
+- 风险：Release 采样导致成功链路不完整
+  - 缓解：Boost run/session + 错误全量保留
+
+## 演进路径
+
+- Phase 1：端侧模型与关键埋点统一（本节点）
+- Phase 2：云侧与 Python 对齐同一 Canonical 映射
+- Phase 3：统一查询视图与自动根因聚合

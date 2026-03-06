@@ -32,6 +32,15 @@ class ContentPrivacyPolicy {
         return value;
       case 'mediaUrls':
         return value;
+      case 'publishLocation':
+        if (value is Map) return <String, dynamic>{'city': value['city']};
+        return null;
+      case 'deviceInfo':
+        if (value is String) {
+          final parts = value.split(' ');
+          return parts.isNotEmpty ? parts.first : '';
+        }
+        return null;
       default:
         return value;
     }

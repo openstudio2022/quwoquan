@@ -38,7 +38,7 @@ void main() {
       }
     });
 
-    test('blocks realtime query without location context', () async {
+    test('does not block weather query when city is in user message', () async {
       final response = await agentLoop.run(
         const AssistantRunRequest(
           sessionId: 's1',
@@ -48,28 +48,17 @@ void main() {
         ),
       );
 
-      expect(response.degraded, isTrue);
-      expect(response.errorCode, equals('missing_context'));
-      expect(response.finalText, contains('补齐上下文'));
+      expect(response.errorCode, isNull);
       expect(
         (response.structuredResponse['domainPrecheck']
             as Map?)?['canEnterDomain'],
-        isFalse,
+        isTrue,
       );
       final fillTasks =
           (response.structuredResponse['fillTasks'] as Map?)?['contextFillTasks']
               as List?;
       expect(fillTasks, isNotNull);
-      expect(fillTasks!.isNotEmpty, isTrue);
-      expect(response.structuredResponse['answerEligibility'], equals('blocked'));
-      final contextSlots = response.structuredResponse['contextSlots'] as List?;
-      expect(contextSlots, isNotNull);
-      expect(
-        contextSlots!
-            .whereType<Map>()
-            .any((slot) => slot['status'] == 'need_query'),
-        isTrue,
-      );
+      expect(fillTasks!, isEmpty);
     });
   });
 }

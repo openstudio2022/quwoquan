@@ -5,9 +5,9 @@ void main() {
   group('PersonalAssistantContextOrchestrator', () {
     const orchestrator = PersonalAssistantContextOrchestrator();
 
-    test('blocks domain when realtime query has no location', () {
+    test('does not block realtime query without location (allow auto location)', () {
       final result = orchestrator.assemble(
-        query: '深圳天气最近怎么样',
+        query: '今天天气怎么样',
         historySummary: '',
         recalledTexts: const <String>[],
         deviceProfile: 'mobile',
@@ -17,14 +17,31 @@ void main() {
         contextScopeHint: const <String, dynamic>{},
       );
 
-      expect(result.canEnterDomain, isFalse);
-      expect(result.fillTasks, isNotEmpty);
-      expect(result.fillTasks.first.targetSlot, equals('gps_or_city_location'));
+      expect(result.canEnterDomain, isTrue);
+      expect(result.fillTasks, isEmpty);
+    });
+
+    test('uses city in query and allows domain', () {
+      final result = orchestrator.assemble(
+        query: '深圳天气最近怎么样',
+        historySummary: '',
+        recalledTexts: const <String>[],
+        deviceProfile: 'mobile',
+        deviceModel: 'iphone',
+        deviceOs: 'ios',
+        gpsLocation: const <String, dynamic>{},
+        contextScopeHint: const <String, dynamic>{},
+      );
+
+      expect(result.canEnterDomain, isTrue);
+      final gpsLocation = result.contextEnvelope['gpsLocation'] as Map?;
+      expect(gpsLocation?['city'], equals('深圳'));
+      expect(gpsLocation?['citySource'], equals('user_query'));
     });
 
     test('allows domain when coarse city location exists', () {
       final result = orchestrator.assemble(
-        query: '深圳天气最近怎么样',
+        query: '今天天气怎么样',
         historySummary: '',
         recalledTexts: const <String>[],
         deviceProfile: 'mobile',

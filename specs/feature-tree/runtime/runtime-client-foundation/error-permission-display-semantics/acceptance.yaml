@@ -38,6 +38,6 @@ level_acceptance:
     tests:
       - file: test/cloud/content/location/contract/error_permission_l10n_contract_test.dart
 execution:
-  # 迁移后 lib/features/create/ → lib/ui/content/entry/（specs/01_APP_DIRECTORY_MIGRATION_TASKS）
-  local_gate: "flutter analyze lib/features/create/ lib/ui/discovery/"
+  # 迁移后 create 入口统一到 lib/ui/content/entry/（specs/01_APP_DIRECTORY_MIGRATION_TASKS）
+  local_gate: "flutter analyze lib/ui/content/entry/ lib/ui/discovery/"
   full_gate: "make gate"

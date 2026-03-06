@@ -1,0 +1,20 @@
+{
+  "contractVersion": "agent_run_observability_schema_v1",
+  "required": [
+    "kind",
+    "templateId",
+    "templateVersion",
+    "structuredResponse",
+    "domainRouting",
+    "retrievalRounds",
+    "gapFillChain",
+    "webPipeline",
+    "resultSummary",
+    "qualityMetrics"
+  ],
+  "defaults": {
+    "kind": "agent_run",
+    "templateId": "synthesizer.final_answer",
+    "templateVersion": "latest"
+  }
+}

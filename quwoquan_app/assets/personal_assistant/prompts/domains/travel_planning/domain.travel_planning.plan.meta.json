@@ -1,9 +1,0 @@
-{
-  "templateId": "domain.travel_planning.plan",
-  "version": "2026.02.18",
-  "stage": "plan",
-  "domainId": "travel_planning",
-  "requiredVariables": ["userQuery", "contextEnvelope", "userProfileSnapshot", "destinationSlots", "dateBudgetSlots", "preferenceSlots"],
-  "outputContract": "domain_plan_v2026_02_18",
-  "selfCheckRules": ["budget_explicit", "itinerary_conflict_check", "preferences_covered", "no_over_budget_default", "executable_schedule", "slot_completeness"]
-}

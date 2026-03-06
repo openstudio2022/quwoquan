@@ -1,3 +1,4 @@
+import 'package:quwoquan_app/personal_assistant/contracts/runtime_policies.dart';
 import 'package:quwoquan_app/personal_assistant/engine/react_state.dart';
 import 'package:quwoquan_app/personal_assistant/tools/tool_schema.dart';
 
@@ -18,6 +19,7 @@ class ReactPlanner {
               description: '执行工具 ${entry.value.name}',
               toolName: entry.value.name,
               arguments: entry.value.arguments,
+              toolCallId: entry.value.id,
             ),
           )
           .toList(growable: false);
@@ -39,23 +41,38 @@ class ReactReflector {
   bool shouldReplan({
     required ReactRunState state,
     required bool lastStepSuccess,
-    required String lastMessage,
+    required Map<String, dynamic> lastObservation,
+    ReactPolicy policy = ReactPolicy.defaults,
   }) {
-    if (!lastStepSuccess) return true;
-    if (lastMessage.trim().isEmpty) return true;
     if (state.shouldStopByBudget || state.shouldStopByIteration) return false;
-    final lowered = lastMessage.toLowerCase();
-    if (lowered.contains('missing') ||
-        lowered.contains('not found') ||
-        lowered.contains('fallback') ||
-        lowered.contains('失败') ||
-        lowered.contains('未获得可用摘要') ||
-        lowered.contains('信息不足') ||
-        lowered.contains('检索未找到足够信息') ||
-        lowered.contains('需要进一步检索')) {
+    if (!lastStepSuccess) return true;
+    final status = (lastObservation['status'] as String?)?.trim() ?? '';
+    final retryable = lastObservation['retryable'] == true;
+    final errorClass = (lastObservation['errorClass'] as String?)?.trim() ?? '';
+    if (policy.replanStatuses.contains(status)) {
+      return true;
+    }
+    if (retryable &&
+        policy.replanRetryableErrorClasses.contains(errorClass)) {
+      return true;
+    }
+    final data =
+        (lastObservation['data'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final coverage = _asDouble(data['coverage'] ?? data['coverageScore']);
+    final confidence = _asDouble(data['confidence'] ?? data['confidenceScore']);
+    final freshnessHours = _asDouble(data['freshnessHours']);
+    if ((coverage > 0 && coverage < policy.replanCoverageMin) ||
+        (confidence > 0 && confidence < policy.replanConfidenceMin) ||
+        (freshnessHours > policy.replanFreshnessHoursMax)) {
       return true;
     }
     return false;
+  }
+
+  double _asDouble(Object? value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse((value ?? '').toString()) ?? 0;
   }
 }
 
