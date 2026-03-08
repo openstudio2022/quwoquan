@@ -31,7 +31,7 @@ type mongoIdxData struct {
 
 type mongoKeyData struct {
 	Field string
-	Order int
+	ValueExpr string
 }
 
 func generateMongoStore(ctx *genContext, collName string, coll CollectionDef) error {
@@ -65,7 +65,11 @@ func generateMongoStore(ctx *genContext, collName string, coll CollectionDef) er
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
-			id.Keys = append(id.Keys, mongoKeyData{Field: k, Order: idx.Keys[k]})
+			valueExpr, err := formatMongoIndexValue(idx.Keys[k])
+			if err != nil {
+				return fmt.Errorf("index %s key %s: %w", idx.Name, k, err)
+			}
+			id.Keys = append(id.Keys, mongoKeyData{Field: k, ValueExpr: valueExpr})
 		}
 		data.Indexes = append(data.Indexes, id)
 	}
@@ -120,7 +124,7 @@ func (s *{{.BaseName}}) EnsureIndexes(ctx context.Context) error {
 		{
 			Keys: bson.D{
 {{- range .Keys}}
-				{Key: "{{.Field}}", Value: {{.Order}}},
+				{Key: "{{.Field}}", Value: {{.ValueExpr}}},
 {{- end}}
 			},
 			Options: options.Index().SetName("{{.Name}}"){{if .Unique}}.SetUnique(true){{end}}{{if .Sparse}}.SetSparse(true){{end}},
@@ -164,3 +168,21 @@ func (s *{{.BaseName}}) CountByFilter(ctx context.Context, filter bson.M) (int64
 	return s.coll.CountDocuments(ctx, filter)
 }
 `
+
+func formatMongoIndexValue(value any) (string, error) {
+	switch v := value.(type) {
+	case int:
+		return fmt.Sprintf("%d", v), nil
+	case int64:
+		return fmt.Sprintf("%d", v), nil
+	case float64:
+		if v == float64(int(v)) {
+			return fmt.Sprintf("%d", int(v)), nil
+		}
+		return "", fmt.Errorf("unsupported non-integer numeric value %v", v)
+	case string:
+		return fmt.Sprintf("%q", v), nil
+	default:
+		return "", fmt.Errorf("unsupported mongo index value type %T", value)
+	}
+}

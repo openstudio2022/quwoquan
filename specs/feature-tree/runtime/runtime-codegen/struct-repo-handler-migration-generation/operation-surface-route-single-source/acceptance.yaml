@@ -32,7 +32,7 @@ non_functional_acceptance:
 
 level_acceptance:
   A1:
-    criteria: operation / surface / route / path template 的 metadata 承载边界明确，且不再依赖代码 override 表
+    criteria: "operation / surface / route / path template 的 metadata 承载边界明确，且不再依赖代码 override 表"
     status: pending
     linked_tasks: [T1, T2]
     test_layers:
@@ -45,7 +45,7 @@ level_acceptance:
       - code review / semantic rule
 
   A2:
-    criteria: codegen 生成 operation 常量、surface 常量、route/path 常量与 builder，端云消费者只消费生成产物
+    criteria: "codegen 生成 operation 常量、surface 常量、route/path 常量与 builder，端云消费者只消费生成产物"
     status: pending
     linked_tasks: [T3, T4]
     test_layers:
@@ -58,7 +58,7 @@ level_acceptance:
       - route / api metadata tests
 
   A3:
-    criteria: `CloudRequestHeaders`、`CloudResponseDecoder.context`、Repository 请求入口不再硬编码业务标识
+    criteria: "`CloudRequestHeaders`、`CloudResponseDecoder.context`、Repository 请求入口不再硬编码业务标识"
     status: pending
     linked_tasks: [T4, T5]
     test_layers:
@@ -71,7 +71,7 @@ level_acceptance:
       - remote api / header propagation tests
 
   A4:
-    criteria: `app_router.dart` 与主要跳转入口不再硬编码业务 route path，统一由 codegen route 常量与 builder 驱动
+    criteria: "`app_router.dart` 与主要跳转入口不再硬编码业务 route path，统一由 codegen route 常量与 builder 驱动"
     status: pending
     linked_tasks: [T5]
     test_layers:
@@ -84,7 +84,7 @@ level_acceptance:
       - key journey widget / patrol tests
 
   A5:
-    criteria: semantic gate 持续阻断 `/vN/`、`forPage('...')`、`context: '...'`、`path: '/biz'`、`context.go('/biz')` 等硬编码
+    criteria: "semantic gate 持续阻断 `/vN/`、`forPage('...')`、`context: '...'`、`path: '/biz'`、`context.go('/biz')` 等硬编码"
     status: pending
     linked_tasks: [T6]
     test_layers:

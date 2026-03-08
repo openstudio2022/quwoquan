@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 /// 设置页
@@ -57,7 +58,7 @@ class SettingsPage extends ConsumerWidget {
             if (context.canPop()) {
               context.pop();
             } else {
-              context.go('/profile');
+              context.go(AppRoutePaths.profile);
             }
           },
           icon: Icon(Icons.arrow_back, color: fgPrimary),
@@ -101,9 +102,9 @@ class SettingsPage extends ConsumerWidget {
             ),
             onTap: () {
               if (s.id == 'assistant') {
-                context.push('/assistant/management');
+                context.push(AppRoutePaths.assistantManagement);
               } else if (s.id == 'developer') {
-                context.push('/settings/developer');
+                context.push(AppRoutePaths.settingsDeveloper);
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(

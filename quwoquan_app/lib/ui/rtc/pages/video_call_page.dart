@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
@@ -77,7 +78,7 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
         if (context.canPop()) {
           context.pop();
         } else {
-          context.go('/chat');
+          context.go(AppRoutePaths.chat);
         }
       }
     });
@@ -230,7 +231,7 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
                   ref.read(callTimerProvider.notifier).reset();
                 },
                 onInvite: () {
-                  context.push('/rtc/pick-participants', extra: {
+                  context.push(AppRoutePaths.rtcPickParticipants, extra: {
                     'callId': widget.callId,
                     'maxParticipants':
                         session.session?.maxParticipants ?? 32,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
@@ -44,7 +45,7 @@ class ProfileCirclesTab extends ConsumerWidget {
             if (mode == ProfileMode.mine) ...[
               SizedBox(height: AppSpacing.md),
               TextButton(
-                onPressed: () => context.go('/circles'),
+                onPressed: () => context.go(AppRoutePaths.circles),
                 child: Text(
                   '去发现圈子',
                   style: TextStyle(
@@ -70,7 +71,9 @@ class ProfileCirclesTab extends ConsumerWidget {
           name: circle['name']?.toString() ?? '',
           coverUrl: circle['coverUrl']?.toString() ?? '',
           isDark: isDark,
-          onTap: () => context.push('/circle/${circle['id']}'),
+          onTap: () => context.push(
+            AppRoutePaths.circleDetail(id: '${circle['id']}'),
+          ),
         );
       },
     );

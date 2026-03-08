@@ -21,6 +21,7 @@ class ContentTrainingSample(BaseModel):
     class Config:
         json_schema_extra = {
             "positive_signals": [
+                {"type": "comment", "weight": 4},
                 {"type": "like", "weight": 3},
                 {"type": "favorite", "weight": 3},
                 {"type": "dwell", "weight": 2},

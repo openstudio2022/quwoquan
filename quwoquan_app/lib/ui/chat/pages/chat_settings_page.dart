@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 /// 聊天设置/聊天信息页（1:1 图二）
@@ -163,7 +164,9 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                                 '',
                             textColor: fgPrimary,
                             username: username,
-                            onTap: () => context.push('/user/$username'),
+                            onTap: () => context.push(
+                              AppRoutePaths.userProfile(username: username),
+                            ),
                           );
                         },
                       );

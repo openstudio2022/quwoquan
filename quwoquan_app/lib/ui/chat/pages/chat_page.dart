@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
@@ -348,7 +349,9 @@ class _ChatPageState extends ConsumerState<ChatPage>
                     return _ConversationTile(
                       conversation: c,
                       isSpecial: false,
-                      onTap: () => context.push('/chat/${c['id']}'),
+                      onTap: () => context.push(
+                        AppRoutePaths.chatDetail(id: '${c['id']}'),
+                      ),
                       fgPrimary: fgPrimary,
                       fgSecondary: fgSecondary,
                       borderColor: borderColor,
@@ -529,7 +532,9 @@ class _ChatPageState extends ConsumerState<ChatPage>
             ...convs.map(
               (c) => _ConversationTile(
                 conversation: c,
-                onTap: () => context.push('/chat/${c['id']}'),
+                onTap: () => context.push(
+                  AppRoutePaths.chatDetail(id: '${c['id']}'),
+                ),
                 fgPrimary: fgPrimary,
                 fgSecondary: fgSecondary,
                 borderColor: borderColor,

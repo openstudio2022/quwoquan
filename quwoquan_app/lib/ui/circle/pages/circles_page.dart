@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
@@ -937,7 +938,9 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
                 return Padding(
                   padding: EdgeInsets.only(right: AppSpacing.sm),
                   child: GestureDetector(
-                    onTap: () => context.push('/circle/${c['id']}'),
+                    onTap: () => context.push(
+                      AppRoutePaths.circleDetail(id: '${c['id']}'),
+                    ),
                     child: Column(
                       children: [
                         SizedBox(
@@ -1182,7 +1185,9 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
           return _DiscoveryPostCard(
             post: p,
             isDark: isDark,
-            onTap: () => context.push('/article/${p['id']}'),
+            onTap: () => context.push(
+              AppRoutePaths.articleDetail(id: '${p['id']}'),
+            ),
             onHorizontalDragEnd: onGridHorizontalDragEnd,
           );
         },

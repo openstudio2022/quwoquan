@@ -641,7 +641,7 @@ class RemoteContentRepository implements ContentRepository {
     );
     final rawPage = CloudResponseDecoder.asCursorPage(
       decoded,
-      context: 'content.feed.list',
+      context: ContentRequestPageIds.getFeed,
     );
     final dtoItems = rawPage.items
         .map(postBaseDtoFromMap)
@@ -677,7 +677,10 @@ class RemoteContentRepository implements ContentRepository {
       uri,
       headers: CloudRequestHeaders.forPage(ContentRequestPageIds.getPost),
     );
-    return CloudResponseDecoder.asObject(decoded, context: 'content.post.get');
+    return CloudResponseDecoder.asObject(
+      decoded,
+      context: ContentRequestPageIds.getPost,
+    );
   }
 
   @override
@@ -692,7 +695,7 @@ class RemoteContentRepository implements ContentRepository {
     );
     return CloudResponseDecoder.asObject(
       decoded,
-      context: 'content.post.create',
+      context: ContentRequestPageIds.createPost,
     );
   }
 
@@ -749,7 +752,7 @@ class RemoteContentRepository implements ContentRepository {
     );
     return CloudResponseDecoder.asObject(
       decoded,
-      context: 'content.post.reactions',
+      context: ContentRequestPageIds.getReactionState,
     );
   }
 
@@ -772,7 +775,7 @@ class RemoteContentRepository implements ContentRepository {
     );
     final rawPage = CloudResponseDecoder.asCursorPage(
       decoded,
-      context: 'content.comment.list',
+      context: ContentRequestPageIds.listComments,
     );
     final dtos = rawPage.items
         .cast<Map<String, dynamic>>()
@@ -799,7 +802,7 @@ class RemoteContentRepository implements ContentRepository {
     );
     return CloudResponseDecoder.asObject(
       decoded,
-      context: 'content.comment.create',
+      context: ContentRequestPageIds.createComment,
     );
   }
 
@@ -860,7 +863,7 @@ class RemoteContentRepository implements ContentRepository {
     );
     final rawPage = CloudResponseDecoder.asCursorPage(
       decoded,
-      context: 'content.comment.myComments',
+      context: ContentRequestPageIds.listCommentsByAuthor,
     );
     final dtos = rawPage.items
         .cast<Map<String, dynamic>>()
@@ -888,7 +891,7 @@ class RemoteContentRepository implements ContentRepository {
     );
     final rawPage = CloudResponseDecoder.asCursorPage(
       decoded,
-      context: 'content.comment.receivedComments',
+      context: ContentRequestPageIds.listCommentsForPostAuthor,
     );
     final dtos = rawPage.items
         .cast<Map<String, dynamic>>()
@@ -933,7 +936,7 @@ class RemoteContentRepository implements ContentRepository {
     );
     return CloudResponseDecoder.asObject(
       decoded,
-      context: 'content.post.counters',
+      context: ContentRequestPageIds.getCounters,
     );
   }
 
@@ -950,7 +953,7 @@ class RemoteContentRepository implements ContentRepository {
     );
     return CloudResponseDecoder.asObject(
       decoded,
-      context: 'content.post.update',
+      context: ContentRequestPageIds.updatePost,
     );
   }
 
@@ -973,7 +976,7 @@ class RemoteContentRepository implements ContentRepository {
     );
     return CloudResponseDecoder.asObject(
       decoded,
-      context: 'content.post.publish',
+      context: ContentRequestPageIds.publishPost,
     );
   }
 
@@ -993,7 +996,7 @@ class RemoteContentRepository implements ContentRepository {
     );
     return CloudResponseDecoder.asObject(
       decoded,
-      context: 'content.post.circles',
+      context: ContentRequestPageIds.updatePostCircles,
     );
   }
 
@@ -1010,7 +1013,7 @@ class RemoteContentRepository implements ContentRepository {
     );
     return CloudResponseDecoder.asObject(
       decoded,
-      context: 'content.post.repost',
+      context: ContentRequestPageIds.repostToCircle,
     );
   }
 
@@ -1028,7 +1031,7 @@ class RemoteContentRepository implements ContentRepository {
     );
     return CloudResponseDecoder.asObject(
       decoded,
-      context: 'content.post.quote',
+      context: ContentRequestPageIds.quoteToCircle,
     );
   }
 
@@ -1044,7 +1047,7 @@ class RemoteContentRepository implements ContentRepository {
     );
     return CloudResponseDecoder.asObject(
       decoded,
-      context: 'content.media.init',
+      context: ContentRequestPageIds.initMediaUpload,
     );
   }
 
@@ -1064,7 +1067,7 @@ class RemoteContentRepository implements ContentRepository {
     );
     return CloudResponseDecoder.asObject(
       decoded,
-      context: 'content.media.complete',
+      context: ContentRequestPageIds.completeMediaUpload,
     );
   }
 
@@ -1089,7 +1092,10 @@ class RemoteContentRepository implements ContentRepository {
       uri,
       headers: CloudRequestHeaders.forPage(ContentRequestPageIds.getMediaAsset),
     );
-    return CloudResponseDecoder.asObject(decoded, context: 'content.media.get');
+    return CloudResponseDecoder.asObject(
+      decoded,
+      context: ContentRequestPageIds.getMediaAsset,
+    );
   }
 
   @override
@@ -1108,7 +1114,7 @@ class RemoteContentRepository implements ContentRepository {
     );
     return CloudResponseDecoder.asObject(
       decoded,
-      context: 'content.media.cover.auto',
+      context: ContentRequestPageIds.selectAutoVideoCover,
     );
   }
 
@@ -1129,7 +1135,7 @@ class RemoteContentRepository implements ContentRepository {
     );
     return CloudResponseDecoder.asObject(
       decoded,
-      context: 'content.media.cover.manual',
+      context: ContentRequestPageIds.selectManualVideoCover,
     );
   }
 
@@ -1148,7 +1154,7 @@ class RemoteContentRepository implements ContentRepository {
     );
     return CloudResponseDecoder.asObject(
       decoded,
-      context: 'content.article.summary',
+      context: ContentRequestPageIds.generateArticleSummary,
     );
   }
 
@@ -1189,7 +1195,7 @@ class RemoteContentRepository implements ContentRepository {
     );
     final rawPage = CloudResponseDecoder.asCursorPage(
       decoded,
-      context: 'content.user.posts',
+      context: ContentRequestPageIds.listUserPosts,
     );
     final dtoItems = rawPage.items
         .map(postBaseDtoFromMap)

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/personal_assistant/app/assistant_engine_provider.dart';
 
@@ -463,7 +464,7 @@ class _AssistantHomePageState extends ConsumerState<AssistantHomePage> {
                 ),
               ),
               TextButton(
-                onPressed: () => context.push('/assistant/skills'),
+                onPressed: () => context.push(AppRoutePaths.assistantSkills),
                 child: const Text('进入'),
               ),
             ],

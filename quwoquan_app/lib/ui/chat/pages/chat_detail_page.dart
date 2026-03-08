@@ -18,6 +18,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/input/customizable_chat_input_bar.dart';
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
@@ -385,7 +386,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       conversationId: widget.conversationId,
     );
     if (callId != null && mounted) {
-      context.push('/rtc/outgoing/$callId');
+      context.push(AppRoutePaths.rtcOutgoing(callId: callId));
     }
   }
 
@@ -3173,7 +3174,11 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                   IconButton(
                     icon: const Icon(Icons.more_horiz),
                     onPressed: () =>
-                        context.push('/chat/${widget.conversationId}/settings'),
+                        context.push(
+                          AppRoutePaths.chatSettings(
+                            id: widget.conversationId,
+                          ),
+                        ),
                   ),
               ],
             ],
@@ -3531,9 +3536,13 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                                                 msg['senderId'] as String? ??
                                                 '';
                                             if (senderId == 'current_user') {
-                                              context.push('/profile');
+                                              context.push(AppRoutePaths.profile);
                                             } else if (senderId.isNotEmpty) {
-                                              context.push('/user/$senderId');
+                                              context.push(
+                                                AppRoutePaths.userProfile(
+                                                  username: senderId,
+                                                ),
+                                              );
                                             }
                                           },
                                     showAssistantAvatar: false,

@@ -1,4 +1,4 @@
-// Codegen for rec-model-service Python: reads contracts/metadata (rec_model_service + _projections)
+// Codegen for rec-model-service Python: reads service metadata + service projections
 // and generates Pydantic models + FastAPI route skeleton. Single source of truth with Go/App.
 package main
 
@@ -32,7 +32,7 @@ func main() {
 
 func run(metadataDir, outputDir, serviceDir string) error {
 	servicePath := filepath.Join(metadataDir, serviceDir)
-	projectionsPath := filepath.Join(metadataDir, "_projections")
+	projectionsPath := filepath.Join(servicePath, "projections")
 
 	fields, err := loadFields(filepath.Join(servicePath, "fields.yaml"))
 	if err != nil {

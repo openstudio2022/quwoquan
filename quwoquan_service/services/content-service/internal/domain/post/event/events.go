@@ -11,6 +11,7 @@ const (
 	PostReshared                  = "PostReshared"
 	PostQuoted                    = "PostQuoted"
 	CommentCreated                = "CommentCreated"
+	CommentLiked                  = "CommentLiked"
 	ContentReacted                = "ContentReacted"
 	ContentViewed                 = "ContentViewed"
 	ContentShared                 = "ContentShared"

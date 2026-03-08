@@ -7,6 +7,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
@@ -603,7 +604,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
     if (context.canPop()) {
       context.pop();
     } else {
-      context.go('/');
+      context.go(AppRoutePaths.home);
     }
   }
 
@@ -895,7 +896,14 @@ class _CreatePageState extends ConsumerState<CreatePage>
     for (var i = 0; i < paths.length; i++) {
       params['path$i'] = paths[i];
     }
-    final uri = Uri(path: '/create/edit-image', queryParameters: params);
+    final uri = Uri.parse(
+      AppRoutePaths.createEditImage(
+        path: path,
+        source: source,
+        index: '$index',
+        total: '$total',
+      ),
+    ).replace(queryParameters: params);
     return context.push<Object>(uri.toString());
   }
 

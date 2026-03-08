@@ -8,7 +8,11 @@ import "errors"
 //nolint:gochecknoglobals
 var (
 	ErrCircleDistributionForbidden         = errors.New("CONTENT.USER.circle_distribution_forbidden")
+	ErrCommentForbiddenDelete              = errors.New("CONTENT.USER.comment_forbidden_delete")
+	ErrCommentLikeDuplicate                = errors.New("CONTENT.USER.comment_like_duplicate")
 	ErrCommentNotFound                     = errors.New("CONTENT.USER.comment_not_found")
+	ErrCommentRateLimited                  = errors.New("CONTENT.USER.comment_rate_limited")
+	ErrCommentTooLong                      = errors.New("CONTENT.USER.comment_too_long")
 	ErrContentDeleted                      = errors.New("CONTENT.USER.content_deleted")
 	ErrContentTooLong                      = errors.New("CONTENT.USER.content_too_long")
 	ErrForbiddenDelete                     = errors.New("CONTENT.USER.forbidden_delete")

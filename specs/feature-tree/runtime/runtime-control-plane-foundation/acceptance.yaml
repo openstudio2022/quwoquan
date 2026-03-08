@@ -1,0 +1,98 @@
+version: 1
+feature: "runtime-control-plane-foundation"
+level: "L2_feature"
+template: "A1-A8"
+tree_context:
+  feature_level: "L2_feature"
+  feature_path: "capability.runtime.feature.runtime-control-plane-foundation"
+  parent_path: "capability.runtime"
+  acceptance_inherits_from: "capability.runtime"
+level_acceptance:
+  A1:
+    criteria: "统一 Web 门户 `ops-portal` 的产品边界、一级/二级菜单、全局导航、权限、审计、通知、环境切换与搜索入口被明确冻结，并可作为 `platform-ops` 与 `product-ops` 的共同上位规格。"
+    status: pending
+    linked_tasks: [P1]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    tests: []
+  A2:
+    criteria: "统一门户不引入第二套控制面真相源，门户壳层仅承载全局能力与导航，不替代业务/系统配置的元数据来源。"
+    status: pending
+    linked_tasks: [P1, P4]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    tests: []
+  A3:
+    criteria: "三类面 `user-plane`、`platform-control-plane`、`product-control-plane` 的契约边界与部署任意组合原则被明确冻结，支持短期 `seed-box` 同 Pod 与长期独立 Deployment / Pod。"
+    status: pending
+    linked_tasks: [P2, P3]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests: []
+  A4:
+    criteria: "统一门户与控制面全局能力可被审计与集成验证，包含审计、通知、环境切换、搜索、全局导航的统一口径。"
+    status: pending
+    linked_tasks: [P1, P8]
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: optional
+    tests: []
+  A5:
+    criteria: "`sys.*`、`ops.*` 与 IaC/基础设施配置边界被明确冻结，端侧 IA / 布局 / 体验 flag 与运行时参数分层清晰。"
+    status: pending
+    linked_tasks: [P6, P7]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests: []
+  A6:
+    criteria: "控制面与门户的权限、危险动作、审计、双签等全局安全治理要求有统一上位约束，不依赖具体控制面单独定义。"
+    status: pending
+    linked_tasks: [P1, P4, P8]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    tests: []
+  A7:
+    criteria: "控制面元数据对象 `portal_shell.yaml`、`portal_menu.yaml`、`control_plane.yaml`、`config_schema.yaml`、`workflow.yaml`、`audit_schema.yaml` 与 codegen 目标被统一定义，并可生成 Web / Go / Python / App 契约。"
+    status: pending
+    linked_tasks: [P4, P5]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests: []
+  A8:
+    criteria: "统一集成验收口径已定义，可在 `platform-ops` 与 `product-ops` 完成后回到本节点完成统一门户、统一元数据、统一 codegen、统一部署组合、统一验收链路的收口。"
+    status: pending
+    linked_tasks: [P8]
+    test_layers:
+      T1: optional
+      T2: optional
+      T3: required
+      T4: required
+    tests: []
+notes:
+  benchmark_inputs:
+    - "Backstage + Argo Rollouts：统一研发自助入口、服务目录、发布灰度"
+    - "LaunchDarkly / Statsig / Amplitude：实验、归因、策略审计"
+    - "TikTok / YouTube Studio / Trust & Safety：治理处置、申诉恢复、证据与审计工作流"
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"

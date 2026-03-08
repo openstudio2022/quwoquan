@@ -51,7 +51,8 @@ void main() {
 
     test('listComments 返回评论列表', () async {
       final comments = await repo.listComments(postId: 'test');
-      expect(comments, isList);
+      expect(comments, isA<CommentPage>());
+      expect(comments.items, isA<List<CommentDto>>());
     });
 
     test('createComment 返回新评论', () async {

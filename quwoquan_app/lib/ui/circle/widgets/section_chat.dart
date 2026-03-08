@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 /// 圈子群聊板块：显示群聊入口卡片（含独立 loading/error 状态）
@@ -59,7 +60,9 @@ class _SectionChatState extends ConsumerState<SectionChat> {
         borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
       ),
       child: InkWell(
-        onTap: () => context.push('/chat/${widget.conversationId}'),
+        onTap: () => context.push(
+          AppRoutePaths.chatDetail(id: widget.conversationId!),
+        ),
         borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
         child: Row(
           children: [

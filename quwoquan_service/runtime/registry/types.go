@@ -211,7 +211,7 @@ type MongoCollDef struct {
 
 type MongoIndexDef struct {
 	Name   string         `yaml:"name"`
-	Keys   map[string]int `yaml:"keys"`
+	Keys   map[string]any `yaml:"keys"`
 	Unique bool           `yaml:"unique"`
 	Sparse bool           `yaml:"sparse"`
 }

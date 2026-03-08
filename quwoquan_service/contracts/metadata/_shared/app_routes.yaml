@@ -1,0 +1,69 @@
+version: 1
+
+routes:
+  - id: home
+    path: /
+  - id: circles
+    path: /circles
+  - id: chat
+    path: /chat
+  - id: profile
+    path: /profile
+  - id: createEntry
+    path: /create-entry
+  - id: create
+    path: /create
+    query_params: [type]
+  - id: createEditImage
+    path: /create/edit-image
+    query_params: [path, source, index, total]
+  - id: circleDetail
+    path: /circle/{id}
+  - id: circleStats
+    path: /circle/{id}/stats
+    query_params: [type]
+  - id: articleDetail
+    path: /article/{id}
+  - id: userProfile
+    path: /user/{username}
+  - id: mediaViewer
+    path: /media-viewer/{category}/{index}
+  - id: videoViewer
+    path: /video-viewer/{index}
+  - id: assistant
+    path: /assistant
+  - id: assistantManagement
+    path: /assistant/management
+  - id: assistantSkills
+    path: /assistant/skills
+  - id: settings
+    path: /settings
+  - id: settingsDeveloper
+    path: /settings/developer
+  - id: profileEdit
+    path: /profile/edit
+  - id: profilePersonas
+    path: /profile/personas
+  - id: profileComments
+    path: /profile/comments
+  - id: profileResonance
+    path: /profile/resonance
+  - id: profileStats
+    path: /profile/stats
+    query_params: [type]
+  - id: chatDetail
+    path: /chat/{id}
+  - id: chatSettings
+    path: /chat/{id}/settings
+  - id: chatAddMembers
+    path: /chat/{id}/add-members
+  - id: rtcOutgoing
+    path: /rtc/outgoing/{callId}
+  - id: rtcIncoming
+    path: /rtc/incoming/{callId}
+  - id: rtcVoice
+    path: /rtc/voice/{callId}
+  - id: rtcVideo
+    path: /rtc/video/{callId}
+  - id: rtcPickParticipants
+    path: /rtc/pick-participants

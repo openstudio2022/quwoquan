@@ -7,6 +7,8 @@ import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/media/upload_policy.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 
 /// Upload task state.
@@ -133,10 +135,10 @@ class MediaUploadManager {
   }
 
   Future<Map<String, dynamic>> _initUpload(UploadTask task) async {
-    final uri = Uri.parse('$_baseUrl/v1/media/upload/init');
+    final uri = Uri.parse('$_baseUrl${ContentApiMetadata.initMediaUploadPath}');
     return await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage('media.upload.init'),
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.initMediaUpload),
       body: {
         'category': task.category.name,
         'ownerId': task.ownerId,
@@ -168,10 +170,14 @@ class MediaUploadManager {
   }
 
   Future<Map<String, dynamic>> _completeUpload(UploadTask task) async {
-    final uri = Uri.parse('$_baseUrl/v1/media/upload/${task.sessionId}/complete');
+    final uri = Uri.parse(
+      '$_baseUrl${ContentApiMetadata.completeMediaUploadPath(sessionId: task.sessionId ?? '')}',
+    );
     return await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage('media.upload.complete'),
+      headers: CloudRequestHeaders.forPage(
+        ContentRequestPageIds.completeMediaUpload,
+      ),
       body: task.completionMetadata ?? {},
     );
   }

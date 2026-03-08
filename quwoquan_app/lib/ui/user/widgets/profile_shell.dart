@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
@@ -281,7 +282,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
                     if (widget.mode == ProfileMode.mine)
                       IconButton(
                         icon: const Icon(Icons.settings_outlined),
-                        onPressed: () => context.push('/settings'),
+                        onPressed: () => context.push(AppRoutePaths.settings),
                       )
                     else
                       IconButton(
@@ -341,21 +342,23 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
                                   mode: widget.mode,
                                   isDark: isDark,
                                   resonanceCount: 128,
-                                  onTap: () => context.push('/profile/resonance'),
+                                  onTap: () => context.push(AppRoutePaths.profileResonance),
                                 ),
                                 SizedBox(height: AppSpacing.sm),
                                 ProfileStatsRow(
                                   isDark: isDark,
                                   stats: state.stats,
-                                  onStatTap: (type) => context.push('/profile/stats?type=$type'),
+                                  onStatTap: (type) => context.push(
+                                    AppRoutePaths.profileStats(type: type),
+                                  ),
                                 ),
                                 SizedBox(height: AppSpacing.sm),
                                 ProfileActionBar(
                                   mode: widget.mode,
                                   isDark: isDark,
                                   isFollowing: state.isFollowing,
-                                  onEditProfile: () => context.push('/profile/edit'),
-                                  onManagePersonas: () => context.push('/profile/personas'),
+                                  onEditProfile: () => context.push(AppRoutePaths.profileEdit),
+                                  onManagePersonas: () => context.push(AppRoutePaths.profilePersonas),
                                   onFollow: notifier.toggleFollow,
                                   onMessage: () {},
                                 ),

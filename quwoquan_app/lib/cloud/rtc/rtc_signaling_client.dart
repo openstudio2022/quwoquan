@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/app_request_page_ids.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/realtime/realtime_api_metadata.g.dart';
 
 class RtcSignalEvent {
   final String type;
@@ -68,9 +70,11 @@ class RtcSignalingClient {
       final wsUrl = CloudRuntimeConfig.gatewayBaseUrl
           .replaceFirst('https://', 'wss://')
           .replaceFirst('http://', 'ws://');
-      final headers = CloudRequestHeaders.forPage('rtc.signal');
+      final headers = CloudRequestHeaders.forPage(AppRequestPageIds.rtcSignal);
 
-      final uri = Uri.parse('$wsUrl/v1/rtc/signal?userId=$_userId');
+      final uri = Uri.parse(
+        '$wsUrl${RealtimeApiMetadata.webSocketUpgradePath}?userId=$_userId',
+      );
       _channel = WebSocketChannel.connect(uri, protocols: null);
 
       _channel!.stream.listen(

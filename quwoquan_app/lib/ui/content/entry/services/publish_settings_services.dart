@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/app_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/integration/integration_location_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/integration/location_poi_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
@@ -66,7 +67,7 @@ class CreateLocationService {
     try {
       final decoded = await _httpClient.getJson(
         uri,
-        headers: CloudRequestHeaders.forPage('create.location.nearby'),
+        headers: CloudRequestHeaders.forPage(AppRequestPageIds.createLocationNearby),
       );
       final items = _parseItems(decoded);
       if (items.isNotEmpty) {
@@ -103,7 +104,7 @@ class CreateLocationService {
     try {
       final decoded = await _httpClient.getJson(
         uri,
-        headers: CloudRequestHeaders.forPage('create.location.search'),
+        headers: CloudRequestHeaders.forPage(AppRequestPageIds.createLocationSearch),
       );
       final items = _parseItems(decoded);
       if (items.isNotEmpty) {

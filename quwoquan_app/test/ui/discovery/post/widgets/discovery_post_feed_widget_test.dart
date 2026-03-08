@@ -142,16 +142,16 @@ void main() {
       await mock.createComment(postId: 'p1', content: 'first');
       await mock.createComment(postId: 'p1', content: 'second');
       final comments = await mock.listComments(postId: 'p1');
-      expect(comments.length, equals(2));
-      expect(comments[0]['content'], equals('first'));
-      expect(comments[1]['content'], equals('second'));
+      expect(comments.items.length, equals(2));
+      expect(comments.items[0].content, equals('first'));
+      expect(comments.items[1].content, equals('second'));
     });
   });
 }
 
 // ─── test double ──────────────────────────────────────────────────────────────
 
-class _FailingContentRepository implements ContentRepository {
+class _FailingContentRepository extends MockContentRepository {
   @override
   Future<CursorPage<PostBaseDto>> listDiscoveryFeedPage({
     required String category,
@@ -171,115 +171,4 @@ class _FailingContentRepository implements ContentRepository {
     String? cursor,
     String sort = kFeedSortRecommend,
   }) async => throw Exception('network_error');
-
-  @override
-  Future<Map<String, dynamic>> getPost({required String postId}) async =>
-      throw UnimplementedError();
-
-  @override
-  Future<Map<String, dynamic>> createPost({
-    required Map<String, dynamic> payload,
-  }) async => throw UnimplementedError();
-
-  @override
-  Future<Map<String, dynamic>> updatePost({
-    required String postId,
-    required Map<String, dynamic> payload,
-  }) async => throw UnimplementedError();
-  @override
-  Future<void> deletePost({required String postId}) async {}
-  @override
-  Future<Map<String, dynamic>> publishPost({required String postId}) async =>
-      {};
-  @override
-  Future<Map<String, dynamic>> updatePostCircles({
-    required String postId,
-    List<String> add = const [],
-    List<String> remove = const [],
-  }) async => {};
-  @override
-  Future<Map<String, dynamic>> repostToCircle({
-    required String postId,
-    required String circleId,
-  }) async => {};
-  @override
-  Future<Map<String, dynamic>> quoteToCircle({
-    required String postId,
-    required String circleId,
-    String quoteText = '',
-  }) async => {};
-  @override
-  Future<Map<String, dynamic>> initMediaUpload({String mediaType = 'image'}) async =>
-      {};
-  @override
-  Future<Map<String, dynamic>> completeMediaUpload({
-    required String sessionId,
-  }) async => {};
-  @override
-  Future<void> abortMediaUpload({required String sessionId}) async {}
-  @override
-  Future<Map<String, dynamic>> getMediaAsset({required String mediaId}) async =>
-      {};
-  @override
-  Future<Map<String, dynamic>> selectAutoVideoCover({
-    required String mediaId,
-  }) async => {};
-  @override
-  Future<Map<String, dynamic>> selectManualVideoCover({
-    required String mediaId,
-    required String coverAssetId,
-  }) async => {};
-  @override
-  Future<Map<String, dynamic>> generateArticleSummary({
-    required String title,
-    required String body,
-  }) async => {};
-  @override
-  Future<Map<String, dynamic>> getRecommendation({
-    String? cursor,
-    int limit = 20,
-  }) async => {};
-  @override
-  Future<CursorPage<PostBaseDto>> listUserPosts({
-    required String userId,
-    String? cursor,
-    int limit = 20,
-  }) async =>
-      CursorPage<PostBaseDto>(items: [], nextCursor: null);
-  @override
-  Future<void> likePost({required String postId}) async {}
-  @override
-  Future<void> unlikePost({required String postId}) async {}
-  @override
-  Future<void> favoritePost({required String postId}) async {}
-  @override
-  Future<void> unfavoritePost({required String postId}) async {}
-  @override
-  Future<Map<String, dynamic>> getReactionState({
-    required String postId,
-  }) async => {};
-  @override
-  Future<List<Map<String, dynamic>>> listComments({
-    required String postId,
-    String? cursor,
-    int limit = 20,
-  }) async => [];
-  @override
-  Future<Map<String, dynamic>> createComment({
-    required String postId,
-    required String content,
-    String? replyToCommentId,
-  }) async => {};
-  @override
-  Future<void> deleteComment({
-    required String postId,
-    required String commentId,
-  }) async {}
-  @override
-  Future<void> reportBehaviors({
-    required List<Map<String, dynamic>> events,
-  }) async {}
-  @override
-  Future<Map<String, dynamic>> getCounters({required String postId}) async =>
-      {};
 }

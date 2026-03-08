@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/app/shell/bottom_navigation.dart';
 import 'package:quwoquan_app/ui/discovery/pages/discovery_page.dart';
@@ -177,7 +178,9 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     if (index == 2) {
       ref.read(lastMainTabBeforeAssistantProvider.notifier).set(_currentIndex);
       _triggerAssistantWakeState();
-      context.go('/chat/${AppConceptConstants.assistantConversationId}');
+      context.go(
+        AppRoutePaths.chatDetail(id: AppConceptConstants.assistantConversationId),
+      );
       return;
     }
 
@@ -188,31 +191,31 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
 
     switch (index) {
       case 0:
-        context.go('/');
+        context.go(AppRoutePaths.home);
         break;
       case 1:
-        context.go('/circles');
+        context.go(AppRoutePaths.circles);
         break;
       case 3:
-        context.go('/chat');
+        context.go(AppRoutePaths.chat);
         break;
       case 4:
-        context.go('/profile');
+        context.go(AppRoutePaths.profile);
         break;
     }
   }
 
   bool _isAssistantConversationRoute(String location) {
     return location.startsWith(
-      '/chat/${AppConceptConstants.assistantConversationId}',
+      AppRoutePaths.chatDetail(id: AppConceptConstants.assistantConversationId),
     );
   }
 
   bool _isMainTabRoute(String location) {
-    return location == '/' ||
-        location == '/circles' ||
-        location == '/chat' ||
-        location == '/profile';
+    return location == AppRoutePaths.home ||
+        location == AppRoutePaths.circles ||
+        location == AppRoutePaths.chat ||
+        location == AppRoutePaths.profile;
   }
 
   void _triggerAssistantWakeState() {

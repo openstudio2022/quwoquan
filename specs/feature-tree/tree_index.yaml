@@ -2160,6 +2160,13 @@ features:
           domain: ""
           status: specified
           tags: [workflow, feature-tree, acceptance, benchmark, testing]
+        - id: runtime-control-plane-foundation
+          name: runtime-control-plane-foundation
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-control-plane-foundation
+          domain: ""
+          status: specified
+          tags: [portal, control-plane, metadata, codegen, deployment]
         - id: runtime-agentpack
           name: runtime-agentpack
           level: L2_feature

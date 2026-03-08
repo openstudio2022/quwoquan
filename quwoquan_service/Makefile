@@ -54,7 +54,7 @@ codegen-content-service:
 	go run ./tools/codegen_content_service --metadata-dir contracts/metadata --output-dir services/content-service/internal --aggregate Post
 
 codegen-rec-model-python:
-	go run ./tools/codegen_rec_model_python --metadata-dir contracts/metadata --output-dir services/rec-model-service/generated
+	go run ./tools/codegen_rec_model_python --metadata-dir contracts/metadata --service-dir recommendation/rec_model --output-dir services/rec-model-service/generated
 
 codegen-storage:
 	@echo "=== codegen-storage: user-service ==="

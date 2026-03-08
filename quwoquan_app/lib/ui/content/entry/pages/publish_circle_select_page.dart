@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
@@ -390,7 +391,7 @@ class _PublishCircleSelectPageState extends State<PublishCircleSelectPage> {
             ),
             SizedBox(height: AppSpacing.interGroupLg),
             CupertinoButton.filled(
-              onPressed: () => context.go('/discovery'),
+              onPressed: () => context.go(AppRoutePaths.home),
               child: Text(l10n.goToDiscovery),
             ),
           ],

@@ -8,6 +8,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagement_bar.dart';
@@ -535,7 +536,11 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                 displayName: currentPost.displayName,
                 backgroundUrl: currentPost.authorBackgroundUrl,
               ),
-              onCircleTap: () => context.push('/circle/${_circleIdForPost(currentPost)}'),
+              onCircleTap: () => context.push(
+                AppRoutePaths.circleDetail(
+                  id: _circleIdForPost(currentPost),
+                ),
+              ),
               onFollowTap: () => _onFollow(currentPost),
               onLikeTap: () => _onLike(currentPost),
               onFavoriteTap: () => _onFavorite(currentPost),

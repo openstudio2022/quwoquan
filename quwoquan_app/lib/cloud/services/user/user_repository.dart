@@ -61,7 +61,7 @@ class RemoteUserRepository implements UserRepository {
     );
     final page = CloudResponseDecoder.asCursorPage(
       decoded,
-      context: 'user.persona.list',
+      context: UserRequestPageIds.listPersonas,
     );
     return page.items;
   }
@@ -87,7 +87,7 @@ class RemoteUserRepository implements UserRepository {
     );
     return CloudResponseDecoder.asObject(
       decoded,
-      context: 'user.notification_settings.get',
+      context: UserRequestPageIds.getNotificationSettings,
     );
   }
 
@@ -100,7 +100,7 @@ class RemoteUserRepository implements UserRepository {
     );
     return CloudResponseDecoder.asObject(
       decoded,
-      context: 'user.privacy_settings.get',
+      context: UserRequestPageIds.getPrivacySettings,
     );
   }
 }

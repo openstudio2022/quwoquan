@@ -39,6 +39,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleNotImplemented(w, r, operation)
 	case "GenerateArticleSummary":
 		h.handleNotImplemented(w, r, operation)
+	case "GetAppConfig":
+		h.handleNotImplemented(w, r, operation)
 	case "GetCounters":
 		h.handleNotImplemented(w, r, operation)
 	case "GetFeed":
@@ -46,8 +48,6 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	case "GetHelperRead":
 		h.handleNotImplemented(w, r, operation)
 	case "GetMediaAsset":
-		h.handleNotImplemented(w, r, operation)
-	case "GetAppConfig":
 		h.handleNotImplemented(w, r, operation)
 	case "GetPost":
 		h.handleGetPost(w, r)
@@ -66,6 +66,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	case "ListCommentsByAuthor":
 		h.handleNotImplemented(w, r, operation)
 	case "ListCommentsForPostAuthor":
+		h.handleNotImplemented(w, r, operation)
+	case "ListUserPosts":
 		h.handleNotImplemented(w, r, operation)
 	case "PublishPost":
 		h.handleNotImplemented(w, r, operation)
@@ -95,8 +97,11 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 }
 
 var generatedRouteTable = []generatedRouteDef{
+	{method: "GET", pathTemplate: "/v1/config/app", operation: "GetAppConfig"},
 	{method: "POST", pathTemplate: "/v1/content/articles/summary:generate", operation: "GenerateArticleSummary"},
 	{method: "POST", pathTemplate: "/v1/content/behaviors", operation: "ReportBehaviors"},
+	{method: "DELETE", pathTemplate: "/v1/content/comments/{commentId}/like", operation: "UnlikeComment"},
+	{method: "POST", pathTemplate: "/v1/content/comments/{commentId}/like", operation: "LikeComment"},
 	{method: "GET", pathTemplate: "/v1/content/feed", operation: "GetFeed"},
 	{method: "GET", pathTemplate: "/v1/content/helper-read/{contentId}", operation: "GetHelperRead"},
 	{method: "POST", pathTemplate: "/v1/content/media/uploads/{sessionId}:abort", operation: "AbortMediaUpload"},
@@ -122,13 +127,11 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/quote", operation: "QuoteToCircle"},
 	{method: "GET", pathTemplate: "/v1/content/posts/{postId}/reactions", operation: "GetReactionState"},
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/repost", operation: "RepostToCircle"},
-	{method: "POST", pathTemplate: "/v1/content/comments/{commentId}/like", operation: "LikeComment"},
-	{method: "DELETE", pathTemplate: "/v1/content/comments/{commentId}/like", operation: "UnlikeComment"},
+	{method: "POST", pathTemplate: "/v1/content/recommend", operation: "GetRecommendation"},
 	{method: "GET", pathTemplate: "/v1/content/users/me/comments", operation: "ListCommentsByAuthor"},
 	{method: "GET", pathTemplate: "/v1/content/users/me/received-comments", operation: "ListCommentsForPostAuthor"},
-	{method: "GET", pathTemplate: "/v1/config/app", operation: "GetAppConfig"},
-	{method: "POST", pathTemplate: "/v1/content/recommend", operation: "GetRecommendation"},
 	{method: "GET", pathTemplate: "/v1/orch/discovery/feed", operation: "GetFeed"},
+	{method: "GET", pathTemplate: "/v1/users/{userId}/posts", operation: "ListUserPosts"},
 }
 
 type generatedRouteDef struct {

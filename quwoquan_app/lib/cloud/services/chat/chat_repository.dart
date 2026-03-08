@@ -316,7 +316,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     return CloudResponseDecoder.asCursorPage(
       decoded,
-      context: 'chat.conversation.list',
+      context: ChatRequestPageIds.listConversations,
     ).items;
   }
 
@@ -374,7 +374,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     return CloudResponseDecoder.asCursorPage(
       decoded,
-      context: 'chat.message.list',
+      context: ChatRequestPageIds.listMessages,
     ).items;
   }
 

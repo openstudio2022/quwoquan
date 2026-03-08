@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
@@ -313,7 +314,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
                 width: sideAnchorWidth,
                 child: CupertinoButton(
                   padding: EdgeInsets.zero,
-                  onPressed: () => context.go('/create'),
+                  onPressed: () => context.go(AppRoutePaths.create()),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -539,7 +540,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
                 isDark: isDark,
                 isFirst: isFirst,
                 onUserTap: (id) {
-                  context.push('/user/$id', extra: <String, String?>{
+                  context.push(AppRoutePaths.userProfile(username: id), extra: <String, String?>{
                     'avatar': dto.avatarUrl,
                     'displayName': dto.displayName,
                     'backgroundImage': dto.authorBackgroundUrl,
@@ -614,10 +615,10 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
                 isFirst: isFirst,
                 onTap: () {
                   _trackBehavior('click', dto);
-                  context.push('/article/${dto.id}');  // article route
+                  context.push(AppRoutePaths.articleDetail(id: dto.id));
                 },
                 onUserTap: () {
-                  context.push('/user/${dto.authorId}', extra: <String, String?>{
+                  context.push(AppRoutePaths.userProfile(username: dto.authorId), extra: <String, String?>{
                     'avatar': dto.avatarUrl,
                     'displayName': dto.displayName,
                     'backgroundImage': dto.authorBackgroundUrl,
@@ -775,7 +776,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       orElse: () => null,
     );
     if (tabConfig?.layout == 'list_with_cover') {
-      context.push('/article/${post.id}');
+      context.push(AppRoutePaths.articleDetail(id: post.id));
       return;
     }
     final postViews = feedPosts?.map(PostSummaryView.fromDto).toList();
@@ -799,7 +800,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
           ),
         );
       } else {
-        context.push('/video-viewer/$initialIndex');
+        context.push(AppRoutePaths.videoViewer(index: '$initialIndex'));
       }
       return;
     }
@@ -815,7 +816,9 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
         ),
       );
     } else {
-      context.push('/media-viewer/photo/$initialIndex');
+      context.push(
+        AppRoutePaths.mediaViewer(category: 'photo', index: '$initialIndex'),
+      );
     }
   }
 

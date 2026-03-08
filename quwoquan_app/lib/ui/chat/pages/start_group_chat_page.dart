@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 /// 发起群聊页（图一：创建新群聊 + 相关同好）
@@ -297,7 +298,9 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
             selected: selected,
             fgPrimary: fgPrimary,
             onTap: () => setState(() => _relatedSelected[username] = !selected),
-            onAvatarTap: () => context.push('/user/$username'),
+            onAvatarTap: () => context.push(
+              AppRoutePaths.userProfile(username: username),
+            ),
           ),
         );
       }

@@ -3,6 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
@@ -122,7 +123,9 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
           backgroundColor: Colors.transparent,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
-            onPressed: () => context.canPop() ? context.pop() : context.go('/'),
+            onPressed: () => context.canPop()
+                ? context.pop()
+                : context.go(AppRoutePaths.home),
           ),
         ),
         body: Center(
@@ -152,7 +155,9 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: AppColors.worksTitle),
-          onPressed: () => context.canPop() ? context.pop() : context.go('/'),
+          onPressed: () => context.canPop()
+              ? context.pop()
+              : context.go(AppRoutePaths.home),
         ),
         title: Text(
           article.title,

@@ -9,6 +9,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/user/mock/user_profile_mock_data.dart';
@@ -1601,7 +1602,7 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
         children: [
           Expanded(
             child: GestureDetector(
-              onTap: () => context.push('/profile/stats?type=following'),
+              onTap: () => context.push(AppRoutePaths.profileStats(type: 'following')),
               child: _buildStatItem('284', context.l10n.follow, isDark),
             ),
           ),
@@ -1615,14 +1616,14 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
           Container(width: 1, height: AppSpacing.lg, color: borderColor),
           Expanded(
             child: GestureDetector(
-              onTap: () => context.push('/profile/stats?type=fans'),
+              onTap: () => context.push(AppRoutePaths.profileStats(type: 'fans')),
               child: _buildStatItem('1.2k', context.l10n.fans, isDark),
             ),
           ),
           Container(width: 1, height: AppSpacing.lg, color: borderColor),
           Expanded(
             child: GestureDetector(
-              onTap: () => context.push('/profile/stats?type=likes'),
+              onTap: () => context.push(AppRoutePaths.profileStats(type: 'likes')),
               child: _buildStatItem('4.8k', context.l10n.circleLikes, isDark),
             ),
           ),

@@ -176,7 +176,10 @@ class RemoteRtcRepository implements RtcRepository {
       headers: CloudRequestHeaders.forPage(RtcRequestPageIds.initiateCall),
       body: body,
     );
-    return CloudResponseDecoder.asObject(decoded, context: 'initiateCall');
+    return CloudResponseDecoder.asObject(
+      decoded,
+      context: RtcRequestPageIds.initiateCall,
+    );
   }
 
   @override
@@ -185,7 +188,10 @@ class RemoteRtcRepository implements RtcRepository {
       _uri(RtcApiMetadata.getCallPath(callId: callId)),
       headers: CloudRequestHeaders.forPage(RtcRequestPageIds.getCall),
     );
-    return CloudResponseDecoder.asObject(decoded, context: 'getCallSession');
+    return CloudResponseDecoder.asObject(
+      decoded,
+      context: RtcRequestPageIds.getCall,
+    );
   }
 
   @override
@@ -195,7 +201,10 @@ class RemoteRtcRepository implements RtcRepository {
       headers: CloudRequestHeaders.forPage(RtcRequestPageIds.answerCall),
       body: const <String, dynamic>{},
     );
-    return CloudResponseDecoder.asObject(decoded, context: 'answerCall');
+    return CloudResponseDecoder.asObject(
+      decoded,
+      context: RtcRequestPageIds.answerCall,
+    );
   }
 
   @override
@@ -223,7 +232,10 @@ class RemoteRtcRepository implements RtcRepository {
       headers: CloudRequestHeaders.forPage(RtcRequestPageIds.joinCall),
       body: const <String, dynamic>{},
     );
-    return CloudResponseDecoder.asObject(decoded, context: 'joinRtcToken');
+    return CloudResponseDecoder.asObject(
+      decoded,
+      context: RtcRequestPageIds.joinCall,
+    );
   }
 
   @override
@@ -295,7 +307,7 @@ class RemoteRtcRepository implements RtcRepository {
     );
     final page = CloudResponseDecoder.asCursorPage(
       decoded,
-      context: 'listCallHistory',
+      context: RtcRequestPageIds.listCalls,
     );
     return page.items;
   }
@@ -306,7 +318,10 @@ class RemoteRtcRepository implements RtcRepository {
       _uri(RtcApiMetadata.getCallPath(callId: callId)),
       headers: CloudRequestHeaders.forPage(RtcRequestPageIds.getCall),
     );
-    final call = CloudResponseDecoder.asObject(decoded, context: 'listParticipants');
+    final call = CloudResponseDecoder.asObject(
+      decoded,
+      context: RtcRequestPageIds.getCall,
+    );
     final participants = call['participants'];
     if (participants is List) {
       return participants.cast<Map<String, dynamic>>();

@@ -11,6 +11,29 @@ type GeoPoint struct {
 
 var _ = time.Now
 
+// PostCircleReshare domain model.
+type PostCircleReshare struct {
+	ID             string    `json:"_id" bson:"_id"`
+	PostId         string    `json:"postId" bson:"postId"`
+	SourcePostId   string    `json:"sourcePostId" bson:"sourcePostId"`
+	ResharerUserId string    `json:"resharerUserId" bson:"resharerUserId"`
+	CircleId       string    `json:"circleId" bson:"circleId"`
+	QuoteText      string    `json:"quoteText" bson:"quoteText"`
+	State          string    `json:"state" bson:"state"`
+	CreatedAt      time.Time `json:"createdAt" bson:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt" bson:"updatedAt"`
+}
+
+// DeletedPostTombstone domain model.
+type DeletedPostTombstone struct {
+	ID        string    `json:"_id" bson:"_id"`
+	PostId    string    `json:"postId" bson:"postId"`
+	AuthorId  string    `json:"authorId" bson:"authorId"`
+	Reason    string    `json:"reason" bson:"reason"`
+	DeletedAt time.Time `json:"deletedAt" bson:"deletedAt"`
+	ExpireAt  time.Time `json:"expireAt" bson:"expireAt"`
+}
+
 // Post domain model.
 type Post struct {
 	ID                  string         `json:"_id" bson:"_id"`
@@ -109,27 +132,4 @@ type PostCircleDistribution struct {
 	State         string    `json:"state" bson:"state"`
 	CreatedAt     time.Time `json:"createdAt" bson:"createdAt"`
 	UpdatedAt     time.Time `json:"updatedAt" bson:"updatedAt"`
-}
-
-// PostCircleReshare domain model.
-type PostCircleReshare struct {
-	ID             string    `json:"_id" bson:"_id"`
-	PostId         string    `json:"postId" bson:"postId"`
-	SourcePostId   string    `json:"sourcePostId" bson:"sourcePostId"`
-	ResharerUserId string    `json:"resharerUserId" bson:"resharerUserId"`
-	CircleId       string    `json:"circleId" bson:"circleId"`
-	QuoteText      string    `json:"quoteText" bson:"quoteText"`
-	State          string    `json:"state" bson:"state"`
-	CreatedAt      time.Time `json:"createdAt" bson:"createdAt"`
-	UpdatedAt      time.Time `json:"updatedAt" bson:"updatedAt"`
-}
-
-// DeletedPostTombstone domain model.
-type DeletedPostTombstone struct {
-	ID        string    `json:"_id" bson:"_id"`
-	PostId    string    `json:"postId" bson:"postId"`
-	AuthorId  string    `json:"authorId" bson:"authorId"`
-	Reason    string    `json:"reason" bson:"reason"`
-	DeletedAt time.Time `json:"deletedAt" bson:"deletedAt"`
-	ExpireAt  time.Time `json:"expireAt" bson:"expireAt"`
 }
