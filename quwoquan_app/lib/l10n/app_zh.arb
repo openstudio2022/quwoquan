@@ -689,5 +689,16 @@
     "placeholders": {
       "count": { "type": "int", "example": "128" }
     }
+  },
+  "expandRepliesTemplate": "展开 {count} 条回复",
+  "@expandRepliesTemplate": {
+    "description": "Expand N replies button text in comment thread",
+    "placeholders": {
+      "count": { "type": "int", "example": "5" }
+    }
+  },
+  "replyToPrefix": " 回复 ",
+  "@replyToPrefix": {
+    "description": "Reply-to prefix between usernames in comment thread (with spaces)"
   }
 }

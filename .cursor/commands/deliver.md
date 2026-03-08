@@ -26,6 +26,7 @@ description: 端到端交付（Design 就绪后，验收驱动完成开发，自
 | DL5 | 本地构建环境是否就绪？ | make build 通过，数据库（MongoDB/Postgres）可用 |
 | DL6 | 是否已完成 `A1~An ↔ T1~T4` 测试证据矩阵？ | 交付时不会出现“功能好了但无证据” |
 | DL7 | 若涉实时性/弱网/并发，是否已定义 NFR 与灰度卡点？ | 发布风险可控 |
+| DL8 | 若涉 operation / surface / route，是否已明确 metadata 唯一源并完成 codegen 基线？ | 交付阶段不再接受代码维护 override 表 |
 
 **任一未通过 → 输出 GATE_BLOCK，停止执行。**
 
@@ -74,7 +75,7 @@ description: 端到端交付（Design 就绪后，验收驱动完成开发，自
   7) 回到步骤 1
 ```
 
-**约束**（与 `/dev` 相同）：DDD 分层、metadata-first、runtime 统一、codegen 保护、Dart 设计系统、Feature 隔离、错误码规范、**PA 引擎契约规范**（引擎逻辑禁止字段名字符串字面量；活跃 contractVersion ≤2；修改契约字段走 `/extend pa-contract`，见 `02-dart-coding §5`）。
+**约束**（与 `/dev` 相同）：DDD 分层、metadata-first、runtime 统一、codegen 保护、Dart 设计系统、Feature 隔离、错误码规范、**PA 引擎契约规范**（引擎逻辑禁止字段名字符串字面量；活跃 contractVersion ≤2；修改契约字段走 `/extend pa-contract`，见 `02-dart-coding §5`）。若交付含 Repository / Router / Telemetry 标识迁移，必须消费 metadata 生成的 operation / surface / route 常量，禁止手写业务路径或 pageId。
 
 **交付视图要求**：
 - `acceptance.yaml` 中每条核心验收项都应有 `T1~T4` 映射

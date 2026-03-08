@@ -22,6 +22,7 @@ description: 需求规格基线（SDD 第一阶段：探索后 → 冻结 spec +
 | P7 | 是否已定义四层测试金字塔 `T1~T4` 的验收责任？ | 每条核心验收项都能映射到测试层 |
 | P8 | 是否已定义实时性 / 弱网 / 并发 / 容量 / 弹性等非功能目标？ | 目标可量化，不是“尽量快”“体验好” |
 | P9 | 是否已定义灰度发布、观测指标与回滚条件？ | 关键指标、阈值与失败处理可说明 |
+| P10 | 若涉及 API/请求头/页面埋点/导航路径，是否已识别这些标识分别由哪类 metadata 承载？ | 能区分 operation 契约（`service.yaml`）与 surface/route 契约（`ui_config.yaml`/`ui_surfaces.yaml`） |
 
 **任一未通过 → 输出 GATE_BLOCK，停止执行，列出需澄清项：**
 
@@ -89,6 +90,9 @@ GATE_BLOCK（PRD 准入未满足）：
 ## 非功能目标
 <实时性、弱网、并发、容量、性能、弹性、可观测、灰度要求>
 
+## 元数据唯一源边界
+<若涉及 operation / surface / route / path template，明确分别由哪份 metadata 作为唯一真相源，以及哪些代码位置禁止再写字符串>
+
 ## 四层验收视图
 <A1~An 将如何分配到 T1/T2/T3/T4>
 
@@ -152,6 +156,7 @@ level_acceptance:
 - 必须能映射到四层测试视图：`T1 契约与静态层 / T2 模块与交互层 / T3 端云集成层 / T4 端到端旅程层`
 - 禁止模糊描述（如"用户体验好"、"响应快"）
 - 若需求含实时性、弱网、并发或增长诉求，必须补齐 `non_functional_acceptance`
+- 若需求涉及 Repository 请求路径、请求头上下文、`CloudResponseDecoder.context`、`app_router.dart` 路由或业务跳转，必须在此阶段明确 operation / surface / route 的 metadata 归属
 - 每条核心验收项都应能说明哪个角色负责定义、实现、验证与发布守门
 
 ---

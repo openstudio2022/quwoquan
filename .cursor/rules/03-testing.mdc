@@ -419,6 +419,8 @@ metadata → codegen → Dart 类型链的语义正确性
 - 每个 `errors.yaml` 错误码在 `ContentErrorCode` 枚举中存在，i18n 文本非空
 - `ContentBehaviorTracker` payload 字段与 `behaviors.yaml payload_fields` 一致
 - `ContentUIConfig` tab 顺序、feature_flag key 与 `ui_config.yaml` 一致
+- operation / surface / route 生成常量与 metadata 一致，禁止测试自身再手写业务 path/page/surface 字符串
+- `CloudResponseDecoder.context`、request header builder、router path builder 均引用 codegen 产物
 
 ### 代码规范
 ```dart

@@ -3691,6 +3691,18 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'{count} 获赞'**
   String likedCountLabel(int count);
+
+  /// Expand N replies button text in comment thread
+  ///
+  /// In zh, this message translates to:
+  /// **'展开 {count} 条回复'**
+  String expandRepliesTemplate(int count);
+
+  /// Reply-to prefix between usernames in comment thread (with spaces)
+  ///
+  /// In zh, this message translates to:
+  /// **' 回复 '**
+  String get replyToPrefix;
 }
 
 class _AppLocalizationsDelegate

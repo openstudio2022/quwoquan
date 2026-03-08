@@ -780,7 +780,20 @@ V1 只发布事件 + 消费骨架代码；推送渠道由 notification 域承接
 
 ---
 
-## 十、上游 Spec 评审
+## 十、国际化（i18n）约束
+
+| 类型 | 规则 | 来源 |
+|---|---|---|
+| 静态文案 | `UITextConstants.*` | `02-dart-coding §2.3` |
+| 模板文案（含参数） | `context.l10n.*Template()` | ARB 定义 |
+| 相对时间 | `context.l10n.justNow` / `minutesAgoTemplate` / `hoursAgoTemplate` / `daysAgoTemplate` / `monthDayTemplate` | 已有 l10n 基础设施 |
+| 禁止 | 任何 `.dart` 文件中硬编码中文/英文用户可见字面量 | `02-dart-coding §2.3` |
+
+评论系统涉及的文案：排序标签（最新/最热）、作者标签、回复前缀、展开回复模板、Tab 标题、空态/错误提示、相对时间，均须通过上述渠道注入。
+
+---
+
+## 十一、上游 Spec 评审
 
 spec.md V1 PRD 与 acceptance.yaml A1~A23 足以支撑本设计，以下调整：
 - **A21（先发后审）**：标记为 deferred，仅保留事件钩子接口

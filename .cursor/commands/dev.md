@@ -20,6 +20,7 @@ description: 实施特性（SDD 第三阶段：逐 task 执行，完成四层自
 | V5 | 节点层级是否符合规范？ | L4 默认叶子（见 `01_FEATURE_TREE_LEVEL_DEFINITIONS.md`） |
 | V6 | 当前待实现 task 是否已绑定“先失败后转绿”的测试？ | 至少存在一个 Red 阶段测试入口 |
 | V7 | 若为实时性/高风险交互，是否已绑定弱网/并发/恢复类用例？ | 关键 NFR 不会被实现阶段遗漏 |
+| V8 | 若涉及 operation / surface / route，是否已完成 metadata 与 codegen 基线，且 consumer 不再依赖代码 override 表？ | 实施阶段只消费生成常量 |
 
 **任一未通过 → 输出 GATE_BLOCK：**
 
@@ -92,6 +93,7 @@ flutter test test/cloud/ test/components/ test/ui/
 - 不允许“先写完整功能，再一次性补测试”
 - 若 Red 阶段无法稳定失败，说明测试不可用，必须先修正测试设计
 - 若需求含实时性或弱网诉求，必须在 task 内同步落地相关 T2/T3/T4 证据，不得留到归档前补救
+- 若需求含 API/Router/Telemetry 标识迁移，必须先迁 metadata/codegen，再迁 consumer；禁止在业务代码里额外维护 route/page/surface/operation 常量表
 
 ### 3. 约束（实时强制）
 
@@ -104,6 +106,7 @@ flutter test test/cloud/ test/components/ test/ui/
 | Dart | 禁止硬编码视觉字面量（fontSize/EdgeInsets/Color/BorderRadius） | `02-dart-coding` |
 | Dart | 禁止相对路径 import（必须 package:） | `02-dart-coding` |
 | Dart | Feature 禁止直接 import 其他 Feature 内部 | `02-dart-coding` |
+| Dart | Repository / Router / decoder context 禁止硬编码业务 path、pageId、surfaceId、operationId、route path | `01-arch-constraints` |
 | 错误码 | 云侧用 generated.AppErrorFrom*；端侧用 *ErrorCode.fromCode().toDisplayMessage(l10n)；测试用枚举.code | `01-arch-constraints §3.3` |
 | 端云 | Go struct / Dart DTO / OpenAPI / Migration 必须与 metadata 一致 | `01-arch-constraints` |
 | **PA 契约** | 引擎逻辑禁止字段名字符串字面量；活跃 contractVersion ≤2 个；修改契约字段必须同步更新 `AssistantTurnOutput` 并使用 `/extend pa-contract` | `02-dart-coding §5` |

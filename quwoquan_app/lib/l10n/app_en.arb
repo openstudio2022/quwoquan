@@ -704,5 +704,19 @@
   "userNotFound": "TODO: translate",
   "loadUserDataFailed": "TODO: translate",
   "userBlocked": "TODO: translate",
-  "featureComingSoon": "TODO: translate"
+  "featureComingSoon": "TODO: translate",
+  "expandRepliesTemplate": "Expand {count} replies",
+  "@expandRepliesTemplate": {
+    "description": "Expand N replies button text in comment thread",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "5"
+      }
+    }
+  },
+  "replyToPrefix": " replied to ",
+  "@replyToPrefix": {
+    "description": "Reply-to prefix between usernames in comment thread (with spaces)"
+  }
 }

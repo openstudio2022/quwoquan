@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer.dart'
     show CommentInput;
@@ -339,9 +340,9 @@ class _SortToggle extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _buildChip(context, CommentSortMode.latest, '最新'),
+        _buildChip(context, CommentSortMode.latest, UITextConstants.circleSortLatest),
         SizedBox(width: AppSpacing.xs),
-        _buildChip(context, CommentSortMode.hot, '最热'),
+        _buildChip(context, CommentSortMode.hot, UITextConstants.circleSortHot),
       ],
     );
   }
@@ -455,7 +456,7 @@ class _CommentItem extends StatelessWidget {
                                   AppSpacing.smallBorderRadius),
                             ),
                             child: Text(
-                              '作者',
+                              UITextConstants.commentAuthorBadge,
                               style: TextStyle(
                                 fontSize: 10,
                                 color: AppColors.primaryColor,
@@ -495,7 +496,7 @@ class _CommentItem extends StatelessWidget {
                 child: Padding(
                   padding: EdgeInsets.symmetric(vertical: AppSpacing.xs),
                   child: Text(
-                    '展开 ${replies.length} 条回复',
+                    context.l10n.expandRepliesTemplate(replies.length),
                     style: TextStyle(
                       fontSize: AppTypography.xs,
                       color: AppColors.primaryColor,
@@ -513,7 +514,7 @@ class _CommentItem extends StatelessWidget {
     return Row(
       children: [
         Text(
-          _formatTime(comment.createdAt),
+          _formatTime(context, comment.createdAt),
           style: TextStyle(
             fontSize: AppTypography.xs,
             color: AppColorsFunctional.getColor(
@@ -578,13 +579,14 @@ class _CommentItem extends StatelessWidget {
     );
   }
 
-  String _formatTime(DateTime time) {
+  String _formatTime(BuildContext context, DateTime time) {
+    final l10n = context.l10n;
     final diff = DateTime.now().difference(time);
-    if (diff.inMinutes < 1) return '刚刚';
-    if (diff.inHours < 1) return '${diff.inMinutes}分钟前';
-    if (diff.inDays < 1) return '${diff.inHours}小时前';
-    if (diff.inDays < 30) return '${diff.inDays}天前';
-    return '${time.month}月${time.day}日';
+    if (diff.inMinutes < 1) return l10n.justNow;
+    if (diff.inHours < 1) return l10n.minutesAgoTemplate(diff.inMinutes);
+    if (diff.inDays < 1) return l10n.hoursAgoTemplate(diff.inHours);
+    if (diff.inDays < 30) return l10n.daysAgoTemplate(diff.inDays);
+    return l10n.monthDayTemplate(time.month, time.day);
   }
 }
 
@@ -636,7 +638,7 @@ class _ReplyItem extends StatelessWidget {
                       ),
                       if (reply.replyToDisplayName != null) ...[
                         TextSpan(
-                          text: ' 回复 ',
+                          text: context.l10n.replyToPrefix,
                           style: TextStyle(
                             fontSize: AppTypography.xs,
                             color: AppColorsFunctional.getColor(

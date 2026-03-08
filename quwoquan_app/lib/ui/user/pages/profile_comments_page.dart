@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_comments_provider.dart';
 
 class ProfileCommentsPage extends ConsumerStatefulWidget {
@@ -83,8 +84,8 @@ class _ProfileCommentsPageState extends ConsumerState<ProfileCommentsPage>
         labelStyle: TextStyle(
             fontSize: AppTypography.sm, fontWeight: FontWeight.w600),
         tabs: const [
-          Tab(text: '我发出的'),
-          Tab(text: '我收到的'),
+          Tab(text: UITextConstants.profileCommentsTabSent),
+          Tab(text: UITextConstants.profileCommentsTabReceived),
         ],
       ),
     );
@@ -210,7 +211,7 @@ class _ProfileCommentItem extends StatelessWidget {
                 ),
               ),
               Text(
-                _formatTime(comment.createdAt),
+                _formatTime(context, comment.createdAt),
                 style: TextStyle(
                   fontSize: AppTypography.xs,
                   color: AppColorsFunctional.getColor(
@@ -231,12 +232,13 @@ class _ProfileCommentItem extends StatelessWidget {
     );
   }
 
-  String _formatTime(DateTime time) {
+  String _formatTime(BuildContext context, DateTime time) {
+    final l10n = context.l10n;
     final diff = DateTime.now().difference(time);
-    if (diff.inMinutes < 1) return '刚刚';
-    if (diff.inHours < 1) return '${diff.inMinutes}分钟前';
-    if (diff.inDays < 1) return '${diff.inHours}小时前';
-    if (diff.inDays < 30) return '${diff.inDays}天前';
-    return '${time.month}月${time.day}日';
+    if (diff.inMinutes < 1) return l10n.justNow;
+    if (diff.inHours < 1) return l10n.minutesAgoTemplate(diff.inMinutes);
+    if (diff.inDays < 1) return l10n.hoursAgoTemplate(diff.inHours);
+    if (diff.inDays < 30) return l10n.daysAgoTemplate(diff.inDays);
+    return l10n.monthDayTemplate(time.month, time.day);
   }
 }

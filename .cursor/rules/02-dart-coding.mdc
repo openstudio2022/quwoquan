@@ -103,12 +103,15 @@ expect(actual.code, IntegrationLocationErrorCode.upstreamTimeout.code)
 
 **空值安全**：语义间距必须用 `?[]` + `??` 兜底。
 
-### 2.3 文本与常量
+### 2.3 文本与常量（i18n 强制）
 
-- 所有用户可见文本 → `UITextConstants.*`
+- 所有用户可见**静态文本** → `UITextConstants.*`（禁止硬编码中文/英文字面量）
+- 含参数的**模板文本**（计数、时间等）→ `context.l10n.*Template()`（定义在 `lib/l10n/app_*.arb`）
+- **相对时间** → `context.l10n.justNow` / `minutesAgoTemplate` / `hoursAgoTemplate` / `daysAgoTemplate` / `monthDayTemplate`，禁止自行硬编码"刚刚""分钟前"等
 - 内容类型 → `ContentTypeConstants.*`
 - 概念名称 → `AppConceptConstants.*`
 - 设计语义 → `DesignSemanticConstants.*`
+- **门禁**：`verify_dart_semantic.py` 检测 `.dart` 文件中非 `UITextConstants`/`l10n` 的中文字面量
 
 ### 2.4 无障碍
 

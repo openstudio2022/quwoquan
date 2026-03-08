@@ -130,7 +130,7 @@ class _CommentInputState extends ConsumerState<CommentInput> {
           
           Expanded(
             child: Text(
-              '${"回复"} @${widget.replyTo!.username}',
+              '${UITextConstants.replyAction} @${widget.replyTo!.username}',
               style: TextStyle(
                 fontSize: CommentResponsive.getFontSize(context, 12.0),
                 color: AppColors.primaryColor,

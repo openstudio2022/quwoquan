@@ -53,6 +53,7 @@ try → [验证通过] → land → [人工确认] → commit → deploy
 6. 形成初步交付拆解，顺序：metadata → codegen → 业务逻辑 → 测试
 7. **特性树分解遵从**：节点归属与新建须符合 `specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md`（治理视图默认止于 L4 Story）
 8. 涉及部署拓扑时，补充 `deploy/shared/process_domain_mapping.yaml`
+9. 若需求涉及 API path、request header、decoder context、surface、route 或 path template，必须识别其 metadata 唯一真相源，禁止默认接受代码 override 表
 
 **禁止**：在 explore 阶段写任何实现代码。
 
@@ -79,6 +80,7 @@ try → [验证通过] → land → [人工确认] → commit → deploy
 - P8: 是否已定义实时性 / 弱网 / 并发 / 容量 / 弹性等非功能目标？
 - P9: 是否已定义对标对象、体验目标与不打折的交互基线？
 - P10: 是否已定义灰度发布、观测指标与回滚条件？
+- P11: 若涉及 operation / surface / route，是否已明确其 metadata 承载边界与唯一真相源？
 
 **AI Agent 必须做的事**：
 1. 创建/更新特性树节点，**仅使用四类文档**（禁止生成 analysis-*.md、README、独立规划书等；详见 `specs/feature-tree/00_FEATURE_TREE_STANDARD.md`）
@@ -88,6 +90,7 @@ try → [验证通过] → land → [人工确认] → commit → deploy
 5. 将对标输入沉淀为结构化结论：借鉴点 / 不借鉴点 / 适用边界 / 成本
 6. 写入非功能验收基线：实时性 / 弱网 / 并发 / 性能 / 弹性 / gray-release
 7. 若涉及部署拓扑，补充 `deploy/shared/process_domain_mapping.yaml`
+8. 若涉及 operation / surface / route，必须在 `spec.md` 明确 `service.yaml` 与 `ui_config.yaml/ui_surfaces.yaml` 的分层职责
 
 **自动卡点 G0**：
 ```
@@ -115,6 +118,7 @@ try → [验证通过] → land → [人工确认] → commit → deploy
 - D7: 若涉实时性，是否定义一致性、顺序、幂等、重试、重连与弱网降级？
 - D8: 是否定义并发、容量、弹性、限流、降级、回滚与观测策略？
 - D9: 是否完成对标体验吸收结论，并明确当前差距与收敛路径？
+- D10: 若涉及 operation / surface / route，是否已定义 metadata 分层、codegen 汇聚与兼容迁移策略？
 
 **AI Agent 必须做的事**：
 1. 先评审上游 `spec.md` 与 `acceptance.yaml` 是否足以支撑设计，不足则阻断进入方案设计
@@ -126,6 +130,7 @@ try → [验证通过] → land → [人工确认] → commit → deploy
 7. 如需扩展已有对象 → 执行 `/extend add-field|capability|event|...`
 8. 更新 metadata YAML（5 文件一组）
 9. 完成 TDD/ATDD 策略、角色职责、多重防护网、灰度发布与回滚设计
+10. 若涉及 Repository/Router/Telemetry 标识，必须在 design 中显式消除代码维护 override 表，并给出 semantic gate 方案
 
 **自动卡点 G1**：
 ```bash
@@ -160,6 +165,7 @@ make codegen-rec-model-python  # 生成 Pydantic 模型与 FastAPI 路由骨架
 3. 遵从 DDD 层级约束、Dart 编码规范、runtime 统一能力、错误码规范
 4. 默认执行 `Red → Green → Refactor`
 5. **每完成一个 task 自动执行 G2**
+6. 若任务涉及 operation / surface / route，业务实现阶段只允许消费生成常量，不允许新增字符串字面量或规则映射表
 
 **自动卡点 G2**（每个 task 完成后）：
 ```bash
@@ -226,6 +232,7 @@ make gate-full
 | `verify_codegen_hashes` | codegen 产物 hash 比对（防手改） |
 | `verify_dart_semantic` | 硬编码字面量 + 包引用 + Feature 隔离 |
 | `verify_error_code_semantic` | 端侧禁止硬编码错误码字符串，须用 *ErrorCode.fromCode / .code |
+| `verify_cloud_services_semantic` / router semantic gate | 禁止硬编码 API path、page/surface/operation、业务 route path、decoder context |
 | `verify_feature_tree` | tree.yaml ↔ 目录 + acceptance 完整性；特性树层级与分解须符合 `specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md` |
 | `flutter analyze` | Dart 静态分析 |
 | `go build ./...` | Go 编译 |

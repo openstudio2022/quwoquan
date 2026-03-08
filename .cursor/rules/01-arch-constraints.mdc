@@ -169,8 +169,14 @@ class RemoteXxxRepository implements XxxRepository {
 
   @override
   Future<List<Map<String, dynamic>>> listItems({int limit = 20}) async {
-    final url = Uri.parse('${CloudRuntimeConfig.gatewayBaseUrl}/v1/xxx/items?limit=$limit');
-    final resp = await _client.get(url, headers: CloudRequestHeaders.forPage('xxx.list'));
+    final url = XxxApiMetadata.listItemsUri(limit: limit);
+    final resp = await _client.get(
+      url,
+      headers: CloudRequestHeaders.forSurfaceOperation(
+        surfaceId: XxxSurfaceIds.listPage,
+        operationId: XxxOperationIds.listItems,
+      ),
+    );
     // 统一错误处理 ...
   }
 }
@@ -179,8 +185,25 @@ class RemoteXxxRepository implements XxxRepository {
 **禁止行为**：
 - Mock 实现禁止发 HTTP 请求
 - Remote 实现必须使用 `CloudRuntimeConfig.gatewayBaseUrl`，禁止硬编码 URL
-- Remote 实现必须使用 `CloudRequestHeaders.forPage(pageId)`，禁止自建 headers
+- Remote 实现必须使用 metadata/codegen 生成的 path builder、operation 常量、surface 常量；禁止硬编码 path、`pageId`、`surfaceId`、`operationId`
+- Remote 请求头必须来自统一 header builder（过渡期可兼容 `forPage(pageId)`，但 `pageId` 也必须是 codegen 常量，禁止字符串字面量）
 - Remote 响应解析必须统一处理 ErrorResponse（对应云侧 `runtime/errors`）
+
+### 2.2.1 Operation / Surface / Route 元数据分层（强制）
+
+客户端请求与导航相关标识必须按以下唯一真相源分层：
+
+| 标识 | 唯一真相源 | 代码消费位置 |
+|---|---|---|
+| API `path_template` / `method` / `operation` | `service.yaml` | Repository / contract tests / codegen |
+| `operation_id` / decoder context | `service.yaml`（或其 codegen 产物） | Request headers / `CloudResponseDecoder` |
+| `surface_id` / `route_id` / `path_template` | `ui_config.yaml` 或 `ui_surfaces.yaml` | `app_router.dart` / navigation helpers / UI tests |
+
+**禁止行为**：
+- 在 codegen 中维护 operation→surface / route→page override map 作为第二真相源
+- 在 Repository 中手写 `CloudResponseDecoder.context: '...'`
+- 在 Router 中手写 `path: '/biz-path'`、`context.go('/biz-path')`
+- 新增 operation / surface / route 时跳过 metadata 直接改业务代码
 
 ### 2.3 Mock/Remote 切换（强制 Provider 模式）
 
@@ -251,6 +274,7 @@ lib/ui/content/entry/               # 创作入口，归属 content 域
 | 必须通过 Provider 访问 Repository | `ref.read(xxxRepositoryProvider)` |
 | 错误处理必须 fallback | catch 异常 → 降级到 mock 或 UI 提示 |
 | 禁止在 UI 层直接操作 `Map<String, dynamic>` | 必须用 `PostBaseDto` 子类或 ViewModel 包装 |
+| 页面路由与 surface 标识必须来自 metadata codegen | 禁止在 UI / Router 中硬编码业务 path、route_id、surface_id |
 
 ### 2.5 新增 Repository 端云对齐检查清单
 

@@ -14,6 +14,7 @@ alwaysApply: true
 - `acceptance-first`：先定义 `A1~An` 与 `T1~T4` 责任，再进入设计与编码。
 - `test-first`：默认执行 TDD，先写失败测试，再写最小实现，再重构。
 - `contracts-first`：先 contracts/metadata YAML，再 codegen，再业务逻辑。
+- `metadata-single-source`：凡涉及 API path、operation、surface、route、decoder context、path template，必须由 metadata 定义并经 codegen 消费，禁止代码维护第二份字符串规则表。
 - DDD 分层：domain → application → adapters → infrastructure（单向依赖）。
 - 元数据驱动：字段策略由 `contracts/metadata/*` 声明，禁止硬编码。
 - 横切统一 `runtime`，领域服务禁止自行实现横切（`01-arch-constraints §1.3`）。

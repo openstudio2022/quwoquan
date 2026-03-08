@@ -18,6 +18,7 @@ explore → prd(G0) → design(G1) → dev(G2/G3 + auto-archive) → commit(G4) 
 **总原则补充**：
 - **ATDD 先行**：先定义 `acceptance.yaml`，再做设计与实现。
 - **TDD 强制**：进入 `/dev`、`/deliver`、`/try` 后，默认执行 `Red → Green → Refactor`，先写失败测试，再写最小实现，再重构。
+- **元数据唯一源**：凡涉及 API path、operation、decoder context、surface、route、path template，必须先定义 metadata，再 codegen，再消费生成产物；禁止代码维护第二份规则表。
 - **NFR 前置**：凡涉及实时性、弱网、并发、性能、容量、弹性、灰度生产的需求，必须在 `/prd` 与 `/design` 明确规格与验收，不得拖到 `/deploy` 临时兜底。
 - **对标落表**：对标一流体验不是建议项，必须形成“借鉴点 / 不借鉴点 / 适用边界 / 当前差距 / 收敛计划”。
 - **多重防护网**：需求防漏（PRD）→ 方案防偏（Design）→ 测试防回归（T1~T4）→ 门禁防带病提交（G2/G3/G4）→ 灰度防生产事故（G5）。
@@ -42,6 +43,7 @@ try → land → commit → deploy
 8. 识别四层测试金字塔职责：`T1` 防契约漂移，`T2` 防交互回归，`T3` 防端云联调断裂，`T4` 防真实设备/系统能力失效
 9. 识别角色分工：产品负责全量需求与体验目标，架构负责方案与弹性，开发负责 TDD 落地，测试负责多层证据，发布负责灰度与回滚
 10. 若缺少对标输入、真实网络条件、容量目标或灰度要求，必须输出 `GATE_BLOCK`
+11. 若需求涉及 Repository、Router、请求头或埋点上下文，必须显式识别 `service.yaml` 与 `ui_config.yaml/ui_surfaces.yaml` 的 metadata 承载边界
 
 禁止跳过 explore 直接编码（/try 除外）。禁止不经 metadata 直接创建 struct/DTO。
 
@@ -60,6 +62,7 @@ try → land → commit → deploy
 - P8: 是否已定义实时性 / 弱网 / 并发 / 容量 / 弹性等非功能目标？
 - P9: 是否已定义对标对象、体验目标与不打折的交互基线？
 - P10: 是否已定义灰度发布、观测指标与回滚条件？
+- P11: 若涉及 operation / surface / route，是否已明确各标识由哪份 metadata 作为唯一真相源？
 
 未通过 → GATE_BLOCK，停止执行。
 
@@ -79,6 +82,7 @@ try → land → commit → deploy
 - D7: 若涉实时性，是否定义一致性模型、顺序性、幂等、重试、重连与弱网降级？
 - D8: 是否定义并发、容量、弹性、限流、降级、回滚与观测策略？
 - D9: 是否完成对标体验吸收结论，并明确当前差距与收敛路径？
+- D10: 若涉及 operation / surface / route，是否给出 metadata 分层与 codegen 汇聚方案，并移除代码 override 表？
 
 **自动运行 G1**（完成后）：
 ```bash
@@ -99,6 +103,7 @@ make verify-metadata → make codegen → make codegen-app
 - V4: acceptance.yaml An 有明确判定方式？
 - V5: 当前 task 是否已绑定至少一个先行失败测试（TDD Red）？
 - V6: 若为实时性/高风险交互，是否已绑定弱网、并发、恢复或真机场景？
+- V7: 若涉及 operation / surface / route，当前 task 是否仅消费 metadata 生成产物，而非新写字符串常量？
 
 每完成一个 task **自动运行 G2**，并遵循 **Red → Green → Refactor**：
 ```bash
@@ -126,6 +131,7 @@ make gate-full
 - Dart: Feature 禁止直接 import 其他 Feature 内部
 - Dart UI：全局遵循 iOS 语义规范 v1（见 `specs/ux/page-layout-semantics.md`）
 - Dart UI：`CupertinoPageScaffold` 场景禁止混用 Material 交互组件
+- Dart 路由/请求上下文：禁止硬编码业务 path、`pageId`、`surfaceId`、`operationId`、decoder context；必须消费 metadata codegen 常量
 - 实时性特性：必须定义并验证时延目标、顺序一致性、重试策略、断线恢复与幂等
 - 弱网特性：必须验证高延迟、抖动、短断网、重试/回退、可恢复提示与最终一致性
 - 高增长特性：必须验证容量假设、热点退化、限流/降级、扩容余量与可观测性

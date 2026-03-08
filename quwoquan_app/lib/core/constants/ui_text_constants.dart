@@ -127,6 +127,9 @@ class UITextConstants {
   static const String loadMoreComments = '加载更多评论';
   static const String noComment = '暂无评论';
   static const String replyAction = '回复';
+  static const String commentAuthorBadge = '作者';
+  static const String profileCommentsTabSent = '我发出的';
+  static const String profileCommentsTabReceived = '我收到的';
 
   // ==================== 我的主页 ====================
   static const String editProfile = '编辑资料';

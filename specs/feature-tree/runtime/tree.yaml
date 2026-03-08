@@ -141,6 +141,7 @@ l2:
           - feature: struct-repo-handler-migration-generation
             l5:
               - feature: openapi-dart-dto-test-scaffold-generation
+              - feature: operation-surface-route-single-source
   - feature: runtime-interceptor
     l3:
       - feature: read-write-middleware-chain

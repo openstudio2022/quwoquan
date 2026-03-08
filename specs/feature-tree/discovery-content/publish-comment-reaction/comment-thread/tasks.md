@@ -104,7 +104,7 @@
 - [ ] **U5**：_CommentInputBar — 输入框 + Persona 头像选择 + 回复指示器 + 字数限制（从 AppConfig 读取）+ 发送按钮
 - [ ] **U6**：Persona 选择器 — 头像点击弹出 persona 列表，选择后切换 activePersona
 - [ ] **U7**：空态 — "暂无评论，来抢沙发吧" + 引导动画 + 点击聚焦输入框
-- [ ] **U8**：相对时间 — 复用 `l10n.justNow` / `hoursAgoTemplate` / `minutesAgoTemplate` / `daysAgoTemplate`
+- [x] **U8**：相对时间 — 复用 `l10n.justNow` / `hoursAgoTemplate` / `minutesAgoTemplate` / `daysAgoTemplate` / `monthDayTemplate`；排序/作者/展开/回复等中文文案已统一收口至 `UITextConstants` 和 `l10n`
 - [ ] `python3 scripts/verify_dart_semantic.py` 无新增硬编码视觉字面量
 
 ### Phase 5：入口打通（E1~E8）

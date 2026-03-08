@@ -1,14 +1,130 @@
 version: 1
-feature: "propagation-completeness-check"
-level: "L5"
-template: "A1-A8"
-focus_groups: []
+feature: propagation-completeness-check
+level: L5_leaf
+status: specified
+archived: false
+feature_path: gateway-orchestrator-foundation.request-context-propagation.client-context-propagation.page-session-device-propagation.propagation-completeness-check
+parent_path: gateway-orchestrator-foundation.request-context-propagation.client-context-propagation.page-session-device-propagation
+
+non_functional_acceptance:
+  realtime:
+    enabled: false
+    slo: []
+  weak_network:
+    enabled: false
+    scenarios: []
+  performance:
+    budgets:
+      - 生成的 operation/surface/route 常量均为编译期 const，不允许在热路径做运行时字符串查表
+  elasticity:
+    assumptions:
+      - 支持分域逐步迁移；旧 header 与新 metadata 口径可双写一段时间
+  gray_release:
+    enabled: true
+    steps: [5, 25, 50, 100]
+    slo_gates:
+      - 请求头中 surface / operation 口径缺失率为 0
+      - Router 使用生成常量后的关键路由打开成功率不低于迁移前
+    rollback_on:
+      - 出现业务路由断链
+      - 出现 request header / decoder context 漂移
+
+level_acceptance:
+  A1:
+    criteria: service metadata 与 UI metadata 明确 operation_id、surface_id、route_id、path_template 的职责边界，且不存在代码维护 override 表作为第二真相源
+    status: pending
+    linked_tasks: [T1, T2]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    tests:
+      - metadata schema / design review
+      - static semantic gate
+
+  A2:
+    criteria: codegen 能从 metadata 生成 operation 常量、surface 常量、route path 常量及必要的 path builder，Repository 与 Router 仅消费生成产物
+    status: pending
+    linked_tasks: [T2, T3, T4]
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: optional
+    tests:
+      - codegen output contract tests
+      - remote api path contract tests
+
+  A3:
+    criteria: 客户端请求头与响应解码上下文不再硬编码 pageId/context 字符串，统一通过 metadata 生成的 operation/surface 标识装配
+    status: pending
+    linked_tasks: [T3, T5]
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: optional
+    tests:
+      - repository unit tests
+      - integration header propagation tests
+
+  A4:
+    criteria: app_router 中页面 path、命名路由与跳转入口使用生成路由常量，禁止手写业务路径字符串
+    status: pending
+    linked_tasks: [T4, T5]
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: required
+    tests:
+      - router constant contract tests
+      - key journey widget/patrol tests
+
+  A5:
+    criteria: gate 新增静态检查，阻断 `'/vN/'`、`forPage('...')`、`CloudResponseDecoder.context: '...'`、`context.go('/biz-path')`、`path: '/biz-path'` 等硬编码业务标识
+    status: pending
+    linked_tasks: [T6]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    tests:
+      - verify_cloud_services_semantic.py
+      - verify router / telemetry semantic checker
+
+  A6:
+    criteria: /prd、/design、/dev、/try、/deliver 以及根规则显式要求“metadata 唯一真相 + codegen 消费”，后续新增特性在流程入口即受约束
+    status: pending
+    linked_tasks: [T7]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    tests:
+      - rules/commands doc review
+      - feature tree completeness check
+
+focus_groups:
+  - frontend
+  - platform
+  - gateway
+
 tests:
-  mock: []
-  unit: []
-  contract: []
-  integration: []
-  uat: []
+  mock:
+    - test/cloud/**/contract/*_api_metadata_contract_test.dart
+  unit:
+    - test/ui/**/router*_test.dart
+  contract:
+    - test/cloud/integration/remote_api_path_contract_test.dart
+  integration:
+    - flutter analyze quwoquan_app/lib/app/navigation quwoquan_app/lib/cloud/services
+  uat:
+    - test/patrol/**/chat_*_test.dart
+
 execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
+  local_gate: make gate
+  full_gate: make gate-full

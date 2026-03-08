@@ -1,4 +1,4 @@
-.PHONY: gate build test test-unit test-contract test-contract-local test-integration lint verify-metadata codegen-app codegen-content-service codegen-rec-model-python codegen-storage dev dev-down clean
+.PHONY: gate build test test-unit test-contract test-contract-local test-integration lint verify-metadata codegen codegen-app codegen-content-service codegen-rec-model-python codegen-storage dev dev-down clean
 
 # ─── Quality Gate ────────────────────────────────────────────────────
 gate:
@@ -44,6 +44,8 @@ lint:
 # ─── Metadata ────────────────────────────────────────────────────────
 verify-metadata:
 	go run ./tools/verify_metadata/ contracts/metadata
+
+codegen: codegen-content-service codegen-storage codegen-rec-model-python
 
 codegen-app:
 	go run ./tools/codegen_app_metadata --metadata-dir contracts/metadata --app-dir ../quwoquan_app --integration-service-dir ./services/integration-service

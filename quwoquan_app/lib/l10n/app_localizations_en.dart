@@ -1846,4 +1846,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String likedCountLabel(int count) {
     return 'TODO: translate';
   }
+
+  @override
+  String expandRepliesTemplate(int count) {
+    return 'Expand $count replies';
+  }
+
+  @override
+  String get replyToPrefix => ' replied to ';
 }

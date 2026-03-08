@@ -1832,4 +1832,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String likedCountLabel(int count) {
     return '$count 获赞';
   }
+
+  @override
+  String expandRepliesTemplate(int count) {
+    return '展开 $count 条回复';
+  }
+
+  @override
+  String get replyToPrefix => ' 回复 ';
 }

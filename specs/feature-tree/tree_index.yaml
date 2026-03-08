@@ -1518,8 +1518,8 @@ features:
                       level: L5_leaf
                       path: ../specs/feature-tree/gateway-orchestrator-foundation/request-context-propagation/client-context-propagation/page-session-device-propagation/propagation-completeness-check
                       domain: ""
-                      status: specified
-                      tags: []
+                      status: in_progress
+                      tags: [metadata, routing, telemetry, codegen]
             - id: request-trace-generation
               name: request-trace-generation
               level: L3_component
@@ -2197,6 +2197,13 @@ features:
                   domain: ""
                   status: specified
                   tags: []
+                - id: operation-surface-route-single-source
+                  name: operation-surface-route-single-source
+                  level: L4_detail
+                  path: ../specs/feature-tree/runtime/runtime-codegen/struct-repo-handler-migration-generation/operation-surface-route-single-source
+                  domain: ""
+                  status: in_progress
+                  tags: [metadata, codegen, routing, telemetry]
             - id: template-engine-and-metadata-reader
               name: template-engine-and-metadata-reader
               level: L3_component

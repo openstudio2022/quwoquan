@@ -1,5 +1,6 @@
 .PHONY: gate
 .PHONY: verify
+.PHONY: codegen
 .PHONY: codegen-app
 .PHONY: codegen-content-service
 .PHONY: bootstrap-service-config
@@ -29,6 +30,9 @@ verify:
 	@bash scripts/verify_recommendation_service_contract.sh
 	@bash scripts/verify_topology_contract_regression.sh
 	@bash scripts/verify_config_gray_parallel_binding.sh
+
+codegen:
+	@$(MAKE) -C quwoquan_service codegen
 
 codegen-app:
 	@$(MAKE) -C quwoquan_service codegen-app
