@@ -1,65 +1,143 @@
-version: 1
+version: 2
 aggregate: Conversation
 
 service:
   name: chat-service
   domain: chat
   owner: backend-team
-  description: 会话管理、消息收发、群聊、联系人
+  description: 会话管理、消息收发（seq 有序 + clientMsgId 幂等）、群聊成员、离线同步、已读回执、小趣助手会话内参与
 
 api_routes:
+  # ── 会话 ──────────────────────────────────────
   - method: GET
     path: /v1/chat/conversations
     operation: ListConversations
-    description: 会话列表
+    description: 会话列表（由 ConversationUserState 驱动排序，返回 maxSeq）
+    query_params: [cursor, limit]
     response_entity: Conversation
 
   - method: POST
     path: /v1/chat/conversations
     operation: CreateConversation
-    description: 创建会话
+    description: 创建会话（自动创建 ConversationMember + ConversationUserState）
     request_entity: Conversation
-    writable_fields: [type, title, memberIds, circleId]
+    writable_fields: [type, title, circleId, maxGroupSize]
 
   - method: GET
     path: /v1/chat/conversations/{conversationId}
     operation: GetConversation
-    description: 会话详情
+    description: 会话详情（含 maxSeq、memberCount）
     response_entity: Conversation
 
+  # ── 消息 ──────────────────────────────────────
   - method: GET
     path: /v1/chat/conversations/{conversationId}/messages
     operation: ListMessages
-    description: 消息列表（时间倒序 + cursor 分页）
+    description: 消息列表（支持 afterSeq/beforeSeq 分页，默认按 seq DESC）
+    query_params: [afterSeq, beforeSeq, cursor, limit]
     response_entity: Message
 
   - method: POST
     path: /v1/chat/conversations/{conversationId}/messages
     operation: SendMessage
-    description: 发送消息
+    description: 发送消息（clientMsgId 幂等 + seq 分配，返回 messageId + seq + timestamp）
     request_entity: Message
-    writable_fields: [type, content, mediaUrl, cardPayload, replyToMessageId, mentions]
+    writable_fields: [type, content, mediaUrl, media, cardPayload, replyToMessageId, mentions, clientMsgId]
 
   - method: POST
     path: /v1/chat/conversations/{conversationId}/messages/{messageId}/recall
     operation: RecallMessage
-    description: 撤回消息
+    description: 撤回消息（2 分钟内有效）
+
+  # ── 离线同步 ──────────────────────────────────
+  - method: POST
+    path: /v1/chat/conversations/{conversationId}/sync
+    operation: SyncMessages
+    description: 离线同步（上报 lastSeq，返回 gap 消息列表 + hasMore，单次最多 500 条）
+    auth: required
+
+  # ── 已读回执 ──────────────────────────────────
+  - method: POST
+    path: /v1/chat/conversations/{conversationId}/messages/{messageId}/read
+    operation: MarkAsRead
+    description: 标记已读（更新 ConversationUserState.readSeq + unreadCount，receiptEnabled 时写入 MessageReceipt）
+    auth: required
+
+  - method: GET
+    path: /v1/chat/conversations/{conversationId}/messages/{messageId}/receipts
+    operation: GetReceipts
+    description: 获取消息回执列表（仅 receiptEnabled 会话可用）
+    response_entity: MessageReceipt
+
+  # ── 成员管理 ──────────────────────────────────
+  - method: GET
+    path: /v1/chat/conversations/{conversationId}/members
+    operation: ListMembers
+    description: 成员列表（分页，返回角色、加入时间）
+    query_params: [cursor, limit, role]
+    response_entity: ConversationMember
 
   - method: POST
     path: /v1/chat/conversations/{conversationId}/members
     operation: AddMembers
-    description: 添加成员
+    description: 添加成员（批量，检查 maxGroupSize 上限）
+    auth: required
 
   - method: DELETE
     path: /v1/chat/conversations/{conversationId}/members/{userId}
     operation: RemoveMember
     description: 移除成员
+    auth: required
 
+  # ── 助手参与 ──────────────────────────────────
+  - method: POST
+    path: /v1/chat/conversations/{conversationId}/assistant
+    operation: InviteAssistant
+    description: 邀请小趣助手加入会话（创建 memberType=assistant 的 ConversationMember），可指定 skillId
+    auth: required
+
+  - method: DELETE
+    path: /v1/chat/conversations/{conversationId}/assistant
+    operation: RemoveAssistant
+    description: 移除小趣助手（删除 memberType=assistant 的成员）
+    auth: required
+
+  # ── 用户设置 ──────────────────────────────────
   - method: PATCH
     path: /v1/chat/conversations/{conversationId}/settings
     operation: UpdateConversationSettings
-    description: 更新会话设置（mute/pin）
+    description: 更新用户级会话设置（mute/pin，写入 ConversationUserState）
+    auth: required
 
+  # ── 收件箱 ──────────────────────────────────
+  - method: GET
+    path: /v1/chat/inbox
+    operation: ListInbox
+    description: 用户收件箱（基于 ConversationUserState 投影，返回最近会话列表 + unreadCount + lastMessage 摘要）
+    query_params: [cursor, limit]
+    response_entity: ConversationUserState
+    auth: required
+
+  # ── 聊天媒体上传 ──────────────────────────────
+  - method: POST
+    path: /v1/chat/media/uploads:init
+    operation: InitChatUpload
+    description: 初始化聊天媒体上传（获取 presigned URL），支持 chat_image/chat_video/chat_file/chat_voice
+    auth: required
+
+  - method: POST
+    path: /v1/chat/media/uploads:complete
+    operation: CompleteChatUpload
+    description: 完成聊天媒体上传（标记会话完成，返回 CDN URL）
+    auth: required
+
+  - method: POST
+    path: /v1/chat/media/uploads:abort
+    operation: AbortChatUpload
+    description: 取消聊天媒体上传会话
+    auth: required
+
+  # ── 联系人 ──────────────────────────────────
   - method: GET
     path: /v1/chat/contacts
     operation: ListContacts
@@ -72,13 +150,15 @@ api_routes:
 
 consumers:
   - name: app
-    capabilities: [list_conversations, create_conversation, send_message, recall_message, manage_members, update_settings, list_contacts, search_contacts]
+    capabilities: [list_conversations, create_conversation, send_message, recall_message, sync_messages, mark_as_read, get_receipts, list_members, manage_members, update_settings, invite_assistant, remove_assistant, list_contacts, search_contacts]
   - name: platform-ops
-    capabilities: [read_conversation, read_messages]
+    capabilities: [read_conversation, read_messages, read_members]
   - name: assistant-service
     capabilities: [read_conversation, read_messages, send_message]
   - name: circle-service
-    capabilities: [create_conversation]
+    capabilities: [create_conversation, manage_members]
+  - name: realtime-gateway
+    capabilities: [sync_messages]
 
 contract_test:
   mock_strategy:
@@ -86,26 +166,41 @@ contract_test:
       mock_target: chat-service API
       data_source: fields.yaml
       scenarios:
-        - name: conversation_list_tabs
+        - name: conversation_list
           route: GET /v1/chat/conversations
-          variants: [all, mentioned, unread]
-          assertions: [status_200, items_match_schema, sorted_by_last_message_time]
+          assertions: [status_200, items_match_schema, sorted_by_last_message_time, maxSeq_present]
 
-        - name: send_message_types
+        - name: send_message_with_seq
           route: POST /v1/chat/conversations/{id}/messages
           variants: [text, image, video, card]
-          assertions: [status_201, message_id_returned]
+          assertions: [status_201, message_id_returned, seq_returned, seq_monotonic]
+
+        - name: send_message_idempotent
+          route: POST /v1/chat/conversations/{id}/messages
+          assertions: [duplicate_clientMsgId_returns_same_id_and_seq]
 
         - name: recall_message
           route: POST /v1/chat/conversations/{id}/messages/{msgId}/recall
           assertions: [status_200, message_status_recalled]
+
+        - name: sync_messages_gap_fill
+          route: POST /v1/chat/conversations/{id}/sync
+          assertions: [returns_messages_after_lastSeq, hasMore_flag_correct]
+
+        - name: mark_as_read
+          route: POST /v1/chat/conversations/{id}/messages/{msgId}/read
+          assertions: [readSeq_updated, unreadCount_decremented]
+
+        - name: list_members
+          route: GET /v1/chat/conversations/{id}/members
+          assertions: [status_200, items_match_schema, pagination_works]
 
         - name: group_chat_lifecycle
           routes:
             - POST /v1/chat/conversations
             - POST /v1/chat/conversations/{id}/members
             - DELETE /v1/chat/conversations/{id}/members/{uid}
-          assertions: [group_created, member_added, member_removed]
+          assertions: [group_created, member_added, member_removed, memberCount_updated]
 
     service_side:
       description: 使用真实测试数据库，不 mock 存储层
@@ -116,18 +211,26 @@ contract_test:
       mock_targets: [cross_service_clients]
       data_management:
         seed: fixture 工厂预制到真实 MongoDB
-        cleanup: "DeleteMany for conversations, messages"
+        cleanup: "DeleteMany for conversations, messages, conversation_members, conversation_user_states, message_receipts"
         redis_cleanup: miniredis.FlushAll()
       scenarios:
-        - name: send_message_full_flow
+        - name: send_message_seq_assignment
           command: SendMessage
           seed: [fixture.NewConversation(type='direct')]
           assertions:
-            - "db.messages.FindOne({_id: result.id}) → document exists"
+            - "db.messages.FindOne({_id: result.id}).seq → monotonically increasing"
+            - "db.conversations.FindOne({_id}).maxSeq → equals message.seq"
             - "db.conversations.FindOne({_id}).lastMessagePreview → matches content"
-            - "db.conversations.FindOne({_id}).messageCount → incremented"
-            - "eventSpy.AssertPublished('MessageSent', {conversationId, senderId, type})"
-            - "miniredis.Exists('cache:conversation:{id}') → false (invalidated)"
+            - "eventSpy.AssertPublished('MessageSent', {conversationId, seq, clientMsgId})"
+            - "redis.Get('seq:conversation:{id}') → equals message.seq"
+
+        - name: send_message_clientmsgid_dedup
+          command: SendMessage (duplicate clientMsgId)
+          seed: [fixture.NewConversation(), fixture.NewMessage(clientMsgId='uuid-1')]
+          assertions:
+            - "result.id → equals existing message id"
+            - "result.seq → equals existing message seq"
+            - "db.messages.CountDocuments({clientMsgId: 'uuid-1'}) → 1"
 
         - name: recall_within_time_limit
           command: RecallMessage
@@ -135,7 +238,7 @@ contract_test:
           assertions:
             - "db.messages.FindOne({_id}).status → 'recalled'"
             - "db.messages.FindOne({_id}).recalledAt → NOT NULL"
-            - "eventSpy.AssertPublished('MessageRecalled')"
+            - "eventSpy.AssertPublished('MessageRecalled', {seq})"
 
         - name: recall_after_time_limit
           command: RecallMessage
@@ -144,15 +247,33 @@ contract_test:
             - "error returned: recall time exceeded"
             - "db.messages.FindOne({_id}).status → 'sent' (unchanged)"
 
-        - name: create_circle_conversation
-          command: CreateConversation (type=circle)
-          seed: []
+        - name: sync_messages_gap_fill
+          command: SyncMessages(lastSeq=50)
+          seed: [fixture.NewConversation(), fixture.NewMessages(seq=1..100)]
           assertions:
-            - "db.conversations.FindOne({_id}).type → 'circle'"
-            - "db.conversations.FindOne({_id}).circleId → matches input"
-            - "eventSpy.AssertPublished('ConversationCreated', {type: 'circle'})"
+            - "result.messages → seq 51..100 (50 messages)"
+            - "result.hasMore → false"
+
+        - name: add_member_updates_count
+          command: AddMembers
+          seed: [fixture.NewConversation(memberCount=3)]
+          assertions:
+            - "db.conversation_members.CountDocuments({conversationId}) → 4"
+            - "db.conversations.FindOne({_id}).memberCount → 4"
+            - "eventSpy.AssertPublished('MemberJoined', {memberCount: 4})"
+
+        - name: add_member_exceeds_max_group_size
+          command: AddMembers (total > maxGroupSize)
+          seed: [fixture.NewConversation(memberCount=999, maxGroupSize=1000)]
+          assertions:
+            - "error returned: group size exceeded"
+            - "db.conversation_members.CountDocuments → 999 (unchanged)"
 
   coverage_requirements:
-    - all conversation types (direct/group/circle/encrypted/assistant) covered
-    - message status transitions covered
-    - search scenarios tested
+    - all conversation types (direct/group/circle/encrypted) covered
+    - message seq monotonicity verified under concurrent sends
+    - clientMsgId dedup verified
+    - sync gap fill boundary conditions
+    - member count consistency
+    - receipt enabled/disabled paths
+    - assistant invite/remove/mention lifecycle

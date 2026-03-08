@@ -1,4 +1,4 @@
-version: 1
+version: 2
 aggregate: Conversation
 
 events:
@@ -8,38 +8,72 @@ events:
     consumers: [notification-service]
     channel: event_store
     payload_entity: Conversation
-    payload_fields: [_id, type, creatorId, memberIds, circleId]
+    payload_fields: [_id, type, creatorId, circleId, maxGroupSize, receiptEnabled, createdAt]
 
   - name: MessageSent
-    description: 消息发送
+    description: 消息发送（v2 新增 seq + clientMsgId）
     producer: chat-service
-    consumers: [notification-service, assistant-service, recommendation-engine]
+    consumers: [realtime-gateway, notification-service, assistant-service, recommendation-engine]
     channel: event_store
     payload_entity: Message
-    payload_fields: [_id, conversationId, senderId, type, content, mentions, timestamp]
+    payload_fields: [_id, conversationId, seq, clientMsgId, senderId, type, content, mediaUrl, media, mentions, timestamp]
     recommend_impact: social_signal
+    realtime_channel: "rt:conversation:{conversationId}"
 
   - name: MessageRecalled
     description: 消息撤回
     producer: chat-service
-    consumers: [notification-service]
+    consumers: [realtime-gateway, notification-service]
     channel: event_store
     payload_entity: Message
-    payload_fields: [_id, conversationId, senderId, recalledAt]
+    payload_fields: [_id, conversationId, seq, senderId, recalledAt]
+    realtime_channel: "rt:conversation:{conversationId}"
 
   - name: MemberJoined
-    description: 成员加入
+    description: 成员加入（v2 触发 ConversationMember 创建 + memberCount 更新）
     producer: chat-service
-    consumers: [notification-service]
+    consumers: [realtime-gateway, notification-service]
     channel: event_store
-    payload_fields: [conversationId, userId, role]
+    payload_fields: [conversationId, userId, role, invitedBy, memberCount]
+    realtime_channel: "rt:conversation:{conversationId}"
 
   - name: MemberLeft
-    description: 成员退出
+    description: 成员退出（v2 触发 ConversationMember 删除 + memberCount 更新）
     producer: chat-service
-    consumers: [notification-service]
+    consumers: [realtime-gateway, notification-service]
     channel: event_store
-    payload_fields: [conversationId, userId]
+    payload_fields: [conversationId, userId, memberCount]
+    realtime_channel: "rt:conversation:{conversationId}"
+
+  - name: ConversationSettingsUpdated
+    description: 用户级会话设置变更（mute/pin，v2 新增）
+    producer: chat-service
+    consumers: []
+    channel: event_store
+    payload_fields: [conversationId, userId, muted, pinned]
+
+  - name: ReadReceiptSent
+    description: 已读回执（v2 新增）
+    producer: chat-service
+    consumers: [realtime-gateway]
+    channel: event_store
+    payload_fields: [conversationId, messageId, userId, readAt]
+    realtime_channel: "rt:conversation:{conversationId}"
+
+  - name: AssistantInvited
+    description: 小趣助手被邀请加入会话（memberType=assistant 的成员加入）
+    producer: chat-service
+    consumers: [assistant-service, realtime-gateway]
+    channel: event_store
+    payload_fields: [conversationId, assistantMemberId, assistantSkillId, invitedBy]
+    realtime_channel: "rt:conversation:{conversationId}"
+
+  - name: AssistantMentioned
+    description: 在消息中 @小趣，触发助手处理（assistant-service 消费后生成回复）
+    producer: chat-service
+    consumers: [assistant-service]
+    channel: event_store
+    payload_fields: [conversationId, messageId, seq, senderId, content, assistantMemberId]
 
   - name: ConversationArchived
     description: 会话归档

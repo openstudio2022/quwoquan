@@ -1,4 +1,4 @@
-version: 1
+version: 2
 aggregate: Conversation
 backend: mongodb
 
@@ -6,10 +6,10 @@ collections:
   conversations:
     entity: Conversation
     indexes:
-      - { name: idx_conv_members, keys: { memberIds: 1, lastMessageTime: -1 } }
-      - { name: idx_conv_type, keys: { type: 1, updatedAt: -1 } }
+      - { name: idx_conv_type_updated, keys: { type: 1, updatedAt: -1 } }
       - { name: idx_conv_circle, keys: { circleId: 1 }, sparse: true }
       - { name: idx_conv_status, keys: { status: 1 } }
+      - { name: idx_conv_last_msg_time, keys: { lastMessageTime: -1 } }
     search_indexes:
       - name: search_conv_title
         type: text
@@ -18,23 +18,62 @@ collections:
   messages:
     entity: Message
     indexes:
-      - { name: idx_msg_conv_time, keys: { conversationId: 1, timestamp: -1 } }
+      - { name: idx_msg_conv_seq, keys: { conversationId: 1, seq: 1 }, unique: true }
+      - { name: idx_msg_conv_timestamp, keys: { conversationId: 1, timestamp: -1 } }
       - { name: idx_msg_sender, keys: { senderId: 1, timestamp: -1 } }
       - { name: idx_msg_mentions, keys: { mentions: 1, timestamp: -1 }, sparse: true }
       - { name: idx_msg_status, keys: { conversationId: 1, status: 1 } }
+      - { name: idx_msg_clientmsgid, keys: { conversationId: 1, clientMsgId: 1 }, unique: true }
+    ttl:
+      field: timestamp
+      expire_after_seconds: 1209600  # 14 天云端消息保留期
     search_indexes:
       - name: search_msg_content
         type: text
         fields: [content]
     change_streams:
       - pipeline: [{ "$match": { "operationType": "insert" } }]
-        consumers: [notification-push, assistant-context-updater]
+        consumers: [realtime-gateway, notification-push, assistant-context-updater]
     sharding:
-      key: { conversationId: 1, timestamp: -1 }
-      description: 按会话分片，保证同会话消息在同一分片
+      key: { conversationId: 1, seq: 1 }
+      description: 按会话+seq 分片，保证同会话消息在同一分片且有序
+
+  conversation_members:
+    entity: ConversationMember
+    indexes:
+      - { name: idx_cm_conv_user, keys: { conversationId: 1, userId: 1 }, unique: true }
+      - { name: idx_cm_user_joined, keys: { userId: 1, joinedAt: -1 } }
+      - { name: idx_cm_conv_role, keys: { conversationId: 1, role: 1 } }
+      - { name: idx_cm_conv_type, keys: { conversationId: 1, memberType: 1 } }
+
+  conversation_user_states:
+    entity: ConversationUserState
+    indexes:
+      - { name: idx_cus_user_conv, keys: { userId: 1, conversationId: 1 }, unique: true }
+      - { name: idx_cus_user_pinned_updated, keys: { userId: 1, pinned: -1, updatedAt: -1 } }
+      - { name: idx_cus_user_unread, keys: { userId: 1, unreadCount: 1 }, sparse: true }
+
+  message_receipts:
+    entity: MessageReceipt
+    indexes:
+      - { name: idx_mr_msg_user, keys: { messageId: 1, userId: 1 }, unique: true }
+      - { name: idx_mr_conv_msg, keys: { conversationId: 1, messageId: 1 } }
 
 redis_cache:
   - key: "cache:conversation:{conversationId}"
     ttl_seconds: 300
     entity: Conversation
-    invalidate_on: [MessageSent, MemberJoined, MemberLeft]
+    invalidate_on: [MessageSent, MemberJoined, MemberLeft, ConversationSettingsUpdated]
+
+  - key: "seq:conversation:{conversationId}"
+    ttl_seconds: null
+    type: string
+    scene: realtime
+    description: per-conversation 消息 seq 计数器（Redis INCR，永不过期）
+
+  - key: "dedup:msg:{conversationId}:{clientMsgId}"
+    ttl_seconds: 300
+    type: string
+    scene: realtime
+    hash_tag: conversationId
+    description: clientMsgId 幂等去重（SET NX + TTL 5min），与 seq key 共享同一 slot

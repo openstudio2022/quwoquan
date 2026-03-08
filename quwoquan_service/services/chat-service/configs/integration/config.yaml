@@ -1,0 +1,13 @@
+service:
+  http:
+    addr: ":18081"
+
+mongodb:
+  uri: "mongodb://mongo:27017"
+  database: "quwoquan_chat"
+
+redis:
+  realtime:
+    addr: "redis:6379"
+  general:
+    addr: "redis:6379"

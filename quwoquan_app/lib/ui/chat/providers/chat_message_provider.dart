@@ -1,0 +1,276 @@
+import 'package:flutter_riverpod/legacy.dart';
+import 'package:uuid/uuid.dart';
+import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
+import 'package:quwoquan_app/cloud/chat/models/send_message_response.dart';
+import 'package:quwoquan_app/cloud/chat/models/sync_response.dart';
+import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
+
+const _uuid = Uuid();
+
+/// 消息列表状态：含加载态、错误信息和已排序消息列表。
+class ChatMessageState {
+  final List<MessageDto> messages;
+  final bool isLoading;
+  final String? error;
+
+  const ChatMessageState({
+    this.messages = const [],
+    this.isLoading = false,
+    this.error,
+  });
+
+  ChatMessageState copyWith({
+    List<MessageDto>? messages,
+    bool? isLoading,
+    String? error,
+  }) {
+    return ChatMessageState(
+      messages: messages ?? this.messages,
+      isLoading: isLoading ?? this.isLoading,
+      error: error,
+    );
+  }
+}
+
+/// 管理单个会话的消息列表、发送、撤回、seq gap 补全。
+class ChatMessageNotifier extends StateNotifier<ChatMessageState> {
+  ChatMessageNotifier(this._repo, this.conversationId)
+      : super(const ChatMessageState());
+
+  final ChatRepository _repo;
+  final String conversationId;
+
+  // seq=0 表示消息尚未被服务端确认（发送中/发送失败）
+  static const int _unconfirmedSeq = 0;
+
+  /// 加载消息并按 seq 排序，之后检测 gap。
+  Future<void> loadMessages({int? maxSeq}) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final rawList = await _repo.listMessages(conversationId: conversationId);
+      final loaded = rawList.map(MessageDto.fromMap).toList();
+      final merged = _mergeMessages(state.messages, loaded);
+      state = state.copyWith(messages: _sorted(merged), isLoading: false);
+      if (maxSeq != null && maxSeq > 0) {
+        await _detectAndFillGap(maxSeq);
+      }
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+    }
+  }
+
+  /// 乐观插入 → 远程发送 → 更新/标记失败。
+  Future<void> sendMessage(
+    String type,
+    String content, {
+    String? mediaUrl,
+    Map<String, dynamic>? media,
+  }) async {
+    final clientMsgId = _uuid.v4();
+    final optimistic = MessageDto(
+      id: clientMsgId,
+      conversationId: conversationId,
+      seq: _unconfirmedSeq,
+      clientMsgId: clientMsgId,
+      senderId: 'current_user',
+      type: type,
+      content: content,
+      mediaUrl: mediaUrl,
+      media: media,
+      status: 'sending',
+      timestamp: DateTime.now(),
+    );
+    state = state.copyWith(messages: _sorted([...state.messages, optimistic]));
+    try {
+      final raw = await _repo.sendMessage(
+        conversationId: conversationId,
+        type: type,
+        content: content,
+        mediaUrl: mediaUrl,
+        media: media,
+        clientMsgId: clientMsgId,
+      );
+      final resp = SendMessageResponse.fromMap(raw);
+      final confirmed = optimistic.copyWith(
+        id: resp.id,
+        seq: resp.seq,
+        status: 'sent',
+        timestamp: resp.timestamp,
+      );
+      final updated = state.messages.map((m) {
+        return m.clientMsgId == clientMsgId ? confirmed : m;
+      }).toList();
+      state = state.copyWith(messages: _sorted(updated));
+    } catch (e) {
+      final failed = state.messages.map((m) {
+        return m.clientMsgId == clientMsgId
+            ? m.copyWith(status: 'failed')
+            : m;
+      }).toList();
+      state = state.copyWith(messages: _sorted(failed));
+    }
+  }
+
+  /// 重试发送失败的消息。
+  Future<void> retrySendMessage(String clientMsgId) async {
+    final msg = state.messages.firstWhere(
+      (m) => m.clientMsgId == clientMsgId && m.status == 'failed',
+      orElse: () => throw StateError('Message not found or not failed'),
+    );
+    final retrying = state.messages.map((m) {
+      return m.clientMsgId == clientMsgId
+          ? m.copyWith(status: 'sending')
+          : m;
+    }).toList();
+    state = state.copyWith(messages: _sorted(retrying));
+    try {
+      final raw = await _repo.sendMessage(
+        conversationId: conversationId,
+        type: msg.type,
+        content: msg.content ?? '',
+        mediaUrl: msg.mediaUrl,
+        media: msg.media,
+        clientMsgId: clientMsgId,
+      );
+      final resp = SendMessageResponse.fromMap(raw);
+      final confirmed = msg.copyWith(
+        id: resp.id,
+        seq: resp.seq,
+        status: 'sent',
+        timestamp: resp.timestamp,
+      );
+      final updated = state.messages.map((m) {
+        return m.clientMsgId == clientMsgId ? confirmed : m;
+      }).toList();
+      state = state.copyWith(messages: _sorted(updated));
+    } catch (_) {
+      final failed = state.messages.map((m) {
+        return m.clientMsgId == clientMsgId
+            ? m.copyWith(status: 'failed')
+            : m;
+      }).toList();
+      state = state.copyWith(messages: _sorted(failed));
+    }
+  }
+
+  /// 撤回消息。
+  Future<void> recallMessage(String messageId) async {
+    try {
+      await _repo.recallMessage(
+        conversationId: conversationId,
+        messageId: messageId,
+      );
+      final updated = state.messages.map((m) {
+        return m.id == messageId
+            ? m.copyWith(status: 'recalled', recalledAt: DateTime.now())
+            : m;
+      }).toList();
+      state = state.copyWith(messages: _sorted(updated));
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+    }
+  }
+
+  /// 手动触发 sync 补全缺失消息。
+  Future<void> syncFromSeq(int lastSeq) async {
+    try {
+      final raw = await _repo.syncMessages(
+        conversationId: conversationId,
+        lastSeq: lastSeq,
+      );
+      final syncResp = SyncResponse.fromMap(raw);
+      if (syncResp.messages.isNotEmpty) {
+        final merged = _mergeMessages(state.messages, syncResp.messages);
+        state = state.copyWith(messages: _sorted(merged));
+      }
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+    }
+  }
+
+  /// 外部实时事件推送消息到列表（WebSocket/Long-poll 收到的新消息）。
+  void addMessage(MessageDto msg) {
+    final existing = state.messages.any(
+      (m) => m.id == msg.id || (msg.clientMsgId.isNotEmpty && m.clientMsgId == msg.clientMsgId),
+    );
+    if (existing) return;
+    state = state.copyWith(messages: _sorted([...state.messages, msg]));
+  }
+
+  /// 实时事件：标记某消息已撤回。
+  void markRecalled(String messageId) {
+    final updated = state.messages.map((m) {
+      return m.id == messageId
+          ? m.copyWith(status: 'recalled', recalledAt: DateTime.now())
+          : m;
+    }).toList();
+    state = state.copyWith(messages: _sorted(updated));
+  }
+
+  // ── 排序：seq > 0 升序，seq == 0（未确认）排最后按 timestamp ──────────
+
+  List<MessageDto> _sorted(List<MessageDto> list) {
+    final confirmed = <MessageDto>[];
+    final pending = <MessageDto>[];
+    for (final m in list) {
+      if (m.seq > _unconfirmedSeq) {
+        confirmed.add(m);
+      } else {
+        pending.add(m);
+      }
+    }
+    confirmed.sort((a, b) => a.seq.compareTo(b.seq));
+    pending.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    return [...confirmed, ...pending];
+  }
+
+  // ── seq gap 检测 + 自动补全 ──────────────────────────────────────
+
+  Future<void> _detectAndFillGap(int maxSeq) async {
+    final confirmedSeqs = state.messages
+        .where((m) => m.seq > _unconfirmedSeq)
+        .map((m) => m.seq)
+        .toList()
+      ..sort();
+    if (confirmedSeqs.isEmpty) {
+      await syncFromSeq(0);
+      return;
+    }
+    final localMaxSeq = confirmedSeqs.last;
+    if (localMaxSeq < maxSeq) {
+      await syncFromSeq(localMaxSeq);
+    }
+  }
+
+  // ── 合并去重（按 id / clientMsgId）──────────────────────────────
+
+  List<MessageDto> _mergeMessages(
+    List<MessageDto> existing,
+    List<MessageDto> incoming,
+  ) {
+    final byId = <String, MessageDto>{};
+    for (final m in existing) {
+      byId[m.id] = m;
+    }
+    for (final m in incoming) {
+      final existingMsg = byId[m.id] ?? byId[m.clientMsgId];
+      if (existingMsg != null && existingMsg.status == 'sending') {
+        byId[m.id] = m;
+        byId.remove(existingMsg.clientMsgId);
+      } else {
+        byId[m.id] = m;
+      }
+    }
+    return byId.values.toList();
+  }
+}
+
+/// 按 conversationId 创建独立的消息状态管理器。
+final chatMessageProvider = StateNotifierProvider.family<
+    ChatMessageNotifier, ChatMessageState, String>(
+  (ref, conversationId) {
+    final repo = ref.watch(chatRepositoryProvider);
+    return ChatMessageNotifier(repo, conversationId);
+  },
+);

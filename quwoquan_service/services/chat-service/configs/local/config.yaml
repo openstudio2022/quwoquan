@@ -1,0 +1,13 @@
+service:
+  http:
+    addr: ":18081"
+
+mongodb:
+  uri: "mongodb://localhost:27017"
+  database: "quwoquan_chat_local"
+
+redis:
+  realtime:
+    addr: "localhost:6379"
+  general:
+    addr: "localhost:6379"

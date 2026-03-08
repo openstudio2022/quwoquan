@@ -1,6 +1,7 @@
 // ignore_for_file: unused_import, unnecessary_underscores
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -19,6 +20,8 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:quwoquan_app/components/input/customizable_chat_input_bar.dart';
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/personal_assistant/app/assistant_engine_provider.dart';
@@ -34,7 +37,12 @@ import 'package:quwoquan_app/features/assistant/context/assistant_open_context.d
 import 'package:quwoquan_app/features/assistant/pages/assistant_dev_replay_page.dart';
 import 'package:quwoquan_app/features/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_chat_settings_page.dart';
+import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
+import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_manager.dart';
+import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
+import 'package:quwoquan_app/ui/chat/widgets/message/regenerate_options_popup.dart';
+import 'package:quwoquan_app/ui/chat/widgets/message/streaming_scroll_fab.dart';
 import 'package:quwoquan_app/ui/chat/widgets/session/assistant_session_header.dart';
 
 /// 仅显示「上午/下午 HH:mm」，不显示「今天」或日期（图一）
@@ -78,6 +86,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   List<Map<String, dynamic>> _messages = [];
+  String? _resolvedTitle;
   bool _isSelectionMode = false;
   final Set<String> _selectedIds = {};
   Map<String, dynamic>? _actionMenuMessage;
@@ -98,6 +107,16 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   /// 当前轮过程状态机展示文案（等待/深度搜索中/深度思考中），由 trace 事件驱动
   String _assistantPhaseLabel = '';
   String? _activeAssistantStreamingMessageId;
+  /// v4: Unified process state for the single-drawer UI.
+  AssistantProcessState _currentProcessState = const AssistantProcessState();
+  /// Accumulated structured content blocks for the process drawer.
+  List<ProcessContentBlock> _processContentBlocks = <ProcessContentBlock>[];
+  /// Accumulated search references across all tool calls in a single run.
+  List<ProcessReference> _collectedSearchRefs = <ProcessReference>[];
+  /// Whether the user has scrolled away from the bottom during streaming.
+  bool _userScrolledAway = false;
+  /// Whether to show the scroll-to-bottom FAB.
+  bool _showScrollFab = false;
   String _assistantRuntimeSessionId =
       AppConceptConstants.assistantConversationId;
   String _assistantTopicTitle = UITextConstants.assistantHistoryAll;
@@ -109,9 +128,16 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScrollChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _loadMessages();
+      if (_isAssistantConversation) {
+        _loadMessages();
+      } else {
+        ref.read(chatMessageProvider(widget.conversationId).notifier).loadMessages();
+        ref.read(realtimeConnectionManagerProvider.notifier)
+            .onEnterChatDetail(widget.conversationId);
+      }
     });
     _inputController.addListener(_onInputChanged);
     if (_isAssistantConversation) {
@@ -131,6 +157,20 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     }
   }
 
+  Future<void> _loadConversationTitle() async {
+    if (_resolvedTitle != null) return;
+    try {
+      final conv = await ref
+          .read(chatRepositoryProvider)
+          .getConversation(widget.conversationId);
+      if (mounted) {
+        setState(() {
+          _resolvedTitle = conv['title'] as String? ?? widget.conversationId;
+        });
+      }
+    } catch (_) {}
+  }
+
   Future<void> _loadMessages() async {
     if (_isAssistantConversation) {
       if (!mounted) return;
@@ -146,12 +186,17 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       if (!mounted) return;
       setState(() => _messages = List<Map<String, dynamic>>.from(list));
     } catch (e) {
-      // 保持页面可用：加载失败时回退到原型 mock 数据
-      final fallback = ref
-          .read(appContentRepositoryProvider)
-          .chatMessagesFor(widget.conversationId);
-      if (!mounted) return;
-      setState(() => _messages = List<Map<String, dynamic>>.from(fallback));
+      // 保持页面可用：加载失败时回退到 ChatRepository mock 数据
+      try {
+        final fallback = await ref
+            .read(chatRepositoryProvider)
+            .listMessages(conversationId: widget.conversationId);
+        if (!mounted) return;
+        setState(
+            () => _messages = List<Map<String, dynamic>>.from(fallback));
+      } catch (_) {
+        // 双重失败：保持空消息列表
+      }
     }
   }
 
@@ -169,8 +214,53 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     if (mounted) setState(() {});
   }
 
+  void _onScrollChanged() {
+    if (!_scrollController.hasClients) return;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.offset;
+    final isNearBottom = maxScroll - currentScroll < 80;
+
+    if (_assistantResponding) {
+      if (!isNearBottom && !_userScrolledAway) {
+        setState(() {
+          _userScrolledAway = true;
+          _showScrollFab = true;
+        });
+      } else if (isNearBottom && _userScrolledAway) {
+        setState(() {
+          _userScrolledAway = false;
+          _showScrollFab = false;
+        });
+      }
+    } else if (_showScrollFab) {
+      setState(() => _showScrollFab = false);
+    }
+  }
+
+  void _scrollToBottom() {
+    if (!_scrollController.hasClients) return;
+    setState(() {
+      _userScrolledAway = false;
+      _showScrollFab = false;
+    });
+    _scrollController.animateTo(
+      _scrollController.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+    );
+  }
+
+  @override
+  void deactivate() {
+    if (!_isAssistantConversation) {
+      ref.read(realtimeConnectionManagerProvider.notifier).onLeaveChatDetail();
+    }
+    super.deactivate();
+  }
+
   @override
   void dispose() {
+    _scrollController.removeListener(_onScrollChanged);
     _inputController.removeListener(_onInputChanged);
     _speechToText.cancel();
     _inputController.dispose();
@@ -274,6 +364,18 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     await _loadAssistantSessionMessages(sessionId);
   }
 
+  Future<void> _initiateCall(String callType) async {
+    final notifier = ref.read(callSessionProvider.notifier);
+    final callId = await notifier.initiateCall(
+      callTypeStr: callType,
+      targetUserIds: [widget.conversationId],
+      conversationId: widget.conversationId,
+    );
+    if (callId != null && mounted) {
+      context.push('/rtc/outgoing/$callId');
+    }
+  }
+
   Future<void> _openAssistantSettingsPage() async {
     await Navigator.of(context).push(
       CupertinoPageRoute<void>(
@@ -345,7 +447,32 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       if (nextPhaseLabel != null) _assistantPhaseLabel = nextPhaseLabel;
       _assistantSearchingCount = searchingCount;
       _assistantReferenceCount = referenceCount;
+      // 同步更新 _currentProcessState，确保 trace 事件（来自远端/静默本地路径）
+      // 也能驱动过程抽屉的阶段标签与动画状态更新
+      if (nextPhaseLabel != null &&
+          nextPhaseLabel != _currentProcessState.stageLabel) {
+        _currentProcessState = _currentProcessState.copyWith(
+          stageLabel: nextPhaseLabel,
+          stage: _mapLabelToProcessStage(nextPhaseLabel),
+          contentBlocks: List<ProcessContentBlock>.of(_processContentBlocks),
+        );
+      }
     });
+  }
+
+  ProcessStage _mapLabelToProcessStage(String label) {
+    if (label == UITextConstants.assistantPhaseSearching) {
+      return ProcessStage.searching;
+    }
+    if (label == UITextConstants.assistantPhaseAnalyzing ||
+        label == UITextConstants.assistantPhaseAssessing ||
+        label == UITextConstants.assistantPhaseThinking) {
+      return ProcessStage.analyzing;
+    }
+    if (label == UITextConstants.assistantPhaseAnswering) {
+      return ProcessStage.answering;
+    }
+    return ProcessStage.understanding;
   }
 
   void _consumeUserPhaseEvent(AssistantRunStreamEvent streamEvent) {
@@ -354,10 +481,19 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     if (phaseType == null) return;
     final message = streamEvent.chunkText ?? '';
     final toolName = streamEvent.userPhaseToolName;
+    final isExtracted = streamEvent.trace?.data?['extracted'] == true;
+
+    final isThinkingType =
+        phaseType == UserPhaseEventType.understandingThinking ||
+        phaseType == UserPhaseEventType.analyzingThinking ||
+        phaseType == UserPhaseEventType.toolReasoningThinking;
+    if (isThinkingType && !isExtracted) {
+      return;
+    }
 
     String? nextPhaseLabel;
     late final String timelinePhaseType;
-    String detail = _sanitizeTraceDetail(message);
+    String detail = isExtracted ? message.trim() : _sanitizeTraceDetail(message);
 
     switch (phaseType) {
       case UserPhaseEventType.understandingStarted:
@@ -400,10 +536,10 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         timelinePhaseType = 'assessing';
     }
 
-    _appendStreamingPhaseFromUserEvent(
-      phaseType: timelinePhaseType,
+    _updateProcessContentBlocks(
+      phaseType: phaseType,
+      timelinePhaseType: timelinePhaseType,
       detail: detail,
-      toolName: toolName,
       data: streamEvent.trace?.data,
     );
 
@@ -411,78 +547,150 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     if (effectiveLabel != null && effectiveLabel != _assistantPhaseLabel) {
       setState(() {
         _assistantPhaseLabel = effectiveLabel;
+        _currentProcessState = _currentProcessState.copyWith(
+          stageLabel: effectiveLabel,
+          stage: _mapPhaseToStage(timelinePhaseType),
+          isStreaming: phaseType == UserPhaseEventType.answeringDelta,
+          contentBlocks: List<ProcessContentBlock>.of(_processContentBlocks),
+        );
+      });
+      _autoScrollToBottomIfNeeded();
+    } else if (detail.isNotEmpty) {
+      setState(() {
+        _currentProcessState = _currentProcessState.copyWith(
+          contentBlocks: List<ProcessContentBlock>.of(_processContentBlocks),
+        );
       });
     }
   }
 
-  void _appendStreamingPhaseFromUserEvent({
-    required String phaseType,
+  /// Build structured content blocks for the process drawer.
+  void _updateProcessContentBlocks({
+    required UserPhaseEventType phaseType,
+    required String timelinePhaseType,
     required String detail,
-    String? toolName,
     Map<String, dynamic>? data,
   }) {
-    final messageId = _activeAssistantStreamingMessageId;
-    if (messageId == null || messageId.isEmpty) return;
-    final index =
-        _messages.indexWhere((item) => (item['id'] as String?) == messageId);
-    if (index < 0) return;
-    final currentPhases = ((_messages[index]['uiPhaseTimelineV1'] as List?)
-            ?.whereType<Map>()
-            .map((item) => item.cast<String, dynamic>())
-            .toList(growable: true)) ??
-        <Map<String, dynamic>>[];
-    final phase = _ensureStreamingPhase(
-      phases: currentPhases,
-      phaseType: phaseType,
-    );
-    final details = _mutableStringList(phase['details']);
-    phase['details'] = details;
-    if (detail.isNotEmpty && !details.contains(detail)) {
-      details.add(detail);
-    }
-    if (data != null) {
-      final refs = (data['references'] as List?)
-              ?.whereType<Map>()
-              .map((item) => item.cast<String, dynamic>())
-              .toList(growable: false) ??
-          const <Map<String, dynamic>>[];
+    final isSearchTool = timelinePhaseType == 'searching' ||
+        (timelinePhaseType.startsWith('tool:') &&
+            timelinePhaseType.contains('search'));
+    final isExtracted = data?['extracted'] == true;
+
+    if (phaseType == UserPhaseEventType.toolExecutionCompleted && isSearchTool) {
+      final refs = _extractReferencesFromData(data);
       if (refs.isNotEmpty) {
-        final phaseRefs = _mutableMapList(phase['references']);
-        phase['references'] = phaseRefs;
-        final seen = phaseRefs
-            .map((item) => (item['url'] as String?) ?? '')
-            .where((item) => item.isNotEmpty)
-            .toSet();
+        final seenUrls = _collectedSearchRefs.map((r) => r.url).toSet();
         for (final ref in refs) {
-          final url = (ref['url'] as String?)?.trim() ?? '';
-          if (url.isEmpty || seen.contains(url)) continue;
-          phaseRefs.add(<String, dynamic>{
-            'title': (ref['title'] ?? '').toString(),
-            'url': url,
-            'source': (ref['source'] ?? '').toString(),
-          });
-          seen.add(url);
+          if (ref.url.isNotEmpty && !seenUrls.contains(ref.url)) {
+            _collectedSearchRefs.add(ref);
+            seenUrls.add(ref.url);
+          }
         }
-        phase['summary'] = '已找到 ${phaseRefs.length} 篇相关资料';
+        _replaceOrAppendBlock(
+          ProcessContentBlockType.searchSummary,
+          ProcessContentBlock(
+            type: ProcessContentBlockType.searchSummary,
+            text: '搜索了 ${_collectedSearchRefs.length} 篇文档',
+            references: List<ProcessReference>.of(_collectedSearchRefs),
+          ),
+        );
+      }
+    } else if (phaseType == UserPhaseEventType.analyzingStarted ||
+               phaseType == UserPhaseEventType.analyzingThinking) {
+      _replaceOrAppendBlock(
+        ProcessContentBlockType.analysisSummary,
+        ProcessContentBlock(
+          type: ProcessContentBlockType.analysisSummary,
+          text: '分析参考了 ${_collectedSearchRefs.length} 篇文档',
+          references: List<ProcessReference>.of(_collectedSearchRefs),
+        ),
+      );
+    } else if (detail.isNotEmpty) {
+      if (isExtracted) {
+        _replaceLastTextBlock(detail);
+      } else {
+        _processContentBlocks.add(ProcessContentBlock(
+          type: ProcessContentBlockType.text,
+          text: detail,
+        ));
       }
     }
-    if (phaseType == 'assessing') {
-      phase['summary'] = detail.isNotEmpty ? detail : '正在检查信息是否充分...';
-      phase['status'] = 'completed';
-    } else if (phaseType == 'understanding') {
-      phase['summary'] = detail.isNotEmpty ? detail : '正在分析您的问题...';
-    } else if (phaseType == 'analyzing') {
-      phase['summary'] = detail.isNotEmpty ? detail : '正在分析获取到的信息...';
-    } else if (phaseType == 'answering') {
-      phase['summary'] = '正在组织回答...';
-      phase['status'] = 'completed';
+  }
+
+  /// Replace the last text block with extracted thinking text, removing
+  /// any accumulated fragment blocks from the same reasoning phase.
+  void _replaceLastTextBlock(String extractedText) {
+    int lastTextIdx = -1;
+    for (int i = _processContentBlocks.length - 1; i >= 0; i--) {
+      if (_processContentBlocks[i].type == ProcessContentBlockType.text) {
+        lastTextIdx = i;
+        break;
+      }
     }
-    _markStreamingPhaseStatus(currentPhases, activeType: phaseType);
-    _messages[index] = <String, dynamic>{
-      ..._messages[index],
-      'uiPhaseTimelineV1': currentPhases,
-    };
-    setState(() {});
+    final block = ProcessContentBlock(
+      type: ProcessContentBlockType.text,
+      text: extractedText,
+    );
+    if (lastTextIdx >= 0) {
+      _processContentBlocks[lastTextIdx] = block;
+    } else {
+      _processContentBlocks.add(block);
+    }
+  }
+
+  /// Replace the first block of [type] in [_processContentBlocks], or append.
+  void _replaceOrAppendBlock(ProcessContentBlockType type, ProcessContentBlock block) {
+    final idx = _processContentBlocks.indexWhere((b) => b.type == type);
+    if (idx >= 0) {
+      _processContentBlocks[idx] = block;
+    } else {
+      _processContentBlocks.add(block);
+    }
+  }
+
+  List<ProcessReference> _extractReferencesFromData(Map<String, dynamic>? data) {
+    if (data == null) return const <ProcessReference>[];
+    final rawRefs = (data['references'] as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[];
+    if (rawRefs.isEmpty) return const <ProcessReference>[];
+    return rawRefs.map((ref) {
+      final url = (ref['url'] as String?)?.trim() ?? '';
+      final title = (ref['title'] as String?)?.trim() ?? '';
+      final source = (ref['source'] as String?)?.trim() ??
+          (Uri.tryParse(url)?.host ?? '');
+      return ProcessReference(title: title, url: url, source: source);
+    }).where((r) => r.url.isNotEmpty && r.title.isNotEmpty).toList(growable: false);
+  }
+
+  ProcessStage _mapPhaseToStage(String timelinePhaseType) {
+    if (timelinePhaseType == 'understanding') return ProcessStage.understanding;
+    if (timelinePhaseType.startsWith('tool:') || timelinePhaseType == 'searching') {
+      return ProcessStage.searching;
+    }
+    if (timelinePhaseType == 'analyzing' || timelinePhaseType == 'assessing') {
+      return ProcessStage.analyzing;
+    }
+    if (timelinePhaseType == 'answering') return ProcessStage.answering;
+    return ProcessStage.understanding;
+  }
+
+  void _autoScrollToBottomIfNeeded() {
+    if (_userScrolledAway) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      final maxScroll = _scrollController.position.maxScrollExtent;
+      final currentScroll = _scrollController.offset;
+      if (maxScroll - currentScroll > 80) {
+        _scrollController.animateTo(
+          maxScroll,
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 
   /// Directly appends a streaming delta to the active assistant message.
@@ -817,16 +1025,56 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   }
 
   String _sanitizeTraceDetail(String raw) {
-    final text = raw.trim();
+    String text = raw.trim();
     if (text.isEmpty) return '';
     if (_isInternalChunk(text)) return '';
-    // Filter out internal trace messages that start with "calling " (tool dispatch)
+    if (_jsonKeyFragmentRe.hasMatch(text)) return '';
+    if (_jsonSyntaxOnlyRe.hasMatch(text)) return '';
     if (text.startsWith('calling ') && text.length < 40) return '';
-    // Filter out raw internal assessment messages
     if (text.contains('工具执行遇到问题') || text.contains('toolFailed')) return '';
+    if (_internalErrorRe.hasMatch(text)) return '';
+    if (_containsXmlToolCall(text)) {
+      text = _stripXmlToolCalls(text);
+      if (text.isEmpty) return '';
+    }
     if (text.length <= 80) return text;
     return '${text.substring(0, 80)}...';
   }
+
+  static final _internalErrorRe = RegExp(
+    r'模板渲染失败|模板缺失|template.*not.?found|'
+    r'模型调用失败|模型调用异常|HTTP [45]\d\d|'
+    r'agent loop (started|finished)|llm request iteration|'
+    r'model_answered_without_tools|'
+    r'第 \d+ 轮推理|正在思考\.\.\.',
+  );
+
+  static final _jsonKeyFragmentRe = RegExp(
+    r'"?(contractVersion|decision|nextAction|toolPlan|thinkingText|'
+    r'userMarkdown|messageKind|slotFillPlan|queryNormalization|'
+    r'selfCheck|diagnostics|reasoningBasis|turnPhase|traceId|'
+    r'queryTasks|contextSlots|subagentPlan|evidence|result|'
+    r'confidence|reasoning|answerEligibility|missingCriticalSlots|'
+    r'assistant_turn_v4|plan|answer|ask_user|tool_call)"?\s*:?',
+  );
+  static final _jsonSyntaxOnlyRe = RegExp(r'^[\s"{}:\[\],\\.]+$');
+
+  // XML tool-call patterns used by some model providers.
+  static final RegExp _xmlToolCallTagRe = RegExp(
+    r'<tool_call>[\s\S]*?</tool_call>|'
+    r'<function=[^>]+>[\s\S]*?</function>|'
+    r'<tool_call>|</tool_call>|'
+    r'<function=[^>]*>|</function>|'
+    r'<parameter=[^>]*>[\s\S]*?</parameter>|'
+    r'</?parameter[^>]*>',
+  );
+  static final RegExp _xmlToolCallOpenRe = RegExp(r'<tool_call>|<function=');
+
+  bool _containsXmlToolCall(String text) =>
+      _xmlToolCallOpenRe.hasMatch(text);
+
+  String _stripXmlToolCalls(String text) =>
+      text.replaceAll(_xmlToolCallTagRe, '').trim();
 
   int _extractReferenceCountFromTraceData(Map<String, dynamic> data) {
     final references = data['references'];
@@ -844,12 +1092,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     if (widget.conversationId == AppConceptConstants.assistantConversationId) {
       return AppConceptConstants.assistantDisplayTitle;
     }
-    for (final c
-        in ref.read(appContentRepositoryProvider).chatMockConversations) {
-      if (c['id'] == widget.conversationId) {
-        return c['title'] as String? ?? widget.conversationId;
-      }
-    }
+    if (_resolvedTitle != null) return _resolvedTitle!;
+    _loadConversationTitle();
     return widget.conversationId;
   }
 
@@ -1132,6 +1376,23 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     await Future<void>.delayed(const Duration(milliseconds: 150));
     final text = (draftText ?? _inputController.text).trim();
     if (text.isEmpty) return;
+
+    if (!_isAssistantConversation) {
+      if (draftText == null) _inputController.clear();
+      ref.read(chatMessageProvider(widget.conversationId).notifier)
+          .sendMessage('text', text);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+      return;
+    }
+
     final now = DateTime.now();
     final timeStr = '${now.hour}:${now.minute.toString().padLeft(2, '0')}';
     final userMessageId = 'msg_${DateTime.now().millisecondsSinceEpoch}';
@@ -1147,6 +1408,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         'senderAvatar':
             'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400',
         'timestamp': timeStr,
+        'sentAtIso': now.toIso8601String(),
         'isRead': true,
         'isSelf': true,
       });
@@ -1178,6 +1440,13 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         _assistantPhaseLabel = UITextConstants.assistantPhaseUnderstanding;
         _assistantSearchingCount = 0;
         _assistantReferenceCount = 0;
+        _currentProcessState = const AssistantProcessState(
+          stageLabel: '正在理解问题...',
+        );
+        _processContentBlocks = <ProcessContentBlock>[];
+        _collectedSearchRefs = <ProcessReference>[];
+        _userScrolledAway = false;
+        _showScrollFab = false;
         _messages.add(<String, dynamic>{
           'id': streamingAssistantMessageId!,
           'conversationId': widget.conversationId,
@@ -1343,6 +1612,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
               });
             }
           });
+          _autoScrollToBottomIfNeeded();
         }
 
         try {
@@ -1408,6 +1678,28 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                 continue;
               case AssistantRunStreamEventType.userPhaseEvent:
                 _consumeUserPhaseEvent(streamEvent);
+                continue;
+              case AssistantRunStreamEventType.processUpdate:
+                if (mounted) {
+                  final data = streamEvent.trace?.data;
+                  final stageStr = data?['stage'] as String? ?? '';
+                  final processLines = (data?['processLines'] as List?)
+                      ?.whereType<String>()
+                      .toList(growable: false) ?? const <String>[];
+                  final isStreaming = data?['isStreaming'] == true;
+                  setState(() {
+                    _currentProcessState = AssistantProcessState(
+                      stage: ProcessStage.values.firstWhere(
+                        (s) => s.name == stageStr,
+                        orElse: () => ProcessStage.understanding,
+                      ),
+                      stageLabel: streamEvent.chunkText ?? '处理中',
+                      processLines: processLines,
+                      isStreaming: isStreaming,
+                    );
+                  });
+                  _autoScrollToBottomIfNeeded();
+                }
                 continue;
             }
             if (response != null) break;
@@ -1521,10 +1813,21 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                 'uiActions': uiActions,
                 'uiAnswer': uiAnswer,
                 'uiUsageStatsV1': uiUsageStatsV1,
-                // 用最终解析出的精美 displayText 覆盖流式碎片，
-                // 气泡渲染优先取 streamFinalAnswer，清空确保显示 content。
-                'streamFinalAnswer': '',
+                'streamFinalAnswer': displayText,
                 'streaming': false,
+                'uiProcessContentBlocks': _processContentBlocks
+                    .map((b) => <String, dynamic>{
+                          'type': b.type.name,
+                          'text': b.text,
+                          'references': b.references
+                              .map((r) => <String, dynamic>{
+                                    'title': r.title,
+                                    'url': r.url,
+                                    'source': r.source,
+                                  })
+                              .toList(growable: false),
+                        })
+                    .toList(growable: false),
               };
             }
           } else {
@@ -1549,11 +1852,31 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
               'uiActions': uiActions,
               'uiAnswer': uiAnswer,
               'uiUsageStatsV1': uiUsageStatsV1,
+              'uiProcessContentBlocks': _processContentBlocks
+                  .map((b) => <String, dynamic>{
+                        'type': b.type.name,
+                        'text': b.text,
+                        'references': b.references
+                            .map((r) => <String, dynamic>{
+                                  'title': r.title,
+                                  'url': r.url,
+                                  'source': r.source,
+                                })
+                            .toList(growable: false),
+                      })
+                  .toList(growable: false),
             });
           }
           _assistantResponding = false;
           _assistantPhaseLabel = '';
           _activeAssistantStreamingMessageId = null;
+          _currentProcessState = AssistantProcessState(
+            stage: ProcessStage.completed,
+            stageLabel: '已完成',
+            contentBlocks: List<ProcessContentBlock>.of(_processContentBlocks),
+            usageStats: uiUsageStatsV1,
+            elapsedMs: elapsedMs,
+          );
           if (effectiveSessionId.isNotEmpty) {
             _assistantRuntimeSessionId = effectiveSessionId;
           }
@@ -1717,10 +2040,6 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   }
 
   String _resolveAssistantDisplayText(AssistantRunResponse response) {
-    if (response.degraded && response.finalText.trim().isNotEmpty) {
-      return response.finalText.trim();
-    }
-
     final structured = response.structuredResponse;
 
     // Gate 1: uiAnswer.markdownText — 引擎层已保证是纯文本
@@ -1744,9 +2063,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       return userMd;
     }
 
-    // Gate 3: LlmResponseParser 从 finalText 中提取
+    // Gate 3: LlmResponseParser 从 finalText 中提取 userMarkdown
     final parsed = LlmResponseParser.parse(response.finalText);
-    if (parsed.ok && !parsed.isIntermediateAction) {
+    if (parsed.ok) {
       final um = parsed.userMarkdown;
       if (um.isNotEmpty &&
           !_isInternalChunk(um) &&
@@ -1766,16 +2085,87 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       return resultText;
     }
 
+    // Gate 5: degraded 场景 — 从 finalText 中剥离 JSON，提取可读内容
+    final rawFinal = response.finalText.trim();
+    // 优先尝试从任何 JSON 结构体中提取可读内容（不仅限于已知签名的信封格式）
+    if (rawFinal.startsWith('{') || rawFinal.startsWith('[')) {
+      final stripped = _stripJsonForDisplay(rawFinal);
+      if (stripped.isNotEmpty) return stripped;
+      // 是 JSON 但无法提取可读内容 → 返回降级提示而非裸 JSON
+      return '助手未生成有效回答，请重试。';
+    }
+    if (rawFinal.isNotEmpty && !AssistantContentFilters.isJsonEnvelope(rawFinal)) {
+      return rawFinal;
+    }
+    if (rawFinal.isNotEmpty) {
+      final stripped = _stripJsonForDisplay(rawFinal);
+      if (stripped.isNotEmpty) return stripped;
+    }
+
     return '助手未生成有效回答，请重试。';
   }
 
-  /// 判断文本是否为内部 JSON 信封 / think 标签残留 / 结构化协议字段，不应展示给用户。
-  /// 委托给 [LlmResponseParser] 统一判断，避免分散的字符串匹配。
+  /// Attempt to extract displayable text from a JSON-formatted LLM output.
+  String _stripJsonForDisplay(String jsonText) {
+    try {
+      final dynamic raw = const JsonDecoder().convert(jsonText);
+      if (raw is! Map) return '';
+      final decoded = raw.cast<String, dynamic>();
+
+      // Priority 1: uiAnswer.markdownText
+      final uiAns = (decoded['uiAnswer'] as Map?)?.cast<String, dynamic>();
+      final uiMd = (uiAns?['markdownText'] as String?)?.trim() ?? '';
+      if (uiMd.isNotEmpty && uiMd.length > 5 && !uiMd.startsWith('{')) {
+        return uiMd;
+      }
+
+      // Priority 2: userMarkdown (legacy top-level)
+      final um = (decoded['userMarkdown'] as String?)?.trim() ?? '';
+      if (um.isNotEmpty && um.length > 5 && !um.startsWith('{')) return um;
+
+      // Priority 3: answerPayload.userMarkdown
+      final answerPayload =
+          (decoded['answerPayload'] as Map?)?.cast<String, dynamic>();
+      final apUm = (answerPayload?['userMarkdown'] as String?)?.trim() ?? '';
+      if (apUm.isNotEmpty && apUm.length > 5 && !apUm.startsWith('{')) {
+        return apUm;
+      }
+
+      // Priority 4: result.text (under answerPayload or top-level)
+      final result =
+          (decoded['result'] as Map?) ??
+          (answerPayload?['result'] as Map?);
+      final text = (result?['text'] as String?)?.trim() ?? '';
+      if (text.isNotEmpty && text.length > 5 && !text.startsWith('{')) {
+        return text;
+      }
+
+      // Priority 5: any string field with reasonable length
+      for (final entry in decoded.entries) {
+        if (entry.value is String) {
+          final v = (entry.value as String).trim();
+          if (v.length > 10 && !v.startsWith('{') && !v.startsWith('[')) {
+            return v;
+          }
+        }
+      }
+    } catch (_) {}
+    return '';
+  }
+
+  /// 判断文本是否为内部 JSON 信封 / think 标签残留 / XML tool-call / 结构化协议字段，
+  /// 不应展示给用户。
   bool _isInternalChunk(String value) {
     final t = value.trim();
     if (t.isEmpty) return false;
     if (t == '</think>' || t == '<think>') return true;
     if (AssistantContentFilters.isJsonEnvelope(t)) return true;
+    // XML tool-call blocks that some models (Qwen) output
+    if (_containsXmlToolCall(t)) {
+      // If after stripping XML there is no remaining readable content → internal
+      final stripped = _stripXmlToolCalls(t);
+      if (stripped.isEmpty) return true;
+    }
     // 额外检查：包含 JSON 结构化关键字但不含可读内容
     if (t.startsWith('{') || t.startsWith('```')) {
       final parsed = LlmResponseParser.parse(t);
@@ -2230,6 +2620,199 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     await _sendMessage();
   }
 
+  Future<void> _requestAssistantRewriteV2({
+    required Map<String, dynamic> message,
+    required RegenerateOption option,
+  }) async {
+    final originalQuery = (message['sourceQuery'] as String?)?.trim() ?? '';
+    if (originalQuery.isEmpty) return;
+    final previousAnswer = (message['content'] as String?)?.trim() ??
+        (message['streamFinalAnswer'] as String?)?.trim() ??
+        '';
+    final rewriteMode = switch (option) {
+      RegenerateOption.regenerate => RewriteMode.regenerate,
+      RegenerateOption.concise => RewriteMode.concise,
+      RegenerateOption.detailed => RewriteMode.detailed,
+      RegenerateOption.casual => RewriteMode.casual,
+      RegenerateOption.deepThink => RewriteMode.deepThink,
+    };
+    await _recordAssistantImplicitFeedback(
+      message: message,
+      regeneratedAnswer: option == RegenerateOption.regenerate,
+      styleAdjusted: option == RegenerateOption.concise ||
+          option == RegenerateOption.detailed ||
+          option == RegenerateOption.casual,
+      userTags: <String>[option.name],
+    );
+    await _sendAssistantMessageWithRewrite(
+      query: originalQuery,
+      rewrite: RewriteInstruction(
+        mode: rewriteMode,
+        originalQuery: originalQuery,
+        previousAnswer: previousAnswer,
+      ),
+    );
+  }
+
+  Future<void> _sendAssistantMessageWithRewrite({
+    required String query,
+    required RewriteInstruction rewrite,
+  }) async {
+    if (_assistantResponding) return;
+    final now = DateTime.now();
+    final ts = '${now.hour}:${now.minute.toString().padLeft(2, '0')}';
+    setState(() {
+      _ensureMessagesGrowable();
+      _messages.add(<String, dynamic>{
+        'id': 'user_rewrite_${now.millisecondsSinceEpoch}',
+        'conversationId': widget.conversationId,
+        'type': 'text',
+        'content': _rewriteUserLabel(rewrite.mode),
+        'senderId': 'current_user',
+        'senderName': '',
+        'timestamp': ts,
+        'isRead': true,
+        'isSelf': true,
+      });
+    });
+    final contextScope = _buildAssistantContextScope();
+    final request = AssistantRunRequest(
+      messages: <AssistantRunMessage>[
+        AssistantRunMessage(role: 'user', content: query),
+      ],
+      sessionId: _assistantRuntimeSessionId,
+      userId: contextScope['userId'] as String? ?? '',
+      maxIterations: rewrite.mode == RewriteMode.deepThink ? 6 : 1,
+      capabilityCatalog: AssistentCapabilityCatalog.defaultCatalog,
+      contextScopeHint: contextScope,
+      rewriteInstruction: rewrite,
+    );
+    String? streamingAssistantMessageId;
+    setState(() {
+      _ensureMessagesGrowable();
+      streamingAssistantMessageId =
+          'assistant_rewrite_${now.millisecondsSinceEpoch}';
+      _activeAssistantStreamingMessageId = streamingAssistantMessageId;
+      _assistantResponding = true;
+      _assistantPhaseLabel = '正在重新生成...';
+      _currentProcessState = AssistantProcessState(
+        stage: ProcessStage.answering,
+        stageLabel: '正在重新生成...',
+        isStreaming: true,
+      );
+      _processContentBlocks = <ProcessContentBlock>[];
+      _collectedSearchRefs = <ProcessReference>[];
+      _messages.add(<String, dynamic>{
+        'id': streamingAssistantMessageId!,
+        'conversationId': widget.conversationId,
+        'type': 'text',
+        'content': '',
+        'streamFinalAnswer': '',
+        'senderId': AppConceptConstants.assistantSenderId,
+        'senderName': AppConceptConstants.assistantLabel,
+        'senderAvatar': '',
+        'timestamp': ts,
+        'isRead': true,
+        'isSelf': false,
+        'streaming': true,
+        'sourceQuery': query,
+      });
+    });
+    _autoScrollToBottomIfNeeded();
+    try {
+      AssistantRunResponse? response;
+      final routeMode = CapabilityRouteMode.localOnly;
+      await for (final streamEvent
+          in ref
+              .read(capabilityGatewayProvider)
+              .runStream(request: request, mode: routeMode)) {
+        switch (streamEvent.type) {
+          case AssistantRunStreamEventType.chunk:
+          case AssistantRunStreamEventType.answerDelta:
+            if (streamEvent.chunkText != null &&
+                streamEvent.chunkText!.isNotEmpty &&
+                streamingAssistantMessageId != null) {
+              setState(() {
+                _ensureMessagesGrowable();
+                final idx = _messages.indexWhere(
+                  (item) => (item['id'] as String?) == streamingAssistantMessageId,
+                );
+                if (idx >= 0) {
+                  final prev =
+                      (_messages[idx]['streamFinalAnswer'] as String?) ?? '';
+                  _messages[idx] = <String, dynamic>{
+                    ..._messages[idx],
+                    'streamFinalAnswer': '$prev${streamEvent.chunkText}',
+                  };
+                }
+              });
+              _autoScrollToBottomIfNeeded();
+            }
+            continue;
+          case AssistantRunStreamEventType.completed:
+            if (streamEvent.response != null) response = streamEvent.response;
+            break;
+          default:
+            continue;
+        }
+        if (response != null) break;
+      }
+      if (response != null && mounted) {
+        final uiAnswer =
+            (response.structuredResponse['uiAnswer'] as Map?)
+                ?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+        final mdText =
+            (uiAnswer['markdownText'] as String?)?.trim() ?? '';
+        final finalText = mdText.isNotEmpty ? mdText : response.finalText;
+        setState(() {
+          _ensureMessagesGrowable();
+          final idx = _messages.indexWhere(
+            (item) => (item['id'] as String?) == streamingAssistantMessageId,
+          );
+          if (idx >= 0) {
+            _messages[idx] = <String, dynamic>{
+              ..._messages[idx],
+              'content': finalText,
+              'streamFinalAnswer': finalText,
+              'streaming': false,
+              'sourceQuery': query,
+            };
+          }
+        });
+      }
+    } catch (_) {
+      // Swallow exceptions; message will show whatever was streamed.
+    } finally {
+      if (mounted) {
+        setState(() {
+          _assistantResponding = false;
+          _assistantPhaseLabel = '';
+          _currentProcessState = AssistantProcessState(
+            stage: ProcessStage.completed,
+            stageLabel: '已完成',
+            contentBlocks: List<ProcessContentBlock>.of(_processContentBlocks),
+          );
+        });
+      }
+    }
+  }
+
+  String _rewriteUserLabel(RewriteMode mode) {
+    switch (mode) {
+      case RewriteMode.regenerate:
+        return '请重新生成回答';
+      case RewriteMode.concise:
+        return '请给我更简洁的版本';
+      case RewriteMode.detailed:
+        return '请给我更详细的版本';
+      case RewriteMode.casual:
+        return '请用更口语化的方式回答';
+      case RewriteMode.deepThink:
+        return '请进行深度思考并重新回答';
+    }
+  }
+
   Future<void> _switchAssistantModelAndRegenerate(
     Map<String, dynamic> message,
   ) async {
@@ -2494,6 +3077,18 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                   child: Text(UITextConstants.messageActionForward),
                 )
               else ...[
+                if (!_isAssistantConversation) ...[
+                  IconButton(
+                    icon: const Icon(CupertinoIcons.phone),
+                    tooltip: UITextConstants.call,
+                    onPressed: () => _initiateCall('voice'),
+                  ),
+                  IconButton(
+                    icon: const Icon(CupertinoIcons.video_camera),
+                    tooltip: UITextConstants.videoCall,
+                    onPressed: () => _initiateCall('video'),
+                  ),
+                ],
                 if (_isAssistantConversation)
                   IconButton(
                     icon: const Icon(CupertinoIcons.gear),
@@ -2581,9 +3176,18 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                   ),
                 ),
               Expanded(
-                child: Container(
+                child: Stack(
+                  children: [
+                    Container(
                   color: chatListBg,
-                  child: ListView.builder(
+                  child: Builder(builder: (context) {
+                    final displayMessages = _isAssistantConversation
+                        ? _messages
+                        : ref.watch(chatMessageProvider(widget.conversationId))
+                            .messages
+                            .map((dto) => dto.toDisplayMap(currentUserId: 'current_user'))
+                            .toList();
+                    return ListView.builder(
                     controller: _scrollController,
                     padding: EdgeInsets.symmetric(
                       horizontal:
@@ -2592,11 +3196,11 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                           AppSpacing.containerSm,
                       vertical: AppSpacing.md,
                     ),
-                    itemCount: _messages.length,
+                    itemCount: displayMessages.length,
                     itemBuilder: (context, index) {
-                      final msg = _messages[index];
+                      final msg = displayMessages[index];
                       final prevTime = index > 0
-                          ? _messages[index - 1]['timestamp'] as String?
+                          ? displayMessages[index - 1]['timestamp'] as String?
                           : null;
                       final showTime =
                           index == 0 || msg['timestamp'] != prevTime;
@@ -2654,6 +3258,17 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                                 : null,
                             hideAvatarAndName: _isAssistantConversation,
                             useFullWidth: _isAssistantConversation,
+                            processState:
+                                _isAssistantConversation &&
+                                        _assistantResponding &&
+                                        index == _messages.length - 1 &&
+                                        isAssistantMessage
+                                    ? _currentProcessState
+                                    : null,
+                            isAssistantRunning:
+                                _assistantResponding &&
+                                index == _messages.length - 1 &&
+                                isAssistantMessage,
                             runningStatusLabel:
                                 _isAssistantConversation &&
                                         _assistantResponding &&
@@ -2750,6 +3365,12 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                                     mode: 'regenerate',
                                   )
                                 : null,
+                            onRegenerateOptionSelected: isAssistantMessage
+                                ? (option) => _requestAssistantRewriteV2(
+                                    message: msg,
+                                    option: option,
+                                  )
+                                : null,
                             onBriefAnswer: isAssistantMessage
                                 ? () => _requestAssistantRewrite(
                                     message: msg,
@@ -2804,7 +3425,21 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                         ],
                       );
                     },
-                  ),
+                  );
+                  }),
+                ),
+                    if (_showScrollFab && _assistantResponding)
+                      Positioned(
+                        bottom: 16,
+                        left: 0,
+                        right: 0,
+                        child: Center(
+                          child: StreamingScrollFab(
+                            onTap: _scrollToBottom,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
               Container(
@@ -2889,15 +3524,36 @@ class _MessageActionMenuOverlay extends StatelessWidget {
   final void Function(String action) onAction;
   final VoidCallback onClose;
 
+  static const _recallWindowDuration = Duration(minutes: 2);
+
+  static bool _isWithinRecallWindow(Map<String, dynamic> message) {
+    final sentAtIso = message['sentAtIso'] as String?;
+    if (sentAtIso != null) {
+      final sentAt = DateTime.tryParse(sentAtIso);
+      if (sentAt != null) {
+        return DateTime.now().difference(sentAt) <= _recallWindowDuration;
+      }
+    }
+    final timestampRaw = message['timestamp'];
+    if (timestampRaw is String) {
+      final parsed = DateTime.tryParse(timestampRaw);
+      if (parsed != null) {
+        return DateTime.now().difference(parsed) <= _recallWindowDuration;
+      }
+    }
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
     final type = message['type'] as String? ?? 'text';
     final isSelf = message['isSelf'] == true;
+    final canRecall = isSelf && _isWithinRecallWindow(message);
     final actions = <MapEntry<String, String>>[
       MapEntry('forward', UITextConstants.messageActionForward),
       MapEntry('select', UITextConstants.messageActionSelect),
       if (type == 'text') MapEntry('copy', UITextConstants.messageActionCopy),
-      if (isSelf) MapEntry('recall', UITextConstants.messageActionRecall),
+      if (canRecall) MapEntry('recall', UITextConstants.messageActionRecall),
       MapEntry('delete', UITextConstants.messageActionDelete),
     ];
     const menuWidth = 200.0;
