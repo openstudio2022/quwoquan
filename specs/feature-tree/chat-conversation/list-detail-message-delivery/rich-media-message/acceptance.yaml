@@ -1,0 +1,188 @@
+feature: rich-media-message
+level: L3_subfeature
+archived: false
+
+execution:
+  local_gate: make build && flutter test test/cloud/chat/ test/ui/chat/
+  full_gate: make gate-full
+
+level_acceptance:
+  # ── 视频消息 (F1) ──────────────────────────────────────
+
+  A1:
+    criteria: "视频消息端到端闭环：用户 A 从相册选择 15s 视频发送，视频自动压缩→上传→发送（type=video, media 含 url/thumbnailUrl/width/height/durationMs/mimeType/fileSizeBytes）→用户 B syncMessages 收到→用户 B 点击气泡全屏播放，画面和声音完整"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: required
+      T4: required
+    tests: []
+
+  A2:
+    criteria: "视频消息气泡 UI：type=video 消息渲染为缩略图气泡（圆角裁剪 + 居中播放图标 ▶ + 右下时长角标 mm:ss）；气泡宽度自适应（最小 40% 最大 70% 屏宽）；发送中显示圆环上传进度；所有视觉 token 使用 AppSpacing/AppTypography/AppColors，verify_dart_semantic.py 无新增违规"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: optional
+    tests: []
+
+  A3:
+    criteria: "视频压缩与封面提取：(a) 选择 4K 视频后自动压缩至 720p/30fps/H.264/mp4，压缩后大小 ≤ 原始大小 50%（典型场景）；(b) 自动提取首帧作为封面缩略图（JPEG，≤200KB）；(c) 时长超过 10 分钟拒绝发送并提示"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: optional
+    tests: []
+
+  A4:
+    criteria: "视频播放器：(a) 点击气泡打开全屏播放器（支持暂停/拖动进度/横竖屏旋转）；(b) 首次播放下载到本地缓存后起播（强网 <3s，弱网显示下载进度）；(c) 再次播放直接从缓存起播（<1s）；(d) 视频缓存独立 LRU 池 500MB"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: required
+    tests: []
+
+  # ── 文件消息 (F2) ──────────────────────────────────────
+
+  A5:
+    criteria: "文件消息端到端闭环：用户 A 通过 FilePicker 选择 5MB PDF 文件发送，文件自动上传→发送（type=file, media 含 url/fileName/mimeType/fileSizeBytes）→用户 B syncMessages 收到→用户 B 点击气泡下载→打开 PDF 阅读器可正常浏览翻页"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: required
+      T4: required
+    tests: []
+
+  A6:
+    criteria: "文件消息气泡 UI：type=file 消息渲染为文件卡片气泡（文件类型图标 + 文件名 + 大小标签 + 下载状态指示）；图标按类型着色（PDF 红/Word 蓝/PPT 橙/Excel 绿/文本灰/其他灰）；下载中显示进度条；所有视觉 token 使用设计系统，verify_dart_semantic.py 无新增违规"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: optional
+    tests: []
+
+  A7:
+    criteria: "文件预览路由：(a) PDF → 端侧 PDF 阅读器（翻页/缩放/可滚动）；(b) TXT → 文本查看器（支持 UTF-8 和 GBK 编码自动检测）；(c) MD → Markdown 渲染器（标题/列表/代码块/链接）；(d) DOCX/DOC/PPTX/PPT → 调用系统应用打开（Intent/UIDocumentInteractionController）；(e) 其他格式 → 「用其他应用打开」系统分享"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: required
+    tests: []
+
+  A8:
+    criteria: "文件下载与缓存：(a) 文件下载到本地缓存（共享 200MB LRU 池）；(b) 下载过程中显示进度百分比；(c) 下载失败显示重试按钮；(d) 已下载文件再次打开无需重新下载"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: optional
+    tests: []
+
+  # ── 图片消息修复 (F3) ──────────────────────────────────
+
+  A9:
+    criteria: "图片消息发送修复：(a) 从相册选择或拍照后通过 MediaUploadManager 上传（category=chatImage），以 type='image' + media={url, thumbnailUrl, width, height, mimeType, fileSizeBytes} 发送；(b) 不再降级为 type='text' 文本占位；(c) 发送中显示上传进度"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: optional
+    tests: []
+
+  A10:
+    criteria: "聊天图片全屏查看：(a) 点击图片气泡打开全屏图片查看器（支持双指缩放/滑动切换同会话图片/下滑关闭）；(b) 长按支持保存到相册；(c) Hero 转场动画流畅"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: required
+    tests: []
+
+  # ── Emoji 增强 (F4) ──────────────────────────────────
+
+  A11:
+    criteria: "大号 Emoji：纯 Emoji 消息（1~3 个 Emoji 字符、无其他文字）在气泡中放大显示（fontSize ≥ 40），超过 3 个 Emoji 或混有文字则按正常大小（fontSize 16）显示"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: optional
+    tests: []
+
+  # ── 弱网与可靠性 ──────────────────────────────────
+
+  A12:
+    criteria: "弱网上传可靠性：(a) 100kbps 限速下视频/文件/图片上传自动重试 ≤3 次（指数退避），最终成功；(b) 完全断网时媒体消息入离线队列，连接恢复后 15s 内自动开始上传；(c) 离线队列 ≥50 条媒体消息 FIFO 全部发送成功"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: required
+      T4: required
+    tests: []
+
+  A13:
+    criteria: "接收方弱网体验：(a) 视频消息在弱网下缩略图优先展示（缩略图 ≤200KB 快速加载），视频延迟加载；(b) 文件消息气泡信息（文件名/大小/类型图标）即时展示，文件手动点击下载；(c) 非 WiFi 环境视频/文件不自动下载"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: optional
+      T3: optional
+      T4: required
+    tests: []
+
+  # ── 性能与端云一致性 ──────────────────────────────
+
+  A14:
+    criteria: "端云消息一致性：(a) 视频/文件/图片消息通过 SendMessage API 发送后，SyncMessages 可正确同步到其他客户端；(b) 同步到的消息 type 和 media 字段与发送方一致；(c) 旧版客户端（仅支持 text/image）收到 video/file 消息时通过 mediaUrl fallback 展示占位文案"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests: []
+
+  # ── 部署灰度 ──────────────────────────────────
+
+  A15:
+    criteria: "灰度部署：(a) integration 环境全量验证通过（A1~A14 全部 implemented）；(b) prod 灰度 10% 用户 24h 无 P0/P1 后扩至 50%→100%；(c) 回滚条件：video/file 消息发送失败率 >1% 或播放/预览失败率 >2% 或 ANR >0.1% 自动回滚"
+    status: pending
+    deferred_reason: ""
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: optional
+      T3: optional
+      T4: required
+    tests: []

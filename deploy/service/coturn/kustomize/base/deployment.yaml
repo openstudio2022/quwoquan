@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coturn
+  labels:
+    app.kubernetes.io/name: coturn
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: coturn
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: coturn
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: coturn
+          image: coturn/coturn:4.6-alpine
+          imagePullPolicy: IfNotPresent
+          args:
+            - "-n"
+            - "--log-file=stdout"
+            - "--external-ip=$(EXTERNAL_IP)"
+            - "--realm=rtc.quwoquan.com"
+            - "--fingerprint"
+            - "--lt-cred-mech"
+          ports:
+            - name: turn-tcp
+              containerPort: 3478
+              protocol: TCP
+            - name: turn-udp
+              containerPort: 3478
+              protocol: UDP
+            - name: turn-tls
+              containerPort: 5349
+              protocol: TCP
+          env:
+            - name: EXTERNAL_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: TURN_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: coturn-secrets
+                  key: TURN_SECRET
+          resources:
+            requests:
+              cpu: 200m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 256Mi

@@ -1,0 +1,102 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+namespace: rtc-service-dev
+images:
+  - name: rtc-service/rtc-service
+    newTag: v2026.03.07.0-dev
+generatorOptions:
+  disableNameSuffixHash: true
+configMapGenerator:
+  - name: deploy-params
+    literals:
+      - APP_ENV=dev
+      - CONFIG_VERSION=v2026.03.07.0
+      - IMAGE_VERSION=v2026.03.07.0-dev
+      - REPLICAS=1
+      - HPA_MIN_REPLICAS=1
+      - HPA_MAX_REPLICAS=2
+      - HPA_CPU_AVG=80
+      - HPA_MEM_AVG=85
+replacements:
+  - source:
+      kind: ConfigMap
+      name: deploy-params
+      fieldPath: data.APP_ENV
+    targets:
+      - select:
+          kind: Deployment
+          name: rtc-service
+        fieldPaths:
+          - spec.template.spec.containers.[name=rtc-service].env.[name=APP_ENV].value
+  - source:
+      kind: ConfigMap
+      name: deploy-params
+      fieldPath: data.CONFIG_VERSION
+    targets:
+      - select:
+          kind: Deployment
+          name: rtc-service
+        fieldPaths:
+          - spec.template.spec.containers.[name=rtc-service].env.[name=CONFIG_VERSION].value
+  - source:
+      kind: ConfigMap
+      name: deploy-params
+      fieldPath: data.IMAGE_VERSION
+    targets:
+      - select:
+          kind: Deployment
+          name: rtc-service
+        fieldPaths:
+          - spec.template.spec.containers.[name=rtc-service].env.[name=IMAGE_VERSION].value
+  - source:
+      kind: ConfigMap
+      name: deploy-params
+      fieldPath: data.REPLICAS
+    targets:
+      - select:
+          kind: Deployment
+          name: rtc-service
+        fieldPaths:
+          - spec.replicas
+  - source:
+      kind: ConfigMap
+      name: deploy-params
+      fieldPath: data.HPA_MIN_REPLICAS
+    targets:
+      - select:
+          kind: HorizontalPodAutoscaler
+          name: rtc-service
+        fieldPaths:
+          - spec.minReplicas
+  - source:
+      kind: ConfigMap
+      name: deploy-params
+      fieldPath: data.HPA_MAX_REPLICAS
+    targets:
+      - select:
+          kind: HorizontalPodAutoscaler
+          name: rtc-service
+        fieldPaths:
+          - spec.maxReplicas
+  - source:
+      kind: ConfigMap
+      name: deploy-params
+      fieldPath: data.HPA_CPU_AVG
+    targets:
+      - select:
+          kind: HorizontalPodAutoscaler
+          name: rtc-service
+        fieldPaths:
+          - spec.metrics.0.resource.target.averageUtilization
+  - source:
+      kind: ConfigMap
+      name: deploy-params
+      fieldPath: data.HPA_MEM_AVG
+    targets:
+      - select:
+          kind: HorizontalPodAutoscaler
+          name: rtc-service
+        fieldPaths:
+          - spec.metrics.1.resource.target.averageUtilization

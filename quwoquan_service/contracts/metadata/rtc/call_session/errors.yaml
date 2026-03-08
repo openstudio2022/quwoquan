@@ -1,0 +1,155 @@
+version: 1
+domain: RTC
+aggregate: CallSession
+
+description: |
+  rtc 域结构化错误码声明。格式：MODULE.KIND.REASON。
+  codegen 从本文件生成 Dart RtcErrorCode enum + RtcErrorMessages，
+  以及 Go errors.go 常量。
+
+errors:
+  - code: RTC.USER.call_not_found
+    kind: USER
+    reason: not_found
+    http_status: 404
+    retryable: false
+    dart_const: callNotFound
+    go_const: ErrCallNotFound
+    user_message:
+      zh: "通话不存在"
+      en: "Call not found"
+
+  - code: RTC.USER.unauthorized
+    kind: USER
+    reason: unauthorized
+    http_status: 401
+    retryable: false
+    dart_const: unauthorized
+    go_const: ErrUnauthorized
+    user_message:
+      zh: "请先登录"
+      en: "Please sign in"
+
+  - code: RTC.USER.already_in_call
+    kind: USER
+    reason: conflict
+    http_status: 409
+    retryable: false
+    dart_const: alreadyInCall
+    go_const: ErrAlreadyInCall
+    user_message:
+      zh: "你正在通话中，请先结束当前通话"
+      en: "You are already in a call"
+
+  - code: RTC.USER.call_full
+    kind: USER
+    reason: limit_exceeded
+    http_status: 409
+    retryable: false
+    dart_const: callFull
+    go_const: ErrCallFull
+    user_message:
+      zh: "通话人数已达上限"
+      en: "Call is full"
+
+  - code: RTC.USER.call_ended
+    kind: USER
+    reason: invalid_state
+    http_status: 410
+    retryable: false
+    dart_const: callEnded
+    go_const: ErrCallEnded
+    user_message:
+      zh: "通话已结束"
+      en: "Call has ended"
+
+  - code: RTC.USER.not_participant
+    kind: USER
+    reason: forbidden
+    http_status: 403
+    retryable: false
+    dart_const: notParticipant
+    go_const: ErrNotParticipant
+    user_message:
+      zh: "你不是该通话的参与者"
+      en: "You are not a participant of this call"
+
+  - code: RTC.USER.cannot_answer
+    kind: USER
+    reason: invalid_state
+    http_status: 409
+    retryable: false
+    dart_const: cannotAnswer
+    go_const: ErrCannotAnswer
+    user_message:
+      zh: "无法接听，通话状态异常"
+      en: "Cannot answer, invalid call state"
+
+  - code: RTC.USER.screen_share_conflict
+    kind: USER
+    reason: conflict
+    http_status: 409
+    retryable: false
+    dart_const: screenShareConflict
+    go_const: ErrScreenShareConflict
+    user_message:
+      zh: "已有参与者正在共享屏幕"
+      en: "Another participant is already sharing screen"
+
+  - code: RTC.USER.recording_not_allowed
+    kind: USER
+    reason: forbidden
+    http_status: 403
+    retryable: false
+    dart_const: recordingNotAllowed
+    go_const: ErrRecordingNotAllowed
+    user_message:
+      zh: "你没有录制权限"
+      en: "Recording not allowed"
+
+  - code: RTC.USER.rate_limited
+    kind: USER
+    reason: rate_limited
+    http_status: 429
+    retryable: true
+    retry_after_seconds: 5
+    dart_const: rateLimited
+    go_const: ErrRateLimited
+    user_message:
+      zh: "操作太频繁，请稍后重试"
+      en: "Too many requests, please wait"
+
+  - code: RTC.SYSTEM.livekit_unavailable
+    kind: SYSTEM
+    reason: upstream_error
+    http_status: 503
+    retryable: true
+    retry_after_seconds: 3
+    dart_const: livekitUnavailable
+    go_const: ErrLivekitUnavailable
+    user_message:
+      zh: "通话服务暂时不可用，请稍后重试"
+      en: "Call service temporarily unavailable"
+
+  - code: RTC.SYSTEM.internal_error
+    kind: SYSTEM
+    reason: internal_error
+    http_status: 500
+    retryable: false
+    dart_const: internalError
+    go_const: ErrInternalError
+    user_message:
+      zh: "通话服务异常，请稍后重试"
+      en: "Call service error, please try again"
+
+  - code: RTC.SYSTEM.token_generation_failed
+    kind: SYSTEM
+    reason: internal_error
+    http_status: 500
+    retryable: true
+    retry_after_seconds: 2
+    dart_const: tokenGenerationFailed
+    go_const: ErrTokenGenerationFailed
+    user_message:
+      zh: "连接通话服务失败，请重试"
+      en: "Failed to connect call service, please retry"

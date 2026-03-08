@@ -1,30 +1,74 @@
-version: 1
+version: 2
 
-# Redis 键空间规范
+# Redis 键空间规范 + Scene 路由
 #
-# 场景分离（对应 config.yaml redis.rec / redis.general）：
-#   rec     — 推荐热路径（session signals / exposed / negative / realtime_interest）
-#             要求：高 QPS、低延迟（100ms）、可独立水平扩容
-#   general — 实体缓存、助手上下文、安全限流、计数缓冲、互动状态
-#             要求：读多写少、TTL 较长、延迟容忍度更高
+# 统一由 runtime/redis.Router 消费。上层通过 Router.Scene(name) 或
+# Router.ForKey(key) 访问，不感知底层 standalone/cluster 拓扑。
 #
-# Redis Cluster 哈希标签约定（{tag}）：
-#   同一用户的所有 session 级键必须使用 {userId} 作为哈希标签，
-#   确保它们落在同一 slot，从而允许 pipeline 读和多键操作。
-#   实现位置：runtime/recommendation/hotpath.go sessionKey()
+# ═══════════════════════════════════════════════════════════════════
+# Scene 路由表（runtime/redis.Router prefix_routing 的唯一真相）
+# ═══════════════════════════════════════════════════════════════════
 #
-#   已应用哈希标签的键模式用 {<field>} 表示，例如：
-#     rec:session_signals:{<userId>}:<sessionId>
+# scene_routing.scenes.{name}.key_prefixes 定义 key prefix → scene 映射。
+# Router.ForKey(key) 按最长前缀匹配路由；未匹配 → fallback scene。
 #
-#   standalone 模式下 Redis 忽略花括号，行为与无标签完全一致。
+# 每个 scene 可独立部署为 standalone / cluster Redis 实例，
+# 弹性扩缩仅改 config YAML，上层零代码改动。
 #
-# 多云兼容性：
-#   阿里云 Tair 集群版 / 火山引擎 VeCache 均遵循 Redis Cluster 协议，
-#   无需代码差异，仅配置差异（addrs / password / tls）。
+# ═══════════════════════════════════════════════════════════════════
+# Redis Cluster 哈希标签约定（{tag}）
+# ═══════════════════════════════════════════════════════════════════
+#
+# 同一聚合 / 同一用户的 session 级键使用 {tag} 确保同 slot：
+#   rec 场景：{userId}     — 同用户 session key 同 slot，pipeline 安全
+#   realtime 场景：{conversationId} — 同会话 seq/dedup/presence 同 slot
+#
+# standalone 模式下 Redis 忽略花括号，行为完全一致。
+#
+# ═══════════════════════════════════════════════════════════════════
+# 多云兼容性
+# ═══════════════════════════════════════════════════════════════════
+#
+# 阿里云 Tair 集群版 / 火山引擎 VeCache 均遵循 Redis Cluster 协议，
+# 无需代码差异，仅配置差异（addrs / password / tls）。
+
+scene_routing:
+  fallback: general
+  scenes:
+    rec:
+      description: 推荐热路径（session signals / exposed / negative / realtime_interest）
+      requirements: 高 QPS、低延迟（< 100ms）、可独立水平扩容
+      key_prefixes: ["rec:"]
+    general:
+      description: 实体缓存、助手上下文、安全限流、计数缓冲、互动状态
+      requirements: 读多写少、TTL 较长、延迟容忍度更高
+      key_prefixes:
+        - "cache:"
+        - "page_ctx:"
+        - "content_analysis:"
+        - "comment_summary:"
+        - "suggested_actions:"
+        - "blocked_set:"
+        - "device_tokens:"
+        - "login_fail:"
+        - "counter:"
+        - "reaction:"
+    realtime:
+      description: 实时推送 Pub/Sub、消息序号、在线状态、消息幂等去重
+      requirements: 超低延迟、Pub/Sub 流量模式与 K/V 不同、必须独立部署
+      key_prefixes:
+        - "rt:"
+        - "seq:"
+        - "presence:"
+        - "dedup:"
+
+# ═══════════════════════════════════════════════════════════════════
+# Key Patterns（按 scene 分组）
+# ═══════════════════════════════════════════════════════════════════
 
 key_patterns:
 
-  # ─── rec 场景 ────────────────────────────────────────────────────────────
+  # ─── rec 场景 ────────────────────────────────────────────────────
   - pattern: "rec:session_signals:{<userId>}:<sessionId>"
     redis_scene: rec
     ttl_seconds: 1800
@@ -56,12 +100,12 @@ key_patterns:
     hash_tag: userId
     description: Session 实时兴趣向量（最近一次行为信号的 JSON 快照）
 
-  # ─── general 场景 ────────────────────────────────────────────────────────
+  # ─── general 场景 ────────────────────────────────────────────────
   - pattern: "cache:{entity}:{id}"
     redis_scene: general
     ttl_source: aggregate.cache_ttl_seconds
     type: string
-    description: 实体级读缓存（Repository cache 中间件）
+    description: 实体级读缓存（runtime/redis.NewCacheAdapter → Repository 缓存装饰器）
 
   - pattern: "page_ctx:{userId}"
     redis_scene: general
@@ -116,3 +160,69 @@ key_patterns:
     ttl_seconds: 300
     type: hash
     description: 互动状态缓存（like / favorite）
+
+  # ─── realtime 场景 ────────────────────────────────────────────────
+  - pattern: "rt:conversation:{<conversationId>}"
+    redis_scene: realtime
+    ttl_seconds: null
+    type: pubsub_channel
+    hash_tag: conversationId
+    description: |
+      会话消息 Pub/Sub fanout 通道。
+      realtime-gateway 每个节点 Subscribe，chat-service Publish。
+      哈希标签 {conversationId} 保证同会话消息路由一致。
+
+  - pattern: "rt:inbox:{userId}"
+    redis_scene: realtime
+    ttl_seconds: null
+    type: pubsub_channel
+    description: 用户会话列表变更通知 Pub/Sub 通道
+
+  - pattern: "rt:system:config"
+    redis_scene: realtime
+    ttl_seconds: null
+    type: pubsub_channel
+    description: 运营配置变更广播通道（V2 实现，V1 预留）
+
+  - pattern: "rt:channel:{channelId}"
+    redis_scene: realtime
+    ttl_seconds: null
+    type: pubsub_channel
+    description: 外部渠道（飞书等）消息路由通道
+
+  - pattern: "seq:conversation:{<conversationId>}"
+    redis_scene: realtime
+    ttl_seconds: null
+    type: string
+    hash_tag: conversationId
+    description: |
+      per-conversation 消息序号计数器（Redis INCR 原子递增）。
+      哈希标签 {conversationId} 与 dedup 键共享同一 slot。
+
+  - pattern: "dedup:msg:{<conversationId>}:{clientMsgId}"
+    redis_scene: realtime
+    ttl_seconds: 300
+    type: string
+    hash_tag: conversationId
+    description: |
+      消息幂等去重（SET NX，TTL 5min）。
+      客户端重试发送同一 clientMsgId → 服务端只写一条。
+
+  - pattern: "presence:user:{userId}"
+    redis_scene: realtime
+    ttl_seconds: 120
+    type: hash
+    description: |
+      用户在线状态。
+      fields: connId, nodeId, lastHeartbeat, subscribedTopics。
+      TTL 120s，心跳续期（每 30s EXPIRE）。
+      realtime-gateway 写入，chat-service 查询判断在线/离线推送。
+
+  - pattern: "presence:conn:{connId}"
+    redis_scene: realtime
+    ttl_seconds: 120
+    type: hash
+    description: |
+      连接级状态（反向索引）。
+      fields: userId, nodeId, connectedAt。
+      用于 gateway 节点下线时批量清理。

@@ -89,7 +89,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 - ✅ {正向行动建议，具体可执行}
 - ⚠️ {需要留意/避免的事项}
 
-> 🔮 占星仅供参考与启发，真实结果取决于你的选择与行动。
+星象给你一个视角，但真正的走向取决于你的选择和行动 🔮
 
 ---
 💬 **你可能还想了解**

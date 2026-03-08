@@ -200,6 +200,9 @@ class PersonalAssistantAgentLoop {
       runtimeToolNames: runtimeToolNames,
     );
     final skillPersona = await _loadSkillPersona(domainId);
+    final skillCatalog = await _domainRouter.buildSkillCatalogPrompt(
+      contextScopeHint: request.contextScopeHint,
+    );
     final templateVariables = _buildTemplateVariables(
       request: request,
       contextAssembly: contextAssembly,
@@ -209,6 +212,7 @@ class PersonalAssistantAgentLoop {
       availableToolNames: effectiveToolNames,
       dialogueRoundScript: dialogueRoundScript,
       skillPersona: skillPersona,
+      skillCatalog: skillCatalog,
     );
     if (!contextAssembly.canEnterDomain) {
       final blocked = _buildBlockedResponse(
@@ -273,6 +277,18 @@ class PersonalAssistantAgentLoop {
       dataLayerBuffer.writeln(anchorText);
       dataLayerBuffer.writeln('</context_anchor>');
     }
+    if (request.isRewrite) {
+      final ri = request.rewriteInstruction!;
+      dataLayerBuffer.writeln();
+      dataLayerBuffer.writeln('<rewrite_instruction>');
+      dataLayerBuffer.writeln(ri.systemPromptInjection);
+      dataLayerBuffer.writeln();
+      dataLayerBuffer.writeln('原始问题：${ri.originalQuery}');
+      dataLayerBuffer.writeln();
+      dataLayerBuffer.writeln('上一次回答：');
+      dataLayerBuffer.writeln(ri.previousAnswer);
+      dataLayerBuffer.writeln('</rewrite_instruction>');
+    }
     messages.insert(0, <String, dynamic>{
       'role': 'system',
       'content': dataLayerBuffer.toString(),
@@ -302,11 +318,19 @@ class PersonalAssistantAgentLoop {
         'templateId': 'planner.global_plan',
       },
     );
+    // Rewrite modes (except deepThink) skip tool execution — the model
+    // already has the previous answer as context and only needs to rephrase.
+    final rewriteToolNames = request.shouldSkipSearch
+        ? const <String>[]
+        : effectiveToolNames;
+    final rewriteMaxIterations = request.shouldSkipSearch
+        ? 1
+        : request.maxIterations;
     final result = await _runtime.run(
       messages: messages,
-      maxIterations: request.maxIterations,
+      maxIterations: rewriteMaxIterations,
       goal: latestUserQuery,
-      availableToolNamesOverride: effectiveToolNames,
+      availableToolNamesOverride: rewriteToolNames,
       templateId: 'planner.global_plan',
       templateVersion: plannerTemplateVersion,
       templateContext: request.contextScopeHint,
@@ -578,8 +602,16 @@ class PersonalAssistantAgentLoop {
         templateVersionUsed: synthTemplateVersion,
         domainCatalogVersion: domainCatalogVersion,
         sessionId: sessionId,
+        onTraceEvent: onTraceEvent,
+        runId: runId,
+        traceId: traceId,
       ),
       profileUpdateProposal: _buildProfileUpdateProposal(request: request),
+    );
+    await _persistLearningTags(
+      response: response,
+      sessionId: sessionId,
+      userId: request.userId ?? '',
     );
     await AssistantAgentLoopDevLogger.instance.writeRun(
       request: request,
@@ -625,6 +657,43 @@ class PersonalAssistantAgentLoop {
       },
     );
     return response;
+  }
+
+  Future<void> _persistLearningTags({
+    required AssistantRunResponse response,
+    required String sessionId,
+    required String userId,
+  }) async {
+    try {
+      final structured = response.structuredResponse;
+      final learningTrack =
+          (structured['learningTrack'] as Map?)?.cast<String, dynamic>() ??
+              const <String, dynamic>{};
+      final tags = (learningTrack['profileTagDelta'] as List?)
+              ?.whereType<Map>()
+              .map((t) => t.cast<String, dynamic>())
+              .where((t) => (t['tag'] ?? '').toString().isNotEmpty)
+              .toList(growable: false) ??
+          const <Map<String, dynamic>>[];
+      if (tags.isEmpty) return;
+
+      final tagSummary = tags
+          .map((t) => '${t['tag']}: ${t['value'] ?? t['confidence'] ?? ''}')
+          .join('; ');
+      await _memoryRepository.rememberText(
+        id: 'learning_${sessionId}_${DateTime.now().millisecondsSinceEpoch}',
+        text: '用户画像标签: $tagSummary',
+        metadata: <String, dynamic>{
+          'type': 'learning_tag',
+          'sessionId': sessionId,
+          'userId': userId,
+          'tags': tags,
+          'timestamp': DateTime.now().toIso8601String(),
+        },
+      );
+    } catch (_) {
+      // Non-critical: silently ignore persistence failures
+    }
   }
 
   Future<void> _safeWriteLogEvent({
@@ -1056,6 +1125,9 @@ class PersonalAssistantAgentLoop {
     required String templateVersionUsed,
     required String domainCatalogVersion,
     required String sessionId,
+    void Function(AssistantTraceEvent event)? onTraceEvent,
+    String? runId,
+    String? traceId,
   }) async {
     final answerPayload = _parseAnswerPayload(
       rawFinalText: result.finalText,
@@ -1123,6 +1195,26 @@ class PersonalAssistantAgentLoop {
         ? 'high'
         : (modelSelfScore >= 70 ? 'medium' : 'low');
     final normalizedMarkdown = _extractUiMarkdown(answerPayload, result.finalText);
+    if (normalizedMarkdown.isNotEmpty && onTraceEvent != null) {
+      onTraceEvent(AssistantTraceEvent(
+        type: AssistantTraceEventType.thinkingProgress,
+        message: '正在组织回答...',
+        timestamp: DateTime.now(),
+        runId: runId ?? '',
+        traceId: traceId ?? '',
+        data: const <String, dynamic>{'phase': 'answering', 'extracted': true},
+      ));
+      for (final chunk in _chunkMarkdownForStreaming(normalizedMarkdown)) {
+        onTraceEvent(AssistantTraceEvent(
+          type: AssistantTraceEventType.answerDelta,
+          message: chunk,
+          timestamp: DateTime.now(),
+          runId: runId ?? '',
+          traceId: traceId ?? '',
+          data: const <String, dynamic>{'stage': 'synthesis'},
+        ));
+      }
+    }
     return <String, dynamic>{
       'domainId': dialogueRoundScript.domainId,
       'candidateDomains': candidateDomains,
@@ -1563,13 +1655,27 @@ class PersonalAssistantAgentLoop {
     return phases;
   }
 
+  static final RegExp _xmlToolCallTagRe = RegExp(
+    r'<tool_call>[\s\S]*?</tool_call>|'
+    r'<function=[^>]+>[\s\S]*?</function>|'
+    r'<tool_call>|</tool_call>|'
+    r'<function=[^>]*>|</function>|'
+    r'<parameter=[^>]*>[\s\S]*?</parameter>|'
+    r'</?parameter[^>]*>',
+  );
+
   String _sanitizeUiDetail(String raw) {
-    final text = raw.trim();
+    String text = raw.trim();
     if (text.isEmpty) return '';
     if (text.contains('"contractVersion"')) return '';
     // Filter internal dispatch messages
     if (text.startsWith('calling ') && text.length < 40) return '';
     if (text.startsWith('{') && text.contains('"tool_calls"')) return '';
+    // Strip XML tool-call markup that some models emit
+    if (text.contains('<tool_call>') || text.contains('<function=')) {
+      text = text.replaceAll(_xmlToolCallTagRe, '').trim();
+      if (text.isEmpty) return '';
+    }
     if (text.length <= 120) return text;
     return '${text.substring(0, 120)}...';
   }
@@ -1966,6 +2072,35 @@ class PersonalAssistantAgentLoop {
     return fb;
   }
 
+  List<String> _chunkMarkdownForStreaming(String markdown) {
+    final paragraphs = markdown.split(RegExp(r'\n\n'));
+    final chunks = <String>[];
+    for (int pi = 0; pi < paragraphs.length; pi++) {
+      final paragraph = paragraphs[pi];
+      if (paragraph.isEmpty) continue;
+      final suffix = pi < paragraphs.length - 1 ? '\n\n' : '';
+      if (paragraph.length <= 120) {
+        chunks.add('$paragraph$suffix');
+      } else {
+        final sentences = paragraph.split(RegExp(r'(?<=[。！？；\n])'));
+        final buffer = StringBuffer();
+        for (final sentence in sentences) {
+          buffer.write(sentence);
+          if (buffer.length >= 80) {
+            chunks.add(buffer.toString());
+            buffer.clear();
+          }
+        }
+        if (buffer.isNotEmpty) {
+          chunks.add('${buffer.toString()}$suffix');
+        } else if (suffix.isNotEmpty && chunks.isNotEmpty) {
+          chunks[chunks.length - 1] = '${chunks.last}$suffix';
+        }
+      }
+    }
+    return chunks;
+  }
+
   List<String> _buildNextActions(
     ContextAssemblyResult contextAssembly,
     SynthesisReadinessResult synthesisReadiness,
@@ -2308,6 +2443,7 @@ class PersonalAssistantAgentLoop {
     required List<String> availableToolNames,
     required DialogueRoundScript dialogueRoundScript,
     String skillPersona = '',
+    String skillCatalog = '',
   }) {
     final query = request.messages.isEmpty ? '' : request.messages.last.content;
     final toolGuidelines =
@@ -2338,6 +2474,7 @@ class PersonalAssistantAgentLoop {
       'toolInvocationGuidelines': toolGuidelines,
       'dialogueRoundScript': _dialogueScriptForModel(dialogueRoundScript),
       'skillPersona': skillPersona,
+      'skillCatalog': skillCatalog,
       'traceId': '',
     };
   }
@@ -2562,16 +2699,15 @@ class PersonalAssistantAgentLoop {
     };
   }
 
-  /// 供 UI 在发起请求前预分类，便于远端优先使用正确领域，避免气运/时运等被误路由到闲聊或待办。
+  /// Returns [fallbackDomainId]. In the LLM-first architecture the model
+  /// autonomously selects the domain via the planner prompt; pre-classification
+  /// is no longer needed. Kept for backward compatibility with UI callers.
   Future<String> classifyDomain(
     String query,
     Map<String, dynamic> contextScopeHint,
   ) async {
-    return _domainRouter.classify(
-      query: query,
-      contextScopeHint: contextScopeHint,
-      forceRefresh: false,
-    );
+    await _domainRouter.ensureLoaded();
+    return _domainRouter.fallbackDomainId;
   }
 
   Future<String> _resolveDomainId(
@@ -2580,14 +2716,8 @@ class PersonalAssistantAgentLoop {
   }) async {
     final domainId = (request.contextScopeHint['domainId'] as String?)?.trim();
     if (domainId != null && domainId.isNotEmpty) return domainId;
-    final query = request.messages.isNotEmpty
-        ? request.messages.last.content
-        : '';
-    return _domainRouter.classify(
-      query: query,
-      contextScopeHint: request.contextScopeHint,
-      forceRefresh: forceRefreshCatalog,
-    );
+    await _domainRouter.ensureLoaded(forceRefresh: forceRefreshCatalog);
+    return _domainRouter.fallbackDomainId;
   }
 
   List<String> _resolveAvailableTools({

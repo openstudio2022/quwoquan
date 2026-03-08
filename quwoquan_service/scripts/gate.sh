@@ -658,6 +658,11 @@ echo "[gate] running content-service contract tests"
 go test ./services/content-service/... -count=1 -timeout=120s \
   || fail "content-service go tests failed"
 
+# ── L2: rtc-service contract tests ──────────────────────────────────────────
+echo "[gate] running rtc-service contract tests"
+go test ./services/rtc-service/... -count=1 -timeout=120s \
+  || fail "rtc-service go tests failed"
+
 # ── T38: e2e.yaml patrol_flow 文件存在性检查（warn 级别，不 fail）─────────────
 # 确保 e2e.yaml 中每个 ui_journey 场景的 patrol_flow 引用文件在 quwoquan_app 中存在。
 E2E_YAML="contracts/metadata/content/post/tests/e2e.yaml"

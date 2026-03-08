@@ -31,7 +31,17 @@ quwoquan/
 
 ## 端云一体化交付（特性粒度）
 
-本仓库以**特性粒度**推进“Ask/Plan → contracts-first → TDD/验收 → 实现 → 门禁 → 合入”，并要求端侧与云侧共同交付。
+本仓库以**特性粒度**推进标准主链路：
+
+```text
+/explore → /prd → /design → /dev → /commit → /deploy
+```
+
+其中：
+- `/dev` 负责按 TDD 实施、完成 `T1~T4` 四层自验证、完成 `gray-release ready` 检查，并自动归档
+- `/commit` 读取 `/dev` 自动归档结果后执行提交
+- `/archive` 仅作兼容补归档入口，标准流通常不单独使用
+- `/try → /land` 保留原型链路与基线化/归档语义
 
 - **创建特性目录（Ask/Plan 输出落盘）**：
 
@@ -39,13 +49,12 @@ quwoquan/
 bash scripts/new_feature_fullstack.sh "<slug>"
 ```
 
-- **按 OpsX 规格驱动迁移/新建（Cursor 命令，统一在根目录）**：
-  - `/opsx-ff`、`/opsx-apply`、`/opsx-archive`（统一入口，委托给树命令）
-  - `/opsx-ff-tree`、`/opsx-apply-tree`、`/opsx-archive-tree`（树驱动）
-  - `/opsx-feature-migrate-fullstack`
-  - `/feature-init-fullstack`
-  - `/feature-verify-fullstack`
-  - `/release-readiness-fullstack`
+- **正式命令入口（Cursor 命令，统一在根目录）**：
+  - `/explore`、`/prd`、`/design`
+  - `/dev`、`/deliver`、`/commit`、`/deploy`
+  - `/verify`、`/audit`
+  - `/try`、`/land`
+  - `/extend`、`/prune`
 
 特性目录位于：`changes/<date>-<slug>/`（验收标准与任务拆解在此目录维护）。
 全量特性台账位于：`changes/feature_catalog.yaml`。

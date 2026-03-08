@@ -159,6 +159,14 @@ class UITextConstants {
   static const String circleSubArticle = '文章';
   static const String circleSubLikes = '赞';
   static const String circleSubComments = '评论';
+  static const String circleSubMicro = '微趣';
+  static const String circleSortLatest = '最新';
+  static const String circleSortHot = '最热';
+  static const String circleSortFeatured = '精选';
+  static const String circleNoCreations = '暂无创作内容';
+  static const String circleNoChatEnabled = '群聊尚未开启';
+  static const String circleUploadFile = '上传文件';
+  static const String circleComments = '评论';
   static const String circleOfficialBadge = '官方认证 | 优质社区';
   static const String circlesRecommendedTitle = '推荐圈子';
   static const String circlesFollowingEmpty = '关注暂无内容';
@@ -233,6 +241,29 @@ class UITextConstants {
   static const String inputHint = '输入消息...';
   static const String send = '发送';
   static const String emoji = '表情';
+
+  /// 实时通话
+  static const String call = '语音通话';
+  static const String videoCall = '视频通话';
+  static const String callEnded = '通话结束';
+  static const String callConnecting = '连接中...';
+  static const String callRinging = '等待接听...';
+  static const String callReconnecting = '正在重连...';
+  static const String callNetworkWeak = '网络不佳';
+  static const String callNetworkDisconnected = '连接中断，正在重连...';
+  static const String callRecording = '录制中';
+  static const String callScreenSharing = '屏幕共享中';
+  static const String callReject = '拒绝';
+  static const String callAccept = '接听';
+  static const String callHangup = '挂断';
+  static const String callMute = '静音';
+  static const String callUnmute = '取消静音';
+  static const String callFlipCamera = '翻转摄像头';
+  static const String callSpeaker = '扬声器';
+  static const String callInvite = '邀请';
+  static const String callIncoming = '来电';
+  static const String callIncomingVoice = '语音来电';
+  static const String callIncomingVideo = '视频来电';
 
   /// 统一 emoji 选择器「最近」Tab
   static const String emojiRecent = '最近';
@@ -381,6 +412,7 @@ class UITextConstants {
   static const String myResonance = '我的交集';
   static const String profileEditLabel = '资料编辑';
   static const String profilePersonasLabel = '分身管理';
+  static const String profileDirectMessage = '私信';
 
   // ==================== 创作页（1:1 对应 CreatePage.tsx + MomentEditorCard.tsx） ====================
   static const String momentPlaceholder = '这一刻的想法...';

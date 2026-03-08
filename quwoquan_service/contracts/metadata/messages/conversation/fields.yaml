@@ -1,9 +1,9 @@
-version: 1
+version: 2
 aggregate: Conversation
 
 entities:
   Conversation:
-    description: 会话（聚合根）
+    description: 会话（聚合根，v2 轻量化）
     fields:
       - name: _id
         type: ObjectId
@@ -21,6 +21,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+        description: direct/group/circle/encrypted（assistant 不再是独立会话类型，小趣通过成员邀请参与任意会话）
 
       - name: title
         type: string
@@ -47,24 +48,6 @@ entities:
         api_exposure: read
         ops_exposure: read
 
-      - name: memberIds
-        type: "[]string"
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: members
-        type: "[]ConversationMember"
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: |
-          嵌入文档：userId, displayName, avatarUrl, role(owner/admin/member), joinedAt, mutedUntil
-
       - name: circleId
         type: string
         constraints: [NULLABLE]
@@ -74,14 +57,41 @@ entities:
         ops_exposure: read
         description: 关联圈子（type=circle 时）
 
-      - name: assistantSkillId
-        type: string
-        constraints: [NULLABLE]
+      - name: maxSeq
+        type: int64
+        constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: 关联 Skill（type=assistant 时，超前）
+        description: 当前会话最大消息 seq（冗余，加速 gap 判定）
+
+      - name: memberCount
+        type: int
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 当前成员数（冗余，避免 count 查询）
+
+      - name: maxGroupSize
+        type: int
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read_write
+        description: 群上限（默认 1000，可配置）
+
+      - name: receiptEnabled
+        type: bool
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read_write
+        description: 是否启用已读回执（≤50 人默认 true，>50 默认 false，可配置覆盖）
 
       - name: lastMessageId
         type: ObjectId
@@ -115,15 +125,6 @@ entities:
         api_exposure: read
         ops_exposure: read
 
-      - name: settings
-        type: ConversationSettings
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-        description: "嵌入文档：muted, pinned, readCursor(messageId)"
-
       - name: status
         type: enum
         constraints: [NOT_NULL]
@@ -150,7 +151,7 @@ entities:
         ops_exposure: read
 
   Message:
-    description: 消息
+    description: 消息（v2 新增 seq + clientMsgId）
     fields:
       - name: _id
         type: ObjectId
@@ -167,6 +168,24 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+
+      - name: seq
+        type: int64
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: per-conversation 单调递增序号（Redis INCR 生成）
+
+      - name: clientMsgId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 客户端生成的 UUID，用于幂等去重
 
       - name: senderId
         type: string
@@ -210,6 +229,18 @@ entities:
         api_exposure: read
         ops_exposure: read
 
+      - name: media
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: |
+          结构化媒体元数据（取代单一 mediaUrl，向后兼容保留 mediaUrl）。
+          Schema: { url, mediaId?, mimeType, fileSizeBytes?, durationMs?, waveform?, codec?,
+                    thumbnailUrl?, width?, height?, fileName?, items[]? }
+
       - name: cardPayload
         type: object
         constraints: [NULLABLE]
@@ -217,7 +248,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: 卡片内容（助手卡片/圈子邀请等，超前）
+        description: 卡片内容（助手卡片/圈子邀请等）
 
       - name: replyToMessageId
         type: ObjectId
@@ -267,3 +298,224 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+
+  ConversationMember:
+    description: 会话成员（v2 独立 collection，支撑 1,000 人群）
+    fields:
+      - name: _id
+        type: ObjectId
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: conversationId
+        type: ObjectId
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: userId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: displayName
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 群内显示名（可覆盖用户昵称）
+
+      - name: avatarUrl
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: memberType
+        type: enum
+        enum_ref: MemberType
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: user（真人用户）/ assistant（小趣助手，可被邀请到任何会话中协助处理信息）
+
+      - name: role
+        type: enum
+        enum_ref: MemberRole
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: owner/admin/member（assistant 成员固定为 member）
+
+      - name: assistantSkillId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 仅 memberType=assistant 时有效，绑定的 Skill ID（不同会话可邀请不同能力的助手）
+
+      - name: invitedBy
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 邀请人 userId
+
+      - name: joinedAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+    unique_constraints:
+      - columns: [conversationId, userId]
+        description: 同一会话同一用户唯一
+
+  ConversationUserState:
+    description: 用户级会话状态（v2 独立 collection，消除写放大）
+    fields:
+      - name: _id
+        type: ObjectId
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: userId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: conversationId
+        type: ObjectId
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: readSeq
+        type: int64
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 用户已读到的 seq
+
+      - name: unreadCount
+        type: int
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: muted
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: pinned
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: lastReadAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: updatedAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+    unique_constraints:
+      - columns: [userId, conversationId]
+        description: 同一用户同一会话唯一
+
+  MessageReceipt:
+    description: 消息已读回执（仅 receiptEnabled 会话启用）
+    fields:
+      - name: _id
+        type: ObjectId
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: messageId
+        type: ObjectId
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: conversationId
+        type: ObjectId
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: userId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: readAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+    unique_constraints:
+      - columns: [messageId, userId]
+        description: 同一消息同一用户唯一

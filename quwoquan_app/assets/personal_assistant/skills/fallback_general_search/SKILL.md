@@ -1,9 +1,16 @@
 ---
 name: fallback_general_search
-description: 无法命中垂类时执行通用问题检索与回答，覆盖所有未分类查询。
+description: 通用搜索兜底。当其他技能都不匹配时使用。
 domain: fallback_general_search
+mode: qa
 allowed_tools: web_search local_context
-trigger_keywords: 搜索 查询 帮我查 看看 了解 一下
+trigger_keywords: []
+searchPolicy:
+  maxReflection: 2
+  qualityThreshold: 0.4
+  strategy: research
+requires:
+  tools: [web_search]
 output_contract: assistant_turn_v2
 tool_observation_contract: tool_observation_v1
 reference_docs: references/domain-knowledge.md references/output-examples.md

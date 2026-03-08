@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 /// 发起群聊页（图一：创建新群聊 + 相关同好）
@@ -24,14 +25,37 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   final ScrollController _listScrollController = ScrollController();
   final Map<String, bool> _relatedSelected = {};
 
-  static const List<Map<String, String>> _mockGroupChats = [
-    {'id': 'g1', 'name': '兴趣小组A', 'count': '9'},
-    {'id': 'g2', 'name': '兴趣小组B', 'count': '12'},
-    {'id': 'g3', 'name': '兴趣小组C', 'count': '15'},
-    {'id': 'g4', 'name': '兴趣小组D', 'count': '5'},
-    {'id': 'g5', 'name': '兴趣小组E', 'count': '8'},
-    {'id': 'g6', 'name': '兴趣小组F', 'count': '6'},
-  ];
+  List<Map<String, dynamic>> _groupConversations = [];
+  List<Map<String, dynamic>> _contacts = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final repo = ref.read(chatRepositoryProvider);
+      final convs = await repo.listConversations(limit: 50);
+      final contacts = await repo.listContacts(limit: 100);
+      if (mounted) {
+        setState(() {
+          _groupConversations = convs
+              .where((c) => c['type'] == 'group' || c['type'] == 'circle')
+              .map((c) => {
+                    'id': c['_id'] as String? ?? '',
+                    'name': c['title'] as String? ?? '',
+                    'count': '${c['memberCount'] ?? 0}',
+                  })
+              .toList();
+          _contacts = contacts;
+        });
+      }
+    } catch (_) {
+      // Fallback: leave empty lists
+    }
+  }
 
   static const List<Map<String, String>> _mockCircles = [
     {'id': 'c1', 'name': '摄影圈', 'count': '20'},
@@ -170,13 +194,17 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => _SelectGroupChatSheet(
-        groups: _mockGroupChats,
+        groups: _groupConversations.map((c) => c.cast<String, String>()).toList(),
         onSelectGroup: (group) {
           Navigator.of(context).pop();
           _openMemberSelectSheet(
             title:
                 '${group['name']} (${group['count']}${UITextConstants.friendsCount})',
-            members: _mockGroupMembers,
+            members: _contacts.map((c) => <String, String>{
+              'name': c['displayName'] as String? ?? '',
+              'username': c['userId'] as String? ?? '',
+              'avatar': c['avatarUrl'] as String? ?? '',
+            }).toList(),
             onConfirm: (selected) {
               messenger.showSnackBar(
                 SnackBar(content: Text('已选 ${selected.length} 人（开发中）')),
@@ -202,7 +230,11 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
           _openMemberSelectSheet(
             title:
                 '${circle['name']} (${circle['count']}${UITextConstants.friendsCount})',
-            members: _mockGroupMembers,
+            members: _contacts.map((c) => <String, String>{
+              'name': c['displayName'] as String? ?? '',
+              'username': c['userId'] as String? ?? '',
+              'avatar': c['avatarUrl'] as String? ?? '',
+            }).toList(),
             onConfirm: (selected) {
               messenger.showSnackBar(
                 SnackBar(content: Text('已选 ${selected.length} 人（开发中）')),
@@ -279,7 +311,15 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
       isDark,
       ColorType.borderPrimary,
     );
-    final grouped = _groupByLetter(List.from(_mockRelatedFriends));
+    final friendsWithLetter = _contacts.map((c) => <String, dynamic>{
+      'name': c['displayName'] as String? ?? '',
+      'username': c['userId'] as String? ?? '',
+      'avatar': c['avatarUrl'] as String? ?? '',
+      'letter': ((c['displayName'] as String? ?? '#').isNotEmpty
+          ? (c['displayName'] as String).substring(0, 1).toUpperCase()
+          : '#'),
+    }).toList();
+    final grouped = _groupByLetter(friendsWithLetter);
     final indexLetters = ['↑', '☆', ...grouped.keys];
 
     final letterKeys = <String, GlobalKey>{};

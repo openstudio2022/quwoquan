@@ -1,0 +1,41 @@
+feature: image-message-fix
+level: L4_story
+archived: false
+
+execution:
+  local_gate: make build && flutter test test/cloud/chat/ test/ui/chat/
+  full_gate: make gate-full
+
+level_acceptance:
+  A1:
+    criteria: "图片发送修复：相册选择/拍照→MediaUploadManager上传(chatImage)→sendMessage(type=image, media完整字段)→不再降级为type=text占位；发送中显示上传进度"
+    status: pending
+    linked_tasks: [I1]
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: optional
+    tests: []
+
+  A2:
+    criteria: "聊天图片全屏查看：点击气泡→Hero转场→全屏查看器(双指缩放/左右滑动切换/下滑关闭)；长按保存到相册"
+    status: pending
+    linked_tasks: [I2]
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: required
+    tests: []
+
+  A3:
+    criteria: "大号Emoji：纯Emoji消息(1~3个Emoji无文字)fontSize≥40；超3个或混文字按正常16显示；检测算法使用Unicode Emoji范围正则"
+    status: pending
+    linked_tasks: [I3]
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: optional
+    tests: []

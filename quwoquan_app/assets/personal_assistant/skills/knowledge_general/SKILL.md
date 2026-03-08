@@ -1,9 +1,16 @@
 ---
 name: knowledge_general
-description: 回答百科、科学、历史、地理、人文与通识问题，并给出来源。
+description: 百科知识、原理解释、科普、概念辨析、翻译。
 domain: knowledge_general
+mode: qa
 allowed_tools: web_search
-trigger_keywords: 是什么 原理 科普 百科 知识 解释 为什么 怎么回事
+trigger_keywords: []
+searchPolicy:
+  maxReflection: 2
+  qualityThreshold: 0.5
+  strategy: research
+requires:
+  tools: [web_search]
 output_contract: assistant_turn_v2
 tool_observation_contract: tool_observation_v1
 reference_docs: references/domain-knowledge.md references/output-examples.md

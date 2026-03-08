@@ -31,11 +31,11 @@
 - [x] 06-semantic-consistency-audit 提交前检查改为调用脚本
 - [x] 00_MASTER_DEVELOPMENT_FLOW Implement 约束表增加「硬编码触控/布局尺寸禁止」
 
-### M4：FF/deliver 前置
+### M4：PRD/Design/Deliver 前置
 
-- [x] opsx-ff/opsx-apply 相关命令文档或逻辑：design 模板增加「编码规范与 token」可选小节
+- [x] `/prd`/`/design`/`/dev` 相关命令文档或逻辑：design 模板增加「编码规范与 token」可选小节
 - [x] tasks 模板：含 UI 的 task 增加 verify_dart_semantic 步骤
-- [x] opsx-apply：变更含 lib/**/*.dart 时自动执行脚本
+- [x] `/dev`：变更含 lib/**/*.dart 时自动执行脚本
 
 ## 搁置任务（带规划）
 

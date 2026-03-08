@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rtc-service
+  labels:
+    app.kubernetes.io/name: rtc-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rtc-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: rtc-service
+    spec:
+      terminationGracePeriodSeconds: 30
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: rtc-service
+      containers:
+        - name: rtc-service
+          image: rtc-service/rtc-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 18083
+          env:
+            - name: APP_ENV
+              value: integration
+            - name: SERVICE_NAME
+              value: rtc-service
+            - name: CONFIG_ROOT
+              value: /etc/rtc-service
+            - name: CONFIG_VERSION
+              value: v0.0.0
+            - name: IMAGE_VERSION
+              value: v0.0.0
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: rtc-service-secrets
+                  key: MONGO_URI
+            - name: REDIS_ADDR
+              valueFrom:
+                secretKeyRef:
+                  name: rtc-service-secrets
+                  key: REDIS_ADDR
+            - name: LIVEKIT_URL
+              valueFrom:
+                secretKeyRef:
+                  name: rtc-service-secrets
+                  key: LIVEKIT_URL
+            - name: LIVEKIT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: rtc-service-secrets
+                  key: LIVEKIT_API_KEY
+            - name: LIVEKIT_API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: rtc-service-secrets
+                  key: LIVEKIT_API_SECRET
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          startupProbe:
+            httpGet:
+              path: /startupz
+              port: http
+            failureThreshold: 30
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi

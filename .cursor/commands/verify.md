@@ -5,9 +5,9 @@ category: Quality
 description: 验证实现匹配基线制品 + 基线漂移检测 + 自动 G3 门禁
 ---
 
-> SDD 主流程：... → dev → **verify** → archive → commit → deploy
+> SDD 主流程：... → dev（已自动归档） → **verify** / commit → deploy
 >
-> **核心职责**：dev/deliver 完成后，检测实现与基线（spec/design/tasks/acceptance）之间的漂移，并强制要求所有 A1~An status 在归档前达到 `implemented`/`waived`/`deferred`。
+> **核心职责**：dev/deliver 完成后，检测实现与基线（spec/design/tasks/acceptance）之间的漂移，并复核自动归档前后的状态一致性。
 
 ---
 
@@ -19,7 +19,7 @@ description: 验证实现匹配基线制品 + 基线漂移检测 + 自动 G3 门
 2. 读取 `tasks.md`，统计完成状态：
    - `[x]`（已完成）/ `[ ]`（未完成）按三个区块分别统计：当前交付任务、搁置任务、未来演进任务
    - **阻塞条件**：当前交付任务中存在未完成 `[ ]` → 输出 BLOCKING
-3. 读取 `acceptance.yaml`，统计 A1~An status 分布：
+3. 读取 `acceptance.yaml`，统计 A1~An status 分布，并检查是否声明了 `T1~T4` 测试层映射：
    - **阻塞条件**：存在 status=`pending` → 输出 BLOCKING
 4. 生成完成度报告
 
@@ -48,8 +48,8 @@ description: 验证实现匹配基线制品 + 基线漂移检测 + 自动 G3 门
 - 若变更中的关键文件在 tasks.md 中无对应任务条目 → 输出 `TASK_DRIFT`（WARNING）
 
 **漂移处理原则**：
-- D1/D2/D3 必须在归档前解决（更新制品或确认超出范围）— BLOCKING
-- D4 建议修复（补充 tasks.md），不阻塞归档 — WARNING
+- D1/D2/D3 必须在提交前解决（更新制品或确认超出范围）— BLOCKING
+- D4 建议修复（补充 tasks.md），不阻塞提交 — WARNING
 
 ---
 
@@ -58,7 +58,8 @@ description: 验证实现匹配基线制品 + 基线漂移检测 + 自动 G3 门
 逐条检查 `acceptance.yaml` 中 `status=implemented` 的验收项：
 1. `tests[].file` 所列文件在仓库中存在
 2. `tests[].functions` 所列函数名在对应文件中存在（通过文本检索）
-3. 若文件或函数不存在 → 输出 `TEST_LINK_BROKEN`（BLOCKING）
+3. `test_layers` 至少声明了该验收项依赖的 `T1/T2/T3/T4`
+4. 若文件、函数或测试层映射不存在 → 输出 `TEST_LINK_BROKEN`（BLOCKING）
 
 对 `tests[]` 为空的 `implemented` 项 → 输出 WARNING
 
@@ -116,10 +117,10 @@ A3: implemented ✓ → tests[] 为空 ⚠ 建议补充
 make gate-full: PASS / FAIL
 
 ━━━ 结论 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-BLOCKING: N 项（必须修复后才能归档）
-WARNING:  N 项（建议修复，不阻塞归档）
+BLOCKING: N 项（必须修复后才能提交）
+WARNING:  N 项（建议修复，不阻塞提交）
 
-→ Ready for /archive（或直接 /commit）
+→ Ready for /commit
 ```
 
 ---
@@ -143,4 +144,4 @@ WARNING:  N 项（建议修复，不阻塞归档）
 | `/dev` | 实施特性 | verify 的前置 |
 | `/verify` | **漂移检测 + G3 门禁** | 特性级质量卡点 |
 | `/audit` | 代码库结构健康度审计 | verify --with-audit 可联合运行 |
-| `/archive` | 归档特性 | verify 通过后执行 archive |
+| `/archive` | 兼容补归档 | 仅自动归档失效时再使用 |

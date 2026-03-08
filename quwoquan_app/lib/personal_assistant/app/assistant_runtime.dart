@@ -13,11 +13,14 @@ import 'package:quwoquan_app/personal_assistant/skills/skill_executor.dart';
 import 'package:quwoquan_app/personal_assistant/skills/skill_loader.dart';
 import 'package:quwoquan_app/personal_assistant/template_runtime/template_registry.dart';
 import 'package:quwoquan_app/personal_assistant/template_runtime/template_runtime.dart';
+import 'package:quwoquan_app/personal_assistant/tools/app_action_tool.dart';
+import 'package:quwoquan_app/personal_assistant/tools/deep_link_tool.dart';
 import 'package:quwoquan_app/personal_assistant/tools/intent_bridge_tool.dart';
 import 'package:quwoquan_app/personal_assistant/tools/local_context_tool.dart';
 import 'package:quwoquan_app/personal_assistant/tools/media_gallery_tool.dart';
 import 'package:quwoquan_app/personal_assistant/tools/memory_search_tool.dart';
 import 'package:quwoquan_app/personal_assistant/tools/metadata/tool_metadata_registry.dart';
+import 'package:quwoquan_app/personal_assistant/tools/scheduler_tool.dart';
 import 'package:quwoquan_app/personal_assistant/tools/tool_registry.dart';
 import 'package:quwoquan_app/personal_assistant/tools/web_fetch_tool.dart';
 import 'dart:io';
@@ -81,7 +84,10 @@ class AssistantRuntime {
               iosAdapter: iosAdapter,
               androidAdapter: androidAdapter,
             ),
-          );
+          )
+          ..register(SchedulerTool(channelAdapter))
+          ..register(DeepLinkTool())
+          ..register(AppActionTool());
     final templateRuntime = PromptTemplateRuntime(registry: TemplateRegistry());
     final switchableProvider = SwitchableAssistantLlmProvider(
       fallbackProvider: const HeuristicLocalLlmProvider(),

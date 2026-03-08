@@ -67,9 +67,16 @@ class WebSearchTool implements AssistantTool {
 
   @override
   Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
-    // Layer 1: 优先使用 queryNormalization.normalizedQuery 作为主查询词
-    // queryVariants 由 retrieval_service 通过 AssistentRetrievalRequest 并发执行（Layer 2）
-    // websearch_tool 自身仍执行单次搜索，多路并发在 retrieval_service 层处理
+    // queryVariants: LLM 可传入多个差异化查询词，工具并发执行后合并结果。
+    // 若存在 queryVariants，先用主 query 执行，再并发执行 variants，合并 references。
+    final variants = (arguments['queryVariants'] as List?)
+        ?.whereType<String>()
+        .map((v) => v.trim())
+        .where((v) => v.isNotEmpty)
+        .toList(growable: false) ?? const <String>[];
+    if (variants.length >= 2) {
+      return _executeMultiQuery(arguments, variants);
+    }
     final rawQuery = (arguments['query'] as String?)?.trim() ?? '';
     final queryNorm = arguments['queryNormalization'];
     final normalizedQuery = queryNorm is Map
@@ -935,6 +942,26 @@ class WebSearchTool implements AssistantTool {
 
   List<Map<String, dynamic>> _extractDuckduckgoReferences(dynamic decoded) {
     if (decoded is! Map) return const <Map<String, dynamic>>[];
+    final organic =
+        (decoded['organic_results'] as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[];
+    if (organic.isNotEmpty) {
+      return organic
+          .take(12)
+          .map(
+            (item) => <String, dynamic>{
+              'title': (item['title'] as String?)?.trim() ?? '',
+              'url': (item['url'] as String?)?.trim() ?? '',
+              'snippet': (item['snippet'] as String?)?.trim() ?? '',
+              'provider': AssistantSearchProvider.duckduckgo.name,
+            },
+          )
+          .where((item) => (item['url'] as String).isNotEmpty)
+          .toList(growable: false);
+    }
     final refs = <Map<String, dynamic>>[];
     final related =
         (decoded['RelatedTopics'] as List?)
@@ -950,23 +977,6 @@ class WebSearchTool implements AssistantTool {
           'title': text,
           'url': url,
           'snippet': text,
-          'provider': AssistantSearchProvider.duckduckgo.name,
-        });
-      }
-      final topics =
-          (item['Topics'] as List?)
-              ?.whereType<Map>()
-              .map((entry) => entry.cast<String, dynamic>())
-              .toList(growable: false) ??
-          const <Map<String, dynamic>>[];
-      for (final topic in topics.take(4)) {
-        final nestedText = (topic['Text'] as String?)?.trim() ?? '';
-        final nestedUrl = (topic['FirstURL'] as String?)?.trim() ?? '';
-        if (nestedUrl.isEmpty) continue;
-        refs.add(<String, dynamic>{
-          'title': nestedText,
-          'url': nestedUrl,
-          'snippet': nestedText,
           'provider': AssistantSearchProvider.duckduckgo.name,
         });
       }
@@ -1091,38 +1101,27 @@ class WebSearchTool implements AssistantTool {
 
   String _summarizeDuckduckgo(dynamic decoded) {
     if (decoded is! Map) return '';
+    final organic =
+        (decoded['organic_results'] as List?)?.whereType<Map>().toList();
+    if (organic != null && organic.isNotEmpty) {
+      final snippets = <String>[];
+      for (final item in organic.take(4)) {
+        final title = (item['title'] as String?)?.trim() ?? '';
+        final snippet = (item['snippet'] as String?)?.trim() ?? '';
+        final combined = _compressWhitespace(
+          [title, snippet].where((s) => s.isNotEmpty).join(' - '),
+        );
+        if (combined.isNotEmpty) snippets.add(combined);
+      }
+      if (snippets.isNotEmpty) return _truncate(snippets.join('；'));
+    }
     final abstractText = (decoded['AbstractText'] as String?)?.trim() ?? '';
     final heading = (decoded['Heading'] as String?)?.trim() ?? '';
     final abstractLine = _compressWhitespace(
       [heading, abstractText].where((s) => s.isNotEmpty).join(' - '),
     );
-    if (abstractLine.isNotEmpty) {
-      return _truncate(abstractLine);
-    }
-    final related = decoded['RelatedTopics'];
-    if (related is! List || related.isEmpty) return '';
-    final snippets = <String>[];
-    for (final item in related.take(4)) {
-      if (item is Map) {
-        final text = (item['Text'] as String?)?.trim() ?? '';
-        if (text.isNotEmpty) {
-          snippets.add(_compressWhitespace(text));
-          continue;
-        }
-        final topics = item['Topics'];
-        if (topics is List) {
-          for (final topic in topics.take(2)) {
-            if (topic is! Map) continue;
-            final nested = (topic['Text'] as String?)?.trim() ?? '';
-            if (nested.isNotEmpty) {
-              snippets.add(_compressWhitespace(nested));
-            }
-          }
-        }
-      }
-    }
-    if (snippets.isEmpty) return '';
-    return _truncate(snippets.join('；'));
+    if (abstractLine.isNotEmpty) return _truncate(abstractLine);
+    return '';
   }
 
   String _summarizeSerpApi(dynamic decoded) {
@@ -1349,21 +1348,83 @@ class WebSearchTool implements AssistantTool {
   }
 
   Future<dynamic> _searchDuckDuckGo({required String query}) async {
-    final url = Uri.parse('https://api.duckduckgo.com/').replace(
-      queryParameters: <String, String>{
-        'q': query,
-        'format': 'json',
-        'no_html': '1',
-        'skip_disambig': '1',
-      },
-    );
+    final cleanQuery = _stripSearchSuffixes(query);
     final response = await http
-        .get(url, headers: const <String, String>{'Accept': 'application/json'})
-        .timeout(_networkTimeout);
+        .post(
+          Uri.parse('https://html.duckduckgo.com/html/'),
+          headers: const <String, String>{
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'User-Agent': 'QuwoquanAssistant/1.0',
+          },
+          body: 'q=${Uri.encodeComponent(cleanQuery)}&kl=cn-zh',
+        )
+        .timeout(const Duration(seconds: 12));
     if (response.statusCode >= 400) {
       throw Exception('DuckDuckGo search failed (${response.statusCode})');
     }
-    return jsonDecode(response.body);
+    return _parseDuckDuckGoHtml(response.body);
+  }
+
+  String _stripSearchSuffixes(String query) {
+    return query
+        .replaceAll(RegExp(r'\s*时间范围:\S+'), '')
+        .replaceAll(RegExp(r'\s*上下文限定:.+$'), '')
+        .trim();
+  }
+
+  Map<String, dynamic> _parseDuckDuckGoHtml(String html) {
+    final results = <Map<String, dynamic>>[];
+    final linkPattern = RegExp(
+      r'<a[^>]+class="result__a"[^>]+href="([^"]*)"[^>]*>(.*?)</a>',
+      dotAll: true,
+    );
+    final snippetPattern = RegExp(
+      r'<a[^>]+class="result__snippet"[^>]*>(.*?)</a>',
+      dotAll: true,
+    );
+    final linkMatches = linkPattern.allMatches(html).toList();
+    final snippetMatches = snippetPattern.allMatches(html).toList();
+    for (var i = 0; i < linkMatches.length && i < 10; i++) {
+      var url = linkMatches[i].group(1) ?? '';
+      if (url.contains('duckduckgo.com/l/?uddg=')) {
+        final uddg = Uri.tryParse(url)?.queryParameters['uddg'];
+        if (uddg != null && uddg.isNotEmpty) url = uddg;
+      }
+      url = Uri.decodeComponent(url);
+      final title = _stripHtmlTags(linkMatches[i].group(2) ?? '');
+      final snippet = i < snippetMatches.length
+          ? _stripHtmlTags(snippetMatches[i].group(1) ?? '')
+          : '';
+      if (url.startsWith('http')) {
+        results.add(<String, dynamic>{
+          'title': title,
+          'url': url,
+          'snippet': snippet,
+        });
+      }
+    }
+    final abstractText = results.isNotEmpty
+        ? results.take(3).map((r) => '${r['title']} - ${r['snippet']}').join('；')
+        : '';
+    return <String, dynamic>{
+      'AbstractText': abstractText,
+      'Heading': '',
+      'RelatedTopics': <dynamic>[],
+      'organic_results': results,
+      '_source': 'ddg_html',
+    };
+  }
+
+  String _stripHtmlTags(String html) {
+    return html
+        .replaceAll(RegExp(r'<[^>]+>'), '')
+        .replaceAll(RegExp(r'&amp;'), '&')
+        .replaceAll(RegExp(r'&lt;'), '<')
+        .replaceAll(RegExp(r'&gt;'), '>')
+        .replaceAll(RegExp(r'&quot;'), '"')
+        .replaceAll(RegExp(r'&#x27;|&#39;'), "'")
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
   }
 
   Future<dynamic> _searchSerpApi({
@@ -1667,6 +1728,70 @@ class WebSearchTool implements AssistantTool {
           ? 'https://api.perplexity.ai'
           : preferredBaseUrl,
       model: preferredModel.isEmpty ? 'sonar-pro' : preferredModel,
+    );
+  }
+
+  /// Executes multiple queries concurrently and merges references.
+  Future<AssistantToolResult> _executeMultiQuery(
+    Map<String, dynamic> arguments,
+    List<String> queryVariants,
+  ) async {
+    final mainQuery = (arguments['query'] as String?)?.trim() ?? '';
+    final allQueries = <String>{
+      if (mainQuery.isNotEmpty) mainQuery,
+      ...queryVariants,
+    }.toList(growable: false);
+    final futures = allQueries.map((q) {
+      final singleArgs = Map<String, dynamic>.from(arguments)
+        ..['query'] = q
+        ..remove('queryVariants');
+      return execute(singleArgs);
+    }).toList(growable: false);
+    final results = await Future.wait(futures, eagerError: false);
+    final mergedRefs = <Map<String, dynamic>>[];
+    final seenUrls = <String>{};
+    String bestSummary = '';
+    double bestQuality = 0.0;
+    String bestProvider = '';
+    var anySuccess = false;
+
+    for (final r in results) {
+      if (r.success) anySuccess = true;
+      final data = r.data ?? const <String, dynamic>{};
+      final refs = (data['references'] as List?)
+          ?.whereType<Map>()
+          .map((e) => e.cast<String, dynamic>())
+          .toList(growable: false) ?? const <Map<String, dynamic>>[];
+      for (final ref in refs) {
+        final url = (ref['url'] as String?)?.trim() ?? '';
+        if (url.isNotEmpty && seenUrls.add(url)) {
+          mergedRefs.add(ref);
+        }
+      }
+      final quality = (data['qualityScore'] as num?)?.toDouble() ?? 0.0;
+      if (quality > bestQuality) {
+        bestQuality = quality;
+        bestSummary = (data['summary'] as String?)?.trim() ?? '';
+        bestProvider = (data['provider'] as String?)?.trim() ?? '';
+      }
+    }
+
+    if (!anySuccess) {
+      return results.first;
+    }
+
+    return AssistantToolResult(
+      success: true,
+      message: '多路检索完成（${allQueries.length} 条查询），找到 ${mergedRefs.length} 条参考资料。',
+      data: <String, dynamic>{
+        'provider': bestProvider,
+        'summary': bestSummary,
+        'references': mergedRefs.take(10).toList(growable: false),
+        'qualityScore': bestQuality,
+        'queryCount': allQueries.length,
+        'referenceCount': mergedRefs.length,
+        'message': '多路检索完成。',
+      },
     );
   }
 

@@ -1,0 +1,15 @@
+package model
+
+import "time"
+
+type UserWork struct {
+	ID        string    `json:"id" db:"id"`
+	UserID    string    `json:"userId" db:"user_id"`
+	Title     string    `json:"title" db:"title"`
+	CoverURL  string    `json:"coverUrl" db:"cover_url"`
+	WorkType  string    `json:"workType" db:"work_type"`
+	RefID     string    `json:"refId" db:"ref_id"`
+	SortOrder int       `json:"sortOrder" db:"sort_order"`
+	CreatedAt time.Time `json:"createdAt" db:"created_at"`
+	UpdatedAt time.Time `json:"updatedAt" db:"updated_at"`
+}

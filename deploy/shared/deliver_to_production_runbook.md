@@ -5,7 +5,7 @@
 从特性到入库（L1/L2 自测通过），再到集成验证（L3/L4），再到生产端到端打通，含灰度/滚动发布。
 
 ```
-特性 → deliver 入库(L1/L2) → deploy 到 integration → L3/L4 验证 → 灰度到 prod
+特性 → dev 完成自验证并自动归档 → commit 入库(L1/L2) → deploy 到 integration → L3/L4 验证 → 灰度到 prod
 ```
 
 ---
@@ -14,7 +14,7 @@
 
 | 阶段 | 命令/动作 | 门禁 | 输出 |
 |------|-----------|------|------|
-| 1. 开发+入库 | `/opsx-deliver` | G2 → G3 → G4 | 代码入库 dev1.0（日常）；main 由定时 merge 更新，见 `branch_strategy.md` |
+| 1. 开发+入库 | `/dev` → `/commit`（或 `/deliver`） | G2 → G3 → G4 | `/dev` 完成四层自验证、gray-release ready 与自动归档；`/commit` 完成入库 |
 | 2. 部署 integration | CI/CD 或手动 | G5a | integration 环境运行目标版本 |
 | 3. 集成验证 | L3 + L4 测试 | G5b | L3/L4 通过 |
 | 4. 灰度到 prod | `config-gray-rollout` | G5c | prod 灰度完成，SLO 通过 |
@@ -26,7 +26,7 @@
 ### 3.1 Deliver 阶段完成
 
 - 代码已合入 dev1.0（日常）或 main（定时 merge 后）；分支策略见 `deploy/shared/branch_strategy.md`
-- `make gate` 通过（L1a+b+c + L2）。**AI 编程助手提交前必须自动执行 L1+L2 门禁**，不得跳过；见 `.cursor/commands/submit-with-gate.md`
+- `make gate` 通过（L1a+b+c + L2）。**AI 编程助手提交前必须自动执行 L1+L2 门禁**，不得跳过；见 `/.cursor/commands/commit.md`
 - `deploy/shared/process_domain_mapping.yaml` 合法，`verify_deployment_domain_mapping.sh` 通过
 
 ### 3.2 部署环境
@@ -172,7 +172,7 @@ make config-rollback SERVICE=seed-box TO_CONFIG=<rollback-version>
 - `deploy/shared/branch_strategy.md` — **分支策略**（dev1.0 日常合入、main 定时 merge）
 - `deploy/shared/ci_cd_end_to_end_design.md` — **CI/CD 端到端闭环落实方案**（pre-release workflow、secrets、实施顺序）
 - `deploy/shared/workflow_consolidation_plan.md` — **Workflow 命名规范**（01～07、02/03 去重）
-- `.cursor/commands/opsx-deploy.md` — 部署命令
+- `.cursor/commands/deploy.md` — 部署命令
 - `deploy/shared/process_domain_mapping_runbook.md` — 部署拓扑
 - `deploy/service/config-release/runbook.md` — 配置发布与灰度
 - `specs/feature-tree/runtime/deliver-deploy-prod-pipeline/design.md` — 多云（阿里云/火山引擎/华为云）设计

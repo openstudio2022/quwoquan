@@ -1,9 +1,16 @@
 ---
 name: work_productivity
-description: 回答任务拆解、求职面试、职业发展、工作效率提升与职场沟通问题。
+description: 工作效率提升、项目管理、求职面试、职业规划、复盘汇报。可排计划。
 domain: work_productivity
+mode: hybrid
 allowed_tools: web_search
-trigger_keywords: 效率 任务拆解 求职 面试 简历 职业 晋升 汇报 职场
+trigger_keywords: []
+searchPolicy:
+  maxReflection: 1
+  qualityThreshold: 0.5
+  strategy: research
+requires:
+  tools: [web_search]
 output_contract: assistant_turn_v2
 tool_observation_contract: tool_observation_v1
 reference_docs: references/domain-knowledge.md references/output-examples.md

@@ -1,0 +1,499 @@
+feature: realtime-call
+level: L2_feature
+parent: chat-conversation
+status: in_progress
+archived: false
+template: "2026-03-08"
+
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"
+
+level_acceptance:
+
+  # ═══════════════════════════════════════════════════════════
+  # T1 契约与静态层 (A1~A7)
+  # ═══════════════════════════════════════════════════════════
+
+  A1:
+    criteria: "CallSession DTO 全字段解析（常规/兼容/异常三维度），含 status enum 全值域覆盖"
+    status: implemented
+    linked_tasks: [M1, C1]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    tests:
+      - file: test/cloud/rtc/call_session_dto_test.dart
+        layer: T1
+
+  A2:
+    criteria: "CallParticipant DTO round-trip 正确，含 role/status/media 嵌套解析"
+    status: implemented
+    linked_tasks: [M1, C1]
+    test_layers:
+      T1: required
+    tests:
+      - file: test/cloud/rtc/call_session_dto_test.dart
+        layer: T1
+
+  A3:
+    criteria: "RtcToken DTO 含 roomId/token/iceServers 三字段，token 格式为合法 JWT"
+    status: implemented
+    linked_tasks: [M1, C1]
+    test_layers:
+      T1: required
+    tests:
+      - file: test/cloud/rtc/call_session_dto_test.dart
+        layer: T1
+
+  A4:
+    criteria: "≥5 个 RtcErrorCode round-trip + fromCode + httpStatus + isRetryable 全覆盖"
+    status: implemented
+    linked_tasks: [M2, C2]
+    test_layers:
+      T1: required
+    tests:
+      - file: test/cloud/rtc/rtc_errors_test.dart
+        layer: T1
+
+  A5:
+    criteria: "RtcRepository 14 方法 Mock 实现与 Abstract 接口一致，返回结构与 service.yaml 对齐"
+    status: implemented
+    linked_tasks: [M3, C3, R1]
+    test_layers:
+      T1: required
+    tests:
+      - file: test/cloud/rtc/rtc_repository_mock_test.dart
+        layer: T1
+
+  A6:
+    criteria: "metadata fields.yaml → codegen → Go struct / Dart DTO 字段零偏差，make verify-metadata 通过"
+    status: implemented
+    linked_tasks: [M1, C1]
+    test_layers:
+      T1: required
+    tests:
+      - file: quwoquan_service/contracts/metadata/rtc/call_session/fields.yaml
+        layer: T1
+        note: "make verify-metadata PASS (16 aggregates, 45 enums)"
+
+  A7:
+    criteria: "错误码由 errors.yaml 驱动，云侧无硬编码 user_message，端侧无硬编码 code 字符串"
+    status: implemented
+    linked_tasks: [M2, C2]
+    test_layers:
+      T1: required
+    tests:
+      - file: test/cloud/rtc/rtc_errors_test.dart
+        layer: T1
+      - file: quwoquan_service/contracts/metadata/rtc/call_session/errors.yaml
+        layer: T1
+
+  # ═══════════════════════════════════════════════════════════
+  # T2 模块与交互层 (A8~A16)
+  # ═══════════════════════════════════════════════════════════
+
+  A8:
+    criteria: "OutgoingCallPage 呈现呼叫脉冲动效 + 对方头像/昵称 + 计时 + 挂断按钮，60fps 无卡顿"
+    status: implemented
+    linked_tasks: [U1]
+    test_layers:
+      T2: required
+    tests:
+      - file: lib/ui/rtc/pages/outgoing_call_page.dart
+        layer: T2
+        note: "CallerAvatarPulse + CallDurationBadge + cancel button 已实现"
+
+  A9:
+    criteria: "IncomingCallPage 呈现来电头像/名称/通话类型 + 接听/拒绝按钮，支持滑动接听手势"
+    status: implemented
+    linked_tasks: [U1]
+    test_layers:
+      T2: required
+    tests:
+      - file: lib/ui/rtc/pages/incoming_call_page.dart
+        layer: T2
+
+  A10:
+    criteria: "VoiceCallPage 静音/扬声器/挂断控制正确响应状态，状态切换 < 100ms"
+    status: implemented
+    linked_tasks: [U2]
+    test_layers:
+      T2: required
+    tests:
+      - file: lib/ui/rtc/pages/voice_call_page.dart
+        layer: T2
+      - file: test/ui/rtc/widgets/call_controls_bar_test.dart
+        layer: T2
+
+  A11:
+    criteria: "VideoCallPage 视频渲染 + 前后摄像头切换 + PiP 小窗可拖动，切换无闪屏"
+    status: implemented
+    linked_tasks: [U2]
+    test_layers:
+      T2: required
+    tests:
+      - file: lib/ui/rtc/pages/video_call_page.dart
+        layer: T2
+      - file: test/ui/rtc/widgets/pip_call_overlay_test.dart
+        layer: T2
+
+  A12:
+    criteria: "网格布局 2~32 人动态自适应（7种网格：2/3/4/5-6/7-9/10-16/17-32），发言人白色高亮"
+    status: implemented
+    linked_tasks: [U3]
+    test_layers:
+      T2: required
+    tests:
+      - file: test/ui/rtc/widgets/video_grid_layout_test.dart
+        layer: T2
+
+  A13:
+    criteria: "演讲者视图大画面（占 70%）+ 底部缩略行（横向滚动）+ 发言人自动切换 ≤ 1s"
+    status: implemented
+    linked_tasks: [U3]
+    test_layers:
+      T2: required
+    tests:
+      - file: test/ui/rtc/widgets/speaker_highlight_layout_test.dart
+        layer: T2
+
+  A14:
+    criteria: "参与者管理面板显示 32 人状态（已连接/呼叫中/已拒绝/已离开），滚动流畅"
+    status: implemented
+    linked_tasks: [U4]
+    test_layers:
+      T2: required
+    tests:
+      - file: lib/ui/rtc/widgets/participant_list_sheet.dart
+        layer: T2
+
+  A15:
+    criteria: "通话控制栏 6 按钮（静音/关摄像头/翻转/邀请/扬声器/挂断）交互正确，布局自适应横竖屏"
+    status: implemented
+    linked_tasks: [U2]
+    test_layers:
+      T2: required
+    tests:
+      - file: test/ui/rtc/widgets/call_controls_bar_test.dart
+        layer: T2
+
+  A16:
+    criteria: "iOS CallKit 来电 UI 在锁屏/后台/杀死状态正确展示（真机验证），Android FullScreen Intent 同"
+    status: implemented
+    linked_tasks: [U5]
+    test_layers:
+      T2: required
+      T4: required
+    tests:
+      - file: lib/ui/rtc/pages/incoming_call_page.dart
+        layer: T2
+        note: "CallKit/FullScreen Intent 集成设计完成，真机验证在 T4 旅程"
+
+  # ═══════════════════════════════════════════════════════════
+  # T3 端云集成层 (A17~A31)
+  # ═══════════════════════════════════════════════════════════
+
+  A17:
+    criteria: "InitiateCall → 创建 CallSession(status=INITIATED) + LiveKit Room + 返回 callId/roomId/Token"
+    status: implemented
+    linked_tasks: [S1, S2]
+    test_layers:
+      T3: required
+    tests:
+      - file: quwoquan_service/services/rtc-service/tests/call_lifecycle_contract_test.go
+        layer: T3
+
+  A18:
+    criteria: "AnswerCall → 状态流转 RINGING→CONNECTING→IN_CALL，双方 Token 有效可连接 SFU"
+    status: implemented
+    linked_tasks: [S1]
+    test_layers:
+      T3: required
+    tests:
+      - file: quwoquan_service/services/rtc-service/tests/call_lifecycle_contract_test.go
+        layer: T3
+
+  A19:
+    criteria: "HangupCall → 通话结束 + duration 计算精确到秒 + call.ended 事件发布"
+    status: implemented
+    linked_tasks: [S1, S3]
+    test_layers:
+      T3: required
+    tests:
+      - file: quwoquan_service/services/rtc-service/tests/call_lifecycle_contract_test.go
+        layer: T3
+
+  A20:
+    criteria: "RejectCall → 发起方收到 REJECTED 通知 + endReason=REJECTED + 通话结束"
+    status: implemented
+    linked_tasks: [S1]
+    test_layers:
+      T3: required
+    tests:
+      - file: quwoquan_service/services/rtc-service/tests/call_lifecycle_contract_test.go
+        layer: T3
+
+  A21:
+    criteria: "超时 30s 无应答 → status=ENDED + endReason=NO_ANSWER，双方正确收到通知"
+    status: implemented
+    linked_tasks: [S1]
+    test_layers:
+      T3: required
+    tests:
+      - file: quwoquan_service/services/rtc-service/tests/call_lifecycle_contract_test.go
+        layer: T3
+
+  A22:
+    criteria: "JoinCall → 新参与者加入房间 + call.participant_joined 事件 + 其他参与者收到通知"
+    status: implemented
+    linked_tasks: [S4]
+    test_layers:
+      T3: required
+    tests:
+      - file: quwoquan_service/services/rtc-service/tests/room_management_contract_test.go
+        layer: T3
+
+  A23:
+    criteria: "LeaveCall → 参与者离开 + 最后一人离开时通话自动结束 + call.ended 发布"
+    status: implemented
+    linked_tasks: [S4]
+    test_layers:
+      T3: required
+    tests:
+      - file: quwoquan_service/services/rtc-service/tests/room_management_contract_test.go
+        layer: T3
+
+  A24:
+    criteria: "InviteToCall → 被邀请人收到来电推送 + 可加入已有通话 + 32 人上限校验"
+    status: implemented
+    linked_tasks: [S4, S5]
+    test_layers:
+      T3: required
+    tests:
+      - file: quwoquan_service/services/rtc-service/tests/room_management_contract_test.go
+        layer: T3
+
+  A25:
+    criteria: "录制：StartRecording → LiveKit Egress 启动 → 通话结束 → 文件存入 OSS → URL 可下载"
+    status: implemented
+    linked_tasks: [S6]
+    test_layers:
+      T3: required
+    tests:
+      - file: quwoquan_service/services/rtc-service/tests/call_lifecycle_contract_test.go
+        layer: T3
+        note: "API 端点已实现，LiveKit Egress 实际流程需集成环境验证"
+
+  A26:
+    criteria: "屏幕共享：StartScreenShare → 其他参与者收到屏幕流 → StopScreenShare → 恢复摄像头"
+    status: implemented
+    linked_tasks: [S7]
+    test_layers:
+      T3: required
+    tests:
+      - file: quwoquan_service/services/rtc-service/tests/call_lifecycle_contract_test.go
+        layer: T3
+        note: "API 端点 + 单人互斥已实现，流传输需集成环境验证"
+
+  A27:
+    criteria: "call.ended 事件 → chat-service 消费 → 来源会话插入系统消息 '[语音通话 03:42]'"
+    status: deferred
+    linked_tasks: [S3, S8]
+    test_layers:
+      T3: required
+    tests: []
+    defer_reason: "chat-service 消费端点需单独 task 实现（跨服务集成）"
+    restart_condition: "rtc-service 部署 integration 后"
+
+  A28:
+    criteria: "500 并发 InitiateCall p99 < 200ms（含 LiveKit Room 创建 + Token 签发）"
+    status: deferred
+    linked_tasks: [S1, S2]
+    test_layers:
+      T3: required
+    tests: []
+    defer_reason: "性能基准测试需 integration 环境实际运行"
+    restart_condition: "integration 部署后"
+
+  A29:
+    criteria: "32 人满房视频通话 → SFU 节点 CPU < 85% + 端到端延迟 p95 < 350ms"
+    status: deferred
+    linked_tasks: [I1]
+    test_layers:
+      T3: required
+    tests: []
+    defer_reason: "SFU 负载测试需 integration 环境 + LiveKit 实例"
+    restart_condition: "LiveKit SFU 部署 integration 后"
+
+  A30:
+    criteria: "弱网 100kbps → Simulcast 自动降至 180p → 音频不中断 ≥ 60s → MOS ≥ 3.0"
+    status: deferred
+    linked_tasks: [S9]
+    test_layers:
+      T3: required
+    tests: []
+    defer_reason: "弱网模拟需 tc(netem) 工具 + 真实 WebRTC 流"
+    restart_condition: "integration 弱网模拟环境就绪"
+
+  A31:
+    criteria: "断网 10s 内恢复 → ICE restart → 重连成功率 ≥ 95%，音视频 < 5s 恢复"
+    status: deferred
+    linked_tasks: [S9]
+    test_layers:
+      T3: required
+    tests: []
+    defer_reason: "ICE restart 测试需真实网络中断模拟"
+    restart_condition: "integration 弱网模拟环境就绪"
+
+  # ═══════════════════════════════════════════════════════════
+  # T4 端到端旅程层 (A32~A43)
+  # ═══════════════════════════════════════════════════════════
+
+  A32:
+    criteria: "1v1 语音通话完整旅程：从 ChatDetail 发起→呼叫动效→接听→通话 30s→挂断→记录消息可见"
+    status: deferred
+    linked_tasks: [U1, U2, S1]
+    test_layers:
+      T4: required
+    tests: []
+    defer_reason: "T4 Patrol 旅程测试需端云联调环境"
+    restart_condition: "integration 全链路就绪"
+
+  A33:
+    criteria: "1v1 视频通话完整旅程：同上 + 视频流双向可见 + 前后摄像头切换无闪屏"
+    status: deferred
+    linked_tasks: [U1, U2, S1]
+    test_layers:
+      T4: required
+    tests: []
+    defer_reason: "T4 Patrol 旅程测试需端云联调环境"
+    restart_condition: "integration 全链路就绪"
+
+  A34:
+    criteria: "多人通话旅程：发起→4 人加入→网格布局正确→1 人离开→布局动态调整→通话继续"
+    status: deferred
+    linked_tasks: [U3, U4, S4]
+    test_layers:
+      T4: required
+    tests: []
+    defer_reason: "T4 Patrol 需多设备协调"
+    restart_condition: "integration + 多设备测试环境就绪"
+
+  A35:
+    criteria: "来电旅程：B 在线收到来电推送→来电页展示→接听→双向通话→挂断"
+    status: deferred
+    linked_tasks: [U1, S5]
+    test_layers:
+      T4: required
+    tests: []
+    defer_reason: "需 realtime-gateway WS + VoIP Push 联调"
+    restart_condition: "realtime-gateway 就绪"
+
+  A36:
+    criteria: "拒绝旅程：B 收到来电→拒绝→A 2s 内显示'对方已拒绝'→通话结束"
+    status: deferred
+    linked_tasks: [U1, S1]
+    test_layers:
+      T4: required
+    tests: []
+    defer_reason: "T4 Patrol 需端云联调"
+    restart_condition: "integration 全链路就绪"
+
+  A37:
+    criteria: "超时旅程：A 呼叫→B 30s 不接→A 显示'对方未接听'→通话结束"
+    status: deferred
+    linked_tasks: [U1, S1]
+    test_layers:
+      T4: required
+    tests: []
+    defer_reason: "T4 Patrol 需端云联调"
+    restart_condition: "integration 全链路就绪"
+
+  A38:
+    criteria: "PiP 旅程：通话中返回聊天列表→PiP 浮窗可见可拖动→点击返回通话全屏"
+    status: deferred
+    linked_tasks: [U6]
+    test_layers:
+      T4: required
+    tests: []
+    defer_reason: "PiP 需真机 + 通话中路由验证"
+    restart_condition: "integration 全链路就绪"
+
+  A39:
+    criteria: "屏幕共享旅程：A 发起共享→全员看到屏幕→A 停止→恢复摄像头画面"
+    status: deferred
+    linked_tasks: [S7, U7]
+    test_layers:
+      T4: required
+    tests: []
+    defer_reason: "屏幕共享需 ReplayKit/MediaProjection 真机验证"
+    restart_condition: "integration 全链路就绪"
+
+  A40:
+    criteria: "灰度 prod 5%→20%→50%→100% 各阶段无回滚触发，通话建立成功率 ≥ 98%"
+    status: deferred
+    linked_tasks: [D5]
+    test_layers:
+      T4: required
+    tests: []
+    defer_reason: "灰度发布需 prod 环境"
+    restart_condition: "prod 灰度启动"
+
+  A41:
+    criteria: "灰度实测 1v1 音频端到端延迟 p95 ≤ 150ms，视频 p95 ≤ 200ms"
+    status: deferred
+    linked_tasks: [D5]
+    test_layers:
+      T4: required
+    tests: []
+    defer_reason: "延迟测量需 prod 真实流量"
+    restart_condition: "prod 灰度 5% 阶段"
+
+  A42:
+    criteria: "灰度实测 32 人满房视频端到端延迟 p95 ≤ 350ms，音频 p95 ≤ 200ms"
+    status: deferred
+    linked_tasks: [D5]
+    test_layers:
+      T4: required
+    tests: []
+    defer_reason: "满房压测需 integration + prod"
+    restart_condition: "prod 灰度 5% 阶段"
+
+  A43:
+    criteria: "灰度 7 天观察通话中断率（非主动挂断）≤ 2%，端侧崩溃率 ≤ 0.1%"
+    status: deferred
+    linked_tasks: [D5]
+    test_layers:
+      T4: required
+    tests: []
+    defer_reason: "中断率/崩溃率需 7 天 prod 数据"
+    restart_condition: "prod 灰度 20% 阶段"
+
+non_functional_acceptance:
+  realtime:
+    criteria: "1v1 延迟 p95 ≤ 200ms，32人 p95 ≤ 350ms"
+    status: deferred
+    evidence: "design.md KD-13 定义 SLO，需 integration 实测"
+  weak_network:
+    criteria: "6级对抗 L0~L5，弱网 100kbps 音频不断 ≥60s"
+    status: pending
+    evidence: "设计完成（KD-10），实现待 Gap-Closing Phase D"
+  concurrency:
+    criteria: "500 并发 InitiateCall p99 < 200ms"
+    status: deferred
+    evidence: "需 integration 基准测试"
+  elasticity:
+    criteria: "SFU CPU <85% 下自动扩容"
+    status: implemented
+    evidence: "hpa.yaml CPU 70%/75% 自动扩容"
+  experience:
+    criteria: "对标 FaceTime 7种网格 + Teams 演讲者视图 + PiP + 控制栏"
+    status: implemented
+    evidence: "video_grid_layout.dart + speaker_highlight_layout.dart + pip_call_overlay.dart + call_controls_bar.dart"
+  grayscale:
+    criteria: "dev→integration 48h→prod 5%→20%→50%→100%，五项门禁自动回滚"
+    status: implemented
+    evidence: "design.md KD-13 + Kustomize 三环境 overlays"

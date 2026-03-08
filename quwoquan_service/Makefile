@@ -1,4 +1,4 @@
-.PHONY: gate build test test-unit test-contract test-contract-local test-integration lint verify-metadata codegen-app codegen-content-service codegen-rec-model-python dev dev-down clean
+.PHONY: gate build test test-unit test-contract test-contract-local test-integration lint verify-metadata codegen-app codegen-content-service codegen-rec-model-python codegen-storage dev dev-down clean
 
 # ─── Quality Gate ────────────────────────────────────────────────────
 gate:
@@ -8,15 +8,17 @@ gate:
 build:
 	go build ./runtime/...
 	go build ./tools/...
+	go build ./services/user-service/...
+	go build ./services/rtc-service/...
 
 # ─── Test ────────────────────────────────────────────────────────────
 test: test-unit
 
 test-unit:
-	go test ./runtime/... ./services/content-service/... -v -count=1
+	go test ./runtime/... ./services/content-service/... ./services/chat-service/... ./services/user-service/... ./services/rtc-service/... -v -count=1
 
 test-contract:
-	go test ./services/content-service/... -v -count=1
+	go test ./services/content-service/... ./services/chat-service/... ./services/user-service/... ./services/rtc-service/... -v -count=1
 
 # Run L2 contract tests against a locally running MongoDB (no Docker required).
 # Usage:
@@ -51,6 +53,10 @@ codegen-content-service:
 
 codegen-rec-model-python:
 	go run ./tools/codegen_rec_model_python --metadata-dir contracts/metadata --output-dir services/rec-model-service/generated
+
+codegen-storage:
+	@echo "=== codegen-storage: user-service ==="
+	go run ./tools/codegen_storage --metadata-dir contracts/metadata --manifest services/user-service/codegen_storage_manifest.yaml
 
 # ─── Dev Environment ─────────────────────────────────────────────────
 dev:

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 /// 聊天设置/聊天信息页（1:1 图二）
@@ -19,6 +20,8 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
   bool _pin = false;
   bool _privacyShield = false;
   bool _membersExpanded = false;
+  List<Map<String, dynamic>> _members = [];
+  bool _membersLoading = true;
 
   static const int _memberColumns = 5;
 
@@ -29,7 +32,32 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
   static const int _memberSlotsExpanded =
       (_memberColumns * 5) - 1; // 24 成员 + 1 添加 = 25 格 = 5 行
 
-  static const List<Map<String, String>> _mockMembers = [
+  @override
+  void initState() {
+    super.initState();
+    _loadMembers();
+  }
+
+  Future<void> _loadMembers() async {
+    try {
+      final repo = ref.read(chatRepositoryProvider);
+      final members = await repo.listMembers(
+        conversationId: widget.conversationId,
+        limit: 50,
+      );
+      if (mounted) {
+        setState(() {
+          _members = members;
+          _membersLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _membersLoading = false);
+    }
+  }
+
+  // Legacy mock data preserved as fallback reference; not used at runtime.
+  static const List<Map<String, String>> _mockMembersLegacy = [
     {
       'name': '成员一',
       'username': 'member1',
@@ -169,7 +197,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
       isDark,
       ColorType.borderPrimary,
     );
-    final memberCount = _mockMembers.length;
+    final memberCount = _members.length;
 
     final dividerColor = SettingsSemanticConstants.dividerColor(isDark);
     return Scaffold(
@@ -227,9 +255,9 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                       final maxMembers = _membersExpanded
                           ? _memberSlotsExpanded
                           : _memberSlotsCollapsed;
-                      final visibleCount = _mockMembers.length > maxMembers
+                      final visibleCount = _members.length > maxMembers
                           ? maxMembers
-                          : _mockMembers.length;
+                          : _members.length;
                       final totalCells = visibleCount + 1;
                       return GridView.builder(
                         shrinkWrap: true,
@@ -254,11 +282,11 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                               ),
                             );
                           }
-                          final m = _mockMembers[index];
-                          final username = m['username'] ?? 'user_$index';
+                          final m = _members[index];
+                          final username = m['userId'] as String? ?? 'user_$index';
                           return _MemberAvatar(
-                            name: m['name']!,
-                            avatarUrl: m['avatar'] ?? '',
+                            name: m['displayName'] as String? ?? m['name'] as String? ?? '',
+                            avatarUrl: m['avatarUrl'] as String? ?? m['avatar'] as String? ?? '',
                             textColor: fgPrimary,
                             username: username,
                             onTap: () => context.push('/user/$username'),
@@ -267,7 +295,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                       );
                     },
                   ),
-                  if (_mockMembers.length > _memberSlotsCollapsed) ...[
+                  if (_members.length > _memberSlotsCollapsed) ...[
                     SizedBox(height: AppSpacing.xs),
                     Center(
                       child: GestureDetector(

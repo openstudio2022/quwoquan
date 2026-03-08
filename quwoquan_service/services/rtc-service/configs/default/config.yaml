@@ -1,0 +1,27 @@
+config:
+  version: "1.0.0"
+  min_image_version: ""
+  max_image_version: ""
+
+service:
+  http:
+    addr: ":18083"
+
+mongodb:
+  uri: "mongodb://localhost:27017"
+  database: "quwoquan_rtc_local"
+
+redis:
+  general:
+    mode: standalone
+    addr: "localhost:6379"
+    db: 3
+  realtime:
+    mode: standalone
+    addr: "localhost:6379"
+    db: 4
+
+livekit:
+  url: "ws://localhost:7880"
+  api_key: "devkey"
+  api_secret: "devsecret"

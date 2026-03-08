@@ -81,6 +81,26 @@ api_routes:
     operation: UpdatePrivacySettings
     request_entity: UserSetting
 
+  - method: GET
+    path: /v1/users/{userId}/works
+    operation: ListUserWorks
+    description: 用户作品集列表（用户主页-创作 Tab 作品子分类）
+    query_params: [cursor, limit]
+    response_entity: UserWork
+
+  - method: GET
+    path: /v1/users/{userId}/life-items
+    operation: ListUserLifeItems
+    description: 用户生活记录列表（用户主页-生活 Tab）
+    query_params: [category, cursor, limit]
+    response_entity: UserLifeItem
+
+  - method: GET
+    path: /v1/users/{userId}/likes
+    operation: ListUserLikes
+    description: 用户获赞列表（用户主页-统计-获赞）
+    query_params: [cursor, limit]
+
   - method: POST
     path: /v1/user/devices/push-tokens
     operation: RegisterDevice

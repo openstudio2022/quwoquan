@@ -3,12 +3,8 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
-	"time"
-
-	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
 )
 
 // ---------------------------------------------------------------------------
@@ -148,74 +144,43 @@ func TestApplyEnvOverrides_RecModelService(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// resolvePoolConfig
+// toSceneConfig
 // ---------------------------------------------------------------------------
 
-func TestResolvePoolConfig_StandaloneDefaults(t *testing.T) {
-	cfg := redisSceneCfg{Mode: "standalone"} // all pool fields zero
-	pool := resolvePoolConfig(cfg)
-	base := recinfra.DefaultRedisPoolConfig()
-	cpus := runtime.GOMAXPROCS(0)
-
-	if pool.PoolSize != cpus*20 {
-		t.Errorf("standalone PoolSize: want %d, got %d", cpus*20, pool.PoolSize)
+func TestToSceneConfig_StandaloneWithAddr(t *testing.T) {
+	r := redisSceneCfg{Mode: "standalone", Addr: "redis:6379", Password: "pass"}
+	sc := toSceneConfig(r)
+	if sc.Mode != "standalone" {
+		t.Errorf("Mode: want standalone, got %q", sc.Mode)
 	}
-	if pool.ReadTimeout != base.ReadTimeout {
-		t.Errorf("standalone ReadTimeout: want %v, got %v", base.ReadTimeout, pool.ReadTimeout)
+	if sc.Addr != "redis:6379" || sc.Password != "pass" {
+		t.Error("Addr/Password not propagated")
 	}
 }
 
-func TestResolvePoolConfig_ClusterDefaults(t *testing.T) {
-	cfg := redisSceneCfg{Mode: "cluster"} // all pool fields zero
-	pool := resolvePoolConfig(cfg)
-	cpus := runtime.GOMAXPROCS(0)
-
-	if pool.PoolSize != cpus*30 {
-		t.Errorf("cluster PoolSize: want %d, got %d", cpus*30, pool.PoolSize)
+func TestToSceneConfig_StandaloneNoAddrFallsToMemory(t *testing.T) {
+	r := redisSceneCfg{Mode: "standalone"}
+	sc := toSceneConfig(r)
+	if sc.Mode != "memory" {
+		t.Errorf("empty standalone addr should fallback to memory, got %q", sc.Mode)
 	}
 }
 
-func TestResolvePoolConfig_ExplicitOverridesDefault(t *testing.T) {
-	cfg := redisSceneCfg{
-		Mode: "standalone",
-	}
-	cfg.Pool.Size = 50
-	cfg.Pool.MinIdle = 10
-	cfg.Pool.ReadTimeoutMs = 200
-	cfg.Pool.WriteTimeoutMs = 250
-	cfg.Pool.DialTimeoutMs = 1000
-
-	pool := resolvePoolConfig(cfg)
-
-	if pool.PoolSize != 50 {
-		t.Errorf("explicit PoolSize: want 50, got %d", pool.PoolSize)
-	}
-	if pool.MinIdleConns != 10 {
-		t.Errorf("explicit MinIdleConns: want 10, got %d", pool.MinIdleConns)
-	}
-	if pool.ReadTimeout != 200*time.Millisecond {
-		t.Errorf("explicit ReadTimeout: want 200ms, got %v", pool.ReadTimeout)
-	}
-	if pool.WriteTimeout != 250*time.Millisecond {
-		t.Errorf("explicit WriteTimeout: want 250ms, got %v", pool.WriteTimeout)
-	}
-	if pool.DialTimeout != 1000*time.Millisecond {
-		t.Errorf("explicit DialTimeout: want 1000ms, got %v", pool.DialTimeout)
+func TestToSceneConfig_ClusterNoAddrsFallsToMemory(t *testing.T) {
+	r := redisSceneCfg{Mode: "cluster"}
+	sc := toSceneConfig(r)
+	if sc.Mode != "memory" {
+		t.Errorf("cluster with no addrs should fallback to memory, got %q", sc.Mode)
 	}
 }
 
-func TestResolvePoolConfig_ZeroFieldsKeptAsDefault(t *testing.T) {
-	// Only Size is set; timeouts should keep their CPU-based defaults.
-	cfg := redisSceneCfg{Mode: "cluster"}
-	cfg.Pool.Size = 100
-	pool := resolvePoolConfig(cfg)
-
-	if pool.PoolSize != 100 {
-		t.Errorf("PoolSize: want 100, got %d", pool.PoolSize)
-	}
-	// ReadTimeout should still be the cluster default (100ms), not 0.
-	if pool.ReadTimeout == 0 {
-		t.Error("ReadTimeout must not be zero when pool.read_timeout_ms is unset")
+func TestToSceneConfig_PoolSizePropagated(t *testing.T) {
+	r := redisSceneCfg{Mode: "standalone", Addr: "redis:6379"}
+	r.Pool.Size = 50
+	r.Pool.MinIdle = 10
+	sc := toSceneConfig(r)
+	if sc.PoolSize != 50 || sc.MinIdleConns != 10 {
+		t.Errorf("PoolSize=%d MinIdleConns=%d", sc.PoolSize, sc.MinIdleConns)
 	}
 }
 

@@ -1,0 +1,99 @@
+version: 2
+aggregate: CallSession
+
+events:
+  - name: CallInitiated
+    description: 通话发起（发起方创建 CallSession + LiveKit Room）
+    producer: rtc-service
+    consumers: [realtime-gateway, notification-service]
+    channel: event_store
+    payload_entity: CallSession
+    payload_fields: [_id, callType, initiatorId, conversationId, circleId, maxParticipants, createdAt]
+    realtime_channel: "rt:rtc:call:{callId}"
+
+  - name: CallRinging
+    description: 来电振铃（被邀请人收到来电通知）
+    producer: rtc-service
+    consumers: [realtime-gateway, notification-service]
+    channel: event_store
+    payload_fields: [callId, callType, initiatorId, targetUserId, conversationId]
+    realtime_channel: "rt:rtc:user:{targetUserId}"
+    push_policy:
+      online: websocket
+      offline: voip_push
+      description: 在线走 WS 推送，离线走 VoIP Push（iOS CallKit / Android FullScreen Intent）
+
+  - name: CallAnswered
+    description: 通话接听（参与者进入 connecting 状态）
+    producer: rtc-service
+    consumers: [realtime-gateway]
+    channel: event_store
+    payload_fields: [callId, userId]
+    realtime_channel: "rt:rtc:call:{callId}"
+
+  - name: CallConnected
+    description: 媒体建连成功（ICE+DTLS 完成，参与者 connected）
+    producer: rtc-service
+    consumers: [realtime-gateway]
+    channel: event_store
+    payload_fields: [callId, userId, participantCount]
+    realtime_channel: "rt:rtc:call:{callId}"
+
+  - name: CallEnded
+    description: 通话结束（所有参与者离开或主动挂断）
+    producer: rtc-service
+    consumers: [realtime-gateway, chat-service, notification-service]
+    channel: event_store
+    payload_entity: CallSession
+    payload_fields: [_id, callType, initiatorId, conversationId, endReason, durationMs, participantCount, startedAt, endedAt]
+    realtime_channel: "rt:rtc:call:{callId}"
+    chat_integration:
+      description: chat-service 消费此事件，在关联会话中插入通话记录消息（type=system_call_log）
+
+  - name: ParticipantJoined
+    description: 参与者加入通话（多人模式）
+    producer: rtc-service
+    consumers: [realtime-gateway]
+    channel: event_store
+    payload_fields: [callId, userId, role, participantCount]
+    realtime_channel: "rt:rtc:call:{callId}"
+
+  - name: ParticipantLeft
+    description: 参与者离开通话
+    producer: rtc-service
+    consumers: [realtime-gateway]
+    channel: event_store
+    payload_fields: [callId, userId, participantCount]
+    realtime_channel: "rt:rtc:call:{callId}"
+
+  - name: CallRecordingStarted
+    description: 通话录制开始（LiveKit Egress 触发）
+    producer: rtc-service
+    consumers: [realtime-gateway]
+    channel: event_store
+    payload_fields: [callId, startedByUserId]
+    realtime_channel: "rt:rtc:call:{callId}"
+
+  - name: CallRecordingStopped
+    description: 通话录制停止
+    producer: rtc-service
+    consumers: [realtime-gateway]
+    channel: event_store
+    payload_fields: [callId, recordingUrl]
+    realtime_channel: "rt:rtc:call:{callId}"
+
+  - name: ScreenShareStarted
+    description: 屏幕共享开始
+    producer: rtc-service
+    consumers: [realtime-gateway]
+    channel: event_store
+    payload_fields: [callId, userId]
+    realtime_channel: "rt:rtc:call:{callId}"
+
+  - name: ScreenShareStopped
+    description: 屏幕共享停止
+    producer: rtc-service
+    consumers: [realtime-gateway]
+    channel: event_store
+    payload_fields: [callId, userId]
+    realtime_channel: "rt:rtc:call:{callId}"

@@ -7,7 +7,7 @@
 - **端云开发流水线**：[00_MASTER_DEVELOPMENT_FLOW.md](00_MASTER_DEVELOPMENT_FLOW.md)
 - **Runtime 阶段与自动化验收**：[RUNTIME_DEVELOPMENT_PLAN.md](RUNTIME_DEVELOPMENT_PLAN.md)
 - **特性树**：`specs/feature-tree/`、`specs/feature-tree/tree_index.yaml`
-- **命令**：`/opsx-ff`、`/opsx-apply`、`/opsx-archive`（根目录统一）
+- **命令**：`/explore`、`/prd`、`/design`、`/dev`、`/commit`、`/deploy`（根目录统一）；`/archive` 仅作兼容补归档入口
 - **推荐模型服务就绪**：Create 阶段完成后见 [rec-model-service/readiness.md](feature-tree/recommendation-platform/rec-model-service/readiness.md)；Python 模型与接口由 `make codegen-rec-model-python` 生成，与 App/Go 同源。训练工程见 recommendation-platform 下 **rec-model-training**。
 
 ## 原则

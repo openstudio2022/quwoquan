@@ -1,0 +1,34 @@
+version: 1
+aggregate: Connection
+
+events:
+  - name: UserConnected
+    description: 用户建立连接（WebSocket 或 Long-polling 首次 poll）
+    producer: realtime-gateway
+    consumers: [notification-service]
+    channel: direct
+    payload_fields: [userId, connId, nodeId, transport, connectedAt]
+
+  - name: UserDisconnected
+    description: 用户断开所有连接（所有 connId 清除）
+    producer: realtime-gateway
+    consumers: [notification-service]
+    channel: direct
+    payload_fields: [userId, lastNodeId, disconnectedAt]
+    description_detail: |
+      通知 notification-service 切换到离线推送模式（APNs/FCM）。
+      仅当用户所有 connId 均已清除时才发布此事件。
+
+  - name: TransportSwitched
+    description: 用户传输模式切换（活跃→空闲、空闲→活跃）
+    producer: realtime-gateway
+    consumers: []
+    channel: direct
+    payload_fields: [userId, fromTransport, toTransport, switchedAt]
+
+  - name: ConnectionReplaced
+    description: 用户超过 per-user 连接限制，踢掉最早连接
+    producer: realtime-gateway
+    consumers: []
+    channel: direct
+    payload_fields: [userId, replacedConnId, newConnId, nodeId]

@@ -1,9 +1,16 @@
 ---
 name: health_wellness
-description: 回答健康生活方式、营养饮食、运动健身、睡眠管理与一般健康信息问题。
+description: 健康咨询、养生建议、运动指导、饮食营养、睡眠改善。
 domain: health_wellness
+mode: qa
 allowed_tools: web_search local_context
-trigger_keywords: 健康 睡眠 饮食 运动 减脂 养生 卡路里 体质指数 心率
+trigger_keywords: []
+searchPolicy:
+  maxReflection: 2
+  qualityThreshold: 0.5
+  strategy: research
+requires:
+  tools: [web_search]
 output_contract: assistant_turn_v2
 tool_observation_contract: tool_observation_v1
 reference_docs: references/domain-knowledge.md references/output-examples.md
@@ -85,7 +92,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 - **午餐**：{示例食物组合}（约 **{N} kcal**）
 - **晚餐**：{示例食物组合}（约 **{N} kcal**）
 
-> ⚠️ 以上为一般性健康参考建议，如有特殊健康状况，请咨询专业医生或注册营养师。
+如有特殊健康状况，建议咨询专业医生或注册营养师获取个性化方案。
 
 ---
 💬 **你可能还想了解**

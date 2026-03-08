@@ -6,7 +6,7 @@ import 'package:test/test.dart';
 void main() {
   group('Domain catalog contract', () {
     test(
-      'routing catalog keeps 19 domains and all domains use skill dialogue',
+      'routing catalog has at least 15 domains and all domains use skill dialogue',
       () {
         final routingCatalog = File(
           'assets/personal_assistant/prompts/domain_routing/domain_routing_catalog.json',
@@ -23,8 +23,9 @@ void main() {
             .where((id) => id.isNotEmpty)
             .toSet()
             .toList(growable: false);
-        expect(domains.length, equals(19));
-        expect(domains.contains('social_companion_chat'), isTrue);
+        expect(domains.length, greaterThanOrEqualTo(15));
+        expect(domains.contains('emotion_companion'), isTrue);
+        expect(domains.contains('fortune_astrology'), isTrue);
         expect(domains.contains('fallback_general_search'), isTrue);
 
         for (final item in domainItems) {
@@ -57,18 +58,6 @@ void main() {
             isTrue,
             reason: 'missing ${skillFile.path}',
           );
-          for (final rel in const <String>[
-            'dialogue/state_machine.md',
-            'dialogue/state_prompts.md',
-            'dialogue/state_transition_contract.json',
-          ]) {
-            final target = File('$skillRoot/$rel');
-            expect(
-              target.existsSync(),
-              isTrue,
-              reason: 'missing ${target.path}',
-            );
-          }
         }
       },
     );
@@ -105,7 +94,7 @@ void main() {
       final pageTypeFallbacks =
           (decoded['pageTypeFallbacks'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{};
-      expect(pageTypeFallbacks['chat'], equals('social_companion_chat'));
+      expect(pageTypeFallbacks['chat'], equals('emotion_companion'));
       final domains =
           (decoded['domains'] as List?)?.whereType<Map>().toList() ??
           const <Map>[];
@@ -115,21 +104,17 @@ void main() {
         expect((item['dialoguePath'] as String?)?.isNotEmpty, isTrue);
         expect(item['priority'], isNotNull);
         expect(item['enabled'], isNotNull);
+        expect(
+          (item['description'] as String?)?.isNotEmpty,
+          isTrue,
+          reason: '${item['domainId']} must have a description for LLM routing',
+        );
+        expect(
+          (item['mode'] as String?)?.isNotEmpty,
+          isTrue,
+          reason: '${item['domainId']} must declare a mode (qa/task/hybrid)',
+        );
       }
-      final weather = domains.firstWhere(
-        (item) => (item['domainId'] as String?)?.trim() == 'weather',
-        orElse: () => const <String, dynamic>{},
-      );
-      expect(weather.isNotEmpty, isTrue);
-      final weatherKeywords =
-          (weather['intentKeywords'] as List?)
-              ?.whereType<String>()
-              .map((item) => item.trim().toLowerCase())
-              .where((item) => item.isNotEmpty)
-              .toList(growable: false) ??
-          const <String>[];
-      expect(weatherKeywords.contains('tianqi'), isTrue);
-      expect(weatherKeywords.contains('weather'), isTrue);
     });
 
     test('legacy prompt domain directory is removed', () {

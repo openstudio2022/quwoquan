@@ -28,8 +28,10 @@ ruby -ryaml -e '
     processes.each do |process_name, process_cfg|
       abort("[verify] FAIL: process name empty in #{env}") if process_name.to_s.strip.empty?
 
-      unless process_name == "seed-box" || process_name.end_with?("-service")
-        abort("[verify] FAIL: invalid process name '#{process_name}' in #{env} (expect seed-box or *-service)")
+      allowed = process_name == "seed-box" || process_name.end_with?("-service") ||
+                %w[realtime-gateway livekit-sfu coturn].include?(process_name)
+      unless allowed
+        abort("[verify] FAIL: invalid process name '#{process_name}' in #{env} (expect seed-box, *-service, realtime-gateway, livekit-sfu, coturn)")
       end
 
       domains = process_cfg.is_a?(Hash) ? process_cfg["domains"] : nil

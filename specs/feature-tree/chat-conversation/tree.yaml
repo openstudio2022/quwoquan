@@ -18,6 +18,36 @@ l2:
           - feature: status-transition-and-receipt-model
             l5:
               - feature: receipt-consistency-repair
+      - feature: seq-based-ordering-and-dedup
+        l4:
+          - feature: server-seq-assignment-policy
+            l5:
+              - feature: seq-monotonicity-guard
+      - feature: realtime-push-and-offline-sync
+        l4:
+          - feature: websocket-push-gap-fill-policy
+            l5:
+              - feature: gap-fill-completeness-guard
+      - feature: large-group-fanout
+        l4:
+          - feature: online-only-fanout-policy
+            l5:
+              - feature: fanout-latency-guard
+      - feature: voice-message
+        l4:
+          - feature: voice-record-and-send
+          - feature: voice-playback-and-cache
+      - feature: rich-media-message
+        l4:
+          - feature: video-message-e2e
+          - feature: file-message-e2e
+          - feature: image-message-fix
+      - feature: message-interaction-polish
+        l4:
+          - feature: quote-reply-display
+          - feature: mention-highlight-and-picker
+          - feature: voice-earpiece-and-speed
+          - feature: inbox-data-source-unification
   - feature: group-creation-member-management
     l3:
       - feature: group-create-flow
@@ -35,6 +65,16 @@ l2:
           - feature: mute-pin-read-settings-contract
             l5:
               - feature: settings-sync-consistency-guard
+      - feature: large-group-member-storage
+        l4:
+          - feature: external-member-collection-policy
+            l5:
+              - feature: member-count-consistency-guard
+      - feature: conversation-user-state
+        l4:
+          - feature: user-state-isolation-policy
+            l5:
+              - feature: unread-count-accuracy-guard
   - feature: contact-and-session-governance
     l3:
       - feature: contact-search-index

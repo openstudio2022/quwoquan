@@ -2,14 +2,14 @@
 
 ## 设计动因
 
-硬编码视觉字面量（如 width: 44、leadingSize: 44）在 FF/deliver/gate 全链路未被拦截，根因：
+硬编码视觉字面量（如 width: 44、leadingSize: 44）在 PRD/design/dev/deliver/gate 全链路未被拦截，根因：
 1. verify_dart_semantic 被引用但脚本不存在
 2. gate 未调用
 3. 规则中 inline 检查范围与模式不全
 
 ## 方案
 
-采用四层策略：L1 脚本→L2 规则→L3 FF 前置→L4 元数据（未来）。
+采用四层策略：L1 脚本→L2 规则→L3 PRD/Design 前置→L4 元数据（未来）。
 
 ### L1：verify_dart_semantic.py
 
@@ -24,11 +24,11 @@
 - 06-semantic-consistency-audit：将 inline Python 替换为调用脚本
 - 00_MASTER_DEVELOPMENT_FLOW：Implement 约束表增加一行
 
-### L3：FF/deliver 前置
+### L3：PRD/Design/Deliver 前置
 
 - design.md 模板：可选「编码规范与设计 token」小节
 - tasks.md 模板：含 UI 的 task 增加「执行 verify_dart_semantic」步骤
-- opsx-apply：变更含 lib/**/*.dart 时自动执行脚本
+- `/dev`：变更含 lib/**/*.dart 时自动执行脚本
 
 ### L4：元数据驱动（未来演进）
 

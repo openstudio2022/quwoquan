@@ -1,40 +1,44 @@
-# 特性树 L1-L5 层级定义与分解规范（唯一约定）
+# 特性树层级定义与分解规范（唯一约定）
 
-> **权威**：本文档是特性树 L1-L5 层级划分与分解的**唯一权威定义**。开发全流程（Plan → Create → Implement → Verify → Submit）中，特性树分解与各卡点须遵从本规范；流程规格与命令已同步引用，见**八、特性树分解与开发卡点落实**及 `specs/00_MASTER_DEVELOPMENT_FLOW.md`、`.cursor/commands/`。
+> **权威**：本文档是特性树层级划分与分解的**唯一权威定义**。开发全流程（Plan → Create → Implement → Verify → Submit）中，特性树分解与各卡点须遵从本规范；流程规格与命令已同步引用，见**八、特性树分解与开发卡点落实**及 `specs/00_MASTER_DEVELOPMENT_FLOW.md`、`.cursor/commands/`。
 
 ---
 
 ## 一、定义与分解原则（开宗明义）
 
-### 1.1 层级定义概要
+### 1.1 层级定义概要（治理视图）
 
-| 层级 | 语义 | 目录深度 | level 取值 | 分解要点 |
-|------|------|----------|------------|----------|
-| **L1** | 能力域 | 1 | L1 | 固定 9 个，不新增 |
-| **L2** | 特性 | 2 | L2_feature | 具备独立交付价值 |
-| **L3** | 子特性/组件 | 3 | L3_subfeature | 有独立契约或模块边界 |
-| **L4** | 契约/任务 | 4 | L4_object_task | **默认叶子层**，可落地、可验收 |
-| **L5** | 子任务（可选） | 5 | L5 / L5_subtask | **仅当 L4 任务过大需拆成多个子任务时**使用 |
+| 层级 | 语义 | 目录深度 | 推荐 level 取值 | 分解要点 |
+|------|------|----------|------------------|----------|
+| **L1** | 关键能力 | 1 | L1 | 固定顶级能力域，不新增 |
+| **L2** | 功能特性 | 2 | L2_feature | 具备独立交付价值 |
+| **L3** | 子功能或组件 | 3 | L3_subfeature | 有独立契约或模块边界 |
+| **L4** | Story / 最小交付单元 | 4 | L4_story | 默认叶子层，可开发、可验收 |
+
+**兼容说明**：
+- 历史节点中仍可能存在 `L1_domain / L3_component / L4_detail / L5_leaf / L5_cross_cutting`。
+- 这些命名在迁移完成前继续兼容读取，但**新特性一律按 L1~L4 治理视图建模**。
+- 历史 `L5` 视为“兼容层/遗留子任务表达”，不再作为新增特性的默认建模层。
 
 ### 1.2 分解过程（必须遵从）
 
 1. **归属 L1**：需求先归属既有 L1，不新增 L1。
 2. **L2**：可独立交付、可单独规划迭代 → 建 L2。
 3. **L3**：有独立契约或模块边界 → 建 L3。
-4. **L4**：可对应具体契约/策略/实现任务 → 建 L4；**L4 即默认叶子**，大多数特性止于 L4。
-5. **L5**：仅当该 L4 任务足够大、需拆成 **≥2 个独立可验收子任务** 时才建 L5；否则不建 L5。
+4. **L4**：可对应一个可独立交付、可独立验收、可绑定测试证据的 **Story** → 建 L4；**L4 即默认叶子**。
+5. **历史 L5**：仅用于兼容旧树结构；新特性优先把工程子步骤写入 `tasks.md`，而不是继续扩一层目录。
 
 ### 1.3 避免（负面示例）
 
-- **禁止**多套 level 命名混用（如 L5_leaf / L5_cross_cutting 与 L5_subtask 混用；统一用 L5 或 L5_subtask）。
-- **禁止**为每个 L4 机械地建一个 L5（如「契约 + guard」拆成两个节点）；guard 等应合并进 L4 的 spec/tasks。
-- **禁止**无独立契约或模块边界就拆 L3，或无具体可验收任务就拆 L4。
+- **禁止**多套 level 命名继续扩散；新特性不得再新增 `L4_detail`、`L5_leaf`、`L5_cross_cutting`。
+- **禁止**把工程实现步骤直接建成树节点；工程步骤应写入 `tasks.md`，交付单元写入 L4 Story。
+- **禁止**无独立契约或模块边界就拆 L3，或无明确用户/平台价值与完成定义就拆 L4。
 
 ---
 
 ## 二、统一层级定义（详细）
 
-**原则**：层级由**目录深度**唯一确定。L4 为默认叶子层；L5 仅当 L4 任务需 subtask 分解时使用。
+**原则**：治理视图以 **L1~L4** 为主。L4 为默认叶子层，代表最小可交付 Story；历史 L5 仅作兼容读取。
 
 ### 2.1 L1：能力域（Domain / Capability）
 
@@ -109,53 +113,53 @@
 
 ---
 
-### 2.4 L4：契约/任务（Contract / Object-task）——**默认叶子层**
+### 2.4 L4：Story / 最小交付单元——**默认叶子层**
 
 | 属性 | 定义 |
 |------|------|
-| **语义** | L3 下的**具体契约、策略或实现任务**，是可直接映射到 metadata/codegen/手写逻辑的粒度。**L4 为默认叶子层**，大多数特性树止于 L4。 |
+| **语义** | L3 下的**最小可交付 Story**，是可直接映射到 spec/design/acceptance/tasks/test evidence 的粒度。**L4 为默认叶子层**，大多数新特性树止于 L4。 |
 | **目录** | `specs/feature-tree/<L1>/<L2>/<L3>/<l4-name>/` |
 | **父子** | 父节点必为 L3（或特殊情况下 L2，见下）。 |
-| **level 取值** | `L4` 或 `L4_object_task`（门禁）/ `L4_detail`（tree_index）。**统一为 `L4_object_task`**，表示「可落地的对象级任务」。 |
+| **level 取值** | 推荐 `L4_story`；迁移期兼容 `L4_object_task` / `L4_detail`。 |
 
 **分解规则**：
 
-- L4 应对应**可执行、可验收**的交付单元。
-- 典型形态：**契约**（如 feed-dto-cursor-contract）、**策略**（如 timeout-circuit-degrade-policy）、**实现任务**（如 mongo-pg-vector-cache-adapters）。
+- L4 应对应**可执行、可验收、可追溯到测试层**的交付单元。
+- 典型形态：一个用户 Story、一个平台 Story、一个契约型 Story、一个跨端云交付 Story。
 - 若 L3 足够简单，可不拆 L4，L3 即叶子。
-- **L4 即叶子**：不强制拆 L5；原先常见的「契约 + guard」「策略 + observability」等应合并进 L4 的 spec/tasks，而非单独建 L5。
+- **L4 即叶子**：工程子步骤进入 `tasks.md`；不要再为“guard/observability/适配器”机械建层级。
 
 **判断标准**：
 
-- 能对应到具体的 API 契约、存储 schema、或 codegen 产物 → L4。
-- 有明确的「完成条件」和验收项 → L4。
+- 能对应到具体的用户/平台价值、契约变更或交付边界 → L4。
+- 有明确的「完成定义」、验收项和测试层映射 → L4。
 
 **示例**：
 
-- `unified-items-cursor` → `feed-dto-cursor-contract`（含游标兼容性保障，无需单独 L5）
-- `repository-interface-layering` → `mongo-pg-vector-cache-adapters`
+- `unified-items-cursor` → `feed-dto-cursor-story`
+- `repository-interface-layering` → `mongo-pg-vector-cache-story`
 
 ---
 
-### 2.5 L5：子任务（Subtask）——**仅当 L4 任务过大需细分时**
+### 2.5 历史 L5：兼容子任务层（Legacy Compatibility）
 
 | 属性 | 定义 |
 |------|------|
-| **语义** | L4 下的**子任务**。**仅当某个 L4 任务足够大、需拆成多个可独立验收的子任务时**才使用 L5。 |
-| **目录** | `specs/feature-tree/<L1>/<L2>/<L3>/<L4>/<l5-name>/` |
-| **父子** | 父节点必为 L4。 |
-| **level 取值** | `L5` 或 `L5_subtask`。 |
+| **语义** | 对历史树结构的兼容表达。新模型中，工程子步骤原则上通过 `tasks.md` 表达，而不是继续下钻目录。 |
+| **目录** | `specs/feature-tree/<L1>/<L2>/<L3>/<L4>/<legacy-l5-name>/` |
+| **父子** | 父节点为历史 L4。 |
+| **level 取值** | `L5` / `L5_subtask` / 历史 `L5_leaf` / `L5_cross_cutting`。 |
 
 **分解规则**：
 
-- **默认不用 L5**：大多数 L4 任务可直接在 tasks.md 中拆解为任务项，无需建 L5 节点。
-- **L5 的触发条件**：某个 L4 任务包含**多个独立可验收的子任务**（通常 ≥2 个），且各自有独立 spec/design/acceptance 价值。
-- 若 L4 下仅有一个「后续步骤」（如 guard、observability），应将其作为 L4 的一部分写入 spec/tasks，**不要单独建 L5**。
+- **新特性默认不用 L5**：大多数 Story 直接在 `tasks.md` 中拆解为任务项。
+- **仅兼容旧节点**：已有 L5 可保留，直到对应 L4 Story 完成收敛迁移。
+- 若只是一个 Story 的实现步骤、增强项或风险控制项，应写入 L4 的 spec/design/tasks，**不要新建 L5**。
 
 **判断标准**：
 
-- L4 任务可拆成 ≥2 个独立可验收子任务 → 可建 L5。
-- L4 任务仅需在 tasks.md 中列若干任务项即可 → 不建 L5。
+- 历史节点已使用 L5，可保留并逐步回收。
+- 新增需求若仅需在 `tasks.md` 中列若干任务项即可完成 → 不建 L5。
 
 **示例（需 L5）**：
 
@@ -173,13 +177,13 @@
 
 | 层级 | 推荐取值 | 说明 |
 |------|----------|------|
-| L1 | `L1` | 能力域，tree_index 可保留 L1_domain 作为兼容 |
-| L2 | `L2_feature` | 特性，与 feature_tree / 门禁一致 |
-| L3 | `L3_subfeature` | 子特性/组件，与门禁一致 |
-| L4 | `L4_object_task` | 契约/任务，**默认叶子层** |
-| L5 | `L5` 或 `L5_subtask` | 仅当 L4 任务需拆成多个子任务时使用 |
+| L1 | `L1` | 关键能力，tree_index 可保留 L1_domain 作为兼容 |
+| L2 | `L2_feature` | 功能特性 |
+| L3 | `L3_subfeature` | 子功能或组件 |
+| L4 | `L4_story` | Story / 最小交付单元，默认叶子层 |
+| Legacy L5 | `L5` / `L5_subtask` | 仅迁移期兼容，不作为新增默认取值 |
 
-**acceptance.yaml** 中 `level` 必须使用上表取值之一。门禁若仍期望 `L5_cross_cutting` 等历史取值，可做兼容映射。
+**acceptance.yaml** 中 `level` 必须优先使用上表取值；历史 `L4_object_task / L4_detail / L5_*` 可做兼容映射。
 
 ---
 
@@ -204,17 +208,12 @@
     └─ 否 → 归入既有 L3
         │
         ▼
-是否可对应具体契约/策略/实现任务？
-    ├─ 是 → L4（契约/任务）
+是否可形成独立交付、独立验收、独立测试映射的 Story？
+    ├─ 是 → L4（Story）
     └─ 否 → 归入既有 L4
-        │
-        ▼
-该 L4 任务是否足够大、需拆成多个独立可验收子任务？
-    ├─ 是（≥2 个子任务）→ L5（子任务）
-    └─ 否 → L4 即叶子，不建 L5
 ```
 
-**原则**：**默认止于 L4**，能合并则合并；仅当 L4 任务过大需 subtask 分解时才建 L5。
+**原则**：**默认止于 L4**，L4 代表 Story；工程步骤进入 `tasks.md`，历史 L5 仅作兼容。
 
 ---
 
@@ -223,13 +222,13 @@
 ### 5.1 tree_index.yaml
 
 - 当前使用：L1_domain, L2_feature, L3_component, L4_detail, L5_leaf
-- **建议**：L3 统一为 `L3_subfeature`，L4 统一为 `L4_object_task`；L5 统一为 `L5` 或 `L5_subtask`（仅当 L4 需 subtask 分解时）
-- 存量树若已有 L5 节点，可保留；新特性**默认止于 L4**，不轻易建 L5
+- **目标**：L3 统一为 `L3_subfeature`，L4 统一为 `L4_story`
+- 存量树若已有 L5 节点，可保留；新特性**默认止于 L4 Story**
 
 ### 5.2 acceptance.yaml
 
 - 功能域：当前部分使用 L2/L3/L4/L5 无后缀
-- **建议**：统一为 L2_feature、L3_subfeature、L4_object_task；L5 用 `L5` 或 `L5_subtask`
+- **目标**：统一为 L2_feature、L3_subfeature、L4_story；Legacy L5 仅兼容读取
 - 门禁脚本 `verify_feature_traceability.sh` 若期望 L5_cross_cutting 等，可做兼容映射
 
 ### 5.3 changes/feature_tree.yaml
@@ -246,9 +245,9 @@
 - [ ] 已归属正确 L1
 - [ ] L2 具备独立交付价值，非 L1 的简单子集
 - [ ] L3 有独立契约或模块边界
-- [ ] L4 可对应具体契约/策略/实现任务
-- [ ] **默认止于 L4**；L5 仅当 L4 任务需拆成 ≥2 个独立可验收子任务时添加
-- [ ] acceptance.yaml 的 level 使用统一取值（L2_feature / L3_subfeature / L4_object_task / L5 或 L5_subtask）
+- [ ] L4 可对应一个最小可交付 Story
+- [ ] **默认止于 L4**；工程子步骤进入 `tasks.md`
+- [ ] acceptance.yaml 的 level 优先使用统一取值（L2_feature / L3_subfeature / L4_story）
 - [ ] tree.yaml 与 tree_index.yaml 同步更新
 
 ---
@@ -257,11 +256,11 @@
 
 | 层级 | 语义 | 目录深度 | 统一 level | 分解要点 |
 |------|------|----------|------------|----------|
-| **L1** | 能力域 | 1 | L1 | 固定 9 个，不新增 |
-| **L2** | 特性 | 2 | L2_feature | 独立交付价值 |
-| **L3** | 子特性/组件 | 3 | L3_subfeature | 独立契约/模块 |
-| **L4** | 契约/任务 | 4 | L4_object_task | **默认叶子**，可落地、可验收 |
-| **L5** | 子任务（可选） | 5 | L5 / L5_subtask | 仅当 L4 任务过大需拆成多个子任务 |
+| **L1** | 关键能力 | 1 | L1 | 固定顶级能力域 |
+| **L2** | 功能特性 | 2 | L2_feature | 独立交付价值 |
+| **L3** | 子功能或组件 | 3 | L3_subfeature | 独立契约/模块 |
+| **L4** | Story / 最小交付单元 | 4 | L4_story | **默认叶子**，可开发、可验收 |
+| **Legacy L5** | 历史子任务兼容层 | 5 | L5 / L5_subtask | 仅迁移期兼容 |
 
 遵循以上定义，可确保特性树分解**无歧义、概念一致**，所有扩展特性都能正确分解到对应层级。
 
@@ -275,11 +274,11 @@
 
 | 卡点 | 特性树落实 |
 |------|------------|
-| 需求已映射到特性树节点 | 明确目标节点：L1 / L2 / L3 / L4（及 L5，若适用）路径 |
+| 需求已映射到特性树节点 | 明确目标节点：L1 / L2 / L3 / L4 路径 |
 | 任务拆解遵循 metadata-first | 任务顺序：metadata → codegen → 业务逻辑 → 测试 |
 | 分解合规 | 新建节点须遵循本规范：L4 默认叶子，L5 仅当 L4 需 subtask 分解时 |
 
-**AI Agent 行为**：Plan 时先确认需求归属的 L1/L2/L3/L4，再按层级定义判断是否需要新建节点或建 L5；任务拆解写入目标节点的 tasks.md。
+**AI Agent 行为**：Plan 时先确认需求归属的 L1/L2/L3/L4，再按层级定义判断是否需要新建节点；工程任务拆解写入目标节点的 `tasks.md`。
 
 ---
 
@@ -287,13 +286,13 @@
 
 | 卡点 | 特性树落实 |
 |------|------------|
-| 创建/更新特性目录 | 路径符合 `specs/feature-tree/<L1>/<L2>/.../<L4|L5>/` |
+| 创建/更新特性目录 | 路径符合 `specs/feature-tree/<L1>/<L2>/<L3>/<L4>/` |
 | 四类文档齐全 | 每个节点：spec.md、design.md、tasks.md、acceptance.yaml |
 | tree.yaml 一致 | 新建节点须同步更新对应 L1 的 tree.yaml |
 | tree_index 一致 | 若使用 tree_index.yaml，须同步更新 |
 | make verify 通过 | metadata 内部一致性 |
 
-**AI Agent 行为**：`/opsx-ff` 或 `/qwq-extend` 创建节点时，按 tree.yaml 结构创建目录、补齐四类文档；acceptance.yaml 中 level 使用统一取值。
+**AI Agent 行为**：创建节点时，按四层治理视图创建目录、补齐四类文档；acceptance.yaml 中优先使用 `L4_story` 等统一取值。
 
 ---
 
@@ -301,11 +300,11 @@
 
 | 卡点 | 特性树落实 |
 |------|------------|
-| 按 tasks.md 逐项实施 | 每个 task 对应一个可交付单元；L4 节点下 task 直接对应 L4 范围 |
+| 按 tasks.md 逐项实施 | `tasks.md` 是 Story 的工程执行清单，不是树层级 |
 | 每完成一个 task 执行 G2 | make build + make test-contract |
 | 实现符合 spec/design | 业务逻辑、契约、字段策略与 spec/design 一致 |
 
-**AI Agent 行为**：`/opsx-apply` 按 tasks.md 顺序执行；若某 L4 有 L5 子节点，L5 对应的子任务可在 tasks.md 中分组或引用，或由 L5 节点独立 tasks 承载。
+**AI Agent 行为**：按 Story 驱动实施，`tasks.md` 记录 Story 的工程步骤；历史 L5 若存在，仅作为兼容引用。
 
 ---
 
@@ -318,7 +317,7 @@
 | acceptance.yaml A1~A8 | 与 spec/design 对齐，全部满足 |
 | make gate-full | 含 verify_feature_tree、verify_metadata、verify_arch_constraints 等 |
 
-**AI Agent 行为**：`/opsx-verify`、`/opsx-archive` 时检查目标节点及子节点的 tasks 完成度、acceptance 满足情况。
+**AI Agent 行为**：`/verify` 复核目标节点及子节点的 tasks 完成度、acceptance 满足情况；若自动归档失效，则由 `/archive` 兼容补回写。
 
 ---
 
@@ -335,11 +334,11 @@
 
 | 阶段 | 命令 | 主要涉及的层级 | 特性树相关检查 |
 |------|------|----------------|----------------|
-| Plan | /opsx-explore | L1~L4（+L5 若适用） | 映射到正确节点，分解合规 |
-| Create | /opsx-ff, /qwq-extend | 新建 L2/L3/L4/L5 | 四类文档、tree.yaml、acceptance level |
-| Implement | /opsx-apply | L4（+L5 子任务） | tasks.md 逐项执行 |
-| Verify | /opsx-verify, /opsx-archive | 目标节点及子节点 | tree 一致性、tasks 完成度、acceptance |
-| Submit | /submit-with-gate | 变更范围 | specs 变更时 gate-full 含特性树检查 |
+| Plan | /explore | L1~L4（+L5 若适用） | 映射到正确节点，分解合规 |
+| Create | /prd, /design, /extend | 新建 L2/L3/L4/L5 | 四类文档、tree.yaml、acceptance level |
+| Implement | /dev | L4（+L5 子任务） | tasks.md 逐项执行 + 自动归档 |
+| Verify | /verify, /archive | 目标节点及子节点 | tree 一致性、tasks 完成度、acceptance |
+| Submit | /commit | 变更范围 | specs 变更时 gate-full 含特性树检查 |
 
 ---
 
@@ -357,9 +356,9 @@
 
 | 文档/命令 | 同步内容 |
 |-----------|----------|
-| `specs/00_MASTER_DEVELOPMENT_FLOW.md` | 各阶段（Plan/Create/Implement/Verify/Submit）中明确特性树层级与分解遵从要求，并引用本文档 |
-| `.cursor/commands/opsx-explore.md` | G0：需求映射到节点时须符合层级定义，L4 默认叶子、L5 仅 subtask 分解 |
-| `.cursor/commands/opsx-ff.md` | G0/G1：新建节点须符合层级定义；acceptance.yaml level 统一取值 |
-| `.cursor/commands/opsx-apply.md` | 实施范围对应 L4（及 L5 子任务）；tasks 与节点层级一致 |
-| `.cursor/commands/opsx-verify.md` | G3：特性树一致性含 tree.yaml、acceptance level 与本文档规范 |
-| `.cursor/commands/submit-with-gate.md` | G4：specs 变更时 gate-full 含特性树检查 |
+| `specs/00_MASTER_DEVELOPMENT_FLOW.md` | 各阶段（Explore/PRD/Design/Dev/Verify/Commit）中明确特性树层级与分解遵从要求，并引用本文档 |
+| `.cursor/commands/explore.md` | G0：需求映射到节点时须符合层级定义，L4 默认叶子、L5 仅 subtask 分解 |
+| `.cursor/commands/prd.md` / `.cursor/commands/design.md` | G0/G1：新建节点须符合层级定义；acceptance.yaml level 统一取值 |
+| `.cursor/commands/dev.md` | 实施范围对应 L4（及 L5 子任务）；tasks 与节点层级一致，并在收口时自动归档 |
+| `.cursor/commands/verify.md` | G3：特性树一致性含 tree.yaml、acceptance level 与本文档规范 |
+| `.cursor/commands/commit.md` | G4：specs 变更时 gate-full 含特性树检查 |

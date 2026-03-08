@@ -14,7 +14,7 @@
 
 ---
 
-## 开发任务清单（按执行顺序，供 /opsx-apply 使用）
+## 开发任务清单（按执行顺序，供 /dev 使用）
 
 依赖顺序：Go 契约与 content-service 装配 → Python 推理 API → 推理部署与联调。
 

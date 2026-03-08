@@ -19,6 +19,7 @@ const (
 	ModuleIntegration Module = "INTEGRATION"
 	ModuleUser        Module = "USER"
 	ModuleChat      Module = "CHAT"
+	ModuleRTC       Module = "RTC"
 	ModuleOps       Module = "OPS"
 	ModuleAssistant Module = "ASSISTANT"
 	ModuleDB        Module = "DB"
@@ -94,6 +95,7 @@ var allowedModules = map[Module]struct{}{
 	ModuleIntegration: {},
 	ModuleUser:        {},
 	ModuleChat:      {},
+	ModuleRTC:       {},
 	ModuleOps:       {},
 	ModuleAssistant: {},
 	ModuleDB:        {},

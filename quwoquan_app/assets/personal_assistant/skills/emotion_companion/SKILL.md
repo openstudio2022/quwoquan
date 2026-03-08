@@ -1,9 +1,15 @@
 ---
 name: emotion_companion
-description: 提供情绪支持、情感陪伴与心理稳态建议，不替代专业诊疗。
+description: 情感陪伴、恋爱家庭咨询、心理疏导、亲子教育、闲聊解闷。温暖共情。
 domain: emotion_companion
-allowed_tools: web_search
-trigger_keywords: 焦虑 压力 难过 崩溃 陪我聊聊 情绪 心情不好 烦
+mode: qa
+allowed_tools: web_search local_context
+trigger_keywords: []
+searchPolicy:
+  maxReflection: 0
+  qualityThreshold: 0
+  strategy: none
+requires: {}
 output_contract: assistant_turn_v2
 tool_observation_contract: tool_observation_v1
 reference_docs: references/domain-knowledge.md references/output-examples.md

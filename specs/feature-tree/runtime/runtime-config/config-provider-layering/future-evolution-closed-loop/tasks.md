@@ -4,9 +4,9 @@
 
 | 阶段命令 | 必过项（最小集） | 不通过处理 |
 |---|---|---|
-| `/opsx-ff` | ① C11~C13 分解为独立 spec/design/tasks/acceptance；② 三类门禁脚本草案定义；③ CI job 草案定义 | 阻断 FF，先补规格 |
-| `/opsx-apply` | ① 热更新白名单校验可执行；② 公共库接口契约校验可执行；③ 漂移规则校验可执行 | 阻断 apply，先补脚本 |
-| `submit-with-gate` | ① config-evolution 回归 job 通过；② gate-full 聚合门禁通过；③ 漂移报告产物可追溯 | 禁止提交入库 |
+| `/prd` | ① C11~C13 分解为独立 spec/design/tasks/acceptance；② 三类门禁脚本草案定义；③ CI job 草案定义 | 阻断 FF，先补规格 |
+| `/design` | ① 热更新白名单校验可执行；② 公共库接口契约校验可执行；③ 漂移规则校验可执行 | 阻断 apply，先补脚本 |
+| `/commit` | ① config-evolution 回归 job 通过；② gate-full 聚合门禁通过；③ 漂移报告产物可追溯 | 禁止提交入库 |
 
 ## 当前交付任务（规划闭环）
 

@@ -51,6 +51,83 @@ errors:
       zh: "操作太频繁，请稍后重试"
       en: "Too many requests, please retry later"
 
+  - code: CIRCLE.USER.not_member
+    kind: USER
+    reason: forbidden
+    http_status: 403
+    retryable: false
+    dart_const: notMember
+    go_const: ErrNotMember
+    user_message:
+      zh: "您不是该圈子成员"
+      en: "You are not a member of this circle"
+
+  - code: CIRCLE.USER.permission_denied
+    kind: USER
+    reason: forbidden
+    http_status: 403
+    retryable: false
+    dart_const: permissionDenied
+    go_const: ErrPermissionDenied
+    user_message:
+      zh: "权限不足"
+      en: "Permission denied"
+
+  - code: CIRCLE.USER.storage_quota_exceeded
+    kind: USER
+    reason: quota_exceeded
+    http_status: 413
+    retryable: false
+    dart_const: storageQuotaExceeded
+    go_const: ErrStorageQuotaExceeded
+    user_message:
+      zh: "存储空间已满，无法上传"
+      en: "Storage quota exceeded"
+
+  - code: CIRCLE.USER.file_not_found
+    kind: USER
+    reason: not_found
+    http_status: 404
+    retryable: false
+    dart_const: fileNotFound
+    go_const: ErrFileNotFound
+    user_message:
+      zh: "文件不存在"
+      en: "File not found"
+
+  - code: CIRCLE.USER.file_upload_failed
+    kind: USER
+    reason: upload_failed
+    http_status: 422
+    retryable: true
+    dart_const: fileUploadFailed
+    go_const: ErrFileUploadFailed
+    user_message:
+      zh: "文件上传失败，请重试"
+      en: "File upload failed, please retry"
+
+  - code: CIRCLE.USER.file_type_not_allowed
+    kind: USER
+    reason: validation_failed
+    http_status: 400
+    retryable: false
+    dart_const: fileTypeNotAllowed
+    go_const: ErrFileTypeNotAllowed
+    user_message:
+      zh: "不支持的文件类型"
+      en: "File type not allowed"
+
+  - code: CIRCLE.USER.file_too_large
+    kind: USER
+    reason: validation_failed
+    http_status: 413
+    retryable: false
+    dart_const: fileTooLarge
+    go_const: ErrFileTooLarge
+    user_message:
+      zh: "文件大小超过限制（最大 50MB）"
+      en: "File size exceeds limit (max 50MB)"
+
   - code: CIRCLE.SYSTEM.internal_error
     kind: SYSTEM
     reason: internal_error

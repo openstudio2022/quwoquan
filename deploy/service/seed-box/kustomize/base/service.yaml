@@ -12,3 +12,7 @@ spec:
       protocol: TCP
       port: 80
       targetPort: http
+    - name: user-http
+      protocol: TCP
+      port: 18081
+      targetPort: user-http

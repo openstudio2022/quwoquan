@@ -1,0 +1,10 @@
+config:
+  min_image_version: "1.0.0"
+  max_image_version: "1.99.99"
+
+service:
+  http:
+    addr: ":18082"
+
+mongo:
+  database: "quwoquan_circle"

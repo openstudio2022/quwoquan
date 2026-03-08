@@ -1,9 +1,17 @@
 ---
 name: local_life
-description: 回答本地吃喝玩乐、周边服务、美食推荐与周边活动问题。
+description: 餐厅美食推荐、本地服务、周边好去处、团购优惠。可导航到店。
 domain: local_life
+mode: hybrid
 allowed_tools: web_search local_context
-trigger_keywords: 附近 餐厅 美食 本地 生活 周边 哪里好吃 推荐
+trigger_keywords: []
+searchPolicy:
+  maxReflection: 1
+  qualityThreshold: 0.5
+  strategy: realtime
+requires:
+  tools: [web_search]
+  permissions: [location]
 output_contract: assistant_turn_v2
 tool_observation_contract: tool_observation_v1
 reference_docs: references/domain-knowledge.md references/output-examples.md

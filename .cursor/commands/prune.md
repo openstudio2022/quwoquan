@@ -47,7 +47,7 @@ description: 检测并清理特性树中的过期/作废节点（Stale Node Dete
 #### 1E. 归档未回写（Archive Not Synced）
 条件：所有当前交付任务均为 `[x]`，acceptance.yaml 所有 An 为 `implemented`，但 `status ≠ completed/archived`。
 严重度：WARNING。
-处理：执行 `/archive` 完成回写。
+处理：优先确认 `/dev` 是否已自动归档；若未回写，再执行 `/archive` 兼容补归档。
 
 #### 1F. 需求已被替代（Superseded）
 条件：spec.md 顶部已有 `> **DEPRECATED**` 标注，但 tree_index status 仍为 `specified/in_progress`。
@@ -137,7 +137,7 @@ WARNING:   N 项
 
 ## 过期检测快捷触发
 
-在 `/verify` 和 `/archive` 执行完成后，自动触发轻量过期扫描：
+在 `/verify`、`/dev` 自动归档完成后，自动触发轻量过期扫描：
 - 只检测 1E（归档未回写）— BLOCKING
 - 只检测 1B（僵尸引用）— BLOCKING
 - 其他 WARNING 项仅在 `/prune scan` 时全量扫描
@@ -149,7 +149,7 @@ WARNING:   N 项
 | 命令 | 触发时机 |
 |------|---------|
 | `/prd update` | 更新节点时若父节点已 cancelled/deprecated，警告用户 |
-| `/archive` | 归档后触发轻量过期扫描（1B + 1E） |
+| `/archive` | 补归档后触发轻量过期扫描（1B + 1E） |
 | `/verify` | 漂移报告后触发轻量过期扫描（1B + 1E） |
 | `/prune scan` | 手动触发全量过期扫描 |
 | `make gate` / `make gate-full` | 自动检测 BLOCKING 项（孤儿目录、僵尸引用） |

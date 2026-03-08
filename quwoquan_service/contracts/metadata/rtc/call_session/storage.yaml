@@ -1,0 +1,41 @@
+version: 2
+aggregate: CallSession
+backend: mongodb
+
+collections:
+  call_sessions:
+    entity: CallSession
+    indexes:
+      - { name: idx_cs_initiator_created, keys: { initiatorId: 1, createdAt: -1 } }
+      - { name: idx_cs_status, keys: { status: 1 } }
+      - { name: idx_cs_conv_created, keys: { conversationId: 1, createdAt: -1 }, sparse: true }
+      - { name: idx_cs_circle_created, keys: { circleId: 1, createdAt: -1 }, sparse: true }
+      - { name: idx_cs_room, keys: { roomId: 1 }, unique: true }
+      - { name: idx_cs_participant_user, keys: { "participants.userId": 1, createdAt: -1 } }
+      - { name: idx_cs_ended_reason, keys: { status: 1, endReason: 1, createdAt: -1 } }
+    description: |
+      CallSession 文档内嵌 participants 数组（≤32人，无需独立 collection）。
+      活跃通话通过 Redis 缓存快速查询，MongoDB 仅在通话结束后作为持久化存储。
+
+redis_cache:
+  - key: "cache:rtc:call:{callId}"
+    ttl_seconds: 60
+    entity: CallSession
+    invalidate_on: [CallAnswered, CallConnected, ParticipantJoined, ParticipantLeft, CallEnded]
+    description: 活跃通话状态缓存（通话中高频读取）
+
+  - key: "rtc:active_call:user:{userId}"
+    ttl_seconds: null
+    type: string
+    scene: realtime
+    description: |
+      用户当前活跃通话 ID（SET NX，通话结束时 DEL）。
+      用于检测 "already_in_call" 冲突。无 TTL，通过定时清理 zombie 条目兜底。
+
+  - key: "rtc:call_timeout:{callId}"
+    ttl_seconds: 30
+    type: string
+    scene: realtime
+    description: |
+      呼叫超时定时器。30s TTL（1v1）或 60s（多人）。
+      过期触发 KeyExpiry 事件 → 消费后标记通话为 no_answer/timeout。

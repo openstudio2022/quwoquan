@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,6 +33,15 @@ func NewContentHandler(
 func (h *ContentHandler) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", h.handleHealthz)
+	mux.HandleFunc("/livez", h.handleHealthz)
+	mux.HandleFunc("/startupz", h.handleHealthz)
+	mux.HandleFunc("/v1/content/users/posts", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET"))
+			return
+		}
+		h.handleListUserPosts(w, r)
+	})
 	RegisterGeneratedRoutes(mux, h)
 	return mux
 }
@@ -478,6 +488,90 @@ func (h *ContentHandler) handleCreateComment(w http.ResponseWriter, r *http.Requ
 	})
 }
 
+func (h *ContentHandler) handleListComments(w http.ResponseWriter, r *http.Request, postID string) {
+	cursor := strings.TrimSpace(r.URL.Query().Get("cursor"))
+	limit := 20
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	comments, nextCursor, err := h.postService.ListComments(r.Context(), postID, cursor, limit)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	resp := map[string]any{"items": comments}
+	if nextCursor != "" {
+		resp["nextCursor"] = nextCursor
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *ContentHandler) handleDeleteComment(w http.ResponseWriter, r *http.Request) {
+	path := strings.Trim(r.URL.Path, "/")
+	parts := strings.Split(path, "/")
+	// /v1/content/posts/{postId}/comments/{commentId}
+	if len(parts) < 6 {
+		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid path", "missing commentId"))
+		return
+	}
+	postID := parts[3]
+	commentID := parts[5]
+	if err := h.postService.DeleteComment(r.Context(), postID, commentID, resolveUserID(r)); err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *ContentHandler) handleGetCounters(w http.ResponseWriter, r *http.Request, postID string) {
+	counters, err := h.postService.GetCounters(r.Context(), postID)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, counters)
+}
+
+func (h *ContentHandler) handleGetHelperRead(w http.ResponseWriter, r *http.Request) {
+	contentID := pathParamAfter(r.URL.Path, "/v1/content/helper-read/", "")
+	result, err := h.postService.GetHelperRead(r.Context(), contentID)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *ContentHandler) handleListUserPosts(w http.ResponseWriter, r *http.Request) {
+	userID := strings.TrimSpace(r.URL.Query().Get("userId"))
+	if userID == "" {
+		userID = resolveUserID(r)
+	}
+	cursor := strings.TrimSpace(r.URL.Query().Get("cursor"))
+	limit := 20
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	posts, nextCursor, err := h.postService.ListUserPosts(r.Context(), userID, cursor, limit)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	items := make([]map[string]any, 0, len(posts))
+	for i := range posts {
+		items = append(items, projectPostForClient(&posts[i]))
+	}
+	resp := map[string]any{"items": items}
+	if nextCursor != "" {
+		resp["nextCursor"] = nextCursor
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
 func postIDFromPath(path string) string {
 	p := strings.TrimSpace(path)
 	if p == "" {
@@ -549,6 +643,21 @@ func (h *ContentHandler) handleNotImplemented(w http.ResponseWriter, r *http.Req
 		return
 	case "GenerateArticleSummary":
 		h.handleGenerateArticleSummary(w, r)
+		return
+	case "ListComments":
+		h.handleListComments(w, r, postIDFromPath(r.URL.Path))
+		return
+	case "DeleteComment":
+		h.handleDeleteComment(w, r)
+		return
+	case "GetCounters":
+		h.handleGetCounters(w, r, postIDFromPath(r.URL.Path))
+		return
+	case "GetHelperRead":
+		h.handleGetHelperRead(w, r)
+		return
+	case "ListUserPosts":
+		h.handleListUserPosts(w, r)
 		return
 	}
 	writeHTTPError(w, rterr.NewAppError(

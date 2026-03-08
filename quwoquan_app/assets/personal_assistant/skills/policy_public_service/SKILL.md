@@ -1,9 +1,16 @@
 ---
 name: policy_public_service
-description: 回答政策、政务办理、社保公积金、落户签证与公共服务问题。
+description: 政策解读、办事流程、社保公积金、落户签证、材料清单。
 domain: policy_public_service
+mode: qa
 allowed_tools: web_search local_context
-trigger_keywords: 政策 办理 政务 社保 公积金 落户 签证 申请 材料
+trigger_keywords: []
+searchPolicy:
+  maxReflection: 2
+  qualityThreshold: 0.5
+  strategy: research
+requires:
+  tools: [web_search]
 output_contract: assistant_turn_v2
 tool_observation_contract: tool_observation_v1
 reference_docs: references/domain-knowledge.md references/output-examples.md
@@ -93,7 +100,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 - 📱 **App/小程序**：{名称}
 - 🏢 **线下窗口**：{地址/业务大厅}，工作时间 **{时间段}**
 
-> ⚠️ **重要提示**：以上信息基于公开资料整理，政策可能随时更新。办理前务必前往官方网站或致电 **{热线电话}** 确认最新要求。
+以上信息基于公开资料，政策可能更新。办理前建议访问官方网站或致电 **{热线电话}** 确认最新要求。
 
 ---
 💬 **你可能还想了解**

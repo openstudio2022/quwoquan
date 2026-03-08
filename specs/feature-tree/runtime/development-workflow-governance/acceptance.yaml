@@ -1,0 +1,191 @@
+version: 1
+feature: "development-workflow-governance"
+level: "L2_feature"
+template: "A1-A12"
+archived: false
+focus_groups:
+  - workflow
+  - feature-tree
+  - acceptance
+  - benchmark-intake
+  - testing-governance
+tree_context:
+  feature_level: "L2_feature"
+  feature_path: "capability.runtime.feature.development-workflow-governance"
+  parent_path: "capability.runtime"
+execution:
+  local_gate: "文档基线阶段：结构完整性检查；实施阶段：make gate"
+  full_gate: "实施阶段：make gate-full + 真实样例特性端到端演练"
+level_acceptance:
+  A1:
+    criteria: "`/explore` 升级为高质量问题建模入口，至少覆盖问题重述、目标用户、关键未知项、风险假设、范围边界、特性树归属建议、EXPLORE_READY/GATE_BLOCK 结论。"
+    status: implemented
+    linked_tasks: [D1, D5]
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: optional
+    tests:
+      - file: .cursor/commands/explore.md
+        functions: ["EXPLORE_READY", "GATE_BLOCK", "Bring in benchmarks"]
+      - file: specs/00_MASTER_DEVELOPMENT_FLOW.md
+        functions: ["阶段 0：explore（探索）", "阶段输出要求"]
+  A2:
+    criteria: "`/explore`、`/prd`、`/design` 均能显式引导用户提供或确认业界对标输入，至少支持产品、原型、公开代码、公开技术文档四类参考，并要求输出借鉴点/不借鉴点/适用条件。"
+    status: implemented
+    linked_tasks: [D5, D6, D7, D9, D10]
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: optional
+    tests:
+      - file: .cursor/commands/explore.md
+        functions: ["Bring in benchmarks"]
+      - file: .cursor/commands/prd.md
+        functions: ["对标输入与吸收结论"]
+      - file: .cursor/commands/design.md
+        functions: ["对标输入分析"]
+      - file: .cursor/commands/try.md
+        functions: ["对标输入"]
+  A3:
+    criteria: "`/prd` 输出必须对齐四层特性树模型：L1=关键能力、L2=功能特性、L3=子功能或组件、L4=Story/最小交付单元；新特性默认不再以 task 作为树层级语义。"
+    status: implemented
+    linked_tasks: [D1, D2, D3, D6]
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: optional
+    tests:
+      - file: specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md
+        functions: ["L4_story", "关键能力", "功能特性", "子功能或组件"]
+      - file: .cursor/commands/prd.md
+        functions: ["level: L4_story"]
+  A4:
+    criteria: "`/prd` 形成的验收标准必须与四层测试视图对齐：T1 契约与静态层、T2 模块与交互层、T3 端云集成层、T4 端到端旅程层；每条核心验收项都可明确映射到至少一个测试层。"
+    status: implemented
+    linked_tasks: [D1, D4, D6]
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: required
+    tests:
+      - file: .cursor/commands/prd.md
+        functions: ["T1 契约与静态层", "T2 模块与交互层", "T3 端云集成层", "T4 端到端旅程层"]
+      - file: .cursor/rules/03-testing.mdc
+        functions: ["统一测试视图", "T1", "T2", "T3", "T4"]
+  A5:
+    criteria: "`/design` 在进入方案设计前，必须先评审上游 spec 与 acceptance 是否足以支撑设计；若存在需求不清、验收不可测、契约缺失、元数据缺失等问题，必须阻断进入设计。"
+    status: implemented
+    linked_tasks: [D1, D7]
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: optional
+    tests:
+      - file: .cursor/commands/design.md
+        functions: ["上游输入评审", "spec.md + acceptance.yaml"]
+      - file: specs/00_MASTER_DEVELOPMENT_FLOW.md
+        functions: ["先评审上游 `spec.md` 与 `acceptance.yaml` 是否足以支撑设计"]
+  A6:
+    criteria: "`/design` 必须具备至少两套方案对比，并把业界一流对标对象的优点、约束、适配边界、当前方案差距和演进路径沉淀到 design.md，而不是只列参考名词。"
+    status: implemented
+    linked_tasks: [D7]
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: optional
+    tests:
+      - file: .cursor/commands/design.md
+        functions: ["对标输入分析", "Story 与测试层映射", "方案对比"]
+      - file: specs/feature-tree/runtime/development-workflow-governance/design.md
+        functions: ["业界对标输入与借鉴", "方案对比", "选型决策"]
+  A7:
+    criteria: "`/dev` 从按 tasks 实施升级为按 L4 Story 交付；每个 Story 都必须显式声明用户价值、端侧改动、云侧改动、metadata/codegen 影响、错误码/契约影响与四层测试计划。"
+    status: implemented
+    linked_tasks: [D8]
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: optional
+    tests:
+      - file: .cursor/commands/dev.md
+        functions: ["实施单位", "当前 Story 是否有可执行的 tasks 清单"]
+      - file: .cursor/commands/design.md
+        functions: ["Story 与测试层映射"]
+  A8:
+    criteria: "`/try` 被纳入统一治理模型：原型模式支持对标输入与验证目标声明，验证成功后必须通过 `/land` 回补到标准 SDD 链路。"
+    status: implemented
+    linked_tasks: [D9, D10]
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: optional
+    tests:
+      - file: .cursor/commands/try.md
+        functions: ["对标输入", "/land"]
+      - file: .cursor/commands/land.md
+        functions: ["对标输入与验证结论", "test_layers"]
+  A9:
+    criteria: "特性树、tasks.md、acceptance.yaml 语义完成解耦：特性树承载能力/特性/组件/Story，tasks.md 仅承载工程执行清单，acceptance.yaml 成为唯一验收真相源。"
+    status: implemented
+    linked_tasks: [D2, D3, D8, D12]
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: optional
+    tests:
+      - file: specs/feature-tree/00_FEATURE_TREE_STANDARD.md
+        functions: ["tasks.md", "acceptance.yaml", "Story / 最小交付单元"]
+      - file: specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md
+        functions: ["工程子步骤进入 `tasks.md`", "L4_story"]
+  A10:
+    criteria: "L1 与 L2 层级必须有用户旅程级验收要求，L3 必须有契约页要求，L4 必须有 Story 完成定义；个人私人助理等大能力的架构图、流程图、用例图必须并入特性树 design.md，而不是游离附件。"
+    status: implemented
+    linked_tasks: [D2, D3]
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: required
+    tests:
+      - file: specs/feature-tree/00_FEATURE_TREE_STANDARD.md
+        functions: ["L1 架构设计交付规范", "组件/包图", "用例图", "流程图"]
+      - file: specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md
+        functions: ["L3_subfeature", "L4_story"]
+  A11:
+    criteria: "四层测试与门禁完成闭环：T1~T4 的定义、命令职责、acceptance 模板、verify/deliver/archive/commit/land 准入和归档要求使用统一术语，实施后可由 gate 检查 pending、tests 证据和层级映射。"
+    status: implemented
+    linked_tasks: [D4, D10, D11]
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: required
+    tests:
+      - file: .cursor/rules/03-testing.mdc
+        functions: ["统一测试视图"]
+      - file: .cursor/commands/verify.md
+        functions: ["test_layers", "T1", "T2", "T3", "T4"]
+      - file: .cursor/commands/archive.md
+        functions: ["test_layers", "T1~T4"]
+      - file: .cursor/commands/commit.md
+        functions: ["T1~T4"]
+  A12:
+    criteria: "存量历史层级与命名存在兼容迁移策略：`L1_domain/L3_component/L4_detail/L5_*` 可被识别、映射和分阶段迁移，但新特性以统一四层模型为准；真实样例试点在后续专项中完成。"
+    status: deferred
+    linked_tasks: [P1, P2]
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: required
+    tests: []

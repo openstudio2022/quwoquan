@@ -1,6 +1,12 @@
 import 'package:quwoquan_app/personal_assistant/engine/domain_routing_catalog_runtime.dart';
 import 'package:quwoquan_app/personal_assistant/template_runtime/template_catalog_runtime.dart';
 
+/// Provides domain catalog data for the assistant.
+///
+/// In the new LLM-first architecture, this class no longer performs
+/// keyword-based classification. The LLM autonomously selects the
+/// appropriate skill via the injected skill catalog prompt. This class
+/// only loads configuration and supplies catalog metadata.
 class AssistantDomainRouter {
   AssistantDomainRouter({
     TemplateCatalogRuntime? catalogRuntime,
@@ -45,100 +51,53 @@ class AssistantDomainRouter {
     return const <String>['fallback_general_search'];
   }
 
+  /// Returns [fallbackDomainId]. Keyword-based classification has been
+  /// removed; the LLM selects the domain via the planner prompt.
   Future<String> classify({
     required String query,
     required Map<String, dynamic> contextScopeHint,
     bool forceRefresh = false,
   }) async {
-    final domains = await availableDomains(
-      forceRefresh: forceRefresh,
-      contextScopeHint: contextScopeHint,
-    );
-    final routingCatalog = _routingCatalogRuntime.resolveCatalogForRequest(
+    await ensureLoaded(forceRefresh: forceRefresh);
+    final catalog = _routingCatalogRuntime.resolveCatalogForRequest(
       contextScopeHint,
     );
-    String matchOrFallback(String domainId) {
-      if (domains.contains(domainId)) return domainId;
-      final fallbackId = routingCatalog.fallbackDomainId.trim();
-      return domains.contains(fallbackId)
-          ? fallbackId
-          : domains.contains('fallback_general_search')
-          ? 'fallback_general_search'
-          : domains.first;
-    }
-
-    final lowered = query.toLowerCase();
-    for (final rule in routingCatalog.rules) {
-      if (!rule.enabled || !domains.contains(rule.domainId)) continue;
-      if (_containsAny(lowered, rule.intentKeywords)) {
-        return matchOrFallback(rule.domainId);
-      }
-    }
-
-    final pageType = (contextScopeHint['pageType'] as String?)?.trim() ?? '';
-    if (pageType.isNotEmpty) {
-      final mapped = routingCatalog.pageTypeFallbacks[pageType];
-      if (mapped != null && mapped.trim().isNotEmpty) {
-        return matchOrFallback(mapped.trim());
-      }
-    }
-    return matchOrFallback(routingCatalog.fallbackDomainId);
+    return catalog.fallbackDomainId;
   }
 
-  bool _containsAny(String source, List<String> keywords) {
-    for (final keyword in keywords) {
-      if (source.contains(keyword)) return true;
-    }
-    return false;
-  }
-
-  /// Classifies a query and returns a ranked list of matching domain IDs.
-  /// The first entry is the primary domain; subsequent entries are secondary
-  /// domains that partially match. At most [maxSecondary]+1 total domains.
-  Future<List<String>> classifyMulti({
-    required String query,
-    required Map<String, dynamic> contextScopeHint,
-    bool forceRefresh = false,
-    int maxSecondary = 2,
+  /// Builds a compact skill catalog prompt for LLM-based skill selection.
+  /// Each enabled domain is listed with its description and mode.
+  Future<String> buildSkillCatalogPrompt({
+    Map<String, dynamic> contextScopeHint = const <String, dynamic>{},
   }) async {
-    final domains = await availableDomains(
-      forceRefresh: forceRefresh,
-      contextScopeHint: contextScopeHint,
-    );
-    final routingCatalog = _routingCatalogRuntime.resolveCatalogForRequest(
+    await ensureLoaded();
+    final catalog = _routingCatalogRuntime.resolveCatalogForRequest(
       contextScopeHint,
     );
-    String matchOrFallback(String domainId) {
-      if (domains.contains(domainId)) return domainId;
-      final fallbackId = routingCatalog.fallbackDomainId.trim();
-      return domains.contains(fallbackId)
-          ? fallbackId
-          : domains.contains('fallback_general_search')
-          ? 'fallback_general_search'
-          : domains.first;
+    final buffer = StringBuffer();
+    for (final rule in catalog.rules) {
+      if (!rule.enabled || rule.description.isEmpty) continue;
+      buffer.writeln('- ${rule.domainId}: ${rule.description} [mode=${rule.mode}]');
     }
+    return buffer.toString().trimRight();
+  }
 
-    final lowered = query.toLowerCase();
-    final matched = <String>[];
-    for (final rule in routingCatalog.rules) {
-      if (!rule.enabled || !domains.contains(rule.domainId)) continue;
-      if (_containsAny(lowered, rule.intentKeywords)) {
-        final id = matchOrFallback(rule.domainId);
-        if (!matched.contains(id)) {
-          matched.add(id);
-        }
-        if (matched.length >= maxSecondary + 1) break;
-      }
+  /// Returns the domain configuration for a given [domainId], or null.
+  Future<DomainRoutingRule?> getDomainConfig(String domainId) async {
+    await ensureLoaded();
+    final catalog = _routingCatalogRuntime.resolveCatalogForRequest(
+      const <String, dynamic>{},
+    );
+    for (final rule in catalog.rules) {
+      if (rule.domainId == domainId) return rule;
     }
-    if (matched.isNotEmpty) return matched;
-    // Fallback to single-domain classification
-    final pageType = (contextScopeHint['pageType'] as String?)?.trim() ?? '';
-    if (pageType.isNotEmpty) {
-      final mapped = routingCatalog.pageTypeFallbacks[pageType];
-      if (mapped != null && mapped.trim().isNotEmpty) {
-        return <String>[matchOrFallback(mapped.trim())];
-      }
-    }
-    return <String>[matchOrFallback(routingCatalog.fallbackDomainId)];
+    return null;
+  }
+
+  String get fallbackDomainId {
+    final catalog = _routingCatalogRuntime.resolveCatalogForRequest(
+      const <String, dynamic>{},
+    );
+    return catalog.fallbackDomainId;
   }
 }

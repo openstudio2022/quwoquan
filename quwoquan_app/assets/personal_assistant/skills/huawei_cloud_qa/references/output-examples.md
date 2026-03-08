@@ -126,7 +126,7 @@ firewall-cmd --reload
 
 {基于模型训练知识的回答}
 
-> ⚠️ 以上信息基于模型训练知识，可能不是最新数据。建议在以下渠道确认：
+以上信息可能不是最新版本，建议在以下渠道确认：
 > - [华为云官网文档](https://support.huaweicloud.com/)
 > - 拨打 **950808 转 1**（技术支持）
 > - 提交[工单](https://console.huaweicloud.com/ticket/)获取精确信息

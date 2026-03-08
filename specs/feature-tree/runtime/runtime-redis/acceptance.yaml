@@ -1,0 +1,216 @@
+version: 1
+feature: runtime-redis
+level: L2
+parent: runtime
+status: draft
+
+acceptance_criteria:
+
+  # ── 统一接口 ──────────────────────────────────────
+  - id: R-A1
+    title: redis.Client 统一接口完整性
+    status: pending
+    scenario: |
+      调用 redis.Client 的所有方法类别：
+      String (Get/Set/SetNX/Del/Incr/Expire),
+      Hash (HSet/HGet/HGetAll/HIncrByFloat),
+      Set (SAdd/SMembers/SIsMember),
+      Pub/Sub (Publish/Subscribe),
+      Pipeline (batch exec),
+      Bytes (GetBytes/SetBytes).
+    expected: |
+      所有方法在 standalone 和 cluster 模式下均正确执行，
+      返回值类型和错误语义与 go-redis 一致。
+    verification:
+      layers: [L2]
+      L2: |
+        Go test: 对 standalone (miniredis) + cluster (mock) 两种模式
+        逐方法调用 → assert 返回值正确
+
+  # ── Scene 路由 ──────────────────────────────────────
+  - id: R-A2
+    title: Router.Scene 显式路由
+    status: pending
+    scenario: |
+      构建 Router（3 个 scene: rec/general/realtime），
+      分别调用 Router.Scene("rec")、Scene("general")、Scene("realtime")。
+    expected: |
+      每个 Scene 返回独立的 Client 实例，
+      Client 的底层连接指向对应 scene 的 Redis 地址，
+      写入 rec scene 的 key 在 general scene 不可见。
+    verification:
+      layers: [L2]
+      L2: |
+        Go test: 3 个 miniredis 实例，Router 构建后
+        rec.Set("rec:k", "v") → general.Get("rec:k") == nil
+        general.Set("cache:k", "v") → rec.Get("cache:k") == nil
+
+  - id: R-A3
+    title: Router.ForKey 前缀自动路由
+    status: pending
+    scenario: |
+      调用 Router.ForKey("cache:post:123")、
+      Router.ForKey("rec:session_signals:{u1}:s1")、
+      Router.ForKey("seq:conv123")、
+      Router.ForKey("unknown_prefix:key")。
+    expected: |
+      "cache:" → general scene，
+      "rec:" → rec scene，
+      "seq:" → realtime scene，
+      未知前缀 → fallback (general) scene。
+    verification:
+      layers: [L2]
+      L2: |
+        Go test: ForKey 返回的 Client 写入 → 仅在对应 miniredis 可见
+
+  # ── Standalone ↔ Cluster 透明切换 ────────────────
+  - id: R-A4
+    title: standalone/cluster 零代码切换
+    status: pending
+    scenario: |
+      同一测试用例，分别用 mode=standalone 和 mode=cluster 配置构建 Router，
+      执行相同的 Get/Set/HGetAll/Pipeline 操作序列。
+    expected: |
+      两种模式下行为完全一致，返回值相同。
+    verification:
+      layers: [L2]
+      L2: |
+        Go test: parameterized test over [standalone, cluster]
+        全部操作 → assert 结果一致
+
+  # ── 适配桥接层 ────────────────────────────────────
+  - id: R-A5
+    title: NewCacheAdapter 桥接 Repository cache
+    status: pending
+    scenario: |
+      用 NewCacheAdapter(router.Scene("general")) 创建 CacheAdapter，
+      注入 repository.NewFactory WithCache，
+      对 entity TTL=300 的实体执行 FindByIDCached。
+    expected: |
+      首次调用：读穿透到 MongoDB → 回填 Redis（key=cache:{entity}:{id}，TTL=300s）。
+      二次调用：直接从 Redis 返回，不查 MongoDB。
+      Update 后：cache 自动失效。
+    verification:
+      layers: [L2]
+      L2: |
+        Go test: miniredis + testcontainers-mongo
+        FindByIDCached → assert redis key exists, TTL == 300
+        FindByIDCached again → assert mongo query count == 1 (not 2)
+        Update → assert redis key deleted
+
+  - id: R-A6
+    title: NewRecAdapter 桥接 HotPath 无退化
+    status: pending
+    scenario: |
+      用 NewRecAdapter(router.Scene("rec")) 创建 rtrec.RedisClient，
+      注入 HotPath，执行 ProcessSignal + GetSessionState。
+    expected: |
+      行为与直接使用 RedisClientAdapter 完全一致，
+      包括 HIncrByFloat 精度、SAdd 去重、PipelineRead 单 RTT。
+    verification:
+      layers: [L2]
+      L2: |
+        Go test: ProcessSignal → GetSessionState
+        assert TagWeights/ExposedIDs/NegativeIDs 与直接 adapter 一致
+
+  # ── Realtime Scene 能力 ────────────────────────────
+  - id: R-A7
+    title: Pub/Sub 跨 subscriber 正确路由
+    status: pending
+    scenario: |
+      两个 goroutine 分别 Subscribe("rt:conversation:123")，
+      第三个 goroutine Publish("rt:conversation:123", payload)。
+    expected: |
+      两个 subscriber 均收到消息，内容一致，延迟 < 5ms（进程内）。
+    verification:
+      layers: [L2]
+      L2: |
+        Go test: 2 subscribers + 1 publisher on miniredis
+        assert both received, payload match
+
+  - id: R-A8
+    title: Incr 原子递增（seq 计数器）
+    status: pending
+    scenario: |
+      100 个 goroutine 并发调用 Incr("seq:conversation:abc")。
+    expected: |
+      最终值 == 100，无跳跃无重复。
+    verification:
+      layers: [L2]
+      L2: |
+        Go test: 100 goroutine Incr → final Get == "100"
+
+  - id: R-A9
+    title: SetNX 幂等判断（消息去重）
+    status: pending
+    scenario: |
+      对 key "dedup:msg:uuid-1" 连续 3 次 SetNX(value, 5min)。
+    expected: |
+      第 1 次返回 true（成功设置），
+      第 2、3 次返回 false（已存在），
+      key TTL 约 5 分钟。
+    verification:
+      layers: [L2]
+      L2: |
+        Go test: 3× SetNX → assert [true, false, false]
+
+  # ── Fallback 与可观测 ──────────────────────────────
+  - id: R-A10
+    title: In-memory fallback 自动降级
+    status: pending
+    scenario: |
+      构建 Router 时 rec scene 配置为 mode=memory（或 addr 留空）。
+    expected: |
+      Router 正常构建不报错，
+      Scene("rec") 返回内存实现，
+      Set/Get 在进程内有效，重启丢失。
+    verification:
+      layers: [L2]
+      L2: |
+        Go test: config with mode=memory → Set → Get ok
+
+  - id: R-A11
+    title: Prometheus 指标 per-scene 可采集
+    status: pending
+    scenario: |
+      对 rec/general/realtime 三个 scene 分别执行若干操作后，
+      访问 /metrics 端点。
+    expected: |
+      包含指标（均带 scene label）：
+      - redis_pool_active_connections{scene="rec|general|realtime"}
+      - redis_command_duration_seconds{scene, cmd}
+      - redis_command_errors_total{scene, cmd}
+    verification:
+      layers: [L2]
+      L2: |
+        Go test: 操作后 GET /metrics → parse → assert metric names + labels
+
+  # ── 集成验证 ────────────────────────────────────────
+  - id: R-A12
+    title: content-service 迁移后双 scene 正常
+    status: pending
+    scenario: |
+      content-service 改用 redis.MustNewRouter，
+      rec scene 接 HotPath，general scene 接 Repository cache。
+    expected: |
+      推荐流程（ProcessSignal → GetSessionState → Feed）正常，
+      Post FindByIDCached 走 general Redis 缓存，
+      两个 scene 互不干扰。
+    verification:
+      layers: [L2]
+      L2: |
+        content-service integration test
+        feed request → assert rec keys in rec-miniredis
+        post detail → assert cache:post:{id} in general-miniredis
+
+  - id: R-A13
+    title: make gate-full 全通过
+    status: pending
+    scenario: |
+      执行 make gate-full。
+    expected: |
+      runtime-redis 相关的 L0+L1+L2 测试全部通过，
+      无回归。
+    verification:
+      layers: [L0, L1, L2]
+      gate: make gate-full exit 0

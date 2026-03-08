@@ -5,7 +5,9 @@ import 'package:quwoquan_app/personal_assistant/contracts/runtime_policies.dart'
 import 'package:quwoquan_app/personal_assistant/engine/llm_provider.dart';
 import 'package:quwoquan_app/personal_assistant/engine/react_planner.dart';
 import 'package:quwoquan_app/personal_assistant/engine/react_state.dart';
+import 'package:quwoquan_app/personal_assistant/engine/tool_execution_guard.dart';
 import 'package:quwoquan_app/personal_assistant/engine/tool_result_assessor.dart';
+import 'package:quwoquan_app/personal_assistant/engine/tool_result_truncator.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/personal_assistant/tools/metadata/tool_metadata_registry.dart';
 import 'package:quwoquan_app/personal_assistant/tools/tool_registry.dart';
@@ -39,7 +41,18 @@ class ReactRuntime {
        _planner = planner ?? const ReactPlanner(),
        _reflector = reflector ?? const ReactReflector(),
        _toolMetadataRegistry = toolMetadataRegistry,
-       _assessor = ToolResultAssessor();
+       _assessor = ToolResultAssessor(),
+       _executionGuard = ToolExecutionGuard(
+         permissions: const <String, ToolPermission>{
+           'intent_bridge': ToolPermission(requireConfirmation: true),
+           'scheduler': ToolPermission(requireConfirmation: true),
+           'app_action': ToolPermission(
+             requireConfirmation: true,
+             allowedSchemes: ['tel', 'sms', 'mailto', 'maps'],
+           ),
+         },
+       ),
+       _resultTruncator = const ToolResultTruncator();
 
   final AssistantLlmProvider _llmProvider;
   final AssistantToolRegistry _toolRegistry;
@@ -47,6 +60,8 @@ class ReactRuntime {
   final ReactReflector _reflector;
   final ToolMetadataRegistry? _toolMetadataRegistry;
   final ToolResultAssessor _assessor;
+  final ToolExecutionGuard _executionGuard;
+  final ToolResultTruncator _resultTruncator;
   static const String _reactPolicyPath =
       'assets/personal_assistant/config/react_policy.json';
   static const String _phaseHintsPath =
@@ -128,6 +143,7 @@ class ReactRuntime {
     await _toolMetadataRegistry?.ensureLoaded();
     _toolRegistry.resetCallHistory();
     _assessor.reset();
+    _executionGuard.reset();
     final goalText = goal.isEmpty
         ? (messages.lastWhere(
                 (m) => m['role'] == 'user',
@@ -214,6 +230,20 @@ class ReactRuntime {
         });
       }
 
+      pushTrace(
+        AssistantTraceEvent(
+          type: AssistantTraceEventType.thinkingProgress,
+          message: currentPhase == 'analyzing' ? '正在深入分析...' : '正在思考...',
+          timestamp: DateTime.now(),
+          runId: runId,
+          traceId: traceId,
+          data: <String, dynamic>{
+            'phase': currentPhase,
+            'iteration': state.iteration,
+            'extracted': true,
+          },
+        ),
+      );
       final output = await _llmProvider.reason(
         messages: messages,
         availableTools: availableToolNames,
@@ -225,24 +255,7 @@ class ReactRuntime {
         runId: runId ?? '',
         traceId: traceId ?? '',
         callOptions: callOptions,
-        onDelta: onDelta != null
-            ? (delta) {
-                onDelta(delta);
-                pushTrace(
-                  AssistantTraceEvent(
-                    type: AssistantTraceEventType.thinkingProgress,
-                    message: delta,
-                    timestamp: DateTime.now(),
-                    runId: runId,
-                    traceId: traceId,
-                    data: <String, dynamic>{
-                      'phase': currentPhase,
-                      'iteration': state.iteration,
-                    },
-                  ),
-                );
-              }
-            : null,
+        onDelta: onDelta,
       );
       final currentDomainId =
           (templateVariables['domainId'] as String?)?.trim() ?? '';
@@ -273,15 +286,40 @@ class ReactRuntime {
           },
         ),
       );
+      final extractedThinking = _extractBestThinking(
+        output.text,
+        output.reasoningText,
+      );
+      if (extractedThinking.isNotEmpty) {
+        pushTrace(
+          AssistantTraceEvent(
+            type: AssistantTraceEventType.thinkingProgress,
+            message: extractedThinking,
+            timestamp: DateTime.now(),
+            runId: runId,
+            traceId: traceId,
+            data: <String, dynamic>{
+              'phase': currentPhase,
+              'iteration': state.iteration,
+              'extracted': true,
+            },
+          ),
+        );
+      }
       // 当模型不走 native function calling（如 mimo-v2-flash），尝试从 JSON 正文
       // 的 toolPlan / nextAction='tool_call' 字段里解析工具调用。
       // 合成阶段（availableToolNames 为空）不解析 JSON 工具调用，
       // 防止模型输出 nextAction='tool_call' 时误触发工具执行。
+      // For models without native function calling, also check reasoning text
+      // since some models (MIMO) put the JSON action plan inside reasoning.
+      final extractSource = output.text.trim().isNotEmpty
+          ? output.text
+          : output.reasoningText;
       final effectiveToolCalls = output.hasToolCalls
           ? output.toolCalls
           : (availableToolNames.isEmpty
               ? const <AssistantToolCall>[]
-              : _extractToolCallsFromJsonText(output.text));
+              : _extractToolCallsFromJsonText(extractSource));
       // Track consecutive empty iterations for deadlock detection
       final isEmptyOutput = output.text.trim().isEmpty && effectiveToolCalls.isEmpty;
       if (isEmptyOutput) {
@@ -380,6 +418,46 @@ class ReactRuntime {
           state.stopReason = 'tool_budget_exhausted';
           break;
         }
+        // Pre-execution guard: loop detection + permission check
+        final guardResult = _executionGuard.checkBeforeExecution(
+          step.toolName,
+          step.arguments,
+        );
+        if (guardResult.isBlocked) {
+          pushTrace(
+            AssistantTraceEvent(
+              type: AssistantTraceEventType.toolError,
+              message: guardResult.reason,
+              timestamp: DateTime.now(),
+              runId: runId,
+              traceId: traceId,
+              toolCallId: step.id,
+              data: <String, dynamic>{
+                'guardBlocked': true,
+                'reason': guardResult.reason,
+              },
+            ),
+          );
+          state.stopReason = 'guard_blocked';
+          break;
+        }
+        if (guardResult.verdict == GuardVerdict.needsConfirmation) {
+          pushTrace(
+            AssistantTraceEvent(
+              type: AssistantTraceEventType.toolStart,
+              message: '需要确认: ${step.toolName}',
+              timestamp: DateTime.now(),
+              runId: runId,
+              traceId: traceId,
+              toolCallId: step.id,
+              data: <String, dynamic>{
+                'needsConfirmation': true,
+                'toolName': guardResult.toolName,
+                'args': guardResult.args,
+              },
+            ),
+          );
+        }
         state.usedTools += 1;
         if (step.toolName.contains('search')) {
           final query = (step.arguments['query'] ?? step.arguments['keyword'] ?? '').toString();
@@ -446,6 +524,7 @@ class ReactRuntime {
         });
         final traceData = <String, dynamic>{
           ...?result.data,
+          'toolName': step.toolName,
           if (!isOk && shouldSuppressToolErrorForUser) 'suppressed': true,
         };
         pushTrace(
@@ -483,6 +562,9 @@ class ReactRuntime {
           toolName: step.toolName,
           result: result,
         );
+        // Truncate tool result to prevent context window overflow
+        final rawContent = jsonEncode(toolObservation);
+        final truncatedContent = _resultTruncator.truncate(rawContent);
         // OpenAI 协议要求：tool message 必须有 tool_call_id，对应 assistant message 里的 tool_calls[].id
         final effectiveCallId = step.toolCallId.isNotEmpty
             ? step.toolCallId
@@ -490,7 +572,7 @@ class ReactRuntime {
         messages.add(<String, dynamic>{
           'role': 'tool',
           'tool_call_id': effectiveCallId,
-          'content': jsonEncode(toolObservation),
+          'content': truncatedContent,
         });
         if (!isOk) {
           final failureContext = _buildToolFailureContext(
@@ -896,6 +978,56 @@ class ReactRuntime {
       _reactPolicy = await ReactPolicy.loadFromAsset(_reactPolicyPath);
     }();
     await _reactPolicyLoading;
+  }
+
+  String _extractThinkingTextFromJson(String text) {
+    try {
+      final decoded = jsonDecode(text);
+      if (decoded is Map) {
+        final tt = (decoded['thinkingText'] as String?)?.trim() ?? '';
+        if (tt.isNotEmpty) return tt;
+        final um = (decoded['userMarkdown'] as String?)?.trim() ?? '';
+        if (um.isNotEmpty &&
+            !um.startsWith('{') &&
+            um.length > 20) {
+          return um;
+        }
+      }
+    } catch (_) {}
+    return '';
+  }
+
+  /// Extract user-visible thinking from the LLM output, combining multiple
+  /// sources: JSON thinkingText, reasoningText, and cleaned raw output.
+  String _extractBestThinking(String outputText, String reasoningText) {
+    final fromJson = _extractThinkingTextFromJson(outputText);
+    if (fromJson.isNotEmpty) return fromJson;
+    final cleaned = _cleanReasoningForDisplay(reasoningText);
+    if (cleaned.isNotEmpty) return cleaned;
+    if (outputText.trim().isNotEmpty) {
+      final fromOutput = _extractThinkingTextFromJson(
+        outputText.trim().startsWith('{') ? outputText : reasoningText,
+      );
+      if (fromOutput.isNotEmpty) return fromOutput;
+    }
+    return '';
+  }
+
+  static final _jsonKeyPattern = RegExp(
+    r'"(?:contractVersion|decision|nextAction|toolPlan|slotState|messageKind|tool_calls)'
+  );
+
+  String _cleanReasoningForDisplay(String reasoning) {
+    final text = reasoning.trim();
+    if (text.isEmpty || text.length < 10) return '';
+    if (text.startsWith('{') && _jsonKeyPattern.hasMatch(text)) return '';
+    final cleaned = text
+        .replaceAll(RegExp(r'<think>|</think>', multiLine: true), '')
+        .replaceAll(RegExp(r'```json[\s\S]*?```', multiLine: true), '')
+        .trim();
+    if (cleaned.isEmpty || cleaned.length < 10) return '';
+    if (cleaned.startsWith('{') && cleaned.endsWith('}')) return '';
+    return cleaned;
   }
 }
 

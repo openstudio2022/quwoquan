@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/runtime/recommendation"
 )
 
@@ -14,20 +15,13 @@ const (
 	pageCtxTTL    = 10 * time.Minute
 )
 
-// RedisClient abstracts Redis for the context package.
-type RedisClient interface {
-	Get(ctx context.Context, key string) (string, error)
-	Set(ctx context.Context, key string, value string, ttl time.Duration) error
-	Del(ctx context.Context, keys ...string) error
-}
-
 // PageContextManager handles page context reporting and retrieval.
 type PageContextManager struct {
-	redis   RedisClient
+	redis   rtredis.Client
 	hotPath recommendation.SignalProcessor
 }
 
-func NewPageContextManager(redis RedisClient, hotPath recommendation.SignalProcessor) *PageContextManager {
+func NewPageContextManager(redis rtredis.Client, hotPath recommendation.SignalProcessor) *PageContextManager {
 	return &PageContextManager{redis: redis, hotPath: hotPath}
 }
 

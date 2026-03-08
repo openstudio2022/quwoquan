@@ -3,6 +3,9 @@ service:
   http:
     addr: ":18080"
 
+mongo:
+  uri: ""
+
 redis:
   rec:
     mode: standalone

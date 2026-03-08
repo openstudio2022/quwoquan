@@ -1,0 +1,30 @@
+version: 1
+aggregate: Connection
+backend: redis
+
+description: |
+  realtime-gateway 连接状态全部存储在 Redis（realtime scene）。
+  Connection 实体存在于进程内存中（Hub map），不持久化。
+  PresenceEntry 通过 Redis Hash 实现多节点共享在线查询。
+
+redis_cache:
+  - key: "presence:user:{userId}"
+    ttl_seconds: 120
+    type: hash
+    scene: realtime
+    description: |
+      用户在线状态 Hash。field = connId, value = JSON{nodeId, transport, lastHeartbeatAt}。
+      TTL 与 ws_heartbeat_timeout_sec 对齐，无心跳自动过期。
+      HSET 在建连时写入，HDEL 在断连时删除，HGETALL 用于在线查询。
+
+  - key: "presence:node:{nodeId}:count"
+    ttl_seconds: 60
+    type: string
+    scene: realtime
+    description: 节点当前连接数（INCR/DECR，用于负载均衡和容量限流）
+
+  - key: "transport:state:{userId}:{deviceId}"
+    ttl_seconds: 300
+    type: string
+    scene: realtime
+    description: 用户传输状态缓存（IDLE/ACTIVE/BACKGROUND，用于跨请求状态一致性）

@@ -793,19 +793,19 @@ make gate
 
 | 命令 | 粒度 | 用途 |
 |------|------|------|
-| `/opsx-ff` | 特性级 | 创建/推进一个用户可感知的特性 |
-| `/opsx-apply` | 特性级 | 实施特性（含多个扩展操作） |
-| `/opsx-archive` | 特性级 | 归档已完成特性 |
+| `/prd` / `/design` | 特性级 | 创建/推进一个用户可感知的特性并完成 metadata/codegen 基线 |
+| `/dev` | 特性级 | 实施特性（含多个扩展操作），完成自验证并自动归档 |
+| `/archive` | 特性级 | 兼容补归档/修复回写，非标准流 |
 | `/qwq-extend` | 对象级 | 20 个扩展场景统一入口 |
-| `/fullstack-audit` | 全栈 | 端云语义 + 结构 + metadata + ArchUnit 审计 |
-| `/submit-with-gate` | 全栈 | 全栈审计 + gate + 提交推送 |
+| `/audit` | 全栈 | 端云语义 + 结构 + metadata + ArchUnit 审计 |
+| `/commit` | 全栈 | 读取 `/dev` 自动归档结果后执行 gate、审计、提交推送 |
 
 ### 11.2 规则（.cursor/rules/）
 
 | 规则 | 说明 |
 |------|------|
-| `07-arch-constraints-fullstack.mdc` | DDD 层级导入约束 + runtime 统一能力 + codegen 产物保护 |
-| `08-extension-scenarios-fullstack.mdc` | 20 个扩展场景的必须步骤和禁止行为 |
+| `01-arch-constraints.mdc` | DDD 层级导入约束 + runtime 统一能力 + codegen 产物保护 |
+| `00-fullstack-development-flow.mdc` | 主流程、自动卡点、自动归档、提交与灰度口径 |
 
 ### 11.3 验证脚本
 

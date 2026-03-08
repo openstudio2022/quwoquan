@@ -31,7 +31,7 @@ class MockReportRepository extends ReportRepository {
       'targetId': targetId,
       'targetType': targetType,
       'reason': reason,
-      'note': ?note,
+      if (note != null) 'note': note,
     });
   }
 }

@@ -1,0 +1,54 @@
+feature:
+  id: "<Fxxx>"
+  name: "<feature-name>"
+opsx:
+  change_id: "<opsx-change-id>"
+  specs:
+    - "<opsx-spec-id>"
+services:
+  - "<service-name>"
+objects:
+  - "<domain-object>"
+apis:
+  - method: GET
+    path: /v1/example/path
+metadata:
+  entities:
+    - "<entity-name>"
+  fields:
+    - "<field-name>"
+cross_cutting:
+  observability: true
+  product_ops: true
+  service_governance: true
+  config_governance: true
+tests:
+  unit:
+    - "<path/to/unit_test>"
+  contract:
+    - "<path/to/contract_test>"
+  integration:
+    - "<path/to/integration_test>"
+  uat:
+    - "<uat-case-id>"
+test_automation:
+  mock:
+    app:
+      - "<path/to/mock_test>"
+    service:
+      - "<path/to/mock_or_stub_test>"
+  contract:
+    app:
+      - "<path/to/client_contract_test>"
+    service:
+      - "<path/to/openapi_or_schema_contract_test>"
+  integration:
+    app:
+      - "<path/to/app_integration_test>"
+    service:
+      - "<path/to/service_integration_test>"
+  uat:
+    cases:
+      - "<uat-case-id>"
+    automation:
+      - "<path/to/uat_automation_script_or_plan>"

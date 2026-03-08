@@ -23,6 +23,13 @@ api_routes:
     writable_fields: [contentType, title, body, summary, tags, mediaUrls, coverUrl, videoUrl, illustrationAssetId, location, locationName, visibility, circleIds, sourcePostId, sourceType, deviceInfo, publishLocation]
 
   - method: GET
+    path: /v1/users/{userId}/posts
+    operation: ListUserPosts
+    description: 用户发布的帖子列表（用户主页-创作 Tab）
+    query_params: [type, visibility, cursor, limit]
+    response_entity: Post
+
+  - method: GET
     path: /v1/content/posts/{postId}
     operation: GetPost
     description: 内容详情

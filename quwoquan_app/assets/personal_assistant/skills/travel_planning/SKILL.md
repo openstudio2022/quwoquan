@@ -1,9 +1,16 @@
 ---
 name: travel_planning
-description: 回答旅行行程规划、景点推荐、住宿选择与旅行攻略问题。
+description: 旅行攻略、景点推荐、酒店机票、行程规划。
 domain: travel_planning
+mode: hybrid
 allowed_tools: web_search local_context
-trigger_keywords: 旅游 旅行 行程 景点 酒店 攻略 去哪玩
+trigger_keywords: []
+searchPolicy:
+  maxReflection: 2
+  qualityThreshold: 0.5
+  strategy: research
+requires:
+  tools: [web_search]
 output_contract: assistant_turn_v2
 tool_observation_contract: tool_observation_v1
 reference_docs: references/domain-knowledge.md references/output-examples.md

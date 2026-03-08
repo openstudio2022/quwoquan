@@ -28,14 +28,28 @@ List<AssistantRunMessage> buildAssistantMessages(
       .where((m) {
         if ((m['type'] as String? ?? 'text') != 'text') return false;
         if (m['streaming'] == true) return false;
-        // 过滤错误消息：不发送降级/错误提示文本给 LLM
         if (m['isError'] == true) return false;
         final content = (m['content'] as String?)?.trim() ?? '';
         if (content.isEmpty) return false;
-        // 过滤已知的降级文本（防止 session 污染传播）
         if (content.startsWith('助手暂时不可用') ||
             content.startsWith('模型调用失败') ||
-            content.startsWith('模型调用异常')) return false;
+            content.startsWith('模型调用异常') ||
+            content.startsWith('当前模型服务不可用') ||
+            content.contains('HTTP 400') ||
+            content.contains('HTTP 500')) return false;
+        if (content.contains('正在查询') ||
+            content.contains('正在获取') ||
+            content.contains('正在检索') ||
+            content.contains('正在搜索') ||
+            content.contains('正在为您') ||
+            content.contains('正在规划') ||
+            content.contains('正在执行')) return false;
+        if (m['isSelf'] != true &&
+            content.startsWith('{') &&
+            (content.contains('"decision"') ||
+                content.contains('"contractVersion"'))) {
+          return false;
+        }
         return true;
       })
       .map(
@@ -52,6 +66,7 @@ const _degradedPrefixes = <String>[
   '助手暂时不可用',
   '模型调用失败',
   '模型调用异常',
+  '当前模型服务不可用',
 ];
 
 void main() {
@@ -225,8 +240,8 @@ void main() {
       ];
 
       final result = buildAssistantMessages(chatHistory);
-      // 3 条 user + 1 条 assistant（失败那条被过滤）
-      expect(result.length, equals(4));
+      // 3 条 user + 2 条 assistant（isError 标记的那条被过滤）= 5
+      expect(result.length, equals(5));
       // 最后一条 LLM 输入是正确的助手回复，不是错误文案
       final lastAssistantMsg = result.lastWhere((m) => m.role == 'assistant');
       expect(

@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: rtc-service
+  labels:
+    app.kubernetes.io/name: rtc-service
+spec:
+  selector:
+    app.kubernetes.io/name: rtc-service
+  ports:
+    - name: http
+      protocol: TCP
+      port: 18083
+      targetPort: http

@@ -52,4 +52,41 @@ l2:
           - feature: parenttrace-causation-envelopes
             l5:
               - feature: async-trace-link-validator
+  - feature: realtime-gateway
+    l3:
+      - feature: websocket-lifecycle
+        l4:
+          - feature: connection-auth-heartbeat
+            l5:
+              - feature: heartbeat-timeout-guard
+      - feature: topic-routing-and-fanout
+        l4:
+          - feature: subscription-fanout-policy
+            l5:
+              - feature: cross-node-broadcast-guard
+      - feature: offline-sync-and-gap-fill
+        l4:
+          - feature: seq-gap-detection-policy
+            l5:
+              - feature: gap-fill-completeness-guard
+      - feature: external-channel-adapter
+        l4:
+          - feature: feishu-webhook-adapter
+            l5:
+              - feature: adapter-payload-validation-guard
+      - feature: config-push-skeleton
+        l4:
+          - feature: config-topic-registration
+            l5:
+              - feature: config-handler-smoke-guard
+      - feature: transport-negotiation-and-fallback
+        l4:
+          - feature: websocket-longpoll-http-cascade
+            l5:
+              - feature: transport-upgrade-retry-guard
+      - feature: connection-resource-management
+        l4:
+          - feature: per-node-per-user-limit-policy
+            l5:
+              - feature: backpressure-disconnect-guard
 

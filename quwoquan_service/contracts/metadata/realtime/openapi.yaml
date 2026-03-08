@@ -1,0 +1,133 @@
+openapi: 3.0.3
+info:
+  title: quwoquan realtime-gateway API
+  version: "v1"
+  description: 统一实时通信网关（WebSocket + Long-polling + 外部渠道 Webhook）
+servers:
+  - url: http://localhost
+security:
+  - bearerAuth: []
+paths:
+  /v1/realtime/ws:
+    get:
+      summary: WebSocket Upgrade
+      description: 建立 WebSocket 连接（JWT query param 鉴权）
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "101": { description: Switching Protocols }
+        "401": { description: Unauthorized }
+        "503":
+          description: Service Unavailable (node capacity exceeded)
+          headers:
+            Retry-After:
+              schema: { type: integer }
+
+  /v1/realtime/poll:
+    get:
+      summary: Long-polling endpoint
+      description: |
+        服务端 hold 连接 ≤ timeout 秒。有消息立即返回 200，超时返回 204（心跳）。
+        端侧收到响应后立即重新发起下一次 poll。
+      parameters:
+        - name: topics
+          in: query
+          required: true
+          schema: { type: string }
+          description: 逗号分隔的 topic 列表（如 inbox,system）
+        - name: lastSeq
+          in: query
+          required: false
+          schema: { type: integer, format: int64 }
+        - name: timeout
+          in: query
+          required: false
+          schema: { type: integer, default: 60 }
+          description: 服务端 hold 超时（秒），默认 poll_interval_sec
+      responses:
+        "200":
+          description: New messages available
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PollResponse" }
+        "204": { description: No new messages (heartbeat) }
+        "401": { description: Unauthorized }
+
+  /v1/config/realtime:
+    get:
+      summary: Get realtime configuration parameters
+      description: 返回自适应传输系统配置（运维可热更新）
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RealtimeConfig" }
+
+  /v1/channel/{channelType}/webhook:
+    post:
+      summary: External channel webhook
+      description: 飞书/钉钉等外部渠道 Webhook 入口
+      parameters:
+        - name: channelType
+          in: path
+          required: true
+          schema: { type: string, enum: [feishu, dingtalk] }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200": { description: OK }
+        "400": { description: Bad Request (signature verification failed) }
+
+  /healthz:
+    get:
+      summary: Health check
+      security: []
+      responses:
+        "200": { description: OK }
+
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      security: []
+      responses:
+        "200": { description: OK }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      $ref: ../_shared/openapi_common.yaml#/components/securitySchemes/bearerAuth
+  schemas:
+    PollResponse:
+      type: object
+      required: [messages]
+      properties:
+        messages:
+          type: array
+          items: { $ref: "#/components/schemas/RealtimeFrame" }
+    RealtimeFrame:
+      type: object
+      required: [type, topic]
+      properties:
+        type: { type: string, enum: [message, subscribe, unsubscribe, heartbeat, ack, auth_expired, connection_replaced, gap_fill] }
+        topic: { type: string }
+        payload: { type: object }
+        eventId: { type: string }
+        seq: { type: integer, format: int64 }
+    RealtimeConfig:
+      type: object
+      properties:
+        ws_idle_timeout_sec: { type: integer, default: 120 }
+        poll_interval_sec: { type: integer, default: 60 }
+        ws_heartbeat_sec: { type: integer, default: 30 }
+        ws_heartbeat_timeout_sec: { type: integer, default: 90 }
+        ws_max_connections_per_user: { type: integer, default: 5 }
+        ws_upgrade_retry_sec: { type: integer, default: 60 }
+        active_trigger_msg_count: { type: integer, default: 3 }
+        active_trigger_window_sec: { type: integer, default: 10 }

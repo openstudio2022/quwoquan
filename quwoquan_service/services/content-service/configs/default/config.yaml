@@ -10,6 +10,12 @@ config:
   min_image_version: "0.0.1"
   max_image_version: "9.9.9"
 
+# MongoDB — empty uri falls back to in-memory PostStore (local dev)
+mongo:
+  uri: ""
+  database: "quwoquan_content"
+  collection: "posts"
+
 # Redis scenes (defaults)
 redis:
   rec:

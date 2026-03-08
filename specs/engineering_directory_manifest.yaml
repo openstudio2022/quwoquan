@@ -55,12 +55,6 @@ required_files:
   - "specs/feature-tree/tree_index.yaml"
   - "specs/README.md"
   - ".cursor/rules/06-doc-authority-hierarchy.mdc"
-  - ".cursor/commands/opsx-ff.md"
-  - ".cursor/commands/opsx-apply.md"
-  - ".cursor/commands/opsx-archive.md"
-  - ".cursor/commands/opsx-ff-tree.md"
-  - ".cursor/commands/opsx-apply-tree.md"
-  - ".cursor/commands/opsx-archive-tree.md"
 
 compatibility_files_must_be_pointer:
   - "quwoquan_service/.cursor/rules/00-quwoquan-service-core.mdc"

@@ -76,4 +76,4 @@ UI Feedback (8 actions)
 
 ## 选型结论
 
-采用**方案 A（update）**：先完成 metadata 基线对齐，再在 `/opsx-deliver` 按 8 类动作分批实施。
+采用**方案 A（update）**：先完成 metadata 基线对齐，再在 `/deliver` 按 8 类动作分批实施。

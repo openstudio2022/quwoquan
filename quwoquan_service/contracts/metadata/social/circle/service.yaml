@@ -12,7 +12,7 @@ api_routes:
     path: /v1/circles
     operation: ListCircles
     description: 圈子列表（分类 + 推荐）
-    query_params: [category, cursor, limit]
+    query_params: [category, domainId, recommendFor, cursor, limit, sort]
     response_entity: Circle
 
   - method: POST
@@ -37,6 +37,13 @@ api_routes:
     path: /v1/circles/{circleId}
     operation: ArchiveCircle
     description: 归档圈子
+
+  - method: GET
+    path: /v1/users/{userId}/circles
+    operation: ListUserCircles
+    description: 查询用户已加入的圈子列表
+    query_params: [cursor, limit]
+    response_entity: Circle
 
   - method: POST
     path: /v1/circles/{circleId}/join
@@ -63,6 +70,7 @@ api_routes:
     path: /v1/circles/{circleId}/feed
     operation: GetCircleFeed
     description: 圈子动态流
+    query_params: [cursor, limit, sort]
 
   - method: GET
     path: /v1/circles/{circleId}/stats
@@ -74,9 +82,59 @@ api_routes:
     operation: ReportCircleBehavior
     description: 圈子行为上报
 
+  # --- 板块配置 ---
+  - method: PATCH
+    path: /v1/circles/{circleId}/sections
+    operation: UpdateCircleSections
+    description: 更新圈子主页板块配置（顺序+可见性）
+    request_entity: CircleSectionConfig
+
+  # --- 存储空间 ---
+  - method: GET
+    path: /v1/circles/{circleId}/files
+    operation: ListCircleFiles
+    description: 文件列表
+    query_params: [parentId, sort, cursor, limit]
+    response_entity: CircleFile
+
+  - method: POST
+    path: /v1/circles/{circleId}/files
+    operation: CreateCircleFile
+    description: 创建文件夹 / 获取上传预签名 URL
+    request_entity: CircleFile
+    writable_fields: [parentFolderId, name, fileType, mimeType, sizeBytes]
+
+  - method: GET
+    path: /v1/circles/{circleId}/files/{fileId}
+    operation: GetCircleFile
+    description: 文件详情 / 获取下载预签名 URL
+    response_entity: CircleFile
+
+  - method: PATCH
+    path: /v1/circles/{circleId}/files/{fileId}
+    operation: UpdateCircleFile
+    description: 重命名文件/文件夹 / 确认上传完成
+    writable_fields: [name, status]
+
+  - method: DELETE
+    path: /v1/circles/{circleId}/files/{fileId}
+    operation: DeleteCircleFile
+    description: 删除文件/文件夹
+
+  # --- Feed 管理 ---
+  - method: PATCH
+    path: /v1/circles/{circleId}/feed/{postId}/pin
+    operation: PinCirclePost
+    description: 置顶/取消置顶圈子内帖子
+
+  - method: PATCH
+    path: /v1/circles/{circleId}/feed/{postId}/feature
+    operation: FeatureCirclePost
+    description: 精选/取消精选圈子内帖子
+
 consumers:
   - name: app
-    capabilities: [list_circles, create_circle, join, leave, read_feed, read_members, report_behavior]
+    capabilities: [list_circles, create_circle, join, leave, read_feed, read_members, report_behavior, manage_files, manage_sections, pin_post, feature_post]
   - name: platform-ops
     capabilities: [read_circle, update_circle, manage_members, read_stats]
   - name: recommendation-engine
@@ -84,9 +142,9 @@ consumers:
   - name: assistant-service
     capabilities: [read_circle, search]
   - name: chat-service
-    capabilities: [read_circle]
+    capabilities: [read_circle, create_conversation_for_circle]
   - name: content-service
-    capabilities: [read_circle]
+    capabilities: [read_circle, read_feed]
 
 contract_test:
   mock_strategy:
@@ -157,7 +215,36 @@ contract_test:
             - "db.circles.FindOne({_id}).memberCount → 1 after leave"
             - "db.circle_members.CountDocuments({circleId}) → matches memberCount"
 
+        - name: storage_upload_flow
+          routes:
+            - POST /v1/circles/{id}/files
+            - PATCH /v1/circles/{id}/files/{fileId}
+          assertions: [presigned_url_returned, file_status_active_after_confirm, storage_used_updated]
+
+        - name: storage_quota_exceeded
+          route: POST /v1/circles/{id}/files
+          precondition: storageUsedBytes >= storageQuotaBytes
+          assertions: [status_413, error_code_storage_quota_exceeded]
+
+        - name: section_config_update
+          route: PATCH /v1/circles/{id}/sections
+          assertions: [section_config_persisted, event_published]
+
+        - name: feed_pin_and_feature
+          routes:
+            - PATCH /v1/circles/{id}/feed/{postId}/pin
+            - PATCH /v1/circles/{id}/feed/{postId}/feature
+          assertions: [pinned_state_toggled, featured_state_toggled]
+
+        - name: recommended_circles
+          route: GET /v1/circles?recommendFor={userId}
+          assertions: [status_200, sorted_by_relevance, domain_id_present]
+
   coverage_requirements:
     - all visibility/joinPolicy combinations covered
     - member role transitions (member → admin → owner) tested
     - circle-conversation link tested
+    - storage CRUD + quota enforcement tested
+    - section config CRUD + event tested
+    - feed pin/feature operations tested
+    - recommended circles API tested

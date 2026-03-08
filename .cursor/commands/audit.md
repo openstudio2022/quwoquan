@@ -208,6 +208,6 @@ cd /path/to/quwoquan && bash scripts/verify_feature_tree_refactor.sh
 
 | 命令 | 视角 | 触发时机 |
 |------|------|---------|
-| `/verify` | **特性级**：spec↔实现漂移检测 | dev 完成后、archive 前 |
+| `/verify` | **特性级**：spec↔实现漂移检测 | dev 完成后、commit 前 |
 | `/audit` | **代码库级**：结构健康度检查 | 任意时刻、周期检查 |
 | `/verify --with-audit` | 两者联合运行 | 需要完整质量报告时 |

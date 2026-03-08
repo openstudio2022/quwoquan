@@ -3,6 +3,11 @@ service:
   http:
     addr: ":18080"
 
+mongo:
+  uri: "${MONGO_URI}"
+  database: "quwoquan_content"
+  collection: "posts"
+
 redis:
   rec:
     mode: standalone

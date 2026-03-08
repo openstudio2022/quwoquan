@@ -487,6 +487,185 @@ features:
                       domain: ""
                       status: specified
                       tags: []
+            - id: voice-message
+              name: voice-message
+              level: L3_subfeature
+              path: ../specs/feature-tree/chat-conversation/list-detail-message-delivery/voice-message
+              domain: chat
+              status: completed
+              tags: [voice, audio, media, chat]
+              children:
+                - id: voice-record-and-send
+                  name: voice-record-and-send
+                  level: L4_story
+                  path: ../specs/feature-tree/chat-conversation/list-detail-message-delivery/voice-message/voice-record-and-send
+                  domain: chat
+                  status: completed
+                  tags: [voice, record, upload, send]
+                - id: voice-playback-and-cache
+                  name: voice-playback-and-cache
+                  level: L4_story
+                  path: ../specs/feature-tree/chat-conversation/list-detail-message-delivery/voice-message/voice-playback-and-cache
+                  domain: chat
+                  status: completed
+                  tags: [voice, playback, cache, ui]
+            - id: rich-media-message
+              name: rich-media-message
+              level: L3_subfeature
+              path: ../specs/feature-tree/chat-conversation/list-detail-message-delivery/rich-media-message
+              domain: chat
+              status: specified
+              tags: [video, file, image, media, chat, emoji]
+              children:
+                - id: video-message-e2e
+                  name: video-message-e2e
+                  level: L4_story
+                  path: ../specs/feature-tree/chat-conversation/list-detail-message-delivery/rich-media-message/video-message-e2e
+                  domain: chat
+                  status: specified
+                  tags: [video, upload, playback, media]
+                - id: file-message-e2e
+                  name: file-message-e2e
+                  level: L4_story
+                  path: ../specs/feature-tree/chat-conversation/list-detail-message-delivery/rich-media-message/file-message-e2e
+                  domain: chat
+                  status: specified
+                  tags: [file, document, preview, pdf, office]
+                - id: image-message-fix
+                  name: image-message-fix
+                  level: L4_story
+                  path: ../specs/feature-tree/chat-conversation/list-detail-message-delivery/rich-media-message/image-message-fix
+                  domain: chat
+                  status: specified
+                  tags: [image, fix, fullscreen, emoji]
+            - id: realtime-push-and-offline-sync
+              name: realtime-push-and-offline-sync
+              level: L3_subfeature
+              path: ../specs/feature-tree/chat-conversation/list-detail-message-delivery/realtime-push-and-offline-sync
+              domain: chat
+              status: specified
+              tags: [realtime, websocket, push, offline, fcm, apns, gap-fill]
+              children:
+                - id: websocket-push-gap-fill-policy
+                  name: websocket-push-gap-fill-policy
+                  level: L4_story
+                  path: ../specs/feature-tree/chat-conversation/list-detail-message-delivery/realtime-push-and-offline-sync/websocket-push-gap-fill-policy
+                  domain: chat
+                  status: specified
+                  tags: [websocket, gap-fill, reconnect]
+                  children: []
+            - id: message-interaction-polish
+              name: message-interaction-polish
+              level: L3_subfeature
+              path: ../specs/feature-tree/chat-conversation/list-detail-message-delivery/message-interaction-polish
+              domain: chat
+              status: specified
+              tags: [reply, mention, earpiece, speed, inbox]
+              children:
+                - id: quote-reply-display
+                  name: quote-reply-display
+                  level: L4_story
+                  path: ../specs/feature-tree/chat-conversation/list-detail-message-delivery/message-interaction-polish/quote-reply-display
+                  domain: chat
+                  status: specified
+                  tags: [reply, quote]
+                  children: []
+                - id: mention-highlight-and-picker
+                  name: mention-highlight-and-picker
+                  level: L4_story
+                  path: ../specs/feature-tree/chat-conversation/list-detail-message-delivery/message-interaction-polish/mention-highlight-and-picker
+                  domain: chat
+                  status: specified
+                  tags: [mention, at, highlight]
+                  children: []
+                - id: voice-earpiece-and-speed
+                  name: voice-earpiece-and-speed
+                  level: L4_story
+                  path: ../specs/feature-tree/chat-conversation/list-detail-message-delivery/message-interaction-polish/voice-earpiece-and-speed
+                  domain: chat
+                  status: specified
+                  tags: [voice, earpiece, speed]
+                  children: []
+                - id: inbox-data-source-unification
+                  name: inbox-data-source-unification
+                  level: L4_story
+                  path: ../specs/feature-tree/chat-conversation/list-detail-message-delivery/message-interaction-polish/inbox-data-source-unification
+                  domain: chat
+                  status: specified
+                  tags: [inbox, datasource, list]
+                  children: []
+        - id: realtime-call
+          name: realtime-call
+          level: L2_feature
+          path: ../specs/feature-tree/chat-conversation/realtime-call
+          domain: rtc
+          status: in_progress
+          tags: [rtc, call, video, audio, webrtc, livekit]
+          children:
+            - id: one-to-one-call
+              name: one-to-one-call
+              level: L3_subfeature
+              path: ../specs/feature-tree/chat-conversation/realtime-call/one-to-one-call
+              domain: rtc
+              status: in_progress
+              tags: [rtc, 1v1, call]
+              children:
+                - id: call-lifecycle-contract
+                  name: call-lifecycle-contract
+                  level: L4_story
+                  path: ../specs/feature-tree/chat-conversation/realtime-call/one-to-one-call/call-lifecycle-contract
+                  domain: rtc
+                  status: specified
+                  tags: [rtc, lifecycle, contract]
+                  children: []
+            - id: group-call
+              name: group-call
+              level: L3_subfeature
+              path: ../specs/feature-tree/chat-conversation/realtime-call/group-call
+              domain: rtc
+              status: in_progress
+              tags: [rtc, group, multi-party]
+              children:
+                - id: multi-party-room-contract
+                  name: multi-party-room-contract
+                  level: L4_story
+                  path: ../specs/feature-tree/chat-conversation/realtime-call/group-call/multi-party-room-contract
+                  domain: rtc
+                  status: specified
+                  tags: [rtc, room, 32-person]
+                  children: []
+            - id: call-experience
+              name: call-experience
+              level: L3_subfeature
+              path: ../specs/feature-tree/chat-conversation/realtime-call/call-experience
+              domain: rtc
+              status: in_progress
+              tags: [rtc, ui, ux, pip, grid]
+              children:
+                - id: call-ui-interaction
+                  name: call-ui-interaction
+                  level: L4_story
+                  path: ../specs/feature-tree/chat-conversation/realtime-call/call-experience/call-ui-interaction
+                  domain: rtc
+                  status: specified
+                  tags: [rtc, ui, grid, speaker, controls]
+                  children: []
+            - id: media-infrastructure
+              name: media-infrastructure
+              level: L3_subfeature
+              path: ../specs/feature-tree/chat-conversation/realtime-call/media-infrastructure
+              domain: rtc
+              status: in_progress
+              tags: [rtc, sfu, livekit, turn, deploy]
+              children:
+                - id: sfu-deployment-contract
+                  name: sfu-deployment-contract
+                  level: L4_story
+                  path: ../specs/feature-tree/chat-conversation/realtime-call/media-infrastructure/sfu-deployment-contract
+                  domain: rtc
+                  status: specified
+                  tags: [rtc, sfu, livekit, coturn, deploy]
+                  children: []
     - id: circle-community
       name: circle-community
       level: L1_domain
@@ -726,6 +905,35 @@ features:
                       domain: ""
                       status: specified
                       tags: []
+        - id: circle-experience-redesign
+          name: circle-experience-redesign
+          level: L2_feature
+          path: ../specs/feature-tree/circle-community/circle-experience-redesign
+          domain: ""
+          status: specified
+          tags: [circle, ux, redesign]
+          children:
+            - id: circle-homepage-redesign
+              name: circle-homepage-redesign
+              level: L3_component
+              path: ../specs/feature-tree/circle-community/circle-experience-redesign/circle-homepage-redesign
+              domain: ""
+              status: specified
+              tags: [circle, homepage, shell, creations-tab, state-management, dto]
+        - id: circle-client-platform
+          name: circle-client-platform
+          level: L2_feature
+          path: ../specs/feature-tree/circle-community/circle-client-platform
+          domain: circle
+          status: specified
+          tags: [circle, client, platform]
+        - id: circle-collaboration-tools
+          name: circle-collaboration-tools
+          level: L2_feature
+          path: ../specs/feature-tree/circle-community/circle-collaboration-tools
+          domain: circle
+          status: specified
+          tags: [circle, collaboration, tools]
     - id: discovery-content
       name: discovery-content
       level: L1_domain
@@ -770,6 +978,13 @@ features:
               domain: ""
               status: completed
               tags: []
+        - id: content-service-cloud-production
+          name: content-service-cloud-production
+          level: L2_feature
+          path: ../specs/feature-tree/discovery-content/content-service-cloud-production
+          domain: content
+          status: completed
+          tags: [production-readiness, storage, cache, events, deployment, testing]
         - id: content-type-framework
           name: content-type-framework
           level: L2_feature
@@ -1405,6 +1620,13 @@ features:
                       domain: ""
                       status: specified
                       tags: []
+        - id: realtime-gateway
+          name: realtime-gateway
+          level: L2_feature
+          path: ../specs/feature-tree/gateway-orchestrator-foundation/realtime-gateway
+          domain: realtime
+          status: specified
+          tags: [realtime, gateway, websocket]
     - id: platform-ops-governance
       name: platform-ops-governance
       level: L1_domain
@@ -1931,6 +2153,13 @@ features:
                   domain: ""
                   status: completed
                   tags: []
+        - id: development-workflow-governance
+          name: development-workflow-governance
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/development-workflow-governance
+          domain: ""
+          status: specified
+          tags: [workflow, feature-tree, acceptance, benchmark, testing]
         - id: runtime-agentpack
           name: runtime-agentpack
           level: L2_feature
@@ -2613,6 +2842,29 @@ features:
                       domain: ""
                       status: specified
                       tags: []
+        - id: runtime-media
+          name: runtime-media
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-media
+          domain: ""
+          status: completed
+          tags: [media, upload, oss, cdn]
+          children:
+            - id: media-upload-and-storage
+              name: media-upload-and-storage
+              level: L3_subfeature
+              path: ../specs/feature-tree/runtime/runtime-media/media-upload-and-storage
+              domain: ""
+              status: completed
+              tags: [media, upload, oss]
+              children:
+                - id: upload-session-and-cdn-delivery
+                  name: upload-session-and-cdn-delivery
+                  level: L4_story
+                  path: ../specs/feature-tree/runtime/runtime-media/media-upload-and-storage/upload-session-and-cdn-delivery
+                  domain: ""
+                  status: completed
+                  tags: [media, upload, cdn]
         - id: runtime-testinfra
           name: runtime-testinfra
           level: L2_feature
@@ -2652,6 +2904,13 @@ features:
           status: completed
           tags: [testing, gate, quality]
           children: []
+        - id: runtime-redis
+          name: runtime-redis
+          level: L2_feature
+          path: ../specs/feature-tree/runtime/runtime-redis
+          domain: ""
+          status: specified
+          tags: [redis, cache, runtime]
     - id: recommendation-platform
       name: recommendation-platform
       level: L1_domain
@@ -2751,6 +3010,20 @@ features:
       status: specified
       tags: []
       children:
+        - id: user-service-cloud-delivery
+          name: user-service-cloud-delivery
+          level: L2_feature
+          path: ../specs/feature-tree/user-identity-profile-relationship/user-service-cloud-delivery
+          domain: user
+          status: specified
+          tags: [user-service, cloud, deployment, end-to-cloud, profile, follow, block, persona]
+        - id: profile-homepage-redesign
+          name: profile-homepage-redesign
+          level: L2_feature
+          path: ../specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign
+          domain: user
+          status: specified
+          tags: [profile, homepage, redesign]
         - id: auth-profile-snapshot
           name: auth-profile-snapshot
           level: L2_feature

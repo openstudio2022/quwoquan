@@ -1,0 +1,41 @@
+version: 2
+domain: rtc
+aggregate_root: CallSession
+
+description: |
+  实时通话会话聚合。支持 1v1 和多人（≤32人）音视频通话。
+  CallSession 为聚合根，管理通话生命周期（状态机）和参与者列表。
+  媒体传输通过 LiveKit SFU 转发，rtc-service 负责信令编排。
+  MongoDB 存储通话记录，Redis 缓存活跃通话状态。
+
+storage_backend: mongodb
+cache_layer: redis
+cache_ttl_seconds: 60
+
+capabilities:
+  - queryable
+
+taggable: false
+vector_enabled: false
+
+members:
+  - entity: CallParticipant
+    relation: 1:N
+    cascade_delete: true
+    description: 通话参与者（嵌入 CallSession 文档，≤32人无需独立 collection）
+
+ddd_layer_mapping:
+  domain_model: internal/domain/rtc/model
+  repository: internal/domain/rtc/repository
+  application: internal/application/rtc
+  adapter_rest: internal/adapter/rest/rtc
+  adapter_event: internal/adapter/event/rtc
+
+livekit_integration:
+  description: |
+    LiveKit Room 与 CallSession 一一映射。
+    roomName = callId，通过 LiveKit Go Server SDK 管理。
+    Token 由 rtc-service 签发（JWT，含 roomName + participantId + grants）。
+  room_name_pattern: "call:{callId}"
+  token_ttl_seconds: 86400
+  max_participants: 32

@@ -31,9 +31,14 @@ class ToolResultAssessor {
   ToolResultAssessor();
 
   int _consecutiveFailures = 0;
+  int _consecutiveLowQuality = 0;
   static const int _maxConsecutiveFailures = 2;
+  static const int _maxConsecutiveLowQuality = 2;
 
-  void reset() => _consecutiveFailures = 0;
+  void reset() {
+    _consecutiveFailures = 0;
+    _consecutiveLowQuality = 0;
+  }
 
   ToolAssessmentResult assess({
     required ReactRunState state,
@@ -84,6 +89,14 @@ class ToolResultAssessor {
     final qualityScore =
         (lastObservation['data'] as Map?)?['qualityScore'] as num? ?? 0.0;
     if (qualityScore < policy.reflectionQualityScoreMin) {
+      _consecutiveLowQuality++;
+      if (_consecutiveLowQuality >= _maxConsecutiveLowQuality) {
+        return const ToolAssessmentResult(
+          type: ToolAssessmentType.sufficient,
+          userMessage: '已尽力搜索，基于已有信息回答',
+          shouldContinueLoop: false,
+        );
+      }
       return const ToolAssessmentResult(
         type: ToolAssessmentType.needMoreSearch,
         userMessage: '找到的信息不够全面，扩大搜索范围',
@@ -91,6 +104,7 @@ class ToolResultAssessor {
         rewriteQuery: true,
       );
     }
+    _consecutiveLowQuality = 0;
 
     if (shouldReplan) {
       return const ToolAssessmentResult(

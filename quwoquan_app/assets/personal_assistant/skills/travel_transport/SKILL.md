@@ -1,9 +1,17 @@
 ---
 name: travel_transport
-description: 回答地铁公交打车高铁等实时出行路线、时刻与通勤效率问题。
+description: 交通路线规划、地铁公交查询、打车叫车、导航。可打开导航App。
 domain: travel_transport
+mode: hybrid
 allowed_tools: web_search local_context
-trigger_keywords: 地铁 公交 打车 高铁 路线 通勤 怎么去 坐几号线
+trigger_keywords: []
+searchPolicy:
+  maxReflection: 1
+  qualityThreshold: 0.5
+  strategy: realtime
+requires:
+  tools: [web_search]
+  permissions: [location]
 output_contract: assistant_turn_v2
 tool_observation_contract: tool_observation_v1
 reference_docs: references/domain-knowledge.md references/output-examples.md

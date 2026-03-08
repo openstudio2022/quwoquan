@@ -12,19 +12,20 @@
 ### 标准主流程
 
 ```
-explore → prd → design → dev → archive → commit → deploy
-                           └────── deliver（= dev + archive + commit）──────┘
+explore → prd → design → dev → commit → deploy
+                      └────── deliver（= dev + commit）──────┘
 ```
 
 ```
-  ┌─────────┐  ┌─────────┐  ┌──────────┐  ┌─────────┐  ┌──────────┐  ┌─────────┐  ┌─────────┐
-  │ explore │─▶│   prd   │─▶│  design  │─▶│   dev   │─▶│  archive │─▶│ commit  │─▶│ deploy  │
-  │ (探索)   │  │(需求规格)│  │ (设计基线)│  │ (实施)  │  │ (归档)  │  │(提交入库)│  │ (部署)  │
-  └────┬────┘  └────┬────┘  └────┬─────┘  └────┬────┘  └────┬─────┘  └────┬────┘  └────┬────┘
-       │             │            │              │             │             │             │
-    G0 准入       PRD Gate    Design Gate     Dev Gate       G3            G4            G5
-    自检（思考）    + G0          + G1          + G2        gate-full    L1+L2+审计   integration
-                                                                                      → prod
+  ┌─────────┐  ┌─────────┐  ┌──────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐
+  │ explore │─▶│   prd   │─▶│  design  │─▶│   dev   │─▶│ commit  │─▶│ deploy  │
+  │ (探索)   │  │(需求规格)│  │ (设计基线)│  │ (实施)  │  │(提交入库)│  │ (部署)  │
+  └────┬────┘  └────┬────┘  └────┬─────┘  └────┬────┘  └────┬────┘  └────┬────┘
+       │             │            │              │             │             │
+    G0 准入       PRD Gate    Design Gate    Dev Gate      G4            G5
+    自检（思考）    + G0          + G1        + G2/G3     L1+L2+审计   integration
+                                                  │                      → prod
+                                                  └─ T1~T4 自验证 + 自动归档
 ```
 
 ### 原型快速通道（豁免特性树分解，所有编码约束完整遵从）
@@ -47,11 +48,17 @@ try → [验证通过] → land → [人工确认] → commit → deploy
 1. 确认需求属于哪个特性树节点（`specs/feature-tree/`）
 2. 确认涉及哪些业务对象（查 `contracts/metadata/`）
 3. 确认涉及哪些扩展场景（S01~S25，见附录 A）
-4. 生成任务拆解，强制顺序：metadata → codegen → 业务逻辑 → 测试
-5. **特性树分解遵从**：节点归属与新建须符合 `specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md`（L4 默认叶子，L5 仅当 L4 需 subtask 分解时使用）
-6. 涉及部署拓扑时，补充 `deploy/shared/process_domain_mapping.yaml`
+4. 对输入做批判性澄清：目标用户、核心问题、边界、风险、未知项、伪需求/跳步判断
+5. 主动引导用户补充业界对标输入：产品、原型、截图/视频、公开代码、公开技术文档
+6. 形成初步交付拆解，顺序：metadata → codegen → 业务逻辑 → 测试
+7. **特性树分解遵从**：节点归属与新建须符合 `specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md`（治理视图默认止于 L4 Story）
+8. 涉及部署拓扑时，补充 `deploy/shared/process_domain_mapping.yaml`
 
 **禁止**：在 explore 阶段写任何实现代码。
+
+**阶段输出要求**：
+- 明确输出 `EXPLORE_READY` 或 `GATE_BLOCK`
+- 若 `GATE_BLOCK`，列出仍待澄清项与建议补充的对标输入
 
 **使用命令**：`/explore`（思考）→ `/prd`（需求规格）
 
@@ -67,17 +74,25 @@ try → [验证通过] → land → [人工确认] → commit → deploy
 - P3: 业务对象已识别（已存在/需新建）？
 - P4: 至少 3 条可量化验收标准？
 - P5: out-of-scope 已明确？
+- P6: 是否已说明需要对标的产品、原型、公开代码或公开技术文档？若未提供，是否已明确无需对标？
+- P7: 是否已定义四层测试金字塔 `T1~T4` 的验收责任？
+- P8: 是否已定义实时性 / 弱网 / 并发 / 容量 / 弹性等非功能目标？
+- P9: 是否已定义对标对象、体验目标与不打折的交互基线？
+- P10: 是否已定义灰度发布、观测指标与回滚条件？
 
 **AI Agent 必须做的事**：
 1. 创建/更新特性树节点，**仅使用四类文档**（禁止生成 analysis-*.md、README、独立规划书等；详见 `specs/feature-tree/00_FEATURE_TREE_STANDARD.md`）
 2. 撰写 `spec.md`（背景/目标用户/功能范围/Out of Scope/约束/验收重点）
-3. 撰写 `acceptance.yaml` 草稿（A1~An，status=pending，至少 3 条 SMART 验收标准）
-4. 若涉及部署拓扑，补充 `deploy/shared/process_domain_mapping.yaml`
+3. 将需求按四层治理视图建模：L1 关键能力、L2 功能特性、L3 子功能或组件、L4 Story
+4. 撰写 `acceptance.yaml` 草稿（A1~An，status=pending，至少 3 条 SMART 验收标准，且可映射到 `T1~T4`）
+5. 将对标输入沉淀为结构化结论：借鉴点 / 不借鉴点 / 适用边界 / 成本
+6. 写入非功能验收基线：实时性 / 弱网 / 并发 / 性能 / 弹性 / gray-release
+7. 若涉及部署拓扑，补充 `deploy/shared/process_domain_mapping.yaml`
 
 **自动卡点 G0**：
 ```
 ✓ spec.md 已创建（包含 Out of Scope）
-✓ acceptance.yaml 已创建，至少 3 条 An（status=pending）
+✓ acceptance.yaml 已创建，至少 3 条 An（status=pending），并可映射到 `T1~T4`
 ✓ 特性树节点已在 tree_index.yaml 中注册（status: specified）
 ✓ 特性树分解符合层级定义（见 01_FEATURE_TREE_LEVEL_DEFINITIONS.md）
 ```
@@ -96,14 +111,21 @@ try → [验证通过] → land → [人工确认] → commit → deploy
 - D3: 设计约束已识别（DDD 分层、metadata 范围）？
 - D4: ≥2 个方案可供比较？
 - D5: 无未解决的阻塞依赖？
+- D6: 是否完成 `A1~An ↔ T1~T4` 证据矩阵设计？
+- D7: 若涉实时性，是否定义一致性、顺序、幂等、重试、重连与弱网降级？
+- D8: 是否定义并发、容量、弹性、限流、降级、回滚与观测策略？
+- D9: 是否完成对标体验吸收结论，并明确当前差距与收敛路径？
 
 **AI Agent 必须做的事**：
-1. 创建/更新 `design.md`（≥2 方案对比、选型决策、未来演进；若轻量方案必须写明演进路径）
-2. 创建/更新 `tasks.md`（顺序：metadata → codegen → 业务逻辑 → 测试）
-3. **特性树层级与分解**：节点路径须符合 `specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md`；acceptance.yaml 的 `level` 使用统一取值（L4_object_task 等）
-4. 如需新建业务对象 → 执行 `/extend new-aggregate|entity|service`（或由 /design 自动调用）
-5. 如需扩展已有对象 → 执行 `/extend add-field|capability|event|...`
-6. 更新 metadata YAML（5 文件一组）
+1. 先评审上游 `spec.md` 与 `acceptance.yaml` 是否足以支撑设计，不足则阻断进入方案设计
+2. 创建/更新 `design.md`（≥2 方案对比、选型决策、未来演进；若轻量方案必须写明演进路径）
+3. 创建设计中的对标分析：对标对象、借鉴点、适配边界、当前差距、演进路径
+4. 创建/更新 `tasks.md`（顺序：metadata → codegen → 测试先行 → 业务逻辑 → 重构）
+5. **特性树层级与分解**：节点路径须符合 `specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md`；acceptance.yaml 的 `level` 使用统一取值（优先 `L4_story`）
+6. 如需新建业务对象 → 执行 `/extend new-aggregate|entity|service`（或由 /design 自动调用）
+7. 如需扩展已有对象 → 执行 `/extend add-field|capability|event|...`
+8. 更新 metadata YAML（5 文件一组）
+9. 完成 TDD/ATDD 策略、角色职责、多重防护网、灰度发布与回滚设计
 
 **自动卡点 G1**：
 ```bash
@@ -127,14 +149,17 @@ make codegen-rec-model-python  # 生成 Pydantic 模型与 FastAPI 路由骨架
 **Dev Gate 自检**（进入前全部通过，否则 GATE_BLOCK）：
 - V1: design.md 已存在且关键设计决策已冻结？
 - V2: codegen 已通过？
-- V3: tasks.md 任务按正确顺序排列？
-- V4: acceptance.yaml An 有明确判定方式？
+- V3: 当前 Story 的 tasks.md 任务按正确顺序排列？
+- V4: acceptance.yaml An 有明确判定方式并映射到 `T1~T4`？
+- V5: 当前 task 是否已绑定先行失败测试（TDD Red）？
+- V6: 若为实时性 / 高风险交互，是否已绑定弱网 / 并发 / 恢复类用例？
 
 **AI Agent 必须做的事**：
-1. 按 `tasks.md` 逐项实施（L4 节点下 task 对应 L4 范围；L5 子任务由 L5 节点 tasks 承载）
+1. 按 L4 Story 组织实施，`tasks.md` 作为 Story 的工程执行清单
 2. 仅在非 codegen 区域手写业务逻辑（domain_service / application_service / feature pages）
 3. 遵从 DDD 层级约束、Dart 编码规范、runtime 统一能力、错误码规范
-4. **每完成一个 task 自动执行 G2**
+4. 默认执行 `Red → Green → Refactor`
+5. **每完成一个 task 自动执行 G2**
 
 **自动卡点 G2**（每个 task 完成后）：
 ```bash
@@ -144,6 +169,19 @@ make test-contract             # 契约测试通过（真实数据库）
 flutter test test/cloud/ test/components/ test/ui/
 ```
 失败 → 停止当前 task，输出错误 + 修复建议。
+
+**开发收口要求（/dev 完成时自动执行）**：
+```bash
+make gate-full
+```
+
+并必须满足：
+- `T1~T4` 四层自验证证据齐全
+- 非功能验收（实时性 / 弱网 / 并发 / 弹性 / 体验）齐全
+- 已达到 **gray-release ready**
+- 自动回写归档状态：`acceptance.yaml.archived=true`、`tree_index.status=completed`
+
+通过后，`/dev` 的状态应为：**已归档、等待 `/commit` 提交**。
 
 **结构约束**（rules 实时强制）：
 
@@ -163,15 +201,15 @@ flutter test test/cloud/ test/components/ test/ui/
 
 ---
 
-### 阶段 4：verify（验证）
+### 阶段 4：verify（验证，独立复核/兼容入口）
 
 **入口**：`/verify`（特性级）或 `/audit`（代码库级）
 
 **AI Agent 必须做的事**：
-1. 确认所有 tasks.md 任务已完成
-2. 确认 acceptance.yaml A1~An 全部满足（status 非 pending）
+1. 复核所有 tasks.md 任务已完成
+2. 复核 acceptance.yaml A1~An 全部满足（status 非 pending）
 3. 检测漂移（SPEC_DRIFT / IMPL_DRIFT / DESIGN_DRIFT / TASK_DRIFT）
-4. **特性树一致性**：tree_index.yaml ↔ 目录 ↔ 四类文档
+4. 复核自动归档前后的状态一致性
 5. **自动执行** 全栈审计 + 门禁
 
 **自动卡点 G3**：
@@ -198,18 +236,19 @@ make gate-full
 
 ### 阶段 5：commit（提交入库）
 
-**入口**：`/commit`（= /archive + 提交）
+**入口**：`/commit`
 
 **AI Agent 必须做的事**：
-1. 若未归档，先执行归档（acceptance.yaml archived=true + tree_index status=completed）
+1. 读取 `/dev` 已自动完成的归档结果
 2. 分析 `git status` 确定变更范围
 3. **提交前必须执行 L1+L2 门禁**（`make gate`）并通过
 4. **自动执行** 按变更范围的针对性审计
 5. 通过后自动 commit → push → merge main
+6. 若因历史流程或异常中断尚未归档，`/commit` 可兼容补归档，但这不是标准流程
 
 **自动卡点 G4**：
 ```
-归档检查（archived=true）→ git status → 分析变更范围
+读取 `/dev` 自动归档结果（若缺失则兼容补归档）→ git status → 分析变更范围
      │
      ▼
  执行 L1+L2 门禁（make gate）─ 必须通过
@@ -260,20 +299,22 @@ make config-gray-rollout SERVICE=... FROM_IMAGE=... TO_IMAGE=... FROM_CONFIG=...
 
 ---
 
-## 三、命令速查
+## 三、命令速查（当前正式命令）
 
 | 阶段 | 命令 | 作用 | 自动卡点 |
 |------|------|------|---------|
-| Plan | `/opsx-explore` | 自由探索，不写代码 | G0（约束检查） |
-| Create | `/opsx-ff` | 创建特性（特性树 + acceptance + tasks） | G1（verify + codegen） |
-| Create | `/qwq-extend <scenario>` | 对象级扩展（20 个场景） | G1（verify + codegen） |
-| Implement | `/opsx-apply` | 按 tasks.md 逐项实施 | G2（build + test-contract per task） |
-| **Implement→Submit** | **`/opsx-deliver`** | **验收驱动开发 → 验证 → 归档 → 提交入库（L1/L2 自测通过）** | G2 → G3 → G4 |
-| Verify | `/opsx-verify` | 验证实现匹配制品 | G3（gate-full） |
-| Verify | `/fullstack-audit` | 独立调用全栈审计 | G3（全维度审计） |
-| Submit | `/submit-with-gate` | 提交合入 | G4（按范围审计 + commit） |
-| **Deploy** | **`/opsx-deploy`** | **部署到 integration → L3/L4 集成验证 → 灰度到 prod** | G5a → G5b → G5c |
-| Archive | `/opsx-archive` | 归档完成的特性 | G3（gate-full before archive） |
+| Explore | `/explore` | 探索思考，不写代码 | G0（约束检查） |
+| PRD | `/prd` | 建立需求规格基线（spec + acceptance） | PRD Gate + G0 |
+| Design | `/design` | 建立设计基线（design + tasks + metadata + codegen） | Design Gate + G1 |
+| Implement | `/dev` | 按 tasks 实施，完成 `T1~T4` 自验证、gray-release ready、自动归档 | G2 + G3 |
+| **Implement→Submit** | **`/deliver`** | **验收驱动开发 → 自动归档 → 提交入库** | G2 → G3 → G4 |
+| Verify | `/verify` | 特性级漂移检测与复核 | G3（gate-full） |
+| Audit | `/audit` | 独立调用全栈审计 | G3（全维度审计） |
+| Submit | `/commit` | 读取 `/dev` 自动归档结果后提交合入 | G4（按范围审计 + commit） |
+| **Deploy** | **`/deploy`** | **部署到 integration → L3/L4 集成验证 → 灰度到 prod** | G5a → G5b → G5c |
+| Archive | `/archive` | 兼容补归档/修复回写，非标准流 | G3（gate-full） |
+| Prototype | `/try` | 快速验证想法，豁免特性树前置创建但不豁免工程约束 | G2（每次主要变更后） |
+| Prototype | `/land` | 将原型成果回补到标准基线并完成归档语义 | G3（gate-full） |
 
 单独调用门禁（随时可用）：
 
@@ -282,7 +323,7 @@ make verify          # metadata 一致性
 make build           # 全量编译
 make test-contract   # 契约测试
 make gate            # 本地门禁（verify + build + test-contract）
-make gate-full       # CI 门禁（gate + 端侧 + 集成测试）
+make gate-full       # 四层自验证 + 非功能验收 + 发布前证据
 ```
 
 ---
@@ -420,15 +461,15 @@ quwoquan/
 │       ├── explore.md                  # 探索（G0 准入自检）
 │       ├── prd.md                      # 需求规格（PRD Gate + G0）
 │       ├── design.md                   # 设计基线（Design Gate + G1）
-│       ├── dev.md                      # 实施（Dev Gate + G2/task）
-│       ├── archive.md                  # 仅归档（G3）
-│       ├── commit.md                   # 归档+提交（G3 + G4）
+│       ├── dev.md                      # 实施（Dev Gate + G2/task，收口时自动 G3 + 自动归档）
+│       ├── archive.md                  # 兼容补归档/修复（非标准流）
+│       ├── commit.md                   # 提交入库（读取 /dev 自动归档结果后执行 G4）
 │       ├── deploy.md                   # 部署（G5a→G5b→G5c）
-│       ├── deliver.md                  # 全链路：dev+archive+commit
+│       ├── deliver.md                  # 全链路：dev+commit
 │       ├── verify.md                   # 特性级漂移检测（G3）
 │       ├── audit.md                    # 代码库级结构审计
 │       ├── try.md                      # 原型模式（豁免特性树）
-│       ├── land.md                     # 原型落地基线化
+│       ├── land.md                     # 原型落地基线化（保留归档语义）
 │       ├── extend.md                   # 对象级扩展（S01~S25，G1）
 │       └── prune.md                    # 清理过期特性树节点
 │

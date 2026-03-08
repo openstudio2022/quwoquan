@@ -1,9 +1,16 @@
 ---
 name: education_learning
-description: 回答学习规划、备考策略、课程方法、技能提升与解题辅导问题。
+description: 学习辅导、考试备考、课程推荐、解题思路。
 domain: education_learning
+mode: qa
 allowed_tools: web_search
-trigger_keywords: 学习 考试 课程 备考 刷题 作业 怎么学 公式 解题
+trigger_keywords: []
+searchPolicy:
+  maxReflection: 2
+  qualityThreshold: 0.5
+  strategy: research
+requires:
+  tools: [web_search]
 output_contract: assistant_turn_v2
 tool_observation_contract: tool_observation_v1
 reference_docs: references/domain-knowledge.md references/output-examples.md

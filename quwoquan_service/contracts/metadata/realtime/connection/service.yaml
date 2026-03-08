@@ -1,0 +1,60 @@
+version: 1
+aggregate: Connection
+
+service:
+  name: realtime-gateway
+  domain: realtime
+  owner: infra-team
+  description: 统一实时通信网关（WebSocket + Long-polling + 外部渠道），平台级基础设施
+
+api_routes:
+  # ── WebSocket ──────────────────────────────────
+  - method: GET
+    path: /v1/realtime/ws
+    operation: WebSocketUpgrade
+    description: WebSocket Upgrade（JWT query param 鉴权）
+    auth: required
+
+  # ── Long-polling ──────────────────────────────
+  - method: GET
+    path: /v1/realtime/poll
+    operation: LongPoll
+    description: Long-polling 端点（hold ≤ poll_interval_sec，有消息立即返回，超时 204）
+    query_params: [topics, lastSeq, timeout]
+    auth: required
+
+  # ── 配置 ──────────────────────────────────────
+  - method: GET
+    path: /v1/config/realtime
+    operation: GetRealtimeConfig
+    description: 获取自适应传输系统配置参数（运维可热更新）
+
+  # ── 外部渠道 ──────────────────────────────────
+  - method: POST
+    path: /v1/channel/{channelType}/webhook
+    operation: ChannelWebhook
+    description: 外部渠道 Webhook 入口（飞书等），经 Adapter 转换后路由到 topic
+
+  # ── 健康检查 ──────────────────────────────────
+  - method: GET
+    path: /healthz
+    operation: HealthCheck
+    description: 健康检查
+
+  - method: GET
+    path: /metrics
+    operation: Metrics
+    description: Prometheus 指标端点
+
+consumers:
+  - name: app
+    capabilities: [websocket_connect, long_poll, get_config]
+  - name: chat-service
+    capabilities: []
+    description: chat-service 通过 Redis Pub/Sub 推送消息，不直接调用 API
+  - name: notification-service
+    capabilities: []
+    description: realtime-gateway 通过事件通知离线推送
+  - name: external-channels
+    capabilities: [channel_webhook]
+    description: 飞书/钉钉等外部渠道通过 Webhook 接入

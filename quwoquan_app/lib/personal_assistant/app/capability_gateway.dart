@@ -25,6 +25,103 @@ enum AssistantRunStreamEventType {
   phaseTimeline,
   // v3 user-facing phase events
   userPhaseEvent,
+  // v4 unified process update for single-drawer UI
+  processUpdate,
+}
+
+/// Unified process state consumed by the single-drawer process view.
+/// Aggregated from individual trace/phase events.
+enum ProcessStage {
+  understanding,
+  searching,
+  analyzing,
+  answering,
+  completed,
+}
+
+/// A single reference document discovered during search or analysis.
+class ProcessReference {
+  const ProcessReference({
+    required this.title,
+    required this.url,
+    this.source = '',
+  });
+
+  final String title;
+  final String url;
+  final String source;
+}
+
+/// Block types rendered inside the process drawer body.
+enum ProcessContentBlockType { text, searchSummary, analysisSummary }
+
+/// A structured content block within the process drawer.
+///
+/// - [text]: plain thinking/reasoning line.
+/// - [searchSummary]: "搜索了 X 篇文档" with a collapsible reference list.
+/// - [analysisSummary]: "分析参考了 X 篇文档" with a collapsible reference list.
+class ProcessContentBlock {
+  const ProcessContentBlock({
+    required this.type,
+    this.text = '',
+    this.references = const <ProcessReference>[],
+  });
+
+  final ProcessContentBlockType type;
+  final String text;
+  final List<ProcessReference> references;
+}
+
+class AssistantProcessState {
+  const AssistantProcessState({
+    this.stage = ProcessStage.understanding,
+    this.stageLabel = '正在理解问题',
+    this.processLines = const <String>[],
+    this.contentBlocks = const <ProcessContentBlock>[],
+    this.isStreaming = false,
+    this.usageStats = const <String, dynamic>{},
+    this.elapsedMs = 0,
+  });
+
+  final ProcessStage stage;
+  final String stageLabel;
+  /// Legacy flat lines — used when [contentBlocks] is empty.
+  final List<String> processLines;
+  /// Structured content blocks with nested reference lists.
+  final List<ProcessContentBlock> contentBlocks;
+  final bool isStreaming;
+  /// Model usage stats: modelCallCount, totalTokens, maxTokensPerCall.
+  final Map<String, dynamic> usageStats;
+  /// Total elapsed time in milliseconds for the entire run.
+  final int elapsedMs;
+
+  AssistantProcessState copyWith({
+    ProcessStage? stage,
+    String? stageLabel,
+    List<String>? processLines,
+    List<ProcessContentBlock>? contentBlocks,
+    bool? isStreaming,
+    Map<String, dynamic>? usageStats,
+    int? elapsedMs,
+  }) {
+    return AssistantProcessState(
+      stage: stage ?? this.stage,
+      stageLabel: stageLabel ?? this.stageLabel,
+      processLines: processLines ?? this.processLines,
+      contentBlocks: contentBlocks ?? this.contentBlocks,
+      isStreaming: isStreaming ?? this.isStreaming,
+      usageStats: usageStats ?? this.usageStats,
+      elapsedMs: elapsedMs ?? this.elapsedMs,
+    );
+  }
+
+  AssistantProcessState appendLine(String line) {
+    return copyWith(processLines: [...processLines, line]);
+  }
+
+  AssistantProcessState appendBlock(ProcessContentBlock block) {
+    return copyWith(contentBlocks: [...contentBlocks, block]);
+  }
 }
 
 class AssistantRunStreamEvent {
@@ -116,6 +213,24 @@ class AssistantRunStreamEvent {
           },
         ),
         chunkText: message,
+      );
+
+  factory AssistantRunStreamEvent.processUpdate(
+    AssistantProcessState state,
+  ) =>
+      AssistantRunStreamEvent._(
+        type: AssistantRunStreamEventType.processUpdate,
+        chunkText: state.stageLabel,
+        trace: AssistantTraceEvent(
+          type: AssistantTraceEventType.lifecycleStart,
+          message: state.stageLabel,
+          timestamp: DateTime.now(),
+          data: <String, dynamic>{
+            'stage': state.stage.name,
+            'processLines': state.processLines,
+            'isStreaming': state.isStreaming,
+          },
+        ),
       );
 
   final AssistantRunStreamEventType type;
@@ -307,7 +422,7 @@ class CapabilityGateway {
     }
   }
 
-  /// 静默运行本地网关：只发 trace 事件，不发 chunk。
+  /// 静默运行本地网关：只发 trace 事件和语义阶段事件，不发 chunk。
   /// 用于 remote 失败 fallback 到 local 的场景，避免 chunk 两路叠加。
   Future<AssistantRunResponse> _runLocalWithStreamSilent(
     AssistantRunRequest request,
@@ -319,6 +434,8 @@ class CapabilityGateway {
         onTraceEvent: (event) {
           if (!controller.isClosed) {
             controller.add(AssistantRunStreamEvent.trace(event));
+            // 静默路径同样需要语义化，确保 UI 过程抽屉阶段正确推进
+            _emitSemanticEvent(event, controller);
           }
         },
       );
@@ -390,11 +507,17 @@ class CapabilityGateway {
 
     // Gate 3: 从 finalText 用 LlmResponseParser 提取 userMarkdown
     final parsed = LlmResponseParser.parse(response.finalText);
-    if (parsed.ok && !parsed.isIntermediateAction) {
+    if (parsed.ok) {
       final um = parsed.userMarkdown;
       if (um.isNotEmpty && !AssistantContentFilters.isNotDisplayable(um)) {
         return um;
       }
+    }
+
+    // Gate 4: answerPayload.userMarkdown
+    final userMd = (answerPayload['userMarkdown'] as String?)?.trim() ?? '';
+    if (userMd.isNotEmpty && !AssistantContentFilters.isNotDisplayable(userMd)) {
+      return userMd;
     }
     return '';
   }
@@ -449,6 +572,8 @@ class CapabilityGateway {
       if (event.type == OpenClawRemoteStreamEventType.trace &&
           event.trace != null) {
         controller.add(AssistantRunStreamEvent.trace(event.trace!));
+        // 远端 trace 事件同样需要语义化，确保 UI 过程抽屉阶段正确推进
+        _emitSemanticEvent(event.trace!, controller);
         continue;
       }
       if (event.type == OpenClawRemoteStreamEventType.chunk &&
@@ -500,12 +625,18 @@ class CapabilityGateway {
 
       case AssistantTraceEventType.thinkingProgress:
         final phase = (event.data?['phase'] as String?) ?? 'understanding';
+        final isExtracted = event.data?['extracted'] == true;
         final phaseType = phase == 'analyzing'
             ? UserPhaseEventType.analyzingThinking
-            : UserPhaseEventType.understandingThinking;
+            : phase == 'answering'
+                ? UserPhaseEventType.answeringStarted
+                : UserPhaseEventType.understandingThinking;
         controller.add(AssistantRunStreamEvent.userPhase(
           phaseType: phaseType,
           message: event.message,
+          data: isExtracted
+              ? <String, dynamic>{'extracted': true}
+              : null,
         ));
         controller.add(AssistantRunStreamEvent.thinkingProgress(event.message));
         break;
@@ -591,11 +722,6 @@ class CapabilityGateway {
         break;
 
       case AssistantTraceEventType.streamDelta:
-        controller.add(AssistantRunStreamEvent.userPhase(
-          phaseType: UserPhaseEventType.answeringDelta,
-          message: event.message,
-        ));
-        controller.add(AssistantRunStreamEvent.answerDelta(event.message));
         break;
 
       case AssistantTraceEventType.lifecycleEnd:

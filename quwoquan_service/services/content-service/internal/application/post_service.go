@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -15,10 +16,25 @@ import (
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 )
 
+// Projector receives domain events for in-process read-model projection.
+type Projector interface {
+	Project(ctx context.Context, event ProjectorEvent) error
+}
+
+type ProjectorEvent struct {
+	Type          string         `json:"type"`
+	AggregateType string         `json:"aggregateType"`
+	AggregateID   string         `json:"aggregateId"`
+	Payload       map[string]any `json:"payload"`
+	OccurredAt    time.Time      `json:"occurredAt"`
+}
+
 type PostService struct {
 	store     persistence.PostRepository
 	signaler  rtrec.SignalProcessor
 	publisher repository.EventPublisher
+	projector Projector
+	logger    *slog.Logger
 	mu        sync.Mutex
 	reactions map[string]map[string]contentReactionState // postID -> userID -> state
 	distributions map[string]map[string]bool             // postID -> circleID -> active
@@ -26,17 +42,20 @@ type PostService struct {
 	tombstones    map[string]time.Time                   // postID -> deletedAt
 	mediaAssets   map[string]postmodel.MediaAsset        // mediaID -> asset
 	uploadSession map[string]string                      // sessionID -> mediaID
+	comments      map[string][]map[string]any            // postID -> comments list
 }
 
 func NewPostService(store persistence.PostRepository, opts ...PostServiceOption) *PostService {
 	s := &PostService{
 		store:         store,
+		logger:        slog.Default(),
 		reactions:     map[string]map[string]contentReactionState{},
 		distributions: map[string]map[string]bool{},
 		reshares:      map[string]map[string]bool{},
 		tombstones:    map[string]time.Time{},
 		mediaAssets:   map[string]postmodel.MediaAsset{},
 		uploadSession: map[string]string{},
+		comments:      map[string][]map[string]any{},
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -59,6 +78,16 @@ func WithSignalProcessor(sp rtrec.SignalProcessor) PostServiceOption {
 // WithEventPublisher enables domain event publishing (e.g. PostCreated).
 func WithEventPublisher(pub repository.EventPublisher) PostServiceOption {
 	return func(s *PostService) { s.publisher = pub }
+}
+
+// WithProjector enables in-process read-model projection after writes.
+func WithProjector(p Projector) PostServiceOption {
+	return func(s *PostService) { s.projector = p }
+}
+
+// WithLogger sets a structured logger.
+func WithLogger(l *slog.Logger) PostServiceOption {
+	return func(s *PostService) { s.logger = l }
 }
 
 func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (*postmodel.Post, error) {
@@ -157,6 +186,27 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (*
 			},
 			OccurredAt: now.Format(time.RFC3339),
 		})
+	}
+
+	// Synchronous projection for DiscoveryFeed read model.
+	if s.projector != nil {
+		projErr := s.projector.Project(ctx, ProjectorEvent{
+			Type:          "PostCreated",
+			AggregateType: "Post",
+			AggregateID:   post.ID,
+			Payload: map[string]any{
+				"_id":         post.ID,
+				"authorId":    post.AuthorId,
+				"contentType": post.ContentType,
+				"title":       post.Title,
+				"tags":        post.Tags,
+				"coverUrl":    post.CoverUrl,
+			},
+			OccurredAt: now,
+		})
+		if projErr != nil {
+			s.logger.Warn("projector failed after CreatePost", "postId", post.ID, "err", projErr)
+		}
 	}
 
 	return post, nil
@@ -712,8 +762,178 @@ func (s *PostService) AddComment(ctx context.Context, postID, userID, content, r
 		"content":          content,
 		"replyToCommentId": strings.TrimSpace(replyToCommentID),
 		"createdAt":        now.Format(time.RFC3339),
+		"deletedAt":        "",
 	}
+	s.comments[post.ID] = append(s.comments[post.ID], comment)
 	return comment, post.CommentCount, nil
+}
+
+func (s *PostService) ListComments(_ context.Context, postID, cursor string, limit int) ([]map[string]any, string, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	all := s.comments[strings.TrimSpace(postID)]
+	active := make([]map[string]any, 0, len(all))
+	for _, c := range all {
+		if del, _ := c["deletedAt"].(string); del != "" {
+			continue
+		}
+		active = append(active, c)
+	}
+
+	// Reverse chronological
+	for i, j := 0, len(active)-1; i < j; i, j = i+1, j-1 {
+		active[i], active[j] = active[j], active[i]
+	}
+
+	startIdx := 0
+	if cursor != "" {
+		for i, c := range active {
+			if cid, _ := c["_id"].(string); cid == cursor {
+				startIdx = i + 1
+				break
+			}
+		}
+	}
+
+	if startIdx >= len(active) {
+		return []map[string]any{}, "", nil
+	}
+	end := startIdx + limit
+	if end > len(active) {
+		end = len(active)
+	}
+	page := active[startIdx:end]
+	nextCursor := ""
+	if end < len(active) {
+		if cid, ok := page[len(page)-1]["_id"].(string); ok {
+			nextCursor = cid
+		}
+	}
+	return page, nextCursor, nil
+}
+
+func (s *PostService) DeleteComment(ctx context.Context, postID, commentID, userID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	comments := s.comments[strings.TrimSpace(postID)]
+	found := false
+	for i, c := range comments {
+		cid, _ := c["_id"].(string)
+		if cid != strings.TrimSpace(commentID) {
+			continue
+		}
+		author, _ := c["authorId"].(string)
+		if userID != "" && author != "" && author != userID {
+			return rterr.NewAppError(
+				rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "forbidden"),
+				"无权删除此评论",
+				"comment author mismatch",
+				false,
+			)
+		}
+		comments[i]["deletedAt"] = time.Now().UTC().Format(time.RFC3339)
+		found = true
+		break
+	}
+	if !found {
+		return rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
+			"评论不存在",
+			"comment not found",
+			false,
+		)
+	}
+
+	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
+	if ok && post.CommentCount > 0 {
+		post.CommentCount--
+		post.UpdatedAt = time.Now().UTC()
+		_ = s.store.Update(ctx, post.ID, post)
+	}
+
+	if s.publisher != nil {
+		_ = s.publisher.Publish(ctx, repository.DomainEvent{
+			Type:          "CommentDeleted",
+			AggregateType: "Post",
+			AggregateID:   strings.TrimSpace(postID),
+			Payload: map[string]any{
+				"commentId": commentID,
+				"postId":    postID,
+			},
+			OccurredAt: time.Now().UTC().Format(time.RFC3339),
+		})
+	}
+	return nil
+}
+
+func (s *PostService) GetCounters(ctx context.Context, postID string) (map[string]any, error) {
+	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
+	if !ok {
+		return nil, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
+			"内容不存在",
+			"post not found",
+			false,
+		)
+	}
+	return map[string]any{
+		"like":     post.LikeCount,
+		"comment":  post.CommentCount,
+		"favorite": post.FavoriteCount,
+		"share":    post.ShareCount,
+	}, nil
+}
+
+func (s *PostService) ListUserPosts(ctx context.Context, userID, cursor string, limit int) ([]postmodel.Post, string, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	posts := s.store.ListByAuthor(ctx, strings.TrimSpace(userID), limit+1, cursor)
+	nextCursor := ""
+	if len(posts) > limit {
+		nextCursor = posts[limit-1].ID
+		posts = posts[:limit]
+	}
+	return posts, nextCursor, nil
+}
+
+func (s *PostService) GetHelperRead(ctx context.Context, postID string) (map[string]any, error) {
+	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
+	if !ok {
+		return nil, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
+			"内容不存在",
+			"post not found",
+			false,
+		)
+	}
+	if strings.TrimSpace(post.ContentType) != "article" {
+		return nil, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
+			"仅支持文章类型的辅助阅读",
+			"helper-read only for articles",
+			false,
+		)
+	}
+	summary := post.Summary
+	if summary == "" {
+		body := strings.TrimSpace(post.Body)
+		if len(body) > 200 {
+			body = body[:200]
+		}
+		summary = body
+	}
+	return map[string]any{
+		"postId":      post.ID,
+		"contentType": post.ContentType,
+		"title":       post.Title,
+		"summary":     summary,
+	}, nil
 }
 
 func asString(v any) string {

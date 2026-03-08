@@ -12,10 +12,18 @@ import (
 	"strings"
 	"time"
 
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"gopkg.in/yaml.v3"
+
+	rthttp "quwoquan_service/runtime/http"
+	robs "quwoquan_service/runtime/observability"
+	rtredis "quwoquan_service/runtime/redis"
 	rtrec "quwoquan_service/runtime/recommendation"
 	httpadapter "quwoquan_service/services/content-service/internal/adapters/http"
 	"quwoquan_service/services/content-service/internal/application"
+	"quwoquan_service/services/content-service/internal/infrastructure/cache"
+	"quwoquan_service/services/content-service/internal/infrastructure/messaging"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
 )
@@ -49,6 +57,12 @@ type config struct {
 			Addr string `yaml:"addr"`
 		} `yaml:"http"`
 	} `yaml:"service"`
+
+	Mongo struct {
+		URI        string `yaml:"uri"`
+		Database   string `yaml:"database"`
+		Collection string `yaml:"collection"`
+	} `yaml:"mongo"`
 
 	// Redis scenes:
 	//   rec     — recommendation hot path (session signals, exposed, negative)
@@ -89,9 +103,21 @@ func main() {
 	}
 
 	logger := slog.Default()
+	instanceID := getenvOrDefault("SERVICE_INSTANCE_ID", hostname())
 
-	redisClient := buildRecRedisClient(cfg)
-	hotPath := rtrec.NewHotPath(redisClient)
+	ioLogger := robs.NewIOAccessLogger(os.Stdout)
+	processLogger, err := robs.NewProcessTraceLogger(os.Stdout, os.Stderr, "info", nil)
+	if err != nil {
+		log.Fatalf("content-service process logger init failed: %v", err)
+	}
+	exceptionLogger, err := robs.NewExceptionLogger(os.Stdout, os.Stderr, nil)
+	if err != nil {
+		log.Fatalf("content-service exception logger init failed: %v", err)
+	}
+
+	router := buildRedisRouter(cfg)
+	defer router.Close()
+	hotPath := rtrec.NewHotPath(rtredis.NewRecAdapter(router.Scene("rec")))
 
 	// Read path: SessionCache wraps HotPath with L1 cache + singleflight
 	sessionCache := rtrec.NewSessionCache(hotPath, 2*time.Second, 10000)
@@ -100,10 +126,51 @@ func main() {
 	bufferedWriter := rtrec.NewBufferedHotPath(hotPath, rtrec.WithBufferLogger(logger))
 	defer bufferedWriter.Stop()
 
-	store := persistence.NewPostStore(recinfra.DefaultSeedPosts())
+	// Storage layer: MongoDB when mongo.uri is configured, else InMemory with seeds.
+	var store persistence.PostRepository
+	var postServiceOpts []application.PostServiceOption
+	postServiceOpts = append(postServiceOpts, application.WithSignalProcessor(bufferedWriter))
+	postServiceOpts = append(postServiceOpts, application.WithLogger(logger))
+
+	mongoURI := resolveMongoURI(cfg)
+	if mongoURI != "" {
+		mongoClient, err := mongo.Connect(options.Client().ApplyURI(mongoURI))
+		if err != nil {
+			log.Fatalf("content-service mongo connect failed: %v", err)
+		}
+		defer func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = mongoClient.Disconnect(ctx)
+		}()
+		dbName := cfg.Mongo.Database
+		if dbName == "" {
+			dbName = "quwoquan_content"
+		}
+		collName := cfg.Mongo.Collection
+		if collName == "" {
+			collName = "posts"
+		}
+		db := mongoClient.Database(dbName)
+		mongoStore := persistence.NewMongoPostStore(db.Collection(collName))
+		store = cache.NewPostCacheRepository(mongoStore, router.Scene("general"), logger)
+		log.Printf("content-service storage=mongodb db=%s collection=%s", dbName, collName)
+
+		// Event publisher: Redis Pub/Sub for cross-service consumption
+		eventPub := messaging.NewRedisEventPublisher(router.Scene("general"), "content-service", logger)
+		postServiceOpts = append(postServiceOpts, application.WithEventPublisher(eventPub))
+
+		// In-process projector: DiscoveryFeed read model
+		projector := &projectorAdapter{p: recinfra.NewDiscoveryFeedProjector(db)}
+		postServiceOpts = append(postServiceOpts, application.WithProjector(projector))
+	} else {
+		store = persistence.NewPostStore(recinfra.DefaultSeedPosts())
+		log.Printf("content-service storage=inmemory (no mongo.uri configured)")
+	}
+
 	source := recinfra.NewPostRepositorySource(store)
 
-	opts := []rtrec.EngineOption{
+	recOpts := []rtrec.EngineOption{
 		rtrec.WithRecallTimeout(150 * time.Millisecond),
 		rtrec.WithLogger(logger),
 	}
@@ -117,21 +184,31 @@ func main() {
 		ruleScorer := &rtrec.RuleScorer{}
 		cascade := rtrec.NewCascadeScorer(remoteScorer, ruleScorer, timeout)
 		cascade.Logger = logger
-		opts = append(opts, rtrec.WithScorer(cascade))
+		recOpts = append(recOpts, rtrec.WithScorer(cascade))
 		log.Printf("content-service rec-model-service enabled url=%s timeout=%v", cfg.RecModelService.URL, timeout)
 	}
-	engine := rtrec.NewEngine(sessionCache, []rtrec.CandidateSource{source}, opts...)
+	engine := rtrec.NewEngine(sessionCache, []rtrec.CandidateSource{source}, recOpts...)
 	feedService := application.NewFeedService(engine, source)
-	postService := application.NewPostService(store,
-		application.WithSignalProcessor(bufferedWriter),
-	)
+	postService := application.NewPostService(store, postServiceOpts...)
 	behaviorService := application.NewBehaviorService(bufferedWriter, store)
 	handler := httpadapter.NewContentHandler(feedService, postService, behaviorService).Routes()
 
+	observedHandler := rthttp.NewHTTPServerMiddleware(handler, rthttp.HTTPServerMiddlewareConfig{
+		Service:           "content-service",
+		ServiceName:       "content-service",
+		ServiceInstanceID: instanceID,
+		Origin:            "service.http",
+		Direction:         robs.DirectionInbound,
+		SourceID:          "content-service",
+		Src:               "content-service",
+	}, ioLogger, processLogger, exceptionLogger)
+
 	server := &http.Server{
 		Addr:              addr,
-		Handler:           handler,
+		Handler:           observedHandler,
 		ReadHeaderTimeout: 5 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 	log.Printf("content-service listening on %s", addr)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -260,8 +337,8 @@ func preflightConfig(cfg config, appEnv string) error {
 	if mode == "" {
 		mode = "standalone"
 	}
-	if mode != "standalone" && mode != "cluster" {
-		return fmt.Errorf("redis.rec.mode must be standalone|cluster, got %q", cfg.Redis.Rec.Mode)
+	if mode != "standalone" && mode != "cluster" && mode != "memory" {
+		return fmt.Errorf("redis.rec.mode must be standalone|cluster|memory, got %q", cfg.Redis.Rec.Mode)
 	}
 	if mode == "cluster" && len(cfg.Redis.Rec.Addrs) == 0 {
 		return fmt.Errorf("redis.rec.mode=cluster requires redis.rec.addrs")
@@ -272,23 +349,6 @@ func preflightConfig(cfg config, appEnv string) error {
 		}
 		if mode == "cluster" && len(cfg.Redis.Rec.Addrs) == 0 {
 			return fmt.Errorf("prod requires redis.rec.addrs when mode=cluster")
-		}
-	}
-	// Preflight connectivity when remote redis is configured.
-	if mode == "standalone" && strings.TrimSpace(cfg.Redis.Rec.Addr) != "" {
-		client := recinfra.NewRedisClientAdapterWithPool(cfg.Redis.Rec.Addr, cfg.Redis.Rec.Password, cfg.Redis.Rec.DB, resolvePoolConfig(cfg.Redis.Rec))
-		ctx, cancel := context.WithTimeout(context.Background(), 800*time.Millisecond)
-		defer cancel()
-		if err := client.Set(ctx, "__content_service_preflight__", "1", time.Second); err != nil {
-			return fmt.Errorf("redis standalone preflight failed: %w", err)
-		}
-	}
-	if mode == "cluster" && len(cfg.Redis.Rec.Addrs) > 0 {
-		client := recinfra.NewRedisClusterAdapter(cfg.Redis.Rec.Addrs, cfg.Redis.Rec.Password, cfg.Redis.Rec.TLS, resolvePoolConfig(cfg.Redis.Rec))
-		ctx, cancel := context.WithTimeout(context.Background(), 800*time.Millisecond)
-		defer cancel()
-		if err := client.Set(ctx, "__content_service_preflight__", "1", time.Second); err != nil {
-			return fmt.Errorf("redis cluster preflight failed: %w", err)
 		}
 	}
 	return nil
@@ -352,6 +412,11 @@ func applyEnvOverrides(cfg *config) {
 		}
 	}
 
+	// MongoDB
+	if v := os.Getenv("MONGO_URI"); v != "" {
+		cfg.Mongo.URI = v
+	}
+
 	// RecModelService
 	if v := os.Getenv("REC_MODEL_SERVICE_URL"); v != "" {
 		cfg.RecModelService.URL = v
@@ -386,59 +451,71 @@ func applyRedisSceneEnv(prefix string, cfg *redisSceneCfg) {
 	}
 }
 
-// buildRecRedisClient constructs the Redis client for the recommendation hot path.
-// Falls back to in-memory client when no address is configured (local dev / tests).
-func buildRecRedisClient(cfg config) rtrec.RedisClient {
-	rcfg := cfg.Redis.Rec
-	pool := resolvePoolConfig(rcfg)
-
-	switch strings.ToLower(rcfg.Mode) {
-	case "cluster":
-		if len(rcfg.Addrs) == 0 {
-			log.Printf("content-service rec redis: cluster mode but no addrs set, falling back to in-memory")
-			return recinfra.NewMemoryRedis()
-		}
-		log.Printf("content-service rec redis cluster addrs=%v tls=%v poolSize=%d",
-			rcfg.Addrs, rcfg.TLS, pool.PoolSize)
-		return recinfra.NewRedisClusterAdapter(rcfg.Addrs, rcfg.Password, rcfg.TLS, pool)
-
-	default: // "standalone" or empty
-		if rcfg.Addr == "" {
-			log.Printf("content-service rec redis: no addr configured, using in-memory client")
-			return recinfra.NewMemoryRedis()
-		}
-		client := recinfra.NewRedisClientAdapterWithPool(rcfg.Addr, rcfg.Password, rcfg.DB, pool)
-		// Warm-up probe: ignore error (key may not exist yet)
-		_ = client.Set(context.Background(), "__content_service_ping__", "1", time.Second)
-		log.Printf("content-service rec redis standalone addr=%s db=%d tls=%v poolSize=%d",
-			rcfg.Addr, rcfg.DB, rcfg.TLS, pool.PoolSize)
-		return client
+func hostname() string {
+	h, _ := os.Hostname()
+	if h == "" {
+		h = "unknown"
 	}
+	return h
 }
 
-// resolvePoolConfig converts redisSceneCfg.Pool to recinfra.RedisPoolConfig,
-// substituting CPU-scaled defaults for any zero value.
-func resolvePoolConfig(rcfg redisSceneCfg) recinfra.RedisPoolConfig {
-	var base recinfra.RedisPoolConfig
-	if strings.ToLower(rcfg.Mode) == "cluster" {
-		base = recinfra.DefaultClusterPoolConfig()
-	} else {
-		base = recinfra.DefaultRedisPoolConfig()
+// projectorAdapter bridges recinfra.DiscoveryFeedProjector to application.Projector.
+type projectorAdapter struct {
+	p *recinfra.DiscoveryFeedProjector
+}
+
+func (a *projectorAdapter) Project(ctx context.Context, event application.ProjectorEvent) error {
+	return a.p.Project(ctx, recinfra.ProjectorEvent{
+		Type:          event.Type,
+		AggregateType: event.AggregateType,
+		AggregateID:   event.AggregateID,
+		Payload:       event.Payload,
+		OccurredAt:    event.OccurredAt,
+	})
+}
+
+func resolveMongoURI(cfg config) string {
+	uri := strings.TrimSpace(cfg.Mongo.URI)
+	if uri == "" || uri == "${MONGO_URI}" {
+		return ""
 	}
-	if rcfg.Pool.Size > 0 {
-		base.PoolSize = rcfg.Pool.Size
+	return uri
+}
+
+// buildRedisRouter creates a redis.Router from the YAML config.
+// Falls back to in-memory mode for scenes without addresses (local dev / tests).
+func buildRedisRouter(cfg config) *rtredis.Router {
+	routerCfg := rtredis.RouterConfig{
+		Scenes: map[string]rtredis.SceneConfig{
+			"rec":     toSceneConfig(cfg.Redis.Rec),
+			"general": toSceneConfig(cfg.Redis.General),
+		},
+		PrefixRoutes: rtredis.DefaultRouterConfig().PrefixRoutes,
+		DefaultScene: "general",
 	}
-	if rcfg.Pool.MinIdle > 0 {
-		base.MinIdleConns = rcfg.Pool.MinIdle
+	return rtredis.MustNewRouter(routerCfg)
+}
+
+// toSceneConfig converts the YAML redisSceneCfg to rtredis.SceneConfig.
+func toSceneConfig(r redisSceneCfg) rtredis.SceneConfig {
+	mode := strings.ToLower(strings.TrimSpace(r.Mode))
+	if mode == "" {
+		mode = "standalone"
 	}
-	if rcfg.Pool.ReadTimeoutMs > 0 {
-		base.ReadTimeout = time.Duration(rcfg.Pool.ReadTimeoutMs) * time.Millisecond
+	if mode == "standalone" && r.Addr == "" {
+		mode = "memory"
 	}
-	if rcfg.Pool.WriteTimeoutMs > 0 {
-		base.WriteTimeout = time.Duration(rcfg.Pool.WriteTimeoutMs) * time.Millisecond
+	if mode == "cluster" && len(r.Addrs) == 0 {
+		mode = "memory"
 	}
-	if rcfg.Pool.DialTimeoutMs > 0 {
-		base.DialTimeout = time.Duration(rcfg.Pool.DialTimeoutMs) * time.Millisecond
+	return rtredis.SceneConfig{
+		Mode:         mode,
+		Addr:         r.Addr,
+		Addrs:        r.Addrs,
+		Password:     r.Password,
+		DB:           r.DB,
+		TLS:          r.TLS,
+		PoolSize:     r.Pool.Size,
+		MinIdleConns: r.Pool.MinIdle,
 	}
-	return base
 }

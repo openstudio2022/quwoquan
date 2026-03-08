@@ -11,6 +11,8 @@ class DomainRoutingRule {
     required this.priority,
     required this.intentKeywords,
     required this.dialoguePath,
+    this.description = '',
+    this.mode = 'qa',
   });
 
   final String domainId;
@@ -18,6 +20,8 @@ class DomainRoutingRule {
   final int priority;
   final List<String> intentKeywords;
   final String dialoguePath;
+  final String description;
+  final String mode;
 }
 
 class DomainRoutingCatalog {
@@ -201,6 +205,8 @@ class DomainRoutingCatalogRuntime {
           priority: (item['priority'] as num?)?.toInt() ?? 0,
           intentKeywords: keywords,
           dialoguePath: (item['dialoguePath'] as String?)?.trim() ?? '',
+          description: (item['description'] as String?)?.trim() ?? '',
+          mode: (item['mode'] as String?)?.trim() ?? 'qa',
         ),
       );
     }

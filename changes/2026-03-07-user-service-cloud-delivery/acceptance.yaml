@@ -1,0 +1,69 @@
+version: 1
+feature_id: "<Fxxx>"
+title: "<feature-title>"
+template: "A1-A8"
+tree_context:
+  feature_level: "<L1_capability|L2_feature|L3_subfeature|L4_object_task|L5_cross_cutting>"
+  feature_path: "<capability.xxx.feature.xxx>"
+  parent_path: "<capability.xxx>"
+  parent_id: "<parent-feature-id>"
+  acceptance_inherits_from: "<parent-feature-path-or-id>"
+level_acceptance:
+  focus_groups: []
+  notes: "<level-specific acceptance focus>"
+global_acceptance:
+  A1_functional:
+    scenarios:
+      - id: "A1-S1"
+        title: "<title>"
+        given: "<precondition>"
+        when: "<action>"
+        then: "<expected_result>"
+  A2_experience:
+    performance_target: "<TTCR/p95/latency target>"
+    stability_target: "<crash/error rate target>"
+    ux_target: "<journey usability target>"
+  A3_service_governance:
+    timeout_retry_circuit_breaker: "<strategy>"
+    health_and_graceful_shutdown: "<check>"
+    rollback_strategy: "<plan>"
+  A4_observability:
+    access_log: "<fields/sample>"
+    operation_log_user: "<fields/sample>"
+    operation_log_operator: "<fields/sample>"
+    error_log: "<fields/sample>"
+    debug_log: "<switch/redaction>"
+    metrics_alert_slo: "<rules/thresholds>"
+  A5_product_ops:
+    event_collection: "<event names/fields>"
+    experiment_gray: "<bucket/version>"
+    feedback_loop: "<collect-evaluate-optimize-rollback>"
+  A6_security_privacy:
+    data_classification: "<PUBLIC/PII/SENSITIVE/SECRET>"
+    masking_encryption_retention: "<policy>"
+    auditability: "<traceability>"
+  A7_contract_metadata_consistency:
+    openapi_synced: true
+    openapi_paths: []
+    metadata_synced: true
+    metadata_files: []
+    endpoint_catalog_synced: true
+  A8_test_automation:
+    mock:
+      app: []
+      service: []
+    unit:
+      app: []
+      service: []
+    contract:
+      app: []
+      service: []
+    integration:
+      app: []
+      service: []
+    uat:
+      cases: []
+      automation: []
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"

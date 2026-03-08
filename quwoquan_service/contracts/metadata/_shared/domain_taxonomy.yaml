@@ -1,0 +1,168 @@
+version: 1
+
+description: |
+  统一领域标签体系。圈子频道、个人助理领域路由、推荐场景、内容标签
+  共享同一套领域 ID。
+  唯一真相：本文件。codegen 生成 Go DomainTag 枚举 + Dart DomainTaxonomy 类。
+
+domains:
+  - id: travel
+    label: { zh: "旅行", en: "Travel" }
+    description: 旅行攻略、景点推荐、行程规划、交通路线
+    mode: content
+    circle_channel_enabled: true
+    circle_channel_priority: 10
+    sub_categories: ["城市", "露营", "异域", "攻略", "徒步", "自驾"]
+    assistant_domain_ids: [travel_planning, travel_transport]
+    recommendation_scenario: circle_discovery
+    user_tag_ref: interest_travel
+
+  - id: local_life
+    label: { zh: "美食", en: "Food & Local" }
+    description: 餐厅美食推荐、本地服务、周边好去处、探店
+    mode: content
+    circle_channel_enabled: true
+    circle_channel_priority: 20
+    sub_categories: ["探店", "烹饪", "茶酒", "咖啡", "烘焙", "团购"]
+    assistant_domain_ids: [local_life]
+    recommendation_scenario: circle_discovery
+    user_tag_ref: interest_food
+
+  - id: health_wellness
+    label: { zh: "运动", en: "Sports & Health" }
+    description: 健身运动、健康养生、饮食营养、户外竞技
+    mode: content
+    circle_channel_enabled: true
+    circle_channel_priority: 30
+    sub_categories: ["健身", "户外", "球类", "养生", "竞技", "瑜伽"]
+    assistant_domain_ids: [health_wellness]
+    recommendation_scenario: circle_discovery
+    user_tag_ref: interest_sports
+
+  - id: tech
+    label: { zh: "科技", en: "Technology" }
+    description: 数码科技、AI、编程开发、智能设备
+    mode: content
+    circle_channel_enabled: true
+    circle_channel_priority: 40
+    sub_categories: ["数码", "AI", "编程", "智能", "航天", "开源"]
+    assistant_domain_ids: [knowledge_general, shopping_decision]
+    recommendation_scenario: circle_discovery
+    user_tag_ref: interest_tech
+
+  - id: education
+    label: { zh: "校园", en: "Education & Campus" }
+    description: 学习辅导、校园生活、校友互助、考试备考
+    mode: content
+    circle_channel_enabled: true
+    circle_channel_priority: 50
+    sub_categories: ["母校", "院系", "年级", "校友会", "职场互助", "备考"]
+    assistant_domain_ids: [education_learning, work_productivity]
+    recommendation_scenario: circle_discovery
+
+  - id: lifestyle
+    label: { zh: "生活", en: "Lifestyle" }
+    description: 穿搭家居、萌宠、情感、亲子、日常分享
+    mode: content
+    circle_channel_enabled: true
+    circle_channel_priority: 60
+    sub_categories: ["穿搭", "家居", "萌宠", "情感", "亲子", "手账"]
+    assistant_domain_ids: [emotion_companion, shopping_decision]
+    recommendation_scenario: circle_discovery
+    user_tag_ref: interest_home
+
+  - id: social_meet
+    label: { zh: "遇见", en: "Social & Meet" }
+    description: 交友、婚恋、同城、搭子、树洞
+    mode: content
+    circle_channel_enabled: true
+    circle_channel_priority: 70
+    sub_categories: ["寻友", "婚恋", "同城", "树洞", "搭子"]
+    assistant_domain_ids: [emotion_companion]
+    recommendation_scenario: circle_discovery
+
+  - id: culture_arts
+    label: { zh: "人文", en: "Culture & Arts" }
+    description: 艺术、影像、文学、历史、设计
+    mode: content
+    circle_channel_enabled: true
+    circle_channel_priority: 80
+    sub_categories: ["艺术", "影像", "文学", "历史", "设计", "哲学"]
+    assistant_domain_ids: [knowledge_general]
+    recommendation_scenario: circle_discovery
+    user_tag_ref: interest_art
+
+  - id: automotive
+    label: { zh: "车友", en: "Automotive" }
+    description: 品牌车型、自驾改装、车友聚会
+    mode: content
+    circle_channel_enabled: true
+    circle_channel_priority: 90
+    sub_categories: ["品牌", "车型", "自驾", "改装", "同城车会"]
+    assistant_domain_ids: [shopping_decision]
+    recommendation_scenario: circle_discovery
+
+  - id: finance
+    label: { zh: "理财", en: "Finance" }
+    description: 投资理财、基金股票、保险贷款、行业分析
+    mode: content
+    circle_channel_enabled: true
+    circle_channel_priority: 100
+    sub_categories: ["基金", "股票", "保险", "理财", "行业"]
+    assistant_domain_ids: [finance_consumer]
+    recommendation_scenario: circle_discovery
+    user_tag_ref: interest_finance
+
+  - id: fortune
+    label: { zh: "星座", en: "Fortune & Astrology" }
+    description: 星座运势、占卜塔罗、趣味解读
+    mode: content
+    circle_channel_enabled: true
+    circle_channel_priority: 110
+    sub_categories: ["星座", "塔罗", "八字", "趣味测试"]
+    assistant_domain_ids: [fortune_astrology]
+    recommendation_scenario: circle_discovery
+
+  - id: work
+    label: { zh: "职场", en: "Work & Career" }
+    description: 效率提升、项目管理、求职面试、职业规划
+    mode: service
+    circle_channel_enabled: false
+    assistant_domain_ids: [work_productivity]
+
+  - id: shopping
+    label: { zh: "选购", en: "Shopping" }
+    description: 选购对比、性价比分析、产品测评
+    mode: service
+    circle_channel_enabled: false
+    assistant_domain_ids: [shopping_decision]
+
+  - id: weather
+    label: { zh: "天气", en: "Weather" }
+    description: 天气查询、出行建议
+    mode: tool
+    circle_channel_enabled: false
+    assistant_domain_ids: [weather]
+
+  - id: calendar
+    label: { zh: "日程", en: "Calendar" }
+    description: 日程管理、提醒设置
+    mode: tool
+    circle_channel_enabled: false
+    assistant_domain_ids: [calendar_task]
+
+  - id: policy
+    label: { zh: "政务", en: "Public Service" }
+    description: 政策解读、办事流程
+    mode: service
+    circle_channel_enabled: false
+    assistant_domain_ids: [policy_public_service]
+
+# 圈子固定频道（非领域驱动，与 taxonomy 平行）
+circle_fixed_channels:
+  - id: following
+    label: { zh: "关注", en: "Following" }
+    position: before_taxonomy
+  - id: recommended
+    label: { zh: "推荐", en: "Recommended" }
+    position: before_taxonomy

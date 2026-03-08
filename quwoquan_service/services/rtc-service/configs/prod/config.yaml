@@ -1,0 +1,20 @@
+service:
+  http:
+    addr: ":18083"
+
+mongodb:
+  uri: ""
+  database: "quwoquan_rtc"
+
+redis:
+  general:
+    mode: cluster
+    addr: ""
+  realtime:
+    mode: cluster
+    addr: ""
+
+livekit:
+  url: ""
+  api_key: ""
+  api_secret: ""

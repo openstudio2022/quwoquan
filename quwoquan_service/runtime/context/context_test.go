@@ -2,77 +2,12 @@ package runtimecontext
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
+	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/runtime/recommendation"
 )
-
-type mockRedis struct {
-	data map[string]string
-	sets map[string]map[string]bool
-	hash map[string]map[string]string
-}
-
-func newMockRedis() *mockRedis {
-	return &mockRedis{
-		data: make(map[string]string),
-		sets: make(map[string]map[string]bool),
-		hash: make(map[string]map[string]string),
-	}
-}
-
-func (m *mockRedis) Get(_ context.Context, key string) (string, error) {
-	return m.data[key], nil
-}
-func (m *mockRedis) Set(_ context.Context, key, value string, _ time.Duration) error {
-	m.data[key] = value
-	return nil
-}
-func (m *mockRedis) Del(_ context.Context, keys ...string) error {
-	for _, k := range keys {
-		delete(m.data, k)
-	}
-	return nil
-}
-func (m *mockRedis) SAdd(_ context.Context, key string, members ...string) error {
-	if m.sets[key] == nil {
-		m.sets[key] = make(map[string]bool)
-	}
-	for _, member := range members {
-		m.sets[key][member] = true
-	}
-	return nil
-}
-func (m *mockRedis) SMembers(_ context.Context, key string) ([]string, error) {
-	var out []string
-	for member := range m.sets[key] {
-		out = append(out, member)
-	}
-	return out, nil
-}
-func (m *mockRedis) SIsMember(_ context.Context, key, member string) (bool, error) {
-	return m.sets[key][member], nil
-}
-func (m *mockRedis) HIncrByFloat(_ context.Context, key, field string, incr float64) error {
-	if m.hash[key] == nil {
-		m.hash[key] = make(map[string]string)
-	}
-	var cur float64
-	if v, ok := m.hash[key][field]; ok {
-		fmt.Sscanf(v, "%f", &cur)
-	}
-	m.hash[key][field] = fmt.Sprintf("%f", cur+incr)
-	return nil
-}
-func (m *mockRedis) HGetAll(_ context.Context, key string) (map[string]string, error) {
-	if m.hash[key] == nil {
-		return nil, nil
-	}
-	return m.hash[key], nil
-}
-func (m *mockRedis) Expire(_ context.Context, _ string, _ time.Duration) error { return nil }
 
 type mockProfileStore struct {
 	profiles map[string]*UserHolisticProfile
@@ -82,8 +17,8 @@ func (m *mockProfileStore) GetProfile(_ context.Context, userID string) (*UserHo
 }
 
 func TestPageContextManager_ReportAndGet(t *testing.T) {
-	redis := newMockRedis()
-	mgr := NewPageContextManager(redis, nil)
+	memClient := rtredis.NewMemoryClient()
+	mgr := NewPageContextManager(memClient, nil)
 	ctx := context.Background()
 
 	req := PageContextRequest{
@@ -119,8 +54,8 @@ func TestPageContextManager_ReportAndGet(t *testing.T) {
 }
 
 func TestPageContextManager_Clear(t *testing.T) {
-	redis := newMockRedis()
-	mgr := NewPageContextManager(redis, nil)
+	memClient := rtredis.NewMemoryClient()
+	mgr := NewPageContextManager(memClient, nil)
 	ctx := context.Background()
 
 	mgr.Report(ctx, PageContextRequest{
@@ -136,9 +71,9 @@ func TestPageContextManager_Clear(t *testing.T) {
 }
 
 func TestPageContextManager_ForwardsUserActionsToHotPath(t *testing.T) {
-	redis := newMockRedis()
-	hp := recommendation.NewHotPath(redis)
-	mgr := NewPageContextManager(redis, hp)
+	memClient := rtredis.NewMemoryClient()
+	hp := recommendation.NewHotPath(rtredis.NewRecAdapter(memClient))
+	mgr := NewPageContextManager(memClient, hp)
 	ctx := context.Background()
 
 	req := PageContextRequest{
@@ -167,9 +102,9 @@ func TestPageContextManager_ForwardsUserActionsToHotPath(t *testing.T) {
 }
 
 func TestContextAssembler_Assemble(t *testing.T) {
-	redis := newMockRedis()
-	hp := recommendation.NewHotPath(redis)
-	mgr := NewPageContextManager(redis, hp)
+	memClient := rtredis.NewMemoryClient()
+	hp := recommendation.NewHotPath(rtredis.NewRecAdapter(memClient))
+	mgr := NewPageContextManager(memClient, hp)
 	ctx := context.Background()
 
 	mgr.Report(ctx, PageContextRequest{
@@ -205,9 +140,9 @@ func TestContextAssembler_Assemble(t *testing.T) {
 }
 
 func TestContextAssembler_NoData(t *testing.T) {
-	redis := newMockRedis()
-	hp := recommendation.NewHotPath(redis)
-	mgr := NewPageContextManager(redis, hp)
+	memClient := rtredis.NewMemoryClient()
+	hp := recommendation.NewHotPath(rtredis.NewRecAdapter(memClient))
+	mgr := NewPageContextManager(memClient, hp)
 
 	assembler := NewContextAssembler(mgr, hp, &mockProfileStore{profiles: map[string]*UserHolisticProfile{}}, nil)
 	result, err := assembler.Assemble(context.Background(), "unknown", "s1")

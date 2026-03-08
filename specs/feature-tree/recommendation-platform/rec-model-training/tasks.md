@@ -2,7 +2,7 @@
 
 ## 开发状态
 
-- **状态**：Create 已完成，**可进入 Implement**（使用 `/opsx-apply` 按下列顺序实施）。
+- **状态**：Create 已完成，**可进入 Implement**（使用 `/dev` 按下列顺序实施）。
 - **G1**：已满足。训练侧无独立 metadata 目录，依赖 `contracts/metadata/_projections/`（learning_events、training_samples、model_registry）；`make verify-metadata` 已通过。
 - **代码/脚本落点**：训练为任务/作业形态，建议落点 `quwoquan_service/scripts/ml/`（或按约定 `services/rec-model-training/` 仅放脚本与配置），与 [design.md](../design.md) 一致。
 

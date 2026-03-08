@@ -1,0 +1,467 @@
+feature: chat-conversation
+level: L1
+archived: false
+
+# ────────────────────────────────────────────────────────────────────────────
+#  T1 — 契约与静态层（L1a + 静态校验）
+#  守护：metadata → codegen → 类型链语义正确性
+# ────────────────────────────────────────────────────────────────────────────
+
+level_acceptance:
+
+  A1:
+    criteria: >
+      Chat DTO 全字段解析契约 — Conversation/Message/ConversationMember/
+      ConversationUserState/MessageReceipt/ChatInbox 六个业务对象 DTO，
+      每个覆盖常规解析（全字段）、兼容性（alias/旧枚举降级/round-trip）、
+      异常边界（全字段缺失不崩溃/null 安全）三维度。
+    status: implemented
+    linked_tasks: [T5-1, T5-2, T5-3, T5-4]
+    test_layers:
+      T1: required
+      T2: not_applicable
+      T3: not_applicable
+      T4: not_applicable
+    tests:
+      - test/cloud/chat/dto/contract/conversation_dto_contract_test.dart
+      - test/cloud/chat/dto/contract/message_dto_contract_test.dart
+      - test/cloud/chat/dto/contract/member_dto_contract_test.dart
+      - test/cloud/chat/dto/contract/user_state_dto_contract_test.dart
+
+  A2:
+    criteria: >
+      Chat 错误码枚举覆盖 — ChatErrorCode 5 个码（conversationNotFound/
+      unauthorized/messageTooLong/rateLimited/internalError）全部通过
+      fromCode round-trip、httpStatus 正确、isRetryable 属性正确、
+      unknown 降级安全。
+    status: implemented
+    linked_tasks: [T5-5]
+    test_layers:
+      T1: required
+      T2: not_applicable
+      T3: not_applicable
+      T4: not_applicable
+    tests:
+      - test/cloud/chat/contract/chat_error_code_contract_test.dart
+
+  A3:
+    criteria: >
+      Chat Repository 接口契约 — ChatRepository 17 个抽象方法，
+      MockChatRepository 每个方法返回类型与 Abstract 声明一致，
+      字段结构与 service.yaml API 响应对齐，
+      Mock 实现禁止发 HTTP（纯本地数据）。
+    status: implemented
+    linked_tasks: [T5-6, T0-3, T0-4]
+    test_layers:
+      T1: required
+      T2: not_applicable
+      T3: not_applicable
+      T4: not_applicable
+    tests:
+      - test/cloud/chat/contract/chat_repository_contract_test.dart
+
+  A4:
+    criteria: >
+      端云 metadata 零偏差 — fields.yaml 更新后执行 make codegen +
+      make codegen-app，Go struct / Dart DTO / OpenAPI 字段名、类型、
+      约束完全一致。make verify-metadata → 0 error。
+    status: implemented
+    linked_tasks: [T1-1~T1-9, T5-7]
+    test_layers:
+      T1: required
+      T2: not_applicable
+      T3: not_applicable
+      T4: not_applicable
+    tests:
+      - make verify-metadata (0 error)
+
+  A5:
+    criteria: >
+      端侧 chat 目录迁移完成 — lib/features/chat/ 为空或已删除，
+      所有 chat 相关页面/Provider/Widget 在 lib/ui/chat/ 下。
+      glob lib/features/chat/**/*.dart → 0 files。
+    status: implemented
+    linked_tasks: [T4-9, T5-8]
+    test_layers:
+      T1: required
+      T2: not_applicable
+      T3: not_applicable
+      T4: not_applicable
+    tests:
+      - glob lib/features/chat/**/*.dart → 0 files (verified)
+
+  # ────────────────────────────────────────────────────────────────────────
+  #  T2 — 模块与交互层（L1b Widget Tests）
+  #  守护：单个 Widget 在 MockRepository 注入下的渲染逻辑和状态响应
+  # ────────────────────────────────────────────────────────────────────────
+
+  A6:
+    criteria: >
+      ChatPage 渲染与交互 — 趣聊/同好 Tab 正确切换，
+      会话列表按 lastMessageTime 降序渲染（含 avatarUrl/title/preview/时间），
+      空态显示空状态提示，错误态降级不崩溃。
+      三维度：渲染契约 + 交互契约 + 错误态渲染。
+    status: implemented
+    linked_tasks: [T6-1]
+    test_layers:
+      T1: not_applicable
+      T2: required
+      T3: not_applicable
+      T4: not_applicable
+    tests:
+      - test/ui/chat/widgets/chat_page_widget_test.dart
+
+  A7:
+    criteria: >
+      ChatDetailPage 消息列表与发送 — 消息按 seq 升序排列，
+      文本/图片/Markdown/assistant_reply 四种类型正确分发渲染，
+      发送区域输入文本 + tap 发送触发乐观插入（status=sending），
+      撤回按钮 2 分钟后灰显/隐藏。
+      三维度：渲染契约 + 交互契约 + 错误态渲染。
+    status: implemented
+    linked_tasks: [T4-1, T4-2, T4-6, T6-2]
+    test_layers:
+      T1: not_applicable
+      T2: required
+      T3: not_applicable
+      T4: not_applicable
+    tests:
+      - test/ui/chat/widgets/chat_detail_page_widget_test.dart
+
+  A8:
+    criteria: >
+      ChatSettingsPage 操作 — 成员列表正确加载（含分页），
+      mute/pin 切换即时响应 UI 状态变化，
+      群名修改提交后更新标题，错误态降级。
+      三维度：渲染契约 + 交互契约 + 错误态渲染。
+    status: implemented
+    linked_tasks: [T4-4, T6-3]
+    test_layers:
+      T1: not_applicable
+      T2: required
+      T3: not_applicable
+      T4: not_applicable
+    tests:
+      - test/ui/chat/widgets/chat_settings_page_widget_test.dart
+
+  A9:
+    criteria: >
+      ChatMessageBubble 类型渲染 — 文本气泡显示 content，
+      图片气泡渲染 mediaUrl，Markdown 气泡渲染富文本，
+      assistant_reply 气泡使用特殊样式 + 显示 AssistantAnswerToolbar。
+      空/null 消息安全降级不崩溃。
+    status: implemented
+    linked_tasks: [T6-4]
+    test_layers:
+      T1: not_applicable
+      T2: required
+      T3: not_applicable
+      T4: not_applicable
+    tests:
+      - test/ui/chat/widgets/chat_message_bubble_widget_test.dart
+
+  A10:
+    criteria: >
+      助手 UI 组件交互 — AssistantAnswerToolbar（有帮助/没帮助/复制/转发/重生成）
+      tap 触发正确回调；AssistantProcessDrawer 四阶段（理解/搜索/分析/回答）
+      正确渲染；RegenerateOptionsPopup 5 个选项正确弹出。
+    status: implemented
+    linked_tasks: [T6-5]
+    test_layers:
+      T1: not_applicable
+      T2: required
+      T3: not_applicable
+      T4: not_applicable
+    tests:
+      - test/ui/chat/widgets/chat_assistant_ui_widget_test.dart
+
+  A11:
+    criteria: >
+      mock/remote 无感切换 — ProviderScope 分别注入 MockChatRepository 和
+      RemoteChatRepository，ChatPage/ChatDetailPage/ChatSettingsPage 行为一致：
+      会话列表加载、消息列表展示、发送/撤回操作、设置操作均正常。
+      无 UI 层直接实例化 Repository，无 UI 层 import AppDataSourceMode。
+    status: implemented
+    linked_tasks: [T0-3, T6-6]
+    test_layers:
+      T1: required
+      T2: required
+      T3: not_applicable
+      T4: not_applicable
+    tests:
+      - test/ui/chat/widgets/chat_mock_remote_consistency_test.dart
+
+  A12:
+    criteria: >
+      已读回执 UI — ≤50 人群消息气泡显示已读/未读人数，
+      >50 人群消息气泡仅显示发送成功（无回执），
+      回执阈值可通过 conversation 级别 receiptEnabled 配置覆盖。
+    status: implemented
+    linked_tasks: [T4-5, T6-7]
+    test_layers:
+      T1: not_applicable
+      T2: required
+      T3: required
+      T4: not_applicable
+    tests:
+      - test/ui/chat/widgets/chat_receipt_ui_widget_test.dart
+
+  # ────────────────────────────────────────────────────────────────────────
+  #  T3 — 端云集成层（L2 Cloud Contract + L3 API Contract）
+  #  守护：服务在真实存储层上的 API 行为 + 端云数据合约不漂移
+  # ────────────────────────────────────────────────────────────────────────
+
+  A13:
+    criteria: >
+      云侧会话 CRUD 契约 — MongoDB testcontainers 环境下：
+      创建会话（direct/group/circle）→ 查询返回正确字段 →
+      更新 title/maxGroupSize → 列表分页 cursor 无重叠。
+      兼容性：响应不含私有字段，旧记录可读。
+      错误路径：404 conversationNotFound、401 unauthorized。
+    status: implemented
+    linked_tasks: [T7-1, T7-8, T7-9]
+    test_layers:
+      T1: not_applicable
+      T2: not_applicable
+      T3: required
+      T4: not_applicable
+    tests:
+      - services/chat-service/tests/conversation_crud_contract_test.go
+      - services/chat-service/tests/conversation_error_contract_test.go
+      - services/chat-service/tests/conversation_compat_contract_test.go
+
+  A14:
+    criteria: >
+      消息 seq + clientMsgId 幂等 + 撤回 — SendMessage 返回严格递增 seq，
+      100 并发发送 seq 无间隔；相同 clientMsgId 3 次发送 → db 仅 1 条；
+      1min 内撤回成功 + MessageRecalled 事件发布，5min 撤回返回 recall_time_exceeded。
+    status: implemented
+    linked_tasks: [T7-2]
+    test_layers:
+      T1: not_applicable
+      T2: not_applicable
+      T3: required
+      T4: not_applicable
+    tests:
+      - services/chat-service/tests/message_crud_contract_test.go
+
+  A15:
+    criteria: >
+      离线同步 SyncMessages — fixture 写入 500 条消息 → SyncMessages(lastSeq=0)
+      返回全部 500 条 → SyncMessages(lastSeq=250) 返回后 250 条 →
+      SyncMessages(lastSeq=500) 返回空列表。耗时 < 3s（10K 条以内）。
+    status: implemented
+    linked_tasks: [T7-3, T4-3]
+    test_layers:
+      T1: not_applicable
+      T2: not_applicable
+      T3: required
+      T4: not_applicable
+    tests:
+      - services/chat-service/tests/message_sync_contract_test.go
+
+  A16:
+    criteria: >
+      成员管理 + 助手 — AddMembers(50 users) → conversation_members.count +50
+      + Conversation.memberCount +50 + MemberJoined 事件发布；
+      RemoveMember → count -1 + MemberLeft 事件；
+      InviteAssistant → assistant member 创建 + AssistantInvited 事件；
+      重复 InviteAssistant → 409 Conflict。
+    status: implemented
+    linked_tasks: [T7-4]
+    test_layers:
+      T1: not_applicable
+      T2: not_applicable
+      T3: required
+      T4: not_applicable
+    tests:
+      - services/chat-service/tests/member_management_contract_test.go
+
+  A17:
+    criteria: >
+      域事件发布 — chat-service 在以下操作后发布对应事件到 Redis Pub/Sub：
+      MessageSent、MessageRecalled、MemberJoined、MemberLeft、
+      ConversationCreated、ConversationSettingsUpdated、
+      ReadReceiptSent、AssistantInvited、AssistantRemoved、AssistantMentioned。
+      EventSpy 验证 payload 字段完整、channel 格式 rt:conversation:{id}。
+    status: implemented
+    linked_tasks: [T2-3, T7-5]
+    test_layers:
+      T1: not_applicable
+      T2: not_applicable
+      T3: required
+      T4: not_applicable
+    tests:
+      - services/chat-service/tests/event_publish_contract_test.go
+
+  A18:
+    criteria: >
+      ChatInbox 投影 — 新消息到达 → inbox unreadCount +1 + lastMessageTime 更新；
+      MarkAsRead → unreadCount 归零 + readSeq 更新；
+      MemberJoined → inbox 条目创建；MemberLeft → inbox 条目删除；
+      会话列表 API 返回结果按 lastMessageTime 降序 + 置顶优先。
+    status: implemented
+    linked_tasks: [T2-4, T7-6]
+    test_layers:
+      T1: not_applicable
+      T2: not_applicable
+      T3: required
+      T4: not_applicable
+    tests:
+      - services/chat-service/tests/inbox_projection_contract_test.go
+
+  A19:
+    criteria: >
+      已读回执云侧 — ≤50 人群 MarkAsRead → message_receipts 写入 +
+      GetReceipts 返回已读用户列表 + ReadReceiptSent 事件发布；
+      >50 人群（receiptEnabled=false）→ MarkAsRead 仅更新 readSeq，
+      不写入 message_receipts。
+    status: implemented
+    linked_tasks: [T7-7, T4-5]
+    test_layers:
+      T1: not_applicable
+      T2: not_applicable
+      T3: required
+      T4: not_applicable
+    tests:
+      - services/chat-service/tests/conversation_settings_contract_test.go
+
+  A20:
+    criteria: >
+      端侧 staging HTTP 契约 — 17 个 API 端点在 staging 环境下：
+      协议层（HTTP status + Content-Type）正确 +
+      结构层（响应 JSON 全字段可解析为 DTO）+
+      语义层（错误码枚举映射 + isRetryable + cursor 分页无重叠）。
+      SLO：会话列表 p95 <800ms、消息列表 p95 <500ms。
+    status: implemented
+    linked_tasks: [T7-11]
+    test_layers:
+      T1: not_applicable
+      T2: not_applicable
+      T3: required
+      T4: not_applicable
+    tests:
+      - test/cloud/chat/api_contract_runner.dart
+
+  A21:
+    criteria: >
+      基准性能 — L2 基准测试通过：
+      1000 并发 SendMessage API p99 < 100ms；
+      10K 条离线同步 SyncMessages < 3s；
+      1000 人群 AddMembers 50 人 < 500ms。
+    status: implemented
+    linked_tasks: [T7-10]
+    test_layers:
+      T1: not_applicable
+      T2: not_applicable
+      T3: required
+      T4: not_applicable
+    tests:
+      - services/chat-service/tests/benchmark_test.go
+
+  # ────────────────────────────────────────────────────────────────────────
+  #  T4 — 端到端旅程层（L1c Journey + Patrol L4）
+  #  守护：多屏用户旅程完整性 + 真实设备上的 native 层行为
+  # ────────────────────────────────────────────────────────────────────────
+
+  A22:
+    criteria: >
+      L1c 会话列表旅程 — testWidgets 环境下 MockChatRepository 注入：
+      正常路径：ChatPage 加载 → 会话列表渲染 → Tab 切换（趣聊/同好）；
+      错误路径：MockRepo 抛异常 → 错误态 UI 显示 + 重试按钮；
+      边界路径：空列表 → 空态提示。
+    status: implemented
+    linked_tasks: [T8-1]
+    test_layers:
+      T1: not_applicable
+      T2: not_applicable
+      T3: not_applicable
+      T4: required
+    tests:
+      - test/ui/chat/journeys/chat_conversation_list_journey_test.dart
+
+  A23:
+    criteria: >
+      L1c 发消息旅程 — testWidgets 环境下：
+      正常路径：输入文本 → tap 发送 → 乐观插入（status=sending）→
+      pump → 消息出现在列表 → Mock 返回 seq → 按 seq 排序正确；
+      错误路径：MockRepo 发送失败 → 消息标记 failed + 重试按钮；
+      边界路径：连续发送 3 条 → 3 条均乐观插入 → seq 排序正确。
+    status: implemented
+    linked_tasks: [T4-1, T4-2, T8-2]
+    test_layers:
+      T1: not_applicable
+      T2: not_applicable
+      T3: not_applicable
+      T4: required
+    tests:
+      - test/ui/chat/journeys/chat_message_send_journey_test.dart
+
+  A24:
+    criteria: >
+      L1c 群管理旅程 — testWidgets 环境下：
+      正常路径：StartGroupChatPage → 选择联系人 → 创建群 →
+      ChatSettingsPage → mute/pin 操作 → UI 状态更新；
+      错误路径：创建群失败 → 错误提示；
+      边界路径：无联系人 → 空态提示。
+    status: implemented
+    linked_tasks: [T8-3, T8-4]
+    test_layers:
+      T1: not_applicable
+      T2: not_applicable
+      T3: not_applicable
+      T4: required
+    tests:
+      - test/ui/chat/journeys/chat_group_management_journey_test.dart
+      - test/ui/chat/journeys/chat_assistant_journey_test.dart
+
+  A25:
+    criteria: >
+      L4 Patrol 真实设备验证 — 仅测试 flutter_test 无法替代的场景：
+      (a) 真实 IME 中文输入发送消息 → 消息正确显示；
+      (b) 系统推送通知点击 → App 打开 ChatDetailPage 正确会话；
+      (c) 横竖屏切换后聊天页 UI 稳定不崩溃。
+      (前置：realtime-gateway 就绪后追加 1v1 p99 <200ms +
+      大群 p99 <500ms + 自适应传输全程 seq gap=0。)
+    status: implemented
+    linked_tasks: [T8-5, T8-6, T8-7]
+    test_layers:
+      T1: not_applicable
+      T2: not_applicable
+      T3: not_applicable
+      T4: required
+    tests:
+      - test/patrol/chat/chat_ime_input_test.dart
+      - test/patrol/chat/chat_notification_entry_test.dart
+      - test/patrol/chat/chat_orientation_stability_test.dart
+
+# ────────────────────────────────────────────────────────────────────────
+#  门禁映射
+# ────────────────────────────────────────────────────────────────────────
+
+execution:
+  local_gate: |
+    # T1 + T2 (L1a/b/c)
+    cd quwoquan_app && flutter test test/cloud/chat/ test/ui/chat/
+    # T3-L2 (Go contract)
+    cd quwoquan_service && go test ./services/chat-service/... -v -count=1
+  full_gate: |
+    # local_gate + T3-L3 (staging HTTP)
+    make gate-full
+    # STAGING_BASE_URL + TEST_AUTH_TOKEN required for L3
+  patrol: |
+    # T4 (pre-release only)
+    cd quwoquan_app && patrol test test/patrol/chat/
+
+# ────────────────────────────────────────────────────────────────────────
+#  验收覆盖矩阵
+# ────────────────────────────────────────────────────────────────────────
+#
+#  T1 契约与静态:  A1  A2  A3  A4  A5  A11(partial)     — 6 项
+#  T2 模块与交互:  A6  A7  A8  A9  A10 A11 A12          — 7 项
+#  T3 端云集成:    A12 A13 A14 A15 A16 A17 A18 A19 A20 A21 — 10 项
+#  T4 端到端旅程:  A22 A23 A24 A25                       — 4 项
+#
+#  每层 required 计数:
+#    T1: 6    T2: 7    T3: 10    T4: 4    总计: 25 (去重后)
+#

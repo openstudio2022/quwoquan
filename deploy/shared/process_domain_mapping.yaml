@@ -5,6 +5,14 @@ version: 1
 # 1) Within one environment, a domain can only belong to one process.
 # 2) integration and prod mapping must be identical.
 # 3) External API routes remain domain-based and cannot be changed by deployment topology.
+#
+# Redis Scene 独立部署说明（详见 redis_keyspace.yaml scene_routing）：
+#   每个 Redis scene (rec / general / realtime) 可独立部署为 standalone 或 cluster。
+#   scene 归属由服务自身 config.yaml redis.scenes 声明，不在此文件管理。
+#   典型部署：
+#     dev       → 三个 scene 共用 1 个 standalone（或 in-memory）
+#     integration → rec cluster + general standalone + realtime cluster
+#     prod      → 三个 scene 各自 cluster，独立扩缩容
 environments:
   dev:
     content-service:
@@ -15,15 +23,41 @@ environments:
       domains: [recommendation]
     chat-service:
       domains: [chat]
+    user-service:
+      domains: [user]
+    realtime-gateway:
+      domains: [realtime]
+    rtc-service:
+      domains: [rtc]
+    livekit-sfu:
+      domains: [media]
+    coturn:
+      domains: [turn]
 
   integration:
     recommendation-service:
       domains: [recommendation]
+    realtime-gateway:
+      domains: [realtime]
+    rtc-service:
+      domains: [rtc]
+    livekit-sfu:
+      domains: [media]
+    coturn:
+      domains: [turn]
     seed-box:
       domains: [content, integration, chat, user, circle, assistant, gateway, orchestrator]
 
   prod:
     recommendation-service:
       domains: [recommendation]
+    realtime-gateway:
+      domains: [realtime]
+    rtc-service:
+      domains: [rtc]
+    livekit-sfu:
+      domains: [media]
+    coturn:
+      domains: [turn]
     seed-box:
       domains: [content, integration, chat, user, circle, assistant, gateway, orchestrator]

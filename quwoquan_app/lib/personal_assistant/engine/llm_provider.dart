@@ -19,6 +19,7 @@ class AssistantModelOutput {
     this.modelPath = '',
     this.failureCode = '',
     this.rawAssistantToolCallsMessage,
+    this.reasoningText = '',
   });
 
   final String text;
@@ -29,6 +30,9 @@ class AssistantModelOutput {
   /// 当模型走 native function calling 时，保存 assistant message 原文（含 tool_calls 字段），
   /// 用于下一轮 LLM 请求时正确构建 OpenAI 协议的消息历史。
   final Map<String, dynamic>? rawAssistantToolCallsMessage;
+  /// Model-provided reasoning / thinking content (from dedicated fields like
+  /// `reasoning`, `reasoning_content`, or `<think>` tags).
+  final String reasoningText;
 
   bool get hasToolCalls => toolCalls.isNotEmpty;
 
@@ -39,6 +43,7 @@ class AssistantModelOutput {
     String? modelPath,
     String? failureCode,
     Map<String, dynamic>? rawAssistantToolCallsMessage,
+    String? reasoningText,
   }) {
     return AssistantModelOutput(
       text: text ?? this.text,
@@ -48,6 +53,7 @@ class AssistantModelOutput {
       failureCode: failureCode ?? this.failureCode,
       rawAssistantToolCallsMessage:
           rawAssistantToolCallsMessage ?? this.rawAssistantToolCallsMessage,
+      reasoningText: reasoningText ?? this.reasoningText,
     );
   }
 }
@@ -142,6 +148,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
     this.templateRuntime,
     this.toolMetadataRegistry,
     this.plannerTemplateVersion = '',
+    this.modelRef = '',
   });
 
   final String modelId;
@@ -149,6 +156,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
   final String apiKey;
   final PromptTemplateRuntime? templateRuntime;
   final ToolMetadataRegistry? toolMetadataRegistry;
+  final String modelRef;
   final String plannerTemplateVersion;
   static const String _reactPolicyPath =
       'assets/personal_assistant/config/react_policy.json';
@@ -447,7 +455,9 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       }
 
       final contentBuffer = StringBuffer();
+      final reasoningBuffer = StringBuffer();
       final toolCallAccum = <String, _StreamingToolCallAccum>{};
+      final profile = ModelCapabilityProfile.forModelRef(modelRef);
 
       await for (final line
           in streamedResponse.stream.transform(const _SseLineTransformer())) {
@@ -463,6 +473,22 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
           if (choice == null) continue;
           final delta = choice['delta'] as Map?;
           if (delta == null) continue;
+
+          // MIMO / DeepSeek put thinking into a dedicated `reasoning` or
+          // `reasoning_content` field instead of (or in addition to) `content`.
+          if (profile.supportsReasoningField) {
+            final reasoningKey = profile.reasoningFieldName.isNotEmpty
+                ? profile.reasoningFieldName
+                : 'reasoning';
+            final reasoningDelta =
+                (delta[reasoningKey] as String?) ??
+                (delta['reasoning_content'] as String?) ??
+                '';
+            if (reasoningDelta.isNotEmpty) {
+              reasoningBuffer.write(reasoningDelta);
+              onDelta(reasoningDelta);
+            }
+          }
 
           final textDelta = (delta['content'] as String?) ?? '';
           if (textDelta.isNotEmpty) {
@@ -553,11 +579,23 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
         },
       );
 
+      final reasoning = reasoningBuffer.toString();
+
+      String effectiveText = fullText;
+      if (effectiveText.isEmpty && toolCalls.isNotEmpty) {
+        final names = toolCalls.map((c) => c.name).join('、');
+        effectiveText = '正在调用工具：$names';
+      } else if (effectiveText.isEmpty && reasoning.isNotEmpty) {
+        effectiveText = reasoning;
+      } else if (effectiveText.isEmpty) {
+        effectiveText = '已完成模型推理。';
+      }
       return AssistantModelOutput(
-        text: fullText.isEmpty ? '已完成模型推理。' : fullText,
+        text: effectiveText,
         toolCalls: toolCalls,
         modelPath: 'remote',
         rawAssistantToolCallsMessage: rawAssistantMsg,
+        reasoningText: reasoning,
       );
     } catch (error) {
       await _logLlmInteraction(
@@ -584,10 +622,26 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
   // Accumulator for streamed tool_call fragments.
   static final RegExp _thinkTagOpen = RegExp(r'<think>');
   static final RegExp _thinkTagClose = RegExp(r'</think>');
+  // XML-format tool call tags used by some models (e.g. older Qwen).
+  static final RegExp _xmlToolCallPattern = RegExp(
+    r'<tool_call>.*?</tool_call>|<function=[^>]+>.*?</function>|'
+    r'</?tool_call>|<function=[^>]*>|</function>|'
+    r'<parameter=[^>]*>.*?</parameter>|</?parameter[^>]*>',
+    dotAll: true,
+  );
   bool _inThinkBlock = false;
+  bool _inXmlToolBlock = false;
 
   /// Extracts user-visible thinking content from streaming deltas.
-  /// Supports `<think>...</think>` tag pairs (DeepSeek-R1 style).
+  ///
+  /// Supports two sources:
+  /// 1. `<think>...</think>` tag pairs (DeepSeek-R1 / Qwen3 style).
+  /// 2. Plain text content that is NOT inside XML tool-call tags.
+  ///    This handles models that stream their reasoning as regular text
+  ///    before emitting the JSON action block.
+  ///
+  /// XML tool-call fragments (`<tool_call>`, `<function=...>`) are stripped
+  /// and never forwarded to the UI.
   String _extractStreamingThinking(String delta) {
     final buf = StringBuffer();
     var remaining = delta;
@@ -603,18 +657,86 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
           buf.write(remaining);
           remaining = '';
         }
-      } else {
-        final openMatch = _thinkTagOpen.firstMatch(remaining);
-        if (openMatch != null) {
-          remaining = remaining.substring(openMatch.end);
-          _inThinkBlock = true;
+      } else if (_inXmlToolBlock) {
+        // Look for </tool_call> or </function> to close the block.
+        final closeIdx = remaining.indexOf('</tool_call>');
+        final closeFnIdx = remaining.indexOf('</function>');
+        final close = _minPositive(closeIdx, closeFnIdx);
+        if (close >= 0) {
+          // Skip past the closing tag.
+          final tag = closeIdx >= 0 && (closeFnIdx < 0 || closeIdx <= closeFnIdx)
+              ? '</tool_call>'
+              : '</function>';
+          remaining = remaining.substring(close + tag.length);
+          _inXmlToolBlock = false;
         } else {
+          remaining = ''; // swallow remainder, block continues in next chunk
+        }
+      } else {
+        // Check for <think> open tag.
+        final thinkMatch = _thinkTagOpen.firstMatch(remaining);
+        // Check for XML tool call open.
+        final toolCallIdx = remaining.indexOf('<tool_call>');
+        final funcIdx = _findXmlFunctionTag(remaining);
+        final xmlStart = _minPositive(toolCallIdx, funcIdx);
+
+        if (thinkMatch != null && (xmlStart < 0 || thinkMatch.start < xmlStart)) {
+          // Plain text before <think> → emit as thinking.
+          final before = remaining.substring(0, thinkMatch.start).trim();
+          if (before.isNotEmpty && !_looksLikeJsonEnvelope(before)) {
+            buf.write(before);
+          }
+          remaining = remaining.substring(thinkMatch.end);
+          _inThinkBlock = true;
+        } else if (xmlStart >= 0) {
+          // Plain text before XML tool call → emit as thinking.
+          final before = remaining.substring(0, xmlStart).trim();
+          if (before.isNotEmpty && !_looksLikeJsonEnvelope(before)) {
+            buf.write(before);
+          }
+          _inXmlToolBlock = true;
+          // Advance past the opening tag.
+          final tagEnd = remaining.indexOf('>', xmlStart);
+          remaining = tagEnd >= 0 ? remaining.substring(tagEnd + 1) : '';
+        } else {
+          // No special tags — emit everything that is NOT a JSON envelope.
+          final text = remaining.trim();
+          if (text.isNotEmpty && !_looksLikeJsonEnvelope(text)) {
+            buf.write(text);
+          }
           remaining = '';
         }
       }
     }
     return buf.toString();
   }
+
+  /// Returns the smaller non-negative value, or -1 if both are negative.
+  static int _minPositive(int a, int b) {
+    if (a < 0) return b;
+    if (b < 0) return a;
+    return a < b ? a : b;
+  }
+
+  /// Finds the start index of an XML `<function=...>` tag in [text], or -1.
+  static int _findXmlFunctionTag(String text) {
+    final m = RegExp(r'<function=').firstMatch(text);
+    return m?.start ?? -1;
+  }
+
+  /// Returns true if [text] looks like a JSON envelope that the UI should not show.
+  static bool _looksLikeJsonEnvelope(String text) {
+    final t = text.trimLeft();
+    if (!t.startsWith('{') && !t.startsWith('```')) return false;
+    return t.contains('"contractVersion"') ||
+        t.contains('"decision"') ||
+        t.contains('"toolPlan"') ||
+        t.contains('"nextAction"');
+  }
+
+  /// Strips XML tool-call markup from a complete text string for display.
+  static String stripXmlToolCalls(String text) =>
+      text.replaceAll(_xmlToolCallPattern, '').trim();
 
   /// Streams synthesis tokens via SSE. Calls [onDelta] for each text chunk.
   /// Returns the accumulated full text when done.
@@ -885,6 +1007,15 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       );
     }
     final content = (message['content'] as String?)?.trim() ?? '';
+    final profile = ModelCapabilityProfile.forModelRef(modelRef);
+    final reasoning = profile.supportsReasoningField
+        ? ((message[profile.reasoningFieldName.isNotEmpty
+                    ? profile.reasoningFieldName
+                    : 'reasoning'] as String?) ??
+                (message['reasoning_content'] as String?) ??
+                '')
+            .trim()
+        : '';
     final toolCallsRaw = message['tool_calls'];
     final toolCalls = <AssistantToolCall>[];
     Map<String, dynamic>? rawAssistantMsg;
@@ -921,11 +1052,21 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
         };
       }
     }
+    String effectiveContent = content;
+    if (effectiveContent.isEmpty && toolCalls.isNotEmpty) {
+      final names = toolCalls.map((c) => c.name).join('、');
+      effectiveContent = '正在调用工具：$names';
+    } else if (effectiveContent.isEmpty && reasoning.isNotEmpty) {
+      effectiveContent = reasoning;
+    } else if (effectiveContent.isEmpty) {
+      effectiveContent = '已完成模型推理。';
+    }
     return AssistantModelOutput(
-      text: content.isEmpty ? '已完成模型推理。' : content,
+      text: effectiveContent,
       toolCalls: toolCalls,
       modelPath: 'remote',
       rawAssistantToolCallsMessage: rawAssistantMsg,
+      reasoningText: reasoning,
     );
   }
 
@@ -1036,6 +1177,7 @@ class SwitchableAssistantLlmProvider implements AssistantLlmProvider {
       templateRuntime: templateRuntime,
       toolMetadataRegistry: toolMetadataRegistry,
       plannerTemplateVersion: plannerTemplateVersion,
+      modelRef: config.modelRef,
     );
     if (!_registrationOrder.contains(config.modelRef)) {
       _registrationOrder.add(config.modelRef);

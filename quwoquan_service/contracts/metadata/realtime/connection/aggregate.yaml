@@ -1,0 +1,28 @@
+version: 1
+domain: realtime
+aggregate_root: Connection
+
+description: |
+  realtime-gateway 连接管理聚合。
+  Connection 是短生命周期实体（WebSocket 连接期间存在），不持久化到 MongoDB。
+  在线状态通过 Redis Hash 维护（presence:user:{userId}），支持多节点查询。
+  realtime-gateway 作为平台级基础设施，不属于任何业务域，独立部署。
+
+storage_backend: redis
+cache_layer: redis
+cache_ttl_seconds: null
+
+capabilities:
+  - queryable
+
+taggable: false
+vector_enabled: false
+
+members: []
+
+ddd_layer_mapping:
+  domain_model: internal/domain
+  repository: internal/domain
+  application: internal/application
+  adapter_rest: internal/adapters/http
+  adapter_event: internal/adapters/mq

@@ -1,0 +1,18 @@
+service:
+  http:
+    addr: ":18083"
+
+mongodb:
+  uri: "mongodb://localhost:27017"
+  database: "quwoquan_rtc_local"
+
+redis:
+  general:
+    addr: "localhost:6379"
+  realtime:
+    addr: "localhost:6379"
+
+livekit:
+  url: "ws://localhost:7880"
+  api_key: "devkey"
+  api_secret: "devsecret"

@@ -1,0 +1,37 @@
+service: user-service
+output_dir: services/user-service/internal
+module_path: quwoquan_service/services/user-service/internal
+
+sources:
+  - metadata: user/user_profile
+    domain_pkg: user
+    tables:
+      - user_profiles
+      - personas
+      - user_auth
+      - user_devices
+      - user_settings
+      - profile_update_proposals
+    name_overrides:
+      UserProfile: Profile
+      UserSetting: Setting
+    type_overrides:
+      UserSetting:
+        contentLanguage: "*string"
+        feedPreference: "*string"
+    cache_overrides:
+      "cache:user_profile:{userId}":
+        entity: FullSnapshot
+        name: Profile
+      "cache:user_setting:{userId}":
+        name: Setting
+
+  - metadata: user/follow_edge
+    domain_pkg: follow
+    name_overrides:
+      FollowEdge: Follow
+
+  - metadata: user/block_edge
+    domain_pkg: block
+    name_overrides:
+      BlockEdge: Block

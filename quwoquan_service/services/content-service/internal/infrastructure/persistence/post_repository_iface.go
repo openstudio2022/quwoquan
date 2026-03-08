@@ -13,4 +13,5 @@ type PostRepository interface {
 	Update(ctx context.Context, id string, post *postmodel.Post) bool
 	FindByID(ctx context.Context, id string) (*postmodel.Post, bool)
 	ListPublished(ctx context.Context, limit int, cursor string) []postmodel.Post
+	ListByAuthor(ctx context.Context, authorID string, limit int, cursor string) []postmodel.Post
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	rctx "quwoquan_service/runtime/context"
+	rtredis "quwoquan_service/runtime/redis"
 )
 
 // SuggestedActionsRequest identifies the page + object to generate suggestions for.
@@ -70,11 +71,11 @@ type Entity struct {
 // CacheableAnalyzer wraps a ContentAnalyzer with Redis caching.
 type CacheableAnalyzer struct {
 	inner ContentAnalyzer
-	cache rctx.RedisClient
+	cache rtredis.Client
 	ttl   string
 }
 
-func NewCacheableAnalyzer(inner ContentAnalyzer, cache rctx.RedisClient) *CacheableAnalyzer {
+func NewCacheableAnalyzer(inner ContentAnalyzer, cache rtredis.Client) *CacheableAnalyzer {
 	return &CacheableAnalyzer{inner: inner, cache: cache, ttl: "24h"}
 }
 

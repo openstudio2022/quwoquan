@@ -13,6 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	mongoopts "go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	rtredis "quwoquan_service/runtime/redis"
 	rtrec "quwoquan_service/runtime/recommendation"
 	"quwoquan_service/runtime/testinfra"
 	contenhttp "quwoquan_service/services/content-service/internal/adapters/http"
@@ -26,6 +27,7 @@ var (
 	eventSpy    *testinfra.EventSpy
 	mongoDB     *mongo.Database
 	mongoClient *mongo.Client
+	testRouter  *rtredis.Router
 )
 
 func TestMain(m *testing.M) {
@@ -75,9 +77,17 @@ func TestMain(m *testing.M) {
 	mongoDB = mongoClient.Database("content_test")
 	postStore = persistence.NewMongoPostStore(mongoDB.Collection("posts"))
 
-	// Wire services with the real MongoDB store.
-	redis := recinfra.NewRedisClientAdapter(mr.Addr(), "", 0)
-	hotPath := rtrec.NewHotPath(redis)
+	// Wire services with redis.Router (dual-scene: rec + general).
+	testRouter = rtredis.MustNewRouter(rtredis.RouterConfig{
+		Scenes: map[string]rtredis.SceneConfig{
+			"rec":      {Mode: "standalone", Addr: mr.Addr()},
+			"general":  {Mode: "memory"},
+			"realtime": {Mode: "memory"},
+		},
+		PrefixRoutes: rtredis.DefaultRouterConfig().PrefixRoutes,
+		DefaultScene: "general",
+	})
+	hotPath := rtrec.NewHotPath(rtredis.NewRecAdapter(testRouter.Scene("rec")))
 	source := recinfra.NewPostRepositorySource(postStore)
 	engine := rtrec.NewEngine(hotPath, []rtrec.CandidateSource{source})
 	feedService := application.NewFeedService(engine, source)
@@ -95,6 +105,7 @@ func TestMain(m *testing.M) {
 	if mongoContainer != nil {
 		_ = mongoContainer.Terminate(ctx)
 	}
+	_ = testRouter.Close()
 	mr.Close()
 	os.Exit(code)
 }

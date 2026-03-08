@@ -1,0 +1,10 @@
+# prod overrides (container/k8s)
+service:
+  http:
+    addr: ":18081"
+
+redis:
+  general:
+    mode: cluster
+    addrs: []
+    tls: true

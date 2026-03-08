@@ -30,7 +30,7 @@ make codegen-rec-model-python
 | L3 rec-model-training | ✅ | — | ✅ | ✅ | 设计见 L1 design；本节点 [spec](rec-model-training/spec.md)、[tasks](rec-model-training/tasks.md)、[acceptance](rec-model-training/acceptance.yaml) |
 | L3 rec-model-service | ✅ | — | ✅ | ✅ | [spec](rec-model-service/spec.md)、[readiness](rec-model-service/readiness.md)、[tasks](rec-model-service/tasks.md)、[acceptance](rec-model-service/acceptance.yaml) |
 
-L4/L5 的 acceptance 与 tasks 见各子目录，按 `/opsx-apply` 逐项实施时使用。
+L4/L5 的 acceptance 与 tasks 见各子目录，按 `/dev` 逐项实施时使用。
 
 ---
 

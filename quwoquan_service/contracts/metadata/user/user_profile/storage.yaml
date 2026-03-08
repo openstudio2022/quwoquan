@@ -20,6 +20,8 @@ tables:
       - { name: follower_count, type: INTEGER, constraints: [NOT_NULL], default: 0 }
       - { name: following_count, type: INTEGER, constraints: [NOT_NULL], default: 0 }
       - { name: post_count, type: INTEGER, constraints: [NOT_NULL], default: 0 }
+      - { name: circle_count, type: INTEGER, constraints: [NOT_NULL], default: 0 }
+      - { name: like_count, type: INTEGER, constraints: [NOT_NULL], default: 0 }
       - { name: created_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
       - { name: updated_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
     indexes:

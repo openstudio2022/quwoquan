@@ -1,0 +1,4 @@
+config:
+  version: "v0.0.1"
+  min_image_version: "0.0.1"
+  max_image_version: "9.9.9"

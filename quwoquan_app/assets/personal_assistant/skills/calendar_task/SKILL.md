@@ -1,9 +1,16 @@
 ---
 name: calendar_task
-description: 回答日程待办提醒、任务规划与时间管理执行建议问题。
+description: 日程管理、提醒设置、待办跟踪、会议安排。纯任务执行，确认后立即操作。
 domain: calendar_task
+mode: task
 allowed_tools: intent_bridge local_context
-trigger_keywords: 日程 待办 提醒 会议 安排 计划 截止时间 任务清单
+trigger_keywords: []
+searchPolicy:
+  maxReflection: 0
+  qualityThreshold: 0
+  strategy: none
+requires:
+  tools: [intent_bridge]
 output_contract: assistant_turn_v2
 tool_observation_contract: tool_observation_v1
 reference_docs: references/domain-knowledge.md references/output-examples.md

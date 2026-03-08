@@ -138,25 +138,59 @@ type StorageSpec struct {
 }
 
 type PGTableDef struct {
-	Entity      string        `yaml:"entity"`
-	Columns     []PGColumnDef `yaml:"columns"`
-	Indexes     []PGIndexDef  `yaml:"indexes"`
-	ForeignKeys []PGFKDef     `yaml:"foreign_keys"`
+	Entity            string                `yaml:"entity"`
+	PK                string                `yaml:"pk"`
+	FK                *PGFKDef              `yaml:"fk"`
+	Columns           []PGColumnDef         `yaml:"columns"`
+	Indexes           []PGIndexDef          `yaml:"indexes"`
+	ForeignKeys       []PGFKDef             `yaml:"foreign_keys"`
+	UniqueConstraints []PGUniqueConstraint  `yaml:"unique_constraints"`
+	SearchIndexes     []PGSearchIndexDef    `yaml:"search_indexes"`
+	CacheExcluded     bool                  `yaml:"cache_excluded"`
 }
 
 type PGColumnDef struct {
-	Name    string `yaml:"name"`
-	Type    string `yaml:"type"`
-	PK      bool   `yaml:"pk"`
-	NotNull bool   `yaml:"not_null"`
-	Unique  bool   `yaml:"unique"`
-	Default any    `yaml:"default"`
+	Name        string   `yaml:"name"`
+	Type        string   `yaml:"type"`
+	Constraints []string `yaml:"constraints"`
+	Default     any      `yaml:"default"`
+}
+
+// IsPK returns true if column has PK constraint.
+func (c PGColumnDef) IsPK() bool      { return containsConstraint(c.Constraints, "PK") }
+
+// IsNotNull returns true if column has NOT_NULL constraint.
+func (c PGColumnDef) IsNotNull() bool  { return containsConstraint(c.Constraints, "NOT_NULL") }
+
+// IsUnique returns true if column has UNIQUE constraint.
+func (c PGColumnDef) IsUnique() bool   { return containsConstraint(c.Constraints, "UNIQUE") }
+
+func containsConstraint(ss []string, target string) bool {
+	for _, s := range ss {
+		if s == target {
+			return true
+		}
+	}
+	return false
 }
 
 type PGIndexDef struct {
+	Name      string   `yaml:"name"`
+	Columns   []string `yaml:"columns"`
+	Unique    bool     `yaml:"unique"`
+	Condition string   `yaml:"condition"`
+}
+
+type PGUniqueConstraint struct {
+	Name      string   `yaml:"name"`
+	Columns   []string `yaml:"columns"`
+	Condition string   `yaml:"condition"`
+}
+
+type PGSearchIndexDef struct {
 	Name    string   `yaml:"name"`
 	Columns []string `yaml:"columns"`
-	Unique  bool     `yaml:"unique"`
+	Type    string   `yaml:"type"`
 }
 
 type PGFKDef struct {
@@ -166,20 +200,29 @@ type PGFKDef struct {
 }
 
 type MongoCollDef struct {
-	Entity        string         `yaml:"entity"`
-	Indexes       []any          `yaml:"indexes"`
-	SearchIndexes []any          `yaml:"search_indexes"`
-	VectorIndexes []any          `yaml:"vector_indexes"`
-	ChangeStreams []any          `yaml:"change_streams"`
-	Sharding      map[string]any `yaml:"sharding"`
-	WritePattern  string         `yaml:"write_pattern"`
+	Entity        string           `yaml:"entity"`
+	Indexes       []MongoIndexDef  `yaml:"indexes"`
+	SearchIndexes []any            `yaml:"search_indexes"`
+	VectorIndexes []any            `yaml:"vector_indexes"`
+	ChangeStreams []any            `yaml:"change_streams"`
+	Sharding      map[string]any   `yaml:"sharding"`
+	WritePattern  string           `yaml:"write_pattern"`
+}
+
+type MongoIndexDef struct {
+	Name   string         `yaml:"name"`
+	Keys   map[string]int `yaml:"keys"`
+	Unique bool           `yaml:"unique"`
+	Sparse bool           `yaml:"sparse"`
 }
 
 type RedisCacheDef struct {
-	Key         string `yaml:"key"`
-	TTLSeconds  int    `yaml:"ttl_seconds"`
-	Type        string `yaml:"type"`
-	Description string `yaml:"description"`
+	Key          string   `yaml:"key"`
+	TTLSeconds   int      `yaml:"ttl_seconds"`
+	Entity       string   `yaml:"entity"`
+	Type         string   `yaml:"type"`
+	Description  string   `yaml:"description"`
+	InvalidateOn []string `yaml:"invalidate_on"`
 }
 
 // ServiceSpec represents the parsed service.yaml.

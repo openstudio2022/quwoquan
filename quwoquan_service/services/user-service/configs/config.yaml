@@ -1,0 +1,4 @@
+service:
+  name: user-service
+  http:
+    addr: ":18081"

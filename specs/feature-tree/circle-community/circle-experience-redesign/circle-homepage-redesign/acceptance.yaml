@@ -1,0 +1,175 @@
+feature: circle-homepage-redesign
+level: L3_capability
+archived: false
+level_acceptance:
+  - id: A1
+    description: >
+      CircleShell 布局重构完成：使用 NestedScrollView + SliverAppBar（pinned），
+      封面支持下拉弹簧拉伸（_springDampedOffset，参数与 ProfileShell 一致），
+      吸顶时头像+圈名 AnimatedOpacity 渐现，
+      Tab 栏使用 SliverPersistentHeader（pinned，高度 AppSpacing.tabNavigationHeight），
+      组件拆分为 CircleShell / CircleHeader / CircleStatsRow / CircleActionBar 四个独立 Widget。
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: optional
+    tests:
+      - path: quwoquan_app/test/ui/circle/widgets/circle_shell_test.dart
+      - path: quwoquan_app/test/ui/circle/widgets/circle_header_test.dart
+
+  - id: A2
+    description: >
+      原"作品"Tab 重命名为"创作"，新增横向二级 SubTab（全部/微趣/图片/视频/文字），
+      复用 CreationSubTab 枚举，按 contentType 过滤圈子内帖子。
+      圈主/管理员模式下额外显示排序控件（最新/最热/精选）。
+      SubTab 交互与 ProfileCreationsTab 一致（横向滚动、选中高亮、字号/字重切换）。
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: required
+      T4: optional
+    tests:
+      - path: quwoquan_app/test/ui/circle/widgets/section_creations_test.dart
+      - path: quwoquan_app/test/ui/circle/journeys/circle_creations_tab_journey_test.dart
+
+  - id: A3
+    description: >
+      CircleStateNotifier 状态管理完成：CircleState 为不可变类含 copyWith，
+      CircleStateNotifier 继承 ChangeNotifier，
+      circleStateProvider 使用 ChangeNotifierProvider.family<CircleStateNotifier, String>，
+      CircleDetailPage 内 setState 变量归零（0 个 setState 调用用于业务状态），
+      所有业务状态（role、joinStatus、activeTab、circleData、isLoading、error）
+      通过 Notifier 管理。
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    tests:
+      - path: quwoquan_app/test/ui/circle/providers/circle_state_notifier_test.dart
+
+  - id: A4
+    description: >
+      Circle DTO 类型化完成：lib/cloud/runtime/generated/circle/ 下存在
+      CircleDto / CircleMemberDto / CircleFileDto / CircleSectionConfigDto，
+      字段与 contracts/metadata/social/circle/fields.yaml 一致。
+      CircleRepository 的 getCircle 返回 CircleDto（非 Map），
+      listMembers 返回 List<CircleMemberDto>，listFiles 返回 List<CircleFileDto>。
+      UI 层（lib/ui/circle/）不存在对 Map<String, dynamic> 的直接字段访问。
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    tests:
+      - path: quwoquan_app/test/cloud/circle/contract/circle_dto_contract_test.dart
+
+  - id: A5
+    description: >
+      创作/群聊/网盘/互动 4 个板块各自独立加载，每个 Section Widget 内部
+      含 isLoading / error 状态，加载失败显示内联错误卡（图标+文案+重试按钮），
+      单板块加载失败不影响其他板块渲染。
+      测试验证：Mock Repository 对 getCircleFeed 抛异常时，
+      群聊/网盘/互动板块正常渲染。
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: required
+      T4: optional
+    tests:
+      - path: quwoquan_app/test/ui/circle/widgets/section_independent_loading_test.dart
+
+  - id: A6
+    description: >
+      CircleDetailPage 不存在对 CircleMockData 的直接 import（grep 验证），
+      所有数据通过 ref.read(circleRepositoryProvider) 获取，
+      appDataSourceModeProvider 切换 mock/remote 时 UI 层无感。
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    tests:
+      - path: quwoquan_app/test/cloud/circle/contract/circle_repository_contract_test.dart
+
+  - id: A7
+    description: >
+      云侧 GetCircleFeed API 从 stub 升级为完整实现：
+      查询 circle 关联帖子（通过 circleIds 字段），支持 cursor 分页和
+      sort 参数（latest/hot/featured），featured 排序置顶 pinnedAt 非空的帖子。
+      circle-service 的 circle_feed_contract_test.go 通过（含分页、排序、空 feed 场景）。
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    tests:
+      - path: quwoquan_service/services/circle-service/tests/circle_feed_contract_test.go
+
+  - id: A8
+    description: >
+      四层测试覆盖完成。
+      T1 契约层：端侧 circle_repository_contract_test.dart 覆盖 21 个 Repository 方法
+      （含正常返回 + 异常场景 + Remote URL 路径断言），云侧现有 5 个契约测试文件通过。
+      T2 Widget 层：CircleShell / CircleHeader / CircleStatsRow / CircleActionBar /
+      创作 Tab（SectionCreations）各有独立 Widget 测试。
+      T3 Journey 层：加入退出圈子旅程 + 创作 Tab 切换过滤旅程 + 文件操作旅程。
+      flutter test test/ui/circle/ test/cloud/circle/ 全部通过。
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: optional
+    tests:
+      - path: quwoquan_app/test/cloud/circle/contract/circle_repository_contract_test.dart
+      - path: quwoquan_app/test/ui/circle/widgets/circle_shell_test.dart
+      - path: quwoquan_app/test/ui/circle/journeys/circle_join_leave_journey_test.dart
+      - path: quwoquan_app/test/ui/circle/journeys/circle_creations_tab_journey_test.dart
+
+  - id: A9
+    description: >
+      python3 scripts/verify_dart_semantic.py 对 lib/ui/circle/ 目录零新增违规，
+      flutter analyze quwoquan_app/lib/ui/circle/ 零 error。
+      所有视觉字面量使用 AppTypography / AppSpacing / AppColors / AppColorsFunctional。
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    tests: []
+
+  - id: A10
+    description: >
+      integration 环境 seed-box 部署后，圈子核心 API 端到端可用：
+      GetCircle / JoinCircle / LeaveCircle / GetCircleFeed / GetCircleStats
+      返回 HTTP 200，响应结构与 service.yaml 定义一致。
+      make test-contract -C services/circle-service 通过。
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: required
+    tests:
+      - path: quwoquan_service/services/circle-service/tests/circle_crud_contract_test.go
+      - path: quwoquan_service/services/circle-service/tests/circle_member_contract_test.go

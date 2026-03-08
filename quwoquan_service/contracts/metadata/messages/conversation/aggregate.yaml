@@ -1,11 +1,15 @@
-version: 1
+version: 2
 domain: chat
 aggregate_root: Conversation
 
 description: |
-  会话聚合。直聊/群聊/圈子聊/加密/助手五种会话类型。
-  MongoDB 存储，支撑消息极高并发写入和时间序列查询。
-  成员列表嵌入 Conversation 文档（成员数通常 < 500）。
+  会话聚合。直聊/群聊/圈子聊/加密四种会话类型。
+  助手（小趣）不再是独立会话类型，而是作为特殊成员（memberType=assistant）
+  可被邀请到任意会话中，帮助处理聊天中的信息（总结、翻译、问答等）。
+  v2 重构：成员从嵌入拆分为独立 ConversationMember collection（支撑 1,000 人群），
+  用户级设置拆分为独立 ConversationUserState collection（消除写放大），
+  Message 新增 seq（Redis INCR per-conversation）保证严格有序。
+  MongoDB 存储，支撑消息极高并发写入和 seq 序列查询。
 
 storage_backend: mongodb
 cache_layer: redis
@@ -22,7 +26,22 @@ members:
   - entity: Message
     relation: 1:N
     cascade_delete: true
-    description: 消息
+    description: 消息（per-conversation seq 有序）
+
+  - entity: ConversationMember
+    relation: 1:N
+    cascade_delete: true
+    description: 会话成员（独立 collection，支撑 1,000 人群）
+
+  - entity: ConversationUserState
+    relation: 1:N
+    cascade_delete: true
+    description: 用户级会话状态（readSeq/unreadCount/mute/pin，独立 collection 消除写放大）
+
+  - entity: MessageReceipt
+    relation: 1:N
+    cascade_delete: true
+    description: 消息已读回执（可选，仅 ≤50 人群启用）
 
 ddd_layer_mapping:
   domain_model: internal/domain/chat/model
@@ -30,3 +49,18 @@ ddd_layer_mapping:
   application: internal/application/chat
   adapter_rest: internal/adapter/rest/chat
   adapter_event: internal/adapter/event/chat
+
+seq_strategy:
+  description: |
+    per-conversation 消息序号。Redis INCR 原子生成，保证严格单调递增。
+    每条消息写入时分配 seq，同时更新 Conversation.maxSeq。
+  redis_key: "seq:conversation:{conversationId}"
+  redis_scene: realtime
+
+dedup_strategy:
+  description: |
+    clientMsgId 幂等去重。Redis SET NX + TTL 300s。
+    300s 内重复提交直接返回已有 messageId + seq。
+  redis_key: "dedup:{conversationId}:{clientMsgId}"
+  redis_scene: realtime
+  ttl_seconds: 300

@@ -132,7 +132,54 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: 关联群聊（超前）
+        description: 关联群聊
+
+      - name: autoSyncChat
+        type: boolean
+        constraints: [NOT_NULL, DEFAULT_TRUE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 是否自动同步成员到群聊
+
+      - name: sectionConfig
+        type: "[]CircleSectionConfig"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 圈子主页板块配置（顺序+可见性）
+
+      - name: storageUsedBytes
+        type: int64
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 存储空间已用字节数
+
+      - name: storageQuotaBytes
+        type: int64
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 存储空间配额上限（字节）
+
+      - name: domainId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        recommend_feature: true
+        description: 领域标签 ID（引用 domain_taxonomy.yaml）
+        domain_taxonomy_ref: true
 
       - name: createdAt
         type: timestamp
@@ -216,3 +263,149 @@ entities:
     unique_constraints:
       - columns: [circleId, userId]
         description: 成员唯一
+
+  CircleSectionConfig:
+    description: 圈子主页板块配置项（嵌入文档，非独立集合）
+    embedded: true
+    fields:
+      - name: sectionType
+        type: enum
+        enum_ref: CircleSectionType
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 板块类型（works/chat/storage/interaction/custom）
+
+      - name: visible
+        type: boolean
+        constraints: [NOT_NULL, DEFAULT_TRUE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: "order"
+        type: int
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: customTitle
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 自定义板块标题（覆盖默认）
+
+  CircleFile:
+    description: 圈子存储空间文件/文件夹
+    fields:
+      - name: _id
+        type: ObjectId
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: circleId
+        type: ObjectId
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: parentFolderId
+        type: ObjectId
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 父文件夹 ID（null 表示根目录）
+
+      - name: name
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        search_field: true
+
+      - name: fileType
+        type: enum
+        enum_ref: CircleFileType
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: file 或 folder
+
+      - name: mimeType
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 文件 MIME 类型（folder 时为 null）
+
+      - name: sizeBytes
+        type: int64
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: objectKey
+        type: string
+        constraints: [NULLABLE]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: none
+        ops_exposure: read
+        description: S3 对象键（folder 时为 null，不暴露给客户端）
+
+      - name: uploaderId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: status
+        type: enum
+        enum_ref: CircleFileStatus
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: active / uploading / deleted
+
+      - name: createdAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: updatedAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read

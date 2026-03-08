@@ -1,0 +1,216 @@
+version: 2
+aggregate: CallSession
+
+service:
+  name: rtc-service
+  domain: rtc
+  owner: backend-team
+  description: 实时音视频通话信令编排、LiveKit Room 管理、Token 签发、录制/屏幕共享控制
+
+api_routes:
+  # ── 通话生命周期 ──────────────────────────────────
+  - method: POST
+    path: /v1/rtc/calls
+    operation: InitiateCall
+    description: 发起通话（创建 CallSession + LiveKit Room + 签发发起方 Token + 推送来电通知）
+    request_fields: [callType, targetUserIds, conversationId, circleId]
+    response_fields: [callId, roomId, token, participants]
+    auth: required
+
+  - method: POST
+    path: /v1/rtc/calls/{callId}/answer
+    operation: AnswerCall
+    description: 接听通话（签发接听方 Token）
+    response_fields: [token, roomId]
+    auth: required
+
+  - method: POST
+    path: /v1/rtc/calls/{callId}/reject
+    operation: RejectCall
+    description: 拒绝通话
+    auth: required
+
+  - method: POST
+    path: /v1/rtc/calls/{callId}/cancel
+    operation: CancelCall
+    description: 取消呼叫（发起方在对方接听前取消）
+    auth: required
+
+  - method: POST
+    path: /v1/rtc/calls/{callId}/hangup
+    operation: HangupCall
+    description: 挂断通话（通话中任一方挂断）
+    auth: required
+
+  # ── 多人通话 ──────────────────────────────────────
+  - method: POST
+    path: /v1/rtc/calls/{callId}/join
+    operation: JoinCall
+    description: 加入多人通话（收到邀请后主动加入，签发 Token）
+    response_fields: [token, roomId, participants]
+    auth: required
+
+  - method: POST
+    path: /v1/rtc/calls/{callId}/leave
+    operation: LeaveCall
+    description: 离开多人通话（不结束通话，其他参与者继续）
+    auth: required
+
+  - method: POST
+    path: /v1/rtc/calls/{callId}/invite
+    operation: InviteToCall
+    description: 邀请更多人加入通话（通话中拉人）
+    request_fields: [targetUserIds]
+    auth: required
+
+  # ── 通话查询 ──────────────────────────────────────
+  - method: GET
+    path: /v1/rtc/calls/{callId}
+    operation: GetCall
+    description: 获取通话详情
+    response_entity: CallSession
+    auth: required
+
+  - method: GET
+    path: /v1/rtc/calls
+    operation: ListCalls
+    description: 通话记录列表（含 missed calls 筛选）
+    query_params: [cursor, limit, status, missed]
+    response_entity: CallSession
+    auth: required
+
+  # ── 媒体控制 ──────────────────────────────────────
+  - method: POST
+    path: /v1/rtc/calls/{callId}/mute
+    operation: ToggleMute
+    description: 切换静音状态
+    request_fields: [muted]
+    auth: required
+
+  - method: POST
+    path: /v1/rtc/calls/{callId}/camera
+    operation: ToggleCamera
+    description: 切换摄像头状态
+    request_fields: [enabled]
+    auth: required
+
+  # ── 录制 ──────────────────────────────────────────
+  - method: POST
+    path: /v1/rtc/calls/{callId}/recording/start
+    operation: StartRecording
+    description: 开始录制（触发 LiveKit Egress）
+    auth: required
+
+  - method: POST
+    path: /v1/rtc/calls/{callId}/recording/stop
+    operation: StopRecording
+    description: 停止录制
+    auth: required
+
+  # ── 屏幕共享 ────────────────────────────────────
+  - method: POST
+    path: /v1/rtc/calls/{callId}/screen-share/start
+    operation: StartScreenShare
+    description: 开始屏幕共享（同时只允许 1 人）
+    auth: required
+
+  - method: POST
+    path: /v1/rtc/calls/{callId}/screen-share/stop
+    operation: StopScreenShare
+    description: 停止屏幕共享
+    auth: required
+
+consumers:
+  - name: app
+    capabilities: [initiate_call, answer_call, reject_call, cancel_call, hangup_call, join_call, leave_call, invite_to_call, get_call, list_calls, toggle_mute, toggle_camera, start_recording, stop_recording, start_screen_share, stop_screen_share]
+  - name: platform-ops
+    capabilities: [get_call, list_calls]
+  - name: chat-service
+    capabilities: [get_call]
+
+contract_test:
+  mock_strategy:
+    app_side:
+      mock_target: rtc-service API
+      data_source: fields.yaml
+      scenarios:
+        - name: initiate_1v1_audio_call
+          route: POST /v1/rtc/calls
+          assertions: [status_201, callId_returned, token_returned, roomId_returned]
+
+        - name: initiate_group_video_call
+          route: POST /v1/rtc/calls
+          assertions: [status_201, callId_returned, max_participants_32]
+
+        - name: answer_call
+          route: POST /v1/rtc/calls/{callId}/answer
+          assertions: [status_200, token_returned]
+
+        - name: reject_call
+          route: POST /v1/rtc/calls/{callId}/reject
+          assertions: [status_200, call_status_ended, end_reason_rejected]
+
+        - name: hangup_call
+          route: POST /v1/rtc/calls/{callId}/hangup
+          assertions: [status_200, call_status_ended]
+
+        - name: join_group_call
+          route: POST /v1/rtc/calls/{callId}/join
+          assertions: [status_200, token_returned, participant_count_incremented]
+
+        - name: call_full_error
+          route: POST /v1/rtc/calls/{callId}/join
+          assertions: [status_409, error_code_call_full]
+
+        - name: list_calls_with_missed_filter
+          route: GET /v1/rtc/calls?missed=true
+          assertions: [status_200, only_missed_calls]
+
+    service_side:
+      description: 使用真实测试数据库，LiveKit 通过 mock adapter
+      real_engines:
+        mongodb: testcontainers (mongo:7)
+        redis: miniredis/v2
+      spy_targets: [event_publisher]
+      mock_targets: [livekit_adapter, cross_service_clients]
+      data_management:
+        seed: fixture 工厂预制到真实 MongoDB
+        cleanup: "DeleteMany for call_sessions"
+        redis_cleanup: miniredis.FlushAll()
+      scenarios:
+        - name: full_1v1_call_lifecycle
+          commands: [InitiateCall, AnswerCall, HangupCall]
+          seed: []
+          assertions:
+            - "db.call_sessions.FindOne({_id}).status → initiated → in_call → ended"
+            - "eventSpy.AssertPublished('CallInitiated')"
+            - "eventSpy.AssertPublished('CallAnswered')"
+            - "eventSpy.AssertPublished('CallEnded', {endReason: 'normal'})"
+            - "livekitMock.AssertCreateRoom(callId)"
+            - "livekitMock.AssertDeleteRoom(callId)"
+
+        - name: call_no_answer_timeout
+          commands: [InitiateCall, ...wait 30s]
+          assertions:
+            - "db.call_sessions.FindOne({_id}).status → ended"
+            - "db.call_sessions.FindOne({_id}).endReason → no_answer"
+
+        - name: group_call_32_limit
+          commands: [InitiateCall(32 targets), JoinCall(33rd)]
+          assertions:
+            - "error returned: call_full"
+            - "db.call_sessions.FindOne({_id}).participantCount → 32"
+
+        - name: concurrent_initiate_500
+          description: 500 并发发起通话基准测试
+          assertions:
+            - "p95 latency < 200ms"
+            - "error rate < 1%"
+
+  coverage_requirements:
+    - 全状态机路径覆盖（initiated→ringing→connecting→in_call→ended × 7 种 endReason）
+    - 多人通话 join/leave/invite 全路径
+    - 32 人上限边界测试
+    - 录制 start/stop 生命周期
+    - 屏幕共享互斥测试
+    - 500 并发基准测试

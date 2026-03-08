@@ -78,3 +78,33 @@ func (s *MongoPostStore) ListPublished(ctx context.Context, limit int, cursor st
 	}
 	return posts
 }
+
+func (s *MongoPostStore) ListByAuthor(ctx context.Context, authorID string, limit int, cursor string) []postmodel.Post {
+	if limit <= 0 {
+		limit = 20
+	}
+	filter := bson.M{
+		"authorId": authorID,
+		"status":   "published",
+	}
+	if cursor != "" {
+		var cursorDoc postmodel.Post
+		if err := s.coll.FindOne(ctx, bson.M{"_id": cursor}).Decode(&cursorDoc); err == nil {
+			filter["publishedAt"] = bson.M{"$lt": cursorDoc.PublishedAt}
+		}
+	}
+	opts := options.Find().
+		SetSort(bson.D{{Key: "publishedAt", Value: -1}}).
+		SetLimit(int64(limit))
+
+	cur, err := s.coll.Find(ctx, filter, opts)
+	if err != nil {
+		return nil
+	}
+	defer cur.Close(ctx)
+	var posts []postmodel.Post
+	if err := cur.All(ctx, &posts); err != nil {
+		return nil
+	}
+	return posts
+}

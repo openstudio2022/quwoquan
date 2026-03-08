@@ -1,7 +1,8 @@
 openapi: 3.0.3
 info:
   title: quwoquan chat-service API
-  version: "v1"
+  version: "v2"
+  description: "v2: seq 有序 + clientMsgId 幂等 + 成员/设置外置 + 离线同步 + 已读回执 + 小趣助手会话内参与"
 servers:
   - url: http://localhost
 security:
@@ -9,7 +10,7 @@ security:
 paths:
   /v1/chat/conversations:
     get:
-      summary: List conversations
+      summary: List conversations (by ConversationUserState, includes maxSeq)
       parameters:
         - $ref: ../_shared/openapi_common.yaml#/components/parameters/Cursor
         - $ref: ../_shared/openapi_common.yaml#/components/parameters/Limit
@@ -20,7 +21,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ConversationPage" }
     post:
-      summary: Create conversation (direct/group)
+      summary: Create conversation (direct/group/circle)
       parameters:
         - $ref: ../_shared/openapi_common.yaml#/components/parameters/IdempotencyKey
       requestBody:
@@ -36,7 +37,7 @@ paths:
               schema: { $ref: "#/components/schemas/CreateConversationResponse" }
   /v1/chat/conversations/{conversationId}:
     get:
-      summary: Get conversation detail
+      summary: Get conversation detail (includes maxSeq, memberCount)
       parameters:
         - name: conversationId
           in: path
@@ -50,16 +51,20 @@ paths:
               schema: { $ref: "#/components/schemas/Conversation" }
   /v1/chat/conversations/{conversationId}/messages:
     get:
-      summary: List messages
+      summary: List messages (afterSeq/beforeSeq pagination)
       parameters:
         - name: conversationId
           in: path
           required: true
           schema: { type: string }
-        - name: before
+        - name: afterSeq
           in: query
           required: false
-          schema: { type: string }
+          schema: { type: integer, format: int64 }
+        - name: beforeSeq
+          in: query
+          required: false
+          schema: { type: integer, format: int64 }
         - $ref: ../_shared/openapi_common.yaml#/components/parameters/Limit
       responses:
         "200":
@@ -68,27 +73,119 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/MessagePage" }
     post:
-      summary: Send message
+      summary: Send message (clientMsgId idempotent, returns seq)
       parameters:
         - name: conversationId
           in: path
           required: true
           schema: { type: string }
-        - $ref: ../_shared/openapi_common.yaml#/components/parameters/IdempotencyKey
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: "#/components/schemas/SendMessageRequest" }
       responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SendMessageResponse" }
+  /v1/chat/conversations/{conversationId}/messages/{messageId}/recall:
+    post:
+      summary: Recall message (within 2 minutes)
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: messageId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /v1/chat/conversations/{conversationId}/sync:
+    post:
+      summary: Sync messages (gap fill by lastSeq)
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lastSeq]
+              properties:
+                lastSeq: { type: integer, format: int64 }
+      responses:
         "200":
           description: OK
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/SendMessageResponse" }
-  /v1/chat/conversations/{conversationId}/members:
+              schema: { $ref: "#/components/schemas/SyncResponse" }
+  /v1/chat/conversations/{conversationId}/messages/{messageId}/read:
     post:
-      summary: Add members
+      summary: Mark as read (updates readSeq + unreadCount)
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: messageId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: No Content }
+  /v1/chat/conversations/{conversationId}/messages/{messageId}/receipts:
+    get:
+      summary: Get message receipts (only if receiptEnabled)
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: messageId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/MessageReceipt" }
+  /v1/chat/conversations/{conversationId}/members:
+    get:
+      summary: List members (paginated)
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: role
+          in: query
+          required: false
+          schema: { type: string, enum: [owner, admin, member] }
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/Cursor
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/Limit
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MemberPage" }
+    post:
+      summary: Add members (batch, checks maxGroupSize)
       parameters:
         - name: conversationId
           in: path
@@ -101,7 +198,7 @@ paths:
             schema: { $ref: "#/components/schemas/AddMembersRequest" }
       responses:
         "204": { description: No Content }
-  /v1/chat/conversations/{conversationId}/members/{memberId}:
+  /v1/chat/conversations/{conversationId}/members/{userId}:
     delete:
       summary: Remove member
       parameters:
@@ -109,15 +206,44 @@ paths:
           in: path
           required: true
           schema: { type: string }
-        - name: memberId
+        - name: userId
           in: path
           required: true
           schema: { type: string }
       responses:
         "204": { description: No Content }
+  /v1/chat/conversations/{conversationId}/assistant:
+    post:
+      summary: Invite assistant (小趣) into conversation
+      description: 创建 memberType=assistant 的成员，可指定 skillId
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                skillId: { type: string, description: "可选，绑定特定 Skill" }
+      responses:
+        "201": { description: Created }
+        "409": { description: Conflict (assistant already in conversation) }
+    delete:
+      summary: Remove assistant from conversation
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: No Content }
+
   /v1/chat/conversations/{conversationId}/settings:
     patch:
-      summary: Update conversation settings
+      summary: Update user-level settings (mute/pin → ConversationUserState)
       parameters:
         - name: conversationId
           in: path
@@ -131,9 +257,6 @@ paths:
       responses:
         "200":
           description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/ConversationSettings" }
   /v1/chat/contacts:
     get:
       summary: List contacts
@@ -177,49 +300,63 @@ components:
           nullable: true
     Conversation:
       type: object
-      required: [id, type]
+      required: [id, type, maxSeq, memberCount]
       properties:
         id: { type: string }
-        type: { type: string, enum: [direct, group, circle, encrypted, assistant] }
+        type: { type: string, enum: [direct, group, circle, encrypted] }
         title: { type: string }
         avatarUrl: { type: string }
-        unreadCount: { type: integer }
-        lastMessage: { type: string }
-        lastMessageTime: { type: string }
-        members:
-          type: array
-          items: { $ref: "#/components/schemas/ConversationMember" }
-        settings:
-          $ref: "#/components/schemas/ConversationSettings"
+        maxSeq: { type: integer, format: int64 }
+        memberCount: { type: integer }
+        maxGroupSize: { type: integer }
+        receiptEnabled: { type: boolean }
+        lastMessagePreview: { type: string }
+        lastMessageTime: { type: string, format: date-time }
+        messageCount: { type: integer }
+        status: { type: string, enum: [active, archived, deleted] }
     ConversationMember:
       type: object
+      required: [userId, memberType, role, joinedAt]
       properties:
         userId: { type: string }
+        memberType: { type: string, enum: [user, assistant] }
         displayName: { type: string }
         avatarUrl: { type: string }
-        role: { type: string }
-    ConversationSettings:
+        role: { type: string, enum: [owner, admin, member] }
+        assistantSkillId: { type: string, description: "仅 memberType=assistant 时有效" }
+        invitedBy: { type: string }
+        joinedAt: { type: string, format: date-time }
+    ConversationSettingsPatch:
       type: object
       properties:
         muted: { type: boolean }
         pinned: { type: boolean }
-    ConversationSettingsPatch:
-      type: object
-      additionalProperties: true
     CreateConversationRequest:
       type: object
-      required: [type, memberIds]
+      required: [type, memberUserIds]
       properties:
-        type: { type: string, enum: [direct, group] }
-        memberIds:
+        type: { type: string, enum: [direct, group, circle, encrypted] }
+        memberUserIds:
           type: array
           items: { type: string }
         title: { type: string }
+        circleId: { type: string }
+        maxGroupSize: { type: integer, default: 1000 }
     CreateConversationResponse:
       type: object
       required: [conversationId]
       properties:
         conversationId: { type: string }
+    MemberPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ConversationMember" }
+        nextCursor:
+          type: string
+          nullable: true
     MessagePage:
       type: object
       required: [items]
@@ -232,37 +369,62 @@ components:
           nullable: true
     Message:
       type: object
-      required: [id, conversationId, type, senderId, timestamp]
+      required: [id, conversationId, seq, clientMsgId, type, senderId, timestamp]
       properties:
         id: { type: string }
         conversationId: { type: string }
+        seq: { type: integer, format: int64 }
+        clientMsgId: { type: string }
         type: { type: string, enum: [text, image, video, card] }
         content: { type: string }
         senderId: { type: string }
-        timestamp: { type: string }
-        metadata:
-          type: object
-          additionalProperties: true
+        mediaUrl: { type: string }
+        replyToMessageId: { type: string }
+        mentions:
+          type: array
+          items: { type: string }
+        status: { type: string, enum: [sent, recalled, deleted] }
+        recalledAt: { type: string, format: date-time }
+        timestamp: { type: string, format: date-time }
     SendMessageRequest:
       type: object
-      required: [type]
+      required: [type, clientMsgId]
       properties:
-        type: { type: string, enum: [text, image, video] }
+        type: { type: string, enum: [text, image, video, card] }
+        clientMsgId: { type: string, format: uuid }
         content: { type: string }
         mediaUrl: { type: string }
-        metadata:
-          type: object
-          additionalProperties: true
+        cardPayload: { type: object }
+        replyToMessageId: { type: string }
+        mentions:
+          type: array
+          items: { type: string }
     SendMessageResponse:
       type: object
-      required: [messageId]
+      required: [messageId, seq, timestamp]
       properties:
         messageId: { type: string }
+        seq: { type: integer, format: int64 }
+        timestamp: { type: string, format: date-time }
+    SyncResponse:
+      type: object
+      required: [messages, hasMore]
+      properties:
+        messages:
+          type: array
+          items: { $ref: "#/components/schemas/Message" }
+        hasMore: { type: boolean }
+    MessageReceipt:
+      type: object
+      required: [userId, readAt]
+      properties:
+        userId: { type: string }
+        readAt: { type: string, format: date-time }
     AddMembersRequest:
       type: object
-      required: [memberIds]
+      required: [userIds]
       properties:
-        memberIds:
+        userIds:
           type: array
           items: { type: string }
     ContactPage:

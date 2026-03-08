@@ -1,0 +1,33 @@
+{
+  "contractVersion": "tool_permissions_v1",
+  "permissions": {
+    "web_search": {
+      "requireConfirmation": false
+    },
+    "web_fetch": {
+      "requireConfirmation": false
+    },
+    "local_context": {
+      "requireConfirmation": false
+    },
+    "media_gallery": {
+      "requireConfirmation": false
+    },
+    "memory_search": {
+      "requireConfirmation": false
+    },
+    "intent_bridge": {
+      "requireConfirmation": true
+    },
+    "scheduler": {
+      "requireConfirmation": true
+    },
+    "deep_link": {
+      "requireConfirmation": false
+    },
+    "app_action": {
+      "requireConfirmation": true,
+      "allowedActions": ["call", "sms", "email", "navigate", "clipboard"]
+    }
+  }
+}

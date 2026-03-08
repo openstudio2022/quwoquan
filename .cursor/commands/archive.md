@@ -2,10 +2,20 @@
 name: /archive
 id: archive
 category: Workflow
-description: 归档特性（自动 G3 全量门禁 + 回写特性树状态）
+description: 兼容归档入口（标准流由 /dev 自动归档；本命令仅用于手动补归档或修复）
 ---
 
-> SDD 主流程：... → dev → **archive** → commit → deploy
+> 标准流：`/dev` 完成后已自动归档。本命令仅用于兼容历史流程、手动补归档或修复回写。
+
+## 使用场景
+
+- `/dev` 已完成，但因中断或历史流程导致归档未回写
+- 需要单独修复 `acceptance.yaml.archived` 或 `tree_index.status`
+- `/land` 需要复用归档等价逻辑
+
+标准交付流中，**无需单独执行 `/archive`**。
+
+---
 
 ## 前置条件检查（执行前必须满足）
 
@@ -17,6 +27,8 @@ description: 归档特性（自动 G3 全量门禁 + 回写特性树状态）
 | 4 | acceptance tests 链接有效 | status=`implemented` 的 An 的 `tests[]` 文件在仓库中存在（gate 自动验证） |
 | 5 | 基线漂移已处理 | `/verify` 漂移报告中无 BLOCKING 项（D1 SPEC_DRIFT、D2 IMPL_DRIFT、D3 DESIGN_DRIFT 已解决） |
 | 6 | gate-full 通过 | `make gate-full` 全部通过，含特性树一致性检查 |
+| 7 | 非功能验收已闭环 | 实时性 / 弱网 / 并发 / 容量 / 弹性 / 对标体验等要求已有证据 |
+| 8 | 灰度生产条件已闭环 | 观测指标、放量步进、回滚阈值已写入并可执行 |
 
 **若不满足**：不执行归档；输出补全列表：
 
@@ -29,6 +41,8 @@ description: 归档特性（自动 G3 全量门禁 + 回写特性树状态）
 □ [ ] acceptance tests 链接有效：status=implemented 的 An 的 tests[].file 已写入实际测试文件路径
 □ [ ] 漂移已处理：执行 /verify，解决所有 BLOCKING 漂移项（SPEC/IMPL/DESIGN drift）
 □ [ ] gate-full 通过：执行 make gate-full，修复所有失败项
+□ [ ] 非功能验收闭环：补齐实时性/弱网/并发/弹性/体验证据
+□ [ ] 灰度生产闭环：补齐 SLO、放量、回滚条件与观测项
 
 补全后重新执行：/verify → /archive
 ```
@@ -42,8 +56,11 @@ description: 归档特性（自动 G3 全量门禁 + 回写特性树状态）
 1. 确认目标节点具备四类文档（标准见 `specs/feature-tree/00_FEATURE_TREE_STANDARD.md`）
 2. 校验 `tasks.md` 当前交付任务全部 `[x]`（搁置/演进任务可保留 `[ ]`）
 3. 校验 `acceptance.yaml` 所有 A1~An status ≠ pending
-4. 读取 `acceptance.yaml` 中 `tests[]`，逐一确认文件存在
-5. 确认已执行 `/verify` 并无 BLOCKING 漂移项
+4. 校验 `acceptance.yaml` 中核心验收项已声明 `test_layers`（`T1~T4`）
+5. 读取 `acceptance.yaml` 中 `tests[]`，逐一确认文件存在
+6. 确认已执行 `/verify` 并无 BLOCKING 漂移项
+7. 若存在 `non_functional_acceptance`，校验其实时性 / 弱网 / 并发 / 弹性 / 灰度字段已补齐
+8. 校验 `design.md` 中灰度发布、回滚、观测与容量策略已落表
 
 ### 2. 自动 G3 卡点：全量门禁
 
@@ -59,6 +76,7 @@ make gate-full
 - 端侧语义审计（flutter analyze + 硬编码检查）
 - 云侧契约测试
 - 特性树一致性（四类文档存在性 + acceptance status 不含 pending + tests[] 文件存在）
+- 非功能验收完整性（实时性 / 弱网 / 并发 / 弹性 / 体验 / 灰度）
 
 **任一失败 → 停止归档 → 输出错误 + 修复建议 → 修复后重跑。**
 
@@ -92,6 +110,8 @@ status: completed
 | 验收项       | implemented N，waived N，deferred N   |
 | 漂移         | SPEC 0，IMPL 0，DESIGN 0，TASK N(warning) |
 | 门禁         | make gate-full PASS                  |
+| 非功能验收   | realtime/weak-network/perf/elasticity PASS |
+| 灰度条件     | steps/SLO/rollback READY             |
 | 搁置任务     | N 项，重启条件已记录                   |
 | 演进任务     | N 项，已在 design.md 映射             |
 
@@ -105,6 +125,6 @@ status: completed
 | 命令 | 职责 | 与 /archive 关系 |
 |------|------|----------------|
 | `/verify` | 漂移检测 + gate-full | archive 的前置（推荐先 verify 再 archive） |
-| `/archive` | **归档**：G3 + 回写状态 | 独立归档，不提交代码 |
-| `/commit` | 归档 + 提交入库 | commit 的阶段 1 等价于 archive |
-| `/deliver` | dev + archive + commit 一气呵成 | deliver 的阶段 3 等价于 archive |
+| `/archive` | **兼容补归档**：G3 + 回写状态 | 非标准流程，仅修复时使用 |
+| `/commit` | 提交入库 | commit 在发现未归档时可兜底执行 archive 等价逻辑 |
+| `/deliver` | dev + commit 一气呵成 | deliver 标准流复用自动归档，不单独调用 archive |

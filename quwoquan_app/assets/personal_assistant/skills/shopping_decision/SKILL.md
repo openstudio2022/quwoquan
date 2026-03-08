@@ -1,9 +1,16 @@
 ---
 name: shopping_decision
-description: 回答商品对比、参数评估、性价比分析与购买建议问题。
+description: 选购对比、性价比分析、产品测评、买哪个好。可跳转购买。
 domain: shopping_decision
+mode: hybrid
 allowed_tools: web_search
-trigger_keywords: 买哪个 对比 选购 参数 测评 推荐 值不值
+trigger_keywords: []
+searchPolicy:
+  maxReflection: 2
+  qualityThreshold: 0.6
+  strategy: research
+requires:
+  tools: [web_search]
 output_contract: assistant_turn_v2
 tool_observation_contract: tool_observation_v1
 reference_docs: references/domain-knowledge.md references/output-examples.md

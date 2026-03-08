@@ -1,0 +1,261 @@
+version: 2
+aggregate: CallSession
+
+enums:
+  CallType:
+    values: [audio, video]
+    description: 通话类型
+
+  CallStatus:
+    values: [initiated, ringing, connecting, in_call, ended]
+    description: 通话状态机
+
+  EndReason:
+    values: [normal, cancelled, rejected, no_answer, error, timeout, last_leave]
+    description: 通话结束原因
+
+  ParticipantRole:
+    values: [initiator, invitee]
+    description: 参与者角色
+
+  ParticipantStatus:
+    values: [invited, ringing, connecting, connected, left, timeout]
+    description: 参与者状态
+
+entities:
+  CallSession:
+    description: 通话会话（聚合根）
+    fields:
+      - name: _id
+        type: ObjectId
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: callType
+        type: enum
+        enum_ref: CallType
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: audio/video
+
+      - name: status
+        type: enum
+        enum_ref: CallStatus
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 通话状态
+
+      - name: initiatorId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 发起者 userId
+
+      - name: conversationId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 关联会话（来自哪个聊天发起的通话）
+
+      - name: circleId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 关联圈子（圈子通话入口）
+
+      - name: roomId
+        type: string
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: LiveKit Room ID
+
+      - name: maxParticipants
+        type: int
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 最大参与人数（1v1=2, 多人≤32）
+
+      - name: participantCount
+        type: int
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 当前参与人数
+
+      - name: isRecording
+        type: bool
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 是否正在录制
+
+      - name: recordingUrl
+        type: string
+        constraints: [NULLABLE]
+        classification: INTERNAL
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: read
+        description: 录制文件 URL（通话结束后 Egress 回写）
+
+      - name: isScreenSharing
+        type: bool
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 是否有人正在共享屏幕
+
+      - name: screenShareUserId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 当前屏幕共享者 userId
+
+      - name: endReason
+        type: enum
+        enum_ref: EndReason
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 通话结束原因
+
+      - name: durationMs
+        type: long
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 通话时长（毫秒，通话结束后写入）
+
+      - name: startedAt
+        type: datetime
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 通话建连时间（第一个参与者 connected 时）
+
+      - name: endedAt
+        type: datetime
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 通话结束时间
+
+      - name: createdAt
+        type: datetime
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: updatedAt
+        type: datetime
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+  CallParticipant:
+    description: 通话参与者（嵌入 CallSession）
+    fields:
+      - name: userId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: role
+        type: enum
+        enum_ref: ParticipantRole
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: initiator/invitee
+
+      - name: status
+        type: enum
+        enum_ref: ParticipantStatus
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: invited/ringing/connecting/connected/left/timeout
+
+      - name: isMuted
+        type: bool
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: isCameraOn
+        type: bool
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: joinedAt
+        type: datetime
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: leftAt
+        type: datetime
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read

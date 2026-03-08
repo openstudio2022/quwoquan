@@ -1,6 +1,46 @@
-version: 1
+version: 2
 l1: circle-community
 l2:
+  # ── 新增 L2：圈子体验重构（发现 + 领域对齐 + 主页重设计）──
+  - feature: circle-experience-redesign
+    l3:
+      - feature: domain-taxonomy-alignment
+        l4:
+          - feature: circle-domain-taxonomy-contract
+      - feature: resonance-discovery
+        l4:
+          - feature: circle-resonance-matching-contract
+      - feature: circle-homepage-redesign
+        l4:
+          - feature: circle-homepage-layout-contract
+
+  # ── 新增 L2：圈子协作工具（存储 + 群聊 + 发布区）──
+  - feature: circle-collaboration-tools
+    l3:
+      - feature: circle-storage
+        l4:
+          - feature: circle-storage-crud-contract
+      - feature: circle-group-chat
+        l4:
+          - feature: circle-chat-integration-contract
+      - feature: circle-publishing-zone
+        l4:
+          - feature: circle-publishing-contract
+
+  # ── 新增 L2：端侧平台化重构（迁移 + Repository + 代码质量）──
+  - feature: circle-client-platform
+    l3:
+      - feature: directory-migration
+        l4:
+          - feature: features-to-ui-migration-contract
+      - feature: circle-repository-creation
+        l4:
+          - feature: circle-repository-contract
+      - feature: circle-code-quality
+        l4:
+          - feature: circle-semantic-cleanup-contract
+
+  # ── 既有 L2：活动-成员-治理 ──
   - feature: activity-member-governance
     l3:
       - feature: circle-lifecycle
@@ -18,6 +58,8 @@ l2:
           - feature: activity-cursor-contract
             l5:
               - feature: stream-degrade-fallback
+
+  # ── 既有 L2：圈内推荐闭环 ──
   - feature: in-circle-recommendation-loop
     l3:
       - feature: behavior-ingestion
@@ -35,6 +77,8 @@ l2:
           - feature: feedback-evaluation-report
             l5:
               - feature: optimization-release-gate
+
+  # ── 既有 L2：圈子运营与统计 ──
   - feature: circle-management-and-stats
     l3:
       - feature: ops-dashboard

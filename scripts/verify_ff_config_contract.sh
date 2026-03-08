@@ -31,7 +31,7 @@ for f in "${tasks_files[@]}"; do
     continue
   fi
 
-  for kw in "/opsx-ff" "/opsx-apply" "submit-with-gate"; do
+  for kw in "/prd" "/design" "submit-with-gate"; do
     if ! grep -n "${kw}" "$f" >/dev/null 2>&1; then
       echo "[verify] FAIL: ${f} missing gate matrix keyword: ${kw}" >&2
       failures=$((failures + 1))

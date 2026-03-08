@@ -133,6 +133,26 @@ entities:
         ops_exposure: read
         recommend_feature: true
 
+      - name: circleCount
+        type: int
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: false
+        description: 已加入圈子数（由 circle-service 成员变更事件驱动更新）
+
+      - name: likeCount
+        type: int
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: true
+        description: 获赞总数（由 content-service 点赞事件驱动更新）
+
       - name: createdAt
         type: timestamp
         constraints: [NOT_NULL]

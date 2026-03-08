@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/feed_item_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
@@ -174,15 +173,6 @@ class _FailingContentRepository implements ContentRepository {
   }) async => throw Exception('network_error');
 
   @override
-  Future<CursorPage<FeedItemDto>> listDiscoveryFeedPageLegacy({
-    required String category,
-    String? subCategory,
-    int limit = 20,
-    String? cursor,
-    String sort = kFeedSortRecommend,
-  }) async => throw Exception('network_error');
-
-  @override
   Future<Map<String, dynamic>> getPost({required String postId}) async =>
       throw UnimplementedError();
 
@@ -191,6 +181,71 @@ class _FailingContentRepository implements ContentRepository {
     required Map<String, dynamic> payload,
   }) async => throw UnimplementedError();
 
+  @override
+  Future<Map<String, dynamic>> updatePost({
+    required String postId,
+    required Map<String, dynamic> payload,
+  }) async => throw UnimplementedError();
+  @override
+  Future<void> deletePost({required String postId}) async {}
+  @override
+  Future<Map<String, dynamic>> publishPost({required String postId}) async =>
+      {};
+  @override
+  Future<Map<String, dynamic>> updatePostCircles({
+    required String postId,
+    List<String> add = const [],
+    List<String> remove = const [],
+  }) async => {};
+  @override
+  Future<Map<String, dynamic>> repostToCircle({
+    required String postId,
+    required String circleId,
+  }) async => {};
+  @override
+  Future<Map<String, dynamic>> quoteToCircle({
+    required String postId,
+    required String circleId,
+    String quoteText = '',
+  }) async => {};
+  @override
+  Future<Map<String, dynamic>> initMediaUpload({String mediaType = 'image'}) async =>
+      {};
+  @override
+  Future<Map<String, dynamic>> completeMediaUpload({
+    required String sessionId,
+  }) async => {};
+  @override
+  Future<void> abortMediaUpload({required String sessionId}) async {}
+  @override
+  Future<Map<String, dynamic>> getMediaAsset({required String mediaId}) async =>
+      {};
+  @override
+  Future<Map<String, dynamic>> selectAutoVideoCover({
+    required String mediaId,
+  }) async => {};
+  @override
+  Future<Map<String, dynamic>> selectManualVideoCover({
+    required String mediaId,
+    required String coverAssetId,
+  }) async => {};
+  @override
+  Future<Map<String, dynamic>> generateArticleSummary({
+    required String title,
+    required String body,
+  }) async => {};
+  @override
+  Future<Map<String, dynamic>> getRecommendation({
+    String? cursor,
+    int limit = 20,
+  }) async => {};
+  @override
+  Future<CursorPage<PostBaseDto>> listUserPosts({
+    required String userId,
+    String? cursor,
+    int limit = 20,
+  }) async =>
+      CursorPage<PostBaseDto>(items: [], nextCursor: null);
   @override
   Future<void> likePost({required String postId}) async {}
   @override

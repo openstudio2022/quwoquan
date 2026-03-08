@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/app/shell/main_app_shell.dart';
-import 'package:quwoquan_app/ui/user/pages/author_profile_page.dart';
+import 'package:quwoquan_app/ui/user/pages/other_profile_page.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/content/pages/article_detail_page.dart';
 import 'package:quwoquan_app/ui/content/pages/photo_detail_page.dart';
 import 'package:quwoquan_app/ui/content/pages/video_detail_page.dart';
-import 'package:quwoquan_app/features/circles/pages/circle_detail_page.dart';
-import 'package:quwoquan_app/features/circles/pages/circle_stats_page.dart';
+import 'package:quwoquan_app/ui/circle/pages/circle_detail_page.dart';
+import 'package:quwoquan_app/ui/circle/pages/circle_stats_page.dart';
 import 'package:quwoquan_app/features/create/components/create_entry_sheet.dart';
 import 'package:quwoquan_app/components/media/image/editor/image_editor_page.dart';
 import 'package:quwoquan_app/features/create/pages/create_page.dart';
@@ -19,14 +19,19 @@ import 'package:quwoquan_app/features/settings/pages/settings_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_detail_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_settings_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/start_group_chat_page.dart';
-import 'package:quwoquan_app/features/profile/pages/edit_profile_page.dart';
-import 'package:quwoquan_app/features/profile/pages/persona_management_page.dart';
-import 'package:quwoquan_app/features/profile/pages/profile_stats_page.dart';
-import 'package:quwoquan_app/features/profile/pages/resonance_page.dart';
+import 'package:quwoquan_app/ui/user/pages/edit_profile_page.dart';
+import 'package:quwoquan_app/ui/user/pages/persona_management_page.dart';
+import 'package:quwoquan_app/ui/user/pages/profile_stats_page.dart';
+import 'package:quwoquan_app/ui/user/pages/resonance_page.dart';
 import 'package:quwoquan_app/features/assistant/context/assistant_open_context.dart';
 import 'package:quwoquan_app/features/assistant/pages/assistant_home_page.dart';
 import 'package:quwoquan_app/features/assistant/pages/assistant_management_page.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_center_page.dart';
+import 'package:quwoquan_app/ui/rtc/pages/outgoing_call_page.dart';
+import 'package:quwoquan_app/ui/rtc/pages/incoming_call_page.dart';
+import 'package:quwoquan_app/ui/rtc/pages/voice_call_page.dart';
+import 'package:quwoquan_app/ui/rtc/pages/video_call_page.dart';
+import 'package:quwoquan_app/ui/rtc/pages/call_participant_picker_page.dart';
 
 String _routeFromMainTabIndex(int index) {
   switch (index) {
@@ -139,26 +144,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/circle/:id',
         builder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
-          final roleStr = state.uri.queryParameters['role'];
-          CircleRole role = CircleRole.visitor;
-          if (roleStr != null) {
-            switch (roleStr) {
-              case 'owner':
-                role = CircleRole.owner;
-                break;
-              case 'admin':
-                role = CircleRole.admin;
-                break;
-              case 'member':
-                role = CircleRole.member;
-                break;
-              default:
-                role = CircleRole.visitor;
-            }
-          }
           return CircleDetailPage(
             circleId: id,
-            initialRole: role,
             onBack: () {
               if (context.canPop()) {
                 context.pop();
@@ -193,26 +180,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final extra = state.extra is UserProfileRouteExtra
               ? state.extra! as UserProfileRouteExtra
               : null;
-          return Consumer(
-            builder: (context, ref, _) {
-              final homeState = ref.watch(discoveryStateProvider);
-              return AuthorProfile(
-                username: username,
-                initialAvatarUrl: extra?.safeAvatar,
-                initialDisplayName: extra?.safeDisplayName,
-                initialBackgroundImageUrl: extra?.safeBackgroundImage,
-                followingUsers: homeState.followingUsers,
-                onFollowClick: (name, _) {
-                  ref.read(discoveryStateProvider).toggleFollow(name);
-                },
-                onBack: () {
-                  if (context.canPop()) {
-                    context.pop();
-                  } else {
-                    context.go('/');
-                  }
-                },
-              );
+          return OtherProfilePage(
+            username: username,
+            initialAvatarUrl: extra?.safeAvatar,
+            initialDisplayName: extra?.safeDisplayName,
+            initialBackgroundImageUrl: extra?.safeBackgroundImage,
+            onBack: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/');
+              }
             },
           );
         },
@@ -391,6 +369,44 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             },
           ),
         ],
+      ),
+      GoRoute(
+        path: '/rtc/outgoing/:callId',
+        builder: (context, state) {
+          final callId = state.pathParameters['callId'] ?? '';
+          return OutgoingCallPage(callId: callId);
+        },
+      ),
+      GoRoute(
+        path: '/rtc/incoming/:callId',
+        builder: (context, state) {
+          final callId = state.pathParameters['callId'] ?? '';
+          return IncomingCallPage(callId: callId);
+        },
+      ),
+      GoRoute(
+        path: '/rtc/voice/:callId',
+        builder: (context, state) {
+          final callId = state.pathParameters['callId'] ?? '';
+          return VoiceCallPage(callId: callId);
+        },
+      ),
+      GoRoute(
+        path: '/rtc/video/:callId',
+        builder: (context, state) {
+          final callId = state.pathParameters['callId'] ?? '';
+          return VideoCallPage(callId: callId);
+        },
+      ),
+      GoRoute(
+        path: '/rtc/pick-participants',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return CallParticipantPickerPage(
+            callId: extra?['callId'] as String?,
+            maxParticipants: extra?['maxParticipants'] as int? ?? 32,
+          );
+        },
       ),
     ],
   );

@@ -5,7 +5,7 @@ events:
   - name: CircleCreated
     description: 圈子创建
     producer: circle-service
-    consumers: [recommendation-engine, notification-service]
+    consumers: [recommendation-engine, notification-service, chat-service]
     channel: event_store
     payload_entity: Circle
     payload_fields: [_id, name, ownerId, category, tags]
@@ -48,3 +48,31 @@ events:
     channel: direct
     payload_fields: [userId, circleId, eventType, sessionId]
     recommend_impact: hot_path_signal
+
+  - name: CircleConversationLinked
+    description: 圈子关联群聊（chat-service 创建 Conversation 后回写）
+    producer: chat-service
+    consumers: [circle-service]
+    channel: event_store
+    payload_fields: [circleId, conversationId]
+
+  - name: CircleFileUploaded
+    description: 文件上传完成
+    producer: circle-service
+    consumers: [notification-service]
+    channel: event_store
+    payload_fields: [circleId, fileId, name, uploaderId, sizeBytes]
+
+  - name: CircleFileDeleted
+    description: 文件删除
+    producer: circle-service
+    consumers: []
+    channel: event_store
+    payload_fields: [circleId, fileId, name, uploaderId]
+
+  - name: CircleSectionsUpdated
+    description: 圈子板块配置更新
+    producer: circle-service
+    consumers: []
+    channel: event_store
+    payload_fields: [circleId, sectionConfig]

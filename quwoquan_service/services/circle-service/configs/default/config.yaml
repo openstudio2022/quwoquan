@@ -1,0 +1,15 @@
+config:
+  version: "1.0.0"
+
+service:
+  http:
+    addr: ":18082"
+
+mongo:
+  uri: "mongodb://localhost:27017"
+  database: "quwoquan_circle"
+
+redis:
+  addr: ""
+  password: ""
+  db: 0

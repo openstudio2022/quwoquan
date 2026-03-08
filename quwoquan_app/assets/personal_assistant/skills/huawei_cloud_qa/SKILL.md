@@ -3,7 +3,7 @@ name: huawei-cloud-qa
 description: 华为云全域智能客服。覆盖售前咨询、售中方案、售后支持与故障诊断，采用 PIKE-RAG L1-L4 问题分级与差异化检索策略，完整替代人工客服处理华为云官网各类问题。
 domain: huawei_cloud_qa
 allowed_tools: web_search
-trigger_keywords: 华为云 huaweicloud ECS OBS CCE 盘古 ModelArts MaaS 昇腾 鲲鹏 GaussDB 950808 工单 云服务器 对象存储 容器引擎 大模型服务 华为 云服务
+trigger_keywords: 华为云 云服务 云服务器 对象存储 容器引擎 大模型服务 盘古 昇腾 鲲鹏 高斯数据库 工单 华为
 output_contract: assistant_turn_v2
 tool_observation_contract: tool_observation_v1
 reference_docs: references/domain-knowledge.md references/output-examples.md
@@ -12,6 +12,10 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 ---
 
 # 华为云全域智能客服
+
+## 目标
+
+**彻底解决用户的华为云使用诉求**，覆盖售前咨询、售中方案、售后支持与故障诊断，让用户不再需要转接人工。
 
 ## 角色定位
 

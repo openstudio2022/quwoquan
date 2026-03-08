@@ -25,11 +25,6 @@ abstract class AppContentRepository {
   List<Map<String, dynamic>> get discoveryVideoData;
   Map<String, dynamic>? articleById(String id);
 
-  Map<String, Map<String, dynamic>> get circlesCategoryConfig;
-  List<Map<String, dynamic>> get circlesMockCircles;
-  List<Map<String, dynamic>> get circlesMockActivities;
-  Map<String, dynamic> get circlePageCircleInfo;
-
   List<Map<String, dynamic>> get chatMockConversations;
   List<Map<String, dynamic>> get chatMockConversationsAtMe;
   List<Map<String, dynamic>> get chatEncryptedConversations;
@@ -45,6 +40,11 @@ abstract class AppContentRepository {
 
   /// 帮读摘要：一句话综述 + 分维度展开事实。格式见 PrototypeMockData.helperReadSummary。
   Map<String, dynamic> get helperReadSummary;
+
+  Map<String, dynamic> get circlePageCircleInfo;
+  Map<String, Map<String, dynamic>> get circlesCategoryConfig;
+  List<Map<String, dynamic>> get circlesMockActivities;
+  List<Map<String, dynamic>> get circlesMockCircles;
 }
 
 class MockAppContentRepository implements AppContentRepository {
@@ -66,22 +66,6 @@ class MockAppContentRepository implements AppContentRepository {
 
   @override
   Map<String, dynamic>? articleById(String id) => PrototypeMockData.articleById(id);
-
-  @override
-  Map<String, Map<String, dynamic>> get circlesCategoryConfig =>
-      PrototypeMockData.circlesCategoryConfig;
-
-  @override
-  List<Map<String, dynamic>> get circlesMockCircles =>
-      PrototypeMockData.circlesMockCircles;
-
-  @override
-  List<Map<String, dynamic>> get circlesMockActivities =>
-      PrototypeMockData.circlesMockActivities;
-
-  @override
-  Map<String, dynamic> get circlePageCircleInfo =>
-      PrototypeMockData.circlePageCircleInfo;
 
   @override
   List<Map<String, dynamic>> get chatMockConversations =>
@@ -130,6 +114,22 @@ class MockAppContentRepository implements AppContentRepository {
   @override
   Map<String, dynamic> get helperReadSummary =>
       PrototypeMockData.helperReadSummary;
+
+  @override
+  Map<String, dynamic> get circlePageCircleInfo =>
+      PrototypeMockData.circlePageCircleInfo;
+
+  @override
+  Map<String, Map<String, dynamic>> get circlesCategoryConfig =>
+      PrototypeMockData.circlesCategoryConfig;
+
+  @override
+  List<Map<String, dynamic>> get circlesMockActivities =>
+      PrototypeMockData.circlesMockActivities;
+
+  @override
+  List<Map<String, dynamic>> get circlesMockCircles =>
+      PrototypeMockData.circlesMockCircles;
 }
 
 class RemoteAppContentRepository implements AppContentRepository {
@@ -146,16 +146,6 @@ class RemoteAppContentRepository implements AppContentRepository {
   List<Map<String, dynamic>> get discoveryVideoData => _fallback.discoveryVideoData;
   @override
   Map<String, dynamic>? articleById(String id) => _fallback.articleById(id);
-  @override
-  Map<String, Map<String, dynamic>> get circlesCategoryConfig =>
-      _fallback.circlesCategoryConfig;
-  @override
-  List<Map<String, dynamic>> get circlesMockCircles => _fallback.circlesMockCircles;
-  @override
-  List<Map<String, dynamic>> get circlesMockActivities =>
-      _fallback.circlesMockActivities;
-  @override
-  Map<String, dynamic> get circlePageCircleInfo => _fallback.circlePageCircleInfo;
   @override
   List<Map<String, dynamic>> get chatMockConversations => _fallback.chatMockConversations;
   @override
@@ -186,6 +176,22 @@ class RemoteAppContentRepository implements AppContentRepository {
   List<Map<String, dynamic>> get assistantSkillsData => _fallback.assistantSkillsData;
   @override
   Map<String, dynamic> get helperReadSummary => _fallback.helperReadSummary;
+
+  @override
+  Map<String, dynamic> get circlePageCircleInfo =>
+      _fallback.circlePageCircleInfo;
+
+  @override
+  Map<String, Map<String, dynamic>> get circlesCategoryConfig =>
+      _fallback.circlesCategoryConfig;
+
+  @override
+  List<Map<String, dynamic>> get circlesMockActivities =>
+      _fallback.circlesMockActivities;
+
+  @override
+  List<Map<String, dynamic>> get circlesMockCircles =>
+      _fallback.circlesMockCircles;
 }
 
 final appContentRepositoryProvider = Provider<AppContentRepository>((ref) {

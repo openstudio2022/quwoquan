@@ -1,10 +1,16 @@
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/personal_assistant/app/capability_gateway.dart';
+import 'package:quwoquan_app/ui/chat/widgets/message/assistant_answer_toolbar.dart';
+import 'package:quwoquan_app/ui/chat/widgets/message/assistant_process_drawer.dart';
+import 'package:quwoquan_app/ui/chat/widgets/message/regenerate_options_popup.dart';
+import 'package:quwoquan_app/ui/chat/widgets/message/voice_message_bubble.dart';
 
 /// 聊天气泡最大宽度（语义尺寸，多屏适配由布局约束决定）
 const double chatBubbleMaxWidth = 280.0;
@@ -43,6 +49,12 @@ class ChatMessageBubble extends StatelessWidget {
     this.hideAvatarAndName = false,
     this.useFullWidth = false,
     this.runningStatusLabel,
+    this.processState,
+    this.isAssistantRunning = false,
+    this.onRegenerateOptionSelected,
+    this.receiptEnabled = false,
+    this.memberCount = 2,
+    this.messageStatus,
   });
 
   final Map<String, dynamic> message;
@@ -60,6 +72,18 @@ class ChatMessageBubble extends StatelessWidget {
   final bool useFullWidth;
   /// 当前轮助手回复的顶部状态文案（如「小趣正在规划与执行中」），非 null 时在气泡顶部展示
   final String? runningStatusLabel;
+  /// Unified process state driving the single-drawer UI.
+  final AssistantProcessState? processState;
+  /// Whether the assistant is currently running (drives drawer animation).
+  final bool isAssistantRunning;
+  /// Callback from the regenerate options popup.
+  final void Function(RegenerateOption option)? onRegenerateOptionSelected;
+  /// 会话是否开启已读回执
+  final bool receiptEnabled;
+  /// 会话成员数（群聊 >2 时不展示逐条回执）
+  final int memberCount;
+  /// 消息发送状态（sending / sent / failed / recalled）
+  final String? messageStatus;
   final bool showAssistantAvatar;
   final bool showFeedbackActions;
   final String feedbackStatus;
@@ -181,6 +205,47 @@ class ChatMessageBubble extends StatelessWidget {
           ),
         ),
       );
+    } else if (type == 'audio') {
+      final media =
+          message['media'] is Map
+              ? (message['media'] as Map).cast<String, dynamic>()
+              : <String, dynamic>{};
+      final mediaUrl =
+          (media['url'] as String?) ??
+          (message['mediaUrl'] as String?) ??
+          '';
+      final durationMs = (media['durationMs'] as num?)?.toInt() ?? 0;
+      final waveformRaw = media['waveform'];
+      final waveform =
+          waveformRaw is List
+              ? waveformRaw.map((e) => (e as num).toDouble()).toList()
+              : <double>[];
+      final msgId =
+          (message['_id'] ?? message['id'] ?? '') as String;
+      final msgStatus =
+          (message['messageStatus'] ?? message['status'] ?? 'sent') as String;
+      contentWidget = VoiceMessageBubble(
+        messageId: msgId,
+        mediaUrl: mediaUrl,
+        durationMs: durationMs,
+        waveform: waveform,
+        isOutgoing: isRight,
+        isRead: isRead,
+        messageStatus: msgStatus,
+      );
+    } else if (isAssistantMessage) {
+      contentWidget = Container(
+        width: double.infinity,
+        padding: EdgeInsets.symmetric(
+          horizontal: AppSpacing.containerSm,
+          vertical: AppSpacing.intraGroupLg,
+        ),
+        child: _buildAssistantMarkdownContent(
+          context: context,
+          content: answerText,
+          textColor: textColor,
+        ),
+      );
     } else {
       contentWidget = _BubbleWithTail(
         isRight: isRight,
@@ -193,21 +258,15 @@ class ChatMessageBubble extends StatelessWidget {
             AppSpacing.containerSm + 2,
             AppSpacing.intraGroupLg,
           ),
-          child: isAssistantMessage
-              ? _buildAssistantMarkdownContent(
-                  context: context,
-                  content: answerText,
-                  textColor: textColor,
-                )
-              : SelectableText(
-                  answerText,
-                  style: TextStyle(
-                    fontSize:
-                        Theme.of(context).textTheme.bodyLarge?.fontSize ??
-                        AppSpacing.md,
-                    color: textColor,
-                  ),
-                ),
+          child: SelectableText(
+            answerText,
+            style: TextStyle(
+              fontSize:
+                  Theme.of(context).textTheme.bodyLarge?.fontSize ??
+                  AppSpacing.md,
+              color: textColor,
+            ),
+          ),
         ),
       );
     }
@@ -291,11 +350,6 @@ class ChatMessageBubble extends StatelessWidget {
                     : CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (runningStatusLabel != null)
-                    _RunningStatusRow(
-                      label: runningStatusLabel!,
-                      textColor: textColor,
-                    ),
                   if (!hideAvatarAndName &&
                       senderName.isNotEmpty &&
                       !isRight)
@@ -315,7 +369,35 @@ class ChatMessageBubble extends StatelessWidget {
                         ),
                       ),
                     ),
-                  if (phaseTimeline.isNotEmpty) ...[
+                  if (isAssistantMessage && processState != null)
+                    AssistantProcessDrawer(
+                      processState: processState!,
+                      isRunning: isAssistantRunning,
+                      initiallyExpanded: isAssistantRunning,
+                      onReferenceUrlTap: onReferenceTap != null
+                          ? (url) => onReferenceTap!(
+                                <String, dynamic>{'url': url},
+                              )
+                          : null,
+                    )
+                  else if (isAssistantMessage &&
+                      _hasPersistedProcessBlocks(message))
+                    AssistantProcessDrawer(
+                      processState: _rebuildProcessStateFromMessage(message),
+                      isRunning: false,
+                      initiallyExpanded: false,
+                      onReferenceUrlTap: onReferenceTap != null
+                          ? (url) => onReferenceTap!(
+                                <String, dynamic>{'url': url},
+                              )
+                          : null,
+                    )
+                  else if (runningStatusLabel != null)
+                    _RunningStatusRow(
+                      label: runningStatusLabel!,
+                      textColor: textColor,
+                    )
+                  else if (phaseTimeline.isNotEmpty) ...[
                     SizedBox(height: AppSpacing.xs),
                     _AssistantPhaseTimelineCard(
                       phases: phaseTimeline,
@@ -323,8 +405,6 @@ class ChatMessageBubble extends StatelessWidget {
                       onReferenceTap: onReferenceTap,
                     ),
                   ],
-                  if (phaseTimeline.isNotEmpty && !hideAnswerBubbleWhileStreamingProcess)
-                    SizedBox(height: AppSpacing.xs),
                   if (!hideAnswerBubbleWhileStreamingProcess)
                     Row(
                       mainAxisSize: MainAxisSize.min,
@@ -344,13 +424,12 @@ class ChatMessageBubble extends StatelessWidget {
                             ),
                           ),
                         if (isRight && (type == 'text' || type == 'image'))
-                          Padding(
-                            padding: EdgeInsets.only(right: AppSpacing.xs),
-                            child: Icon(
-                              isRead ? Icons.done_all : Icons.done,
-                              size: AppSpacing.iconSmall,
-                              color: textColor.withValues(alpha: 0.8),
-                            ),
+                          _ReceiptStatusIndicator(
+                            isRead: isRead,
+                            receiptEnabled: receiptEnabled,
+                            memberCount: memberCount,
+                            messageStatus: messageStatus,
+                            textColor: textColor,
                           ),
                         Expanded(child: contentWidget),
                       ],
@@ -363,14 +442,18 @@ class ChatMessageBubble extends StatelessWidget {
                       onActionHintTap: onActionHintTap,
                     ),
                   ],
-                  if (isAssistantMessage && uiReferences.isNotEmpty && !hideAnswerBubbleWhileStreamingProcess) ...[
-                    SizedBox(height: AppSpacing.xs),
-                    _AssistantReferencesCard(
-                      references: uiReferences,
-                      onReferenceTap: onReferenceTap,
-                    ),
-                  ],
-                  if (showFeedbackActions) ...[
+                  // References card removed — source data shown inside process drawer.
+                  // v4: New unified toolbar replaces old feedback buttons.
+                  if (showFeedbackActions && isAssistantMessage)
+                    AssistantAnswerToolbar(
+                      feedbackStatus: feedbackStatus,
+                      onFeedbackHelpful: onFeedbackHelpful,
+                      onFeedbackUnhelpful: onFeedbackUnhelpful,
+                      onCopyAnswer: onCopyAnswer,
+                      onShareAnswer: onShareAnswer,
+                      onRegenerateSelected: onRegenerateOptionSelected,
+                    )
+                  else if (showFeedbackActions) ...[
                     SizedBox(height: AppSpacing.xs),
                     Wrap(
                       spacing: AppSpacing.xs,
@@ -389,51 +472,11 @@ class ChatMessageBubble extends StatelessWidget {
                           iconSize: AppSpacing.iconSmall,
                         ),
                         IconButton(
-                          onPressed: onFeedbackCorrect,
-                          icon: const Icon(Icons.edit_outlined),
-                          tooltip: UITextConstants.assistantFeedbackCorrect,
-                          iconSize: AppSpacing.iconSmall,
-                        ),
-                        IconButton(
                           onPressed: onRegenerateAnswer,
                           icon: const Icon(Icons.refresh),
                           tooltip: UITextConstants.assistantActionRegenerate,
                           iconSize: AppSpacing.iconSmall,
                         ),
-                        IconButton(
-                          onPressed: onShareAnswer,
-                          icon: const Icon(Icons.share_outlined),
-                          tooltip: UITextConstants.share,
-                          iconSize: AppSpacing.iconSmall,
-                        ),
-                        IconButton(
-                          onPressed: onCopyAnswer,
-                          icon: const Icon(Icons.copy_outlined),
-                          tooltip: UITextConstants.copyLink,
-                          iconSize: AppSpacing.iconSmall,
-                        ),
-                        if (feedbackStatus.isNotEmpty)
-                          Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: AppSpacing.xs,
-                              vertical: AppSpacing.xs,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.primaryColor.withValues(
-                                alpha: 0.08,
-                              ),
-                              borderRadius: BorderRadius.circular(
-                                AppSpacing.fullBorderRadius,
-                              ),
-                            ),
-                            child: Text(
-                              feedbackStatus,
-                              style: TextStyle(
-                                fontSize: AppTypography.sm,
-                                color: AppColors.primaryColor,
-                              ),
-                            ),
-                          ),
                       ],
                     ),
                   ],
@@ -450,12 +493,17 @@ class ChatMessageBubble extends StatelessWidget {
     );
   }
 
+  static final RegExp _referenceBlockPattern = RegExp(
+    r'\n---\n📚\s*\*{0,2}参考资料\*{0,2}[\s\S]*$',
+  );
+
   Widget _buildAssistantMarkdownContent({
     required BuildContext context,
     required String content,
     required Color textColor,
   }) {
-    final segments = _MarkdownSegment.parse(content);
+    final cleaned = content.replaceFirst(_referenceBlockPattern, '').trimRight();
+    final segments = _MarkdownSegment.parse(cleaned);
     final textStyle = TextStyle(
       fontSize:
           Theme.of(context).textTheme.bodyLarge?.fontSize ?? AppSpacing.md,
@@ -475,6 +523,12 @@ class ChatMessageBubble extends StatelessWidget {
         horizontal: AppSpacing.containerSm,
         vertical: AppSpacing.intraGroupSm,
       ),
+      tableColumnWidth: const IntrinsicColumnWidth(),
+      tableCellsPadding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.xs,
+        vertical: AppSpacing.xs / 2,
+      ),
+      tableBody: textStyle.copyWith(fontSize: AppTypography.sm),
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -513,16 +567,77 @@ class ChatMessageBubble extends StatelessWidget {
     required MarkdownStyleSheet styleSheet,
     required TextStyle textStyle,
   }) {
+    final hasTable = markdownText.contains('|') &&
+        RegExp(r'\|[^\n]+\|').hasMatch(markdownText);
     try {
-      return MarkdownBody(
+      final body = MarkdownBody(
         data: markdownText,
         selectable: true,
         styleSheet: styleSheet,
       );
+      if (hasTable) {
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 360),
+            child: body,
+          ),
+        );
+      }
+      return body;
     } catch (_) {
       return SelectableText(markdownText, style: textStyle);
     }
   }
+}
+
+bool _hasPersistedProcessBlocks(Map<String, dynamic> message) {
+  return message.containsKey('uiProcessContentBlocks');
+}
+
+AssistantProcessState _rebuildProcessStateFromMessage(
+    Map<String, dynamic> message) {
+  final rawBlocks =
+      (message['uiProcessContentBlocks'] as List?)?.whereType<Map>() ??
+          const <Map>[];
+  final contentBlocks = <ProcessContentBlock>[];
+  for (final raw in rawBlocks) {
+    final typeName = (raw['type'] as String?) ?? 'text';
+    final text = (raw['text'] as String?) ?? '';
+    final rawRefs =
+        (raw['references'] as List?)?.whereType<Map>() ?? const <Map>[];
+    final refs = rawRefs
+        .map((r) => ProcessReference(
+              title: (r['title'] as String?) ?? '',
+              url: (r['url'] as String?) ?? '',
+              source: (r['source'] as String?) ?? '',
+            ))
+        .toList(growable: false);
+    ProcessContentBlockType blockType;
+    switch (typeName) {
+      case 'searchSummary':
+        blockType = ProcessContentBlockType.searchSummary;
+      case 'analysisSummary':
+        blockType = ProcessContentBlockType.analysisSummary;
+      default:
+        blockType = ProcessContentBlockType.text;
+    }
+    contentBlocks.add(ProcessContentBlock(
+      type: blockType,
+      text: text,
+      references: refs,
+    ));
+  }
+  final usageStats =
+      (message['uiUsageStatsV1'] as Map?)?.cast<String, dynamic>() ??
+      const <String, dynamic>{};
+  return AssistantProcessState(
+    stage: ProcessStage.completed,
+    stageLabel: '已完成',
+    isStreaming: false,
+    contentBlocks: contentBlocks,
+    usageStats: usageStats,
+  );
 }
 
 /// 助手当前轮回复顶部的状态行：按阶段展示不同动效 + 文案 + 可选引用数
@@ -1299,8 +1414,8 @@ class _AssistantFollowupCard extends StatelessWidget {
   }
 }
 
-/// 参考资料卡片：展示 web_search 工具返回的来源链接，支持点击打开 WebView
-class _AssistantReferencesCard extends StatelessWidget {
+/// 参考资料卡片：展示 web_search 工具返回的来源链接，默认收起仅显示一行摘要
+class _AssistantReferencesCard extends StatefulWidget {
   const _AssistantReferencesCard({
     required this.references,
     this.onReferenceTap,
@@ -1308,6 +1423,14 @@ class _AssistantReferencesCard extends StatelessWidget {
 
   final List<Map<String, dynamic>> references;
   final void Function(Map<String, dynamic> reference)? onReferenceTap;
+
+  @override
+  State<_AssistantReferencesCard> createState() =>
+      _AssistantReferencesCardState();
+}
+
+class _AssistantReferencesCardState extends State<_AssistantReferencesCard> {
+  bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
@@ -1320,104 +1443,173 @@ class _AssistantReferencesCard extends StatelessWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              Icon(
-                Icons.link_rounded,
-                size: AppSpacing.iconSmall,
-                color: AppColors.primaryColor.withValues(alpha: 0.8),
-              ),
-              SizedBox(width: AppSpacing.xs / 2),
-              Text(
-                '参考资料（${references.length}）',
-                style: TextStyle(
-                  fontSize: AppTypography.sm,
-                  color: AppColors.primaryColor,
-                  fontWeight: FontWeight.w600,
+          GestureDetector(
+            onTap: () => setState(() => _expanded = !_expanded),
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              children: [
+                Icon(
+                  Icons.link_rounded,
+                  size: AppSpacing.iconSmall,
+                  color: AppColors.primaryColor.withValues(alpha: 0.8),
                 ),
-              ),
-            ],
+                SizedBox(width: AppSpacing.xs / 2),
+                Expanded(
+                  child: Text(
+                    '参考了 ${widget.references.length} 篇资料',
+                    style: TextStyle(
+                      fontSize: AppTypography.sm,
+                      color: AppColors.primaryColor,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                Icon(
+                  _expanded
+                      ? CupertinoIcons.chevron_up
+                      : CupertinoIcons.chevron_down,
+                  size: 13,
+                  color: AppColors.primaryColor.withValues(alpha: 0.6),
+                ),
+              ],
+            ),
           ),
-          SizedBox(height: AppSpacing.xs),
-          ...references.asMap().entries.map((entry) {
-            final index = entry.key;
-            final ref = entry.value;
-            final title = (ref['title'] as String?)?.trim() ?? '';
-            final url = (ref['url'] as String?)?.trim() ?? '';
-            final source = (ref['source'] as String?)?.trim().isNotEmpty == true
-                ? (ref['source'] as String).trim()
-                : Uri.tryParse(url)?.host ?? '';
-            return InkWell(
-              onTap: () => onReferenceTap?.call(ref),
-              borderRadius: BorderRadius.circular(AppSpacing.borderRadius / 2),
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: AppSpacing.xs / 2),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: AppSpacing.eighteen,
-                      height: AppSpacing.eighteen,
-                      margin: EdgeInsets.only(top: AppSpacing.one, right: AppSpacing.xs),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryColor.withValues(alpha: 0.12),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: Text(
-                          '${index + 1}',
-                          style: TextStyle(
-                            fontSize: AppTypography.xs,
-                            color: AppColors.primaryColor,
-                            fontWeight: FontWeight.w700,
+          if (_expanded) ...[
+            SizedBox(height: AppSpacing.xs),
+            ...widget.references.asMap().entries.map((entry) {
+              final index = entry.key;
+              final ref = entry.value;
+              final title = (ref['title'] as String?)?.trim() ?? '';
+              final url = (ref['url'] as String?)?.trim() ?? '';
+              final source =
+                  (ref['source'] as String?)?.trim().isNotEmpty == true
+                      ? (ref['source'] as String).trim()
+                      : Uri.tryParse(url)?.host ?? '';
+              return InkWell(
+                onTap: () => widget.onReferenceTap?.call(ref),
+                borderRadius:
+                    BorderRadius.circular(AppSpacing.borderRadius / 2),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: AppSpacing.xs / 2),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: AppSpacing.eighteen,
+                        height: AppSpacing.eighteen,
+                        margin: EdgeInsets.only(
+                            top: AppSpacing.one, right: AppSpacing.xs),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryColor.withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Text(
+                            '${index + 1}',
+                            style: TextStyle(
+                              fontSize: AppTypography.xs,
+                              color: AppColors.primaryColor,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            title,
-                            style: TextStyle(
-                              fontSize: AppTypography.sm,
-                              color: AppColors.primaryColor,
-                              fontWeight: FontWeight.w500,
-                              decoration: TextDecoration.underline,
-                              decorationColor: AppColors.primaryColor.withValues(
-                                alpha: 0.5,
-                              ),
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          if (source.isNotEmpty)
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                             Text(
-                              source,
+                              title,
                               style: TextStyle(
-                                fontSize: AppTypography.xs,
-                                color: AppColors.primaryColor.withValues(
-                                  alpha: 0.55,
+                                fontSize: AppTypography.sm,
+                                color: AppColors.primaryColor,
+                                fontWeight: FontWeight.w500,
+                                decoration: TextDecoration.underline,
+                                decorationColor:
+                                    AppColors.primaryColor.withValues(
+                                  alpha: 0.5,
                                 ),
                               ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                        ],
+                            if (source.isNotEmpty)
+                              Text(
+                                source,
+                                style: TextStyle(
+                                  fontSize: AppTypography.xs,
+                                  color: AppColors.primaryColor.withValues(
+                                    alpha: 0.55,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
-                    ),
-                    Icon(
-                      Icons.open_in_new_rounded,
-                      size: AppSpacing.iconSmall * 0.85,
-                      color: AppColors.primaryColor.withValues(alpha: 0.45),
-                    ),
-                  ],
+                      Icon(
+                        Icons.open_in_new_rounded,
+                        size: AppSpacing.iconSmall * 0.85,
+                        color: AppColors.primaryColor.withValues(alpha: 0.45),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            );
-          }),
+              );
+            }),
+          ],
         ],
       ),
+    );
+  }
+}
+
+/// 消息回执状态指示器：根据 receiptEnabled / memberCount / messageStatus 显示不同状态。
+/// - sending → 时钟图标
+/// - failed → 红色感叹号
+/// - 1:1 会话 + receiptEnabled → 双勾（已读）/ 单勾（已送达）
+/// - 群聊（memberCount > 2）或 receiptEnabled=false → 单勾
+class _ReceiptStatusIndicator extends StatelessWidget {
+  const _ReceiptStatusIndicator({
+    required this.isRead,
+    required this.receiptEnabled,
+    required this.memberCount,
+    required this.textColor,
+    this.messageStatus,
+  });
+
+  final bool isRead;
+  final bool receiptEnabled;
+  final int memberCount;
+  final String? messageStatus;
+  final Color textColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final IconData icon;
+    final Color color;
+
+    switch (messageStatus) {
+      case 'sending':
+        icon = Icons.access_time;
+        color = textColor.withValues(alpha: 0.5);
+      case 'failed':
+        icon = Icons.error_outline;
+        color = AppColors.error;
+      default:
+        if (receiptEnabled && memberCount <= 2 && isRead) {
+          icon = Icons.done_all;
+          color = AppColors.primaryColor;
+        } else {
+          icon = Icons.done;
+          color = textColor.withValues(alpha: 0.6);
+        }
+    }
+
+    return Padding(
+      padding: EdgeInsets.only(right: AppSpacing.xs),
+      child: Icon(icon, size: AppSpacing.iconSmall, color: color),
     );
   }
 }

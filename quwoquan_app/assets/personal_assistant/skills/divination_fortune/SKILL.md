@@ -92,7 +92,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 ### 幸运元素
 🎨 幸运色：**{颜色}** · 🔢 幸运数：**{数字}** · 🧭 吉位：**{方位}**
 
-> ✨ 运势仅供参考，美好的一天从你的选择开始。
+美好的一天从你的每个选择开始 ✨
 
 ---
 💬 **你可能还想了解**

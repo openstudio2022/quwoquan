@@ -104,3 +104,39 @@ func (s *PostStore) ListPublished(_ context.Context, limit int, cursor string) [
 	}
 	return out
 }
+
+func (s *PostStore) ListByAuthor(_ context.Context, authorID string, limit int, cursor string) []postmodel.Post {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if limit <= 0 {
+		limit = 20
+	}
+	all := make([]postmodel.Post, 0)
+	for _, p := range s.posts {
+		if p.AuthorId != authorID || !strings.EqualFold(strings.TrimSpace(p.Status), "published") {
+			continue
+		}
+		all = append(all, p)
+	}
+	sort.Slice(all, func(i, j int) bool {
+		return all[i].PublishedAt.After(all[j].PublishedAt)
+	})
+	if cursor != "" {
+		start := 0
+		for i, p := range all {
+			if p.ID == cursor {
+				start = i + 1
+				break
+			}
+		}
+		if start < len(all) {
+			all = all[start:]
+		} else {
+			all = nil
+		}
+	}
+	if len(all) > limit {
+		all = all[:limit]
+	}
+	return all
+}

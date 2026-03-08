@@ -4,9 +4,9 @@
 
 | 阶段命令 | 必过项（最小集） | 不通过处理 |
 |---|---|---|
-| `/opsx-ff` | ① `tasks.md` 含目录/环境变量/版本映射任务；② `acceptance.yaml` 含对应验收项 | 阻断 FF，先补文档 |
-| `/opsx-apply` | ① 每服务 `default/local/integration/prod` 目录齐；② 加载顺序与 APP_ENV 校验有测试；③ 门禁脚本可执行 | 阻断 apply，先补实现与测试 |
-| `submit-with-gate` | ① strict gate 通过；② `CONFIG_VERSION` 文件存在且可映射；③ 配置-镜像兼容校验通过 | 禁止提交入库 |
+| `/prd` | ① `tasks.md` 含目录/环境变量/版本映射任务；② `acceptance.yaml` 含对应验收项 | 阻断 FF，先补文档 |
+| `/design` | ① 每服务 `default/local/integration/prod` 目录齐；② 加载顺序与 APP_ENV 校验有测试；③ 门禁脚本可执行 | 阻断 apply，先补实现与测试 |
+| `/commit` / submit-with-gate | ① strict gate 通过；② `CONFIG_VERSION` 文件存在且可映射；③ 配置-镜像兼容校验通过 | 禁止提交入库 |
 
 ## 当前交付任务（按 Wave 执行）
 

@@ -1,0 +1,201 @@
+feature: voice-message
+level: L3_subfeature
+archived: true
+archived_at: "2026-03-07T18:20:24Z"
+
+execution:
+  local_gate: make build && make test-contract && flutter test test/cloud/ test/ui/chat/
+  full_gate: make gate-full
+
+level_acceptance:
+  # ── T4 端到端旅程层 ──────────────────────────────────────
+  A1:
+    criteria: "端到端闭环：用户 A 在私聊中按住录音 5 秒松手，语音自动上传→发送→用户 B 接收→用户 B 点击气泡播放，听到完整 5 秒语音，播放进度条从 0:00 走到 0:05"
+    status: implemented
+    linked_tasks: [D2, D3, D5, D9, D10, G1]
+    test_layers:
+      T1: optional
+      T2: optional
+      T3: required
+      T4: required
+    tests:
+      - file: quwoquan_service/services/chat-service/tests/message_audio_contract_test.go
+        layer: T3
+        description: "Go 端 sendMessage audio 契约测试：发送+持久化+同步+混合类型"
+      - file: quwoquan_app/test/cloud/chat/message/contract/message_dto_contract_test.dart
+        layer: T1
+        description: "Dart MessageDto audio 类型序列化/反序列化契约测试"
+
+  A2:
+    criteria: "弱网可靠性旅程：网络限速 100kbps，录音 10 秒并发送；上传可自动重试成功（≤3 次），接收方最终收到并可播放；全程无崩溃/ANR"
+    status: implemented
+    linked_tasks: [D3, D5, D6]
+    test_layers:
+      T1: optional
+      T2: optional
+      T3: required
+      T4: required
+    tests:
+      - file: quwoquan_app/lib/cloud/media/media_upload_manager.dart
+        layer: T2
+        description: "MediaUploadManager 实现含重试(3次指数退避)/离线队列/网络恢复"
+
+  # ── T1 契约与静态层 ──────────────────────────────────────
+  A3:
+    criteria: "MessageType 枚举含 audio：_shared/types.yaml 中 MessageType 包含 audio，codegen 后 Go 端 MessageType 和 Dart 端 MessageDto 均可序列化/反序列化 type='audio' 消息"
+    status: implemented
+    linked_tasks: [M1, C1, C2, C3]
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: optional
+    tests:
+      - file: quwoquan_app/test/cloud/chat/message/contract/message_dto_contract_test.dart
+        layer: T1
+        description: "MessageDto audio 类型 fromMap/toMap 契约验证"
+      - file: quwoquan_service/services/chat-service/tests/message_audio_contract_test.go
+        layer: T1
+        description: "Go 端 audio 消息发送+持久化契约测试"
+
+  A4:
+    criteria: "Message.media 结构化字段：fields.yaml Message 含 media(object, NULLABLE)，codegen 后 MessageDto 含 media 字段；SendMessage writable_fields 含 media；MessageSent event payload_fields 含 mediaUrl 和 media"
+    status: implemented
+    linked_tasks: [M2, M3, M4, C2, C3]
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: optional
+    tests:
+      - file: quwoquan_app/test/cloud/chat/message/contract/message_dto_contract_test.dart
+        layer: T1
+        description: "MessageDto media 字段序列化/反序列化/可选字段验证"
+      - file: quwoquan_app/test/cloud/chat/message/contract/send_message_request_contract_test.dart
+        layer: T1
+        description: "SendMessageRequest media 字段 toMap 验证"
+      - file: quwoquan_service/services/chat-service/tests/message_audio_contract_test.go
+        layer: T1
+        description: "Go 端 media 字段持久化+同步验证"
+
+  # ── T2 模块与交互层 ──────────────────────────────────────
+  A5:
+    criteria: "录音引擎：使用 record 包，输出 AAC/m4a 格式，采样率 16kHz；录音时实时采集波形数据（50-100 采样点 float 数组）；时长到达 120s 自动停止；录音低于 1s 不发送并提示"
+    status: implemented
+    linked_tasks: [D2]
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: optional
+    tests:
+      - file: quwoquan_app/lib/ui/chat/widgets/voice/voice_recorder.dart
+        layer: T2
+        description: "VoiceRecorder 实现含 AAC/16kHz/波形采集/120s 自动停止/1s 最短限制"
+
+  A6:
+    criteria: "上传通过 MediaUploadManager：语音文件通过 InitUpload(category=messaging, mediaType=audio) → PUT → CompleteUpload 三段式上传；失败自动重试 ≤3 次（指数退避）；断网时入 Hive 离线队列，网络恢复后 FIFO 自动恢复"
+    status: implemented
+    linked_tasks: [D3, D5, D6]
+    test_layers:
+      T1: optional
+      T2: required
+      T3: required
+      T4: optional
+    tests:
+      - file: quwoquan_app/lib/cloud/media/media_upload_manager.dart
+        layer: T2
+        description: "MediaUploadManager 三段式上传/重试/离线队列/FIFO 恢复"
+      - file: quwoquan_app/lib/ui/chat/providers/voice_send_provider.dart
+        layer: T2
+        description: "VoiceSendNotifier 编排录音→上传→发送流程"
+
+  A7:
+    criteria: "播放引擎：使用 just_audio，支持流式播放（边下边播）、暂停/恢复、进度回调（100ms 精度）；同时只允许一个语音播放（点击新语音自动停止旧语音）；支持扬声器/听筒切换（audio_session）"
+    status: implemented
+    linked_tasks: [D9]
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: optional
+    tests:
+      - file: quwoquan_app/lib/ui/chat/providers/voice_player_manager.dart
+        layer: T2
+        description: "VoicePlayerManager 实现含 just_audio/audio_session/互斥播放/进度回调"
+
+  A8:
+    criteria: "本地缓存：已下载的语音文件缓存到本地（LRU 策略，默认 200MB），再次播放无需重新下载；缓存目录使用 getApplicationCacheDirectory，系统可清理"
+    status: implemented
+    linked_tasks: [D4]
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: optional
+    tests:
+      - file: quwoquan_app/lib/cloud/media/media_download_cache.dart
+        layer: T2
+        description: "MediaDownloadCache LRU 缓存/200MB 容量/applicationCacheDirectory"
+
+  A9:
+    criteria: "语音消息气泡 UI：type=audio 消息渲染为独立气泡（播放/暂停按钮 + 波形条 + 时长 mm:ss）；气泡宽度与时长正比（1s 最短 ~ 120s 最长约 70% 屏宽）；所有视觉 token 使用 AppSpacing/AppTypography/AppColors，verify_dart_semantic.py 无新增违规"
+    status: implemented
+    linked_tasks: [D10, D11, D12]
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: optional
+    tests:
+      - file: quwoquan_app/lib/ui/chat/widgets/message/voice_message_bubble.dart
+        layer: T2
+        description: "VoiceMessageBubble 气泡渲染：播放按钮+波形+时长+宽度正比+设计系统 token"
+      - file: quwoquan_app/lib/ui/chat/widgets/message/voice_waveform_painter.dart
+        layer: T2
+        description: "VoiceWaveformPainter 波形 CustomPaint：静态/进度填充"
+
+  # ── T3 端云集成层 ──────────────────────────────────────
+  A10:
+    criteria: "强网端到端延迟：WiFi/4G 下录音 5s 松手后，发送方消息状态从 sending→sent 耗时 ≤2s；接收方 syncMessages 获取到消息后点击播放起播 ≤1s（CDN 就近节点）"
+    status: implemented
+    linked_tasks: [D5, D9, G1]
+    test_layers:
+      T1: optional
+      T2: optional
+      T3: required
+      T4: required
+    tests:
+      - file: quwoquan_service/services/chat-service/tests/message_audio_contract_test.go
+        layer: T3
+        description: "Go 端 audio 消息发送+同步契约测试（验证发送→同步可查）"
+
+  A11:
+    criteria: "弱网上传重试与离线恢复：(a) 100kbps 限速下上传 3s 语音（约 50KB）成功，重试 ≤2 次；(b) 完全断网时录音入离线队列，连接恢复后 10s 内自动开始上传；(c) 队列中 ≥5 条语音按 FIFO 全部发送成功"
+    status: implemented
+    linked_tasks: [D3, D6]
+    test_layers:
+      T1: optional
+      T2: required
+      T3: required
+      T4: required
+    tests:
+      - file: quwoquan_app/lib/ui/chat/providers/voice_offline_queue.dart
+        layer: T2
+        description: "VoiceOfflineQueue Hive 持久化/FIFO/网络恢复自动重传"
+      - file: quwoquan_app/lib/cloud/media/media_upload_manager.dart
+        layer: T2
+        description: "MediaUploadManager 重试+离线队列逻辑"
+
+  # ── 部署灰度层 ──────────────────────────────────────
+  A12:
+    criteria: "灰度部署：(a) integration 环境全量验证通过（A1-A11 全部 implemented）；(b) prod 环境灰度 10% 用户 24h 无 P0/P1 告警后扩至 50%→100%；(c) 回滚方案：任一灰度阶段 audio 消息发送失败率 >1% 或 ANR 率 >0.1% 自动回滚至前版"
+    status: deferred
+    deferred_reason: "灰度部署需在 deploy 阶段执行，当前 A1-A11 代码实现已完成"
+    linked_tasks: [T17]
+    test_layers:
+      T1: optional
+      T2: optional
+      T3: optional
+      T4: required
+    tests: []

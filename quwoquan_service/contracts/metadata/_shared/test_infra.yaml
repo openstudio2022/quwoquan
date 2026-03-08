@@ -205,7 +205,7 @@ aggregate_engine_map:
 
   conversation:
     engines: [mongodb, redis]
-    mongo_collections: [conversations, messages]
+    mongo_collections: [conversations, messages, conversation_members, conversation_user_states, message_receipts]
 
   circle:
     engines: [mongodb, redis]

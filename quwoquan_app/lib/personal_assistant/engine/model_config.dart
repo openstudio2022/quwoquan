@@ -20,6 +20,58 @@ class AssistantModelRuntimeConfig {
   final String apiKey;
 }
 
+/// Declares per-model capability differences so the streaming parser,
+/// tool-call extraction, and prompt construction can adapt automatically.
+class ModelCapabilityProfile {
+  const ModelCapabilityProfile({
+    this.supportsNativeFunctionCalling = true,
+    this.supportsReasoningField = false,
+    this.supportsThinkTags = false,
+    this.reasoningFieldName = '',
+    this.supportsJsonMode = true,
+    this.defaultMaxTokens = 4096,
+    this.defaultTemperature = 0.3,
+  });
+
+  final bool supportsNativeFunctionCalling;
+  final bool supportsReasoningField;
+  final bool supportsThinkTags;
+  final String reasoningFieldName;
+  final bool supportsJsonMode;
+  final int defaultMaxTokens;
+  final double defaultTemperature;
+
+  static const ModelCapabilityProfile openAiDefault =
+      ModelCapabilityProfile();
+
+  static const ModelCapabilityProfile mimo = ModelCapabilityProfile(
+    supportsNativeFunctionCalling: false,
+    supportsReasoningField: true,
+    reasoningFieldName: 'reasoning',
+    supportsJsonMode: false,
+    defaultTemperature: 0.6,
+  );
+
+  static const ModelCapabilityProfile deepseek = ModelCapabilityProfile(
+    supportsThinkTags: true,
+    supportsReasoningField: true,
+    reasoningFieldName: 'reasoning_content',
+  );
+
+  static const ModelCapabilityProfile qwen = ModelCapabilityProfile(
+    supportsThinkTags: true,
+  );
+
+  /// Resolves the best-matching profile for a given modelRef (e.g. "mimo/mimo-v2-flash").
+  static ModelCapabilityProfile forModelRef(String modelRef) {
+    final lower = modelRef.toLowerCase();
+    if (lower.startsWith('mimo/') || lower.contains('mimo')) return mimo;
+    if (lower.contains('deepseek')) return deepseek;
+    if (lower.contains('qwen')) return qwen;
+    return openAiDefault;
+  }
+}
+
 class AssistantModelConfigLoader {
   const AssistantModelConfigLoader();
 

@@ -1,9 +1,16 @@
 ---
 name: finance_consumer
-description: 回答预算、信用卡、贷款、保险、股票、基金与理财规划等问题。
+description: 理财分析、基金/股票/保险对比、投资建议、贷款/预算规划、供应链分析、行业趋势。
 domain: finance_consumer
+mode: qa
 allowed_tools: web_search
-trigger_keywords: 理财 预算 基金 保险 贷款 信用卡 股票 涨跌 利率
+trigger_keywords: []
+searchPolicy:
+  maxReflection: 2
+  qualityThreshold: 0.6
+  strategy: research
+requires:
+  tools: [web_search]
 output_contract: assistant_turn_v2
 tool_observation_contract: tool_observation_v1
 reference_docs: references/domain-knowledge.md references/output-examples.md
@@ -86,7 +93,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 - {关键结论 2，基于数据支撑}
 - {关键结论 3，可选}
 
-> ⚠️ **风险提示**：以上信息仅供参考，不构成任何投资建议。市场有风险，投资前请结合自身情况决策。
+市场存在波动，建议结合自身风险偏好和资金周期做决策。
 
 ---
 💬 **你可能还想了解**

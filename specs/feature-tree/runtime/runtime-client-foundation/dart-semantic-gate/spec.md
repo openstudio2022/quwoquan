@@ -2,7 +2,7 @@
 
 ## 功能说明
 
-端侧 Dart 编码规范的**自动化守门**，在 Plan→Create→Implement→Verify→Submit 全链路拦截：
+端侧 Dart 编码规范的**自动化守门**，在 Explore→PRD→Design→Dev→Verify→Commit 全链路拦截：
 - 硬编码视觉字面量（width/height/leadingSize、fontSize、EdgeInsets、Color 等）
 - iOS 语义风格违规（行尾箭头语义、Cupertino 页面混用 Material 交互、selector leading 语义）
 
@@ -12,7 +12,7 @@
 |-----------|------|
 | `verify-script-and-gate-integration` | 新建 verify_dart_semantic.py + 纳入 gate_repo.sh |
 | `rules-and-flow-enhancement` | 02-dart-coding、06 规则、00_MASTER_DEVELOPMENT_FLOW 补充触控/布局禁止示例与约束 |
-| `ff-deliver-semantic-checklist` | design/tasks 模板增加编码规范小节；opsx-apply 对 Dart 变更自动跑语义检查 |
+| `ff-deliver-semantic-checklist` | design/tasks 模板增加编码规范小节；`/dev` 对 Dart 变更自动跑语义检查 |
 | `design-token-metadata-registry` | 设计 token 注册表（contracts/metadata）→ codegen/lint 联动（未来演进） |
 
 ## 范围

@@ -8,14 +8,14 @@
 
 ## 一、四类文档（强制）
 
-每个特性树节点（L1~L5）必须具备且仅依赖以下四类制品：
+每个特性树节点（治理视图以 L1~L4 为主，历史 L5 兼容）必须具备且仅依赖以下四类制品：
 
 | 文档 | 用途 | 必须 |
 |------|------|------|
 | **spec.md** | 功能说明、范围、约束、验收重点；「做什么」「不做什么」 | 是 |
 | **design.md** | 设计决策、架构/拓扑、与上下游契约、迁移或演进说明；「怎么做」「为何这样拆」 | 是 |
-| **tasks.md** | 可执行任务列表（含当前交付与可选规划任务）；顺序：metadata → codegen → 业务逻辑 → 测试 | 是 |
-| **acceptance.yaml** | A1~A8 验收标准、focus_groups、level_acceptance、execution（gate） | 是 |
+| **tasks.md** | Story 的工程执行清单（含当前交付与可选规划任务）；顺序：metadata → codegen → 业务逻辑 → 测试 | 是 |
+| **acceptance.yaml** | A1~An 验收标准、测试层映射、证据链接、execution（gate） | 是 |
 
 - **禁止**：在 `specs/feature-tree/<path>/` 下新增 `analysis-*.md`、`README.md`、`*-规划.md`、`*-设计说明.md` 等独立文件；分析、规划、设计说明一律写入上述 **spec.md / design.md / tasks.md**，必要时在 tasks 中增加「规划任务」小节。
 - **追溯**：若项目使用 `traceability.yaml`，可保留；验收以 **acceptance.yaml** 为准。
@@ -28,13 +28,15 @@
 
 ### 2.1 spec.md
 
-- **必须包含**：节点层级（L1~L5）、功能定位、职责边界、与父/子节点关系、约束（技术/契约/运维）、验收标准概要。
+- **必须包含**：节点层级（优先按 L1~L4 治理视图描述）、功能定位、职责边界、与父/子节点关系、约束（技术/契约/运维）、验收标准概要。
+- **必须包含（对标输入）**：若需求来自业界标杆、竞品、原型、公开代码或公开文档，需在 spec 中说明借鉴点、不借鉴点与适用边界。
 - **必须包含（标准化章节）**：**「适用范围与约束」**——明确本节点方案的适用场景、前置条件、不适用或超出范围的情形（任何方案均有局限性，须在 spec 中写清「在什么条件下成立」「什么不负责」），便于后续回顾与裁剪。可与「约束」合并为小节，但须显式出现适用/不适用表述。
 - **建议**：用表格列出子节点或对外契约；引用 design.md / tasks.md 避免重复。
 
 ### 2.2 design.md
 
 - **必须包含**：设计动因（为何这样拆）、关键决策、与现有系统/契约的对应关系；若涉及迁移或演进，写清「当前态 → 目标态」与已完成步骤。
+- **必须包含（上游评审）**：明确说明当前 `spec.md` 与 `acceptance.yaml` 是否足以支撑设计；若存在不足，需在 design 中标出阻断项或补充项。
 - **必须包含（标准化章节）**：
   - **「适用场景与约束」**：当前选定方案的**适用场景**（在什么业务/规模/技术条件下成立）、**约束与局限性**（不适用情形、前置条件、已知限制）。任何方案都有局限性或适应场景，design 中必须显式写出，便于回顾与决策。
   - **「未来演进」**：演进方向、目标态与当前态的差距、前置条件或触发条件、与 tasks 中「搁置任务」「未来演进任务」的对应关系；若当前即为目标态则简要说明「暂无演进项」。
@@ -50,18 +52,20 @@
 ### 2.3 tasks.md
 
 - **必须包含**：
-  - **「当前交付任务」**：本阶段可执行、可验收的任务（可勾选列表）；顺序：metadata → codegen → 业务逻辑 → 测试；与 `/opsx-apply` 执行顺序一致。
+  - **「当前交付任务」**：本阶段可执行、可验收的任务（可勾选列表）；顺序：metadata → codegen → 业务逻辑 → 测试；与 Story 驱动交付顺序一致。
   - **「搁置任务（带规划）」**：因依赖/资源/优先级等原因暂不实施的任务，须写明**搁置原因、计划何时/在何条件下重启、由谁或何节点承接**，便于回顾审视与后续跟进。
   - **「未来演进任务」**：与 design 中「未来演进」对应的中长期演进项（可勾选、不阻塞当前交付）；新开特性时在对应节点 spec/design/tasks 中细化。若无搁置或演进，可写「无」或「暂无」，但章节标题须保留以便统一回顾。
+- `tasks.md` **不是树层级**：它描述的是 L4 Story 的工程执行清单，而不是新增层级。
 - 以上三小节为**标准化结构**，便于门禁与复盘时一致检查；design 采用轻量方案时，「未来演进任务」必须非空且与 design 的「未来演进」对应。
 - **含 UI 的 task**：实施完成后须执行 `python3 scripts/verify_dart_semantic.py`，无新增硬编码视觉字面量。
 - **含错误码的 task**：须创建/更新 `errors.yaml`（含 l10n_key、user_message.zh/en），云侧 Handler 使用 generated.AppErrorFrom*，端侧使用 *ErrorCode.fromCode().toDisplayMessage(l10n)，测试使用枚举 .code；实施后执行 `python3 scripts/verify_error_code_semantic.py`。
 
 ### 2.4 acceptance.yaml
 
-- **必须包含**：`feature`、`level`、`template`（如 A1-A8）、`execution.local_gate` / `full_gate`；L4/L5 须含 `level_acceptance` 的 A1~An 验收项。
+- **必须包含**：`feature`、`level`、`template`、`execution.local_gate` / `full_gate`；L4 Story 须含 `level_acceptance` 的 A1~An 验收项。
 - **一致性**：与 spec 中的验收重点、design 中的交付边界对齐；门禁脚本可依赖本文件做完整性检查。
 - **含错误码时**：须有验收项「错误码由 errors.yaml 驱动，云侧无硬编码 user_message，端侧无硬编码 code 字符串」；tests 可引用 `*_error_code_contract_test` 或 journey 测试。
+- **必须包含（测试层视图）**：每条核心验收项应声明其对应的测试层，例如 `T1/T2/T3/T4`，用于把产品验收与测试金字塔统一到同一视图。
 
 #### 验收项结构（交付后必须填写 status 与 tests）
 
@@ -73,6 +77,11 @@ level_acceptance:
     criteria: "验收标准描述（与 spec 对齐）"
     status: pending        # pending | implemented | waived | deferred
     linked_tasks: [M1, C1] # 对应 tasks.md 中的任务编号
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
     tests:                 # 实现后回填，机器可验证
       - file: test/cloud/content/feed_item_dto_contract_test.dart
         functions: [generates_from_metadata, has_do_not_edit_header]
@@ -97,12 +106,13 @@ level_acceptance:
 
 ## 三、与命令、规则的衔接
 
-- **/opsx-ff**：创建或更新特性时，必须补齐或更新 **spec.md、design.md、tasks.md、acceptance.yaml**；不得生成四类以外的文档。
-- **/opsx-apply**：按 **tasks.md** 逐项执行；实现须符合 **spec.md** 与 **design.md**；自动将节点 status 推进为 `in_progress`。
-- **/opsx-deliver**：Apply 条件就绪后，**以 acceptance.yaml A1~A8 验收标准为驱动**，迭代完成开发 → 验证 → 归档 → 提交入库；一气呵成交付到合入。
-- **/opsx-verify、/opsx-archive**：校验 **tasks.md** 完成度与 **acceptance.yaml** A1~A8；正确性对照 **spec.md** 与 **design.md**；归档时回写 `status: completed` 和 `archived: true`。
-- **/opsx-prune**：检测并清理过期/作废节点；将节点标记为 `cancelled` 或 `deprecated`；更新 tree_index.yaml。
-- **/opsx-explore**：探索结论若需落档，应写入目标节点的 **spec/design/tasks**，不单独生成分析文档。
+- **/prd**：创建或更新特性时，必须补齐或更新 **spec.md、design.md、tasks.md、acceptance.yaml**；不得生成四类以外的文档。
+- **/dev**：按 Story 驱动实施，**tasks.md** 承载工程清单；实现须符合 **spec.md** 与 **design.md**；默认执行 TDD，并在收口时自动将节点推进到已归档状态。
+- **/deliver**：Design 条件就绪后，**以 acceptance.yaml A1~A8 验收标准为驱动**，迭代完成开发 → 自验证 → 自动归档 → 提交入库；一气呵成交付到合入。
+- **/verify、/archive**：`/verify` 负责复核 **tasks.md** 完成度、**acceptance.yaml** A1~A8 与漂移；`/archive` 仅用于自动归档失效后的兼容补归档，回写 `status: completed` 和 `archived: true`。
+- **/prune**：检测并清理过期/作废节点；将节点标记为 `cancelled` 或 `deprecated`；更新 tree_index.yaml。
+- **/explore**：探索结论若需落档，应写入目标节点的 **spec/design/tasks**，不单独生成分析文档；若存在外部标杆输入，需记录借鉴点与边界。
+- **/try**：原型模式可暂时豁免特性树前置创建，但一旦验证成功，必须通过 `/land` 回补到本标准要求的四类文档。
 
 详见 `.cursor/commands/` 下各命令与 `specs/00_MASTER_DEVELOPMENT_FLOW.md`。
 
@@ -116,11 +126,11 @@ level_acceptance:
 
 | status | 语义 | 触发命令 | 可否归档 |
 |--------|------|----------|----------|
-| `specified` | 已规格化，待实施（默认初始值） | `/opsx-ff` create | 否 |
-| `in_progress` | 实施中（tasks.md 出现首个 `[x]`） | `/opsx-apply` 自动推进 | 否 |
-| `completed` | 已归档交付 | `/opsx-archive` 自动回写 | 是 |
-| `cancelled` | 需求取消，节点作废 | `/opsx-prune cancel` | — |
-| `deprecated` | 被其他节点取代，保留历史 | `/opsx-prune deprecate` | — |
+| `specified` | 已规格化，待实施（默认初始值） | `/prd` create | 否 |
+| `in_progress` | 实施中（tasks.md 出现首个 `[x]`） | `/dev` 自动推进 | 否 |
+| `completed` | 已归档交付 | `/dev` 自动归档或 `/archive` 兼容补回写 | 是 |
+| `cancelled` | 需求取消，节点作废 | `/prune cancel` | — |
+| `deprecated` | 被其他节点取代，保留历史 | `/prune deprecate` | — |
 
 **state machine**：
 ```
@@ -132,13 +142,13 @@ specified ──→ in_progress ──→ completed
 
 ### 4.2 过期节点（Stale/Expired Node）定义
 
-以下情形视为**潜在过期节点**，由 `/opsx-prune` 或 `gate.sh` 检测并报告：
+以下情形视为**潜在过期节点**，由 `/prune` 或 `gate.sh` 检测并报告：
 
 | 判断条件 | 严重度 | 建议处理 |
 |----------|--------|----------|
-| `status=specified`，tasks.md 全为 `[ ]`，且 **90 天以上无 git 变更** | WARNING | `/opsx-prune cancel` 或重确认优先级 |
+| `status=specified`，tasks.md 全为 `[ ]`，且 **90 天以上无 git 变更** | WARNING | `/prune cancel` 或重确认优先级 |
 | `status=in_progress`，acceptance.yaml 存在 pending 项，且 **60 天无 git 变更** | WARNING | 重启实施或降为 `specified`/`cancelled` |
-| `status=completed` 但 acceptance.yaml 无 `archived: true` | BLOCKING | `/opsx-archive` 回写 `archived: true` |
+| `status=completed` 但 acceptance.yaml 无 `archived: true` | BLOCKING | 优先确认 `/dev` 是否已自动归档；若未回写则用 `/archive` 兼容补回写 |
 | `status=cancelled/deprecated` 但 tasks.md 仍有 `[ ]` 任务 | BLOCKING | 清理 tasks.md 中残余任务 |
 | 节点目录存在但不在 `tree_index.yaml` 中（孤儿目录） | BLOCKING | 补充到 tree_index 或删除 |
 | `tree_index.yaml` 中节点路径指向不存在的目录 | BLOCKING | 修复路径或删除索引条目 |
@@ -153,9 +163,9 @@ specified ──→ in_progress ──→ completed
   - 必须在 spec.md 顶部加注 `> **DEPRECATED**: 已由 <替代路径> 取代`
   - acceptance.yaml 顶层加入 `superseded_by: <替代节点路径>`
 
-### 4.4 `/opsx-archive` 必须回写 tree_index
+### 4.4 自动归档或 `/archive` 必须回写 tree_index
 
-归档命令执行成功后，必须更新 `tree_index.yaml`：
+自动归档或兼容补归档执行成功后，必须更新 `tree_index.yaml`：
 ```yaml
 status: completed   # 从 specified/in_progress 改为 completed
 ```
@@ -175,21 +185,21 @@ archived_at: 2026-03-01T00:00:00Z
 
 ---
 
-## 六、L1-L5 层级定义（引用）
+## 六、层级定义（引用）
 
-L1~L5 的**唯一权威定义**及**与开发卡点的落实关系**见 `specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md`。
+特性树层级的**唯一权威定义**及**与开发卡点的落实关系**见 `specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md`。
 
 **简要约定**：
 
 | 层级 | 语义 | 统一 level | 分解要点 |
 |------|------|------------|----------|
-| L1 | 能力域 | L1 | 固定 9 个，不新增 |
-| L2 | 特性 | L2_feature | 具备独立交付价值 |
-| L3 | 子特性/组件 | L3_subfeature | 有独立契约或模块边界 |
-| L4 | 契约/任务 | L4_object_task | **默认叶子层**，可对应具体契约、策略或实现任务 |
-| L5 | 子任务（可选） | L5 / L5_subtask | **仅当 L4 任务过大需拆成多个子任务时**使用 |
+| L1 | 关键能力 | L1 | 固定顶级能力域 |
+| L2 | 功能特性 | L2_feature | 具备独立交付价值 |
+| L3 | 子功能或组件 | L3_subfeature | 有独立契约或模块边界 |
+| L4 | Story / 最小交付单元 | L4_story | **默认叶子层**，可开发、可验收 |
+| Legacy L5 | 历史兼容层 | L5 / L5_subtask | 仅迁移期兼容 |
 
-**原则**：默认止于 L4；L5 仅当 L4 需 subtask 分解时添加。spec.md 与 acceptance.yaml 中 `level` 取值须与上表一致。
+**原则**：默认止于 L4，工程子步骤进入 `tasks.md`；新特性不再默认新增 L5。
 
 ---
 

@@ -130,6 +130,7 @@ components:
             - INTEGRATION
             - USER
             - CHAT
+            - RTC
             - OPS
             - ASSISTANT
             - DB

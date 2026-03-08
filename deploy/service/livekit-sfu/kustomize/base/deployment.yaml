@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: livekit-sfu
+  labels:
+    app.kubernetes.io/name: livekit-sfu
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: livekit-sfu
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: livekit-sfu
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: livekit-sfu
+          image: livekit/livekit-server:v1.7.2
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 7880
+              protocol: TCP
+            - name: rtc-tcp
+              containerPort: 7881
+              protocol: TCP
+            - name: rtc-udp
+              containerPort: 7882
+              protocol: UDP
+          env:
+            - name: LIVEKIT_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: livekit-sfu-secrets
+                  key: LIVEKIT_KEYS
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: "4"
+              memory: 2Gi

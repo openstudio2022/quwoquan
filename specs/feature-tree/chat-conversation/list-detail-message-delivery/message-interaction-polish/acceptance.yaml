@@ -1,0 +1,153 @@
+feature: message-interaction-polish
+level: L3_subfeature
+archived: false
+
+execution:
+  local_gate: make build && flutter test test/cloud/chat/ test/ui/chat/
+  full_gate: make gate-full
+
+level_acceptance:
+  # ── F1 引用回复 ──────────────────────────────────────────
+
+  E-A1:
+    criteria: "引用回复触发与发送：(a) 长按消息→上下文菜单「回复」→输入栏上方出现引用预览块（被回复消息摘要 + 关闭按钮）；(b) 发送时携带 replyToMessageId；(c) 服务端存储并通过 MessageSent 推送；(d) 点击关闭按钮取消回复"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: required
+      T4: optional
+    tests: []
+
+  E-A2:
+    criteria: "引用回复气泡渲染：(a) 含 replyToMessageId 的消息在气泡内顶部嵌入引用块（灰色背景 + 蓝色竖线左边距 + 被回复者名称 + 消息摘要截断 80 字）；(b) 点击引用块滚动到被引用消息并高亮闪烁 2 次；(c) 被引用消息已删除/撤回时显示「原消息已删除」"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: required
+    tests: []
+
+  E-A3:
+    criteria: "跨类型引用：(a) 引用文本消息→显示文字摘要；(b) 引用图片→显示缩略图+「[图片]」；(c) 引用语音→显示「[语音] 0:15」；(d) 引用视频→显示缩略图+「[视频]」；(e) 引用文件→显示「[文件] xxx.pdf」"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: optional
+    tests: []
+
+  # ── F2 @提及 ──────────────────────────────────────────
+
+  E-A4:
+    criteria: "@提及触发与选择：(a) 输入 `@` 字符后弹出群成员选择器（≤200ms）；(b) 选择器支持搜索过滤；(c) 选中成员后在输入框插入 `@用户名 `（蓝色着色 + 尾部空格）；(d) 发送时 mentions 数组含被 @ 用户 userId"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: required
+      T4: optional
+    tests: []
+
+  E-A5:
+    criteria: "@提及气泡渲染：(a) 消息文本中 `@用户名` 渲染为蓝色高亮（TextSpan）；(b) 点击蓝色 @用户名导航到该用户主页；(c) `@所有人` 同样蓝色高亮，仅群主/管理员可触发发送"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: required
+    tests: []
+
+  # ── F3 语音听筒/扬声器切换 ──────────────────────────────
+
+  E-A6:
+    criteria: "距离传感器自动切换：(a) 播放语音消息时手机贴耳→≤100ms 内切换到听筒模式（音量通过听筒输出）；(b) 远离耳朵→恢复扬声器模式；(c) 非播放状态时传感器不消耗电量（停止监听）"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: required
+    tests: []
+
+  E-A7:
+    criteria: "手动切换与记忆：(a) 语音气泡长按菜单增加「听筒播放/扬声器播放」选项；(b) 切换后记住偏好，下次播放默认使用该模式；(c) 偏好持久化到本地（Hive/SharedPreferences）"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: optional
+    tests: []
+
+  # ── F4 语音倍速播放 ──────────────────────────────────────
+
+  E-A8:
+    criteria: "倍速切换：(a) 语音播放状态下气泡显示倍速标签（默认 1x）；(b) 点击倍速标签循环切换 1x→1.5x→2x→0.5x→1x；(c) 切换后 ≤50ms 内实时变速生效（无停顿）；(d) 音调不因变速改变"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: optional
+    tests: []
+
+  E-A9:
+    criteria: "倍速记忆：同一会话内所有语音消息使用相同倍速偏好；切换会话后重置为 1x"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: optional
+    tests: []
+
+  # ── F5 会话列表数据源统一 ──────────────────────────────
+
+  E-A10:
+    criteria: "数据源统一：(a) ChatPage 会话列表数据全部来自 chatRepositoryProvider（调用 ChatRepository.listConversations()），不再混用 appContentRepository；(b) 会话列表按 lastMessage.timestamp 降序排列，置顶会话优先；(c) Mock/Remote 模式下列表内容一致"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: optional
+    tests: []
+
+  E-A11:
+    criteria: "InboxService HTTP 暴露：(a) 云侧 InboxService 挂载 GET /v1/chat/inbox 路由，返回 per-user inbox 投影（含 conversationId/title/lastMessage/unreadCount/maxSeq）；(b) 单次返回 ≤50 个会话，支持 cursor 分页；(c) 响应时间 ≤200ms p95（50 个会话）"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests: []
+
+  # ── 部署灰度 ──────────────────────────────────────────
+
+  E-A12:
+    criteria: "灰度部署：(a) integration 环境全量验证通过（E-A1~E-A11 全部 implemented）；(b) prod 灰度 10%→50%→100%；(c) 回滚条件：引用回复渲染崩溃率 >0.1% 或语音播放异常率 >1% 自动回滚"
+    status: pending
+    deferred_reason: ""
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: optional
+      T3: optional
+      T4: required
+    tests: []

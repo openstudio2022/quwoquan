@@ -25,8 +25,32 @@ collections:
       - { name: idx_cm_circle_role, keys: { circleId: 1, role: 1 } }
       - { name: idx_cm_contribution, keys: { circleId: 1, contribution: -1 } }
 
+  circle_files:
+    entity: CircleFile
+    indexes:
+      - { name: idx_cf_circle_parent, keys: { circleId: 1, parentFolderId: 1, name: 1 } }
+      - { name: idx_cf_circle_status, keys: { circleId: 1, status: 1, createdAt: -1 } }
+      - { name: idx_cf_uploader, keys: { uploaderId: 1, createdAt: -1 } }
+      - { name: idx_cf_circle_type, keys: { circleId: 1, fileType: 1 } }
+
 redis_cache:
   - key: "cache:circle:{circleId}"
     ttl_seconds: 600
     entity: Circle
-    invalidate_on: [CircleUpdated, CircleMemberJoined, CircleMemberLeft]
+    invalidate_on: [CircleUpdated, CircleMemberJoined, CircleMemberLeft, CircleSectionsUpdated]
+
+object_storage:
+  bucket_prefix: "circle-files"
+  key_pattern: "{circleId}/{fileId}/{filename}"
+  max_file_size_bytes: 52428800
+  allowed_mime_types:
+    - "image/*"
+    - "video/*"
+    - "audio/*"
+    - "application/pdf"
+    - "application/zip"
+    - "application/x-rar-compressed"
+    - "application/msword"
+    - "application/vnd.openxmlformats-officedocument.*"
+    - "text/plain"
+    - "text/markdown"

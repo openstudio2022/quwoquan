@@ -35,7 +35,7 @@
 
 - [x] D14：微趣媒体浏览器 UI 回归：feedPosts、二维导航、文字 3 行+全文展开
 
-## 当前交付任务（/opsx-ff update）
+## 当前交付任务（`/prd` / `/design` update）
 
 > 目标：统一侵入式浏览器内核，works/moment 分实例装配；顶栏分离；底栏复用作品同源实现。
 

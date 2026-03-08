@@ -44,6 +44,9 @@ l2:
         l4:
           - feature: config-rollout-slo-gate
 
+  # ─── 平台开发治理：命令、特性树、验收与测试模型 ───
+  - feature: development-workflow-governance
+
   # ─── 底座层：已有 runtime 能力组件 ───
   - feature: runtime-config
     l3:
@@ -152,6 +155,31 @@ l2:
           - feature: embedded-pg-testcontainers-miniredis
             l5:
               - feature: codegen-test-and-ci-integration
+
+  # ─── 平台 Redis 统一路由层 ───
+  - feature: runtime-redis
+    l3:
+      - feature: unified-client-and-router
+        l4:
+          - feature: scene-pool-and-prefix-routing
+            l5:
+              - feature: cluster-standalone-transparent-switch-guard
+          - feature: pubsub-subscription-manager
+            l5:
+              - feature: cross-node-fanout-guard
+      - feature: config-and-keyspace-contract
+        l4:
+          - feature: multi-scene-config-schema
+            l5:
+              - feature: env-override-multicloud-guard
+          - feature: keyspace-prefix-scene-mapping
+            l5:
+              - feature: prefix-conflict-detection-guard
+      - feature: adapter-bridge-and-migration
+        l4:
+          - feature: cache-adapter-and-rec-adapter-bridge
+            l5:
+              - feature: zero-regression-backward-compat-guard
 
   # ─── 业务能力层：CQRS / 推荐 / 流式 / 上下文 / Skill ───
   - feature: runtime-eventstore

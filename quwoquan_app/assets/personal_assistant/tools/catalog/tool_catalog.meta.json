@@ -56,11 +56,16 @@
       "requiredOutputPaths": ["provider", "summary", "references"],
       "openAiFunction": {
         "name": "web_search",
-        "description": "网络检索最新信息。",
+        "description": "网络检索最新信息。支持 queryVariants 多路并发检索：传入多个差异化搜索词可显著提升覆盖率。",
         "parameters": {
           "type": "object",
           "properties": {
-            "query": {"type": "string"},
+            "query": {"type": "string", "description": "主搜索词"},
+            "queryVariants": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "可选。多条差异化搜索词，工具会并发执行并合并去重结果。适用于多维度检索场景（如同时搜索不同关键词角度）。"
+            },
             "provider": {"type": "string"},
             "count": {"type": "integer"},
             "domainId": {"type": "string"},
@@ -342,138 +347,266 @@
         }
       }
     }
+    ,
+    {
+      "toolName": "scheduler",
+      "displayName": "日程提醒",
+      "purpose": "创建、查询、修改日历事件和提醒",
+      "whenToUse": [
+        "用户需要设置提醒或日程",
+        "用户询问接下来的安排",
+        "涉及时间管理和日程规划"
+      ],
+      "supportedSkills": [
+        "calendar.event_crud",
+        "task.reminder_management"
+      ],
+      "userInteraction": {
+        "phaseTitle": "日程管理",
+        "phaseIcon": "calendar",
+        "reasoning": {
+          "label": "日程操作",
+          "promptHint": "请在 thinkingText 中解释你要创建/查询什么日程",
+          "example": "用户需要设置明天早上8点的会议提醒。"
+        },
+        "executing": {
+          "startLabel": "正在处理日程",
+          "progressTemplate": "{{action}}日程...",
+          "completedTemplate": "日程操作已完成"
+        },
+        "resultDisplay": {
+          "showKeywords": false,
+          "showReferences": false
+        },
+        "replanLabel": null
+      },
+      "parameterSummary": [
+        {"name": "action", "type": "string", "required": true, "description": "操作类型: create/query/update/delete"},
+        {"name": "title", "type": "string", "required": false, "description": "日程标题"},
+        {"name": "startTime", "type": "string", "required": false, "description": "开始时间 ISO8601"},
+        {"name": "endTime", "type": "string", "required": false, "description": "结束时间 ISO8601"},
+        {"name": "reminder", "type": "string", "required": false, "description": "提醒时间"},
+        {"name": "notes", "type": "string", "required": false, "description": "备注"}
+      ],
+      "openAiFunction": {
+        "name": "scheduler",
+        "description": "创建、查询、修改或删除日历事件和提醒。需用户确认后执行。",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "action": {"type": "string", "enum": ["create", "query", "update", "delete"], "description": "操作类型"},
+            "title": {"type": "string", "description": "日程标题"},
+            "startTime": {"type": "string", "description": "开始时间 ISO8601"},
+            "endTime": {"type": "string", "description": "结束时间 ISO8601"},
+            "allDay": {"type": "boolean", "description": "是否全天事件"},
+            "reminder": {"type": "string", "description": "提前提醒时间如 15min/1h"},
+            "notes": {"type": "string", "description": "备注"},
+            "eventId": {"type": "string", "description": "事件ID（更新/删除时需要）"},
+            "query": {"type": "string", "description": "查询关键词"},
+            "rangeStart": {"type": "string", "description": "查询范围起点"},
+            "rangeEnd": {"type": "string", "description": "查询范围终点"}
+          },
+          "required": ["action"]
+        }
+      }
+    },
+    {
+      "toolName": "deep_link",
+      "displayName": "链接跳转",
+      "purpose": "App内页面跳转或打开外部应用",
+      "whenToUse": [
+        "需要打开App内特定页面",
+        "需要跳转到外部App或网页"
+      ],
+      "supportedSkills": [
+        "navigation.internal",
+        "navigation.external"
+      ],
+      "userInteraction": {
+        "phaseTitle": "页面跳转",
+        "phaseIcon": "link",
+        "reasoning": {
+          "label": "跳转准备",
+          "promptHint": "请解释你要跳转到哪里、为什么",
+          "example": "用户想查看附近餐厅，我来打开地图页面。"
+        },
+        "executing": {
+          "startLabel": "正在跳转",
+          "progressTemplate": "打开 {{url}}",
+          "completedTemplate": "已跳转"
+        },
+        "resultDisplay": {
+          "showKeywords": false,
+          "showReferences": false
+        },
+        "replanLabel": null
+      },
+      "parameterSummary": [
+        {"name": "url", "type": "string", "required": true, "description": "跳转URL（支持 quwoquan:// 内部路由、https:// 等）"}
+      ],
+      "openAiFunction": {
+        "name": "deep_link",
+        "description": "打开App内页面或外部应用链接。支持 quwoquan:// 内部路由和 https/tel/sms/mailto/maps 等外部协议。",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "url": {"type": "string", "description": "完整URL"}
+          },
+          "required": ["url"]
+        }
+      }
+    },
+    {
+      "toolName": "app_action",
+      "displayName": "设备操作",
+      "purpose": "执行打电话、发短信、发邮件、导航、复制到剪贴板等设备操作",
+      "whenToUse": [
+        "用户请求打电话或发短信",
+        "用户需要导航到某个地址",
+        "用户想复制内容"
+      ],
+      "supportedSkills": [
+        "device.call",
+        "device.sms",
+        "device.email",
+        "device.navigate",
+        "device.clipboard"
+      ],
+      "userInteraction": {
+        "phaseTitle": "执行操作",
+        "phaseIcon": "action",
+        "reasoning": {
+          "label": "操作准备",
+          "promptHint": "请解释你要执行什么设备操作、为什么",
+          "example": "用户想给客服打电话，我来拨号。"
+        },
+        "executing": {
+          "startLabel": "正在执行操作",
+          "progressTemplate": "{{action}}...",
+          "completedTemplate": "操作已完成"
+        },
+        "resultDisplay": {
+          "showKeywords": false,
+          "showReferences": false
+        },
+        "replanLabel": null
+      },
+      "parameterSummary": [
+        {"name": "action", "type": "string", "required": true, "description": "操作类型: call/sms/email/navigate/clipboard"},
+        {"name": "phone", "type": "string", "required": false, "description": "电话号码（call/sms）"},
+        {"name": "to", "type": "string", "required": false, "description": "邮箱地址（email）"},
+        {"name": "address", "type": "string", "required": false, "description": "导航地址（navigate）"},
+        {"name": "text", "type": "string", "required": false, "description": "要复制的文本（clipboard）"}
+      ],
+      "openAiFunction": {
+        "name": "app_action",
+        "description": "执行设备操作：打电话(call)、发短信(sms)、发邮件(email)、地图导航(navigate)、复制到剪贴板(clipboard)。敏感操作需用户确认。",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "action": {"type": "string", "enum": ["call", "sms", "email", "navigate", "clipboard"], "description": "操作类型"},
+            "phone": {"type": "string", "description": "电话号码"},
+            "to": {"type": "string", "description": "收件邮箱"},
+            "subject": {"type": "string", "description": "邮件主题"},
+            "body": {"type": "string", "description": "内容正文（sms/email）"},
+            "address": {"type": "string", "description": "导航地址"},
+            "lat": {"type": "number", "description": "纬度"},
+            "lng": {"type": "number", "description": "经度"},
+            "text": {"type": "string", "description": "要复制的文本"}
+          },
+          "required": ["action"]
+        }
+      }
+    }
   ],
   "domainToolMatrix": [
     {
       "domainId": "weather",
-      "allowedTools": [
-        "local_context",
-        "web_search",
-        "web_fetch",
-        "memory_search"
-      ],
-      "preferredTools": [
-        "local_context",
-        "web_search"
-      ],
-      "skillHints": [
-        "weather.city_resolution",
-        "weather.realtime_search"
-      ]
+      "allowedTools": ["local_context", "web_search", "web_fetch", "memory_search", "scheduler"],
+      "preferredTools": ["local_context", "web_search"],
+      "skillHints": ["weather.city_resolution", "weather.realtime_search"]
     },
     {
       "domainId": "travel_transport",
-      "allowedTools": ["web_search", "local_context"],
+      "allowedTools": ["web_search", "local_context", "deep_link", "app_action"],
       "preferredTools": ["web_search", "local_context"],
       "skillHints": ["transport.route_lookup", "transport.realtime_traffic"]
     },
     {
       "domainId": "travel_planning",
-      "allowedTools": ["web_search", "local_context"],
+      "allowedTools": ["web_search", "web_fetch", "local_context", "scheduler", "deep_link"],
       "preferredTools": ["web_search"],
       "skillHints": ["travel.itinerary_plan", "travel.poi_research"]
     },
     {
       "domainId": "local_life",
-      "allowedTools": ["web_search", "local_context"],
+      "allowedTools": ["web_search", "local_context", "deep_link", "app_action"],
       "preferredTools": ["local_context", "web_search"],
       "skillHints": ["local.poi_search", "local.service_lookup"]
     },
     {
       "domainId": "calendar_task",
-      "allowedTools": ["intent_bridge", "local_context"],
-      "preferredTools": ["intent_bridge"],
+      "allowedTools": ["scheduler", "intent_bridge", "local_context", "deep_link"],
+      "preferredTools": ["scheduler"],
       "skillHints": ["calendar.schedule_create", "task.reminder_setup"]
     },
     {
       "domainId": "knowledge_general",
-      "allowedTools": ["web_search", "web_fetch", "memory_search"],
+      "allowedTools": ["web_search", "web_fetch", "memory_search", "app_action"],
       "preferredTools": ["web_search", "web_fetch"],
       "skillHints": ["knowledge.explain", "knowledge.reference_trace"]
     },
     {
       "domainId": "finance_consumer",
-      "allowedTools": ["web_search"],
+      "allowedTools": ["web_search", "web_fetch", "memory_search"],
       "preferredTools": ["web_search"],
       "skillHints": ["finance.budget_advice", "finance.risk_notice"]
     },
     {
       "domainId": "health_wellness",
-      "allowedTools": ["web_search", "local_context"],
+      "allowedTools": ["web_search", "web_fetch", "local_context", "memory_search"],
       "preferredTools": ["web_search"],
       "skillHints": ["health.wellness_advice", "health.boundary_notice"]
     },
     {
       "domainId": "education_learning",
-      "allowedTools": ["web_search"],
+      "allowedTools": ["web_search", "web_fetch", "memory_search", "app_action"],
       "preferredTools": ["web_search"],
       "skillHints": ["learning.plan", "learning.resource_lookup"]
     },
     {
       "domainId": "work_productivity",
-      "allowedTools": ["web_search"],
-      "preferredTools": ["web_search"],
+      "allowedTools": ["web_search", "scheduler", "app_action", "deep_link"],
+      "preferredTools": ["web_search", "scheduler"],
       "skillHints": ["work.task_breakdown", "career.interview_support"]
     },
     {
       "domainId": "shopping_decision",
-      "allowedTools": ["web_search"],
+      "allowedTools": ["web_search", "web_fetch", "deep_link", "app_action"],
       "preferredTools": ["web_search"],
       "skillHints": ["shopping.compare", "shopping.recommendation"]
     },
     {
       "domainId": "policy_public_service",
-      "allowedTools": ["web_search", "local_context"],
+      "allowedTools": ["web_search", "web_fetch", "local_context", "deep_link"],
       "preferredTools": ["web_search", "local_context"],
       "skillHints": ["policy.lookup", "gov.service_process"]
     },
     {
       "domainId": "emotion_companion",
-      "allowedTools": ["web_search"],
-      "preferredTools": ["web_search"],
+      "allowedTools": ["web_search", "memory_search", "local_context"],
+      "preferredTools": ["memory_search"],
       "skillHints": ["emotion.support", "emotion.safe_boundary"]
     },
     {
-      "domainId": "social_companion_chat",
-      "allowedTools": ["local_context"],
-      "preferredTools": ["local_context"],
-      "skillHints": ["chat.small_talk", "chat.contextual_response"]
-    },
-    {
-      "domainId": "relationship_matchmaking",
-      "allowedTools": ["web_search"],
+      "domainId": "fortune_astrology",
+      "allowedTools": ["web_search", "local_context", "memory_search"],
       "preferredTools": ["web_search"],
-      "skillHints": ["relationship.communication", "relationship.boundary"]
-    },
-    {
-      "domainId": "divination_fortune",
-      "allowedTools": [
-        "web_search"
-      ],
-      "preferredTools": [
-        "web_search"
-      ],
-      "skillHints": [
-        "fortune.interpretation",
-        "fortune.safety_boundary",
-        "retrieval.web"
-      ]
-    },
-    {
-      "domainId": "astrology_constellation",
-      "allowedTools": ["web_search"],
-      "preferredTools": ["web_search"],
-      "skillHints": ["astrology.chart_read", "astrology.daily_summary"]
-    },
-    {
-      "domainId": "family_parenting",
-      "allowedTools": ["web_search"],
-      "preferredTools": ["web_search"],
-      "skillHints": ["parenting.guidance", "family.communication"]
+      "skillHints": ["fortune.interpretation", "astrology.chart_read", "fortune.safety_boundary"]
     },
     {
       "domainId": "fallback_general_search",
-      "allowedTools": ["web_search", "web_fetch", "local_context", "memory_search"],
+      "allowedTools": ["web_search", "web_fetch", "local_context", "memory_search", "deep_link", "app_action"],
       "preferredTools": ["web_search"],
       "skillHints": ["fallback.general_query", "fallback.context_hint"]
     }

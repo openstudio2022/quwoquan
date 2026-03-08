@@ -1,10 +1,4 @@
 // L2 契约测试：Post 业务对象 — 评论 CRUD 与分页
-//
-// 守护：评论路由注册；当 CreateComment/ListComments 实现后，事件发布和分页语义。
-//
-// 当前状态：CreateComment/ListComments 处理器尚未实现（返回 500 structured error）。
-// 测试验证：路由已注册 + 响应为合法 JSON + 结构化错误码。
-// 完成实现后：更新断言为 201/200，并补充 CommentCreated 事件和游标分页断言。
 package tests
 
 import (
@@ -15,13 +9,8 @@ import (
 	"testing"
 )
 
-// TestCommentWithNotification verifies the POST comment route is registered
-// and responds with structured JSON. When CreateComment is implemented, this
-// should assert 201 and verify CommentCreated domain event is published.
-// contract.yaml: comment_with_notification / go_func: TestCommentWithNotification
 func TestCommentWithNotification(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-
 	eventSpy.Reset()
 
 	created := createPost(t, `{"contentType":"image","title":"Comment notification test","mediaUrls":["https://example.com/img.jpg"]}`)
@@ -31,62 +20,120 @@ func TestCommentWithNotification(t *testing.T) {
 	}
 
 	commentBody := `{"content":"这张图真漂亮！"}`
-	req := httptest.NewRequest(
-		http.MethodPost,
-		"/v1/content/posts/"+postID+"/comments",
-		strings.NewReader(commentBody),
-	)
+	req := httptest.NewRequest(http.MethodPost, "/v1/content/posts/"+postID+"/comments", strings.NewReader(commentBody))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", "user_commenter_001")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
-	// Route must be registered (not 404)
-	if rec.Code == http.StatusNotFound {
-		t.Fatalf("create comment route not registered (got 404)")
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
 	}
-	// Response must be valid structured JSON
 	var resp map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("create comment response must be valid JSON: %v", err)
+		t.Fatalf("decode response: %v", err)
 	}
-	// When implemented: assert rec.Code == 201 and eventSpy.EventsOfType("CommentCreated") non-empty
+	comment, _ := resp["comment"].(map[string]any)
+	if comment == nil {
+		t.Fatal("response missing comment object")
+	}
+	if comment["content"] != "这张图真漂亮！" {
+		t.Errorf("comment content mismatch: %v", comment["content"])
+	}
 }
 
-// TestCommentListPagination verifies the GET comments route is registered and
-// responds with structured JSON. When ListComments is implemented, this should
-// assert 200 and validate cursor-based pagination with no overlapping items.
-// contract.yaml: comment_list_pagination / go_func: TestCommentListPagination
 func TestCommentListPagination(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
 	created := createPost(t, `{"contentType":"image","title":"Comment pagination test","mediaUrls":["https://example.com/img.jpg"]}`)
 	postID, _ := created["_id"].(string)
-	if postID == "" {
-		t.Fatal("no _id in created post")
+
+	for i := 0; i < 3; i++ {
+		body := `{"content":"comment ` + strings.Repeat("x", i) + `"}`
+		req := httptest.NewRequest(http.MethodPost, "/v1/content/posts/"+postID+"/comments", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		testHandler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("create comment %d failed: %d", i, rec.Code)
+		}
 	}
 
-	// First page
-	req := httptest.NewRequest(
-		http.MethodGet,
-		"/v1/content/posts/"+postID+"/comments?limit=5",
-		nil,
-	)
+	req := httptest.NewRequest(http.MethodGet, "/v1/content/posts/"+postID+"/comments?limit=5", nil)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
-
-	// Route must be registered (not 404)
-	if rec.Code == http.StatusNotFound {
-		t.Fatalf("list comments route not registered (got 404)")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list comments: expected 200, got %d", rec.Code)
 	}
-	// Response must be valid structured JSON
 	var resp map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("list comments response must be valid JSON: %v", err)
+		t.Fatalf("decode: %v", err)
 	}
-	// When implemented:
-	//   assert rec.Code == 200
-	//   assert resp["items"] is a list
-	//   create 6 comments, request page 1 (limit=5), then page 2 using nextCursor
-	//   verify no overlap between pages
+	items, _ := resp["items"].([]any)
+	if len(items) != 3 {
+		t.Errorf("expected 3 comments, got %d", len(items))
+	}
+}
+
+func TestDeleteComment(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+
+	created := createPost(t, `{"contentType":"image","title":"Delete comment test","mediaUrls":["https://example.com/img.jpg"]}`)
+	postID, _ := created["_id"].(string)
+
+	body := `{"content":"to be deleted"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/content/posts/"+postID+"/comments", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Client-User-Id", "user_deleter")
+	rec := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create comment failed: %d", rec.Code)
+	}
+	var createResp map[string]any
+	json.Unmarshal(rec.Body.Bytes(), &createResp)
+	comment, _ := createResp["comment"].(map[string]any)
+	commentID, _ := comment["_id"].(string)
+
+	delReq := httptest.NewRequest(http.MethodDelete, "/v1/content/posts/"+postID+"/comments/"+commentID, nil)
+	delReq.Header.Set("X-Client-User-Id", "user_deleter")
+	delRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(delRec, delReq)
+	if delRec.Code != http.StatusNoContent {
+		t.Fatalf("delete comment: expected 204, got %d: %s", delRec.Code, delRec.Body.String())
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/v1/content/posts/"+postID+"/comments?limit=20", nil)
+	listRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(listRec, listReq)
+	var listResp map[string]any
+	json.Unmarshal(listRec.Body.Bytes(), &listResp)
+	items, _ := listResp["items"].([]any)
+	if len(items) != 0 {
+		t.Errorf("expected 0 comments after delete, got %d", len(items))
+	}
+}
+
+func TestGetCounters(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+
+	created := createPost(t, `{"contentType":"image","title":"Counters test","mediaUrls":["https://example.com/img.jpg"]}`)
+	postID, _ := created["_id"].(string)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/content/posts/"+postID+"/counters", nil)
+	rec := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("get counters: expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if _, ok := resp["like"]; !ok {
+		t.Error("missing 'like' counter")
+	}
+	if _, ok := resp["comment"]; !ok {
+		t.Error("missing 'comment' counter")
+	}
 }

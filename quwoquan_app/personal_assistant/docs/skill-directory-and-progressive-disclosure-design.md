@@ -1,6 +1,6 @@
 # Personal Assistant Skill 目录结构与渐进式披露设计
 
-> **版本**：v1.0 · **日期**：2026-03-05  
+> **版本**：v1.1 · **日期**：2026-03-07（更新活跃技能列表）
 > **范围**：`assets/personal_assistant/skills/*` 目录规范、运行时加载策略、槽位国际化、开发就绪度评估  
 > **从属**：`personal_assistant/docs/skill_development_standard.md` 的配套实施细则
 
@@ -211,16 +211,53 @@ script_guides:  references/tool-call-guidance.md
 
 ---
 
-## 四、槽位国际化检查结果
+## 四、当前活跃技能目录
 
-### 4.1 检查结论
+### 4.0 活跃技能（15 个）
 
-对 19 个技能的 `skill.policy.md` 进行全量扫描，结论如下：
+路由由 LLM 自主选择（读取 `domain_routing_catalog.json` 中的 `description`），不再依赖 `intentKeywords` 关键词匹配。
+
+| domainId | mode | searchPolicy.strategy | 说明 |
+|---|---|---|---|
+| `weather` | hybrid | realtime | 天气查询、出行建议、穿衣推荐 |
+| `travel_transport` | hybrid | realtime | 交通路线、导航、实时路况 |
+| `travel_planning` | hybrid | research | 旅行攻略、景点、酒店机票 |
+| `local_life` | hybrid | realtime | 餐厅美食、本地服务、周边推荐 |
+| `calendar_task` | task | none | 日程管理、提醒设置、待办跟踪 |
+| `knowledge_general` | qa | research | 百科知识、原理解释、事实查询 |
+| `finance_consumer` | qa | research | 理财、投资、贷款预算 |
+| `health_wellness` | qa | research | 健康咨询、养生、症状科普 |
+| `education_learning` | qa | research | 学习辅导、考试备考 |
+| `work_productivity` | hybrid | research | 工作效率、职业规划 |
+| `shopping_decision` | hybrid | research | 选购对比、性价比分析 |
+| `policy_public_service` | qa | research | 政策解读、政务服务 |
+| `emotion_companion` | qa | none | 情感陪伴、心理疏导 |
+| `fortune_astrology` | qa | none | 星座运势、占卜趣味 |
+| `fallback_general_search` | qa | research | 通用搜索兜底 |
+
+### 废弃技能（已下线，目录仍存在但不在路由中启用）
+
+| 废弃 domainId | 处理方式 |
+|---|---|
+| `huawei_cloud_qa` | 下线，不再路由 |
+| `social_companion_chat` | 合并入 `emotion_companion` |
+| `relationship_matchmaking` | 合并入 `emotion_companion` |
+| `family_parenting` | 合并入 `emotion_companion` |
+| `divination_fortune` | 合并为 `fortune_astrology` |
+| `astrology_constellation` | 合并为 `fortune_astrology` |
+
+---
+
+## 五、槽位国际化检查结果
+
+### 5.1 检查结论
+
+对 15 个活跃技能的 `skill.policy.md` 进行全量扫描，结论如下：
 
 | 检查项 | 现状 | 是否满足 |
 |---|---|---|
-| 响应语言随用户语言 | 全部 19 个技能均声明 "Follow user language for final response" | ✅ |
-| 双语检索声明 | 12/19 个技能声明了 bilingual retrieval 策略 | ✅（部分） |
+| 响应语言随用户语言 | 全部 15 个活跃技能均声明 "Follow user language for final response" | ✅ |
+| 双语检索声明 | 部分技能声明了 bilingual retrieval 策略 | ✅（部分） |
 | 搜索引擎查询规范化 | `planner.global_plan.md` 的 `queryNormalization` 覆盖拼音→中文、英文→中文 | ✅ |
 | 查询变体（提升召回） | `queryVariants` 3 条变体（精确/宽泛/权威域） | ✅ |
 | 提示词统一中文 | `skill.policy.md` 全部为**英文** | ❌ 不符合标准 |
@@ -330,15 +367,15 @@ skill_id: finance_consumer
 
 ---
 
-## 五、开发就绪度评估
+## 六、开发就绪度评估
 
 ### 5.1 P0（可立即开发，无阻塞）
 
 | 任务 | 对应代码位置 | 预估工时 |
 |---|---|---|
 | **Phase-aware 加载实现** | `agent_loop._resolveSkillContext` 增加 `phase` 参数，加载 `reference_docs`/`script_guides` 对应文件 | 0.5d |
-| **tool-call-guidance 迁移** | 19 个技能将 `scripts/tool-call-guidance.md` 重命名移入 `references/`，更新 SKILL.md frontmatter | 0.5d |
-| **skill.policy.md 中文化** | 19 个技能将 `skill.policy.md` 由英文改写为中文 | 1d |
+| **tool-call-guidance 迁移** | 15 个活跃技能将 `scripts/tool-call-guidance.md` 重命名移入 `references/`，更新 SKILL.md frontmatter | 0.5d |
+| **skill.policy.md 中文化** | 15 个活跃技能将 `skill.policy.md` 由英文改写为中文 | 1d |
 | **state_transition_test_cases 接入测试** | 新建 `test/personal_assistant/dialogue_state_transition_contract_test.dart` | 0.5d |
 
 ### 5.2 P1（需要小范围规格确认后开发）
@@ -353,7 +390,7 @@ skill_id: finance_consumer
 
 | 任务 | 缺什么 | 备注 |
 |---|---|---|
-| `slot-contract.md` 创建（19 个技能） | 各技能槽位全集定义尚未文档化 | 可在 domain-knowledge.md 中先用表格暂代 |
+| `slot-contract.md` 创建（15 个活跃技能） | 各技能槽位全集定义尚未文档化 | 可在 domain-knowledge.md 中先用表格暂代 |
 | `dialogue_judge_prompt.md` 升级为通用 LLM 状态判定服务 | 需设计 judge 模型的 token 预算策略 | 独立 subagent 方向 |
 
 ### 5.4 门禁补充
@@ -381,7 +418,7 @@ test('domain-knowledge.md should declare slot i18n rules', () {
 
 ---
 
-## 六、变更对照表（迁移路径）
+## 七、变更对照表（迁移路径）
 
 | 变更项 | 当前状态 | 目标状态 | 是否破坏性 |
 |---|---|---|---|
