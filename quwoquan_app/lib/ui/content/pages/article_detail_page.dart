@@ -5,8 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/features/assistant/context/assistant_open_context.dart';
-import 'package:quwoquan_app/features/assistant/widgets/assistant_half_sheet.dart';
+import 'package:quwoquan_app/core/models/assistant_open_context.dart';
+import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
+import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
 import 'package:quwoquan_app/ui/content/article_detail_view.dart';
 import 'package:quwoquan_app/ui/content/post_view_projection.dart';
 
@@ -243,7 +244,12 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
                     icon: CupertinoIcons.chat_bubble,
                     label: _formatCount(_commentsCount),
                     color: AppColors.worksTitle,
-                    onTap: () {},
+                    onTap: () {
+                      CommentViewer.showModal(
+                        context: context,
+                        postId: widget.articleId,
+                      );
+                    },
                   ),
                 ],
               ),

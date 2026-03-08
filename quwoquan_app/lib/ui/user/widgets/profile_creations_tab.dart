@@ -31,8 +31,14 @@ class ProfileCreationsTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.watch(profileNotifierProvider(userId));
     final state = notifier.state;
-    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    final fg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
     final primary = AppColors.primaryColor;
 
     return Column(
@@ -44,19 +50,25 @@ class ProfileCreationsTab extends ConsumerWidget {
               Expanded(
                 child: ListView(
                   scrollDirection: Axis.horizontal,
-                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: AppSpacing.containerMd,
+                  ),
                   children: CreationSubTab.values.map((tab) {
                     final isActive = tab == state.activeSubTab;
                     return GestureDetector(
                       onTap: () => notifier.setSubTab(tab),
                       child: Container(
                         alignment: Alignment.center,
-                        padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: AppSpacing.containerSm,
+                        ),
                         child: Text(
                           _subTabLabels[tab]!,
                           style: TextStyle(
                             fontSize: AppTypography.md,
-                            fontWeight: isActive ? AppTypography.semiBold : AppTypography.normal,
+                            fontWeight: isActive
+                                ? AppTypography.semiBold
+                                : AppTypography.normal,
                             color: isActive ? primary : fgSecondary,
                           ),
                         ),
@@ -81,16 +93,18 @@ class ProfileCreationsTab extends ConsumerWidget {
               onSelected: notifier.setVisibility,
             ),
           ),
-        Expanded(
-          child: _buildCreationsGrid(state, fg, fgSecondary),
-        ),
+        Expanded(child: _buildCreationsGrid(state, fg, fgSecondary)),
       ],
     );
   }
 
   String _coverUrlForPost(PostBaseDto post) {
     final map = post.toMap();
-    return (map['coverUrl'] ?? map['thumbnailUrl'] ?? map['imageUrls']?[0] ?? '').toString();
+    return (map['coverUrl'] ??
+            map['thumbnailUrl'] ??
+            map['imageUrls']?[0] ??
+            '')
+        .toString();
   }
 
   Widget _buildCreationsGrid(ProfileState state, Color fg, Color fgSecondary) {
@@ -112,7 +126,11 @@ class ProfileCreationsTab extends ConsumerWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.photo_library_outlined, size: AppSpacing.xl * 2, color: fgSecondary),
+            Icon(
+              Icons.photo_library_outlined,
+              size: AppSpacing.xl * 2,
+              color: fgSecondary,
+            ),
             SizedBox(height: AppSpacing.md),
             Text(
               mode == ProfileMode.mine ? '还没有创作内容' : 'Ta 还没有创作内容',
@@ -145,7 +163,7 @@ class ProfileCreationsTab extends ConsumerWidget {
                 Image.network(
                   cover,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
+                  errorBuilder: (_, _, _) => Container(
                     color: fgSecondary.withValues(alpha: 0.1),
                     child: Icon(Icons.image, color: fgSecondary),
                   ),
@@ -184,7 +202,11 @@ class ProfileCreationsTab extends ConsumerWidget {
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.favorite, size: AppTypography.sm, color: Colors.white),
+                      Icon(
+                        Icons.favorite,
+                        size: AppTypography.sm,
+                        color: Colors.white,
+                      ),
                       SizedBox(width: AppSpacing.intraGroupXs),
                       Text(
                         '${post.likeCount}',

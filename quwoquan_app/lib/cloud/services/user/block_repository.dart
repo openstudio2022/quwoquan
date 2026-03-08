@@ -1,6 +1,8 @@
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 
 /// 用户拉黑 Repository（三层模式：Abstract → Mock → Remote）
@@ -43,13 +45,15 @@ class RemoteBlockRepository extends BlockRepository {
   // 本地缓存已拉黑的用户 ID，避免每次查询都发 HTTP
   final Set<String> _localCache;
 
+  Uri _uri(String path) => Uri.parse('$_baseUrl$path');
+
   @override
   Future<void> blockUser(String targetUserId) async {
-    final uri = Uri.parse('$_baseUrl/v1/user/block/$targetUserId');
+    final uri = _uri(UserApiMetadata.blockUserPath(targetUserId: targetUserId));
     try {
       await _httpClient.postJson(
         uri,
-        headers: CloudRequestHeaders.forPage('user.block.create'),
+        headers: CloudRequestHeaders.forPage(UserRequestPageIds.blockUser),
         body: const <String, dynamic>{},
       );
       _localCache.add(targetUserId);
@@ -62,11 +66,13 @@ class RemoteBlockRepository extends BlockRepository {
 
   @override
   Future<void> unblockUser(String targetUserId) async {
-    final uri = Uri.parse('$_baseUrl/v1/user/block/$targetUserId');
+    final uri = _uri(
+      UserApiMetadata.unblockUserPath(targetUserId: targetUserId),
+    );
     try {
       await _httpClient.deleteJson(
         uri,
-        headers: CloudRequestHeaders.forPage('user.block.delete'),
+        headers: CloudRequestHeaders.forPage(UserRequestPageIds.unblockUser),
       );
       _localCache.remove(targetUserId);
     } catch (_) {

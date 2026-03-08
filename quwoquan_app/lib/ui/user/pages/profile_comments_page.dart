@@ -1,0 +1,242 @@
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
+import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/ui/user/providers/profile_comments_provider.dart';
+
+class ProfileCommentsPage extends ConsumerStatefulWidget {
+  const ProfileCommentsPage({super.key});
+
+  @override
+  ConsumerState<ProfileCommentsPage> createState() =>
+      _ProfileCommentsPageState();
+}
+
+class _ProfileCommentsPageState extends ConsumerState<ProfileCommentsPage>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(sentCommentsProvider.notifier).load();
+      ref.read(receivedCommentsProvider.notifier).load();
+    });
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(
+        middle: const Text(UITextConstants.comment),
+        leading: CupertinoNavigationBarBackButton(
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ),
+      child: SafeArea(
+        child: Column(
+          children: [
+            _buildTabBar(isDark),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _CommentsListView(
+                    provider: sentCommentsProvider,
+                    isDark: isDark,
+                  ),
+                  _CommentsListView(
+                    provider: receivedCommentsProvider,
+                    isDark: isDark,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabBar(bool isDark) {
+    return Material(
+      color: AppColorsFunctional.getColor(
+          isDark, ColorType.backgroundPrimary),
+      child: TabBar(
+        controller: _tabController,
+        labelColor: AppColors.primaryColor,
+        unselectedLabelColor: AppColorsFunctional.getColor(
+            isDark, ColorType.foregroundSecondary),
+        indicatorColor: AppColors.primaryColor,
+        labelStyle: TextStyle(
+            fontSize: AppTypography.sm, fontWeight: FontWeight.w600),
+        tabs: const [
+          Tab(text: '我发出的'),
+          Tab(text: '我收到的'),
+        ],
+      ),
+    );
+  }
+}
+
+class _CommentsListView extends ConsumerWidget {
+  final StateNotifierProvider<ProfileCommentsNotifier, ProfileCommentsState>
+      provider;
+  final bool isDark;
+
+  const _CommentsListView({required this.provider, required this.isDark});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(provider);
+
+    if (state.isLoading && state.comments.isEmpty) {
+      return const Center(child: CupertinoActivityIndicator());
+    }
+    if (state.error != null && state.comments.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(UITextConstants.loadFailed,
+                style: TextStyle(
+                    fontSize: AppTypography.sm,
+                    color: AppColorsFunctional.getColor(
+                        isDark, ColorType.foregroundSecondary))),
+            SizedBox(height: AppSpacing.md),
+            CupertinoButton(
+              onPressed: () => ref.read(provider.notifier).load(),
+              child: Text(UITextConstants.retry),
+            ),
+          ],
+        ),
+      );
+    }
+    if (state.comments.isEmpty) {
+      return Center(
+        child: Text(UITextConstants.noComment,
+            style: TextStyle(
+                fontSize: AppTypography.sm,
+                color: AppColorsFunctional.getColor(
+                    isDark, ColorType.foregroundSecondary))),
+      );
+    }
+
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification is ScrollEndNotification &&
+            notification.metrics.pixels >=
+                notification.metrics.maxScrollExtent - 200) {
+          ref.read(provider.notifier).loadMore();
+        }
+        return false;
+      },
+      child: ListView.builder(
+        padding: EdgeInsets.all(AppSpacing.md),
+        itemCount: state.comments.length +
+            (state.isLoadingMore ? 1 : 0),
+        itemBuilder: (ctx, index) {
+          if (index >= state.comments.length) {
+            return Padding(
+              padding: EdgeInsets.all(AppSpacing.md),
+              child: const Center(child: CupertinoActivityIndicator()),
+            );
+          }
+          return _ProfileCommentItem(
+            comment: state.comments[index],
+            isDark: isDark,
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ProfileCommentItem extends StatelessWidget {
+  final CommentDto comment;
+  final bool isDark;
+
+  const _ProfileCommentItem({required this.comment, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: AppColorsFunctional.getColor(
+                isDark, ColorType.borderPrimary),
+            width: 0.5,
+          ),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: AppSpacing.iconSmall,
+                backgroundColor: AppColorsFunctional.getColor(
+                    isDark, ColorType.backgroundSecondary),
+                child: Icon(CupertinoIcons.person_fill,
+                    size: AppSpacing.iconSmall,
+                    color: AppColorsFunctional.getColor(
+                        isDark, ColorType.foregroundTertiary)),
+              ),
+              SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  comment.displayName ?? comment.authorId,
+                  style: TextStyle(
+                    fontSize: AppTypography.xs,
+                    fontWeight: FontWeight.w500,
+                    color: AppColorsFunctional.getColor(
+                        isDark, ColorType.foregroundSecondary),
+                  ),
+                ),
+              ),
+              Text(
+                _formatTime(comment.createdAt),
+                style: TextStyle(
+                  fontSize: AppTypography.xs,
+                  color: AppColorsFunctional.getColor(
+                      isDark, ColorType.foregroundTertiary),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: AppSpacing.xs),
+          Padding(
+            padding: EdgeInsets.only(
+                left: AppSpacing.iconSmall * 2 + AppSpacing.sm),
+            child: Text(comment.content,
+                style: TextStyle(fontSize: AppTypography.sm)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatTime(DateTime time) {
+    final diff = DateTime.now().difference(time);
+    if (diff.inMinutes < 1) return '刚刚';
+    if (diff.inHours < 1) return '${diff.inMinutes}分钟前';
+    if (diff.inDays < 1) return '${diff.inHours}小时前';
+    if (diff.inDays < 30) return '${diff.inDays}天前';
+    return '${time.month}月${time.day}日';
+  }
+}

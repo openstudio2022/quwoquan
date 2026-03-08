@@ -295,7 +295,7 @@ class _CommentInputState extends ConsumerState<CommentInput> {
     }
     
     // 检查内容长度
-    if (content.length > 1000) {
+    if (content.length > 500) {
       _showError(UITextConstants.commentTooLong);
       return;
     }
@@ -344,7 +344,7 @@ class CommentInputUtils {
       return UITextConstants.commentEmpty;
     }
     
-    if (content.length > 1000) {
+    if (content.length > 500) {
       return UITextConstants.commentTooLong;
     }
     
@@ -365,6 +365,6 @@ class CommentInputUtils {
   static bool canSend(String content, CommentConfig config) {
     return content.trim().isNotEmpty && 
            config.canUserComment &&
-           content.trim().length <= 1000;
+           content.trim().length <= 500;
   }
 }

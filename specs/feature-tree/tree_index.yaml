@@ -1206,25 +1206,25 @@ features:
           children:
             - id: comment-thread
               name: comment-thread
-              level: L3_component
+              level: L3_subfeature
               path: ../specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread
-              domain: ""
+              domain: content
               status: specified
-              tags: []
+              tags: [v1-prd, commercial-grade]
               children:
                 - id: comment-reply-pagination-contract
                   name: comment-reply-pagination-contract
-                  level: L4_detail
+                  level: L4_story
                   path: ../specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/comment-reply-pagination-contract
-                  domain: ""
+                  domain: content
                   status: specified
                   tags: []
                   children:
                     - id: moderation-delete-audit-guard
                       name: moderation-delete-audit-guard
-                      level: L5_leaf
+                      level: L5
                       path: ../specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/comment-reply-pagination-contract/moderation-delete-audit-guard
-                      domain: ""
+                      domain: content
                       status: specified
                       tags: []
             - id: post-create-update

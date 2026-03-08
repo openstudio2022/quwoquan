@@ -66,22 +66,31 @@ class ChatMessageBubble extends StatelessWidget {
   final void Function(LongPressStartDetails details) onLongPressStart;
   final VoidCallback? onTap;
   final VoidCallback? onAvatarTap;
+
   /// 为 true 时不展示头像与昵称（新会话交互布局）
   final bool hideAvatarAndName;
+
   /// 为 true 时气泡内容占满可用宽度（新会话交互布局）
   final bool useFullWidth;
+
   /// 当前轮助手回复的顶部状态文案（如「小趣正在规划与执行中」），非 null 时在气泡顶部展示
   final String? runningStatusLabel;
+
   /// Unified process state driving the single-drawer UI.
   final AssistantProcessState? processState;
+
   /// Whether the assistant is currently running (drives drawer animation).
   final bool isAssistantRunning;
+
   /// Callback from the regenerate options popup.
   final void Function(RegenerateOption option)? onRegenerateOptionSelected;
+
   /// 会话是否开启已读回执
   final bool receiptEnabled;
+
   /// 会话成员数（群聊 >2 时不展示逐条回执）
   final int memberCount;
+
   /// 消息发送状态（sending / sent / failed / recalled）
   final String? messageStatus;
   final bool showAssistantAvatar;
@@ -106,10 +115,7 @@ class ChatMessageBubble extends StatelessWidget {
     const horizontalPadding = 24.0;
     final effectiveMaxWidth = useFullWidth
         ? viewportWidth - 2 * horizontalPadding
-        : math.max(
-            chatBubbleMaxWidth,
-            viewportWidth * chatBubbleWidthFactor,
-          );
+        : math.max(chatBubbleMaxWidth, viewportWidth * chatBubbleWidthFactor);
     final type = message['type'] as String? ?? 'text';
     final content = message['content'] as String? ?? '';
     final streamFinalAnswer = message['streamFinalAnswer'] as String? ?? '';
@@ -206,22 +212,17 @@ class ChatMessageBubble extends StatelessWidget {
         ),
       );
     } else if (type == 'audio') {
-      final media =
-          message['media'] is Map
-              ? (message['media'] as Map).cast<String, dynamic>()
-              : <String, dynamic>{};
+      final media = message['media'] is Map
+          ? (message['media'] as Map).cast<String, dynamic>()
+          : <String, dynamic>{};
       final mediaUrl =
-          (media['url'] as String?) ??
-          (message['mediaUrl'] as String?) ??
-          '';
+          (media['url'] as String?) ?? (message['mediaUrl'] as String?) ?? '';
       final durationMs = (media['durationMs'] as num?)?.toInt() ?? 0;
       final waveformRaw = media['waveform'];
-      final waveform =
-          waveformRaw is List
-              ? waveformRaw.map((e) => (e as num).toDouble()).toList()
-              : <double>[];
-      final msgId =
-          (message['_id'] ?? message['id'] ?? '') as String;
+      final waveform = waveformRaw is List
+          ? waveformRaw.map((e) => (e as num).toDouble()).toList()
+          : <double>[];
+      final msgId = (message['_id'] ?? message['id'] ?? '') as String;
       final msgStatus =
           (message['messageStatus'] ?? message['status'] ?? 'sent') as String;
       contentWidget = VoiceMessageBubble(
@@ -275,18 +276,6 @@ class ChatMessageBubble extends StatelessWidget {
         (message['uiPhaseTimelineV1'] as List?)
             ?.whereType<Map>()
             .map((item) => item.cast<String, dynamic>())
-            .toList(growable: false) ??
-        const <Map<String, dynamic>>[];
-    // 顶层参考资料列表：汇集所有 web_search 工具返回的来源，在答案下方独立展示
-    final uiReferences =
-        (message['uiReferences'] as List?)
-            ?.whereType<Map>()
-            .map((item) => item.cast<String, dynamic>())
-            .where(
-              (item) =>
-                  ((item['url'] as String?)?.trim().isNotEmpty ?? false) &&
-                  ((item['title'] as String?)?.trim().isNotEmpty ?? false),
-            )
             .toList(growable: false) ??
         const <Map<String, dynamic>>[];
     final hideAnswerBubbleWhileStreamingProcess =
@@ -350,9 +339,7 @@ class ChatMessageBubble extends StatelessWidget {
                     : CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (!hideAvatarAndName &&
-                      senderName.isNotEmpty &&
-                      !isRight)
+                  if (!hideAvatarAndName && senderName.isNotEmpty && !isRight)
                     Padding(
                       padding: EdgeInsets.only(
                         left: AppSpacing.xs,
@@ -375,9 +362,8 @@ class ChatMessageBubble extends StatelessWidget {
                       isRunning: isAssistantRunning,
                       initiallyExpanded: isAssistantRunning,
                       onReferenceUrlTap: onReferenceTap != null
-                          ? (url) => onReferenceTap!(
-                                <String, dynamic>{'url': url},
-                              )
+                          ? (url) =>
+                                onReferenceTap!(<String, dynamic>{'url': url})
                           : null,
                     )
                   else if (isAssistantMessage &&
@@ -387,9 +373,8 @@ class ChatMessageBubble extends StatelessWidget {
                       isRunning: false,
                       initiallyExpanded: false,
                       onReferenceUrlTap: onReferenceTap != null
-                          ? (url) => onReferenceTap!(
-                                <String, dynamic>{'url': url},
-                              )
+                          ? (url) =>
+                                onReferenceTap!(<String, dynamic>{'url': url})
                           : null,
                     )
                   else if (runningStatusLabel != null)
@@ -502,7 +487,9 @@ class ChatMessageBubble extends StatelessWidget {
     required String content,
     required Color textColor,
   }) {
-    final cleaned = content.replaceFirst(_referenceBlockPattern, '').trimRight();
+    final cleaned = content
+        .replaceFirst(_referenceBlockPattern, '')
+        .trimRight();
     final segments = _MarkdownSegment.parse(cleaned);
     final textStyle = TextStyle(
       fontSize:
@@ -567,7 +554,8 @@ class ChatMessageBubble extends StatelessWidget {
     required MarkdownStyleSheet styleSheet,
     required TextStyle textStyle,
   }) {
-    final hasTable = markdownText.contains('|') &&
+    final hasTable =
+        markdownText.contains('|') &&
         RegExp(r'\|[^\n]+\|').hasMatch(markdownText);
     try {
       final body = MarkdownBody(
@@ -596,10 +584,11 @@ bool _hasPersistedProcessBlocks(Map<String, dynamic> message) {
 }
 
 AssistantProcessState _rebuildProcessStateFromMessage(
-    Map<String, dynamic> message) {
+  Map<String, dynamic> message,
+) {
   final rawBlocks =
       (message['uiProcessContentBlocks'] as List?)?.whereType<Map>() ??
-          const <Map>[];
+      const <Map>[];
   final contentBlocks = <ProcessContentBlock>[];
   for (final raw in rawBlocks) {
     final typeName = (raw['type'] as String?) ?? 'text';
@@ -607,11 +596,13 @@ AssistantProcessState _rebuildProcessStateFromMessage(
     final rawRefs =
         (raw['references'] as List?)?.whereType<Map>() ?? const <Map>[];
     final refs = rawRefs
-        .map((r) => ProcessReference(
-              title: (r['title'] as String?) ?? '',
-              url: (r['url'] as String?) ?? '',
-              source: (r['source'] as String?) ?? '',
-            ))
+        .map(
+          (r) => ProcessReference(
+            title: (r['title'] as String?) ?? '',
+            url: (r['url'] as String?) ?? '',
+            source: (r['source'] as String?) ?? '',
+          ),
+        )
         .toList(growable: false);
     ProcessContentBlockType blockType;
     switch (typeName) {
@@ -622,11 +613,9 @@ AssistantProcessState _rebuildProcessStateFromMessage(
       default:
         blockType = ProcessContentBlockType.text;
     }
-    contentBlocks.add(ProcessContentBlock(
-      type: blockType,
-      text: text,
-      references: refs,
-    ));
+    contentBlocks.add(
+      ProcessContentBlock(type: blockType, text: text, references: refs),
+    );
   }
   final usageStats =
       (message['uiUsageStatsV1'] as Map?)?.cast<String, dynamic>() ??
@@ -642,10 +631,7 @@ AssistantProcessState _rebuildProcessStateFromMessage(
 
 /// 助手当前轮回复顶部的状态行：按阶段展示不同动效 + 文案 + 可选引用数
 class _RunningStatusRow extends StatefulWidget {
-  const _RunningStatusRow({
-    required this.label,
-    required this.textColor,
-  });
+  const _RunningStatusRow({required this.label, required this.textColor});
 
   final String label;
   final Color textColor;
@@ -756,7 +742,9 @@ class _WaitingTwistIndicator extends StatelessWidget {
                   height: AppSpacing.three,
                   decoration: BoxDecoration(
                     color: color.withValues(alpha: 0.85),
-                    borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius),
+                    borderRadius: BorderRadius.circular(
+                      AppSpacing.fullBorderRadius,
+                    ),
                   ),
                 ),
               ),
@@ -767,7 +755,9 @@ class _WaitingTwistIndicator extends StatelessWidget {
                   height: AppSpacing.three,
                   decoration: BoxDecoration(
                     color: color.withValues(alpha: 0.45),
-                    borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius),
+                    borderRadius: BorderRadius.circular(
+                      AppSpacing.fullBorderRadius,
+                    ),
                   ),
                 ),
               ),
@@ -805,7 +795,9 @@ class _SearchingFlowIndicator extends StatelessWidget {
                 height: AppSpacing.ten,
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: alpha(i)),
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusNinetyNine),
+                  borderRadius: BorderRadius.circular(
+                    AppSpacing.radiusNinetyNine,
+                  ),
                 ),
               ),
             ),
@@ -1144,7 +1136,8 @@ class _AssistantPhaseTimelineCard extends StatefulWidget {
       _AssistantPhaseTimelineCardState();
 }
 
-class _AssistantPhaseTimelineCardState extends State<_AssistantPhaseTimelineCard> {
+class _AssistantPhaseTimelineCardState
+    extends State<_AssistantPhaseTimelineCard> {
   final Set<String> _expandedPhaseIds = <String>{};
 
   @override
@@ -1160,136 +1153,146 @@ class _AssistantPhaseTimelineCardState extends State<_AssistantPhaseTimelineCard
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ...widget.phases.map((phase) {
-          final phaseId = (phase['phaseId'] as String?)?.trim().isNotEmpty == true
-              ? (phase['phaseId'] as String).trim()
-              : 'phase_${phase.hashCode}';
-          final expanded = _expandedPhaseIds.contains(phaseId);
-          final title = ((phase['title'] as String?)?.trim().isNotEmpty ?? false)
-              ? (phase['title'] as String).trim()
-              : '过程阶段';
-          final summary = (phase['summary'] as String?)?.trim() ?? '';
-          final status = (phase['status'] as String?)?.trim() ?? '';
-          final details = (phase['details'] as List?)
-                  ?.map((item) => item.toString().trim())
-                  .where((item) => item.isNotEmpty)
-                  .toList(growable: false) ??
-              const <String>[];
-          final references = (phase['references'] as List?)
-                  ?.whereType<Map>()
-                  .map((item) => item.cast<String, dynamic>())
-                  .toList(growable: false) ??
-              const <Map<String, dynamic>>[];
-          return Padding(
-            padding: EdgeInsets.only(bottom: AppSpacing.xs),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.85),
-                borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-              ),
-              child: Column(
-                children: [
-                  InkWell(
-                    onTap: () {
-                      setState(() {
-                        if (expanded) {
-                          _expandedPhaseIds.remove(phaseId);
-                        } else {
-                          _expandedPhaseIds.add(phaseId);
-                        }
-                      });
-                    },
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: AppSpacing.containerSm,
-                        vertical: AppSpacing.xs,
-                      ),
-                      child: Row(
-                        children: [
-                          _phaseStatusDot(status),
-                          SizedBox(width: AppSpacing.xs),
-                          Expanded(
-                            child: Text(
-                              summary.isEmpty ? title : '$title：$summary',
-                              style: TextStyle(
-                                fontSize: AppTypography.sm,
-                                color: AppColors.primaryColor.withValues(alpha: 0.9),
-                                fontWeight: FontWeight.w600,
+            final phaseId =
+                (phase['phaseId'] as String?)?.trim().isNotEmpty == true
+                ? (phase['phaseId'] as String).trim()
+                : 'phase_${phase.hashCode}';
+            final expanded = _expandedPhaseIds.contains(phaseId);
+            final title =
+                ((phase['title'] as String?)?.trim().isNotEmpty ?? false)
+                ? (phase['title'] as String).trim()
+                : '过程阶段';
+            final summary = (phase['summary'] as String?)?.trim() ?? '';
+            final status = (phase['status'] as String?)?.trim() ?? '';
+            final details =
+                (phase['details'] as List?)
+                    ?.map((item) => item.toString().trim())
+                    .where((item) => item.isNotEmpty)
+                    .toList(growable: false) ??
+                const <String>[];
+            final references =
+                (phase['references'] as List?)
+                    ?.whereType<Map>()
+                    .map((item) => item.cast<String, dynamic>())
+                    .toList(growable: false) ??
+                const <Map<String, dynamic>>[];
+            return Padding(
+              padding: EdgeInsets.only(bottom: AppSpacing.xs),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.85),
+                  borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                ),
+                child: Column(
+                  children: [
+                    InkWell(
+                      onTap: () {
+                        setState(() {
+                          if (expanded) {
+                            _expandedPhaseIds.remove(phaseId);
+                          } else {
+                            _expandedPhaseIds.add(phaseId);
+                          }
+                        });
+                      },
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: AppSpacing.containerSm,
+                          vertical: AppSpacing.xs,
+                        ),
+                        child: Row(
+                          children: [
+                            _phaseStatusDot(status),
+                            SizedBox(width: AppSpacing.xs),
+                            Expanded(
+                              child: Text(
+                                summary.isEmpty ? title : '$title：$summary',
+                                style: TextStyle(
+                                  fontSize: AppTypography.sm,
+                                  color: AppColors.primaryColor.withValues(
+                                    alpha: 0.9,
+                                  ),
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
-                          ),
-                          Icon(
-                            expanded ? Icons.expand_less : Icons.expand_more,
-                            size: AppSpacing.iconSmall,
-                            color: AppColors.primaryColor,
-                          ),
-                        ],
+                            Icon(
+                              expanded ? Icons.expand_less : Icons.expand_more,
+                              size: AppSpacing.iconSmall,
+                              color: AppColors.primaryColor,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  if (expanded) ...[
-                    if (details.isNotEmpty)
-                      Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          AppSpacing.containerSm,
-                          0,
-                          AppSpacing.containerSm,
-                          AppSpacing.xs,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: details
-                              .map(
-                                (line) => Padding(
-                                  padding: EdgeInsets.only(bottom: AppSpacing.xs / 2),
-                                  child: Text(
-                                    '• $line',
-                                    style: TextStyle(
-                                      fontSize: AppTypography.sm,
-                                      color: AppColors.primaryColor.withValues(
-                                        alpha: 0.85,
-                                      ),
+                    if (expanded) ...[
+                      if (details.isNotEmpty)
+                        Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            AppSpacing.containerSm,
+                            0,
+                            AppSpacing.containerSm,
+                            AppSpacing.xs,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: details
+                                .map(
+                                  (line) => Padding(
+                                    padding: EdgeInsets.only(
+                                      bottom: AppSpacing.xs / 2,
                                     ),
-                                  ),
-                                ),
-                              )
-                              .toList(growable: false),
-                        ),
-                      ),
-                    if (references.isNotEmpty)
-                      Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          AppSpacing.containerSm,
-                          0,
-                          AppSpacing.containerSm,
-                          AppSpacing.xs,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: references
-                              .map(
-                                (ref) => InkWell(
-                                  onTap: () => widget.onReferenceTap?.call(ref),
-                                  child: Padding(
-                                    padding: EdgeInsets.only(bottom: AppSpacing.xs / 2),
                                     child: Text(
-                                      '来源：${(ref['title'] ?? '').toString()}',
+                                      '• $line',
                                       style: TextStyle(
                                         fontSize: AppTypography.sm,
-                                        color: AppColors.primaryColor,
+                                        color: AppColors.primaryColor
+                                            .withValues(alpha: 0.85),
                                       ),
                                     ),
                                   ),
-                                ),
-                              )
-                              .toList(growable: false),
+                                )
+                                .toList(growable: false),
+                          ),
                         ),
-                      ),
+                      if (references.isNotEmpty)
+                        Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            AppSpacing.containerSm,
+                            0,
+                            AppSpacing.containerSm,
+                            AppSpacing.xs,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: references
+                                .map(
+                                  (ref) => InkWell(
+                                    onTap: () =>
+                                        widget.onReferenceTap?.call(ref),
+                                    child: Padding(
+                                      padding: EdgeInsets.only(
+                                        bottom: AppSpacing.xs / 2,
+                                      ),
+                                      child: Text(
+                                        '来源：${(ref['title'] ?? '').toString()}',
+                                        style: TextStyle(
+                                          fontSize: AppTypography.sm,
+                                          color: AppColors.primaryColor,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                                .toList(growable: false),
+                          ),
+                        ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-          );
-        }),
+            );
+          }),
           if (widget.usageStats.isNotEmpty) ...[
             SizedBox(height: AppSpacing.xs),
             Text(
@@ -1416,13 +1419,9 @@ class _AssistantFollowupCard extends StatelessWidget {
 
 /// 参考资料卡片：展示 web_search 工具返回的来源链接，默认收起仅显示一行摘要
 class _AssistantReferencesCard extends StatefulWidget {
-  const _AssistantReferencesCard({
-    required this.references,
-    this.onReferenceTap,
-  });
+  const _AssistantReferencesCard({required this.references});
 
   final List<Map<String, dynamic>> references;
-  final void Function(Map<String, dynamic> reference)? onReferenceTap;
 
   @override
   State<_AssistantReferencesCard> createState() =>
@@ -1485,12 +1484,13 @@ class _AssistantReferencesCardState extends State<_AssistantReferencesCard> {
               final url = (ref['url'] as String?)?.trim() ?? '';
               final source =
                   (ref['source'] as String?)?.trim().isNotEmpty == true
-                      ? (ref['source'] as String).trim()
-                      : Uri.tryParse(url)?.host ?? '';
+                  ? (ref['source'] as String).trim()
+                  : Uri.tryParse(url)?.host ?? '';
               return InkWell(
-                onTap: () => widget.onReferenceTap?.call(ref),
-                borderRadius:
-                    BorderRadius.circular(AppSpacing.borderRadius / 2),
+                onTap: null,
+                borderRadius: BorderRadius.circular(
+                  AppSpacing.borderRadius / 2,
+                ),
                 child: Padding(
                   padding: EdgeInsets.symmetric(vertical: AppSpacing.xs / 2),
                   child: Row(
@@ -1500,7 +1500,9 @@ class _AssistantReferencesCardState extends State<_AssistantReferencesCard> {
                         width: AppSpacing.eighteen,
                         height: AppSpacing.eighteen,
                         margin: EdgeInsets.only(
-                            top: AppSpacing.one, right: AppSpacing.xs),
+                          top: AppSpacing.one,
+                          right: AppSpacing.xs,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.primaryColor.withValues(alpha: 0.12),
                           shape: BoxShape.circle,
@@ -1527,10 +1529,8 @@ class _AssistantReferencesCardState extends State<_AssistantReferencesCard> {
                                 color: AppColors.primaryColor,
                                 fontWeight: FontWeight.w500,
                                 decoration: TextDecoration.underline,
-                                decorationColor:
-                                    AppColors.primaryColor.withValues(
-                                  alpha: 0.5,
-                                ),
+                                decorationColor: AppColors.primaryColor
+                                    .withValues(alpha: 0.5),
                               ),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,

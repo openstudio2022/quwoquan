@@ -1,5 +1,5 @@
 import 'package:photo_manager/photo_manager.dart';
-import 'package:quwoquan_app/features/create/models/create_media_models.dart';
+import 'package:quwoquan_app/core/models/create_media_models.dart';
 
 class MediaPickerService {
   Future<bool> ensurePhotoPermission() async {

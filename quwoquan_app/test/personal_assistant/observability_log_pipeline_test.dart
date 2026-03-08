@@ -122,7 +122,6 @@ void main() {
     });
 
     test('导出结果包含路径、run 数量与时间范围摘要', () async {
-      final root = await testPaths.rootDirectory();
       final dayDir = await testPaths.dayDirectory(DateTime.now());
       final agentDir = Directory('${dayDir.path}/agent');
       final integrationDir = Directory('${dayDir.path}/integrations');

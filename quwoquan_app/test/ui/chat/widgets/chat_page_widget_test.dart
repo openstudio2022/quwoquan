@@ -16,15 +16,12 @@ Widget _scopedApp({ChatRepository? mock}) {
         routes: [
           GoRoute(
             path: '/chat',
-            builder: (_, __) => const Scaffold(body: ChatPage()),
+            builder: (_, _) => const Scaffold(body: ChatPage()),
           ),
-          GoRoute(
-            path: '/chat/:id',
-            builder: (_, __) => const SizedBox(),
-          ),
+          GoRoute(path: '/chat/:id', builder: (_, _) => const SizedBox()),
           GoRoute(
             path: '/chat/:id/settings',
-            builder: (_, __) => const SizedBox(),
+            builder: (_, _) => const SizedBox(),
           ),
         ],
       ),

@@ -374,6 +374,15 @@ entities:
         api_exposure: read
         ops_exposure: read
 
+      - name: replyCount
+        type: int
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 回复数（用于回复折叠预览计数）
+
       - name: likeCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]

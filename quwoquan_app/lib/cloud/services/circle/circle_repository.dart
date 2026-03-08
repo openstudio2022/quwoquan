@@ -3,6 +3,9 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_request_page_ids.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 
 /// Circle 域 Repository（三层模式：Abstract + Mock + Remote）。
@@ -15,7 +18,7 @@ abstract class CircleRepository {
     String? domainId,
     String? recommendFor,
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
     String? sort,
   });
 
@@ -37,7 +40,7 @@ abstract class CircleRepository {
   Future<List<Map<String, dynamic>>> listMembers(
     String circleId, {
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
   });
 
   Future<void> updateMemberRole(
@@ -49,7 +52,7 @@ abstract class CircleRepository {
   Future<List<Map<String, dynamic>>> getCircleFeed(
     String circleId, {
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
     String sort = 'latest',
   });
 
@@ -72,7 +75,7 @@ abstract class CircleRepository {
     String? parentId,
     String? sort,
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
   });
 
   Future<Map<String, dynamic>> createFile(
@@ -100,7 +103,7 @@ abstract class CircleRepository {
   Future<List<Map<String, dynamic>>> listUserCircles(
     String userId, {
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
   });
 }
 
@@ -115,7 +118,7 @@ class MockCircleRepository implements CircleRepository {
     String? domainId,
     String? recommendFor,
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
     String? sort,
   }) async {
     var result = CircleMockData.circles;
@@ -178,7 +181,7 @@ class MockCircleRepository implements CircleRepository {
   Future<List<Map<String, dynamic>>> listMembers(
     String circleId, {
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
   }) async {
     return CircleMockData.members.take(limit).toList(growable: false);
   }
@@ -194,7 +197,7 @@ class MockCircleRepository implements CircleRepository {
   Future<List<Map<String, dynamic>>> getCircleFeed(
     String circleId, {
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
     String sort = 'latest',
   }) async {
     return <Map<String, dynamic>>[];
@@ -225,7 +228,7 @@ class MockCircleRepository implements CircleRepository {
     String? parentId,
     String? sort,
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
   }) async {
     var result = CircleMockData.files;
     if (parentId != null) {
@@ -286,7 +289,7 @@ class MockCircleRepository implements CircleRepository {
   Future<List<Map<String, dynamic>>> listUserCircles(
     String userId, {
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
   }) async {
     return CircleMockData.circles.take(limit).toList(growable: false);
   }
@@ -304,6 +307,10 @@ class RemoteCircleRepository implements CircleRepository {
   final http.Client _client;
   final String _baseUrl;
 
+  Uri _uri(String path, {Map<String, String>? queryParameters}) {
+    return Uri.parse('$_baseUrl$path').replace(queryParameters: queryParameters);
+  }
+
   // -- Circles ---------------------------------------------------------------
 
   @override
@@ -312,7 +319,7 @@ class RemoteCircleRepository implements CircleRepository {
     String? domainId,
     String? recommendFor,
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
     String? sort,
   }) async {
     final query = <String, String>{'limit': '$limit'};
@@ -322,34 +329,34 @@ class RemoteCircleRepository implements CircleRepository {
     if (cursor != null) query['cursor'] = cursor;
     if (sort != null) query['sort'] = sort;
 
-    final uri = Uri.parse('$_baseUrl/v1/circles')
-        .replace(queryParameters: query);
+    final uri = _uri(
+      CircleApiMetadata.listCirclesPath,
+      queryParameters: query,
+    );
     final resp = await _client.get(
       uri,
-      headers: CloudRequestHeaders.forPage('circle.list'),
+      headers: CloudRequestHeaders.forPage(CircleRequestPageIds.listCircles),
     );
     return _decodeList(resp);
   }
 
   @override
   Future<Map<String, dynamic>> getCircle(String circleId) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/circles/${Uri.encodeComponent(circleId)}',
-    );
+    final uri = _uri(CircleApiMetadata.getCirclePath(circleId: circleId));
     final resp = await _client.get(
       uri,
-      headers: CloudRequestHeaders.forPage('circle.get'),
+      headers: CloudRequestHeaders.forPage(CircleRequestPageIds.getCircle),
     );
     return _decodeObject(resp);
   }
 
   @override
   Future<Map<String, dynamic>> createCircle(Map<String, dynamic> data) async {
-    final uri = Uri.parse('$_baseUrl/v1/circles');
+    final uri = _uri(CircleApiMetadata.createCirclePath);
     final resp = await _client.post(
       uri,
       headers: {
-        ...CloudRequestHeaders.forPage('circle.create'),
+        ...CloudRequestHeaders.forPage(CircleRequestPageIds.createCircle),
         'Content-Type': 'application/json',
       },
       body: json.encode(data),
@@ -362,13 +369,11 @@ class RemoteCircleRepository implements CircleRepository {
     String circleId,
     Map<String, dynamic> data,
   ) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/circles/${Uri.encodeComponent(circleId)}',
-    );
+    final uri = _uri(CircleApiMetadata.updateCirclePath(circleId: circleId));
     final resp = await _client.patch(
       uri,
       headers: {
-        ...CloudRequestHeaders.forPage('circle.update'),
+        ...CloudRequestHeaders.forPage(CircleRequestPageIds.updateCircle),
         'Content-Type': 'application/json',
       },
       body: json.encode(data),
@@ -378,12 +383,10 @@ class RemoteCircleRepository implements CircleRepository {
 
   @override
   Future<void> archiveCircle(String circleId) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/circles/${Uri.encodeComponent(circleId)}',
-    );
+    final uri = _uri(CircleApiMetadata.archiveCirclePath(circleId: circleId));
     final resp = await _client.delete(
       uri,
-      headers: CloudRequestHeaders.forPage('circle.archive'),
+      headers: CloudRequestHeaders.forPage(CircleRequestPageIds.archiveCircle),
     );
     _ensureSuccess(resp);
   }
@@ -392,24 +395,20 @@ class RemoteCircleRepository implements CircleRepository {
 
   @override
   Future<void> joinCircle(String circleId) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/circles/${Uri.encodeComponent(circleId)}/join',
-    );
+    final uri = _uri(CircleApiMetadata.joinCirclePath(circleId: circleId));
     final resp = await _client.post(
       uri,
-      headers: CloudRequestHeaders.forPage('circle.join'),
+      headers: CloudRequestHeaders.forPage(CircleRequestPageIds.joinCircle),
     );
     _ensureSuccess(resp);
   }
 
   @override
   Future<void> leaveCircle(String circleId) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/circles/${Uri.encodeComponent(circleId)}/leave',
-    );
+    final uri = _uri(CircleApiMetadata.leaveCirclePath(circleId: circleId));
     final resp = await _client.post(
       uri,
-      headers: CloudRequestHeaders.forPage('circle.leave'),
+      headers: CloudRequestHeaders.forPage(CircleRequestPageIds.leaveCircle),
     );
     _ensureSuccess(resp);
   }
@@ -418,17 +417,18 @@ class RemoteCircleRepository implements CircleRepository {
   Future<List<Map<String, dynamic>>> listMembers(
     String circleId, {
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
   }) async {
     final query = <String, String>{'limit': '$limit'};
     if (cursor != null) query['cursor'] = cursor;
 
-    final uri = Uri.parse(
-      '$_baseUrl/v1/circles/${Uri.encodeComponent(circleId)}/members',
-    ).replace(queryParameters: query);
+    final uri = _uri(
+      CircleApiMetadata.listCircleMembersPath(circleId: circleId),
+      queryParameters: query,
+    );
     final resp = await _client.get(
       uri,
-      headers: CloudRequestHeaders.forPage('circle.members.list'),
+      headers: CloudRequestHeaders.forPage(CircleRequestPageIds.listCircleMembers),
     );
     return _decodeList(resp);
   }
@@ -439,13 +439,16 @@ class RemoteCircleRepository implements CircleRepository {
     String userId,
     String role,
   ) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/circles/${Uri.encodeComponent(circleId)}/members/${Uri.encodeComponent(userId)}/role',
+    final uri = _uri(
+      CircleApiMetadata.updateMemberRolePath(
+        circleId: circleId,
+        userId: userId,
+      ),
     );
     final resp = await _client.patch(
       uri,
       headers: {
-        ...CloudRequestHeaders.forPage('circle.members.updateRole'),
+        ...CloudRequestHeaders.forPage(CircleRequestPageIds.updateMemberRole),
         'Content-Type': 'application/json',
       },
       body: json.encode({'role': role}),
@@ -459,18 +462,19 @@ class RemoteCircleRepository implements CircleRepository {
   Future<List<Map<String, dynamic>>> getCircleFeed(
     String circleId, {
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
     String sort = 'latest',
   }) async {
     final query = <String, String>{'limit': '$limit', 'sort': sort};
     if (cursor != null) query['cursor'] = cursor;
 
-    final uri = Uri.parse(
-      '$_baseUrl/v1/circles/${Uri.encodeComponent(circleId)}/feed',
-    ).replace(queryParameters: query);
+    final uri = _uri(
+      CircleApiMetadata.getCircleFeedPath(circleId: circleId),
+      queryParameters: query,
+    );
     final resp = await _client.get(
       uri,
-      headers: CloudRequestHeaders.forPage('circle.feed.list'),
+      headers: CloudRequestHeaders.forPage(CircleRequestPageIds.getCircleFeed),
     );
     return _decodeList(resp);
   }
@@ -481,13 +485,16 @@ class RemoteCircleRepository implements CircleRepository {
     String postId, {
     required bool pinned,
   }) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/circles/${Uri.encodeComponent(circleId)}/feed/${Uri.encodeComponent(postId)}/pin',
+    final uri = _uri(
+      CircleApiMetadata.pinCirclePostPath(
+        circleId: circleId,
+        postId: postId,
+      ),
     );
     final resp = await _client.patch(
       uri,
       headers: {
-        ...CloudRequestHeaders.forPage('circle.post.pin'),
+        ...CloudRequestHeaders.forPage(CircleRequestPageIds.pinCirclePost),
         'Content-Type': 'application/json',
       },
       body: json.encode({'pinned': pinned}),
@@ -501,13 +508,16 @@ class RemoteCircleRepository implements CircleRepository {
     String postId, {
     required bool featured,
   }) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/circles/${Uri.encodeComponent(circleId)}/feed/${Uri.encodeComponent(postId)}/feature',
+    final uri = _uri(
+      CircleApiMetadata.featureCirclePostPath(
+        circleId: circleId,
+        postId: postId,
+      ),
     );
     final resp = await _client.patch(
       uri,
       headers: {
-        ...CloudRequestHeaders.forPage('circle.post.feature'),
+        ...CloudRequestHeaders.forPage(CircleRequestPageIds.featureCirclePost),
         'Content-Type': 'application/json',
       },
       body: json.encode({'featured': featured}),
@@ -519,12 +529,10 @@ class RemoteCircleRepository implements CircleRepository {
 
   @override
   Future<Map<String, dynamic>> getCircleStats(String circleId) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/circles/${Uri.encodeComponent(circleId)}/stats',
-    );
+    final uri = _uri(CircleApiMetadata.getCircleStatsPath(circleId: circleId));
     final resp = await _client.get(
       uri,
-      headers: CloudRequestHeaders.forPage('circle.stats'),
+      headers: CloudRequestHeaders.forPage(CircleRequestPageIds.getCircleStats),
     );
     return _decodeObject(resp);
   }
@@ -537,19 +545,20 @@ class RemoteCircleRepository implements CircleRepository {
     String? parentId,
     String? sort,
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
   }) async {
     final query = <String, String>{'limit': '$limit'};
     if (parentId != null) query['parentId'] = parentId;
     if (sort != null) query['sort'] = sort;
     if (cursor != null) query['cursor'] = cursor;
 
-    final uri = Uri.parse(
-      '$_baseUrl/v1/circles/${Uri.encodeComponent(circleId)}/files',
-    ).replace(queryParameters: query);
+    final uri = _uri(
+      CircleApiMetadata.listCircleFilesPath(circleId: circleId),
+      queryParameters: query,
+    );
     final resp = await _client.get(
       uri,
-      headers: CloudRequestHeaders.forPage('circle.files.list'),
+      headers: CloudRequestHeaders.forPage(CircleRequestPageIds.listCircleFiles),
     );
     return _decodeList(resp);
   }
@@ -559,13 +568,11 @@ class RemoteCircleRepository implements CircleRepository {
     String circleId,
     Map<String, dynamic> data,
   ) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/circles/${Uri.encodeComponent(circleId)}/files',
-    );
+    final uri = _uri(CircleApiMetadata.createCircleFilePath(circleId: circleId));
     final resp = await _client.post(
       uri,
       headers: {
-        ...CloudRequestHeaders.forPage('circle.files.create'),
+        ...CloudRequestHeaders.forPage(CircleRequestPageIds.createCircleFile),
         'Content-Type': 'application/json',
       },
       body: json.encode(data),
@@ -575,12 +582,12 @@ class RemoteCircleRepository implements CircleRepository {
 
   @override
   Future<Map<String, dynamic>> getFile(String circleId, String fileId) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/circles/${Uri.encodeComponent(circleId)}/files/${Uri.encodeComponent(fileId)}',
+    final uri = _uri(
+      CircleApiMetadata.getCircleFilePath(circleId: circleId, fileId: fileId),
     );
     final resp = await _client.get(
       uri,
-      headers: CloudRequestHeaders.forPage('circle.files.get'),
+      headers: CloudRequestHeaders.forPage(CircleRequestPageIds.getCircleFile),
     );
     return _decodeObject(resp);
   }
@@ -591,13 +598,16 @@ class RemoteCircleRepository implements CircleRepository {
     String fileId,
     Map<String, dynamic> data,
   ) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/circles/${Uri.encodeComponent(circleId)}/files/${Uri.encodeComponent(fileId)}',
+    final uri = _uri(
+      CircleApiMetadata.updateCircleFilePath(
+        circleId: circleId,
+        fileId: fileId,
+      ),
     );
     final resp = await _client.patch(
       uri,
       headers: {
-        ...CloudRequestHeaders.forPage('circle.files.update'),
+        ...CloudRequestHeaders.forPage(CircleRequestPageIds.updateCircleFile),
         'Content-Type': 'application/json',
       },
       body: json.encode(data),
@@ -607,12 +617,17 @@ class RemoteCircleRepository implements CircleRepository {
 
   @override
   Future<void> deleteFile(String circleId, String fileId) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/circles/${Uri.encodeComponent(circleId)}/files/${Uri.encodeComponent(fileId)}',
+    final uri = _uri(
+      CircleApiMetadata.deleteCircleFilePath(
+        circleId: circleId,
+        fileId: fileId,
+      ),
     );
     final resp = await _client.delete(
       uri,
-      headers: CloudRequestHeaders.forPage('circle.files.delete'),
+      headers: CloudRequestHeaders.forPage(
+        CircleRequestPageIds.deleteCircleFile,
+      ),
     );
     _ensureSuccess(resp);
   }
@@ -624,13 +639,15 @@ class RemoteCircleRepository implements CircleRepository {
     String circleId,
     List<Map<String, dynamic>> sections,
   ) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/circles/${Uri.encodeComponent(circleId)}/sections',
+    final uri = _uri(
+      CircleApiMetadata.updateCircleSectionsPath(circleId: circleId),
     );
     final resp = await _client.patch(
       uri,
       headers: {
-        ...CloudRequestHeaders.forPage('circle.sections.update'),
+        ...CloudRequestHeaders.forPage(
+          CircleRequestPageIds.updateCircleSections,
+        ),
         'Content-Type': 'application/json',
       },
       body: json.encode({'sections': sections}),
@@ -642,11 +659,13 @@ class RemoteCircleRepository implements CircleRepository {
 
   @override
   Future<void> reportBehavior(Map<String, dynamic> report) async {
-    final uri = Uri.parse('$_baseUrl/v1/circles/behaviors');
+    final uri = _uri(CircleApiMetadata.reportCircleBehaviorPath);
     final resp = await _client.post(
       uri,
       headers: {
-        ...CloudRequestHeaders.forPage('circle.behaviors.report'),
+        ...CloudRequestHeaders.forPage(
+          CircleRequestPageIds.reportCircleBehavior,
+        ),
         'Content-Type': 'application/json',
       },
       body: json.encode(report),
@@ -660,17 +679,18 @@ class RemoteCircleRepository implements CircleRepository {
   Future<List<Map<String, dynamic>>> listUserCircles(
     String userId, {
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
   }) async {
     final query = <String, String>{'limit': '$limit'};
     if (cursor != null) query['cursor'] = cursor;
 
-    final uri = Uri.parse(
-      '$_baseUrl/v1/users/${Uri.encodeComponent(userId)}/circles',
-    ).replace(queryParameters: query);
+    final uri = _uri(
+      CircleApiMetadata.listUserCirclesPath(userId: userId),
+      queryParameters: query,
+    );
     final resp = await _client.get(
       uri,
-      headers: CloudRequestHeaders.forPage('circle.user.list'),
+      headers: CloudRequestHeaders.forPage(CircleRequestPageIds.listUserCircles),
     );
     return _decodeList(resp);
   }

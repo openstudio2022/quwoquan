@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 /// 聊天设置/聊天信息页（1:1 图二）
@@ -21,7 +20,6 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
   bool _privacyShield = false;
   bool _membersExpanded = false;
   List<Map<String, dynamic>> _members = [];
-  bool _membersLoading = true;
 
   static const int _memberColumns = 5;
 
@@ -48,143 +46,12 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
       if (mounted) {
         setState(() {
           _members = members;
-          _membersLoading = false;
         });
       }
     } catch (_) {
-      if (mounted) setState(() => _membersLoading = false);
+      if (mounted) setState(() {});
     }
   }
-
-  // Legacy mock data preserved as fallback reference; not used at runtime.
-  static const List<Map<String, String>> _mockMembersLegacy = [
-    {
-      'name': '成员一',
-      'username': 'member1',
-      'avatar':
-          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
-    },
-    {
-      'name': '成员二',
-      'username': 'member2',
-      'avatar':
-          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
-    },
-    {
-      'name': '成员三',
-      'username': 'member3',
-      'avatar':
-          'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
-    },
-    {
-      'name': '成员四',
-      'username': 'member4',
-      'avatar':
-          'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200',
-    },
-    {
-      'name': '成员五',
-      'username': 'member5',
-      'avatar':
-          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
-    },
-    {
-      'name': '成员六',
-      'username': 'member6',
-      'avatar':
-          'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200',
-    },
-    {
-      'name': '成员七',
-      'username': 'member7',
-      'avatar':
-          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
-    },
-    {
-      'name': '成员八',
-      'username': 'member8',
-      'avatar':
-          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
-    },
-    {
-      'name': '成员九',
-      'username': 'member9',
-      'avatar':
-          'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200',
-    },
-    {
-      'name': '成员十',
-      'username': 'member10',
-      'avatar':
-          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
-    },
-    {
-      'name': '成员十一',
-      'username': 'member11',
-      'avatar':
-          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
-    },
-    {
-      'name': '成员十二',
-      'username': 'member12',
-      'avatar':
-          'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
-    },
-    {
-      'name': '成员十三',
-      'username': 'member13',
-      'avatar':
-          'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200',
-    },
-    {
-      'name': '成员十四',
-      'username': 'member14',
-      'avatar':
-          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
-    },
-    {
-      'name': '成员十五',
-      'username': 'member15',
-      'avatar':
-          'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200',
-    },
-    {
-      'name': '成员十六',
-      'username': 'member16',
-      'avatar':
-          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
-    },
-    {
-      'name': '成员十七',
-      'username': 'member17',
-      'avatar':
-          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
-    },
-    {
-      'name': '成员十八',
-      'username': 'member18',
-      'avatar':
-          'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200',
-    },
-    {
-      'name': '成员十九',
-      'username': 'member19',
-      'avatar':
-          'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
-    },
-    {
-      'name': '成员二十',
-      'username': 'member20',
-      'avatar':
-          'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200',
-    },
-    {
-      'name': '成员廿一',
-      'username': 'member21',
-      'avatar':
-          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
-    },
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -283,10 +150,17 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                             );
                           }
                           final m = _members[index];
-                          final username = m['userId'] as String? ?? 'user_$index';
+                          final username =
+                              m['userId'] as String? ?? 'user_$index';
                           return _MemberAvatar(
-                            name: m['displayName'] as String? ?? m['name'] as String? ?? '',
-                            avatarUrl: m['avatarUrl'] as String? ?? m['avatar'] as String? ?? '',
+                            name:
+                                m['displayName'] as String? ??
+                                m['name'] as String? ??
+                                '',
+                            avatarUrl:
+                                m['avatarUrl'] as String? ??
+                                m['avatar'] as String? ??
+                                '',
                             textColor: fgPrimary,
                             username: username,
                             onTap: () => context.push('/user/$username'),

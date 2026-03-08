@@ -1,47 +1,358 @@
-# L3 特性：comment-thread
+# L3 特性：comment-thread（商用级评论系统）
 
-## 功能说明
-- 评论楼与楼中楼：按 post 维度的评论列表拉取（游标分页）、发表评论/回复、删除评论，与端侧 comment_system 组件对接，保证端云契约一致。
-- 范围：ListComments（cursor + limit）、CreateComment（content、可选 replyToCommentId）、DeleteComment（postId + commentId）；不包含评论点赞计数（归属 reaction-state-counter）、评论审核/隐藏（归属 moderation-delete-audit-guard）。
+> **版本**：V1 PRD — 2026-03-08
+> **归属**：discovery-content / publish-comment-reaction / comment-thread
+> **目标用户**：所有 App 用户（发帖者、评论者、浏览者）
+> **核心问题**：当前评论系统仅有 Mock 骨架，8 个入口中仅 2 个能提交评论、0 个能加载历史评论，无法满足社交互动的基本闭环，更无法承载 10 万+评论的商用场景。
 
-## 约束
-- 契约与字段策略必须与 OpenAPI、service.yaml、metadata（fields.yaml）保持一致。
-- 删除评论路径以 service.yaml 为准：`DELETE /v1/content/posts/{postId}/comments/{commentId}`；OpenAPI 须与此一致。
+---
 
-## 验收标准
-- A1：评论列表拉取、发表评论/回复、删除评论端到端可执行且输出稳定。
-- A7：契约一致性校验通过（metadata、OpenAPI、endpoint_catalog、端侧 Repository 与 service.yaml 对齐）。
-- A8：对应自动化测试映射完整（contract_test 中 comment_thread / comment_with_notification 可运行）。
+## 一、功能定位
 
-## 业务对象完备性
-Comment 为 Post 聚合成员（aggregate.yaml members），非独立实体。当前状态：
+端云一体化的商用级评论系统，支持所有内容类型（微趣/图片/视频/文章）的评论互动，覆盖评论发表、展示、回复、点赞、删除、排序、分页，以及个人主页评论管理，具备 10 万+评论/帖的性能与容量承载能力。
 
-| 维度 | 状态 | 说明 |
+### 与父/子节点关系
+
+| 节点 | 关系 | 说明 |
 |------|------|------|
-| aggregate.yaml | ✅ | members 含 Comment，relation 1:N，cascade_delete |
-| fields.yaml | ✅ | Comment 字段完整（_id, postId, authorId, personaId, content, replyToCommentId, replyToUserId, likeCount, status, createdAt） |
-| storage.yaml | ✅ | comments 集合 + idx_comments_post_created 等索引 |
-| events.yaml | ✅ | CommentCreated，payload_entity: Comment |
-| service.yaml | ✅ | ListComments / CreateComment / DeleteComment 三条路由 |
-| entity_catalog | ✅ | Comment 已注册 |
+| publish-comment-reaction (L2) | 父节点 | 评论是内容互动的核心组成 |
+| reaction-state-counter (L3) | 兄弟节点 | 评论点赞复用反应计数基础设施 |
+| comment-reply-pagination-contract (L4) | 子节点 | 游标分页与回复关联契约 |
+| moderation-delete-audit-guard (L5) | 孙节点 | 删除权限与审核策略 |
 
-**结论**：业务对象与元数据完备，无需 S01/S02/S05 新建；缺口在**契约修正、实现与端侧对接**。
+---
 
-## 缺口与扩展路径
+## 二、功能规格（F1~F20）
 
-| 缺口 | 类型 | 扩展/命令 | 说明 |
-|------|------|----------|------|
-| OpenAPI Delete 路径错误 | 契约修正 | 手动编辑 `contracts/openapi/content-service.v1.yaml` | 改为 `DELETE /v1/content/posts/{postId}/comments/{commentId}` |
-| Comment 持久化缺失 | 实现 | 手写或 `make codegen target=post`（若工具支持 member 持久化） | 参考 post_store 实现 comment_store |
-| HTTP 层 NotImplemented | 实现 | 手写 handler 逻辑 | 替换 handleNotImplemented，调用应用层 |
-| 应用层评论用例缺失 | 实现 | 手写 comment_service / 扩展现有用例 | ListComments / CreateComment / DeleteComment 编排 |
-| ContentRepository 无评论接口 | 端侧 | `make codegen-app`（若从 service.yaml 生成）或手写 | Abstract + Mock + Remote 三方法 |
-| contract_test 场景 | S20 | 更新 service.yaml contract_test → `make codegen-test` | comment_thread、comment_with_notification 已有定义，需实现后断言通过 |
+### 2.1 核心交互
 
-**无需执行**：S01（新建聚合）、S02（新建成员）、S05（新建端点）——均已存在于 metadata。
+| 编号 | 功能 | 规格 | 对标来源 |
+|------|------|------|----------|
+| F1 | 评论层级 | **2 级**：一级评论 + 回复（reply 展平在一级评论下方） | TikTok/小红书/微博/微信 共识 |
+| F2 | 评论入口 | 8 个入口全部打通（见 §2.2 入口矩阵） | — |
+| F3 | 评论弹窗 | 底部半屏弹窗，支持下拉手势关闭，高度自适应（50%~90%） | TikTok/小红书 |
+| F4 | 评论列表 | 游标分页，每页 20 条，滚动到底自动加载 | 全平台共识 |
+| F5 | 排序策略 | 热评优先（默认）/ 最新优先，用户可切换 | TikTok/微博 |
+| F6 | 回复折叠 | 默认显示 2 条回复，"展开 N 条回复"按钮加载更多 | TikTok/小红书 |
+| F7 | 评论点赞 | 单评论可赞/取消赞，赞数显示，影响热评排序权重 | 全平台共识 |
+| F8 | 评论删除 | 评论作者可删除自己的评论；帖主可删除帖下任意评论；软删除 + 审计 | 全平台共识 |
+| F9 | 回复 @ | 回复时自动 @被回复人，输入框显示"回复 @xxx" | 全平台共识 |
+| F10 | 长评论折叠 | 超过 3 行折叠，"展开全文"按钮 | TikTok/微博 |
+| F11 | 评论计数 | 帖外评论计数实时更新（乐观更新 + 最终一致） | 全平台共识 |
+| F12 | 空态 | "暂无评论，来抢沙发吧" + 引导输入 | 小红书 |
+| F13 | 作者标识 | 帖主评论带"作者"标签 | TikTok/小红书 |
+| F14 | 时间显示 | 相对时间（刚刚 / x分钟前 / x小时前 / x天前） | 全平台共识 |
 
-## 探索结论（代码与元数据检查）
-- **元数据**：完备。
-- **契约不一致**：OpenAPI 中 Delete 为 `DELETE /v1/content/comments/{commentId}`，须统一为 service.yaml 路径。
-- **云侧**：ListComments、CreateComment、DeleteComment 均为 handleNotImplemented；无 comment_store、无应用层评论用例。
-- **端侧**：ContentRepository 无评论接口；CommentViewer 未接 Repository；无 Comment codegen DTO（可暂用 Map）。
+### 2.2 入口矩阵
+
+| 入口 | 位置 | 目标行为 |
+|------|------|----------|
+| E1 | 发现页·微趣 Feed（ActionRow 评论按钮） | 打开弹窗 → 加载评论 → 可提交/回复/点赞/删除 |
+| E2 | 发现页·作品沉浸（EngagementBar 评论按钮） | 同 E1 |
+| E3 | 发现页·微趣评论数文字点击 | 同 E1 |
+| E4 | 图片沉浸查看器（Toolbar 评论按钮） | 同 E1 |
+| E5 | 视频沉浸查看器（Toolbar 评论按钮） | 同 E1 |
+| E6 | MediaPostCard（评论按钮） | 同 E1 |
+| E7 | 文章详情页（BottomBar 评论按钮） | 同 E1 |
+| E8 | 个人主页 | "我的评论"/"收到的评论"两个入口 |
+
+### 2.3 扩展功能
+
+| 编号 | 功能 | 规格 |
+|------|------|------|
+| F15 | 先发后审 | 评论提交后立即可见；异步审核流水线处理 → 违规内容隐藏 + 通知评论者 |
+| F16 | Persona 身份 | 评论时可选择 persona 身份发表，展示 persona 头像/昵称；默认使用主身份 |
+| F17 | 我发出的评论 | 个人主页 Tab，按时间倒序，点击可跳转原帖评论弹窗 |
+| F18 | 我收到的评论 | 个人主页 Tab，按时间倒序，含快捷回复入口 |
+| F19 | 评论字数限制 | 500 字上限，端云一致（云侧校验 + 端侧通过 App Config 同步） |
+| F20 | 评论通知 | 收到回复 / 帖子被评论时推送通知（协调 notification 域，V1 骨架接入） |
+
+### 2.4 视觉规格
+
+```
+┌──────────────────────────────────────────────┐
+│ ─────────── 拖拽条 ───────────                │  ← iOS DragHandle，下拉手势关闭
+│  评论 (1.2万)           最热 ▾ │ 最新        │  ← 标题 + 排序切换
+├──────────────────────────────────────────────┤
+│  ┌──┐  用户名              作者   3小时前     │  ← 36px 圆形头像 + 名字 + 标签 + 时间
+│  │头│  评论内容最多三行显示，超出部分折叠      │     AppTypography.body
+│  │像│  展开全文                              │
+│  └──┘  ❤ 128    💬 回复                     │  ← 评论点赞 + 回复按钮
+│        ┌──┐  回复人A：回复内容               │  ← 缩进回复（2级，左缩进 48px）
+│        └──┘  ❤ 12                           │     AppTypography.caption
+│        ┌──┐  回复人B 回复 @A：...            │
+│        └──┘  ❤ 3                            │
+│        ── 展开 12 条回复 ──                   │  ← 折叠/展开
+│                                              │
+│  ┌──┐  用户名2             5小时前            │  ← 下一条一级评论
+│  │头│  评论内容...                            │
+│  └──┘  ❤ 56    💬 回复                       │
+│        ...                                   │
+│  ──── 滚动加载更多 ────                       │
+├──────────────────────────────────────────────┤
+│  [头像] [  说点什么...            ] [😀] [发送] │  ← 输入栏
+│         回复 @xxx                  ✕          │  ← 回复指示（条件显示）
+└──────────────────────────────────────────────┘
+```
+
+**视觉 Token 约束**（遵从 `02-dart-coding`）：
+
+| 元素 | Token | 值 |
+|------|-------|-----|
+| 头像尺寸 | `AppSpacing.xxxl` | 36px |
+| 用户名字体 | `AppTypography.bodyBold` | — |
+| 评论正文字体 | `AppTypography.body` | — |
+| 时间/附属信息 | `AppTypography.caption` | — |
+| 文本主色 | `AppColors.textPrimary` | — |
+| 时间/附属色 | `AppColors.textSecondary` | — |
+| 点赞激活色 | `AppColors.danger` | — |
+| 评论间距 | `AppSpacing.md` | — |
+| 回复缩进 | `AppSpacing.xl` × 2 | 48px |
+| 弹窗圆角 | `AppSpacing.lg` | — |
+
+**禁止硬编码视觉字面量**：所有 width/height/fontSize/EdgeInsets 必须使用设计系统 Token。
+
+---
+
+## 三、适用范围与约束
+
+### 3.1 适用场景
+
+- 所有内容类型（微趣/图片/视频/文章）的帖下评论
+- 单帖评论数从 0 到 10 万+的全量级覆盖
+- 用户在弱网/断网环境下的评论体验降级
+- 多 persona 身份切换的社交互动
+
+### 3.2 前置条件
+
+- Post 实体及其 commentCount 字段已存在
+- Comment 实体 metadata（fields.yaml / storage.yaml / events.yaml / service.yaml）已完备
+- ContentRepository 三层模式已建立
+- 推送通知基础设施（notification 域）已有骨架
+
+### 3.3 不适用 / 超出范围
+
+| 项目 | 说明 |
+|------|------|
+| 评论搜索 | 全文检索能力不在 V1 范围，V2+ 可接入 ES |
+| 图片/视频评论 | V1 仅支持纯文本；V2 表情、V3 图片 |
+| 评论置顶 | 需作者权限体系完善后在 V2 引入 |
+| IP 属地显示 | 需政策配合，V2 引入 |
+| 评论翻译 | V2+ |
+| 敏感词实时拦截 | V1 采用先发后审，不做前置拦截；V2 可增加前置检测 |
+| 评论区关闭 | 帖主关闭评论区功能，V2 引入 |
+
+---
+
+## 四、业界对标
+
+### 4.1 对标对象
+
+TikTok/抖音、小红书、网易云音乐、微博、微信视频号。
+
+### 4.2 借鉴总结
+
+| 对标点 | 结论 | 理由 |
+|--------|------|------|
+| 2 级层级 | ✅ 借鉴 | 业界共识，控制复杂度 |
+| 底部半屏弹窗 + 下拉手势 | ✅ 借鉴 | iOS 语义契合，TikTok/小红书统一范式 |
+| 热评优先排序 | ✅ 借鉴 | 提升内容发现效率 |
+| 回复折叠（2-3 条预览） | ✅ 借鉴 | 信息密度与可读性平衡 |
+| 评论点赞 | ✅ 借鉴 | 热评排序基础 |
+| 长评论折叠 | ✅ 借鉴 | 必要的密度控制 |
+| 作者标识 | ✅ 借鉴 | 社交信任信号 |
+| 先发后审 | ✅ 借鉴 | 用户体验优先，业界主流 |
+| 图片评论 | ❌ V1 不借鉴 | 增加审核复杂度 |
+| IP 属地 | ❌ V1 不借鉴 | 需政策配合 |
+| 评论置顶 | ⚠️ V2 借鉴 | 需权限体系 |
+| AI 辅助回复 | ❌ 不借鉴 | 适合 B 端，C 端场景不同 |
+
+### 4.3 当前差距与收敛路径
+
+| 差距 | 收敛路径 | 时间窗口 |
+|------|----------|---------|
+| 评论完全不可用 | V1 端云闭环 | 本次交付 |
+| 无嵌套回复 | V1 2 级层级 | 本次交付 |
+| 无热评排序 | V1 热评+最新双排序 | 本次交付 |
+| 无评论点赞 | V1 评论点赞 | 本次交付 |
+| 无个人主页评论 | V1 我的/收到的评论 | 本次交付 |
+| 无表情评论 | V2 表情选择器 | 下一迭代 |
+| 无评论置顶 | V2 作者置顶 | 下一迭代 |
+
+---
+
+## 五、非功能规格（NFR）
+
+### 5.1 性能目标
+
+| 指标 | V1 目标 | 对标参考 |
+|------|---------|---------|
+| 评论列表首屏加载 | < 800ms（P95） | 小红书 < 1s |
+| 评论提交响应 | < 500ms（P95） | TikTok/小红书 < 500ms |
+| 评论弹窗打开动画 | < 300ms | — |
+| 乐观更新本地渲染 | < 100ms | — |
+| 热评排序查询 | < 500ms（P95） | — |
+
+### 5.2 容量目标
+
+| 指标 | V1 目标 | 演进目标 |
+|------|---------|---------|
+| 单帖评论上限 | 10 万+ 条 | 100 万+ |
+| 并发读 QPS | 1,000 | 10,000+ |
+| 并发写 QPS | 200 | 2,000+ |
+| 总评论存储 | 千万级 | 十亿级 |
+
+### 5.3 一致性模型
+
+| 场景 | 策略 | 说明 |
+|------|------|------|
+| 评论创建 | **乐观更新** | 本地立即插入列表 + 计数+1 → 异步写后端 → 失败回滚 |
+| 评论删除 | **乐观更新** | 本地立即移除 + 计数-1 → 异步删除后端 → 失败回滚 |
+| 评论点赞 | **最终一致** | Redis 先计数 → 异步持久化（同反应计数器模式） |
+| 评论计数 | **最终一致** | 写入后异步更新 post.commentCount → 定期修复任务 |
+| 列表排序 | **最终一致** | 热评排序基于缓存快照，非实时精确 |
+
+### 5.4 弱网降级
+
+| 场景 | 策略 |
+|------|------|
+| 列表加载超时 (>3s) | 显示"加载失败，点击重试"，保留已加载数据 |
+| 评论提交超时 | 本地队列缓存，恢复后自动重试（最多 3 次），UI 标记"发送中" |
+| 断网 | 可查看已缓存评论，提交操作排入待发队列 |
+| 网络恢复 | 自动重试队列中的待发评论 |
+
+### 5.5 热帖防护
+
+| 策略 | 规格 |
+|------|------|
+| 单用户频率限制 | 5 条/分钟 |
+| 单帖频率限制 | 1000 条/分钟 |
+| 热帖缓存阈值 | 评论数 ≥ 100 条触发 Redis ZSet 热评缓存 |
+| 热评缓存 Top-N | 缓存 Top 50 热评 |
+| 游标分页保护 | 不支持深翻页（offset），仅游标前进 |
+
+---
+
+## 六、配置管理规格
+
+### 6.1 配置项与分层
+
+| 配置项 | config.yaml Key | 默认值 | 端侧同步 |
+|--------|----------------|--------|----------|
+| 评论字数上限 | `sys.content.comment.max_length` | 500 | ✅ App Config |
+| 回复预览数 | `sys.content.comment.reply_preview_count` | 2 | ✅ App Config |
+| 长评论折叠行数 | `sys.content.comment.fold_line_count` | 3 | ✅ App Config |
+| 单用户评论频率 | `sys.content.comment.rate_limit.per_user_rpm` | 5 | ❌ |
+| 单帖评论频率 | `sys.content.comment.rate_limit.per_post_rpm` | 1000 | ❌ |
+| 热帖缓存阈值 | `sys.content.comment.hot_post.threshold` | 100 | ❌ |
+| 热评缓存 Top-N | `sys.content.comment.hot_post.cache_top_n` | 50 | ❌ |
+| 热评缓存 TTL | `sys.content.comment.hot_post.cache_ttl_seconds` | 300 | ❌ |
+| 赞数刷盘间隔 | `sys.content.comment.like_flush_interval_ms` | 5000 | ❌ |
+| 评论分页默认值 | metadata paginationLimitDefault | 20 | ✅ codegen |
+
+### 6.2 端云一致保障
+
+- 云侧校验使用 `RuntimeConfigProvider.GetInt("sys.content.comment.max_length")` 读取
+- 端侧通过 App Config Endpoint（`GET /v1/config/app`）同步业务规则
+- 端侧 codegen 产出 **fallback 默认值**，网络不可达时使用
+- 云侧是"最终裁判"——即使端侧因 fallback 允许提交，云侧仍校验并拒绝超限
+
+---
+
+## 七、Metadata 扩展需求
+
+### 7.1 现有（已完备，无需新建）
+
+| 维度 | 状态 |
+|------|------|
+| Comment 实体定义（aggregate.yaml） | ✅ 1:N 成员，cascade_delete |
+| Comment 字段（fields.yaml） | ✅ _id, postId, authorId, personaId, content, replyToCommentId, replyToUserId, likeCount, status, createdAt |
+| Comment 存储（storage.yaml） | ✅ comments 集合 + 3 个索引 |
+| CommentCreated 事件 | ✅ |
+| ListComments / CreateComment / DeleteComment 路由 | ✅ |
+| Comment 实体注册 | ✅ |
+
+### 7.2 需新增
+
+| 类型 | 内容 | 说明 |
+|------|------|------|
+| fields.yaml | `Comment.replyCount` (int) | 回复折叠预览所需 |
+| service.yaml | `LikeComment` / `UnlikeComment` 端点 | 评论点赞 |
+| service.yaml | `ListCommentsByAuthor` 端点 | 个人主页"我发出的评论" |
+| service.yaml | `ListCommentsForPostAuthor` 端点 | 个人主页"我收到的评论" |
+| events.yaml | `CommentLiked` 事件 | 评论点赞事件 |
+| events.yaml | `CommentModerated` 事件 | 审核结果回调 |
+| storage.yaml | `idx_comments_hot` 索引 | (postId, likeCount DESC, createdAt DESC) |
+| storage.yaml | 评论域缓存 key 定义 | 热评/最新/回复/点赞缓存 |
+| errors.yaml | `comment_too_long` | 评论超长错误 |
+| errors.yaml | `comment_rate_limited` | 评论频率限制错误 |
+| errors.yaml | `comment_like_duplicate` | 重复点赞错误 |
+
+### 7.3 需修复
+
+| 项目 | 现状 | 目标 |
+|------|------|------|
+| OpenAPI Delete 路径 | `/v1/content/comments/{commentId}` | 统一为 `/v1/content/posts/{postId}/comments/{commentId}` |
+
+---
+
+## 八、端云不一致修复（随本特性一并修复）
+
+| 项目 | 现状 | 修复 | 优先级 |
+|------|------|------|--------|
+| OpenAPI Delete 路径 | openapi.yaml 与 service.yaml 不一致 | 统一为带 postId 的路径 | P0 |
+| chatVideo 时长 | Dart=600s / Go=300s | 统一为 300s | P1 |
+| RTC cache TTL | 代码=3600s / metadata=60s | 代码对齐 metadata | P1 |
+| 评论字数限制 | Dart=500 / Go 无校验 | Go Handler 增加 max_length 校验 | P0 |
+
+---
+
+## 九、灰度发布规格
+
+### 9.1 灰度步进
+
+| 阶段 | 范围 | 观测期 | 放量条件 |
+|------|------|--------|---------|
+| Canary | 内部测试账号（~10 用户） | 48 小时 | 功能正常 + 无 P0 Bug |
+| Beta | 1% 用户 | 72 小时 | 错误率 < 0.1%，P95 延迟达标 |
+| GA-50 | 50% 用户 | 48 小时 | 错误率 < 0.05%，无容量报警 |
+| GA-100 | 全量 | — | 各项 SLO 达标 |
+
+### 9.2 SLO 与观测
+
+| 指标 | SLO | 报警阈值 |
+|------|-----|---------|
+| 评论列表成功率 | ≥ 99.5% | < 99% |
+| 评论提交成功率 | ≥ 99% | < 98% |
+| 列表 P95 延迟 | ≤ 800ms | > 1200ms |
+| 提交 P95 延迟 | ≤ 500ms | > 800ms |
+| 评论计数一致性 | 最终一致（≤ 5min） | 偏差 > 10% 且持续 > 30min |
+
+### 9.3 回滚条件
+
+- 评论提交成功率 < 95% 持续 5 分钟
+- 评论列表 P95 延迟 > 2s 持续 10 分钟
+- 出现数据丢失或计数严重偏差
+- 审核流水线完全失效导致违规内容暴露
+
+---
+
+## 十、验收标准概要
+
+详见 `acceptance.yaml`，共 20 条验收标准（A1~A20），覆盖：
+
+- **A1~A5**：核心交互（列表/创建/删除/回复/点赞）
+- **A6~A8**：入口打通与 UI 规格
+- **A9~A11**：排序/分页/折叠
+- **A12~A14**：个人主页/Persona/审核
+- **A15~A17**：端云一致/配置/DTO
+- **A18~A20**：NFR（性能/弱网/热帖）
+
+### 测试层责任
+
+| 层级 | 职责 |
+|------|------|
+| T1 | 防契约漂移：Comment DTO ↔ metadata fields.yaml；API 路径 ↔ service.yaml |
+| T2 | 防交互回归：8 入口打开弹窗 → 加载 → 提交 → 列表更新 → 点赞 → 删除 |
+| T3 | 防端云联调断裂：Remote Repository 与 Go Handler 路径/参数/响应一致 |
+| T4 | 防真实设备失效：弱网 >3s 降级提示；10 万评论滚动流畅度 ≥ 50fps |

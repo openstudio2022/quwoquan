@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/realtime/realtime_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/realtime/realtime_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_config.dart';
 
 /// Callback for incoming realtime events from long-polling.
@@ -44,10 +46,14 @@ class LongPollTransport {
     while (_running && !_disposed) {
       try {
         final url = Uri.parse(
-          '${CloudRuntimeConfig.gatewayBaseUrl}/v1/chat/realtime/poll'
-          '?userId=$userId&hold=${config.longPollHoldSec}',
+          '${CloudRuntimeConfig.gatewayBaseUrl}${RealtimeApiMetadata.longPollPath}',
+        ).replace(
+          queryParameters: <String, String>{
+            'userId': userId,
+            'hold': '${config.longPollHoldSec}',
+          },
         );
-        final headers = CloudRequestHeaders.forPage('chat.longpoll');
+        final headers = CloudRequestHeaders.forPage(RealtimeRequestPageIds.longPoll);
         final resp = await _client
             .get(url, headers: headers)
             .timeout(Duration(seconds: config.longPollHoldSec + 10));

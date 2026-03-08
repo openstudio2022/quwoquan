@@ -16,13 +16,10 @@ Widget _scopedApp({CircleRepository? mock}) {
         routes: [
           GoRoute(
             path: '/circles',
-            builder: (_, __) => const Scaffold(body: CirclesPage()),
+            builder: (_, _) => const Scaffold(body: CirclesPage()),
           ),
-          GoRoute(path: '/circle/:id', builder: (_, __) => const SizedBox()),
-          GoRoute(
-            path: '/article/:id',
-            builder: (_, __) => const SizedBox(),
-          ),
+          GoRoute(path: '/circle/:id', builder: (_, _) => const SizedBox()),
+          GoRoute(path: '/article/:id', builder: (_, _) => const SizedBox()),
         ],
       ),
     ),

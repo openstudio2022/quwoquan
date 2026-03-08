@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/realtime/realtime_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_config.dart';
 
 /// Callback for incoming realtime events from WebSocket.
@@ -45,7 +46,9 @@ class WebSocketTransport {
 
       _connected.value = true;
 
-      final headers = CloudRequestHeaders.forPage('chat.realtime');
+      final headers = CloudRequestHeaders.forPage(
+        RealtimeRequestPageIds.webSocketUpgrade,
+      );
       _send({'type': 'auth', 'userId': userId, ...headers});
 
       _startHeartbeat();

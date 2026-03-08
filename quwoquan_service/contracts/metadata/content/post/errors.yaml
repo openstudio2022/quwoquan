@@ -100,6 +100,51 @@ errors:
       zh: "操作太频繁，请稍后重试"
       en: "Too many requests, please retry later"
 
+  - code: CONTENT.USER.comment_too_long
+    kind: USER
+    reason: invalid_argument
+    http_status: 400
+    retryable: false
+    dart_const: commentTooLong
+    go_const: ErrCommentTooLong
+    user_message:
+      zh: "评论超出字数限制"
+      en: "Comment exceeds length limit"
+
+  - code: CONTENT.USER.comment_rate_limited
+    kind: USER
+    reason: rate_limited
+    http_status: 429
+    retryable: true
+    retry_after_seconds: 60
+    dart_const: commentRateLimited
+    go_const: ErrCommentRateLimited
+    user_message:
+      zh: "评论太频繁，请稍后重试"
+      en: "Too many comments, please retry later"
+
+  - code: CONTENT.USER.comment_like_duplicate
+    kind: USER
+    reason: conflict
+    http_status: 409
+    retryable: false
+    dart_const: commentLikeDuplicate
+    go_const: ErrCommentLikeDuplicate
+    user_message:
+      zh: "已经点过赞了"
+      en: "Already liked"
+
+  - code: CONTENT.USER.comment_forbidden_delete
+    kind: USER
+    reason: forbidden
+    http_status: 403
+    retryable: false
+    dart_const: commentForbiddenDelete
+    go_const: ErrCommentForbiddenDelete
+    user_message:
+      zh: "无权删除此评论"
+      en: "Not allowed to delete this comment"
+
   - code: CONTENT.USER.content_too_long
     kind: USER
     reason: invalid_argument

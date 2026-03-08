@@ -59,7 +59,8 @@ api_routes:
   - method: GET
     path: /v1/content/posts/{postId}/comments
     operation: ListComments
-    description: 评论列表
+    description: 评论列表（支持 hot/latest 排序）
+    query_params: [sort, cursor, limit]
     response_entity: Comment
 
   - method: POST
@@ -67,12 +68,45 @@ api_routes:
     operation: CreateComment
     description: 发表评论
     request_entity: Comment
-    writable_fields: [content, replyToCommentId]
+    writable_fields: [content, replyToCommentId, personaId]
 
   - method: DELETE
     path: /v1/content/posts/{postId}/comments/{commentId}
     operation: DeleteComment
     description: 删除评论
+
+  - method: POST
+    path: /v1/content/comments/{commentId}/like
+    operation: LikeComment
+    description: 评论点赞（幂等，Redis SISMEMBER 去重 + INCR 计数 → 异步刷盘）
+    auth: required
+
+  - method: DELETE
+    path: /v1/content/comments/{commentId}/like
+    operation: UnlikeComment
+    description: 取消评论点赞（幂等）
+    auth: required
+
+  - method: GET
+    path: /v1/content/users/me/comments
+    operation: ListCommentsByAuthor
+    description: 我发出的评论（个人主页，按时间倒序，附带原帖摘要）
+    query_params: [cursor, limit]
+    response_entity: Comment
+    auth: required
+
+  - method: GET
+    path: /v1/content/users/me/received-comments
+    operation: ListCommentsForPostAuthor
+    description: 我收到的评论（个人主页，按时间倒序，附带原帖摘要）
+    query_params: [cursor, limit]
+    response_entity: Comment
+    auth: required
+
+  - method: GET
+    path: /v1/config/app
+    operation: GetAppConfig
+    description: 端侧业务规则配置（评论字数限制、折叠参数等），启动时拉取一次
 
   - method: GET
     path: /v1/content/posts/{postId}/reactions

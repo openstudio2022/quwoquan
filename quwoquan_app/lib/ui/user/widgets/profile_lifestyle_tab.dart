@@ -35,7 +35,10 @@ class ProfileLifestyleTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.watch(profileNotifierProvider(userId));
     final state = notifier.state;
-    final fgSecondary = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
     final primary = AppColors.primaryColor;
 
     final filteredItems = state.lifeItems.where((item) {
@@ -56,12 +59,16 @@ class ProfileLifestyleTab extends ConsumerWidget {
                 onTap: () => notifier.setLifestyleSubTab(tab),
                 child: Container(
                   alignment: Alignment.center,
-                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: AppSpacing.containerSm,
+                  ),
                   child: Text(
                     _subTabLabels[tab]!,
                     style: TextStyle(
                       fontSize: AppTypography.md,
-                      fontWeight: isActive ? AppTypography.semiBold : AppTypography.normal,
+                      fontWeight: isActive
+                          ? AppTypography.semiBold
+                          : AppTypography.normal,
                       color: isActive ? primary : fgSecondary,
                     ),
                   ),
@@ -76,11 +83,18 @@ class ProfileLifestyleTab extends ConsumerWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.explore_outlined, size: AppSpacing.xl * 2, color: fgSecondary),
+                      Icon(
+                        Icons.explore_outlined,
+                        size: AppSpacing.xl * 2,
+                        color: fgSecondary,
+                      ),
                       SizedBox(height: AppSpacing.md),
                       Text(
                         mode == ProfileMode.mine ? '还没有生活记录' : 'Ta 还没有生活记录',
-                        style: TextStyle(fontSize: AppTypography.md, color: fgSecondary),
+                        style: TextStyle(
+                          fontSize: AppTypography.md,
+                          color: fgSecondary,
+                        ),
                       ),
                     ],
                   ),
@@ -96,14 +110,16 @@ class ProfileLifestyleTab extends ConsumerWidget {
                   itemBuilder: (context, index) {
                     final item = filteredItems[index];
                     return ClipRRect(
-                      borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.borderRadius,
+                      ),
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
                           Image.network(
                             item.coverUrl,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
+                            errorBuilder: (_, _, _) => Container(
                               color: fgSecondary.withValues(alpha: 0.1),
                               child: Icon(Icons.image, color: fgSecondary),
                             ),

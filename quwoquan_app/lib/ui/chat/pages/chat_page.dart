@@ -8,8 +8,8 @@ import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.d
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/features/assistant/context/assistant_open_context.dart';
-import 'package:quwoquan_app/features/assistant/widgets/assistant_half_sheet.dart';
+import 'package:quwoquan_app/core/models/assistant_open_context.dart';
+import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 
 /// 趣聊页
 ///

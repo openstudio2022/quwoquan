@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 /// 发起群聊页（图一：创建新群聊 + 相关同好）
@@ -43,11 +42,13 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
         setState(() {
           _groupConversations = convs
               .where((c) => c['type'] == 'group' || c['type'] == 'circle')
-              .map((c) => {
-                    'id': c['_id'] as String? ?? '',
-                    'name': c['title'] as String? ?? '',
-                    'count': '${c['memberCount'] ?? 0}',
-                  })
+              .map(
+                (c) => {
+                  'id': c['_id'] as String? ?? '',
+                  'name': c['title'] as String? ?? '',
+                  'count': '${c['memberCount'] ?? 0}',
+                },
+              )
               .toList();
           _contacts = contacts;
         });
@@ -61,123 +62,6 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     {'id': 'c1', 'name': '摄影圈', 'count': '20'},
     {'id': 'c2', 'name': '读书会', 'count': '15'},
     {'id': 'c3', 'name': '跑步同好', 'count': '30'},
-  ];
-
-  static const List<Map<String, String>> _mockGroupMembers = [
-    {
-      'name': '用户一',
-      'username': 'user1',
-      'avatar':
-          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
-    },
-    {
-      'name': '用户二',
-      'username': 'user2',
-      'avatar':
-          'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
-    },
-    {
-      'name': '用户三',
-      'username': 'user3',
-      'avatar':
-          'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200',
-    },
-    {
-      'name': '用户四',
-      'username': 'user4',
-      'avatar':
-          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
-    },
-    {
-      'name': '用户五',
-      'username': 'user5',
-      'avatar':
-          'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200',
-    },
-    {
-      'name': '用户六',
-      'username': 'user6',
-      'avatar':
-          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
-    },
-    {
-      'name': '用户七',
-      'username': 'user7',
-      'avatar':
-          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
-    },
-    {
-      'name': '用户八',
-      'username': 'user8',
-      'avatar':
-          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
-    },
-    {
-      'name': '用户九',
-      'username': 'user9',
-      'avatar':
-          'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
-    },
-  ];
-
-  /// 相关同好 mock：带首字母用于分组（A-Z, #），仅用通用占位名
-  static const List<Map<String, dynamic>> _mockRelatedFriends = [
-    {
-      'name': '同好A1',
-      'username': 'friend_a1',
-      'avatar':
-          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
-      'letter': 'A',
-    },
-    {
-      'name': '同好A2',
-      'username': 'friend_a2',
-      'avatar':
-          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
-      'letter': 'A',
-    },
-    {
-      'name': '同好A3',
-      'username': 'friend_a3',
-      'avatar':
-          'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200',
-      'letter': 'A',
-    },
-    {
-      'name': '同好B1',
-      'username': 'friend_b1',
-      'avatar':
-          'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
-      'letter': 'B',
-    },
-    {
-      'name': '同好B2',
-      'username': 'friend_b2',
-      'avatar':
-          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
-      'letter': 'B',
-    },
-    {
-      'name': '同好C1',
-      'username': 'friend_c1',
-      'avatar':
-          'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200',
-      'letter': 'C',
-    },
-    {
-      'name': '同好C2',
-      'username': 'friend_c2',
-      'avatar':
-          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
-      'letter': 'C',
-    },
-    {
-      'name': '同好D1',
-      'username': 'friend_d1',
-      'avatar':
-          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
-      'letter': 'D',
-    },
   ];
 
   @override
@@ -194,17 +78,23 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => _SelectGroupChatSheet(
-        groups: _groupConversations.map((c) => c.cast<String, String>()).toList(),
+        groups: _groupConversations
+            .map((c) => c.cast<String, String>())
+            .toList(),
         onSelectGroup: (group) {
           Navigator.of(context).pop();
           _openMemberSelectSheet(
             title:
                 '${group['name']} (${group['count']}${UITextConstants.friendsCount})',
-            members: _contacts.map((c) => <String, String>{
-              'name': c['displayName'] as String? ?? '',
-              'username': c['userId'] as String? ?? '',
-              'avatar': c['avatarUrl'] as String? ?? '',
-            }).toList(),
+            members: _contacts
+                .map(
+                  (c) => <String, String>{
+                    'name': c['displayName'] as String? ?? '',
+                    'username': c['userId'] as String? ?? '',
+                    'avatar': c['avatarUrl'] as String? ?? '',
+                  },
+                )
+                .toList(),
             onConfirm: (selected) {
               messenger.showSnackBar(
                 SnackBar(content: Text('已选 ${selected.length} 人（开发中）')),
@@ -230,11 +120,15 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
           _openMemberSelectSheet(
             title:
                 '${circle['name']} (${circle['count']}${UITextConstants.friendsCount})',
-            members: _contacts.map((c) => <String, String>{
-              'name': c['displayName'] as String? ?? '',
-              'username': c['userId'] as String? ?? '',
-              'avatar': c['avatarUrl'] as String? ?? '',
-            }).toList(),
+            members: _contacts
+                .map(
+                  (c) => <String, String>{
+                    'name': c['displayName'] as String? ?? '',
+                    'username': c['userId'] as String? ?? '',
+                    'avatar': c['avatarUrl'] as String? ?? '',
+                  },
+                )
+                .toList(),
             onConfirm: (selected) {
               messenger.showSnackBar(
                 SnackBar(content: Text('已选 ${selected.length} 人（开发中）')),
@@ -311,14 +205,18 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
       isDark,
       ColorType.borderPrimary,
     );
-    final friendsWithLetter = _contacts.map((c) => <String, dynamic>{
-      'name': c['displayName'] as String? ?? '',
-      'username': c['userId'] as String? ?? '',
-      'avatar': c['avatarUrl'] as String? ?? '',
-      'letter': ((c['displayName'] as String? ?? '#').isNotEmpty
-          ? (c['displayName'] as String).substring(0, 1).toUpperCase()
-          : '#'),
-    }).toList();
+    final friendsWithLetter = _contacts
+        .map(
+          (c) => <String, dynamic>{
+            'name': c['displayName'] as String? ?? '',
+            'username': c['userId'] as String? ?? '',
+            'avatar': c['avatarUrl'] as String? ?? '',
+            'letter': ((c['displayName'] as String? ?? '#').isNotEmpty
+                ? (c['displayName'] as String).substring(0, 1).toUpperCase()
+                : '#'),
+          },
+        )
+        .toList();
     final grouped = _groupByLetter(friendsWithLetter);
     final indexLetters = ['↑', '☆', ...grouped.keys];
 

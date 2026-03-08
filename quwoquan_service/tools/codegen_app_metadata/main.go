@@ -50,18 +50,25 @@ type routeDef struct {
 	Method         string   `yaml:"method"`
 	Path           string   `yaml:"path"`
 	Operation      string   `yaml:"operation"`
+	Description    string   `yaml:"description"`
 	QueryParams    []string `yaml:"query_params"`
 	WritableFields []string `yaml:"writable_fields"`
 }
 
+type serviceInfo struct {
+	Name   string `yaml:"name"`
+	Domain string `yaml:"domain"`
+}
+
 type serviceFile struct {
-	APIRoutes []routeDef `yaml:"api_routes"`
+	Service   serviceInfo `yaml:"service"`
+	APIRoutes []routeDef  `yaml:"api_routes"`
 }
 
 // integration/location/service.yaml 专用，含 response_list_key
 type integrationLocationServiceFile struct {
-	ResponseListKey string      `yaml:"response_list_key"`
-	APIRoutes       []routeDef  `yaml:"api_routes"`
+	ResponseListKey string     `yaml:"response_list_key"`
+	APIRoutes       []routeDef `yaml:"api_routes"`
 }
 
 // ── {domain}/{entity}/projections/*.yaml ─────────────────────────────────────
@@ -93,23 +100,23 @@ type clientProjection struct {
 }
 
 type projectionFile struct {
-	ReadModel         string           `yaml:"read_model"`
-	ClientProjection  clientProjection `yaml:"client_projection"`
+	ReadModel        string           `yaml:"read_model"`
+	ClientProjection clientProjection `yaml:"client_projection"`
 }
 
 // ── errors.yaml ───────────────────────────────────────────────────────────────
 
 type errorDef struct {
-	Code               string            `yaml:"code"`
-	Kind               string            `yaml:"kind"`
-	Reason             string            `yaml:"reason"`
-	HTTPStatus         int               `yaml:"http_status"`
-	Retryable          bool              `yaml:"retryable"`
-	RetryAfterSeconds  int               `yaml:"retry_after_seconds"`
-	DartConst          string            `yaml:"dart_const"`
-	GoConst            string            `yaml:"go_const"`
-	L10nKey            string            `yaml:"l10n_key"` // AppLocalizations getter name for display message
-	UserMessage        map[string]string `yaml:"user_message"`
+	Code              string            `yaml:"code"`
+	Kind              string            `yaml:"kind"`
+	Reason            string            `yaml:"reason"`
+	HTTPStatus        int               `yaml:"http_status"`
+	Retryable         bool              `yaml:"retryable"`
+	RetryAfterSeconds int               `yaml:"retry_after_seconds"`
+	DartConst         string            `yaml:"dart_const"`
+	GoConst           string            `yaml:"go_const"`
+	L10nKey           string            `yaml:"l10n_key"` // AppLocalizations getter name for display message
+	UserMessage       map[string]string `yaml:"user_message"`
 }
 
 type errorsFile struct {
@@ -120,15 +127,15 @@ type errorsFile struct {
 // ── behaviors.yaml ─────────────────────────────────────────────────────────────
 
 type behaviorEventDef struct {
-	Type          string   `yaml:"type"`
-	Description   string   `yaml:"description"`
-	Trigger       string   `yaml:"trigger"`
-	Batch         bool     `yaml:"batch"`
-	BatchRoute    string   `yaml:"batch_route"`
-	DartMethod    string   `yaml:"dart_method"`
-	DedicatedRoute string  `yaml:"dedicated_route"`
-	PayloadFields []string `yaml:"payload_fields"`
-	MLSignal      string   `yaml:"ml_signal"`
+	Type           string   `yaml:"type"`
+	Description    string   `yaml:"description"`
+	Trigger        string   `yaml:"trigger"`
+	Batch          bool     `yaml:"batch"`
+	BatchRoute     string   `yaml:"batch_route"`
+	DartMethod     string   `yaml:"dart_method"`
+	DedicatedRoute string   `yaml:"dedicated_route"`
+	PayloadFields  []string `yaml:"payload_fields"`
+	MLSignal       string   `yaml:"ml_signal"`
 }
 
 type behaviorsFile struct {
@@ -153,12 +160,12 @@ type privacyFile struct {
 // ── ui_config.yaml ────────────────────────────────────────────────────────────
 
 type discoveryTabDef struct {
-	ID             string  `yaml:"id"`
-	LabelKey       string  `yaml:"label_key"`
-	Icon           string  `yaml:"icon"`
-	ContentType    string  `yaml:"content_type"`
-	Layout         string  `yaml:"layout"`
-	Order          int     `yaml:"order"`
+	ID          string `yaml:"id"`
+	LabelKey    string `yaml:"label_key"`
+	Icon        string `yaml:"icon"`
+	ContentType string `yaml:"content_type"`
+	Layout      string `yaml:"layout"`
+	Order       int    `yaml:"order"`
 }
 
 type featureFlagDef struct {
@@ -371,6 +378,25 @@ func main() {
 		dtoPath := filepath.Join(appDir, "lib", relPath)
 		writeFile(dtoPath, out)
 	}
+
+	domainRoutes, err := collectDomainServiceRoutes(metadataDir)
+	if err != nil {
+		exitErr(err)
+	}
+	defaultsOut := renderCloudAPIDefaultsDart(feedDefaultLimit)
+	writeFile(filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "cloud_api_defaults.g.dart"), defaultsOut)
+	for domain, routes := range domainRoutes {
+		metaOut := renderDomainAPIMetadataDart(domain, routes)
+		pageIDsOut := renderDomainRequestPageIDsDart(domain, routes)
+		writeFile(
+			filepath.Join(appDir, "lib", "cloud", "runtime", "generated", domain, fmt.Sprintf("%s_api_metadata.g.dart", domain)),
+			metaOut,
+		)
+		writeFile(
+			filepath.Join(appDir, "lib", "cloud", "runtime", "generated", domain, fmt.Sprintf("%s_request_page_ids.g.dart", domain)),
+			pageIDsOut,
+		)
+	}
 }
 
 // ── readers ───────────────────────────────────────────────────────────────────
@@ -421,6 +447,48 @@ func readProjection(path string) (*projectionFile, error) {
 }
 
 // ── builders ──────────────────────────────────────────────────────────────────
+
+func collectDomainServiceRoutes(metadataDir string) (map[string][]routeDef, error) {
+	grouped := map[string][]routeDef{}
+	seen := map[string]bool{}
+	err := filepath.WalkDir(metadataDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || d.Name() != "service.yaml" {
+			return nil
+		}
+		service, readErr := readService(path)
+		if readErr != nil {
+			return readErr
+		}
+		domain := strings.TrimSpace(service.Service.Domain)
+		if domain == "" {
+			return nil
+		}
+		for _, route := range service.APIRoutes {
+			if strings.TrimSpace(route.Operation) == "" || strings.TrimSpace(route.Path) == "" {
+				continue
+			}
+			key := domain + ":" + route.Operation
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			grouped[domain] = append(grouped[domain], route)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	for domain := range grouped {
+		sort.Slice(grouped[domain], func(i, j int) bool {
+			return grouped[domain][i].Operation < grouped[domain][j].Operation
+		})
+	}
+	return grouped, nil
+}
 
 func buildPostDefaults(fields []fieldDef) map[string]string {
 	defaults := map[string]string{}
@@ -582,7 +650,114 @@ func paginationLimitDefault(shared *sharedTypes, fallback int) int {
 	return fallback
 }
 
+func operationDefaultLimit(operation string, pageLimit int) int {
+	switch operation {
+	case "ListUserCircles":
+		return 50
+	case "SyncMessages":
+		return 500
+	default:
+		return pageLimit
+	}
+}
+
 // ── renderers ─────────────────────────────────────────────────────────────────
+
+func renderCloudAPIDefaultsDart(pageLimit int) string {
+	var b strings.Builder
+	b.WriteString("// Code generated by tools/codegen_app_metadata. DO NOT EDIT.\n\n")
+	b.WriteString("// ignore: avoid_classes_with_only_static_members\n")
+	b.WriteString("class CloudApiDefaults {\n")
+	b.WriteString("  const CloudApiDefaults._();\n\n")
+	b.WriteString(fmt.Sprintf("  static const int pageLimit = %d;\n", pageLimit))
+	b.WriteString(fmt.Sprintf("  static const int syncMessagesLimit = %d;\n", operationDefaultLimit("SyncMessages", pageLimit)))
+	b.WriteString(fmt.Sprintf("  static const int userCirclesLimit = %d;\n", operationDefaultLimit("ListUserCircles", pageLimit)))
+	b.WriteString("  static const int callMaxParticipants = 32;\n")
+	b.WriteString("}\n")
+	return b.String()
+}
+
+func renderDomainAPIMetadataDart(domain string, routes []routeDef) string {
+	var b strings.Builder
+	className := toDartExportedName(domain) + "ApiMetadata"
+	hasPathParams := false
+	b.WriteString(fmt.Sprintf("// Code generated by tools/codegen_app_metadata from %s domain service.yaml files. DO NOT EDIT.\n\n", domain))
+	b.WriteString("// ignore: avoid_classes_with_only_static_members\n")
+	b.WriteString("import 'dart:core';\n\n")
+	b.WriteString(fmt.Sprintf("class %s {\n", className))
+	b.WriteString(fmt.Sprintf("  const %s._();\n\n", className))
+	b.WriteString(fmt.Sprintf("  static const String domain = '%s';\n", domain))
+	prefixes := collectRoutePrefixes(routes)
+	b.WriteString("  static const List<String> apiPrefixes = <String>[\n")
+	for _, prefix := range prefixes {
+		b.WriteString(fmt.Sprintf("    '%s',\n", prefix))
+	}
+	b.WriteString("  ];\n\n")
+	b.WriteString("  static const Map<String, String> operationToPathTemplate = <String, String>{\n")
+	for _, route := range routes {
+		b.WriteString(fmt.Sprintf("    '%s': '%s',\n", route.Operation, route.Path))
+	}
+	b.WriteString("  };\n\n")
+	b.WriteString("  static const Map<String, String> operationToMethod = <String, String>{\n")
+	for _, route := range routes {
+		b.WriteString(fmt.Sprintf("    '%s': '%s',\n", route.Operation, strings.ToUpper(route.Method)))
+	}
+	b.WriteString("  };\n\n")
+	for _, route := range routes {
+		identifier := lowerCamel(route.Operation)
+		params := extractPathParams(route.Path)
+		if len(params) == 0 {
+			b.WriteString(fmt.Sprintf("  static const String %sPath = '%s';\n", identifier, route.Path))
+			continue
+		}
+		hasPathParams = true
+		b.WriteString(fmt.Sprintf("  static const String %sPathTemplate = '%s';\n", identifier, route.Path))
+		b.WriteString(fmt.Sprintf("  static String %sPath({", identifier))
+		for idx, param := range params {
+			if idx > 0 {
+				b.WriteString(", ")
+			}
+			b.WriteString(fmt.Sprintf("required String %s", param))
+		}
+		b.WriteString("}) {\n")
+		b.WriteString(fmt.Sprintf("    return _fillPath(%sPathTemplate, <String, String>{\n", identifier))
+		for _, param := range params {
+			b.WriteString(fmt.Sprintf("      '%s': %s,\n", param, param))
+		}
+		b.WriteString("    });\n")
+		b.WriteString("  }\n")
+	}
+	if hasPathParams {
+		b.WriteString("\n  static String _fillPath(String template, Map<String, String> params) {\n")
+		b.WriteString("    var path = template;\n")
+		b.WriteString("    params.forEach((key, value) {\n")
+		b.WriteString("      path = path.replaceAll('{$key}', Uri.encodeComponent(value));\n")
+		b.WriteString("    });\n")
+		b.WriteString("    return path;\n")
+		b.WriteString("  }\n")
+	}
+	b.WriteString("}\n")
+	return b.String()
+}
+
+func renderDomainRequestPageIDsDart(domain string, routes []routeDef) string {
+	var b strings.Builder
+	className := toDartExportedName(domain) + "RequestPageIds"
+	b.WriteString(fmt.Sprintf("// Code generated by tools/codegen_app_metadata from %s domain service.yaml files. DO NOT EDIT.\n\n", domain))
+	b.WriteString("// ignore: avoid_classes_with_only_static_members\n")
+	b.WriteString(fmt.Sprintf("class %s {\n", className))
+	b.WriteString(fmt.Sprintf("  const %s._();\n\n", className))
+	b.WriteString("  static const Map<String, String> operationToPageId = <String, String>{\n")
+	for _, route := range routes {
+		b.WriteString(fmt.Sprintf("    '%s': '%s',\n", route.Operation, resolvePageID(domain, route.Operation)))
+	}
+	b.WriteString("  };\n\n")
+	for _, route := range routes {
+		b.WriteString(fmt.Sprintf("  static const String %s = '%s';\n", lowerCamel(route.Operation), resolvePageID(domain, route.Operation)))
+	}
+	b.WriteString("}\n")
+	return b.String()
+}
 
 // renderContentMetadataDart generates the legacy metadata constants file
 // (renamed from post_runtime_metadata.g.dart → content_metadata.g.dart).
@@ -1080,6 +1255,237 @@ func writeSortedStringMap(b *strings.Builder, m map[string]string) {
 	for _, k := range keys {
 		b.WriteString(fmt.Sprintf("    '%s': '%s',\n", k, m[k]))
 	}
+}
+
+func extractPathParams(path string) []string {
+	start := -1
+	params := []string{}
+	for i, r := range path {
+		switch r {
+		case '{':
+			start = i + 1
+		case '}':
+			if start > 0 && start <= i {
+				params = append(params, path[start:i])
+			}
+			start = -1
+		}
+	}
+	return params
+}
+
+func collectRoutePrefixes(routes []routeDef) []string {
+	seen := map[string]bool{}
+	prefixes := []string{}
+	for _, route := range routes {
+		parts := strings.Split(strings.Trim(route.Path, "/"), "/")
+		if len(parts) < 2 {
+			continue
+		}
+		prefix := "/" + parts[0] + "/" + parts[1]
+		if seen[prefix] {
+			continue
+		}
+		seen[prefix] = true
+		prefixes = append(prefixes, prefix)
+	}
+	sort.Strings(prefixes)
+	return prefixes
+}
+
+func toDartExportedName(value string) string {
+	parts := strings.FieldsFunc(value, func(r rune) bool {
+		return r == '_' || r == '-' || r == '/' || r == ' '
+	})
+	var b strings.Builder
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		lower := strings.ToLower(part)
+		b.WriteString(strings.ToUpper(lower[:1]))
+		if len(lower) > 1 {
+			b.WriteString(lower[1:])
+		}
+	}
+	return b.String()
+}
+
+func lowerCamel(value string) string {
+	parts := splitCamelCase(value)
+	if len(parts) == 0 {
+		return value
+	}
+	var b strings.Builder
+	for idx, part := range parts {
+		lower := strings.ToLower(part)
+		if idx == 0 {
+			b.WriteString(lower)
+			continue
+		}
+		b.WriteString(strings.ToUpper(lower[:1]))
+		if len(lower) > 1 {
+			b.WriteString(lower[1:])
+		}
+	}
+	return b.String()
+}
+
+func splitCamelCase(value string) []string {
+	if value == "" {
+		return nil
+	}
+	var parts []string
+	var current strings.Builder
+	for idx, r := range value {
+		if idx > 0 && r >= 'A' && r <= 'Z' && current.Len() > 0 {
+			parts = append(parts, current.String())
+			current.Reset()
+		}
+		current.WriteRune(r)
+	}
+	if current.Len() > 0 {
+		parts = append(parts, current.String())
+	}
+	return parts
+}
+
+func resolvePageID(domain string, operation string) string {
+	if opMap, ok := routePageIDOverrides[domain]; ok {
+		if pageID, ok := opMap[operation]; ok {
+			return pageID
+		}
+	}
+	parts := splitCamelCase(operation)
+	if len(parts) == 0 {
+		return domain + "." + strings.ToLower(operation)
+	}
+	lowered := make([]string, 0, len(parts)+1)
+	lowered = append(lowered, domain)
+	for _, part := range parts {
+		lowered = append(lowered, strings.ToLower(part))
+	}
+	return strings.Join(lowered, ".")
+}
+
+var routePageIDOverrides = map[string]map[string]string{
+	"chat": {
+		"AddMembers":                 "chat.member.add",
+		"CreateConversation":         "chat.conversation.create",
+		"GetConversation":            "chat.conversation.detail",
+		"GetReceipts":                "chat.message.receipts",
+		"InviteAssistant":            "chat.assistant.invite",
+		"ListContacts":               "chat.contacts.list",
+		"ListConversations":          "chat.conversation.list",
+		"ListMembers":                "chat.member.list",
+		"ListMessages":               "chat.message.list",
+		"MarkAsRead":                 "chat.message.read",
+		"RecallMessage":              "chat.message.recall",
+		"RemoveAssistant":            "chat.assistant.remove",
+		"RemoveMember":               "chat.member.remove",
+		"SearchContacts":             "chat.contacts.search",
+		"SendMessage":                "chat.message.send",
+		"SyncMessages":               "chat.message.sync",
+		"UpdateConversationSettings": "chat.settings.update",
+	},
+	"circle": {
+		"ArchiveCircle":        "circle.archive",
+		"CreateCircle":         "circle.create",
+		"CreateCircleFile":     "circle.files.create",
+		"DeleteCircleFile":     "circle.files.delete",
+		"FeatureCirclePost":    "circle.post.feature",
+		"GetCircle":            "circle.get",
+		"GetCircleFeed":        "circle.feed.list",
+		"GetCircleFile":        "circle.files.get",
+		"GetCircleStats":       "circle.stats",
+		"JoinCircle":           "circle.join",
+		"LeaveCircle":          "circle.leave",
+		"ListCircleFiles":      "circle.files.list",
+		"ListCircleMembers":    "circle.members.list",
+		"ListCircles":          "circle.list",
+		"ListUserCircles":      "circle.user.list",
+		"PinCirclePost":        "circle.post.pin",
+		"ReportCircleBehavior": "circle.behaviors.report",
+		"UpdateCircle":         "circle.update",
+		"UpdateCircleFile":     "circle.files.update",
+		"UpdateCircleSections": "circle.sections.update",
+		"UpdateMemberRole":     "circle.members.updateRole",
+	},
+	"content": {
+		"AbortMediaUpload":       "content.media.abort",
+		"CompleteMediaUpload":    "content.media.complete",
+		"CreateComment":          "content.comment.create",
+		"CreatePost":             "content.post.create",
+		"CreateReport":           "content.report.create",
+		"DeleteComment":          "content.comment.delete",
+		"DeletePost":             "content.post.delete",
+		"FavoritePost":           "content.post.favorite",
+		"GenerateArticleSummary": "content.article.summary",
+		"GetCounters":            "content.post.counters",
+		"GetFeed":                "content.feed.list",
+		"GetMediaAsset":          "content.media.get",
+		"GetPost":                "content.post.get",
+		"GetReactionState":       "content.post.reactions",
+		"GetRecommendation":      "content.recommend",
+		"InitMediaUpload":        "content.media.init",
+		"LikePost":               "content.post.like",
+		"ListComments":           "content.comment.list",
+		"ListUserPosts":          "content.user.posts",
+		"PublishPost":            "content.post.publish",
+		"QuoteToCircle":          "content.post.quote",
+		"ReportBehaviors":        "content.behaviors.report",
+		"RepostToCircle":         "content.post.repost",
+		"SelectAutoVideoCover":   "content.media.cover.auto",
+		"SelectManualVideoCover": "content.media.cover.manual",
+		"UnfavoritePost":         "content.post.unfavorite",
+		"UnlikePost":             "content.post.unlike",
+		"UpdatePost":             "content.post.update",
+		"UpdatePostCircles":      "content.post.circles",
+	},
+	"realtime": {
+		"GetRealtimeConfig": "realtime.config.get",
+		"LongPoll":          "chat.longpoll",
+		"WebSocketUpgrade":  "chat.realtime",
+	},
+	"rtc": {
+		"AnswerCall":       "rtc.answer",
+		"GetCall":          "rtc.session",
+		"HangupCall":       "rtc.hangup",
+		"InitiateCall":     "rtc.initiate",
+		"InviteToCall":     "rtc.invite",
+		"JoinCall":         "rtc.token",
+		"ListCalls":        "rtc.history",
+		"RejectCall":       "rtc.reject",
+		"StartRecording":   "rtc.recording.start",
+		"StartScreenShare": "rtc.screenShare.start",
+		"StopRecording":    "rtc.recording.stop",
+		"StopScreenShare":  "rtc.screenShare.stop",
+		"ToggleCamera":     "rtc.camera",
+		"ToggleMute":       "rtc.mute",
+	},
+	"user": {
+		"ActivatePersona":         "user.personas.activate",
+		"BlockUser":               "user.block.create",
+		"CreatePersona":           "user.personas.create",
+		"DeletePersona":           "user.personas.delete",
+		"FollowUser":              "user.follow",
+		"GetNotificationSettings": "user.notification_settings.get",
+		"GetPrivacySettings":      "user.settings.privacy.get",
+		"GetRelationship":         "user.relationship",
+		"GetUserProfile":          "user.profile",
+		"ListBlockedUsers":        "user.block.list",
+		"ListFollowers":           "user.followers",
+		"ListFollowing":           "user.following",
+		"ListPersonas":            "user.personas",
+		"ListUserLifeItems":       "user.lifeItems",
+		"ListUserLikes":           "user.likes",
+		"ListUserWorks":           "user.works",
+		"UnblockUser":             "user.block.delete",
+		"UnfollowUser":            "user.unfollow",
+		"UpdatePersona":           "user.personas.update",
+		"UpdatePrivacySettings":   "user.settings.privacy.patch",
+		"UpdateUserProfile":       "user.profile.edit",
+	},
 }
 
 // ── new cross-cutting readers ─────────────────────────────────────────────────

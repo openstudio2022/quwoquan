@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/features/create/models/create_media_models.dart';
+import 'package:quwoquan_app/core/models/create_media_models.dart';
 
 @immutable
 class CameraCaptureResult {

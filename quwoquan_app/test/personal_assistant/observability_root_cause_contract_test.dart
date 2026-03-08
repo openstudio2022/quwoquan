@@ -10,8 +10,7 @@
 ///   4. 结构化响应（structuredResponse）的 qualityMetrics 必须包含 decisionParseSuccess 字段
 ///   5. 所有 trace 的 timestamp 必须为有效 DateTime（非 epoch 0）
 ///   6. trace 序列化后 runId/traceId 跨事件一致
-
-import 'dart:convert';
+library;
 
 import 'package:quwoquan_app/personal_assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/trace_events.dart';
@@ -81,29 +80,24 @@ AssistantRunResponse _buildCompliantResponse({
 
 void main() {
   // ── 规则 1：正常响应的 runId/traceId 必须非空 ────────────────────────────
-  test('Rule-1: successful response must carry non-null non-empty runId and traceId', () {
-    final response = _buildCompliantResponse();
-    expect(
-      response.runId,
-      isNotNull,
-      reason: 'runId 不能为 null',
-    );
-    expect(
-      response.runId!.trim().isNotEmpty,
-      isTrue,
-      reason: 'runId 不能为空字符串',
-    );
-    expect(
-      response.traceId,
-      isNotNull,
-      reason: 'traceId 不能为 null',
-    );
-    expect(
-      response.traceId!.trim().isNotEmpty,
-      isTrue,
-      reason: 'traceId 不能为空字符串',
-    );
-  });
+  test(
+    'Rule-1: successful response must carry non-null non-empty runId and traceId',
+    () {
+      final response = _buildCompliantResponse();
+      expect(response.runId, isNotNull, reason: 'runId 不能为 null');
+      expect(
+        response.runId!.trim().isNotEmpty,
+        isTrue,
+        reason: 'runId 不能为空字符串',
+      );
+      expect(response.traceId, isNotNull, reason: 'traceId 不能为 null');
+      expect(
+        response.traceId!.trim().isNotEmpty,
+        isTrue,
+        reason: 'traceId 不能为空字符串',
+      );
+    },
+  );
 
   // ── 规则 2：traces 必须包含 lifecycleStart 和 lifecycleEnd ───────────────
   test('Rule-2: traces must include lifecycleStart and lifecycleEnd', () {
@@ -159,20 +153,21 @@ void main() {
   });
 
   // ── 规则 4：structuredResponse.qualityMetrics 必须含 decisionParseSuccess ─
-  test('Rule-4: structuredResponse.qualityMetrics must contain decisionParseSuccess', () {
-    final response = _buildCompliantResponse();
-    final qm = response.structuredResponse['qualityMetrics'] as Map<String, dynamic>?;
-    expect(
-      qm,
-      isNotNull,
-      reason: 'structuredResponse 必须含 qualityMetrics 字段',
-    );
-    expect(
-      qm!.containsKey('decisionParseSuccess'),
-      isTrue,
-      reason: 'qualityMetrics 必须含 decisionParseSuccess 字段',
-    );
-  });
+  test(
+    'Rule-4: structuredResponse.qualityMetrics must contain decisionParseSuccess',
+    () {
+      final response = _buildCompliantResponse();
+      final qm =
+          response.structuredResponse['qualityMetrics']
+              as Map<String, dynamic>?;
+      expect(qm, isNotNull, reason: 'structuredResponse 必须含 qualityMetrics 字段');
+      expect(
+        qm!.containsKey('decisionParseSuccess'),
+        isTrue,
+        reason: 'qualityMetrics 必须含 decisionParseSuccess 字段',
+      );
+    },
+  );
 
   // ── 规则 5：所有 trace 的 timestamp 必须有效（非 epoch 0）────────────────
   test('Rule-5: all trace timestamps must be valid (not epoch zero)', () {
@@ -183,8 +178,7 @@ void main() {
       expect(
         trace.timestamp.isAfter(epochZero),
         isTrue,
-        reason:
-            'trace "${trace.message}" 的 timestamp 是 epoch 0，表示反序列化失败或未设置',
+        reason: 'trace "${trace.message}" 的 timestamp 是 epoch 0，表示反序列化失败或未设置',
       );
     }
   });
@@ -227,29 +221,32 @@ void main() {
   });
 
   // ── 规则 7：trace 序列化后 runId/traceId 一致 ────────────────────────────
-  test('Rule-7: trace serialization round-trip preserves runId and traceId', () {
-    const runId = 'run-round-trip-001';
-    const traceId = 'trace-round-trip-001';
-    final trace = AssistantTraceEvent(
-      type: AssistantTraceEventType.lifecycleStart,
-      message: 'agent_run_start',
-      timestamp: DateTime.parse('2026-03-04T10:00:00.000Z'),
-      runId: runId,
-      traceId: traceId,
-      toolCallId: 'call-xyz',
-    );
+  test(
+    'Rule-7: trace serialization round-trip preserves runId and traceId',
+    () {
+      const runId = 'run-round-trip-001';
+      const traceId = 'trace-round-trip-001';
+      final trace = AssistantTraceEvent(
+        type: AssistantTraceEventType.lifecycleStart,
+        message: 'agent_run_start',
+        timestamp: DateTime.parse('2026-03-04T10:00:00.000Z'),
+        runId: runId,
+        traceId: traceId,
+        toolCallId: 'call-xyz',
+      );
 
-    final json = trace.toJson();
-    final restored = AssistantTraceEvent.fromJson(json);
+      final json = trace.toJson();
+      final restored = AssistantTraceEvent.fromJson(json);
 
-    expect(restored.runId, equals(runId));
-    expect(restored.traceId, equals(traceId));
-    expect(restored.toolCallId, equals('call-xyz'));
-    expect(
-      restored.timestamp,
-      equals(DateTime.parse('2026-03-04T10:00:00.000Z')),
-    );
-  });
+      expect(restored.runId, equals(runId));
+      expect(restored.traceId, equals(traceId));
+      expect(restored.toolCallId, equals('call-xyz'));
+      expect(
+        restored.timestamp,
+        equals(DateTime.parse('2026-03-04T10:00:00.000Z')),
+      );
+    },
+  );
 
   // ── 规则 8：缺少 lifecycleEnd 的 traces 可被检测（负向测试）─────────────
   test('Rule-8 negative: missing lifecycleEnd is detectable', () {

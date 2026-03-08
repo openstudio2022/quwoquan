@@ -22,7 +22,7 @@ import 'package:quwoquan_app/personal_assistant/observability/logging/app_trace_
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:quwoquan_app/app/navigation/app_router.dart';
 import 'package:quwoquan_app/app/providers/welcome_state_provider.dart';
-import 'package:quwoquan_app/features/welcome/pages/welcome_screen.dart';
+import 'package:quwoquan_app/ui/welcome/pages/welcome_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

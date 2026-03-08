@@ -11,21 +11,22 @@ import 'package:quwoquan_app/ui/content/pages/photo_detail_page.dart';
 import 'package:quwoquan_app/ui/content/pages/video_detail_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_detail_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_stats_page.dart';
-import 'package:quwoquan_app/features/create/components/create_entry_sheet.dart';
+import 'package:quwoquan_app/ui/content/entry/widgets/create_entry_sheet.dart';
 import 'package:quwoquan_app/components/media/image/editor/image_editor_page.dart';
-import 'package:quwoquan_app/features/create/pages/create_page.dart';
-import 'package:quwoquan_app/features/settings/pages/developer_settings_page.dart';
-import 'package:quwoquan_app/features/settings/pages/settings_page.dart';
+import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
+import 'package:quwoquan_app/ui/settings/pages/developer_settings_page.dart';
+import 'package:quwoquan_app/ui/settings/pages/settings_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_detail_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_settings_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/start_group_chat_page.dart';
 import 'package:quwoquan_app/ui/user/pages/edit_profile_page.dart';
 import 'package:quwoquan_app/ui/user/pages/persona_management_page.dart';
+import 'package:quwoquan_app/ui/user/pages/profile_comments_page.dart';
 import 'package:quwoquan_app/ui/user/pages/profile_stats_page.dart';
 import 'package:quwoquan_app/ui/user/pages/resonance_page.dart';
-import 'package:quwoquan_app/features/assistant/context/assistant_open_context.dart';
-import 'package:quwoquan_app/features/assistant/pages/assistant_home_page.dart';
-import 'package:quwoquan_app/features/assistant/pages/assistant_management_page.dart';
+import 'package:quwoquan_app/core/models/assistant_open_context.dart';
+import 'package:quwoquan_app/ui/assistant/pages/assistant_home_page.dart';
+import 'package:quwoquan_app/ui/assistant/pages/assistant_management_page.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_center_page.dart';
 import 'package:quwoquan_app/ui/rtc/pages/outgoing_call_page.dart';
 import 'package:quwoquan_app/ui/rtc/pages/incoming_call_page.dart';
@@ -298,6 +299,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/profile/personas',
         builder: (context, state) {
           return const PersonaManagementPage();
+        },
+      ),
+      GoRoute(
+        path: '/profile/comments',
+        builder: (context, state) {
+          return const ProfileCommentsPage();
         },
       ),
       GoRoute(

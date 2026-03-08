@@ -74,15 +74,15 @@ class CallSessionState {
 
   @override
   int get hashCode => Object.hash(
-        session?.id,
-        status,
-        isMuted,
-        isCameraOn,
-        isRecording,
-        isScreenSharing,
-        isLoading,
-        error,
-      );
+    session?.id,
+    status,
+    isMuted,
+    isCameraOn,
+    isRecording,
+    isScreenSharing,
+    isLoading,
+    error,
+  );
 }
 
 final liveKitRoomServiceProvider = Provider<LiveKitRoomService>((ref) {
@@ -104,7 +104,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
 
   String get _livekitUrl {
     final base = CloudRuntimeConfig.gatewayBaseUrl;
-    return base.replaceFirst(RegExp(r'/v\d+.*$'), '').replaceFirst('https://', 'wss://').replaceFirst('http://', 'ws://') + ':7880';
+    return '${base.replaceFirst(RegExp(r'/v\d+.*$'), '').replaceFirst('https://', 'wss://').replaceFirst('http://', 'ws://')}:7880';
   }
 
   Future<String?> initiateCall({
@@ -135,7 +135,9 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
         isLoading: false,
       );
 
-      ref.read(activeCallProvider.notifier).startCall(
+      ref
+          .read(activeCallProvider.notifier)
+          .startCall(
             callId: session.id,
             callType: callTypeStr,
             participants: session.participants,
@@ -164,7 +166,6 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       final session = CallSessionDto.fromMap(map);
       final type = CallType.fromString(session.callType);
       final token = map['token'] as String? ?? '';
-      final roomId = map['roomId'] as String? ?? '';
 
       state = state.copyWith(
         session: session,
@@ -174,7 +175,9 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
         isLoading: false,
       );
 
-      ref.read(activeCallProvider.notifier).startCall(
+      ref
+          .read(activeCallProvider.notifier)
+          .startCall(
             callId: session.id,
             callType: session.callType,
             participants: session.participants,
@@ -244,7 +247,9 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
         isLoading: false,
       );
 
-      ref.read(activeCallProvider.notifier).startCall(
+      ref
+          .read(activeCallProvider.notifier)
+          .startCall(
             callId: session.id,
             callType: session.callType,
             participants: session.participants,
@@ -367,7 +372,10 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
     );
   }
 
-  Future<void> _connectToLiveKit(String token, {bool enableVideo = false}) async {
+  Future<void> _connectToLiveKit(
+    String token, {
+    bool enableVideo = false,
+  }) async {
     try {
       await _lkRoom.connect(
         url: _livekitUrl,
@@ -425,5 +433,5 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
 
 final callSessionProvider =
     NotifierProvider<CallSessionNotifier, CallSessionState>(
-  CallSessionNotifier.new,
-);
+      CallSessionNotifier.new,
+    );

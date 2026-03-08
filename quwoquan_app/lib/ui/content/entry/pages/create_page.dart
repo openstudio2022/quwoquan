@@ -15,12 +15,12 @@ import 'package:quwoquan_app/components/media/picker/create_media_picker_page.da
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/features/create/components/create_entry_sheet.dart';
-import 'package:quwoquan_app/features/create/models/create_media_models.dart';
-import 'package:quwoquan_app/features/create/models/publish_settings_models.dart';
-import 'package:quwoquan_app/features/create/pages/publish_location_selector_page.dart';
-import 'package:quwoquan_app/features/create/services/publish_settings_services.dart';
-import 'package:quwoquan_app/features/create/widgets/publish_circle_select_page.dart';
+import 'package:quwoquan_app/core/models/create_media_models.dart';
+import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
+import 'package:quwoquan_app/ui/content/entry/pages/publish_circle_select_page.dart';
+import 'package:quwoquan_app/ui/content/entry/pages/publish_location_selector_page.dart';
+import 'package:quwoquan_app/ui/content/entry/services/publish_settings_services.dart';
+import 'package:quwoquan_app/ui/content/entry/widgets/create_entry_sheet.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 
 /// 创作页

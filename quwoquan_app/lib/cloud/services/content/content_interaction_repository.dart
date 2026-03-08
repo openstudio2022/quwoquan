@@ -1,6 +1,8 @@
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 
 /// 内容互动 Repository（三层模式：Abstract → Mock → Remote）
@@ -47,41 +49,45 @@ class RemoteContentInteractionRepository extends ContentInteractionRepository {
   final CloudHttpClient _httpClient;
   final String _baseUrl;
 
+  Uri _uri(String path) => Uri.parse('$_baseUrl$path');
+
   @override
   Future<void> like(String postId) async {
-    final uri = Uri.parse('$_baseUrl/v1/content/posts/$postId/like');
+    final uri = _uri(ContentApiMetadata.likePostPath(postId: postId));
     await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.post.like'),
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.likePost),
       body: const <String, dynamic>{},
     );
   }
 
   @override
   Future<void> unlike(String postId) async {
-    final uri = Uri.parse('$_baseUrl/v1/content/posts/$postId/like');
+    final uri = _uri(ContentApiMetadata.unlikePostPath(postId: postId));
     await _httpClient.deleteJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.post.unlike'),
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.unlikePost),
     );
   }
 
   @override
   Future<void> favorite(String postId) async {
-    final uri = Uri.parse('$_baseUrl/v1/content/posts/$postId/favorite');
+    final uri = _uri(ContentApiMetadata.favoritePostPath(postId: postId));
     await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.post.favorite'),
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.favoritePost),
       body: const <String, dynamic>{},
     );
   }
 
   @override
   Future<void> unfavorite(String postId) async {
-    final uri = Uri.parse('$_baseUrl/v1/content/posts/$postId/favorite');
+    final uri = _uri(ContentApiMetadata.unfavoritePostPath(postId: postId));
     await _httpClient.deleteJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.post.unfavorite'),
+      headers: CloudRequestHeaders.forPage(
+        ContentRequestPageIds.unfavoritePost,
+      ),
     );
   }
 }

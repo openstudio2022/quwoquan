@@ -18,7 +18,7 @@ Widget _scopedApp({CircleRepository? mock}) {
         routes: [
           GoRoute(
             path: '/circles',
-            builder: (_, __) => const Scaffold(body: CirclesPage()),
+            builder: (_, _) => const Scaffold(body: CirclesPage()),
           ),
           GoRoute(
             path: '/circle/:id',
@@ -31,17 +31,17 @@ Widget _scopedApp({CircleRepository? mock}) {
           ),
           GoRoute(
             path: '/circle/:id/stats',
-            builder: (_, __) =>
+            builder: (_, _) =>
                 const Scaffold(body: Center(child: Text('Stats'))),
           ),
           GoRoute(
             path: '/article/:id',
-            builder: (_, __) =>
+            builder: (_, _) =>
                 const Scaffold(body: Center(child: Text('Article'))),
           ),
           GoRoute(
             path: '/chat/:id',
-            builder: (_, __) =>
+            builder: (_, _) =>
                 const Scaffold(body: Center(child: Text('Chat'))),
           ),
         ],
@@ -58,7 +58,8 @@ Future<void> _pumpIgnoringTabPaintErrors(
 }) async {
   final original = FlutterError.onError;
   FlutterError.onError = (details) {
-    final isTabPaintError = details.library == 'rendering library' &&
+    final isTabPaintError =
+        details.library == 'rendering library' &&
         details.toString().contains('_IndicatorPainter');
     if (!isTabPaintError) {
       original?.call(details);
@@ -74,7 +75,8 @@ Future<void> _pumpIgnoringTabPaintErrors(
 Future<void> _settleIgnoringTabPaintErrors(WidgetTester tester) async {
   final original = FlutterError.onError;
   FlutterError.onError = (details) {
-    final isTabPaintError = details.library == 'rendering library' &&
+    final isTabPaintError =
+        details.library == 'rendering library' &&
         details.toString().contains('_IndicatorPainter');
     if (!isTabPaintError) {
       original?.call(details);

@@ -65,6 +65,15 @@ events:
     payload_fields: [_id, postId, authorId, content, replyToUserId]
     recommend_impact: engagement_signal
 
+  - name: CommentLiked
+    description: 评论被点赞
+    producer: content-service
+    consumers: [notification-service]
+    channel: event_store
+    payload_entity: Comment
+    payload_fields: [_id, postId, authorId, likeCount]
+    recommend_impact: engagement_signal
+
   - name: ContentReacted
     description: 互动状态变更（点赞/收藏/分享/举报）
     producer: content-service

@@ -7,12 +7,13 @@ import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
 /// Helper that wraps a [ChatMessageBubble] inside a minimal widget tree
 /// (ScreenUtilInit + MaterialApp + Scaffold) so the bubble can be rendered
 /// in isolation without the full ChatDetailPage lifecycle.
-Widget _bubbleHarness(Map<String, dynamic> message, {
+Widget _bubbleHarness(
+  Map<String, dynamic> message, {
   void Function(Map<String, dynamic>)? onReferenceTap,
 }) {
   return ScreenUtilInit(
     designSize: const Size(390, 844),
-    builder: (_, __) => MaterialApp(
+    builder: (_, _) => MaterialApp(
       locale: const Locale('zh'),
       home: Scaffold(
         body: SingleChildScrollView(
@@ -130,20 +131,29 @@ void main() {
     );
     await tester.pump(const Duration(seconds: 1));
 
-    expect(find.textContaining('已完成'), findsOneWidget,
-        reason: '过程抽屉头部应显示「已完成」阶段标签');
+    expect(
+      find.textContaining('已完成'),
+      findsOneWidget,
+      reason: '过程抽屉头部应显示「已完成」阶段标签',
+    );
 
     await tester.tap(find.textContaining('已完成'));
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.textContaining('检索到 1 篇资料'), findsOneWidget,
-        reason: '展开抽屉后应显示 searchSummary 文案');
+    expect(
+      find.textContaining('检索到 1 篇资料'),
+      findsOneWidget,
+      reason: '展开抽屉后应显示 searchSummary 文案',
+    );
 
     await tester.tap(find.textContaining('检索到 1 篇资料'));
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.textContaining('外部来源标题'), findsOneWidget,
-        reason: '展开 searchSummary 后应显示参考资料标题');
+    expect(
+      find.textContaining('外部来源标题'),
+      findsOneWidget,
+      reason: '展开 searchSummary 后应显示参考资料标题',
+    );
 
     await tester.tap(find.textContaining('外部来源标题'));
     await tester.pump();

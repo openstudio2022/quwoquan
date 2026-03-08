@@ -20,7 +20,6 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:quwoquan_app/components/input/customizable_chat_input_bar.dart';
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
@@ -32,10 +31,10 @@ import 'package:quwoquan_app/personal_assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/personal_assistant/retrieval/capability_catalog.dart';
-import 'package:quwoquan_app/features/assistant/config/assistant_prompt_config.dart';
-import 'package:quwoquan_app/features/assistant/context/assistant_open_context.dart';
-import 'package:quwoquan_app/features/assistant/pages/assistant_dev_replay_page.dart';
-import 'package:quwoquan_app/features/assistant/widgets/assistant_half_sheet.dart';
+import 'package:quwoquan_app/ui/assistant/config/assistant_prompt_config.dart';
+import 'package:quwoquan_app/core/models/assistant_open_context.dart';
+import 'package:quwoquan_app/ui/assistant/pages/assistant_dev_replay_page.dart';
+import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_chat_settings_page.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_manager.dart';
@@ -104,17 +103,23 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   double _lastViewportWidth = 390;
   int _assistantSearchingCount = 0;
   int _assistantReferenceCount = 0;
+
   /// 当前轮过程状态机展示文案（等待/深度搜索中/深度思考中），由 trace 事件驱动
   String _assistantPhaseLabel = '';
   String? _activeAssistantStreamingMessageId;
+
   /// v4: Unified process state for the single-drawer UI.
   AssistantProcessState _currentProcessState = const AssistantProcessState();
+
   /// Accumulated structured content blocks for the process drawer.
   List<ProcessContentBlock> _processContentBlocks = <ProcessContentBlock>[];
+
   /// Accumulated search references across all tool calls in a single run.
   List<ProcessReference> _collectedSearchRefs = <ProcessReference>[];
+
   /// Whether the user has scrolled away from the bottom during streaming.
   bool _userScrolledAway = false;
+
   /// Whether to show the scroll-to-bottom FAB.
   bool _showScrollFab = false;
   String _assistantRuntimeSessionId =
@@ -134,8 +139,11 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       if (_isAssistantConversation) {
         _loadMessages();
       } else {
-        ref.read(chatMessageProvider(widget.conversationId).notifier).loadMessages();
-        ref.read(realtimeConnectionManagerProvider.notifier)
+        ref
+            .read(chatMessageProvider(widget.conversationId).notifier)
+            .loadMessages();
+        ref
+            .read(realtimeConnectionManagerProvider.notifier)
             .onEnterChatDetail(widget.conversationId);
       }
     });
@@ -174,7 +182,11 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   Future<void> _loadMessages() async {
     if (_isAssistantConversation) {
       if (!mounted) return;
-      setState(() => _messages = List<Map<String, dynamic>>.from(const <Map<String, dynamic>>[]));
+      setState(
+        () => _messages = List<Map<String, dynamic>>.from(
+          const <Map<String, dynamic>>[],
+        ),
+      );
       return;
     }
     try {
@@ -192,8 +204,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             .read(chatRepositoryProvider)
             .listMessages(conversationId: widget.conversationId);
         if (!mounted) return;
-        setState(
-            () => _messages = List<Map<String, dynamic>>.from(fallback));
+        setState(() => _messages = List<Map<String, dynamic>>.from(fallback));
       } catch (_) {
         // 双重失败：保持空消息列表
       }
@@ -206,7 +217,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     setState(() {
       _assistantRuntimeSessionId = freshSessionId;
       _assistantTopicTitle = UITextConstants.assistantHistoryAll;
-      _messages = List<Map<String, dynamic>>.from(const <Map<String, dynamic>>[]);
+      _messages = List<Map<String, dynamic>>.from(
+        const <Map<String, dynamic>>[],
+      );
     });
   }
 
@@ -439,8 +452,10 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       data: data,
       referenceCount: referenceCount,
     );
-    final phaseChanged = nextPhaseLabel != null && nextPhaseLabel != _assistantPhaseLabel;
-    final countChanged = searchingCount != _assistantSearchingCount ||
+    final phaseChanged =
+        nextPhaseLabel != null && nextPhaseLabel != _assistantPhaseLabel;
+    final countChanged =
+        searchingCount != _assistantSearchingCount ||
         referenceCount != _assistantReferenceCount;
     if (!phaseChanged && !countChanged && !timelineChanged) return;
     setState(() {
@@ -493,7 +508,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
 
     String? nextPhaseLabel;
     late final String timelinePhaseType;
-    String detail = isExtracted ? message.trim() : _sanitizeTraceDetail(message);
+    String detail = isExtracted
+        ? message.trim()
+        : _sanitizeTraceDetail(message);
 
     switch (phaseType) {
       case UserPhaseEventType.understandingStarted:
@@ -571,12 +588,14 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     required String detail,
     Map<String, dynamic>? data,
   }) {
-    final isSearchTool = timelinePhaseType == 'searching' ||
+    final isSearchTool =
+        timelinePhaseType == 'searching' ||
         (timelinePhaseType.startsWith('tool:') &&
             timelinePhaseType.contains('search'));
     final isExtracted = data?['extracted'] == true;
 
-    if (phaseType == UserPhaseEventType.toolExecutionCompleted && isSearchTool) {
+    if (phaseType == UserPhaseEventType.toolExecutionCompleted &&
+        isSearchTool) {
       final refs = _extractReferencesFromData(data);
       if (refs.isNotEmpty) {
         final seenUrls = _collectedSearchRefs.map((r) => r.url).toSet();
@@ -596,7 +615,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         );
       }
     } else if (phaseType == UserPhaseEventType.analyzingStarted ||
-               phaseType == UserPhaseEventType.analyzingThinking) {
+        phaseType == UserPhaseEventType.analyzingThinking) {
       _replaceOrAppendBlock(
         ProcessContentBlockType.analysisSummary,
         ProcessContentBlock(
@@ -609,10 +628,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       if (isExtracted) {
         _replaceLastTextBlock(detail);
       } else {
-        _processContentBlocks.add(ProcessContentBlock(
-          type: ProcessContentBlockType.text,
-          text: detail,
-        ));
+        _processContentBlocks.add(
+          ProcessContentBlock(type: ProcessContentBlockType.text, text: detail),
+        );
       }
     }
   }
@@ -639,7 +657,10 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   }
 
   /// Replace the first block of [type] in [_processContentBlocks], or append.
-  void _replaceOrAppendBlock(ProcessContentBlockType type, ProcessContentBlock block) {
+  void _replaceOrAppendBlock(
+    ProcessContentBlockType type,
+    ProcessContentBlock block,
+  ) {
     final idx = _processContentBlocks.indexWhere((b) => b.type == type);
     if (idx >= 0) {
       _processContentBlocks[idx] = block;
@@ -648,26 +669,34 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     }
   }
 
-  List<ProcessReference> _extractReferencesFromData(Map<String, dynamic>? data) {
+  List<ProcessReference> _extractReferencesFromData(
+    Map<String, dynamic>? data,
+  ) {
     if (data == null) return const <ProcessReference>[];
-    final rawRefs = (data['references'] as List?)
+    final rawRefs =
+        (data['references'] as List?)
             ?.whereType<Map>()
             .map((item) => item.cast<String, dynamic>())
             .toList(growable: false) ??
         const <Map<String, dynamic>>[];
     if (rawRefs.isEmpty) return const <ProcessReference>[];
-    return rawRefs.map((ref) {
-      final url = (ref['url'] as String?)?.trim() ?? '';
-      final title = (ref['title'] as String?)?.trim() ?? '';
-      final source = (ref['source'] as String?)?.trim() ??
-          (Uri.tryParse(url)?.host ?? '');
-      return ProcessReference(title: title, url: url, source: source);
-    }).where((r) => r.url.isNotEmpty && r.title.isNotEmpty).toList(growable: false);
+    return rawRefs
+        .map((ref) {
+          final url = (ref['url'] as String?)?.trim() ?? '';
+          final title = (ref['title'] as String?)?.trim() ?? '';
+          final source =
+              (ref['source'] as String?)?.trim() ??
+              (Uri.tryParse(url)?.host ?? '');
+          return ProcessReference(title: title, url: url, source: source);
+        })
+        .where((r) => r.url.isNotEmpty && r.title.isNotEmpty)
+        .toList(growable: false);
   }
 
   ProcessStage _mapPhaseToStage(String timelinePhaseType) {
     if (timelinePhaseType == 'understanding') return ProcessStage.understanding;
-    if (timelinePhaseType.startsWith('tool:') || timelinePhaseType == 'searching') {
+    if (timelinePhaseType.startsWith('tool:') ||
+        timelinePhaseType == 'searching') {
       return ProcessStage.searching;
     }
     if (timelinePhaseType == 'analyzing' || timelinePhaseType == 'assessing') {
@@ -701,7 +730,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   }) {
     final messageId = _activeAssistantStreamingMessageId;
     if (messageId == null || messageId.isEmpty) return false;
-    final index = _messages.indexWhere((item) => (item['id'] as String?) == messageId);
+    final index = _messages.indexWhere(
+      (item) => (item['id'] as String?) == messageId,
+    );
     if (index < 0) return false;
     final currentPhases =
         ((_messages[index]['uiPhaseTimelineV1'] as List?)
@@ -720,7 +751,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       keywords = _extractSearchKeywords(query);
       detail = _sanitizeTraceDetail(event.message);
     } else if (event.type == AssistantTraceEventType.assistantDelta) {
-      final searchQueries = (data['searchQueries'] as List?)
+      final searchQueries =
+          (data['searchQueries'] as List?)
               ?.whereType<String>()
               .map((item) => item.trim())
               .where((item) => item.isNotEmpty)
@@ -790,7 +822,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       details.add(detail);
     }
     if (nextPhaseType == 'searching' || nextPhaseType == 'replan_searching') {
-      final refs = (data['references'] as List?)
+      final refs =
+          (data['references'] as List?)
               ?.whereType<Map>()
               .map((item) => item.cast<String, dynamic>())
               .toList(growable: false) ??
@@ -842,7 +875,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     required String phaseType,
   }) {
     final existingIndex = phases.lastIndexWhere(
-      (item) => (item['phaseType'] as String?) == phaseType &&
+      (item) =>
+          (item['phaseType'] as String?) == phaseType &&
           (item['status'] as String?) == 'running',
     );
     if (existingIndex >= 0) return phases[existingIndex];
@@ -885,10 +919,18 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
 
   String _phaseTitle(String phaseType) {
     // v3: fixed user-facing phases
-    if (phaseType == 'understanding') return UITextConstants.assistantPhaseUnderstanding;
-    if (phaseType == 'analyzing') return UITextConstants.assistantPhaseAnalyzing;
-    if (phaseType == 'answering') return UITextConstants.assistantPhaseAnswering;
-    if (phaseType == 'assessing') return UITextConstants.assistantPhaseAssessing;
+    if (phaseType == 'understanding') {
+      return UITextConstants.assistantPhaseUnderstanding;
+    }
+    if (phaseType == 'analyzing') {
+      return UITextConstants.assistantPhaseAnalyzing;
+    }
+    if (phaseType == 'answering') {
+      return UITextConstants.assistantPhaseAnswering;
+    }
+    if (phaseType == 'assessing') {
+      return UITextConstants.assistantPhaseAssessing;
+    }
     // v3: tool phases from metadata (tool:web_search, tool:local_context, etc.)
     if (phaseType.startsWith('tool:')) {
       final toolName = phaseType.substring(5).split(':').first;
@@ -997,13 +1039,15 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     if (direct.isNotEmpty) return direct;
     final keyword = (data['keyword'] as String?)?.trim() ?? '';
     if (keyword.isNotEmpty) return keyword;
-    final args = (data['arguments'] as Map?)?.cast<String, dynamic>() ??
+    final args =
+        (data['arguments'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final argsQuery = (args['query'] as String?)?.trim() ?? '';
     if (argsQuery.isNotEmpty) return argsQuery;
     final argsKeyword = (args['keyword'] as String?)?.trim() ?? '';
     if (argsKeyword.isNotEmpty) return argsKeyword;
-    final keywords = (data['keywords'] as List?)
+    final keywords =
+        (data['keywords'] as List?)
             ?.whereType<String>()
             .map((item) => item.trim())
             .where((item) => item.isNotEmpty)
@@ -1070,8 +1114,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   );
   static final RegExp _xmlToolCallOpenRe = RegExp(r'<tool_call>|<function=');
 
-  bool _containsXmlToolCall(String text) =>
-      _xmlToolCallOpenRe.hasMatch(text);
+  bool _containsXmlToolCall(String text) => _xmlToolCallOpenRe.hasMatch(text);
 
   String _stripXmlToolCalls(String text) =>
       text.replaceAll(_xmlToolCallTagRe, '').trim();
@@ -1338,24 +1381,27 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     if (payload.attachments.isNotEmpty) {
       final now = DateTime.now();
       final timeStr = '${now.hour}:${now.minute.toString().padLeft(2, '0')}';
-      final attachmentMessages = payload.attachments.map((item) {
-        final kind = item.type == ChatInputAttachmentType.image
-            ? UITextConstants.chatMorePhoto
-            : UITextConstants.chatMoreFile;
-        return <String, dynamic>{
-          'id': 'msg_attachment_${DateTime.now().millisecondsSinceEpoch}_${item.id}',
-          'conversationId': widget.conversationId,
-          'type': 'text',
-          'content': '[$kind] ${item.name}',
-          'senderId': 'current_user',
-          'senderName': '我',
-          'senderAvatar':
-              'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400',
-          'timestamp': timeStr,
-          'isRead': true,
-          'isSelf': true,
-        };
-      }).toList(growable: false);
+      final attachmentMessages = payload.attachments
+          .map((item) {
+            final kind = item.type == ChatInputAttachmentType.image
+                ? UITextConstants.chatMorePhoto
+                : UITextConstants.chatMoreFile;
+            return <String, dynamic>{
+              'id':
+                  'msg_attachment_${DateTime.now().millisecondsSinceEpoch}_${item.id}',
+              'conversationId': widget.conversationId,
+              'type': 'text',
+              'content': '[$kind] ${item.name}',
+              'senderId': 'current_user',
+              'senderName': '我',
+              'senderAvatar':
+                  'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400',
+              'timestamp': timeStr,
+              'isRead': true,
+              'isSelf': true,
+            };
+          })
+          .toList(growable: false);
       setState(() {
         _ensureMessagesGrowable();
         _messages.addAll(attachmentMessages);
@@ -1379,7 +1425,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
 
     if (!_isAssistantConversation) {
       if (draftText == null) _inputController.clear();
-      ref.read(chatMessageProvider(widget.conversationId).notifier)
+      ref
+          .read(chatMessageProvider(widget.conversationId).notifier)
           .sendMessage('text', text);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scrollController.hasClients) {
@@ -1431,9 +1478,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       final streamNow = DateTime.now();
       final streamTs =
           '${streamNow.hour}:${streamNow.minute.toString().padLeft(2, '0')}';
-        setState(() {
-          _ensureMessagesGrowable();
-          streamingAssistantMessageId =
+      setState(() {
+        _ensureMessagesGrowable();
+        streamingAssistantMessageId =
             'assistant_stream_${DateTime.now().millisecondsSinceEpoch}';
         _activeAssistantStreamingMessageId = streamingAssistantMessageId;
         _assistantResponding = true;
@@ -1500,7 +1547,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                   content.startsWith('模型调用异常') ||
                   content.startsWith('当前模型服务不可用') ||
                   content.contains('HTTP 400') ||
-                  content.contains('HTTP 500')) return false;
+                  content.contains('HTTP 500')) {
+                return false;
+              }
               // 过滤进度/占位文本
               if (content.contains('正在查询') ||
                   content.contains('正在获取') ||
@@ -1508,11 +1557,14 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                   content.contains('正在搜索') ||
                   content.contains('正在为您') ||
                   content.contains('正在规划') ||
-                  content.contains('正在执行')) return false;
+                  content.contains('正在执行')) {
+                return false;
+              }
               // 过滤未解析的 JSON 格式 assistant 消息（历史遗留）
               if (m['isSelf'] != true &&
                   content.startsWith('{') &&
-                  (content.contains('"decision"') || content.contains('"contractVersion"'))) {
+                  (content.contains('"decision"') ||
+                      content.contains('"contractVersion"'))) {
                 return false;
               }
               return true;
@@ -1535,7 +1587,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           }
         } catch (error) {
           if (kDebugMode) {
-            debugPrint('Assistant classify domain failed, use fallback: $error');
+            debugPrint(
+              'Assistant classify domain failed, use fallback: $error',
+            );
           }
         }
         contextScope['domainId'] = domainId;
@@ -1590,7 +1644,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             );
             if (existingIndex >= 0) {
               final prev =
-                  (_messages[existingIndex]['streamFinalAnswer'] as String?) ?? '';
+                  (_messages[existingIndex]['streamFinalAnswer'] as String?) ??
+                  '';
               _messages[existingIndex] = <String, dynamic>{
                 ..._messages[existingIndex],
                 'streamFinalAnswer': '$prev$value',
@@ -1646,25 +1701,31 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                 break;
               // v2 semantic events
               case AssistantRunStreamEventType.planStarted:
-                _consumeAssistantTraceEvent(AssistantTraceEvent(
-                  type: AssistantTraceEventType.planStarted,
-                  message: streamEvent.chunkText ?? '规划中...',
-                  timestamp: DateTime.now(),
-                ));
+                _consumeAssistantTraceEvent(
+                  AssistantTraceEvent(
+                    type: AssistantTraceEventType.planStarted,
+                    message: streamEvent.chunkText ?? '规划中...',
+                    timestamp: DateTime.now(),
+                  ),
+                );
                 continue;
               case AssistantRunStreamEventType.searchProgress:
-                _consumeAssistantTraceEvent(AssistantTraceEvent(
-                  type: AssistantTraceEventType.searchStarted,
-                  message: streamEvent.chunkText ?? '检索中...',
-                  timestamp: DateTime.now(),
-                ));
+                _consumeAssistantTraceEvent(
+                  AssistantTraceEvent(
+                    type: AssistantTraceEventType.searchStarted,
+                    message: streamEvent.chunkText ?? '检索中...',
+                    timestamp: DateTime.now(),
+                  ),
+                );
                 continue;
               case AssistantRunStreamEventType.thinkingProgress:
-                _consumeAssistantTraceEvent(AssistantTraceEvent(
-                  type: AssistantTraceEventType.thinkingProgress,
-                  message: streamEvent.chunkText ?? '思考中...',
-                  timestamp: DateTime.now(),
-                ));
+                _consumeAssistantTraceEvent(
+                  AssistantTraceEvent(
+                    type: AssistantTraceEventType.thinkingProgress,
+                    message: streamEvent.chunkText ?? '思考中...',
+                    timestamp: DateTime.now(),
+                  ),
+                );
                 continue;
               case AssistantRunStreamEventType.answerDelta:
                 if (streamEvent.chunkText != null) {
@@ -1683,9 +1744,11 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                 if (mounted) {
                   final data = streamEvent.trace?.data;
                   final stageStr = data?['stage'] as String? ?? '';
-                  final processLines = (data?['processLines'] as List?)
-                      ?.whereType<String>()
-                      .toList(growable: false) ?? const <String>[];
+                  final processLines =
+                      (data?['processLines'] as List?)
+                          ?.whereType<String>()
+                          .toList(growable: false) ??
+                      const <String>[];
                   final isStreaming = data?['isStreaming'] == true;
                   setState(() {
                     _currentProcessState = AssistantProcessState(
@@ -1765,12 +1828,10 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                   .toList(growable: false)) ??
               const <Map<String, dynamic>>[];
         })();
-        final mergedPhases = _normalizeUiPhaseTimelineV1(
-          <Map<String, dynamic>>[
-            ...streamedPhases,
-            ...uiPhaseTimelineV1,
-          ],
-        );
+        final mergedPhases = _normalizeUiPhaseTimelineV1(<Map<String, dynamic>>[
+          ...streamedPhases,
+          ...uiPhaseTimelineV1,
+        ]);
         final uiReferences =
             (runResponse.structuredResponse['uiReferences'] as List?)
                 ?.whereType<Map>()
@@ -1816,17 +1877,21 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                 'streamFinalAnswer': displayText,
                 'streaming': false,
                 'uiProcessContentBlocks': _processContentBlocks
-                    .map((b) => <String, dynamic>{
-                          'type': b.type.name,
-                          'text': b.text,
-                          'references': b.references
-                              .map((r) => <String, dynamic>{
-                                    'title': r.title,
-                                    'url': r.url,
-                                    'source': r.source,
-                                  })
-                              .toList(growable: false),
-                        })
+                    .map(
+                      (b) => <String, dynamic>{
+                        'type': b.type.name,
+                        'text': b.text,
+                        'references': b.references
+                            .map(
+                              (r) => <String, dynamic>{
+                                'title': r.title,
+                                'url': r.url,
+                                'source': r.source,
+                              },
+                            )
+                            .toList(growable: false),
+                      },
+                    )
                     .toList(growable: false),
               };
             }
@@ -1853,17 +1918,21 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
               'uiAnswer': uiAnswer,
               'uiUsageStatsV1': uiUsageStatsV1,
               'uiProcessContentBlocks': _processContentBlocks
-                  .map((b) => <String, dynamic>{
-                        'type': b.type.name,
-                        'text': b.text,
-                        'references': b.references
-                            .map((r) => <String, dynamic>{
-                                  'title': r.title,
-                                  'url': r.url,
-                                  'source': r.source,
-                                })
-                            .toList(growable: false),
-                      })
+                  .map(
+                    (b) => <String, dynamic>{
+                      'type': b.type.name,
+                      'text': b.text,
+                      'references': b.references
+                          .map(
+                            (r) => <String, dynamic>{
+                              'title': r.title,
+                              'url': r.url,
+                              'source': r.source,
+                            },
+                          )
+                          .toList(growable: false),
+                    },
+                  )
                   .toList(growable: false),
             });
           }
@@ -1931,9 +2000,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         if (!mounted) return;
         // 外层 catch 是最后防线：包含错误类型用于诊断，
         // 正常路径下不应到达此处（stream 错误已在内层 catch 处理）。
-        final errorHint = kDebugMode
-            ? '助手异常: ${e.runtimeType}'
-            : '助手出现异常，请重试。';
+        final errorHint = kDebugMode ? '助手异常: ${e.runtimeType}' : '助手出现异常，请重试。';
         setState(() {
           _ensureMessagesGrowable();
           _assistantResponding = false;
@@ -2094,7 +2161,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       // 是 JSON 但无法提取可读内容 → 返回降级提示而非裸 JSON
       return '助手未生成有效回答，请重试。';
     }
-    if (rawFinal.isNotEmpty && !AssistantContentFilters.isJsonEnvelope(rawFinal)) {
+    if (rawFinal.isNotEmpty &&
+        !AssistantContentFilters.isJsonEnvelope(rawFinal)) {
       return rawFinal;
     }
     if (rawFinal.isNotEmpty) {
@@ -2124,8 +2192,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       if (um.isNotEmpty && um.length > 5 && !um.startsWith('{')) return um;
 
       // Priority 3: answerPayload.userMarkdown
-      final answerPayload =
-          (decoded['answerPayload'] as Map?)?.cast<String, dynamic>();
+      final answerPayload = (decoded['answerPayload'] as Map?)
+          ?.cast<String, dynamic>();
       final apUm = (answerPayload?['userMarkdown'] as String?)?.trim() ?? '';
       if (apUm.isNotEmpty && apUm.length > 5 && !apUm.startsWith('{')) {
         return apUm;
@@ -2133,8 +2201,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
 
       // Priority 4: result.text (under answerPayload or top-level)
       final result =
-          (decoded['result'] as Map?) ??
-          (answerPayload?['result'] as Map?);
+          (decoded['result'] as Map?) ?? (answerPayload?['result'] as Map?);
       final text = (result?['text'] as String?)?.trim() ?? '';
       if (text.isNotEmpty && text.length > 5 && !text.startsWith('{')) {
         return text;
@@ -2280,7 +2347,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     final normalized = rawPhases
         .map((item) => item.cast<String, dynamic>())
         .where(
-          (item) => ((item['phaseType'] as String?)?.trim().isNotEmpty ?? false),
+          (item) =>
+              ((item['phaseType'] as String?)?.trim().isNotEmpty ?? false),
         )
         .toList(growable: false);
     if (normalized.isEmpty) return const <Map<String, dynamic>>[];
@@ -2288,12 +2356,14 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     for (final phase in normalized) {
       final type = (phase['phaseType'] as String?)?.trim() ?? '';
       if (type.isEmpty) continue;
-      final details = (phase['details'] as List?)
+      final details =
+          (phase['details'] as List?)
               ?.map((item) => item.toString().trim())
               .where((item) => item.isNotEmpty)
               .toList(growable: false) ??
           const <String>[];
-      final references = (phase['references'] as List?)
+      final references =
+          (phase['references'] as List?)
               ?.whereType<Map>()
               .map((item) => item.cast<String, dynamic>())
               .toList(growable: false) ??
@@ -2309,9 +2379,10 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           'summary': ((phase['summary'] as String?)?.trim() ?? ''),
           'details': <String>[...details],
           'references': <Map<String, dynamic>>[...references],
-          'keywords': (phase['keywords'] as List?)
-                  ?.whereType<String>()
-                  .toList(growable: false) ??
+          'keywords':
+              (phase['keywords'] as List?)?.whereType<String>().toList(
+                growable: false,
+              ) ??
               const <String>[],
         };
         continue;
@@ -2324,7 +2395,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       for (final detail in details) {
         if (!currentDetails.contains(detail)) currentDetails.add(detail);
       }
-      final currentRefs = (current['references'] as List).cast<Map<String, dynamic>>();
+      final currentRefs = (current['references'] as List)
+          .cast<Map<String, dynamic>>();
       final seenUrls = currentRefs
           .map((item) => (item['url'] as String?) ?? '')
           .where((item) => item.isNotEmpty)
@@ -2626,7 +2698,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   }) async {
     final originalQuery = (message['sourceQuery'] as String?)?.trim() ?? '';
     if (originalQuery.isEmpty) return;
-    final previousAnswer = (message['content'] as String?)?.trim() ??
+    final previousAnswer =
+        (message['content'] as String?)?.trim() ??
         (message['streamFinalAnswer'] as String?)?.trim() ??
         '';
     final rewriteMode = switch (option) {
@@ -2639,7 +2712,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     await _recordAssistantImplicitFeedback(
       message: message,
       regeneratedAnswer: option == RegenerateOption.regenerate,
-      styleAdjusted: option == RegenerateOption.concise ||
+      styleAdjusted:
+          option == RegenerateOption.concise ||
           option == RegenerateOption.detailed ||
           option == RegenerateOption.casual,
       userTags: <String>[option.name],
@@ -2735,7 +2809,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
               setState(() {
                 _ensureMessagesGrowable();
                 final idx = _messages.indexWhere(
-                  (item) => (item['id'] as String?) == streamingAssistantMessageId,
+                  (item) =>
+                      (item['id'] as String?) == streamingAssistantMessageId,
                 );
                 if (idx >= 0) {
                   final prev =
@@ -2762,8 +2837,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             (response.structuredResponse['uiAnswer'] as Map?)
                 ?.cast<String, dynamic>() ??
             const <String, dynamic>{};
-        final mdText =
-            (uiAnswer['markdownText'] as String?)?.trim() ?? '';
+        final mdText = (uiAnswer['markdownText'] as String?)?.trim() ?? '';
         final finalText = mdText.isNotEmpty ? mdText : response.finalText;
         setState(() {
           _ensureMessagesGrowable();
@@ -3179,264 +3253,305 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                 child: Stack(
                   children: [
                     Container(
-                  color: chatListBg,
-                  child: Builder(builder: (context) {
-                    final displayMessages = _isAssistantConversation
-                        ? _messages
-                        : ref.watch(chatMessageProvider(widget.conversationId))
-                            .messages
-                            .map((dto) => dto.toDisplayMap(currentUserId: 'current_user'))
-                            .toList();
-                    return ListView.builder(
-                    controller: _scrollController,
-                    padding: EdgeInsets.symmetric(
-                      horizontal:
-                          AppSpacing.semantic[DesignSemanticConstants
-                              .container]?[DesignSemanticConstants.sm] ??
-                          AppSpacing.containerSm,
-                      vertical: AppSpacing.md,
-                    ),
-                    itemCount: displayMessages.length,
-                    itemBuilder: (context, index) {
-                      final msg = displayMessages[index];
-                      final prevTime = index > 0
-                          ? displayMessages[index - 1]['timestamp'] as String?
-                          : null;
-                      final showTime =
-                          index == 0 || msg['timestamp'] != prevTime;
-                      final timeStr = formatChatTime(
-                        msg['timestamp'] as String?,
-                      );
-                      final isAssistantMessage =
-                          _isAssistantConversation &&
-                          (msg['senderId'] ==
-                              AppConceptConstants.assistantSenderId);
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (showTime && timeStr.isNotEmpty)
-                            Padding(
-                              padding: EdgeInsets.only(
-                                bottom:
-                                    AppSpacing.semantic[DesignSemanticConstants
-                                        .intraGroup]?[DesignSemanticConstants
-                                        .sm] ??
-                                    AppSpacing.intraGroupSm,
-                              ),
-                              child: Center(
-                                child: Text(
-                                  timeStr,
-                                  style: TextStyle(
-                                    fontSize:
-                                        Theme.of(
-                                          context,
-                                        ).textTheme.bodySmall?.fontSize ??
-                                        AppSpacing.containerSm,
-                                    color: fgPrimary.withValues(alpha: 0.5),
+                      color: chatListBg,
+                      child: Builder(
+                        builder: (context) {
+                          final displayMessages = _isAssistantConversation
+                              ? _messages
+                              : ref
+                                    .watch(
+                                      chatMessageProvider(
+                                        widget.conversationId,
+                                      ),
+                                    )
+                                    .messages
+                                    .map(
+                                      (dto) => dto.toDisplayMap(
+                                        currentUserId: 'current_user',
+                                      ),
+                                    )
+                                    .toList();
+                          return ListView.builder(
+                            controller: _scrollController,
+                            padding: EdgeInsets.symmetric(
+                              horizontal:
+                                  AppSpacing.semantic[DesignSemanticConstants
+                                      .container]?[DesignSemanticConstants
+                                      .sm] ??
+                                  AppSpacing.containerSm,
+                              vertical: AppSpacing.md,
+                            ),
+                            itemCount: displayMessages.length,
+                            itemBuilder: (context, index) {
+                              final msg = displayMessages[index];
+                              final prevTime = index > 0
+                                  ? displayMessages[index - 1]['timestamp']
+                                        as String?
+                                  : null;
+                              final showTime =
+                                  index == 0 || msg['timestamp'] != prevTime;
+                              final timeStr = formatChatTime(
+                                msg['timestamp'] as String?,
+                              );
+                              final isAssistantMessage =
+                                  _isAssistantConversation &&
+                                  (msg['senderId'] ==
+                                      AppConceptConstants.assistantSenderId);
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (showTime && timeStr.isNotEmpty)
+                                    Padding(
+                                      padding: EdgeInsets.only(
+                                        bottom:
+                                            AppSpacing
+                                                .semantic[DesignSemanticConstants
+                                                .intraGroup]?[DesignSemanticConstants
+                                                .sm] ??
+                                            AppSpacing.intraGroupSm,
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          timeStr,
+                                          style: TextStyle(
+                                            fontSize:
+                                                Theme.of(context)
+                                                    .textTheme
+                                                    .bodySmall
+                                                    ?.fontSize ??
+                                                AppSpacing.containerSm,
+                                            color: fgPrimary.withValues(
+                                              alpha: 0.5,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ChatMessageBubble(
+                                    message: msg,
+                                    isRight: msg['isSelf'] == true,
+                                    bubbleColor: msg['isSelf'] == true
+                                        ? bubbleSelf
+                                        : bubbleOther,
+                                    textColor: msg['isSelf'] == true
+                                        ? Colors.white
+                                        : fgPrimary,
+                                    isSelectionMode: _isSelectionMode,
+                                    isSelected: _selectedIds.contains(
+                                      msg['id'],
+                                    ),
+                                    onLongPressStart: (details) =>
+                                        _onLongPressMessage(
+                                          msg,
+                                          details.globalPosition,
+                                        ),
+                                    onTap: _isSelectionMode
+                                        ? () =>
+                                              _toggleSelect(msg['id'] as String)
+                                        : null,
+                                    hideAvatarAndName: _isAssistantConversation,
+                                    useFullWidth: _isAssistantConversation,
+                                    processState:
+                                        _isAssistantConversation &&
+                                            _assistantResponding &&
+                                            index == _messages.length - 1 &&
+                                            isAssistantMessage
+                                        ? _currentProcessState
+                                        : null,
+                                    isAssistantRunning:
+                                        _assistantResponding &&
+                                        index == _messages.length - 1 &&
+                                        isAssistantMessage,
+                                    runningStatusLabel:
+                                        _isAssistantConversation &&
+                                            _assistantResponding &&
+                                            index == _messages.length - 1 &&
+                                            isAssistantMessage
+                                        ? (_assistantPhaseLabel.isNotEmpty
+                                              ? _assistantPhaseLabel
+                                              : UITextConstants
+                                                    .assistantRunningHint)
+                                        : null,
+                                    showFeedbackActions:
+                                        isAssistantMessage &&
+                                        !_isSelectionMode &&
+                                        (msg['type'] as String? ?? 'text') ==
+                                            'text' &&
+                                        ((msg['id'] as String?) ?? '') ==
+                                            latestAssistantTextMessageId,
+                                    feedbackStatus:
+                                        _assistantFeedbackStatusByMessageId[msg['id']
+                                                as String? ??
+                                            ''] ??
+                                        '',
+                                    onFeedbackHelpful: isAssistantMessage
+                                        ? () => _submitAssistantFeedback(
+                                            message: msg,
+                                            explicitThumb: 'up',
+                                            reasonCodes: const <String>[],
+                                          )
+                                        : null,
+                                    onFeedbackUnhelpful: isAssistantMessage
+                                        ? () =>
+                                              _showAssistantNegativeFeedbackSheet(
+                                                msg,
+                                              )
+                                        : null,
+                                    onFeedbackCorrect: isAssistantMessage
+                                        ? () =>
+                                              _showAssistantCorrectionSheet(msg)
+                                        : null,
+                                    onCopyAnswer: isAssistantMessage
+                                        ? () async {
+                                            final content =
+                                                (msg['content'] as String?) ??
+                                                '';
+                                            if (content.isEmpty) return;
+                                            await Clipboard.setData(
+                                              ClipboardData(text: content),
+                                            );
+                                            if (!mounted) return;
+                                            ScaffoldMessenger.of(
+                                              this.context,
+                                            ).showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  UITextConstants
+                                                      .copiedToClipboard,
+                                                ),
+                                              ),
+                                            );
+                                            await _recordAssistantImplicitFeedback(
+                                              message: msg,
+                                              copiedAnswer: true,
+                                            );
+                                          }
+                                        : null,
+                                    onShareAnswer: isAssistantMessage
+                                        ? () async {
+                                            final content =
+                                                (msg['content'] as String?) ??
+                                                '';
+                                            if (content.isNotEmpty) {
+                                              await SharePlus.instance.share(
+                                                ShareParams(text: content),
+                                              );
+                                            }
+                                            await _recordAssistantImplicitFeedback(
+                                              message: msg,
+                                              sharedAnswer: true,
+                                            );
+                                          }
+                                        : null,
+                                    onFavoriteAnswer: isAssistantMessage
+                                        ? () async {
+                                            await _recordAssistantImplicitFeedback(
+                                              message: msg,
+                                              favoritedAnswer: true,
+                                            );
+                                            if (!mounted) return;
+                                            ScaffoldMessenger.of(
+                                              this.context,
+                                            ).showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  UITextConstants
+                                                      .assistantBookmarked,
+                                                ),
+                                              ),
+                                            );
+                                          }
+                                        : null,
+                                    onRegenerateAnswer: isAssistantMessage
+                                        ? () => _requestAssistantRewrite(
+                                            message: msg,
+                                            mode: 'regenerate',
+                                          )
+                                        : null,
+                                    onRegenerateOptionSelected:
+                                        isAssistantMessage
+                                        ? (option) =>
+                                              _requestAssistantRewriteV2(
+                                                message: msg,
+                                                option: option,
+                                              )
+                                        : null,
+                                    onBriefAnswer: isAssistantMessage
+                                        ? () => _requestAssistantRewrite(
+                                            message: msg,
+                                            mode: 'brief',
+                                          )
+                                        : null,
+                                    onDetailedAnswer: isAssistantMessage
+                                        ? () => _requestAssistantRewrite(
+                                            message: msg,
+                                            mode: 'detailed',
+                                          )
+                                        : null,
+                                    onSwitchModelAnswer: isAssistantMessage
+                                        ? () =>
+                                              _switchAssistantModelAndRegenerate(
+                                                msg,
+                                              )
+                                        : null,
+                                    onActionHintTap: isAssistantMessage
+                                        ? (hint) async {
+                                            _inputController.text = hint;
+                                            await _sendMessage();
+                                          }
+                                        : null,
+                                    onReferenceTap: isAssistantMessage
+                                        ? (refItem) => _onAssistantReferenceTap(
+                                            msg,
+                                            refItem,
+                                          )
+                                        : null,
+                                    onAvatarTap: isAssistantMessage
+                                        ? () {
+                                            final target = VisitTarget.page(
+                                              'chat',
+                                            );
+                                            final service = ref.read(
+                                              visitRecorderServiceProvider,
+                                            );
+                                            final ctx = AssistantOpenContext(
+                                              source: AssistantSource.chat,
+                                              visitTarget: target,
+                                              experienceLevel: service
+                                                  .getExperience(target),
+                                            );
+                                            AssistantHalfSheet.show(
+                                              context,
+                                              ctx,
+                                            );
+                                          }
+                                        : () {
+                                            final senderId =
+                                                msg['senderId'] as String? ??
+                                                '';
+                                            if (senderId == 'current_user') {
+                                              context.push('/profile');
+                                            } else if (senderId.isNotEmpty) {
+                                              context.push('/user/$senderId');
+                                            }
+                                          },
+                                    showAssistantAvatar: false,
                                   ),
-                                ),
-                              ),
-                            ),
-                          ChatMessageBubble(
-                            message: msg,
-                            isRight: msg['isSelf'] == true,
-                            bubbleColor: msg['isSelf'] == true
-                                ? bubbleSelf
-                                : bubbleOther,
-                            textColor: msg['isSelf'] == true
-                                ? Colors.white
-                                : fgPrimary,
-                            isSelectionMode: _isSelectionMode,
-                            isSelected: _selectedIds.contains(msg['id']),
-                            onLongPressStart: (details) => _onLongPressMessage(
-                              msg,
-                              details.globalPosition,
-                            ),
-                            onTap: _isSelectionMode
-                                ? () => _toggleSelect(msg['id'] as String)
-                                : null,
-                            hideAvatarAndName: _isAssistantConversation,
-                            useFullWidth: _isAssistantConversation,
-                            processState:
-                                _isAssistantConversation &&
-                                        _assistantResponding &&
-                                        index == _messages.length - 1 &&
-                                        isAssistantMessage
-                                    ? _currentProcessState
-                                    : null,
-                            isAssistantRunning:
-                                _assistantResponding &&
-                                index == _messages.length - 1 &&
-                                isAssistantMessage,
-                            runningStatusLabel:
-                                _isAssistantConversation &&
-                                        _assistantResponding &&
-                                        index == _messages.length - 1 &&
-                                        isAssistantMessage
-                                    ? (_assistantPhaseLabel.isNotEmpty
-                                        ? _assistantPhaseLabel
-                                        : UITextConstants.assistantRunningHint)
-                                    : null,
-                            showFeedbackActions:
-                                isAssistantMessage &&
-                                !_isSelectionMode &&
-                                (msg['type'] as String? ?? 'text') == 'text' &&
-                                ((msg['id'] as String?) ?? '') ==
-                                    latestAssistantTextMessageId,
-                            feedbackStatus:
-                                _assistantFeedbackStatusByMessageId[msg['id']
-                                        as String? ??
-                                    ''] ??
-                                '',
-                            onFeedbackHelpful: isAssistantMessage
-                                ? () => _submitAssistantFeedback(
-                                    message: msg,
-                                    explicitThumb: 'up',
-                                    reasonCodes: const <String>[],
-                                  )
-                                : null,
-                            onFeedbackUnhelpful: isAssistantMessage
-                                ? () => _showAssistantNegativeFeedbackSheet(msg)
-                                : null,
-                            onFeedbackCorrect: isAssistantMessage
-                                ? () => _showAssistantCorrectionSheet(msg)
-                                : null,
-                            onCopyAnswer: isAssistantMessage
-                                ? () async {
-                                    final content =
-                                        (msg['content'] as String?) ?? '';
-                                    if (content.isEmpty) return;
-                                    await Clipboard.setData(
-                                      ClipboardData(text: content),
-                                    );
-                                    if (!mounted) return;
-                                    ScaffoldMessenger.of(
-                                      this.context,
-                                    ).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          UITextConstants.copiedToClipboard,
-                                        ),
-                                      ),
-                                    );
-                                    await _recordAssistantImplicitFeedback(
-                                      message: msg,
-                                      copiedAnswer: true,
-                                    );
-                                  }
-                                : null,
-                            onShareAnswer: isAssistantMessage
-                                ? () async {
-                                    final content =
-                                        (msg['content'] as String?) ?? '';
-                                    if (content.isNotEmpty) {
-                                      await SharePlus.instance.share(
-                                        ShareParams(text: content),
-                                      );
-                                    }
-                                    await _recordAssistantImplicitFeedback(
-                                      message: msg,
-                                      sharedAnswer: true,
-                                    );
-                                  }
-                                : null,
-                            onFavoriteAnswer: isAssistantMessage
-                                ? () async {
-                                    await _recordAssistantImplicitFeedback(
-                                      message: msg,
-                                      favoritedAnswer: true,
-                                    );
-                                    if (!mounted) return;
-                                    ScaffoldMessenger.of(
-                                      this.context,
-                                    ).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          UITextConstants.assistantBookmarked,
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                : null,
-                            onRegenerateAnswer: isAssistantMessage
-                                ? () => _requestAssistantRewrite(
-                                    message: msg,
-                                    mode: 'regenerate',
-                                  )
-                                : null,
-                            onRegenerateOptionSelected: isAssistantMessage
-                                ? (option) => _requestAssistantRewriteV2(
-                                    message: msg,
-                                    option: option,
-                                  )
-                                : null,
-                            onBriefAnswer: isAssistantMessage
-                                ? () => _requestAssistantRewrite(
-                                    message: msg,
-                                    mode: 'brief',
-                                  )
-                                : null,
-                            onDetailedAnswer: isAssistantMessage
-                                ? () => _requestAssistantRewrite(
-                                    message: msg,
-                                    mode: 'detailed',
-                                  )
-                                : null,
-                            onSwitchModelAnswer: isAssistantMessage
-                                ? () => _switchAssistantModelAndRegenerate(msg)
-                                : null,
-                            onActionHintTap: isAssistantMessage
-                                ? (hint) async {
-                                    _inputController.text = hint;
-                                    await _sendMessage();
-                                  }
-                                : null,
-                            onReferenceTap: isAssistantMessage
-                                ? (refItem) =>
-                                      _onAssistantReferenceTap(msg, refItem)
-                                : null,
-                            onAvatarTap: isAssistantMessage
-                                ? () {
-                                    final target = VisitTarget.page('chat');
-                                    final service = ref.read(
-                                      visitRecorderServiceProvider,
-                                    );
-                                    final ctx = AssistantOpenContext(
-                                      source: AssistantSource.chat,
-                                      visitTarget: target,
-                                      experienceLevel: service.getExperience(
-                                        target,
-                                      ),
-                                    );
-                                    AssistantHalfSheet.show(context, ctx);
-                                  }
-                                : () {
-                                    final senderId =
-                                        msg['senderId'] as String? ?? '';
-                                    if (senderId == 'current_user') {
-                                      context.push('/profile');
-                                    } else if (senderId.isNotEmpty) {
-                                      context.push('/user/$senderId');
-                                    }
-                                  },
-                            showAssistantAvatar: false,
-                          ),
-                        ],
-                      );
-                    },
-                  );
-                  }),
-                ),
+                                ],
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
                     if (_showScrollFab && _assistantResponding)
                       Positioned(
                         bottom: 16,
                         left: 0,
                         right: 0,
                         child: Center(
-                          child: StreamingScrollFab(
-                            onTap: _scrollToBottom,
-                          ),
+                          child: StreamingScrollFab(onTap: _scrollToBottom),
                         ),
                       ),
                   ],

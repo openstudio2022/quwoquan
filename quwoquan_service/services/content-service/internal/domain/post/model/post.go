@@ -58,6 +58,7 @@ type Comment struct {
 	Content          string    `json:"content" bson:"content"`
 	ReplyToCommentId string    `json:"replyToCommentId" bson:"replyToCommentId"`
 	ReplyToUserId    string    `json:"replyToUserId" bson:"replyToUserId"`
+	ReplyCount       int64     `json:"replyCount" bson:"replyCount"`
 	LikeCount        int64     `json:"likeCount" bson:"likeCount"`
 	Status           string    `json:"status" bson:"status"`
 	CreatedAt        time.Time `json:"createdAt" bson:"createdAt"`

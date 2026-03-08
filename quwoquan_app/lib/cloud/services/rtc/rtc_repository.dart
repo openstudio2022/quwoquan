@@ -2,6 +2,9 @@ import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/rtc/rtc_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/rtc/rtc_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/rtc/mock/rtc_mock_data.dart';
 
@@ -11,7 +14,7 @@ abstract class RtcRepository {
     String? conversationId,
     String? circleId,
     required List<String> inviteeIds,
-    int maxParticipants = 32,
+    int maxParticipants = CloudApiDefaults.callMaxParticipants,
   });
 
   Future<Map<String, dynamic>> getCallSession(String callId);
@@ -24,15 +27,9 @@ abstract class RtcRepository {
 
   Future<Map<String, dynamic>> joinRtcToken(String callId);
 
-  Future<void> muteToggle({
-    required String callId,
-    required bool muted,
-  });
+  Future<void> muteToggle({required String callId, required bool muted});
 
-  Future<void> cameraToggle({
-    required String callId,
-    required bool cameraOn,
-  });
+  Future<void> cameraToggle({required String callId, required bool cameraOn});
 
   Future<void> startScreenShare(String callId);
 
@@ -44,7 +41,7 @@ abstract class RtcRepository {
 
   Future<List<Map<String, dynamic>>> listCallHistory({
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
   });
 
   Future<List<Map<String, dynamic>>> listParticipants(String callId);
@@ -62,7 +59,7 @@ class MockRtcRepository implements RtcRepository {
     String? conversationId,
     String? circleId,
     required List<String> inviteeIds,
-    int maxParticipants = 32,
+    int maxParticipants = CloudApiDefaults.callMaxParticipants,
   }) async {
     return Map<String, dynamic>.from(kMockCallSessions.first);
   }
@@ -122,11 +119,9 @@ class MockRtcRepository implements RtcRepository {
   @override
   Future<List<Map<String, dynamic>>> listCallHistory({
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return kMockCallHistory
-        .map((e) => Map<String, dynamic>.from(e))
-        .toList();
+    return kMockCallHistory.map((e) => Map<String, dynamic>.from(e)).toList();
   }
 
   @override
@@ -151,11 +146,15 @@ class MockRtcRepository implements RtcRepository {
 
 class RemoteRtcRepository implements RtcRepository {
   RemoteRtcRepository({http.Client? client})
-      : _http = CloudHttpClient(client: client);
+    : _http = CloudHttpClient(client: client);
 
   final CloudHttpClient _http;
 
-  static String _base() => '${CloudRuntimeConfig.gatewayBaseUrl}/v1/rtc';
+  Uri _uri(String path, {Map<String, String>? queryParameters}) {
+    return Uri.parse(
+      '${CloudRuntimeConfig.gatewayBaseUrl}$path',
+    ).replace(queryParameters: queryParameters);
+  }
 
   @override
   Future<Map<String, dynamic>> initiateCall({
@@ -163,18 +162,18 @@ class RemoteRtcRepository implements RtcRepository {
     String? conversationId,
     String? circleId,
     required List<String> inviteeIds,
-    int maxParticipants = 32,
+    int maxParticipants = CloudApiDefaults.callMaxParticipants,
   }) async {
     final body = <String, dynamic>{
       'callType': callType,
-      if (conversationId != null) 'conversationId': conversationId,
-      if (circleId != null) 'circleId': circleId,
+      'conversationId': ?conversationId,
+      'circleId': ?circleId,
       'inviteeIds': inviteeIds,
       'maxParticipants': maxParticipants,
     };
     final decoded = await _http.postJson(
-      Uri.parse('${_base()}/calls'),
-      headers: CloudRequestHeaders.forPage('rtc.initiate'),
+      _uri(RtcApiMetadata.initiateCallPath),
+      headers: CloudRequestHeaders.forPage(RtcRequestPageIds.initiateCall),
       body: body,
     );
     return CloudResponseDecoder.asObject(decoded, context: 'initiateCall');
@@ -183,8 +182,8 @@ class RemoteRtcRepository implements RtcRepository {
   @override
   Future<Map<String, dynamic>> getCallSession(String callId) async {
     final decoded = await _http.getJson(
-      Uri.parse('${_base()}/calls/$callId'),
-      headers: CloudRequestHeaders.forPage('rtc.session'),
+      _uri(RtcApiMetadata.getCallPath(callId: callId)),
+      headers: CloudRequestHeaders.forPage(RtcRequestPageIds.getCall),
     );
     return CloudResponseDecoder.asObject(decoded, context: 'getCallSession');
   }
@@ -192,8 +191,8 @@ class RemoteRtcRepository implements RtcRepository {
   @override
   Future<Map<String, dynamic>> answerCall(String callId) async {
     final decoded = await _http.postJson(
-      Uri.parse('${_base()}/calls/$callId/answer'),
-      headers: CloudRequestHeaders.forPage('rtc.answer'),
+      _uri(RtcApiMetadata.answerCallPath(callId: callId)),
+      headers: CloudRequestHeaders.forPage(RtcRequestPageIds.answerCall),
       body: const <String, dynamic>{},
     );
     return CloudResponseDecoder.asObject(decoded, context: 'answerCall');
@@ -202,8 +201,8 @@ class RemoteRtcRepository implements RtcRepository {
   @override
   Future<void> rejectCall(String callId) async {
     await _http.postJson(
-      Uri.parse('${_base()}/calls/$callId/reject'),
-      headers: CloudRequestHeaders.forPage('rtc.reject'),
+      _uri(RtcApiMetadata.rejectCallPath(callId: callId)),
+      headers: CloudRequestHeaders.forPage(RtcRequestPageIds.rejectCall),
       body: const <String, dynamic>{},
     );
   }
@@ -211,8 +210,8 @@ class RemoteRtcRepository implements RtcRepository {
   @override
   Future<void> hangUp(String callId) async {
     await _http.postJson(
-      Uri.parse('${_base()}/calls/$callId/hangup'),
-      headers: CloudRequestHeaders.forPage('rtc.hangup'),
+      _uri(RtcApiMetadata.hangupCallPath(callId: callId)),
+      headers: CloudRequestHeaders.forPage(RtcRequestPageIds.hangupCall),
       body: const <String, dynamic>{},
     );
   }
@@ -220,21 +219,18 @@ class RemoteRtcRepository implements RtcRepository {
   @override
   Future<Map<String, dynamic>> joinRtcToken(String callId) async {
     final decoded = await _http.postJson(
-      Uri.parse('${_base()}/calls/$callId/token'),
-      headers: CloudRequestHeaders.forPage('rtc.token'),
+      _uri(RtcApiMetadata.joinCallPath(callId: callId)),
+      headers: CloudRequestHeaders.forPage(RtcRequestPageIds.joinCall),
       body: const <String, dynamic>{},
     );
     return CloudResponseDecoder.asObject(decoded, context: 'joinRtcToken');
   }
 
   @override
-  Future<void> muteToggle({
-    required String callId,
-    required bool muted,
-  }) async {
+  Future<void> muteToggle({required String callId, required bool muted}) async {
     await _http.patchJson(
-      Uri.parse('${_base()}/calls/$callId/media'),
-      headers: CloudRequestHeaders.forPage('rtc.media'),
+      _uri(RtcApiMetadata.toggleMutePath(callId: callId)),
+      headers: CloudRequestHeaders.forPage(RtcRequestPageIds.toggleMute),
       body: {'muted': muted},
     );
   }
@@ -245,17 +241,17 @@ class RemoteRtcRepository implements RtcRepository {
     required bool cameraOn,
   }) async {
     await _http.patchJson(
-      Uri.parse('${_base()}/calls/$callId/media'),
-      headers: CloudRequestHeaders.forPage('rtc.media'),
-      body: {'cameraOn': cameraOn},
+      _uri(RtcApiMetadata.toggleCameraPath(callId: callId)),
+      headers: CloudRequestHeaders.forPage(RtcRequestPageIds.toggleCamera),
+      body: {'enabled': cameraOn},
     );
   }
 
   @override
   Future<void> startScreenShare(String callId) async {
     await _http.postJson(
-      Uri.parse('${_base()}/calls/$callId/screen-share/start'),
-      headers: CloudRequestHeaders.forPage('rtc.screenShare'),
+      _uri(RtcApiMetadata.startScreenSharePath(callId: callId)),
+      headers: CloudRequestHeaders.forPage(RtcRequestPageIds.startScreenShare),
       body: const <String, dynamic>{},
     );
   }
@@ -263,8 +259,8 @@ class RemoteRtcRepository implements RtcRepository {
   @override
   Future<void> stopScreenShare(String callId) async {
     await _http.postJson(
-      Uri.parse('${_base()}/calls/$callId/screen-share/stop'),
-      headers: CloudRequestHeaders.forPage('rtc.screenShare'),
+      _uri(RtcApiMetadata.stopScreenSharePath(callId: callId)),
+      headers: CloudRequestHeaders.forPage(RtcRequestPageIds.stopScreenShare),
       body: const <String, dynamic>{},
     );
   }
@@ -272,8 +268,8 @@ class RemoteRtcRepository implements RtcRepository {
   @override
   Future<void> startRecording(String callId) async {
     await _http.postJson(
-      Uri.parse('${_base()}/calls/$callId/recording/start'),
-      headers: CloudRequestHeaders.forPage('rtc.recording'),
+      _uri(RtcApiMetadata.startRecordingPath(callId: callId)),
+      headers: CloudRequestHeaders.forPage(RtcRequestPageIds.startRecording),
       body: const <String, dynamic>{},
     );
   }
@@ -281,8 +277,8 @@ class RemoteRtcRepository implements RtcRepository {
   @override
   Future<void> stopRecording(String callId) async {
     await _http.postJson(
-      Uri.parse('${_base()}/calls/$callId/recording/stop'),
-      headers: CloudRequestHeaders.forPage('rtc.recording'),
+      _uri(RtcApiMetadata.stopRecordingPath(callId: callId)),
+      headers: CloudRequestHeaders.forPage(RtcRequestPageIds.stopRecording),
       body: const <String, dynamic>{},
     );
   }
@@ -290,30 +286,32 @@ class RemoteRtcRepository implements RtcRepository {
   @override
   Future<List<Map<String, dynamic>>> listCallHistory({
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
   }) async {
-    final params = <String, String>{
-      'limit': '$limit',
-      if (cursor != null) 'cursor': cursor,
-    };
+    final params = <String, String>{'limit': '$limit', 'cursor': ?cursor};
     final decoded = await _http.getJson(
-      Uri.parse('${_base()}/calls/history').replace(queryParameters: params),
-      headers: CloudRequestHeaders.forPage('rtc.history'),
+      _uri(RtcApiMetadata.listCallsPath, queryParameters: params),
+      headers: CloudRequestHeaders.forPage(RtcRequestPageIds.listCalls),
     );
-    final page =
-        CloudResponseDecoder.asCursorPage(decoded, context: 'listCallHistory');
+    final page = CloudResponseDecoder.asCursorPage(
+      decoded,
+      context: 'listCallHistory',
+    );
     return page.items;
   }
 
   @override
   Future<List<Map<String, dynamic>>> listParticipants(String callId) async {
     final decoded = await _http.getJson(
-      Uri.parse('${_base()}/calls/$callId/participants'),
-      headers: CloudRequestHeaders.forPage('rtc.participants'),
+      _uri(RtcApiMetadata.getCallPath(callId: callId)),
+      headers: CloudRequestHeaders.forPage(RtcRequestPageIds.getCall),
     );
-    final page = CloudResponseDecoder.asCursorPage(decoded,
-        context: 'listParticipants');
-    return page.items;
+    final call = CloudResponseDecoder.asObject(decoded, context: 'listParticipants');
+    final participants = call['participants'];
+    if (participants is List) {
+      return participants.cast<Map<String, dynamic>>();
+    }
+    return const <Map<String, dynamic>>[];
   }
 
   @override
@@ -322,8 +320,8 @@ class RemoteRtcRepository implements RtcRepository {
     required List<String> userIds,
   }) async {
     await _http.postJson(
-      Uri.parse('${_base()}/calls/$callId/invite'),
-      headers: CloudRequestHeaders.forPage('rtc.invite'),
+      _uri(RtcApiMetadata.inviteToCallPath(callId: callId)),
+      headers: CloudRequestHeaders.forPage(RtcRequestPageIds.inviteToCall),
       body: {'userIds': userIds},
     );
   }

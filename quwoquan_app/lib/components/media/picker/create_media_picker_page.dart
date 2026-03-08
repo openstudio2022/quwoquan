@@ -7,7 +7,7 @@ import 'package:quwoquan_app/components/media/camera/camera_capture_page.dart';
 import 'package:quwoquan_app/components/media/picker/one_tap_movie_preview_page.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/media_picker_service.dart';
-import 'package:quwoquan_app/features/create/models/create_media_models.dart';
+import 'package:quwoquan_app/core/models/create_media_models.dart';
 
 class CreateMediaPickerPage extends StatefulWidget {
   const CreateMediaPickerPage({

@@ -282,12 +282,14 @@ class DialogueStateRuntime {
         (contextScopeHint['dialogueState'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final fromHint = (dialogueHint['currentStateId'] as String?)?.trim() ?? '';
-    if (fromHint.isNotEmpty && allowedStateIds.contains(fromHint))
+    if (fromHint.isNotEmpty && allowedStateIds.contains(fromHint)) {
       return fromHint;
+    }
     final fromScope =
         (contextScopeHint['currentStateId'] as String?)?.trim() ?? '';
-    if (fromScope.isNotEmpty && allowedStateIds.contains(fromScope))
+    if (fromScope.isNotEmpty && allowedStateIds.contains(fromScope)) {
       return fromScope;
+    }
     return allowedStateIds.isNotEmpty
         ? allowedStateIds.first
         : 'S0_ENTRY_INTENT_CAPTURE';

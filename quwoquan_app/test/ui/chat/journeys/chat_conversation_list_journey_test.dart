@@ -16,7 +16,7 @@ Widget _scopedApp({ChatRepository? mock}) {
         routes: [
           GoRoute(
             path: '/chat',
-            builder: (_, __) => const Scaffold(body: ChatPage()),
+            builder: (_, _) => const Scaffold(body: ChatPage()),
           ),
           GoRoute(
             path: '/chat/:id',
@@ -87,9 +87,7 @@ void main() {
 
   group('旅程错误路径', () {
     testWidgets('加载失败显示错误态', (tester) async {
-      await tester.pumpWidget(
-        _scopedApp(mock: _ErrorChatRepository()),
-      );
+      await tester.pumpWidget(_scopedApp(mock: _ErrorChatRepository()));
       await tester.pumpAndSettle();
 
       expect(find.byType(ChatPage), findsOneWidget);
@@ -97,9 +95,7 @@ void main() {
     });
 
     testWidgets('Repository 异常不导致页面崩溃', (tester) async {
-      await tester.pumpWidget(
-        _scopedApp(mock: _ErrorChatRepository()),
-      );
+      await tester.pumpWidget(_scopedApp(mock: _ErrorChatRepository()));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -109,9 +105,7 @@ void main() {
 
   group('旅程边界/幂等', () {
     testWidgets('空列表安全渲染', (tester) async {
-      await tester.pumpWidget(
-        _scopedApp(mock: _EmptyChatRepository()),
-      );
+      await tester.pumpWidget(_scopedApp(mock: _EmptyChatRepository()));
       await tester.pumpAndSettle();
 
       expect(find.byType(ChatPage), findsOneWidget);

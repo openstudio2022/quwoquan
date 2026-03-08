@@ -10,6 +10,10 @@ enum ContentErrorCode {
   invalidArgument,
   invalidContentType,
   rateLimited,
+  commentTooLong,
+  commentRateLimited,
+  commentLikeDuplicate,
+  commentForbiddenDelete,
   contentTooLong,
   mediaNotReady,
   postImmutableAfterPublish,
@@ -25,6 +29,7 @@ enum ContentErrorCode {
   bool get isRetryable {
     switch (this) {
       case ContentErrorCode.rateLimited:
+      case ContentErrorCode.commentRateLimited:
       case ContentErrorCode.mediaNotReady:
       case ContentErrorCode.storageWriteFailed:
       case ContentErrorCode.upstreamTimeout:
@@ -52,6 +57,14 @@ enum ContentErrorCode {
         return ContentErrorCode.invalidContentType;
       case 'CONTENT.USER.rate_limited':
         return ContentErrorCode.rateLimited;
+      case 'CONTENT.USER.comment_too_long':
+        return ContentErrorCode.commentTooLong;
+      case 'CONTENT.USER.comment_rate_limited':
+        return ContentErrorCode.commentRateLimited;
+      case 'CONTENT.USER.comment_like_duplicate':
+        return ContentErrorCode.commentLikeDuplicate;
+      case 'CONTENT.USER.comment_forbidden_delete':
+        return ContentErrorCode.commentForbiddenDelete;
       case 'CONTENT.USER.content_too_long':
         return ContentErrorCode.contentTooLong;
       case 'CONTENT.USER.media_not_ready':
@@ -91,6 +104,10 @@ class ContentErrorMessages {
     ContentErrorCode.invalidArgument: '请求参数有误，请检查后重试',
     ContentErrorCode.invalidContentType: '不支持的内容类型',
     ContentErrorCode.rateLimited: '操作太频繁，请稍后重试',
+    ContentErrorCode.commentTooLong: '评论超出字数限制',
+    ContentErrorCode.commentRateLimited: '评论太频繁，请稍后重试',
+    ContentErrorCode.commentLikeDuplicate: '已经点过赞了',
+    ContentErrorCode.commentForbiddenDelete: '无权删除此评论',
     ContentErrorCode.contentTooLong: '内容超出长度限制',
     ContentErrorCode.mediaNotReady: '媒体文件正在处理中，请稍后发布',
     ContentErrorCode.postImmutableAfterPublish: '内容发布后不可修改',
@@ -112,6 +129,10 @@ class ContentErrorMessages {
     ContentErrorCode.invalidArgument: 'Invalid request, please check and retry',
     ContentErrorCode.invalidContentType: 'Unsupported content type',
     ContentErrorCode.rateLimited: 'Too many requests, please retry later',
+    ContentErrorCode.commentTooLong: 'Comment exceeds length limit',
+    ContentErrorCode.commentRateLimited: 'Too many comments, please retry later',
+    ContentErrorCode.commentLikeDuplicate: 'Already liked',
+    ContentErrorCode.commentForbiddenDelete: 'Not allowed to delete this comment',
     ContentErrorCode.contentTooLong: 'Content exceeds length limit',
     ContentErrorCode.mediaNotReady: 'Media is still processing, please retry shortly',
     ContentErrorCode.postImmutableAfterPublish: 'Published content is immutable',

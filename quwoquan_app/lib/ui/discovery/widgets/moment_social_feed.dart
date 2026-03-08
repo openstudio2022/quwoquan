@@ -10,7 +10,6 @@ import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
-import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 import 'package:quwoquan_app/components/more_actions_popup/configs/media_post_config.dart';
 import 'package:quwoquan_app/components/more_actions_popup/more_action_popup.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -143,14 +142,6 @@ class MomentSocialFeed extends ConsumerWidget {
                   CommentViewer.showModal(
                     context: context,
                     postId: dto.id,
-                    initialComments: [],
-                    config: const CommentConfig(enabled: true),
-                    onSubmitComment: (content) async {
-                      await ref.read(contentRepositoryProvider).createComment(
-                            postId: dto.id,
-                            content: content,
-                          );
-                    },
                   );
                 },
                 onShareTap: () {

@@ -1,6 +1,13 @@
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_request_page_ids.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/services/user/mock/user_profile_mock_data.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -15,19 +22,37 @@ abstract class UserProfileRepository {
   Future<void> updateProfile(Map<String, dynamic> data);
 
   // ── 主页 Tab 数据 ─────────────────────────────────────────────────────────
-  Future<List<PostBaseDto>> listUserPosts(String userId, {int limit = 20});
+  Future<List<PostBaseDto>> listUserPosts(
+    String userId, {
+    int limit = CloudApiDefaults.pageLimit,
+  });
   Future<List<UserWorkItem>> listUserWorks(String userId);
   Future<List<UserLifeItem>> listUserLifeItems(String userId);
-  Future<List<Map<String, dynamic>>> listUserCircles(String userId, {int limit = 50});
+  Future<List<Map<String, dynamic>>> listUserCircles(
+    String userId, {
+    int limit = CloudApiDefaults.userCirclesLimit,
+  });
   Future<Map<String, dynamic>> getUserStats(String userId);
 
   // ── 关注 / 粉丝 ──────────────────────────────────────────────────────────
   Future<void> followUser(String targetUserId);
   Future<void> unfollowUser(String targetUserId);
-  Future<List<Map<String, dynamic>>> listFollowing(String userId, {String? cursor, int limit = 20});
-  Future<List<Map<String, dynamic>>> listFollowers(String userId, {String? cursor, int limit = 20});
+  Future<List<Map<String, dynamic>>> listFollowing(
+    String userId, {
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  });
+  Future<List<Map<String, dynamic>>> listFollowers(
+    String userId, {
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  });
   Future<Map<String, dynamic>> getRelationship(String userId);
-  Future<List<Map<String, dynamic>>> listUserLikes(String userId, {String? cursor, int limit = 20});
+  Future<List<Map<String, dynamic>>> listUserLikes(
+    String userId, {
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  });
 
   // ── 分身 ──────────────────────────────────────────────────────────────────
   Future<List<Map<String, dynamic>>> listPersonas();
@@ -51,7 +76,10 @@ class MockUserProfileRepository implements UserProfileRepository {
   Future<void> updateProfile(Map<String, dynamic> data) async {}
 
   @override
-  Future<List<PostBaseDto>> listUserPosts(String userId, {int limit = 20}) async {
+  Future<List<PostBaseDto>> listUserPosts(
+    String userId, {
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
     final posts = UserProfileMockData.userPostsFor(userId);
     return posts.take(limit).toList();
   }
@@ -67,7 +95,10 @@ class MockUserProfileRepository implements UserProfileRepository {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listUserCircles(String userId, {int limit = 50}) async {
+  Future<List<Map<String, dynamic>>> listUserCircles(
+    String userId, {
+    int limit = CloudApiDefaults.userCirclesLimit,
+  }) async {
     return [
       {
         'id': 'c1',
@@ -107,12 +138,20 @@ class MockUserProfileRepository implements UserProfileRepository {
   Future<void> unfollowUser(String targetUserId) async {}
 
   @override
-  Future<List<Map<String, dynamic>>> listFollowing(String userId, {String? cursor, int limit = 20}) async {
+  Future<List<Map<String, dynamic>>> listFollowing(
+    String userId, {
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
     return _mockRelationUsers.take(limit).toList();
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listFollowers(String userId, {String? cursor, int limit = 20}) async {
+  Future<List<Map<String, dynamic>>> listFollowers(
+    String userId, {
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
     return _mockRelationUsers.take(limit).toList();
   }
 
@@ -122,7 +161,11 @@ class MockUserProfileRepository implements UserProfileRepository {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listUserLikes(String userId, {String? cursor, int limit = 20}) async {
+  Future<List<Map<String, dynamic>>> listUserLikes(
+    String userId, {
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
     return _mockLikes.take(limit).toList();
   }
 
@@ -279,14 +322,21 @@ class RemoteUserProfileRepository implements UserProfileRepository {
 
   final http.Client _client;
 
+  Uri _uri(String path, {Map<String, String>? queryParameters}) {
+    return Uri.parse(
+      '${CloudRuntimeConfig.gatewayBaseUrl}$path',
+    ).replace(queryParameters: queryParameters);
+  }
+
   // ── 档案 ──────────────────────────────────────────────────────────────────
 
   @override
   Future<Map<String, dynamic>> getUserProfile(String userId) async {
-    final url = Uri.parse(
-      '${CloudRuntimeConfig.gatewayBaseUrl}/v1/user/profile/$userId',
+    final url = _uri(UserApiMetadata.getUserProfilePath(userId: userId));
+    final resp = await _client.get(
+      url,
+      headers: CloudRequestHeaders.forPage(UserRequestPageIds.getUserProfile),
     );
-    final resp = await _client.get(url, headers: CloudRequestHeaders.forPage('user.profile'));
     if (resp.statusCode != 200) {
       throw Exception('getUserProfile failed: ${resp.statusCode}');
     }
@@ -295,13 +345,11 @@ class RemoteUserProfileRepository implements UserProfileRepository {
 
   @override
   Future<void> updateProfile(Map<String, dynamic> data) async {
-    final url = Uri.parse(
-      '${CloudRuntimeConfig.gatewayBaseUrl}/v1/user/profile',
-    );
+    final url = _uri(UserApiMetadata.updateUserProfilePath);
     final resp = await _client.patch(
       url,
       headers: {
-        ...CloudRequestHeaders.forPage('user.profile.edit'),
+        ...CloudRequestHeaders.forPage(UserRequestPageIds.updateUserProfile),
         'Content-Type': 'application/json',
       },
       body: json.encode(data),
@@ -314,11 +362,18 @@ class RemoteUserProfileRepository implements UserProfileRepository {
   // ── 主页 Tab 数据 ─────────────────────────────────────────────────────────
 
   @override
-  Future<List<PostBaseDto>> listUserPosts(String userId, {int limit = 20}) async {
-    final url = Uri.parse(
-      '${CloudRuntimeConfig.gatewayBaseUrl}/v1/users/$userId/posts?limit=$limit',
+  Future<List<PostBaseDto>> listUserPosts(
+    String userId, {
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final url = _uri(
+      ContentApiMetadata.listUserPostsPath(userId: userId),
+      queryParameters: <String, String>{'limit': '$limit'},
     );
-    final resp = await _client.get(url, headers: CloudRequestHeaders.forPage('user.posts'));
+    final resp = await _client.get(
+      url,
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.listUserPosts),
+    );
     if (resp.statusCode != 200) {
       throw Exception('listUserPosts failed: ${resp.statusCode}');
     }
@@ -329,10 +384,11 @@ class RemoteUserProfileRepository implements UserProfileRepository {
 
   @override
   Future<List<UserWorkItem>> listUserWorks(String userId) async {
-    final url = Uri.parse(
-      '${CloudRuntimeConfig.gatewayBaseUrl}/v1/users/$userId/works',
+    final url = _uri(UserApiMetadata.listUserWorksPath(userId: userId));
+    final resp = await _client.get(
+      url,
+      headers: CloudRequestHeaders.forPage(UserRequestPageIds.listUserWorks),
     );
-    final resp = await _client.get(url, headers: CloudRequestHeaders.forPage('user.works'));
     if (resp.statusCode != 200) {
       throw Exception('listUserWorks failed: ${resp.statusCode}');
     }
@@ -343,10 +399,11 @@ class RemoteUserProfileRepository implements UserProfileRepository {
 
   @override
   Future<List<UserLifeItem>> listUserLifeItems(String userId) async {
-    final url = Uri.parse(
-      '${CloudRuntimeConfig.gatewayBaseUrl}/v1/users/$userId/life-items',
+    final url = _uri(UserApiMetadata.listUserLifeItemsPath(userId: userId));
+    final resp = await _client.get(
+      url,
+      headers: CloudRequestHeaders.forPage(UserRequestPageIds.listUserLifeItems),
     );
-    final resp = await _client.get(url, headers: CloudRequestHeaders.forPage('user.lifeItems'));
     if (resp.statusCode != 200) {
       throw Exception('listUserLifeItems failed: ${resp.statusCode}');
     }
@@ -356,11 +413,18 @@ class RemoteUserProfileRepository implements UserProfileRepository {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listUserCircles(String userId, {int limit = 50}) async {
-    final url = Uri.parse(
-      '${CloudRuntimeConfig.gatewayBaseUrl}/v1/users/$userId/circles?limit=$limit',
+  Future<List<Map<String, dynamic>>> listUserCircles(
+    String userId, {
+    int limit = CloudApiDefaults.userCirclesLimit,
+  }) async {
+    final url = _uri(
+      CircleApiMetadata.listUserCirclesPath(userId: userId),
+      queryParameters: <String, String>{'limit': '$limit'},
     );
-    final resp = await _client.get(url, headers: CloudRequestHeaders.forPage('user.circles'));
+    final resp = await _client.get(
+      url,
+      headers: CloudRequestHeaders.forPage(CircleRequestPageIds.listUserCircles),
+    );
     if (resp.statusCode != 200) {
       throw Exception('listUserCircles failed: ${resp.statusCode}');
     }
@@ -383,10 +447,11 @@ class RemoteUserProfileRepository implements UserProfileRepository {
 
   @override
   Future<void> followUser(String targetUserId) async {
-    final url = Uri.parse(
-      '${CloudRuntimeConfig.gatewayBaseUrl}/v1/user/follow/$targetUserId',
+    final url = _uri(UserApiMetadata.followUserPath(targetUserId: targetUserId));
+    final resp = await _client.post(
+      url,
+      headers: CloudRequestHeaders.forPage(UserRequestPageIds.followUser),
     );
-    final resp = await _client.post(url, headers: CloudRequestHeaders.forPage('user.follow'));
     if (resp.statusCode != 200 && resp.statusCode != 201) {
       throw Exception('followUser failed: ${resp.statusCode}');
     }
@@ -394,23 +459,34 @@ class RemoteUserProfileRepository implements UserProfileRepository {
 
   @override
   Future<void> unfollowUser(String targetUserId) async {
-    final url = Uri.parse(
-      '${CloudRuntimeConfig.gatewayBaseUrl}/v1/user/follow/$targetUserId',
+    final url = _uri(
+      UserApiMetadata.unfollowUserPath(targetUserId: targetUserId),
     );
-    final resp = await _client.delete(url, headers: CloudRequestHeaders.forPage('user.unfollow'));
+    final resp = await _client.delete(
+      url,
+      headers: CloudRequestHeaders.forPage(UserRequestPageIds.unfollowUser),
+    );
     if (resp.statusCode != 200 && resp.statusCode != 204) {
       throw Exception('unfollowUser failed: ${resp.statusCode}');
     }
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listFollowing(String userId, {String? cursor, int limit = 20}) async {
+  Future<List<Map<String, dynamic>>> listFollowing(
+    String userId, {
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
     final params = <String, String>{'limit': '$limit'};
     if (cursor != null) params['cursor'] = cursor;
-    final url = Uri.parse(
-      '${CloudRuntimeConfig.gatewayBaseUrl}/v1/user/$userId/following',
-    ).replace(queryParameters: params);
-    final resp = await _client.get(url, headers: CloudRequestHeaders.forPage('user.following'));
+    final url = _uri(
+      UserApiMetadata.listFollowingPath(userId: userId),
+      queryParameters: params,
+    );
+    final resp = await _client.get(
+      url,
+      headers: CloudRequestHeaders.forPage(UserRequestPageIds.listFollowing),
+    );
     if (resp.statusCode != 200) {
       throw Exception('listFollowing failed: ${resp.statusCode}');
     }
@@ -419,13 +495,21 @@ class RemoteUserProfileRepository implements UserProfileRepository {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listFollowers(String userId, {String? cursor, int limit = 20}) async {
+  Future<List<Map<String, dynamic>>> listFollowers(
+    String userId, {
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
     final params = <String, String>{'limit': '$limit'};
     if (cursor != null) params['cursor'] = cursor;
-    final url = Uri.parse(
-      '${CloudRuntimeConfig.gatewayBaseUrl}/v1/user/$userId/followers',
-    ).replace(queryParameters: params);
-    final resp = await _client.get(url, headers: CloudRequestHeaders.forPage('user.followers'));
+    final url = _uri(
+      UserApiMetadata.listFollowersPath(userId: userId),
+      queryParameters: params,
+    );
+    final resp = await _client.get(
+      url,
+      headers: CloudRequestHeaders.forPage(UserRequestPageIds.listFollowers),
+    );
     if (resp.statusCode != 200) {
       throw Exception('listFollowers failed: ${resp.statusCode}');
     }
@@ -435,10 +519,11 @@ class RemoteUserProfileRepository implements UserProfileRepository {
 
   @override
   Future<Map<String, dynamic>> getRelationship(String userId) async {
-    final url = Uri.parse(
-      '${CloudRuntimeConfig.gatewayBaseUrl}/v1/user/$userId/relationship',
+    final url = _uri(UserApiMetadata.getRelationshipPath(userId: userId));
+    final resp = await _client.get(
+      url,
+      headers: CloudRequestHeaders.forPage(UserRequestPageIds.getRelationship),
     );
-    final resp = await _client.get(url, headers: CloudRequestHeaders.forPage('user.relationship'));
     if (resp.statusCode != 200) {
       throw Exception('getRelationship failed: ${resp.statusCode}');
     }
@@ -446,13 +531,21 @@ class RemoteUserProfileRepository implements UserProfileRepository {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listUserLikes(String userId, {String? cursor, int limit = 20}) async {
+  Future<List<Map<String, dynamic>>> listUserLikes(
+    String userId, {
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
     final params = <String, String>{'limit': '$limit'};
     if (cursor != null) params['cursor'] = cursor;
-    final url = Uri.parse(
-      '${CloudRuntimeConfig.gatewayBaseUrl}/v1/users/$userId/likes',
-    ).replace(queryParameters: params);
-    final resp = await _client.get(url, headers: CloudRequestHeaders.forPage('user.likes'));
+    final url = _uri(
+      UserApiMetadata.listUserLikesPath(userId: userId),
+      queryParameters: params,
+    );
+    final resp = await _client.get(
+      url,
+      headers: CloudRequestHeaders.forPage(UserRequestPageIds.listUserLikes),
+    );
     if (resp.statusCode != 200) {
       throw Exception('listUserLikes failed: ${resp.statusCode}');
     }
@@ -464,10 +557,11 @@ class RemoteUserProfileRepository implements UserProfileRepository {
 
   @override
   Future<List<Map<String, dynamic>>> listPersonas() async {
-    final url = Uri.parse(
-      '${CloudRuntimeConfig.gatewayBaseUrl}/v1/user/personas',
+    final url = _uri(UserApiMetadata.listPersonasPath);
+    final resp = await _client.get(
+      url,
+      headers: CloudRequestHeaders.forPage(UserRequestPageIds.listPersonas),
     );
-    final resp = await _client.get(url, headers: CloudRequestHeaders.forPage('user.personas'));
     if (resp.statusCode != 200) {
       throw Exception('listPersonas failed: ${resp.statusCode}');
     }
@@ -477,13 +571,11 @@ class RemoteUserProfileRepository implements UserProfileRepository {
 
   @override
   Future<Map<String, dynamic>> createPersona(Map<String, dynamic> data) async {
-    final url = Uri.parse(
-      '${CloudRuntimeConfig.gatewayBaseUrl}/v1/user/personas',
-    );
+    final url = _uri(UserApiMetadata.createPersonaPath);
     final resp = await _client.post(
       url,
       headers: {
-        ...CloudRequestHeaders.forPage('user.personas.create'),
+        ...CloudRequestHeaders.forPage(UserRequestPageIds.createPersona),
         'Content-Type': 'application/json',
       },
       body: json.encode(data),
@@ -496,13 +588,11 @@ class RemoteUserProfileRepository implements UserProfileRepository {
 
   @override
   Future<void> updatePersona(String personaId, Map<String, dynamic> data) async {
-    final url = Uri.parse(
-      '${CloudRuntimeConfig.gatewayBaseUrl}/v1/user/personas/$personaId',
-    );
+    final url = _uri(UserApiMetadata.updatePersonaPath(personaId: personaId));
     final resp = await _client.patch(
       url,
       headers: {
-        ...CloudRequestHeaders.forPage('user.personas.update'),
+        ...CloudRequestHeaders.forPage(UserRequestPageIds.updatePersona),
         'Content-Type': 'application/json',
       },
       body: json.encode(data),
@@ -514,10 +604,11 @@ class RemoteUserProfileRepository implements UserProfileRepository {
 
   @override
   Future<void> deletePersona(String personaId) async {
-    final url = Uri.parse(
-      '${CloudRuntimeConfig.gatewayBaseUrl}/v1/user/personas/$personaId',
+    final url = _uri(UserApiMetadata.deletePersonaPath(personaId: personaId));
+    final resp = await _client.delete(
+      url,
+      headers: CloudRequestHeaders.forPage(UserRequestPageIds.deletePersona),
     );
-    final resp = await _client.delete(url, headers: CloudRequestHeaders.forPage('user.personas.delete'));
     if (resp.statusCode != 200 && resp.statusCode != 204) {
       throw Exception('deletePersona failed: ${resp.statusCode}');
     }
@@ -525,10 +616,13 @@ class RemoteUserProfileRepository implements UserProfileRepository {
 
   @override
   Future<void> activatePersona(String personaId) async {
-    final url = Uri.parse(
-      '${CloudRuntimeConfig.gatewayBaseUrl}/v1/user/personas/$personaId/activate',
+    final url = _uri(
+      UserApiMetadata.activatePersonaPath(personaId: personaId),
     );
-    final resp = await _client.post(url, headers: CloudRequestHeaders.forPage('user.personas.activate'));
+    final resp = await _client.post(
+      url,
+      headers: CloudRequestHeaders.forPage(UserRequestPageIds.activatePersona),
+    );
     if (resp.statusCode != 200) {
       throw Exception('activatePersona failed: ${resp.statusCode}');
     }

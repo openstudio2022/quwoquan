@@ -18,15 +18,11 @@ Widget _scopedApp({ChatRepository? mock}) {
             path: '/chat/:id/settings',
             builder: (_, state) => Scaffold(
               body: ChatSettingsPage(
-                conversationId:
-                    state.pathParameters['id'] ?? 'conv_002',
+                conversationId: state.pathParameters['id'] ?? 'conv_002',
               ),
             ),
           ),
-          GoRoute(
-            path: '/chat/:id',
-            builder: (_, __) => const SizedBox(),
-          ),
+          GoRoute(path: '/chat/:id', builder: (_, _) => const SizedBox()),
         ],
       ),
     ),
@@ -111,9 +107,7 @@ void main() {
   group('ChatSettingsPage — 错误态渲染', () {
     testWidgets('Repository 异常时页面不崩溃', (tester) async {
       _suppressImageErrors();
-      await tester.pumpWidget(
-        _scopedApp(mock: _ErrorChatRepository()),
-      );
+      await tester.pumpWidget(_scopedApp(mock: _ErrorChatRepository()));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 

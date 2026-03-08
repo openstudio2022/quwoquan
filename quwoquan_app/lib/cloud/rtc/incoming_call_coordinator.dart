@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/rtc/callkit_service.dart';
@@ -20,10 +19,7 @@ final rtcSignalingProvider = Provider<RtcSignalingClient>((ref) {
 });
 
 class IncomingCallCoordinator {
-  IncomingCallCoordinator({
-    required this.ref,
-    required this.router,
-  });
+  IncomingCallCoordinator({required this.ref, required this.router});
 
   final Ref ref;
   final GoRouter router;
@@ -43,7 +39,8 @@ class IncomingCallCoordinator {
     _signalSub = signaling.incomingCalls.listen((event) {
       _pendingCallId = event.callId;
       _pendingCallType = event.payload['callType'] as String? ?? 'voice';
-      final callerName = event.payload['callerName'] as String? ?? event.actorId ?? '';
+      final callerName =
+          event.payload['callerName'] as String? ?? event.actorId ?? '';
 
       callKit.showIncomingCall(
         callId: event.callId,
@@ -95,7 +92,9 @@ class IncomingCallCoordinator {
   }
 }
 
-final incomingCallCoordinatorProvider = Provider<IncomingCallCoordinator>((ref) {
+final incomingCallCoordinatorProvider = Provider<IncomingCallCoordinator>((
+  ref,
+) {
   final coordinator = IncomingCallCoordinator(
     ref: ref,
     router: ref.read(goRouterProvider),

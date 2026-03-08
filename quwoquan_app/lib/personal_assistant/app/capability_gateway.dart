@@ -31,13 +31,7 @@ enum AssistantRunStreamEventType {
 
 /// Unified process state consumed by the single-drawer process view.
 /// Aggregated from individual trace/phase events.
-enum ProcessStage {
-  understanding,
-  searching,
-  analyzing,
-  answering,
-  completed,
-}
+enum ProcessStage { understanding, searching, analyzing, answering, completed }
 
 /// A single reference document discovered during search or analysis.
 class ProcessReference {
@@ -85,13 +79,17 @@ class AssistantProcessState {
 
   final ProcessStage stage;
   final String stageLabel;
+
   /// Legacy flat lines — used when [contentBlocks] is empty.
   final List<String> processLines;
+
   /// Structured content blocks with nested reference lists.
   final List<ProcessContentBlock> contentBlocks;
   final bool isStreaming;
+
   /// Model usage stats: modelCallCount, totalTokens, maxTokensPerCall.
   final Map<String, dynamic> usageStats;
+
   /// Total elapsed time in milliseconds for the entire run.
   final int elapsedMs;
 
@@ -183,41 +181,37 @@ class AssistantRunStreamEvent {
 
   factory AssistantRunStreamEvent.phaseTimeline(
     List<Map<String, dynamic>> phases,
-  ) =>
-      AssistantRunStreamEvent._(
-        type: AssistantRunStreamEventType.phaseTimeline,
-        trace: AssistantTraceEvent(
-          type: AssistantTraceEventType.lifecycleEnd,
-          message: 'phase_timeline',
-          timestamp: DateTime.now(),
-          data: <String, dynamic>{'phases': phases},
-        ),
-      );
+  ) => AssistantRunStreamEvent._(
+    type: AssistantRunStreamEventType.phaseTimeline,
+    trace: AssistantTraceEvent(
+      type: AssistantTraceEventType.lifecycleEnd,
+      message: 'phase_timeline',
+      timestamp: DateTime.now(),
+      data: <String, dynamic>{'phases': phases},
+    ),
+  );
 
   factory AssistantRunStreamEvent.userPhase({
     required UserPhaseEventType phaseType,
     String? toolName,
     String? message,
     Map<String, dynamic>? data,
-  }) =>
-      AssistantRunStreamEvent._(
-        type: AssistantRunStreamEventType.userPhaseEvent,
-        trace: AssistantTraceEvent(
-          type: AssistantTraceEventType.lifecycleStart,
-          message: message ?? phaseType.name,
-          timestamp: DateTime.now(),
-          data: <String, dynamic>{
-            'userPhaseType': phaseType.name,
-            if (toolName != null) 'toolName': toolName,
-            ...?data,
-          },
-        ),
-        chunkText: message,
-      );
+  }) => AssistantRunStreamEvent._(
+    type: AssistantRunStreamEventType.userPhaseEvent,
+    trace: AssistantTraceEvent(
+      type: AssistantTraceEventType.lifecycleStart,
+      message: message ?? phaseType.name,
+      timestamp: DateTime.now(),
+      data: <String, dynamic>{
+        'userPhaseType': phaseType.name,
+        'toolName': ?toolName,
+        ...?data,
+      },
+    ),
+    chunkText: message,
+  );
 
-  factory AssistantRunStreamEvent.processUpdate(
-    AssistantProcessState state,
-  ) =>
+  factory AssistantRunStreamEvent.processUpdate(AssistantProcessState state) =>
       AssistantRunStreamEvent._(
         type: AssistantRunStreamEventType.processUpdate,
         chunkText: state.stageLabel,
@@ -354,9 +348,11 @@ class CapabilityGateway {
       } catch (error) {
         // 绝不发 failed 事件：任何异常都转为 completed + degraded response，
         // 保证 UI 层永远能收到 completed 事件并提取 finalText。
-        controller.add(AssistantRunStreamEvent.completed(
-          _buildGatewayErrorResponse(request, error, 'runstream_outer'),
-        ));
+        controller.add(
+          AssistantRunStreamEvent.completed(
+            _buildGatewayErrorResponse(request, error, 'runstream_outer'),
+          ),
+        );
       } finally {
         if (!controller.isClosed) {
           await controller.close();
@@ -516,7 +512,8 @@ class CapabilityGateway {
 
     // Gate 4: answerPayload.userMarkdown
     final userMd = (answerPayload['userMarkdown'] as String?)?.trim() ?? '';
-    if (userMd.isNotEmpty && !AssistantContentFilters.isNotDisplayable(userMd)) {
+    if (userMd.isNotEmpty &&
+        !AssistantContentFilters.isNotDisplayable(userMd)) {
       return userMd;
     }
     return '';
@@ -530,7 +527,8 @@ class CapabilityGateway {
     for (final rune in normalized.runes) {
       final ch = String.fromCharCode(rune);
       buffer.write(ch);
-      final shouldSplit = ch == '\n' ||
+      final shouldSplit =
+          ch == '\n' ||
           ch == '。' ||
           ch == '！' ||
           ch == '？' ||
@@ -598,27 +596,33 @@ class CapabilityGateway {
 
     switch (event.type) {
       case AssistantTraceEventType.planStarted:
-        controller.add(AssistantRunStreamEvent.planStarted(
-          planSummary: event.message,
-        ));
-        controller.add(AssistantRunStreamEvent.userPhase(
-          phaseType: UserPhaseEventType.understandingStarted,
-          message: '正在理解您的问题...',
-        ));
+        controller.add(
+          AssistantRunStreamEvent.planStarted(planSummary: event.message),
+        );
+        controller.add(
+          AssistantRunStreamEvent.userPhase(
+            phaseType: UserPhaseEventType.understandingStarted,
+            message: '正在理解您的问题...',
+          ),
+        );
         break;
 
       case AssistantTraceEventType.thinkingStarted:
         final hasEvidence = (event.data?['iteration'] as int? ?? 1) > 1;
         if (hasEvidence) {
-          controller.add(AssistantRunStreamEvent.userPhase(
-            phaseType: UserPhaseEventType.analyzingStarted,
-            message: '正在分析获取到的信息...',
-          ));
+          controller.add(
+            AssistantRunStreamEvent.userPhase(
+              phaseType: UserPhaseEventType.analyzingStarted,
+              message: '正在分析获取到的信息...',
+            ),
+          );
         } else {
-          controller.add(AssistantRunStreamEvent.userPhase(
-            phaseType: UserPhaseEventType.understandingStarted,
-            message: '正在分析您的问题...',
-          ));
+          controller.add(
+            AssistantRunStreamEvent.userPhase(
+              phaseType: UserPhaseEventType.understandingStarted,
+              message: '正在分析您的问题...',
+            ),
+          );
         }
         controller.add(AssistantRunStreamEvent.thinkingProgress(event.message));
         break;
@@ -629,15 +633,15 @@ class CapabilityGateway {
         final phaseType = phase == 'analyzing'
             ? UserPhaseEventType.analyzingThinking
             : phase == 'answering'
-                ? UserPhaseEventType.answeringStarted
-                : UserPhaseEventType.understandingThinking;
-        controller.add(AssistantRunStreamEvent.userPhase(
-          phaseType: phaseType,
-          message: event.message,
-          data: isExtracted
-              ? <String, dynamic>{'extracted': true}
-              : null,
-        ));
+            ? UserPhaseEventType.answeringStarted
+            : UserPhaseEventType.understandingThinking;
+        controller.add(
+          AssistantRunStreamEvent.userPhase(
+            phaseType: phaseType,
+            message: event.message,
+            data: isExtracted ? <String, dynamic>{'extracted': true} : null,
+          ),
+        );
         controller.add(AssistantRunStreamEvent.thinkingProgress(event.message));
         break;
 
@@ -649,16 +653,20 @@ class CapabilityGateway {
             (event.data?['tool'] ?? event.data?['toolName'] ?? toolName)
                 .toString()
                 .trim();
-        controller.add(AssistantRunStreamEvent.userPhase(
-          phaseType: UserPhaseEventType.toolExecutionStarted,
-          toolName: actualToolName,
-          message: event.message,
-          data: event.data,
-        ));
+        controller.add(
+          AssistantRunStreamEvent.userPhase(
+            phaseType: UserPhaseEventType.toolExecutionStarted,
+            toolName: actualToolName,
+            message: event.message,
+            data: event.data,
+          ),
+        );
         if (actualToolName.contains('search')) {
-          controller.add(AssistantRunStreamEvent.searchProgress(
-            '正在搜索: ${event.data?['query'] ?? event.message}',
-          ));
+          controller.add(
+            AssistantRunStreamEvent.searchProgress(
+              '正在搜索: ${event.data?['query'] ?? event.message}',
+            ),
+          );
         }
         break;
 
@@ -669,46 +677,52 @@ class CapabilityGateway {
               (event.data?['assessmentType'] as String?) ?? '';
           final userMsg =
               (event.data?['userMessage'] as String?) ?? event.message;
-          controller.add(AssistantRunStreamEvent.userPhase(
-            phaseType: UserPhaseEventType.toolAssessmentResult,
-            message: userMsg,
-            data: <String, dynamic>{
-              'assessmentType': assessmentType,
-            },
-          ));
+          controller.add(
+            AssistantRunStreamEvent.userPhase(
+              phaseType: UserPhaseEventType.toolAssessmentResult,
+              message: userMsg,
+              data: <String, dynamic>{'assessmentType': assessmentType},
+            ),
+          );
         } else {
           final toolName = (event.data?['toolName'] ?? '').toString().trim();
-          controller.add(AssistantRunStreamEvent.userPhase(
-            phaseType: UserPhaseEventType.toolExecutionCompleted,
-            toolName: toolName,
-            message: event.message,
-            data: event.data,
-          ));
+          controller.add(
+            AssistantRunStreamEvent.userPhase(
+              phaseType: UserPhaseEventType.toolExecutionCompleted,
+              toolName: toolName,
+              message: event.message,
+              data: event.data,
+            ),
+          );
           final refs = event.data?['references'] as List?;
           if (refs != null && refs.isNotEmpty) {
-            controller.add(AssistantRunStreamEvent.searchProgress(
-              '已获取 ${refs.length} 条结果',
-            ));
+            controller.add(
+              AssistantRunStreamEvent.searchProgress('已获取 ${refs.length} 条结果'),
+            );
           }
         }
         break;
 
       case AssistantTraceEventType.toolError:
-        controller.add(AssistantRunStreamEvent.userPhase(
-          phaseType: UserPhaseEventType.toolAssessmentResult,
-          message: '工具执行遇到问题',
-          data: <String, dynamic>{'assessmentType': 'toolFailed'},
-        ));
+        controller.add(
+          AssistantRunStreamEvent.userPhase(
+            phaseType: UserPhaseEventType.toolAssessmentResult,
+            message: '工具执行遇到问题',
+            data: <String, dynamic>{'assessmentType': 'toolFailed'},
+          ),
+        );
         break;
 
       case AssistantTraceEventType.replanTriggered:
-        controller.add(AssistantRunStreamEvent.userPhase(
-          phaseType: UserPhaseEventType.toolAssessmentResult,
-          message: event.message,
-          data: <String, dynamic>{
-            'assessmentType': event.data?['reason'] ?? 'needMoreSearch',
-          },
-        ));
+        controller.add(
+          AssistantRunStreamEvent.userPhase(
+            phaseType: UserPhaseEventType.toolAssessmentResult,
+            message: event.message,
+            data: <String, dynamic>{
+              'assessmentType': event.data?['reason'] ?? 'needMoreSearch',
+            },
+          ),
+        );
         break;
 
       case AssistantTraceEventType.searchStarted:
@@ -727,16 +741,20 @@ class CapabilityGateway {
       case AssistantTraceEventType.lifecycleEnd:
         final data = event.data;
         if (data != null && data.containsKey('userMessage')) {
-          controller.add(AssistantRunStreamEvent.userPhase(
-            phaseType: UserPhaseEventType.loopDegraded,
-            message: data['userMessage'] as String? ?? '处理完成',
-          ));
+          controller.add(
+            AssistantRunStreamEvent.userPhase(
+              phaseType: UserPhaseEventType.loopDegraded,
+              message: data['userMessage'] as String? ?? '处理完成',
+            ),
+          );
         }
         if (event.message.contains('finished')) {
-          controller.add(AssistantRunStreamEvent.userPhase(
-            phaseType: UserPhaseEventType.answeringCompleted,
-            message: '回答完成',
-          ));
+          controller.add(
+            AssistantRunStreamEvent.userPhase(
+              phaseType: UserPhaseEventType.answeringCompleted,
+              message: '回答完成',
+            ),
+          );
         }
         break;
 

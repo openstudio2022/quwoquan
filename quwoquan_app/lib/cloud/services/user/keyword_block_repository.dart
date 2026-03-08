@@ -1,6 +1,8 @@
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 
 /// 屏蔽词设置 Repository（三层模式）
@@ -42,12 +44,14 @@ class RemoteKeywordBlockRepository extends KeywordBlockRepository {
   final CloudHttpClient _httpClient;
   final String _baseUrl;
 
+  Uri _uri(String path) => Uri.parse('$_baseUrl$path');
+
   @override
   Future<List<String>> getBlockedKeywords() async {
-    final uri = Uri.parse('$_baseUrl/v1/user/settings/privacy');
+    final uri = _uri(UserApiMetadata.getPrivacySettingsPath);
     final decoded = await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage('user.settings.privacy.get'),
+      headers: CloudRequestHeaders.forPage(UserRequestPageIds.getPrivacySettings),
     );
     final map = decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
     final raw = map['blockedKeywords'];
@@ -59,11 +63,13 @@ class RemoteKeywordBlockRepository extends KeywordBlockRepository {
 
   @override
   Future<void> setBlockedKeywords(List<String> keywords) async {
-    final uri = Uri.parse('$_baseUrl/v1/user/settings/privacy');
+    final uri = _uri(UserApiMetadata.updatePrivacySettingsPath);
     final normalized = keywords.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet().toList();
     await _httpClient.patchJson(
       uri,
-      headers: CloudRequestHeaders.forPage('user.settings.privacy.patch'),
+      headers: CloudRequestHeaders.forPage(
+        UserRequestPageIds.updatePrivacySettings,
+      ),
       body: <String, dynamic>{'blockedKeywords': normalized},
     );
   }

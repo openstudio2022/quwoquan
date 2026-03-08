@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/realtime/realtime_api_metadata.g.dart';
 
 /// Configuration for realtime transport layer.
 /// In production, fetched from `GET /v1/config/realtime`.
@@ -26,7 +27,9 @@ class RealtimeConfig {
     final wsBase = base
         .replaceFirst('https://', 'wss://')
         .replaceFirst('http://', 'ws://');
-    return RealtimeConfig(wsUrl: '$wsBase/v1/chat/realtime');
+    return RealtimeConfig(
+      wsUrl: '$wsBase${RealtimeApiMetadata.webSocketUpgradePath}',
+    );
   }
 
   factory RealtimeConfig.fromMap(Map<String, dynamic> map) {

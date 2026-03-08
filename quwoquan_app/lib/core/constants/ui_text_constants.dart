@@ -125,6 +125,8 @@ class UITextConstants {
   static const String pullToRefreshHint = '下拉刷新试试';
   static const String goToUserProfile = '前往用户主页';
   static const String loadMoreComments = '加载更多评论';
+  static const String noComment = '暂无评论';
+  static const String replyAction = '回复';
 
   // ==================== 我的主页 ====================
   static const String editProfile = '编辑资料';

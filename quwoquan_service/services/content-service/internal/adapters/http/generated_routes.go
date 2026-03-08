@@ -47,6 +47,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleNotImplemented(w, r, operation)
 	case "GetMediaAsset":
 		h.handleNotImplemented(w, r, operation)
+	case "GetAppConfig":
+		h.handleNotImplemented(w, r, operation)
 	case "GetPost":
 		h.handleGetPost(w, r)
 	case "GetReactionState":
@@ -55,9 +57,15 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleGetRecommendation(w, r)
 	case "InitMediaUpload":
 		h.handleNotImplemented(w, r, operation)
+	case "LikeComment":
+		h.handleNotImplemented(w, r, operation)
 	case "LikePost":
 		h.handleNotImplemented(w, r, operation)
 	case "ListComments":
+		h.handleNotImplemented(w, r, operation)
+	case "ListCommentsByAuthor":
+		h.handleNotImplemented(w, r, operation)
+	case "ListCommentsForPostAuthor":
 		h.handleNotImplemented(w, r, operation)
 	case "PublishPost":
 		h.handleNotImplemented(w, r, operation)
@@ -72,6 +80,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	case "SelectManualVideoCover":
 		h.handleNotImplemented(w, r, operation)
 	case "UnfavoritePost":
+		h.handleNotImplemented(w, r, operation)
+	case "UnlikeComment":
 		h.handleNotImplemented(w, r, operation)
 	case "UnlikePost":
 		h.handleNotImplemented(w, r, operation)
@@ -112,6 +122,11 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/quote", operation: "QuoteToCircle"},
 	{method: "GET", pathTemplate: "/v1/content/posts/{postId}/reactions", operation: "GetReactionState"},
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/repost", operation: "RepostToCircle"},
+	{method: "POST", pathTemplate: "/v1/content/comments/{commentId}/like", operation: "LikeComment"},
+	{method: "DELETE", pathTemplate: "/v1/content/comments/{commentId}/like", operation: "UnlikeComment"},
+	{method: "GET", pathTemplate: "/v1/content/users/me/comments", operation: "ListCommentsByAuthor"},
+	{method: "GET", pathTemplate: "/v1/content/users/me/received-comments", operation: "ListCommentsForPostAuthor"},
+	{method: "GET", pathTemplate: "/v1/config/app", operation: "GetAppConfig"},
 	{method: "POST", pathTemplate: "/v1/content/recommend", operation: "GetRecommendation"},
 	{method: "GET", pathTemplate: "/v1/orch/discovery/feed", operation: "GetFeed"},
 }
@@ -196,6 +211,7 @@ var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
 	"CreateComment": {
 		"content":          {},
 		"replyToCommentId": {},
+		"personaId":        {},
 	},
 	"CreatePost": {
 		"contentType":         {},

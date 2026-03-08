@@ -37,6 +37,7 @@ collections:
       - { name: idx_comments_post_created, keys: { postId: 1, createdAt: -1 } }
       - { name: idx_comments_author, keys: { authorId: 1, createdAt: -1 } }
       - { name: idx_comments_reply, keys: { replyToCommentId: 1 }, sparse: true }
+      - { name: idx_comments_hot, keys: { postId: 1, likeCount: -1, createdAt: -1 }, description: "热评排序索引" }
     search_indexes:
       - name: search_comments_text
         type: text
@@ -102,3 +103,19 @@ redis_cache:
     ttl_seconds: 3600
     type: hash
     description: 评论总结缓存
+
+  - key: "comment_hot:{postId}"
+    ttl_seconds: 300
+    type: sorted_set
+    description: 热帖热评 Top-N 缓存（score = hotScore，member = commentId）
+    invalidate_on: [CommentCreated, CommentLiked]
+
+  - key: "comment_like:{commentId}"
+    ttl_seconds: null
+    type: set
+    description: 评论点赞用户集（SISMEMBER 去重）
+
+  - key: "counter:comment:{commentId}:like"
+    ttl_seconds: null
+    type: string
+    description: 评论赞数计数器（INCR + 异步刷盘）

@@ -281,21 +281,9 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
 
   /// 显示评论查看器
   void _showCommentViewer() {
-    // 创建评论配置
-    final commentConfig = comment_models.CommentConfig();
-    
     CommentViewer.showModal(
       context: context,
-      postId: '${widget.post['id'] ?? 'mock_post_id'}_5', // 添加后缀_5生成5条评论
-      initialComments: [], // 初始为空，由CommentViewer内部加载
-      config: commentConfig,
-      modalHeight: comment_models.CommentModalHeight.adaptive,
-      onCommentAdded: _handleCommentAdded,
-      onCommentLiked: (comment) => _handleCommentLiked(comment),
-      onReplyAdded: _handleReplyAdded,
-      onUserTapped: _handleUserTapped,
-      onLoadMoreComments: _handleLoadMoreComments,
-      onClose: _handleCommentClosed,
+      postId: (widget.post['id'] ?? widget.post['postId'] ?? 'mock_post_id').toString(),
     );
   }
 

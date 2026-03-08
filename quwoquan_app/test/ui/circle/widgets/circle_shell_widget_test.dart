@@ -16,18 +16,11 @@ Widget _scopedApp({CircleRepository? mock}) {
         routes: [
           GoRoute(
             path: '/',
-            builder: (_, __) => const Scaffold(
-              body: CircleShell(circleId: 'circle_photo_01'),
-            ),
+            builder: (_, _) =>
+                const Scaffold(body: CircleShell(circleId: 'circle_photo_01')),
           ),
-          GoRoute(
-            path: '/article/:id',
-            builder: (_, __) => const SizedBox(),
-          ),
-          GoRoute(
-            path: '/chat/:id',
-            builder: (_, __) => const SizedBox(),
-          ),
+          GoRoute(path: '/article/:id', builder: (_, _) => const SizedBox()),
+          GoRoute(path: '/chat/:id', builder: (_, _) => const SizedBox()),
         ],
       ),
     ),
@@ -101,7 +94,7 @@ void main() {
             routes: [
               GoRoute(
                 path: '/',
-                builder: (_, __) => Scaffold(
+                builder: (_, _) => Scaffold(
                   body: CircleShell(
                     circleId: 'circle_photo_01',
                     onBack: () => backCalled = true,
@@ -109,10 +102,10 @@ void main() {
                 ),
               ),
               GoRoute(
-                  path: '/article/:id',
-                  builder: (_, __) => const SizedBox()),
-              GoRoute(
-                  path: '/chat/:id', builder: (_, __) => const SizedBox()),
+                path: '/article/:id',
+                builder: (_, _) => const SizedBox(),
+              ),
+              GoRoute(path: '/chat/:id', builder: (_, _) => const SizedBox()),
             ],
           ),
         ),
@@ -139,15 +132,14 @@ void main() {
             routes: [
               GoRoute(
                 path: '/',
-                builder: (_, __) => const Scaffold(
-                  body: CircleShell(circleId: ''),
-                ),
+                builder: (_, _) =>
+                    const Scaffold(body: CircleShell(circleId: '')),
               ),
               GoRoute(
-                  path: '/article/:id',
-                  builder: (_, __) => const SizedBox()),
-              GoRoute(
-                  path: '/chat/:id', builder: (_, __) => const SizedBox()),
+                path: '/article/:id',
+                builder: (_, _) => const SizedBox(),
+              ),
+              GoRoute(path: '/chat/:id', builder: (_, _) => const SizedBox()),
             ],
           ),
         ),
@@ -161,8 +153,7 @@ void main() {
     testWidgets('Repository 异常时 Widget 不崩溃', (tester) async {
       final app = ProviderScope(
         overrides: [
-          circleRepositoryProvider
-              .overrideWithValue(_ErrorCircleRepository()),
+          circleRepositoryProvider.overrideWithValue(_ErrorCircleRepository()),
         ],
         child: MaterialApp.router(
           routerConfig: GoRouter(
@@ -170,15 +161,14 @@ void main() {
             routes: [
               GoRoute(
                 path: '/',
-                builder: (_, __) => const Scaffold(
-                  body: CircleShell(circleId: 'nonexistent'),
-                ),
+                builder: (_, _) =>
+                    const Scaffold(body: CircleShell(circleId: 'nonexistent')),
               ),
               GoRoute(
-                  path: '/article/:id',
-                  builder: (_, __) => const SizedBox()),
-              GoRoute(
-                  path: '/chat/:id', builder: (_, __) => const SizedBox()),
+                path: '/article/:id',
+                builder: (_, _) => const SizedBox(),
+              ),
+              GoRoute(path: '/chat/:id', builder: (_, _) => const SizedBox()),
             ],
           ),
         ),

@@ -2,6 +2,9 @@ import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_request_page_ids.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 
@@ -11,7 +14,7 @@ abstract class ChatRepository {
   // ── 会话 ────────────────────────────────────────────────────────────────────
   Future<List<Map<String, dynamic>>> listConversations({
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
   });
 
   Future<Map<String, dynamic>> createConversation({
@@ -27,7 +30,7 @@ abstract class ChatRepository {
   Future<List<Map<String, dynamic>>> listMessages({
     required String conversationId,
     String? before,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
   });
 
   Future<Map<String, dynamic>> sendMessage({
@@ -50,7 +53,7 @@ abstract class ChatRepository {
   Future<Map<String, dynamic>> syncMessages({
     required String conversationId,
     required int lastSeq,
-    int limit = 500,
+    int limit = CloudApiDefaults.syncMessagesLimit,
   });
 
   // ── 已读回执 ──────────────────────────────────────────────────────────────
@@ -68,7 +71,7 @@ abstract class ChatRepository {
   Future<List<Map<String, dynamic>>> listMembers({
     required String conversationId,
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
     String? role,
   });
 
@@ -100,7 +103,7 @@ abstract class ChatRepository {
   // ── 联系人 ──────────────────────────────────────────────────────────────
   Future<List<Map<String, dynamic>>> listContacts({
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
   });
 
   Future<List<Map<String, dynamic>>> searchContacts({required String query});
@@ -116,7 +119,7 @@ class MockChatRepository implements ChatRepository {
   @override
   Future<List<Map<String, dynamic>>> listConversations({
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
   }) async {
     return ChatMockData.conversations;
   }
@@ -154,7 +157,7 @@ class MockChatRepository implements ChatRepository {
   Future<List<Map<String, dynamic>>> listMessages({
     required String conversationId,
     String? before,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
   }) async {
     return ChatMockData.messagesFor(conversationId);
   }
@@ -189,7 +192,7 @@ class MockChatRepository implements ChatRepository {
   Future<Map<String, dynamic>> syncMessages({
     required String conversationId,
     required int lastSeq,
-    int limit = 500,
+    int limit = CloudApiDefaults.syncMessagesLimit,
   }) async {
     final msgs = ChatMockData.messagesFor(conversationId);
     return {'messages': msgs, 'hasMore': false};
@@ -213,7 +216,7 @@ class MockChatRepository implements ChatRepository {
   Future<List<Map<String, dynamic>>> listMembers({
     required String conversationId,
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
     String? role,
   }) async {
     return ChatMockData.membersFor(conversationId);
@@ -250,7 +253,7 @@ class MockChatRepository implements ChatRepository {
   @override
   Future<List<Map<String, dynamic>>> listContacts({
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
   }) async {
     return ChatMockData.contacts;
   }
@@ -262,9 +265,9 @@ class MockChatRepository implements ChatRepository {
     return ChatMockData.contacts
         .where(
           (c) =>
-              (c['displayName'] as String?)
-                  ?.toLowerCase()
-                  .contains(query.toLowerCase()) ??
+              (c['displayName'] as String?)?.toLowerCase().contains(
+                query.toLowerCase(),
+              ) ??
               false,
         )
         .toList();
@@ -287,14 +290,19 @@ class RemoteChatRepository implements ChatRepository {
   final CloudHttpClient _httpClient;
   final String _baseUrl;
 
+  Uri _uri(String path, {Map<String, String>? queryParameters}) {
+    return Uri.parse('$_baseUrl$path').replace(queryParameters: queryParameters);
+  }
+
   // ── 会话 ──────────────────────────────────────────────────────────────────
 
   @override
   Future<List<Map<String, dynamic>>> listConversations({
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
   }) async {
-    final uri = Uri.parse('$_baseUrl/v1/chat/conversations').replace(
+    final uri = _uri(
+      ChatApiMetadata.listConversationsPath,
       queryParameters: <String, String>{
         if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
         'limit': '$limit',
@@ -302,7 +310,9 @@ class RemoteChatRepository implements ChatRepository {
     );
     final decoded = await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage('chat.conversation.list'),
+      headers: CloudRequestHeaders.forPage(
+        ChatRequestPageIds.listConversations,
+      ),
     );
     return CloudResponseDecoder.asCursorPage(
       decoded,
@@ -317,26 +327,29 @@ class RemoteChatRepository implements ChatRepository {
     String? circleId,
     int? maxGroupSize,
   }) async {
-    final uri = Uri.parse('$_baseUrl/v1/chat/conversations');
+    final uri = _uri(ChatApiMetadata.createConversationPath);
     return await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage('chat.conversation.create'),
+      headers: CloudRequestHeaders.forPage(
+        ChatRequestPageIds.createConversation,
+      ),
       body: {
         'type': type,
-        if (title != null) 'title': title,
-        if (circleId != null) 'circleId': circleId,
-        if (maxGroupSize != null) 'maxGroupSize': maxGroupSize,
+        'title': ?title,
+        'circleId': ?circleId,
+        'maxGroupSize': ?maxGroupSize,
       },
     );
   }
 
   @override
   Future<Map<String, dynamic>> getConversation(String conversationId) async {
-    final uri =
-        Uri.parse('$_baseUrl/v1/chat/conversations/$conversationId');
+    final uri = _uri(
+      ChatApiMetadata.getConversationPath(conversationId: conversationId),
+    );
     return await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage('chat.conversation.detail'),
+      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.getConversation),
     );
   }
 
@@ -346,11 +359,10 @@ class RemoteChatRepository implements ChatRepository {
   Future<List<Map<String, dynamic>>> listMessages({
     required String conversationId,
     String? before,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
   }) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/chat/conversations/$conversationId/messages',
-    ).replace(
+    final uri = _uri(
+      ChatApiMetadata.listMessagesPath(conversationId: conversationId),
       queryParameters: <String, String>{
         if (before != null && before.isNotEmpty) 'before': before,
         'limit': '$limit',
@@ -358,7 +370,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     final decoded = await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage('chat.message.list'),
+      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.listMessages),
     );
     return CloudResponseDecoder.asCursorPage(
       decoded,
@@ -378,21 +390,21 @@ class RemoteChatRepository implements ChatRepository {
     List<String>? mentions,
     required String clientMsgId,
   }) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/chat/conversations/$conversationId/messages',
+    final uri = _uri(
+      ChatApiMetadata.sendMessagePath(conversationId: conversationId),
     );
     return await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage('chat.message.send'),
+      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.sendMessage),
       body: {
         'type': type,
         'content': content,
         'clientMsgId': clientMsgId,
-        if (mediaUrl != null) 'mediaUrl': mediaUrl,
-        if (media != null) 'media': media,
-        if (cardPayload != null) 'cardPayload': cardPayload,
-        if (replyToMessageId != null) 'replyToMessageId': replyToMessageId,
-        if (mentions != null) 'mentions': mentions,
+        'mediaUrl': ?mediaUrl,
+        'media': ?media,
+        'cardPayload': ?cardPayload,
+        'replyToMessageId': ?replyToMessageId,
+        'mentions': ?mentions,
       },
     );
   }
@@ -402,12 +414,15 @@ class RemoteChatRepository implements ChatRepository {
     required String conversationId,
     required String messageId,
   }) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/chat/conversations/$conversationId/messages/$messageId/recall',
+    final uri = _uri(
+      ChatApiMetadata.recallMessagePath(
+        conversationId: conversationId,
+        messageId: messageId,
+      ),
     );
     await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage('chat.message.recall'),
+      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.recallMessage),
       body: {},
     );
   }
@@ -416,14 +431,12 @@ class RemoteChatRepository implements ChatRepository {
   Future<Map<String, dynamic>> syncMessages({
     required String conversationId,
     required int lastSeq,
-    int limit = 500,
+    int limit = CloudApiDefaults.syncMessagesLimit,
   }) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/chat/conversations/$conversationId/sync',
-    );
+    final uri = _uri(ChatApiMetadata.syncMessagesPath(conversationId: conversationId));
     return await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage('chat.message.sync'),
+      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.syncMessages),
       body: {'lastSeq': lastSeq, 'limit': limit},
     );
   }
@@ -435,12 +448,15 @@ class RemoteChatRepository implements ChatRepository {
     required String conversationId,
     required String messageId,
   }) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/chat/conversations/$conversationId/messages/$messageId/read',
+    final uri = _uri(
+      ChatApiMetadata.markAsReadPath(
+        conversationId: conversationId,
+        messageId: messageId,
+      ),
     );
     await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage('chat.message.read'),
+      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.markAsRead),
       body: {},
     );
   }
@@ -450,12 +466,15 @@ class RemoteChatRepository implements ChatRepository {
     required String conversationId,
     required String messageId,
   }) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/chat/conversations/$conversationId/messages/$messageId/receipts',
+    final uri = _uri(
+      ChatApiMetadata.getReceiptsPath(
+        conversationId: conversationId,
+        messageId: messageId,
+      ),
     );
     final decoded = await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage('chat.message.receipts'),
+      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.getReceipts),
     );
     final items = decoded['items'];
     if (items is List) {
@@ -470,12 +489,11 @@ class RemoteChatRepository implements ChatRepository {
   Future<List<Map<String, dynamic>>> listMembers({
     required String conversationId,
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
     String? role,
   }) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/chat/conversations/$conversationId/members',
-    ).replace(
+    final uri = _uri(
+      ChatApiMetadata.listMembersPath(conversationId: conversationId),
       queryParameters: <String, String>{
         if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
         'limit': '$limit',
@@ -484,7 +502,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     final decoded = await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage('chat.member.list'),
+      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.listMembers),
     );
     final items = decoded['items'];
     if (items is List) {
@@ -498,12 +516,12 @@ class RemoteChatRepository implements ChatRepository {
     required String conversationId,
     required List<String> userIds,
   }) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/chat/conversations/$conversationId/members',
+    final uri = _uri(
+      ChatApiMetadata.addMembersPath(conversationId: conversationId),
     );
     await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage('chat.member.add'),
+      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.addMembers),
       body: {'userIds': userIds},
     );
   }
@@ -513,12 +531,15 @@ class RemoteChatRepository implements ChatRepository {
     required String conversationId,
     required String userId,
   }) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/chat/conversations/$conversationId/members/$userId',
+    final uri = _uri(
+      ChatApiMetadata.removeMemberPath(
+        conversationId: conversationId,
+        userId: userId,
+      ),
     );
     await _httpClient.deleteJson(
       uri,
-      headers: CloudRequestHeaders.forPage('chat.member.remove'),
+      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.removeMember),
     );
   }
 
@@ -529,24 +550,24 @@ class RemoteChatRepository implements ChatRepository {
     required String conversationId,
     String? skillId,
   }) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/chat/conversations/$conversationId/assistant',
+    final uri = _uri(
+      ChatApiMetadata.inviteAssistantPath(conversationId: conversationId),
     );
     await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage('chat.assistant.invite'),
-      body: {if (skillId != null) 'skillId': skillId},
+      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.inviteAssistant),
+      body: {'skillId': ?skillId},
     );
   }
 
   @override
   Future<void> removeAssistant({required String conversationId}) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/chat/conversations/$conversationId/assistant',
+    final uri = _uri(
+      ChatApiMetadata.removeAssistantPath(conversationId: conversationId),
     );
     await _httpClient.deleteJson(
       uri,
-      headers: CloudRequestHeaders.forPage('chat.assistant.remove'),
+      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.removeAssistant),
     );
   }
 
@@ -558,16 +579,17 @@ class RemoteChatRepository implements ChatRepository {
     bool? muted,
     bool? pinned,
   }) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/chat/conversations/$conversationId/settings',
+    final uri = _uri(
+      ChatApiMetadata.updateConversationSettingsPath(
+        conversationId: conversationId,
+      ),
     );
     await _httpClient.patchJson(
       uri,
-      headers: CloudRequestHeaders.forPage('chat.settings.update'),
-      body: {
-        if (muted != null) 'muted': muted,
-        if (pinned != null) 'pinned': pinned,
-      },
+      headers: CloudRequestHeaders.forPage(
+        ChatRequestPageIds.updateConversationSettings,
+      ),
+      body: {'muted': ?muted, 'pinned': ?pinned},
     );
   }
 
@@ -576,9 +598,10 @@ class RemoteChatRepository implements ChatRepository {
   @override
   Future<List<Map<String, dynamic>>> listContacts({
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
   }) async {
-    final uri = Uri.parse('$_baseUrl/v1/chat/contacts').replace(
+    final uri = _uri(
+      ChatApiMetadata.listContactsPath,
       queryParameters: <String, String>{
         if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
         'limit': '$limit',
@@ -586,7 +609,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     final decoded = await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage('chat.contacts.list'),
+      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.listContacts),
     );
     final items = decoded['items'];
     if (items is List) {
@@ -599,12 +622,13 @@ class RemoteChatRepository implements ChatRepository {
   Future<List<Map<String, dynamic>>> searchContacts({
     required String query,
   }) async {
-    final uri = Uri.parse('$_baseUrl/v1/chat/contacts/search').replace(
+    final uri = _uri(
+      ChatApiMetadata.searchContactsPath,
       queryParameters: <String, String>{'q': query},
     );
     final decoded = await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage('chat.contacts.search'),
+      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.searchContacts),
     );
     final items = decoded['items'];
     if (items is List) {

@@ -7,7 +7,6 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patrol/patrol.dart';
-import 'package:quwoquan_app/core/test_keys.dart';
 
 const _env = String.fromEnvironment('ENV', defaultValue: 'staging');
 
@@ -15,9 +14,7 @@ void main() {
   patrolTest(
     '系统通知点击打开聊天详情',
     tags: ['l4', 'chat', 'notification'],
-    config: PatrolTesterConfig(
-      visibleTimeout: const Duration(seconds: 20),
-    ),
+    config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 20)),
     ($) async {
       assert(_env == 'staging', 'L4 tests must run with ENV=staging');
 
@@ -51,9 +48,7 @@ void main() {
   patrolTest(
     '后台收到通知后前台打开不崩溃',
     tags: ['l4', 'chat', 'notification'],
-    config: PatrolTesterConfig(
-      visibleTimeout: const Duration(seconds: 20),
-    ),
+    config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 20)),
     ($) async {
       assert(_env == 'staging', 'L4 tests must run with ENV=staging');
 

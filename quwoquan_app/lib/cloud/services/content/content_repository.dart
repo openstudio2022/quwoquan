@@ -1,6 +1,9 @@
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
@@ -66,15 +69,11 @@ abstract class ContentRepository {
   });
 
   Future<Map<String, dynamic>> initMediaUpload({String mediaType = 'image'});
-  Future<Map<String, dynamic>> completeMediaUpload({
-    required String sessionId,
-  });
+  Future<Map<String, dynamic>> completeMediaUpload({required String sessionId});
   Future<void> abortMediaUpload({required String sessionId});
   Future<Map<String, dynamic>> getMediaAsset({required String mediaId});
 
-  Future<Map<String, dynamic>> selectAutoVideoCover({
-    required String mediaId,
-  });
+  Future<Map<String, dynamic>> selectAutoVideoCover({required String mediaId});
   Future<Map<String, dynamic>> selectManualVideoCover({
     required String mediaId,
     required String coverAssetId,
@@ -87,13 +86,13 @@ abstract class ContentRepository {
 
   Future<Map<String, dynamic>> getRecommendation({
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
   });
 
   Future<CursorPage<PostBaseDto>> listUserPosts({
     required String userId,
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
   });
 
   Future<void> likePost({required String postId});
@@ -101,22 +100,141 @@ abstract class ContentRepository {
   Future<void> favoritePost({required String postId});
   Future<void> unfavoritePost({required String postId});
   Future<Map<String, dynamic>> getReactionState({required String postId});
-  Future<List<Map<String, dynamic>>> listComments({
+  Future<CommentPage> listComments({
     required String postId,
     String? cursor,
-    int limit = 20,
+    String sort = 'latest',
+    int limit = CloudApiDefaults.pageLimit,
   });
   Future<Map<String, dynamic>> createComment({
     required String postId,
     required String content,
     String? replyToCommentId,
+    String? personaId,
   });
   Future<void> deleteComment({
     required String postId,
     required String commentId,
   });
+  Future<void> likeComment({required String commentId});
+  Future<void> unlikeComment({required String commentId});
+  Future<CommentPage> listCommentsByAuthor({
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  });
+  Future<CommentPage> listCommentsForPostAuthor({
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  });
+  Future<Map<String, dynamic>> getAppConfig();
   Future<void> reportBehaviors({required List<Map<String, dynamic>> events});
   Future<Map<String, dynamic>> getCounters({required String postId});
+}
+
+class CommentDto {
+  final String id;
+  final String postId;
+  final String authorId;
+  final String? personaId;
+  final String? displayName;
+  final String? avatarUrl;
+  final String content;
+  final String? replyToCommentId;
+  final String? replyToUserId;
+  final String? replyToDisplayName;
+  final int replyCount;
+  final int likeCount;
+  final String status;
+  final bool isAuthor;
+  final DateTime createdAt;
+
+  const CommentDto({
+    required this.id,
+    required this.postId,
+    required this.authorId,
+    this.personaId,
+    this.displayName,
+    this.avatarUrl,
+    required this.content,
+    this.replyToCommentId,
+    this.replyToUserId,
+    this.replyToDisplayName,
+    this.replyCount = 0,
+    this.likeCount = 0,
+    this.status = 'visible',
+    this.isAuthor = false,
+    required this.createdAt,
+  });
+
+  factory CommentDto.fromMap(Map<String, dynamic> m) {
+    return CommentDto(
+      id: (m['_id'] ?? m['id'] ?? '').toString(),
+      postId: (m['postId'] ?? '').toString(),
+      authorId: (m['authorId'] ?? '').toString(),
+      personaId: m['personaId']?.toString(),
+      displayName: m['displayName']?.toString(),
+      avatarUrl: m['avatarUrl']?.toString(),
+      content: (m['content'] ?? '').toString(),
+      replyToCommentId: m['replyToCommentId']?.toString(),
+      replyToUserId: m['replyToUserId']?.toString(),
+      replyToDisplayName: m['replyToDisplayName']?.toString(),
+      replyCount: (m['replyCount'] as num?)?.toInt() ?? 0,
+      likeCount: (m['likeCount'] as num?)?.toInt() ?? 0,
+      status: (m['status'] ?? 'visible').toString(),
+      isAuthor: m['isAuthor'] == true,
+      createdAt: DateTime.tryParse(m['createdAt']?.toString() ?? '') ??
+          DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'postId': postId,
+        'authorId': authorId,
+        'personaId': personaId,
+        'displayName': displayName,
+        'avatarUrl': avatarUrl,
+        'content': content,
+        'replyToCommentId': replyToCommentId,
+        'replyToUserId': replyToUserId,
+        'replyToDisplayName': replyToDisplayName,
+        'replyCount': replyCount,
+        'likeCount': likeCount,
+        'status': status,
+        'isAuthor': isAuthor,
+        'createdAt': createdAt.toIso8601String(),
+      };
+
+  CommentDto copyWith({
+    int? replyCount,
+    int? likeCount,
+    String? status,
+  }) {
+    return CommentDto(
+      id: id,
+      postId: postId,
+      authorId: authorId,
+      personaId: personaId,
+      displayName: displayName,
+      avatarUrl: avatarUrl,
+      content: content,
+      replyToCommentId: replyToCommentId,
+      replyToUserId: replyToUserId,
+      replyToDisplayName: replyToDisplayName,
+      replyCount: replyCount ?? this.replyCount,
+      likeCount: likeCount ?? this.likeCount,
+      status: status ?? this.status,
+      isAuthor: isAuthor,
+      createdAt: createdAt,
+    );
+  }
+}
+
+class CommentPage {
+  final List<CommentDto> items;
+  final String? nextCursor;
+
+  const CommentPage({required this.items, this.nextCursor});
 }
 
 class MockContentRepository implements ContentRepository {
@@ -220,12 +338,14 @@ class MockContentRepository implements ContentRepository {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listComments({
+  Future<CommentPage> listComments({
     required String postId,
     String? cursor,
-    int limit = 20,
+    String sort = 'latest',
+    int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return commentsStub;
+    final dtos = commentsStub.map(CommentDto.fromMap).toList();
+    return CommentPage(items: dtos, nextCursor: null);
   }
 
   @override
@@ -233,6 +353,7 @@ class MockContentRepository implements ContentRepository {
     required String postId,
     required String content,
     String? replyToCommentId,
+    String? personaId,
   }) async {
     createCommentCallCount++;
     lastCommentPostId = postId;
@@ -243,6 +364,11 @@ class MockContentRepository implements ContentRepository {
       'postId': postId,
       'content': content,
       'authorId': 'mock_user',
+      'personaId': personaId,
+      'replyCount': 0,
+      'likeCount': 0,
+      'status': 'visible',
+      'isAuthor': false,
       'createdAt': DateTime.now().toIso8601String(),
     };
     if (replyToCommentId != null) {
@@ -259,6 +385,41 @@ class MockContentRepository implements ContentRepository {
     required String commentId,
   }) async {
     commentsStub = commentsStub.where((c) => c['_id'] != commentId).toList();
+  }
+
+  @override
+  Future<void> likeComment({required String commentId}) async {}
+
+  @override
+  Future<void> unlikeComment({required String commentId}) async {}
+
+  @override
+  Future<CommentPage> listCommentsByAuthor({
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    return const CommentPage(items: [], nextCursor: null);
+  }
+
+  @override
+  Future<CommentPage> listCommentsForPostAuthor({
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    return const CommentPage(items: [], nextCursor: null);
+  }
+
+  @override
+  Future<Map<String, dynamic>> getAppConfig() async {
+    return {
+      'content': {
+        'comment': {
+          'max_length': 500,
+          'reply_preview_count': 3,
+          'fold_line_count': 3,
+        },
+      },
+    };
   }
 
   @override
@@ -388,7 +549,7 @@ class MockContentRepository implements ContentRepository {
   @override
   Future<Map<String, dynamic>> getRecommendation({
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
   }) async {
     return {'items': [], 'nextCursor': null};
   }
@@ -397,7 +558,7 @@ class MockContentRepository implements ContentRepository {
   Future<CursorPage<PostBaseDto>> listUserPosts({
     required String userId,
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
   }) async {
     final allRaw = [
       ...ContentMockData.discoveryPhotoData,
@@ -440,6 +601,10 @@ class RemoteContentRepository implements ContentRepository {
   final CloudHttpClient _httpClient;
   final String _baseUrl;
 
+  Uri _uri(String path, {Map<String, String>? queryParameters}) {
+    return Uri.parse('$_baseUrl$path').replace(queryParameters: queryParameters);
+  }
+
   @override
   Future<CursorPage<PostBaseDto>> listDiscoveryFeedPage({
     required String category,
@@ -466,12 +631,13 @@ class RemoteContentRepository implements ContentRepository {
     if (keys.contains('subCategory') && subCategory?.isNotEmpty == true) {
       query['subCategory'] = subCategory!;
     }
-    final uri = Uri.parse(
-      '$_baseUrl${GeneratedPostRuntimeMetadata.feedPath}',
-    ).replace(queryParameters: query);
+    final uri = _uri(
+      ContentApiMetadata.getFeedPath,
+      queryParameters: query,
+    );
     final decoded = await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.feed.list'),
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.getFeed),
     );
     final rawPage = CloudResponseDecoder.asCursorPage(
       decoded,
@@ -506,14 +672,10 @@ class RemoteContentRepository implements ContentRepository {
 
   @override
   Future<Map<String, dynamic>> getPost({required String postId}) async {
-    final path = GeneratedPostRuntimeMetadata.postDetailPathTemplate.replaceAll(
-      '{postId}',
-      Uri.encodeComponent(postId),
-    );
-    final uri = Uri.parse('$_baseUrl$path');
+    final uri = _uri(ContentApiMetadata.getPostPath(postId: postId));
     final decoded = await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.post.get'),
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.getPost),
     );
     return CloudResponseDecoder.asObject(decoded, context: 'content.post.get');
   }
@@ -522,10 +684,10 @@ class RemoteContentRepository implements ContentRepository {
   Future<Map<String, dynamic>> createPost({
     required Map<String, dynamic> payload,
   }) async {
-    final uri = Uri.parse('$_baseUrl/v1/content/posts');
+    final uri = _uri(ContentApiMetadata.createPostPath);
     final decoded = await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.post.create'),
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.createPost),
       body: payload,
     );
     return CloudResponseDecoder.asObject(
@@ -536,47 +698,41 @@ class RemoteContentRepository implements ContentRepository {
 
   @override
   Future<void> likePost({required String postId}) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/like',
-    );
+    final uri = _uri(ContentApiMetadata.likePostPath(postId: postId));
     await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.post.like'),
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.likePost),
       body: {},
     );
   }
 
   @override
   Future<void> unlikePost({required String postId}) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/like',
-    );
+    final uri = _uri(ContentApiMetadata.unlikePostPath(postId: postId));
     await _httpClient.deleteJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.post.unlike'),
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.unlikePost),
     );
   }
 
   @override
   Future<void> favoritePost({required String postId}) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/favorite',
-    );
+    final uri = _uri(ContentApiMetadata.favoritePostPath(postId: postId));
     await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.post.favorite'),
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.favoritePost),
       body: {},
     );
   }
 
   @override
   Future<void> unfavoritePost({required String postId}) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/favorite',
-    );
+    final uri = _uri(ContentApiMetadata.unfavoritePostPath(postId: postId));
     await _httpClient.deleteJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.post.unfavorite'),
+      headers: CloudRequestHeaders.forPage(
+        ContentRequestPageIds.unfavoritePost,
+      ),
     );
   }
 
@@ -584,12 +740,12 @@ class RemoteContentRepository implements ContentRepository {
   Future<Map<String, dynamic>> getReactionState({
     required String postId,
   }) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/reactions',
-    );
+    final uri = _uri(ContentApiMetadata.getReactionStatePath(postId: postId));
     final decoded = await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.post.reactions'),
+      headers: CloudRequestHeaders.forPage(
+        ContentRequestPageIds.getReactionState,
+      ),
     );
     return CloudResponseDecoder.asObject(
       decoded,
@@ -598,25 +754,31 @@ class RemoteContentRepository implements ContentRepository {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listComments({
+  Future<CommentPage> listComments({
     required String postId,
     String? cursor,
-    int limit = 20,
+    String sort = 'latest',
+    int limit = CloudApiDefaults.pageLimit,
   }) async {
-    final query = <String, String>{'limit': '$limit'};
+    final query = <String, String>{'limit': '$limit', 'sort': sort};
     if (cursor != null) query['cursor'] = cursor;
-    final uri = Uri.parse(
-      '$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/comments',
-    ).replace(queryParameters: query);
+    final uri = _uri(
+      ContentApiMetadata.listCommentsPath(postId: postId),
+      queryParameters: query,
+    );
     final decoded = await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.comment.list'),
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.listComments),
     );
-    final page = CloudResponseDecoder.asCursorPage(
+    final rawPage = CloudResponseDecoder.asCursorPage(
       decoded,
       context: 'content.comment.list',
     );
-    return page.items.cast<Map<String, dynamic>>();
+    final dtos = rawPage.items
+        .cast<Map<String, dynamic>>()
+        .map(CommentDto.fromMap)
+        .toList(growable: false);
+    return CommentPage(items: dtos, nextCursor: rawPage.nextCursor);
   }
 
   @override
@@ -624,15 +786,15 @@ class RemoteContentRepository implements ContentRepository {
     required String postId,
     required String content,
     String? replyToCommentId,
+    String? personaId,
   }) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/comments',
-    );
+    final uri = _uri(ContentApiMetadata.createCommentPath(postId: postId));
     final body = <String, dynamic>{'content': content};
     if (replyToCommentId != null) body['replyToCommentId'] = replyToCommentId;
+    if (personaId != null) body['personaId'] = personaId;
     final decoded = await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.comment.create'),
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.createComment),
       body: body,
     );
     return CloudResponseDecoder.asObject(
@@ -646,12 +808,105 @@ class RemoteContentRepository implements ContentRepository {
     required String postId,
     required String commentId,
   }) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/comments/${Uri.encodeComponent(commentId)}',
+    final uri = _uri(
+      ContentApiMetadata.deleteCommentPath(
+        postId: postId,
+        commentId: commentId,
+      ),
     );
     await _httpClient.deleteJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.comment.delete'),
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.deleteComment),
+    );
+  }
+
+  @override
+  Future<void> likeComment({required String commentId}) async {
+    final uri = _uri(ContentApiMetadata.likeCommentPath(commentId: commentId));
+    await _httpClient.postJson(
+      uri,
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.likeComment),
+      body: {},
+    );
+  }
+
+  @override
+  Future<void> unlikeComment({required String commentId}) async {
+    final uri = _uri(
+      ContentApiMetadata.unlikeCommentPath(commentId: commentId),
+    );
+    await _httpClient.deleteJson(
+      uri,
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.unlikeComment),
+    );
+  }
+
+  @override
+  Future<CommentPage> listCommentsByAuthor({
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final query = <String, String>{'limit': '$limit'};
+    if (cursor != null) query['cursor'] = cursor;
+    final uri = _uri(
+      ContentApiMetadata.listCommentsByAuthorPath,
+      queryParameters: query,
+    );
+    final decoded = await _httpClient.getJson(
+      uri,
+      headers: CloudRequestHeaders.forPage(
+        ContentRequestPageIds.listCommentsByAuthor,
+      ),
+    );
+    final rawPage = CloudResponseDecoder.asCursorPage(
+      decoded,
+      context: 'content.comment.myComments',
+    );
+    final dtos = rawPage.items
+        .cast<Map<String, dynamic>>()
+        .map(CommentDto.fromMap)
+        .toList(growable: false);
+    return CommentPage(items: dtos, nextCursor: rawPage.nextCursor);
+  }
+
+  @override
+  Future<CommentPage> listCommentsForPostAuthor({
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final query = <String, String>{'limit': '$limit'};
+    if (cursor != null) query['cursor'] = cursor;
+    final uri = _uri(
+      ContentApiMetadata.listCommentsForPostAuthorPath,
+      queryParameters: query,
+    );
+    final decoded = await _httpClient.getJson(
+      uri,
+      headers: CloudRequestHeaders.forPage(
+        ContentRequestPageIds.listCommentsForPostAuthor,
+      ),
+    );
+    final rawPage = CloudResponseDecoder.asCursorPage(
+      decoded,
+      context: 'content.comment.receivedComments',
+    );
+    final dtos = rawPage.items
+        .cast<Map<String, dynamic>>()
+        .map(CommentDto.fromMap)
+        .toList(growable: false);
+    return CommentPage(items: dtos, nextCursor: rawPage.nextCursor);
+  }
+
+  @override
+  Future<Map<String, dynamic>> getAppConfig() async {
+    final uri = _uri(ContentApiMetadata.getAppConfigPath);
+    final decoded = await _httpClient.getJson(
+      uri,
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.getAppConfig),
+    );
+    return CloudResponseDecoder.asObject(
+      decoded,
+      context: ContentRequestPageIds.getAppConfig,
     );
   }
 
@@ -659,22 +914,22 @@ class RemoteContentRepository implements ContentRepository {
   Future<void> reportBehaviors({
     required List<Map<String, dynamic>> events,
   }) async {
-    final uri = Uri.parse('$_baseUrl/v1/content/behaviors');
+    final uri = _uri(ContentApiMetadata.reportBehaviorsPath);
     await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.behaviors.report'),
+      headers: CloudRequestHeaders.forPage(
+        ContentRequestPageIds.reportBehaviors,
+      ),
       body: {'events': events},
     );
   }
 
   @override
   Future<Map<String, dynamic>> getCounters({required String postId}) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/counters',
-    );
+    final uri = _uri(ContentApiMetadata.getCountersPath(postId: postId));
     final decoded = await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.post.counters'),
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.getCounters),
     );
     return CloudResponseDecoder.asObject(
       decoded,
@@ -687,39 +942,39 @@ class RemoteContentRepository implements ContentRepository {
     required String postId,
     required Map<String, dynamic> payload,
   }) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}',
-    );
+    final uri = _uri(ContentApiMetadata.updatePostPath(postId: postId));
     final decoded = await _httpClient.patchJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.post.update'),
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.updatePost),
       body: payload,
     );
-    return CloudResponseDecoder.asObject(decoded, context: 'content.post.update');
+    return CloudResponseDecoder.asObject(
+      decoded,
+      context: 'content.post.update',
+    );
   }
 
   @override
   Future<void> deletePost({required String postId}) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}',
-    );
+    final uri = _uri(ContentApiMetadata.deletePostPath(postId: postId));
     await _httpClient.deleteJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.post.delete'),
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.deletePost),
     );
   }
 
   @override
   Future<Map<String, dynamic>> publishPost({required String postId}) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/publish',
-    );
+    final uri = _uri(ContentApiMetadata.publishPostPath(postId: postId));
     final decoded = await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.post.publish'),
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.publishPost),
       body: {},
     );
-    return CloudResponseDecoder.asObject(decoded, context: 'content.post.publish');
+    return CloudResponseDecoder.asObject(
+      decoded,
+      context: 'content.post.publish',
+    );
   }
 
   @override
@@ -728,15 +983,18 @@ class RemoteContentRepository implements ContentRepository {
     List<String> add = const [],
     List<String> remove = const [],
   }) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/circles',
-    );
+    final uri = _uri(ContentApiMetadata.updatePostCirclesPath(postId: postId));
     final decoded = await _httpClient.patchJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.post.circles'),
+      headers: CloudRequestHeaders.forPage(
+        ContentRequestPageIds.updatePostCircles,
+      ),
       body: {'add': add, 'remove': remove},
     );
-    return CloudResponseDecoder.asObject(decoded, context: 'content.post.circles');
+    return CloudResponseDecoder.asObject(
+      decoded,
+      context: 'content.post.circles',
+    );
   }
 
   @override
@@ -744,15 +1002,16 @@ class RemoteContentRepository implements ContentRepository {
     required String postId,
     required String circleId,
   }) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/repost',
-    );
+    final uri = _uri(ContentApiMetadata.repostToCirclePath(postId: postId));
     final decoded = await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.post.repost'),
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.repostToCircle),
       body: {'circleId': circleId},
     );
-    return CloudResponseDecoder.asObject(decoded, context: 'content.post.repost');
+    return CloudResponseDecoder.asObject(
+      decoded,
+      context: 'content.post.repost',
+    );
   }
 
   @override
@@ -761,65 +1020,74 @@ class RemoteContentRepository implements ContentRepository {
     required String circleId,
     String quoteText = '',
   }) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/content/posts/${Uri.encodeComponent(postId)}/quote',
-    );
+    final uri = _uri(ContentApiMetadata.quoteToCirclePath(postId: postId));
     final decoded = await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.post.quote'),
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.quoteToCircle),
       body: {'circleId': circleId, 'quoteText': quoteText},
     );
-    return CloudResponseDecoder.asObject(decoded, context: 'content.post.quote');
+    return CloudResponseDecoder.asObject(
+      decoded,
+      context: 'content.post.quote',
+    );
   }
 
   @override
   Future<Map<String, dynamic>> initMediaUpload({
     String mediaType = 'image',
   }) async {
-    final uri = Uri.parse('$_baseUrl/v1/content/media/uploads:init');
+    final uri = _uri(ContentApiMetadata.initMediaUploadPath);
     final decoded = await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.media.init'),
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.initMediaUpload),
       body: {'mediaType': mediaType},
     );
-    return CloudResponseDecoder.asObject(decoded, context: 'content.media.init');
+    return CloudResponseDecoder.asObject(
+      decoded,
+      context: 'content.media.init',
+    );
   }
 
   @override
   Future<Map<String, dynamic>> completeMediaUpload({
     required String sessionId,
   }) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/content/media/uploads/${Uri.encodeComponent(sessionId)}:complete',
+    final uri = _uri(
+      ContentApiMetadata.completeMediaUploadPath(sessionId: sessionId),
     );
     final decoded = await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.media.complete'),
+      headers: CloudRequestHeaders.forPage(
+        ContentRequestPageIds.completeMediaUpload,
+      ),
       body: {},
     );
-    return CloudResponseDecoder.asObject(decoded, context: 'content.media.complete');
+    return CloudResponseDecoder.asObject(
+      decoded,
+      context: 'content.media.complete',
+    );
   }
 
   @override
   Future<void> abortMediaUpload({required String sessionId}) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/content/media/uploads/${Uri.encodeComponent(sessionId)}:abort',
+    final uri = _uri(
+      ContentApiMetadata.abortMediaUploadPath(sessionId: sessionId),
     );
     await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.media.abort'),
+      headers: CloudRequestHeaders.forPage(
+        ContentRequestPageIds.abortMediaUpload,
+      ),
       body: {},
     );
   }
 
   @override
   Future<Map<String, dynamic>> getMediaAsset({required String mediaId}) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/content/media/${Uri.encodeComponent(mediaId)}',
-    );
+    final uri = _uri(ContentApiMetadata.getMediaAssetPath(mediaId: mediaId));
     final decoded = await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.media.get'),
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.getMediaAsset),
     );
     return CloudResponseDecoder.asObject(decoded, context: 'content.media.get');
   }
@@ -828,15 +1096,20 @@ class RemoteContentRepository implements ContentRepository {
   Future<Map<String, dynamic>> selectAutoVideoCover({
     required String mediaId,
   }) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/content/media/${Uri.encodeComponent(mediaId)}/cover:auto',
+    final uri = _uri(
+      ContentApiMetadata.selectAutoVideoCoverPath(mediaId: mediaId),
     );
     final decoded = await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.media.cover.auto'),
+      headers: CloudRequestHeaders.forPage(
+        ContentRequestPageIds.selectAutoVideoCover,
+      ),
       body: {},
     );
-    return CloudResponseDecoder.asObject(decoded, context: 'content.media.cover.auto');
+    return CloudResponseDecoder.asObject(
+      decoded,
+      context: 'content.media.cover.auto',
+    );
   }
 
   @override
@@ -844,15 +1117,20 @@ class RemoteContentRepository implements ContentRepository {
     required String mediaId,
     required String coverAssetId,
   }) async {
-    final uri = Uri.parse(
-      '$_baseUrl/v1/content/media/${Uri.encodeComponent(mediaId)}/cover:manual',
+    final uri = _uri(
+      ContentApiMetadata.selectManualVideoCoverPath(mediaId: mediaId),
     );
     final decoded = await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.media.cover.manual'),
+      headers: CloudRequestHeaders.forPage(
+        ContentRequestPageIds.selectManualVideoCover,
+      ),
       body: {'coverAssetId': coverAssetId},
     );
-    return CloudResponseDecoder.asObject(decoded, context: 'content.media.cover.manual');
+    return CloudResponseDecoder.asObject(
+      decoded,
+      context: 'content.media.cover.manual',
+    );
   }
 
   @override
@@ -860,48 +1138,54 @@ class RemoteContentRepository implements ContentRepository {
     required String title,
     required String body,
   }) async {
-    final uri = Uri.parse('$_baseUrl/v1/content/articles/summary:generate');
+    final uri = _uri(ContentApiMetadata.generateArticleSummaryPath);
     final decoded = await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.article.summary'),
+      headers: CloudRequestHeaders.forPage(
+        ContentRequestPageIds.generateArticleSummary,
+      ),
       body: {'title': title, 'body': body},
     );
-    return CloudResponseDecoder.asObject(decoded, context: 'content.article.summary');
+    return CloudResponseDecoder.asObject(
+      decoded,
+      context: 'content.article.summary',
+    );
   }
 
   @override
   Future<Map<String, dynamic>> getRecommendation({
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
   }) async {
-    final uri = Uri.parse('$_baseUrl/v1/content/recommend');
+    final uri = _uri(ContentApiMetadata.getRecommendationPath);
     final decoded = await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.recommend'),
-      body: {
-        'limit': limit,
-        if (cursor != null) 'cursor': cursor,
-      },
+      headers: CloudRequestHeaders.forPage(
+        ContentRequestPageIds.getRecommendation,
+      ),
+      body: {'limit': limit, 'cursor': ?cursor},
     );
-    return CloudResponseDecoder.asObject(decoded, context: 'content.recommend');
+    return CloudResponseDecoder.asObject(
+      decoded,
+      context: ContentRequestPageIds.getRecommendation,
+    );
   }
 
   @override
   Future<CursorPage<PostBaseDto>> listUserPosts({
     required String userId,
     String? cursor,
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
   }) async {
-    final query = <String, String>{
-      'userId': userId,
-      'limit': '$limit',
-    };
+    final query = <String, String>{'limit': '$limit'};
     if (cursor != null) query['cursor'] = cursor;
-    final uri = Uri.parse('$_baseUrl/v1/content/users/posts')
-        .replace(queryParameters: query);
+    final uri = _uri(
+      ContentApiMetadata.listUserPostsPath(userId: userId),
+      queryParameters: query,
+    );
     final decoded = await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.user.posts'),
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.listUserPosts),
     );
     final rawPage = CloudResponseDecoder.asCursorPage(
       decoded,

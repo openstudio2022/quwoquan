@@ -7,7 +7,6 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patrol/patrol.dart';
-import 'package:quwoquan_app/core/test_keys.dart';
 
 const _env = String.fromEnvironment('ENV', defaultValue: 'staging');
 
@@ -15,9 +14,7 @@ void main() {
   patrolTest(
     '真实 IME 中文输入发送消息',
     tags: ['l4', 'chat', 'ime'],
-    config: PatrolTesterConfig(
-      visibleTimeout: const Duration(seconds: 15),
-    ),
+    config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 15)),
     ($) async {
       assert(_env == 'staging', 'L4 tests must run with ENV=staging');
 
@@ -26,15 +23,12 @@ void main() {
 
       // 等待聊天输入框可见
       final inputField = find.byType(TextField);
-      await $(inputField).waitUntilVisible(
-        timeout: const Duration(seconds: 20),
-      );
+      await $(
+        inputField,
+      ).waitUntilVisible(timeout: const Duration(seconds: 20));
 
       // 使用 native API 输入中文（真实 IME composing）
-      await $.native.enterText(
-        Selector(text: ''),
-        text: '你好，这是一条测试消息',
-      );
+      await $.native.enterText(Selector(text: ''), text: '你好，这是一条测试消息');
       await $.pumpAndSettle();
 
       // tap 发送按钮
@@ -49,23 +43,18 @@ void main() {
   patrolTest(
     '真实 IME Emoji 输入发送消息',
     tags: ['l4', 'chat', 'ime'],
-    config: PatrolTesterConfig(
-      visibleTimeout: const Duration(seconds: 15),
-    ),
+    config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 15)),
     ($) async {
       assert(_env == 'staging', 'L4 tests must run with ENV=staging');
 
       await $.pumpWidgetAndSettle(const _PatrolAppPlaceholder());
 
       final inputField = find.byType(TextField);
-      await $(inputField).waitUntilVisible(
-        timeout: const Duration(seconds: 20),
-      );
+      await $(
+        inputField,
+      ).waitUntilVisible(timeout: const Duration(seconds: 20));
 
-      await $.native.enterText(
-        Selector(text: ''),
-        text: '测试 Emoji 消息 😊🎉',
-      );
+      await $.native.enterText(Selector(text: ''), text: '测试 Emoji 消息 😊🎉');
       await $.pumpAndSettle();
 
       await $(find.byIcon(Icons.send)).tap();

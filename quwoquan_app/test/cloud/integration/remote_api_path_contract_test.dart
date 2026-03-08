@@ -11,6 +11,9 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/report_repository.dart';
@@ -69,123 +72,147 @@ void main() {
     test('listCircles → GET /v1/circles', () async {
       try { await repo.listCircles(); } catch (_) {}
       expect(log.last.method, 'GET');
-      expect(log.last.path, '/v1/circles');
+      expect(log.last.path, CircleApiMetadata.listCirclesPath);
     });
 
     test('getCircle → GET /v1/circles/{circleId}', () async {
       try { await repo.getCircle('c1'); } catch (_) {}
       expect(log.last.method, 'GET');
-      expect(log.last.path, '/v1/circles/c1');
+      expect(log.last.path, CircleApiMetadata.getCirclePath(circleId: 'c1'));
     });
 
     test('createCircle → POST /v1/circles', () async {
       await repo.createCircle({'name': 'test'});
       expect(log.last.method, 'POST');
-      expect(log.last.path, '/v1/circles');
+      expect(log.last.path, CircleApiMetadata.createCirclePath);
     });
 
     test('updateCircle → PATCH /v1/circles/{circleId}', () async {
       await repo.updateCircle('c1', {'name': 'updated'});
       expect(log.last.method, 'PATCH');
-      expect(log.last.path, '/v1/circles/c1');
+      expect(log.last.path, CircleApiMetadata.updateCirclePath(circleId: 'c1'));
     });
 
     test('archiveCircle → DELETE /v1/circles/{circleId}', () async {
       await repo.archiveCircle('c1');
       expect(log.last.method, 'DELETE');
-      expect(log.last.path, '/v1/circles/c1');
+      expect(log.last.path, CircleApiMetadata.archiveCirclePath(circleId: 'c1'));
     });
 
     test('joinCircle → POST /v1/circles/{circleId}/join', () async {
       await repo.joinCircle('c1');
       expect(log.last.method, 'POST');
-      expect(log.last.path, '/v1/circles/c1/join');
+      expect(log.last.path, CircleApiMetadata.joinCirclePath(circleId: 'c1'));
     });
 
     test('leaveCircle → POST /v1/circles/{circleId}/leave', () async {
       await repo.leaveCircle('c1');
       expect(log.last.method, 'POST');
-      expect(log.last.path, '/v1/circles/c1/leave');
+      expect(log.last.path, CircleApiMetadata.leaveCirclePath(circleId: 'c1'));
     });
 
     test('listMembers → GET /v1/circles/{circleId}/members', () async {
       try { await repo.listMembers('c1'); } catch (_) {}
       expect(log.last.method, 'GET');
-      expect(log.last.path, '/v1/circles/c1/members');
+      expect(
+        log.last.path,
+        CircleApiMetadata.listCircleMembersPath(circleId: 'c1'),
+      );
     });
 
     test('updateMemberRole → PATCH /v1/circles/{id}/members/{uid}/role',
         () async {
       await repo.updateMemberRole('c1', 'u1', 'admin');
       expect(log.last.method, 'PATCH');
-      expect(log.last.path, '/v1/circles/c1/members/u1/role');
+      expect(
+        log.last.path,
+        CircleApiMetadata.updateMemberRolePath(circleId: 'c1', userId: 'u1'),
+      );
     });
 
     test('getCircleFeed → GET /v1/circles/{circleId}/feed', () async {
       try { await repo.getCircleFeed('c1'); } catch (_) {}
       expect(log.last.method, 'GET');
-      expect(log.last.path, '/v1/circles/c1/feed');
+      expect(log.last.path, CircleApiMetadata.getCircleFeedPath(circleId: 'c1'));
     });
 
     test('pinPost → PATCH /v1/circles/{id}/feed/{postId}/pin', () async {
       await repo.pinPost('c1', 'p1', pinned: true);
       expect(log.last.method, 'PATCH');
-      expect(log.last.path, '/v1/circles/c1/feed/p1/pin');
+      expect(
+        log.last.path,
+        CircleApiMetadata.pinCirclePostPath(circleId: 'c1', postId: 'p1'),
+      );
     });
 
     test('featurePost → PATCH /v1/circles/{id}/feed/{postId}/feature',
         () async {
       await repo.featurePost('c1', 'p1', featured: true);
       expect(log.last.method, 'PATCH');
-      expect(log.last.path, '/v1/circles/c1/feed/p1/feature');
+      expect(
+        log.last.path,
+        CircleApiMetadata.featureCirclePostPath(circleId: 'c1', postId: 'p1'),
+      );
     });
 
     test('getCircleStats → GET /v1/circles/{circleId}/stats', () async {
       await repo.getCircleStats('c1');
       expect(log.last.method, 'GET');
-      expect(log.last.path, '/v1/circles/c1/stats');
+      expect(log.last.path, CircleApiMetadata.getCircleStatsPath(circleId: 'c1'));
     });
 
     test('listFiles → GET /v1/circles/{circleId}/files', () async {
       try { await repo.listFiles('c1'); } catch (_) {}
       expect(log.last.method, 'GET');
-      expect(log.last.path, '/v1/circles/c1/files');
+      expect(log.last.path, CircleApiMetadata.listCircleFilesPath(circleId: 'c1'));
     });
 
     test('createFile → POST /v1/circles/{circleId}/files', () async {
       await repo.createFile('c1', {'name': 'doc.pdf'});
       expect(log.last.method, 'POST');
-      expect(log.last.path, '/v1/circles/c1/files');
+      expect(log.last.path, CircleApiMetadata.createCircleFilePath(circleId: 'c1'));
     });
 
     test('getFile → GET /v1/circles/{circleId}/files/{fileId}', () async {
       await repo.getFile('c1', 'f1');
       expect(log.last.method, 'GET');
-      expect(log.last.path, '/v1/circles/c1/files/f1');
+      expect(
+        log.last.path,
+        CircleApiMetadata.getCircleFilePath(circleId: 'c1', fileId: 'f1'),
+      );
     });
 
     test('updateFile → PATCH /v1/circles/{id}/files/{fileId}', () async {
       await repo.updateFile('c1', 'f1', {'name': 'updated'});
       expect(log.last.method, 'PATCH');
-      expect(log.last.path, '/v1/circles/c1/files/f1');
+      expect(
+        log.last.path,
+        CircleApiMetadata.updateCircleFilePath(circleId: 'c1', fileId: 'f1'),
+      );
     });
 
     test('deleteFile → DELETE /v1/circles/{id}/files/{fileId}', () async {
       await repo.deleteFile('c1', 'f1');
       expect(log.last.method, 'DELETE');
-      expect(log.last.path, '/v1/circles/c1/files/f1');
+      expect(
+        log.last.path,
+        CircleApiMetadata.deleteCircleFilePath(circleId: 'c1', fileId: 'f1'),
+      );
     });
 
     test('updateSections → PATCH /v1/circles/{circleId}/sections', () async {
       await repo.updateSections('c1', []);
       expect(log.last.method, 'PATCH');
-      expect(log.last.path, '/v1/circles/c1/sections');
+      expect(
+        log.last.path,
+        CircleApiMetadata.updateCircleSectionsPath(circleId: 'c1'),
+      );
     });
 
     test('reportBehavior → POST /v1/circles/behaviors', () async {
       await repo.reportBehavior({'type': 'view'});
       expect(log.last.method, 'POST');
-      expect(log.last.path, '/v1/circles/behaviors');
+      expect(log.last.path, CircleApiMetadata.reportCircleBehaviorPath);
     });
   });
 
@@ -201,7 +228,7 @@ void main() {
     test('listDiscoveryFeed → GET /v1/content/feed', () async {
       await repo.listDiscoveryFeed(category: 'all');
       expect(log.last.method, 'GET');
-      expect(log.last.path, '/v1/content/feed');
+      expect(log.last.path, ContentApiMetadata.getFeedPath);
     });
 
     test('getPost → GET /v1/content/posts/{postId}', () async {
@@ -209,7 +236,7 @@ void main() {
         await repo.getPost(postId: 'p1');
       } catch (_) {}
       expect(log.last.method, 'GET');
-      expect(log.last.path, '/v1/content/posts/p1');
+      expect(log.last.path, ContentApiMetadata.getPostPath(postId: 'p1'));
     });
 
     test('createPost → POST /v1/content/posts', () async {
@@ -217,44 +244,47 @@ void main() {
         await repo.createPost(payload: {'type': 'moment'});
       } catch (_) {}
       expect(log.last.method, 'POST');
-      expect(log.last.path, '/v1/content/posts');
+      expect(log.last.path, ContentApiMetadata.createPostPath);
     });
 
     test('likePost → POST /v1/content/posts/{postId}/like', () async {
       await repo.likePost(postId: 'p1');
       expect(log.last.method, 'POST');
-      expect(log.last.path, '/v1/content/posts/p1/like');
+      expect(log.last.path, ContentApiMetadata.likePostPath(postId: 'p1'));
     });
 
     test('unlikePost → DELETE /v1/content/posts/{postId}/like', () async {
       await repo.unlikePost(postId: 'p1');
       expect(log.last.method, 'DELETE');
-      expect(log.last.path, '/v1/content/posts/p1/like');
+      expect(log.last.path, ContentApiMetadata.unlikePostPath(postId: 'p1'));
     });
 
     test('favoritePost → POST /v1/content/posts/{postId}/favorite', () async {
       await repo.favoritePost(postId: 'p1');
       expect(log.last.method, 'POST');
-      expect(log.last.path, '/v1/content/posts/p1/favorite');
+      expect(log.last.path, ContentApiMetadata.favoritePostPath(postId: 'p1'));
     });
 
     test('unfavoritePost → DELETE /v1/content/posts/{postId}/favorite',
         () async {
       await repo.unfavoritePost(postId: 'p1');
       expect(log.last.method, 'DELETE');
-      expect(log.last.path, '/v1/content/posts/p1/favorite');
+      expect(
+        log.last.path,
+        ContentApiMetadata.unfavoritePostPath(postId: 'p1'),
+      );
     });
 
     test('listComments → GET /v1/content/posts/{postId}/comments', () async {
       await repo.listComments(postId: 'p1');
       expect(log.last.method, 'GET');
-      expect(log.last.path, '/v1/content/posts/p1/comments');
+      expect(log.last.path, ContentApiMetadata.listCommentsPath(postId: 'p1'));
     });
 
     test('createComment → POST /v1/content/posts/{postId}/comments', () async {
       await repo.createComment(postId: 'p1', content: 'hi');
       expect(log.last.method, 'POST');
-      expect(log.last.path, '/v1/content/posts/p1/comments');
+      expect(log.last.path, ContentApiMetadata.createCommentPath(postId: 'p1'));
     });
 
     test(
@@ -262,26 +292,32 @@ void main() {
         () async {
       await repo.deleteComment(postId: 'p1', commentId: 'c1');
       expect(log.last.method, 'DELETE');
-      expect(log.last.path, '/v1/content/posts/p1/comments/c1');
+      expect(
+        log.last.path,
+        ContentApiMetadata.deleteCommentPath(postId: 'p1', commentId: 'c1'),
+      );
     });
 
     test('reportBehaviors → POST /v1/content/behaviors', () async {
       await repo.reportBehaviors(events: []);
       expect(log.last.method, 'POST');
-      expect(log.last.path, '/v1/content/behaviors');
+      expect(log.last.path, ContentApiMetadata.reportBehaviorsPath);
     });
 
     test('getCounters → GET /v1/content/posts/{postId}/counters', () async {
       await repo.getCounters(postId: 'p1');
       expect(log.last.method, 'GET');
-      expect(log.last.path, '/v1/content/posts/p1/counters');
+      expect(log.last.path, ContentApiMetadata.getCountersPath(postId: 'p1'));
     });
 
     test('getReactionState → GET /v1/content/posts/{postId}/reactions',
         () async {
       await repo.getReactionState(postId: 'p1');
       expect(log.last.method, 'GET');
-      expect(log.last.path, '/v1/content/posts/p1/reactions');
+      expect(
+        log.last.path,
+        ContentApiMetadata.getReactionStatePath(postId: 'p1'),
+      );
     });
   });
 
@@ -304,7 +340,7 @@ void main() {
         reason: 'spam',
       );
       expect(log.last.method, 'POST');
-      expect(log.last.path, '/v1/content/reports');
+      expect(log.last.path, ContentApiMetadata.createReportPath);
     });
   });
 
@@ -323,26 +359,29 @@ void main() {
     test('listPersonas → GET /v1/user/personas', () async {
       await repo.listPersonas();
       expect(log.last.method, 'GET');
-      expect(log.last.path, '/v1/user/personas');
+      expect(log.last.path, UserApiMetadata.listPersonasPath);
     });
 
     test('activatePersona → POST /v1/user/personas/{id}/activate', () async {
       await repo.activatePersona('persona_1');
       expect(log.last.method, 'POST');
-      expect(log.last.path, '/v1/user/personas/persona_1/activate');
+      expect(
+        log.last.path,
+        UserApiMetadata.activatePersonaPath(personaId: 'persona_1'),
+      );
     });
 
     test('getNotificationSettings → GET /v1/user/settings/notifications',
         () async {
       await repo.getNotificationSettings();
       expect(log.last.method, 'GET');
-      expect(log.last.path, '/v1/user/settings/notifications');
+      expect(log.last.path, UserApiMetadata.getNotificationSettingsPath);
     });
 
     test('getPrivacySettings → GET /v1/user/settings/privacy', () async {
       await repo.getPrivacySettings();
       expect(log.last.method, 'GET');
-      expect(log.last.path, '/v1/user/settings/privacy');
+      expect(log.last.path, UserApiMetadata.getPrivacySettingsPath);
     });
   });
 
@@ -361,13 +400,13 @@ void main() {
     test('blockUser → POST /v1/user/block/{targetUserId}', () async {
       await repo.blockUser('u1');
       expect(log.last.method, 'POST');
-      expect(log.last.path, '/v1/user/block/u1');
+      expect(log.last.path, UserApiMetadata.blockUserPath(targetUserId: 'u1'));
     });
 
     test('unblockUser → DELETE /v1/user/block/{targetUserId}', () async {
       await repo.unblockUser('u1');
       expect(log.last.method, 'DELETE');
-      expect(log.last.path, '/v1/user/block/u1');
+      expect(log.last.path, UserApiMetadata.unblockUserPath(targetUserId: 'u1'));
     });
   });
 

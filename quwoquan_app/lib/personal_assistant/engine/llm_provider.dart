@@ -1293,23 +1293,40 @@ class SwitchableAssistantLlmProvider implements AssistantLlmProvider {
               : remoteResult.modelPath,
         );
       }
-      if (remoteResult.failureCode == AssistantFailureCode.modelHttp ||
+
+      AssistantModelOutput lastRemoteFailure = remoteResult.copyWith(
+        modelPath: remoteResult.modelPath.isEmpty ? ref : remoteResult.modelPath,
+      );
+
+      final retryableRemoteFailure =
+          remoteResult.failureCode == AssistantFailureCode.modelHttp ||
           remoteResult.failureCode == AssistantFailureCode.modelException ||
           remoteResult.failureCode ==
               AssistantFailureCode.modelResponseInvalid ||
-          remoteResult.failureCode == AssistantFailureCode.modelUnavailable) {
-        return remoteResult.copyWith(
-          modelPath: remoteResult.modelPath.isEmpty
-              ? ref
-              : remoteResult.modelPath,
-        );
-      }
-      // Try next remote model first, then fallback to local provider.
-      final nextRef = _nextRemoteRef(ref);
-      if (nextRef != null && nextRef != ref) {
-        _activeModelRef = nextRef;
-        final nextProvider = _providers[nextRef];
-        if (nextProvider != null) {
+          remoteResult.failureCode == AssistantFailureCode.modelUnavailable;
+
+      // 网络/DNS/HTTP/响应格式这类模型侧故障不应直接透传给 UI，
+      // 先尝试剩余远端模型，再回退到本地安全降级。
+      if (retryableRemoteFailure) {
+        final candidates = _selectedModelOrder.isEmpty
+            ? _registrationOrder
+            : _selectedModelOrder;
+        final currentIndex = candidates.indexOf(ref);
+        final retryRefs = <String>[];
+        for (var i = 1; i < candidates.length; i++) {
+          final idx = currentIndex >= 0
+              ? (currentIndex + i) % candidates.length
+              : i - 1;
+          final candidateRef = candidates[idx];
+          if (candidateRef != ref && !retryRefs.contains(candidateRef)) {
+            retryRefs.add(candidateRef);
+          }
+        }
+
+        for (final nextRef in retryRefs) {
+          _activeModelRef = nextRef;
+          final nextProvider = _providers[nextRef];
+          if (nextProvider == null) continue;
           final retry = await nextProvider.reason(
             messages: messages,
             availableTools: availableTools,
@@ -1320,6 +1337,7 @@ class SwitchableAssistantLlmProvider implements AssistantLlmProvider {
             sessionId: sessionId,
             runId: runId,
             traceId: traceId,
+            callOptions: callOptions,
           );
           if (!retry.degraded) return retry;
           if (retry.failureCode == AssistantFailureCode.templateMissing) {
@@ -1329,16 +1347,12 @@ class SwitchableAssistantLlmProvider implements AssistantLlmProvider {
                   : retry.modelPath,
             );
           }
-          if (retry.failureCode == AssistantFailureCode.modelHttp ||
-              retry.failureCode == AssistantFailureCode.modelException ||
-              retry.failureCode == AssistantFailureCode.modelResponseInvalid ||
-              retry.failureCode == AssistantFailureCode.modelUnavailable) {
-            return retry.copyWith(
-              modelPath: retry.modelPath.isEmpty ? nextRef : retry.modelPath,
-            );
-          }
+          lastRemoteFailure = retry.copyWith(
+            modelPath: retry.modelPath.isEmpty ? nextRef : retry.modelPath,
+          );
         }
       }
+
       final fallback = await _fallbackProvider.reason(
         messages: messages,
         availableTools: availableTools,
@@ -1355,7 +1369,9 @@ class SwitchableAssistantLlmProvider implements AssistantLlmProvider {
             ? 'fallback_local'
             : fallback.modelPath,
         failureCode: fallback.failureCode.isEmpty
-            ? AssistantFailureCode.heuristicFallback
+            ? (lastRemoteFailure.failureCode.isNotEmpty
+                  ? lastRemoteFailure.failureCode
+                  : AssistantFailureCode.heuristicFallback)
             : fallback.failureCode,
       );
     }

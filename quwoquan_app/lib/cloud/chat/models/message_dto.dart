@@ -67,7 +67,8 @@ class MessageDto {
       metadata: map['metadata'] is Map
           ? (map['metadata'] as Map).cast<String, dynamic>()
           : null,
-      timestamp: DateTime.tryParse((map['timestamp'] ?? '') as String) ??
+      timestamp:
+          DateTime.tryParse((map['timestamp'] ?? '') as String) ??
           DateTime.now(),
     );
   }
@@ -113,32 +114,33 @@ class MessageDto {
   }
 
   Map<String, dynamic> toMap() => {
-        'id': id,
-        'conversationId': conversationId,
-        'seq': seq,
-        'clientMsgId': clientMsgId,
-        'senderId': senderId,
-        if (senderPersonaId != null) 'senderPersonaId': senderPersonaId,
-        'type': type,
-        if (content != null) 'content': content,
-        if (mediaUrl != null) 'mediaUrl': mediaUrl,
-        if (media != null) 'media': media,
-        if (cardPayload != null) 'cardPayload': cardPayload,
-        if (replyToMessageId != null) 'replyToMessageId': replyToMessageId,
-        if (mentions != null) 'mentions': mentions,
-        'status': status,
-        if (recalledAt != null) 'recalledAt': recalledAt!.toIso8601String(),
-        if (metadata != null) 'metadata': metadata,
-        'timestamp': timestamp.toIso8601String(),
-      };
+    'id': id,
+    'conversationId': conversationId,
+    'seq': seq,
+    'clientMsgId': clientMsgId,
+    'senderId': senderId,
+    if (senderPersonaId != null) 'senderPersonaId': senderPersonaId,
+    'type': type,
+    if (content != null) 'content': content,
+    if (mediaUrl != null) 'mediaUrl': mediaUrl,
+    if (media != null) 'media': media,
+    if (cardPayload != null) 'cardPayload': cardPayload,
+    if (replyToMessageId != null) 'replyToMessageId': replyToMessageId,
+    if (mentions != null) 'mentions': mentions,
+    'status': status,
+    if (recalledAt != null) 'recalledAt': recalledAt!.toIso8601String(),
+    if (metadata != null) 'metadata': metadata,
+    'timestamp': timestamp.toIso8601String(),
+  };
 
   /// Converts to the display-oriented Map expected by ChatMessageBubble.
-  /// Bridges typed DTO → legacy Map<String, dynamic> UI contract.
+  /// Bridges typed DTO to legacy `Map<String, dynamic>` UI contract.
   Map<String, dynamic> toDisplayMap({required String currentUserId}) {
     final isSelf = senderId == currentUserId;
     final h = timestamp.hour;
     final m = timestamp.minute.toString().padLeft(2, '0');
-    final timeStr = '${h < 12 ? "上午" : "下午"}${h == 12 ? 12 : (h > 12 ? h - 12 : h)}:$m';
+    final timeStr =
+        '${h < 12 ? "上午" : "下午"}${h == 12 ? 12 : (h > 12 ? h - 12 : h)}:$m';
     return {
       'id': id,
       '_id': id,

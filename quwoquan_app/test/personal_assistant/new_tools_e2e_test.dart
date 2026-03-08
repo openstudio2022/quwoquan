@@ -18,7 +18,6 @@ import 'package:quwoquan_app/personal_assistant/tools/search_cache.dart';
 import 'package:quwoquan_app/personal_assistant/tools/tool_registry.dart';
 import 'package:quwoquan_app/personal_assistant/tools/tool_schema.dart';
 import 'package:quwoquan_app/personal_assistant/tools/web_fetch_tool.dart';
-import 'package:quwoquan_app/personal_assistant/tools/websearch_tool.dart';
 
 // ---------------------------------------------------------------------------
 // Mock LLM: Drives multi-tool pipeline
@@ -46,15 +45,15 @@ class _MultiToolLlm implements AssistantLlmProvider {
   }) async {
     totalCallCount += 1;
 
-    final isPlannerCall = templateId == 'planner.global_plan' ||
+    final isPlannerCall =
+        templateId == 'planner.global_plan' ||
         templateId == 'planner.postcondition_check';
-    final isSynthesisCall = templateId.contains('synthesizer') ||
+    final isSynthesisCall =
+        templateId.contains('synthesizer') ||
         templateId.contains('final_answer');
 
     if (!isPlannerCall && !isSynthesisCall) {
-      return const AssistantModelOutput(
-        text: '{"summary": "用户在询问深圳的天气情况。"}',
-      );
+      return const AssistantModelOutput(text: '{"summary": "用户在询问深圳的天气情况。"}');
     }
 
     if (isPlannerCall) {
@@ -72,7 +71,7 @@ class _MultiToolLlm implements AssistantLlmProvider {
               {
                 'tool': 'web_search',
                 'arguments': {'query': '深圳 今天 天气 实时'},
-              }
+              },
             ],
             'thinkingText': '用户想了解深圳天气，先搜索最新信息。',
           }),
@@ -98,7 +97,7 @@ class _MultiToolLlm implements AssistantLlmProvider {
                   'url': 'https://weather.cma.cn/shenzhen',
                   'maxChars': 5000,
                 },
-              }
+              },
             ],
             'thinkingText': '搜索到气象局页面，深入阅读获取详细天气数据。',
           }),
@@ -122,8 +121,7 @@ class _MultiToolLlm implements AssistantLlmProvider {
         'contractVersion': 'assistant_turn_v4',
         'decision': {'nextAction': 'answer'},
         'messageKind': 'answer',
-        'userMarkdown':
-            '## 深圳天气\n\n今天深圳天气晴朗，温度约25°C，相对湿度65%，东南风3级。适合户外活动。',
+        'userMarkdown': '## 深圳天气\n\n今天深圳天气晴朗，温度约25°C，相对湿度65%，东南风3级。适合户外活动。',
         'result': {
           'text': '今天深圳天气晴朗，温度约25°C，相对湿度65%。',
           'interpretation': '深圳当前天气概况',
@@ -259,45 +257,57 @@ void main() {
       expect(response.degraded, isFalse);
 
       // Both tools should be called
-      expect(webSearchCallCount, greaterThan(0),
-          reason: 'web_search 应被调用');
-      expect(webFetchCallCount, greaterThan(0),
-          reason: 'web_fetch 应被调用');
+      expect(webSearchCallCount, greaterThan(0), reason: 'web_search 应被调用');
+      expect(webFetchCallCount, greaterThan(0), reason: 'web_fetch 应被调用');
 
       // Trace should contain both toolStart events (tool name is in message)
       final toolStarts = traces
           .where((t) => t.type == AssistantTraceEventType.toolStart)
           .toList();
       final toolMessages = toolStarts.map((t) => t.message).toList();
-      expect(toolMessages.any((m) => m.contains('web_search')), isTrue,
-          reason: 'trace 应包含 web_search toolStart');
-      expect(toolMessages.any((m) => m.contains('web_fetch')), isTrue,
-          reason: 'trace 应包含 web_fetch toolStart');
+      expect(
+        toolMessages.any((m) => m.contains('web_search')),
+        isTrue,
+        reason: 'trace 应包含 web_search toolStart',
+      );
+      expect(
+        toolMessages.any((m) => m.contains('web_fetch')),
+        isTrue,
+        reason: 'trace 应包含 web_fetch toolStart',
+      );
 
       // Tool results should exist for both
       final toolResults = traces
           .where((t) => t.type == AssistantTraceEventType.toolResult)
           .toList();
-      expect(toolResults.length, greaterThanOrEqualTo(2),
-          reason: '至少两个 toolResult（web_search + web_fetch）');
+      expect(
+        toolResults.length,
+        greaterThanOrEqualTo(2),
+        reason: '至少两个 toolResult（web_search + web_fetch）',
+      );
 
       // Timeline should show multi-tool phases
       final structured = response.structuredResponse;
-      final timeline = (structured['uiPhaseTimelineV1'] as List?)
+      final timeline =
+          (structured['uiPhaseTimelineV1'] as List?)
               ?.whereType<Map>()
               .map((p) => p.cast<String, dynamic>())
               .toList() ??
           [];
-      final phaseTypes =
-          timeline.map((p) => (p['phaseType'] as String?) ?? '').toList();
+      final phaseTypes = timeline
+          .map((p) => (p['phaseType'] as String?) ?? '')
+          .toList();
       expect(phaseTypes.contains('understanding'), isTrue);
       expect(phaseTypes.last, equals('answering'));
 
       // Final answer should contain weather info
-      final combined = '${response.finalText} '
+      final combined =
+          '${response.finalText} '
           '${(structured['uiAnswer'] as Map?)?['markdownText'] ?? ""}';
       expect(
-        combined.contains('天气') || combined.contains('深圳') || combined.contains('温度'),
+        combined.contains('天气') ||
+            combined.contains('深圳') ||
+            combined.contains('温度'),
         isTrue,
         reason: '最终答案应包含天气内容',
       );
@@ -317,8 +327,7 @@ void main() {
       expect(firstRunSearchCount, greaterThan(0));
 
       // SearchCache should have an entry
-      expect(searchCache.has('深圳 今天 天气 实时'), isTrue,
-          reason: '搜索缓存应包含查询结果');
+      expect(searchCache.has('深圳 今天 天气 实时'), isTrue, reason: '搜索缓存应包含查询结果');
 
       // The cache is shared, so a direct get should work
       final cached = searchCache.get('深圳 今天 天气 实时');
@@ -358,7 +367,7 @@ void main() {
     });
 
     test('tool_catalog.meta.json 包含新工具定义', () async {
-      final binding = TestWidgetsFlutterBinding.ensureInitialized();
+      TestWidgetsFlutterBinding.ensureInitialized();
       final jsonStr = await rootBundle.loadString(
         'assets/personal_assistant/tools/catalog/tool_catalog.meta.json',
       );
@@ -366,29 +375,29 @@ void main() {
       final tools = (catalog['tools'] as List).cast<Map<String, dynamic>>();
       final toolNames = tools.map((t) => t['toolName'] as String).toSet();
 
-      expect(toolNames.contains('web_fetch'), isTrue,
-          reason: 'catalog 应包含 web_fetch');
-      expect(toolNames.contains('memory_search'), isTrue,
-          reason: 'catalog 应包含 memory_search');
+      expect(
+        toolNames.contains('web_fetch'),
+        isTrue,
+        reason: 'catalog 应包含 web_fetch',
+      );
+      expect(
+        toolNames.contains('memory_search'),
+        isTrue,
+        reason: 'catalog 应包含 memory_search',
+      );
 
       // Check userInteraction metadata
       final webFetchMeta = tools.firstWhere(
         (t) => t['toolName'] == 'web_fetch',
       );
       expect(webFetchMeta['userInteraction'], isNotNull);
-      expect(
-        webFetchMeta['userInteraction']['phaseTitle'],
-        equals('阅读网页'),
-      );
+      expect(webFetchMeta['userInteraction']['phaseTitle'], equals('阅读网页'));
 
       final memoryMeta = tools.firstWhere(
         (t) => t['toolName'] == 'memory_search',
       );
       expect(memoryMeta['userInteraction'], isNotNull);
-      expect(
-        memoryMeta['userInteraction']['phaseTitle'],
-        equals('回忆相关信息'),
-      );
+      expect(memoryMeta['userInteraction']['phaseTitle'], equals('回忆相关信息'));
 
       // Check domainToolMatrix includes new tools for weather
       final matrix = (catalog['domainToolMatrix'] as List)
@@ -398,20 +407,23 @@ void main() {
       );
       final allowedTools = (weatherDomain['allowedTools'] as List)
           .cast<String>();
-      expect(allowedTools.contains('web_fetch'), isTrue,
-          reason: 'weather domain 应允许 web_fetch');
-      expect(allowedTools.contains('memory_search'), isTrue,
-          reason: 'weather domain 应允许 memory_search');
+      expect(
+        allowedTools.contains('web_fetch'),
+        isTrue,
+        reason: 'weather domain 应允许 web_fetch',
+      );
+      expect(
+        allowedTools.contains('memory_search'),
+        isTrue,
+        reason: 'weather domain 应允许 memory_search',
+      );
     });
   });
 }
 
 /// Fake web_search that returns realistic results with cache integration.
 class _FakeWebSearchTool implements AssistantTool {
-  _FakeWebSearchTool({
-    required this.searchCache,
-    required this.onExecute,
-  });
+  _FakeWebSearchTool({required this.searchCache, required this.onExecute});
 
   final SearchResultCache searchCache;
   final void Function() onExecute;

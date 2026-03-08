@@ -107,10 +107,15 @@ paths:
             application/json:
               schema:
                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-  /v1/content/comments/{commentId}:
+  /v1/content/posts/{postId}/comments/{commentId}:
     delete:
       summary: Delete comment
       parameters:
+        - name: postId
+          in: path
+          required: true
+          schema:
+            type: string
         - name: commentId
           in: path
           required: true
@@ -125,6 +130,71 @@ paths:
             application/json:
               schema:
                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+  /v1/content/comments/{commentId}/like:
+    post:
+      summary: Like a comment
+      parameters:
+        - name: commentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "409":
+          description: Already liked
+          content:
+            application/json:
+              schema:
+                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+    delete:
+      summary: Unlike a comment
+      parameters:
+        - name: commentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+  /v1/content/users/me/comments:
+    get:
+      summary: List comments authored by current user
+      parameters:
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/Cursor
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/Limit
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommentPage"
+  /v1/content/users/me/received-comments:
+    get:
+      summary: List comments received on current user's posts
+      parameters:
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/Cursor
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/Limit
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommentPage"
+  /v1/config/app:
+    get:
+      summary: App configuration for client-side business rules
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppConfig"
   /v1/content/posts/{postId}/reactions:
     get:
       summary: Get reaction state for a user on a post
@@ -244,21 +314,68 @@ components:
       properties:
         id: { type: string }
         postId: { type: string }
-        content: { type: string }
         authorId: { type: string }
-        replyToCommentId: { type: string }
+        personaId: { type: string, nullable: true }
+        displayName: { type: string }
+        avatarUrl: { type: string }
+        content: { type: string }
+        replyToCommentId: { type: string, nullable: true }
+        replyToUserId: { type: string, nullable: true }
+        replyToDisplayName: { type: string, nullable: true }
+        replyCount: { type: integer }
+        likeCount: { type: integer }
+        status: { type: string, enum: [visible, hidden, deleted] }
+        isAuthor: { type: boolean, description: "是否帖主" }
         createdAt: { type: string }
+        postSummary:
+          $ref: "#/components/schemas/PostSummary"
+          nullable: true
+          description: "仅在 ListCommentsByAuthor/ListCommentsForPostAuthor 时附带"
+    PostSummary:
+      type: object
+      properties:
+        id: { type: string }
+        contentType: { type: string }
+        title: { type: string, nullable: true }
+        coverUrl: { type: string, nullable: true }
+        authorDisplayName: { type: string }
     CreateCommentRequest:
       type: object
       required: [content]
       properties:
-        content: { type: string }
+        content: { type: string, maxLength: 500 }
         replyToCommentId: { type: string }
+        personaId: { type: string }
     CreateCommentResponse:
       type: object
-      required: [commentId]
+      required: [id]
       properties:
-        commentId: { type: string }
+        id: { type: string }
+        postId: { type: string }
+        authorId: { type: string }
+        personaId: { type: string, nullable: true }
+        displayName: { type: string }
+        avatarUrl: { type: string }
+        content: { type: string }
+        replyToCommentId: { type: string, nullable: true }
+        replyToUserId: { type: string, nullable: true }
+        replyCount: { type: integer }
+        likeCount: { type: integer }
+        status: { type: string }
+        isAuthor: { type: boolean }
+        createdAt: { type: string }
+    AppConfig:
+      type: object
+      properties:
+        content:
+          type: object
+          properties:
+            comment:
+              type: object
+              properties:
+                max_length: { type: integer }
+                reply_preview_count: { type: integer }
+                fold_line_count: { type: integer }
     ReactionState:
       type: object
       properties:

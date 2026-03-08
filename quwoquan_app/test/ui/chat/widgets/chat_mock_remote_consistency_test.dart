@@ -15,15 +15,12 @@ Widget _scopedApp({required ChatRepository overrideRepo}) {
         routes: [
           GoRoute(
             path: '/chat',
-            builder: (_, __) => const Scaffold(body: ChatPage()),
+            builder: (_, _) => const Scaffold(body: ChatPage()),
           ),
-          GoRoute(
-            path: '/chat/:id',
-            builder: (_, __) => const SizedBox(),
-          ),
+          GoRoute(path: '/chat/:id', builder: (_, _) => const SizedBox()),
           GoRoute(
             path: '/chat/:id/settings',
-            builder: (_, __) => const SizedBox(),
+            builder: (_, _) => const SizedBox(),
           ),
         ],
       ),
@@ -37,9 +34,7 @@ void main() {
   // ──────────────────────────────────────────────────────────────────
   group('Chat Mock/Remote 一致性 — 渲染契约', () {
     testWidgets('MockChatRepository 注入后 ChatPage 可渲染', (tester) async {
-      await tester.pumpWidget(
-        _scopedApp(overrideRepo: MockChatRepository()),
-      );
+      await tester.pumpWidget(_scopedApp(overrideRepo: MockChatRepository()));
       await tester.pump();
 
       expect(find.byType(ChatPage), findsOneWidget);
@@ -59,9 +54,7 @@ void main() {
   // ──────────────────────────────────────────────────────────────────
   group('Chat Mock/Remote 一致性 — 交互契约', () {
     testWidgets('通过 Provider 注入 MockChatRepository 正常工作', (tester) async {
-      await tester.pumpWidget(
-        _scopedApp(overrideRepo: MockChatRepository()),
-      );
+      await tester.pumpWidget(_scopedApp(overrideRepo: MockChatRepository()));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
@@ -87,18 +80,14 @@ void main() {
   // ──────────────────────────────────────────────────────────────────
   group('Chat Mock/Remote 一致性 — 错误态渲染', () {
     testWidgets('空数据 Repository 注入后 ChatPage 安全渲染', (tester) async {
-      await tester.pumpWidget(
-        _scopedApp(overrideRepo: _EmptyChatRepository()),
-      );
+      await tester.pumpWidget(_scopedApp(overrideRepo: _EmptyChatRepository()));
       await tester.pump();
 
       expect(find.byType(ChatPage), findsOneWidget);
     });
 
     testWidgets('异常 Repository 注入后 ChatPage 不崩溃', (tester) async {
-      await tester.pumpWidget(
-        _scopedApp(overrideRepo: _ErrorChatRepository()),
-      );
+      await tester.pumpWidget(_scopedApp(overrideRepo: _ErrorChatRepository()));
       await tester.pump();
 
       expect(find.byType(ChatPage), findsOneWidget);

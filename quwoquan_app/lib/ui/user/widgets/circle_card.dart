@@ -17,8 +17,14 @@ class CircleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final border = AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
+    final fg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final border = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.borderPrimary,
+    );
 
     return GestureDetector(
       onTap: onTap,
@@ -36,9 +42,13 @@ class CircleCard extends StatelessWidget {
               child: Image.network(
                 coverUrl,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
+                errorBuilder: (_, _, _) => Container(
                   color: border.withValues(alpha: 0.1),
-                  child: Icon(Icons.group, color: border, size: AppSpacing.iconLarge),
+                  child: Icon(
+                    Icons.group,
+                    color: border,
+                    size: AppSpacing.iconLarge,
+                  ),
                 ),
               ),
             ),

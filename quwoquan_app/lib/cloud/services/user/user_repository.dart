@@ -2,6 +2,8 @@ import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 
 /// User 域 Repository：persona、follow、settings、push token 等业务对象入口。
@@ -48,12 +50,14 @@ class RemoteUserRepository implements UserRepository {
   final CloudHttpClient _httpClient;
   final String _baseUrl;
 
+  Uri _uri(String path) => Uri.parse('$_baseUrl$path');
+
   @override
   Future<List<Map<String, dynamic>>> listPersonas() async {
-    final uri = Uri.parse('$_baseUrl/v1/user/personas');
+    final uri = _uri(UserApiMetadata.listPersonasPath);
     final decoded = await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage('user.persona.list'),
+      headers: CloudRequestHeaders.forPage(UserRequestPageIds.listPersonas),
     );
     final page = CloudResponseDecoder.asCursorPage(
       decoded,
@@ -64,20 +68,22 @@ class RemoteUserRepository implements UserRepository {
 
   @override
   Future<void> activatePersona(String personaId) async {
-    final uri = Uri.parse('$_baseUrl/v1/user/personas/$personaId/activate');
+    final uri = _uri(UserApiMetadata.activatePersonaPath(personaId: personaId));
     await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage('user.persona.activate'),
+      headers: CloudRequestHeaders.forPage(UserRequestPageIds.activatePersona),
       body: const <String, dynamic>{},
     );
   }
 
   @override
   Future<Map<String, dynamic>> getNotificationSettings() async {
-    final uri = Uri.parse('$_baseUrl/v1/user/settings/notifications');
+    final uri = _uri(UserApiMetadata.getNotificationSettingsPath);
     final decoded = await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage('user.notification_settings.get'),
+      headers: CloudRequestHeaders.forPage(
+        UserRequestPageIds.getNotificationSettings,
+      ),
     );
     return CloudResponseDecoder.asObject(
       decoded,
@@ -87,10 +93,10 @@ class RemoteUserRepository implements UserRepository {
 
   @override
   Future<Map<String, dynamic>> getPrivacySettings() async {
-    final uri = Uri.parse('$_baseUrl/v1/user/settings/privacy');
+    final uri = _uri(UserApiMetadata.getPrivacySettingsPath);
     final decoded = await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage('user.privacy_settings.get'),
+      headers: CloudRequestHeaders.forPage(UserRequestPageIds.getPrivacySettings),
     );
     return CloudResponseDecoder.asObject(
       decoded,

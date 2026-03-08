@@ -9,15 +9,17 @@ class AssistentRetrievalService {
   AssistentRetrievalService({
     required AssistentRetrievalRouter router,
     required List<AssistentRetrievalProvider> providers,
-  })  : _router = router,
-        _providers = <String, AssistentRetrievalProvider>{
-          for (final provider in providers) provider.providerId: provider,
-        };
+  }) : _router = router,
+       _providers = <String, AssistentRetrievalProvider>{
+         for (final provider in providers) provider.providerId: provider,
+       };
 
   final AssistentRetrievalRouter _router;
   final Map<String, AssistentRetrievalProvider> _providers;
 
-  Future<AssistentRetrievalResult> retrieve(AssistentRetrievalRequest request) async {
+  Future<AssistentRetrievalResult> retrieve(
+    AssistentRetrievalRequest request,
+  ) async {
     final policy = AssistentPrivacyPolicy.fromInputs(
       privacyProfile: request.privacyProfile,
       contextScopeHint: <String, dynamic>{
@@ -29,7 +31,8 @@ class AssistentRetrievalService {
     final decision = _router.decide(
       request: request,
       providerCapabilities: <String, List<String>>{
-        for (final entry in _providers.entries) entry.key: entry.value.capabilityIds,
+        for (final entry in _providers.entries)
+          entry.key: entry.value.capabilityIds,
       },
     );
 
@@ -38,7 +41,6 @@ class AssistentRetrievalService {
     final roundTraces = <Map<String, dynamic>>[];
     var degraded = false;
     var errorCode = '';
-    final allRawReferences = <Map<String, dynamic>>[];
 
     final rounds = decision.maxRounds < 1 ? 1 : decision.maxRounds;
     for (var round = 1; round <= rounds; round++) {
@@ -68,21 +70,23 @@ class AssistentRetrievalService {
 
         if (providerId == 'web' && queriesToRun.length > 1) {
           // Layer 2: 并发执行所有查询词
-          final futures = queriesToRun.map((q) {
-            final sanitized = policy.sanitizeQueryForWeb(q);
-            return provider.retrieve(
-              AssistentRetrievalRequest(
-                query: sanitized,
-                requestedCapabilities: decision.capabilitySequence,
-                contextScopeHint: request.contextScopeHint,
-                privacyProfile: request.privacyProfile,
-                privacyPolicy: request.privacyPolicy,
-                providerHint: request.providerHint,
-                round: round,
-                maxItems: request.maxItems,
-              ),
-            );
-          }).toList(growable: false);
+          final futures = queriesToRun
+              .map((q) {
+                final sanitized = policy.sanitizeQueryForWeb(q);
+                return provider.retrieve(
+                  AssistentRetrievalRequest(
+                    query: sanitized,
+                    requestedCapabilities: decision.capabilitySequence,
+                    contextScopeHint: request.contextScopeHint,
+                    privacyProfile: request.privacyProfile,
+                    privacyPolicy: request.privacyPolicy,
+                    providerHint: request.providerHint,
+                    round: round,
+                    maxItems: request.maxItems,
+                  ),
+                );
+              })
+              .toList(growable: false);
           final responses = await Future.wait(futures, eagerError: false);
           providersUsed.add(providerId);
           roundProviders.add(providerId);
@@ -139,12 +143,12 @@ class AssistentRetrievalService {
         'newEvidenceCount': roundNewEvidence,
         'coverageScore': _coverageScore(deduped),
         'qualityScore': qScore,
-        'stopReason': shouldStop ? (qScore >= 0.65 ? 'quality_enough' : 'no_new_evidence') : '',
+        'stopReason': shouldStop
+            ? (qScore >= 0.65 ? 'quality_enough' : 'no_new_evidence')
+            : '',
       });
       if (shouldStop) {
-        final message = deduped.isEmpty
-            ? '检索未找到足够信息。'
-            : '检索完成。';
+        final message = deduped.isEmpty ? '检索未找到足够信息。' : '检索完成。';
         final refs = _buildAllReferences(deduped);
         final authScore = _authorityScore(deduped);
         final authCount = _authoritativeCount(deduped);
@@ -219,7 +223,9 @@ class AssistentRetrievalService {
     return '$query 最新';
   }
 
-  List<AssistentRetrievalItem> _dedupeItems(List<AssistentRetrievalItem> items) {
+  List<AssistentRetrievalItem> _dedupeItems(
+    List<AssistentRetrievalItem> items,
+  ) {
     final seen = <String>{};
     final result = <AssistentRetrievalItem>[];
     for (final item in items) {
@@ -271,19 +277,26 @@ class AssistentRetrievalService {
   }
 
   /// 构建全量参考资料列表，权威来源标记 cited=true
-  List<Map<String, dynamic>> _buildAllReferences(List<AssistentRetrievalItem> items) {
-    return items.take(8).map((item) {
-      final isAuth = (item.metadata['authorityScore'] as num?)?.toDouble() != null &&
-          (item.metadata['authorityScore'] as num).toDouble() > 0;
-      return <String, dynamic>{
-        'title': item.metadata['title'] ?? item.sourceId,
-        'url': item.metadata['url'] ?? item.sourceId,
-        'snippet': item.content.length > 120 ? item.content.substring(0, 120) : item.content,
-        'sourceType': item.sourceType,
-        'cited': isAuth,
-        'authorityScore': item.metadata['authorityScore'] ?? 0.0,
-      };
-    }).toList(growable: false);
+  List<Map<String, dynamic>> _buildAllReferences(
+    List<AssistentRetrievalItem> items,
+  ) {
+    return items
+        .take(8)
+        .map((item) {
+          final isAuth =
+              (item.metadata['authorityScore'] as num?)?.toDouble() != null &&
+              (item.metadata['authorityScore'] as num).toDouble() > 0;
+          return <String, dynamic>{
+            'title': item.metadata['title'] ?? item.sourceId,
+            'url': item.metadata['url'] ?? item.sourceId,
+            'snippet': item.content.length > 120
+                ? item.content.substring(0, 120)
+                : item.content,
+            'sourceType': item.sourceType,
+            'cited': isAuth,
+            'authorityScore': item.metadata['authorityScore'] ?? 0.0,
+          };
+        })
+        .toList(growable: false);
   }
 }
-

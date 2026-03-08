@@ -1,6 +1,8 @@
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 
 /// Behavior event for recommendation pipeline.
@@ -78,11 +80,13 @@ class RemoteBehaviorRepository extends BehaviorRepository {
   final CloudHttpClient _httpClient;
   final String _baseUrl;
 
+  Uri _uri(String path) => Uri.parse('$_baseUrl$path');
+
   @override
   Future<void> reportEvents({required List<BehaviorEvent> events}) async {
     if (events.isEmpty) return;
 
-    final uri = Uri.parse('$_baseUrl/v1/content/behaviors');
+    final uri = _uri(ContentApiMetadata.reportBehaviorsPath);
     final body = <String, dynamic>{
       'sessionId': CloudRequestHeaders.sessionId,
       'events': events.map((e) => e.toJson()).toList(),
@@ -91,7 +95,9 @@ class RemoteBehaviorRepository extends BehaviorRepository {
     try {
       await _httpClient.postJson(
         uri,
-        headers: CloudRequestHeaders.forPage('content.behavior.report'),
+        headers: CloudRequestHeaders.forPage(
+          ContentRequestPageIds.reportBehaviors,
+        ),
         body: body,
       );
     } catch (_) {

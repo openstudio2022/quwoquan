@@ -43,6 +43,8 @@ type PostService struct {
 	mediaAssets   map[string]postmodel.MediaAsset        // mediaID -> asset
 	uploadSession map[string]string                      // sessionID -> mediaID
 	comments      map[string][]map[string]any            // postID -> comments list
+	commentLikes  map[string]map[string]bool             // commentID -> userID -> liked
+	commentMaxLen int                                    // configurable, default 500
 }
 
 func NewPostService(store persistence.PostRepository, opts ...PostServiceOption) *PostService {
@@ -56,6 +58,8 @@ func NewPostService(store persistence.PostRepository, opts ...PostServiceOption)
 		mediaAssets:   map[string]postmodel.MediaAsset{},
 		uploadSession: map[string]string{},
 		comments:      map[string][]map[string]any{},
+		commentLikes:  map[string]map[string]bool{},
+		commentMaxLen: 500,
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -733,7 +737,7 @@ func (s *PostService) GetReactionState(postID, userID string) (liked, favorited 
 	return state.Liked, state.Favorited
 }
 
-func (s *PostService) AddComment(ctx context.Context, postID, userID, content, replyToCommentID string) (map[string]any, int64, error) {
+func (s *PostService) AddComment(ctx context.Context, postID, userID, content, replyToCommentID, personaId string) (map[string]any, int64, error) {
 	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
 	if !ok {
 		return nil, 0, rterr.NewAppError(
@@ -751,24 +755,72 @@ func (s *PostService) AddComment(ctx context.Context, postID, userID, content, r
 	if content == "" {
 		return nil, 0, rterr.NewInvalidArgument(rterr.ModuleContent, "评论内容不能为空", "empty comment content")
 	}
+	contentRunes := []rune(content)
+	if len(contentRunes) > s.commentMaxLen {
+		return nil, 0, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "comment_too_long"),
+			fmt.Sprintf("评论超出字数限制（最多 %d 字）", s.commentMaxLen),
+			fmt.Sprintf("comment length %d exceeds max %d", len(contentRunes), s.commentMaxLen),
+			false,
+		)
+	}
+
+	replyToCommentID = strings.TrimSpace(replyToCommentID)
+	var replyToUserId string
+	if replyToCommentID != "" {
+		for _, c := range s.comments[post.ID] {
+			if cid, _ := c["_id"].(string); cid == replyToCommentID {
+				replyToUserId, _ = c["authorId"].(string)
+				rc, _ := c["replyCount"].(int64)
+				c["replyCount"] = rc + 1
+				break
+			}
+		}
+	}
+
 	now := time.Now().UTC()
 	post.CommentCount++
 	post.UpdatedAt = now
 	_ = s.store.Update(ctx, post.ID, post)
+
+	isAuthor := userID == post.AuthorId
 	comment := map[string]any{
 		"_id":              fmt.Sprintf("comment_%d", now.UnixNano()),
 		"postId":           post.ID,
 		"authorId":         userID,
+		"personaId":        strings.TrimSpace(personaId),
 		"content":          content,
-		"replyToCommentId": strings.TrimSpace(replyToCommentID),
+		"replyToCommentId": replyToCommentID,
+		"replyToUserId":    replyToUserId,
+		"replyCount":       int64(0),
+		"likeCount":        int64(0),
+		"status":           "visible",
+		"isAuthor":         isAuthor,
 		"createdAt":        now.Format(time.RFC3339),
 		"deletedAt":        "",
 	}
 	s.comments[post.ID] = append(s.comments[post.ID], comment)
+
+	if s.publisher != nil {
+		_ = s.publisher.Publish(ctx, repository.DomainEvent{
+			Type:          "CommentCreated",
+			AggregateType: "Post",
+			AggregateID:   post.ID,
+			Payload: map[string]any{
+				"commentId":     comment["_id"],
+				"postId":        post.ID,
+				"authorId":      userID,
+				"content":       content,
+				"replyToUserId": replyToUserId,
+			},
+			OccurredAt: now.Format(time.RFC3339),
+		})
+	}
+
 	return comment, post.CommentCount, nil
 }
 
-func (s *PostService) ListComments(_ context.Context, postID, cursor string, limit int) ([]map[string]any, string, error) {
+func (s *PostService) ListComments(_ context.Context, postID, cursor, sort string, limit int) ([]map[string]any, string, error) {
 	if limit <= 0 {
 		limit = 20
 	}
@@ -784,9 +836,12 @@ func (s *PostService) ListComments(_ context.Context, postID, cursor string, lim
 		active = append(active, c)
 	}
 
-	// Reverse chronological
-	for i, j := 0, len(active)-1; i < j; i, j = i+1, j-1 {
-		active[i], active[j] = active[j], active[i]
+	if sort == "hot" {
+		sortCommentsByHot(active)
+	} else {
+		for i, j := 0, len(active)-1; i < j; i, j = i+1, j-1 {
+			active[i], active[j] = active[j], active[i]
+		}
 	}
 
 	startIdx := 0
@@ -816,6 +871,22 @@ func (s *PostService) ListComments(_ context.Context, postID, cursor string, lim
 	return page, nextCursor, nil
 }
 
+func sortCommentsByHot(comments []map[string]any) {
+	for i := 1; i < len(comments); i++ {
+		for j := i; j > 0; j-- {
+			if hotScore(comments[j]) > hotScore(comments[j-1]) {
+				comments[j], comments[j-1] = comments[j-1], comments[j]
+			}
+		}
+	}
+}
+
+func hotScore(c map[string]any) float64 {
+	likes, _ := c["likeCount"].(int64)
+	replies, _ := c["replyCount"].(int64)
+	return float64(likes)*10 + float64(replies)*5
+}
+
 func (s *PostService) DeleteComment(ctx context.Context, postID, commentID, userID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -830,14 +901,27 @@ func (s *PostService) DeleteComment(ctx context.Context, postID, commentID, user
 		author, _ := c["authorId"].(string)
 		if userID != "" && author != "" && author != userID {
 			return rterr.NewAppError(
-				rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "forbidden"),
+				rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "comment_forbidden_delete"),
 				"无权删除此评论",
 				"comment author mismatch",
 				false,
 			)
 		}
 		comments[i]["deletedAt"] = time.Now().UTC().Format(time.RFC3339)
+		comments[i]["status"] = "deleted"
 		found = true
+
+		if parentID, _ := c["replyToCommentId"].(string); parentID != "" {
+			for _, pc := range comments {
+				if pid, _ := pc["_id"].(string); pid == parentID {
+					rc, _ := pc["replyCount"].(int64)
+					if rc > 0 {
+						pc["replyCount"] = rc - 1
+					}
+					break
+				}
+			}
+		}
 		break
 	}
 	if !found {
@@ -869,6 +953,215 @@ func (s *PostService) DeleteComment(ctx context.Context, postID, commentID, user
 		})
 	}
 	return nil
+}
+
+func (s *PostService) LikeComment(ctx context.Context, commentID, userID string) (int64, bool, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		userID = "guest"
+	}
+	commentID = strings.TrimSpace(commentID)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	byComment, ok := s.commentLikes[commentID]
+	if !ok {
+		byComment = map[string]bool{}
+		s.commentLikes[commentID] = byComment
+	}
+	if byComment[userID] {
+		return 0, false, nil
+	}
+	byComment[userID] = true
+
+	var likeCount int64
+	for _, comments := range s.comments {
+		for _, c := range comments {
+			if cid, _ := c["_id"].(string); cid == commentID {
+				lc, _ := c["likeCount"].(int64)
+				lc++
+				c["likeCount"] = lc
+				likeCount = lc
+				break
+			}
+		}
+	}
+
+	if s.publisher != nil {
+		_ = s.publisher.Publish(ctx, repository.DomainEvent{
+			Type:          "CommentLiked",
+			AggregateType: "Post",
+			Payload: map[string]any{
+				"commentId": commentID,
+				"userId":    userID,
+				"likeCount": likeCount,
+			},
+			OccurredAt: time.Now().UTC().Format(time.RFC3339),
+		})
+	}
+
+	return likeCount, true, nil
+}
+
+func (s *PostService) UnlikeComment(_ context.Context, commentID, userID string) (int64, bool, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		userID = "guest"
+	}
+	commentID = strings.TrimSpace(commentID)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	byComment := s.commentLikes[commentID]
+	if !byComment[userID] {
+		return 0, false, nil
+	}
+	delete(byComment, userID)
+
+	var likeCount int64
+	for _, comments := range s.comments {
+		for _, c := range comments {
+			if cid, _ := c["_id"].(string); cid == commentID {
+				lc, _ := c["likeCount"].(int64)
+				if lc > 0 {
+					lc--
+				}
+				c["likeCount"] = lc
+				likeCount = lc
+				break
+			}
+		}
+	}
+
+	return likeCount, true, nil
+}
+
+func (s *PostService) IsCommentLiked(commentID, userID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.commentLikes[strings.TrimSpace(commentID)][strings.TrimSpace(userID)]
+}
+
+func (s *PostService) ListCommentsByAuthor(_ context.Context, userID, cursor string, limit int) ([]map[string]any, string, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	userID = strings.TrimSpace(userID)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var all []map[string]any
+	for _, comments := range s.comments {
+		for _, c := range comments {
+			if del, _ := c["deletedAt"].(string); del != "" {
+				continue
+			}
+			if aid, _ := c["authorId"].(string); aid == userID {
+				all = append(all, c)
+			}
+		}
+	}
+
+	for i, j := 0, len(all)-1; i < j; i, j = i+1, j-1 {
+		all[i], all[j] = all[j], all[i]
+	}
+
+	startIdx := 0
+	if cursor != "" {
+		for i, c := range all {
+			if cid, _ := c["_id"].(string); cid == cursor {
+				startIdx = i + 1
+				break
+			}
+		}
+	}
+	if startIdx >= len(all) {
+		return []map[string]any{}, "", nil
+	}
+	end := startIdx + limit
+	if end > len(all) {
+		end = len(all)
+	}
+	page := all[startIdx:end]
+	nextCursor := ""
+	if end < len(all) {
+		if cid, ok := page[len(page)-1]["_id"].(string); ok {
+			nextCursor = cid
+		}
+	}
+	return page, nextCursor, nil
+}
+
+func (s *PostService) ListCommentsForPostAuthor(ctx context.Context, userID, cursor string, limit int) ([]map[string]any, string, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	userID = strings.TrimSpace(userID)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	authorPostIDs := map[string]bool{}
+	for _, p := range s.store.ListByAuthor(ctx, userID, 10000, "") {
+		authorPostIDs[p.ID] = true
+	}
+
+	var all []map[string]any
+	for postID, comments := range s.comments {
+		if !authorPostIDs[postID] {
+			continue
+		}
+		for _, c := range comments {
+			if del, _ := c["deletedAt"].(string); del != "" {
+				continue
+			}
+			if aid, _ := c["authorId"].(string); aid != userID {
+				all = append(all, c)
+			}
+		}
+	}
+
+	for i, j := 0, len(all)-1; i < j; i, j = i+1, j-1 {
+		all[i], all[j] = all[j], all[i]
+	}
+
+	startIdx := 0
+	if cursor != "" {
+		for i, c := range all {
+			if cid, _ := c["_id"].(string); cid == cursor {
+				startIdx = i + 1
+				break
+			}
+		}
+	}
+	if startIdx >= len(all) {
+		return []map[string]any{}, "", nil
+	}
+	end := startIdx + limit
+	if end > len(all) {
+		end = len(all)
+	}
+	page := all[startIdx:end]
+	nextCursor := ""
+	if end < len(all) {
+		if cid, ok := page[len(page)-1]["_id"].(string); ok {
+			nextCursor = cid
+		}
+	}
+	return page, nextCursor, nil
+}
+
+func (s *PostService) GetAppConfig() map[string]any {
+	return map[string]any{
+		"content": map[string]any{
+			"comment": map[string]any{
+				"max_length":          s.commentMaxLen,
+				"reply_preview_count": 3,
+				"fold_line_count":     3,
+			},
+		},
+	}
 }
 
 func (s *PostService) GetCounters(ctx context.Context, postID string) (map[string]any, error) {

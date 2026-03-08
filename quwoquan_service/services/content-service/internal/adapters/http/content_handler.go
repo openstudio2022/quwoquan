@@ -466,10 +466,15 @@ func (h *ContentHandler) handleCreateComment(w http.ResponseWriter, r *http.Requ
 	var body struct {
 		Content          string `json:"content"`
 		ReplyToCommentID string `json:"replyToCommentId"`
+		PersonaId        string `json:"personaId"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
 		return
+	}
+	personaId := body.PersonaId
+	if personaId == "" {
+		personaId = strings.TrimSpace(r.Header.Get("X-Persona-Id"))
 	}
 	comment, commentCount, err := h.postService.AddComment(
 		r.Context(),
@@ -477,6 +482,7 @@ func (h *ContentHandler) handleCreateComment(w http.ResponseWriter, r *http.Requ
 		resolveUserID(r),
 		body.Content,
 		body.ReplyToCommentID,
+		personaId,
 	)
 	if err != nil {
 		writeHTTPError(w, err)
@@ -490,13 +496,14 @@ func (h *ContentHandler) handleCreateComment(w http.ResponseWriter, r *http.Requ
 
 func (h *ContentHandler) handleListComments(w http.ResponseWriter, r *http.Request, postID string) {
 	cursor := strings.TrimSpace(r.URL.Query().Get("cursor"))
+	sort := strings.TrimSpace(r.URL.Query().Get("sort"))
 	limit := 20
 	if raw := r.URL.Query().Get("limit"); raw != "" {
 		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
 			limit = n
 		}
 	}
-	comments, nextCursor, err := h.postService.ListComments(r.Context(), postID, cursor, limit)
+	comments, nextCursor, err := h.postService.ListComments(r.Context(), postID, cursor, sort, limit)
 	if err != nil {
 		writeHTTPError(w, err)
 		return
@@ -523,6 +530,88 @@ func (h *ContentHandler) handleDeleteComment(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *ContentHandler) handleLikeComment(w http.ResponseWriter, r *http.Request, commentID string) {
+	likeCount, changed, err := h.postService.LikeComment(r.Context(), commentID, resolveUserID(r))
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"commentId": commentID,
+		"liked":     true,
+		"changed":   changed,
+		"likeCount": likeCount,
+	})
+}
+
+func (h *ContentHandler) handleUnlikeComment(w http.ResponseWriter, r *http.Request, commentID string) {
+	likeCount, changed, err := h.postService.UnlikeComment(r.Context(), commentID, resolveUserID(r))
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"commentId": commentID,
+		"liked":     false,
+		"changed":   changed,
+		"likeCount": likeCount,
+	})
+}
+
+func (h *ContentHandler) handleListCommentsByAuthor(w http.ResponseWriter, r *http.Request) {
+	cursor := strings.TrimSpace(r.URL.Query().Get("cursor"))
+	limit := 20
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	comments, nextCursor, err := h.postService.ListCommentsByAuthor(r.Context(), resolveUserID(r), cursor, limit)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	resp := map[string]any{"items": comments}
+	if nextCursor != "" {
+		resp["nextCursor"] = nextCursor
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *ContentHandler) handleListCommentsForPostAuthor(w http.ResponseWriter, r *http.Request) {
+	cursor := strings.TrimSpace(r.URL.Query().Get("cursor"))
+	limit := 20
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	comments, nextCursor, err := h.postService.ListCommentsForPostAuthor(r.Context(), resolveUserID(r), cursor, limit)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	resp := map[string]any{"items": comments}
+	if nextCursor != "" {
+		resp["nextCursor"] = nextCursor
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *ContentHandler) handleGetAppConfig(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, h.postService.GetAppConfig())
+}
+
+func commentIDFromPath(path string) string {
+	parts := strings.Split(strings.Trim(strings.TrimSpace(path), "/"), "/")
+	for i, p := range parts {
+		if p == "comments" && i+1 < len(parts) {
+			return strings.TrimSpace(parts[i+1])
+		}
+	}
+	return ""
 }
 
 func (h *ContentHandler) handleGetCounters(w http.ResponseWriter, r *http.Request, postID string) {
@@ -658,6 +747,21 @@ func (h *ContentHandler) handleNotImplemented(w http.ResponseWriter, r *http.Req
 		return
 	case "ListUserPosts":
 		h.handleListUserPosts(w, r)
+		return
+	case "LikeComment":
+		h.handleLikeComment(w, r, commentIDFromPath(r.URL.Path))
+		return
+	case "UnlikeComment":
+		h.handleUnlikeComment(w, r, commentIDFromPath(r.URL.Path))
+		return
+	case "ListCommentsByAuthor":
+		h.handleListCommentsByAuthor(w, r)
+		return
+	case "ListCommentsForPostAuthor":
+		h.handleListCommentsForPostAuthor(w, r)
+		return
+	case "GetAppConfig":
+		h.handleGetAppConfig(w, r)
 		return
 	}
 	writeHTTPError(w, rterr.NewAppError(

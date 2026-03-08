@@ -9,7 +9,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagement_bar.dart';
 import 'package:quwoquan_app/components/more_actions_popup/configs/media_post_config.dart';
@@ -586,14 +585,6 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     CommentViewer.showModal(
       context: ctx,
       postId: postId,
-      initialComments: const [],
-      config: const CommentConfig(enabled: true),
-      onSubmitComment: (content) async {
-        await ref.read(contentRepositoryProvider).createComment(
-              postId: postId,
-              content: content,
-            );
-      },
     );
   }
 

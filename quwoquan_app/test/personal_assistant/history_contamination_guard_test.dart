@@ -22,8 +22,10 @@ class _InMemoryVectorStore implements AssistantVectorStore {
   }
 
   @override
-  Future<List<VectorMemoryItem>> search(List<double> queryVector,
-      {int limit = 5}) async {
+  Future<List<VectorMemoryItem>> search(
+    List<double> queryVector, {
+    int limit = 5,
+  }) async {
     return _items.take(limit).toList();
   }
 }
@@ -60,33 +62,12 @@ class _CapturingSequenceProvider implements AssistantLlmProvider {
   }
 }
 
-// ─── Helper: build AgentLoop ───────────────────────────────────────────────
-PersonalAssistantAgentLoop _buildLoop({
-  required List<String> answers,
-  required String tempPath,
-}) {
-  final provider = _CapturingSequenceProvider(answers);
-  final runtime = ReactRuntime(
-    llmProvider: provider,
-    toolRegistry: AssistantToolRegistry(),
-  );
-  return PersonalAssistantAgentLoop(
-    runtime,
-    sessionManager: AssistantSessionManager(
-      storagePath: '$tempPath/sessions.json',
-    ),
-    memoryRepository: AssistantMemoryRepository(
-      _InMemoryVectorStore(),
-    ),
-  );
-}
-
-/// 从 messages list 提取所有 assistant content（仅 role==assistant）
-List<String> _assistantContents(List<Map<String, dynamic>> msgs) {
-  return msgs
-      .where((m) => m['role'] == 'assistant')
+List<String> _assistantContents(List<dynamic> history) {
+  return history
+      .whereType<Map>()
+      .where((m) => (m['role'] as String?) == 'assistant')
       .map((m) => (m['content'] as String?) ?? '')
-      .toList();
+      .toList(growable: false);
 }
 
 void main() {
@@ -112,7 +93,7 @@ void main() {
       final runtime = ReactRuntime(
         llmProvider: provider = _CapturingSequenceProvider(<String>[
           '模型调用失败: HTTP 400 - Param Incorrect',
-          '{"userMarkdown":"深圳今天晴，25°C","decision":{"nextAction":"answer"}}'
+          '{"userMarkdown":"深圳今天晴，25°C","decision":{"nextAction":"answer"}}',
         ]),
         toolRegistry: AssistantToolRegistry(),
       );
@@ -125,16 +106,20 @@ void main() {
       );
 
       // 第一轮
-      await loop.run(const AssistantRunRequest(
-        sessionId: 'assistant',
-        messages: [AssistantRunMessage(role: 'user', content: '深圳天气')],
-      ));
+      await loop.run(
+        const AssistantRunRequest(
+          sessionId: 'assistant',
+          messages: [AssistantRunMessage(role: 'user', content: '深圳天气')],
+        ),
+      );
 
       // 第二轮
-      await loop.run(const AssistantRunRequest(
-        sessionId: 'assistant',
-        messages: [AssistantRunMessage(role: 'user', content: '那明天呢')],
-      ));
+      await loop.run(
+        const AssistantRunRequest(
+          sessionId: 'assistant',
+          messages: [AssistantRunMessage(role: 'user', content: '那明天呢')],
+        ),
+      );
 
       expect(provider.capturedMessages.length, greaterThanOrEqualTo(2));
       final secondCallMsgs = provider.capturedMessages[1];
@@ -159,13 +144,16 @@ void main() {
       ];
 
       for (final degraded in degradedTexts) {
-        final tempSub =
-            await Directory.systemTemp.createTemp('pa_degrade_guard_');
+        final tempSub = await Directory.systemTemp.createTemp(
+          'pa_degrade_guard_',
+        );
         try {
           late _CapturingSequenceProvider provider;
           final runtime = ReactRuntime(
-            llmProvider:
-                provider = _CapturingSequenceProvider([degraded, '正常答案']),
+            llmProvider: provider = _CapturingSequenceProvider([
+              degraded,
+              '正常答案',
+            ]),
             toolRegistry: AssistantToolRegistry(),
           );
           final loop = PersonalAssistantAgentLoop(
@@ -173,18 +161,21 @@ void main() {
             sessionManager: AssistantSessionManager(
               storagePath: '${tempSub.path}/sessions.json',
             ),
-            memoryRepository:
-                AssistantMemoryRepository(_InMemoryVectorStore()),
+            memoryRepository: AssistantMemoryRepository(_InMemoryVectorStore()),
           );
 
-          await loop.run(const AssistantRunRequest(
-            sessionId: 'assistant',
-            messages: [AssistantRunMessage(role: 'user', content: '问题1')],
-          ));
-          await loop.run(const AssistantRunRequest(
-            sessionId: 'assistant',
-            messages: [AssistantRunMessage(role: 'user', content: '问题2')],
-          ));
+          await loop.run(
+            const AssistantRunRequest(
+              sessionId: 'assistant',
+              messages: [AssistantRunMessage(role: 'user', content: '问题1')],
+            ),
+          );
+          await loop.run(
+            const AssistantRunRequest(
+              sessionId: 'assistant',
+              messages: [AssistantRunMessage(role: 'user', content: '问题2')],
+            ),
+          );
 
           if (provider.capturedMessages.length >= 2) {
             final secondMsgs = provider.capturedMessages[1];
@@ -217,11 +208,14 @@ void main() {
         'sessions': {
           'assistant': [
             {'role': 'user', 'content': '深圳天气'},
-            {'role': 'assistant', 'content': '模型调用失败: HTTP 400 - Param Incorrect'},
+            {
+              'role': 'assistant',
+              'content': '模型调用失败: HTTP 400 - Param Incorrect',
+            },
             {'role': 'user', 'content': '那明天呢'},
             {'role': 'assistant', 'content': '助手暂时不可用，请稍后重试。'},
-          ]
-        }
+          ],
+        },
       };
       await File(sessionsPath).writeAsString(jsonEncode(pollutedData));
 
@@ -234,11 +228,13 @@ void main() {
       expect(
         assistantContents,
         everyElement(
-          isNot(anyOf(
-            contains('模型调用失败'),
-            contains('助手暂时不可用'),
-            contains('HTTP 400'),
-          )),
+          isNot(
+            anyOf(
+              contains('模型调用失败'),
+              contains('助手暂时不可用'),
+              contains('HTTP 400'),
+            ),
+          ),
         ),
         reason: '从磁盘加载后，所有降级 assistant 消息应已被过滤',
       );
@@ -255,8 +251,8 @@ void main() {
             {'role': 'assistant', 'content': '深圳今天晴朗，气温25°C。'},
             {'role': 'user', 'content': '明天呢'},
             {'role': 'assistant', 'content': '明天多云，气温22-27°C。'},
-          ]
-        }
+          ],
+        },
       };
       await File(sessionsPath).writeAsString(jsonEncode(normalData));
 
@@ -276,13 +272,10 @@ void main() {
   // ══════════════════════════════════════════════════════════════════════════
   group('G3 — summarizeRecent 不得输出 JSON 格式的 assistant_turn_v2 原文', () {
     test('session 含 JSON envelope 时，summarizeRecent 输出纯文本', () {
-      final manager =
-          AssistantSessionManager(storagePath: '${tempDir.path}/sessions.json');
-      manager.appendMessage(
-        sessionId: 'test',
-        role: 'user',
-        content: '深圳天气',
+      final manager = AssistantSessionManager(
+        storagePath: '${tempDir.path}/sessions.json',
       );
+      manager.appendMessage(sessionId: 'test', role: 'user', content: '深圳天气');
       manager.appendMessage(
         sessionId: 'test',
         role: 'assistant',
@@ -304,23 +297,16 @@ void main() {
     });
 
     test('session 含降级文本时，summarizeRecent 跳过该条', () {
-      final manager =
-          AssistantSessionManager(storagePath: '${tempDir.path}/sessions.json');
-      manager.appendMessage(
-        sessionId: 'test',
-        role: 'user',
-        content: '深圳天气',
+      final manager = AssistantSessionManager(
+        storagePath: '${tempDir.path}/sessions.json',
       );
+      manager.appendMessage(sessionId: 'test', role: 'user', content: '深圳天气');
       manager.appendMessage(
         sessionId: 'test',
         role: 'assistant',
         content: '模型调用失败: HTTP 400 - Param Incorrect',
       );
-      manager.appendMessage(
-        sessionId: 'test',
-        role: 'user',
-        content: '那明天呢',
-      );
+      manager.appendMessage(sessionId: 'test', role: 'user', content: '那明天呢');
 
       final summary = manager.summarizeRecent('test');
       expect(

@@ -6,7 +6,7 @@ import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/integration/integration_location_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/core/services/data_service.dart';
-import 'package:quwoquan_app/features/create/services/publish_settings_services.dart';
+import 'package:quwoquan_app/ui/content/entry/services/publish_settings_services.dart';
 
 class _FakeDataService implements DataService {
   _FakeDataService({required this.circles});

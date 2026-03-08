@@ -3,8 +3,8 @@ import 'package:go_router/go_router.dart';
 
 import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/features/assistant/config/assistant_prompt_config.dart';
-import 'package:quwoquan_app/features/assistant/context/assistant_open_context.dart';
+import 'package:quwoquan_app/ui/assistant/config/assistant_prompt_config.dart';
+import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 
 /// 小趣半弹窗：约 50% 屏高、可拖拽，展示欢迎句、推荐 chips、「当前适合干啥」、输入框与「进入完整对话」。
 class AssistantHalfSheet extends StatelessWidget {

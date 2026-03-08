@@ -10,10 +10,8 @@
 ///   3. traces 中必须存在 type == toolError 且 message 包含根因信息（非固定文案）
 ///   4. finalText 不得是空字符串（用户必须看到某种提示）
 ///   5. finalText 不得含 JSON envelope key（assistant_turn_v2 / contractVersion）
+library;
 
-import 'dart:convert';
-
-import 'package:quwoquan_app/personal_assistant/app/capability_gateway.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/personal_assistant/tools/tool_schema.dart';
@@ -82,13 +80,11 @@ void _assertDegradedResponseContract(
     // message 不得是纯固定文案（必须含动态信息，如异常描述）
     final allMessages = errorTraces.map((t) => t.message).join(' ');
     final isOnlyFixedText =
-        allMessages == '助手暂时不可用，请稍后重试。' ||
-        allMessages.isEmpty;
+        allMessages == '助手暂时不可用，请稍后重试。' || allMessages.isEmpty;
     expect(
       isOnlyFixedText,
       isFalse,
-      reason:
-          '[$scenario] toolError trace.message 不得是纯固定文案，需包含根因动态信息',
+      reason: '[$scenario] toolError trace.message 不得是纯固定文案，需包含根因动态信息',
     );
 
     // 规则 4：finalText 不能为空
@@ -103,8 +99,7 @@ void _assertDegradedResponseContract(
       expect(
         response.finalText.contains(forbidden),
         isFalse,
-        reason:
-            '[$scenario] finalText 不得含 JSON envelope key: $forbidden',
+        reason: '[$scenario] finalText 不得含 JSON envelope key: $forbidden',
       );
     }
   });
@@ -176,7 +171,8 @@ void main() {
         reason: '负向测试确认：缺 errorCode 的 response 是可被检测的',
       );
       // 验证这样的 response 会触发规则 1 检测
-      final rule1Passes = invalidDegraded.errorCode != null &&
+      final rule1Passes =
+          invalidDegraded.errorCode != null &&
           invalidDegraded.errorCode!.trim().isNotEmpty;
       expect(
         rule1Passes,
@@ -186,30 +182,34 @@ void main() {
     });
 
     // ── 场景 4：finalText 含 JSON envelope — 负向测试 ─────────────────────
-    test('invalid degraded response — JSON envelope in finalText is detectable', () {
-      const jsonLeakingFinalText =
-          '{"assistant_turn_v2":{"decision":{"nextAction":"answer"}}}';
-      final leakingResponse = AssistantRunResponse(
-        finalText: jsonLeakingFinalText,
-        degraded: true,
-        errorCode: AssistantErrorCode.executionFailed.name,
-        traces: [
-          AssistantTraceEvent(
-            type: AssistantTraceEventType.toolError,
-            message: 'some error detail',
-            timestamp: DateTime.now(),
-          ),
-        ],
-      );
-      // 负向断言：这条 finalText 违反规则 5
-      final hasJsonLeak = _forbiddenInFinalText
-          .any((k) => leakingResponse.finalText.contains(k));
-      expect(
-        hasJsonLeak,
-        isTrue,
-        reason: '负向测试：finalText 含 JSON envelope key 可被检测',
-      );
-    });
+    test(
+      'invalid degraded response — JSON envelope in finalText is detectable',
+      () {
+        const jsonLeakingFinalText =
+            '{"assistant_turn_v2":{"decision":{"nextAction":"answer"}}}';
+        final leakingResponse = AssistantRunResponse(
+          finalText: jsonLeakingFinalText,
+          degraded: true,
+          errorCode: AssistantErrorCode.executionFailed.name,
+          traces: [
+            AssistantTraceEvent(
+              type: AssistantTraceEventType.toolError,
+              message: 'some error detail',
+              timestamp: DateTime.now(),
+            ),
+          ],
+        );
+        // 负向断言：这条 finalText 违反规则 5
+        final hasJsonLeak = _forbiddenInFinalText.any(
+          (k) => leakingResponse.finalText.contains(k),
+        );
+        expect(
+          hasJsonLeak,
+          isTrue,
+          reason: '负向测试：finalText 含 JSON envelope key 可被检测',
+        );
+      },
+    );
 
     // ── 场景 5：errorCode 不在枚举集 — 负向测试 ────────────────────────────
     test('unknown errorCode is detectable', () {
@@ -225,41 +225,45 @@ void main() {
     // 根因：_resolveAssistantDisplayText 的 _isProgressText 会把含"请稍"的文本
     // 判为进度占位文本，导致降级错误信息被丢弃，最终展示"助手暂时不可用"。
     // 修复：degraded==true 时直接返回 finalText，跳过 _isProgressText 过滤。
-    test('heuristic fallback finalText contains 请稍 but must be displayable', () {
-      const heuristicText =
-          '当前模型服务不可用，已进入安全降级模式。请稍后重试，或明确告诉我要查询的内容（例如"深圳天气"）。';
-      final response = AssistantRunResponse(
-        finalText: heuristicText,
-        degraded: true,
-        errorCode: AssistantErrorCode.executionFailed.name,
-        traces: <AssistantTraceEvent>[
-          AssistantTraceEvent(
-            type: AssistantTraceEventType.toolError,
-            message: 'heuristic_fallback: no model configured',
-            timestamp: DateTime.now(),
-          ),
-        ],
-      );
+    test(
+      'heuristic fallback finalText contains 请稍 but must be displayable',
+      () {
+        const heuristicText =
+            '当前模型服务不可用，已进入安全降级模式。请稍后重试，或明确告诉我要查询的内容（例如"深圳天气"）。';
+        final response = AssistantRunResponse(
+          finalText: heuristicText,
+          degraded: true,
+          errorCode: AssistantErrorCode.executionFailed.name,
+          traces: <AssistantTraceEvent>[
+            AssistantTraceEvent(
+              type: AssistantTraceEventType.toolError,
+              message: 'heuristic_fallback: no model configured',
+              timestamp: DateTime.now(),
+            ),
+          ],
+        );
 
-      // 契约：finalText 不为空
-      expect(response.finalText.trim().isNotEmpty, isTrue);
+        // 契约：finalText 不为空
+        expect(response.finalText.trim().isNotEmpty, isTrue);
 
-      // 文档化当前已知的"问题词"：finalText 含"请稍"（曾被 _isProgressText 误判）
-      expect(
-        response.finalText.contains('请稍'),
-        isTrue,
-        reason: '此测试记录了 finalText 含"请稍"这一已知问题词——'
-            'UI 层的 _resolveAssistantDisplayText 必须对 degraded==true '
-            '的响应直接返回 finalText，不得过滤',
-      );
+        // 文档化当前已知的"问题词"：finalText 含"请稍"（曾被 _isProgressText 误判）
+        expect(
+          response.finalText.contains('请稍'),
+          isTrue,
+          reason:
+              '此测试记录了 finalText 含"请稍"这一已知问题词——'
+              'UI 层的 _resolveAssistantDisplayText 必须对 degraded==true '
+              '的响应直接返回 finalText，不得过滤',
+        );
 
-      // 契约：degraded==true 时 finalText 就是最终展示内容，不得为空
-      expect(
-        response.degraded && response.finalText.trim().isNotEmpty,
-        isTrue,
-        reason: 'degraded响应的finalText是给用户看的最终说明，UI层必须直接展示它',
-      );
-    });
+        // 契约：degraded==true 时 finalText 就是最终展示内容，不得为空
+        expect(
+          response.degraded && response.finalText.trim().isNotEmpty,
+          isTrue,
+          reason: 'degraded响应的finalText是给用户看的最终说明，UI层必须直接展示它',
+        );
+      },
+    );
 
     // ── 场景 6：toJson/fromJson 序列化保留所有根因字段 ────────────────────
     test('degraded response serialization preserves errorCode and traces', () {
@@ -285,7 +289,10 @@ void main() {
       final restored = AssistantRunResponse.fromJson(json);
 
       expect(restored.degraded, isTrue);
-      expect(restored.errorCode, equals(AssistantErrorCode.executionFailed.name));
+      expect(
+        restored.errorCode,
+        equals(AssistantErrorCode.executionFailed.name),
+      );
       expect(restored.runId, equals('run-abc-123'));
       expect(restored.traceId, equals('trace-xyz-456'));
       expect(restored.traces.length, equals(1));

@@ -1,6 +1,8 @@
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 
 /// 举报 Repository（三层模式：Abstract → Mock → Remote）
@@ -31,7 +33,7 @@ class MockReportRepository extends ReportRepository {
       'targetId': targetId,
       'targetType': targetType,
       'reason': reason,
-      if (note != null) 'note': note,
+      'note': ?note,
     });
   }
 }
@@ -42,11 +44,14 @@ class RemoteReportRepository extends ReportRepository {
     CloudHttpClient? httpClient,
     http.Client? client,
     String? baseUrl,
-  })  : _httpClient = httpClient ?? CloudHttpClient(client: client ?? http.Client()),
-        _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
+  }) : _httpClient =
+           httpClient ?? CloudHttpClient(client: client ?? http.Client()),
+       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
 
   final CloudHttpClient _httpClient;
   final String _baseUrl;
+
+  Uri _uri(String path) => Uri.parse('$_baseUrl$path');
 
   @override
   Future<void> createReport({
@@ -55,7 +60,7 @@ class RemoteReportRepository extends ReportRepository {
     required String reason,
     String? note,
   }) async {
-    final uri = Uri.parse('$_baseUrl/v1/content/reports');
+    final uri = _uri(ContentApiMetadata.createReportPath);
     final body = <String, dynamic>{
       'targetId': targetId,
       'targetType': targetType,
@@ -64,7 +69,7 @@ class RemoteReportRepository extends ReportRepository {
     };
     await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage('content.report.create'),
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.createReport),
       body: body,
     );
   }

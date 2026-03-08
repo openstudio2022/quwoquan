@@ -21,14 +21,21 @@ class ProfileCirclesTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(profileNotifierProvider(userId)).state;
-    final fgSecondary = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
 
     if (state.circles.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.group_outlined, size: AppSpacing.xl * 2, color: fgSecondary),
+            Icon(
+              Icons.group_outlined,
+              size: AppSpacing.xl * 2,
+              color: fgSecondary,
+            ),
             SizedBox(height: AppSpacing.md),
             Text(
               mode == ProfileMode.mine ? '还没加入圈子' : 'Ta 还没加入圈子',
@@ -56,7 +63,7 @@ class ProfileCirclesTab extends ConsumerWidget {
     return ListView.separated(
       padding: EdgeInsets.all(AppSpacing.containerMd),
       itemCount: state.circles.length,
-      separatorBuilder: (_, __) => SizedBox(height: AppSpacing.sm),
+      separatorBuilder: (_, _) => SizedBox(height: AppSpacing.sm),
       itemBuilder: (context, index) {
         final circle = state.circles[index];
         return CircleCard(

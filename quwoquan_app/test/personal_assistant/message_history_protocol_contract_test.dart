@@ -9,6 +9,7 @@
 ///   3. summarizeRecent() 不得输出 JSON envelope 原文
 ///   4. summarizeRecent() 不得输出已知降级文案前缀
 ///   5. 消息序列化往返：tool_calls / tool_call_id 字段类型保持 dynamic（不被 toString）
+library;
 
 import 'dart:convert';
 import 'dart:io';
@@ -26,10 +27,7 @@ const _degradedPrefixes = <String>[
 ];
 
 // ─── JSON envelope keys ───────────────────────────────────────────────────────
-const _jsonEnvelopeKeys = <String>[
-  'assistant_turn_v2',
-  'contractVersion',
-];
+const _jsonEnvelopeKeys = <String>['assistant_turn_v2', 'contractVersion'];
 
 /// 写入 sessions.json 并用 SessionManager.load() 加载
 Future<AssistantSessionManager> _loadFrom(
@@ -115,59 +113,58 @@ void main() {
   });
 
   // ── 规则 3：load() 保留 dynamic 值类型（不做 toString 转换）──────────────
-  test('Rule-3: load() preserves value types (int/bool/list stay non-String)', () async {
-    final sm = await _loadFrom(tempDir, {
-      'version': 'v2',
-      'activeSessionId': 'assistant',
-      'sessions': {
-        'assistant': [
-          {
-            'role': 'assistant',
-            'content': '正常回答',
-            'tool_calls': [
-              {'id': 'call_abc', 'function': 'web_search', 'args': {}}
-            ],
-            'metadata': {'retryCount': 2, 'flag': true},
-          },
-        ],
-      },
-      'metadata': {},
-    });
+  test(
+    'Rule-3: load() preserves value types (int/bool/list stay non-String)',
+    () async {
+      final sm = await _loadFrom(tempDir, {
+        'version': 'v2',
+        'activeSessionId': 'assistant',
+        'sessions': {
+          'assistant': [
+            {
+              'role': 'assistant',
+              'content': '正常回答',
+              'tool_calls': [
+                {'id': 'call_abc', 'function': 'web_search', 'args': {}},
+              ],
+              'metadata': {'retryCount': 2, 'flag': true},
+            },
+          ],
+        },
+        'metadata': {},
+      });
 
-    final messages = sm.getOrCreateSession('assistant');
-    expect(messages.isNotEmpty, isTrue);
-    final msg = messages.first;
+      final messages = sm.getOrCreateSession('assistant');
+      expect(messages.isNotEmpty, isTrue);
+      final msg = messages.first;
 
-    // tool_calls 必须是 List，不能被 toString() 变成字符串
-    expect(
-      msg['tool_calls'],
-      isA<List>(),
-      reason: 'tool_calls 值类型应为 List，load() 不得 toString() 转换',
-    );
-    // metadata 数值不得变成字符串
-    final meta = msg['metadata'] as Map<String, dynamic>?;
-    expect(
-      meta?['retryCount'],
-      isA<int>(),
-      reason: 'metadata.retryCount 应为 int，不得被 toString() 转换为 String',
-    );
-    expect(
-      meta?['flag'],
-      isA<bool>(),
-      reason: 'metadata.flag 应为 bool，不得被 toString() 转换为 String',
-    );
-  });
+      // tool_calls 必须是 List，不能被 toString() 变成字符串
+      expect(
+        msg['tool_calls'],
+        isA<List>(),
+        reason: 'tool_calls 值类型应为 List，load() 不得 toString() 转换',
+      );
+      // metadata 数值不得变成字符串
+      final meta = msg['metadata'] as Map<String, dynamic>?;
+      expect(
+        meta?['retryCount'],
+        isA<int>(),
+        reason: 'metadata.retryCount 应为 int，不得被 toString() 转换为 String',
+      );
+      expect(
+        meta?['flag'],
+        isA<bool>(),
+        reason: 'metadata.flag 应为 bool，不得被 toString() 转换为 String',
+      );
+    },
+  );
 
   // ── 规则 4：appendMessage + save + load 往返不丢 content ─────────────────
   test('Rule-4: append→save→load round-trip preserves content', () async {
     final file = File('${tempDir.path}/sessions.json');
     final sm = AssistantSessionManager(storagePath: file.path);
 
-    sm.appendMessage(
-      sessionId: 'assistant',
-      role: 'user',
-      content: '你好',
-    );
+    sm.appendMessage(sessionId: 'assistant', role: 'user', content: '你好');
     sm.appendMessage(
       sessionId: 'assistant',
       role: 'assistant',
@@ -206,8 +203,7 @@ void main() {
       expect(
         summary.contains(key),
         isFalse,
-        reason:
-            'summarizeRecent() 不得将 JSON envelope key "$key" 输出到摘要中',
+        reason: 'summarizeRecent() 不得将 JSON envelope key "$key" 输出到摘要中',
       );
     }
   });
@@ -233,8 +229,7 @@ void main() {
       expect(
         summary.contains(prefix),
         isFalse,
-        reason:
-            'summarizeRecent() 不得输出含降级前缀 "$prefix" 的摘要行',
+        reason: 'summarizeRecent() 不得输出含降级前缀 "$prefix" 的摘要行',
       );
     }
   });
@@ -251,8 +246,11 @@ void main() {
     });
 
     final messages = sm.getOrCreateSession('assistant');
-    expect(messages.any((m) => m['content'] == normalContent), isTrue,
-        reason: 'v1 格式 load() 必须能正确读取 assistant 消息');
+    expect(
+      messages.any((m) => m['content'] == normalContent),
+      isTrue,
+      reason: 'v1 格式 load() 必须能正确读取 assistant 消息',
+    );
   });
 
   // ── 规则 8：load() 对空文件不崩溃 ────────────────────────────────────────
