@@ -1,0 +1,42 @@
+version: 1
+domain: recommendation
+display_name: Recommendation
+template_role: backlog_candidate
+rollout_group: wave_2_backfill
+acceptance_status: integration_pass
+metadata_paths:
+  - recommendation/rec_model
+service_names:
+  - recommendation-service
+control_planes:
+  platform:
+    enabled: true
+    object_types: [service_catalog_entry, plane_binding, alert_template]
+    config_prefixes: [sys.recommendation.]
+  product:
+    enabled: true
+    object_types: [recommendation_policy, experiment, guardrail]
+    config_prefixes: [ops.reco.]
+minimum_package:
+  metadata_files:
+    - contracts/metadata/recommendation/rec_model/service.yaml
+    - contracts/metadata/recommendation/rec_model/tests/e2e.yaml
+  codegen_targets: [go_runtime, python_runtime, ops_portal]
+  test_evidence:
+    t1:
+      - contracts/metadata/recommendation/rec_model/service.yaml
+    t2:
+      - services/rec-model-service/tests/test_runtime_contract.py
+    t3:
+      - contracts/metadata/recommendation/rec_model/tests/e2e.yaml
+    t4: []
+deployment:
+  plane_binding_domain: recommendation
+  plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
+  legacy_binding_source: deploy/shared/process_domain_mapping.yaml
+replication:
+  source_template: content
+  next_copy_targets: []
+  copy_notes:
+    - Recommendation already has runtime gate evidence; next step is to add onboarding-specific T3 and portal surfaces.
+blocking_gaps: []

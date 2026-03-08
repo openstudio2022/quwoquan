@@ -2,17 +2,19 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/personal_assistant/app/assistant_gateway.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/user_events.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/run_response.dart';
 
-enum OpenClawRemoteStreamEventType { chunk, trace, completed, failed }
+enum OpenClawRemoteStreamEventType { chunk, trace, userEvent, completed, failed }
 
 class OpenClawRemoteStreamEvent {
   const OpenClawRemoteStreamEvent._({
     required this.type,
     this.chunkText,
     this.trace,
+    this.userEvent,
     this.response,
     this.errorMessage,
   });
@@ -27,6 +29,12 @@ class OpenClawRemoteStreamEvent {
       OpenClawRemoteStreamEvent._(
         type: OpenClawRemoteStreamEventType.trace,
         trace: trace,
+      );
+
+  factory OpenClawRemoteStreamEvent.userEvent(UserEvent userEvent) =>
+      OpenClawRemoteStreamEvent._(
+        type: OpenClawRemoteStreamEventType.userEvent,
+        userEvent: userEvent,
       );
 
   factory OpenClawRemoteStreamEvent.completed(AssistantRunResponse response) =>
@@ -44,6 +52,7 @@ class OpenClawRemoteStreamEvent {
   final OpenClawRemoteStreamEventType type;
   final String? chunkText;
   final AssistantTraceEvent? trace;
+  final UserEvent? userEvent;
   final AssistantRunResponse? response;
   final String? errorMessage;
 }
@@ -255,6 +264,62 @@ class OpenClawBridge {
         return OpenClawRemoteStreamEvent.trace(
           AssistantTraceEvent.fromJson(decoded),
         );
+      }
+      return null;
+    }
+    if (eventName == 'user_event' ||
+        eventName == 'process_replace' ||
+        eventName == 'process_append' ||
+        eventName == 'process_commit') {
+      final eventJson = decoded != null
+          ? <String, dynamic>{
+              if (decoded.containsKey('type'))
+                ...decoded
+              else ...<String, dynamic>{
+                'type': eventName == 'user_event'
+                    ? (decoded['type'] as String? ?? 'process_append')
+                    : eventName,
+                'scope': (decoded['scope'] as String? ?? 'root'),
+                'message': (decoded['message'] as String?)?.trim() ?? payloadRaw,
+                'nodeId': (decoded['nodeId'] as String? ?? ''),
+                'runId': (decoded['runId'] as String? ?? ''),
+                'payload':
+                    (decoded['payload'] as Map?)?.cast<String, dynamic>() ??
+                    decoded,
+              },
+            }
+          : <String, dynamic>{
+              'type': eventName == 'user_event' ? 'process_append' : eventName,
+              'scope': 'root',
+              'message': payloadRaw,
+              'payload': const <String, dynamic>{},
+            };
+      return OpenClawRemoteStreamEvent.userEvent(UserEvent.fromJson(eventJson));
+    }
+    if (eventName == 'answer_delta') {
+      if (decoded != null &&
+          (decoded['scope'] != null || decoded['type'] != null)) {
+        final eventJson = <String, dynamic>{
+          'type': 'answer_delta',
+          'scope': (decoded['scope'] as String? ?? 'aggregation'),
+          'message':
+              (decoded['message'] as String?)?.trim() ??
+              (decoded['text'] as String?)?.trim() ??
+              '',
+          'nodeId': (decoded['nodeId'] as String? ?? ''),
+          'runId': (decoded['runId'] as String? ?? ''),
+          'payload':
+              (decoded['payload'] as Map?)?.cast<String, dynamic>() ?? decoded,
+        };
+        return OpenClawRemoteStreamEvent.userEvent(UserEvent.fromJson(eventJson));
+      }
+      final chunk = decoded != null
+          ? ((decoded['chunk'] as String?)?.trim().isNotEmpty == true
+                ? (decoded['chunk'] as String)
+                : ((decoded['text'] as String?) ?? payloadRaw))
+          : payloadRaw;
+      if (chunk.isNotEmpty) {
+        return OpenClawRemoteStreamEvent.chunk(chunk);
       }
       return null;
     }

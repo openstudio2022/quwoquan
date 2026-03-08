@@ -23,8 +23,10 @@ class ReactRuntimeResult {
 
   final String finalText;
   final List<AssistantTraceEvent> traces;
+
   /// true 表示本次 run 产出的是降级内容，不应写入 session/memory。
   final bool degraded;
+
   /// 对应 [AssistantFailureCode] 或 [AssistantErrorCode.name]，空串表示无错误。
   final String failureCode;
 }
@@ -151,10 +153,11 @@ class ReactRuntime {
               )['content'] ??
               '')
         : goal;
+    final executionShell = _resolveExecutionShell(templateVariables);
     final state = ReactRunState(
       goal: goalText,
       maxIterations: maxIterations,
-      toolBudget: maxIterations * 2,
+      toolBudget: executionShell.toolBudget,
     );
     final traces = <AssistantTraceEvent>[];
     void pushTrace(AssistantTraceEvent event) {
@@ -224,10 +227,7 @@ class ReactRuntime {
       final currentPhase = _determineUserPhase(state);
       final phaseHint = _buildPhaseHint(currentPhase, availableToolNames);
       if (phaseHint.isNotEmpty) {
-        messages.add(<String, String>{
-          'role': 'system',
-          'content': phaseHint,
-        });
+        messages.add(<String, String>{'role': 'system', 'content': phaseHint});
       }
 
       pushTrace(
@@ -315,13 +315,18 @@ class ReactRuntime {
       final extractSource = output.text.trim().isNotEmpty
           ? output.text
           : output.reasoningText;
-      final effectiveToolCalls = output.hasToolCalls
+      final rawToolCalls = output.hasToolCalls
           ? output.toolCalls
           : (availableToolNames.isEmpty
-              ? const <AssistantToolCall>[]
-              : _extractToolCallsFromJsonText(extractSource));
+                ? const <AssistantToolCall>[]
+                : _extractToolCallsFromJsonText(extractSource));
+      final effectiveToolCalls = _sanitizeToolCalls(
+        rawToolCalls,
+        shell: executionShell,
+      );
       // Track consecutive empty iterations for deadlock detection
-      final isEmptyOutput = output.text.trim().isEmpty && effectiveToolCalls.isEmpty;
+      final isEmptyOutput =
+          output.text.trim().isEmpty && effectiveToolCalls.isEmpty;
       if (isEmptyOutput) {
         state.consecutiveEmptyIterations += 1;
       } else {
@@ -384,24 +389,55 @@ class ReactRuntime {
       if (output.rawAssistantToolCallsMessage != null) {
         // 原始 assistant message 已含 tool_calls，直接加入（用 Map 类型）
         final rawMsg = output.rawAssistantToolCallsMessage!;
-        messages.add(<String, dynamic>{
-          'role': rawMsg['role'] ?? 'assistant',
-          if (rawMsg['content'] != null) 'content': rawMsg['content'],
-          'tool_calls': rawMsg['tool_calls'],
-        }.map((k, v) => MapEntry(k, v)));
+        final rawToolCalls =
+            (rawMsg['tool_calls'] as List?)?.cast<dynamic>() ??
+            const <dynamic>[];
+        final sanitizedToolCalls = rawToolCalls
+            .asMap()
+            .entries
+            .map((entry) {
+              final item = entry.value;
+              if (item is! Map) return item;
+              final sanitized = entry.key < effectiveToolCalls.length
+                  ? effectiveToolCalls[entry.key]
+                  : null;
+              if (sanitized == null) return item;
+              final function =
+                  (item['function'] as Map?)?.cast<String, dynamic>() ??
+                  const <String, dynamic>{};
+              return <String, dynamic>{
+                ...item.cast<String, dynamic>(),
+                'function': <String, dynamic>{
+                  ...function,
+                  'arguments': jsonEncode(sanitized.arguments),
+                },
+              };
+            })
+            .toList(growable: false);
+        messages.add(
+          <String, dynamic>{
+            'role': rawMsg['role'] ?? 'assistant',
+            if (rawMsg['content'] != null) 'content': rawMsg['content'],
+            'tool_calls': sanitizedToolCalls,
+          }.map((k, v) => MapEntry(k, v)),
+        );
       } else {
         // JSON 解析路径：为每个工具调用生成一个带 id 的 tool_calls 列表
-        final syntheticToolCalls = effectiveToolCalls.map((call) {
-          final callId = call.id.isNotEmpty ? call.id : 'call_${call.name}_${state.iteration}';
-          return <String, dynamic>{
-            'id': callId,
-            'type': 'function',
-            'function': <String, dynamic>{
-              'name': call.name,
-              'arguments': jsonEncode(call.arguments),
-            },
-          };
-        }).toList(growable: false);
+        final syntheticToolCalls = effectiveToolCalls
+            .map((call) {
+              final callId = call.id.isNotEmpty
+                  ? call.id
+                  : 'call_${call.name}_${state.iteration}';
+              return <String, dynamic>{
+                'id': callId,
+                'type': 'function',
+                'function': <String, dynamic>{
+                  'name': call.name,
+                  'arguments': jsonEncode(call.arguments),
+                },
+              };
+            })
+            .toList(growable: false);
         messages.add(<String, dynamic>{
           'role': 'assistant',
           'content': null,
@@ -460,7 +496,9 @@ class ReactRuntime {
         }
         state.usedTools += 1;
         if (step.toolName.contains('search')) {
-          final query = (step.arguments['query'] ?? step.arguments['keyword'] ?? '').toString();
+          final query =
+              (step.arguments['query'] ?? step.arguments['keyword'] ?? '')
+                  .toString();
           pushTrace(
             AssistantTraceEvent(
               type: AssistantTraceEventType.searchStarted,
@@ -469,10 +507,7 @@ class ReactRuntime {
               runId: runId,
               traceId: traceId,
               toolCallId: step.id,
-              data: <String, dynamic>{
-                'tool': step.toolName,
-                'query': query,
-              },
+              data: <String, dynamic>{'tool': step.toolName, 'query': query},
             ),
           );
         }
@@ -513,8 +548,7 @@ class ReactRuntime {
         );
         final isOk = result.success;
         final shouldSuppressToolErrorForUser =
-            !isOk &&
-            _shouldSuppressToolErrorForUser(step.toolName, result);
+            !isOk && _shouldSuppressToolErrorForUser(step.toolName, result);
         state.evidences.add(<String, dynamic>{
           'stepId': step.id,
           'tool': step.toolName,
@@ -553,7 +587,8 @@ class ReactRuntime {
               data: <String, dynamic>{
                 'tool': step.toolName,
                 'referenceCount': refs,
-                'qualityScore': (result.data?['qualityScore'] as num?)?.toDouble() ?? 0.0,
+                'qualityScore':
+                    (result.data?['qualityScore'] as num?)?.toDouble() ?? 0.0,
               },
             ),
           );
@@ -592,26 +627,42 @@ class ReactRuntime {
         }
         // Layer 3 反思循环：当 web_search 质量评分不足时，注入反思提示驱动 LLM 重写查询
         if (step.toolName == 'web_search' && isOk) {
-          final data = (result.data as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{};
-          final qualityScore = (data['qualityScore'] as num?)?.toDouble() ?? 0.0;
+          final data =
+              (result.data as Map?)?.cast<String, dynamic>() ??
+              const <String, dynamic>{};
+          final qualityScore =
+              (data['qualityScore'] as num?)?.toDouble() ?? 0.0;
           final reflectionRound = state.openQuestions
               .where((q) => q.startsWith('reflect_round:'))
               .length;
+          final allowedReflectionRounds =
+              executionShell.reflectionBudget < _reactPolicy.reflectionMaxRounds
+              ? executionShell.reflectionBudget
+              : _reactPolicy.reflectionMaxRounds;
           if (qualityScore < _reactPolicy.reflectionQualityScoreMin &&
-              reflectionRound < _reactPolicy.reflectionMaxRounds) {
+              reflectionRound < allowedReflectionRounds) {
             final roundLabel = 'reflect_round:${reflectionRound + 1}';
             state.openQuestions.add(roundLabel);
-            final authorityDomains = (data['authorityDomains'] as List?)?.cast<String>() ?? <String>[];
-            final refs = (data['references'] as List?)?.cast<Map<String, dynamic>>() ?? <Map<String, dynamic>>[];
-            final snippets = refs.take(3).map((r) => r['snippet'] ?? r['title'] ?? '').where((s) => s.isNotEmpty).toList();
+            final authorityDomains =
+                (data['authorityDomains'] as List?)?.cast<String>() ??
+                <String>[];
+            final refs =
+                (data['references'] as List?)?.cast<Map<String, dynamic>>() ??
+                <Map<String, dynamic>>[];
+            final snippets = refs
+                .take(3)
+                .map((r) => r['snippet'] ?? r['title'] ?? '')
+                .where((s) => s.isNotEmpty)
+                .toList();
             messages.add(<String, String>{
               'role': 'system',
-              'content': '本轮搜索质量评分过低（qualityScore=${qualityScore.toStringAsFixed(2)}），'
+              'content':
+                  '本轮搜索质量评分过低（qualityScore=${qualityScore.toStringAsFixed(2)}），'
                   '请诊断失败原因并生成3条差异化重写查询词：\n'
                   '失败信息: ${result.message}\n'
                   '目标权威域: ${authorityDomains.join(", ")}\n'
                   '已检索片段摘要: ${snippets.join(" | ")}\n'
-                  '这是第 ${reflectionRound + 1} 次反思（最多${_reactPolicy.reflectionMaxRounds}次）。'
+                  '这是第 ${reflectionRound + 1} 次反思（最多$allowedReflectionRounds次）。'
                   '请输出 JSON：failureReason（从 authority_domain_miss/query_too_generic/time_constraint_too_strict/provider_cache_stale/language_mismatch/missing_geo_context 中选）、'
                   'rewrittenQueries（3条，每条覆盖不同召回角度）、retryProvider。'
                   '然后重新调用 web_search 工具并选用不同 provider。\n'
@@ -674,9 +725,7 @@ class ReactRuntime {
               timestamp: DateTime.now(),
               runId: runId,
               traceId: traceId,
-              data: <String, dynamic>{
-                'reason': assessment.type.name,
-              },
+              data: <String, dynamic>{'reason': assessment.type.name},
             ),
           );
           break;
@@ -689,7 +738,8 @@ class ReactRuntime {
       // 尝试从 traces 中最后一次模型输出提取 userMarkdown 或完整 JSON 文本，
       // 避免用静态兜底文案覆盖有价值的模型输出。
       final lastDeltaIndex = traces.lastIndexWhere(
-        (e) => e.type == AssistantTraceEventType.assistantDelta &&
+        (e) =>
+            e.type == AssistantTraceEventType.assistantDelta &&
             e.message.trim().isNotEmpty,
       );
       if (lastDeltaIndex >= 0) {
@@ -823,7 +873,8 @@ class ReactRuntime {
       if (direct.isNotEmpty && seen.add(direct)) out.add(direct);
       final keyword = (args['keyword'] as String?)?.trim() ?? '';
       if (keyword.isNotEmpty && seen.add(keyword)) out.add(keyword);
-      final keywords = (args['keywords'] as List?)
+      final keywords =
+          (args['keywords'] as List?)
               ?.whereType<String>()
               .map((item) => item.trim())
               .where((item) => item.isNotEmpty)
@@ -834,6 +885,59 @@ class ReactRuntime {
       }
     }
     return out;
+  }
+
+  _RuntimeExecutionShell _resolveExecutionShell(
+    Map<String, dynamic> templateVariables,
+  ) {
+    final raw =
+        (templateVariables['skillExecutionShell'] as Map?)
+            ?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    return _RuntimeExecutionShell.fromMap(raw);
+  }
+
+  List<AssistantToolCall> _sanitizeToolCalls(
+    List<AssistantToolCall> toolCalls, {
+    required _RuntimeExecutionShell shell,
+  }) {
+    if (toolCalls.isEmpty) return toolCalls;
+    return toolCalls
+        .map((call) {
+          if (call.name != 'web_search') return call;
+          final args = Map<String, dynamic>.from(call.arguments);
+          final queryVariantsRaw = args['queryVariants'];
+          if (shell.variantBudget <= 0) {
+            args.remove('queryVariants');
+          } else if (queryVariantsRaw is List) {
+            args['queryVariants'] = queryVariantsRaw
+                .map((item) => item.toString().trim())
+                .where((item) => item.isNotEmpty)
+                .take(shell.variantBudget)
+                .toList(growable: false);
+          }
+          if (shell.providerPolicy == 'authority_first') {
+            args.remove('provider');
+            if (shell.authorityDomains.isNotEmpty) {
+              args['authorityDomains'] = shell.authorityDomains;
+            }
+          } else if (shell.providerPolicy == 'preferred_only' &&
+              shell.preferredProviders.isNotEmpty) {
+            args['provider'] = shell.preferredProviders.first;
+          }
+          final freshness = args['freshnessHoursMax'];
+          if (freshness is! num ||
+              freshness.toInt() <= 0 ||
+              freshness.toInt() > shell.freshnessHoursMax) {
+            args['freshnessHoursMax'] = shell.freshnessHoursMax;
+          }
+          return AssistantToolCall(
+            name: call.name,
+            arguments: args,
+            id: call.id,
+          );
+        })
+        .toList(growable: false);
   }
 
   Map<String, dynamic> _extractSlotDelta({
@@ -866,7 +970,10 @@ class ReactRuntime {
     try {
       // 去掉 <think>...</think> 标签
       final stripped = text
-          .replaceAll(RegExp(r'<think>[\s\S]*?</think>', caseSensitive: false), '')
+          .replaceAll(
+            RegExp(r'<think>[\s\S]*?</think>', caseSensitive: false),
+            '',
+          )
           .trim();
       // 找到第一个 JSON 对象
       final start = stripped.indexOf('{');
@@ -987,9 +1094,7 @@ class ReactRuntime {
         final tt = (decoded['thinkingText'] as String?)?.trim() ?? '';
         if (tt.isNotEmpty) return tt;
         final um = (decoded['userMarkdown'] as String?)?.trim() ?? '';
-        if (um.isNotEmpty &&
-            !um.startsWith('{') &&
-            um.length > 20) {
+        if (um.isNotEmpty && !um.startsWith('{') && um.length > 20) {
           return um;
         }
       }
@@ -1014,7 +1119,7 @@ class ReactRuntime {
   }
 
   static final _jsonKeyPattern = RegExp(
-    r'"(?:contractVersion|decision|nextAction|toolPlan|slotState|messageKind|tool_calls)'
+    r'"(?:contractVersion|decision|nextAction|toolPlan|slotState|messageKind|tool_calls)',
   );
 
   String _cleanReasoningForDisplay(String reasoning) {
@@ -1031,3 +1136,61 @@ class ReactRuntime {
   }
 }
 
+class _RuntimeExecutionShell {
+  const _RuntimeExecutionShell({
+    required this.toolBudget,
+    required this.variantBudget,
+    required this.reflectionBudget,
+    required this.providerPolicy,
+    required this.preferredProviders,
+    required this.authorityDomains,
+    required this.freshnessHoursMax,
+  });
+
+  final int toolBudget;
+  final int variantBudget;
+  final int reflectionBudget;
+  final String providerPolicy;
+  final List<String> preferredProviders;
+  final List<String> authorityDomains;
+  final int freshnessHoursMax;
+
+  factory _RuntimeExecutionShell.fromMap(Map<String, dynamic> map) {
+    return _RuntimeExecutionShell(
+      toolBudget: _positiveInt(map['toolBudget'], fallback: 12),
+      variantBudget: _nonNegativeInt(map['variantBudget'], fallback: 2),
+      reflectionBudget: _nonNegativeInt(map['reflectionBudget'], fallback: 2),
+      providerPolicy:
+          (map['providerPolicy'] as String?)?.trim().isNotEmpty == true
+          ? (map['providerPolicy'] as String).trim()
+          : 'model_choice',
+      preferredProviders: _stringList(map['preferredProviders']),
+      authorityDomains: _stringList(map['authorityDomains']),
+      freshnessHoursMax: _positiveInt(map['freshnessHoursMax'], fallback: 72),
+    );
+  }
+
+  static int _positiveInt(Object? value, {required int fallback}) {
+    if (value is num && value.toInt() > 0) return value.toInt();
+    final parsed = int.tryParse(value?.toString() ?? '');
+    if (parsed != null && parsed > 0) return parsed;
+    return fallback;
+  }
+
+  static int _nonNegativeInt(Object? value, {required int fallback}) {
+    if (value is num && value.toInt() >= 0) return value.toInt();
+    final parsed = int.tryParse(value?.toString() ?? '');
+    if (parsed != null && parsed >= 0) return parsed;
+    return fallback;
+  }
+
+  static List<String> _stringList(Object? value) {
+    if (value is List) {
+      return value
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
+    }
+    return const <String>[];
+  }
+}

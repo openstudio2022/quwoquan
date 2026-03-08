@@ -1,0 +1,112 @@
+version: 1
+feature: "product-ops"
+level: "service_prd"
+template: "A1-A8"
+scope: "product-control-plane"
+level_acceptance:
+  A1:
+    criteria: "`product-ops` 的产品范围被明确冻结，至少覆盖事件与指标、标签与分群、实验与灰度、推荐运营、内容治理、账号治理、申诉与恢复、客服与证据、策略中心。"
+    status: completed
+    linked_sections: ["Frozen Scope", "核心对象模型"]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    tests:
+      - "T1: `quwoquan_service/specs/product-ops/spec.md` 冻结菜单、对象模型与工作流模型"
+      - "T2: `apps/ops-portal` 构建通过并呈现 `Product Ops` 一级工作域"
+  A2:
+    criteria: "`product-ops` 与 `platform-ops` 的边界被明确冻结，`product-ops` 仅管理 `ops.*`、治理处置、实验、推荐运营与 IA/体验配置，不承载 `sys.*` 运行时参数与基础设施配置。"
+    status: completed
+    linked_sections: ["Frozen Scope", "ADDED Requirements"]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests:
+      - "T1: `contracts/metadata/_shared/config_schema.yaml` 对 `ops.*` 与 `sys.*` 分层建模"
+      - "T3: `make gate-full` 覆盖统一 metadata、codegen 与边界校验"
+  A3:
+    criteria: "统一门户中的 `Product Ops` 工作域具备与当前 App 语义风格一致的信息架构、工作台与业务总览仪表盘，并支持从大盘下钻到 case、实验、策略与审计对象。"
+    status: completed
+    linked_sections: ["Frozen Scope", "统一 Web 门户中的 Product Ops 板块"]
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: optional
+    tests:
+      - "T2: `apps/ops-portal` 构建产物包含 Product Ops 仪表盘、工作台与对象下钻入口"
+      - "T2: 门户使用统一 shell/menu metadata 渲染，不在前端额外维护导航表"
+  A4:
+    criteria: "治理处置、申诉、恢复、实验、推荐策略的对象模型和状态机被统一定义，账号恢复必须具备客服工作流、证据、SLA 与双签。"
+    status: completed
+    linked_sections: ["核心对象模型", "工作流模型"]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests:
+      - "T1: `workflow.yaml` 与 `audit_schema.yaml` 覆盖 case、evidence、SLA、dual-approval"
+      - "T3: 统一控制面 metadata 与 codegen 产物通过门禁"
+  A5:
+    criteria: "推荐运营必须覆盖召回、粗排、精排/重排的受控干预，且所有干预只能在受限参数空间内发生，并绑定 guardrail、灰度、审计与回滚。"
+    status: completed
+    linked_sections: ["Requirement: 推荐运营必须覆盖召回 / 粗排 / 精排", "推荐运营模型"]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests:
+      - "T1: `quwoquan_service/specs/product-ops/spec.md` 冻结召回 / 粗排 / 精排干预边界"
+      - "T3: Python / Go / Web 控制面契约通过 codegen 与门禁校验"
+  A6:
+    criteria: "高风险治理动作、账号恢复、推荐策略切换与实验大比例放量必须具备统一审计、审批链、证据引用与 rollback 上下文。"
+    status: completed
+    linked_sections: ["治理模型", "工作流模型"]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests:
+      - "T1: `audit_schema.yaml` 与 `workflow.yaml` 声明高风险动作审批和 rollback 上下文"
+      - "T2: 门户消费统一审计模型展示审批链与证据引用"
+  A7:
+    criteria: "`_shared/control_plane.yaml` 与 `_control_plane/product/control_plane.yaml`、`workflow.yaml`、`audit_schema.yaml`、`config_schema.yaml` 的共同对象、关键字段与 codegen 目标被统一冻结，可生成 Web / Go / Python / App 契约。"
+    status: completed
+    linked_sections: ["Requirement: 统一控制面契约元数据化", "后续 `/design` 需要比较的方案"]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests:
+      - "T1: 控制面 metadata 已落库并冻结 schema"
+      - "T3: Web / Go / Python / App 共同消费控制面 codegen 产物"
+  A8:
+    criteria: "`product-ops` 已形成可进入 `/dev` 的设计与任务基线，能够继续推进 metadata、codegen、门户开发、领域接入和统一验收。"
+    status: completed
+    linked_sections: ["后续 `/design` 需要比较的方案"]
+    test_layers:
+      T1: optional
+      T2: optional
+      T3: optional
+      T4: optional
+    tests:
+      - "T1: `quwoquan_service/specs/product-ops/spec.md` 已具备开发与验收输入"
+      - "T3: `releases/config/product-ops-service/v2026.03.08.0.yaml` 与统一门禁形成收口基线"
+notes:
+  benchmark_inputs:
+    - "Trust & Safety Console：治理处置、证据、审批、时间线"
+    - "Experiment / Feature Flag Platform：放量、guardrail、回滚"
+    - "Recommendation Ops Console：受控参数空间、灰度、审计"
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"
+archived: true
+archived_at: "2026-03-08T12:00:00Z"

@@ -1,0 +1,42 @@
+version: 1
+domain: integration
+display_name: Integration
+template_role: backlog_candidate
+rollout_group: wave_2_backfill
+acceptance_status: integration_pass
+metadata_paths:
+  - integration/location
+service_names:
+  - integration-service
+control_planes:
+  platform:
+    enabled: true
+    object_types: [service_catalog_entry, dependency_profile, plane_binding]
+    config_prefixes: [sys.integration.]
+  product:
+    enabled: true
+    object_types: [provider_policy]
+    config_prefixes: [ops.integration.]
+minimum_package:
+  metadata_files:
+    - contracts/metadata/integration/location/service.yaml
+    - contracts/metadata/integration/location/tests/e2e.yaml
+  codegen_targets: [go_runtime, python_runtime, ops_portal]
+  test_evidence:
+    t1:
+      - contracts/metadata/integration/location/service.yaml
+    t2:
+      - services/integration-service/internal/adapters/http/location_handler_test.go
+    t3:
+      - contracts/metadata/integration/location/tests/e2e.yaml
+    t4: []
+deployment:
+  plane_binding_domain: integration
+  plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
+  legacy_binding_source: deploy/shared/process_domain_mapping.yaml
+replication:
+  source_template: content
+  next_copy_targets: []
+  copy_notes:
+    - Integration domain should follow the same minimum package once provider governance objects are frozen.
+blocking_gaps: []

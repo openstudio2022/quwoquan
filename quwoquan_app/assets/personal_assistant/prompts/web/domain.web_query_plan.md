@@ -14,6 +14,7 @@
 - 若用户时间语义是"哪年/哪年哪月/哪年哪月哪日"，优先输出结构化槽位：`timeYear`、`timeMonth`、`timeDay`（按粒度填充）。
 - 若为 `custom` 必须补齐 `timeRangeStart/timeRangeEnd`。
 - 金融实时类查询必须携带权威来源域名白名单（authorityDomains）。
+- 若运行时注入了 `skillExecutionShell`，必须优先遵守其中的 `variantBudget/reflectionBudget/providerPolicy/authorityDomains/freshnessHoursMax`。
 
 ## 执行要求
 - 输出 JSON：`queryTasks[]` + `queryNormalization`。  
@@ -25,7 +26,7 @@
 - `originalInput`：用户原始输入
 - `detectedIntent`：识别到的查询意图类型（weather_realtime/finance_stock/news/etc.）
 - `normalizedQuery`：规范化后的主查询词（解决拼音→中文、英文→中文、口语→书面语、语病→纠正、模糊时间地点→明确化）
-- `queryVariants`：3条差异化查询变体（按以下策略生成）：
+- `queryVariants`：仅在 `skillExecutionShell.variantBudget > 0` 时输出，且数量不得超过预算：
   - variant_1：最精确查询（含时间+地点+关键维度，如"深圳今日实时天气 温度 湿度 风速"）
   - variant_2：宽泛查询（仅核心主题，提升召回率，如"深圳天气预报"）
   - variant_3：定向权威域查询（使用 `site:` 限定权威来源，如"深圳天气 site:weather.com.cn"）
@@ -67,10 +68,12 @@
 - 查询是否单主题？  
 - 是否覆盖关键事实目标？  
 - 是否具备可执行停止条件？
-- queryNormalization 是否已输出 queryVariants（3条）？
+- 是否遵守了 `skillExecutionShell` 的查询预算与 provider 策略？
+- 若 `variantBudget > 0`，queryNormalization 是否已输出 queryVariants？
 
 === CONTEXT_DATA_START ===
 {{domainId}}
 {{userQuery}}
 {{contextSlots}}
+{{skillExecutionShell}}
 === CONTEXT_DATA_END ===

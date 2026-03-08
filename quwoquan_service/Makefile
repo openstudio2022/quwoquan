@@ -1,4 +1,4 @@
-.PHONY: gate build test test-unit test-contract test-contract-local test-integration lint verify-metadata codegen codegen-app codegen-content-service codegen-rec-model-python codegen-storage dev dev-down clean
+.PHONY: gate build test test-unit test-contract test-contract-local test-integration lint verify-metadata codegen codegen-app codegen-ops-portal codegen-control-plane-runtime codegen-content-service codegen-rec-model-python codegen-storage dev dev-down clean
 
 # ─── Quality Gate ────────────────────────────────────────────────────
 gate:
@@ -45,10 +45,16 @@ lint:
 verify-metadata:
 	go run ./tools/verify_metadata/ contracts/metadata
 
-codegen: codegen-content-service codegen-storage codegen-rec-model-python
+codegen: codegen-content-service codegen-storage codegen-rec-model-python codegen-control-plane-runtime codegen-ops-portal
 
 codegen-app:
 	go run ./tools/codegen_app_metadata --metadata-dir contracts/metadata --app-dir ../quwoquan_app --integration-service-dir ./services/integration-service
+
+codegen-ops-portal:
+	go run ./tools/codegen_ops_portal_metadata --metadata-dir contracts/metadata --portal-dir ../apps/ops-portal
+
+codegen-control-plane-runtime:
+	go run ./tools/codegen_control_plane_runtime --metadata-dir contracts/metadata --go-out-dir ./generated/control_plane --python-out-dir ./services/rec-model-service/generated/control_plane
 
 codegen-content-service:
 	go run ./tools/codegen_content_service --metadata-dir contracts/metadata --output-dir services/content-service/internal --aggregate Post

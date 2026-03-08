@@ -1,0 +1,55 @@
+version: 1
+
+shared_fields:
+  - name: key
+    type: string
+    required: true
+  - name: owner
+    type: string
+    required: true
+  - name: type
+    type: string
+    required: true
+  - name: default
+    type: any
+    required: true
+  - name: scope
+    type: enum
+    required: true
+    allowed_values: [global, environment, service, plane, service_instance_group]
+  - name: reload
+    type: enum
+    required: true
+    allowed_values: [hot, warm, restart]
+  - name: risk_level
+    type: enum
+    required: true
+    allowed_values: [low, medium, high, critical]
+  - name: secret
+    type: bool
+    required: true
+  - name: rollout_mode
+    type: enum
+    required: true
+    allowed_values: [direct, package_gray, config_group_gray]
+
+examples:
+  - key: sys.chat.long_poll.interval_ms
+    owner: chat-team
+    type: int
+    default: 3000
+    scope: service
+    reload: hot
+    risk_level: high
+    secret: false
+    rollout_mode: package_gray
+
+  - key: sys.gateway.rate_limit.global_rps
+    owner: platform-team
+    type: int
+    default: 4000
+    scope: environment
+    reload: warm
+    risk_level: critical
+    secret: false
+    rollout_mode: config_group_gray

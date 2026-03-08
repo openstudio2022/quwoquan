@@ -1,0 +1,111 @@
+version: 1
+feature: "platform-ops"
+level: "service_prd"
+template: "A1-A8"
+scope: "platform-control-plane"
+level_acceptance:
+  A1:
+    criteria: "`platform-ops` 的产品范围被明确冻结，至少包含服务目录、配置中心、治理策略、发布灰度、环境与依赖、可观测与 SLO、Runbook、CI/CD 门禁。"
+    status: completed
+    linked_sections: ["Frozen Scope", "产品模型"]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    tests:
+      - "T1: `quwoquan_service/specs/platform-ops/spec.md` 冻结菜单、对象模型与领域接入矩阵"
+      - "T2: `apps/ops-portal` 构建通过并呈现 `Platform Ops` 一级工作域"
+  A2:
+    criteria: "`platform-ops` 与 `product-ops` 的边界被明确冻结，`platform-ops` 仅管理 `sys.*`、系统治理、配置包、发布与回滚，不承载业务策略、审核、实验、人群灰度、推荐运营。"
+    status: completed
+    linked_sections: ["Frozen Scope", "适用范围与约束"]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests:
+      - "T1: `contracts/metadata/_shared/config_schema.yaml` 与 `control_plane.yaml` 对 `sys.*` / control-plane 边界建模"
+      - "T3: `make gate-full` 覆盖统一 metadata、codegen 与门禁校验"
+  A3:
+    criteria: "每个领域的 `platform-control-plane` 契约独立于用户面 API，并支持短期 `seed-box` 同 Pod、长期独立 Deployment / Pod 的部署演进，不依赖当前拓扑。"
+    status: completed
+    linked_sections: ["ADDED Requirements", "适用范围与约束"]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests:
+      - "T1: `contracts/metadata/_shared/control_plane.yaml` 声明三类面与 deployment_profile"
+      - "T3: `deploy/shared/process_domain_mapping.yaml` 与 topology 门禁通过"
+  A4:
+    criteria: "配置包版本、灰度、审计、回滚、环境差异、依赖差异、高风险配置保护与 SLO / 告警 / Runbook 的统一口径被明确，并绑定统一门户的全局搜索、通知、工作台与审计入口。"
+    status: completed
+    linked_sections: ["产品模型", "ADDED Requirements"]
+    test_layers:
+      T1: optional
+      T2: optional
+      T3: required
+      T4: optional
+    tests:
+      - "T3: `releases/config/platform-ops-service/v2026.03.08.0.yaml` 进入版本化配置快照"
+      - "T2: `apps/ops-portal` 构建产物包含全局导航、通知、搜索与工作台入口"
+  A5:
+    criteria: "`sys.*` 系统参数范围被冻结，至少覆盖 long-polling 周期、超时、重试、熔断、限流、采样率、worker 并发、批处理大小等运行时参数。"
+    status: completed
+    linked_sections: ["ADDED Requirements", "元数据需求清单"]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests:
+      - "T1: `quwoquan_service/specs/platform-ops/spec.md` 明确 `sys.*` 运行时参数清单"
+      - "T3: `contracts/metadata/_shared/config_schema.yaml` 与门禁检查配置前缀分层"
+  A6:
+    criteria: "高风险配置与治理动作必须具备统一审计、危险动作确认与审批记录能力，且门户菜单与对象模型不得脱离 metadata 单独维护。"
+    status: completed
+    linked_sections: ["元数据需求清单", "ADDED Requirements", "产品模型"]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    tests:
+      - "T1: `audit_schema.yaml` 与控制面 metadata 声明 danger_level / audit_required / approval_mode"
+      - "T2: `apps/ops-portal` 消费 codegen 菜单与对象模型，不维护第二真相源"
+  A7:
+    criteria: "`control_plane.yaml`、`config_schema.yaml`、`portal_menu.yaml`、`portal_shell.yaml`、`audit_schema.yaml` 的元数据需求清单已冻结，并明确由 codegen 生成 Web / Go / Python 契约；各领域存在最低 `platform-control-plane` 接入对象集合。"
+    status: completed
+    linked_sections: ["元数据需求清单"]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests:
+      - "T1: `quwoquan_service/contracts/metadata/_shared/*.yaml` 已落库"
+      - "T3: Go / Python / Web 控制面 codegen 产物通过 `make gate-full`"
+  A8:
+    criteria: "后续 `/design` 的方案比较、领域接入矩阵与任务拆解已明确，可无歧义进入平台运维控制面的设计阶段。"
+    status: completed
+    linked_sections: ["`/design` 需要回答的方案比较", "`/design` 前的任务拆解"]
+    test_layers:
+      T1: optional
+      T2: optional
+      T3: optional
+      T4: optional
+    tests:
+      - "T1: `quwoquan_service/specs/platform-ops/spec.md` 已具备设计输入"
+      - "T3: 统一集成基线门禁通过后可直接进入实现与验收收口"
+notes:
+  benchmark_inputs:
+    - "Backstage + Argo Rollouts：统一研发自助入口、服务目录、配置灰度与回滚"
+    - "Sentinel / Service Mesh 思路：治理策略模板化与统一接入"
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"
+archived: true
+archived_at: "2026-03-08T12:00:00Z"

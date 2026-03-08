@@ -1,0 +1,10 @@
+# integration overrides (shared test env)
+service:
+  http:
+    addr: ":18086"
+
+redis:
+  rec:
+    mode: standalone
+    addr: ""
+    db: 0

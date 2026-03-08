@@ -162,6 +162,57 @@ void main() {
     expect(tappedRef!['url'], 'https://example.com/data');
   });
 
+  testWidgets('助理过程抽屉可从 uiProcessTimelineV2 恢复', (tester) async {
+    final message = _assistantMessage(
+      id: 'assistant_msg_timeline_v2',
+      content: '深圳天气晴朗',
+      extra: {
+        'uiProcessTimelineV2': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'scope': 'root',
+            'type': 'processReplace',
+            'nodeId': 'root.intent',
+            'summary': '已识别问题方向，准备开始处理',
+            'references': const <Map<String, dynamic>>[],
+          },
+          <String, dynamic>{
+            'scope': 'aggregation',
+            'type': 'processCommit',
+            'nodeId': 'aggregation.final',
+            'summary': '已核对 2 个来源，正在整理可直接参考的结论',
+            'references': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'title': '中国气象局',
+                'url': 'https://weather.cma.cn/shenzhen',
+                'source': 'weather.cma.cn',
+              },
+            ],
+          },
+        ],
+      },
+    );
+    await tester.pumpWidget(_bubbleHarness(message));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(
+      find.textContaining('已核对 2 个来源'),
+      findsOneWidget,
+      reason: '应优先从 uiProcessTimelineV2 恢复完成态摘要',
+    );
+
+    await tester.tap(find.textContaining('已核对 2 个来源').first);
+    await tester.pump(const Duration(milliseconds: 300));
+
+    await tester.tap(find.textContaining('已核对 2 个来源').last);
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(
+      find.textContaining('中国气象局'),
+      findsOneWidget,
+      reason: 'timeline v2 中的来源应可展开显示',
+    );
+  });
+
   testWidgets('助理 Markdown 与 card block 按层次渲染', (tester) async {
     final message = _assistantMessage(
       id: 'assistant_msg_md',

@@ -17,6 +17,14 @@ environments:
   dev:
     content-service:
       domains: [content]
+    product-ops-service:
+      domains: [ops]
+    circle-service:
+      domains: [circle]
+    seed-box:
+      domains: [assistant]
+    notification-service:
+      domains: [notification]
     integration-service:
       domains: [integration]
     recommendation-service:
@@ -35,6 +43,8 @@ environments:
       domains: [turn]
 
   integration:
+    product-ops-service:
+      domains: [ops]
     recommendation-service:
       domains: [recommendation]
     realtime-gateway:
@@ -46,9 +56,11 @@ environments:
     coturn:
       domains: [turn]
     seed-box:
-      domains: [content, integration, chat, user, circle, assistant, gateway, orchestrator]
+      domains: [content, integration, chat, user, circle, assistant, notification, gateway, orchestrator]
 
   prod:
+    product-ops-service:
+      domains: [ops]
     recommendation-service:
       domains: [recommendation]
     realtime-gateway:
@@ -60,4 +72,4 @@ environments:
     coturn:
       domains: [turn]
     seed-box:
-      domains: [content, integration, chat, user, circle, assistant, gateway, orchestrator]
+      domains: [content, integration, chat, user, circle, assistant, notification, gateway, orchestrator]

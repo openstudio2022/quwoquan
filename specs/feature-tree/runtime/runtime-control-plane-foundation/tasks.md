@@ -1,35 +1,90 @@
 # 开发任务：runtime-control-plane-foundation
 
-## 当前交付任务
-- [ ] P1 规格：冻结统一门户 `ops-portal` 的产品边界、一级/二级菜单、全局导航、权限、审计、通知、环境切换与搜索入口
-- [ ] P2 规格：冻结三类面架构：`user-plane`、`platform-control-plane`、`product-control-plane`
-- [ ] P3 规格：冻结控制面部署原则，明确短期 `seed-box` 同 Pod、长期独立 Deployment / Pod 与独立扩缩容
-- [ ] P4 规格：冻结控制面元数据对象：`portal_shell.yaml`、`portal_menu.yaml`、`control_plane.yaml`、`config_schema.yaml`、`workflow.yaml`、`audit_schema.yaml`
-- [ ] P5 规格：冻结 codegen 目标，明确 Web / Go / Python / App 的生成责任
-- [ ] P6 规格：冻结配置分层边界，明确 `sys.*` / `ops.*` / IaC 的职责划分
-- [ ] P7 规格：冻结端侧可配置边界，明确 IA / 布局 / 体验 flag 与运行时参数的归属差异
-- [ ] P8 规格：输出统一集成验收口径，定义后续 `platform-ops` 与 `product-ops` 完成后的收口检查项
+## 当前 /dev 交付任务
 
-## 搁置任务（带规划）
-- [ ] D1 延后到 `/design`：细化 `portal_shell.yaml` 与 `portal_menu.yaml` 的字段级 schema
-  - 搁置原因：当前阶段先冻结产品与边界，不进入字段级设计
-  - 重启条件：进入统一门户 `/design`
-  - 承接节点：本节点后续 `/design`
-- [ ] D2 延后到 `/design`：细化 `control_plane.yaml` 与 `config_schema.yaml` 的 codegen 模板与命名约定
-  - 搁置原因：需与 `runtime-codegen`、`codegen_app_metadata` 的现状一起设计
-  - 重启条件：进入控制面元数据 `/design`
-  - 承接节点：本节点后续 `/design`
-- [ ] D3 延后到 `/design`：定义 `process_domain_mapping` 向 `domain-plane -> process` 的演进模型
-  - 搁置原因：涉及现有部署契约与验证脚本
-  - 重启条件：进入部署与门禁设计
-  - 承接节点：本节点后续 `/design`
+### 阶段 0：准入与基线确认
+- [x] T0 确认控制面 metadata 唯一基线目录为 `quwoquan_service/contracts/metadata/_control_plane/`
+  - 目标：明确 `_control_plane/` 为实现基线，`_shared/*.yaml` 仅作探索残留，不作为 codegen 真相源
+  - 关联验收：A2、A7
+  - Red 测试入口：`go test ./tools/verify_metadata/...`
 
-## 未来演进任务
-- [ ] E1 细化统一门户壳层的 RBAC、通知中心、全局搜索与环境上下文设计
-- [ ] E2 细化 plane 级部署拓扑、HPA、资源画像与拆分触发条件
-- [ ] E3 细化控制面元数据到 Web / Go / Python / App 的 codegen 模板
-- [ ] E4 细化端侧 IA config 与 app route / surface / page metadata 的单一真相源模型
-- [ ] E5 将统一集成验收链路纳入 `make gate-full`
+### 阶段 1：metadata 校验器
+- [x] T1 Red：为 `tools/verify_metadata` 增加控制面 metadata 失败用例
+  - 目标：先让以下情况稳定失败
+    - 缺失 `portal_shell.yaml` / `portal_menu.yaml`
+    - `approval_mode` 非法
+    - `route_path` / `menu_id` 重复
+    - `dashboard` 与 `object_type` / `route` 关联缺失
+  - 关联验收：A1、A2、A6、A7
+  - Red 命令：`go test ./tools/verify_metadata/... -run ControlPlane`
+
+- [x] T2 Green：扩展 `tools/verify_metadata`，正式校验 `_control_plane/` 目录
+  - 目标：使校验器覆盖：
+    - `portal_shell.yaml`
+    - `portal_menu.yaml`
+    - `platform/control_plane.yaml`
+    - `platform/config_schema.yaml`
+    - `product/control_plane.yaml`
+    - `product/config_schema.yaml`
+    - `product/workflow.yaml`
+    - `product/audit_schema.yaml`
+  - 关联验收：A1、A2、A5、A6、A7
+  - 绿灯命令：`make verify-metadata`
+
+### 阶段 2：ops portal codegen
+- [x] T3 Red：为 `tools/codegen_ops_portal_metadata` 增加生成失败/输出断言测试
+  - 目标：先验证当前 metadata 无法被可靠转换为门户生成物时，测试应失败
+  - 重点断言：
+    - 生成 `portalShell.generated.ts`
+    - 生成 `portalMenu.generated.ts`
+    - 生成 platform/product 的 control plane、workflow、audit、config TS 模块
+    - 生成 `index.ts`
+  - 关联验收：A1、A4、A7
+  - Red 命令：`go test ./tools/codegen_ops_portal_metadata/...`
+
+- [x] T4 Green：对齐 `codegen_ops_portal_metadata` 与 `_control_plane/` schema
+  - 目标：支持门户风格语义、dashboard 编排、对象跳转、platform/product 控制面 generated TS 输出
+  - 关联验收：A1、A4、A7、A8
+  - 绿灯命令：`make codegen-ops-portal`
+
+### 阶段 3：全量 codegen 基线
+- [x] T5 运行 G1 基线并修复生成问题
+  - 顺序：
+    - `make verify-metadata`
+    - `make codegen`
+    - `make codegen-app`
+  - 目标：控制面 metadata 进入正式 verify/codegen 流程
+  - 关联验收：A2、A5、A7、A8
+
+### 阶段 4：统一门户集成就绪
+- [x] T6 建立门户生成物集成冒烟入口
+  - 目标：确认 `apps/ops-portal/src/generated/control-plane/` 产物齐全，且能作为门户实现输入
+  - 关联验收：A1、A4、A7、A8
+  - T2/T3 证据：生成文件清单、route/menu/dashboard schema 可解析
+
+- [x] T7 收口统一集成前置条件
+  - 目标：确认本节点达到“具备全面集成条件”
+  - 收口项：
+    - metadata 真相源唯一
+    - verify/codegen 流程打通
+    - dashboard schema 可生成
+    - 风格语义约束已进入门户生成边界
+    - 部署映射与对象跳转规则已可验证
+  - 关联验收：A1-A8
+
+## 每个任务完成后的自动卡点
+- `make build`
+- `make test-contract`
+- 若修改了 `quwoquan_app/lib/**/*.dart`，追加：`flutter test test/cloud/ test/components/ test/ui/`
+
+## 当前实现策略
+- 先打通 metadata → verify → codegen
+- 再确认门户 generated artifacts 可作为统一门户输入
+- 本会话不展开 `platform-ops` / `product-ops` 全量业务页面实现，而先完成“统一基础设施可被全面集成”的实现闭环
+
+## 当前进度
+- 已完成：T0-T7
+- 根仓 `make gate-full`：PASS
 
 ## 与子会话的边界
 

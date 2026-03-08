@@ -1,0 +1,15 @@
+config:
+  version: "v2026.03.08.0"
+  min_image_version: "0.0.1"
+  max_image_version: "9.9.9"
+
+service:
+  name: platform-ops-service
+
+http:
+  addr: ":18080"
+
+control_plane:
+  workspace: "platform-ops"
+  managed_config_prefixes:
+    - "sys."

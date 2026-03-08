@@ -1,0 +1,125 @@
+version: 1
+planes:
+  - user-plane
+  - platform-control-plane
+  - product-control-plane
+environments:
+  dev:
+    content-service:
+      bindings:
+        - domain: content
+          planes: [user-plane]
+    product-ops-service:
+      bindings:
+        - domain: ops
+          planes: [platform-control-plane, product-control-plane]
+    chat-service:
+      bindings:
+        - domain: chat
+          planes: [user-plane]
+    circle-service:
+      bindings:
+        - domain: circle
+          planes: [user-plane]
+    user-service:
+      bindings:
+        - domain: user
+          planes: [user-plane]
+    integration-service:
+      bindings:
+        - domain: integration
+          planes: [user-plane]
+    recommendation-service:
+      bindings:
+        - domain: recommendation
+          planes: [user-plane, platform-control-plane, product-control-plane]
+    realtime-gateway:
+      bindings:
+        - domain: realtime
+          planes: [user-plane, platform-control-plane, product-control-plane]
+    rtc-service:
+      bindings:
+        - domain: rtc
+          planes: [user-plane, platform-control-plane, product-control-plane]
+    seed-box:
+      bindings:
+        - domain: content
+          planes: [platform-control-plane, product-control-plane]
+        - domain: chat
+          planes: [platform-control-plane, product-control-plane]
+        - domain: circle
+          planes: [platform-control-plane, product-control-plane]
+        - domain: user
+          planes: [platform-control-plane, product-control-plane]
+        - domain: integration
+          planes: [platform-control-plane, product-control-plane]
+        - domain: assistant
+          planes: [user-plane, platform-control-plane, product-control-plane]
+        - domain: notification
+          planes: [user-plane, platform-control-plane, product-control-plane]
+  integration:
+    product-ops-service:
+      bindings:
+        - domain: ops
+          planes: [platform-control-plane, product-control-plane]
+    recommendation-service:
+      bindings:
+        - domain: recommendation
+          planes: [user-plane, platform-control-plane, product-control-plane]
+    realtime-gateway:
+      bindings:
+        - domain: realtime
+          planes: [user-plane, platform-control-plane, product-control-plane]
+    rtc-service:
+      bindings:
+        - domain: rtc
+          planes: [user-plane, platform-control-plane, product-control-plane]
+    seed-box:
+      bindings:
+        - domain: content
+          planes: [user-plane, platform-control-plane, product-control-plane]
+        - domain: integration
+          planes: [user-plane, platform-control-plane, product-control-plane]
+        - domain: chat
+          planes: [user-plane, platform-control-plane, product-control-plane]
+        - domain: user
+          planes: [user-plane, platform-control-plane, product-control-plane]
+        - domain: circle
+          planes: [user-plane, platform-control-plane, product-control-plane]
+        - domain: assistant
+          planes: [user-plane, platform-control-plane, product-control-plane]
+        - domain: notification
+          planes: [user-plane, platform-control-plane, product-control-plane]
+  prod:
+    product-ops-service:
+      bindings:
+        - domain: ops
+          planes: [platform-control-plane, product-control-plane]
+    recommendation-service:
+      bindings:
+        - domain: recommendation
+          planes: [user-plane, platform-control-plane, product-control-plane]
+    realtime-gateway:
+      bindings:
+        - domain: realtime
+          planes: [user-plane, platform-control-plane, product-control-plane]
+    rtc-service:
+      bindings:
+        - domain: rtc
+          planes: [user-plane, platform-control-plane, product-control-plane]
+    seed-box:
+      bindings:
+        - domain: content
+          planes: [user-plane, platform-control-plane, product-control-plane]
+        - domain: integration
+          planes: [user-plane, platform-control-plane, product-control-plane]
+        - domain: chat
+          planes: [user-plane, platform-control-plane, product-control-plane]
+        - domain: user
+          planes: [user-plane, platform-control-plane, product-control-plane]
+        - domain: circle
+          planes: [user-plane, platform-control-plane, product-control-plane]
+        - domain: assistant
+          planes: [user-plane, platform-control-plane, product-control-plane]
+        - domain: notification
+          planes: [user-plane, platform-control-plane, product-control-plane]

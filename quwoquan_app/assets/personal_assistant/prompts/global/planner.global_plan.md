@@ -53,10 +53,23 @@
 基于 `inferredMotive` 设计多维搜索：
 
 - `normalizedQuery`：规范化主查询词
-- `queryVariants`：3 条差异化查询词
+- `queryVariants`：仅在 `skillExecutionShell.variantBudget > 0` 时输出，且数量不得超过该预算
   - variant_1：直接回答表面问题（精确查询）
   - variant_2：满足深层需求（动机查询）
   - variant_3：权威来源定向（如 `site:weather.com.cn`）
+
+#### Skill 执行壳（最高优先级）
+
+以下策略由运行时注入，必须严格遵守，不得自行放宽：
+
+`{{skillExecutionShell}}`
+
+执行规则：
+- `variantBudget=0` 时，`queryVariants` 必须输出为空数组 `[]`
+- `reflectionBudget=0` 时，只允许当前轮检索，禁止为“提质”继续扩搜或切换 provider
+- `providerPolicy=authority_first` 时，优先围绕 `authorityDomains` 组织查询，不要随意指定非权威 provider
+- `freshnessHoursMax` 不得高于执行壳给出的上限
+- 简单实时问题优先快速收敛，不要为了“更懂用户动机”扩展成多主题检索
 
 #### 多技能融合（跨域时）
 
@@ -75,7 +88,7 @@
 - `primaryDomainId` 必须从 skill_catalog 中选择
 - `inferredMotive` 必须揭示用户深层需求，不能简单复述问题
 - 有 web_search 时 `queryNormalization` 必须输出
-- `queryVariants` 必须覆盖表面需求和深层动机
+- `queryVariants` 只有在 `variantBudget > 0` 时才允许输出，且必须覆盖表面需求和深层动机
 - `thinkingText` 必须为面向用户的自然中文，禁止出现 JSON 键名、字段路径、内部变量名
 - 跨域问题必须在 `subagentPlan` 中声明副技能
 
@@ -123,7 +136,7 @@
 ```json
 {
   "normalizedQuery": "深圳今日天气",
-  "queryVariants": ["深圳实时天气 温度 湿度", "深圳今天穿什么 出行建议", "深圳天气 site:weather.com.cn"],
+  "queryVariants": [],
   "inputIssues": [],
   "slotFills": { "city": "深圳", "timeScope": "today" }
 }
@@ -134,7 +147,8 @@
 - [ ] primaryDomainId 是否从 skill_catalog 中选择？
 - [ ] inferredMotive 是否揭示了用户深层需求？
 - [ ] 有 web_search 时 queryNormalization 是否已输出？
-- [ ] queryVariants 是否覆盖了表面需求和深层动机？
+- [ ] 是否严格遵守了 `skillExecutionShell` 的预算、provider 和 freshness 限制？
+- [ ] 若 `variantBudget > 0`，queryVariants 是否覆盖了表面需求和深层动机？
 - [ ] thinkingText 是否为面向用户的自然语言？
 - [ ] 跨域问题是否在 subagentPlan 中声明了副技能？
 

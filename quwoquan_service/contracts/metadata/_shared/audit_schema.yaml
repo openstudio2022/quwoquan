@@ -1,0 +1,37 @@
+version: 1
+
+audit_events:
+  - event_id: config.release.started
+    object_type: ConfigRelease
+    risk_level: high
+    capture_before_after: true
+    requires_approval_trace: true
+
+  - event_id: config.release.rolled_back
+    object_type: RollbackRecord
+    risk_level: critical
+    capture_before_after: true
+    requires_approval_trace: true
+
+  - event_id: governance.policy.bound
+    object_type: GovernancePolicyBinding
+    risk_level: high
+    capture_before_after: true
+    requires_approval_trace: false
+
+  - event_id: deployment.binding.changed
+    object_type: PlaneBinding
+    risk_level: high
+    capture_before_after: true
+    requires_approval_trace: true
+
+required_fields:
+  - audit_id
+  - actor
+  - actor_type
+  - environment
+  - object_ref
+  - action
+  - timestamp
+  - before
+  - after

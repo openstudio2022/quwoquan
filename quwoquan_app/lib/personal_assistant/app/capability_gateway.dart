@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:quwoquan_app/personal_assistant/app/assistant_gateway.dart';
 import 'package:quwoquan_app/personal_assistant/connectors/openclaw_bridge.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/assistant_turn_contract.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/user_events.dart';
 import 'package:quwoquan_app/personal_assistant/engine/llm_response_parser.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/assistant_content_filters.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/run_request.dart';
@@ -25,6 +26,8 @@ enum AssistantRunStreamEventType {
   phaseTimeline,
   // v3 user-facing phase events
   userPhaseEvent,
+  // v5 formal user event stream
+  userEvent,
   // v4 unified process update for single-drawer UI
   processUpdate,
 }
@@ -227,6 +230,18 @@ class AssistantRunStreamEvent {
         ),
       );
 
+  factory AssistantRunStreamEvent.userEvent(UserEvent event) =>
+      AssistantRunStreamEvent._(
+        type: AssistantRunStreamEventType.userEvent,
+        chunkText: event.message,
+        trace: AssistantTraceEvent(
+          type: AssistantTraceEventType.lifecycleStart,
+          message: event.message,
+          timestamp: DateTime.now(),
+          data: event.toJson(),
+        ),
+      );
+
   final AssistantRunStreamEventType type;
   final AssistantTraceEvent? trace;
   final String? chunkText;
@@ -247,6 +262,13 @@ class AssistantRunStreamEvent {
   /// For userPhaseEvent type, returns the associated tool name.
   String? get userPhaseToolName {
     return trace?.data?['toolName'] as String?;
+  }
+
+  UserEvent? get userFacingEvent {
+    if (type != AssistantRunStreamEventType.userEvent) return null;
+    final data = trace?.data;
+    if (data == null) return null;
+    return UserEvent.fromJson(data);
   }
 }
 
@@ -386,8 +408,18 @@ class CapabilityGateway {
           controller.add(AssistantRunStreamEvent.trace(event));
           // v2: emit semantic events based on trace type for granular UI
           _emitSemanticEvent(event, controller);
+          _emitUserEvent(event, controller);
         },
       );
+      final userEvents = (response.structuredResponse['userEvents'] as List?)
+          ?.whereType<Map>()
+          .map((item) => UserEvent.fromJson(item.cast<String, dynamic>()))
+          .toList(growable: false);
+      if (userEvents != null && userEvents.isNotEmpty && !controller.isClosed) {
+        for (final event in userEvents) {
+          controller.add(AssistantRunStreamEvent.userEvent(event));
+        }
+      }
       // v2: emit phase timeline from structured response
       final phases = (response.structuredResponse['uiPhaseTimelineV1'] as List?)
           ?.whereType<Map<String, dynamic>>()
@@ -432,6 +464,7 @@ class CapabilityGateway {
             controller.add(AssistantRunStreamEvent.trace(event));
             // 静默路径同样需要语义化，确保 UI 过程抽屉阶段正确推进
             _emitSemanticEvent(event, controller);
+            _emitUserEvent(event, controller);
           }
         },
       );
@@ -572,6 +605,12 @@ class CapabilityGateway {
         controller.add(AssistantRunStreamEvent.trace(event.trace!));
         // 远端 trace 事件同样需要语义化，确保 UI 过程抽屉阶段正确推进
         _emitSemanticEvent(event.trace!, controller);
+        _emitUserEvent(event.trace!, controller);
+        continue;
+      }
+      if (event.type == OpenClawRemoteStreamEventType.userEvent &&
+          event.userEvent != null) {
+        controller.add(AssistantRunStreamEvent.userEvent(event.userEvent!));
         continue;
       }
       if (event.type == OpenClawRemoteStreamEventType.chunk &&
@@ -586,6 +625,15 @@ class CapabilityGateway {
       }
     }
     return completed;
+  }
+
+  void _emitUserEvent(
+    AssistantTraceEvent event,
+    StreamController<AssistantRunStreamEvent> controller,
+  ) {
+    final userEvent = _UserEventTranslator.translate(event);
+    if (userEvent == null || controller.isClosed) return;
+    controller.add(AssistantRunStreamEvent.userEvent(userEvent));
   }
 
   void _emitSemanticEvent(
@@ -805,5 +853,146 @@ class CapabilityGateway {
       }
     }
     return local;
+  }
+}
+
+class _UserEventTranslator {
+  static UserEvent? translate(AssistantTraceEvent event) {
+    final data = event.data ?? const <String, dynamic>{};
+    switch (event.type) {
+      case AssistantTraceEventType.planStarted:
+        return const UserEvent(
+          type: UserEventType.processReplace,
+          scope: UserEventScope.root,
+          nodeId: 'root.intent',
+          message: '已理解你的问题，准备开始处理',
+        );
+      case AssistantTraceEventType.toolStart:
+        if (_isSearchLike(event, data)) {
+          final toolName = _toolName(data);
+          return UserEvent(
+            type: UserEventType.processAppend,
+            scope: UserEventScope.skill,
+            nodeId: toolName.isEmpty ? 'skill.search' : 'skill.$toolName',
+            message: '正在补充与问题相关的信息',
+            payload: <String, dynamic>{'toolName': toolName},
+          );
+        }
+        return null;
+      case AssistantTraceEventType.toolResult:
+        if (data['isAssessment'] == true) {
+          final userMessage = _sanitizeMessage(
+            (data['userMessage'] as String?)?.trim() ?? '',
+          );
+          if (userMessage.isEmpty) return null;
+          return UserEvent(
+            type: UserEventType.processAppend,
+            scope: UserEventScope.aggregation,
+            nodeId: 'aggregation.assessment',
+            message: userMessage,
+          );
+        }
+        final refs = (data['references'] as List?)?.length ?? 0;
+        if (refs > 0) {
+          return UserEvent(
+            type: UserEventType.processAppend,
+            scope: UserEventScope.skill,
+            nodeId: _toolName(data),
+            message: '已核对 $refs 个来源，继续整理关键信息',
+            payload: <String, dynamic>{'referenceCount': refs},
+          );
+        }
+        return null;
+      case AssistantTraceEventType.subagentStart:
+        final goal = _sanitizeMessage((data['goal'] as String?)?.trim() ?? '');
+        return UserEvent(
+          type: UserEventType.processAppend,
+          scope: UserEventScope.skill,
+          nodeId: (data['domainId'] as String?)?.trim() ?? 'skill.secondary',
+          runId: (data['subagentId'] as String?)?.trim() ?? '',
+          message: goal.isNotEmpty ? goal : '正在并行补充另一部分信息',
+          payload: data,
+        );
+      case AssistantTraceEventType.subagentResult:
+        return UserEvent(
+          type: UserEventType.processCommit,
+          scope: UserEventScope.skill,
+          nodeId: (data['domainId'] as String?)?.trim() ?? 'skill.secondary',
+          runId: (data['subagentId'] as String?)?.trim() ?? '',
+          message: _summarizeSubtask(data),
+          payload: data,
+        );
+      case AssistantTraceEventType.subagentError:
+        return UserEvent(
+          type: UserEventType.processAppend,
+          scope: UserEventScope.skill,
+          nodeId: (data['domainId'] as String?)?.trim() ?? 'skill.secondary',
+          runId: (data['subagentId'] as String?)?.trim() ?? '',
+          message: '这部分信息暂时还不完整，我继续用已有信息整理结果',
+          payload: data,
+        );
+      case AssistantTraceEventType.lifecycleEnd:
+        final userMessage = _sanitizeMessage(
+          (data['userMessage'] as String?)?.trim() ?? '',
+        );
+        if (userMessage.isEmpty) return null;
+        return UserEvent(
+          type: UserEventType.processCommit,
+          scope: UserEventScope.aggregation,
+          nodeId: 'aggregation.final',
+          message: userMessage,
+          payload: data,
+        );
+      default:
+        return null;
+    }
+  }
+
+  static bool _isSearchLike(
+    AssistantTraceEvent event,
+    Map<String, dynamic> data,
+  ) {
+    final toolName = _toolName(data).toLowerCase();
+    if (toolName.contains('search') || toolName.contains('fetch')) {
+      return true;
+    }
+    return event.message.toLowerCase().contains('search');
+  }
+
+  static String _toolName(Map<String, dynamic> data) {
+    return (data['toolName'] ?? data['tool'] ?? data['stepId'] ?? '')
+        .toString()
+        .split('_')
+        .first
+        .trim();
+  }
+
+  static String _summarizeSubtask(Map<String, dynamic> data) {
+    final summary = _sanitizeMessage((data['summary'] as String?)?.trim() ?? '');
+    if (summary.isNotEmpty) return summary;
+    final goal = _sanitizeMessage((data['goal'] as String?)?.trim() ?? '');
+    if (goal.isNotEmpty) return '已完成：$goal';
+    return '已完成这部分信息整理';
+  }
+
+  static String _sanitizeMessage(String raw) {
+    var text = raw.trim();
+    if (text.isEmpty) return '';
+    const blockedFragments = <String>[
+      'queryVariants',
+      'freshnessHoursMax',
+      'provider',
+      'contractVersion',
+      'assistant_turn_v4',
+      'tool_call',
+      '<tool_call>',
+      '</tool_call>',
+      'timeScope',
+    ];
+    for (final fragment in blockedFragments) {
+      if (text.contains(fragment)) return '';
+    }
+    if (text.startsWith('{') || text.startsWith('[')) return '';
+    return text;
   }
 }

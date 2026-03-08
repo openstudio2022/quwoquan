@@ -1805,6 +1805,13 @@ features:
       status: specified
       tags: []
       children:
+        - id: product-control-plane-foundation
+          name: product-control-plane-foundation
+          level: L2_feature
+          path: ../specs/feature-tree/product-ops-growth/product-control-plane-foundation
+          domain: ""
+          status: specified
+          tags: [product-ops, control-plane, governance, recommendation, workflow]
         - id: event-ingestion-and-analytics
           name: event-ingestion-and-analytics
           level: L2_feature
@@ -2165,8 +2172,16 @@ features:
           level: L2_feature
           path: ../specs/feature-tree/runtime/runtime-control-plane-foundation
           domain: ""
-          status: specified
+          status: completed
           tags: [portal, control-plane, metadata, codegen, deployment]
+          children:
+            - id: domain-onboarding-acceptance-governance
+              name: domain-onboarding-acceptance-governance
+              level: L3_subfeature
+              path: ../specs/feature-tree/runtime/runtime-control-plane-foundation/domain-onboarding-acceptance-governance
+              domain: ""
+              status: specified
+              tags: [onboarding, acceptance, control-plane, metadata, gate, deployment]
         - id: runtime-agentpack
           name: runtime-agentpack
           level: L2_feature

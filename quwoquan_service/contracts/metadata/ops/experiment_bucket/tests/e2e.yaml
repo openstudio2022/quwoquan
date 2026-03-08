@@ -1,0 +1,26 @@
+version: 1
+entity: ExperimentBucket
+layer: e2e
+
+description: |
+  Product Ops 端到端接入场景（integration/staging）。
+  关注统一门户读取实验列表、查看分桶结果与放量后的状态一致性。
+
+scenarios:
+  - name: product_ops_portal_reads_experiment_stats
+    steps:
+      - product ops opens experiments dashboard
+      - portal requests /v1/control-plane/product/experiments
+      - operator opens one experiment detail and reads bucket stats
+    assertions:
+      - experiment_list_visible
+      - bucket_stats_visible
+      - policy_version_rendered
+
+  - name: assign_bucket_then_read_stats
+    steps:
+      - product ops assigns a subject into discovery_feed_v3
+      - operator refreshes experiment stats
+    assertions:
+      - assigned_subject_count_incremented
+      - assigned_bucket_visible

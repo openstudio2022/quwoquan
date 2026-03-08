@@ -13,8 +13,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	mongoopts "go.mongodb.org/mongo-driver/v2/mongo/options"
 
-	rtredis "quwoquan_service/runtime/redis"
 	rtrec "quwoquan_service/runtime/recommendation"
+	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/runtime/testinfra"
 	contenhttp "quwoquan_service/services/content-service/internal/adapters/http"
 	"quwoquan_service/services/content-service/internal/application"
@@ -45,6 +45,7 @@ func TestMain(m *testing.M) {
 	// Falls back to TEST_MONGO_URI env var for CI environments that pre-provision Mongo.
 	// When Docker is unavailable locally, prints a warning and skips all L2 tests.
 	var postStore persistence.PostRepository
+	reportStore := persistence.NewInMemoryReportStore()
 	var mongoContainer *mongomod.MongoDBContainer
 
 	mongoURI := os.Getenv("TEST_MONGO_URI")
@@ -95,8 +96,9 @@ func TestMain(m *testing.M) {
 		postStore,
 		application.WithEventPublisher(eventSpy),
 	)
+	reportService := application.NewReportService(reportStore, eventSpy)
 	behaviorService := application.NewBehaviorService(hotPath, postStore)
-	testHandler = contenhttp.NewContentHandler(feedService, postService, behaviorService).Routes()
+	testHandler = contenhttp.NewContentHandler(feedService, postService, reportService, behaviorService).Routes()
 
 	code := m.Run()
 

@@ -1,0 +1,32 @@
+version: 1
+
+workflows:
+  - workflow_id: platform_config_publish
+    object_type: ConfigRelease
+    risk_aware: true
+    steps:
+      - submit
+      - review
+      - approve
+      - rollout
+      - observe
+      - complete
+
+  - workflow_id: platform_risk_override
+    object_type: GovernancePolicyBinding
+    risk_aware: true
+    steps:
+      - submit
+      - dual_approval
+      - execute
+      - audit_archive
+
+  - workflow_id: platform_manual_rollback
+    object_type: RollbackRecord
+    risk_aware: true
+    steps:
+      - trigger
+      - confirm
+      - execute
+      - verify
+      - archive

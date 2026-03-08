@@ -49,6 +49,8 @@ l2:
 
   # ─── 统一控制面基础：门户、三类面、元数据与部署组合 ───
   - feature: runtime-control-plane-foundation
+    l3:
+      - feature: domain-onboarding-acceptance-governance
 
   # ─── 底座层：已有 runtime 能力组件 ───
   - feature: runtime-config

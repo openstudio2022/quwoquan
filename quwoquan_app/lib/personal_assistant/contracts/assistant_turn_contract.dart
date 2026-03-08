@@ -1,3 +1,8 @@
+import 'aggregation_state.dart';
+import 'intent_graph.dart';
+import 'skill_run.dart';
+import 'user_events.dart';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // AssistantTurn 输出契约
 //
@@ -26,7 +31,14 @@ const String kAssistantTurnV2WrapKey = 'assistant_turn_v2';
 
 enum AssistantNextAction { toolCall, answer, askUser, retry, abort, unknown }
 
-enum AssistantMessageKind { progress, answer, askUser, error, fallback, unknown }
+enum AssistantMessageKind {
+  progress,
+  answer,
+  askUser,
+  error,
+  fallback,
+  unknown,
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -53,10 +65,17 @@ class AssistantTurnOutput {
     this.slotState = const <String, dynamic>{},
     this.askUser = const <String, dynamic>{},
     this.subagentPlan = const <Map<String, dynamic>>[],
+    this.intentGraph,
+    this.skillRuns = const <SkillRun>[],
+    this.aggregationState,
+    this.userEvents = const <UserEvent>[],
+    this.uiProcessTimelineV2 = const <Map<String, dynamic>>[],
     this.toolPlan = const <Map<String, dynamic>>[],
     this.missingContextSlots = const <String>[],
     this.fillGuidance = const <Map<String, dynamic>>[],
     this.followupPrompt = '',
+    this.processSummary = '',
+    this.processReferenceCount = 0,
   });
 
   final String contractVersion;
@@ -100,6 +119,21 @@ class AssistantTurnOutput {
   /// 子任务计划列表，每项含 `goal`、`domainId`、`timeoutMs` 等。
   final List<Map<String, dynamic>> subagentPlan;
 
+  /// 首轮导引结构化结果。
+  final IntentGraph? intentGraph;
+
+  /// 正式编排的 skillRun 列表。
+  final List<SkillRun> skillRuns;
+
+  /// 全局聚合状态。
+  final AggregationState? aggregationState;
+
+  /// 用户可见的流式事件。
+  final List<UserEvent> userEvents;
+
+  /// 消息级过程树持久化结构。
+  final List<Map<String, dynamic>> uiProcessTimelineV2;
+
   /// 工具执行计划，每项含 `tool`、`arguments`。
   final List<Map<String, dynamic>> toolPlan;
 
@@ -112,14 +146,19 @@ class AssistantTurnOutput {
   /// 追问提示文本。
   final String followupPrompt;
 
+  /// 过程区的一行摘要。
+  final String processSummary;
+
+  /// 过程区的可展开来源计数。
+  final int processReferenceCount;
+
   // ── 快捷访问 ──────────────────────────────────────────────────────────────
 
   /// decision.nextAction 快捷访问。
   String get nextAction => (decision['nextAction'] as String?)?.trim() ?? '';
 
   /// decision.confidence 快捷访问（0.0-1.0）。
-  double get confidence =>
-      (decision['confidence'] as num?)?.toDouble() ?? 0.0;
+  double get confidence => (decision['confidence'] as num?)?.toDouble() ?? 0.0;
 
   /// modelSelfScore.score 快捷访问（0-100）。
   double get selfScoreValue =>
@@ -187,14 +226,34 @@ class AssistantTurnOutput {
           (payload['askUser'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{},
       subagentPlan: _parseMapList(payload['subagentPlan']),
+      intentGraph: (payload['intentGraph'] as Map?) != null
+          ? IntentGraph.fromJson(
+              (payload['intentGraph'] as Map).cast<String, dynamic>(),
+            )
+          : null,
+      skillRuns: _parseMapList(payload['skillRuns'])
+          .map(SkillRun.fromJson)
+          .toList(growable: false),
+      aggregationState: (payload['aggregationState'] as Map?) != null
+          ? AggregationState.fromJson(
+              (payload['aggregationState'] as Map).cast<String, dynamic>(),
+            )
+          : null,
+      userEvents: _parseMapList(payload['userEvents'])
+          .map(UserEvent.fromJson)
+          .toList(growable: false),
+      uiProcessTimelineV2: _parseMapList(payload['uiProcessTimelineV2']),
       toolPlan: _parseMapList(payload['toolPlan']),
       missingContextSlots:
-          (payload['missingContextSlots'] as List?)
-              ?.whereType<String>()
-              .toList(growable: false) ??
+          (payload['missingContextSlots'] as List?)?.whereType<String>().toList(
+            growable: false,
+          ) ??
           const <String>[],
       fillGuidance: _parseMapList(payload['fillGuidance']),
       followupPrompt: (payload['followupPrompt'] as String?) ?? '',
+      processSummary: (payload['processSummary'] as String?)?.trim() ?? '',
+      processReferenceCount:
+          (payload['processReferenceCount'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -214,10 +273,17 @@ class AssistantTurnOutput {
     'slotState': slotState,
     'askUser': askUser,
     'subagentPlan': subagentPlan,
+    'intentGraph': intentGraph?.toJson(),
+    'skillRuns': skillRuns.map((item) => item.toJson()).toList(growable: false),
+    'aggregationState': aggregationState?.toJson(),
+    'userEvents': userEvents.map((item) => item.toJson()).toList(growable: false),
+    'uiProcessTimelineV2': uiProcessTimelineV2,
     'toolPlan': toolPlan,
     'missingContextSlots': missingContextSlots,
     'fillGuidance': fillGuidance,
     'followupPrompt': followupPrompt,
+    'processSummary': processSummary,
+    'processReferenceCount': processReferenceCount,
   };
 
   static List<Map<String, dynamic>> _parseMapList(dynamic value) {
@@ -260,8 +326,7 @@ class AssistantTurnDecision {
     final decisionMap =
         (answerPayload['decision'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
-    final nextActionRaw =
-        (decisionMap['nextAction'] as String?)?.trim() ?? '';
+    final nextActionRaw = (decisionMap['nextAction'] as String?)?.trim() ?? '';
     final messageKindRaw =
         (answerPayload['messageKind'] as String?)?.trim() ?? '';
     return AssistantTurnDecision(

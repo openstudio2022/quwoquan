@@ -9,90 +9,113 @@ tree_context:
   acceptance_inherits_from: "capability.runtime"
 level_acceptance:
   A1:
-    criteria: "统一 Web 门户 `ops-portal` 的产品边界、一级/二级菜单、全局导航、权限、审计、通知、环境切换与搜索入口被明确冻结，并可作为 `platform-ops` 与 `product-ops` 的共同上位规格。"
-    status: pending
-    linked_tasks: [P1]
+    criteria: "统一 Web 门户 `ops-portal` 的产品边界、一级/二级菜单、全局导航、权限、审计、通知、环境切换、搜索入口与 dashboard 入口被明确冻结，并可作为 `platform-ops` 与 `product-ops` 的共同上位规格。"
+    status: completed
+    linked_tasks: [P1, P9, D1, D8]
     test_layers:
       T1: required
       T2: optional
       T3: optional
       T4: optional
-    tests: []
+    tests:
+      - "T1: 校验 `portal_shell.yaml` 与 `portal_menu.yaml` schema 完整且 route/menu/surface 唯一"
+      - "T2: 门户壳层渲染一级/二级菜单、环境切换、全局搜索、通知、工作台与 dashboard 入口"
   A2:
     criteria: "统一门户不引入第二套控制面真相源，门户壳层仅承载全局能力与导航，不替代业务/系统配置的元数据来源。"
-    status: pending
-    linked_tasks: [P1, P4]
+    status: completed
+    linked_tasks: [P1, P4, D1, D2]
     test_layers:
       T1: required
       T2: optional
       T3: optional
       T4: optional
-    tests: []
+    tests:
+      - "T1: 检查门户 route/menu/jump rules 来自控制面 metadata，而非前端硬编码表"
+      - "T3: 检查 Web / Go / Python / App 共同消费控制面 metadata 的 codegen 产物"
   A3:
     criteria: "三类面 `user-plane`、`platform-control-plane`、`product-control-plane` 的契约边界与部署任意组合原则被明确冻结，支持短期 `seed-box` 同 Pod 与长期独立 Deployment / Pod。"
-    status: pending
-    linked_tasks: [P2, P3]
+    status: completed
+    linked_tasks: [P2, P3, D4, D6]
     test_layers:
       T1: required
       T2: optional
       T3: required
       T4: optional
-    tests: []
+    tests:
+      - "T1: 校验每个已接入领域声明三类面与最低对象/动作矩阵"
+      - "T3: 校验 `domain-plane -> process` 绑定完整性及同 Pod/独立 Pod 契约一致性"
   A4:
-    criteria: "统一门户与控制面全局能力可被审计与集成验证，包含审计、通知、环境切换、搜索、全局导航的统一口径。"
-    status: pending
-    linked_tasks: [P1, P8]
+    criteria: "统一门户与控制面全局能力可被审计与集成验证，包含审计、通知、环境切换、搜索、全局导航、dashboard 与对象下钻的统一口径。"
+    status: completed
+    linked_tasks: [P1, P8, P9, D1, D3, D7, D8]
     test_layers:
       T1: optional
       T2: required
       T3: optional
       T4: optional
-    tests: []
+    tests:
+      - "T2: 门户全局搜索、通知、导航、对象跳转、dashboard 下钻的集成冒烟"
+      - "T2: 高风险动作触发后在全局审计与工作台中可追踪"
   A5:
     criteria: "`sys.*`、`ops.*` 与 IaC/基础设施配置边界被明确冻结，端侧 IA / 布局 / 体验 flag 与运行时参数分层清晰。"
-    status: pending
-    linked_tasks: [P6, P7]
+    status: completed
+    linked_tasks: [P6, P7, D2, D4]
     test_layers:
       T1: required
       T2: optional
       T3: required
       T4: optional
-    tests: []
+    tests:
+      - "T1: 校验 `config_schema.yaml` 中 key 前缀、kind、scope、codegen_targets 一致"
+      - "T3: 校验端侧 IA/flag 只落 `ops.*`，运行时参数只落 `sys.*`"
   A6:
     criteria: "控制面与门户的权限、危险动作、审计、双签等全局安全治理要求有统一上位约束，不依赖具体控制面单独定义。"
-    status: pending
-    linked_tasks: [P1, P4, P8]
+    status: completed
+    linked_tasks: [P1, P4, P8, D1, D3, D7]
     test_layers:
       T1: required
       T2: optional
       T3: optional
       T4: optional
-    tests: []
+    tests:
+      - "T1: 校验危险动作声明 `danger_level`、`approval_mode`、`audit_required`"
+      - "T2: 校验双签动作在门户中展示确认、审批与审计入口"
   A7:
-    criteria: "控制面元数据对象 `portal_shell.yaml`、`portal_menu.yaml`、`control_plane.yaml`、`config_schema.yaml`、`workflow.yaml`、`audit_schema.yaml` 与 codegen 目标被统一定义，并可生成 Web / Go / Python / App 契约。"
-    status: pending
-    linked_tasks: [P4, P5]
+    criteria: "控制面元数据对象 `portal_shell.yaml`、`portal_menu.yaml`、`control_plane.yaml`、`config_schema.yaml`、`workflow.yaml`、`audit_schema.yaml` 与领域服务业务对象接入规范被统一定义，并可生成 Web / Go / Python / App 契约；其中门户风格语义与 dashboard 编排不引入第二真相源。"
+    status: completed
+    linked_tasks: [P4, P5, P9, D2, D3, D4, D5, D8]
     test_layers:
       T1: required
       T2: optional
       T3: required
       T4: optional
-    tests: []
+    tests:
+      - "T1: 校验 6 类 metadata schema 完整、命名唯一、关联完整"
+      - "T3: 校验 Web / Go / Python / App 的控制面 codegen 产物存在且类型可解析"
+      - "T3: 校验 dashboard schema、对象下钻 route 与 analytics view 关联完整"
   A8:
-    criteria: "统一集成验收口径已定义，可在 `platform-ops` 与 `product-ops` 完成后回到本节点完成统一门户、统一元数据、统一 codegen、统一部署组合、统一验收链路的收口。"
-    status: pending
-    linked_tasks: [P8]
+    criteria: "统一集成验收口径已定义，可在 `platform-ops` 与 `product-ops` 完成后回到本节点完成统一门户、统一元数据、统一 codegen、统一部署组合、统一风格语义、统一 dashboard 与统一验收链路的收口。"
+    status: completed
+    linked_tasks: [P8, P9, D7, D8]
     test_layers:
       T1: optional
       T2: optional
       T3: required
       T4: required
-    tests: []
+    tests:
+      - "T3: 校验统一门户、统一 metadata、统一 codegen、统一 deployment binding 的收口清单"
+      - "T4: 统一门户生产前冒烟，覆盖账号恢复双签、推荐 override 灰度/回滚链路与核心 dashboard 语义一致性"
 notes:
   benchmark_inputs:
     - "Backstage + Argo Rollouts：统一研发自助入口、服务目录、发布灰度"
     - "LaunchDarkly / Statsig / Amplitude：实验、归因、策略审计"
     - "TikTok / YouTube Studio / Trust & Safety：治理处置、申诉恢复、证据与审计工作流"
+    - "Datadog / Grafana / Amplitude Dashboard：多层级仪表盘、下钻分析、时间窗切换与异常归因"
 execution:
   local_gate: "make gate"
   full_gate: "make gate-full"
+design_readiness:
+  status: ready_for_dev
+  meaning: "本节点 PRD 与设计规格已补齐，可进入 metadata 基线、codegen、门户与控制面实现开发，并包含语义风格对齐与 dashboard 能力基线。"
+archived: true
+archived_at: "2026-03-08T07:26:32Z"

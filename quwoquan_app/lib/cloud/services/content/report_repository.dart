@@ -14,7 +14,7 @@ abstract class ReportRepository {
     required String targetId,
     required String targetType,
     required String reason,
-    String? note,
+    String? description,
   });
 }
 
@@ -27,13 +27,13 @@ class MockReportRepository extends ReportRepository {
     required String targetId,
     required String targetType,
     required String reason,
-    String? note,
+    String? description,
   }) async {
     submitted.add(<String, dynamic>{
       'targetId': targetId,
       'targetType': targetType,
       'reason': reason,
-      'note': ?note,
+      if (description != null && description.isNotEmpty) 'description': description,
     });
   }
 }
@@ -58,14 +58,14 @@ class RemoteReportRepository extends ReportRepository {
     required String targetId,
     required String targetType,
     required String reason,
-    String? note,
+    String? description,
   }) async {
     final uri = _uri(ContentApiMetadata.createReportPath);
     final body = <String, dynamic>{
       'targetId': targetId,
       'targetType': targetType,
       'reason': reason,
-      if (note != null && note.isNotEmpty) 'note': note,
+      if (description != null && description.isNotEmpty) 'description': description,
     };
     await _httpClient.postJson(
       uri,

@@ -1,0 +1,42 @@
+version: 1
+domain: rtc
+display_name: RTC
+template_role: backlog_candidate
+rollout_group: wave_2_backfill
+acceptance_status: integration_pass
+metadata_paths:
+  - rtc/call_session
+service_names:
+  - rtc-service
+control_planes:
+  platform:
+    enabled: true
+    object_types: [service_catalog_entry, plane_binding, slo_policy]
+    config_prefixes: [sys.rtc.]
+  product:
+    enabled: true
+    object_types: [call_policy, recovery_case]
+    config_prefixes: [ops.rtc.]
+minimum_package:
+  metadata_files:
+    - contracts/metadata/rtc/call_session/service.yaml
+    - contracts/metadata/rtc/call_session/tests/e2e.yaml
+  codegen_targets: [go_runtime, python_runtime, ops_portal]
+  test_evidence:
+    t1:
+      - contracts/metadata/rtc/call_session/service.yaml
+    t2:
+      - services/rtc-service/tests/room_management_contract_test.go
+    t3:
+      - contracts/metadata/rtc/call_session/tests/e2e.yaml
+    t4: []
+deployment:
+  plane_binding_domain: rtc
+  plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
+  legacy_binding_source: deploy/shared/process_domain_mapping.yaml
+replication:
+  source_template: content
+  next_copy_targets: []
+  copy_notes:
+    - RTC already has service-side contract evidence; next onboarding step is T3/T4 call journey acceptance.
+blocking_gaps: []

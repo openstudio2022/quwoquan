@@ -21,8 +21,9 @@ func newTestHandler() http.Handler {
 	engine := rtrec.NewEngine(hotPath, []rtrec.CandidateSource{source})
 	feedService := application.NewFeedService(engine, source)
 	postService := application.NewPostService(store)
+	reportService := application.NewReportService(persistence.NewInMemoryReportStore(), nil)
 	behaviorService := application.NewBehaviorService(hotPath, store)
-	return NewContentHandler(feedService, postService, behaviorService).Routes()
+	return NewContentHandler(feedService, postService, reportService, behaviorService).Routes()
 }
 
 func TestHealthz(t *testing.T) {

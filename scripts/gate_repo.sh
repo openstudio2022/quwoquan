@@ -104,6 +104,16 @@ run_app() {
   fi
 }
 
+run_portal() {
+  echo "[gate] ops-portal"
+  command -v npm >/dev/null 2>&1 || { echo "[gate] FAIL: npm not found in PATH" 1>&2; exit 1; }
+  if [[ ! -d node_modules ]]; then
+    npm install
+  fi
+  npm run ops-portal:test
+  npm run ops-portal:build
+}
+
 echo "[gate] repo quality gate (scope=$scope)"
 
 run_patrol_local() {
@@ -120,6 +130,7 @@ case "$scope" in
   all)
     run_service
     run_app
+    run_portal
     ;;
   service)
     run_service

@@ -1,0 +1,43 @@
+version: 1
+domain: circle
+display_name: Circle
+template_role: replica_ready
+rollout_group: wave_1_copy
+acceptance_status: integration_pass
+metadata_paths:
+  - social/circle
+service_names:
+  - circle-service
+control_planes:
+  platform:
+    enabled: true
+    object_types: [service_catalog_entry, plane_binding, gate_rule]
+    config_prefixes: [sys.circle.]
+  product:
+    enabled: true
+    object_types: [moderation_case, circle_growth_policy]
+    config_prefixes: [ops.circle.]
+minimum_package:
+  metadata_files:
+    - contracts/metadata/social/circle/service.yaml
+    - contracts/metadata/social/circle/tests/e2e.yaml
+  codegen_targets: [go_runtime, python_runtime, ops_portal]
+  test_evidence:
+    t1:
+      - contracts/metadata/social/circle/service.yaml
+    t2:
+      - services/circle-service/tests/circle_crud_contract_test.go
+      - services/circle-service/tests/circle_member_contract_test.go
+    t3:
+      - contracts/metadata/social/circle/tests/e2e.yaml
+    t4: []
+deployment:
+  plane_binding_domain: circle
+  plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
+  legacy_binding_source: deploy/shared/process_domain_mapping.yaml
+replication:
+  source_template: content
+  next_copy_targets: []
+  copy_notes:
+    - Reuse the content template for minimum package and swap in circle-specific service and test evidence.
+blocking_gaps: []

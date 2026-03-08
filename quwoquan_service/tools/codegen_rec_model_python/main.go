@@ -285,7 +285,7 @@ func generateRequestResponsePy(f *fieldsFile) string {
 	b.WriteString(genHeader)
 	b.WriteString("\nfrom __future__ import annotations\n\n")
 	b.WriteString("from typing import Any\n\n")
-	b.WriteString("from pydantic import BaseModel\n\n")
+	b.WriteString("from pydantic import BaseModel, ConfigDict\n\n")
 
 	entityNames := make(map[string]bool)
 	for name := range f.Entities {
@@ -319,7 +319,7 @@ func generateProjectionsPy(projections []projectionSpec) string {
 	b.WriteString(genHeader)
 	b.WriteString("\nfrom __future__ import annotations\n\n")
 	b.WriteString("from typing import Any\n\n")
-	b.WriteString("from pydantic import BaseModel\n\n")
+	b.WriteString("from pydantic import BaseModel, ConfigDict\n\n")
 
 	for _, p := range projections {
 		className := p.ReadModel
@@ -341,7 +341,7 @@ func generateProjectionsPy(projections []projectionSpec) string {
 			pyT := pyType(fd.Type, false, nil)
 			b.WriteString(fmt.Sprintf("    %s: %s = None\n", fd.Name, pyT))
 		}
-		b.WriteString(fmt.Sprintf("\n    class Config:\n        populate_by_name = True\n"))
+		b.WriteString("\n    model_config = ConfigDict(populate_by_name=True)\n")
 	}
 	return b.String()
 }
@@ -508,7 +508,7 @@ func generateTrainingSamplePy(beh *behaviorsYAML) string {
 	sb.WriteString(genHeader)
 	sb.WriteString("\nfrom __future__ import annotations\n\n")
 	sb.WriteString("from typing import Optional\n\n")
-	sb.WriteString("from pydantic import BaseModel, Field\n\n")
+	sb.WriteString("from pydantic import BaseModel, ConfigDict, Field\n\n")
 	sb.WriteString(fmt.Sprintf("from .content_features import %s\n\n\n", beh.RecommendFeatures.PythonClass))
 
 	ts := beh.TrainingSample
@@ -538,8 +538,8 @@ func generateTrainingSamplePy(beh *behaviorsYAML) string {
 
 	// signal metadata as class-level docs
 	if len(ts.PositiveSignals) > 0 || len(ts.NegativeSignals) > 0 {
-		sb.WriteString("\n    class Config:\n")
-		sb.WriteString("        json_schema_extra = {\n")
+		sb.WriteString("\n    model_config = ConfigDict(\n")
+		sb.WriteString("        json_schema_extra={\n")
 		sb.WriteString("            \"positive_signals\": [\n")
 		for _, s := range ts.PositiveSignals {
 			sb.WriteString(fmt.Sprintf("                {\"type\": \"%s\", \"weight\": %d},\n", s.Type, s.Weight))
@@ -550,7 +550,8 @@ func generateTrainingSamplePy(beh *behaviorsYAML) string {
 			sb.WriteString(fmt.Sprintf("                {\"type\": \"%s\", \"weight\": %d},\n", s.Type, s.Weight))
 		}
 		sb.WriteString("            ],\n")
-		sb.WriteString("        }\n")
+		sb.WriteString("        },\n")
+		sb.WriteString("    )\n")
 	}
 
 	return sb.String()

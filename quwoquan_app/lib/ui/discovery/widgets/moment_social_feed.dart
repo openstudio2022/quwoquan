@@ -181,6 +181,10 @@ class MomentSocialFeed extends ConsumerWidget {
                           await ref.read(keywordBlockRepositoryProvider).addBlockedKeyword(keyword);
                         },
                         onReport: () {
+                          ref.read(behaviorRepositoryProvider).reportSingle(
+                            contentId: dto.id,
+                            action: 'report',
+                          );
                           ref.read(reportRepositoryProvider).createReport(
                             targetId: dto.id,
                             targetType: 'post',

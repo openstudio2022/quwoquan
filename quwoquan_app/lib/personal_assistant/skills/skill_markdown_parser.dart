@@ -1,3 +1,5 @@
+import 'package:yaml/yaml.dart';
+
 class SkillMarkdownParseResult {
   const SkillMarkdownParseResult({
     required this.frontmatter,
@@ -35,6 +37,14 @@ class SkillMarkdownParser {
   }
 
   Map<String, dynamic> _parseFrontmatter(String raw) {
+    try {
+      final yaml = loadYaml(raw);
+      if (yaml is YamlMap) {
+        return _yamlMapToDartMap(yaml);
+      }
+    } catch (_) {
+      // Fall through to the permissive legacy parser.
+    }
     final out = <String, dynamic>{};
     final lines = raw.split('\n');
     for (final line in lines) {
@@ -71,5 +81,27 @@ class SkillMarkdownParser {
       return v.substring(1, v.length - 1).trim();
     }
     return v;
+  }
+
+  Map<String, dynamic> _yamlMapToDartMap(YamlMap map) {
+    final result = <String, dynamic>{};
+    for (final entry in map.entries) {
+      final key = entry.key.toString();
+      final value = entry.value;
+      if (value is YamlMap) {
+        result[key] = _yamlMapToDartMap(value);
+      } else if (value is YamlList) {
+        result[key] = value
+            .map((item) {
+              if (item is YamlMap) return _yamlMapToDartMap(item);
+              if (item is YamlList) return item.toList(growable: false);
+              return item;
+            })
+            .toList(growable: false);
+      } else {
+        result[key] = value;
+      }
+    }
+    return result;
   }
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"log/slog"
@@ -18,8 +19,8 @@ import (
 
 	rthttp "quwoquan_service/runtime/http"
 	robs "quwoquan_service/runtime/observability"
-	rtredis "quwoquan_service/runtime/redis"
 	rtrec "quwoquan_service/runtime/recommendation"
+	rtredis "quwoquan_service/runtime/redis"
 	httpadapter "quwoquan_service/services/content-service/internal/adapters/http"
 	"quwoquan_service/services/content-service/internal/application"
 	"quwoquan_service/services/content-service/internal/infrastructure/cache"
@@ -30,15 +31,15 @@ import (
 
 // redisSceneCfg holds configuration for a single Redis deployment (one logical scene).
 type redisSceneCfg struct {
-	Mode     string   `yaml:"mode"`     // "standalone" (default) | "cluster"
-	Addr     string   `yaml:"addr"`     // standalone: host:port
-	Addrs    []string `yaml:"addrs"`    // cluster: [host:port, ...]
+	Mode     string   `yaml:"mode"`  // "standalone" (default) | "cluster"
+	Addr     string   `yaml:"addr"`  // standalone: host:port
+	Addrs    []string `yaml:"addrs"` // cluster: [host:port, ...]
 	Password string   `yaml:"password"`
 	DB       int      `yaml:"db"`  // cluster mode ignores this
 	TLS      bool     `yaml:"tls"` // set true for Alibaba Cloud / VeCache public endpoints
 	Pool     struct {
-		Size           int `yaml:"size"`             // 0 = auto
-		MinIdle        int `yaml:"min_idle"`          // 0 = auto
+		Size           int `yaml:"size"`     // 0 = auto
+		MinIdle        int `yaml:"min_idle"` // 0 = auto
 		ReadTimeoutMs  int `yaml:"read_timeout_ms"`
 		WriteTimeoutMs int `yaml:"write_timeout_ms"`
 		DialTimeoutMs  int `yaml:"dial_timeout_ms"`
@@ -63,6 +64,10 @@ type config struct {
 		Database   string `yaml:"database"`
 		Collection string `yaml:"collection"`
 	} `yaml:"mongo"`
+
+	Postgres struct {
+		ReportDSN string `yaml:"report_dsn"`
+	} `yaml:"postgres"`
 
 	// Redis scenes:
 	//   rec     — recommendation hot path (session signals, exposed, negative)
@@ -118,6 +123,7 @@ func main() {
 	router := buildRedisRouter(cfg)
 	defer router.Close()
 	hotPath := rtrec.NewHotPath(rtredis.NewRecAdapter(router.Scene("rec")))
+	eventPub := messaging.NewRedisEventPublisher(router.Scene("general"), "content-service", logger)
 
 	// Read path: SessionCache wraps HotPath with L1 cache + singleflight
 	sessionCache := rtrec.NewSessionCache(hotPath, 2*time.Second, 10000)
@@ -128,6 +134,7 @@ func main() {
 
 	// Storage layer: MongoDB when mongo.uri is configured, else InMemory with seeds.
 	var store persistence.PostRepository
+	var reportStore persistence.ReportRepository
 	var postServiceOpts []application.PostServiceOption
 	postServiceOpts = append(postServiceOpts, application.WithSignalProcessor(bufferedWriter))
 	postServiceOpts = append(postServiceOpts, application.WithLogger(logger))
@@ -157,7 +164,6 @@ func main() {
 		log.Printf("content-service storage=mongodb db=%s collection=%s", dbName, collName)
 
 		// Event publisher: Redis Pub/Sub for cross-service consumption
-		eventPub := messaging.NewRedisEventPublisher(router.Scene("general"), "content-service", logger)
 		postServiceOpts = append(postServiceOpts, application.WithEventPublisher(eventPub))
 
 		// In-process projector: DiscoveryFeed read model
@@ -166,6 +172,24 @@ func main() {
 	} else {
 		store = persistence.NewPostStore(recinfra.DefaultSeedPosts())
 		log.Printf("content-service storage=inmemory (no mongo.uri configured)")
+	}
+
+	reportDSN := resolveReportDSN(cfg)
+	if reportDSN != "" {
+		db, err := sql.Open("postgres", reportDSN)
+		if err != nil {
+			log.Fatalf("content-service report postgres open failed: %v", err)
+		}
+		defer db.Close()
+		pgReportStore, err := persistence.NewPGReportStore(db)
+		if err != nil {
+			log.Fatalf("content-service report postgres init failed: %v", err)
+		}
+		reportStore = pgReportStore
+		log.Printf("content-service report storage=postgres")
+	} else {
+		reportStore = persistence.NewInMemoryReportStore()
+		log.Printf("content-service report storage=inmemory (no postgres.report_dsn configured)")
 	}
 
 	source := recinfra.NewPostRepositorySource(store)
@@ -190,8 +214,9 @@ func main() {
 	engine := rtrec.NewEngine(sessionCache, []rtrec.CandidateSource{source}, recOpts...)
 	feedService := application.NewFeedService(engine, source)
 	postService := application.NewPostService(store, postServiceOpts...)
+	reportService := application.NewReportService(reportStore, eventPub)
 	behaviorService := application.NewBehaviorService(bufferedWriter, store)
-	handler := httpadapter.NewContentHandler(feedService, postService, behaviorService).Routes()
+	handler := httpadapter.NewContentHandler(feedService, postService, reportService, behaviorService).Routes()
 
 	observedHandler := rthttp.NewHTTPServerMiddleware(handler, rthttp.HTTPServerMiddlewareConfig{
 		Service:           "content-service",
@@ -381,20 +406,24 @@ func compareSemver(a, b string) int {
 // Env vars take precedence over config.yaml values — intended for CI/CD injection.
 //
 // Rec Redis overrides:
-//   CONTENT_REDIS_REC_MODE         standalone | cluster
-//   CONTENT_REDIS_REC_ADDR         host:port  (standalone)
-//   CONTENT_REDIS_REC_ADDRS        host1:port,host2:port,...  (cluster)
-//   CONTENT_REDIS_REC_PASSWORD     password
-//   CONTENT_REDIS_REC_TLS          true | 1
+//
+//	CONTENT_REDIS_REC_MODE         standalone | cluster
+//	CONTENT_REDIS_REC_ADDR         host:port  (standalone)
+//	CONTENT_REDIS_REC_ADDRS        host1:port,host2:port,...  (cluster)
+//	CONTENT_REDIS_REC_PASSWORD     password
+//	CONTENT_REDIS_REC_TLS          true | 1
 //
 // General Redis overrides:
-//   CONTENT_REDIS_GENERAL_MODE, _ADDR, _ADDRS, _PASSWORD, _TLS  (same pattern)
+//
+//	CONTENT_REDIS_GENERAL_MODE, _ADDR, _ADDRS, _PASSWORD, _TLS  (same pattern)
 //
 // Backward-compatible legacy vars (mapped to rec scene):
-//   CONTENT_REDIS_ADDR, CONTENT_REDIS_PASSWORD, CONTENT_REDIS_DB
+//
+//	CONTENT_REDIS_ADDR, CONTENT_REDIS_PASSWORD, CONTENT_REDIS_DB
 //
 // RecModelService overrides:
-//   REC_MODEL_SERVICE_URL, REC_MODEL_SERVICE_ENABLED, REC_MODEL_SERVICE_TIMEOUT_MS
+//
+//	REC_MODEL_SERVICE_URL, REC_MODEL_SERVICE_ENABLED, REC_MODEL_SERVICE_TIMEOUT_MS
 func applyEnvOverrides(cfg *config) {
 	applyRedisSceneEnv("CONTENT_REDIS_REC", &cfg.Redis.Rec)
 	applyRedisSceneEnv("CONTENT_REDIS_GENERAL", &cfg.Redis.General)
@@ -480,6 +509,17 @@ func resolveMongoURI(cfg config) string {
 		return ""
 	}
 	return uri
+}
+
+func resolveReportDSN(cfg config) string {
+	if v := strings.TrimSpace(os.Getenv("REPORT_DATABASE_URL")); v != "" {
+		return v
+	}
+	dsn := strings.TrimSpace(cfg.Postgres.ReportDSN)
+	if dsn == "" || dsn == "${REPORT_DATABASE_URL}" {
+		return ""
+	}
+	return dsn
 }
 
 // buildRedisRouter creates a redis.Router from the YAML config.

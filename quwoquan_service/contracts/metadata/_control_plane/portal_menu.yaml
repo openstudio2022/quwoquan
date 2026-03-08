@@ -1,0 +1,185 @@
+menus:
+  - menu_id: overview
+    label: 总览
+    domain: overview
+    route_path: /
+    icon: layout-dashboard
+    order: 10
+    permission_scope: ops.portal.read
+    object_types: [dashboard]
+
+  - menu_id: platform-ops
+    label: Platform Ops
+    domain: platform-ops
+    route_path: /platform
+    icon: server-cog
+    order: 20
+    permission_scope: ops.platform.read
+    object_types: [service_config, config_release]
+
+  - menu_id: platform-config
+    parent_menu_id: platform-ops
+    label: 配置与可靠性
+    domain: platform-ops
+    route_path: /platform/config
+    icon: settings-2
+    order: 21
+    permission_scope: ops.platform.config.read
+    object_types: [service_config, config_release]
+
+  - menu_id: platform-service-catalog
+    parent_menu_id: platform-ops
+    label: 服务目录
+    domain: platform-ops
+    route_path: /platform/catalog
+    icon: boxes
+    order: 20
+    permission_scope: ops.platform.catalog.read
+    object_types: [service_catalog_entry, plane_binding]
+
+  - menu_id: platform-onboarding
+    parent_menu_id: platform-ops
+    label: 领域接入矩阵
+    domain: platform-ops
+    route_path: /platform/onboarding
+    icon: boxes
+    order: 22
+    permission_scope: ops.platform.catalog.read
+    object_types: [plane_binding]
+
+  - menu_id: platform-governance
+    parent_menu_id: platform-ops
+    label: 治理策略
+    domain: platform-ops
+    route_path: /platform/governance
+    icon: shield-check
+    order: 24
+    permission_scope: ops.platform.governance.read
+    object_types: [governance_policy_template, governance_policy_binding]
+
+  - menu_id: platform-rollout
+    parent_menu_id: platform-ops
+    label: 灰度与回滚
+    domain: platform-ops
+    route_path: /platform/rollout
+    icon: rocket
+    order: 23
+    permission_scope: ops.platform.rollout.read
+    object_types: [config_release]
+
+  - menu_id: platform-dependency
+    parent_menu_id: platform-ops
+    label: 环境与依赖
+    domain: platform-ops
+    route_path: /platform/dependency
+    icon: network
+    order: 25
+    permission_scope: ops.platform.dependency.read
+    object_types: [environment_topology, dependency_profile, capacity_profile]
+
+  - menu_id: platform-observability
+    parent_menu_id: platform-ops
+    label: 可观测与 SLO
+    domain: platform-ops
+    route_path: /platform/observability
+    icon: chart-area
+    order: 26
+    permission_scope: ops.platform.observability.read
+    object_types: [slo_policy, alert_template, dashboard_card]
+
+  - menu_id: platform-runbook
+    parent_menu_id: platform-ops
+    label: Runbook 与演练
+    domain: platform-ops
+    route_path: /platform/runbook
+    icon: book-open-text
+    order: 27
+    permission_scope: ops.platform.runbook.read
+    object_types: [runbook]
+
+  - menu_id: platform-gates
+    parent_menu_id: platform-ops
+    label: CI/CD 门禁
+    domain: platform-ops
+    route_path: /platform/gates
+    icon: badge-check
+    order: 28
+    permission_scope: ops.platform.gate.read
+    object_types: [gate_rule]
+
+  - menu_id: product-ops
+    label: Product Ops
+    domain: product-ops
+    route_path: /product
+    icon: sparkles
+    order: 30
+    permission_scope: ops.product.read
+    object_types: [moderation_case, experiment, recommendation_policy]
+
+  - menu_id: product-dashboard
+    parent_menu_id: product-ops
+    label: 业务总览
+    domain: product-ops
+    route_path: /product/dashboard
+    icon: chart-column
+    order: 31
+    permission_scope: ops.product.dashboard.read
+    object_types: [dashboard]
+
+  - menu_id: governance
+    parent_menu_id: product-ops
+    label: 治理处置
+    domain: product-ops
+    route_path: /product/governance
+    icon: shield-alert
+    order: 32
+    permission_scope: ops.case.read
+    object_types: [moderation_case, appeal_case, recovery_case]
+
+  - menu_id: recommendation
+    parent_menu_id: product-ops
+    label: 推荐运营
+    domain: product-ops
+    route_path: /product/recommendation
+    icon: chart-spline
+    order: 33
+    permission_scope: ops.reco.read
+    object_types: [recommendation_policy, recommendation_override]
+
+  - menu_id: experiments
+    parent_menu_id: product-ops
+    label: 实验与灰度
+    domain: product-ops
+    route_path: /product/experiments
+    icon: flask-conical
+    order: 34
+    permission_scope: ops.experiment.read
+    object_types: [experiment]
+
+  - menu_id: segments
+    parent_menu_id: product-ops
+    label: 标签与分群
+    domain: product-ops
+    route_path: /product/segments
+    icon: users-round
+    order: 35
+    permission_scope: ops.segment.read
+    object_types: [segment]
+
+  - menu_id: audit
+    label: 审计与变更
+    domain: overview
+    route_path: /audit
+    icon: history
+    order: 40
+    permission_scope: ops.audit.read
+    object_types: [audit_event]
+
+  - menu_id: settings
+    label: 系统设置
+    domain: overview
+    route_path: /settings
+    icon: panel-left-close
+    order: 50
+    permission_scope: ops.settings.read
+    object_types: [portal_settings]

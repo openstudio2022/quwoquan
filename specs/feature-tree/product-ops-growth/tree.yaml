@@ -1,6 +1,7 @@
 version: 1
 l1: product-ops-growth
 l2:
+  - feature: product-control-plane-foundation
   - feature: event-ingestion-and-analytics
     l3:
       - feature: event-schema-governance

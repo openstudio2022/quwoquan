@@ -4,8 +4,12 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/aggregation_state.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/agent_run_observability.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/assistant_turn_contract.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/intent_graph.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/skill_run.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/user_events.dart';
 import 'package:quwoquan_app/personal_assistant/engine/context_orchestrator.dart';
 import 'package:quwoquan_app/personal_assistant/engine/dialogue_state_runtime.dart';
 import 'package:quwoquan_app/personal_assistant/engine/domain_router.dart';
@@ -25,6 +29,7 @@ import 'package:quwoquan_app/personal_assistant/protocol/profile_update_proposal
 import 'package:quwoquan_app/personal_assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/personal_assistant/retrieval/capability_catalog.dart';
 import 'package:quwoquan_app/personal_assistant/skills/skill_loader.dart';
+import 'package:quwoquan_app/personal_assistant/skills/skill_manifest.dart';
 import 'package:quwoquan_app/personal_assistant/skills/skill_router.dart';
 import 'package:quwoquan_app/personal_assistant/template_runtime/template_catalog_runtime.dart';
 import 'package:quwoquan_app/personal_assistant/tools/metadata/tool_metadata_registry.dart';
@@ -154,10 +159,6 @@ class PersonalAssistantAgentLoop {
     );
     await _toolMetadataRegistry?.ensureLoaded();
     await AssistantContentFilters.ensureLoaded();
-    final domainId = await _resolveDomainId(
-      request,
-      forceRefreshCatalog: forceRefreshDynamicCatalog,
-    );
     final domainCatalog = await _domainRouter.availableDomains(
       forceRefresh: forceRefreshDynamicCatalog,
       contextScopeHint: request.contextScopeHint,
@@ -166,6 +167,41 @@ class PersonalAssistantAgentLoop {
       forceRefresh: false,
       contextScopeHint: request.contextScopeHint,
     );
+    final skillCatalog = await _domainRouter.buildSkillCatalogPrompt(
+      contextScopeHint: request.contextScopeHint,
+    );
+    final intentGraph = await _resolveIntentGraph(
+      request: request,
+      contextAssembly: contextAssembly,
+      historySummary: historySummary,
+      forceRefreshCatalog: forceRefreshDynamicCatalog,
+      skillCatalog: skillCatalog,
+      sessionId: sessionId,
+      runId: runId,
+      traceId: traceId,
+      onTraceEvent: onTraceEvent,
+    );
+    final domainId =
+        intentGraph.primarySkill.trim().isNotEmpty
+            ? intentGraph.primarySkill.trim()
+            : await _resolveDomainId(
+                request,
+                forceRefreshCatalog: forceRefreshDynamicCatalog,
+              );
+    final problemShape = intentGraph.problemShape.trim().isNotEmpty
+        ? intentGraph.problemShape.trim()
+        : (intentGraph.secondarySkills.isNotEmpty
+              ? 'multi_skill'
+              : 'single_skill');
+    final intentTraceEvent = AssistantTraceEvent(
+      type: AssistantTraceEventType.lifecycleStart,
+      message: 'intent_graph_resolved',
+      timestamp: DateTime.now(),
+      runId: runId,
+      traceId: traceId,
+      data: intentGraph.toJson(),
+    );
+    onTraceEvent?.call(intentTraceEvent);
     // 先构建对话轮次脚本，以便 phase-aware 加载根据当前状态选择参考资料
     final dialogueRoundScript = await _dialogueStateRuntime.buildRoundScript(
       domainId: domainId,
@@ -200,9 +236,6 @@ class PersonalAssistantAgentLoop {
       runtimeToolNames: runtimeToolNames,
     );
     final skillPersona = await _loadSkillPersona(domainId);
-    final skillCatalog = await _domainRouter.buildSkillCatalogPrompt(
-      contextScopeHint: request.contextScopeHint,
-    );
     final templateVariables = _buildTemplateVariables(
       request: request,
       contextAssembly: contextAssembly,
@@ -213,6 +246,7 @@ class PersonalAssistantAgentLoop {
       dialogueRoundScript: dialogueRoundScript,
       skillPersona: skillPersona,
       skillCatalog: skillCatalog,
+      skillExecutionShell: skillContext.executionShell,
     );
     if (!contextAssembly.canEnterDomain) {
       final blocked = _buildBlockedResponse(
@@ -240,7 +274,9 @@ class PersonalAssistantAgentLoop {
     // 保持 prompt 栈（identity/safety/task/contract/persona/tool_policy）纯净。
     final dataLayerBuffer = StringBuffer();
     dataLayerBuffer.writeln('<dialogue_state>');
-    dataLayerBuffer.writeln(jsonEncode(_dialogueScriptForModel(dialogueRoundScript)));
+    dataLayerBuffer.writeln(
+      jsonEncode(_dialogueScriptForModel(dialogueRoundScript)),
+    );
     dataLayerBuffer.writeln('</dialogue_state>');
     dataLayerBuffer.writeln();
     dataLayerBuffer.writeln('<context_slots>');
@@ -255,7 +291,13 @@ class PersonalAssistantAgentLoop {
     if (recall.isNotEmpty) {
       final cleanRecall = recall
           .map((e) => e.text.toString().trim())
-          .where((t) => t.isNotEmpty && !t.contains('"contractVersion"') && !t.contains('"decision"') && !t.startsWith('{'))
+          .where(
+            (t) =>
+                t.isNotEmpty &&
+                !t.contains('"contractVersion"') &&
+                !t.contains('"decision"') &&
+                !t.startsWith('{'),
+          )
           .join('\n');
       if (cleanRecall.isNotEmpty) {
         dataLayerBuffer.writeln();
@@ -267,7 +309,9 @@ class PersonalAssistantAgentLoop {
     if (request.capabilityCatalog.isNotEmpty) {
       dataLayerBuffer.writeln();
       dataLayerBuffer.writeln('<capability_catalog>');
-      dataLayerBuffer.writeln(AssistentCapabilityCatalog.toPromptText(request.capabilityCatalog));
+      dataLayerBuffer.writeln(
+        AssistentCapabilityCatalog.toPromptText(request.capabilityCatalog),
+      );
       dataLayerBuffer.writeln('</capability_catalog>');
     }
     if (request.contextScopeHint.isNotEmpty) {
@@ -313,6 +357,7 @@ class PersonalAssistantAgentLoop {
         'event': 'operation',
         'operation': 'agent_run_start',
         'domainId': domainId,
+        'problemShape': problemShape,
         'skillName': skillContext.skillName,
         'toolCount': effectiveToolNames.length,
         'templateId': 'planner.global_plan',
@@ -323,9 +368,13 @@ class PersonalAssistantAgentLoop {
     final rewriteToolNames = request.shouldSkipSearch
         ? const <String>[]
         : effectiveToolNames;
+    final shellMaxIterations = math.max(
+      1,
+      skillContext.executionShell.maxIterations,
+    );
     final rewriteMaxIterations = request.shouldSkipSearch
         ? 1
-        : request.maxIterations;
+        : math.min(request.maxIterations, shellMaxIterations);
     final result = await _runtime.run(
       messages: messages,
       maxIterations: rewriteMaxIterations,
@@ -364,7 +413,7 @@ class PersonalAssistantAgentLoop {
       ];
       final retryResult = await _runtime.run(
         messages: retryMessages,
-        maxIterations: request.maxIterations,
+        maxIterations: math.min(request.maxIterations, shellMaxIterations),
         goal: latestUserQuery,
         availableToolNamesOverride: effectiveToolNames,
         templateId: 'planner.postcondition_check',
@@ -461,8 +510,8 @@ class PersonalAssistantAgentLoop {
     final phaseOneText = mergedResult.finalText;
     // 合成结果为空或是 react_runtime 兜底文案时，保留 Phase 1 的结果。
     // 避免好的 Phase 1 回答被无内容的合成兜底覆盖。
-    final useSynthesis = synthesisText.isNotEmpty &&
-        !synthesisText.contains('没有生成可展示结果');
+    final useSynthesis =
+        synthesisText.isNotEmpty && !synthesisText.contains('没有生成可展示结果');
     mergedResult = ReactRuntimeResult(
       finalText: useSynthesis ? synthesisResult.finalText : phaseOneText,
       traces: <AssistantTraceEvent>[
@@ -480,8 +529,24 @@ class PersonalAssistantAgentLoop {
       rawFinalText: mergedResult.finalText,
       traces: mergedResult.traces,
     );
-    final subagentRuns = await _executeSubagentPlans(
+    final primarySkillRun = _buildPrimarySkillRun(
+      intentGraph: intentGraph,
+      domainId: domainId,
       answerPayload: answerPayloadBeforeSubagent,
+      result: mergedResult,
+      executionShell: skillContext.executionShell,
+    );
+    final skillRunPlans = _buildSkillRunPlans(
+      intentGraph: intentGraph,
+      answerPayload: answerPayloadBeforeSubagent,
+      latestUserQuery: latestUserQuery,
+      primaryDomainId: domainId,
+    );
+    final subagentRuns = await _executeSubagentPlans(
+      answerPayload: <String, dynamic>{
+        ...answerPayloadBeforeSubagent,
+        'subagentPlan': skillRunPlans,
+      },
       request: request,
       sessionId: sessionId,
       runId: runId,
@@ -490,11 +555,23 @@ class PersonalAssistantAgentLoop {
       templateVariables: templateVariables,
       onTraceEvent: onTraceEvent,
     );
+    final skillRuns = <SkillRun>[
+      primarySkillRun,
+      ...subagentRuns.map(_skillRunFromLegacySubagentRun),
+    ];
+    final aggregationState = _buildAggregationState(
+      intentGraph: intentGraph,
+      skillRuns: skillRuns,
+      answerPayload: answerPayloadBeforeSubagent,
+    );
     if (subagentRuns.isNotEmpty) {
       final runsForModel = _subagentRunsForModel(subagentRuns);
       // For multi-skill fusion synthesis, also inject subagent results into template vars
       final fusionTemplateVars = <String, dynamic>{
         ...synthesisTemplateVars,
+        'skillRuns': jsonEncode(
+          skillRuns.map((item) => item.toJson()).toList(growable: false),
+        ),
         'subagentRuns': jsonEncode(runsForModel),
       };
       final fusionSynthesisTemplateId = subagentRuns.length > 1
@@ -508,7 +585,8 @@ class PersonalAssistantAgentLoop {
         },
         <String, dynamic>{
           'role': 'system',
-          'content': '请基于以上子任务结果整合为最终答复。'
+          'content':
+              '请基于以上子任务结果整合为最终答复。'
               '必须输出标准 JSON 格式：含 decision（nextAction/confidence/reason）、userMarkdown（用户可见 Markdown）、'
               'result、evidence、reasoningBasis、selfCheck、diagnostics。'
               'userMarkdown 不得包含任何 JSON 字段名。',
@@ -521,7 +599,8 @@ class PersonalAssistantAgentLoop {
         goal: latestUserQuery,
         availableToolNamesOverride: const <String>[],
         templateId: fusionSynthesisTemplateId,
-        templateVersion: fusionSynthesisTemplateId == 'synthesizer.multi_skill_fusion'
+        templateVersion:
+            fusionSynthesisTemplateId == 'synthesizer.multi_skill_fusion'
             ? fusionSynthTemplateVersion
             : synthTemplateVersion,
         templateContext: request.contextScopeHint,
@@ -553,14 +632,9 @@ class PersonalAssistantAgentLoop {
         mergedResult.degraded ||
         AssistantContentFilters.isDegradedText(mergedResult.finalText);
     // 提取用于存储的纯文本摘要（优先 userMarkdown，避免 JSON 进入记忆/摘要）
-    final displayTextForStorage = _extractDisplayTextForStorage(mergedResult.finalText);
-    if (!isDegradedReply && displayTextForStorage.isNotEmpty) {
-      _sessionManager.appendMessage(
-        sessionId: sessionId,
-        role: 'assistant',
-        content: displayTextForStorage,
-      );
-    }
+    final displayTextForStorage = _extractDisplayTextForStorage(
+      mergedResult.finalText,
+    );
     _sessionManager.updateSessionTopicSummary(
       sessionId: sessionId,
       latestUserQuery: latestUserQuery,
@@ -596,6 +670,9 @@ class PersonalAssistantAgentLoop {
         contextAssembly: contextAssembly,
         synthesisReadiness: synthesisReadiness,
         result: mergedResult,
+        intentGraph: intentGraph,
+        skillRuns: skillRuns,
+        aggregationState: aggregationState,
         subagentRuns: subagentRuns,
         dialogueRoundScript: dialogueRoundScript,
         candidateDomains: domainCatalog,
@@ -608,6 +685,30 @@ class PersonalAssistantAgentLoop {
       ),
       profileUpdateProposal: _buildProfileUpdateProposal(request: request),
     );
+    if (!isDegradedReply && displayTextForStorage.isNotEmpty) {
+      _sessionManager.appendMessage(
+        sessionId: sessionId,
+        role: 'assistant',
+        content: displayTextForStorage,
+        metadata: <String, dynamic>{
+          'uiProcessTimelineV2':
+              (response.structuredResponse['uiProcessTimelineV2'] as List?) ??
+              const <dynamic>[],
+          'uiUsageStatsV1':
+              (response.structuredResponse['uiUsageStatsV1'] as Map?) ??
+              const <String, dynamic>{},
+          'intentGraph':
+              (response.structuredResponse['intentGraph'] as Map?) ??
+              const <String, dynamic>{},
+          'skillRuns':
+              (response.structuredResponse['skillRuns'] as List?) ??
+              const <dynamic>[],
+          'aggregationState':
+              (response.structuredResponse['aggregationState'] as Map?) ??
+              const <String, dynamic>{},
+        },
+      );
+    }
     await _persistLearningTags(
       response: response,
       sessionId: sessionId,
@@ -668,8 +769,9 @@ class PersonalAssistantAgentLoop {
       final structured = response.structuredResponse;
       final learningTrack =
           (structured['learningTrack'] as Map?)?.cast<String, dynamic>() ??
-              const <String, dynamic>{};
-      final tags = (learningTrack['profileTagDelta'] as List?)
+          const <String, dynamic>{};
+      final tags =
+          (learningTrack['profileTagDelta'] as List?)
               ?.whereType<Map>()
               .map((t) => t.cast<String, dynamic>())
               .where((t) => (t['tag'] ?? '').toString().isNotEmpty)
@@ -731,10 +833,7 @@ class PersonalAssistantAgentLoop {
       if (turn.nextAction == 'answer') return rawText;
       final updated = <String, dynamic>{
         ...turn.toEnvelopeMap(),
-        'decision': <String, dynamic>{
-          ...turn.decision,
-          'nextAction': 'answer',
-        },
+        'decision': <String, dynamic>{...turn.decision, 'nextAction': 'answer'},
       };
       return jsonEncode(updated);
     }
@@ -845,7 +944,7 @@ class PersonalAssistantAgentLoop {
       final goal = (plan['goal'] as String?)?.trim() ?? '';
       final subagentDomainId = (plan['domainId'] as String?)?.trim() ?? '';
       final timeoutMs = _positiveInt(plan['timeoutMs'], fallback: 12000);
-      final maxIterations = _positiveInt(plan['maxIterations'], fallback: 2);
+      var maxIterations = _positiveInt(plan['maxIterations'], fallback: 2);
       final toolBudget = _positiveInt(plan['toolBudget'], fallback: 2);
       final toolWhitelist =
           (plan['toolWhitelist'] as List?)
@@ -865,12 +964,18 @@ class PersonalAssistantAgentLoop {
           domainId: subagentDomainId,
           userQuery: goal,
         );
+        final subagentShell = subagentSkillContext.executionShell;
         subagentTemplateVars = <String, dynamic>{
           ...templateVariables,
           'domainId': subagentDomainId,
           'domainSkillInstruction': subagentSkillContext.instructionMarkdown,
           'domainSkillName': subagentSkillContext.skillName,
+          'skillExecutionShell': subagentShell.toJson(),
         };
+        if (subagentShell.maxIterations > 0 &&
+            subagentShell.maxIterations < maxIterations) {
+          maxIterations = subagentShell.maxIterations;
+        }
       }
       onTraceEvent?.call(
         AssistantTraceEvent(
@@ -919,9 +1024,7 @@ class PersonalAssistantAgentLoop {
           'goal': goal,
           'summary': subagentResult.finalText,
           'toolCallCount': subagentResult.traces
-              .where(
-                (event) => event.type == AssistantTraceEventType.toolStart,
-              )
+              .where((event) => event.type == AssistantTraceEventType.toolStart)
               .length,
         };
         onTraceEvent?.call(
@@ -1119,6 +1222,9 @@ class PersonalAssistantAgentLoop {
     required ContextAssemblyResult contextAssembly,
     required SynthesisReadinessResult synthesisReadiness,
     required ReactRuntimeResult result,
+    required IntentGraph intentGraph,
+    required List<SkillRun> skillRuns,
+    required AggregationState aggregationState,
     required List<Map<String, dynamic>> subagentRuns,
     required DialogueRoundScript dialogueRoundScript,
     required List<String> candidateDomains,
@@ -1180,12 +1286,7 @@ class PersonalAssistantAgentLoop {
     );
     final parseStatus =
         (answerPayload['parseStatus'] as String?) ?? 'fallback_text';
-    final renderMode =
-        ((answerPayload['userMarkdown'] as String?) ?? '').trim().isNotEmpty
-        ? 'md_json_dual'
-        : 'fallback_text';
     final decisionParseSuccess = parseStatus == 'assistant_turn_v4_parsed';
-    final renderFallback = renderMode == 'fallback_text';
     final heuristicFallbackUsed = _usedHeuristicFallback(result.traces);
     final messageKind = _resolveMessageKind(
       answerPayload: answerPayload,
@@ -1194,29 +1295,91 @@ class PersonalAssistantAgentLoop {
     final learningSatisfaction = modelSelfScore >= 85
         ? 'high'
         : (modelSelfScore >= 70 ? 'medium' : 'low');
-    final normalizedMarkdown = _extractUiMarkdown(answerPayload, result.finalText);
+    final uiReferences = _buildUiReferences(toolResults);
+    final processSummaryV1 = _resolveProcessSummary(
+      answerPayload: answerPayload,
+      domainId: dialogueRoundScript.domainId,
+      request: request,
+      uiReferences: uiReferences,
+      toolErrors: toolErrors,
+      result: result,
+    );
+    final processReferenceCountV1 = _resolveProcessReferenceCount(
+      answerPayload: answerPayload,
+      uiReferences: uiReferences,
+    );
+    final directMarkdown = _extractUiMarkdown(answerPayload, result.finalText);
+    final normalizedMarkdown = directMarkdown.trim().isNotEmpty
+        ? directMarkdown
+        : _buildFallbackMarkdown(
+            answerPayload: answerPayload,
+            domainId: dialogueRoundScript.domainId,
+            request: request,
+            uiReferences: uiReferences,
+            toolErrors: toolErrors,
+            result: result,
+            synthesisReadiness: synthesisReadiness,
+          );
+    final renderMode = normalizedMarkdown.trim().isNotEmpty
+        ? 'md_json_dual'
+        : 'fallback_text';
+    final renderFallback = renderMode == 'fallback_text';
+    final uiProcessContentBlocks = _buildUiProcessContentBlocks(
+      processSummary: processSummaryV1,
+      uiReferences: uiReferences,
+    );
+    final userEvents = _buildUserEvents(
+      intentGraph: intentGraph,
+      skillRuns: skillRuns,
+      aggregationState: aggregationState,
+      processSummary: processSummaryV1,
+      uiReferences: uiReferences,
+    );
+    final uiProcessTimelineV2 = _buildUiProcessTimelineV2(
+      userEvents: userEvents,
+      uiReferences: uiReferences,
+    );
+    final enrichedAnswerPayload = <String, dynamic>{
+      ...answerPayload,
+      'intentGraph': intentGraph.toJson(),
+      'skillRuns': skillRuns.map((item) => item.toJson()).toList(growable: false),
+      'aggregationState': aggregationState.toJson(),
+      'userEvents': userEvents.map((item) => item.toJson()).toList(growable: false),
+      'uiProcessTimelineV2': uiProcessTimelineV2,
+    };
     if (normalizedMarkdown.isNotEmpty && onTraceEvent != null) {
-      onTraceEvent(AssistantTraceEvent(
-        type: AssistantTraceEventType.thinkingProgress,
-        message: '正在组织回答...',
-        timestamp: DateTime.now(),
-        runId: runId ?? '',
-        traceId: traceId ?? '',
-        data: const <String, dynamic>{'phase': 'answering', 'extracted': true},
-      ));
-      for (final chunk in _chunkMarkdownForStreaming(normalizedMarkdown)) {
-        onTraceEvent(AssistantTraceEvent(
-          type: AssistantTraceEventType.answerDelta,
-          message: chunk,
+      onTraceEvent(
+        AssistantTraceEvent(
+          type: AssistantTraceEventType.thinkingProgress,
+          message: '正在组织回答...',
           timestamp: DateTime.now(),
           runId: runId ?? '',
           traceId: traceId ?? '',
-          data: const <String, dynamic>{'stage': 'synthesis'},
-        ));
+          data: const <String, dynamic>{
+            'phase': 'answering',
+            'extracted': true,
+          },
+        ),
+      );
+      for (final chunk in _chunkMarkdownForStreaming(normalizedMarkdown)) {
+        onTraceEvent(
+          AssistantTraceEvent(
+            type: AssistantTraceEventType.answerDelta,
+            message: chunk,
+            timestamp: DateTime.now(),
+            runId: runId ?? '',
+            traceId: traceId ?? '',
+            data: const <String, dynamic>{'stage': 'synthesis'},
+          ),
+        );
       }
     }
     return <String, dynamic>{
       'domainId': dialogueRoundScript.domainId,
+      'problemShape': intentGraph.problemShape,
+      'primarySkill': intentGraph.primarySkill,
+      'secondarySkills': intentGraph.secondarySkills,
+      'intentGraph': intentGraph.toJson(),
       'candidateDomains': candidateDomains,
       'templateVersionUsed': templateVersionUsed,
       'domainCatalogVersion': domainCatalogVersion,
@@ -1305,37 +1468,53 @@ class PersonalAssistantAgentLoop {
         }(),
         'roundTraces': toolResults
             .where((r) => r['tool'] == 'web_search' || r['stepId'] != null)
-            .map((r) => <String, dynamic>{
-                  'stepId': r['stepId'] ?? '',
-                  'tool': r['tool'] ?? '',
-                  'success': r['success'] ?? false,
-                  'qualityScore': (r['data'] is Map
-                          ? (r['data']['qualityScore'] as num?)?.toDouble()
-                          : null) ?? 0.0,
-                  'authorityScore': (r['data'] is Map
-                          ? (r['data']['authorityScore'] as num?)?.toDouble()
-                          : null) ?? 0.0,
-                  'totalReferences': (r['data'] is Map
-                          ? (r['data']['totalReferences'] as int?)
-                          : null) ?? 0,
-                })
+            .map(
+              (r) => <String, dynamic>{
+                'stepId': r['stepId'] ?? '',
+                'tool': r['tool'] ?? '',
+                'success': r['success'] ?? false,
+                'qualityScore':
+                    (r['data'] is Map
+                        ? (r['data']['qualityScore'] as num?)?.toDouble()
+                        : null) ??
+                    0.0,
+                'authorityScore':
+                    (r['data'] is Map
+                        ? (r['data']['authorityScore'] as num?)?.toDouble()
+                        : null) ??
+                    0.0,
+                'totalReferences':
+                    (r['data'] is Map
+                        ? (r['data']['totalReferences'] as int?)
+                        : null) ??
+                    0,
+              },
+            )
             .toList(growable: false),
-        'eligible': toolResults.isNotEmpty &&
+        'eligible':
+            toolResults.isNotEmpty &&
             toolResults.any((r) {
               if (r['success'] != true) return false;
-              final qs = (r['data'] is Map
-                  ? (r['data']['qualityScore'] as num?)?.toDouble()
-                  : null) ?? 0.0;
+              final qs =
+                  (r['data'] is Map
+                      ? (r['data']['qualityScore'] as num?)?.toDouble()
+                      : null) ??
+                  0.0;
               return qs >= 0.35;
             }),
         'gaps': toolResults.isEmpty
             ? <String>['no_search_result']
-            : toolResults.where((r) {
-                final qs = (r['data'] is Map
-                    ? (r['data']['qualityScore'] as num?)?.toDouble()
-                    : null) ?? 0.0;
-                return r['success'] != true || qs < 0.35;
-              }).map((r) => 'low_quality_result:${r['stepId'] ?? ''}').toList(growable: false),
+            : toolResults
+                  .where((r) {
+                    final qs =
+                        (r['data'] is Map
+                            ? (r['data']['qualityScore'] as num?)?.toDouble()
+                            : null) ??
+                        0.0;
+                    return r['success'] != true || qs < 0.35;
+                  })
+                  .map((r) => 'low_quality_result:${r['stepId'] ?? ''}')
+                  .toList(growable: false),
       },
       'learningSignals': <String, dynamic>{
         'profileTagDelta':
@@ -1369,8 +1548,8 @@ class PersonalAssistantAgentLoop {
         'toolErrorCount': toolErrors.length,
         'webEvidenceGatePassed': evidenceGatePassed,
       },
-      'answerPayload': answerPayload,
-      'decisionJson': answerPayload['decision'] ?? const <String, dynamic>{},
+      'answerPayload': enrichedAnswerPayload,
+      'decisionJson': enrichedAnswerPayload['decision'] ?? const <String, dynamic>{},
       'messageKind': messageKind,
       'toolObservations': <Map<String, dynamic>>[
         ...toolResults.map(
@@ -1391,6 +1570,9 @@ class PersonalAssistantAgentLoop {
         ),
       ],
       'subagentRuns': subagentRuns,
+      'skillRuns': skillRuns.map((item) => item.toJson()).toList(growable: false),
+      'aggregationState': aggregationState.toJson(),
+      'userEvents': userEvents.map((item) => item.toJson()).toList(growable: false),
       'renderMode': renderMode,
       'qualityMetrics': <String, dynamic>{
         'decisionParseSuccess': decisionParseSuccess,
@@ -1404,9 +1586,11 @@ class PersonalAssistantAgentLoop {
         stateId: dialogueRoundScript.currentStateId,
         detectedEvent: dialogueRoundScript.detectedEvent,
         latencyMs: DateTime.now()
-            .difference(result.traces.isEmpty
-                ? DateTime.now()
-                : result.traces.first.timestamp)
+            .difference(
+              result.traces.isEmpty
+                  ? DateTime.now()
+                  : result.traces.first.timestamp,
+            )
             .inMilliseconds,
       ).toJson(),
       'uiAnswer': <String, dynamic>{
@@ -1420,6 +1604,9 @@ class PersonalAssistantAgentLoop {
         'followupPrompt': (answerPayload['followupPrompt'] as String?) ?? '',
         'selfScore': modelSelfScore,
       },
+      'processSummaryV1': processSummaryV1,
+      'processReferenceCountV1': processReferenceCountV1,
+      'uiProcessTimelineV2': uiProcessTimelineV2,
       'uiPhaseTimelineV1': _buildUiPhaseTimelineV1(
         traces: result.traces,
         toolResults: toolResults,
@@ -1433,7 +1620,8 @@ class PersonalAssistantAgentLoop {
             'status': (run['status'] as String?) ?? 'unknown',
           },
       ],
-      'uiReferences': _buildUiReferences(toolResults),
+      'uiReferences': uiReferences,
+      'uiProcessContentBlocks': uiProcessContentBlocks,
       'uiActions': <Map<String, dynamic>>[
         <String, dynamic>{'id': 'regenerate'},
         <String, dynamic>{'id': 'brief'},
@@ -1515,15 +1703,18 @@ class PersonalAssistantAgentLoop {
     for (final trace in traces) {
       final data = trace.data ?? const <String, dynamic>{};
       if (trace.type == AssistantTraceEventType.toolStart) {
-        final toolName = (data['tool'] ?? data['toolName'] ?? data['name'] ?? '')
-            .toString()
-            .trim()
-            .toLowerCase();
+        final toolName =
+            (data['tool'] ?? data['toolName'] ?? data['name'] ?? '')
+                .toString()
+                .trim()
+                .toLowerCase();
         if (toolName.contains('search') || toolName.contains('retrieval')) {
           ensureSearchingPhase();
-          final args = (data['arguments'] as Map?)?.cast<String, dynamic>() ??
+          final args =
+              (data['arguments'] as Map?)?.cast<String, dynamic>() ??
               const <String, dynamic>{};
-          final query = ((data['query'] ?? args['query'] ?? data['keyword']) as Object?)
+          final query =
+              ((data['query'] ?? args['query'] ?? data['keyword']) as Object?)
                   ?.toString()
                   .trim() ??
               '';
@@ -1538,7 +1729,8 @@ class PersonalAssistantAgentLoop {
           }
         }
       } else if (trace.type == AssistantTraceEventType.assistantDelta) {
-        final plannedQueries = (data['searchQueries'] as List?)
+        final plannedQueries =
+            (data['searchQueries'] as List?)
                 ?.whereType<String>()
                 .map((item) => item.trim())
                 .where((item) => item.isNotEmpty)
@@ -1584,7 +1776,8 @@ class PersonalAssistantAgentLoop {
             appendDetail(searchingPhase!, '尝试其他搜索途径（第 $retryCount 次）');
           }
         } else {
-          final refs = (data['references'] as List?)
+          final refs =
+              (data['references'] as List?)
                   ?.whereType<Map>()
                   .map((item) => item.cast<String, dynamic>())
                   .toList(growable: false) ??
@@ -1696,7 +1889,9 @@ class PersonalAssistantAgentLoop {
           final key = entry.key.toString().toLowerCase();
           final value = entry.value;
           if (value is num &&
-              (key.contains('token') || key.contains('input_tokens') || key.contains('output_tokens'))) {
+              (key.contains('token') ||
+                  key.contains('input_tokens') ||
+                  key.contains('output_tokens'))) {
             final token = value.toInt();
             if (token > 0) {
               tokenSampleCount += 1;
@@ -1719,10 +1914,15 @@ class PersonalAssistantAgentLoop {
     }
 
     final inputText = request.messages.map((item) => item.content).join('\n');
-    final estimatedTotalTokens = ((inputText.length + outputText.length) / 4).ceil();
+    final estimatedTotalTokens = ((inputText.length + outputText.length) / 4)
+        .ceil();
     final estimatedMaxTokens = (outputText.length / 4).ceil();
-    final totalTokens = tokenSampleCount > 0 ? totalTokensFromTrace : estimatedTotalTokens;
-    final maxTokens = tokenSampleCount > 0 ? maxTokensFromTrace : estimatedMaxTokens;
+    final totalTokens = tokenSampleCount > 0
+        ? totalTokensFromTrace
+        : estimatedTotalTokens;
+    final maxTokens = tokenSampleCount > 0
+        ? maxTokensFromTrace
+        : estimatedMaxTokens;
     final iterationCalls = traces
         .where(
           (trace) =>
@@ -1762,14 +1962,16 @@ class PersonalAssistantAgentLoop {
               .map((ref) => ref.cast<String, dynamic>())
               .toList(growable: false) ??
           const <Map<String, dynamic>>[];
-      final authorityDomains = (data['authorityDomains'] as List?)?.cast<String>() ?? <String>[];
+      final authorityDomains =
+          (data['authorityDomains'] as List?)?.cast<String>() ?? <String>[];
       for (final ref in rawRefs) {
         final url = (ref['url'] as String?)?.trim() ?? '';
         if (url.isEmpty || seen.contains(url)) continue;
         final parsed = Uri.tryParse(url);
         final source = parsed?.host ?? (ref['source'] as String?) ?? '';
         // Layer 5: 标记权威来源
-        final isCited = authorityDomains.isNotEmpty &&
+        final isCited =
+            authorityDomains.isNotEmpty &&
             authorityDomains.any((d) => source == d || source.endsWith('.$d'));
         refs.add(<String, dynamic>{
           'title': (ref['title'] as String?)?.trim().isNotEmpty == true
@@ -1824,10 +2026,10 @@ class PersonalAssistantAgentLoop {
         : toolCallsFromTrace;
     final resultPayload = turn != null
         ? (turn.result.isNotEmpty
-            ? Map<String, dynamic>.from(turn.result)
-            : <String, dynamic>{'text': rawFinalText})
+              ? Map<String, dynamic>.from(turn.result)
+              : <String, dynamic>{'text': rawFinalText})
         : ((parsed['result'] as Map?)?.cast<String, dynamic>() ??
-            <String, dynamic>{'text': rawFinalText});
+              <String, dynamic>{'text': rawFinalText});
     // 将 nextAction 注入到 result，供下游 _extractUiMarkdown 使用
     if (turn != null && turn.nextAction.isNotEmpty) {
       resultPayload['nextAction'] = turn.nextAction;
@@ -1861,17 +2063,375 @@ class PersonalAssistantAgentLoop {
       'subagentPlan': turn != null
           ? turn.subagentPlan
           : _normalizeMapList(parsed['subagentPlan'], textKey: 'goal'),
+      'intentGraph': turn?.intentGraph?.toJson() ??
+          _normalizeMap(parsed['intentGraph']),
+      'skillRuns': turn != null
+          ? turn.skillRuns.map((item) => item.toJson()).toList(growable: false)
+          : _normalizeMapList(parsed['skillRuns'], textKey: 'goal'),
+      'aggregationState':
+          turn?.aggregationState?.toJson() ??
+          _normalizeMap(parsed['aggregationState']),
+      'userEvents': turn != null
+          ? turn.userEvents.map((item) => item.toJson()).toList(growable: false)
+          : _normalizeMapList(parsed['userEvents'], textKey: 'message'),
+      'uiProcessTimelineV2': turn != null
+          ? turn.uiProcessTimelineV2
+          : _normalizeMapList(parsed['uiProcessTimelineV2'], textKey: 'summary'),
       'toolPlan': turn != null
           ? turn.toolPlan
           : _normalizeMapList(parsed['toolPlan'], textKey: 'tool'),
-      'missingContextSlots': turn?.missingContextSlots ??
+      'missingContextSlots':
+          turn?.missingContextSlots ??
           _normalizeStringList(parsed['missingContextSlots']),
       'fillGuidance': turn != null
           ? turn.fillGuidance
           : _normalizeMapList(parsed['fillGuidance'], textKey: 'guidance'),
       'followupPrompt': turn?.followupPrompt ?? '',
+      'processSummary': turn?.processSummary ?? '',
+      'processReferenceCount': turn?.processReferenceCount ?? 0,
       'parseStatus': parseStatus,
     };
+  }
+
+  Future<IntentGraph> _resolveIntentGraph({
+    required AssistantRunRequest request,
+    required ContextAssemblyResult contextAssembly,
+    required String historySummary,
+    required bool forceRefreshCatalog,
+    required String skillCatalog,
+    required String sessionId,
+    required String runId,
+    required String traceId,
+    void Function(AssistantTraceEvent event)? onTraceEvent,
+  }) async {
+    final fallbackDomainId = await _resolveFallbackDomainId(
+      request,
+      forceRefreshCatalog: forceRefreshCatalog,
+    );
+    final fallbackDialogueScript = await _dialogueStateRuntime.buildRoundScript(
+      domainId: fallbackDomainId,
+      userQuery:
+          request.messages.isNotEmpty ? request.messages.last.content : '',
+      contextScopeHint: request.contextScopeHint,
+      forceRefreshCatalog: forceRefreshCatalog,
+    );
+    final fallbackSkillContext = await _resolveSkillContext(
+      domainId: fallbackDomainId,
+      userQuery:
+          request.messages.isNotEmpty ? request.messages.last.content : '',
+      dialogueRoundScript: fallbackDialogueScript,
+    );
+    final templateVariables = _buildTemplateVariables(
+      request: request,
+      contextAssembly: contextAssembly,
+      domainId: fallbackDomainId,
+      domainSkillInstruction: fallbackSkillContext.instructionMarkdown,
+      domainSkillName: fallbackSkillContext.skillName,
+      availableToolNames: const <String>[],
+      dialogueRoundScript: fallbackDialogueScript,
+      skillPersona: '',
+      skillCatalog: skillCatalog,
+      skillExecutionShell: fallbackSkillContext.executionShell,
+    );
+    final plannerMessages = <Map<String, dynamic>>[
+      <String, dynamic>{
+        'role': 'system',
+        'content': _buildIntentPlanningContext(
+          request: request,
+          contextAssembly: contextAssembly,
+          historySummary: historySummary,
+        ),
+      },
+      for (final item in request.messages)
+        <String, dynamic>{'role': item.role, 'content': item.content},
+    ];
+    try {
+      final result = await _runtime.run(
+        messages: plannerMessages,
+        maxIterations: 1,
+        goal: request.messages.isNotEmpty ? request.messages.last.content : '',
+        availableToolNamesOverride: const <String>[],
+        templateId: 'planner.global_plan',
+        templateVersion: _templateCatalogRuntime.latestVersionFor(
+          'planner.global_plan',
+          fallback: '',
+        ),
+        templateContext: request.contextScopeHint,
+        templateVariables: templateVariables,
+        sessionId: sessionId,
+        runId: runId,
+        traceId: traceId,
+        onTraceEvent: onTraceEvent,
+        onDelta: null,
+        callOptions: const LlmCallOptions(
+          temperature: 0.2,
+          maxTokens: 1200,
+          forceJsonObject: true,
+          timeoutSeconds: 20,
+        ),
+      );
+      final parsed =
+          LlmResponseParser.parse(result.finalText).json ?? <String, dynamic>{};
+      final primarySkill =
+          (parsed['primaryDomainId'] as String?)?.trim().isNotEmpty == true
+          ? (parsed['primaryDomainId'] as String).trim()
+          : fallbackDomainId;
+      final secondarySkills = _normalizeStringList(
+        parsed['secondaryDomains'],
+      ).where((item) => item != primarySkill).toList(growable: false);
+      final userGoal =
+          (parsed['inferredMotive'] as String?)?.trim().isNotEmpty == true
+          ? (parsed['inferredMotive'] as String).trim()
+          : (request.messages.isNotEmpty ? request.messages.last.content : '');
+      return IntentGraph(
+        userGoal: userGoal,
+        problemShape: secondarySkills.isEmpty ? 'single_skill' : 'multi_skill',
+        primarySkill: primarySkill,
+        secondarySkills: secondarySkills,
+        globalConstraints: <String, dynamic>{
+          'mode': (parsed['mode'] as String?)?.trim() ?? '',
+          'queryNormalization':
+              _normalizeMap(parsed['queryNormalization']),
+          'slotFillPlan': _normalizeMap(parsed['slotFillPlan']),
+          'contextSlots': _normalizeMap(parsed['contextSlots']),
+        },
+        clarificationNeeded:
+            _normalizeStringList(parsed['missingContextSlots']).isNotEmpty ||
+            ((parsed['slotFillAction'] as String?)?.trim() ?? '') == 'ask_user',
+      );
+    } catch (_) {
+      return IntentGraph(
+        userGoal: request.messages.isNotEmpty ? request.messages.last.content : '',
+        problemShape: 'single_skill',
+        primarySkill: fallbackDomainId,
+      );
+    }
+  }
+
+  String _buildIntentPlanningContext({
+    required AssistantRunRequest request,
+    required ContextAssemblyResult contextAssembly,
+    required String historySummary,
+  }) {
+    final buffer = StringBuffer();
+    buffer.writeln('<context_slots>');
+    buffer.writeln(jsonEncode(contextAssembly.contextEnvelope));
+    buffer.writeln('</context_slots>');
+    if (historySummary.trim().isNotEmpty) {
+      buffer.writeln();
+      buffer.writeln('<session_history>');
+      buffer.writeln(historySummary.trim());
+      buffer.writeln('</session_history>');
+    }
+    if (request.contextScopeHint.isNotEmpty) {
+      buffer.writeln();
+      buffer.writeln('<context_anchor>');
+      buffer.writeln(_formatContextAnchor(request.contextScopeHint));
+      buffer.writeln('</context_anchor>');
+    }
+    return buffer.toString();
+  }
+
+  Future<String> _resolveFallbackDomainId(
+    AssistantRunRequest request, {
+    required bool forceRefreshCatalog,
+  }) async {
+    await _domainRouter.ensureLoaded(forceRefresh: forceRefreshCatalog);
+    final query = request.messages.isEmpty ? '' : request.messages.last.content;
+    if (query.trim().isNotEmpty) {
+      try {
+        final skills = await _skillLoader.loadBundledSkills();
+        final matched = _skillRouter.resolveSkill(query, skills);
+        final matchedDomainId = matched?.domainId.trim() ?? '';
+        if (matchedDomainId.isNotEmpty) return matchedDomainId;
+      } catch (_) {
+        // Ignore and use fallback below.
+      }
+    }
+    return _domainRouter.fallbackDomainId;
+  }
+
+  List<Map<String, dynamic>> _buildSkillRunPlans({
+    required IntentGraph intentGraph,
+    required Map<String, dynamic> answerPayload,
+    required String latestUserQuery,
+    required String primaryDomainId,
+  }) {
+    final existingPlans = (answerPayload['subagentPlan'] as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[];
+    if (existingPlans.isNotEmpty) {
+      return existingPlans
+          .where(
+            (item) =>
+                ((item['domainId'] as String?)?.trim() ?? '').isNotEmpty &&
+                ((item['domainId'] as String?)?.trim() ?? '') != primaryDomainId,
+          )
+          .toList(growable: false);
+    }
+    return intentGraph.secondarySkills
+        .where((item) => item.trim().isNotEmpty && item.trim() != primaryDomainId)
+        .map(
+          (skillId) => <String, dynamic>{
+            'subagentId': 'skill_${skillId}_1',
+            'domainId': skillId,
+            'mode': 'qa',
+            'goal': '围绕用户问题补充 $skillId 视角的关键信息：$latestUserQuery',
+            'maxIterations': 2,
+            'toolBudget': 2,
+          },
+        )
+        .toList(growable: false);
+  }
+
+  SkillRun _buildPrimarySkillRun({
+    required IntentGraph intentGraph,
+    required String domainId,
+    required Map<String, dynamic> answerPayload,
+    required ReactRuntimeResult result,
+    required SkillExecutionShell executionShell,
+  }) {
+    return SkillRun(
+      runId: 'skill_primary_$domainId',
+      domainId: domainId,
+      goal: intentGraph.userGoal,
+      problemClass: executionShell.problemClass,
+      shell: executionShell.toJson(),
+      slotState:
+          (answerPayload['slotState'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{},
+      answerReady:
+          (answerPayload['userMarkdown'] as String?)?.trim().isNotEmpty == true ||
+          (answerPayload['result'] as Map?) != null,
+      stopReason: (answerPayload['messageKind'] as String?)?.trim() ?? '',
+      resultSummary: _extractUiSummary(answerPayload, result.finalText),
+    );
+  }
+
+  SkillRun _skillRunFromLegacySubagentRun(Map<String, dynamic> run) {
+    final domainId = (run['domainId'] as String?)?.trim() ?? '';
+    final status = (run['status'] as String?)?.trim() ?? 'unknown';
+    return SkillRun(
+      runId: (run['subagentId'] as String?)?.trim() ?? 'skill_$domainId',
+      domainId: domainId,
+      goal: (run['goal'] as String?)?.trim() ?? '',
+      problemClass: status == 'success' ? 'qa' : 'fallback_general',
+      answerReady: status == 'success',
+      stopReason: status,
+      resultSummary: (run['summary'] as String?)?.trim() ?? '',
+    );
+  }
+
+  AggregationState _buildAggregationState({
+    required IntentGraph intentGraph,
+    required List<SkillRun> skillRuns,
+    required Map<String, dynamic> answerPayload,
+  }) {
+    final blockingSkills = skillRuns
+        .where((item) => !item.answerReady)
+        .map((item) => item.domainId)
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    final allSkillsReady = skillRuns.isNotEmpty && blockingSkills.isEmpty;
+    final canGivePartialAnswer =
+        skillRuns.any((item) => item.answerReady) && blockingSkills.isNotEmpty;
+    final clarificationNeeded =
+        intentGraph.clarificationNeeded ||
+        ((answerPayload['messageKind'] as String?)?.trim() ?? '') == 'ask_user';
+    final needExpansion =
+        !allSkillsReady && !canGivePartialAnswer && !clarificationNeeded;
+    return AggregationState(
+      allSkillsReady: allSkillsReady,
+      blockingSkills: blockingSkills,
+      canGivePartialAnswer: canGivePartialAnswer,
+      needExpansion: needExpansion,
+      expansionPlan: needExpansion
+          ? <String, dynamic>{
+              'targetSkills': blockingSkills,
+              'strategy': 'broaden_or_retry',
+            }
+          : const <String, dynamic>{},
+      finalAnswerReady: allSkillsReady || canGivePartialAnswer,
+      finalAnswerMode: allSkillsReady
+          ? 'full'
+          : (canGivePartialAnswer
+                ? 'partial'
+                : (clarificationNeeded ? 'clarify' : 'expansion')),
+      clarificationNeeded: clarificationNeeded,
+    );
+  }
+
+  List<UserEvent> _buildUserEvents({
+    required IntentGraph intentGraph,
+    required List<SkillRun> skillRuns,
+    required AggregationState aggregationState,
+    required String processSummary,
+    required List<Map<String, dynamic>> uiReferences,
+  }) {
+    final events = <UserEvent>[
+      UserEvent(
+        type: UserEventType.processReplace,
+        scope: UserEventScope.root,
+        nodeId: 'root.intent',
+        message: intentGraph.isMultiSkill
+            ? '已识别为复合问题，准备分任务处理'
+            : '已识别问题方向，准备开始处理',
+        payload: intentGraph.toJson(),
+      ),
+    ];
+    for (final run in skillRuns) {
+      final message = run.resultSummary.isNotEmpty
+          ? run.resultSummary
+          : (run.answerReady ? '该部分信息已整理完成' : '该部分还需要继续补充');
+      events.add(
+        UserEvent(
+          type: run.answerReady
+              ? UserEventType.processCommit
+              : UserEventType.processAppend,
+          scope: UserEventScope.skill,
+          nodeId: run.domainId,
+          runId: run.runId,
+          message: message,
+          payload: run.toJson(),
+        ),
+      );
+    }
+    events.add(
+      UserEvent(
+        type: UserEventType.processCommit,
+        scope: UserEventScope.aggregation,
+        nodeId: 'aggregation.final',
+        message: processSummary,
+        payload: <String, dynamic>{
+          ...aggregationState.toJson(),
+          'referenceCount': uiReferences.length,
+        },
+      ),
+    );
+    return events;
+  }
+
+  List<Map<String, dynamic>> _buildUiProcessTimelineV2({
+    required List<UserEvent> userEvents,
+    required List<Map<String, dynamic>> uiReferences,
+  }) {
+    return userEvents
+        .map(
+          (event) => <String, dynamic>{
+            'scope': event.scope.name,
+            'type': event.type.name,
+            'nodeId': event.nodeId,
+            'runId': event.runId,
+            'summary': event.message,
+            'payload': event.payload,
+            'references': event.scope == UserEventScope.aggregation
+                ? uiReferences
+                : const <Map<String, dynamic>>[],
+          },
+        )
+        .toList(growable: false);
   }
 
   String _resolveMessageKind({
@@ -2031,12 +2591,211 @@ class PersonalAssistantAgentLoop {
     return fallback;
   }
 
+  String _resolveProcessSummary({
+    required Map<String, dynamic> answerPayload,
+    required String domainId,
+    required AssistantRunRequest request,
+    required List<Map<String, dynamic>> uiReferences,
+    required List<Map<String, dynamic>> toolErrors,
+    required ReactRuntimeResult result,
+  }) {
+    final fromPayload =
+        (answerPayload['processSummary'] as String?)?.trim() ?? '';
+    if (fromPayload.isNotEmpty) return fromPayload;
+    final isWeatherLike = _isWeatherLikeRequest(
+      domainId: domainId,
+      request: request,
+      answerPayload: answerPayload,
+    );
+    final nextAction =
+        ((answerPayload['decision'] as Map?)?['nextAction'] as String?)
+            ?.trim() ??
+        '';
+    if (nextAction == 'ask_user') {
+      return '还差一个关键信息，我先和你确认后再继续。';
+    }
+    if (uiReferences.isNotEmpty) {
+      if (isWeatherLike) {
+        return '已核对 ${uiReferences.length} 个天气来源，正在整理可直接参考的结论。';
+      }
+      return '已核对 ${uiReferences.length} 个来源，正在整理可直接参考的结论。';
+    }
+    if (toolErrors.isNotEmpty) {
+      if (isWeatherLike) {
+        return '已尝试获取实时天气，但暂时没有拿到可靠来源，先给你当前可执行的建议。';
+      }
+      return '已尝试获取相关信息，但暂时没有拿到足够可靠的来源，先给你当前可执行的建议。';
+    }
+    final fallback = _extractUiSummary(answerPayload, result.finalText).trim();
+    if (fallback.isNotEmpty) return fallback;
+    return '已整理出当前可直接查看的回答。';
+  }
+
+  int _resolveProcessReferenceCount({
+    required Map<String, dynamic> answerPayload,
+    required List<Map<String, dynamic>> uiReferences,
+  }) {
+    final fromPayload = (answerPayload['processReferenceCount'] as num?)
+        ?.toInt();
+    if (fromPayload != null && (fromPayload > 0 || uiReferences.isEmpty)) {
+      return fromPayload;
+    }
+    return uiReferences.length;
+  }
+
+  List<Map<String, dynamic>> _buildUiProcessContentBlocks({
+    required String processSummary,
+    required List<Map<String, dynamic>> uiReferences,
+  }) {
+    final summary = processSummary.trim();
+    if (summary.isEmpty) return const <Map<String, dynamic>>[];
+    final refs = uiReferences
+        .map(
+          (ref) => <String, dynamic>{
+            'title': (ref['title'] ?? '').toString(),
+            'url': (ref['url'] ?? '').toString(),
+            'source': (ref['source'] ?? '').toString(),
+          },
+        )
+        .where(
+          (ref) =>
+              (ref['title'] as String).trim().isNotEmpty &&
+              (ref['url'] as String).trim().isNotEmpty,
+        )
+        .toList(growable: false);
+    return <Map<String, dynamic>>[
+      <String, dynamic>{
+        'type': refs.isNotEmpty ? 'searchSummary' : 'text',
+        'text': summary,
+        'references': refs,
+      },
+    ];
+  }
+
+  String _buildFallbackMarkdown({
+    required Map<String, dynamic> answerPayload,
+    required String domainId,
+    required AssistantRunRequest request,
+    required List<Map<String, dynamic>> uiReferences,
+    required List<Map<String, dynamic>> toolErrors,
+    required ReactRuntimeResult result,
+    required SynthesisReadinessResult synthesisReadiness,
+  }) {
+    if (uiReferences.isNotEmpty) return '';
+    final isWeatherLike = _isWeatherLikeRequest(
+      domainId: domainId,
+      request: request,
+      answerPayload: answerPayload,
+    );
+    final resultMap =
+        (answerPayload['result'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final readableResultText = OpenAiCompatibleLlmProvider.stripXmlToolCalls(
+      (resultMap['text'] as String?)?.trim() ?? '',
+    ).trim();
+    if (toolErrors.isEmpty &&
+        !result.degraded &&
+        (answerPayload['messageKind'] as String?)?.trim() != 'fallback' &&
+        synthesisReadiness.ready &&
+        readableResultText.isNotEmpty &&
+        !AssistantContentFilters.isProgressPlaceholder(readableResultText)) {
+      return '';
+    }
+    final reason = _extractToolErrorReason(toolErrors);
+    if (isWeatherLike) {
+      final city = _inferWeatherCity(
+        request: request,
+        answerPayload: answerPayload,
+      );
+      final titleCity = city.isEmpty ? '当前城市' : city;
+      final siteLabel = city.isEmpty ? '对应城市' : titleCity;
+      return '''
+## 🌤️ $titleCity 天气
+
+暂时查不到实时天气数据，${reason.isEmpty ? '天气来源暂时不可用。' : reason}
+
+**你可以**
+1. 打开手机天气 App 查看 $siteLabel 最新天气
+2. 访问[中国天气网](http://www.weather.com.cn)搜索“$siteLabel”
+3. 稍后再问我，或直接告诉我你想查询的城市
+''';
+    }
+    final question = request.messages.isNotEmpty
+        ? request.messages.last.content.trim()
+        : '这个问题';
+    return '''
+## 💡 先给你一个可靠结论
+
+我暂时没拿到足够稳定的实时来源来完整回答“$question”，${reason.isEmpty ? '所以先给你当前最稳妥的下一步建议。' : reason}
+
+**你可以尝试**
+1. 换一种更具体的说法再问我
+2. 如果这是实时问题，稍后再让我重新查一次
+3. 如果你愿意，我也可以先基于已有信息给你一个通用建议
+''';
+  }
+
+  String _extractToolErrorReason(List<Map<String, dynamic>> toolErrors) {
+    if (toolErrors.isEmpty) return '';
+    final latest = toolErrors.last;
+    final message = (latest['message'] as String?)?.trim() ?? '';
+    if (message.isEmpty) return '';
+    if (message.contains('暂不可用') || message.contains('超时')) {
+      return message;
+    }
+    return '$message。';
+  }
+
+  String _inferWeatherCity({
+    required AssistantRunRequest request,
+    required Map<String, dynamic> answerPayload,
+  }) {
+    final slotState =
+        (answerPayload['slotState'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final citySlot = slotState['city'];
+    if (citySlot is Map) {
+      final value = (citySlot['value'] as String?)?.trim() ?? '';
+      if (value.isNotEmpty) return value;
+    } else if (citySlot is String && citySlot.trim().isNotEmpty) {
+      return citySlot.trim();
+    }
+    final query = request.messages.isNotEmpty
+        ? request.messages.last.content.trim()
+        : '';
+    final match = RegExp(
+      r'([\u4e00-\u9fa5]{2,8}(?:市|区|县)|[\u4e00-\u9fa5]{2,8})(?:今天天气|天气|气温|降雨|风力)',
+    ).firstMatch(query);
+    return (match?.group(1) ?? '').trim();
+  }
+
+  bool _isWeatherLikeRequest({
+    required String domainId,
+    required AssistantRunRequest request,
+    required Map<String, dynamic> answerPayload,
+  }) {
+    final loweredDomain = domainId.trim().toLowerCase();
+    if (loweredDomain.contains('weather')) return true;
+    final query = request.messages.isNotEmpty
+        ? request.messages.last.content.trim()
+        : '';
+    if (RegExp(r'(天气|气温|降雨|风力|体感|预报)').hasMatch(query)) {
+      return true;
+    }
+    return _inferWeatherCity(
+      request: request,
+      answerPayload: answerPayload,
+    ).isNotEmpty;
+  }
+
   /// 从 finalText（可能是 JSON envelope）提取用于 session/记忆存储的纯文本。
   /// 委托给 [LlmResponseParser] 统一解析，避免 JSON 原文污染摘要和历史。
   String _extractDisplayTextForStorage(String finalText) {
     final t = finalText.trim();
     if (t.isEmpty) return '';
-    if (!t.startsWith('{') && !t.startsWith('```') && !t.startsWith('<think>')) {
+    if (!t.startsWith('{') &&
+        !t.startsWith('```') &&
+        !t.startsWith('<think>')) {
       return t;
     }
     final result = LlmResponseParser.parse(t);
@@ -2063,7 +2822,7 @@ class PersonalAssistantAgentLoop {
       return userMd;
     }
     // 优先级 2：fallback（finalText），过滤 JSON 原文和进度文本
-    final fb = fallback.trim();
+    final fb = OpenAiCompatibleLlmProvider.stripXmlToolCalls(fallback).trim();
     if (fb.isEmpty ||
         AssistantContentFilters.isJsonEnvelope(fb) ||
         AssistantContentFilters.isProgressPlaceholder(fb)) {
@@ -2444,6 +3203,7 @@ class PersonalAssistantAgentLoop {
     required DialogueRoundScript dialogueRoundScript,
     String skillPersona = '',
     String skillCatalog = '',
+    required SkillExecutionShell skillExecutionShell,
   }) {
     final query = request.messages.isEmpty ? '' : request.messages.last.content;
     final toolGuidelines =
@@ -2475,6 +3235,7 @@ class PersonalAssistantAgentLoop {
       'dialogueRoundScript': _dialogueScriptForModel(dialogueRoundScript),
       'skillPersona': skillPersona,
       'skillCatalog': skillCatalog,
+      'skillExecutionShell': skillExecutionShell.toJson(),
       'traceId': '',
     };
   }
@@ -2492,6 +3253,7 @@ class PersonalAssistantAgentLoop {
         return _ResolvedSkillContext(
           skillName: 'Global Policy',
           instructionMarkdown: globalPolicy,
+          executionShell: const SkillExecutionShell(),
         );
       }
       final matched = _skillRouter.resolveSkillForDomain(
@@ -2499,11 +3261,15 @@ class PersonalAssistantAgentLoop {
         domainId: domainId,
         skills: skills,
       );
-      if (matched == null) {
+      final effectiveMatch = domainId == _domainRouter.fallbackDomainId
+          ? (_skillRouter.resolveSkill(userQuery, skills) ?? matched)
+          : matched;
+      if (effectiveMatch == null) {
         if (globalPolicy.isEmpty) return const _ResolvedSkillContext.empty();
         return _ResolvedSkillContext(
           skillName: 'Global Policy',
           instructionMarkdown: globalPolicy,
+          executionShell: const SkillExecutionShell(),
         );
       }
       final skillPolicy = await _loadSkillPolicyMarkdown(domainId);
@@ -2513,13 +3279,14 @@ class PersonalAssistantAgentLoop {
       );
       final mergedInstruction = _mergeSkillInstructions(
         globalPolicy: globalPolicy,
-        baseSkillInstruction: matched.skillInstructionMarkdown,
+        baseSkillInstruction: effectiveMatch.skillInstructionMarkdown,
         skillPolicy: skillPolicy,
         phaseReferences: phaseRefs,
       );
       return _ResolvedSkillContext(
-        skillName: matched.name,
+        skillName: effectiveMatch.name,
         instructionMarkdown: mergedInstruction,
+        executionShell: effectiveMatch.executionShell,
       );
     } catch (_) {
       return const _ResolvedSkillContext.empty();
@@ -2598,7 +3365,8 @@ class PersonalAssistantAgentLoop {
   }
 
   Future<String> _loadGlobalPolicyMarkdown() async {
-    const path = 'assets/personal_assistant/prompts/global/stack.global_policy.md';
+    const path =
+        'assets/personal_assistant/prompts/global/stack.global_policy.md';
     try {
       final text = await rootBundle.loadString(path);
       return text.trim();
@@ -2617,7 +3385,13 @@ class PersonalAssistantAgentLoop {
     var inPersonaSection = false;
     for (final line in lines) {
       final lower = line.toLowerCase().trim();
-      if (lower.startsWith('## ') && (lower.contains('人设') || lower.contains('persona') || lower.contains('语气') || lower.contains('tone') || lower.contains('风格') || lower.contains('style'))) {
+      if (lower.startsWith('## ') &&
+          (lower.contains('人设') ||
+              lower.contains('persona') ||
+              lower.contains('语气') ||
+              lower.contains('tone') ||
+              lower.contains('风格') ||
+              lower.contains('style'))) {
         inPersonaSection = true;
         personaBuffer.writeln(line);
         continue;
@@ -2714,10 +3488,10 @@ class PersonalAssistantAgentLoop {
     AssistantRunRequest request, {
     required bool forceRefreshCatalog,
   }) async {
-    final domainId = (request.contextScopeHint['domainId'] as String?)?.trim();
-    if (domainId != null && domainId.isNotEmpty) return domainId;
-    await _domainRouter.ensureLoaded(forceRefresh: forceRefreshCatalog);
-    return _domainRouter.fallbackDomainId;
+    return _resolveFallbackDomainId(
+      request,
+      forceRefreshCatalog: forceRefreshCatalog,
+    );
   }
 
   List<String> _resolveAvailableTools({
@@ -2833,12 +3607,15 @@ class _ResolvedSkillContext {
   const _ResolvedSkillContext({
     required this.skillName,
     required this.instructionMarkdown,
+    required this.executionShell,
   });
 
   const _ResolvedSkillContext.empty()
     : skillName = '',
-      instructionMarkdown = '';
+      instructionMarkdown = '',
+      executionShell = const SkillExecutionShell();
 
   final String skillName;
   final String instructionMarkdown;
+  final SkillExecutionShell executionShell;
 }

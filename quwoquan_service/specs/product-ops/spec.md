@@ -192,3 +192,264 @@
 推荐训练、评估、离线分析等计算型能力保留：
 - `Python`
 
+---
+
+## 核心对象模型
+
+### 一、治理处置域对象
+
+#### 1. `ModerationCase`
+- 用途：统一承载举报、审核、下架、处罚、申诉、恢复等治理工单
+- 关键字段：
+  - `caseId`
+  - `caseType`：report / moderation / enforcement / appeal / recovery
+  - `targetType`：content / comment / circle / user / message / assistant_run
+  - `targetId`
+  - `status`
+  - `priority`
+  - `riskLevel`
+  - `source`
+  - `ownerId`
+  - `slaPolicyId`
+  - `createdAt` / `updatedAt`
+
+#### 2. `EnforcementAction`
+- 用途：记录已执行或待执行的治理动作
+- 关键字段：
+  - `actionId`
+  - `caseId`
+  - `actionType`：takedown / restrict / mute / suspend / ban / recover
+  - `scope`
+  - `reasonCode`
+  - `effectiveAt` / `expireAt`
+  - `executorId`
+  - `approvalMode`：single / dual
+  - `status`
+
+#### 3. `AppealCase`
+- 用途：承载用户申诉
+- 关键字段：
+  - `appealId`
+  - `sourceCaseId`
+  - `appellantId`
+  - `appealReason`
+  - `submittedEvidenceIds`
+  - `status`
+  - `reviewResult`
+
+#### 4. `RecoveryCase`
+- 用途：账号恢复与客服协作
+- 关键字段：
+  - `recoveryId`
+  - `userId`
+  - `originActionId`
+  - `customerServiceTicketId`
+  - `status`
+  - `slaDeadlineAt`
+  - `dualApprovalRequired`
+  - `finalDecision`
+
+#### 5. `EvidenceAsset`
+- 用途：承载截图、录屏、聊天证据、补充材料
+- 关键字段：
+  - `evidenceId`
+  - `caseId`
+  - `assetType`
+  - `storageUrl`
+  - `hash`
+  - `uploadedBy`
+  - `uploadedAt`
+
+#### 6. `ReviewDecision`
+- 用途：保存审核、复核、双签记录
+- 关键字段：
+  - `decisionId`
+  - `caseId`
+  - `reviewerId`
+  - `decision`
+  - `reasonCode`
+  - `comment`
+  - `decisionAt`
+
+### 二、增长 / 实验 / 推荐运营域对象
+
+#### 1. `EventDefinition`
+- 用途：定义统一事件 schema 与版本
+- 关键字段：
+  - `eventType`
+  - `version`
+  - `requiredFields`
+  - `dimensions`
+  - `owner`
+
+#### 2. `MetricDefinition`
+- 用途：统一指标口径
+- 关键字段：
+  - `metricId`
+  - `category`
+  - `formula`
+  - `dimensions`
+  - `guardrails`
+
+#### 3. `Segment`
+- 用途：标签与分群
+- 关键字段：
+  - `segmentId`
+  - `populationRule`
+  - `includedTags`
+  - `excludedTags`
+  - `estimatedSize`
+
+#### 4. `Experiment`
+- 用途：实验、放量、回滚与审计
+- 关键字段：
+  - `experimentId`
+  - `layer`
+  - `variants`
+  - `targetSegments`
+  - `rolloutPlan`
+  - `status`
+  - `guardMetrics`
+
+#### 5. `RecommendationPolicy`
+- 用途：统一推荐运营策略定义
+- 关键字段：
+  - `policyId`
+  - `scenario`
+  - `layer`：recall / prerank / rank / rerank
+  - `policyType`
+  - `targetSegments`
+  - `status`
+  - `version`
+
+#### 6. `RecommendationOverride`
+- 用途：受控干预召回、粗排、精排/重排
+- 关键字段：
+  - `overrideId`
+  - `policyId`
+  - `overrideScope`
+  - `parameterSpace`
+  - `effectiveWindow`
+  - `rolloutMode`
+  - `rollbackToken`
+
+#### 7. `OptimizationRun`
+- 用途：承载优化评估闭环
+- 关键字段：
+  - `runId`
+  - `baselineVersion`
+  - `candidateVersion`
+  - `evaluationMetrics`
+  - `decision`
+  - `releasedAt`
+
+---
+
+## 工作流模型
+
+### 一、治理处置工作流
+
+#### 1. 举报 / 审核 / 处罚主链路
+`reported -> triaged -> reviewing -> action_pending -> action_applied -> closed`
+
+扩展路径：
+- `reported -> dismissed`
+- `reviewing -> escalated`
+- `action_pending -> dual_approval_pending -> action_applied`
+
+#### 2. 申诉工作流
+`submitted -> evidence_pending -> under_review -> approved|rejected -> closed`
+
+#### 3. 账号恢复工作流
+`requested -> customer_service_intake -> evidence_verified -> dual_review -> recovered|rejected -> closed`
+
+### 二、实验与推荐运营工作流
+
+#### 1. 实验工作流
+`draft -> review_pending -> running -> ramping -> completed|rolled_back -> archived`
+
+#### 2. 推荐策略工作流
+`draft -> simulated -> review_pending -> canary -> active -> rolled_back|retired`
+
+#### 3. 推荐优化工作流
+`hypothesis -> candidate_config -> offline_eval -> online_canary -> full_release|rollback`
+
+---
+
+## 推荐运营模型
+
+### 召回层
+- 白名单 / 黑名单
+- 活动池 / 保底池
+- 领域开关
+- 人群定向召回
+- 作者 / 圈子 / 内容扶持
+
+### 粗排层
+- 质量阈值
+- 探索比例
+- 新内容冷启动保护
+- 风险内容预过滤
+- 基础权重调节
+
+### 精排 / 重排层
+- 模型版本选择
+- 多样性约束
+- 去重策略
+- 扶持因子
+- 负反馈抑制
+- rerank 开关
+
+### 强约束
+- 运营只能在受限参数空间内干预
+- 干预必须版本化、可审计、可灰度、可回滚
+- 干预不替代算法代码主逻辑
+
+---
+
+## 治理模型
+
+### 内容治理
+- 举报受理
+- 审核判定
+- 下架 / 恢复
+- 风险升级
+- 证据归档
+
+### 账号治理
+- 限制 / 禁用 / 封禁
+- 申诉
+- 恢复
+- 客服协同
+- SLA 跟踪
+- 双签审批
+
+### 权限与审计
+- 高风险动作默认要求审计
+- 账号恢复、永久处罚等动作要求双签
+- 每个治理与推荐动作都必须产出审计记录与回滚上下文
+
+---
+
+## 后续 `/design` 需要比较的方案
+
+### 方案组 1：产品形态
+- 方案 A：一个统一产品，内部两大模块
+- 方案 B：治理后台与增长后台拆成两个独立产品
+- 当前选择：方案 A
+
+### 方案组 2：控制面接入方式
+- 方案 A：各领域手写运营接口
+- 方案 B：统一 `product-control-plane` 元数据驱动 + codegen
+- 当前选择：方案 B
+
+### 方案组 3：推荐运营深度
+- 方案 A：只做 AB 与指标
+- 方案 B：覆盖召回 / 粗排 / 精排的受控干预
+- 当前选择：方案 B
+
+### 方案组 4：账号恢复
+- 方案 A：简单状态回退
+- 方案 B：正式 case/workflow + 证据 + SLA + 双签
+- 当前选择：方案 B
+

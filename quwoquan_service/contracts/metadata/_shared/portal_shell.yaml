@@ -1,0 +1,33 @@
+version: 1
+
+portal:
+  id: ops-portal
+  description: 统一控制面门户壳层，承载 Platform Ops 与 Product Ops。
+  supported_environments: [local, dev, integration, prod]
+  context_switchers:
+    - environment
+    - domain
+    - service
+  workbench_views:
+    - my_services
+    - pending_approvals
+    - active_rollouts
+    - open_alerts
+    - hot_cases
+  global_search:
+    object_types:
+      - service
+      - config
+      - release
+      - dependency
+      - alert
+      - audit
+      - case
+      - experiment
+  notification_channels:
+    - approval_pending
+    - rollout_blocked
+    - rollback_completed
+    - slo_burn
+    - incident_alert
+  object_jump_support: true

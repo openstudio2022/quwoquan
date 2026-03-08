@@ -123,11 +123,13 @@ class AssistantSessionManager {
     required String sessionId,
     required String role,
     required String content,
+    Map<String, dynamic> metadata = const <String, dynamic>{},
   }) {
     final messages = getOrCreateSession(sessionId);
-    messages.add(<String, String>{
+    messages.add(<String, dynamic>{
       'role': role,
       'content': content,
+      ...metadata,
     });
   }
 

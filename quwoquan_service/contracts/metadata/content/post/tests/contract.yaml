@@ -320,3 +320,33 @@ scenarios:
     go_func: TestGetRecommendationContract
     status: pending
     command: GetRecommendation
+  - name: list_user_posts_contract
+    operation: ListUserPosts
+    go_func: TestListUserPostsContract
+    status: pending
+    command: ListUserPosts
+  - name: like_comment_contract
+    operation: LikeComment
+    go_func: TestLikeCommentContract
+    status: pending
+    command: LikeComment
+  - name: unlike_comment_contract
+    operation: UnlikeComment
+    go_func: TestUnlikeCommentContract
+    status: pending
+    command: UnlikeComment
+  - name: list_comments_by_author_contract
+    operation: ListCommentsByAuthor
+    go_func: TestListCommentsByAuthorContract
+    status: pending
+    command: ListCommentsByAuthor
+  - name: list_comments_for_post_author_contract
+    operation: ListCommentsForPostAuthor
+    go_func: TestListCommentsForPostAuthorContract
+    status: pending
+    command: ListCommentsForPostAuthor
+  - name: get_app_config_contract
+    operation: GetAppConfig
+    go_func: TestGetAppConfigContract
+    status: pending
+    command: GetAppConfig

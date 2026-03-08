@@ -118,6 +118,31 @@ error_scenarios:
     expected_dart_const: commentNotFound
     expected_retryable: false
 
+  - name: parse_comment_too_long
+    input_code: "CONTENT.USER.comment_too_long"
+    input_status: 400
+    expected_dart_const: commentTooLong
+    expected_retryable: false
+
+  - name: parse_comment_rate_limited
+    input_code: "CONTENT.USER.comment_rate_limited"
+    input_status: 429
+    expected_dart_const: commentRateLimited
+    expected_retryable: true
+    expected_retry_after: 60
+
+  - name: parse_comment_like_duplicate
+    input_code: "CONTENT.USER.comment_like_duplicate"
+    input_status: 409
+    expected_dart_const: commentLikeDuplicate
+    expected_retryable: false
+
+  - name: parse_comment_forbidden_delete
+    input_code: "CONTENT.USER.comment_forbidden_delete"
+    input_status: 403
+    expected_dart_const: commentForbiddenDelete
+    expected_retryable: false
+
   - name: parse_forbidden_delete
     input_code: "CONTENT.USER.forbidden_delete"
     input_status: 403

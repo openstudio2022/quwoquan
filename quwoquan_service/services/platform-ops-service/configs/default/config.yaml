@@ -1,0 +1,40 @@
+service:
+  name: platform-ops-service
+  http:
+    addr: ":18080"
+
+config:
+  # Config release contract
+  # CONFIG_VERSION must be injected by deployment pipeline in prod.
+  version: "v0.0.1"
+  min_image_version: "0.0.1"
+  max_image_version: "9.9.9"
+
+# Redis scenes (defaults)
+redis:
+  rec:
+    mode: standalone
+    addr: ""
+    addrs: []
+    password: ""
+    db: 0
+    tls: false
+    pool:
+      size: 0
+      min_idle: 0
+      read_timeout_ms: 100
+      write_timeout_ms: 100
+      dial_timeout_ms: 500
+  general:
+    mode: standalone
+    addr: ""
+    addrs: []
+    password: ""
+    db: 1
+    tls: false
+    pool:
+      size: 0
+      min_idle: 0
+      read_timeout_ms: 200
+      write_timeout_ms: 200
+      dial_timeout_ms: 500

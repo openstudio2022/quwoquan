@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 
@@ -20,8 +20,7 @@ class LearningEvent(BaseModel):
     payload: dict[str, Any] | None = None
     ts: float | None = None
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class TrainingSample(BaseModel):
@@ -36,8 +35,7 @@ class TrainingSample(BaseModel):
     labels: dict[str, Any] | None = None
     ts: float | None = None
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class ModelRegistryEntry(BaseModel):
@@ -51,5 +49,4 @@ class ModelRegistryEntry(BaseModel):
     createdAt: float | None = None
     updatedAt: float | None = None
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)

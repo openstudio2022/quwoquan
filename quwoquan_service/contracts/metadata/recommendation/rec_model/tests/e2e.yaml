@@ -1,0 +1,32 @@
+version: 1
+aggregate: RecModel
+layer: e2e
+
+description: |
+  推荐域端云验收场景。portal / product-ops / recommendation-service / model projection 全链路，
+  用于验证策略激活后训练与推断侧的 projection 可被 onboarding 矩阵识别为 T3 证据。
+
+execution:
+  environment: integration
+  ci_strategy: advisory
+  trigger: daily + pre-release
+  runners:
+    api_contract: integration HTTP client
+    ui_journey: ops portal smoke runner
+
+scenarios:
+  - name: recommendation_policy_activation_updates_projection
+    description: 推荐策略激活后，模型投影与 guardrail 摘要同步刷新
+    test_type: api_contract
+    actors:
+      portal: apps/ops-portal/src/domains/product/RecommendationPage.tsx
+      control_plane: product-ops-service POST /v1/control-plane/product/recommendation/policies/{policyId}:activate
+      service: recommendation-service projections/model_registry
+    steps:
+      - operator activates a recommendation policy in product control plane
+      - product control plane writes audit and approval records
+      - recommendation-service refreshes model registry projection
+    assertions:
+      - policy status becomes active
+      - audit trail contains rollback token
+      - model registry projection reflects the activated policy version

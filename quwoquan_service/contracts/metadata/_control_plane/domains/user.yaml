@@ -1,0 +1,43 @@
+version: 1
+domain: user
+display_name: User
+template_role: replica_ready
+rollout_group: wave_1_copy
+acceptance_status: integration_pass
+metadata_paths:
+  - user/user_profile
+service_names:
+  - user-service
+control_planes:
+  platform:
+    enabled: true
+    object_types: [service_catalog_entry, plane_binding, gate_rule]
+    config_prefixes: [sys.user.]
+  product:
+    enabled: true
+    object_types: [recovery_case, profile_review_case, segment]
+    config_prefixes: [ops.user.]
+minimum_package:
+  metadata_files:
+    - contracts/metadata/user/user_profile/service.yaml
+    - contracts/metadata/user/user_profile/tests/e2e.yaml
+  codegen_targets: [go_runtime, python_runtime, ops_portal]
+  test_evidence:
+    t1:
+      - contracts/metadata/user/user_profile/service.yaml
+    t2:
+      - services/user-service/tests/profile_crud_contract_test.go
+      - services/user-service/tests/follow_contract_test.go
+    t3:
+      - contracts/metadata/user/user_profile/tests/e2e.yaml
+    t4: []
+deployment:
+  plane_binding_domain: user
+  plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
+  legacy_binding_source: deploy/shared/process_domain_mapping.yaml
+replication:
+  source_template: content
+  next_copy_targets: []
+  copy_notes:
+    - Keep the same onboarding shell but bind product control plane to recovery and profile review workflows.
+blocking_gaps: []

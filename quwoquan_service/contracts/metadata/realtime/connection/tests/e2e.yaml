@@ -1,0 +1,27 @@
+version: 1
+aggregate: Connection
+layer: e2e
+
+description: |
+  Realtime 域端到端接入场景（integration/staging）。
+  重点验证弱网、瞬时失败与恢复后的消息接收链路。
+
+scenarios:
+  - name: longpoll_recovers_after_transient_failure
+    test_file: ../quwoquan_app/test/cloud/realtime/realtime_transport_contract_test.dart
+    steps:
+      - client starts long-poll transport
+      - network returns transient failures twice
+      - gateway resumes and returns realtime events
+    assertions:
+      - retries_happen_before_backoff_ceiling
+      - event_delivered_after_recovery
+
+  - name: websocket_and_longpoll_contract_share_same_metadata
+    test_file: ../quwoquan_app/test/cloud/realtime/realtime_transport_contract_test.dart
+    steps:
+      - client derives ws url from generated metadata
+      - client derives long-poll path from generated metadata
+    assertions:
+      - websocket_path_matches_service_yaml
+      - longpoll_path_matches_service_yaml

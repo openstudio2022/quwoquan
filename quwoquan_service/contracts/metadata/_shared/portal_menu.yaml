@@ -1,0 +1,109 @@
+version: 1
+
+menus:
+  - menu_id: overview
+    label: 总览
+    order: 0
+    route_id: portal_overview
+    required_scope: portal.read
+    environment_aware: true
+
+  - menu_id: platform
+    label: Platform Ops
+    order: 1
+    route_id: platform_root
+    required_scope: platform_ops.read
+    environment_aware: true
+
+  - menu_id: platform.service_catalog
+    parent_menu_id: platform
+    label: 服务目录
+    order: 0
+    route_id: platform_service_catalog
+    required_scope: platform_ops.catalog.read
+    object_types: [ServiceCatalogEntry, PlaneBinding]
+    environment_aware: true
+
+  - menu_id: platform.config_center
+    parent_menu_id: platform
+    label: 配置中心
+    order: 1
+    route_id: platform_config_center
+    required_scope: platform_ops.config.read
+    object_types: [ConfigSchema, ConfigPackage, ConfigRelease]
+    environment_aware: true
+
+  - menu_id: platform.governance
+    parent_menu_id: platform
+    label: 治理策略
+    order: 2
+    route_id: platform_governance
+    required_scope: platform_ops.governance.read
+    object_types: [GovernancePolicyTemplate, GovernancePolicyBinding]
+    environment_aware: true
+
+  - menu_id: platform.rollout
+    parent_menu_id: platform
+    label: 发布灰度
+    order: 3
+    route_id: platform_rollout
+    required_scope: platform_ops.release.read
+    object_types: [RolloutPlan, RolloutStage, RollbackRecord]
+    environment_aware: true
+
+  - menu_id: platform.dependency
+    parent_menu_id: platform
+    label: 环境与依赖
+    order: 4
+    route_id: platform_dependency
+    required_scope: platform_ops.dependency.read
+    object_types: [EnvironmentTopology, DependencyProfile, CapacityProfile]
+    environment_aware: true
+
+  - menu_id: platform.observability
+    parent_menu_id: platform
+    label: 可观测与 SLO
+    order: 5
+    route_id: platform_observability
+    required_scope: platform_ops.observability.read
+    object_types: [SLOPolicy, AlertTemplate, DashboardCard]
+    environment_aware: true
+
+  - menu_id: platform.runbook
+    parent_menu_id: platform
+    label: Runbook 与演练
+    order: 6
+    route_id: platform_runbook
+    required_scope: platform_ops.runbook.read
+    object_types: [Runbook]
+    environment_aware: true
+
+  - menu_id: platform.gates
+    parent_menu_id: platform
+    label: CI/CD 门禁
+    order: 7
+    route_id: platform_gates
+    required_scope: platform_ops.gate.read
+    object_types: [GateRule]
+    environment_aware: true
+
+  - menu_id: product
+    label: Product Ops
+    order: 2
+    route_id: product_root
+    required_scope: product_ops.read
+    environment_aware: true
+
+  - menu_id: audit
+    label: 审计与变更
+    order: 3
+    route_id: portal_audit
+    required_scope: portal.audit.read
+    environment_aware: true
+
+  - menu_id: settings
+    label: 系统设置
+    order: 4
+    route_id: portal_settings
+    required_scope: portal.settings.read
+    environment_aware: false

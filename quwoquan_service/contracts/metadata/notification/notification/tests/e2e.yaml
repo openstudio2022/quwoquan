@@ -1,0 +1,26 @@
+version: 1
+entity: Notification
+layer: e2e
+
+description: |
+  通知域端到端接入场景（integration/staging）。
+  关注系统通知入口、通知列表和已读状态的统一接入闭环。
+
+scenarios:
+  - name: chat_notification_opens_entry_page
+    patrol_flow: test/patrol/chat/chat_notification_entry_test.dart
+    steps:
+      - app receives a chat-related system notification
+      - operator taps the system notification
+      - app opens the target entry without crashing
+    assertions:
+      - notification_entry_opens
+      - app_recovers_to_foreground
+
+  - name: notification_center_reads_unread_count
+    steps:
+      - app loads unread count from /v1/notifications/unread-count
+      - app opens /v1/notifications and marks one item as read
+    assertions:
+      - unread_count_visible
+      - read_state_changes_persist

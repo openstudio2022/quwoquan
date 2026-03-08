@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from .content_features import ContentFeatures
 
@@ -18,8 +18,8 @@ class ContentTrainingSample(BaseModel):
     item_features: ContentFeatures
     user_engaged: int = Field(..., description="1=positive, 0=negative")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "positive_signals": [
                 {"type": "comment", "weight": 4},
                 {"type": "like", "weight": 3},
@@ -31,4 +31,5 @@ class ContentTrainingSample(BaseModel):
                 {"type": "dislike", "weight": 3},
                 {"type": "report", "weight": 5},
             ],
-        }
+        },
+    )

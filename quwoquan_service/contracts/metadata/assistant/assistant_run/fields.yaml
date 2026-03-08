@@ -178,6 +178,60 @@ entities:
         ops_exposure: read
         description: 子代理任务计划与结果摘要
 
+      - name: problemShape
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 问题形态（single_skill/multi_skill）
+
+      - name: primarySkill
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 首轮导引识别出的主 skill
+
+      - name: secondarySkills
+        type: "[]string"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 首轮导引识别出的次级 skill 列表
+
+      - name: intentGraph
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 首轮导引产出的结构化意图图
+
+      - name: skillRuns
+        type: "[]object"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 正式编排的 skillRun 列表
+
+      - name: aggregationState
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 全局聚合出口状态
+
       - name: renderMode
         type: string
         constraints: [NULLABLE]
@@ -195,6 +249,51 @@ entities:
         api_exposure: read
         ops_exposure: read
         description: 回合协议版本（assistant_turn_v2 等）
+
+      - name: processSummaryV1
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 过程区一行摘要（面向用户任务进展，默认折叠展示）
+
+      - name: processReferenceCountV1
+        type: int
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 过程区可展开来源计数
+
+      - name: uiProcessTimelineV2
+        type: "[]object"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 面向用户事件驱动的过程树时间线（root/skill/aggregation）
+
+      - name: sessionPreferenceFacts
+        type: "[]object"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 本会话即时生效的偏好事实快照
+
+      - name: longTermPreferenceFacts
+        type: "[]object"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 长期偏好事实快照（可见、可撤销）
 
       - name: toolsCalled
         type: "[]string"

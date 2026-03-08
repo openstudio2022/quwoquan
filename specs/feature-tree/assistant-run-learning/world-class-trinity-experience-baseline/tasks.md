@@ -1,102 +1,95 @@
-# 开发任务：world-class-trinity-experience-baseline（重分解）
+# world-class-trinity-experience-baseline 任务列表
 
-## 状态盘点（来自当前仓库）
+## 当前交付任务
 
-- 已完成：天气链路隐私文案收敛、城市优先解析、本地定位失败后再追问、基础回归测试新增。
-- 未完成：关键路径仍存在文本匹配分支；`md+json` 强契约未落地；Subagent 调度未接入主会话。
+### 包 1：Unified Runtime Mainline
 
----
+- [ ] T1: [metadata] 更新 `quwoquan_service/contracts/metadata/assistant/assistant_run/fields.yaml`，补齐过程摘要、来源计数、本会话偏好事实、长期偏好事实字段。
+- [ ] T2: [metadata] 更新 `quwoquan_service/contracts/metadata/assistant/assistant_run/service.yaml`，补齐过程区、偏好事实与 fallback 相关 contract test 场景。
+- [ ] T3: [codegen] 执行 `make verify && make codegen && make codegen-app`，确认 assistant_run 相关 generated 产物可生成。
+- [ ] T4: [测试/Red] 为问题分型、stop policy、remote/local/hybrid 行为一致性补齐最小失败测试骨架（T1/T3）。
+- [ ] T5: [业务逻辑] 重构 `AgentLoop` 主线，明确 `Planner -> Skill Shell -> ReactRuntime -> Synthesizer` 边界。
+- [ ] T6: [业务逻辑] 清理 runtime 中残余领域硬编码，保留通用 ReAct、守卫、预算与 fallback 机制。
+- [ ] T7: [业务逻辑] 对齐 `CapabilityGateway`、`OpenClawBridge` 与本地执行结果的统一能力面和质量门控。
+- [ ] T8: [测试/Green] 跑通 `localOnly / remotePreferred / hybrid` 三路径一致性测试并转绿。
 
-## Phase 0：冻结基线与风险清理（先做）
+### 包 2：Skill DSL 2.0
 
-- [ ] P0-1 盘点并标记所有字符串判断分支（尤其 `llm_provider`、`react_runtime`），产出待替换清单。
-- [ ] P0-2 确认 `assistant_run` metadata 现状与缺口（fields/errors/service 对协议支持度）。
-- [ ] P0-3 定义灰度开关：`structured_decision_enabled`、`subagent_enabled`。
+- [ ] T9: [metadata/规范] 定义 Skill DSL 2.0 最小字段集：`manifest / slot_contract / dialogue_state / tool_binding / response_style / reference_policy / execution_shell / preference_hooks`。
+- [ ] T10: [测试/Red] 为 Skill DSL 结构与兼容迁移编写 contract test，确保旧 `SKILL.md` 可逐步升级而不破坏现有加载逻辑。
+- [ ] T11: [业务逻辑] 升级 Skill loader / planner 注入逻辑，使 Planner 可消费新的 Skill Shell 结构。
+- [ ] T12: [业务逻辑] 完成天气 Skill 的 DSL 2.0 首个试点，实现短预算、强收敛、实时证据优先。
+- [ ] T13: [业务逻辑] 完成 `shopping_decision` Skill 试点，实现对比型结构输出与明确推荐。
+- [ ] T14: [业务逻辑] 完成 `social_companion_chat` Skill 试点，实现少结构、弱过程、弱工具感闲聊主线。
+- [ ] T15: [业务逻辑] 完成 `fallback_general_search` Skill 试点，实现高质量通用兜底。
+- [ ] T16: [测试/Green] 跑通 4 个试点 Skill 的 contract / integration 回归测试。
 
----
+### 包 3：Markdown-first Rendering
 
-## Phase 1：协议化改造（P0，必做）
+- [ ] T17: [测试/Red] 为主答复 Markdown-first、过程区折叠、一行摘要 + 可展开来源计数、少量 emoji 约束编写 UI regression tests。
+- [ ] T18: [业务逻辑] 在结构化结果中引入 `processSummary` 与 `processReferenceCount` 统一字段，禁止 UI 自由拼接过程语义。
+- [ ] T19: [业务逻辑] 重构 `ChatDetailPage` / 相关消息组件，使主答复优先、过程区默认折叠且围绕用户目标进展表达。
+- [ ] T20: [业务逻辑] 将天气等高频垂类主答复统一为精排 Markdown，不新增专属卡片组件。
+- [ ] T21: [业务逻辑] 统一 Markdown 降级路径，确保结构解析失败时安全回退到普通 Markdown。
+- [ ] T22: [测试/Green] 转绿 UI 渲染、过程区、引用展开与 Markdown 降级相关测试。
 
-### A. metadata 扩展（对应 /qwq-extend 场景）
+### 包 4：Session + Long-term Preference Facts
 
-- [x] M1 (`S11 add-field`) 在 `assistant_run/fields.yaml` 增补协议字段：
-  - `decisionJson`, `toolObservations`, `subagentRuns`, `renderMode`, `contractVersion`。
-- [x] M2 (`S21 add-errors`) 完整化错误码：
-  - `tool_observation_invalid`, `decision_parse_failed`, `subagent_timeout`, `subagent_contract_invalid`。
-- [ ] M3 (`S25 add-test-contracts`) 增加协议契约测试元数据骨架（run/runStream/decision parsing）。
+- [ ] T23: [metadata] 在 `assistant_run` 及相关交互事件持久化结构中挂载本会话偏好事实与长期偏好事实引用。
+- [ ] T24: [测试/Red] 为偏好事实 schema、本会话即时生效和长期事实可见可撤销设计单测与 VM 测试。
+- [ ] T25: [业务逻辑] 统一“重新生成 / 点赞点踩 / 过程展开 / 引用展开 / 纠正文本”的事实采集结构。
+- [ ] T26: [业务逻辑] 让本会话偏好即时注入 Planner / Synthesizer / Skill Shell，影响同会话后续回答。
+- [ ] T27: [业务逻辑] 实现长期偏好事实读取与设置页展示、撤销入口；当前仅做事实记录，不做自动强学习。
+- [ ] T28: [测试/Green] 转绿偏好事实采集、注入、设置展示与撤销测试。
 
-### B. codegen 与校验
+### 包 5：Fallback General Skill High-quality Baseline
 
-- [x] C1 执行 `make verify-metadata`。
-- [x] C2 执行 `make codegen` 与 `make codegen-app`。
-- [ ] C3 校验 generated 产物无手改。
+- [ ] T29: [测试/Red] 为结构化输出异常、低质量搜索、工具失败、远端不可用等 fallback 场景补齐 contract tests。
+- [ ] T30: [业务逻辑] 明确 fallback general skill 的触发条件、Markdown 骨架、边界声明与下一步建议格式。
+- [ ] T31: [业务逻辑] 将低质量搜索 stop policy 与 fallback general skill 接通，避免简单问题长时间不收敛。
+- [ ] T32: [业务逻辑] 将远端结果不合格、本地工具失败、模型结构异常统一导向高质量兜底路径。
+- [ ] T33: [测试/Green] 转绿 fallback 相关 contract / integration / weak-network 回归测试。
 
-### C. 运行时改造
+### 全链质量与发布收口
 
-- [x] I1 引入 `assistant_turn_v2` 解析器（machine + markdown 双通道）。
-- [x] I2 引入 `tool_observation_v1` 标准化器，替换关键字符串分支。
-- [x] I3 天气垂类先接入结构化补槽（城市已知/未知/定位失败/工具失败）。
-- [ ] I4 i18n key 渲染链路接入（决策层不再写死中文）。
+- [ ] T34: [测试] 建立 `A1~A13 ↔ T1~T4` 证据映射回填，补齐缺失的测试入口与函数引用。
+- [ ] T35: [测试] 执行 `python3 scripts/verify_dart_semantic.py`，确保助理 UI 无新增硬编码视觉字面量。
+- [ ] T36: [测试] 执行 `make gate` 与 `make gate-full` 所需最小闭环，确认 metadata、codegen、契约、UI 回归可复跑。
+- [ ] T37: [发布] 配置灰度开关：`skill_shell_v2_enabled`、`markdown_first_rendering_enabled`、`session_preference_facts_enabled`、`fallback_general_skill_enabled`、`problem_class_routing_enabled`。
+- [ ] T38: [发布] 按 5% / 25% / 50% / 100% 规划天气试点到统一主线的放量步骤，并定义回滚阈值。
 
----
+### 统一主线归一任务
 
-## Phase 2：Subagent 与编排升级（P1）
+- [ ] T39: [规格/实现] 在 `spec.md / design.md / acceptance.yaml` 中冻结 `IntentGraph`、`skillRuns[]`、`AggregationState`、`UserEvent`、`uiProcessTimelineV2` 的正式定义与边界。
+- [ ] T40: [测试/Red] 为 `IntentGraph` 建立契约测试，覆盖单 skill、双 skill、需澄清三种输入。
+- [ ] T41: [metadata] 扩展 `assistant_run/fields.yaml`，补齐 `problemShape`、`primarySkill`、`secondarySkills`、`skillRuns`、`aggregationState`、`uiProcessTimelineV2` 字段。
+- [ ] T42: [业务逻辑] 重构入口导引，移除 `ChatDetailPage` 对 `domainId` 的预分类控制权，统一由 engine 产出 `IntentGraph`。
+- [ ] T43: [业务逻辑] 在 `AgentLoop` 中落地 `skillRuns[]` orchestrator，使单 skill / 多 skill 共用正式编排主线。
+- [ ] T44: [业务逻辑] 为每个 `skillRun` 注入独立 `SkillExecutionShell` 与 `slotState`，禁止父任务预算泄漏到子任务。
+- [ ] T45: [测试/Green] 转绿多 skill 问题回归，至少覆盖“天气 + 旅游”与“单天气”两条主线。
+- [ ] T46: [业务逻辑] 引入 `AggregationState`，统一处理“全部可答 / 部分可答 / 继续扩展 / 请求澄清”四类出口。
+- [ ] T47: [测试/Red] 为 `AggregationState` 建立契约测试，覆盖 `allSkillsReady / needExpansion / canGivePartialAnswer / clarificationNeeded`。
+- [ ] T48: [业务逻辑] 重构 synthesizer，把多 skill fusion 升级为正式聚合出口，而不是 `subagentRuns.length > 1` 的补丁分支。
+- [ ] T49: [协议] 定义 `UserEvent` 契约，最少支持 `process_replace / process_append / process_commit / answer_delta` 与 `root / skill / aggregation` 作用域。
+- [ ] T50: [业务逻辑] 在 `CapabilityGateway` 中引入 `UserEventTranslator`，统一翻译本地 trace 与远端 SSE。
+- [ ] T51: [业务逻辑] 扩展 `OpenClawBridge`，兼容新的 `user_event/*` SSE 事件与回放语义。
+- [ ] T52: [业务逻辑] 将 `ChatDetailPage` 改为 reducer 驱动，统一消费 `UserEvent` 与完成态消息载荷。
+- [ ] T53: [业务逻辑] 持久化消息级 `uiProcessTimelineV2`，修复过程抽屉在完成态与历史重载态消失的问题。
+- [ ] T54: [测试/Red] 建立 UI regression，覆盖流式过程先起、答案后起、完成态保留、历史重载恢复。
+- [ ] T55: [业务逻辑] 收紧 UI 展示白名单，禁止 `query`、`provider`、`freshnessHoursMax`、`assistant_turn_v4`、tool args、XML tool_call 泄漏到用户。
+- [ ] T56: [测试/Green] 转绿“结构脏输出 / XML tool_call / contractVersion 泄漏 / 内部关键字泄漏”回归测试。
+- [ ] T57: [发布] 为统一主线增加灰度开关：`intent_graph_enabled`、`multi_skill_orchestrator_enabled`、`aggregation_state_enabled`、`user_event_stream_enabled`、`ui_process_timeline_v2_enabled`。
+- [ ] T58: [发布] 定义统一主线的观测与回滚阈值，至少覆盖 `drawer_persist_success_rate`、`internal_leak_rate`、`expansion_overrun_rate`、`answer_ready_rate`。
 
-- [x] S2-1 引入 `subagent_plan_v1`、`subagent_result_v1` 协议。
-- [x] S2-2 在主 Agent 增加 `spawn_subagent` 决策执行器（带预算与超时）。
-- [x] S2-3 子任务结果回注主会话并参与最终汇总。
-- [x] S2-4 UI 增加 subagent timeline 事件显示。
+## 搁置任务（不在本次交付范围，但已识别，有重启条件）
 
----
+- [ ] 第三方 Skill 商店化、审核流与商业生态（重启条件：本地主线和内建 Skill DSL 2.0 稳定上线后）。
+- [ ] 独立云侧 Agent 服务进程与云主端备形态（重启条件：当前本地 + OpenClaw 混合主线稳定，且需要多端统一与集中运维时）。
+- [ ] 全端统一渲染与桌面端同构体验（重启条件：移动端 Markdown-first 交互稳定且已有桌面端交付需求时）。
 
-## Phase 3：渲染与交互稳定化（P1）
+## 未来演进任务
 
-- [x] U1 Markdown 结构块解析器稳定化（compare/trend/diagram）。
-- [x] U2 解析失败降级路径统一（永不阻断主答复）。
-- [x] U3 runStream 事件顺序一致性（trace/chunk/final）与前端消费治理。
-- [x] U4 动作建议与补槽追问组件化（统一样式、统一可中断行为）。
-
----
-
-## Phase 4：能力平台化（P2）
-
-- [ ] X1 Prompt Stack 平台化（global/runtime/domain/recovery/output-contract）。
-- [ ] X2 Skill DSL 标准化（manifest + slot_contract + tool_binding + response_style）。
-- [ ] X3 私有数据 connector tools 接入规范与权限网关。
-- [ ] X4 质量与成本看板（success rate、slot fill rate、latency、fallback ratio）。
-
----
-
-## 测试分解（必须同步）
-
-- [x] T1 单元：decision/tool-observation/subagent 协议解析。
-- [ ] T2 单元：i18n key 映射与降级文案。
-- [x] T3 组件：timeline + markdown blocks + subagent progress。
-- [ ] T4 契约：run/runStream JSON shape + error mapping。
-- [ ] T5 集成：remotePreferred/hybrid/localOnly 三路径一致性。
-- [x] T6 回归：天气四主链 + 工具失败恢复链。
-
----
-
-## 发布策略
-
-- [ ] R1 先天气垂类灰度（10% -> 50% -> 100%）。
-- [ ] R2 协议版本化：`assistant_turn_v2` 与旧路径并行两周。
-- [ ] R3 关键指标门禁：`decision_parse_success >= 99.5%`、`render_fallback_rate < 1%`。
-
----
-
-## 当前冲刺（本周可开工）
-
-- [x] Sprint-1 完成 Phase 1 的 M1/M2/C1/C2/I1/I2/I3/T1/T6。
-- [ ] Sprint-2 完成 Phase 2 的 S2-1/S2-2/S2-3/T3/T5（天气域先行）。
-
----
-
-## Phase 5：规范与交付件落实（新标准）
-
-- [x] D1 将 `skill_development_standard.md` 升级为“全流程标准”，不再局限于 Skill。
-- [x] D2 生成个人助理全栈规范文档：`docs/personal-assistant/personal-assistant-fullstack-standard.md`。
-- [x] D3 在 `docs/personal-assistant/README.md` 建立新规范索引与阅读顺序。
-- [x] D4 在本节点 `design.md` 补齐组件/包图、用例图、流程图与映射表。
-- [ ] D5 将“设计-任务-验收-测试”映射规则纳入自动检查（先 WARNING 后 BLOCKING）。
+- [ ] 将 Skill DSL 2.0 升级为更强的结构化 schema 与自动验证器（与 design.md“未来演进”对应）。
+- [ ] 基于事实积累升级长期偏好标签优化和学习能力，但保持设置页可见可撤销原则。
+- [ ] 引入更强的商用质量与成本看板，覆盖 `decision_parse_success`、`render_fallback_rate`、`search_overrun_rate`、`remote_to_local_failover_rate` 等指标。
+- [ ] 将 fallback general skill 扩展为跨域融合兜底，支持多域低信心场景下的统一高质量成答。

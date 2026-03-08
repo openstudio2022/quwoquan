@@ -43,6 +43,11 @@ void main() {
       final skill = weather.first;
       expect(skill.domainId, equals('weather'));
       expect(skill.allowedTools, contains('web_search'));
+      expect(skill.executionShell.problemClass, equals('realtime_info'));
+      expect(skill.executionShell.variantBudget, equals(0));
+      expect(skill.executionShell.reflectionBudget, equals(0));
+      expect(skill.executionShell.providerPolicy, equals('authority_first'));
+      expect(skill.executionShell.authorityDomains, contains('weather.com.cn'));
       expect(
         skill.skillInstructionMarkdown,
         allOf(

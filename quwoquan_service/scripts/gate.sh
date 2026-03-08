@@ -653,6 +653,20 @@ if [ -f "$CONTENT_POST_DIR/tests/contract.yaml" ]; then
     "services/content-service/tests"
 fi
 
+# ── Tooling / control-plane codegen tests ────────────────────────────────────
+echo "[gate] running metadata and control-plane tooling tests"
+go test ./tools/verify_metadata ./tools/codegen_ops_portal_metadata ./tools/codegen_control_plane_runtime -count=1 \
+  || fail "control-plane tooling tests failed"
+
+bash scripts/verify_domain_onboarding.sh \
+  || fail "domain onboarding aggregation failed"
+
+if [ -d "generated/control_plane" ]; then
+  echo "[gate] compiling generated control-plane Go package"
+  go test ./generated/control_plane/... -count=1 \
+    || fail "generated control-plane Go package failed to compile"
+fi
+
 # ── L2: content-service contract tests ───────────────────────────────────────
 echo "[gate] running content-service contract tests"
 go test ./services/content-service/... -count=1 -timeout=120s \
@@ -662,6 +676,13 @@ go test ./services/content-service/... -count=1 -timeout=120s \
 echo "[gate] running rtc-service contract tests"
 go test ./services/rtc-service/... -count=1 -timeout=120s \
   || fail "rtc-service go tests failed"
+
+# ── L2: product-ops-service contract tests ──────────────────────────────────
+echo "[gate] running product-ops-service contract tests"
+(
+  cd services/product-ops-service &&
+    go test ./... -count=1 -timeout=120s
+) || fail "product-ops-service go tests failed"
 
 # ── T38: e2e.yaml patrol_flow 文件存在性检查（warn 级别，不 fail）─────────────
 # 确保 e2e.yaml 中每个 ui_journey 场景的 patrol_flow 引用文件在 quwoquan_app 中存在。

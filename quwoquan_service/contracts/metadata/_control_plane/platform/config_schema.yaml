@@ -1,0 +1,50 @@
+configs:
+  - key: sys.gateway.rate_limit.per_user_rps
+    type: int
+    owner: platform-ops
+    default: 30
+    scope: service
+    reload: hot
+    rollout: progressive
+    risk_level: high
+    ui_editable: true
+
+  - key: sys.orchestrator.downstream.timeout_ms
+    type: int
+    owner: platform-ops
+    default: 800
+    scope: service
+    reload: hot
+    rollout: progressive
+    risk_level: high
+    ui_editable: true
+
+  - key: sys.content.mongo.max_pool_size
+    type: int
+    owner: platform-ops
+    default: 120
+    scope: service
+    reload: restart
+    rollout: progressive
+    risk_level: medium
+    ui_editable: true
+
+  - key: sys.assistant.otel.trace_sample_ratio
+    type: float
+    owner: platform-ops
+    default: 0.2
+    scope: service
+    reload: hot
+    rollout: progressive
+    risk_level: medium
+    ui_editable: true
+
+  - key: sys.content.worker.concurrency
+    type: int
+    owner: platform-ops
+    default: 16
+    scope: service
+    reload: restart
+    rollout: progressive
+    risk_level: medium
+    ui_editable: true

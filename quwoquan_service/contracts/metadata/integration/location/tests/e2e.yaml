@@ -1,0 +1,34 @@
+version: 1
+aggregate: Location
+layer: e2e
+
+description: |
+  集成域端云验收场景。app / gateway / integration-service / upstream provider 全链路，
+  用于验证 provider policy、降级提示与定位结果回写可被统一 onboarding 矩阵消费。
+
+execution:
+  environment: integration
+  ci_strategy: advisory
+  trigger: daily + pre-release
+  runners:
+    api_contract: integration HTTP client
+    ui_journey: Patrol on Firebase Test Lab
+
+scenarios:
+  - name: location_search_provider_failover
+    description: 主 provider 超时后切换备用 provider，端侧仍拿到位置候选
+    test_type: api_contract
+    actors:
+      app: lib/ui/content/entry/pages/publish_location_selector_page.dart
+      gateway: /v1/integration/location/search
+      service: integration-service GET /v1/integration/location/search
+      upstream: geo provider primary -> backup
+    steps:
+      - user enters keyword for publishing location
+      - gateway routes request to integration-service
+      - primary provider times out and service switches to backup provider
+      - service returns normalized location candidates
+    assertions:
+      - response contains normalized poi id, title and coordinates
+      - provider policy fallback is recorded in audit metadata
+      - end-user receives no raw upstream error

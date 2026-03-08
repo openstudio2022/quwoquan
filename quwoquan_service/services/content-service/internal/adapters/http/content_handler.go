@@ -15,17 +15,20 @@ import (
 type ContentHandler struct {
 	feedService     *application.FeedService
 	postService     *application.PostService
+	reportService   *application.ReportService
 	behaviorService *application.BehaviorService
 }
 
 func NewContentHandler(
 	feedService *application.FeedService,
 	postService *application.PostService,
+	reportService *application.ReportService,
 	behaviorService *application.BehaviorService,
 ) *ContentHandler {
 	return &ContentHandler{
 		feedService:     feedService,
 		postService:     postService,
+		reportService:   reportService,
 		behaviorService: behaviorService,
 	}
 }
@@ -41,6 +44,26 @@ func (h *ContentHandler) Routes() http.Handler {
 			return
 		}
 		h.handleListUserPosts(w, r)
+	})
+	mux.HandleFunc("/v1/content/reports", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			h.handleListReports(w, r)
+		case http.MethodPost:
+			h.handleCreateReport(w, r)
+		default:
+			writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET/POST"))
+		}
+	})
+	mux.HandleFunc("/v1/content/reports/", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			h.handleGetReport(w, r)
+		case http.MethodPatch:
+			h.handleResolveReport(w, r)
+		default:
+			writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET/PATCH"))
+		}
 	})
 	RegisterGeneratedRoutes(mux, h)
 	return mux
@@ -165,6 +188,79 @@ func (h *ContentHandler) handleUpdatePost(w http.ResponseWriter, r *http.Request
 		return
 	}
 	writeJSON(w, http.StatusOK, post)
+}
+
+func (h *ContentHandler) handleCreateReport(w http.ResponseWriter, r *http.Request) {
+	if h.reportService == nil {
+		h.handleNotImplemented(w, r, "CreateReport")
+		return
+	}
+	var body map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
+		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
+		return
+	}
+	report, err := h.reportService.CreateReport(r.Context(), resolveUserID(r), body)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, report)
+}
+
+func (h *ContentHandler) handleListReports(w http.ResponseWriter, r *http.Request) {
+	if h.reportService == nil {
+		h.handleNotImplemented(w, r, "ListReports")
+		return
+	}
+	limit := 20
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	items, err := h.reportService.ListReports(r.Context(), limit)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items": items,
+		"total": len(items),
+	})
+}
+
+func (h *ContentHandler) handleGetReport(w http.ResponseWriter, r *http.Request) {
+	if h.reportService == nil {
+		h.handleNotImplemented(w, r, "GetReport")
+		return
+	}
+	reportID := pathParamAfter(r.URL.Path, "/v1/content/reports/", "")
+	report, err := h.reportService.GetReport(r.Context(), reportID)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
+func (h *ContentHandler) handleResolveReport(w http.ResponseWriter, r *http.Request) {
+	if h.reportService == nil {
+		h.handleNotImplemented(w, r, "ResolveReport")
+		return
+	}
+	reportID := pathParamAfter(r.URL.Path, "/v1/content/reports/", "")
+	var body map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
+		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
+		return
+	}
+	report, err := h.reportService.ResolveReport(r.Context(), reportID, resolveUserID(r), body)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
 }
 
 func (h *ContentHandler) handlePublishPost(w http.ResponseWriter, r *http.Request) {

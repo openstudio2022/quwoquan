@@ -1,0 +1,49 @@
+version: 1
+domain: content
+display_name: Content
+template_role: template_seed
+rollout_group: wave_0_template
+acceptance_status: integration_pass
+metadata_paths:
+  - content/post
+  - content/report
+service_names:
+  - content-service
+control_planes:
+  platform:
+    enabled: true
+    object_types: [service_catalog_entry, plane_binding, gate_rule, governance_policy_binding]
+    config_prefixes: [sys.content.]
+  product:
+    enabled: true
+    object_types: [moderation_case, content_report, recommendation_policy]
+    config_prefixes: [ops.content., ops.reco.discovery.]
+minimum_package:
+  metadata_files:
+    - contracts/metadata/content/post/service.yaml
+    - contracts/metadata/content/post/tests/contract.yaml
+    - contracts/metadata/content/post/tests/mock.yaml
+    - contracts/metadata/content/post/tests/e2e.yaml
+    - contracts/metadata/content/report/service.yaml
+  codegen_targets: [go_runtime, python_runtime, ops_portal]
+  test_evidence:
+    t1:
+      - contracts/metadata/content/post/tests/contract.yaml
+      - contracts/metadata/content/post/tests/mock.yaml
+    t2:
+      - services/content-service/tests/post_comment_contract_test.go
+      - services/content-service/tests/post_reaction_contract_test.go
+      - services/content-service/tests/report_crud_contract_test.go
+    t3:
+      - contracts/metadata/content/post/tests/e2e.yaml
+    t4: []
+deployment:
+  plane_binding_domain: content
+  plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
+  legacy_binding_source: deploy/shared/process_domain_mapping.yaml
+replication:
+  source_template: content
+  next_copy_targets: [chat, circle, user]
+  copy_notes:
+    - Freeze the minimum package here first, then only replace metadata paths and T2 evidence per replica domain.
+blocking_gaps: []

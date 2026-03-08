@@ -79,11 +79,11 @@ contract_test:
       scenarios:
         - name: sync_run
           route: POST /v1/assistant/runs
-          assertions: [status_200, run_id_returned, response_type_valid, phase_timeline_v1_present, usage_stats_v1_present]
+          assertions: [status_200, run_id_returned, response_type_valid, phase_timeline_v1_present, usage_stats_v1_present, process_summary_v1_present, process_reference_count_v1_present, intent_graph_present, aggregation_state_present, ui_process_timeline_v2_present]
 
         - name: stream_run
           route: POST /v1/assistant/runs/stream
-          assertions: [sse_connection_established, events_streamed, run_completed, phase_timeline_v1_present, usage_stats_v1_present]
+          assertions: [sse_connection_established, events_streamed, run_completed, phase_timeline_v1_present, usage_stats_v1_present, process_summary_v1_present, process_reference_count_v1_present, intent_graph_present, aggregation_state_present, ui_process_timeline_v2_present, user_event_stream_emitted]
 
         - name: page_context_report
           route: POST /v1/assistant/page-context
@@ -118,6 +118,9 @@ contract_test:
           assertions:
             - "db.assistant_runs.FindOne({_id}) → status='running' then 'completed'"
             - "db.assistant_runs.FindOne({_id}).latencyMs → > 0"
+            - "db.assistant_runs.FindOne({_id}).intentGraph → exists"
+            - "db.assistant_runs.FindOne({_id}).aggregationState → exists"
+            - "db.assistant_runs.FindOne({_id}).uiProcessTimelineV2 → exists"
             - "eventSpy.AssertPublished('AssistantRunStarted')"
             - "eventSpy.AssertPublished('AssistantRunCompleted', {llmTokensUsed})"
             - "llm mock called with correct context"
@@ -135,6 +138,7 @@ contract_test:
           assertions:
             - "db.interaction_events.FindOne({runId}) → feedbackType + score correct"
             - "db.assistant_runs.FindOne({_id}).satisfactionScore → updated"
+            - "db.assistant_runs.FindOne({_id}).sessionPreferenceFacts or longTermPreferenceFacts → appendable"
             - "eventSpy.AssertPublished('AssistantFeedbackReceived')"
 
         - name: skill_consent_check
@@ -150,3 +154,4 @@ contract_test:
     - SSE streaming tested
     - skill consent enforcement verified
     - learning feedback loop end-to-end
+    - intent graph / aggregation state / process timeline v2 covered

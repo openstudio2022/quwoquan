@@ -1,0 +1,43 @@
+version: 1
+domain: chat
+display_name: Chat
+template_role: replica_ready
+rollout_group: wave_1_copy
+acceptance_status: integration_pass
+metadata_paths:
+  - messages/conversation
+service_names:
+  - chat-service
+control_planes:
+  platform:
+    enabled: true
+    object_types: [service_catalog_entry, plane_binding, gate_rule]
+    config_prefixes: [sys.chat.]
+  product:
+    enabled: true
+    object_types: [moderation_case, conversation_audit_case]
+    config_prefixes: [ops.chat.]
+minimum_package:
+  metadata_files:
+    - contracts/metadata/messages/conversation/service.yaml
+    - contracts/metadata/messages/conversation/tests/e2e.yaml
+  codegen_targets: [go_runtime, python_runtime, ops_portal]
+  test_evidence:
+    t1:
+      - contracts/metadata/messages/conversation/service.yaml
+    t2:
+      - services/chat-service/tests/message_crud_contract_test.go
+      - services/chat-service/tests/message_sync_contract_test.go
+    t3:
+      - contracts/metadata/messages/conversation/tests/e2e.yaml
+    t4: []
+deployment:
+  plane_binding_domain: chat
+  plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
+  legacy_binding_source: deploy/shared/process_domain_mapping.yaml
+replication:
+  source_template: content
+  next_copy_targets: []
+  copy_notes:
+    - Replace content moderation objects with conversation audit objects while preserving the same onboarding skeleton.
+blocking_gaps: []

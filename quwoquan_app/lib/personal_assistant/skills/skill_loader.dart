@@ -55,6 +55,7 @@ class PersonalAssistantSkillLoader {
             'trigger_keywords': _toStringList(
               parsed.frontmatter['trigger_keywords'],
             ),
+            'frontmatter': parsed.frontmatter,
             'skill_markdown': parsed.body,
           };
           final manifest = PersonalAssistantSkillManifest.fromMap(map);

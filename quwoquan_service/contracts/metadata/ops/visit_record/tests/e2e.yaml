@@ -1,0 +1,18 @@
+version: 1
+entity: VisitRecord
+layer: e2e
+
+description: |
+  Product Ops 访问统计端到端接入场景（integration/staging）。
+  关注统一门户埋点采集后，统计视图能读取并展示访问增量。
+
+scenarios:
+  - name: portal_onboarding_page_records_visit
+    steps:
+      - operator opens platform onboarding page
+      - app reports visit to /v1/ops/visits
+      - product ops reads aggregated visit stats
+    assertions:
+      - visit_record_created
+      - total_visits_incremented
+      - target_key_platform_onboarding_visible

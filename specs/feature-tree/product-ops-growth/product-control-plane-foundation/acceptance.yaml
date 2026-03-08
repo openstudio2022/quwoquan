@@ -1,0 +1,131 @@
+version: 1
+feature: "product-control-plane-foundation"
+level: "L2_feature"
+template: "A1-A8"
+archived: false
+tree_context:
+  feature_level: "L2_feature"
+  feature_path: "capability.product-ops-growth.feature.product-control-plane-foundation"
+  parent_path: "capability.product-ops-growth"
+  acceptance_inherits_from: "capability.product-ops-growth"
+non_functional_acceptance:
+  realtime:
+    enabled: true
+    slo:
+      - "高风险治理动作写入后，审计记录 5 秒内可检索"
+      - "实验/推荐运营配置变更 1 分钟内可被运行时消费或明确标记待生效"
+  weak_network:
+    enabled: true
+    scenarios:
+      - "门户弱网下表单草稿不丢失"
+      - "审核/申诉/恢复提交流程失败后可恢复重试并保留上下文"
+  performance:
+    budgets:
+      - "一级菜单切换 P95 < 1s"
+      - "对象详情页首屏 P95 < 2s"
+      - "搜索与筛选结果返回 P95 < 1.5s"
+  elasticity:
+    assumptions:
+      - "支持同一环境 100 名操作员并发使用"
+      - "支持 10 万级日事件入库、千级 case 存量、百级并发审计查询"
+      - "支持短期同 Pod 与长期独立 Pod 的两种部署形态"
+  gray_release:
+    enabled: true
+    steps: [5, 25, 50, 100]
+    slo_gates:
+      - "治理动作失败率不超过基线"
+      - "case SLA 违约率不恶化"
+      - "实验 guardrail 指标不突破阈值"
+    rollback_on:
+      - "审计链不完整"
+      - "guardrail 指标越界"
+      - "case 工作流状态不一致"
+      - "运行时消费配置失败或回退失败"
+level_acceptance:
+  A1:
+    criteria: "`product-ops` 作为统一运营控制面的产品范围、一级菜单、两大模块边界、核心对象模型与工作流模型已冻结，可作为后续各子特性与各领域接入的共同上位规格。"
+    status: pending
+    linked_tasks: [P1, P2, P4]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    tests: []
+  A2:
+    criteria: "`product-ops` 作为一个产品交付，但不会吞并 `platform-ops` 的系统治理职责，也不会把运行时参数与 IaC 混入业务配置。"
+    status: pending
+    linked_tasks: [P1, P7]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    tests: []
+  A3:
+    criteria: "各领域的 `product-control-plane` 契约边界与部署任意组合原则被明确冻结，支持短期 `seed-box` 同 Pod 与长期独立 Deployment / Pod。"
+    status: pending
+    linked_tasks: [P3, P8]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests: []
+  A4:
+    criteria: "审核、处罚、申诉、恢复、客服、证据、SLA、双签等治理动作具备统一的工作流与审计上位模型。"
+    status: pending
+    linked_tasks: [P4, P6]
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: optional
+    tests: []
+  A5:
+    criteria: "推荐运营深度已冻结到召回、粗排、精排/重排的受控干预，且限定在可审计、可灰度、可回滚的参数空间内。"
+    status: pending
+    linked_tasks: [P5]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests: []
+  A6:
+    criteria: "高风险治理与推荐运营动作的审计、证据、危险动作确认与双签要求有统一上位约束。"
+    status: pending
+    linked_tasks: [P4, P6]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    tests: []
+  A7:
+    criteria: "`control_plane.yaml`、`workflow.yaml`、`audit_schema.yaml`、`config_schema.yaml` 的共同对象、关键字段与 codegen 目标被统一定义，支持生成 Web / Go / Python / App 契约。"
+    status: pending
+    linked_tasks: [P3, P7, D3, D6]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests: []
+  A8:
+    criteria: "方案比较、任务拆解、相邻节点边界、领域接入矩阵与 `/dev` 输入条件已明确，可直接进入实施阶段。"
+    status: pending
+    linked_tasks: [P9, D1, D2, D4, D5, D7]
+    test_layers:
+      T1: optional
+      T2: optional
+      T3: optional
+      T4: optional
+    tests: []
+notes:
+  benchmark_inputs:
+    - "LaunchDarkly / Statsig / Amplitude：实验、放量、归因与策略审计"
+    - "TikTok / YouTube Studio / Trust & Safety：审核、处罚、申诉、恢复、证据与客服协同"
+execution:
+  local_gate: "make gate"
+  full_gate: "make gate-full"

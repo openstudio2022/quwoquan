@@ -1378,17 +1378,6 @@ class SwitchableAssistantLlmProvider implements AssistantLlmProvider {
     return remoteResult;
   }
 
-  String? _nextRemoteRef(String current) {
-    final candidates = _selectedModelOrder.isEmpty
-        ? _registrationOrder
-        : _selectedModelOrder;
-    if (candidates.length <= 1) return null;
-    final idx = candidates.indexOf(current);
-    if (idx < 0) return candidates.first;
-    final next = idx + 1;
-    if (next < candidates.length) return candidates[next];
-    return candidates.first;
-  }
 }
 
 /// Fallback-only local provider:

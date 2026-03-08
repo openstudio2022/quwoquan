@@ -1,0 +1,43 @@
+version: 1
+domain: notification
+display_name: Notification
+template_role: backlog_candidate
+rollout_group: wave_2_backfill
+acceptance_status: integration_pass
+metadata_paths:
+  - notification/notification
+service_names:
+  - seed-box
+control_planes:
+  platform:
+    enabled: true
+    object_types: [service_catalog_entry, plane_binding]
+    config_prefixes: [sys.notification.]
+  product:
+    enabled: true
+    object_types: [notification_policy, moderation_case]
+    config_prefixes: [ops.notification.]
+minimum_package:
+  metadata_files:
+    - contracts/metadata/notification/notification/service.yaml
+    - contracts/metadata/notification/notification/tests/e2e.yaml
+  codegen_targets: [go_runtime, python_runtime, ops_portal]
+  test_evidence:
+    t1:
+      - contracts/metadata/notification/notification/service.yaml
+    t2:
+      - ../quwoquan_app/test/cloud/notification/notification_metadata_contract_test.dart
+    t3:
+      - contracts/metadata/notification/notification/tests/e2e.yaml
+    t4:
+      - ../quwoquan_app/test/patrol/chat/chat_notification_entry_test.dart
+deployment:
+  plane_binding_domain: notification
+  plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
+  legacy_binding_source: deploy/shared/process_domain_mapping.yaml
+replication:
+  source_template: content
+  next_copy_targets: []
+  copy_notes:
+    - Notification lacks a dedicated service implementation, so onboarding stays declarative until the domain service is carved out.
+blocking_gaps: []

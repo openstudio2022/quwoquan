@@ -182,6 +182,10 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
           await ref.read(keywordBlockRepositoryProvider).addBlockedKeyword(keyword);
         },
         onReport: () {
+          ref.read(behaviorRepositoryProvider).reportSingle(
+            contentId: post.id,
+            action: 'report',
+          );
           ref.read(reportRepositoryProvider).createReport(
             targetId: post.id,
             targetType: 'post',

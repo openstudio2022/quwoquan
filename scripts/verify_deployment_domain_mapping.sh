@@ -79,3 +79,57 @@ ruby -ryaml -e '
 
   puts "[verify] OK: deployment mapping validated"
 '
+
+ruby -ryaml -e '
+  root = Dir.pwd
+  file = File.join(root, "deploy/shared/process_domain_plane_mapping.yaml")
+  abort("[verify] FAIL: missing deploy/shared/process_domain_plane_mapping.yaml") unless File.exist?(file)
+
+  data = YAML.load_file(file) || {}
+  planes = data["planes"] || []
+  envs = data["environments"] || {}
+
+  abort("[verify] FAIL: process_domain_plane_mapping planes must be non-empty") unless planes.is_a?(Array) && !planes.empty?
+  %w[user-plane platform-control-plane product-control-plane].each do |plane|
+    abort("[verify] FAIL: process_domain_plane_mapping missing plane #{plane}") unless planes.include?(plane)
+  end
+
+  %w[dev integration prod].each do |env|
+    abort("[verify] FAIL: process_domain_plane_mapping missing environments.#{env}") unless envs[env].is_a?(Hash) && !envs[env].empty?
+  end
+
+  normalized = {}
+  envs.each do |env, processes|
+    normalized[env] = {}
+    seen = {}
+    processes.each do |process_name, cfg|
+      allowed = process_name == "seed-box" || process_name.end_with?("-service") || %w[realtime-gateway livekit-sfu coturn].include?(process_name)
+      abort("[verify] FAIL: invalid process name #{process_name} in process_domain_plane_mapping #{env}") unless allowed
+
+      bindings = cfg.is_a?(Hash) ? cfg["bindings"] : nil
+      abort("[verify] FAIL: #{env}.#{process_name}.bindings must be a non-empty array") unless bindings.is_a?(Array) && !bindings.empty?
+
+      normalized[env][process_name] = bindings.map do |binding|
+        domain = binding["domain"].to_s.strip
+        plane_list = (binding["planes"] || []).map { |item| item.to_s.strip }.reject(&:empty?).sort
+        abort("[verify] FAIL: #{env}.#{process_name} binding missing domain") if domain.empty?
+        abort("[verify] FAIL: #{env}.#{process_name}.#{domain} planes cannot be empty") if plane_list.empty?
+        plane_list.each do |plane|
+          abort("[verify] FAIL: #{env}.#{process_name}.#{domain} unknown plane #{plane}") unless planes.include?(plane)
+          key = "#{domain}##{plane}"
+          if seen.key?(key)
+            abort("[verify] FAIL: domain-plane #{key} appears in both #{seen[key]} and #{process_name} under #{env}")
+          end
+          seen[key] = process_name
+        end
+        {"domain" => domain, "planes" => plane_list}
+      end.sort_by { |item| item["domain"] }
+    end
+  end
+
+  if normalized["integration"] != normalized["prod"]
+    abort("[verify] FAIL: integration and prod process-domain-plane mapping must be identical")
+  end
+
+  puts "[verify] OK: plane-aware deployment mapping validated"
+'

@@ -580,15 +580,43 @@ class ChatMessageBubble extends StatelessWidget {
 }
 
 bool _hasPersistedProcessBlocks(Map<String, dynamic> message) {
-  return message.containsKey('uiProcessContentBlocks');
+  final rawBlocks = (message['uiProcessContentBlocks'] as List?) ?? const [];
+  final rawTimeline = (message['uiProcessTimelineV2'] as List?) ?? const [];
+  return rawBlocks.isNotEmpty || rawTimeline.isNotEmpty;
 }
 
 AssistantProcessState _rebuildProcessStateFromMessage(
   Map<String, dynamic> message,
 ) {
-  final rawBlocks =
-      (message['uiProcessContentBlocks'] as List?)?.whereType<Map>() ??
-      const <Map>[];
+  final rawBlocks = (() {
+    final persisted = (message['uiProcessContentBlocks'] as List?)
+            ?.whereType<Map>()
+            .toList(growable: false) ??
+        const <Map>[];
+    if (persisted.isNotEmpty) return persisted;
+    final timeline = (message['uiProcessTimelineV2'] as List?)
+            ?.whereType<Map>()
+            .toList(growable: false) ??
+        const <Map>[];
+    return timeline
+        .map((item) => item.cast<String, dynamic>())
+        .where(
+          (item) => ((item['summary'] as String?)?.trim().isNotEmpty ?? false),
+        )
+        .map((item) {
+          final refs =
+              (item['references'] as List?)?.whereType<Map>().toList(
+                    growable: false,
+                  ) ??
+              const <Map>[];
+          return <String, dynamic>{
+            'type': refs.isNotEmpty ? 'analysisSummary' : 'text',
+            'text': (item['summary'] as String?)?.trim() ?? '',
+            'references': refs,
+          };
+        })
+        .toList(growable: false);
+  })();
   final contentBlocks = <ProcessContentBlock>[];
   for (final raw in rawBlocks) {
     final typeName = (raw['type'] as String?) ?? 'text';
@@ -620,9 +648,16 @@ AssistantProcessState _rebuildProcessStateFromMessage(
   final usageStats =
       (message['uiUsageStatsV1'] as Map?)?.cast<String, dynamic>() ??
       const <String, dynamic>{};
+  final timeline = (message['uiProcessTimelineV2'] as List?) ?? const [];
+  final stageLabel = timeline.isNotEmpty
+      ? (((timeline.last as Map)['summary'] as String?)?.trim().isNotEmpty ??
+                false)
+          ? ((timeline.last as Map)['summary'] as String).trim()
+          : '已完成'
+      : '已完成';
   return AssistantProcessState(
     stage: ProcessStage.completed,
-    stageLabel: '已完成',
+    stageLabel: stageLabel,
     isStreaming: false,
     contentBlocks: contentBlocks,
     usageStats: usageStats,
@@ -1469,7 +1504,7 @@ class _AssistantReferencesCardState extends State<_AssistantReferencesCard> {
                   _expanded
                       ? CupertinoIcons.chevron_up
                       : CupertinoIcons.chevron_down,
-                  size: 13,
+                  size: AppSpacing.iconSmall,
                   color: AppColors.primaryColor.withValues(alpha: 0.6),
                 ),
               ],

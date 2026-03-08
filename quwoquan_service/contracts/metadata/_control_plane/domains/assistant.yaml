@@ -1,0 +1,45 @@
+version: 1
+domain: assistant
+display_name: Assistant
+template_role: backlog_candidate
+rollout_group: wave_2_backfill
+acceptance_status: integration_pass
+metadata_paths:
+  - assistant/assistant_run
+  - assistant/skill_consent
+service_names:
+  - seed-box
+control_planes:
+  platform:
+    enabled: true
+    object_types: [service_catalog_entry, plane_binding]
+    config_prefixes: [sys.assistant.]
+  product:
+    enabled: true
+    object_types: [assistant_policy, approval_case]
+    config_prefixes: [ops.assistant.]
+minimum_package:
+  metadata_files:
+    - contracts/metadata/assistant/assistant_run/service.yaml
+    - contracts/metadata/assistant/skill_consent/service.yaml
+  codegen_targets: [go_runtime, python_runtime, ops_portal]
+  test_evidence:
+    t1:
+      - contracts/metadata/assistant/assistant_run/service.yaml
+    t2:
+      - runtime/controlplane/assistant_seedbox_contract_test.go
+      - ../quwoquan_app/test/ui/assistant/contract/assistant_message_history_contract_test.dart
+      - ../quwoquan_app/test/ui/chat/widgets/chat_assistant_ui_widget_test.dart
+    t3:
+      - ../quwoquan_app/test/personal_assistant/assistant_run_e2e_test.dart
+    t4: []
+deployment:
+  plane_binding_domain: assistant
+  plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
+  legacy_binding_source: deploy/shared/process_domain_mapping.yaml
+replication:
+  source_template: content
+  next_copy_targets: []
+  copy_notes:
+    - Assistant onboarding stays metadata-first, but service-side acceptance still needs dedicated control-plane test evidence.
+blocking_gaps: []

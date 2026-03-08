@@ -2,12 +2,19 @@
   "name": "quwoquan",
   "version": "1.0.0",
   "private": true,
+  "workspaces": [
+    "apps/ops-portal"
+  ],
   "description": "趣我圈 monorepo - OpenSpec 与脚本从仓库根运行",
   "scripts": {
     "openspec:init": "npx openspec init --tools cursor",
     "openspec:update": "npx openspec update",
     "openspec:list": "npx openspec list",
-    "openspec:view": "npx openspec view"
+    "openspec:view": "npx openspec view",
+    "ops-portal:dev": "npm run dev --workspace @quwoquan/ops-portal",
+    "ops-portal:build": "npm run build --workspace @quwoquan/ops-portal",
+    "ops-portal:test": "npm run test --workspace @quwoquan/ops-portal",
+    "ops-portal:preview": "npm run preview --workspace @quwoquan/ops-portal"
   },
   "devDependencies": {
     "@fission-ai/openspec": "latest"

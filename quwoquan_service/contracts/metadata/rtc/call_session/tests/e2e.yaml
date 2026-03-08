@@ -1,0 +1,35 @@
+version: 1
+aggregate: CallSession
+layer: e2e
+
+description: |
+  RTC 域端云验收场景。call UI / realtime gateway / rtc-service / SFU 辅助链路全链路，
+  用于验证弱网下的建连、恢复与控制面策略提示可被 onboarding 矩阵消费。
+
+execution:
+  environment: integration
+  ci_strategy: advisory
+  trigger: daily + pre-release
+  runners:
+    api_contract: integration HTTP client
+    ui_journey: Patrol on Firebase Test Lab
+
+scenarios:
+  - name: rtc_call_reconnect_after_network_jitter
+    description: 建连成功后发生短暂抖动，RTC 服务恢复会话并保持控制面策略一致
+    test_type: ui_journey
+    patrol_flow: test/patrol/chat/rtc_call_reconnect_test.dart
+    actors:
+      app: lib/ui/chat/pages/chat_detail_page.dart
+      gateway: realtime-gateway websocket upgrade
+      service: rtc-service POST /v1/rtc/call-sessions
+      media: livekit-sfu
+    steps:
+      - user starts a one-to-one call
+      - rtc-service creates call session and returns transport policy
+      - network jitter disconnects media path for a short interval
+      - app reconnects and rtc-service restores the call session
+    assertions:
+      - reconnect completes without creating a duplicate session
+      - transport policy remains consistent before and after reconnect
+      - recovery event is recorded in rtc audit timeline

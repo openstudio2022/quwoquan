@@ -2,6 +2,8 @@
 .PHONY: verify
 .PHONY: codegen
 .PHONY: codegen-app
+.PHONY: codegen-ops-portal
+.PHONY: codegen-control-plane-runtime
 .PHONY: codegen-content-service
 .PHONY: bootstrap-service-config
 .PHONY: new-service
@@ -36,6 +38,12 @@ codegen:
 
 codegen-app:
 	@$(MAKE) -C quwoquan_service codegen-app
+
+codegen-ops-portal:
+	@$(MAKE) -C quwoquan_service codegen-ops-portal
+
+codegen-control-plane-runtime:
+	@$(MAKE) -C quwoquan_service codegen-control-plane-runtime
 
 codegen-content-service:
 	@$(MAKE) -C quwoquan_service codegen-content-service

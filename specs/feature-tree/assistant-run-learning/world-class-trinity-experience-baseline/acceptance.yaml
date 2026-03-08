@@ -10,111 +10,148 @@ focus_groups:
   - streaming
 level_acceptance:
   A1:
-    criteria: "助理主链路可用：remotePreferred 流式 + local 回退 + 三入口可触达，且会话不中断"
+    criteria: "统一主线成立：问题先产出 IntentGraph，再进入 skillRuns[]、AggregationState、Final Synthesis 与 UserEvent 流式演绎；AgentLoop、Planner、ReactRuntime、Tool Fabric、CapabilityGateway、UI 形成单一问题处理主线，且 localOnly / remotePreferred / hybrid 三模式行为一致可预期"
     status: pending
-    linked_tasks: [P0-3, I1, I2, U3]
+    linked_tasks: [T39, T41, T42, T43, T46, T49, T50]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
     tests: []
   A2:
-    criteria: "响应统一 markdown 展示，结构块可稳定解析，失败自动降级"
+    criteria: "5 个交付包规格齐备：Unified Runtime Mainline、Skill DSL 2.0、Markdown-first Rendering、Session + Long-term Preference Facts、Fallback General Skill High-quality Baseline 均在规格中有清晰职责边界与非目标"
     status: pending
-    linked_tasks: [I1, U1, U2]
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: optional
+      T3: optional
+      T4: optional
     tests: []
   A3:
-    criteria: "工具失败可恢复：模型基于结构化 observation 决定 ask/retry/fallback，不阻断对话"
+    criteria: "问题分型策略可用：至少覆盖简单问答、实时信息、任务执行、复杂推理、通用兜底 5 类问题，且不同问题能适配不同处理链路；复合问题可稳定拆为 primarySkill + secondarySkills 并进入 skillRuns[]，不依赖垂类硬编码"
     status: pending
-    linked_tasks: [M2, I2, I3, T1, T6]
+    linked_tasks: [T4, T40, T42, T43, T45]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
     tests:
-      # L1 纯 VM（桶 A）
-      - quwoquan_app/test/personal_assistant/degraded_response_root_cause_contract_test.dart
-      - quwoquan_app/test/personal_assistant/history_contamination_guard_test.dart
-      - quwoquan_app/test/personal_assistant/message_history_protocol_contract_test.dart
-      # L2 引擎集成（桶 B）
-      - quwoquan_app/test/personal_assistant/react_runtime_tool_observation_contract_test.dart
-      - quwoquan_app/test/personal_assistant/dual_gate_integration_test.dart
-      - quwoquan_app/test/personal_assistant/agent_loop_context_gate_test.dart
-      # L3 UI 契约（dart test）
-      - quwoquan_app/test/ui/assistant/contract/assistant_message_history_contract_test.dart
+      - file: quwoquan_app/test/personal_assistant/react_runtime_tool_observation_contract_test.dart
+        functions: []
   A4:
-    criteria: "runId/traceId/关键动作/子代理事件可观测并可回放"
+    criteria: "Skill 成为领域真相源：至少支持 manifest、slot_contract、dialogue_state、tool_binding、response_style、reference_policy、execution_shell、preference_hooks 8 类定义，并可驱动试点 Skill；每个 skillRun 都必须消费各自 SkillExecutionShell"
     status: pending
-    linked_tasks: [S2-1, S2-2, S2-4, T3, T5]
+    linked_tasks: [T9, T11, T12, T13, T14, T15, T44]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
     tests:
-      # L1 纯 VM（桶 A）
-      - quwoquan_app/test/personal_assistant/observability_root_cause_contract_test.dart
-      # L2 引擎集成（桶 B）
-      - quwoquan_app/test/personal_assistant/observability_completeness_test.dart
-      - quwoquan_app/test/personal_assistant/observability_log_pipeline_test.dart
-      - quwoquan_app/test/personal_assistant/log_completeness_contract_test.dart
-      # L3 UI 回归（桶 C）
-      - quwoquan_app/test/ui/chat/widgets/chat_detail_page_assistant_ui_regression_test.dart
+      - file: quwoquan_app/test/personal_assistant/tool_registry_contract_test.dart
+        functions: []
   A5:
-    criteria: "主会话可执行动作与子任务回注形成闭环，关键动作可追踪"
+    criteria: "主答复统一 Markdown-first：天气等高频垂类以精排 Markdown 为主，不强制专属卡片；emoji 默认少量点缀，允许按 Skill 扩展；Markdown 解析失败可安全降级"
     status: pending
-    linked_tasks: [S2-2, S2-3, U4, T5]
-    tests: []
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: required
+      T4: optional
+    tests:
+      - file: quwoquan_app/test/ui/chat/widgets/chat_detail_page_assistant_ui_regression_test.dart
+        functions: []
   A6:
-    criteria: "授权与隐私语义完整：设备能力调用遵循策略网关，追问文案 i18n 合规"
+    criteria: "过程区统一为 1 行摘要 + 1 个可展开来源计数；默认可解释但折叠，且过程文案围绕用户任务进展而不是内部 trace 阶段名。过程展示只消费 UserEvent 与 uiProcessTimelineV2，并在流式、完成态、历史重载态一致"
     status: pending
-    linked_tasks: [M2, I4, X3, T2]
-    tests: []
+    linked_tasks: [T17, T18, T19, T49, T50, T52, T53, T54, T55]
+    test_layers:
+      T1: optional
+      T2: required
+      T3: required
+      T4: optional
+    tests:
+      - file: quwoquan_app/test/ui/chat/widgets/chat_detail_page_assistant_ui_regression_test.dart
+        functions: []
   A7:
-    criteria: "metadata/codegen/接口契约一致；关键路径移除字符串判断与硬编码错误文案"
+    criteria: "本会话偏好可即时生效，长期偏好以事实形式记录、在设置中可见可撤销；长期偏好标签至少覆盖任务类型、结构密度、表达风格、过程透明度、收敛容忍度、按 Skill 的局部偏好"
     status: pending
-    linked_tasks: [M1, M2, M3, C1, C2, C3, P0-1, T4]
+    linked_tasks: []
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: optional
     tests: []
   A8:
-    criteria: "mock/unit/contract/integration 覆盖可复跑，新增协议路径有回归保障"
+    criteria: "统一能力面对齐：`run / runStream / skills / invoke` 在本地运行时、OpenClaw 远端桥接和渠道集成视图中保持统一语义，不因执行位置不同而改变上层使用心智"
     status: pending
-    linked_tasks: [T1, T2, T3, T4, T5, T6]
+    linked_tasks: []
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
     tests:
-      # L0 静态分析（Python gate）
-      - scripts/verify_degraded_response_contract.py
-      # L1 纯 VM 契约（桶 A）
-      - quwoquan_app/test/personal_assistant/degraded_response_root_cause_contract_test.dart
-      - quwoquan_app/test/personal_assistant/message_history_protocol_contract_test.dart
-      - quwoquan_app/test/personal_assistant/observability_root_cause_contract_test.dart
-      - quwoquan_app/test/personal_assistant/quality_metrics_gate_test.dart
-      - quwoquan_app/test/personal_assistant/history_contamination_guard_test.dart
-      # L2 引擎集成（桶 B）
-      - quwoquan_app/test/personal_assistant/structured_response_contract_test.dart
-      - quwoquan_app/test/personal_assistant/protocol_compatibility_test.dart
-      - quwoquan_app/test/personal_assistant/tool_registry_contract_test.dart
-      - quwoquan_app/test/personal_assistant/tool_metadata_contract_test.dart
-      - quwoquan_app/test/personal_assistant/react_runtime_tool_observation_contract_test.dart
-      # L3 UI 契约（dart test）
-      - quwoquan_app/test/ui/assistant/contract/assistant_message_history_contract_test.dart
+      - file: quwoquan_app/test/personal_assistant/protocol_compatibility_test.dart
+        functions: []
   A9:
-    criteria: "结构化决策稳定性达标：decision_json 解析成功率 >= 99.5%"
+    criteria: "模型与搜索质量不佳时具备鲁棒性：结构化输出不稳、搜索结果低质、工具失败、远端不可用等场景下，系统仍可给出高水准通用 fallback，而不是报错或暴露内部状态；任何情况下都不得向用户泄漏 query、provider、freshness、assistant_turn_v4、tool args 或 XML tool_call"
     status: pending
-    linked_tasks: [I1, T1, T4, R3]
+    linked_tasks: [T29, T30, T31, T32, T33, T55, T56]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
     tests:
-      - quwoquan_app/test/personal_assistant/quality_metrics_gate_test.dart
-      - quwoquan_app/test/personal_assistant/structured_response_contract_test.dart
-      - quwoquan_app/test/personal_assistant/json_answer_parse_integration_test.dart
-      - quwoquan_app/test/personal_assistant/domain_quality_benchmark_test.dart
+      - file: quwoquan_app/test/personal_assistant/structured_response_contract_test.dart
+        functions: []
   A10:
-    criteria: "渲染稳定性达标：markdown 结构块降级率 < 1%，且无崩溃"
+    criteria: "天气试点达到行业标杆级闭环：城市已知/城市缺失/定位失败/工具失败四路径可闭合，输出为高质量 Markdown，过程区折叠可解释，默认预算可控；同时在天气 + 旅游等复合问题下可稳定作为 primarySkill 或 secondarySkill 参与聚合"
     status: pending
-    linked_tasks: [U1, U2, T3, R3]
+    linked_tasks: [T12, T16, T43, T45, T46, T48]
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: optional
     tests:
-      - quwoquan_app/test/ui/chat/widgets/chat_detail_page_assistant_ui_regression_test.dart
-      - quwoquan_app/test/personal_assistant/structured_response_contract_test.dart
-      - quwoquan_app/test/personal_assistant/json_answer_parse_integration_test.dart
-      - quwoquan_app/test/personal_assistant/quality_metrics_gate_test.dart
+      - file: quwoquan_app/test/personal_assistant/domain_quality_benchmark_test.dart
+        functions: []
   A11:
-    criteria: "天气垂类补槽成功率达标：城市缺失场景补槽完成率 >= 95%"
+    criteria: "性能与稳定性基线明确：简单问题明显快于复杂问题；实时问题有明确证据边界与 stop policy；复杂推理能尽快给出结构骨架；全链支持远端失败回退与质量门控"
     status: pending
-    linked_tasks: [I3, T6, R1, R3]
+    linked_tasks: []
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
     tests: []
   A12:
-    criteria: "设计交付件标准化：design.md 含组件/包图、用例图、流程图，并具备实现/验收映射"
+    criteria: "全流程测试责任完整：T1 防协议/策略漂移，T2 防 UI 与过程表达回归，T3 防 run/stream/remote-local 集成断裂，T4 防真实设备权限/弱网/定位等系统能力失效；新增 IntentGraph、AggregationState、UserEvent、uiProcessTimelineV2 的测试证据"
     status: pending
-    linked_tasks: [D2, D4]
+    linked_tasks: [T34, T40, T47, T54, T56]
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: required
     tests: []
   A13:
-    criteria: "全流程规范落地：文档不再仅限 Skill，覆盖 Plan/Create/Implement/Verify/Submit"
+    criteria: "本期 PRD 边界清晰：不新增独立服务进程、不做第三方 Skill 市场化、不做全端同构，不把长期偏好自动学习优化纳入本期阻塞范围"
     status: pending
-    linked_tasks: [D1, D3, D5]
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: optional
+      T3: optional
+      T4: optional
     tests: []
 execution:
   local_gate: "make gate"

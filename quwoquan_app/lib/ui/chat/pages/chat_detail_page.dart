@@ -26,6 +26,8 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/personal_assistant/app/assistant_engine_provider.dart';
 import 'package:quwoquan_app/personal_assistant/app/capability_gateway.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/user_events.dart';
+import 'package:quwoquan_app/personal_assistant/engine/llm_provider.dart';
 import 'package:quwoquan_app/personal_assistant/engine/llm_response_parser.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/assistant_content_filters.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/run_request.dart';
@@ -582,6 +584,58 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     }
   }
 
+  void _consumeStructuredUserEvent(UserEvent event) {
+    if (!mounted || !_assistantResponding) return;
+    final message = _sanitizeTraceDetail(event.message);
+    if (message.isEmpty) return;
+    final appended = _appendStreamingTimelineV2FromUserEvent(event);
+    final nextStage = switch (event.scope) {
+      UserEventScope.root => ProcessStage.understanding,
+      UserEventScope.skill => ProcessStage.searching,
+      UserEventScope.aggregation =>
+        event.type == UserEventType.processCommit
+            ? ProcessStage.completed
+            : ProcessStage.analyzing,
+      UserEventScope.unknown => _currentProcessState.stage,
+    };
+    List<Map<String, dynamic>> mergedTimeline = const <Map<String, dynamic>>[];
+    if (appended) {
+      final activeId = _activeAssistantStreamingMessageId;
+      final messageIndex = activeId == null
+          ? -1
+          : _messages.indexWhere((item) => (item['id'] as String?) == activeId);
+      if (messageIndex >= 0) {
+        mergedTimeline = _normalizeUiProcessTimelineV2(
+          ((_messages[messageIndex]['uiProcessTimelineV2'] as List?)
+                  ?.whereType<Map>()
+                  .toList(growable: false)) ??
+              const <Map>[],
+        );
+      }
+    }
+    final blocks = mergedTimeline.isNotEmpty
+        ? _processBlocksFromTimelineV2(mergedTimeline)
+        : <ProcessContentBlock>[
+            ..._processContentBlocks,
+            ProcessContentBlock(type: ProcessContentBlockType.text, text: message),
+          ];
+    setState(() {
+      _processContentBlocks = List<ProcessContentBlock>.of(blocks);
+      _currentProcessState = _currentProcessState.copyWith(
+        stage: nextStage,
+        stageLabel: nextStage == ProcessStage.completed ? '已完成' : message,
+        contentBlocks: List<ProcessContentBlock>.of(blocks),
+        isStreaming: nextStage != ProcessStage.completed,
+      );
+      if (nextStage == ProcessStage.completed) {
+        _assistantPhaseLabel = '';
+      } else {
+        _assistantPhaseLabel = message;
+      }
+    });
+    _autoScrollToBottomIfNeeded();
+  }
+
   /// Build structured content blocks for the process drawer.
   void _updateProcessContentBlocks({
     required UserPhaseEventType phaseType,
@@ -694,6 +748,178 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         .toList(growable: false);
   }
 
+  List<ProcessContentBlock> _processBlocksFromStructuredResponse(
+    Map<String, dynamic> structuredResponse,
+  ) {
+    final rawBlocks =
+        (structuredResponse['uiProcessContentBlocks'] as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[];
+    if (rawBlocks.isEmpty) {
+      final timeline = _timelineV2FromStructuredResponse(structuredResponse);
+      if (timeline.isEmpty) return const <ProcessContentBlock>[];
+      return _processBlocksFromTimelineV2(timeline);
+    }
+    final blocks = <ProcessContentBlock>[];
+    for (final item in rawBlocks) {
+      final rawType = (item['type'] as String?)?.trim() ?? '';
+      final text = (item['text'] as String?)?.trim() ?? '';
+      final references =
+          (item['references'] as List?)
+              ?.whereType<Map>()
+              .map((ref) => ref.cast<String, dynamic>())
+              .map(
+                (ref) => ProcessReference(
+                  title: (ref['title'] as String?)?.trim() ?? '',
+                  url: (ref['url'] as String?)?.trim() ?? '',
+                  source: (ref['source'] as String?)?.trim() ?? '',
+                ),
+              )
+              .where((ref) => ref.title.isNotEmpty && ref.url.isNotEmpty)
+              .toList(growable: false) ??
+          const <ProcessReference>[];
+      final type = switch (rawType) {
+        'searchSummary' => ProcessContentBlockType.searchSummary,
+        'analysisSummary' => ProcessContentBlockType.analysisSummary,
+        _ => ProcessContentBlockType.text,
+      };
+      if (text.isEmpty && references.isEmpty) continue;
+      blocks.add(
+        ProcessContentBlock(type: type, text: text, references: references),
+      );
+    }
+    return blocks;
+  }
+
+  List<Map<String, dynamic>> _serializeProcessBlocks(
+    List<ProcessContentBlock> blocks,
+  ) {
+    return blocks
+        .map(
+          (b) => <String, dynamic>{
+            'type': b.type.name,
+            'text': b.text,
+            'references': b.references
+                .map(
+                  (r) => <String, dynamic>{
+                    'title': r.title,
+                    'url': r.url,
+                    'source': r.source,
+                  },
+                )
+                .toList(growable: false),
+          },
+        )
+        .toList(growable: false);
+  }
+
+  List<Map<String, dynamic>> _normalizeUiProcessTimelineV2(List<Map> raw) {
+    return raw
+        .map((item) => item.cast<String, dynamic>())
+        .where(
+          (item) => ((item['summary'] as String?)?.trim().isNotEmpty ?? false),
+        )
+        .toList(growable: false);
+  }
+
+  List<Map<String, dynamic>> _timelineV2FromStructuredResponse(
+    Map<String, dynamic> structuredResponse,
+  ) {
+    return _normalizeUiProcessTimelineV2(
+      (structuredResponse['uiProcessTimelineV2'] as List?)
+              ?.whereType<Map>()
+              .toList(growable: false) ??
+          const <Map>[],
+    );
+  }
+
+  List<ProcessContentBlock> _processBlocksFromTimelineV2(
+    List<Map<String, dynamic>> timeline,
+  ) {
+    final blocks = <ProcessContentBlock>[];
+    for (final item in timeline) {
+      final summary = (item['summary'] as String?)?.trim() ?? '';
+      final references =
+          (item['references'] as List?)
+              ?.whereType<Map>()
+              .map((ref) => ref.cast<String, dynamic>())
+              .map(
+                (ref) => ProcessReference(
+                  title: (ref['title'] as String?)?.trim() ?? '',
+                  url: (ref['url'] as String?)?.trim() ?? '',
+                  source: (ref['source'] as String?)?.trim() ?? '',
+                ),
+              )
+              .where((ref) => ref.title.isNotEmpty && ref.url.isNotEmpty)
+              .toList(growable: false) ??
+          const <ProcessReference>[];
+      if (summary.isEmpty && references.isEmpty) continue;
+      final scope = (item['scope'] as String?)?.trim() ?? '';
+      final type = references.isNotEmpty
+          ? (scope == 'aggregation'
+                ? ProcessContentBlockType.analysisSummary
+                : ProcessContentBlockType.searchSummary)
+          : ProcessContentBlockType.text;
+      blocks.add(
+        ProcessContentBlock(type: type, text: summary, references: references),
+      );
+    }
+    return blocks;
+  }
+
+  List<Map<String, dynamic>> _mergeProcessTimelineV2(
+    List<Map<String, dynamic>> streamed,
+    List<Map<String, dynamic>> completed,
+  ) {
+    final merged = <Map<String, dynamic>>[];
+    final seen = <String>{};
+    for (final item in [...streamed, ...completed]) {
+      final key =
+          '${(item['scope'] ?? '').toString()}::${(item['nodeId'] ?? '').toString()}::${(item['summary'] ?? '').toString()}';
+      if (seen.contains(key)) continue;
+      merged.add(item);
+      seen.add(key);
+    }
+    return merged;
+  }
+
+  bool _appendStreamingTimelineV2FromUserEvent(UserEvent event) {
+    final messageId = _activeAssistantStreamingMessageId;
+    if (messageId == null || messageId.isEmpty) return false;
+    final index = _messages.indexWhere(
+      (item) => (item['id'] as String?) == messageId,
+    );
+    if (index < 0) return false;
+    final currentTimeline = _normalizeUiProcessTimelineV2(
+      ((_messages[index]['uiProcessTimelineV2'] as List?)
+              ?.whereType<Map>()
+              .toList(growable: false)) ??
+          const <Map>[],
+    );
+    final entry = <String, dynamic>{
+      'scope': event.scope.name,
+      'type': event.type.name,
+      'nodeId': event.nodeId,
+      'runId': event.runId,
+      'summary': event.message,
+      'payload': event.payload,
+      'references': const <Map<String, dynamic>>[],
+    };
+    final merged = _mergeProcessTimelineV2(currentTimeline, <Map<String, dynamic>>[
+      entry,
+    ]);
+    _messages[index] = <String, dynamic>{
+      ..._messages[index],
+      'uiProcessTimelineV2': merged,
+      'uiProcessContentBlocks': _serializeProcessBlocks(
+        _processBlocksFromTimelineV2(merged),
+      ),
+    };
+    return true;
+  }
+
   ProcessStage _mapPhaseToStage(String timelinePhaseType) {
     if (timelinePhaseType == 'understanding') return ProcessStage.understanding;
     if (timelinePhaseType.startsWith('tool:') ||
@@ -743,13 +969,12 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         <Map<String, dynamic>>[];
     String? nextPhaseType;
     String detail = '';
-    String query = '';
     List<String> keywords = const <String>[];
     if (event.type == AssistantTraceEventType.toolStart &&
         _isSearchLikeTrace(event, data)) {
       nextPhaseType = 'searching';
-      query = _extractSearchQueryFromTraceData(data);
-      keywords = _extractSearchKeywords(query);
+      final extractedQuery = _extractSearchQueryFromTraceData(data);
+      keywords = _extractSearchKeywords(extractedQuery);
       detail = _sanitizeTraceDetail(event.message);
     } else if (event.type == AssistantTraceEventType.assistantDelta) {
       final searchQueries =
@@ -762,8 +987,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       if (searchQueries.isNotEmpty) {
         nextPhaseType = 'searching';
         keywords = searchQueries.take(6).toList(growable: false);
-        query = searchQueries.first;
-        detail = '规划检索词：$query';
+        detail = '';
       } else {
         nextPhaseType = 'thinking';
         // assistantDelta.message 可能是原始 JSON，不能直接展示。
@@ -812,10 +1036,6 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     );
     final details = _mutableStringList(phase['details']);
     phase['details'] = details;
-    if (query.isNotEmpty) {
-      final line = '检索查询：$query';
-      if (!details.contains(line)) details.add(line);
-    }
     if (keywords.isNotEmpty) {
       phase['keywords'] = keywords;
     }
@@ -1100,7 +1320,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     r'selfCheck|diagnostics|reasoningBasis|turnPhase|traceId|'
     r'queryTasks|contextSlots|subagentPlan|evidence|result|'
     r'confidence|reasoning|answerEligibility|missingCriticalSlots|'
-    r'assistant_turn_v4|plan|answer|ask_user|tool_call)"?\s*:?',
+    r'assistant_turn_v4|provider|freshnessHoursMax|timeScope|queryVariants|'
+    r'plan|answer|ask_user|tool_call)"?\s*:?',
   );
   static final _jsonSyntaxOnlyRe = RegExp(r'^[\s"{}:\[\],\\.]+$');
 
@@ -1508,6 +1729,17 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           'isSelf': false,
           'streaming': true,
           'streamFinalAnswer': '',
+          'uiProcessTimelineV2': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'scope': 'root',
+              'type': 'processReplace',
+              'nodeId': 'root.intent',
+              'runId': '',
+              'summary': '已收到问题，正在理解你的需求',
+              'payload': const <String, dynamic>{},
+              'references': const <Map<String, dynamic>>[],
+            },
+          ],
           'uiPhaseTimelineV1': <Map<String, dynamic>>[
             <String, dynamic>{
               'phaseId': 'phase_understanding_1',
@@ -1578,22 +1810,6 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             )
             .toList(growable: false);
         final contextScope = _buildAssistantContextScope();
-        var domainId = 'fallback_general_search';
-        try {
-          final classified = await ref
-              .read(assistantGatewayProvider)
-              .classifyDomain(text, contextScope);
-          if (classified.trim().isNotEmpty) {
-            domainId = classified.trim();
-          }
-        } catch (error) {
-          if (kDebugMode) {
-            debugPrint(
-              'Assistant classify domain failed, use fallback: $error',
-            );
-          }
-        }
-        contextScope['domainId'] = domainId;
         final request = AssistantRunRequest(
           messages: assistantMessages,
           sessionId: _effectiveAssistantSessionId,
@@ -1741,8 +1957,14 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
               case AssistantRunStreamEventType.userPhaseEvent:
                 _consumeUserPhaseEvent(streamEvent);
                 continue;
+              case AssistantRunStreamEventType.userEvent:
+                final userEvent = streamEvent.userFacingEvent;
+                if (userEvent != null) {
+                  _consumeStructuredUserEvent(userEvent);
+                }
+                continue;
               case AssistantRunStreamEventType.processUpdate:
-                if (mounted) {
+                if (mounted && _processContentBlocks.isEmpty) {
                   final data = streamEvent.trace?.data;
                   final stageStr = data?['stage'] as String? ?? '';
                   final processLines =
@@ -1853,7 +2075,46 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             (runResponse.structuredResponse['uiUsageStatsV1'] as Map?)
                 ?.cast<String, dynamic>() ??
             const <String, dynamic>{};
+        final uiProcessTimelineV2 = _timelineV2FromStructuredResponse(
+          runResponse.structuredResponse,
+        );
+        final streamedTimelineV2 = (() {
+          if (streamingAssistantMessageId == null) {
+            return const <Map<String, dynamic>>[];
+          }
+          final existingIndex = _messages.indexWhere(
+            (item) => (item['id'] as String?) == streamingAssistantMessageId,
+          );
+          if (existingIndex < 0) return const <Map<String, dynamic>>[];
+          return _normalizeUiProcessTimelineV2(
+            ((_messages[existingIndex]['uiProcessTimelineV2'] as List?)
+                    ?.whereType<Map>()
+                    .toList(growable: false)) ??
+                const <Map>[],
+          );
+        })();
+        final mergedTimelineV2 = _mergeProcessTimelineV2(
+          streamedTimelineV2,
+          uiProcessTimelineV2,
+        );
+        final structuredProcessBlocks = _processBlocksFromStructuredResponse(
+          runResponse.structuredResponse,
+        );
+        final effectiveProcessBlocks = structuredProcessBlocks.isNotEmpty
+            ? structuredProcessBlocks
+            : (mergedTimelineV2.isNotEmpty
+                  ? _processBlocksFromTimelineV2(mergedTimelineV2)
+                  : List<ProcessContentBlock>.of(_processContentBlocks));
         setState(() {
+          if (structuredProcessBlocks.isNotEmpty) {
+            _processContentBlocks = List<ProcessContentBlock>.of(
+              structuredProcessBlocks,
+            );
+          } else if (mergedTimelineV2.isNotEmpty) {
+            _processContentBlocks = List<ProcessContentBlock>.of(
+              _processBlocksFromTimelineV2(mergedTimelineV2),
+            );
+          }
           _ensureMessagesGrowable();
           if (streamingAssistantMessageId != null) {
             final existingIndex = _messages.indexWhere(
@@ -1875,25 +2136,12 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                 'uiActions': uiActions,
                 'uiAnswer': uiAnswer,
                 'uiUsageStatsV1': uiUsageStatsV1,
+                'uiProcessTimelineV2': mergedTimelineV2,
                 'streamFinalAnswer': displayText,
                 'streaming': false,
-                'uiProcessContentBlocks': _processContentBlocks
-                    .map(
-                      (b) => <String, dynamic>{
-                        'type': b.type.name,
-                        'text': b.text,
-                        'references': b.references
-                            .map(
-                              (r) => <String, dynamic>{
-                                'title': r.title,
-                                'url': r.url,
-                                'source': r.source,
-                              },
-                            )
-                            .toList(growable: false),
-                      },
-                    )
-                    .toList(growable: false),
+                'uiProcessContentBlocks': _serializeProcessBlocks(
+                  effectiveProcessBlocks,
+                ),
               };
             }
           } else {
@@ -1918,23 +2166,10 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
               'uiActions': uiActions,
               'uiAnswer': uiAnswer,
               'uiUsageStatsV1': uiUsageStatsV1,
-              'uiProcessContentBlocks': _processContentBlocks
-                  .map(
-                    (b) => <String, dynamic>{
-                      'type': b.type.name,
-                      'text': b.text,
-                      'references': b.references
-                          .map(
-                            (r) => <String, dynamic>{
-                              'title': r.title,
-                              'url': r.url,
-                              'source': r.source,
-                            },
-                          )
-                          .toList(growable: false),
-                    },
-                  )
-                  .toList(growable: false),
+              'uiProcessTimelineV2': mergedTimelineV2,
+              'uiProcessContentBlocks': _serializeProcessBlocks(
+                effectiveProcessBlocks,
+              ),
             });
           }
           _assistantResponding = false;
@@ -1943,7 +2178,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           _currentProcessState = AssistantProcessState(
             stage: ProcessStage.completed,
             stageLabel: '已完成',
-            contentBlocks: List<ProcessContentBlock>.of(_processContentBlocks),
+            contentBlocks: List<ProcessContentBlock>.of(effectiveProcessBlocks),
             usageStats: uiUsageStatsV1,
             elapsedMs: elapsedMs,
           );
@@ -2154,7 +2389,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     }
 
     // Gate 5: degraded 场景 — 从 finalText 中剥离 JSON，提取可读内容
-    final rawFinal = response.finalText.trim();
+    final rawFinal = OpenAiCompatibleLlmProvider.stripXmlToolCalls(
+      response.finalText,
+    ).trim();
     // 优先尝试从任何 JSON 结构体中提取可读内容（不仅限于已知签名的信封格式）
     if (rawFinal.startsWith('{') || rawFinal.startsWith('[')) {
       final stripped = _stripJsonForDisplay(rawFinal);
@@ -2208,15 +2445,6 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         return text;
       }
 
-      // Priority 5: any string field with reasonable length
-      for (final entry in decoded.entries) {
-        if (entry.value is String) {
-          final v = (entry.value as String).trim();
-          if (v.length > 10 && !v.startsWith('{') && !v.startsWith('[')) {
-            return v;
-          }
-        }
-      }
     } catch (_) {}
     return '';
   }
@@ -2278,6 +2506,12 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       'createdAt': DateTime.now().toIso8601String(),
       'uiPhaseTimelineV1': _normalizeUiPhaseTimelineV1(
         (structured['uiPhaseTimelineV1'] as List?)?.whereType<Map>().toList(
+              growable: false,
+            ) ??
+            const <Map>[],
+      ),
+      'uiProcessTimelineV2': _normalizeUiProcessTimelineV2(
+        (structured['uiProcessTimelineV2'] as List?)?.whereType<Map>().toList(
               growable: false,
             ) ??
             const <Map>[],
@@ -2838,9 +3072,46 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             (response.structuredResponse['uiAnswer'] as Map?)
                 ?.cast<String, dynamic>() ??
             const <String, dynamic>{};
-        final mdText = (uiAnswer['markdownText'] as String?)?.trim() ?? '';
-        final finalText = mdText.isNotEmpty ? mdText : response.finalText;
+        final uiProcessTimelineV2 = _timelineV2FromStructuredResponse(
+          response.structuredResponse,
+        );
+        final structuredProcessBlocks = _processBlocksFromStructuredResponse(
+          response.structuredResponse,
+        );
+        final uiUsageStats =
+            (response.structuredResponse['uiUsageStatsV1'] as Map?)
+                ?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+        final effectiveTimelineV2 = uiProcessTimelineV2.isNotEmpty
+            ? uiProcessTimelineV2
+            : _normalizeUiProcessTimelineV2(
+                (_messages
+                            .firstWhere(
+                              (item) =>
+                                  (item['id'] as String?) ==
+                                  streamingAssistantMessageId,
+                              orElse: () => const <String, dynamic>{},
+                            )['uiProcessTimelineV2'] as List?)
+                        ?.whereType<Map>()
+                        .toList(growable: false) ??
+                    const <Map>[],
+              );
+        final effectiveProcessBlocks = structuredProcessBlocks.isNotEmpty
+            ? structuredProcessBlocks
+            : (effectiveTimelineV2.isNotEmpty
+                  ? _processBlocksFromTimelineV2(effectiveTimelineV2)
+                  : List<ProcessContentBlock>.of(_processContentBlocks));
+        final finalText = _resolveAssistantDisplayText(response);
         setState(() {
+          if (structuredProcessBlocks.isNotEmpty) {
+            _processContentBlocks = List<ProcessContentBlock>.of(
+              structuredProcessBlocks,
+            );
+          } else if (effectiveTimelineV2.isNotEmpty) {
+            _processContentBlocks = List<ProcessContentBlock>.of(
+              _processBlocksFromTimelineV2(effectiveTimelineV2),
+            );
+          }
           _ensureMessagesGrowable();
           final idx = _messages.indexWhere(
             (item) => (item['id'] as String?) == streamingAssistantMessageId,
@@ -2852,8 +3123,20 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
               'streamFinalAnswer': finalText,
               'streaming': false,
               'sourceQuery': query,
+              'uiAnswer': uiAnswer,
+              'uiProcessTimelineV2': effectiveTimelineV2,
+              'uiProcessContentBlocks': _serializeProcessBlocks(
+                effectiveProcessBlocks,
+              ),
+              'uiUsageStatsV1': uiUsageStats,
             };
           }
+          _currentProcessState = AssistantProcessState(
+            stage: ProcessStage.completed,
+            stageLabel: '已完成',
+            contentBlocks: List<ProcessContentBlock>.of(effectiveProcessBlocks),
+            usageStats: uiUsageStats,
+          );
         });
       }
     } catch (_) {
@@ -3173,12 +3456,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                 else
                   IconButton(
                     icon: const Icon(Icons.more_horiz),
-                    onPressed: () =>
-                        context.push(
-                          AppRoutePaths.chatSettings(
-                            id: widget.conversationId,
-                          ),
-                        ),
+                    onPressed: () => context.push(
+                      AppRoutePaths.chatSettings(id: widget.conversationId),
+                    ),
                   ),
               ],
             ],
@@ -3536,7 +3816,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                                                 msg['senderId'] as String? ??
                                                 '';
                                             if (senderId == 'current_user') {
-                                              context.push(AppRoutePaths.profile);
+                                              context.push(
+                                                AppRoutePaths.profile,
+                                              );
                                             } else if (senderId.isNotEmpty) {
                                               context.push(
                                                 AppRoutePaths.userProfile(
