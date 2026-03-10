@@ -79,7 +79,6 @@ class ChatMessageNotifier extends StateNotifier<ChatMessageState> {
       mediaUrl: mediaUrl,
       media: media,
       status: 'sending',
-      timestamp: DateTime.now(),
     );
     state = state.copyWith(messages: _sorted([...state.messages, optimistic]));
     try {
@@ -221,7 +220,14 @@ class ChatMessageNotifier extends StateNotifier<ChatMessageState> {
       }
     }
     confirmed.sort((a, b) => a.seq.compareTo(b.seq));
-    pending.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    pending.sort((a, b) {
+      final at = a.timestamp;
+      final bt = b.timestamp;
+      if (at == null && bt == null) return 0;
+      if (at == null) return 1;
+      if (bt == null) return -1;
+      return at.compareTo(bt);
+    });
     return [...confirmed, ...pending];
   }
 

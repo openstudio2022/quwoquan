@@ -50,21 +50,13 @@ import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/regenerate_options_popup.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/streaming_scroll_fab.dart';
 
-/// 仅显示「上午/下午 HH:mm」，不显示「今天」或日期（图一）
+/// 聊天气泡时间分隔符 — 直接透传 ChatTimeFormatter 的完整格式
+///
+/// 接收已格式化的 "{日期标签} 上午/下午H:mm" 或 ISO 字符串，
+/// 返回用于展示的时间文本。空串表示发送中。
 String formatChatTime(String? raw) {
   if (raw == null || raw.isEmpty) return '';
-  final s = raw.replaceFirst(RegExp(r'^(今天|昨天)\s*'), '').trim();
-  final am = UITextConstants.timeFormatAM;
-  final pm = UITextConstants.timeFormatPM;
-  if (s.startsWith(am) || s.startsWith(pm)) return s;
-  final match = RegExp(r'^(\d{1,2}):(\d{2})$').firstMatch(s);
-  if (match != null) {
-    final h = int.tryParse(match.group(1) ?? '0') ?? 0;
-    final m = match.group(2) ?? '00';
-    if (h < 12) return '$am$h:$m';
-    return '$pm${h == 12 ? 12 : h - 12}:$m';
-  }
-  return s;
+  return raw;
 }
 
 /// 聊天详情页 - 1:1 对应 WeChatStyleChatDetail → CircleChatSystem / ChatDetail.tsx
@@ -2024,8 +2016,6 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
 
   Future<void> _submitChatInput(ChatInputSubmitPayload payload) async {
     if (payload.attachments.isNotEmpty) {
-      final now = DateTime.now();
-      final timeStr = '${now.hour}:${now.minute.toString().padLeft(2, '0')}';
       final attachmentMessages = payload.attachments
           .map((item) {
             final kind = item.type == ChatInputAttachmentType.image
@@ -2041,7 +2031,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
               'senderName': '我',
               'senderAvatar':
                   'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400',
-              'timestamp': timeStr,
+              'timestamp': '',
+              'status': 'sending',
               'isRead': true,
               'isSelf': true,
             };
@@ -2085,8 +2076,6 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       return;
     }
 
-    final now = DateTime.now();
-    final timeStr = '${now.hour}:${now.minute.toString().padLeft(2, '0')}';
     final userMessageId = 'msg_${DateTime.now().millisecondsSinceEpoch}';
     setState(() {
       _ensureMessagesGrowable();
@@ -2099,8 +2088,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         'senderName': '我',
         'senderAvatar':
             'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400',
-        'timestamp': timeStr,
-        'sentAtIso': now.toIso8601String(),
+        'timestamp': '',
+        'status': 'sending',
         'isRead': true,
         'isSelf': true,
       });
@@ -2485,9 +2474,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         final elapsedMs = DateTime.now()
             .difference(runStartedAt)
             .inMilliseconds;
-        final replyNow = DateTime.now();
-        final replyTime =
-            '${replyNow.hour}:${replyNow.minute.toString().padLeft(2, '0')}';
+        final replyTime = ChatTimeFormatter.format(DateTime.now());
         final assistantMessageId =
             'assistant_${DateTime.now().millisecondsSinceEpoch}';
         final uiPhaseTimelineV1 = _normalizeUiPhaseTimelineV1(
@@ -2718,7 +2705,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             'senderId': AppConceptConstants.assistantSenderId,
             'senderName': AppConceptConstants.assistantLabel,
             'senderAvatar': '',
-            'timestamp': timeStr,
+            'timestamp': '',
             'isRead': true,
             'isSelf': false,
             'isError': true,

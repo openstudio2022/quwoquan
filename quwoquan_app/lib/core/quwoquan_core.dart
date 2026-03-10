@@ -42,6 +42,9 @@ export 'services/data_service.dart';
 export 'services/app_content_repository.dart';
 export 'services/assistant_chat_store.dart';
 
+// Utils
+export 'utils/chat_time_formatter.dart';
+
 // Models
 export 'package:quwoquan_app/core/models/post_models.dart';
 export 'package:quwoquan_app/core/models/story_models.dart';

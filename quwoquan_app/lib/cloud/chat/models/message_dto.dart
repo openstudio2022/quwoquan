@@ -1,3 +1,5 @@
+import 'package:quwoquan_app/core/utils/chat_time_formatter.dart';
+
 /// Typed DTO for the Message entity.
 /// Maps to contracts/metadata/messages/conversation/fields.yaml → Message.
 class MessageDto {
@@ -17,7 +19,7 @@ class MessageDto {
   final String status;
   final DateTime? recalledAt;
   final Map<String, dynamic>? metadata;
-  final DateTime timestamp;
+  final DateTime? timestamp;
 
   const MessageDto({
     required this.id,
@@ -36,7 +38,7 @@ class MessageDto {
     required this.status,
     this.recalledAt,
     this.metadata,
-    required this.timestamp,
+    this.timestamp,
   });
 
   factory MessageDto.fromMap(Map<String, dynamic> map) {
@@ -68,8 +70,9 @@ class MessageDto {
           ? (map['metadata'] as Map).cast<String, dynamic>()
           : null,
       timestamp:
-          DateTime.tryParse((map['timestamp'] ?? '') as String) ??
-          DateTime.now(),
+          ChatTimeFormatter.tryParseServerTime(
+            (map['timestamp'] ?? map['createdAt'] ?? '') as String,
+          ),
     );
   }
 
@@ -130,17 +133,16 @@ class MessageDto {
     'status': status,
     if (recalledAt != null) 'recalledAt': recalledAt!.toIso8601String(),
     if (metadata != null) 'metadata': metadata,
-    'timestamp': timestamp.toIso8601String(),
+    if (timestamp != null) 'timestamp': timestamp!.toIso8601String(),
   };
 
   /// Converts to the display-oriented Map expected by ChatMessageBubble.
   /// Bridges typed DTO to legacy `Map<String, dynamic>` UI contract.
   Map<String, dynamic> toDisplayMap({required String currentUserId}) {
     final isSelf = senderId == currentUserId;
-    final h = timestamp.hour;
-    final m = timestamp.minute.toString().padLeft(2, '0');
-    final timeStr =
-        '${h < 12 ? "上午" : "下午"}${h == 12 ? 12 : (h > 12 ? h - 12 : h)}:$m';
+    final timeStr = timestamp != null
+        ? ChatTimeFormatter.format(timestamp!)
+        : '';
     return {
       'id': id,
       '_id': id,
@@ -158,7 +160,7 @@ class MessageDto {
       if (mentions != null) 'mentions': mentions,
       'status': status,
       'timestamp': timeStr,
-      'sentAtIso': timestamp.toIso8601String(),
+      if (timestamp != null) 'sentAtIso': timestamp!.toIso8601String(),
       'isSelf': isSelf,
       'isRead': true,
     };

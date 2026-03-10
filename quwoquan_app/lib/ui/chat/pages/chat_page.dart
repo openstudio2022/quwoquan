@@ -948,6 +948,15 @@ class _ConversationTile extends StatelessWidget {
 
   static const double _avatarSize = 56;
 
+  String _formatConversationTime(Map<String, dynamic> conv) {
+    final isoStr = conv['lastMessageAt'] as String?
+        ?? conv['lastMessageTime'] as String?
+        ?? conv['updatedAt'] as String?;
+    final dt = ChatTimeFormatter.tryParseServerTime(isoStr);
+    if (dt == null) return '';
+    return ChatTimeFormatter.format(dt);
+  }
+
   Widget _buildConversationAvatar() {
     final type = conversation['type'] as String? ?? 'direct';
     final isGroup = type == 'group';
@@ -1088,7 +1097,7 @@ class _ConversationTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    conversation['lastMessageTime'] as String? ?? '',
+                    _formatConversationTime(conversation),
                     style: TextStyle(
                       fontSize: AppTypography.sm,
                       color: fgSecondary,
