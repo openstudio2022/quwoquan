@@ -1,45 +1,44 @@
 version: 1
-feature: "three-layer-context-model"
-level: "L3_subfeature"
-template: "A1-A8"
+feature: three-layer-context-model
+level: "L3_story"
+template: A1-A8
 tree_context:
-  feature_level: "L3_subfeature"
-  feature_path: "capability.runtime.feature.runtime-context.subfeature.three-layer-context-model"
-  parent_path: "capability.runtime.feature.runtime-context"
-  acceptance_inherits_from: "capability.runtime.feature.runtime-context"
+  feature_path: capability.runtime.feature.runtime-context.subfeature.three-layer-context-model
+  parent_path: capability.runtime.feature.runtime-context
+  acceptance_inherits_from: capability.runtime.feature.runtime-context
 level_acceptance:
   focus_groups:
-    - A1_functional
-    - A7_contract_metadata_consistency
-    - A8_test_automation
-  notes: "三层上下文架构：PageContext + SessionContext + LongTermProfile。"
+  - A1_functional
+  - A7_contract_metadata_consistency
+  - A8_test_automation
+  notes: 三层上下文架构：PageContext + SessionContext + LongTermProfile。
 global_acceptance:
   A1_functional:
     scenarios:
-      - given: "三层上下文模型已定义"
-        when: "ContextAssembler 被调用"
-        then: "返回 PageContext + SessionContext + LongTermProfile 组装结果"
-      - given: "PageContext 缺失"
-        when: "ContextAssembler 组装"
-        then: "Session + LongTerm 仍可返回，PageContext 为空"
+    - given: 三层上下文模型已定义
+      when: ContextAssembler 被调用
+      then: 返回 PageContext + SessionContext + LongTermProfile 组装结果
+    - given: PageContext 缺失
+      when: ContextAssembler 组装
+      then: Session + LongTerm 仍可返回，PageContext 为空
   A2_experience:
-    - "上下文组装对业务代码透明"
+  - 上下文组装对业务代码透明
   A3_service_governance:
-    - "各层 TTL 可配置"
+  - 各层 TTL 可配置
   A4_observability:
-    - "上下文组装延迟可监控"
+  - 上下文组装延迟可监控
   A5_product_ops:
-    - "N/A"
+  - N/A
   A6_security_privacy:
-    - "上下文按 userId 隔离"
+  - 上下文按 userId 隔离
   A7_contract_metadata_consistency:
-    - "PageContext 场景类型与 entity_catalog 一致"
-    - "LongTermProfile 结构与 _vectors/*.yaml 一致"
+  - PageContext 场景类型与 entity_catalog 一致
+  - LongTermProfile 结构与 _vectors/*.yaml 一致
   A8_test_automation:
-    - "三层模型接口单元测试"
+  - 三层模型接口单元测试
 tests:
   unit:
-    - "quwoquan_service/runtime/context/tests/context_model_test.go"
+  - quwoquan_service/runtime/context/tests/context_model_test.go
 execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
+  local_gate: make gate
+  full_gate: make gate-full

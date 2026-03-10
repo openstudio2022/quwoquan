@@ -1,0 +1,18 @@
+version: 1
+feature: security-event-log-schema
+level: "L3_story"
+template: A1-A8
+focus_groups: []
+tests:
+  mock: []
+  unit: []
+  contract: []
+  integration: []
+  uat: []
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+legacy_merged_acceptance:
+- source_path: gateway-orchestrator-foundation/unified-entry-security/edge-security-observability/security-event-log-schema/security-alert-link
+  task_bucket: security-alert-link
+  migrated_as: L3_task

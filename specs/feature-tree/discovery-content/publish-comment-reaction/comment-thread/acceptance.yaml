@@ -1,16 +1,14 @@
 version: 1
-feature: "comment-thread"
-level: "L3_subfeature"
-template: "A1-A20"
+feature: comment-thread
+level: "L3_story"
+template: A1-A20
 focus_groups: []
-
 level_acceptance:
-  # ─── 核心交互 ───
   A1:
-    criteria: >
-      评论列表端云闭环：打开评论弹窗时调用 listComments(postId, cursor, limit)
-      加载历史评论并分页展示；游标分页响应 CommentPage(items + nextCursor)；
-      滚动到底自动加载下一页；首屏加载 P95 < 800ms。
+    criteria: '评论列表端云闭环：打开评论弹窗时调用 listComments(postId, cursor, limit) 加载历史评论并分页展示；游标分页响应
+      CommentPage(items + nextCursor)； 滚动到底自动加载下一页；首屏加载 P95 < 800ms。
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
@@ -19,12 +17,11 @@ level_acceptance:
       T3: required
       T4: optional
     tests: []
-
   A2:
-    criteria: >
-      评论创建端云闭环：输入内容点击发送 → 乐观更新（本地立即插入列表 + 帖外计数+1）
-      → 异步调用 createComment → 成功确认 / 失败回滚；支持 replyToCommentId
-      回复关联；评论字数上限 500 字端云一致校验；支持 persona 身份选择。
+    criteria: '评论创建端云闭环：输入内容点击发送 → 乐观更新（本地立即插入列表 + 帖外计数+1） → 异步调用 createComment →
+      成功确认 / 失败回滚；支持 replyToCommentId 回复关联；评论字数上限 500 字端云一致校验；支持 persona 身份选择。
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
@@ -33,12 +30,11 @@ level_acceptance:
       T3: required
       T4: optional
     tests: []
-
   A3:
-    criteria: >
-      评论删除端云闭环：评论作者可删除自己的评论，帖主可删除帖下任意评论；
-      乐观更新（本地移除 + 计数-1）→ 异步调用 deleteComment → 失败回滚；
-      软删除 + 审计日志。
+    criteria: '评论删除端云闭环：评论作者可删除自己的评论，帖主可删除帖下任意评论； 乐观更新（本地移除 + 计数-1）→ 异步调用 deleteComment
+      → 失败回滚； 软删除 + 审计日志。
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
@@ -47,12 +43,11 @@ level_acceptance:
       T3: required
       T4: optional
     tests: []
-
   A4:
-    criteria: >
-      回复与楼中楼：2 级评论层级（一级评论 + 回复展平）；回复时输入框显示
-      "回复 @xxx"且自动填充 replyToCommentId；回复默认显示 2 条预览，
-      "展开 N 条回复"可加载更多。
+    criteria: '回复与楼中楼：2 级评论层级（一级评论 + 回复展平）；回复时输入框显示 "回复 @xxx"且自动填充 replyToCommentId；回复默认显示
+      2 条预览， "展开 N 条回复"可加载更多。
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
@@ -61,11 +56,11 @@ level_acceptance:
       T3: optional
       T4: optional
     tests: []
-
   A5:
-    criteria: >
-      评论点赞：单评论可赞/取消赞（LikeComment / UnlikeComment）；赞数实时显示；
-      影响热评排序权重；采用 Redis 先计数 + 异步持久化的最终一致模型。
+    criteria: '评论点赞：单评论可赞/取消赞（LikeComment / UnlikeComment）；赞数实时显示； 影响热评排序权重；采用 Redis
+      先计数 + 异步持久化的最终一致模型。
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
@@ -74,13 +69,11 @@ level_acceptance:
       T3: required
       T4: optional
     tests: []
-
-  # ─── 入口打通与 UI ───
   A6:
-    criteria: >
-      8 个评论入口全部打通：E1 微趣 Feed、E2 作品沉浸、E3 微趣评论数、
-      E4 图片沉浸、E5 视频沉浸、E6 MediaPostCard、E7 文章详情、
-      E8 个人主页；每个入口点击评论 → 打开弹窗 → 加载评论 → 可提交。
+    criteria: '8 个评论入口全部打通：E1 微趣 Feed、E2 作品沉浸、E3 微趣评论数、 E4 图片沉浸、E5 视频沉浸、E6 MediaPostCard、E7
+      文章详情、 E8 个人主页；每个入口点击评论 → 打开弹窗 → 加载评论 → 可提交。
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
@@ -89,12 +82,11 @@ level_acceptance:
       T3: optional
       T4: required
     tests: []
-
   A7:
-    criteria: >
-      评论弹窗 UI 规格：底部半屏弹窗，高度自适应（50%~90%）；支持下拉手势关闭；
-      标题显示"评论 (N)"；所有视觉元素使用 AppTypography/AppSpacing/AppColors，
+    criteria: '评论弹窗 UI 规格：底部半屏弹窗，高度自适应（50%~90%）；支持下拉手势关闭； 标题显示"评论 (N)"；所有视觉元素使用 AppTypography/AppSpacing/AppColors，
       无硬编码视觉字面量；verify_dart_semantic.py 通过。
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
@@ -103,12 +95,11 @@ level_acceptance:
       T3: optional
       T4: optional
     tests: []
-
   A8:
-    criteria: >
-      评论项视觉规格：头像 36px 圆形；用户名 bodyBold + 时间 caption；
-      内容 body；作者标识"作者"标签；相对时间显示；长评论 >3 行折叠 + 展开全文；
-      空态"暂无评论，来抢沙发吧"+ 引导输入。
+    criteria: '评论项视觉规格：头像 36px 圆形；用户名 bodyBold + 时间 caption； 内容 body；作者标识"作者"标签；相对时间显示；长评论
+      >3 行折叠 + 展开全文； 空态"暂无评论，来抢沙发吧"+ 引导输入。
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
@@ -117,12 +108,10 @@ level_acceptance:
       T3: optional
       T4: optional
     tests: []
-
-  # ─── 排序 / 分页 / 折叠 ───
   A9:
-    criteria: >
-      排序策略：热评优先（默认，按 likeCount 加权 + 时间衰减）与最新优先
-      （按 createdAt DESC）；用户可在弹窗标题栏切换；切换后清空列表并重新加载。
+    criteria: '排序策略：热评优先（默认，按 likeCount 加权 + 时间衰减）与最新优先 （按 createdAt DESC）；用户可在弹窗标题栏切换；切换后清空列表并重新加载。
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
@@ -131,12 +120,11 @@ level_acceptance:
       T3: required
       T4: optional
     tests: []
-
   A10:
-    criteria: >
-      游标分页契约：ListComments 响应 CommentPage(items + nextCursor)；
-      cursor 为不透明字符串；端侧滚动到底自动携带 nextCursor 加载下一页；
-      nextCursor 为空时停止加载；与 content feed 游标语义一致。
+    criteria: '游标分页契约：ListComments 响应 CommentPage(items + nextCursor)； cursor 为不透明字符串；端侧滚动到底自动携带
+      nextCursor 加载下一页； nextCursor 为空时停止加载；与 content feed 游标语义一致。
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
@@ -145,11 +133,11 @@ level_acceptance:
       T3: required
       T4: optional
     tests: []
-
   A11:
-    criteria: >
-      回复折叠：一级评论下默认显示 reply_preview_count（默认 2）条回复；
-      "展开 N 条回复"按钮展开剩余回复；reply_preview_count 从 App Config 同步。
+    criteria: '回复折叠：一级评论下默认显示 reply_preview_count（默认 2）条回复； "展开 N 条回复"按钮展开剩余回复；reply_preview_count
+      从 App Config 同步。
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
@@ -158,13 +146,11 @@ level_acceptance:
       T3: optional
       T4: optional
     tests: []
-
-  # ─── 个人主页 / Persona / 审核 ───
   A12:
-    criteria: >
-      个人主页"我发出的评论"：ListCommentsByAuthor 端点，按时间倒序展示
-      当前用户发出的所有评论；每条评论显示原帖信息 + 评论内容；
-      点击可跳转原帖评论弹窗。
+    criteria: '个人主页"我发出的评论"：ListCommentsByAuthor 端点，按时间倒序展示 当前用户发出的所有评论；每条评论显示原帖信息
+      + 评论内容； 点击可跳转原帖评论弹窗。
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
@@ -173,11 +159,10 @@ level_acceptance:
       T3: required
       T4: optional
     tests: []
-
   A13:
-    criteria: >
-      个人主页"我收到的评论"：ListCommentsForPostAuthor 端点，按时间倒序展示
-      他人在当前用户帖子下的评论；含快捷回复入口。
+    criteria: '个人主页"我收到的评论"：ListCommentsForPostAuthor 端点，按时间倒序展示 他人在当前用户帖子下的评论；含快捷回复入口。
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
@@ -186,12 +171,11 @@ level_acceptance:
       T3: required
       T4: optional
     tests: []
-
   A14:
-    criteria: >
-      Persona 身份切换：评论时可选择 persona 发表（personaId 字段），
-      展示对应 persona 头像/昵称；默认使用主身份；
+    criteria: 'Persona 身份切换：评论时可选择 persona 发表（personaId 字段）， 展示对应 persona 头像/昵称；默认使用主身份；
       切换仅影响当前评论，不影响已发评论。
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
@@ -200,15 +184,12 @@ level_acceptance:
       T3: optional
       T4: optional
     tests: []
-
-  # ─── 端云一致 / 配置 / DTO ───
   A15:
-    criteria: >
-      端云契约一致性：OpenAPI Delete 路径统一为
-      DELETE /v1/content/posts/{postId}/comments/{commentId}；
-      端侧 Remote Repository URL 与 service.yaml 完全对齐；
-      metadata fields.yaml 与 Comment DTO 字段一一对应；
-      make verify 通过。
+    criteria: '端云契约一致性：OpenAPI Delete 路径统一为 DELETE /v1/content/posts/{postId}/comments/{commentId}；
+      端侧 Remote Repository URL 与 service.yaml 完全对齐； metadata fields.yaml 与 Comment
+      DTO 字段一一对应； make verify 通过。
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
@@ -217,12 +198,11 @@ level_acceptance:
       T3: required
       T4: optional
     tests: []
-
   A16:
-    criteria: >
-      配置端云同步：评论字数上限（500）、回复预览数（2）、折叠行数（3）
-      由 config.yaml 配置 → App Config Endpoint 同步到端侧 →
-      端侧 Provider 消费；端侧 codegen 提供 fallback 默认值。
+    criteria: '配置端云同步：评论字数上限（500）、回复预览数（2）、折叠行数（3） 由 config.yaml 配置 → App Config Endpoint
+      同步到端侧 → 端侧 Provider 消费；端侧 codegen 提供 fallback 默认值。
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
@@ -231,12 +211,11 @@ level_acceptance:
       T3: required
       T4: optional
     tests: []
-
   A17:
-    criteria: >
-      Comment DTO 类型化：codegen 产出 CommentDto（替代 Map<String, dynamic>），
-      字段与 metadata fields.yaml 一致；DTO 有 DO NOT EDIT 标记；
-      端侧 Repository 和 UI 使用类型化 DTO。
+    criteria: 'Comment DTO 类型化：codegen 产出 CommentDto（替代 Map<String, dynamic>）， 字段与
+      metadata fields.yaml 一致；DTO 有 DO NOT EDIT 标记； 端侧 Repository 和 UI 使用类型化 DTO。
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
@@ -245,12 +224,10 @@ level_acceptance:
       T3: optional
       T4: optional
     tests: []
-
-  # ─── NFR ───
   A18:
-    criteria: >
-      性能达标：评论列表首屏 P95 < 800ms；评论提交 P95 < 500ms；
-      弹窗打开 < 300ms；乐观更新本地渲染 < 100ms。
+    criteria: '性能达标：评论列表首屏 P95 < 800ms；评论提交 P95 < 500ms； 弹窗打开 < 300ms；乐观更新本地渲染 < 100ms。
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
@@ -259,12 +236,11 @@ level_acceptance:
       T3: optional
       T4: required
     tests: []
-
   A19:
-    criteria: >
-      弱网降级：列表加载超时显示"加载失败，点击重试"并保留已加载数据；
-      评论提交超时进入本地队列 + UI 标记"发送中"→ 恢复后自动重试（≤3 次）；
-      断网可查看已缓存评论。
+    criteria: '弱网降级：列表加载超时显示"加载失败，点击重试"并保留已加载数据； 评论提交超时进入本地队列 + UI 标记"发送中"→ 恢复后自动重试（≤3
+      次）； 断网可查看已缓存评论。
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
@@ -273,13 +249,11 @@ level_acceptance:
       T3: optional
       T4: required
     tests: []
-
   A20:
-    criteria: >
-      热帖防护：单用户 5 条/分钟 + 单帖 1000 条/分钟频率限制；
-      评论数 ≥ 100 条触发 Redis ZSet 热评缓存（Top 50，TTL 300s）；
-      10 万+评论帖的列表加载 P95 < 1s；
-      所有阈值由 config.yaml 统一配置，非硬编码。
+    criteria: '热帖防护：单用户 5 条/分钟 + 单帖 1000 条/分钟频率限制； 评论数 ≥ 100 条触发 Redis ZSet 热评缓存（Top
+      50，TTL 300s）； 10 万+评论帖的列表加载 P95 < 1s； 所有阈值由 config.yaml 统一配置，非硬编码。
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
@@ -288,31 +262,27 @@ level_acceptance:
       T3: required
       T4: required
     tests: []
-
-  # ─── 先发后审（deferred — 待运营系统统一规划） ───
   A21:
-    criteria: >
-      先发后审：评论提交后立即可见（status=visible）；异步审核流水线处理 →
-      违规内容 status 改为 hidden → 推送通知评论者"评论已被隐藏"；
-      CommentModerated 事件发布。
-      V1 仅实现事件钩子接口（CommentCreated 事件发布），审核流水线消费端
+    criteria: '先发后审：评论提交后立即可见（status=visible）；异步审核流水线处理 → 违规内容 status 改为 hidden →
+      推送通知评论者"评论已被隐藏"； CommentModerated 事件发布。 V1 仅实现事件钩子接口（CommentCreated 事件发布），审核流水线消费端
       待运营系统统一规划后实现。
+
+      '
     status: deferred
-    linked_tasks: [S4]
-    deferred_reason: "审核流水线待运营系统统一规划，V1 仅保留 CommentCreated 事件钩子"
+    linked_tasks:
+    - S4
+    deferred_reason: 审核流水线待运营系统统一规划，V1 仅保留 CommentCreated 事件钩子
     test_layers:
       T1: optional
       T2: optional
       T3: optional
       T4: optional
     tests: []
-
-  # ─── 评论通知（V1 骨架） ───
   A22:
-    criteria: >
-      评论通知骨架：CommentCreated 事件触发通知 → 帖主收到"有人评论了你的帖子"；
-      回复时被回复人收到"有人回复了你的评论"；通知协调 notification 域；
-      V1 实现事件发布与通知消费骨架，具体推送渠道由 notification 域承接。
+    criteria: '评论通知骨架：CommentCreated 事件触发通知 → 帖主收到"有人评论了你的帖子"； 回复时被回复人收到"有人回复了你的评论"；通知协调
+      notification 域； V1 实现事件发布与通知消费骨架，具体推送渠道由 notification 域承接。
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
@@ -321,15 +291,13 @@ level_acceptance:
       T3: required
       T4: optional
     tests: []
-
-  # ─── 错误码规范 ───
   A23:
-    criteria: >
-      错误码由 errors.yaml 驱动：comment_not_found / comment_too_long /
-      comment_rate_limited / comment_like_duplicate 均在 errors.yaml 定义
-      l10n_key + user_message.zh/en；云侧 Handler 使用 generated.AppErrorFrom*；
-      端侧使用 ErrorCode.fromCode().toDisplayMessage(l10n)；
+    criteria: '错误码由 errors.yaml 驱动：comment_not_found / comment_too_long / comment_rate_limited
+      / comment_like_duplicate 均在 errors.yaml 定义 l10n_key + user_message.zh/en；云侧
+      Handler 使用 generated.AppErrorFrom*； 端侧使用 ErrorCode.fromCode().toDisplayMessage(l10n)；
       无硬编码 code 字符串或 user_message。
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
@@ -338,14 +306,12 @@ level_acceptance:
       T3: optional
       T4: optional
     tests: []
-
 tests:
   mock: []
   unit: []
   contract: []
   integration: []
   uat: []
-
 execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
+  local_gate: make gate
+  full_gate: make gate-full

@@ -1,0 +1,101 @@
+version: 1
+entity: ContactDiscoveryRecord
+
+fields:
+  - name: id
+    type: string
+    constraints: [PK]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: ownerAccountId
+    type: string
+    constraints: [NOT_NULL, FK_user_profiles_CASCADE]
+    classification: PII
+    log_policy: mask
+    api_exposure: drop
+    ops_exposure: mask
+    description: 发起发现的主控账号 ID（不暴露给匹配结果接收方）
+
+  - name: hashedPhones
+    type: "string[]"
+    constraints: [NOT_NULL]
+    classification: SECRET
+    log_policy: drop
+    api_exposure: drop
+    ops_exposure: drop
+    description: SHA256 哈希后的手机号列表（原文不存储）
+
+  - name: matchedSubAccountIds
+    type: "string[]"
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 匹配到的 SubAccount ID 列表（仅 subAccountId，不含 ownerAccountId）
+
+  - name: status
+    type: enum
+    enum_ref: DiscoveryStatus
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: matchCount
+    type: int
+    constraints: [NOT_NULL, DEFAULT_0]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: expireAt
+    type: timestamp
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 72 小时后自动过期
+
+  - name: createdAt
+    type: timestamp
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: completedAt
+    type: timestamp
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+enums:
+  DiscoveryStatus:
+    values: [pending, processing, completed, dismissed]
+    description: >
+      pending: 已提交待处理；
+      processing: 异步匹配中；
+      completed: 匹配完成；
+      dismissed: 用户主动忽略/删除
+
+state_machine:
+  field: status
+  transitions:
+    - from: pending
+      to: [processing]
+    - from: processing
+      to: [completed]
+    - from: completed
+      to: [dismissed]
+    - from: pending
+      to: [dismissed]

@@ -156,6 +156,30 @@ class ChatMockData {
 
   static final Map<String, List<Map<String, dynamic>>>
       _membersByConversation = {
+    'conv_001': [
+      {
+        '_id': 'cm_001_01',
+        'id': 'cm_001_01',
+        'conversationId': 'conv_001',
+        'userId': 'user_001',
+        'displayName': '我',
+        'avatarUrl': 'https://i.pravatar.cc/150?u=me',
+        'memberType': 'user',
+        'role': 'member',
+        'joinedAt': '2026-01-15T08:00:00Z',
+      },
+      {
+        '_id': 'cm_001_02',
+        'id': 'cm_001_02',
+        'conversationId': 'conv_001',
+        'userId': 'user_002',
+        'displayName': '李明',
+        'avatarUrl': 'https://i.pravatar.cc/150?u=liming',
+        'memberType': 'user',
+        'role': 'member',
+        'joinedAt': '2026-01-15T08:00:00Z',
+      },
+    ],
     'conv_002': [
       {
         '_id': 'cm_002_01',

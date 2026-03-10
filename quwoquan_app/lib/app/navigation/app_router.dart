@@ -415,6 +415,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return CallParticipantPickerPage(
             callId: extra?['callId'] as String?,
             maxParticipants: extra?['maxParticipants'] as int? ?? 32,
+            conversationId: extra?['conversationId'] as String?,
+            defaultSelectAll: extra?['defaultSelectAll'] as bool? ?? false,
           );
         },
       ),

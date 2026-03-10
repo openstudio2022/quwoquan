@@ -1,0 +1,36 @@
+{
+  "domainId": "fortune_astrology",
+  "contractId": "fortune_astrology.state_transition_v1",
+  "cases": [
+    {
+      "caseId": "intent_to_slot_fill",
+      "from": "S0_意图识别",
+      "event": "E_意图命中",
+      "expectTo": "S1_槽位补全"
+    },
+    {
+      "caseId": "slot_fill_ready_to_tool",
+      "from": "S1_槽位补全",
+      "event": "E_槽位已就绪",
+      "expectTo": "S2_工具执行"
+    },
+    {
+      "caseId": "slot_fill_missing_stays_same",
+      "from": "S1_槽位补全",
+      "event": "E_槽位缺失",
+      "expectTo": "S1_槽位补全"
+    },
+    {
+      "caseId": "tool_success_to_render",
+      "from": "S2_工具执行",
+      "event": "E_工具成功",
+      "expectTo": "S3_结果渲染"
+    },
+    {
+      "caseId": "render_complete_stays_render",
+      "from": "S3_结果渲染",
+      "event": "E_渲染完成",
+      "expectTo": "S3_结果渲染"
+    }
+  ]
+}

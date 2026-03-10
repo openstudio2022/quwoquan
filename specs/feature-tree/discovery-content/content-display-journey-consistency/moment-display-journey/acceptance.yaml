@@ -1,59 +1,85 @@
 version: 1
 archived: true
-archived_at: "2026-03-01T00:00:00Z"
-feature: "moment-display-journey"
-level: "L3_subfeature"
-template: "A1-A10"
+archived_at: '2026-03-01T00:00:00Z'
+feature: moment-display-journey
+level: "L3_story"
+template: A1-A10
 execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
+  local_gate: make gate
+  full_gate: make gate-full
 level_acceptance:
   A1:
-    criteria: "列表、媒体浏览器、作者详情数据与 post 一致"
+    criteria: 列表、媒体浏览器、作者详情数据与 post 一致
     status: implemented
-    linked_tasks: [D1, D2, D3, D4]
+    linked_tasks:
+    - D1
+    - D2
+    - D3
+    - D4
     tests:
-      - file: test/ui/discovery/post/widgets/moment_media_viewer_widget_test.dart
+    - file: test/ui/discovery/post/widgets/moment_media_viewer_widget_test.dart
   A2:
-    criteria: "关注/赞/收藏跨页面一致，重入后保持"
+    criteria: 关注/赞/收藏跨页面一致，重入后保持
     status: deferred
-    linked_tasks: [D10, D11, D12]
-    deferred_reason: "需 E2E 或 Patrol 回归"
+    linked_tasks:
+    - D10
+    - D11
+    - D12
+    deferred_reason: 需 E2E 或 Patrol 回归
   A3:
-    criteria: "作者详情关注变更返回同步"
+    criteria: 作者详情关注变更返回同步
     status: deferred
-    linked_tasks: [D11]
-    deferred_reason: "需集成测试验证返回同步"
+    linked_tasks:
+    - D11
+    deferred_reason: 需集成测试验证返回同步
   A4:
-    criteria: "媒体浏览器支持 feedPosts，二维导航（横向=同微趣图，上下=微趣列表）"
+    criteria: 媒体浏览器支持 feedPosts，二维导航（横向=同微趣图，上下=微趣列表）
     status: implemented
-    linked_tasks: [D2, D5, D6, D7]
+    linked_tasks:
+    - D2
+    - D5
+    - D6
+    - D7
     tests:
-      - file: test/ui/discovery/post/widgets/moment_media_viewer_widget_test.dart
+    - file: test/ui/discovery/post/widgets/moment_media_viewer_widget_test.dart
   A5:
-    criteria: "文字底部展示，3 行折叠，超出「全文」可展开可滚动"
+    criteria: 文字底部展示，3 行折叠，超出「全文」可展开可滚动
     status: implemented
-    linked_tasks: [D8, D9]
+    linked_tasks:
+    - D8
+    - D9
     tests:
-      - file: test/ui/discovery/post/widgets/moment_media_viewer_widget_test.dart
+    - file: test/ui/discovery/post/widgets/moment_media_viewer_widget_test.dart
   A6:
-    criteria: "Mock/Remote 切换后正确"
+    criteria: Mock/Remote 切换后正确
     status: deferred
-    linked_tasks: [D1]
-    deferred_reason: "需 appDataSourceMode 切换 + feed 断言"
+    linked_tasks:
+    - D1
+    deferred_reason: 需 appDataSourceMode 切换 + feed 断言
   A7:
-    criteria: "moment 顶栏仅返回+更多，works 顶栏保持完整"
+    criteria: moment 顶栏仅返回+更多，works 顶栏保持完整
     status: planned
-    linked_tasks: [D19, D20, D21]
+    linked_tasks:
+    - D19
+    - D20
+    - D21
   A8:
-    criteria: "works/moment 使用同源底栏实现，操作顺序/计数格式/回调一致"
+    criteria: works/moment 使用同源底栏实现，操作顺序/计数格式/回调一致
     status: planned
-    linked_tasks: [D18, D20, D21]
+    linked_tasks:
+    - D18
+    - D20
+    - D21
   A9:
-    criteria: "moment 点击图/视频进入侵入式后，除顶栏差异外与作品行为一致"
+    criteria: moment 点击图/视频进入侵入式后，除顶栏差异外与作品行为一致
     status: planned
-    linked_tasks: [D17, D20, D22]
+    linked_tasks:
+    - D17
+    - D20
+    - D22
   A10:
-    criteria: "回归通过（moment 图文、moment 视频、works 不回归）"
+    criteria: 回归通过（moment 图文、moment 视频、works 不回归）
     status: planned
-    linked_tasks: [D23, D24]
+    linked_tasks:
+    - D23
+    - D24

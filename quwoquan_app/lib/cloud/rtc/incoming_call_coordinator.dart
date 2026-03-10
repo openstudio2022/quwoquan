@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/rtc/callkit_service.dart';
 import 'package:quwoquan_app/cloud/rtc/rtc_signaling_client.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
 
 final callKitServiceProvider = Provider<CallKitService>((ref) {
   final service = CallKitService();
@@ -41,12 +42,23 @@ class IncomingCallCoordinator {
       _pendingCallType = event.payload['callType'] as String? ?? 'voice';
       final callerName =
           event.payload['callerName'] as String? ?? event.actorId ?? '';
-
-      callKit.showIncomingCall(
-        callId: event.callId,
-        callerName: callerName,
-        isVideo: _pendingCallType == 'video',
-      );
+      () async {
+        final settings = await ref.read(callSettingsRepositoryProvider)
+            .getCallSettings();
+        final initiatorRingtoneId =
+            event.payload['initiatorRingtoneId'] as String?;
+        final ringtoneId = settings.allowCallerRingtoneOverride &&
+                initiatorRingtoneId != null &&
+                initiatorRingtoneId.isNotEmpty
+            ? initiatorRingtoneId
+            : settings.defaultIncomingCallRingtoneId;
+        await callKit.showIncomingCall(
+          callId: event.callId,
+          callerName: callerName,
+          isVideo: _pendingCallType == 'video',
+          ringtoneId: ringtoneId,
+        );
+      }();
     });
 
     _callKitSub = callKit.actions.listen((action) {

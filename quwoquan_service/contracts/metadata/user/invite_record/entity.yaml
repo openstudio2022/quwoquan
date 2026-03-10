@@ -1,0 +1,30 @@
+version: 1
+domain: user
+entity_name: InviteRecord
+aggregate_root: false
+
+description: |
+  邀请归因记录。归属于发起邀请的 SubAccount（子账号）。
+  OwnerAccountId 仅内部审计使用，不对外暴露（保护主控账号隐私）。
+  邀请链接有效期 7 天，过期后不可接受。
+  创建操作幂等：同一 (inviterSubAccountId, channel, inviteePhoneHash) 复用已有记录。
+
+storage_backend: postgres
+cache_layer: redis
+cache_ttl_seconds: 3600
+
+business_rules:
+  - id: idempotent_creation
+    description: 同 (inviterSubAccountId, channel, inviteePhoneHash) 在 generated 状态下复用
+  - id: daily_limit
+    description: 每个 SubAccount 每天最多发起 1000 次邀请
+  - id: expiry
+    description: 邀请有效期 7 天（expireAt = generatedAt + 7d）
+  - id: owner_internal_only
+    description: inviterOwnerAccountId 仅内部审计，API 层不暴露
+
+ddd_layer_mapping:
+  domain_model: internal/domain/user/model
+  repository: internal/domain/user/repository
+  application: internal/application/user
+  adapter_rest: internal/adapter/rest/user

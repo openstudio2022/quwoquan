@@ -21,6 +21,30 @@ class SkillExecutionShell {
   final List<String> authorityDomains;
   final int freshnessHoursMax;
 
+  SkillExecutionShell copyWith({
+    String? problemClass,
+    int? maxIterations,
+    int? toolBudget,
+    int? variantBudget,
+    int? reflectionBudget,
+    String? providerPolicy,
+    List<String>? preferredProviders,
+    List<String>? authorityDomains,
+    int? freshnessHoursMax,
+  }) {
+    return SkillExecutionShell(
+      problemClass: problemClass ?? this.problemClass,
+      maxIterations: maxIterations ?? this.maxIterations,
+      toolBudget: toolBudget ?? this.toolBudget,
+      variantBudget: variantBudget ?? this.variantBudget,
+      reflectionBudget: reflectionBudget ?? this.reflectionBudget,
+      providerPolicy: providerPolicy ?? this.providerPolicy,
+      preferredProviders: preferredProviders ?? this.preferredProviders,
+      authorityDomains: authorityDomains ?? this.authorityDomains,
+      freshnessHoursMax: freshnessHoursMax ?? this.freshnessHoursMax,
+    );
+  }
+
   factory SkillExecutionShell.fromMap(
     Map<String, dynamic> map, {
     required Map<String, dynamic> frontmatter,
@@ -28,7 +52,9 @@ class SkillExecutionShell {
   }) {
     final shellMap =
         (map['execution_shell'] as Map?)?.cast<String, dynamic>() ??
+        (frontmatter['execution_shell'] as Map?)?.cast<String, dynamic>() ??
         (map['executionShell'] as Map?)?.cast<String, dynamic>() ??
+        (frontmatter['executionShell'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final searchPolicy =
         (frontmatter['searchPolicy'] as Map?)?.cast<String, dynamic>() ??

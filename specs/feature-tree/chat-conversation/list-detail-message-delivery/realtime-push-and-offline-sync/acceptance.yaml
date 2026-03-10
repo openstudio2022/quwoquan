@@ -1,16 +1,14 @@
 feature: realtime-push-and-offline-sync
-level: L3_subfeature
+level: "L3_story"
 archived: false
-
 execution:
   local_gate: make build && flutter test test/cloud/chat/ test/ui/chat/
   full_gate: make gate-full
-
 level_acceptance:
-  # ── F1 云侧事件接入 ──────────────────────────────────────
-
   R-A1:
-    criteria: "EventPublisher 接入 SendMessage：chat-service SendMessage 成功后发布 MessageSent 域事件到 Redis Pub/Sub channel `rt:conversation:{conversationId}`，事件 payload 含 conversationId/messageId/seq/senderId/type/content/media/timestamp，与 events.yaml 定义一致"
+    criteria: EventPublisher 接入 SendMessage：chat-service SendMessage 成功后发布 MessageSent
+      域事件到 Redis Pub/Sub channel `rt:conversation:{conversationId}`，事件 payload 含 conversationId/messageId/seq/senderId/type/content/media/timestamp，与
+      events.yaml 定义一致
     status: pending
     linked_tasks: []
     test_layers:
@@ -19,9 +17,9 @@ level_acceptance:
       T3: required
       T4: optional
     tests: []
-
   R-A2:
-    criteria: "EventPublisher 接入全量域事件：MessageRecalled/MemberJoined/MemberLeft/ConversationSettingsUpdated/ReadReceiptSent 均在对应操作成功后发布到 Redis Pub/Sub，事件含 eventId（UUID）用于下游去重"
+    criteria: EventPublisher 接入全量域事件：MessageRecalled/MemberJoined/MemberLeft/ConversationSettingsUpdated/ReadReceiptSent
+      均在对应操作成功后发布到 Redis Pub/Sub，事件含 eventId（UUID）用于下游去重
     status: pending
     linked_tasks: []
     test_layers:
@@ -30,11 +28,10 @@ level_acceptance:
       T3: required
       T4: optional
     tests: []
-
-  # ── F2 端侧自适应传输状态机 ──────────────────────────────
-
   R-A3:
-    criteria: "传输状态机三态切换：(a) App 启动默认进入 Long-polling 空闲态；(b) 进入 ChatDetailPage 时自动切换到 WebSocket 活跃态；(c) 离开 ChatDetailPage 且 120s 无消息时回落到 Long-polling；(d) App 进入后台时断开所有连接进入 Disconnected；(e) App 回到前台恢复 Long-polling + gap fill"
+    criteria: 传输状态机三态切换：(a) App 启动默认进入 Long-polling 空闲态；(b) 进入 ChatDetailPage 时自动切换到
+      WebSocket 活跃态；(c) 离开 ChatDetailPage 且 120s 无消息时回落到 Long-polling；(d) App 进入后台时断开所有连接进入
+      Disconnected；(e) App 回到前台恢复 Long-polling + gap fill
     status: pending
     linked_tasks: []
     test_layers:
@@ -43,9 +40,9 @@ level_acceptance:
       T3: required
       T4: required
     tests: []
-
   R-A4:
-    criteria: "配置热拉取：App 启动时从 `/v1/config/realtime` 拉取自适应参数（ws_idle_timeout_sec/poll_interval_sec/ws_heartbeat_sec 等），参数变更后无需发版即生效；拉取失败使用本地默认值"
+    criteria: 配置热拉取：App 启动时从 `/v1/config/realtime` 拉取自适应参数（ws_idle_timeout_sec/poll_interval_sec/ws_heartbeat_sec
+      等），参数变更后无需发版即生效；拉取失败使用本地默认值
     status: pending
     linked_tasks: []
     test_layers:
@@ -54,11 +51,10 @@ level_acceptance:
       T3: required
       T4: optional
     tests: []
-
-  # ── F3 WebSocket 活跃态 ──────────────────────────────────
-
   R-A5:
-    criteria: "WebSocket 建连与消息接收：(a) 进入 ChatDetailPage 后 ≤500ms 内建立 WebSocket 连接（含 JWT 鉴权）；(b) 订阅 `conversation/{id}` topic；(c) 对方发送消息后 ≤300ms（1v1 p99）/ ≤500ms（1000人群 p99）在当前聊天页实时展示新消息气泡"
+    criteria: WebSocket 建连与消息接收：(a) 进入 ChatDetailPage 后 ≤500ms 内建立 WebSocket 连接（含
+      JWT 鉴权）；(b) 订阅 `conversation/{id}` topic；(c) 对方发送消息后 ≤300ms（1v1 p99）/ ≤500ms（1000人群
+      p99）在当前聊天页实时展示新消息气泡
     status: pending
     linked_tasks: []
     test_layers:
@@ -67,9 +63,9 @@ level_acceptance:
       T3: required
       T4: required
     tests: []
-
   R-A6:
-    criteria: "WebSocket 心跳与断线重连：(a) 30s 发送 ping，收到 pong 确认连接存活；(b) 90s 无 pong 判定断线；(c) 断线后指数退避重连（1s→2s→4s→8s→16s→max 30s）；(d) 重连成功后携带 lastSeq 做 gap fill，缺失消息全部补全"
+    criteria: WebSocket 心跳与断线重连：(a) 30s 发送 ping，收到 pong 确认连接存活；(b) 90s 无 pong 判定断线；(c)
+      断线后指数退避重连（1s→2s→4s→8s→16s→max 30s）；(d) 重连成功后携带 lastSeq 做 gap fill，缺失消息全部补全
     status: pending
     linked_tasks: []
     test_layers:
@@ -78,9 +74,9 @@ level_acceptance:
       T3: required
       T4: required
     tests: []
-
   R-A7:
-    criteria: "WebSocket 降级：WebSocket 建连失败（代理拦截/防火墙）→ 停留 Long-polling → 60s 后重试 Upgrade → 成功升级后切换到 WebSocket；降级期间消息通过 Long-polling 正常接收，无丢失"
+    criteria: WebSocket 降级：WebSocket 建连失败（代理拦截/防火墙）→ 停留 Long-polling → 60s 后重试 Upgrade
+      → 成功升级后切换到 WebSocket；降级期间消息通过 Long-polling 正常接收，无丢失
     status: pending
     linked_tasks: []
     test_layers:
@@ -89,11 +85,10 @@ level_acceptance:
       T3: required
       T4: optional
     tests: []
-
-  # ── F4 Long-polling 空闲态 ──────────────────────────────
-
   R-A8:
-    criteria: "Long-polling inbox 更新：(a) 空闲态发起 `GET /v1/realtime/poll?topics=inbox,system&lastSeq=X&timeout=60`；(b) 有新消息时立即返回 inbox 更新（含 conversationId + lastSeq）→ 端侧更新角标和会话列表排序；(c) 超时 204 后立即重新 poll"
+    criteria: Long-polling inbox 更新：(a) 空闲态发起 `GET /v1/realtime/poll?topics=inbox,system&lastSeq=X&timeout=60`；(b)
+      有新消息时立即返回 inbox 更新（含 conversationId + lastSeq）→ 端侧更新角标和会话列表排序；(c) 超时 204 后立即重新
+      poll
     status: pending
     linked_tasks: []
     test_layers:
@@ -102,11 +97,10 @@ level_acceptance:
       T3: required
       T4: optional
     tests: []
-
-  # ── F5 ChatDetailPage 实时集成 ──────────────────────────
-
   R-A9:
-    criteria: "ChatDetailPage 接入 ChatMessageProvider：(a) 消息列表由 ChatMessageNotifier 驱动（替代本地 _messages 状态）；(b) 发送消息后立即乐观插入（status=sending），服务端确认后更新 status=sent + seq；(c) 发送失败显示红色感叹号 + 重试按钮"
+    criteria: ChatDetailPage 接入 ChatMessageProvider：(a) 消息列表由 ChatMessageNotifier
+      驱动（替代本地 _messages 状态）；(b) 发送消息后立即乐观插入（status=sending），服务端确认后更新 status=sent +
+      seq；(c) 发送失败显示红色感叹号 + 重试按钮
     status: pending
     linked_tasks: []
     test_layers:
@@ -115,9 +109,9 @@ level_acceptance:
       T3: required
       T4: required
     tests: []
-
   R-A10:
-    criteria: "Seq gap 自动修复：(a) ChatMessageNotifier 检测到收到的消息 seq 不连续（gap > 1）→ 自动调用 SyncMessages 补全缺失消息；(b) 补全后消息按 seq 正确排序展示；(c) 补全过程中 UI 无闪烁（增量插入）"
+    criteria: Seq gap 自动修复：(a) ChatMessageNotifier 检测到收到的消息 seq 不连续（gap > 1）→ 自动调用
+      SyncMessages 补全缺失消息；(b) 补全后消息按 seq 正确排序展示；(c) 补全过程中 UI 无闪烁（增量插入）
     status: pending
     linked_tasks: []
     test_layers:
@@ -126,9 +120,9 @@ level_acceptance:
       T3: required
       T4: optional
     tests: []
-
   R-A11:
-    criteria: "实时事件同步：(a) 对方撤回消息 → 实时更新气泡为「消息已撤回」；(b) 已读回执 → 实时更新双勾图标；(c) 会话设置变更 → 实时刷新 ChatSettingsPage；(d) 成员加入/离开 → 实时展示系统消息"
+    criteria: 实时事件同步：(a) 对方撤回消息 → 实时更新气泡为「消息已撤回」；(b) 已读回执 → 实时更新双勾图标；(c) 会话设置变更 →
+      实时刷新 ChatSettingsPage；(d) 成员加入/离开 → 实时展示系统消息
     status: pending
     linked_tasks: []
     test_layers:
@@ -137,11 +131,9 @@ level_acceptance:
       T3: required
       T4: optional
     tests: []
-
-  # ── F6 离线推送（APNs/FCM） ──────────────────────────────
-
   R-A12:
-    criteria: "FCM/APNs 推送注册：(a) App 启动成功获取 FCM token（Android）/ APNs token via FCM（iOS）；(b) token 上报到 user-service 绑定当前用户+设备；(c) 用户退出登录时注销 token；(d) token 自动刷新时重新上报"
+    criteria: FCM/APNs 推送注册：(a) App 启动成功获取 FCM token（Android）/ APNs token via FCM（iOS）；(b)
+      token 上报到 user-service 绑定当前用户+设备；(c) 用户退出登录时注销 token；(d) token 自动刷新时重新上报
     status: pending
     linked_tasks: []
     test_layers:
@@ -150,9 +142,9 @@ level_acceptance:
       T3: required
       T4: required
     tests: []
-
   R-A13:
-    criteria: "推送接收与导航：(a) App 后台收到推送通知显示「发送者：消息预览」；(b) 点击通知唤醒 App → 直接导航到对应 ChatDetailPage；(c) 导航后触发 后台→活跃 状态转换 → WebSocket 建连 + gap fill → 消息完整展示；(d) 免打扰会话不发送推送（仅角标+1）"
+    criteria: 推送接收与导航：(a) App 后台收到推送通知显示「发送者：消息预览」；(b) 点击通知唤醒 App → 直接导航到对应 ChatDetailPage；(c)
+      导航后触发 后台→活跃 状态转换 → WebSocket 建连 + gap fill → 消息完整展示；(d) 免打扰会话不发送推送（仅角标+1）
     status: pending
     linked_tasks: []
     test_layers:
@@ -161,11 +153,9 @@ level_acceptance:
       T3: required
       T4: required
     tests: []
-
-  # ── 弱网可靠性与一致性 ──────────────────────────────────
-
   R-A14:
-    criteria: "弱网断线恢复：(a) 模拟 100kbps 弱网下 WebSocket 断线后 ≤30s 内重连成功；(b) 重连后 gap fill 补全所有缺失消息（≤500 条/次，自动分页）；(c) 补全后消息按 seq 排序，无重复无遗漏；(d) 重连期间 UI 显示连接状态指示（「连接中...」）"
+    criteria: 弱网断线恢复：(a) 模拟 100kbps 弱网下 WebSocket 断线后 ≤30s 内重连成功；(b) 重连后 gap fill
+      补全所有缺失消息（≤500 条/次，自动分页）；(c) 补全后消息按 seq 排序，无重复无遗漏；(d) 重连期间 UI 显示连接状态指示（「连接中...」）
     status: pending
     linked_tasks: []
     test_layers:
@@ -174,13 +164,12 @@ level_acceptance:
       T3: required
       T4: required
     tests: []
-
-  # ── 部署灰度 ──────────────────────────────────────────
-
   R-A15:
-    criteria: "灰度部署：(a) integration 环境全量验证通过（R-A1~R-A14 全部 implemented）；(b) prod 灰度 10% 用户 24h 后指标达标（WebSocket 连接成功率 ≥95%、消息丢失率 <0.1%、推送送达率 ≥90%）扩至 50%→100%；(c) 回滚条件：连接成功率 <90% 或消息丢失率 >0.5% 或推送送达率 <80% 自动回滚"
+    criteria: 灰度部署：(a) integration 环境全量验证通过（R-A1~R-A14 全部 implemented）；(b) prod 灰度
+      10% 用户 24h 后指标达标（WebSocket 连接成功率 ≥95%、消息丢失率 <0.1%、推送送达率 ≥90%）扩至 50%→100%；(c)
+      回滚条件：连接成功率 <90% 或消息丢失率 >0.5% 或推送送达率 <80% 自动回滚
     status: pending
-    deferred_reason: ""
+    deferred_reason: ''
     linked_tasks: []
     test_layers:
       T1: optional

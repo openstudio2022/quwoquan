@@ -134,6 +134,28 @@ entities:
         ops_exposure: read
         description: active/archived/deleted
 
+      - name: originType
+        type: enum
+        enum_ref: ConversationOriginType
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: |
+          会话来源类型：
+          direct_init      - 直接创建（互关/群组等默认路径）
+          greeting_reply   - 由打招呼回复升级而来
+
+      - name: originRequestId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 升级来源的 GreetingRequest.id（originType=greeting_reply 时有值）
+
       - name: createdAt
         type: timestamp
         constraints: [NOT_NULL]

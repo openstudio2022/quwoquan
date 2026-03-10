@@ -13,7 +13,7 @@ import 'package:quwoquan_app/personal_assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/personal_assistant/skills/simple_skill_executor.dart';
 import 'package:quwoquan_app/personal_assistant/skills/skill_manifest.dart';
 import 'package:quwoquan_app/personal_assistant/tools/tool_registry.dart';
-import 'package:quwoquan_app/personal_assistant/tools/websearch_tool.dart';
+import 'package:quwoquan_app/personal_assistant/tools/tool_schema.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -25,7 +25,7 @@ void main() {
 
     setUp(() async {
       tempDir = await Directory.systemTemp.createTemp('pa_acceptance_vm_');
-      toolRegistry = AssistantToolRegistry()..register(WebSearchTool());
+      toolRegistry = AssistantToolRegistry()..register(_DeterministicWebSearchTool());
       final runtime = ReactRuntime(
         llmProvider: const HeuristicLocalLlmProvider(),
         toolRegistry: toolRegistry,
@@ -143,4 +143,46 @@ void main() {
       // HeuristicLocalLlmProvider 不生成 tool call，故不检测 toolStart/toolResult
     });
   });
+}
+
+class _DeterministicWebSearchTool implements AssistantTool {
+  @override
+  String get name => 'web_search';
+
+  @override
+  String get description => 'Deterministic web search stub for VM acceptance tests.';
+
+  @override
+  Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
+    final query = (arguments['query'] as String?)?.trim() ?? '';
+    if (query.isEmpty) {
+      return const AssistantToolResult(
+        success: false,
+        message: 'Missing query',
+        errorCode: AssistantErrorCode.invalidArguments,
+      );
+    }
+    return AssistantToolResult(
+      success: true,
+      message: '检索结果：杭州天气多云，出行建议优先地铁并关注晚高峰拥堵。',
+      data: <String, dynamic>{
+        'provider': 'stub',
+        'summary': '杭州天气多云，出行建议优先地铁并关注晚高峰拥堵。',
+        'raw': <String, dynamic>{
+          'results': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'title': '杭州天气预报',
+              'snippet': '今日多云，气温 15-23C，晚间有小雨概率。',
+              'url': 'https://example.com/weather/hangzhou',
+            },
+            <String, dynamic>{
+              'title': '杭州交通出行提示',
+              'snippet': '工作日晚高峰拥堵明显，建议错峰或地铁出行。',
+              'url': 'https://example.com/traffic/hangzhou',
+            },
+          ],
+        },
+      },
+    );
+  }
 }

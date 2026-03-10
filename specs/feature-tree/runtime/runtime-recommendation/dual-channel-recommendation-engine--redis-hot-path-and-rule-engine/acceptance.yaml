@@ -1,0 +1,61 @@
+version: 1
+feature: redis-hot-path-and-rule-engine
+level: "L3_story"
+archived: true
+archived_at: '2026-03-01T00:00:00Z'
+template: A1-A8
+tree_context:
+  feature_path: capability.runtime.feature.runtime-recommendation.subfeature.dual-channel-recommendation-engine.object.redis-hot-path-and-rule-engine
+  parent_path: capability.runtime.feature.runtime-recommendation.subfeature.dual-channel-recommendation-engine
+  acceptance_inherits_from: capability.runtime.feature.runtime-recommendation
+level_acceptance:
+  focus_groups:
+  - A1_functional
+  - A8_test_automation
+  notes: Redis 热路径实现 + 初期规则引擎（召回/排序/重排）。
+global_acceptance:
+  A1_functional:
+    scenarios:
+    - given: 用户上报 view 信号
+      when: POST /v1/content/feed/signal
+      then: session_signals 更新，exposed_set 记录，< 50ms
+    - given: 用户上报 like 信号
+      when: HotPath.RecordSignal
+      then: realtime_interest 标签权重 +1
+    - given: 用户上报 dislike 信号
+      when: HotPath.RecordSignal
+      then: negative_set 记录，过滤同类/同作者
+    - given: Engine 召回候选
+      when: 规则引擎排序（热度 + 新鲜度 + 实时信号）
+      then: 返回排序后列表
+    - given: Engine 重排
+      when: 去重（exposed_set）+ 负反馈过滤（negative_set）
+      then: 已曝光和负反馈内容不出现
+  A2_experience:
+  - 信号上报到偏好反映 < 200ms
+  - 已曝光内容不再出现
+  A3_service_governance:
+  - 规则参数可配置
+  A4_observability:
+  - 热路径延迟可监控
+  A5_product_ops:
+  - 运营可配置规则参数
+  A6_security_privacy:
+  - 用户行为数据不泄露
+  A7_contract_metadata_consistency:
+  - 热路径消费 recommend_impact 事件
+  A8_test_automation:
+  - 热路径契约测试（miniredis）
+  - 规则引擎单元测试
+tests:
+  contract:
+  - quwoquan_service/runtime/recommendation/tests/hotpath_contract_test.go
+  unit:
+  - quwoquan_service/runtime/recommendation/tests/rule_engine_test.go
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+legacy_merged_acceptance:
+- source_path: runtime/runtime-recommendation/dual-channel-recommendation-engine/redis-hot-path-and-rule-engine/ml-model-integration-and-ab-test
+  task_bucket: ml-model-integration-and-ab-test
+  migrated_as: L3_task

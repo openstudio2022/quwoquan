@@ -1,5 +1,5 @@
 feature: article-rich-content-blocks
-level: L3_subfeature
+level: "L3_story"
 template: A1-A4
 archived: false
 execution:
@@ -7,22 +7,33 @@ execution:
   full_gate: make gate-full
 level_acceptance:
   A1:
-    criteria: "fields.yaml 中 ArticleBlock schema 存在，make codegen-app 成功生成 article_block_dto.g.dart（含 DO NOT EDIT 头）"
+    criteria: fields.yaml 中 ArticleBlock schema 存在，make codegen-app 成功生成 article_block_dto.g.dart（含
+      DO NOT EDIT 头）
     status: pending
-    linked_tasks: [M1, C1]
+    linked_tasks:
+    - M1
+    - C1
     tests: []
   A2:
-    criteria: "ArticleBlockDto.fromMap() 正确解析 TextBlock（content）/ ImageBlock（url+widthFraction+floatSide+caption）/ QuoteBlock（content）"
+    criteria: ArticleBlockDto.fromMap() 正确解析 TextBlock（content）/ ImageBlock（url+widthFraction+floatSide+caption）/
+      QuoteBlock（content）
     status: pending
-    linked_tasks: [C1, T1]
+    linked_tasks:
+    - C1
+    - T1
     tests: []
   A3:
-    criteria: "ImageBlock 包含 widthFraction（half/third/full）、floatSide（left/right/none）、aspectRatio、caption 字段；宽高比超 9:16 时端侧截断"
+    criteria: ImageBlock 包含 widthFraction（half/third/full）、floatSide（left/right/none）、aspectRatio、caption
+      字段；宽高比超 9:16 时端侧截断
     status: pending
-    linked_tasks: [M1, T2]
+    linked_tasks:
+    - M1
+    - T2
     tests: []
   A4:
-    criteria: "ArticlePostDto.blocks 为 null 时端侧降级使用 body 字段渲染单页，不崩溃"
+    criteria: ArticlePostDto.blocks 为 null 时端侧降级使用 body 字段渲染单页，不崩溃
     status: pending
-    linked_tasks: [R1, T3]
+    linked_tasks:
+    - R1
+    - T3
     tests: []

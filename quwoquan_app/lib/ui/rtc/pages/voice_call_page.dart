@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,6 +16,7 @@ import 'package:quwoquan_app/ui/rtc/providers/call_timer_provider.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_controls_bar.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_duration_badge.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_quality_indicator.dart';
+import 'package:quwoquan_app/ui/rtc/widgets/participant_list_sheet.dart';
 
 class VoiceCallPage extends ConsumerStatefulWidget {
   const VoiceCallPage({
@@ -28,13 +31,38 @@ class VoiceCallPage extends ConsumerStatefulWidget {
 }
 
 class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
+  bool _controlsVisible = true;
+  Timer? _controlsHideTimer;
+
   @override
   void initState() {
     super.initState();
-    final timer = ref.read(callTimerProvider);
-    if (!timer.isRunning) {
-      ref.read(callTimerProvider.notifier).start();
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final timer = ref.read(callTimerProvider);
+      if (!timer.isRunning) {
+        ref.read(callTimerProvider.notifier).start();
+      }
+    });
+    _startControlsHideTimer();
+  }
+
+  @override
+  void dispose() {
+    _controlsHideTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startControlsHideTimer() {
+    _controlsHideTimer?.cancel();
+    _controlsHideTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted) setState(() => _controlsVisible = false);
+    });
+  }
+
+  void _toggleControls() {
+    setState(() => _controlsVisible = !_controlsVisible);
+    if (_controlsVisible) _startControlsHideTimer();
   }
 
   @override
@@ -60,63 +88,109 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) {
           ref.read(activeCallProvider.notifier).enterPipMode();
-          context.pop();
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go(AppRoutePaths.chat);
+          }
         }
       },
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        body: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                AppColors.overlayDark,
-                AppColors.overlayStrong,
-              ],
+        body: GestureDetector(
+          onTap: _toggleControls,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  AppColors.overlayDark,
+                  AppColors.overlayStrong,
+                ],
+              ),
             ),
-          ),
-          child: SafeArea(
-            bottom: false,
-            child: Stack(
-              children: [
-                Column(
-                  children: [
-                    SizedBox(height: AppSpacing.xl),
-                    const CallDurationBadge(),
-                    SizedBox(height: AppSpacing.xl),
-                    Expanded(
-                      child: Center(
-                        child: _buildParticipantAvatars(participants),
+            child: SafeArea(
+              bottom: false,
+              child: Stack(
+                children: [
+                  Column(
+                    children: [
+                      SizedBox(height: AppSpacing.xl),
+                      const CallDurationBadge(),
+                      SizedBox(height: AppSpacing.xl),
+                      Expanded(
+                        child: Center(
+                          child: _buildParticipantAvatars(participants),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Positioned(
+                    top: AppSpacing.sm,
+                    right: AppSpacing.md,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _TopActionButton(
+                          icon: CupertinoIcons.person_2,
+                          onTap: () {
+                            showModalBottomSheet<void>(
+                              context: context,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => ParticipantListSheet(
+                                maxParticipants:
+                                    session.session?.maxParticipants ?? 32,
+                                onInviteMore: () {
+                                  Navigator.of(context).pop();
+                                  context.push(
+                                    AppRoutePaths.rtcPickParticipants,
+                                    extra: <String, dynamic>{
+                                      'callId': widget.callId,
+                                      'maxParticipants':
+                                          session.session?.maxParticipants ?? 32,
+                                    },
+                                  );
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                        SizedBox(width: AppSpacing.sm),
+                        const CallQualityIndicator(),
+                      ],
+                    ),
+                  ),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: AnimatedOpacity(
+                      opacity: _controlsVisible ? 1.0 : 0.0,
+                      duration: const Duration(milliseconds: 250),
+                      child: IgnorePointer(
+                        ignoring: !_controlsVisible,
+                        child: CallControlsBar(
+                          callType: CallType.audio,
+                          autoHide: false,
+                          onHangup: () {
+                            ref.read(callSessionProvider.notifier).hangupCall();
+                            ref.read(callTimerProvider.notifier).reset();
+                          },
+                          onInvite: () {
+                            context.push(AppRoutePaths.rtcPickParticipants, extra: {
+                              'callId': widget.callId,
+                              'maxParticipants':
+                                  session.session?.maxParticipants ?? 32,
+                            });
+                          },
+                        ),
                       ),
                     ),
-                  ],
-                ),
-                Positioned(
-                  top: AppSpacing.sm,
-                  right: AppSpacing.md,
-                  child: const CallQualityIndicator(),
-                ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: CallControlsBar(
-                    callType: CallType.audio,
-                    onHangup: () {
-                      ref.read(callSessionProvider.notifier).hangupCall();
-                      ref.read(callTimerProvider.notifier).reset();
-                    },
-                    onInvite: () {
-                      context.push(AppRoutePaths.rtcPickParticipants, extra: {
-                        'callId': widget.callId,
-                        'maxParticipants':
-                            session.session?.maxParticipants ?? 32,
-                      });
-                    },
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -195,6 +269,36 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
           ),
         );
       }).toList(),
+    );
+  }
+}
+
+class _TopActionButton extends StatelessWidget {
+  const _TopActionButton({
+    required this.icon,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: AppSpacing.minInteractiveSize,
+        height: AppSpacing.minInteractiveSize,
+        decoration: BoxDecoration(
+          color: AppColors.overlayMedium,
+          borderRadius: BorderRadius.circular(AppSpacing.sm),
+        ),
+        child: Icon(
+          icon,
+          color: AppColors.white,
+          size: AppSpacing.iconMedium,
+        ),
+      ),
     );
   }
 }

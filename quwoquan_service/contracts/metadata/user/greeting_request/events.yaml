@@ -1,0 +1,46 @@
+version: 1
+entity: GreetingRequest
+
+events:
+  - name: GreetingRequestSent
+    description: 用户发送打招呼请求
+    producer: user-service
+    consumers: [notification-service]
+    channel: event_store
+    payload_fields: [id, requesterSubAccountId, targetSubAccountId, source, expireAt]
+    side_effects:
+      - target: notification-service
+        action: push_greeting_received
+        condition: "targetUser.allowStrangerGreeting == true"
+
+  - name: GreetingRequestReplied
+    description: 接收方回复打招呼，触发会话升级
+    producer: user-service
+    consumers: [chat-service, notification-service]
+    channel: event_store
+    payload_fields: [id, requesterSubAccountId, targetSubAccountId, promotedConversationId]
+    side_effects:
+      - target: chat-service
+        action: create_direct_conversation
+        note: 由 chat-service 消费事件后创建正式会话
+
+  - name: GreetingRequestIgnored
+    description: 接收方忽略打招呼
+    producer: user-service
+    consumers: []
+    channel: event_store
+    payload_fields: [id, requesterSubAccountId, targetSubAccountId, decisionAt]
+
+  - name: GreetingRequestCancelled
+    description: 发起方撤回打招呼
+    producer: user-service
+    consumers: [notification-service]
+    channel: event_store
+    payload_fields: [id, requesterSubAccountId, targetSubAccountId]
+
+  - name: GreetingRequestExpired
+    description: 打招呼请求超期（定时任务触发）
+    producer: user-service
+    consumers: []
+    channel: event_store
+    payload_fields: [id, requesterSubAccountId, targetSubAccountId, expireAt]

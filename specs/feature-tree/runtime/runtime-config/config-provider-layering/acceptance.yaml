@@ -1,40 +1,43 @@
 version: 1
-feature: "config-provider-layering"
-level: "L3_component"
-template: "A1-A8"
+feature: config-provider-layering
+level: "L3_story"
+template: A1-A8
 tree_context:
-  feature_level: "L3_component"
-  feature_path: "capability.runtime.feature.runtime-config.component.config-provider-layering"
-  parent_path: "capability.runtime.feature.runtime-config"
-  acceptance_inherits_from: "capability.runtime.feature.runtime-config"
+  feature_path: capability.runtime.feature.runtime-config.component.config-provider-layering
+  parent_path: capability.runtime.feature.runtime-config
+  acceptance_inherits_from: capability.runtime.feature.runtime-config
 level_acceptance:
-  focus_groups: [A1_functional, A3_service_governance, A7_contract_metadata_consistency, A8_test_automation]
-  notes: "配置分层加载能力与发布化接入能力。"
+  focus_groups:
+  - A1_functional
+  - A3_service_governance
+  - A7_contract_metadata_consistency
+  - A8_test_automation
+  notes: 配置分层加载能力与发布化接入能力。
 global_acceptance:
   A1_functional:
     scenarios:
-      - given: "存在 default + integration 两套配置"
-        when: "APP_ENV=integration 启动服务"
-        then: "最终运行配置=default 被 integration 覆盖后的结果"
-      - given: "容器设置 CONFIG_ROOT=/etc/qwq-config 且 CONFIG_VERSION=v2026.02.28.0"
-        when: "服务启动"
-        then: "按 default->env->version->env-vars 顺序加载"
-      - given: "存在环境变量覆盖项"
-        when: "服务启动"
-        then: "环境变量值覆盖文件配置"
+    - given: 存在 default + integration 两套配置
+      when: APP_ENV=integration 启动服务
+      then: 最终运行配置=default 被 integration 覆盖后的结果
+    - given: 容器设置 CONFIG_ROOT=/etc/qwq-config 且 CONFIG_VERSION=v2026.02.28.0
+      when: 服务启动
+      then: 按 default->env->version->env-vars 顺序加载
+    - given: 存在环境变量覆盖项
+      when: 服务启动
+      then: 环境变量值覆盖文件配置
   A3_service_governance:
-    - "高风险配置项定义清晰并强制灰度发布"
-    - "配置发布与镜像发布可解耦"
-    - "部署进程拓扑映射在 integration/prod 保持一致"
+  - 高风险配置项定义清晰并强制灰度发布
+  - 配置发布与镜像发布可解耦
+  - 部署进程拓扑映射在 integration/prod 保持一致
   A7_contract_metadata_consistency:
-    - "配置结构与运行时加载器字段一致"
-    - "每个服务均具备 default/local/integration/prod 目录结构"
+  - 配置结构与运行时加载器字段一致
+  - 每个服务均具备 default/local/integration/prod 目录结构
   A8_test_automation:
-    - "配置加载顺序与覆盖规则有单测"
-    - "local/integration/prod 三环境加载行为有集成测试"
-    - "门禁脚本可阻断目录缺失、非法 APP_ENV、缺失 CONFIG_VERSION 映射"
-    - "新建服务流程自动生成合规配置目录并通过门禁"
-    - "部署映射门禁可阻断 domain 重复归属和 integration/prod 拓扑漂移"
+  - 配置加载顺序与覆盖规则有单测
+  - local/integration/prod 三环境加载行为有集成测试
+  - 门禁脚本可阻断目录缺失、非法 APP_ENV、缺失 CONFIG_VERSION 映射
+  - 新建服务流程自动生成合规配置目录并通过门禁
+  - 部署映射门禁可阻断 domain 重复归属和 integration/prod 拓扑漂移
 execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
+  local_gate: make gate
+  full_gate: make gate-full

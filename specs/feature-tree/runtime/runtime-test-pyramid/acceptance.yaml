@@ -1,150 +1,175 @@
 version: 1
 feature: runtime-test-pyramid
-level: L2_feature
+level: "L2_feature"
 archived: true
-archived_at: "2026-02-26T00:00:00+08:00"
-
+archived_at: '2026-02-26T00:00:00+08:00'
 focus_groups:
-  - engineering
-  - platform
-
+- engineering
+- platform
 execution:
   environment: local + ci
   trigger: on_merge + pre-release
-
 acceptance_criteria:
+- id: A1
+  title: flutter test 纳入 PR gate
+  status: implemented
+  description: 'make gate 在本地（不设 QWQ_GATE_TESTS=1）和 CI 均执行 flutter test。
 
-  # ── Gate 绑定 ────────────────────────────────────────────────────
-  - id: A1
-    title: flutter test 纳入 PR gate
-    status: implemented
-    description: |
-      make gate 在本地（不设 QWQ_GATE_TESTS=1）和 CI 均执行 flutter test。
-      现有 6 个 L1a 测试全部通过。
-    verify: make gate (scope=app) 日志中出现 "All tests passed" 且无 "skip flutter test"
-    tests:
-      - file: scripts/gate_repo.sh
-        note: run_app() 第 32 行始终执行 flutter test test/cloud/ test/components/ test/ui/
+    现有 6 个 L1a 测试全部通过。
 
-  - id: A2
-    title: go test 纳入 PR gate
-    status: implemented
-    description: |
-      make gate (scope=service) 执行 go test ./services/content-service/...。
-      所有测试通过，包括 contract.yaml 声明的 go_func。
-    verify: gate.sh 日志中出现 "ok quwoquan_service/services/content-service/..."
-    tests:
-      - file: quwoquan_service/scripts/gate.sh
-        note: 第 621-624 行绑定 go test ./services/content-service/... -count=1 -timeout=120s
+    '
+  verify: make gate (scope=app) 日志中出现 "All tests passed" 且无 "skip flutter test"
+  tests:
+  - file: scripts/gate_repo.sh
+    note: run_app() 第 32 行始终执行 flutter test test/cloud/ test/components/ test/ui/
+- id: A2
+  title: go test 纳入 PR gate
+  status: implemented
+  description: 'make gate (scope=service) 执行 go test ./services/content-service/...。
 
-  - id: A3
-    title: L2 禁止 in-memory store
-    status: implemented
-    description: |
-      content-service contract tests 使用 testcontainers mongo:7。
-      禁止 persistence.NewPostStore(DefaultSeedPosts()) 出现在 tests/ 目录。
-    verify: |
-      go test ./services/content-service/tests/... 中 TestMain 启动 MongoDB container；
-      grep "NewPostStore" services/content-service/tests/ 返回空
-    tests:
-      - file: quwoquan_service/services/content-service/tests/testmain_test.go
-        note: 使用 testcontainers-go/modules/mongodb mongo:7，Docker 不可用时优雅 skip
+    所有测试通过，包括 contract.yaml 声明的 go_func。
 
-  - id: A4
-    title: contract.yaml go_func 全部已声明函数实现
-    status: deferred
-    description: |
-      contract.yaml 中 status=active 的 go_func 对应实际 Go 测试函数。
-      3 个 status=pending 的函数（TestBehaviorBatchEmpty / TestCounterFlush /
-      TestPostModerationFlow）依赖未上线的服务端功能，标记为 deferred。
-      gate go_func 存在性检查（T03）待上述功能上线后启用。
-    verify: gate.sh G7 变体检查通过，无 "go_func not implemented" 输出
-    deferred_reason: |
-      TestBehaviorBatchEmpty、TestCounterFlush、TestPostModerationFlow 对应
-      BatchFlush / Moderation 功能尚未上线。重启条件：对应功能合入 main 后。
-    tests:
-      - file: quwoquan_service/services/content-service/tests/post_crud_contract_test.go
-      - file: quwoquan_service/services/content-service/tests/post_feed_contract_test.go
-      - file: quwoquan_service/services/content-service/tests/post_behavior_contract_test.go
-      - file: quwoquan_service/services/content-service/tests/post_compat_contract_test.go
-      - file: quwoquan_service/services/content-service/tests/post_error_contract_test.go
+    '
+  verify: gate.sh 日志中出现 "ok quwoquan_service/services/content-service/..."
+  tests:
+  - file: quwoquan_service/scripts/gate.sh
+    note: 第 621-624 行绑定 go test ./services/content-service/... -count=1 -timeout=120s
+- id: A3
+  title: L2 禁止 in-memory store
+  status: implemented
+  description: 'content-service contract tests 使用 testcontainers mongo:7。
 
-  - id: A5
-    title: L1b Widget Tests 补齐
-    status: implemented
-    description: |
-      以下三个 widget test 文件存在且通过（路径已调整为 test/components/content/post/）：
-      - test/components/content/post/post_card_widget_test.dart
-      - test/components/content/post/video_post_card_widget_test.dart
-      - test/components/content/post/comment_input_bar_widget_test.dart
-    verify: flutter test test/components/content/post/ 全绿
-    tests:
-      - file: quwoquan_app/test/components/content/post/post_card_widget_test.dart
-      - file: quwoquan_app/test/components/content/post/video_post_card_widget_test.dart
-      - file: quwoquan_app/test/components/content/post/comment_input_bar_widget_test.dart
+    禁止 persistence.NewPostStore(DefaultSeedPosts()) 出现在 tests/ 目录。
 
-  - id: A6
-    title: L1c Journey Tests 补齐
-    status: implemented
-    description: |
-      以下三条旅程测试存在且通过（路径已调整为 test/ui/discovery/post/journeys/）：
-      1. DiscoveryPage → PhotoDetailPage 路由传参正确（testDiscoveryToDetailRouteParams）
-      2. 点赞乐观更新 → 429 回滚（testLikeOptimisticRollbackOnRateLimit）
-      3. 评论提交 → MockRepo 调用 + 评论数 +1（testCommentPostJourney）
-    verify: flutter test test/ui/discovery/post/journeys/ 全绿
-    tests:
-      - file: quwoquan_app/test/ui/discovery/post/journeys/discovery_post_feed_load_journey_test.dart
-      - file: quwoquan_app/test/ui/discovery/post/journeys/discovery_post_interaction_journey_test.dart
+    '
+  verify: 'go test ./services/content-service/tests/... 中 TestMain 启动 MongoDB container；
 
-  - id: A7
-    title: e2e.yaml patrol_flow 文件 warn 检查
-    status: implemented
-    description: |
-      make gate 对 e2e.yaml 中 patrol_flow 引用的文件做存在性检查。
-      文件不存在时输出 WARN 不 FAIL（L4 是渐进完善的）。
-    verify: make gate 输出中 e2e.yaml patrol_flow warn 可见但退出码为 0
-    tests:
-      - file: quwoquan_service/scripts/gate.sh
-        note: T38 实现 patrol_flow 文件存在性检查（warn 级）
+    grep "NewPostStore" services/content-service/tests/ 返回空
 
-  - id: A8
-    title: mock.yaml widget/journey 场景声明对应实际测试
-    status: deferred
-    description: |
-      mock.yaml 中 widget_scenarios 和 journey_scenarios 的每个 dart_func
-      在实际测试文件中有对应函数（路径已更新为 test/components/content/post/ 和
-      test/ui/discovery/post/journeys/，不再是 test/features/content/）。
-      gate dart_func 存在性自动检查待 T03 完成后启用。
-    verify: gate 新增 mock.yaml dart_func 存在性检查通过
-    deferred_reason: |
-      gate dart_func 存在性检查（T03）依赖 contract.yaml pending 函数先落地。
-      重启条件：T03 gate 增强实现后。
-    tests:
-      - file: quwoquan_app/test/components/content/post/post_card_widget_test.dart
-        note: 包含 testPhotoCardAuthorAvatarVisibility / testPhotoCardLikeButtonOptimistic
-      - file: quwoquan_app/test/components/content/post/video_post_card_widget_test.dart
-        note: 包含 testVideoCardDurationFormat
-      - file: quwoquan_app/test/components/content/post/comment_input_bar_widget_test.dart
-        note: 包含 testCommentInputBarSubmitDisabledWhenEmpty / testCommentInputBarSubmitEnabledAfterInput
-      - file: quwoquan_app/test/ui/discovery/post/journeys/discovery_post_interaction_journey_test.dart
-        note: 包含 testDiscoveryToDetailRouteParams / testLikeOptimisticRollbackOnRateLimit / testCommentPostJourney
+    '
+  tests:
+  - file: quwoquan_service/services/content-service/tests/testmain_test.go
+    note: 使用 testcontainers-go/modules/mongodb mongo:7，Docker 不可用时优雅 skip
+- id: A4
+  title: contract.yaml go_func 全部已声明函数实现
+  status: deferred
+  description: 'contract.yaml 中 status=active 的 go_func 对应实际 Go 测试函数。
 
-  - id: A9
-    title: L4 Patrol 依赖 + TestKeys + 3 个场景就绪
-    status: implemented
-    description: |
-      pubspec.yaml 包含 patrol: ^3.15.0 + integration_test；
-      lib/core/test_keys.dart 存在并声明核心 Widget keys（含 errorToast 声明）；
-      3 个 Patrol 测试文件存在（对应 e2e.yaml ui_journey 场景）；
-      patrol.yaml + integration_test/patrol_test_main.dart 已配置；
-      .github/workflows/e2e.yaml CI job 已就绪。
-      注：errorToast Key 已在 test_keys.dart 声明，Widget 打桩待 toast 组件提取后完成（T31）。
-    verify: flutter pub get 成功；test/patrol/content/ 下文件 ≥3
-    ci_strategy: advisory（pre-release 阻塞发布）
-    tests:
-      - file: quwoquan_app/test/patrol/discovery/feed_load_test.dart
-      - file: quwoquan_app/test/patrol/content/like_post_test.dart
-      - file: quwoquan_app/test/patrol/content/comment_post_test.dart
-      - file: quwoquan_app/patrol.yaml
-      - file: quwoquan_app/integration_test/patrol_test_main.dart
-      - file: .github/workflows/e2e.yaml
+    3 个 status=pending 的函数（TestBehaviorBatchEmpty / TestCounterFlush /
+
+    TestPostModerationFlow）依赖未上线的服务端功能，标记为 deferred。
+
+    gate go_func 存在性检查（T03）待上述功能上线后启用。
+
+    '
+  verify: gate.sh G7 变体检查通过，无 "go_func not implemented" 输出
+  deferred_reason: 'TestBehaviorBatchEmpty、TestCounterFlush、TestPostModerationFlow
+    对应
+
+    BatchFlush / Moderation 功能尚未上线。重启条件：对应功能合入 main 后。
+
+    '
+  tests:
+  - file: quwoquan_service/services/content-service/tests/post_crud_contract_test.go
+  - file: quwoquan_service/services/content-service/tests/post_feed_contract_test.go
+  - file: quwoquan_service/services/content-service/tests/post_behavior_contract_test.go
+  - file: quwoquan_service/services/content-service/tests/post_compat_contract_test.go
+  - file: quwoquan_service/services/content-service/tests/post_error_contract_test.go
+- id: A5
+  title: L1b Widget Tests 补齐
+  status: implemented
+  description: '以下三个 widget test 文件存在且通过（路径已调整为 test/components/content/post/）：
+
+    - test/components/content/post/post_card_widget_test.dart
+
+    - test/components/content/post/video_post_card_widget_test.dart
+
+    - test/components/content/post/comment_input_bar_widget_test.dart
+
+    '
+  verify: flutter test test/components/content/post/ 全绿
+  tests:
+  - file: quwoquan_app/test/components/content/post/post_card_widget_test.dart
+  - file: quwoquan_app/test/components/content/post/video_post_card_widget_test.dart
+  - file: quwoquan_app/test/components/content/post/comment_input_bar_widget_test.dart
+- id: A6
+  title: L1c Journey Tests 补齐
+  status: implemented
+  description: '以下三条旅程测试存在且通过（路径已调整为 test/ui/discovery/post/journeys/）：
+
+    1. DiscoveryPage → PhotoDetailPage 路由传参正确（testDiscoveryToDetailRouteParams）
+
+    2. 点赞乐观更新 → 429 回滚（testLikeOptimisticRollbackOnRateLimit）
+
+    3. 评论提交 → MockRepo 调用 + 评论数 +1（testCommentPostJourney）
+
+    '
+  verify: flutter test test/ui/discovery/post/journeys/ 全绿
+  tests:
+  - file: quwoquan_app/test/ui/discovery/post/journeys/discovery_post_feed_load_journey_test.dart
+  - file: quwoquan_app/test/ui/discovery/post/journeys/discovery_post_interaction_journey_test.dart
+- id: A7
+  title: e2e.yaml patrol_flow 文件 warn 检查
+  status: implemented
+  description: 'make gate 对 e2e.yaml 中 patrol_flow 引用的文件做存在性检查。
+
+    文件不存在时输出 WARN 不 FAIL（L4 是渐进完善的）。
+
+    '
+  verify: make gate 输出中 e2e.yaml patrol_flow warn 可见但退出码为 0
+  tests:
+  - file: quwoquan_service/scripts/gate.sh
+    note: T38 实现 patrol_flow 文件存在性检查（warn 级）
+- id: A8
+  title: mock.yaml widget/journey 场景声明对应实际测试
+  status: deferred
+  description: 'mock.yaml 中 widget_scenarios 和 journey_scenarios 的每个 dart_func
+
+    在实际测试文件中有对应函数（路径已更新为 test/components/content/post/ 和
+
+    test/ui/discovery/post/journeys/，不再是 test/features/content/）。
+
+    gate dart_func 存在性自动检查待 T03 完成后启用。
+
+    '
+  verify: gate 新增 mock.yaml dart_func 存在性检查通过
+  deferred_reason: 'gate dart_func 存在性检查（T03）依赖 contract.yaml pending 函数先落地。
+
+    重启条件：T03 gate 增强实现后。
+
+    '
+  tests:
+  - file: quwoquan_app/test/components/content/post/post_card_widget_test.dart
+    note: 包含 testPhotoCardAuthorAvatarVisibility / testPhotoCardLikeButtonOptimistic
+  - file: quwoquan_app/test/components/content/post/video_post_card_widget_test.dart
+    note: 包含 testVideoCardDurationFormat
+  - file: quwoquan_app/test/components/content/post/comment_input_bar_widget_test.dart
+    note: 包含 testCommentInputBarSubmitDisabledWhenEmpty / testCommentInputBarSubmitEnabledAfterInput
+  - file: quwoquan_app/test/ui/discovery/post/journeys/discovery_post_interaction_journey_test.dart
+    note: 包含 testDiscoveryToDetailRouteParams / testLikeOptimisticRollbackOnRateLimit
+      / testCommentPostJourney
+- id: A9
+  title: L4 Patrol 依赖 + TestKeys + 3 个场景就绪
+  status: implemented
+  description: 'pubspec.yaml 包含 patrol: ^3.15.0 + integration_test；
+
+    lib/core/test_keys.dart 存在并声明核心 Widget keys（含 errorToast 声明）；
+
+    3 个 Patrol 测试文件存在（对应 e2e.yaml ui_journey 场景）；
+
+    patrol.yaml + integration_test/patrol_test_main.dart 已配置；
+
+    .github/workflows/e2e.yaml CI job 已就绪。
+
+    注：errorToast Key 已在 test_keys.dart 声明，Widget 打桩待 toast 组件提取后完成（T31）。
+
+    '
+  verify: flutter pub get 成功；test/patrol/content/ 下文件 ≥3
+  ci_strategy: advisory（pre-release 阻塞发布）
+  tests:
+  - file: quwoquan_app/test/patrol/discovery/feed_load_test.dart
+  - file: quwoquan_app/test/patrol/content/like_post_test.dart
+  - file: quwoquan_app/test/patrol/content/comment_post_test.dart
+  - file: quwoquan_app/patrol.yaml
+  - file: quwoquan_app/integration_test/patrol_test_main.dart
+  - file: .github/workflows/e2e.yaml

@@ -1,0 +1,18 @@
+version: 1
+feature: proposal-generation-and-review-model
+level: "L3_story"
+template: A1-A8
+focus_groups: []
+tests:
+  mock: []
+  unit: []
+  contract: []
+  integration: []
+  uat: []
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+legacy_merged_acceptance:
+- source_path: assistant-run-learning/profile-proposal-apply-loop/proposal-create-review/proposal-generation-and-review-model/review-audit-trace-link
+  task_bucket: review-audit-trace-link
+  migrated_as: L3_task

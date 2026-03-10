@@ -1,50 +1,49 @@
 version: 1
-feature: "runtime-config"
+feature: runtime-config
 level: "L2_feature"
-template: "A1-A8"
+template: A1-A8
 tree_context:
-  feature_level: "L2_feature"
-  feature_path: "capability.runtime.feature.runtime-config"
-  parent_path: "capability.runtime"
-  acceptance_inherits_from: "capability.runtime"
+  feature_path: capability.runtime.feature.runtime-config
+  parent_path: capability.runtime
+  acceptance_inherits_from: capability.runtime
 level_acceptance:
   focus_groups:
-    - A1_functional
-    - A3_service_governance
-    - A7_contract_metadata_consistency
-    - A8_test_automation
-  notes: "配置分层与动态治理为优先验收点。"
+  - A1_functional
+  - A3_service_governance
+  - A7_contract_metadata_consistency
+  - A8_test_automation
+  notes: 配置分层与动态治理为优先验收点。
 global_acceptance:
   A1_functional:
     scenarios:
-      - given: "服务启动并注入 runtime-config"
-        when: "读取 sys.gateway.http_client.timeout_ms"
-        then: "返回有效配置值并携带来源信息"
+    - given: 服务启动并注入 runtime-config
+      when: 读取 sys.gateway.http_client.timeout_ms
+      then: 返回有效配置值并携带来源信息
   A2_experience:
-    - "配置变更不应导致请求链路可感知抖动"
+  - 配置变更不应导致请求链路可感知抖动
   A3_service_governance:
-    - "高风险配置支持灰度发布与一键回滚"
+  - 高风险配置支持灰度发布与一键回滚
   A4_observability:
-    - "配置读取失败与变更事件可被日志检索"
+  - 配置读取失败与变更事件可被日志检索
   A5_product_ops:
-    - "运营配置与系统配置边界清晰，不混用"
+  - 运营配置与系统配置边界清晰，不混用
   A6_security_privacy:
-    - "Secrets 不落普通日志，访问需审计"
+  - Secrets 不落普通日志，访问需审计
   A7_contract_metadata_consistency:
-    - "命名与分层规则与 configuration contract 一致"
+  - 命名与分层规则与 configuration contract 一致
   A8_test_automation:
-    - "provider/merge/watch/rollback 均有自动化测试"
+  - provider/merge/watch/rollback 均有自动化测试
 tests:
   mock:
-    - "quwoquan_service/runtime/config/tests/provider_mock_test.go"
+  - quwoquan_service/runtime/config/tests/provider_mock_test.go
   unit:
-    - "quwoquan_service/runtime/config/tests/merge_priority_unit_test.go"
+  - quwoquan_service/runtime/config/tests/merge_priority_unit_test.go
   contract:
-    - "quwoquan_service/contracts/tests/configuration_contract_test.go"
+  - quwoquan_service/contracts/tests/configuration_contract_test.go
   integration:
-    - "quwoquan_service/runtime/config/tests/configcenter_refresh_integration_test.go"
+  - quwoquan_service/runtime/config/tests/configcenter_refresh_integration_test.go
   uat:
-    - "UAT-RUNTIME-CONFIG-ROLLBACK-001"
+  - UAT-RUNTIME-CONFIG-ROLLBACK-001
 execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
+  local_gate: make gate
+  full_gate: make gate-full

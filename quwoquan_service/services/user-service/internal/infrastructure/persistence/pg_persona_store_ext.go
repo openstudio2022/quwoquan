@@ -44,3 +44,9 @@ func (s *PgPersonaStore) ActivateOne(ctx context.Context, id string) error {
 		`UPDATE personas SET is_active = true, updated_at = NOW() WHERE id = $1`, id)
 	return err
 }
+
+// FindBySubAccountID looks up a persona by its public sub_account_id.
+func (s *PgPersonaStore) FindBySubAccountID(ctx context.Context, subAccountID string) (*model.Persona, error) {
+	return scanPersona(s.pool.QueryRow(ctx,
+		`SELECT `+personaCols+` FROM personas WHERE sub_account_id = $1`, subAccountID))
+}

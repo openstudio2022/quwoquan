@@ -1,0 +1,13 @@
+version: 1
+entity: UserWork
+
+fields:
+  - { name: id,        type: string,    constraints: [PK, NOT_NULL],  api_exposure: public }
+  - { name: userId,    type: string,    constraints: [NOT_NULL],      api_exposure: public }
+  - { name: title,     type: string,    constraints: [NOT_NULL],      api_exposure: public }
+  - { name: coverUrl,  type: string,                                   api_exposure: public }
+  - { name: workType,  type: string,    constraints: [NOT_NULL],      api_exposure: public }
+  - { name: refId,     type: string,    constraints: [NOT_NULL],      api_exposure: public }
+  - { name: sortOrder, type: int,       constraints: [NOT_NULL],      api_exposure: public }
+  - { name: createdAt, type: timestamp, constraints: [NOT_NULL],      api_exposure: public }
+  - { name: updatedAt, type: timestamp, constraints: [NOT_NULL],      api_exposure: public }

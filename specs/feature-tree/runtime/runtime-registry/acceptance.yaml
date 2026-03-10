@@ -1,50 +1,49 @@
 version: 1
-feature: "runtime-registry"
+feature: runtime-registry
 level: "L2_feature"
 archived: true
-archived_at: "2026-03-01T00:00:00Z"
-template: "A1-A8"
+archived_at: '2026-03-01T00:00:00Z'
+template: A1-A8
 tree_context:
-  feature_level: "L2_feature"
-  feature_path: "capability.runtime.feature.runtime-registry"
-  parent_path: "capability.runtime"
-  acceptance_inherits_from: "capability.runtime"
+  feature_path: capability.runtime.feature.runtime-registry
+  parent_path: capability.runtime
+  acceptance_inherits_from: capability.runtime
 level_acceptance:
   focus_groups:
-    - A1_functional
-    - A3_service_governance
-    - A7_contract_metadata_consistency
-    - A8_test_automation
-  notes: "EntityRegistry 是框架层核心，所有 Repository/拦截链/codegen 依赖此组件。"
+  - A1_functional
+  - A3_service_governance
+  - A7_contract_metadata_consistency
+  - A8_test_automation
+  notes: EntityRegistry 是框架层核心，所有 Repository/拦截链/codegen 依赖此组件。
 global_acceptance:
   A1_functional:
     scenarios:
-      - given: "服务启动并加载 metadata v3 目录"
-        when: "调用 GetFieldPolicy('Post', 'title')"
-        then: "返回正确的 classification/log_policy/recommend_feature"
-      - given: "metadata 中未注册某实体"
-        when: "尝试获取该实体的 Repository"
-        then: "框架拦截报错，明确提示实体未注册"
+    - given: 服务启动并加载 metadata v3 目录
+      when: 调用 GetFieldPolicy('Post', 'title')
+      then: 返回正确的 classification/log_policy/recommend_feature
+    - given: metadata 中未注册某实体
+      when: 尝试获取该实体的 Repository
+      then: 框架拦截报错，明确提示实体未注册
   A2_experience:
-    - "metadata 加载失败时服务启动报错明确，不静默降级"
+  - metadata 加载失败时服务启动报错明确，不静默降级
   A3_service_governance:
-    - "metadata 加载时间 < 500ms，不阻塞服务启动关键路径"
+  - metadata 加载时间 < 500ms，不阻塞服务启动关键路径
   A4_observability:
-    - "metadata 加载完成后输出 entity 总数、字段总数日志"
+  - metadata 加载完成后输出 entity 总数、字段总数日志
   A5_product_ops:
-    - "运营可查看当前服务加载了哪些 entity 及其能力"
+  - 运营可查看当前服务加载了哪些 entity 及其能力
   A6_security_privacy:
-    - "classification=SECRET 的字段策略在 Registry 查询时可正确标记"
+  - classification=SECRET 的字段策略在 Registry 查询时可正确标记
   A7_contract_metadata_consistency:
-    - "Registry 加载的数据与 contracts/metadata/ v3 目录结构完全一致"
+  - Registry 加载的数据与 contracts/metadata/ v3 目录结构完全一致
   A8_test_automation:
-    - "loader/registry/query API 均有自动化单元测试"
+  - loader/registry/query API 均有自动化单元测试
 tests:
   unit:
-    - "quwoquan_service/runtime/registry/tests/loader_test.go"
-    - "quwoquan_service/runtime/registry/tests/registry_query_test.go"
+  - quwoquan_service/runtime/registry/tests/loader_test.go
+  - quwoquan_service/runtime/registry/tests/registry_query_test.go
   contract:
-    - "quwoquan_service/runtime/registry/tests/metadata_consistency_test.go"
+  - quwoquan_service/runtime/registry/tests/metadata_consistency_test.go
 execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
+  local_gate: make gate
+  full_gate: make gate-full

@@ -77,6 +77,8 @@
 
 === CONTEXT_DATA_START ===
 {{subagentRuns}}
+{{skillRuns}}
+{{aggregationState}}
 {{domainResults}}
 {{contextSlots}}
 {{webEvidencePacks}}

@@ -27,7 +27,7 @@
 
 | 文件 | 说明 |
 |------|------|
-| `feature-tree/` | L1-L5 目录化特性树，9 大能力域 |
+| `feature-tree/` | 三层目录化特性树（`L1_capability -> L2_feature -> L3_story`，Task 不入目录），9 大能力域 |
 | `feature-tree/tree_index.yaml` | L1 机器可读索引 |
 | `l1_index.yaml` | L1 目录与服务映射 |
 | `engineering_directory_manifest.yaml` | 机读约束与 verify 规则 |
@@ -58,7 +58,7 @@
 
 | 入口 | 说明 |
 |------|------|
-| `changes/feature_catalog.yaml` | 全量特性台账 |
-| `changes/feature_tree.yaml` | 目录层级特性树 |
-| `changes/<date>-<slug>/` | 特性实例（README/contracts_delta/acceptance/tasks/traceability） |
-| `changes/README.md` | 特性交付说明 |
+| `specs/feature-tree/tree_index.yaml` | 特性树结构索引唯一真相源 |
+| `specs/feature-tree/<l1>/<l2>/` | Story 四件套（`spec/design/tasks/acceptance`） |
+| `changes/feature_catalog.yaml` | 全量变更台账 |
+| `changes/README.md` | 变更与交付说明 |

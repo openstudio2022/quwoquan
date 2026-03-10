@@ -48,7 +48,6 @@ required_files:
   - "scripts/scaffold_feature_tree_from_yaml.sh"
   - "changes/README.md"
   - "changes/feature_catalog.yaml"
-  - "changes/feature_tree.yaml"
   - "specs/00_AGENT_MASTER_SPEC.md"
   - "specs/l1_index.yaml"
   - "specs/feature-tree/README.md"

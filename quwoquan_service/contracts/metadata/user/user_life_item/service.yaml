@@ -1,0 +1,16 @@
+version: 1
+entity: UserLifeItem
+
+service:
+  name: user-service
+  domain: user
+
+api_routes:
+  - method: GET
+    path: /v1/users/{userId}/life-items
+    operation: ListUserLifeItems
+    description: 用户生活记录列表
+
+consumers:
+  - name: app
+    capabilities: [read_life_items]

@@ -14,14 +14,14 @@ failures=0
 
 tasks_files=(
   "$ROOT/specs/feature-tree/runtime/runtime-config/config-provider-layering/tasks.md"
-  "$ROOT/specs/feature-tree/runtime/runtime-config/config-provider-layering/environment-process-domain-mapping/tasks.md"
-  "$ROOT/specs/feature-tree/platform-ops-governance/config-and-reliability-governance/config-source-governance/risky-config-gray-release/tasks.md"
+  "$ROOT/specs/feature-tree/runtime/runtime-config/config-provider-layering--environment-process-domain-mapping/tasks.md"
+  "$ROOT/specs/feature-tree/platform-ops-governance/config-and-reliability-governance/config-source-governance--risky-config-gray-release/tasks.md"
 )
 
 acceptance_files=(
   "$ROOT/specs/feature-tree/runtime/runtime-config/config-provider-layering/acceptance.yaml"
-  "$ROOT/specs/feature-tree/runtime/runtime-config/config-provider-layering/environment-process-domain-mapping/acceptance.yaml"
-  "$ROOT/specs/feature-tree/platform-ops-governance/config-and-reliability-governance/config-source-governance/risky-config-gray-release/acceptance.yaml"
+  "$ROOT/specs/feature-tree/runtime/runtime-config/config-provider-layering--environment-process-domain-mapping/acceptance.yaml"
+  "$ROOT/specs/feature-tree/platform-ops-governance/config-and-reliability-governance/config-source-governance--risky-config-gray-release/acceptance.yaml"
 )
 
 for f in "${tasks_files[@]}"; do

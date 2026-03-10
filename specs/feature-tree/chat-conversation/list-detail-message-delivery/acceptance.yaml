@@ -1,16 +1,12 @@
 feature: list-detail-message-delivery
-level: L2
+level: "L2_feature"
 archived: false
-
 execution:
   local_gate: make build && flutter test test/cloud/chat/ test/ui/chat/
   full_gate: make gate-full
-
 level_acceptance:
-  # ── 消息有序投递（spec §6 M-A1~M-A10）──────────────────
-
   M-A1:
-    criteria: "SendMessage 返回 seq，per-conversation seq 严格单调递增；并发 100 条消息 seq 无重复无跳跃"
+    criteria: SendMessage 返回 seq，per-conversation seq 严格单调递增；并发 100 条消息 seq 无重复无跳跃
     status: implemented
     linked_tasks: []
     test_layers:
@@ -19,10 +15,10 @@ level_acceptance:
       T3: required
       T4: optional
     tests:
-      - quwoquan_service/services/chat-service/tests/message_crud_contract_test.go
-
+    - quwoquan_service/services/chat-service/tests/message_crud_contract_test.go
   M-A2:
-    criteria: "clientMsgId 幂等：同一 clientMsgId 重复发送 3 次，服务端仅存储 1 条消息并返回相同 messageId + seq"
+    criteria: clientMsgId 幂等：同一 clientMsgId 重复发送 3 次，服务端仅存储 1 条消息并返回相同 messageId +
+      seq
     status: implemented
     linked_tasks: []
     test_layers:
@@ -31,10 +27,9 @@ level_acceptance:
       T3: required
       T4: optional
     tests:
-      - quwoquan_service/services/chat-service/tests/message_crud_contract_test.go
-
+    - quwoquan_service/services/chat-service/tests/message_crud_contract_test.go
   M-A3:
-    criteria: "1v1 消息 WebSocket 实时推送 ≤300ms p99（依赖 realtime-push-and-offline-sync 实施）"
+    criteria: 1v1 消息 WebSocket 实时推送 ≤300ms p99（依赖 realtime-push-and-offline-sync 实施）
     status: pending
     blocked_by: realtime-push-and-offline-sync
     linked_tasks: []
@@ -44,9 +39,9 @@ level_acceptance:
       T3: required
       T4: required
     tests: []
-
   M-A4:
-    criteria: "1000 人群消息 WebSocket 推送 ≤500ms p99（依赖 realtime-push-and-offline-sync + large-group-fanout 实施）"
+    criteria: 1000 人群消息 WebSocket 推送 ≤500ms p99（依赖 realtime-push-and-offline-sync
+      + large-group-fanout 实施）
     status: pending
     blocked_by: realtime-push-and-offline-sync
     linked_tasks: []
@@ -56,9 +51,8 @@ level_acceptance:
       T3: required
       T4: required
     tests: []
-
   M-A5:
-    criteria: "离线 500 条消息同步 ≤3s：SyncMessages(lastSeq) 返回 gap 消息列表 + hasMore，客户端分页拉取"
+    criteria: 离线 500 条消息同步 ≤3s：SyncMessages(lastSeq) 返回 gap 消息列表 + hasMore，客户端分页拉取
     status: implemented
     linked_tasks: []
     test_layers:
@@ -67,10 +61,9 @@ level_acceptance:
       T3: required
       T4: optional
     tests:
-      - quwoquan_service/services/chat-service/tests/message_sync_contract_test.go
-
+    - quwoquan_service/services/chat-service/tests/message_sync_contract_test.go
   M-A6:
-    criteria: "消息按 seq 排序展示：乱序到达仍按 seq 正确排序；端侧消息列表禁止按 timestamp 排序"
+    criteria: 消息按 seq 排序展示：乱序到达仍按 seq 正确排序；端侧消息列表禁止按 timestamp 排序
     status: implemented
     linked_tasks: []
     test_layers:
@@ -79,10 +72,10 @@ level_acceptance:
       T3: optional
       T4: optional
     tests:
-      - quwoquan_app/test/ui/chat/widgets/chat_detail_page_widget_test.dart
-
+    - quwoquan_app/test/ui/chat/widgets/chat_detail_page_widget_test.dart
   M-A7:
-    criteria: "已读回执：(a) ≤50 人群 receiptEnabled=true 时 MarkAsRead 写入回执 + UI 显示双勾；(b) >50 人群不写入回执 + UI 显示单勾"
+    criteria: 已读回执：(a) ≤50 人群 receiptEnabled=true 时 MarkAsRead 写入回执 + UI 显示双勾；(b)
+      >50 人群不写入回执 + UI 显示单勾
     status: implemented
     linked_tasks: []
     test_layers:
@@ -91,11 +84,11 @@ level_acceptance:
       T3: required
       T4: optional
     tests:
-      - quwoquan_app/test/ui/chat/widgets/chat_receipt_ui_widget_test.dart
-      - quwoquan_service/services/chat-service/tests/message_crud_contract_test.go
-
+    - quwoquan_app/test/ui/chat/widgets/chat_receipt_ui_widget_test.dart
+    - quwoquan_service/services/chat-service/tests/message_crud_contract_test.go
   M-A8:
-    criteria: "端云 metadata 字段一致：Message/Conversation/ConversationMember/ConversationUserState/MessageReceipt 字段与 fields.yaml 完全对齐"
+    criteria: 端云 metadata 字段一致：Message/Conversation/ConversationMember/ConversationUserState/MessageReceipt
+      字段与 fields.yaml 完全对齐
     status: implemented
     linked_tasks: []
     test_layers:
@@ -104,11 +97,11 @@ level_acceptance:
       T3: optional
       T4: optional
     tests:
-      - quwoquan_app/test/cloud/chat/dto/contract/message_dto_contract_test.dart
-      - quwoquan_app/test/cloud/chat/dto/contract/conversation_dto_contract_test.dart
-
+    - quwoquan_app/test/cloud/chat/dto/contract/message_dto_contract_test.dart
+    - quwoquan_app/test/cloud/chat/dto/contract/conversation_dto_contract_test.dart
   M-A9:
-    criteria: "ListMessages 支持 afterSeq/beforeSeq 参数分页：afterSeq=100 返回 seq>100 的消息，beforeSeq=200 返回 seq<200 的消息"
+    criteria: ListMessages 支持 afterSeq/beforeSeq 参数分页：afterSeq=100 返回 seq>100 的消息，beforeSeq=200
+      返回 seq<200 的消息
     status: implemented
     linked_tasks: []
     test_layers:
@@ -117,10 +110,10 @@ level_acceptance:
       T3: required
       T4: optional
     tests:
-      - quwoquan_service/services/chat-service/tests/message_crud_contract_test.go
-
+    - quwoquan_service/services/chat-service/tests/message_crud_contract_test.go
   M-A10:
-    criteria: "ConversationUserState 正确维护 unreadCount：发送消息后其他成员 unreadCount+1，MarkAsRead 后 unreadCount 重算"
+    criteria: ConversationUserState 正确维护 unreadCount：发送消息后其他成员 unreadCount+1，MarkAsRead
+      后 unreadCount 重算
     status: implemented
     linked_tasks: []
     test_layers:
@@ -129,12 +122,9 @@ level_acceptance:
       T3: required
       T4: optional
     tests:
-      - quwoquan_service/services/chat-service/tests/message_crud_contract_test.go
-
-  # ── L3 子特性交付状态汇总 ──────────────────────────────
-
+    - quwoquan_service/services/chat-service/tests/message_crud_contract_test.go
   M-A11:
-    criteria: "voice-message L3 交付完成：语音消息端到端闭环（录音→上传→发送→播放→离线队列）全部 acceptance implemented"
+    criteria: voice-message L3 交付完成：语音消息端到端闭环（录音→上传→发送→播放→离线队列）全部 acceptance implemented
     status: implemented
     linked_tasks: []
     test_layers:
@@ -143,9 +133,8 @@ level_acceptance:
       T3: required
       T4: required
     tests: []
-
   M-A12:
-    criteria: "rich-media-message L3 交付完成：视频/文件/图片/Emoji 端到端闭环全部 acceptance implemented"
+    criteria: rich-media-message L3 交付完成：视频/文件/图片/Emoji 端到端闭环全部 acceptance implemented
     status: pending
     blocked_by: rich-media-message
     linked_tasks: []
@@ -155,9 +144,9 @@ level_acceptance:
       T3: required
       T4: required
     tests: []
-
   M-A13:
-    criteria: "realtime-push-and-offline-sync L3 交付完成：WebSocket 实时推送 + Long-polling + 离线推送 + gap fill 全部 acceptance implemented"
+    criteria: realtime-push-and-offline-sync L3 交付完成：WebSocket 实时推送 + Long-polling
+      + 离线推送 + gap fill 全部 acceptance implemented
     status: pending
     blocked_by: realtime-push-and-offline-sync
     linked_tasks: []
@@ -167,9 +156,9 @@ level_acceptance:
       T3: required
       T4: required
     tests: []
-
   M-A14:
-    criteria: "message-interaction-polish L3 交付完成：引用回复 + @提及 + 语音听筒/倍速 + 数据源统一全部 acceptance implemented"
+    criteria: message-interaction-polish L3 交付完成：引用回复 + @提及 + 语音听筒/倍速 + 数据源统一全部 acceptance
+      implemented
     status: pending
     blocked_by: message-interaction-polish
     linked_tasks: []
@@ -179,11 +168,9 @@ level_acceptance:
       T3: required
       T4: required
     tests: []
-
-  # ── 灰度与生产就绪 ──────────────────────────────────
-
   M-A15:
-    criteria: "全量灰度就绪：(a) M-A1~M-A14 全部 implemented；(b) T1~T4 四层测试证据齐全；(c) integration 全量验证 → prod 灰度 10%→50%→100%"
+    criteria: 全量灰度就绪：(a) M-A1~M-A14 全部 implemented；(b) T1~T4 四层测试证据齐全；(c) integration
+      全量验证 → prod 灰度 10%→50%→100%
     status: pending
     linked_tasks: []
     test_layers:

@@ -61,8 +61,11 @@ class _MultiToolLlm implements AssistantLlmProvider {
 
       onDelta?.call('第 $planCallCount 轮推理中...');
 
-      // Round 1: call web_search
-      if (planCallCount == 1 && availableTools.contains('web_search')) {
+      final hasWebSearch = _hasExecutedTool(messages, 'web_search');
+      final hasWebFetch = _hasExecutedTool(messages, 'web_fetch');
+
+      // First retrieval step: search the web.
+      if (!hasWebSearch && availableTools.contains('web_search')) {
         return AssistantModelOutput(
           text: jsonEncode(<String, dynamic>{
             'contractVersion': 'assistant_turn_v4',
@@ -84,8 +87,8 @@ class _MultiToolLlm implements AssistantLlmProvider {
         );
       }
 
-      // Round 2: call web_fetch to deep-read the first search result
-      if (planCallCount == 2 && availableTools.contains('web_fetch')) {
+      // Second retrieval step: deep-read the authoritative result.
+      if (hasWebSearch && !hasWebFetch && availableTools.contains('web_fetch')) {
         return AssistantModelOutput(
           text: jsonEncode(<String, dynamic>{
             'contractVersion': 'assistant_turn_v4',
@@ -146,6 +149,33 @@ class _MultiToolLlm implements AssistantLlmProvider {
       }),
     );
   }
+}
+
+bool _hasExecutedTool(List<Map<String, dynamic>> messages, String toolName) {
+  for (final message in messages) {
+    if ((message['role'] as String?) == 'assistant') {
+      final toolCalls = message['tool_calls'];
+      if (toolCalls is List) {
+        for (final item in toolCalls.whereType<Map>()) {
+          final function =
+              (item['function'] as Map?)?.cast<String, dynamic>() ??
+              const <String, dynamic>{};
+          final name = (function['name'] as String?)?.trim() ?? '';
+          if (name == toolName) {
+            return true;
+          }
+        }
+      }
+    }
+    if ((message['role'] as String?) == 'tool') {
+      final content = (message['content'] as String?) ?? '';
+      if (content.contains('"toolName":"$toolName"') ||
+          content.contains('"toolName": "$toolName"')) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 void main() {

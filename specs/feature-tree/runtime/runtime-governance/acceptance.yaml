@@ -1,48 +1,51 @@
 version: 1
-feature: "runtime-governance"
+feature: runtime-governance
 level: "L2_feature"
 archived: true
-archived_at: "2026-03-01T00:00:00Z"
-template: "A1-A8"
+archived_at: '2026-03-01T00:00:00Z'
+template: A1-A8
 tree_context:
-  feature_level: "L2_feature"
-  feature_path: "capability.runtime.feature.runtime-governance"
-  parent_path: "capability.runtime"
-  acceptance_inherits_from: "capability.runtime"
+  feature_path: capability.runtime.feature.runtime-governance
+  parent_path: capability.runtime
+  acceptance_inherits_from: capability.runtime
 level_acceptance:
-  focus_groups: [A1_functional, A3_service_governance, A4_observability, A8_test_automation]
-  notes: "治理策略引擎与生命周期控制为重点。"
+  focus_groups:
+  - A1_functional
+  - A3_service_governance
+  - A4_observability
+  - A8_test_automation
+  notes: 治理策略引擎与生命周期控制为重点。
 global_acceptance:
   A1_functional:
     scenarios:
-      - given: "服务接入 runtime-governance"
-        when: "下游出现高错误率与高延迟"
-        then: "熔断与降级策略按配置生效"
+    - given: 服务接入 runtime-governance
+      when: 下游出现高错误率与高延迟
+      then: 熔断与降级策略按配置生效
   A2_experience:
-    - "降级路径确保核心功能可用"
+  - 降级路径确保核心功能可用
   A3_service_governance:
-    - "策略支持灰度发布与快速回滚"
+  - 策略支持灰度发布与快速回滚
   A4_observability:
-    - "策略触发事件具备日志与指标"
+  - 策略触发事件具备日志与指标
   A5_product_ops:
-    - "关键策略变更可供运营侧感知风险"
+  - 关键策略变更可供运营侧感知风险
   A6_security_privacy:
-    - "治理配置与审计信息访问受控"
+  - 治理配置与审计信息访问受控
   A7_contract_metadata_consistency:
-    - "策略项与治理 contract 一致"
+  - 策略项与治理 contract 一致
   A8_test_automation:
-    - "策略引擎各模块自动化测试完整"
+  - 策略引擎各模块自动化测试完整
 tests:
   mock:
-    - "quwoquan_service/runtime/governance/tests/policy_mock_test.go"
+  - quwoquan_service/runtime/governance/tests/policy_mock_test.go
   unit:
-    - "quwoquan_service/runtime/governance/tests/retry_circuit_rate_unit_test.go"
+  - quwoquan_service/runtime/governance/tests/retry_circuit_rate_unit_test.go
   contract:
-    - "quwoquan_service/contracts/tests/service_governance_contract_test.go"
+  - quwoquan_service/contracts/tests/service_governance_contract_test.go
   integration:
-    - "quwoquan_service/runtime/governance/tests/http_mq_policy_integration_test.go"
+  - quwoquan_service/runtime/governance/tests/http_mq_policy_integration_test.go
   uat:
-    - "UAT-RUNTIME-GOVERNANCE-ROLLBACK-001"
+  - UAT-RUNTIME-GOVERNANCE-ROLLBACK-001
 execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
+  local_gate: make gate
+  full_gate: make gate-full

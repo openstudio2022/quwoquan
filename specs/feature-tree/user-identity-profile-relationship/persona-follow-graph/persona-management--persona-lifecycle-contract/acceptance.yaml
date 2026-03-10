@@ -1,0 +1,18 @@
+version: 1
+feature: persona-lifecycle-contract
+level: "L3_story"
+template: A1-A8
+focus_groups: []
+tests:
+  mock: []
+  unit: []
+  contract: []
+  integration: []
+  uat: []
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+legacy_merged_acceptance:
+- source_path: user-identity-profile-relationship/persona-follow-graph/persona-management/persona-lifecycle-contract/persona-activation-guard
+  task_bucket: persona-activation-guard
+  migrated_as: L3_task

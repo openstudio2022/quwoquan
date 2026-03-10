@@ -2,13 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_detail_page.dart';
 
-Widget _scopedApp({ChatRepository? mock}) {
+Widget _scopedApp({
+  ChatRepository? mock,
+  RelationshipCapabilityRepository? capabilityRepository,
+}) {
   final repo = mock ?? MockChatRepository();
   return ProviderScope(
-    overrides: [chatRepositoryProvider.overrideWithValue(repo)],
+    overrides: [
+      chatRepositoryProvider.overrideWithValue(repo),
+      relationshipCapabilityRepositoryProvider.overrideWithValue(
+        capabilityRepository ?? _SameInterestCapabilityRepository(),
+      ),
+    ],
     child: MaterialApp(
       home: Scaffold(
         body: ChatDetailPage(
@@ -40,6 +49,25 @@ void main() {
 
       expect(find.byType(ChatDetailPage), findsOneWidget);
       expect(find.byType(Scaffold), findsWidgets);
+    });
+
+    testWidgets('非同好显示加同好关系条且不展示通话入口', (tester) async {
+      await tester.pumpWidget(
+        _scopedApp(
+          capabilityRepository: _FollowingOnlyCapabilityRepository(),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('成为同好后可直接发起语音和视频通话'), findsOneWidget);
+      expect(find.text('加同好'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.add).first);
+      await tester.pump();
+
+      expect(find.text('语音通话'), findsNothing);
+      expect(find.text('视频通话'), findsNothing);
     });
   });
 
@@ -83,6 +111,18 @@ void main() {
       } else {
         expect(find.byType(ChatDetailPage), findsOneWidget);
       }
+    });
+
+    testWidgets('同好打开更多面板后展示语音和视频通话入口', (tester) async {
+      await tester.pumpWidget(_scopedApp());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byIcon(Icons.add).first);
+      await tester.pump();
+
+      expect(find.text('语音通话'), findsOneWidget);
+      expect(find.text('视频通话'), findsOneWidget);
     });
   });
 
@@ -131,5 +171,43 @@ class _EmptyMessagesChatRepository extends MockChatRepository {
     int limit = 20,
   }) async {
     return [];
+  }
+}
+
+class _SameInterestCapabilityRepository extends RelationshipCapabilityRepository {
+  @override
+  Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
+    return RelationshipCapabilityDto.fromMap(<String, dynamic>{
+      'viewerSubAccountId': 'user_001',
+      'targetSubAccountId': targetUserId,
+      'relationTier': 'same_interest',
+      'canGreet': false,
+      'canOpenConversation': true,
+      'canAddSameInterest': true,
+      'canSetCloseFriend': true,
+      'canStartVoiceCall': true,
+      'canStartVideoCall': true,
+      'isBlocked': false,
+      'isBlockedBy': false,
+    });
+  }
+}
+
+class _FollowingOnlyCapabilityRepository extends RelationshipCapabilityRepository {
+  @override
+  Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
+    return RelationshipCapabilityDto.fromMap(<String, dynamic>{
+      'viewerSubAccountId': 'user_001',
+      'targetSubAccountId': targetUserId,
+      'relationTier': 'following_only',
+      'canGreet': true,
+      'canOpenConversation': false,
+      'canAddSameInterest': false,
+      'canSetCloseFriend': false,
+      'canStartVoiceCall': false,
+      'canStartVideoCall': false,
+      'isBlocked': false,
+      'isBlockedBy': false,
+    });
   }
 }

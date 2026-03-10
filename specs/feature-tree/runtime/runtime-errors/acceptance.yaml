@@ -1,46 +1,49 @@
 version: 1
-feature: "runtime-errors"
+feature: runtime-errors
 level: "L2_feature"
-template: "A1-A8"
+template: A1-A8
 tree_context:
-  feature_level: "L2_feature"
-  feature_path: "capability.runtime.feature.runtime-errors"
-  parent_path: "capability.runtime"
-  acceptance_inherits_from: "capability.runtime"
+  feature_path: capability.runtime.feature.runtime-errors
+  parent_path: capability.runtime
+  acceptance_inherits_from: capability.runtime
 level_acceptance:
-  focus_groups: [A1_functional, A3_service_governance, A7_contract_metadata_consistency, A8_test_automation]
-  notes: "错误码统一与协议兼容性为主。"
+  focus_groups:
+  - A1_functional
+  - A3_service_governance
+  - A7_contract_metadata_consistency
+  - A8_test_automation
+  notes: 错误码统一与协议兼容性为主。
 global_acceptance:
   A1_functional:
     scenarios:
-      - given: "服务抛出领域异常"
-        when: "通过 runtime-errors 序列化"
-        then: "返回标准 ErrorResponse 且包含 requestId/traceId"
+    - given: 服务抛出领域异常
+      when: 通过 runtime-errors 序列化
+      then: 返回标准 ErrorResponse 且包含 requestId/traceId
   A2_experience:
-    - "用户错误提示可理解，不暴露内部细节"
+  - 用户错误提示可理解，不暴露内部细节
   A3_service_governance:
-    - "retryable 标记可驱动重试策略"
+  - retryable 标记可驱动重试策略
   A4_observability:
-    - "错误日志可按 code/module/kind/reason 检索"
+  - 错误日志可按 code/module/kind/reason 检索
   A5_product_ops:
-    - "关键错误可用于运营聚合统计"
+  - 关键错误可用于运营聚合统计
   A6_security_privacy:
-    - "debugMessage 默认脱敏"
+  - debugMessage 默认脱敏
   A7_contract_metadata_consistency:
-    - "错误码、OpenAPI、实现一致"
+  - 错误码、OpenAPI、实现一致
   A8_test_automation:
-    - "mock/unit/contract/integration/uat 覆盖"
+  - mock/unit/contract/integration/uat 覆盖
 tests:
   mock:
-    - "quwoquan_service/runtime/errors/tests/error_mapping_mock_test.go"
+  - quwoquan_service/runtime/errors/tests/error_mapping_mock_test.go
   unit:
-    - "quwoquan_service/runtime/errors/tests/error_code_unit_test.go"
+  - quwoquan_service/runtime/errors/tests/error_code_unit_test.go
   contract:
-    - "quwoquan_service/contracts/tests/error_response_contract_test.go"
+  - quwoquan_service/contracts/tests/error_response_contract_test.go
   integration:
-    - "quwoquan_service/runtime/errors/tests/gateway_passthrough_integration_test.go"
+  - quwoquan_service/runtime/errors/tests/gateway_passthrough_integration_test.go
   uat:
-    - "UAT-RUNTIME-ERRORS-USER-DEBUG-SEPARATION-001"
+  - UAT-RUNTIME-ERRORS-USER-DEBUG-SEPARATION-001
 execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
+  local_gate: make gate
+  full_gate: make gate-full

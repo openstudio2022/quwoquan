@@ -1,58 +1,57 @@
 version: 1
-feature: "runtime-context"
+feature: runtime-context
 level: "L2_feature"
 archived: true
-archived_at: "2026-03-01T00:00:00Z"
-template: "A1-A8"
+archived_at: '2026-03-01T00:00:00Z'
+template: A1-A8
 tree_context:
-  feature_level: "L2_feature"
-  feature_path: "capability.runtime.feature.runtime-context"
-  parent_path: "capability.runtime"
-  acceptance_inherits_from: "capability.runtime"
+  feature_path: capability.runtime.feature.runtime-context
+  parent_path: capability.runtime
+  acceptance_inherits_from: capability.runtime
 level_acceptance:
   focus_groups:
-    - A1_functional
-    - A3_service_governance
-    - A7_contract_metadata_consistency
-    - A8_test_automation
-  notes: "三层上下文是小趣助手'懂用户'的技术基础。"
+  - A1_functional
+  - A3_service_governance
+  - A7_contract_metadata_consistency
+  - A8_test_automation
+  notes: 三层上下文是小趣助手'懂用户'的技术基础。
 global_acceptance:
   A1_functional:
     scenarios:
-      - given: "用户正在浏览内容详情页"
-        when: "端侧上报 PageContext（content_detail 类型）"
-        then: "Redis 中存储完整 PostSnapshot"
-      - given: "用户浏览 10 篇 Post、发送 5 条消息、加入 2 个圈子"
-        when: "查询 user_holistic_profile"
-        then: "五维画像（内容偏好/社交关系/圈子参与/聊天话题/助手交互）正确聚合"
-      - given: "ContextAssembler 被调用"
-        when: "组装三层上下文（PageContext + Session + LongTerm）"
-        then: "耗时 < 50ms，上下文完整"
+    - given: 用户正在浏览内容详情页
+      when: 端侧上报 PageContext（content_detail 类型）
+      then: Redis 中存储完整 PostSnapshot
+    - given: 用户浏览 10 篇 Post、发送 5 条消息、加入 2 个圈子
+      when: 查询 user_holistic_profile
+      then: 五维画像（内容偏好/社交关系/圈子参与/聊天话题/助手交互）正确聚合
+    - given: ContextAssembler 被调用
+      when: 组装三层上下文（PageContext + Session + LongTerm）
+      then: 耗时 < 50ms，上下文完整
   A2_experience:
-    - "页面切换时旧 PageContext 自动过期"
-    - "上下文组装对业务代码透明"
+  - 页面切换时旧 PageContext 自动过期
+  - 上下文组装对业务代码透明
   A3_service_governance:
-    - "PageContext Redis TTL 可配置"
-    - "全息画像异步构建，不阻塞主路径"
+  - PageContext Redis TTL 可配置
+  - 全息画像异步构建，不阻塞主路径
   A4_observability:
-    - "上下文组装延迟和命中率可监控"
+  - 上下文组装延迟和命中率可监控
   A5_product_ops:
-    - "运营可查看用户画像摘要"
+  - 运营可查看用户画像摘要
   A6_security_privacy:
-    - "用户画像数据按 classification 策略保护"
-    - "上下文不跨用户泄露"
+  - 用户画像数据按 classification 策略保护
+  - 上下文不跨用户泄露
   A7_contract_metadata_consistency:
-    - "画像聚合消费 events.yaml 定义的事件"
-    - "向量存储结构与 _vectors/*.yaml 一致"
+  - 画像聚合消费 events.yaml 定义的事件
+  - 向量存储结构与 _vectors/*.yaml 一致
   A8_test_automation:
-    - "PageContext 上报/过期/并发 有单元测试"
-    - "ContextAssembler 有端到端测试"
+  - PageContext 上报/过期/并发 有单元测试
+  - ContextAssembler 有端到端测试
 tests:
   unit:
-    - "quwoquan_service/runtime/context/tests/page_context_test.go"
-    - "quwoquan_service/runtime/context/tests/assembler_test.go"
+  - quwoquan_service/runtime/context/tests/page_context_test.go
+  - quwoquan_service/runtime/context/tests/assembler_test.go
   contract:
-    - "quwoquan_service/runtime/context/tests/holistic_profile_test.go"
+  - quwoquan_service/runtime/context/tests/holistic_profile_test.go
 execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
+  local_gate: make gate
+  full_gate: make gate-full

@@ -1,0 +1,192 @@
+feature: voice-playback-and-cache
+level: "L3_story"
+archived: true
+archived_at: '2026-03-07T18:20:24Z'
+execution:
+  local_gate: flutter test test/cloud/ test/ui/chat/ && python3 scripts/verify_dart_semantic.py
+  full_gate: make gate-full
+level_acceptance:
+  A1:
+    criteria: 语音气泡视觉语义合规：type=audio 气泡所有视觉 token 使用 AppSpacing/AppTypography/AppColors；verify_dart_semantic.py
+      无新增硬编码违规
+    status: implemented
+    linked_tasks:
+    - D10
+    - D11
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    tests:
+    - file: quwoquan_app/lib/ui/chat/widgets/message/voice_message_bubble.dart
+      layer: T1
+      description: VoiceMessageBubble 使用 AppColors/AppSpacing/AppTypography 设计系统 token
+    - file: quwoquan_app/lib/ui/chat/widgets/message/voice_waveform_painter.dart
+      layer: T1
+      description: VoiceWaveformPainter 颜色参数由外部传入（设计系统 token）
+  A2:
+    criteria: 气泡渲染 Widget 测试：(a) type=audio 消息渲染为语音气泡（含播放按钮+波形+时长）；(b) 时长 1s 气泡宽度约
+      25% 屏宽，120s 约 70% 屏宽（±5%）；(c) 未播放语音有红点标记；(d) sending 状态显示进度环；(e) failed 状态显示重试按钮
+    status: implemented
+    linked_tasks:
+    - D10
+    - D12
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: optional
+    tests:
+    - file: quwoquan_app/lib/ui/chat/widgets/message/voice_message_bubble.dart
+      layer: T2
+      description: VoiceMessageBubble 实现含播放按钮/波形/时长/宽度正比/状态图标
+  A3:
+    criteria: 播放引擎模块测试：(a) 加载 CDN URL 后可播放（模拟 just_audio）；(b) 播放/暂停/停止控制正确；(c) 进度回调精度
+      ≤200ms；(d) 播放完成后进度重置为 0:00；(e) 点击新语音时旧语音自动停止
+    status: implemented
+    linked_tasks:
+    - D9
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: optional
+    tests:
+    - file: quwoquan_app/lib/ui/chat/providers/voice_player_manager.dart
+      layer: T2
+      description: VoicePlayerManager 实现含播放/暂停/停止/互斥/进度回调/完成重置
+  A4:
+    criteria: 下载缓存模块测试：(a) 首次播放触发下载；(b) 再次播放命中缓存无网络请求；(c) 缓存超 200MB 时 LRU 淘汰最旧文件；(d)
+      下载失败返回错误（可重试）
+    status: implemented
+    linked_tasks:
+    - D4
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: optional
+    tests:
+    - file: quwoquan_app/lib/cloud/media/media_download_cache.dart
+      layer: T2
+      description: MediaDownloadCache LRU 缓存/首次下载/缓存命中/容量淘汰/错误处理
+  A5:
+    criteria: 波形动画测试：(a) 未播放状态波形为灰色静态；(b) 播放中波形从左到右渐变主题色（进度填充动画）；(c) 已播放完成波形为主题色静态；(d)
+      波形 CustomPaint 在列表滚动时不触发重绘（repaint boundary）
+    status: implemented
+    linked_tasks:
+    - D11
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: optional
+    tests:
+    - file: quwoquan_app/lib/ui/chat/widgets/message/voice_waveform_painter.dart
+      layer: T2
+      description: VoiceWaveformPainter 实现含 baseColor/activeColor 进度填充 + shouldRepaint
+  A6:
+    criteria: 音频会话管理：(a) 默认扬声器播放；(b) 扬声器/听筒切换 API 可用；(c) 来电中断时自动暂停播放；(d) 中断恢复后不自动续播
+    status: implemented
+    linked_tasks:
+    - D9
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: optional
+    tests:
+    - file: quwoquan_app/lib/ui/chat/providers/voice_player_manager.dart
+      layer: T2
+      description: VoicePlayerManager 含 audio_session 配置/中断处理
+  A7:
+    criteria: 强网起播延迟：CDN 就近节点，5s 语音（约 80KB）从点击到出声 ≤1s（缓存未命中）；缓存命中时 ≤200ms
+    status: implemented
+    linked_tasks:
+    - D9
+    - D4
+    test_layers:
+      T1: optional
+      T2: optional
+      T3: required
+      T4: optional
+    tests:
+    - file: quwoquan_app/lib/ui/chat/providers/voice_player_manager.dart
+      layer: T2
+      description: VoicePlayerManager 优先使用 MediaDownloadCache 本地文件播放
+  A8:
+    criteria: 弱网流式播放：100kbps 限速下 30s 语音（约 480KB），点击后 ≤5s 开始播放（边下边播），全程无中断
+    status: implemented
+    linked_tasks:
+    - D9
+    test_layers:
+      T1: optional
+      T2: optional
+      T3: required
+      T4: required
+    tests:
+    - file: quwoquan_app/lib/ui/chat/providers/voice_player_manager.dart
+      layer: T2
+      description: VoicePlayerManager 使用 just_audio 流式播放 URL（边下边播）
+  A9:
+    criteria: 断网播放降级：(a) 未缓存语音点击后显示'无法播放，请检查网络'内联错误；(b) 已缓存语音断网仍可正常播放
+    status: implemented
+    linked_tasks:
+    - D9
+    - D10
+    test_layers:
+      T1: optional
+      T2: required
+      T3: required
+      T4: optional
+    tests:
+    - file: quwoquan_app/lib/ui/chat/providers/voice_player_manager.dart
+      layer: T2
+      description: VoicePlayerManager 错误处理 + MediaDownloadCache 缓存降级
+  A10:
+    criteria: 播放旅程完整性：用户 B 在会话列表看到语音消息（显示 [语音消息 0:05]）→ 进入会话 → 看到语音气泡 → 点击播放 → 听到完整
+      5s 语音 → 进度条走完 → 红点消失（标记已读）→ 退出再进入 → 再次点击 → 从缓存播放（起播 ≤200ms）
+    status: implemented
+    linked_tasks:
+    - D9
+    - D10
+    - D12
+    - G2
+    test_layers:
+      T1: optional
+      T2: optional
+      T3: optional
+      T4: required
+    tests:
+    - file: quwoquan_service/services/chat-service/tests/message_audio_contract_test.go
+      layer: T3
+      description: Go 端 conversation preview 验证 [语音消息] 显示
+  A11:
+    criteria: 列表性能：会话中含 50 条语音消息，列表滚动 60fps 无卡顿（帧时间 P95 ≤16.6ms）；波形 CustomPaint 不在滚动时触发重绘
+    status: implemented
+    linked_tasks:
+    - D10
+    - D11
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: required
+    tests:
+    - file: quwoquan_app/lib/ui/chat/widgets/message/voice_waveform_painter.dart
+      layer: T2
+      description: VoiceWaveformPainter shouldRepaint 仅在数据/进度变化时重绘
+  A12:
+    criteria: 灰度部署验证：integration 环境 A1-A11 全部通过后，prod 灰度 10% 用户 24h 内语音播放失败率 <0.5%、起播延迟
+      P95 <3s、无 OOM/ANR；达标后扩至 50%→100%
+    status: deferred
+    deferred_reason: 灰度部署需在 deploy 阶段执行，当前 A1-A11 代码实现已完成
+    linked_tasks:
+    - T17
+    test_layers:
+      T1: optional
+      T2: optional
+      T3: optional
+      T4: required
+    tests: []

@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:livekit_client/livekit_client.dart' as lk;
+import 'package:quwoquan_app/cloud/rtc/models/call_participant_dto.dart';
 import 'package:quwoquan_app/cloud/rtc/livekit_room_service.dart';
 import 'package:quwoquan_app/cloud/rtc/models/call_session_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/services/rtc/rtc_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/core/services/active_call_service.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_quality_indicator.dart';
@@ -101,6 +103,8 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
 
   RtcRepository get _repo => ref.read(rtcRepositoryProvider);
   LiveKitRoomService get _lkRoom => ref.read(liveKitRoomServiceProvider);
+  bool get _isMockMode =>
+      ref.read(appDataSourceModeProvider) == AppDataSourceMode.mock;
 
   String get _livekitUrl {
     final base = CloudRuntimeConfig.gatewayBaseUrl;
@@ -164,7 +168,10 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
 
       final map = await _repo.answerCall(callId);
       final session = CallSessionDto.fromMap(map);
-      final type = CallType.fromString(session.callType);
+      // Preserve the call type established during the ringing phase;
+      // the answer response must not silently override it (e.g., mock data
+      // may always return a 'video' session regardless of actual type).
+      final type = state.callType;
       final token = map['token'] as String? ?? '';
 
       state = state.copyWith(
@@ -285,6 +292,86 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
     } catch (e) {
       state = state.copyWith(error: e.toString());
     }
+  }
+
+  void debugSeedIncomingCall({
+    required String callId,
+    required String callerName,
+    required String callType,
+    String? conversationId,
+  }) {
+    if (!_isMockMode) return;
+    final session = CallSessionDto(
+      id: callId,
+      callType: callType,
+      status: 'ringing',
+      initiatorId: callerName,
+      conversationId: conversationId,
+      roomId: 'debug_room_$callId',
+      maxParticipants: 32,
+      participantCount: 2,
+      participants: <CallParticipantDto>[
+        CallParticipantDto(
+          userId: callerName,
+          role: 'initiator',
+          status: 'connected',
+          isMuted: false,
+          isCameraOn: callType == 'video',
+        ),
+      ],
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+    state = state.copyWith(
+      session: session,
+      status: CallStatus.ringing,
+      callType: CallType.fromString(callType),
+      isCameraOn: callType == 'video',
+      isLoading: false,
+      error: null,
+    );
+  }
+
+  void debugSimulateRemoteAnswer() {
+    if (!_isMockMode) return;
+    final session = state.session;
+    if (session == null) return;
+    final answered = session.copyWith(
+      status: 'active',
+      updatedAt: DateTime.now(),
+    );
+    state = state.copyWith(
+      session: answered,
+      status: CallStatus.inCall,
+      isLoading: false,
+      error: null,
+    );
+    ref.read(activeCallProvider.notifier).startCall(
+          callId: answered.id,
+          callType: answered.callType,
+          participants: answered.participants,
+        );
+  }
+
+  void debugSimulateRejected({bool timeout = false}) {
+    if (!_isMockMode) return;
+    final session = state.session;
+    if (session == null) {
+      state = state.copyWith(status: CallStatus.ended, isLoading: false);
+      return;
+    }
+    state = state.copyWith(
+      session: session.copyWith(
+        status: 'ended',
+        endReason: timeout ? 'timeout' : 'rejected',
+        updatedAt: DateTime.now(),
+      ),
+      status: CallStatus.ended,
+      isLoading: false,
+      error: null,
+    );
+    _cancelTimeoutTimer();
+    ref.read(activeCallProvider.notifier).endCall();
   }
 
   Future<void> toggleMute() async {

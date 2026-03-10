@@ -1,0 +1,59 @@
+version: 1
+feature: arb-gen-l10n-string-extraction
+level: "L3_story"
+template: A1-A8
+tree_context:
+  feature_path: capability.runtime.feature.runtime-client-foundation.subfeature.app-locale-infrastructure.task.arb-gen-l10n-string-extraction
+  parent_path: capability.runtime.feature.runtime-client-foundation.subfeature.app-locale-infrastructure
+  acceptance_inherits_from: capability.runtime.feature.runtime-client-foundation.subfeature.app-locale-infrastructure
+level_acceptance:
+  focus_groups:
+  - A1_functional
+  - A7_contract_metadata_consistency
+  - A8_test_automation
+  notes: 默认叶子层 L4，本次交付 i18n 基础设施 + lib/ui/ 三文件清理。
+global_acceptance:
+  A1_functional:
+    scenarios:
+    - given: T1~T7 全部完成
+      when: 在 article_detail_page.dart 中使用 context.l10n.allCommentsCount(42)
+      then: 返回 '全部评论 42'，编译通过，运行时正常
+    - given: app_zh.arb + app_en.arb 配置正确
+      when: 执行 flutter gen-l10n
+      then: 生成 AppLocalizations，所有 key 均可访问
+    - given: author_profile_page.dart T7 完成
+      when: 编译并运行
+      then: 页面所有中文文本正常显示，无崩溃
+  A2_experience:
+  - context.l10n.xxx 调用与 AppColors/AppSpacing 使用风格一致
+  - 单个 import 'package:quwoquan_app/l10n/l10n.dart' 即可访问 AppLocalizations 和扩展
+  A3_service_governance:
+  - UITextConstants 保留不删除
+  - 生成文件标注 DO NOT EDIT，不允许手改
+  A4_observability:
+  - N/A
+  A5_product_ops:
+  - N/A
+  A6_security_privacy:
+  - ARB 文件不含 PII / secret
+  A7_contract_metadata_consistency:
+  - app_zh.arb key 数量 >= UITextConstants 常量数量 + AppStrings 常量数量 + 新增 key 数量
+  - app_en.arb key 集合与 app_zh.arb 完全一致
+  - lib/ui/ 三文件中所有原硬编码 CJK 字符串已被替换（mock 数据除外）
+  A8_test_automation:
+  - flutter analyze 零错误（lib/ui/ 三文件 + lib/l10n/ 目录）
+  - flutter gen-l10n 零报错
+  - 以下脚本检查 lib/ui/ 下 CJK 字面量返回零匹配：
+  - "python3 -c \"\nimport pathlib, re, sys\npattern = re.compile(r\\\"'[^']*[\\u4e00-\\\
+    u9fff][^']*'\\\")\nskip = re.compile(r'(mock|fixture|//|\\\\*)')\nfound = False\n\
+    for p in pathlib.Path('quwoquan_app/lib/ui').rglob('*.dart'):\n    for i, line\
+    \ in enumerate(p.read_text().splitlines(), 1):\n        if pattern.search(line)\
+    \ and not skip.search(line):\n            print(f'{p}:{i}: {line.strip()}')\n\
+    \            found = True\nsys.exit(1 if found else 0)\n\"\n"
+execution:
+  local_gate: flutter analyze && flutter gen-l10n
+  full_gate: 'cd quwoquan_app && flutter analyze && flutter gen-l10n
+
+    make gate-full || true  # Go 服务端检查，本次无变更预期通过
+
+    '

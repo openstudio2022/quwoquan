@@ -59,6 +59,7 @@ class _WeatherPipelineLlm implements AssistantLlmProvider {
           'primaryDomainId': 'weather',
           'secondaryDomains': <String>[],
           'inferredMotive': '查询深圳实时天气',
+          'problemClass': 'realtime_info',
           'mode': 'qa',
           'queryNormalization': <String, dynamic>{'query': '深圳天气怎么样'},
         }),
@@ -164,6 +165,8 @@ class _FakeWeatherSearchTool implements AssistantTool {
         'provider': 'duckduckgo',
         'qualityScore': 0.85,
         'summary': '深圳今天天气晴朗，温度25°C',
+        'authorityDomains': <String>['weather.com.cn', 'cma.cn'],
+        'totalReferences': 2,
         'references': <Map<String, dynamic>>[
           {
             'title': '深圳天气预报 - 中国气象局',
@@ -233,6 +236,7 @@ class _WeatherFallbackLlm implements AssistantLlmProvider {
           'primaryDomainId': 'weather',
           'secondaryDomains': <String>[],
           'inferredMotive': '查询深圳实时天气',
+          'problemClass': 'realtime_info',
           'mode': 'qa',
           'queryNormalization': <String, dynamic>{'query': '深圳天气怎么样'},
         }),
@@ -272,6 +276,186 @@ class _WeatherFallbackLlm implements AssistantLlmProvider {
           'city': {'value': '深圳', 'source': 'user_query'},
         },
         'result': {'text': '搜索服务暂时不可用', 'interpretation': '搜索服务暂时不可用'},
+      }),
+    );
+  }
+}
+
+class _FallbackAdaptiveLlm implements AssistantLlmProvider {
+  int planCallCount = 0;
+
+  @override
+  Future<AssistantModelOutput> reason({
+    required List<Map<String, dynamic>> messages,
+    required List<String> availableTools,
+    Map<String, dynamic> templateContext = const <String, dynamic>{},
+    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    String templateId = 'planner.global_plan',
+    String templateVersion = '',
+    String sessionId = '',
+    String runId = '',
+    String traceId = '',
+    LlmCallOptions? callOptions,
+    void Function(String delta)? onDelta,
+  }) async {
+    final isPlannerCall =
+        templateId == 'planner.global_plan' ||
+        templateId == 'planner.postcondition_check';
+    final isIntentStage =
+        templateId == 'planner.global_plan' && availableTools.isEmpty;
+    if (isIntentStage) {
+      return AssistantModelOutput(
+        text: jsonEncode(const <String, dynamic>{
+          'primaryDomainId': 'fallback_general_search',
+          'secondaryDomains': <String>[],
+          'inferredMotive': '对比分析科技新闻与 AI 行业走势',
+          'problemClass': 'complex_reasoning',
+          'mode': 'hybrid',
+          'queryNormalization': <String, dynamic>{
+            'query': '今天全球科技新闻重点和AI行业走势对比分析',
+          },
+        }),
+      );
+    }
+    if (isPlannerCall) {
+      planCallCount += 1;
+      if (planCallCount == 1 && availableTools.contains('web_search')) {
+        return AssistantModelOutput(
+          text: jsonEncode(<String, dynamic>{
+            'contractVersion': 'assistant_turn_v4',
+            'decision': <String, dynamic>{'nextAction': 'tool_call'},
+            'toolCalls': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'tool': 'web_search',
+                'arguments': <String, dynamic>{
+                  'query': '今天全球科技新闻重点和AI行业走势',
+                  'queryVariants': <String>[
+                    '今日科技新闻 AI 行业 重点',
+                    '全球科技头条 人工智能 行业走势',
+                  ],
+                },
+              },
+            ],
+            'thinkingText': '我先收集今天的科技新闻和 AI 行业动态，再做对比整理。',
+          }),
+          toolCalls: const <AssistantToolCall>[
+            AssistantToolCall(
+              name: 'web_search',
+              arguments: <String, dynamic>{
+                'query': '今天全球科技新闻重点和AI行业走势',
+                'queryVariants': <String>[
+                  '今日科技新闻 AI 行业 重点',
+                  '全球科技头条 人工智能 行业走势',
+                ],
+              },
+            ),
+          ],
+        );
+      }
+    }
+    return AssistantModelOutput(
+      text: jsonEncode(<String, dynamic>{
+        'contractVersion': 'assistant_turn_v4',
+        'decision': <String, dynamic>{'nextAction': 'answer'},
+        'messageKind': 'answer',
+        'userMarkdown':
+            '## 科技与 AI 动态\n\n- 今天科技新闻聚焦大模型落地与算力投入。\n- AI 行业走势继续受资金与政策驱动。',
+        'result': <String, dynamic>{
+          'text': '今天科技新闻聚焦大模型落地与算力投入，AI 行业走势继续受资金与政策驱动。',
+        },
+        'toolCalls': const <dynamic>[],
+        'selfCheck': const <String, dynamic>{},
+        'diagnostics': const <String, dynamic>{},
+        'modelSelfScore': const <String, dynamic>{'score': 88},
+      }),
+    );
+  }
+}
+
+class _MultiSkillProblemClassLlm implements AssistantLlmProvider {
+  @override
+  Future<AssistantModelOutput> reason({
+    required List<Map<String, dynamic>> messages,
+    required List<String> availableTools,
+    Map<String, dynamic> templateContext = const <String, dynamic>{},
+    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    String templateId = 'planner.global_plan',
+    String templateVersion = '',
+    String sessionId = '',
+    String runId = '',
+    String traceId = '',
+    LlmCallOptions? callOptions,
+    void Function(String delta)? onDelta,
+  }) async {
+    final isPlannerCall =
+        templateId == 'planner.global_plan' ||
+        templateId == 'planner.postcondition_check';
+    final isSynthesisCall =
+        templateId.contains('synthesizer') ||
+        templateId.contains('final_answer');
+    final isIntentStage =
+        templateId == 'planner.global_plan' && availableTools.isEmpty;
+    if (isIntentStage) {
+      return AssistantModelOutput(
+        text: jsonEncode(const <String, dynamic>{
+          'primaryDomainId': 'weather',
+          'secondaryDomains': <String>['fallback_general_search'],
+          'inferredMotive': '先看天气，再结合出游场景给建议',
+          'problemClass': 'complex_reasoning',
+          'mode': 'hybrid',
+        }),
+      );
+    }
+
+    if (isSynthesisCall) {
+      return AssistantModelOutput(
+        text: jsonEncode(const <String, dynamic>{
+          'contractVersion': 'assistant_turn_v4',
+          'decision': <String, dynamic>{'nextAction': 'answer'},
+          'messageKind': 'answer',
+          'userMarkdown': '## 深圳天气与出游建议\n\n- 今天天气适合出门。\n- 建议优先安排轻松的城市漫步和室内备选点。',
+          'result': <String, dynamic>{
+            'text': '深圳今天天气适合出门，旅游安排可优先轻松步行路线并保留室内备选。',
+          },
+        }),
+      );
+    }
+
+    if (!isPlannerCall) {
+      return const AssistantModelOutput(text: '{"summary":"用户想看天气并规划出游。"}');
+    }
+
+    final domainId = (templateVariables['domainId'] as String?)?.trim() ?? '';
+    if (domainId == 'fallback_general_search') {
+      return AssistantModelOutput(
+        text: jsonEncode(const <String, dynamic>{
+          'contractVersion': 'assistant_turn_v4',
+          'decision': <String, dynamic>{'nextAction': 'answer'},
+          'messageKind': 'answer',
+          'userMarkdown': '## 深圳旅游建议\n\n- 白天可安排城市漫步。\n- 准备一个室内备选点以应对天气变化。',
+          'result': <String, dynamic>{'text': '旅游建议以轻量户外活动为主，并准备室内备选。'},
+        }),
+      );
+    }
+
+    return AssistantModelOutput(
+      text: jsonEncode(const <String, dynamic>{
+        'contractVersion': 'assistant_turn_v4',
+        'decision': <String, dynamic>{'nextAction': 'answer'},
+        'messageKind': 'answer',
+        'userMarkdown': '## 深圳天气\n\n- 今天深圳天气温和，适合出门。',
+        'result': <String, dynamic>{'text': '今天深圳天气温和，适合出门。'},
+        'subagentPlan': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'subagentId': 'travel_planner_1',
+            'domainId': 'fallback_general_search',
+            'problemClass': 'complex_reasoning',
+            'mode': 'qa',
+            'goal': '结合深圳今天天气，为用户补充出游安排与备选方案',
+            'maxIterations': 4,
+            'toolBudget': 2,
+          },
+        ],
       }),
     );
   }
@@ -538,12 +722,12 @@ void main() {
 
       expect(
         structured['processSummaryV1'],
-        contains('已核对 2 个天气来源'),
+        contains('已核对 1 个天气来源'),
         reason: '应输出统一的一行过程摘要',
       );
       expect(
         structured['processReferenceCountV1'],
-        equals(2),
+        equals(1),
         reason: '应输出可展开来源计数',
       );
       final uiProcessBlocks =
@@ -558,10 +742,23 @@ void main() {
         (uiProcessBlocks.first['text'] as String?) ?? '',
         contains('天气来源'),
       );
+      final blockRefs =
+          (uiProcessBlocks.first['references'] as List?)
+              ?.whereType<Map>()
+              .map((item) => item.cast<String, dynamic>())
+              .toList(growable: false) ??
+          const <Map<String, dynamic>>[];
+      expect(blockRefs.length, equals(1), reason: '天气过程区只应保留筛选后的权威来源');
+      expect(
+        (blockRefs.first['url'] as String?) ?? '',
+        contains('weather.cma.cn'),
+        reason: '天气过程区应优先展示权威天气来源',
+      );
       final intentGraph =
           (structured['intentGraph'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{};
       expect(intentGraph['primarySkill'], equals('weather'));
+      expect(intentGraph['problemClass'], equals('realtime_info'));
       expect(intentGraph['problemShape'], equals('single_skill'));
       final skillRuns =
           (structured['skillRuns'] as List?)
@@ -583,17 +780,45 @@ void main() {
           const <Map<String, dynamic>>[];
       expect(userEvents, isNotEmpty, reason: '应输出 userEvents');
       expect(userEvents.first['scope'], equals('root'));
+      final userMessages = userEvents
+          .map((item) => (item['message'] as String?)?.trim() ?? '')
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
+      expect(
+        userMessages.any((item) => item.contains('深圳') && item.contains('天气')),
+        isTrue,
+        reason: '天气过程语言应带当前问题语义，而不是只显示系统状态',
+      );
+      expect(
+        userMessages.any(
+          (item) =>
+              item.contains('已识别问题方向，准备开始处理') ||
+              item.contains('这部分答案已整理完成') ||
+              item.contains('正在补充这一部分信息'),
+        ),
+        isFalse,
+        reason: '过程事件不应退化成通用系统状态文案',
+      );
       final uiProcessTimelineV2 =
           (structured['uiProcessTimelineV2'] as List?)
               ?.whereType<Map>()
               .map((item) => item.cast<String, dynamic>())
               .toList(growable: false) ??
           const <Map<String, dynamic>>[];
-      expect(uiProcessTimelineV2, isNotEmpty, reason: '应输出 uiProcessTimelineV2');
+      expect(
+        uiProcessTimelineV2,
+        isNotEmpty,
+        reason: '应输出 uiProcessTimelineV2',
+      );
       expect(
         uiProcessTimelineV2.last['summary'],
         contains('已核对'),
         reason: 'timeline v2 应保留最终过程摘要',
+      );
+      expect(
+        (uiProcessTimelineV2.last['references'] as List?) ?? const <dynamic>[],
+        isNotEmpty,
+        reason: '最终过程事件应携带聚合后的来源真相源，供过程区与最终答案复用',
       );
     });
 
@@ -711,6 +936,139 @@ void main() {
       expect(markdown, isNot(contains('<tool_call>')));
       expect(markdown, contains('## 🌤️ 深圳 天气'));
       expect(markdown, contains('暂时查不到实时天气数据'));
+    });
+
+    test('fallback 会按问题类型自适应执行壳子，而非固定 simple_qa', () async {
+      final adaptiveSearch = _FakeWeatherSearchTool();
+      final adaptiveToolRegistry = AssistantToolRegistry()
+        ..register(adaptiveSearch);
+      final adaptiveLoop = PersonalAssistantAgentLoop(
+        ReactRuntime(
+          llmProvider: _FallbackAdaptiveLlm(),
+          toolRegistry: adaptiveToolRegistry,
+        ),
+        sessionManager: AssistantSessionManager(
+          storagePath: '${tempDir.path}/sessions_fallback_adaptive.json',
+        ),
+        memoryRepository: AssistantMemoryRepository(
+          ObjectBoxVectorStore(
+            storagePath: '${tempDir.path}/memory_fallback_adaptive.json',
+          ),
+        ),
+      );
+
+      final response = await adaptiveLoop.run(
+        const AssistantRunRequest(
+          sessionId: 'pipeline_fallback_adaptive',
+          messages: <AssistantRunMessage>[
+            AssistantRunMessage(
+              role: 'user',
+              content: '帮我对比分析今天全球科技新闻重点和AI行业走势',
+            ),
+          ],
+        ),
+      );
+
+      final structured = response.structuredResponse;
+      final skillRuns =
+          (structured['skillRuns'] as List?)
+              ?.whereType<Map>()
+              .map((item) => item.cast<String, dynamic>())
+              .toList(growable: false) ??
+          const <Map<String, dynamic>>[];
+      expect(skillRuns, isNotEmpty);
+      expect(skillRuns.first['domainId'], equals('fallback_general_search'));
+      expect(skillRuns.first['problemClass'], equals('complex_reasoning'));
+      final shell =
+          (skillRuns.first['shell'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      expect(shell['maxIterations'], equals(4));
+      expect(shell['toolBudget'], equals(2));
+      expect(shell['variantBudget'], equals(1));
+      expect(shell['reflectionBudget'], equals(1));
+      expect(
+        (adaptiveSearch.lastArguments['queryVariants'] as List?)?.length ?? 0,
+        equals(1),
+        reason: '复杂 fallback 允许有限扩搜，但不能无限并发变体',
+      );
+    });
+
+    test('多 skill 分发时每个 subagent 都带独立 problemClass 并各自收敛', () async {
+      final multiToolRegistry = AssistantToolRegistry()
+        ..register(_FakeWeatherSearchTool());
+      final multiLoop = PersonalAssistantAgentLoop(
+        ReactRuntime(
+          llmProvider: _MultiSkillProblemClassLlm(),
+          toolRegistry: multiToolRegistry,
+        ),
+        sessionManager: AssistantSessionManager(
+          storagePath: '${tempDir.path}/sessions_multiskill_problem_class.json',
+        ),
+        memoryRepository: AssistantMemoryRepository(
+          ObjectBoxVectorStore(
+            storagePath: '${tempDir.path}/memory_multiskill_problem_class.json',
+          ),
+        ),
+      );
+
+      final response = await multiLoop.run(
+        const AssistantRunRequest(
+          sessionId: 'pipeline_multiskill_problem_class',
+          messages: <AssistantRunMessage>[
+            AssistantRunMessage(
+              role: 'user',
+              content: '深圳今天天气如何，顺便给我一个轻松点的旅游建议',
+            ),
+          ],
+        ),
+      );
+
+      final structured = response.structuredResponse;
+      final intentGraph =
+          (structured['intentGraph'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      expect(intentGraph['primarySkill'], equals('weather'));
+      expect(intentGraph['problemClass'], equals('complex_reasoning'));
+
+      final subagentPlan =
+          (structured['subagentPlan'] as List?)
+              ?.whereType<Map>()
+              .map((item) => item.cast<String, dynamic>())
+              .toList(growable: false) ??
+          const <Map<String, dynamic>>[];
+      expect(subagentPlan, isNotEmpty);
+      expect(
+        subagentPlan.first['problemClass'],
+        equals('complex_reasoning'),
+        reason: '子任务计划必须显式携带自己的 problemClass',
+      );
+
+      final skillRuns =
+          (structured['skillRuns'] as List?)
+              ?.whereType<Map>()
+              .map((item) => item.cast<String, dynamic>())
+              .toList(growable: false) ??
+          const <Map<String, dynamic>>[];
+      expect(skillRuns.length, equals(2));
+
+      final weatherRun = skillRuns.firstWhere(
+        (item) => item['domainId'] == 'weather',
+      );
+      expect(weatherRun['problemClass'], equals('realtime_info'));
+
+      final travelRun = skillRuns.firstWhere(
+        (item) => item['domainId'] == 'fallback_general_search',
+      );
+      expect(travelRun['domainId'], equals('fallback_general_search'));
+      expect(travelRun['problemClass'], equals('complex_reasoning'));
+      final travelShell =
+          (travelRun['shell'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      expect(travelShell['problemClass'], equals('complex_reasoning'));
+      expect(travelShell['maxIterations'], equals(4));
+      expect(travelShell['toolBudget'], equals(2));
+      expect(travelShell['variantBudget'], equals(1));
+      expect(travelShell['reflectionBudget'], equals(1));
     });
   });
 }

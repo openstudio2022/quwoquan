@@ -5,7 +5,7 @@ import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/services/active_call_service.dart';
 
-/// Top green bar shown when navigating away from an active call.
+/// Top blue bar shown when navigating away from an active call.
 /// Tap to return to the call page.
 class ActiveCallBar extends ConsumerWidget {
   const ActiveCallBar({
@@ -29,10 +29,10 @@ class ActiveCallBar extends ConsumerWidget {
       child: Container(
         width: double.infinity,
         height: AppSpacing.twentyEight,
-        color: AppColors.success,
+        color: AppColors.primaryColor,
         child: Center(
           child: Text(
-            '🟢 通话中 $minutes:$seconds 点击返回',
+            '通话中 $minutes:$seconds 点击返回',
             style: TextStyle(
               color: AppColors.white,
               fontSize: AppTypography.sm,

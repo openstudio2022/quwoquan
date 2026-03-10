@@ -6,15 +6,19 @@ import (
 )
 
 type UserSetting struct {
-	UserID            string    `json:"userId" db:"user_id"`
-	EnablePush        bool      `json:"enablePush" db:"enable_push"`
-	EnableMarketing   bool      `json:"enableMarketing" db:"enable_marketing"`
-	QuietHoursStart   *string   `json:"quietHoursStart" db:"quiet_hours_start"`
-	QuietHoursEnd     *string   `json:"quietHoursEnd" db:"quiet_hours_end"`
-	AllowStrangerMsg  bool      `json:"allowStrangerMsg" db:"allow_stranger_msg"`
-	ProfileVisibility string    `json:"profileVisibility" db:"profile_visibility"`
-	ContentLanguage   *string   `json:"contentLanguage" db:"content_language"`
-	FeedPreference    *string   `json:"feedPreference" db:"feed_preference"`
-	AssistantEnabled  bool      `json:"assistantEnabled" db:"assistant_enabled"`
-	UpdatedAt         time.Time `json:"updatedAt" db:"updated_at"`
+	UserID                        string    `json:"userId" db:"user_id"`
+	EnablePush                    bool      `json:"enablePush" db:"enable_push"`
+	EnableMarketing               bool      `json:"enableMarketing" db:"enable_marketing"`
+	QuietHoursStart               *string   `json:"quietHoursStart" db:"quiet_hours_start"`
+	QuietHoursEnd                 *string   `json:"quietHoursEnd" db:"quiet_hours_end"`
+	DefaultIncomingCallRingtoneID string    `json:"defaultIncomingCallRingtoneId" db:"default_incoming_call_ringtone_id"`
+	AllowCallerRingtoneOverride   bool      `json:"allowCallerRingtoneOverride" db:"allow_caller_ringtone_override"`
+	EnableCallVibration           bool      `json:"enableCallVibration" db:"enable_call_vibration"`
+	EnableGroupCallRing           bool      `json:"enableGroupCallRing" db:"enable_group_call_ring"`
+	AllowStrangerMsg              bool      `json:"allowStrangerMsg" db:"allow_stranger_msg"`
+	ProfileVisibility             string    `json:"profileVisibility" db:"profile_visibility"`
+	ContentLanguage               *string   `json:"contentLanguage" db:"content_language"`
+	FeedPreference                *string   `json:"feedPreference" db:"feed_preference"`
+	AssistantEnabled              bool      `json:"assistantEnabled" db:"assistant_enabled"`
+	UpdatedAt                     time.Time `json:"updatedAt" db:"updated_at"`
 }

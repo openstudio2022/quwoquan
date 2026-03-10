@@ -5,9 +5,14 @@ CREATE TABLE IF NOT EXISTS personas (
     user_id                  VARCHAR(36) NOT NULL,
     display_name             VARCHAR(64) NOT NULL,
     avatar_url               TEXT,
+    caller_ringtone_id       VARCHAR(64),
     is_primary               BOOLEAN NOT NULL DEFAULT false,
     is_private               BOOLEAN NOT NULL DEFAULT false,
     is_active                BOOLEAN NOT NULL DEFAULT false,
+    sub_account_id           VARCHAR(36) NOT NULL UNIQUE,
+    isolation_level          VARCHAR(16) NOT NULL DEFAULT 'open',
+    purpose_hint             VARCHAR(128),
+    invite_count             INTEGER NOT NULL DEFAULT 0,
     created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
     ,CONSTRAINT fk_personas_user_id FOREIGN KEY (user_id) REFERENCES user_profiles(user_id) ON DELETE CASCADE
@@ -15,6 +20,10 @@ CREATE TABLE IF NOT EXISTS personas (
 
 CREATE INDEX IF NOT EXISTS idx_personas_user_id ON personas (user_id);
 
+CREATE INDEX IF NOT EXISTS idx_personas_sub_account_id ON personas (sub_account_id);
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_personas_primary ON personas (user_id, is_primary) WHERE is_primary = true;
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_personas_active ON personas (user_id, is_active) WHERE is_active = true;
+
+ALTER TABLE personas ADD CONSTRAINT uq_personas_sub_account_id UNIQUE (sub_account_id);

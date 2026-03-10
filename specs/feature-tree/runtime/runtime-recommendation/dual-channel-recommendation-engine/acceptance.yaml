@@ -1,49 +1,48 @@
 version: 1
-feature: "dual-channel-recommendation-engine"
-level: "L3_subfeature"
+feature: dual-channel-recommendation-engine
+level: "L3_story"
 archived: true
-archived_at: "2026-03-01T00:00:00Z"
-template: "A1-A8"
+archived_at: '2026-03-01T00:00:00Z'
+template: A1-A8
 tree_context:
-  feature_level: "L3_subfeature"
-  feature_path: "capability.runtime.feature.runtime-recommendation.subfeature.dual-channel-recommendation-engine"
-  parent_path: "capability.runtime.feature.runtime-recommendation"
-  acceptance_inherits_from: "capability.runtime.feature.runtime-recommendation"
+  feature_path: capability.runtime.feature.runtime-recommendation.subfeature.dual-channel-recommendation-engine
+  parent_path: capability.runtime.feature.runtime-recommendation
+  acceptance_inherits_from: capability.runtime.feature.runtime-recommendation
 level_acceptance:
   focus_groups:
-    - A1_functional
-    - A7_contract_metadata_consistency
-  notes: "双通道架构：HotPath（实时信号）+ ColdPath（离线特征）+ Engine（召回/排序/重排）。"
+  - A1_functional
+  - A7_contract_metadata_consistency
+  notes: 双通道架构：HotPath（实时信号）+ ColdPath（离线特征）+ Engine（召回/排序/重排）。
 global_acceptance:
   A1_functional:
     scenarios:
-      - given: "用户请求信息流"
-        when: "Engine.GetFeed(user_id, feed_type, cursor)"
-        then: "召回 → 排序 → 重排 → 返回内容列表"
-      - given: "用户上报 view 信号"
-        when: "HotPath.RecordSignal"
-        then: "session_signals 更新，< 50ms"
-      - given: "Engine 需要用户特征"
-        when: "ColdPath.GetFeatures(user_id)"
-        then: "返回离线特征（来自 RecommendFeatureProjector）"
+    - given: 用户请求信息流
+      when: Engine.GetFeed(user_id, feed_type, cursor)
+      then: 召回 → 排序 → 重排 → 返回内容列表
+    - given: 用户上报 view 信号
+      when: HotPath.RecordSignal
+      then: session_signals 更新，< 50ms
+    - given: Engine 需要用户特征
+      when: ColdPath.GetFeatures(user_id)
+      then: 返回离线特征（来自 RecommendFeatureProjector）
   A2_experience:
-    - "信号上报到偏好反映 < 200ms"
+  - 信号上报到偏好反映 < 200ms
   A3_service_governance:
-    - "推荐策略支持 A/B 灰度"
+  - 推荐策略支持 A/B 灰度
   A4_observability:
-    - "召回/排序/重排各阶段延迟可监控"
+  - 召回/排序/重排各阶段延迟可监控
   A5_product_ops:
-    - "运营可配置推荐策略参数"
+  - 运营可配置推荐策略参数
   A6_security_privacy:
-    - "用户行为数据不泄露"
+  - 用户行为数据不泄露
   A7_contract_metadata_consistency:
-    - "消费 recommend_impact 事件"
-    - "推荐特征来自 recommend_feature 字段"
+  - 消费 recommend_impact 事件
+  - 推荐特征来自 recommend_feature 字段
   A8_test_automation:
-    - "Engine 端到端测试"
+  - Engine 端到端测试
 tests:
   contract:
-    - "quwoquan_service/runtime/recommendation/tests/engine_contract_test.go"
+  - quwoquan_service/runtime/recommendation/tests/engine_contract_test.go
 execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
+  local_gate: make gate
+  full_gate: make gate-full

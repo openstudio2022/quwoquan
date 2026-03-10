@@ -1,252 +1,258 @@
-# 特性树文档标准（唯一约定）
+# 特性树文档标准（三层目录版）
 
-> **权威**：特性树下所有节点的需求、设计、任务与验收**仅通过以下四类文档表达**。禁止在节点下生成上述四类以外的独立文档（如 `analysis-*.md`、`README.md`、单独「设计说明」「规划书」等）；所有内容必须汇入 spec / design / tasks / acceptance。
+> **权威**：特性树节点的治理信息只通过以下四类文档表达：
 >
-> **适用范围（强制）**：本标准适用于全仓端云一体化开发（`quwoquan_app`、`quwoquan_service`、`contracts/metadata` 及其子域）。任何子域文档规范只能补充细节，不能替代本标准。
+> - `spec.md`
+> - `design.md`
+> - `tasks.md`
+> - `acceptance.yaml`
+>
+> 本标准与三层层级定义绑定，只适用于：
+>
+> - `L1_capability`
+> - `L2_feature`
+> - `L3_story`
+>
+> `Task` 只存在于任务文档中，不占目录层。
 
 ---
 
-## 一、四类文档（强制）
+## 一、适用范围
 
-每个特性树节点（治理视图以 L1~L4 为主，历史 L5 兼容）必须具备且仅依赖以下四类制品：
+本标准适用于全仓端云一体化开发，包括：
 
-| 文档 | 用途 | 必须 |
-|------|------|------|
-| **spec.md** | 功能说明、范围、约束、验收重点；「做什么」「不做什么」 | 是 |
-| **design.md** | 设计决策、架构/拓扑、与上下游契约、迁移或演进说明；「怎么做」「为何这样拆」 | 是 |
-| **tasks.md** | Story 的工程执行清单（含当前交付与可选规划任务）；顺序：metadata → codegen → 业务逻辑 → 测试 | 是 |
-| **acceptance.yaml** | A1~An 验收标准、测试层映射、证据链接、execution（gate） | 是 |
+- `quwoquan_app`
+- `quwoquan_service`
+- `contracts/metadata`
+- `specs/feature-tree`
 
-- **禁止**：在 `specs/feature-tree/<path>/` 下新增 `analysis-*.md`、`README.md`、`*-规划.md`、`*-设计说明.md` 等独立文件；分析、规划、设计说明一律写入上述 **spec.md / design.md / tasks.md**，必要时在 tasks 中增加「规划任务」小节。
-- **追溯**：若项目使用 `traceability.yaml`，可保留；验收以 **acceptance.yaml** 为准。
+任何子域规范只能补充细节，不能替代本标准。
 
 ---
 
-## 二、质量与详细度要求
+## 二、四类文档
 
-生成或更新四类文档时，须满足以下要求，以便后续特性树一致性与门禁检查可执行。
+### 2.1 `L1_capability`
 
-### 2.1 spec.md
+每个 `L1_capability` 目录必须具备以下四类文档：
 
-- **必须包含**：节点层级（优先按 L1~L4 治理视图描述）、功能定位、职责边界、与父/子节点关系、约束（技术/契约/运维）、验收标准概要。
-- **必须包含（对标输入）**：若需求来自业界标杆、竞品、原型、公开代码或公开文档，需在 spec 中说明借鉴点、不借鉴点与适用边界。
-- **必须包含（标准化章节）**：**「适用范围与约束」**——明确本节点方案的适用场景、前置条件、不适用或超出范围的情形（任何方案均有局限性，须在 spec 中写清「在什么条件下成立」「什么不负责」），便于后续回顾与裁剪。可与「约束」合并为小节，但须显式出现适用/不适用表述。
-- **建议**：用表格列出子节点或对外契约；引用 design.md / tasks.md 避免重复。
+- `spec.md`
+- `design.md`
+- `tasks.md`
+- `acceptance.yaml`
 
-### 2.2 design.md
+职责：
 
-- **必须包含**：设计动因（为何这样拆）、关键决策、与现有系统/契约的对应关系；若涉及迁移或演进，写清「当前态 → 目标态」与已完成步骤。
-- **必须包含（上游评审）**：明确说明当前 `spec.md` 与 `acceptance.yaml` 是否足以支撑设计；若存在不足，需在 design 中标出阻断项或补充项。
-- **必须包含（标准化章节）**：
-  - **「适用场景与约束」**：当前选定方案的**适用场景**（在什么业务/规模/技术条件下成立）、**约束与局限性**（不适用情形、前置条件、已知限制）。任何方案都有局限性或适应场景，design 中必须显式写出，便于回顾与决策。
-  - **「未来演进」**：演进方向、目标态与当前态的差距、前置条件或触发条件、与 tasks 中「搁置任务」「未来演进任务」的对应关系；若当前即为目标态则简要说明「暂无演进项」。
-- **建议**：部署形态、服务清单、接口归属用表格表达；规划类清单放在 tasks.md，design 中保留演进原则与契约兼容说明。
-- **涉及 UI 时**：design 可选增加「编码规范与设计 token」小节，列出将用的 AppSpacing/AppTypography/AppColors；禁止硬编码 width/height/leadingSize/fontSize/EdgeInsets。
+- 说明能力边界
+- 说明关键旅程、NFR、发布治理
+- 组织其下的 `L2_feature`
 
-**设计原则（design 必须遵循）**：
+### 2.2 `L2_feature`
 
-1. **业界对标与多方案对比**：对设计主题做**业界最佳实践与标杆方案**的详细分析与对比（如 TikTok/Facebook 信息流、双塔/深度模型、训练与推理分离等），在 design 中给出**多个备选方案**（至少 2 个），从职责边界、SLA、可演进性、实施成本等维度对比，并说明**为何选择当前方案**。
-2. **最优或可演进到最优**：选定方案须是**当前条件下最具竞争力的方案**，或**具备明确演进路径、可演进到业界最优**；若因资源/时间/依赖限制无法一步到位，应采用**轻量化可行方案**，且不得阻塞后续演进。
-3. **轻量方案时的演进与规划任务**：当采用轻量方案而非一步到位时，**design.md** 中必须写明「当前方案与目标最优方案的差距」「演进路径与前置条件」；**tasks.md** 中必须增加**「搁置任务（带规划）」与「未来演进任务」**（见 2.3），便于跟踪与回顾审视。
+每个 `L2_feature` 目录必须具备以下四类文档：
 
-### 2.3 tasks.md
+- `spec.md`
+- `design.md`
+- `tasks.md`
+- `acceptance.yaml`
 
-- **必须包含**：
-  - **「当前交付任务」**：本阶段可执行、可验收的任务（可勾选列表）；顺序：metadata → codegen → 业务逻辑 → 测试；与 Story 驱动交付顺序一致。
-  - **「搁置任务（带规划）」**：因依赖/资源/优先级等原因暂不实施的任务，须写明**搁置原因、计划何时/在何条件下重启、由谁或何节点承接**，便于回顾审视与后续跟进。
-  - **「未来演进任务」**：与 design 中「未来演进」对应的中长期演进项（可勾选、不阻塞当前交付）；新开特性时在对应节点 spec/design/tasks 中细化。若无搁置或演进，可写「无」或「暂无」，但章节标题须保留以便统一回顾。
-- `tasks.md` **不是树层级**：它描述的是 L4 Story 的工程执行清单，而不是新增层级。
-- 以上三小节为**标准化结构**，便于门禁与复盘时一致检查；design 采用轻量方案时，「未来演进任务」必须非空且与 design 的「未来演进」对应。
-- **含 UI 的 task**：实施完成后须执行 `python3 scripts/verify_dart_semantic.py`，无新增硬编码视觉字面量。
-- **含错误码的 task**：须创建/更新 `errors.yaml`（含 l10n_key、user_message.zh/en），云侧 Handler 使用 generated.AppErrorFrom*，端侧使用 *ErrorCode.fromCode().toDisplayMessage(l10n)，测试使用枚举 .code；实施后执行 `python3 scripts/verify_error_code_semantic.py`。
+职责：
 
-### 2.4 acceptance.yaml
+- 作为稳定业务特性容器
+- 承载 Feature 范围、边界、聚合规则与 Feature 级验收
 
-- **必须包含**：`feature`、`level`、`template`、`execution.local_gate` / `full_gate`；L4 Story 须含 `level_acceptance` 的 A1~An 验收项。
-- **一致性**：与 spec 中的验收重点、design 中的交付边界对齐；门禁脚本可依赖本文件做完整性检查。
-- **含错误码时**：须有验收项「错误码由 errors.yaml 驱动，云侧无硬编码 user_message，端侧无硬编码 code 字符串」；tests 可引用 `*_error_code_contract_test` 或 journey 测试。
-- **必须包含（测试层视图）**：每条核心验收项应声明其对应的测试层，例如 `T1/T2/T3/T4`，用于把产品验收与测试金字塔统一到同一视图。
+### 2.3 `L3_story`
 
-#### 验收项结构（交付后必须填写 status 与 tests）
+每个 `L3_story` 目录必须具备以下四类文档：
 
-每个 A1~An 验收项须使用以下结构，**在实施阶段完成时回填**：
+- `spec.md`
+- `design.md`
+- `tasks.md`
+- `acceptance.yaml`
 
-```yaml
-level_acceptance:
-  A1:
-    criteria: "验收标准描述（与 spec 对齐）"
-    status: pending        # pending | implemented | waived | deferred
-    linked_tasks: [M1, C1] # 对应 tasks.md 中的任务编号
-    test_layers:
-      T1: required
-      T2: optional
-      T3: optional
-      T4: optional
-    tests:                 # 实现后回填，机器可验证
-      - file: test/cloud/content/feed_item_dto_contract_test.dart
-        functions: [generates_from_metadata, has_do_not_edit_header]
-  A2:
-    criteria: "..."
-    status: implemented
-    tests:
-      - file: test/features/content/typed_dto_contract_test.dart
-        functions: [photo_dto_from_map, video_dto_alias_resolution]
+职责：
+
+- 作为最小独立交付单元
+- 承载规格、设计、任务、验收和测试证据
+
+### 2.4 `Task`
+
+`Task` 不拥有独立目录，也不拥有独立四件套。  
+它只存在于 `tasks.md` 或后续 `tasks.yaml` 中。
+
+禁止行为：
+
+- 为 `Task` 建目录
+- 为 `Task` 建独立 `spec.md`
+- 为 `Task` 建独立 `design.md`
+- 为 `Task` 建独立 `acceptance.yaml`
+
+---
+
+## 三、四类文档职责
+
+| 文档 | 作用 |
+|------|------|
+| `spec.md` | 说明做什么、不做什么、为什么做、适用边界 |
+| `design.md` | 说明怎么做、为什么这样做、方案对比、关键决策 |
+| `tasks.md` | 说明 `Task` 执行清单、搁置项、未来演进项 |
+| `acceptance.yaml` | 说明验收标准、测试层映射、证据、执行门禁 |
+
+### 3.1 禁止第五类治理文档
+
+禁止在特性树节点下新增以下独立治理文档：
+
+- `analysis-*.md`
+- `README.md`
+- `architecture.md`
+- `diagram.md`
+- `*-规划.md`
+- `*-设计说明.md`
+
+分析、规划、架构说明、图示说明都必须汇入四件套内部。
+
+---
+
+## 四、文档内容要求
+
+### 4.1 `spec.md`
+
+必须包含：
+
+- 节点层级与定位
+- 背景与动机
+- 目标用户或平台价值
+- 功能范围
+- Out of Scope
+- 约束与适用边界
+- 对标输入与吸收结论
+- 验收重点
+
+### 4.2 `design.md`
+
+必须包含：
+
+- 设计动因
+- 上游输入评审
+- 对标输入分析
+- 至少两套方案对比
+- 选型决策
+- 关键设计决策
+- TDD / ATDD 策略
+- 未来演进
+
+若是 `L1_capability`，还必须在 `design.md` 内包含架构图示或等价文本说明，不得外置第五类文档。
+
+### 4.3 `tasks.md`
+
+必须包含三个标准区块：
+
+- 当前交付任务
+- 搁置任务（带规划）
+- 未来演进任务
+
+约束：
+
+- `tasks.md` 是 `Task` 的唯一正式承载位置
+- `tasks.md` 不是树层级
+- 任务应回链到 `acceptance.yaml` 的验收项
+
+### 4.4 `acceptance.yaml`
+
+必须包含：
+
+- `feature`
+- `level`
+- `execution`
+- `level_acceptance`
+
+每个核心验收项至少包含：
+
+- `criteria`
+- `status`
+- `linked_tasks`
+- `test_layers`
+- `tests`
+
+测试层只允许使用：
+
+- `T1`
+- `T2`
+- `T3`
+- `T4`
+
+---
+
+## 五、目录与索引规则
+
+- 特性树目录只允许三层目录深度：`L1_capability / L2_feature / L3_story`
+- `tree_index.yaml` 是索引唯一真相源
+- 不再允许脚手架、命令文案、辅助树文件维护第二套不一致层级定义
+
+违规即失败：
+
+- 发现三层以上目录
+- 发现 `L4` 或 `L5`
+- 发现 `acceptance.yaml` 使用旧 `level`
+- 发现旧层级残留在脚手架或 gate 中
+
+---
+
+## 六、节点生命周期
+
+每个正式节点在 `tree_index.yaml` 中通过 `status` 表示生命周期：
+
+- `specified`
+- `in_progress`
+- `completed`
+- `cancelled`
+- `deprecated`
+
+### 6.1 `L1_capability`
+
+可长期存在，通常不会频繁归档变动。
+
+### 6.2 `L2_feature`
+
+是稳定业务特性容器。
+
+### 6.3 `L3_story`
+
+是实施、验证、归档、提交的核心对象。
+
+### 6.4 `Task`
+
+不进入 `tree_index.yaml`，通过 `tasks.md` 管理状态。
+
+---
+
+## 七、与命令和流程的衔接
+
+- `/explore`
+  - 确认 `L1_capability`、`L2_feature` 与目标 `L3_story`
+- `/prd`
+  - 创建或更新 `L3_story` 的 `spec.md + acceptance.yaml`
+- `/design`
+  - 完成 `L3_story` 的 `design.md + tasks.md`
+- `/dev`
+  - 消费 `tasks.md` 中的 `Task`
+- `/verify`
+  - 复核 `L3_story` 完成度与测试证据
+- `/commit`
+  - 提交已完成的 `L3_story`
+
+---
+
+## 八、总结
+
+三层治理模型下，特性树文档的唯一正式结构为：
+
+```text
+L1_capability
+  └── L2_feature
+        └── L3_story
+              └── Task（写在 tasks.md / tasks.yaml）
 ```
 
-**status 取值语义**：
-- `pending`：尚未实现（基线化时的初始状态）
-- `implemented`：已实现并有测试覆盖（tests[] 非空，且文件/函数存在）
-- `waived`：验收项豁免（须在 criteria 后写明豁免原因）
-- `deferred`：延期（须在 tasks.md 搁置任务中有对应条目）
-
-**归档前门禁要求**：所有 A1~An 的 status 必须为 `implemented` / `waived` / `deferred`，不得有 `pending`。
-`implemented` 项的 `tests[]` 不得为空；`gate.sh check-feature-tree-consistency` 会验证 tests[] 中每个 file/function 确实存在。
-
----
-
-## 三、与命令、规则的衔接
-
-- **/prd**：创建或更新特性时，必须补齐或更新 **spec.md、design.md、tasks.md、acceptance.yaml**；不得生成四类以外的文档。
-- **/dev**：按 Story 驱动实施，**tasks.md** 承载工程清单；实现须符合 **spec.md** 与 **design.md**；默认执行 TDD，并在收口时自动将节点推进到已归档状态。
-- **/deliver**：Design 条件就绪后，**以 acceptance.yaml A1~A8 验收标准为驱动**，迭代完成开发 → 自验证 → 自动归档 → 提交入库；一气呵成交付到合入。
-- **/verify、/archive**：`/verify` 负责复核 **tasks.md** 完成度、**acceptance.yaml** A1~A8 与漂移；`/archive` 仅用于自动归档失效后的兼容补归档，回写 `status: completed` 和 `archived: true`。
-- **/prune**：检测并清理过期/作废节点；将节点标记为 `cancelled` 或 `deprecated`；更新 tree_index.yaml。
-- **/explore**：探索结论若需落档，应写入目标节点的 **spec/design/tasks**，不单独生成分析文档；若存在外部标杆输入，需记录借鉴点与边界。
-- **/try**：原型模式可暂时豁免特性树前置创建，但一旦验证成功，必须通过 `/land` 回补到本标准要求的四类文档。
-
-详见 `.cursor/commands/` 下各命令与 `specs/00_MASTER_DEVELOPMENT_FLOW.md`。
-
----
-
-## 四、节点生命周期（Node Lifecycle）
-
-每个特性树节点在 `tree_index.yaml` 中通过 `status` 字段跟踪生命周期。
-
-### 4.1 合法 status 取值
-
-| status | 语义 | 触发命令 | 可否归档 |
-|--------|------|----------|----------|
-| `specified` | 已规格化，待实施（默认初始值） | `/prd` create | 否 |
-| `in_progress` | 实施中（tasks.md 出现首个 `[x]`） | `/dev` 自动推进 | 否 |
-| `completed` | 已归档交付 | `/dev` 自动归档或 `/archive` 兼容补回写 | 是 |
-| `cancelled` | 需求取消，节点作废 | `/prune cancel` | — |
-| `deprecated` | 被其他节点取代，保留历史 | `/prune deprecate` | — |
-
-**state machine**：
-```
-specified ──→ in_progress ──→ completed
-    │               │
-    └──→ cancelled  └──→ cancelled
-    └──→ deprecated └──→ deprecated
-```
-
-### 4.2 过期节点（Stale/Expired Node）定义
-
-以下情形视为**潜在过期节点**，由 `/prune` 或 `gate.sh` 检测并报告：
-
-| 判断条件 | 严重度 | 建议处理 |
-|----------|--------|----------|
-| `status=specified`，tasks.md 全为 `[ ]`，且 **90 天以上无 git 变更** | WARNING | `/prune cancel` 或重确认优先级 |
-| `status=in_progress`，acceptance.yaml 存在 pending 项，且 **60 天无 git 变更** | WARNING | 重启实施或降为 `specified`/`cancelled` |
-| `status=completed` 但 acceptance.yaml 无 `archived: true` | BLOCKING | 优先确认 `/dev` 是否已自动归档；若未回写则用 `/archive` 兼容补回写 |
-| `status=cancelled/deprecated` 但 tasks.md 仍有 `[ ]` 任务 | BLOCKING | 清理 tasks.md 中残余任务 |
-| 节点目录存在但不在 `tree_index.yaml` 中（孤儿目录） | BLOCKING | 补充到 tree_index 或删除 |
-| `tree_index.yaml` 中节点路径指向不存在的目录 | BLOCKING | 修复路径或删除索引条目 |
-
-### 4.3 取消与废弃（Cancel vs Deprecate）
-
-- **`cancelled`**：需求被明确放弃，目录保留（历史参考），不再出现在 gate 报告的活跃检查中。
-  - 必须在 spec.md 顶部加注 `> **CANCELLED**: <取消日期> — <取消原因>`
-  - tasks.md 中 `[ ]` 任务须改为 `~~[ ]~~`（Markdown 删除线）或清空
-
-- **`deprecated`**：需求被更优方案取代，需要在 spec.md 中写明替代节点路径。
-  - 必须在 spec.md 顶部加注 `> **DEPRECATED**: 已由 <替代路径> 取代`
-  - acceptance.yaml 顶层加入 `superseded_by: <替代节点路径>`
-
-### 4.4 自动归档或 `/archive` 必须回写 tree_index
-
-自动归档或兼容补归档执行成功后，必须更新 `tree_index.yaml`：
-```yaml
-status: completed   # 从 specified/in_progress 改为 completed
-```
-以及更新 `acceptance.yaml`：
-```yaml
-archived: true
-archived_at: 2026-03-01T00:00:00Z
-```
-
----
-
-## 五、索引与树结构
-
-- 节点目录与层级以 **tree_index.yaml** 为准；新增节点时同步更新 tree_index。
-- 四类文档路径约定：`specs/feature-tree/<L1>/<L2>/.../spec.md`（及同目录下 design.md、tasks.md、acceptance.yaml）。
-- 节点 status 生命周期见第四节；gate.sh 的 `check-feature-tree-consistency` 会自动检查 lifecycle 一致性和孤儿目录。
-
----
-
-## 六、层级定义（引用）
-
-特性树层级的**唯一权威定义**及**与开发卡点的落实关系**见 `specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md`。
-
-**简要约定**：
-
-| 层级 | 语义 | 统一 level | 分解要点 |
-|------|------|------------|----------|
-| L1 | 关键能力 | L1 | 固定顶级能力域 |
-| L2 | 功能特性 | L2_feature | 具备独立交付价值 |
-| L3 | 子功能或组件 | L3_subfeature | 有独立契约或模块边界 |
-| L4 | Story / 最小交付单元 | L4_story | **默认叶子层**，可开发、可验收 |
-| Legacy L5 | 历史兼容层 | L5 / L5_subtask | 仅迁移期兼容 |
-
-**原则**：默认止于 L4，工程子步骤进入 `tasks.md`；新特性不再默认新增 L5。
-
----
-
-## 七、L1 架构设计交付规范（渐进式，强建议）
-
-为提升 L1 节点的可执行性与可审计性，建议将 L1 架构设计纳入特性树四件套，不新增第五类文档。
-
-### 7.1 交付位置与格式
-
-- **交付位置**：仅放在对应节点 `design.md`。
-- **图示格式**：建议使用 Mermaid（可 diff、可审查）。
-- **禁止**：将架构图分散到独立 `architecture.md`、`diagram.md`。
-
-### 7.2 L1 最低交付件（必备三图）
-
-L1 `design.md` 至少包含以下三类图示与说明：
-
-1. **组件/包图**（Component + Package）
-   - 展示系统核心组件边界、模块依赖与单向约束。
-   - 必须标注关键组件对应代码目录（如 `engine/`、`skills/`、`tools/`、`template_runtime/`）。
-
-2. **用例图**（Use Case）
-   - 展示核心用例与参与者（用户、主代理、子代理、工具、外部检索）。
-   - 必须覆盖成功路径与失败恢复路径。
-
-3. **流程图**（Flow）
-   - 展示主链路（输入 → 路由 → 规划 → 工具 → 观察 → 合成 → 输出）。
-   - 必须包含至少一个异常分支（重试/降级/补槽）。
-
-### 7.3 渐进式架构设计层次（L1）
-
-- **L1-Baseline**：先交主链路与核心边界（保证可实现）。
-- **L1-Progressive**：补充多技能编排、子代理、证据门禁等增强路径。
-- **L1-Hardening**：将图示映射到验收项和任务项，形成门禁闭环。
-
-### 7.4 与 tasks / acceptance 的强关联
-
-- `tasks.md` 必须包含“架构对齐任务”，至少一项对应每类图示。
-- `acceptance.yaml` 必须有 L1 架构验收项，至少检查：
-  - 三图齐全；
-  - 图与实现路径映射存在；
-  - 图与任务编号可追溯；
-  - 异常分支覆盖（重试/降级/补槽至少其一）。
-
-### 7.5 审查口径（建议门禁化）
-
-建议在特性树一致性检查中增加以下规则：
-- L1 节点 `design.md` 缺三图任一项 -> WARNING（可逐步升级为 BLOCKING）。
-- 三图与 `tasks.md` 无编号映射 -> WARNING。
-- `acceptance.yaml` 无 L1 架构验收项 -> WARNING。
+四件套服务于 `L1_capability`、`L2_feature` 与 `L3_story`。  
+`Task` 是执行层，不再是目录层。

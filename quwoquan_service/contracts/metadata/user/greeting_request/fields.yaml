@@ -1,0 +1,112 @@
+version: 1
+entity: GreetingRequest
+
+fields:
+  - name: id
+    type: string
+    constraints: [PK, NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: requesterSubAccountId
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 发起方子账号 ID
+
+  - name: targetSubAccountId
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 接收方子账号 ID
+
+  - name: requestMessage
+    type: string
+    constraints: [NULLABLE]
+    classification: SENSITIVE
+    log_policy: mask
+    api_exposure: read_write
+    ops_exposure: mask
+    description: 打招呼自定义内容，最长 200 字
+
+  - name: status
+    type: enum
+    enum_ref: GreetingRequestStatus
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: |
+      pending    - 等待回复（进入接收方请求箱，不进入聊天列表）
+      replied    - 对方已回复，自动升级为正式 Conversation
+      ignored    - 接收方主动忽略
+      blocked    - 接收方已拉黑发起方（静默，发起方不可见被拉黑事实）
+      cancelled  - 发起方撤回
+      expired    - 超期未处理（expireAt 触发）
+
+  - name: source
+    type: enum
+    enum_ref: GreetingRequestSource
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: profile/recommendation/group_member/invite（请求来源，用于漏斗分析）
+
+  - name: promotedConversationId
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 升级后的正式会话 ID（status=replied 时写入）
+
+  - name: expireAt
+    type: timestamp
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 请求过期时间（默认 30 天）
+
+  - name: decisionAt
+    type: timestamp
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 接收方作出决策的时间（replied/ignored/blocked）
+
+  - name: createdAt
+    type: timestamp
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: updatedAt
+    type: timestamp
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+unique_constraints:
+  - columns: [requesterSubAccountId, targetSubAccountId, status]
+    where: status = 'pending'
+    description: 同一发起方对同一接收方，同时只能有一条 pending 请求（频控幂等）

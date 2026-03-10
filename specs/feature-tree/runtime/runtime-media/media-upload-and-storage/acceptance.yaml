@@ -1,54 +1,56 @@
 feature: media-upload-and-storage
-level: L3_subfeature
+level: "L3_story"
 archived: true
-archived_at: "2026-03-07T18:20:24Z"
-
+archived_at: '2026-03-07T18:20:24Z'
 execution:
   local_gate: make build && make test-contract
   full_gate: make gate-full
-
 level_acceptance:
   A1:
-    criteria: "MediaStore 接口 5 个方法签名完整，与 metadata service.yaml 定义一致"
+    criteria: MediaStore 接口 5 个方法签名完整，与 metadata service.yaml 定义一致
     status: implemented
-    linked_tasks: [G1]
+    linked_tasks:
+    - G1
     test_layers:
       T1: required
       T2: required
       T3: optional
       T4: optional
     tests:
-      - file: quwoquan_service/runtime/media/media_test.go
-        layer: T1
-        description: "MockMediaStore 接口完整性验证"
-
+    - file: quwoquan_service/runtime/media/media_test.go
+      layer: T1
+      description: MockMediaStore 接口完整性验证
   A2:
-    criteria: "presigned URL 上传端到端可用（InitUpload → PUT → CompleteUpload → GetAsset 返回 ready）"
+    criteria: presigned URL 上传端到端可用（InitUpload → PUT → CompleteUpload → GetAsset 返回
+      ready）
     status: implemented
-    linked_tasks: [G3, G5]
+    linked_tasks:
+    - G3
+    - G5
     test_layers:
       T1: required
       T2: required
       T3: required
       T4: optional
     tests:
-      - file: quwoquan_service/runtime/media/media_test.go
-        layer: T1
-        description: "MockMediaStore Init→Complete→Get 端到端流程"
-
+    - file: quwoquan_service/runtime/media/media_test.go
+      layer: T1
+      description: MockMediaStore Init→Complete→Get 端到端流程
   A3:
-    criteria: "上传策略引擎对 messaging/audio 限制 5MB/120s、content/video 限制 500MB 生效，超限返回 policy_violation 错误"
+    criteria: 上传策略引擎对 messaging/audio 限制 5MB/120s、content/video 限制 500MB 生效，超限返回 policy_violation
+      错误
     status: implemented
-    linked_tasks: [G2]
+    linked_tasks:
+    - G2
     test_layers:
       T1: required
       T2: required
       T3: optional
       T4: optional
     tests:
-      - file: quwoquan_service/runtime/media/media_test.go
-        layer: T1
-        description: "ValidateUpload 策略引擎单测"
-      - file: quwoquan_app/test/cloud/media/contract/upload_policy_contract_test.dart
-        layer: T1
-        description: "端侧 UploadPolicy 契约测试"
+    - file: quwoquan_service/runtime/media/media_test.go
+      layer: T1
+      description: ValidateUpload 策略引擎单测
+    - file: quwoquan_app/test/cloud/media/contract/upload_policy_contract_test.dart
+      layer: T1
+      description: 端侧 UploadPolicy 契约测试

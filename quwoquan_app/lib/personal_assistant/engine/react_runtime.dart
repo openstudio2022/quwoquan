@@ -145,6 +145,8 @@ class ReactRuntime {
     await _toolMetadataRegistry?.ensureLoaded();
     _toolRegistry.resetCallHistory();
     _assessor.reset();
+    _assessor.problemClass =
+        (templateVariables['problemClass'] as String?)?.trim() ?? '';
     _executionGuard.reset();
     final goalText = goal.isEmpty
         ? (messages.lastWhere(
@@ -680,14 +682,19 @@ class ReactRuntime {
           });
         }
 
-        final replan = _reflector.shouldReplan(
-          state: state,
-          lastStepSuccess: isOk,
-          lastObservation: toolObservation,
-          policy: _reactPolicy,
-        );
+        // Skip reflection loop entirely when reflectionBudget == 0
+        // (e.g. realtime_info / weather queries that should converge fast).
+        final shouldSkipReflection = executionShell.reflectionBudget == 0;
 
-        // Post-tool assessment: emit user-visible evaluation
+        final replan = shouldSkipReflection
+            ? false
+            : _reflector.shouldReplan(
+                state: state,
+                lastStepSuccess: isOk,
+                lastObservation: toolObservation,
+                policy: _reactPolicy,
+              );
+
         final assessment = _assessor.assess(
           state: state,
           lastStepSuccess: isOk,

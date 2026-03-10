@@ -1,0 +1,52 @@
+version: 1
+feature: producer-consumer-retry-dlq
+level: "L3_story"
+template: A1-A8
+tree_context:
+  feature_path: capability.runtime.object.producer-consumer-retry-dlq
+  parent_path: capability.runtime
+  acceptance_inherits_from: capability.runtime
+level_acceptance:
+  focus_groups:
+  - A1_functional
+  - A6_security_privacy
+  - A7_contract_metadata_consistency
+  notes: runtime 对象任务验收
+global_acceptance:
+  A1_functional:
+    scenarios:
+    - given: 对象任务接入
+      when: 执行流程
+      then: 输出符合预期
+  A2_experience:
+  - 体验稳定
+  A3_service_governance:
+  - 治理策略可回滚
+  A4_observability:
+  - 可观测字段完整
+  A5_product_ops:
+  - 可支持运营侧分析
+  A6_security_privacy:
+  - 字段安全策略有效
+  A7_contract_metadata_consistency:
+  - 契约元数据一致
+  A8_test_automation:
+  - 自动化测试覆盖
+tests:
+  mock:
+  - runtime/tests/mock_producer-consumer-retry-dlq
+  unit:
+  - runtime/tests/unit_producer-consumer-retry-dlq
+  contract:
+  - runtime/tests/contract_producer-consumer-retry-dlq
+  integration:
+  - runtime/tests/integration_producer-consumer-retry-dlq
+  uat:
+  - UAT-RUNTIME-PRODUCER_CONSUMER_RETRY_DLQ-001
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+legacy_merged_acceptance:
+- source_path: runtime/runtime-messaging/envelope-schema-idempotency/producer-consumer-retry-dlq/outbox-inbox-consistency-pattern
+  task_bucket: outbox-inbox-consistency-pattern
+  migrated_as: L3_task

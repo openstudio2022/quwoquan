@@ -29,6 +29,11 @@ func main() {
 		exitErr(fmt.Errorf("load manifest: %w", err))
 	}
 
+	// Pre-pass: merge events from all sources with same domain_pkg → one events.g.go per pkg.
+	if err := generateMergedEventConstants(manifest, metadataDir); err != nil {
+		exitErr(fmt.Errorf("gen events: %w", err))
+	}
+
 	migrationSeq := 1
 
 	for _, src := range manifest.Sources {
@@ -333,6 +338,8 @@ func entityToSnake(entity string) string { return codegen.CamelToSnake(entity) }
 func sqlTypeToGo(sqlType string, notNull bool) string {
 	upper := strings.ToUpper(sqlType)
 	switch {
+	case upper == "TEXT[]", upper == "VARCHAR[]":
+		return "[]string"
 	case strings.HasPrefix(upper, "VARCHAR"), upper == "TEXT":
 		return "string"
 	case upper == "INTEGER", upper == "INT", upper == "BIGINT":

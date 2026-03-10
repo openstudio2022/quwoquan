@@ -1,14 +1,113 @@
 version: 1
-feature: "persona-follow-graph"
-level: "L2"
-template: "A1-A8"
-focus_groups: []
-tests:
-  mock: []
-  unit: []
-  contract: []
-  integration: []
-  uat: []
+feature: persona-follow-graph
+level: "L2_feature"
+template: A1-A8
+archived: false
+tree_context:
+  feature_path: capability.user-identity-profile-relationship.feature.persona-follow-graph
+  parent_path: capability.user-identity-profile-relationship
+notes:
+  semantic_upgrade:
+  - 保留历史路径名 persona-follow-graph，业务语义升级为子账号隔离与关系网络
+  benchmark_inputs:
+  - 微信：强关系链路与工作/生活身份冲突痛点
+  - 小红书：人格化表达与评论身份感知
+  - 微博：运营账号心智、粉丝关系与传播
+non_functional_acceptance:
+  realtime:
+    enabled: true
+    slo:
+    - 子账号切换到新上下文 P95 < 1s
+    - 切换后评论、私信、圈子、邀请主体立即一致，不发生串号
+  weak_network:
+    enabled: true
+    scenarios:
+    - 关系建立、切换、删除失败后可恢复且不写入错误归属
+    - 分页与列表重试后不跨子账号串数据
+  gray_release:
+    enabled: true
+    steps:
+    - 5
+    - 25
+    - 50
+    - 100
+    rollback_on:
+    - 多个子账号被外部链路间接关联
+    - 好友/圈子/群/邀请归属串号
+    - 切换后推荐、聊天、评论上下文不同步
+level_acceptance:
+  A1:
+    criteria: 用户可以创建、切换和管理多个 SubAccount，且单子账号用户路径依旧简单。
+    status: pending
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: optional
+    tests: []
+  A2:
+    criteria: 好友、关注、圈子、群、评论、私信、主页与互动数据都按 SubAccount 独立归属。
+    status: pending
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: optional
+    tests: []
+  A3:
+    criteria: 外部默认无法从主页、评论、共同联系人、圈子参与、邀请传播与常规业务接口推断多个子账号归属于同一 OwnerAccount。
+    status: pending
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests: []
+  A4:
+    criteria: 通讯录匹配结果来自 OwnerAccount，但转化为好友、圈子、群或其他真实关系时必须显式落到具体 SubAccount。
+    status: pending
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: optional
+    tests: []
+  A5:
+    criteria: 评论、发帖、加好友、进圈、私信、邀请等关键动作可以明确绑定当前 SubAccount，不发生串号。
+    status: pending
+    test_layers:
+      T1: optional
+      T2: required
+      T3: required
+      T4: optional
+    tests: []
+  A6:
+    criteria: 平台审计与风控能追踪 OwnerAccount 到 SubAccount 的映射，但普通读接口遵循隔离与最小暴露。
+    status: pending
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests: []
+  A7:
+    criteria: 子账号、关系网络、隔离规则相关 service/openapi/fields/errors 契约与 metadata 一致。
+    status: pending
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests: []
+  A8:
+    criteria: 自动化测试覆盖子账号生命周期、关系网络分页、切换透传、隔离验证与异常恢复，可进入 `/design` 细化对象拆分。
+    status: pending
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: required
+    tests: []
 execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
+  local_gate: make gate
+  full_gate: make gate-full

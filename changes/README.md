@@ -4,7 +4,7 @@
 
 全量特性台账：
 - `changes/feature_catalog.yaml`
-- `changes/feature_tree.yaml`（目录层级特性树，路径+标题可读）
+- `changes/feature_tree.yaml` 已退役，不再作为特性树结构来源
 - 每条特性必须补充：`opsx_change_id`、`opsx_specs`、`delivery_profile`
 
 创建新特性目录：

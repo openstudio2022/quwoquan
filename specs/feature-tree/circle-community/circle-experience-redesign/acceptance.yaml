@@ -1,34 +1,33 @@
 feature: circle-experience-redesign
-level: L2_feature
+level: "L2_feature"
 archived: false
 level_acceptance:
-  - id: A1
-    description: >
-      统一领域标签配置文件（domain_taxonomy.yaml）建立，包含至少 11 个领域 ID，
-      圈子频道配置和助理领域路由均引用同一套 ID。
-    status: pending
-    tests: []
+- id: A1
+  description: '统一领域标签配置文件（domain_taxonomy.yaml）建立，包含至少 11 个领域 ID， 圈子频道配置和助理领域路由均引用同一套
+    ID。
 
-  - id: A2
-    description: >
-      圈子列表页「推荐」频道基于同频推荐排序，推荐结果与用户近 7 天活跃领域相关度 ≥ 60%。
-      推荐服务不可用时自动降级到按热度排序。
-    status: pending
-    tests: []
+    '
+  status: pending
+  tests: []
+- id: A2
+  description: '圈子列表页「推荐」频道基于同频推荐排序，推荐结果与用户近 7 天活跃领域相关度 ≥ 60%。 推荐服务不可用时自动降级到按热度排序。
 
-  - id: A3
-    description: >
-      圈子详情页 CircleShell 重构完成（对标 ProfileShell），"作品"Tab 更名为"创作"
-      并新增二级 SubTab（全部/微趣/图片/视频/文字），各板块独立加载，
-      CircleStateNotifier 状态管理，Circle DTO 类型化，
-      单板块加载失败不影响其他板块。详细验收见 L3 circle-homepage-redesign/acceptance.yaml A1~A10。
-    status: pending
-    tests:
-      - path: quwoquan_app/lib/ui/circle/pages/circle_detail_page.dart
+    '
+  status: pending
+  tests: []
+- id: A3
+  description: '圈子详情页 CircleShell 重构完成（对标 ProfileShell），"作品"Tab 更名为"创作" 并新增二级 SubTab（全部/微趣/图片/视频/文字），各板块独立加载，
+    CircleStateNotifier 状态管理，Circle DTO 类型化， 单板块加载失败不影响其他板块。详细验收见 L3 circle-homepage-redesign/acceptance.yaml
+    A1~A10。
 
-  - id: A4
-    description: >
-      在特定领域圈子内唤起助理时，助理自动路由到对应领域技能（如旅行圈内唤起 → travel_planning），
-      通过 pageType + domainContext 参数传递。
-    status: pending
-    tests: []
+    '
+  status: pending
+  tests:
+  - path: quwoquan_app/lib/ui/circle/pages/circle_detail_page.dart
+- id: A4
+  description: '在特定领域圈子内唤起助理时，助理自动路由到对应领域技能（如旅行圈内唤起 → travel_planning）， 通过 pageType
+    + domainContext 参数传递。
+
+    '
+  status: pending
+  tests: []

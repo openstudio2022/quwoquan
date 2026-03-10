@@ -1,0 +1,18 @@
+version: 1
+feature: settings-change-trace-link
+level: "L3_story"
+template: A1-A8
+focus_groups: []
+tests:
+  mock: []
+  unit: []
+  contract: []
+  integration: []
+  uat: []
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+legacy_merged_acceptance:
+- source_path: user-identity-profile-relationship/settings-and-device-token/settings-audit/settings-change-trace-link/compliance-audit-export
+  task_bucket: compliance-audit-export
+  migrated_as: L3_task

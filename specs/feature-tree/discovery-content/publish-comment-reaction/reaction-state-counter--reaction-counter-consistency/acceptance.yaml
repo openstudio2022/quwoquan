@@ -1,0 +1,18 @@
+version: 1
+feature: reaction-counter-consistency
+level: "L3_story"
+template: A1-A8
+focus_groups: []
+tests:
+  mock: []
+  unit: []
+  contract: []
+  integration: []
+  uat: []
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+legacy_merged_acceptance:
+- source_path: discovery-content/publish-comment-reaction/reaction-state-counter/reaction-counter-consistency/eventual-consistency-repair-job
+  task_bucket: eventual-consistency-repair-job
+  migrated_as: L3_task

@@ -1,14 +1,74 @@
 version: 1
-feature: "contact-and-session-governance"
-level: "L2"
-template: "A1-A8"
+feature: contact-and-session-governance
+level: "L2_feature"
+status: specified
+archived: false
+template: '2026-03-10'
 focus_groups: []
-tests:
-  mock: []
-  unit: []
-  contract: []
-  integration: []
-  uat: []
 execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
+  local_gate: make gate
+  full_gate: make gate-full
+level_acceptance:
+  A1:
+    criteria: 五态关系模型 `我自己/陌生用户/关注用户/同好/密友` 在主页、会话、音视频权限上语义一致
+    status: pending
+    test_layers:
+      T1: required
+      T2: required
+  A2:
+    criteria: 打招呼支持自定义内容，但未被回复前仅进入请求箱，不进入普通聊天列表
+    status: pending
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+  A3:
+    criteria: 对方回复打招呼后，系统自动升级为正式 1v1 会话，并进入普通聊天列表
+    status: pending
+    test_layers:
+      T2: required
+      T3: required
+  A4:
+    criteria: 正式会话建立后但尚未互关时，会话内存在明确的“加同好”升级入口
+    status: pending
+    test_layers:
+      T2: required
+      T3: required
+  A5:
+    criteria: '`同好 = 互关`；任一方取消关注后自动降级并失去同好状态'
+    status: pending
+    test_layers:
+      T1: required
+      T3: required
+  A6:
+    criteria: '`密友 ⊂ 同好`；添加同好时可勾选为密友，后续也可手动切换，非同好不可设为密友'
+    status: pending
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+  A7:
+    criteria: 打招呼、加同好、密友切换受免骚扰设置、频控、拉黑规则约束，无法绕过对象级治理
+    status: pending
+    test_layers:
+      T1: required
+      T3: required
+  A8:
+    criteria: 群聊治理边界明确：群聊设置页不提供拉黑群聊，也不提供举报群；举报/拉黑下沉到成员和消息对象
+    status: pending
+    test_layers:
+      T2: required
+      T3: required
+  A9:
+    criteria: 同好/密友解锁音视频入口，关注用户与仅有请求关系用户不解锁音视频入口
+    status: pending
+    test_layers:
+      T2: required
+      T3: required
+  A10:
+    criteria: 请求箱、正式会话、同好升级、密友标记全链路具备可观测事件与状态审计
+    status: pending
+    test_layers:
+      T1: required
+      T3: required
+      T4: optional

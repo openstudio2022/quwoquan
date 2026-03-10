@@ -1,0 +1,35 @@
+feature: call-lifecycle-contract
+level: "L3_story"
+parent: one-to-one-call
+status: specified
+archived: false
+level_acceptance:
+  A17:
+    criteria: InitiateCall → 创建 CallSession(status=INITIATED) + LiveKit Room + 返回
+      callId/roomId/Token
+    status: pending
+    ref: realtime-call/acceptance.yaml A17
+  A18:
+    criteria: AnswerCall → 状态流转 RINGING→CONNECTING→IN_CALL，双方 Token 有效可连接 SFU
+    status: pending
+    ref: realtime-call/acceptance.yaml A18
+  A19:
+    criteria: HangupCall → 通话结束 + duration 计算精确到秒 + call.ended 事件发布
+    status: pending
+    ref: realtime-call/acceptance.yaml A19
+  A20:
+    criteria: RejectCall → 发起方收到 REJECTED 通知 + endReason=REJECTED + 通话结束
+    status: pending
+    ref: realtime-call/acceptance.yaml A20
+  A21:
+    criteria: 超时 30s 无应答 → status=ENDED + endReason=NO_ANSWER，双方正确收到通知
+    status: pending
+    ref: realtime-call/acceptance.yaml A21
+  A32:
+    criteria: 1v1 语音通话完整旅程：从 ChatDetail 发起→呼叫动效→接听→通话 30s→挂断→记录消息可见
+    status: pending
+    ref: realtime-call/acceptance.yaml A32
+  A33:
+    criteria: 1v1 视频通话完整旅程：同上 + 视频流双向可见 + 前后摄像头切换无闪屏
+    status: pending
+    ref: realtime-call/acceptance.yaml A33

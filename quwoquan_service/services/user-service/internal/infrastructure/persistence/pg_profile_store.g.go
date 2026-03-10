@@ -22,11 +22,11 @@ type pgProfileStoreBase struct {
 	pool *pgxpool.Pool
 }
 
-const userProfileCols = `user_id, phone, nickname, avatar_url, bio, gender, birth_date, region, status, profile_version, follower_count, following_count, post_count, circle_count, like_count, created_at, updated_at`
+const userProfileCols = `user_id, phone, nickname, avatar_url, bio, gender, birth_date, region, status, profile_version, follower_count, following_count, post_count, circle_count, like_count, owner_display_name, sub_account_count, created_at, updated_at`
 
 func scanUserProfile(row pgx.Row) (*model.UserProfile, error) {
 	e := &model.UserProfile{}
-	err := row.Scan(&e.UserID, &e.Phone, &e.Nickname, &e.AvatarURL, &e.Bio, &e.Gender, &e.BirthDate, &e.Region, &e.Status, &e.ProfileVersion, &e.FollowerCount, &e.FollowingCount, &e.PostCount, &e.CircleCount, &e.LikeCount, &e.CreatedAt, &e.UpdatedAt)
+	err := row.Scan(&e.UserID, &e.Phone, &e.Nickname, &e.AvatarURL, &e.Bio, &e.Gender, &e.BirthDate, &e.Region, &e.Status, &e.ProfileVersion, &e.FollowerCount, &e.FollowingCount, &e.PostCount, &e.CircleCount, &e.LikeCount, &e.OwnerDisplayName, &e.SubAccountCount, &e.CreatedAt, &e.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -48,8 +48,8 @@ func (s *pgProfileStoreBase) Create(ctx context.Context, e *model.UserProfile) e
 	e.CreatedAt = now
 	e.UpdatedAt = now
 	_, err := s.pool.Exec(ctx,
-		`INSERT INTO user_profiles (user_id, phone, nickname, avatar_url, bio, gender, birth_date, region, status, profile_version, follower_count, following_count, post_count, circle_count, like_count, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
-		e.UserID, e.Phone, e.Nickname, e.AvatarURL, e.Bio, e.Gender, e.BirthDate, e.Region, e.Status, e.ProfileVersion, e.FollowerCount, e.FollowingCount, e.PostCount, e.CircleCount, e.LikeCount, e.CreatedAt, e.UpdatedAt)
+		`INSERT INTO user_profiles (user_id, phone, nickname, avatar_url, bio, gender, birth_date, region, status, profile_version, follower_count, following_count, post_count, circle_count, like_count, owner_display_name, sub_account_count, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
+		e.UserID, e.Phone, e.Nickname, e.AvatarURL, e.Bio, e.Gender, e.BirthDate, e.Region, e.Status, e.ProfileVersion, e.FollowerCount, e.FollowingCount, e.PostCount, e.CircleCount, e.LikeCount, e.OwnerDisplayName, e.SubAccountCount, e.CreatedAt, e.UpdatedAt)
 	return err
 }
 
@@ -57,8 +57,8 @@ func (s *pgProfileStoreBase) Create(ctx context.Context, e *model.UserProfile) e
 func (s *pgProfileStoreBase) Update(ctx context.Context, e *model.UserProfile) error {
 	e.UpdatedAt = time.Now().UTC()
 	tag, err := s.pool.Exec(ctx,
-		`UPDATE user_profiles SET phone=$2, nickname=$3, avatar_url=$4, bio=$5, gender=$6, birth_date=$7, region=$8, status=$9, profile_version=$10, follower_count=$11, following_count=$12, post_count=$13, circle_count=$14, like_count=$15, created_at=$16, updated_at=$17 WHERE user_id = $1`,
-		e.UserID, e.Phone, e.Nickname, e.AvatarURL, e.Bio, e.Gender, e.BirthDate, e.Region, e.Status, e.ProfileVersion, e.FollowerCount, e.FollowingCount, e.PostCount, e.CircleCount, e.LikeCount, e.CreatedAt, e.UpdatedAt)
+		`UPDATE user_profiles SET phone=$2, nickname=$3, avatar_url=$4, bio=$5, gender=$6, birth_date=$7, region=$8, status=$9, profile_version=$10, follower_count=$11, following_count=$12, post_count=$13, circle_count=$14, like_count=$15, owner_display_name=$16, sub_account_count=$17, created_at=$18, updated_at=$19 WHERE user_id = $1`,
+		e.UserID, e.Phone, e.Nickname, e.AvatarURL, e.Bio, e.Gender, e.BirthDate, e.Region, e.Status, e.ProfileVersion, e.FollowerCount, e.FollowingCount, e.PostCount, e.CircleCount, e.LikeCount, e.OwnerDisplayName, e.SubAccountCount, e.CreatedAt, e.UpdatedAt)
 	if err != nil {
 		return err
 	}

@@ -1,0 +1,26 @@
+version: 1
+domain: user
+entity: GreetingRequest
+is_aggregate: true
+
+description: |
+  打招呼请求对象（请求箱容器）。
+  用户向陌生/关注用户发送的接触请求，在对方回复前独立于正式会话容器存在，
+  不污染主聊天列表。回复后自动升级为正式 Conversation。
+
+storage_backend: postgresql
+cache_layer: redis
+
+capabilities:
+  - queryable
+  - cacheable
+
+taggable: false
+vector_enabled: false
+
+ddd_layer_mapping:
+  domain_model: internal/domain/user/model
+  repository: internal/domain/user/repository
+  application: internal/application
+  adapter_rest: internal/adapters/http
+  adapter_event: internal/adapters/mq

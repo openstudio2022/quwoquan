@@ -1,0 +1,144 @@
+version: 1
+entity: InviteRecord
+
+fields:
+  - name: id
+    type: string
+    constraints: [PK]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: inviterSubAccountId
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 发起邀请的子账号 ID（归因主体）
+
+  - name: inviterOwnerAccountId
+    type: string
+    constraints: [NOT_NULL]
+    classification: SECRET
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: mask
+    description: 内部审计字段——发起邀请的主控账号 ID（不对外暴露）
+
+  - name: channel
+    type: enum
+    enum_ref: InviteChannel
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: "邀请渠道：link / qrcode / contact / sms"
+
+  - name: linkCode
+    type: string
+    constraints: [NOT_NULL, UK]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 邀请码（URL path 参数，全局唯一）
+
+  - name: inviteePhoneHash
+    type: string
+    constraints: [NULLABLE]
+    classification: PII
+    log_policy: drop
+    api_exposure: drop
+    ops_exposure: drop
+    description: 被邀请人手机号哈希（仅 contact/sms 渠道存在，原文不存储）
+
+  - name: status
+    type: enum
+    enum_ref: InviteStatus
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: expireAt
+    type: timestamp
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: generatedAt
+    type: timestamp
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: deliveredAt
+    type: timestamp
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+    description: 邀请链接被首次点击时间
+
+  - name: viewedAt
+    type: timestamp
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+
+  - name: acceptedAt
+    type: timestamp
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 被邀请人注册成功时间
+
+  - name: convertedAt
+    type: timestamp
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 被邀请人首次有效使用（激活完成）时间
+
+enums:
+  InviteChannel:
+    values: [link, qrcode, contact, sms]
+    description: link=通用链接；qrcode=二维码；contact=通讯录；sms=短信
+
+  InviteStatus:
+    values: [generated, delivered, viewed, accepted, activated, expired]
+    description: >
+      generated: 已生成；
+      delivered: 已送达（链接点击）；
+      viewed: 已查看（注册页打开）；
+      accepted: 已接受（注册完成）；
+      activated: 已激活（首次有效使用）；
+      expired: 已过期
+
+state_machine:
+  field: status
+  transitions:
+    - from: generated
+      to: [delivered, expired]
+    - from: delivered
+      to: [viewed, expired]
+    - from: viewed
+      to: [accepted, expired]
+    - from: accepted
+      to: [activated]

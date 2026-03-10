@@ -63,6 +63,15 @@ enums:
   EndReason: [normal, cancelled, rejected, no_answer, error, timeout, last_leave]
   ParticipantRole: [initiator, invitee]
   ParticipantStatus: [invited, ringing, connecting, connected, left, timeout]
+  IsolationLevel: [open, semi, strict]
+  CredentialType: [phone, wechat, apple]
+  DiscoveryStatus: [pending, processing, completed, dismissed]
+  InviteChannel: [link, qrcode, contact, sms]
+  InviteStatus: [generated, delivered, viewed, accepted, activated, expired]
+  GreetingRequestStatus: [pending, replied, ignored, blocked, cancelled, expired]
+  GreetingRequestSource: [profile, recommendation, group_member, invite]
+  ConversationOriginType: [direct_init, greeting_reply]
+  RelationTier: [none, following_only, same_interest, close_friend, self]
 
 classifications:
   PUBLIC: 公开数据

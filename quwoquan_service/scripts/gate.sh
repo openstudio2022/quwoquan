@@ -407,7 +407,16 @@ ruby -ryaml -rdate -e '
   # ── 5.5 tree_index.yaml 与目录结构双向同步 + lifecycle 一致性 ──────
   service_root = File.expand_path(ARGV[0])   # quwoquan_service/
   index_path   = File.join(specs_root, "tree_index.yaml")
-    valid_statuses = %w[specified in_progress completed archived cancelled deprecated planned]
+  index_base   = File.dirname(index_path)
+  valid_statuses = %w[specified in_progress completed archived cancelled deprecated planned]
+
+  resolve_feature_dir = lambda do |rel_path|
+    candidates = [
+      File.expand_path(rel_path, index_base),
+      File.expand_path(rel_path, service_root),
+    ]
+    candidates.find { |p| Dir.exist?(p) } || candidates.last
+  end
 
   if File.exist?(index_path)
     index = load_yaml(index_path) || {}
@@ -421,8 +430,7 @@ ruby -ryaml -rdate -e '
         status   = node["status"].to_s
 
         unless rel_path.empty?
-          # paths are relative to quwoquan_service/
-          abs_path = File.expand_path(rel_path, service_root)
+          abs_path = resolve_feature_dir.call(rel_path)
           indexed_dirs << abs_path
 
           # ① tree_index 引用的目录必须存在（planned 节点目录未创建时为 WARNING）
@@ -443,7 +451,7 @@ ruby -ryaml -rdate -e '
 
         # ③ lifecycle 一致性：completed 节点的 acceptance.yaml 必须有 archived: true
         if status == "completed" && !rel_path.empty?
-          abs_path = File.expand_path(rel_path, service_root)
+          abs_path = resolve_feature_dir.call(rel_path)
           acc = File.join(abs_path, "acceptance.yaml")
           if File.exist?(acc)
             acc_doc = load_yaml(acc) || {}
@@ -455,7 +463,7 @@ ruby -ryaml -rdate -e '
 
         # ④ cancelled/deprecated 节点的 tasks.md 不应有未完成的当前交付任务
         if %w[cancelled deprecated].include?(status) && !rel_path.empty?
-          abs_path = File.expand_path(rel_path, service_root)
+          abs_path = resolve_feature_dir.call(rel_path)
           tasks_f = File.join(abs_path, "tasks.md")
           if File.exist?(tasks_f)
             tasks_content = File.read(tasks_f)

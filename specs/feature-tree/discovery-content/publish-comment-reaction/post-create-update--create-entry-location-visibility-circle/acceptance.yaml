@@ -1,0 +1,109 @@
+version: 1
+feature: create-entry-location-visibility-circle
+level: "L3_story"
+template: A1-A8
+status: specified
+focus_groups:
+- cross_media_create
+- location_picker
+- visibility_circle_linkage
+- payload_contract
+- reusable_component
+execution:
+  local_gate: make verify-metadata && make build && make test-contract
+  full_gate: make gate-full
+level_acceptance:
+  A1:
+    criteria: moment/photo/video/article 四类发布入口点击“所在位置”均可打开位置选择器，支持默认附近位置列表与关键字搜索
+    status: passed
+    linked_tasks:
+    - B2
+    - B3
+    - B6
+    tests:
+    - quwoquan_app/lib/ui/content/entry/pages/create_page.dart
+    - quwoquan_app/lib/ui/content/entry/pages/publish_location_selector_page.dart
+  A2:
+    criteria: 未选位置显示“不显示位置”；选中后回填地理名并以蓝色主色显示
+    status: passed
+    linked_tasks:
+    - B2
+    - T1
+    tests:
+    - quwoquan_app/test/ui/content/entry/contract/location_circle_services_contract_test.dart
+  A3:
+    criteria: “是否公开”采用 iOS 风格 Switch（CupertinoSwitch），激活态蓝色，四类发布入口默认公开
+    status: passed
+    linked_tasks:
+    - B4
+    - B6
+    - T1
+    tests:
+    - quwoquan_app/lib/ui/content/entry/pages/create_page.dart
+  A4:
+    criteria: 仅当公开时展示“发布的圈子”；私密时隐藏且不提交圈子，四类发布入口行为一致
+    status: passed
+    linked_tasks:
+    - B5
+    - B7
+    - T1
+    - T2
+    tests:
+    - quwoquan_app/lib/ui/content/entry/pages/create_page.dart
+  A5:
+    criteria: 圈子支持多选，回填为逗号分隔，超长文本单行省略；圈子选择器全屏、顶部居中「选择圈子」、底部取消+完成；默认全选；入口文案「发布的圈子」，无圈子时「加入圈子，发现同好」
+    status: passed
+    linked_tasks:
+    - B5
+    - B9
+    - T1
+    tests:
+    - quwoquan_app/lib/ui/content/entry/pages/create_page.dart
+  A6:
+    criteria: 四类内容发布 payload 正确包含/排除 visibility、location、locationName、circleIds
+    status: passed
+    linked_tasks:
+    - B7
+    - T2
+    tests:
+    - quwoquan_app/lib/ui/content/entry/pages/create_page.dart
+  A7:
+    criteria: 地图失败与圈子空列表具备降级能力，不阻断发布；附近页加载态「正在获取结果」+ 动效；权限/云端错误文案与 integration/location/errors.yaml
+      对齐；永久拒绝时展示「去设置」入口
+    status: passed
+    linked_tasks:
+    - B8
+    - T3
+    tests:
+    - quwoquan_app/lib/ui/content/entry/pages/publish_location_selector_page.dart
+    - quwoquan_app/lib/ui/content/entry/services/publish_settings_services.dart
+    - quwoquan_app/test/ui/content/entry/contract/location_circle_services_contract_test.dart
+  A8:
+    criteria: 通用发布设置能力在其它媒体编辑页可复用接入，且本节点相关本地门禁与回归测试通过，可进入 /opsx-deliver
+    status: passed
+    linked_tasks:
+    - M1
+    - M2
+    - C1
+    - C2
+    - T3
+    - T4
+    tests:
+    - make verify
+    - flutter analyze lib/ui/content/entry/pages/create_page.dart lib/ui/content/entry/pages/publish_location_selector_page.dart
+      lib/ui/content/entry/services/publish_settings_services.dart
+    - flutter test test/ui/content/entry/contract/location_circle_services_contract_test.dart
+  A9:
+    criteria: 是否公开、发布到圈子入口图标与高品质内容创作定位匹配，统一采用 CupertinoIcons 或等效风格
+    status: passed
+    linked_tasks:
+    - B9
+    - T1
+    tests:
+    - quwoquan_app/lib/ui/content/entry/pages/create_page.dart
+  A10:
+    criteria: 发现流仅返回 visibility=public 的内容；私密内容不出现在发现页
+    status: passed
+    linked_tasks: []
+    tests:
+    - quwoquan_service/services/content-service/tests/post_feed_contract_test.go

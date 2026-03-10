@@ -1,41 +1,36 @@
 version: 1
 feature: three-layer-test-contract
-level: L3_subfeature
+level: "L3_story"
 status: specified
 archived: true
-archived_at: "2026-03-01T00:00:00Z"
-
+archived_at: '2026-03-01T00:00:00Z'
 acceptance_criteria:
-  - id: A1
-    description: 三层测试文件存在且结构完整
-    assertions:
-      - contracts/metadata/content/post/tests/mock.yaml 存在
-      - contracts/metadata/content/post/tests/contract.yaml 存在
-      - contracts/metadata/content/post/tests/e2e.yaml 存在
-      - service.yaml 中 contract_test 块已删除
-
-  - id: A2
-    description: mock.yaml 场景覆盖完整
-    assertions:
-      - scenarios 中包含全部 errors.yaml 错误码的解析验证
-      - scenarios 中包含全部 behaviors.yaml behavior_events 的格式验证
-      - scenarios 中包含 DTO 四类分发 + alias 解析
-
-  - id: A3
-    description: contract.yaml 场景覆盖完整
-    assertions:
-      - service.yaml api_routes 每个路由至少对应一个 scenario
-      - 含错误码返回场景（GetPost not found → CONTENT.USER.post_not_found）
-      - 含幂等场景（LikePost x2 → counter=1）
-
-  - id: A4
-    description: Gate G7 绑定校验通过
-    assertions:
-      - make gate G7 PASS
-      - contract.yaml 每个 scenario.name 在 Go 测试文件中有对应函数
-
-  - id: A5
-    description: 测试实际运行通过
-    assertions:
-      - flutter test test/cloud/content/ PASS
-      - go test ./services/content-service/... PASS
+- id: A1
+  description: 三层测试文件存在且结构完整
+  assertions:
+  - contracts/metadata/content/post/tests/mock.yaml 存在
+  - contracts/metadata/content/post/tests/contract.yaml 存在
+  - contracts/metadata/content/post/tests/e2e.yaml 存在
+  - service.yaml 中 contract_test 块已删除
+- id: A2
+  description: mock.yaml 场景覆盖完整
+  assertions:
+  - scenarios 中包含全部 errors.yaml 错误码的解析验证
+  - scenarios 中包含全部 behaviors.yaml behavior_events 的格式验证
+  - scenarios 中包含 DTO 四类分发 + alias 解析
+- id: A3
+  description: contract.yaml 场景覆盖完整
+  assertions:
+  - service.yaml api_routes 每个路由至少对应一个 scenario
+  - 含错误码返回场景（GetPost not found → CONTENT.USER.post_not_found）
+  - 含幂等场景（LikePost x2 → counter=1）
+- id: A4
+  description: Gate G7 绑定校验通过
+  assertions:
+  - make gate G7 PASS
+  - contract.yaml 每个 scenario.name 在 Go 测试文件中有对应函数
+- id: A5
+  description: 测试实际运行通过
+  assertions:
+  - flutter test test/cloud/content/ PASS
+  - go test ./services/content-service/... PASS

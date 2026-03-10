@@ -1,34 +1,48 @@
 version: 1
-feature: "envelope-schema-idempotency"
-level: "L3_subfeature"
-template: "A1-A8"
+feature: envelope-schema-idempotency
+level: "L3_story"
+template: A1-A8
 tree_context:
-  feature_level: "L3_subfeature"
-  feature_path: "capability.runtime.subfeature.envelope-schema-idempotency"
-  parent_path: "capability.runtime"
-  acceptance_inherits_from: "capability.runtime"
+  feature_path: capability.runtime.subfeature.envelope-schema-idempotency
+  parent_path: capability.runtime
+  acceptance_inherits_from: capability.runtime
 level_acceptance:
-  focus_groups: [A1_functional, A3_service_governance, A7_contract_metadata_consistency]
-  notes: "runtime 子特性验收"
+  focus_groups:
+  - A1_functional
+  - A3_service_governance
+  - A7_contract_metadata_consistency
+  notes: runtime 子特性验收
 global_acceptance:
   A1_functional:
     scenarios:
-      - given: "子特性接入"
-        when: "执行核心流程"
-        then: "行为符合契约"
-  A2_experience: ["体验指标满足阈值"]
-  A3_service_governance: ["治理策略可配置"]
-  A4_observability: ["观测字段可关联"]
-  A5_product_ops: ["可输出运营归因字段"]
-  A6_security_privacy: ["敏感字段脱敏"]
-  A7_contract_metadata_consistency: ["契约与实现一致"]
-  A8_test_automation: ["测试自动化完整"]
+    - given: 子特性接入
+      when: 执行核心流程
+      then: 行为符合契约
+  A2_experience:
+  - 体验指标满足阈值
+  A3_service_governance:
+  - 治理策略可配置
+  A4_observability:
+  - 观测字段可关联
+  A5_product_ops:
+  - 可输出运营归因字段
+  A6_security_privacy:
+  - 敏感字段脱敏
+  A7_contract_metadata_consistency:
+  - 契约与实现一致
+  A8_test_automation:
+  - 测试自动化完整
 tests:
-  mock: ["runtime/tests/mock_envelope-schema-idempotency"]
-  unit: ["runtime/tests/unit_envelope-schema-idempotency"]
-  contract: ["runtime/tests/contract_envelope-schema-idempotency"]
-  integration: ["runtime/tests/integration_envelope-schema-idempotency"]
-  uat: ["UAT-RUNTIME-ENVELOPE_SCHEMA_IDEMPOTENCY-001"]
+  mock:
+  - runtime/tests/mock_envelope-schema-idempotency
+  unit:
+  - runtime/tests/unit_envelope-schema-idempotency
+  contract:
+  - runtime/tests/contract_envelope-schema-idempotency
+  integration:
+  - runtime/tests/integration_envelope-schema-idempotency
+  uat:
+  - UAT-RUNTIME-ENVELOPE_SCHEMA_IDEMPOTENCY-001
 execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
+  local_gate: make gate
+  full_gate: make gate-full

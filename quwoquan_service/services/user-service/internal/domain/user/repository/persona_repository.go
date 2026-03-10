@@ -10,6 +10,7 @@ type PersonaRepository interface {
 	FindByID(ctx context.Context, id string) (*model.Persona, error)
 	FindByUserID(ctx context.Context, userID string) ([]model.Persona, error)
 	FindActiveByUserID(ctx context.Context, userID string) (*model.Persona, error)
+	FindBySubAccountID(ctx context.Context, subAccountID string) (*model.Persona, error)
 	Create(ctx context.Context, persona *model.Persona) error
 	Update(ctx context.Context, persona *model.Persona) error
 	Delete(ctx context.Context, id string) error

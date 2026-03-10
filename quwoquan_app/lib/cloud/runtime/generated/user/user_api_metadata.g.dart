@@ -8,76 +8,150 @@ class UserApiMetadata {
 
   static const String domain = 'user';
   static const List<String> apiPrefixes = <String>[
+    '/v1/auth',
+    '/v1/invites',
+    '/v1/me',
+    '/v1/owner',
     '/v1/user',
     '/v1/users',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
+    'AcceptInvite': '/v1/invites/{linkCode}/accept',
     'ActivatePersona': '/v1/user/personas/{personaId}/activate',
+    'ActivateSubAccount': '/v1/owner/sub-accounts/{subAccountId}/activate',
     'ApplyProposal': '/v1/user/profile/proposals/{id}/apply',
+    'BindCredential': '/v1/owner/credentials/bind',
     'BlockUser': '/v1/user/block/{targetUserId}',
+    'CancelGreetingRequest': '/v1/user/greeting-request/{requestId}',
     'ConfirmProposal': '/v1/user/profile/proposals/{id}/confirm',
     'CreatePersona': '/v1/user/personas',
+    'CreateSubAccount': '/v1/owner/sub-accounts',
     'DeletePersona': '/v1/user/personas/{personaId}',
+    'DeleteSubAccount': '/v1/owner/sub-accounts/{subAccountId}',
+    'DismissContactDiscovery': '/v1/owner/contact-discovery/{id}',
     'FollowUser': '/v1/user/follow/{targetUserId}',
+    'GenerateInvite': '/v1/me/invites',
+    'GetCallSettings': '/v1/user/settings/calls',
+    'GetInviteByCode': '/v1/invites/{linkCode}',
+    'GetLatestContactDiscovery': '/v1/owner/contact-discovery/latest',
+    'GetMeProfile': '/v1/me',
     'GetNotificationSettings': '/v1/user/settings/notifications',
     'GetPrivacySettings': '/v1/user/settings/privacy',
     'GetRelationship': '/v1/user/{userId}/relationship',
+    'GetRelationshipCapability': '/v1/user/{userId}/relationship/capability',
+    'GetSubAccountProfile': '/v1/user/{subAccountId}',
     'GetUserProfile': '/v1/user/profile/{userId}',
+    'IgnoreGreetingRequest': '/v1/user/greeting-request/{requestId}/ignore',
+    'InitiateContactDiscovery': '/v1/owner/contact-discovery',
     'ListBlockedUsers': '/v1/user/blocked',
+    'ListCredentials': '/v1/owner/credentials',
     'ListFollowers': '/v1/user/{userId}/followers',
     'ListFollowing': '/v1/user/{userId}/following',
+    'ListGreetingInbox': '/v1/user/greeting-request/inbox',
+    'ListGreetingOutbox': '/v1/user/greeting-request/outbox',
+    'ListMyInvites': '/v1/me/invites',
     'ListPersonas': '/v1/user/personas',
+    'ListSubAccounts': '/v1/owner/sub-accounts',
     'ListUserLifeItems': '/v1/users/{userId}/life-items',
     'ListUserLikes': '/v1/users/{userId}/likes',
     'ListUserWorks': '/v1/users/{userId}/works',
-    'Login': '/v1/user/auth/login',
-    'RefreshToken': '/v1/user/auth/refresh',
+    'LoginWithApple': '/v1/auth/login/apple',
+    'LoginWithPhone': '/v1/auth/login/phone',
+    'LoginWithWechat': '/v1/auth/login/wechat',
+    'Logout': '/v1/auth/logout',
+    'RefreshToken': '/v1/auth/token/refresh',
     'RegisterDevice': '/v1/user/devices/push-tokens',
     'RejectProposal': '/v1/user/profile/proposals/{id}/reject',
+    'ReplyGreetingRequest': '/v1/user/greeting-request/{requestId}/reply',
+    'SendGreetingRequest': '/v1/user/greeting-request',
+    'UnbindCredential': '/v1/owner/credentials/{credentialType}',
     'UnblockUser': '/v1/user/block/{targetUserId}',
     'UnfollowUser': '/v1/user/follow/{targetUserId}',
+    'UpdateCallSettings': '/v1/user/settings/calls',
     'UpdateNotificationSettings': '/v1/user/settings/notifications',
     'UpdatePersona': '/v1/user/personas/{personaId}',
     'UpdatePrivacySettings': '/v1/user/settings/privacy',
+    'UpdateSubAccount': '/v1/owner/sub-accounts/{subAccountId}',
     'UpdateUserProfile': '/v1/user/profile',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
+    'AcceptInvite': 'POST',
     'ActivatePersona': 'POST',
+    'ActivateSubAccount': 'POST',
     'ApplyProposal': 'POST',
+    'BindCredential': 'POST',
     'BlockUser': 'POST',
+    'CancelGreetingRequest': 'DELETE',
     'ConfirmProposal': 'POST',
     'CreatePersona': 'POST',
+    'CreateSubAccount': 'POST',
     'DeletePersona': 'DELETE',
+    'DeleteSubAccount': 'DELETE',
+    'DismissContactDiscovery': 'DELETE',
     'FollowUser': 'POST',
+    'GenerateInvite': 'POST',
+    'GetCallSettings': 'GET',
+    'GetInviteByCode': 'GET',
+    'GetLatestContactDiscovery': 'GET',
+    'GetMeProfile': 'GET',
     'GetNotificationSettings': 'GET',
     'GetPrivacySettings': 'GET',
     'GetRelationship': 'GET',
+    'GetRelationshipCapability': 'GET',
+    'GetSubAccountProfile': 'GET',
     'GetUserProfile': 'GET',
+    'IgnoreGreetingRequest': 'POST',
+    'InitiateContactDiscovery': 'POST',
     'ListBlockedUsers': 'GET',
+    'ListCredentials': 'GET',
     'ListFollowers': 'GET',
     'ListFollowing': 'GET',
+    'ListGreetingInbox': 'GET',
+    'ListGreetingOutbox': 'GET',
+    'ListMyInvites': 'GET',
     'ListPersonas': 'GET',
+    'ListSubAccounts': 'GET',
     'ListUserLifeItems': 'GET',
     'ListUserLikes': 'GET',
     'ListUserWorks': 'GET',
-    'Login': 'POST',
+    'LoginWithApple': 'POST',
+    'LoginWithPhone': 'POST',
+    'LoginWithWechat': 'POST',
+    'Logout': 'POST',
     'RefreshToken': 'POST',
     'RegisterDevice': 'POST',
     'RejectProposal': 'POST',
+    'ReplyGreetingRequest': 'POST',
+    'SendGreetingRequest': 'POST',
+    'UnbindCredential': 'DELETE',
     'UnblockUser': 'DELETE',
     'UnfollowUser': 'DELETE',
+    'UpdateCallSettings': 'PATCH',
     'UpdateNotificationSettings': 'PATCH',
     'UpdatePersona': 'PATCH',
     'UpdatePrivacySettings': 'PATCH',
+    'UpdateSubAccount': 'PATCH',
     'UpdateUserProfile': 'PATCH',
   };
 
+  static const String acceptInvitePathTemplate = '/v1/invites/{linkCode}/accept';
+  static String acceptInvitePath({required String linkCode}) {
+    return _fillPath(acceptInvitePathTemplate, <String, String>{
+      'linkCode': linkCode,
+    });
+  }
   static const String activatePersonaPathTemplate = '/v1/user/personas/{personaId}/activate';
   static String activatePersonaPath({required String personaId}) {
     return _fillPath(activatePersonaPathTemplate, <String, String>{
       'personaId': personaId,
+    });
+  }
+  static const String activateSubAccountPathTemplate = '/v1/owner/sub-accounts/{subAccountId}/activate';
+  static String activateSubAccountPath({required String subAccountId}) {
+    return _fillPath(activateSubAccountPathTemplate, <String, String>{
+      'subAccountId': subAccountId,
     });
   }
   static const String applyProposalPathTemplate = '/v1/user/profile/proposals/{id}/apply';
@@ -86,10 +160,17 @@ class UserApiMetadata {
       'id': id,
     });
   }
+  static const String bindCredentialPath = '/v1/owner/credentials/bind';
   static const String blockUserPathTemplate = '/v1/user/block/{targetUserId}';
   static String blockUserPath({required String targetUserId}) {
     return _fillPath(blockUserPathTemplate, <String, String>{
       'targetUserId': targetUserId,
+    });
+  }
+  static const String cancelGreetingRequestPathTemplate = '/v1/user/greeting-request/{requestId}';
+  static String cancelGreetingRequestPath({required String requestId}) {
+    return _fillPath(cancelGreetingRequestPathTemplate, <String, String>{
+      'requestId': requestId,
     });
   }
   static const String confirmProposalPathTemplate = '/v1/user/profile/proposals/{id}/confirm';
@@ -99,10 +180,23 @@ class UserApiMetadata {
     });
   }
   static const String createPersonaPath = '/v1/user/personas';
+  static const String createSubAccountPath = '/v1/owner/sub-accounts';
   static const String deletePersonaPathTemplate = '/v1/user/personas/{personaId}';
   static String deletePersonaPath({required String personaId}) {
     return _fillPath(deletePersonaPathTemplate, <String, String>{
       'personaId': personaId,
+    });
+  }
+  static const String deleteSubAccountPathTemplate = '/v1/owner/sub-accounts/{subAccountId}';
+  static String deleteSubAccountPath({required String subAccountId}) {
+    return _fillPath(deleteSubAccountPathTemplate, <String, String>{
+      'subAccountId': subAccountId,
+    });
+  }
+  static const String dismissContactDiscoveryPathTemplate = '/v1/owner/contact-discovery/{id}';
+  static String dismissContactDiscoveryPath({required String id}) {
+    return _fillPath(dismissContactDiscoveryPathTemplate, <String, String>{
+      'id': id,
     });
   }
   static const String followUserPathTemplate = '/v1/user/follow/{targetUserId}';
@@ -111,6 +205,16 @@ class UserApiMetadata {
       'targetUserId': targetUserId,
     });
   }
+  static const String generateInvitePath = '/v1/me/invites';
+  static const String getCallSettingsPath = '/v1/user/settings/calls';
+  static const String getInviteByCodePathTemplate = '/v1/invites/{linkCode}';
+  static String getInviteByCodePath({required String linkCode}) {
+    return _fillPath(getInviteByCodePathTemplate, <String, String>{
+      'linkCode': linkCode,
+    });
+  }
+  static const String getLatestContactDiscoveryPath = '/v1/owner/contact-discovery/latest';
+  static const String getMeProfilePath = '/v1/me';
   static const String getNotificationSettingsPath = '/v1/user/settings/notifications';
   static const String getPrivacySettingsPath = '/v1/user/settings/privacy';
   static const String getRelationshipPathTemplate = '/v1/user/{userId}/relationship';
@@ -119,13 +223,33 @@ class UserApiMetadata {
       'userId': userId,
     });
   }
+  static const String getRelationshipCapabilityPathTemplate = '/v1/user/{userId}/relationship/capability';
+  static String getRelationshipCapabilityPath({required String userId}) {
+    return _fillPath(getRelationshipCapabilityPathTemplate, <String, String>{
+      'userId': userId,
+    });
+  }
+  static const String getSubAccountProfilePathTemplate = '/v1/user/{subAccountId}';
+  static String getSubAccountProfilePath({required String subAccountId}) {
+    return _fillPath(getSubAccountProfilePathTemplate, <String, String>{
+      'subAccountId': subAccountId,
+    });
+  }
   static const String getUserProfilePathTemplate = '/v1/user/profile/{userId}';
   static String getUserProfilePath({required String userId}) {
     return _fillPath(getUserProfilePathTemplate, <String, String>{
       'userId': userId,
     });
   }
+  static const String ignoreGreetingRequestPathTemplate = '/v1/user/greeting-request/{requestId}/ignore';
+  static String ignoreGreetingRequestPath({required String requestId}) {
+    return _fillPath(ignoreGreetingRequestPathTemplate, <String, String>{
+      'requestId': requestId,
+    });
+  }
+  static const String initiateContactDiscoveryPath = '/v1/owner/contact-discovery';
   static const String listBlockedUsersPath = '/v1/user/blocked';
+  static const String listCredentialsPath = '/v1/owner/credentials';
   static const String listFollowersPathTemplate = '/v1/user/{userId}/followers';
   static String listFollowersPath({required String userId}) {
     return _fillPath(listFollowersPathTemplate, <String, String>{
@@ -138,7 +262,11 @@ class UserApiMetadata {
       'userId': userId,
     });
   }
+  static const String listGreetingInboxPath = '/v1/user/greeting-request/inbox';
+  static const String listGreetingOutboxPath = '/v1/user/greeting-request/outbox';
+  static const String listMyInvitesPath = '/v1/me/invites';
   static const String listPersonasPath = '/v1/user/personas';
+  static const String listSubAccountsPath = '/v1/owner/sub-accounts';
   static const String listUserLifeItemsPathTemplate = '/v1/users/{userId}/life-items';
   static String listUserLifeItemsPath({required String userId}) {
     return _fillPath(listUserLifeItemsPathTemplate, <String, String>{
@@ -157,13 +285,29 @@ class UserApiMetadata {
       'userId': userId,
     });
   }
-  static const String loginPath = '/v1/user/auth/login';
-  static const String refreshTokenPath = '/v1/user/auth/refresh';
+  static const String loginWithApplePath = '/v1/auth/login/apple';
+  static const String loginWithPhonePath = '/v1/auth/login/phone';
+  static const String loginWithWechatPath = '/v1/auth/login/wechat';
+  static const String logoutPath = '/v1/auth/logout';
+  static const String refreshTokenPath = '/v1/auth/token/refresh';
   static const String registerDevicePath = '/v1/user/devices/push-tokens';
   static const String rejectProposalPathTemplate = '/v1/user/profile/proposals/{id}/reject';
   static String rejectProposalPath({required String id}) {
     return _fillPath(rejectProposalPathTemplate, <String, String>{
       'id': id,
+    });
+  }
+  static const String replyGreetingRequestPathTemplate = '/v1/user/greeting-request/{requestId}/reply';
+  static String replyGreetingRequestPath({required String requestId}) {
+    return _fillPath(replyGreetingRequestPathTemplate, <String, String>{
+      'requestId': requestId,
+    });
+  }
+  static const String sendGreetingRequestPath = '/v1/user/greeting-request';
+  static const String unbindCredentialPathTemplate = '/v1/owner/credentials/{credentialType}';
+  static String unbindCredentialPath({required String credentialType}) {
+    return _fillPath(unbindCredentialPathTemplate, <String, String>{
+      'credentialType': credentialType,
     });
   }
   static const String unblockUserPathTemplate = '/v1/user/block/{targetUserId}';
@@ -178,6 +322,7 @@ class UserApiMetadata {
       'targetUserId': targetUserId,
     });
   }
+  static const String updateCallSettingsPath = '/v1/user/settings/calls';
   static const String updateNotificationSettingsPath = '/v1/user/settings/notifications';
   static const String updatePersonaPathTemplate = '/v1/user/personas/{personaId}';
   static String updatePersonaPath({required String personaId}) {
@@ -186,6 +331,12 @@ class UserApiMetadata {
     });
   }
   static const String updatePrivacySettingsPath = '/v1/user/settings/privacy';
+  static const String updateSubAccountPathTemplate = '/v1/owner/sub-accounts/{subAccountId}';
+  static String updateSubAccountPath({required String subAccountId}) {
+    return _fillPath(updateSubAccountPathTemplate, <String, String>{
+      'subAccountId': subAccountId,
+    });
+  }
   static const String updateUserProfilePath = '/v1/user/profile';
 
   static String _fillPath(String template, Map<String, String> params) {

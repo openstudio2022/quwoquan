@@ -8,8 +8,13 @@ import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_interaction_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/report_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/auth_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/block_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/call_settings_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/invite_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/keyword_block_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
 import 'package:quwoquan_app/cloud/services/rtc/rtc_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
@@ -255,6 +260,24 @@ final userRepositoryProvider = Provider<UserRepository>((ref) {
   return MockUserRepository();
 });
 
+/// Auth Repository（登录/凭证/子账号管理）
+final authRepositoryProvider = Provider<AuthRepository>((ref) {
+  final mode = ref.watch(appDataSourceModeProvider);
+  if (mode == AppDataSourceMode.remote) {
+    return RemoteAuthRepository();
+  }
+  return MockAuthRepository();
+});
+
+/// Invite Repository（邀请归因）
+final inviteRepositoryProvider = Provider<InviteRepository>((ref) {
+  final mode = ref.watch(appDataSourceModeProvider);
+  if (mode == AppDataSourceMode.remote) {
+    return RemoteInviteRepository();
+  }
+  return MockInviteRepository();
+});
+
 /// Behavior Repository（行为上报，驱动实时推荐）
 final behaviorRepositoryProvider = Provider<BehaviorRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
@@ -318,6 +341,31 @@ final rtcRepositoryProvider = Provider<RtcRepository>((ref) {
   return mode == AppDataSourceMode.remote
       ? RemoteRtcRepository()
       : MockRtcRepository();
+});
+
+/// RelationshipCapability Repository（关系能力位投影，用户主页五态按钮矩阵 + RTC 门禁）
+final relationshipCapabilityRepositoryProvider =
+    Provider<RelationshipCapabilityRepository>((ref) {
+  final mode = ref.watch(appDataSourceModeProvider);
+  return mode == AppDataSourceMode.remote
+      ? RemoteRelationshipCapabilityRepository()
+      : MockRelationshipCapabilityRepository();
+});
+
+/// CallSettings Repository（来电铃声与响铃偏好）
+final callSettingsRepositoryProvider = Provider<CallSettingsRepository>((ref) {
+  final mode = ref.watch(appDataSourceModeProvider);
+  return mode == AppDataSourceMode.remote
+      ? RemoteCallSettingsRepository()
+      : MockCallSettingsRepository();
+});
+
+/// Greeting Repository（打招呼请求箱）
+final greetingRepositoryProvider = Provider<GreetingRepository>((ref) {
+  final mode = ref.watch(appDataSourceModeProvider);
+  return mode == AppDataSourceMode.remote
+      ? RemoteGreetingRepository()
+      : MockGreetingRepository();
 });
 
 /// Media Upload Manager（统一媒体上传队列 + 并发 + 重试 + 离线恢复）

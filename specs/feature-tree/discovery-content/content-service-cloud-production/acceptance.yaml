@@ -1,255 +1,246 @@
 version: 1
 feature: content-service-cloud-production
-level: L2_feature
+level: "L2_feature"
 archived: true
-archived_at: "2026-03-08T01:55:00+08:00"
+archived_at: '2026-03-08T01:55:00+08:00'
 status: completed
-
-template: "A1-A12"
-
+template: A1-A12
 tree_context:
-  feature_level: L2_feature
   feature_path: discovery-content.content-service-cloud-production
   parent_path: discovery-content
   parent_id: discovery-content
-
 execution:
   local_gate: make gate
   full_gate: make gate-full
   test_commands:
-    - go test ./services/content-service/... -tags=contract
-    - flutter test test/cloud/content/
-    - flutter test test/ui/content/
-    - flutter test test/components/content/
-
+  - go test ./services/content-service/... -tags=contract
+  - flutter test test/cloud/content/
+  - flutter test test/ui/content/
+  - flutter test test/components/content/
 focus_groups:
-  - backend
-  - frontend
-  - devops
-
-# ──────────────────────────────────────────────────────────────────
-#  验收标准（A1-A12）
-#  分 4 组：存储与运行时 | API 完整性 | 部署与 CI | 四层测试
-# ──────────────────────────────────────────────────────────────────
-
+- backend
+- frontend
+- devops
 level_acceptance:
-
-  # ═══════════════════════ 组 1：存储与运行时 ═══════════════════════
-
   A1:
-    criteria: >
-      content-service main.go 默认使用 MongoPostStore 持久存储；
-      服务重启后 Post/Comment/Reaction 数据不丢失；
-      APP_ENV=local 时自动降级到 InMemory PostStore。
+    criteria: 'content-service main.go 默认使用 MongoPostStore 持久存储； 服务重启后 Post/Comment/Reaction
+      数据不丢失； APP_ENV=local 时自动降级到 InMemory PostStore。
+
+      '
     status: implemented
-    linked_tasks: [C1, C5]
+    linked_tasks:
+    - C1
+    - C5
     test_layers:
       T1: required
       T2: not_applicable
       T3: required
       T4: optional
     tests:
-      - file: services/content-service/tests/post_crud_contract_test.go
-        func: TestCreatePostAggregate
-      - file: services/content-service/tests/post_crud_contract_test.go
-        func: TestGetPostSuccess
-
+    - file: services/content-service/tests/post_crud_contract_test.go
+      func: TestCreatePostAggregate
+    - file: services/content-service/tests/post_crud_contract_test.go
+      func: TestGetPostSuccess
   A2:
-    criteria: >
-      Post 读取走 CacheableRepository Redis 装饰器
-      （cache:post:{id}，TTL 300s）；
-      Update/Delete 后缓存自动失效；
-      Redis 不可用时降级到直读 MongoDB，不阻塞请求。
+    criteria: 'Post 读取走 CacheableRepository Redis 装饰器 （cache:post:{id}，TTL 300s）；
+      Update/Delete 后缓存自动失效； Redis 不可用时降级到直读 MongoDB，不阻塞请求。
+
+      '
     status: implemented
-    linked_tasks: [C2, C5]
+    linked_tasks:
+    - C2
+    - C5
     test_layers:
       T1: required
       T2: not_applicable
       T3: required
       T4: optional
     tests:
-      - file: services/content-service/tests/post_cache_contract_test.go
-        func: TestCacheFindByID_MissThenHit
-      - file: services/content-service/tests/post_cache_contract_test.go
-        func: TestCacheInvalidateOnUpdate
-
+    - file: services/content-service/tests/post_cache_contract_test.go
+      func: TestCacheFindByID_MissThenHit
+    - file: services/content-service/tests/post_cache_contract_test.go
+      func: TestCacheInvalidateOnUpdate
   A3:
-    criteria: >
-      EventPublisher 接入 Redis Pub/Sub 生产实现；
-      CreatePost 成功后 ≤5s PostCreated 事件被
-      DiscoveryFeedProjector 消费并写入 rm_discovery_feed；
-      发现流 GET /v1/content/feed 可返回新创建的内容。
+    criteria: 'EventPublisher 接入 Redis Pub/Sub 生产实现； CreatePost 成功后 ≤5s PostCreated
+      事件被 DiscoveryFeedProjector 消费并写入 rm_discovery_feed； 发现流 GET /v1/content/feed
+      可返回新创建的内容。
+
+      '
     status: implemented
-    linked_tasks: [C3, C4, C5]
+    linked_tasks:
+    - C3
+    - C4
+    - C5
     test_layers:
       T1: required
       T2: not_applicable
       T3: required
       T4: required
     tests:
-      - file: services/content-service/tests/post_event_contract_test.go
-        func: TestPostCreatedEvent
-      - file: services/content-service/tests/post_event_contract_test.go
-        func: TestNoSpuriousEventsOnRead
-      - file: services/content-service/tests/post_feed_contract_test.go
-        func: TestGetFeedByType
-
+    - file: services/content-service/tests/post_event_contract_test.go
+      func: TestPostCreatedEvent
+    - file: services/content-service/tests/post_event_contract_test.go
+      func: TestNoSpuriousEventsOnRead
+    - file: services/content-service/tests/post_feed_contract_test.go
+      func: TestGetFeedByType
   A4:
-    criteria: >
-      HTTP handler 接入 runtime/governance 限流中间件
-      （超限返回 429）和 runtime/observability 中间件
-      （access log、追踪 span、请求指标）；
-      make build 通过；无硬编码中间件。
+    criteria: 'HTTP handler 接入 runtime/governance 限流中间件 （超限返回 429）和 runtime/observability
+      中间件 （access log、追踪 span、请求指标）； make build 通过；无硬编码中间件。
+
+      '
     status: implemented
-    linked_tasks: [C6]
+    linked_tasks:
+    - C6
     test_layers:
       T1: required
       T2: not_applicable
       T3: optional
       T4: not_applicable
     tests:
-      - file: services/content-service/cmd/api/main.go
-        note: observability middleware integrated in main.go startup
-
-  # ═══════════════════════ 组 2：API 完整性 ═══════════════════════
-
+    - file: services/content-service/cmd/api/main.go
+      note: observability middleware integrated in main.go startup
   A5:
-    criteria: >
-      云侧 content-service 无任何 handleNotImplemented 端点；
-      ListComments 支持游标分页（cursor + limit）；
-      DeleteComment 软删除并发布 CommentDeleted 事件；
-      GetCounters 返回 like/comment/favorite/share 四个计数；
-      ListUserPosts 支持按 authorId 过滤 + 游标分页；
-      GetHelperRead 返回文章辅助阅读摘要。
+    criteria: '云侧 content-service 无任何 handleNotImplemented 端点； ListComments 支持游标分页（cursor
+      + limit）； DeleteComment 软删除并发布 CommentDeleted 事件； GetCounters 返回 like/comment/favorite/share
+      四个计数； ListUserPosts 支持按 authorId 过滤 + 游标分页； GetHelperRead 返回文章辅助阅读摘要。
+
+      '
     status: implemented
-    linked_tasks: [C7, C8, C9, C10, C11, C12]
+    linked_tasks:
+    - C7
+    - C8
+    - C9
+    - C10
+    - C11
+    - C12
     test_layers:
       T1: required
       T2: not_applicable
       T3: required
       T4: optional
     tests:
-      - file: services/content-service/tests/post_comment_contract_test.go
-        func: TestCommentWithNotification
-      - file: services/content-service/tests/post_comment_contract_test.go
-        func: TestCommentListPagination
-      - file: services/content-service/tests/post_comment_contract_test.go
-        func: TestDeleteComment
-      - file: services/content-service/tests/post_comment_contract_test.go
-        func: TestGetCounters
-      - file: services/content-service/tests/post_user_list_contract_test.go
-        func: TestListUserPosts
-      - file: services/content-service/tests/post_projection_contract_test.go
-        func: TestGetHelperRead_Article
-      - file: services/content-service/tests/post_event_contract_test.go
-        func: TestCommentDeletedEvent
-
+    - file: services/content-service/tests/post_comment_contract_test.go
+      func: TestCommentWithNotification
+    - file: services/content-service/tests/post_comment_contract_test.go
+      func: TestCommentListPagination
+    - file: services/content-service/tests/post_comment_contract_test.go
+      func: TestDeleteComment
+    - file: services/content-service/tests/post_comment_contract_test.go
+      func: TestGetCounters
+    - file: services/content-service/tests/post_user_list_contract_test.go
+      func: TestListUserPosts
+    - file: services/content-service/tests/post_projection_contract_test.go
+      func: TestGetHelperRead_Article
+    - file: services/content-service/tests/post_event_contract_test.go
+      func: TestCommentDeletedEvent
   A6:
-    criteria: >
-      端侧 ContentRepository abstract 接口方法数 ≥ 云侧
-      service.yaml 已实现端点数；新增 15 个方法各有 Mock + Remote
-      双实现；Remote 使用 CloudRuntimeConfig + CloudRequestHeaders。
+    criteria: '端侧 ContentRepository abstract 接口方法数 ≥ 云侧 service.yaml 已实现端点数；新增 15
+      个方法各有 Mock + Remote 双实现；Remote 使用 CloudRuntimeConfig + CloudRequestHeaders。
+
+      '
     status: implemented
-    linked_tasks: [D1, D2, D3]
+    linked_tasks:
+    - D1
+    - D2
+    - D3
     test_layers:
       T1: required
       T2: optional
       T3: optional
       T4: not_applicable
     tests:
-      - file: quwoquan_app/lib/cloud/services/content/content_repository.dart
-        note: 15 methods added to abstract + Mock + Remote implementations
-
+    - file: quwoquan_app/lib/cloud/services/content/content_repository.dart
+      note: 15 methods added to abstract + Mock + Remote implementations
   A7:
-    criteria: >
-      FeedItemDto 兼容层已清理；listDiscoveryFeedPageLegacy
-      方法已移除；所有发现页数据加载使用 PostBaseDto 子类。
+    criteria: 'FeedItemDto 兼容层已清理；listDiscoveryFeedPageLegacy 方法已移除；所有发现页数据加载使用 PostBaseDto
+      子类。
+
+      '
     status: implemented
-    linked_tasks: [D4]
+    linked_tasks:
+    - D4
     test_layers:
       T1: required
       T2: required
       T3: not_applicable
       T4: optional
     tests:
-      - file: quwoquan_app/lib/cloud/services/content/content_repository.dart
-        note: listDiscoveryFeedPageLegacy removed; FeedItemDto import removed
-
-  # ═══════════════════════ 组 3：部署与 CI ═══════════════════════
-
+    - file: quwoquan_app/lib/cloud/services/content/content_repository.dart
+      note: listDiscoveryFeedPageLegacy removed; FeedItemDto import removed
   A8:
-    criteria: >
-      content-service 具备完整 Kustomize 配置：
-      base/（deployment + service + hpa + pdb）、
-      overlays/dev（1 副本）、overlays/integration（2 副本）、
-      overlays/prod（3+ 副本 + topologySpreadConstraints）；
-      kustomize build 每个 overlay 均通过。
+    criteria: 'content-service 具备完整 Kustomize 配置： base/（deployment + service + hpa
+      + pdb）、 overlays/dev（1 副本）、overlays/integration（2 副本）、 overlays/prod（3+ 副本 +
+      topologySpreadConstraints）； kustomize build 每个 overlay 均通过。
+
+      '
     status: implemented
-    linked_tasks: [K1, K2]
+    linked_tasks:
+    - K1
+    - K2
     test_layers:
       T1: required
       T2: not_applicable
       T3: not_applicable
       T4: not_applicable
     tests:
-      - file: deploy/service/content-service/kustomize/base/deployment.yaml
-        note: Kustomize base + 3 overlays; validated via kustomize build in CI
-      - file: .github/workflows/service_pipeline.yml
-        note: validate-deploy job includes content-service overlay validation
-
+    - file: deploy/service/content-service/kustomize/base/deployment.yaml
+      note: Kustomize base + 3 overlays; validated via kustomize build in CI
+    - file: .github/workflows/service_pipeline.yml
+      note: validate-deploy job includes content-service overlay validation
   A9:
-    criteria: >
-      CI Pipeline（service_pipeline.yml）新增
-      test-content-service Job，含 MongoDB service container；
-      Kustomize validate 覆盖 content-service 所有 overlays。
+    criteria: 'CI Pipeline（service_pipeline.yml）新增 test-content-service Job，含 MongoDB
+      service container； Kustomize validate 覆盖 content-service 所有 overlays。
+
+      '
     status: implemented
-    linked_tasks: [K4]
+    linked_tasks:
+    - K4
     test_layers:
       T1: required
       T2: not_applicable
       T3: not_applicable
       T4: not_applicable
     tests:
-      - file: .github/workflows/service_pipeline.yml
-        note: test-content-service job with mongo:7-jammy service container
-
-  # ═══════════════════════ 组 4：四层测试 ═══════════════════════
-
+    - file: .github/workflows/service_pipeline.yml
+      note: test-content-service job with mongo:7-jammy service container
   A10:
-    criteria: >
-      T1 契约与静态层覆盖：
-      云侧新增投影一致性、缓存命中/失效、评论 CRUD、
-      用户列表、领域事件契约测试；
-      所有契约测试通过 make test-contract。
+    criteria: 'T1 契约与静态层覆盖： 云侧新增投影一致性、缓存命中/失效、评论 CRUD、 用户列表、领域事件契约测试； 所有契约测试通过 make
+      test-contract。
+
+      '
     status: implemented
-    linked_tasks: [T1, T2, T3, T4, T5]
+    linked_tasks:
+    - T1
+    - T2
+    - T3
+    - T4
+    - T5
     test_layers:
       T1: required
       T2: not_applicable
       T3: not_applicable
       T4: not_applicable
     tests:
-      - file: services/content-service/tests/post_projection_contract_test.go
-        func: TestGetHelperRead_Article
-      - file: services/content-service/tests/post_projection_contract_test.go
-        func: TestCreatePostResponseShape_NoPrivateFields
-      - file: services/content-service/tests/post_cache_contract_test.go
-        func: TestCacheFindByID_MissThenHit
-      - file: services/content-service/tests/post_comment_contract_test.go
-        func: TestCommentWithNotification
-      - file: services/content-service/tests/post_user_list_contract_test.go
-        func: TestListUserPosts
-      - file: services/content-service/tests/post_event_contract_test.go
-        func: TestPostCreatedEvent
-
+    - file: services/content-service/tests/post_projection_contract_test.go
+      func: TestGetHelperRead_Article
+    - file: services/content-service/tests/post_projection_contract_test.go
+      func: TestCreatePostResponseShape_NoPrivateFields
+    - file: services/content-service/tests/post_cache_contract_test.go
+      func: TestCacheFindByID_MissThenHit
+    - file: services/content-service/tests/post_comment_contract_test.go
+      func: TestCommentWithNotification
+    - file: services/content-service/tests/post_user_list_contract_test.go
+      func: TestListUserPosts
+    - file: services/content-service/tests/post_event_contract_test.go
+      func: TestPostCreatedEvent
   A11:
-    criteria: >
-      T2 模块与交互层覆盖：
-      端侧创作页/发现页/评论 Widget test。
+    criteria: 'T2 模块与交互层覆盖： 端侧创作页/发现页/评论 Widget test。
+
+      '
     status: deferred
-    deferred_reason: >
-      端侧 Widget 测试随 UI 重构同步补全（S6/S7/S8），
-      当前交付以云侧契约测试为主。
+    deferred_reason: '端侧 Widget 测试随 UI 重构同步补全（S6/S7/S8）， 当前交付以云侧契约测试为主。
+
+      '
     linked_tasks: []
     test_layers:
       T1: not_applicable
@@ -257,15 +248,14 @@ level_acceptance:
       T3: not_applicable
       T4: not_applicable
     tests: []
-
   A12:
-    criteria: >
-      T3+T4 集成与旅程层覆盖：
-      T3 云侧端到端集成测试；T4 Patrol E2E 旅程测试。
+    criteria: 'T3+T4 集成与旅程层覆盖： T3 云侧端到端集成测试；T4 Patrol E2E 旅程测试。
+
+      '
     status: deferred
-    deferred_reason: >
-      T3 需 staging 环境可用（S9）；T4 需端侧 UI 稳定后补全（S10）。
-      已有 Patrol test 基础设施（test/patrol/content/）。
+    deferred_reason: 'T3 需 staging 环境可用（S9）；T4 需端侧 UI 稳定后补全（S10）。 已有 Patrol test 基础设施（test/patrol/content/）。
+
+      '
     linked_tasks: []
     test_layers:
       T1: not_applicable

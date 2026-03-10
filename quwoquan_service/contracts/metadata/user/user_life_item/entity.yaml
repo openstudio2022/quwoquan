@@ -1,0 +1,17 @@
+version: 1
+domain: user
+entity_name: UserLifeItem
+aggregate_root: false
+
+description: |
+  用户主页展示的生命轨迹/人生经历项。
+  按 category（如教育、职业、荣誉、兴趣）归类，可自定义排序。
+  通过 refId 关联内容（作品、圈子等）。
+
+storage_backend: postgres
+cache_layer: none
+
+ddd_layer_mapping:
+  domain_model: internal/domain/user/model
+  repository: internal/domain/user/repository
+  application: internal/application

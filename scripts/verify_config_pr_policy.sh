@@ -46,7 +46,7 @@ if [[ "$config_changed" -eq 1 && "$release_changed" -eq 0 ]]; then
 fi
 
 if [[ "$high_risk_changed" -eq 1 ]]; then
-  if ! echo "$changed" | rg 'specs/feature-tree/.*/risky-config-gray-release/(tasks\.md|acceptance\.yaml|design\.md|spec\.md)$' >/dev/null 2>&1; then
+  if ! echo "$changed" | rg 'specs/feature-tree/.*/[^/]*risky-config-gray-release/(tasks\.md|acceptance\.yaml|design\.md|spec\.md)$' >/dev/null 2>&1; then
     echo "[verify] FAIL: high-risk config keys changed but risky-config-gray-release docs were not updated" >&2
     failures=$((failures + 1))
   fi

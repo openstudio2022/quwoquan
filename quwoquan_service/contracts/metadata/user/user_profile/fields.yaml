@@ -1,9 +1,13 @@
 version: 1
 aggregate: UserProfile
 
+# 语义说明：
+#   UserProfile = OwnerAccount（主控账号，管理平面）
+#   Persona     = SubAccount（子账号，应用平面，强隔离）
+
 entities:
   UserProfile:
-    description: 用户核心档案（聚合根）
+    description: 主控账号（OwnerAccount）——登录凭证、设备、恢复、子账号的管理容器
     fields:
       - name: userId
         type: string
@@ -162,6 +166,26 @@ entities:
         ops_exposure: read
         recommend_feature: true
 
+      - name: ownerDisplayName
+        type: string
+        constraints: [NULLABLE]
+        classification: PII
+        log_policy: mask
+        api_exposure: drop
+        ops_exposure: read
+        recommend_feature: false
+        description: 主控账号管理视角名称（仅自己控制台可见，不对外展示）
+
+      - name: subAccountCount
+        type: int
+        constraints: [NOT_NULL, DEFAULT_1]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: false
+        description: 当前持有子账号数量（冗余计数）
+
       - name: updatedAt
         type: timestamp
         constraints: [NOT_NULL]
@@ -172,7 +196,7 @@ entities:
         recommend_feature: false
 
   Persona:
-    description: 分身（匿名/私密身份）
+    description: 子账号（SubAccount）——应用内真实身份主体，强隔离，外部不可关联到同一 OwnerAccount
     fields:
       - name: id
         type: string
@@ -206,6 +230,15 @@ entities:
         api_exposure: read_write
         ops_exposure: read
 
+      - name: callerRingtoneId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 发起实时通话时对外使用的官方呼叫铃声 ID；为空时回退平台默认铃声
+
       - name: isPrimary
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
@@ -238,6 +271,44 @@ entities:
         api_exposure: read
         ops_exposure: read
 
+      - name: subAccountId
+        type: string
+        constraints: [NOT_NULL, UK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 全局唯一子账号 ID（跨域上下文引用标识，区别于 personas.id）
+
+      - name: isolationLevel
+        type: enum
+        enum_ref: IsolationLevel
+        constraints: [NOT_NULL]
+        default_value: open
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: "隔离等级：open（公开可发现）/ semi（半隔离）/ strict（不对外暴露）"
+
+      - name: purposeHint
+        type: string
+        constraints: [NULLABLE]
+        classification: PII
+        log_policy: mask
+        api_exposure: drop
+        ops_exposure: read
+        description: 用户自定义用途备注（仅主控账号视角可见）
+
+      - name: inviteCount
+        type: int
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 该子账号发起的邀请转化数（冗余计数）
+
       - name: updatedAt
         type: timestamp
         constraints: [NOT_NULL]
@@ -249,10 +320,108 @@ entities:
     unique_constraints:
       - columns: [userId, isPrimary]
         condition: "isPrimary = true"
-        description: 每用户恰好一个主分身
+        description: 每主控账号恰好一个主子账号
       - columns: [userId, isActive]
         condition: "isActive = true"
-        description: 每用户恰好一个激活分身
+        description: 每主控账号同时恰好一个激活子账号
+      - columns: [subAccountId]
+        description: 子账号 ID 全局唯一
+
+    enums:
+      IsolationLevel:
+        values: [open, semi, strict]
+        description: >
+          open: 可被通讯录发现，可关注；
+          semi: 可关注但不被通讯录推荐；
+          strict: 完全不被外部发现，仅受邀可见
+
+  CredentialBinding:
+    description: 第三方凭证绑定（phone/wechat/apple 并行，各最多 1 个绑定到同一 OwnerAccount）
+    cache_excluded: true
+    fields:
+      - name: id
+        type: string
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: ownerId
+        type: string
+        constraints: [FK_user_profiles_CASCADE, NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+        description: 归属的主控账号 ID
+
+      - name: credentialType
+        type: enum
+        enum_ref: CredentialType
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: "凭证类型：phone / wechat / apple"
+
+      - name: credentialKey
+        type: string
+        constraints: [NOT_NULL]
+        classification: SECRET
+        log_policy: drop
+        api_exposure: drop
+        ops_exposure: drop
+        description: 凭证唯一标识（手机号哈希/微信UnionID/Apple SubjectID）
+
+      - name: displayLabel
+        type: string
+        constraints: [NULLABLE]
+        classification: PII
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: mask
+        description: 用户可见的凭证标签（手机号脱敏显示，如 138****8888）
+
+      - name: isActive
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_TRUE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: boundAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: lastUsedAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+    unique_constraints:
+      - columns: [credentialType, credentialKey]
+        description: 同一凭证不能绑定两个 OwnerAccount（全局唯一）
+      - columns: [ownerId, credentialType]
+        description: 同一 OwnerAccount 每种凭证最多一个
+
+    enums:
+      CredentialType:
+        values: [phone, wechat, apple]
+        description: 支持的第三方凭证类型
+
+    business_rules:
+      - id: last_credential_protection
+        description: OwnerAccount 至少保留 1 个 isActive=true 的凭证，不能全部解绑
 
   UserAuth:
     description: 认证凭证（安全隔离，不缓存到 Redis）
@@ -421,7 +590,7 @@ entities:
         description: 同用户同设备不重复注册
 
   UserSetting:
-    description: 通知 + 隐私设置
+    description: 通知 + 隐私 + 来电设置
     fields:
       - name: userId
         type: string
@@ -463,6 +632,42 @@ entities:
         log_policy: allow
         api_exposure: read_write
         ops_exposure: read
+
+      - name: defaultIncomingCallRingtoneId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 默认来电铃声 ID（仅支持官方铃声库）
+
+      - name: allowCallerRingtoneOverride
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_TRUE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 是否允许使用发起方配置的专属呼叫铃声替换默认铃声
+
+      - name: enableCallVibration
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_TRUE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 来电时是否振动
+
+      - name: enableGroupCallRing
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_TRUE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 群语音/视频邀请是否按来电方式响铃提醒
 
       - name: allowStrangerMsg
         type: bool
@@ -509,7 +714,7 @@ entities:
         description: 小趣助手开关
 
       - name: blockedKeywords
-        type: string[]
+        type: "string[]"
         constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow

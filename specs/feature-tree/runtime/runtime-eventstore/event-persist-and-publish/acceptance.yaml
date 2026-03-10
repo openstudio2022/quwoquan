@@ -1,47 +1,46 @@
 version: 1
-feature: "event-persist-and-publish"
-level: "L3_subfeature"
-template: "A1-A8"
+feature: event-persist-and-publish
+level: "L3_story"
+template: A1-A8
 tree_context:
-  feature_level: "L3_subfeature"
-  feature_path: "capability.runtime.feature.runtime-eventstore.subfeature.event-persist-and-publish"
-  parent_path: "capability.runtime.feature.runtime-eventstore"
-  acceptance_inherits_from: "capability.runtime.feature.runtime-eventstore"
+  feature_path: capability.runtime.feature.runtime-eventstore.subfeature.event-persist-and-publish
+  parent_path: capability.runtime.feature.runtime-eventstore
+  acceptance_inherits_from: capability.runtime.feature.runtime-eventstore
 level_acceptance:
   focus_groups:
-    - A1_functional
-    - A7_contract_metadata_consistency
-  notes: "Event Store 核心能力：持久化 + 发布，Repository 写路径自动触发。"
+  - A1_functional
+  - A7_contract_metadata_consistency
+  notes: Event Store 核心能力：持久化 + 发布，Repository 写路径自动触发。
 global_acceptance:
   A1_functional:
     scenarios:
-      - given: "领域事件产生"
-        when: "调用 EventStore.Persist(event)"
-        then: "事件写入 MongoDB events 集合"
-      - given: "事件已持久化"
-        when: "调用 EventStore.Publish(event)"
-        then: "事件发布到 RocketMQ topic"
-      - given: "Repository.Save() 执行"
-        when: "拦截链触发"
-        then: "自动 Persist + Publish，业务代码透明"
+    - given: 领域事件产生
+      when: 调用 EventStore.Persist(event)
+      then: 事件写入 MongoDB events 集合
+    - given: 事件已持久化
+      when: 调用 EventStore.Publish(event)
+      then: 事件发布到 RocketMQ topic
+    - given: Repository.Save() 执行
+      when: 拦截链触发
+      then: 自动 Persist + Publish，业务代码透明
   A2_experience:
-    - "事件发布对业务代码透明"
+  - 事件发布对业务代码透明
   A3_service_governance:
-    - "事件包含 traceID（OTEL 传播）"
+  - 事件包含 traceID（OTEL 传播）
   A4_observability:
-    - "持久化与发布延迟可监控"
+  - 持久化与发布延迟可监控
   A5_product_ops:
-    - "运营可查看事件流"
+  - 运营可查看事件流
   A6_security_privacy:
-    - "事件 payload 遵循 classification 策略"
+  - 事件 payload 遵循 classification 策略
   A7_contract_metadata_consistency:
-    - "事件 schema 与 events.yaml 一致"
+  - 事件 schema 与 events.yaml 一致
   A8_test_automation:
-    - "Persist 和 Publish 均有契约测试"
+  - Persist 和 Publish 均有契约测试
 tests:
   contract:
-    - "quwoquan_service/runtime/eventstore/tests/persist_contract_test.go"
-    - "quwoquan_service/runtime/eventstore/tests/publish_contract_test.go"
+  - quwoquan_service/runtime/eventstore/tests/persist_contract_test.go
+  - quwoquan_service/runtime/eventstore/tests/publish_contract_test.go
 execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
+  local_gate: make gate
+  full_gate: make gate-full

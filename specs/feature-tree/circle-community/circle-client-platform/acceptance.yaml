@@ -1,62 +1,61 @@
 feature: circle-client-platform
-level: L2_feature
+level: "L2_feature"
 archived: false
 level_acceptance:
-  - id: A1
-    description: >
-      目录迁移完成：lib/ui/circle/ 目录包含 pages/、providers/、widgets/、models/ 四个子目录，
-      lib/features/circles/ 已删除，项目内无任何 import 引用 features/circles/ 路径，
-      flutter analyze 无新增错误。
-    status: pending
-    tests:
-      - path: quwoquan_app/lib/ui/circle/pages/circles_page.dart
-      - path: quwoquan_app/lib/ui/circle/pages/circle_detail_page.dart
-      - path: quwoquan_app/lib/ui/circle/pages/circle_stats_page.dart
+- id: A1
+  description: '目录迁移完成：lib/ui/circle/ 目录包含 pages/、providers/、widgets/、models/ 四个子目录，
+    lib/features/circles/ 已删除，项目内无任何 import 引用 features/circles/ 路径， flutter analyze
+    无新增错误。
 
-  - id: A2
-    description: >
-      CircleRepository 创建完成：Abstract 接口包含 listCircles/getCircle/createCircle/
-      joinCircle/leaveCircle/getCircleFeed/getCircleStats/listMembers 8 个方法，
-      Mock 实现返回本地数据且不发 HTTP，Remote 实现使用 CloudRuntimeConfig + CloudRequestHeaders。
-    status: pending
-    tests:
-      - path: quwoquan_app/lib/cloud/services/circle/circle_repository.dart
+    '
+  status: pending
+  tests:
+  - path: quwoquan_app/lib/ui/circle/pages/circles_page.dart
+  - path: quwoquan_app/lib/ui/circle/pages/circle_detail_page.dart
+  - path: quwoquan_app/lib/ui/circle/pages/circle_stats_page.dart
+- id: A2
+  description: 'CircleRepository 创建完成：Abstract 接口包含 listCircles/getCircle/createCircle/
+    joinCircle/leaveCircle/getCircleFeed/getCircleStats/listMembers 8 个方法， Mock 实现返回本地数据且不发
+    HTTP，Remote 实现使用 CloudRuntimeConfig + CloudRequestHeaders。
 
-  - id: A3
-    description: >
-      circleRepositoryProvider 已注册到 app_providers.dart，
-      通过 appDataSourceModeProvider 切换 mock/remote。
-      AppContentRepository 中 circlesCategoryConfig/circlesMockCircles/
-      circlesMockActivities/circlePageCircleInfo 四个接口已移除。
-    status: pending
-    tests:
-      - path: quwoquan_app/lib/core/providers/app_providers.dart
-      - path: quwoquan_app/lib/core/services/app_content_repository.dart
+    '
+  status: pending
+  tests:
+  - path: quwoquan_app/lib/cloud/services/circle/circle_repository.dart
+- id: A3
+  description: 'circleRepositoryProvider 已注册到 app_providers.dart， 通过 appDataSourceModeProvider
+    切换 mock/remote。 AppContentRepository 中 circlesCategoryConfig/circlesMockCircles/
+    circlesMockActivities/circlePageCircleInfo 四个接口已移除。
 
-  - id: A4
-    description: >
-      组件拆分完成：从 circles_page.dart 提取 ≥ 3 个独立 widget 到 ui/circle/widgets/，
-      每个 widget 为独立文件，可复用。
-    status: pending
-    tests:
-      - path: quwoquan_app/lib/ui/circle/widgets/
+    '
+  status: pending
+  tests:
+  - path: quwoquan_app/lib/core/providers/app_providers.dart
+  - path: quwoquan_app/lib/core/services/app_content_repository.dart
+- id: A4
+  description: '组件拆分完成：从 circles_page.dart 提取 ≥ 3 个独立 widget 到 ui/circle/widgets/，
+    每个 widget 为独立文件，可复用。
 
-  - id: A5
-    description: >
-      硬编码清零：circle_detail_page.dart 中所有字号使用 AppTypography.*、
-      间距使用 AppSpacing.*、颜色使用 AppColors/AppColorsFunctional、
-      圆角使用 AppSpacing.*BorderRadius。
-      python3 scripts/verify_dart_semantic.py 对 ui/circle/ 零新增违规。
-    status: pending
-    tests:
-      - path: quwoquan_app/lib/ui/circle/pages/circle_detail_page.dart
+    '
+  status: pending
+  tests:
+  - path: quwoquan_app/lib/ui/circle/widgets/
+- id: A5
+  description: '硬编码清零：circle_detail_page.dart 中所有字号使用 AppTypography.*、 间距使用 AppSpacing.*、颜色使用
+    AppColors/AppColorsFunctional、 圆角使用 AppSpacing.*BorderRadius。 python3 scripts/verify_dart_semantic.py
+    对 ui/circle/ 零新增违规。
 
-  - id: A6
-    description: >
-      圈子 mock 数据迁移完成：lib/cloud/services/circle/mock/circle_mock_data.dart 存在，
-      PrototypeMockData 中 circlesCategoryConfig/circlesMockCircles/
-      circlesMockActivities/circlePageCircleInfo 已移除。
-    status: pending
-    tests:
-      - path: quwoquan_app/lib/cloud/services/circle/mock/circle_mock_data.dart
-      - path: quwoquan_app/lib/core/mock/prototype_mock_data.dart
+    '
+  status: pending
+  tests:
+  - path: quwoquan_app/lib/ui/circle/pages/circle_detail_page.dart
+- id: A6
+  description: '圈子 mock 数据迁移完成：lib/cloud/services/circle/mock/circle_mock_data.dart
+    存在， PrototypeMockData 中 circlesCategoryConfig/circlesMockCircles/ circlesMockActivities/circlePageCircleInfo
+    已移除。
+
+    '
+  status: pending
+  tests:
+  - path: quwoquan_app/lib/cloud/services/circle/mock/circle_mock_data.dart
+  - path: quwoquan_app/lib/core/mock/prototype_mock_data.dart

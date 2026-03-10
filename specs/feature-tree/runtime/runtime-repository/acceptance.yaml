@@ -1,55 +1,54 @@
 version: 1
-feature: "runtime-repository"
+feature: runtime-repository
 level: "L2_feature"
 archived: true
-archived_at: "2026-03-01T00:00:00Z"
-template: "A1-A8"
+archived_at: '2026-03-01T00:00:00Z'
+template: A1-A8
 tree_context:
-  feature_level: "L2_feature"
-  feature_path: "capability.runtime.feature.runtime-repository"
-  parent_path: "capability.runtime"
-  acceptance_inherits_from: "capability.runtime"
+  feature_path: capability.runtime.feature.runtime-repository
+  parent_path: capability.runtime
+  acceptance_inherits_from: capability.runtime
 level_acceptance:
   focus_groups:
-    - A1_functional
-    - A3_service_governance
-    - A7_contract_metadata_consistency
-    - A8_test_automation
-  notes: "Repository 是 P0 最核心交付物，所有业务服务的 CRUD 依赖此框架。"
+  - A1_functional
+  - A3_service_governance
+  - A7_contract_metadata_consistency
+  - A8_test_automation
+  notes: Repository 是 P0 最核心交付物，所有业务服务的 CRUD 依赖此框架。
 global_acceptance:
   A1_functional:
     scenarios:
-      - given: "Post 聚合已在 metadata 注册，storage_backend=mongodb"
-        when: "调用 Repository.Save(post) 后 FindByID"
-        then: "返回完整 Post 对象，字段一致"
-      - given: "UserProfile 聚合已在 metadata 注册，storage_backend=postgres"
-        when: "调用 Repository.Save(profile) 后 Find(filter)"
-        then: "返回符合过滤条件的 UserProfile 列表"
-      - given: "Redis 缓存已开启"
-        when: "第一次 FindByID（缓存未命中）"
-        then: "从数据库查询并写入 Redis 缓存，第二次 FindByID 命中缓存"
+    - given: Post 聚合已在 metadata 注册，storage_backend=mongodb
+      when: 调用 Repository.Save(post) 后 FindByID
+      then: 返回完整 Post 对象，字段一致
+    - given: UserProfile 聚合已在 metadata 注册，storage_backend=postgres
+      when: 调用 Repository.Save(profile) 后 Find(filter)
+      then: 返回符合过滤条件的 UserProfile 列表
+    - given: Redis 缓存已开启
+      when: 第一次 FindByID（缓存未命中）
+      then: 从数据库查询并写入 Redis 缓存，第二次 FindByID 命中缓存
   A2_experience:
-    - "Repository API 使用体验一致，不因底层存储差异暴露不同接口"
+  - Repository API 使用体验一致，不因底层存储差异暴露不同接口
   A3_service_governance:
-    - "数据库连接池配置可通过 runtime-config 调整"
-    - "慢查询自动记录到 observability 日志"
+  - 数据库连接池配置可通过 runtime-config 调整
+  - 慢查询自动记录到 observability 日志
   A4_observability:
-    - "Repository 操作自动产生 OTEL span + 延迟 metric"
+  - Repository 操作自动产生 OTEL span + 延迟 metric
   A5_product_ops:
-    - "运营可查看 entity 的存储后端和缓存配置"
+  - 运营可查看 entity 的存储后端和缓存配置
   A6_security_privacy:
-    - "PII/SECRET 字段在 Repository 层不做额外处理，由拦截链负责"
+  - PII/SECRET 字段在 Repository 层不做额外处理，由拦截链负责
   A7_contract_metadata_consistency:
-    - "Repository 实例由 metadata 的 storage_backend 自动路由，禁止硬编码存储选择"
+  - Repository 实例由 metadata 的 storage_backend 自动路由，禁止硬编码存储选择
   A8_test_automation:
-    - "MongoDB/PostgreSQL/Redis 适配器均有契约测试（使用真实测试引擎）"
+  - MongoDB/PostgreSQL/Redis 适配器均有契约测试（使用真实测试引擎）
 tests:
   unit:
-    - "quwoquan_service/runtime/repository/tests/factory_test.go"
+  - quwoquan_service/runtime/repository/tests/factory_test.go
   contract:
-    - "quwoquan_service/runtime/repository/tests/mongo_adapter_contract_test.go"
-    - "quwoquan_service/runtime/repository/tests/pg_adapter_contract_test.go"
-    - "quwoquan_service/runtime/repository/tests/cache_middleware_contract_test.go"
+  - quwoquan_service/runtime/repository/tests/mongo_adapter_contract_test.go
+  - quwoquan_service/runtime/repository/tests/pg_adapter_contract_test.go
+  - quwoquan_service/runtime/repository/tests/cache_middleware_contract_test.go
 execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
+  local_gate: make gate
+  full_gate: make gate-full

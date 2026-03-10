@@ -1,5 +1,0 @@
-version: 1
-l2: deliver-deploy-prod-pipeline
-l3: multi-cloud-deploy-overlay
-l4:
-  - feature: aliyun-volcengine-huaweicloud-overlays

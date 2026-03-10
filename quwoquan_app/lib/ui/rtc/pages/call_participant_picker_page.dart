@@ -2,21 +2,32 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 
+enum _ParticipantSource { currentConversation, sameInterest, otherGroups }
+
 class CallParticipantPickerPage extends ConsumerStatefulWidget {
   const CallParticipantPickerPage({
     super.key,
     this.callId,
     this.maxParticipants = 32,
+    this.conversationId,
+    this.defaultSelectAll = false,
   });
 
   final String? callId;
   final int maxParticipants;
+
+  /// 群聊上下文：优先从群成员加载，忽略通用联系人
+  final String? conversationId;
+
+  /// 是否默认全选（群成员 <=8 时传 true）
+  final bool defaultSelectAll;
 
   @override
   ConsumerState<CallParticipantPickerPage> createState() =>
@@ -28,7 +39,10 @@ class _CallParticipantPickerPageState
   final Set<String> _selectedIds = {};
   String _searchQuery = '';
   List<Map<String, dynamic>> _contacts = [];
+  List<Map<String, dynamic>> _availableGroups = [];
   bool _isLoading = true;
+  _ParticipantSource _source = _ParticipantSource.currentConversation;
+  String? _selectedGroupId;
 
   @override
   void initState() {
@@ -39,11 +53,18 @@ class _CallParticipantPickerPageState
   Future<void> _loadContacts() async {
     try {
       final chatRepo = ref.read(chatRepositoryProvider);
-      final contacts = await chatRepo.listContacts();
+      final contacts = await _loadContactsForSource(chatRepo, _source);
+      final groups = await _loadAvailableGroups(chatRepo);
       if (mounted) {
         setState(() {
           _contacts = contacts;
+          _availableGroups = groups;
+          if (_selectedGroupId == null && groups.isNotEmpty) {
+            _selectedGroupId = groups.first['id']?.toString() ??
+                groups.first['_id']?.toString();
+          }
           _isLoading = false;
+          _applyDefaultSelectionIfNeeded(contacts);
         });
       }
     } catch (_) {
@@ -51,6 +72,105 @@ class _CallParticipantPickerPageState
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadAvailableGroups(
+    dynamic chatRepo,
+  ) async {
+    final conversations = await chatRepo.listConversations(limit: 100);
+    final currentConversationId = widget.conversationId;
+    return (conversations as List<Map<String, dynamic>>)
+        .where((item) {
+          final type = item['type'] as String? ?? '';
+          final id =
+              item['id']?.toString() ?? item['_id']?.toString() ?? '';
+          return type == 'group' && id.isNotEmpty && id != currentConversationId;
+        })
+        .toList(growable: false);
+  }
+
+  Future<List<Map<String, dynamic>>> _loadContactsForSource(
+    dynamic chatRepo,
+    _ParticipantSource source,
+  ) async {
+    final currentUserId = ref.read(userDataProvider)?.id ?? '';
+    switch (source) {
+      case _ParticipantSource.currentConversation:
+        final convId = widget.conversationId;
+        if (convId == null || convId.isEmpty) {
+          return chatRepo.listContacts();
+        }
+        final rawMembers = await chatRepo.listMembers(
+          conversationId: convId,
+          limit: 200,
+        );
+        return (rawMembers as List<Map<String, dynamic>>)
+            .where((m) => (m['userId'] as String? ?? '') != currentUserId)
+            .toList(growable: false);
+      case _ParticipantSource.sameInterest:
+        final contacts = await chatRepo.listContacts(limit: 200);
+        return (contacts as List<Map<String, dynamic>>)
+            .where((c) => (c['userId'] as String? ?? '') != currentUserId)
+            .toList(growable: false);
+      case _ParticipantSource.otherGroups:
+        final groupId = _selectedGroupId;
+        if (groupId == null || groupId.isEmpty) return const <Map<String, dynamic>>[];
+        final rawMembers = await chatRepo.listMembers(
+          conversationId: groupId,
+          limit: 200,
+        );
+        return (rawMembers as List<Map<String, dynamic>>)
+            .where((m) => (m['userId'] as String? ?? '') != currentUserId)
+            .toList(growable: false);
+    }
+  }
+
+  void _applyDefaultSelectionIfNeeded(List<Map<String, dynamic>> contacts) {
+    final shouldSelectDefault =
+        _source == _ParticipantSource.currentConversation &&
+            widget.defaultSelectAll &&
+            _selectedIds.isEmpty;
+    if (!shouldSelectDefault) return;
+    _selectedIds.addAll(
+      contacts
+          .map((c) => c['userId'] as String? ?? '')
+          .where((id) => id.isNotEmpty),
+    );
+  }
+
+  Future<void> _switchSource(_ParticipantSource next) async {
+    final chatRepo = ref.read(chatRepositoryProvider);
+    setState(() {
+      _source = next;
+      _isLoading = true;
+    });
+    final contacts = await _loadContactsForSource(chatRepo, next);
+    if (!mounted) return;
+    setState(() {
+      _contacts = contacts;
+      _isLoading = false;
+      if (next == _ParticipantSource.currentConversation) {
+        _selectedIds.clear();
+        _applyDefaultSelectionIfNeeded(contacts);
+      }
+    });
+  }
+
+  Future<void> _switchOtherGroup(String groupId) async {
+    final chatRepo = ref.read(chatRepositoryProvider);
+    setState(() {
+      _selectedGroupId = groupId;
+      _isLoading = true;
+    });
+    final contacts = await _loadContactsForSource(
+      chatRepo,
+      _ParticipantSource.otherGroups,
+    );
+    if (!mounted) return;
+    setState(() {
+      _contacts = contacts;
+      _isLoading = false;
+    });
   }
 
   List<Map<String, dynamic>> get _filteredContacts {
@@ -108,6 +228,9 @@ class _CallParticipantPickerPageState
       child: SafeArea(
         child: Column(
           children: [
+            _buildSourceTabs(),
+            if (_source == _ParticipantSource.otherGroups)
+              _buildGroupSelector(),
             Padding(
               padding: EdgeInsets.all(AppSpacing.md),
               child: CupertinoSearchTextField(
@@ -129,6 +252,38 @@ class _CallParticipantPickerPageState
                     ),
                   ),
                   const Spacer(),
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: () {
+                      setState(_selectedIds.clear);
+                    },
+                    child: Text(
+                      UITextConstants.callClearSelection,
+                      style: TextStyle(
+                        color: AppColors.overlayMedium,
+                        fontSize: AppTypography.sm,
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: AppSpacing.sm),
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: () {
+                      setState(() {
+                        _selectedIds.clear();
+                        _applyDefaultSelectionIfNeeded(_contacts);
+                      });
+                    },
+                    child: Text(
+                      UITextConstants.callRestoreDefaultSelection,
+                      style: TextStyle(
+                        color: AppColors.primaryColor,
+                        fontSize: AppTypography.sm,
+                        fontWeight: AppTypography.medium,
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: AppSpacing.sm),
                   if (_selectedIds.isNotEmpty)
                     Text(
                       '已选 ${_selectedIds.length}',
@@ -185,6 +340,107 @@ class _CallParticipantPickerPageState
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSourceTabs() {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.sm,
+        AppSpacing.md,
+        0,
+      ),
+      child: CupertinoSlidingSegmentedControl<_ParticipantSource>(
+        groupValue: _source,
+        children: const <_ParticipantSource, Widget>{
+          _ParticipantSource.currentConversation: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: Text(UITextConstants.callSourceCurrentConversation),
+          ),
+          _ParticipantSource.sameInterest: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: Text(UITextConstants.callSourceSameInterest),
+          ),
+          _ParticipantSource.otherGroups: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: Text(UITextConstants.callSourceOtherGroups),
+          ),
+        },
+        onValueChanged: (value) {
+          if (value != null) {
+            _switchSource(value);
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _buildGroupSelector() {
+    if (_availableGroups.isEmpty) {
+      return Padding(
+        padding: EdgeInsets.all(AppSpacing.md),
+        child: Text(
+          '暂无可切换群聊',
+          style: TextStyle(
+            color: AppColors.overlayMedium,
+            fontSize: AppTypography.sm,
+          ),
+        ),
+      );
+    }
+    return SizedBox(
+      height: AppSpacing.forty,
+      child: ListView.separated(
+        padding: EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
+        scrollDirection: Axis.horizontal,
+        itemBuilder: (context, index) {
+          final group = _availableGroups[index];
+          final groupId =
+              group['id']?.toString() ?? group['_id']?.toString() ?? '';
+          final title = group['title']?.toString() ?? groupId;
+          final selected = groupId == _selectedGroupId;
+          return GestureDetector(
+            onTap: () => _switchOtherGroup(groupId),
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.xs,
+              ),
+              decoration: BoxDecoration(
+                color: selected
+                    ? AppColors.primaryColor.withValues(alpha: 0.12)
+                    : AppColors.white,
+                borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                border: Border.all(
+                  color: selected
+                      ? AppColors.primaryColor
+                      : AppColors.overlayLight,
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    color: selected
+                        ? AppColors.primaryColor
+                        : AppColors.overlayMedium,
+                    fontSize: AppTypography.sm,
+                    fontWeight: selected
+                        ? AppTypography.semiBold
+                        : AppTypography.medium,
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+        separatorBuilder: (context, index) => SizedBox(width: AppSpacing.sm),
+        itemCount: _availableGroups.length,
       ),
     );
   }

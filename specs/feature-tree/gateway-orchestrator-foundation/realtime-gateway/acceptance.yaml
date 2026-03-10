@@ -1,228 +1,321 @@
 version: 1
 feature: realtime-gateway
-level: L2
+level: "L2_feature"
 parent: gateway-orchestrator-foundation
 status: draft
-
 acceptance_criteria:
+- id: G-A1
+  title: WebSocket 建连 + 鉴权 + 心跳生命周期
+  status: pending
+  scenario: '客户端携带 valid JWT 建立 WebSocket 连接，发送 ping，等待 pong。
 
-  - id: G-A1
-    title: WebSocket 建连 + 鉴权 + 心跳生命周期
-    status: pending
-    scenario: |
-      客户端携带 valid JWT 建立 WebSocket 连接，发送 ping，等待 pong。
-    expected: |
-      建连成功，服务端返回 connected 帧（含 connId），
-      ping → pong 往返 < 10ms，
-      90s 无心跳 → 服务端关闭连接。
-    verification:
-      layers: [L2]
-      L2: |
-        Go test: ws.Dial + auth header → connected
-        ws.WritePing → ws.ReadPong < 10ms
-        sleep(91s) → conn.Read error (closed)
+    '
+  expected: '建连成功，服务端返回 connected 帧（含 connId），
 
-  - id: G-A2
-    title: Topic 订阅后接收消息推送
-    status: pending
-    scenario: |
-      客户端 A 订阅 topic "conversation/123"，
-      chat-service 发布 MessageSent 事件到 Redis。
-    expected: |
-      客户端 A 在 < 50ms（节点内）收到该消息帧，
-      帧包含 type=message, topic=conversation/123, payload, seq。
-    verification:
-      layers: [L2]
-      L2: |
-        ws.Subscribe("conversation/123")
-        redis.Publish("rt:conversation:123", messagePayload)
-        msg := ws.ReadMessage() → assert topic, payload, seq
+    ping → pong 往返 < 10ms，
 
-  - id: G-A3
-    title: 1000 连接 fanout 性能
-    status: pending
-    scenario: |
-      1000 个 WebSocket 客户端订阅同一 conversation topic，
-      发布 1 条消息。
-    expected: |
-      所有 1000 客户端在 500ms 内（p99）收到消息，
-      无遗漏。
-    verification:
-      layers: [L2]
-      L2: |
-        benchmark test: 1000 ws.Dial + Subscribe
-        redis.Publish → waitGroup 全部 ReadMessage
-        assert p99 < 500ms, received_count == 1000
+    90s 无心跳 → 服务端关闭连接。
 
-  - id: G-A4
-    title: 断线重连 + gap fill
-    status: pending
-    scenario: |
-      客户端收到 seq=100 后断线，期间产生 seq 101-110，客户端重连。
-    expected: |
-      重连时客户端发送 lastSeq=100，
-      服务端返回/触发拉取 seq 101-110 的消息，
-      客户端完整接收。
-    verification:
-      layers: [L2, L3]
-      L2: 服务端重连握手解析 lastSeq → 返回 gap_fill 指令
-      L3: 端侧 RealtimeConnectionManager mock 断线 → reconnect → gap fill 回调
+    '
+  verification:
+    layers:
+    - L2
+    L2: 'Go test: ws.Dial + auth header → connected
 
-  - id: G-A5
-    title: 跨节点消息路由
-    status: pending
-    scenario: |
-      用户 A 连接 node-1，用户 B 连接 node-2，
-      两者订阅同一 conversation topic。
-    expected: |
-      发布 1 条消息后 A 和 B 均收到，
-      无论连接在哪个节点。
-    verification:
-      layers: [L2]
-      L2: |
-        启动 2 个 gateway 实例，共享 Redis
-        A → node-1 subscribe, B → node-2 subscribe
-        redis.Publish → A.ReadMessage + B.ReadMessage both succeed
+      ws.WritePing → ws.ReadPong < 10ms
 
-  - id: G-A6
-    title: 飞书 Webhook 经 Adapter 路由
-    status: pending
-    scenario: |
-      飞书发送 HTTP Webhook 到 realtime-gateway /v1/channel/feishu/webhook。
-    expected: |
-      Adapter 解析飞书消息 → 转换为统一帧格式 →
-      路由到 channel/feishu_{appId} topic →
-      订阅该 topic 的端侧客户端收到消息。
-    verification:
-      layers: [L2]
-      L2: |
-        POST /v1/channel/feishu/webhook with sample payload
-        → ws client subscribed to channel/feishu_001 receives message
+      sleep(91s) → conn.Read error (closed)
 
-  - id: G-A7
-    title: system/config topic 骨架
-    status: pending
-    scenario: |
-      端侧注册 ConfigHandler，连接 realtime-gateway。
-    expected: |
-      system/config topic 可订阅，
-      端侧 handler 注册成功，
-      发送空配置帧 → handler onMessage 触发。
-    verification:
-      layers: [L3]
-      L3: 端侧 widget test 注入 MockRealtimeConnectionManager → ConfigHandler.onMessage 回调
+      '
+- id: G-A2
+  title: Topic 订阅后接收消息推送
+  status: pending
+  scenario: '客户端 A 订阅 topic "conversation/123"，
 
-  - id: G-A8
-    title: Prometheus 可观测指标
-    status: pending
-    scenario: |
-      访问 realtime-gateway /metrics 端点。
-    expected: |
-      包含指标：
-      - realtime_connections_active (gauge)
-      - realtime_messages_sent_total (counter)
-      - realtime_message_fanout_duration_seconds (histogram)
-      - realtime_heartbeat_timeouts_total (counter)
-    verification:
-      layers: [L2]
-      L2: GET /metrics → parse prometheus text → assert metric names exist
+    chat-service 发布 MessageSent 事件到 Redis。
 
-  - id: G-A9
-    title: make gate-full 全通过
-    status: pending
-    scenario: |
-      执行 make gate-full。
-    expected: |
-      realtime-gateway 相关的 L0+L1+L2 测试全部通过。
-    verification:
-      layers: [L0, L1, L2]
-      gate: make gate-full exit 0
+    '
+  expected: '客户端 A 在 < 50ms（节点内）收到该消息帧，
 
-  # ── 自适应传输 ──────────────────────────────────────
-  - id: G-A10
-    title: 活跃度自适应传输状态机
-    status: pending
-    scenario: |
-      用户启动 App → 浏览发现页（空闲态）→ 进入聊天页（活跃态）→
-      离开聊天页 60s（回落空闲态）→ App 进入后台（断开态）→
-      点击 push 通知打开聊天页（直接活跃态）。
-    expected: |
-      空闲态：long-polling（poll_interval_sec=60s）接收 inbox 角标更新，无 WebSocket 连接。
-      活跃态：WebSocket 建立，实时收发消息，long-polling 停止。
-      回落空闲态：ws_idle_timeout_sec=120s 无消息后 WebSocket 关闭，long-polling 恢复。
-      断开态：无任何连接，仅 APNs/FCM。
-      push 唤醒直入活跃态：直接建立 WebSocket + seq gap fill。
-    verification:
-      layers: [L2, L3]
-      L2: |
-        Go test: 模拟状态转换序列
-        → idle: assert poll endpoint hit, no ws connection
-        → active: assert ws connected, poll stopped
-        → idle again: assert ws closed, poll resumed
-      L3: |
-        端侧 RealtimeConnectionManager 状态机 unit test
-        → mock 页面导航事件 → assert transport 状态转换正确
-        → mock App lifecycle events → assert 连接建立/关闭时机
+    帧包含 type=message, topic=conversation/123, payload, seq。
 
-  - id: G-A10b
-    title: WebSocket Upgrade 被拦截时保持 long-polling
-    status: pending
-    scenario: |
-      用户进入聊天页，但 WebSocket Upgrade 被 proxy 拦截。
-    expected: |
-      客户端保持 long-polling 接收消息（含 conversation topic），
-      后台每 60s 重试 WebSocket Upgrade，成功后升级。
-      消息无丢失（long-polling 覆盖全部 topic）。
-    verification:
-      layers: [L2, L3]
-      L2: |
-        Go test: mock upgrade failure → poll endpoint covers conversation topic
-        → publish message → poll response contains message
-      L3: |
-        端侧 mock WebSocket failure → assert transport stays long-polling
-        → 消息正常显示在聊天页
+    '
+  verification:
+    layers:
+    - L2
+    L2: 'ws.Subscribe("conversation/123")
 
-  # ── 连接资源管理 ──────────────────────────────────
-  - id: G-A11
-    title: per-user 多设备连接限制
-    status: pending
-    scenario: |
-      同一用户建立 6 个 WebSocket 连接（超过上限 5）。
-    expected: |
-      第 6 个连接成功，但第 1 个（最早的）连接收到 connection_replaced 帧后被关闭。
-      在线连接数始终 ≤ 5。
-    verification:
-      layers: [L2]
-      L2: |
-        Go test: 6× ws.Dial(same userId)
-        → assert conn[0] receives "connection_replaced" and closes
-        → presence:user:{userId} has 5 entries
+      redis.Publish("rt:conversation:123", messagePayload)
 
-  - id: G-A12
-    title: 节点容量限流
-    status: pending
-    scenario: |
-      节点已有 40K 连接（80% 容量），新连接尝试建立。
-    expected: |
-      返回 HTTP 503 + Retry-After: 5 header，
-      不接受新 WebSocket Upgrade。
-    verification:
-      layers: [L2]
-      L2: |
-        Go test: mock connection count = 40001
-        → ws.Dial → assert HTTP 503 + Retry-After header
+      msg := ws.ReadMessage() → assert topic, payload, seq
 
-  - id: G-A13
-    title: 写缓冲背压断连
-    status: pending
-    scenario: |
-      客户端连接后停止读取，服务端持续推送消息 10+ 秒。
-    expected: |
-      写缓冲超 256KB 持续 10s 后服务端主动关闭连接，
-      客户端重连后通过 gap fill 补全丢失消息。
-    verification:
-      layers: [L2]
-      L2: |
-        Go test: ws.Dial → subscribe → stop reading
-        → publish 1000 messages → assert conn closed after ~10s
-        → reconnect with lastSeq → receive gap messages
+      '
+- id: G-A3
+  title: 1000 连接 fanout 性能
+  status: pending
+  scenario: '1000 个 WebSocket 客户端订阅同一 conversation topic，
+
+    发布 1 条消息。
+
+    '
+  expected: '所有 1000 客户端在 500ms 内（p99）收到消息，
+
+    无遗漏。
+
+    '
+  verification:
+    layers:
+    - L2
+    L2: 'benchmark test: 1000 ws.Dial + Subscribe
+
+      redis.Publish → waitGroup 全部 ReadMessage
+
+      assert p99 < 500ms, received_count == 1000
+
+      '
+- id: G-A4
+  title: 断线重连 + gap fill
+  status: pending
+  scenario: '客户端收到 seq=100 后断线，期间产生 seq 101-110，客户端重连。
+
+    '
+  expected: '重连时客户端发送 lastSeq=100，
+
+    服务端返回/触发拉取 seq 101-110 的消息，
+
+    客户端完整接收。
+
+    '
+  verification:
+    layers:
+    - L2
+    - L3
+    L2: 服务端重连握手解析 lastSeq → 返回 gap_fill 指令
+    L3: 端侧 RealtimeConnectionManager mock 断线 → reconnect → gap fill 回调
+- id: G-A5
+  title: 跨节点消息路由
+  status: pending
+  scenario: '用户 A 连接 node-1，用户 B 连接 node-2，
+
+    两者订阅同一 conversation topic。
+
+    '
+  expected: '发布 1 条消息后 A 和 B 均收到，
+
+    无论连接在哪个节点。
+
+    '
+  verification:
+    layers:
+    - L2
+    L2: '启动 2 个 gateway 实例，共享 Redis
+
+      A → node-1 subscribe, B → node-2 subscribe
+
+      redis.Publish → A.ReadMessage + B.ReadMessage both succeed
+
+      '
+- id: G-A6
+  title: 飞书 Webhook 经 Adapter 路由
+  status: pending
+  scenario: '飞书发送 HTTP Webhook 到 realtime-gateway /v1/channel/feishu/webhook。
+
+    '
+  expected: 'Adapter 解析飞书消息 → 转换为统一帧格式 →
+
+    路由到 channel/feishu_{appId} topic →
+
+    订阅该 topic 的端侧客户端收到消息。
+
+    '
+  verification:
+    layers:
+    - L2
+    L2: 'POST /v1/channel/feishu/webhook with sample payload
+
+      → ws client subscribed to channel/feishu_001 receives message
+
+      '
+- id: G-A7
+  title: system/config topic 骨架
+  status: pending
+  scenario: '端侧注册 ConfigHandler，连接 realtime-gateway。
+
+    '
+  expected: 'system/config topic 可订阅，
+
+    端侧 handler 注册成功，
+
+    发送空配置帧 → handler onMessage 触发。
+
+    '
+  verification:
+    layers:
+    - L3
+    L3: 端侧 widget test 注入 MockRealtimeConnectionManager → ConfigHandler.onMessage
+      回调
+- id: G-A8
+  title: Prometheus 可观测指标
+  status: pending
+  scenario: '访问 realtime-gateway /metrics 端点。
+
+    '
+  expected: '包含指标：
+
+    - realtime_connections_active (gauge)
+
+    - realtime_messages_sent_total (counter)
+
+    - realtime_message_fanout_duration_seconds (histogram)
+
+    - realtime_heartbeat_timeouts_total (counter)
+
+    '
+  verification:
+    layers:
+    - L2
+    L2: GET /metrics → parse prometheus text → assert metric names exist
+- id: G-A9
+  title: make gate-full 全通过
+  status: pending
+  scenario: '执行 make gate-full。
+
+    '
+  expected: 'realtime-gateway 相关的 L0+L1+L2 测试全部通过。
+
+    '
+  verification:
+    layers:
+    - L0
+    - L1
+    - L2
+    gate: make gate-full exit 0
+- id: G-A10
+  title: 活跃度自适应传输状态机
+  status: pending
+  scenario: '用户启动 App → 浏览发现页（空闲态）→ 进入聊天页（活跃态）→
+
+    离开聊天页 60s（回落空闲态）→ App 进入后台（断开态）→
+
+    点击 push 通知打开聊天页（直接活跃态）。
+
+    '
+  expected: '空闲态：long-polling（poll_interval_sec=60s）接收 inbox 角标更新，无 WebSocket 连接。
+
+    活跃态：WebSocket 建立，实时收发消息，long-polling 停止。
+
+    回落空闲态：ws_idle_timeout_sec=120s 无消息后 WebSocket 关闭，long-polling 恢复。
+
+    断开态：无任何连接，仅 APNs/FCM。
+
+    push 唤醒直入活跃态：直接建立 WebSocket + seq gap fill。
+
+    '
+  verification:
+    layers:
+    - L2
+    - L3
+    L2: 'Go test: 模拟状态转换序列
+
+      → idle: assert poll endpoint hit, no ws connection
+
+      → active: assert ws connected, poll stopped
+
+      → idle again: assert ws closed, poll resumed
+
+      '
+    L3: '端侧 RealtimeConnectionManager 状态机 unit test
+
+      → mock 页面导航事件 → assert transport 状态转换正确
+
+      → mock App lifecycle events → assert 连接建立/关闭时机
+
+      '
+- id: G-A10b
+  title: WebSocket Upgrade 被拦截时保持 long-polling
+  status: pending
+  scenario: '用户进入聊天页，但 WebSocket Upgrade 被 proxy 拦截。
+
+    '
+  expected: '客户端保持 long-polling 接收消息（含 conversation topic），
+
+    后台每 60s 重试 WebSocket Upgrade，成功后升级。
+
+    消息无丢失（long-polling 覆盖全部 topic）。
+
+    '
+  verification:
+    layers:
+    - L2
+    - L3
+    L2: 'Go test: mock upgrade failure → poll endpoint covers conversation topic
+
+      → publish message → poll response contains message
+
+      '
+    L3: '端侧 mock WebSocket failure → assert transport stays long-polling
+
+      → 消息正常显示在聊天页
+
+      '
+- id: G-A11
+  title: per-user 多设备连接限制
+  status: pending
+  scenario: '同一用户建立 6 个 WebSocket 连接（超过上限 5）。
+
+    '
+  expected: '第 6 个连接成功，但第 1 个（最早的）连接收到 connection_replaced 帧后被关闭。
+
+    在线连接数始终 ≤ 5。
+
+    '
+  verification:
+    layers:
+    - L2
+    L2: 'Go test: 6× ws.Dial(same userId)
+
+      → assert conn[0] receives "connection_replaced" and closes
+
+      → presence:user:{userId} has 5 entries
+
+      '
+- id: G-A12
+  title: 节点容量限流
+  status: pending
+  scenario: '节点已有 40K 连接（80% 容量），新连接尝试建立。
+
+    '
+  expected: '返回 HTTP 503 + Retry-After: 5 header，
+
+    不接受新 WebSocket Upgrade。
+
+    '
+  verification:
+    layers:
+    - L2
+    L2: 'Go test: mock connection count = 40001
+
+      → ws.Dial → assert HTTP 503 + Retry-After header
+
+      '
+- id: G-A13
+  title: 写缓冲背压断连
+  status: pending
+  scenario: '客户端连接后停止读取，服务端持续推送消息 10+ 秒。
+
+    '
+  expected: '写缓冲超 256KB 持续 10s 后服务端主动关闭连接，
+
+    客户端重连后通过 gap fill 补全丢失消息。
+
+    '
+  verification:
+    layers:
+    - L2
+    L2: 'Go test: ws.Dial → subscribe → stop reading
+
+      → publish 1000 messages → assert conn closed after ~10s
+
+      → reconnect with lastSeq → receive gap messages
+
+      '

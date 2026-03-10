@@ -1,0 +1,18 @@
+version: 1
+feature: page-session-device-propagation
+level: "L3_story"
+template: A1-A8
+focus_groups: []
+tests:
+  mock: []
+  unit: []
+  contract: []
+  integration: []
+  uat: []
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+legacy_merged_acceptance:
+- source_path: gateway-orchestrator-foundation/request-context-propagation/client-context-propagation/page-session-device-propagation/propagation-completeness-check
+  task_bucket: propagation-completeness-check
+  migrated_as: L3_task

@@ -8,58 +8,157 @@ service:
   description: 用户档案、认证、设备、设置与分身管理
 
 api_routes:
-  - method: POST
-    path: /v1/user/auth/login
-    operation: Login
-    description: 登录
-    request_entity: UserAuth
-    response_fields: [accessToken, refreshToken, userId]
+  # ── 认证（OwnerAccount 主控） ──────────────────────────────────────────────
 
   - method: POST
-    path: /v1/user/auth/refresh
+    path: /v1/auth/login/phone
+    operation: LoginWithPhone
+    description: 手机号 + OTP 登录，创建或恢复 OwnerAccount
+    auth_required: false
+    request_fields: [phone, otpCode, deviceId, platform]
+    response_fields: [accessToken, refreshToken, ownerId, activeSub, subAccountCount]
+
+  - method: POST
+    path: /v1/auth/login/wechat
+    operation: LoginWithWechat
+    description: 微信授权码登录
+    auth_required: false
+    request_fields: [wechatCode, deviceId, platform]
+    response_fields: [accessToken, refreshToken, ownerId, activeSub, subAccountCount]
+
+  - method: POST
+    path: /v1/auth/login/apple
+    operation: LoginWithApple
+    description: Apple ID token 登录
+    auth_required: false
+    request_fields: [appleIdToken, deviceId, platform]
+    response_fields: [accessToken, refreshToken, ownerId, activeSub, subAccountCount]
+
+  - method: POST
+    path: /v1/auth/token/refresh
     operation: RefreshToken
-    description: Token 刷新
+    description: 刷新 access token（滑动延期）
+    auth_required: false
+    request_fields: [refreshToken]
+    response_fields: [accessToken, refreshToken]
+
+  - method: POST
+    path: /v1/auth/logout
+    operation: Logout
+    description: 登出（吊销 refresh token）
+    request_fields: [deviceId]
+
+  # ── 凭证管理（OwnerAccount 视图，需登录） ────────────────────────────────
+
+  - method: GET
+    path: /v1/owner/credentials
+    operation: ListCredentials
+    description: 查看已绑定的凭证列表（脱敏展示）
+    response_entity: CredentialBinding
+    response_fields: [id, credentialType, displayLabel, isActive, boundAt]
+
+  - method: POST
+    path: /v1/owner/credentials/bind
+    operation: BindCredential
+    description: 绑定新凭证（phone/wechat/apple）
+    request_fields: [credentialType, verificationPayload]
+
+  - method: DELETE
+    path: /v1/owner/credentials/{credentialType}
+    operation: UnbindCredential
+    description: 解绑凭证（不能解绑最后一个）
+
+  # ── 子账号管理（OwnerAccount 视图，需登录） ──────────────────────────────
+
+  - method: GET
+    path: /v1/owner/sub-accounts
+    operation: ListSubAccounts
+    description: 查看自己所有子账号列表
+    response_entity: Persona
+    response_fields: [id, subAccountId, displayName, avatarUrl, isolationLevel, isActive, isPrimary]
+
+  - method: POST
+    path: /v1/owner/sub-accounts
+    operation: CreateSubAccount
+    description: 创建新子账号
+    request_entity: Persona
+    request_fields: [displayName, avatarUrl, isolationLevel, purposeHint]
+
+  - method: PATCH
+    path: /v1/owner/sub-accounts/{subAccountId}
+    operation: UpdateSubAccount
+    description: 更新子账号资料或隔离等级
+    request_fields: [displayName, avatarUrl, callerRingtoneId, isolationLevel, purposeHint]
+
+  - method: DELETE
+    path: /v1/owner/sub-accounts/{subAccountId}
+    operation: DeleteSubAccount
+    description: 删除子账号（不能删除最后一个）
+
+  - method: POST
+    path: /v1/owner/sub-accounts/{subAccountId}/activate
+    operation: ActivateSubAccount
+    description: 切换激活子账号（强一致，排他写）
+
+  # ── 用户主页（SubAccount 公开视图） ──────────────────────────────────────
+
+  - method: GET
+    path: /v1/user/{subAccountId}
+    operation: GetSubAccountProfile
+    description: 公开用户主页（按 subAccountId 读取）
+    response_entity: Persona
+    response_fields: [subAccountId, displayName, avatarUrl, bio, followerCount, followingCount, postCount]
+    note: 不暴露 ownerId / userId，isolationLevel=strict 时返回 404
+
+  - method: GET
+    path: /v1/me
+    operation: GetMeProfile
+    description: 当前激活子账号快捷视图（等同于 GetSubAccountProfile(activeSub)）
+
+  # ── 原有 API（保持兼容，逐步迁移到上方路径） ──────────────────────────────
 
   - method: GET
     path: /v1/user/profile/{userId}
     operation: GetUserProfile
-    description: 档案读取
+    description: "[已有] 主控账号档案读取（内部使用，ownerAccount 视角）"
     response_entity: UserProfile
-    join_path: user_full_snapshot
+    join_path: owner_full_snapshot
+    deprecated: false
 
   - method: PATCH
     path: /v1/user/profile
     operation: UpdateUserProfile
-    description: 更新资料
+    description: "[已有] 更新主控账号资料"
     request_entity: UserProfile
     writable_fields: [nickname, avatarUrl, bio, gender, birthDate, region]
 
   - method: GET
     path: /v1/user/personas
     operation: ListPersonas
-    description: 分身列表
+    description: "[已有] 子账号列表（向后兼容，等同于 ListSubAccounts）"
     response_entity: Persona
 
   - method: POST
     path: /v1/user/personas
     operation: CreatePersona
-    description: 创建分身
+    description: "[已有] 创建子账号（向后兼容）"
     request_entity: Persona
 
   - method: PATCH
     path: /v1/user/personas/{personaId}
     operation: UpdatePersona
-    description: 更新分身
+    description: "[已有] 更新子账号（向后兼容）"
+    request_fields: [displayName, avatarUrl, callerRingtoneId, isolationLevel, purposeHint]
 
   - method: DELETE
     path: /v1/user/personas/{personaId}
     operation: DeletePersona
-    description: 删除分身
+    description: "[已有] 删除子账号（向后兼容）"
 
   - method: POST
     path: /v1/user/personas/{personaId}/activate
     operation: ActivatePersona
-    description: 激活分身
+    description: "[已有] 激活子账号（向后兼容）"
 
   - method: GET
     path: /v1/user/settings/notifications
@@ -80,6 +179,20 @@ api_routes:
     path: /v1/user/settings/privacy
     operation: UpdatePrivacySettings
     request_entity: UserSetting
+
+  - method: GET
+    path: /v1/user/settings/calls
+    operation: GetCallSettings
+    description: 获取来电与铃声设置
+    response_entity: UserSetting
+    response_fields: [defaultIncomingCallRingtoneId, allowCallerRingtoneOverride, enableCallVibration, enableGroupCallRing]
+
+  - method: PATCH
+    path: /v1/user/settings/calls
+    operation: UpdateCallSettings
+    description: 更新来电与铃声设置（仅支持官方铃声库 ID）
+    request_entity: UserSetting
+    request_fields: [defaultIncomingCallRingtoneId, allowCallerRingtoneOverride, enableCallVibration, enableGroupCallRing]
 
   - method: GET
     path: /v1/users/{userId}/works

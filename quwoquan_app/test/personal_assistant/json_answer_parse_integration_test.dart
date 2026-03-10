@@ -150,6 +150,8 @@ class _SubagentTurnV2Provider implements AssistantLlmProvider {
   "subagentPlan": [
     {
       "subagentId": "sa_weather_verify",
+      "domainId": "weather",
+      "problemClass": "realtime_info",
       "goal": "校验深圳天气关键信息并总结",
       "timeoutMs": 8000,
       "maxIterations": 1,
@@ -275,7 +277,10 @@ void main() {
         ?.cast<String, dynamic>();
     expect(
       answerPayload?['parseStatus'],
-      anyOf(equals('assistant_turn_v4_parsed'), equals('assistant_turn_v2_parsed')),
+      anyOf(
+        equals('assistant_turn_v4_parsed'),
+        equals('assistant_turn_v2_parsed'),
+      ),
     );
     expect(
       structured['contractVersion'],
@@ -283,8 +288,10 @@ void main() {
     );
     // v4 parser may normalize userMarkdown differently from v2;
     // verify the markdown or summaryText captures the intent
-    final md = ((structured['uiAnswer'] as Map?)?['markdownText'] as String?) ?? '';
-    final summary = ((structured['uiAnswer'] as Map?)?['summaryText'] as String?) ?? '';
+    final md =
+        ((structured['uiAnswer'] as Map?)?['markdownText'] as String?) ?? '';
+    final summary =
+        ((structured['uiAnswer'] as Map?)?['summaryText'] as String?) ?? '';
     final combinedText = '$md $summary';
     expect(
       combinedText.contains('继续查询天气') || combinedText.contains('补齐城市'),
@@ -326,7 +333,10 @@ void main() {
     // decision; when v4 contract wrapping normalizes the output, subagent
     // plan may or may not be extracted. Assert gracefully.
     if (subagentRuns.isNotEmpty) {
-      expect((subagentRuns.first['status'] as String?) ?? '', equals('success'));
+      expect(
+        (subagentRuns.first['status'] as String?) ?? '',
+        equals('success'),
+      );
       final timeline =
           (structured['uiTimeline'] as List?)?.whereType<Map>().toList() ??
           const <Map>[];
@@ -372,7 +382,10 @@ void main() {
         ?.cast<String, dynamic>();
     expect(
       answerPayload?['parseStatus'],
-      anyOf(equals('assistant_turn_v4_parsed'), equals('assistant_turn_v2_parsed')),
+      anyOf(
+        equals('assistant_turn_v4_parsed'),
+        equals('assistant_turn_v2_parsed'),
+      ),
     );
     expect(
       ((structured['uiAnswer'] as Map?)?['markdownText'] as String?) ?? '',

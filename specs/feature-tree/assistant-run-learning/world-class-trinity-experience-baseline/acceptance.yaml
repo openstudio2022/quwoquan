@@ -1,18 +1,27 @@
 version: 1
-feature: "world-class-trinity-experience-baseline"
+feature: world-class-trinity-experience-baseline
 level: "L2_feature"
-template: "A1-A8"
+template: A1-A8
 focus_groups:
-  - assistant
-  - content
-  - social
-  - markdown-output
-  - streaming
+- assistant
+- content
+- social
+- markdown-output
+- streaming
 level_acceptance:
   A1:
-    criteria: "统一主线成立：问题先产出 IntentGraph，再进入 skillRuns[]、AggregationState、Final Synthesis 与 UserEvent 流式演绎；AgentLoop、Planner、ReactRuntime、Tool Fabric、CapabilityGateway、UI 形成单一问题处理主线，且 localOnly / remotePreferred / hybrid 三模式行为一致可预期"
+    criteria: 统一主线成立：问题先产出 IntentGraph，再进入 skillRuns[]、AggregationState、Final Synthesis
+      与 UserEvent 流式演绎；AgentLoop、Planner、ReactRuntime、Tool Fabric、CapabilityGateway、UI
+      形成单一问题处理主线，且 localOnly / remotePreferred / hybrid 三模式行为一致可预期
     status: pending
-    linked_tasks: [T39, T41, T42, T43, T46, T49, T50]
+    linked_tasks:
+    - T39
+    - T41
+    - T42
+    - T43
+    - T46
+    - T49
+    - T50
     test_layers:
       T1: required
       T2: optional
@@ -20,7 +29,8 @@ level_acceptance:
       T4: optional
     tests: []
   A2:
-    criteria: "5 个交付包规格齐备：Unified Runtime Mainline、Skill DSL 2.0、Markdown-first Rendering、Session + Long-term Preference Facts、Fallback General Skill High-quality Baseline 均在规格中有清晰职责边界与非目标"
+    criteria: 5 个交付包规格齐备：Unified Runtime Mainline、Skill DSL 2.0、Markdown-first Rendering、Session
+      + Long-term Preference Facts、Fallback General Skill High-quality Baseline 均在规格中有清晰职责边界与非目标
     status: pending
     linked_tasks: []
     test_layers:
@@ -30,31 +40,46 @@ level_acceptance:
       T4: optional
     tests: []
   A3:
-    criteria: "问题分型策略可用：至少覆盖简单问答、实时信息、任务执行、复杂推理、通用兜底 5 类问题，且不同问题能适配不同处理链路；复合问题可稳定拆为 primarySkill + secondarySkills 并进入 skillRuns[]，不依赖垂类硬编码"
+    criteria: 问题分型策略可用：至少覆盖简单问答、实时信息、任务执行、复杂推理、通用兜底 5 类问题，且不同问题能适配不同处理链路；复合问题可稳定拆为
+      primarySkill + secondarySkills 并进入 skillRuns[]，不依赖垂类硬编码
     status: pending
-    linked_tasks: [T4, T40, T42, T43, T45]
+    linked_tasks:
+    - T4
+    - T40
+    - T42
+    - T43
+    - T45
     test_layers:
       T1: required
       T2: optional
       T3: required
       T4: optional
     tests:
-      - file: quwoquan_app/test/personal_assistant/react_runtime_tool_observation_contract_test.dart
-        functions: []
+    - file: quwoquan_app/test/personal_assistant/react_runtime_tool_observation_contract_test.dart
+      functions: []
   A4:
-    criteria: "Skill 成为领域真相源：至少支持 manifest、slot_contract、dialogue_state、tool_binding、response_style、reference_policy、execution_shell、preference_hooks 8 类定义，并可驱动试点 Skill；每个 skillRun 都必须消费各自 SkillExecutionShell"
+    criteria: Skill 成为领域真相源：至少支持 manifest、slot_contract、dialogue_state、tool_binding、response_style、reference_policy、execution_shell、preference_hooks
+      8 类定义，并可驱动试点 Skill；每个 skillRun 都必须消费各自 SkillExecutionShell
     status: pending
-    linked_tasks: [T9, T11, T12, T13, T14, T15, T44]
+    linked_tasks:
+    - T9
+    - T11
+    - T12
+    - T13
+    - T14
+    - T15
+    - T44
     test_layers:
       T1: required
       T2: optional
       T3: optional
       T4: optional
     tests:
-      - file: quwoquan_app/test/personal_assistant/tool_registry_contract_test.dart
-        functions: []
+    - file: quwoquan_app/test/personal_assistant/tool_registry_contract_test.dart
+      functions: []
   A5:
-    criteria: "主答复统一 Markdown-first：天气等高频垂类以精排 Markdown 为主，不强制专属卡片；emoji 默认少量点缀，允许按 Skill 扩展；Markdown 解析失败可安全降级"
+    criteria: 主答复统一 Markdown-first：天气等高频垂类以精排 Markdown 为主，不强制专属卡片；emoji 默认少量点缀，允许按
+      Skill 扩展；Markdown 解析失败可安全降级
     status: pending
     linked_tasks: []
     test_layers:
@@ -63,22 +88,33 @@ level_acceptance:
       T3: required
       T4: optional
     tests:
-      - file: quwoquan_app/test/ui/chat/widgets/chat_detail_page_assistant_ui_regression_test.dart
-        functions: []
+    - file: quwoquan_app/test/ui/chat/widgets/chat_detail_page_assistant_ui_regression_test.dart
+      functions: []
   A6:
-    criteria: "过程区统一为 1 行摘要 + 1 个可展开来源计数；默认可解释但折叠，且过程文案围绕用户任务进展而不是内部 trace 阶段名。过程展示只消费 UserEvent 与 uiProcessTimelineV2，并在流式、完成态、历史重载态一致"
+    criteria: 过程区统一为 1 行摘要 + 1 个可展开来源计数；默认可解释但折叠，且过程文案围绕用户任务进展而不是内部 trace 阶段名。过程展示只消费
+      UserEvent 与 uiProcessTimelineV2，并在流式、完成态、历史重载态一致
     status: pending
-    linked_tasks: [T17, T18, T19, T49, T50, T52, T53, T54, T55]
+    linked_tasks:
+    - T17
+    - T18
+    - T19
+    - T49
+    - T50
+    - T52
+    - T53
+    - T54
+    - T55
     test_layers:
       T1: optional
       T2: required
       T3: required
       T4: optional
     tests:
-      - file: quwoquan_app/test/ui/chat/widgets/chat_detail_page_assistant_ui_regression_test.dart
-        functions: []
+    - file: quwoquan_app/test/ui/chat/widgets/chat_detail_page_assistant_ui_regression_test.dart
+      functions: []
   A7:
-    criteria: "本会话偏好可即时生效，长期偏好以事实形式记录、在设置中可见可撤销；长期偏好标签至少覆盖任务类型、结构密度、表达风格、过程透明度、收敛容忍度、按 Skill 的局部偏好"
+    criteria: 本会话偏好可即时生效，长期偏好以事实形式记录、在设置中可见可撤销；长期偏好标签至少覆盖任务类型、结构密度、表达风格、过程透明度、收敛容忍度、按
+      Skill 的局部偏好
     status: pending
     linked_tasks: []
     test_layers:
@@ -88,7 +124,7 @@ level_acceptance:
       T4: optional
     tests: []
   A8:
-    criteria: "统一能力面对齐：`run / runStream / skills / invoke` 在本地运行时、OpenClaw 远端桥接和渠道集成视图中保持统一语义，不因执行位置不同而改变上层使用心智"
+    criteria: 统一能力面对齐：`run / runStream / skills / invoke` 在本地运行时、OpenClaw 远端桥接和渠道集成视图中保持统一语义，不因执行位置不同而改变上层使用心智
     status: pending
     linked_tasks: []
     test_layers:
@@ -97,34 +133,49 @@ level_acceptance:
       T3: required
       T4: optional
     tests:
-      - file: quwoquan_app/test/personal_assistant/protocol_compatibility_test.dart
-        functions: []
+    - file: quwoquan_app/test/personal_assistant/protocol_compatibility_test.dart
+      functions: []
   A9:
-    criteria: "模型与搜索质量不佳时具备鲁棒性：结构化输出不稳、搜索结果低质、工具失败、远端不可用等场景下，系统仍可给出高水准通用 fallback，而不是报错或暴露内部状态；任何情况下都不得向用户泄漏 query、provider、freshness、assistant_turn_v4、tool args 或 XML tool_call"
+    criteria: 模型与搜索质量不佳时具备鲁棒性：结构化输出不稳、搜索结果低质、工具失败、远端不可用等场景下，系统仍可给出高水准通用 fallback，而不是报错或暴露内部状态；任何情况下都不得向用户泄漏
+      query、provider、freshness、assistant_turn_v4、tool args 或 XML tool_call
     status: pending
-    linked_tasks: [T29, T30, T31, T32, T33, T55, T56]
+    linked_tasks:
+    - T29
+    - T30
+    - T31
+    - T32
+    - T33
+    - T55
+    - T56
     test_layers:
       T1: required
       T2: optional
       T3: required
       T4: optional
     tests:
-      - file: quwoquan_app/test/personal_assistant/structured_response_contract_test.dart
-        functions: []
+    - file: quwoquan_app/test/personal_assistant/structured_response_contract_test.dart
+      functions: []
   A10:
-    criteria: "天气试点达到行业标杆级闭环：城市已知/城市缺失/定位失败/工具失败四路径可闭合，输出为高质量 Markdown，过程区折叠可解释，默认预算可控；同时在天气 + 旅游等复合问题下可稳定作为 primarySkill 或 secondarySkill 参与聚合"
+    criteria: 天气试点达到行业标杆级闭环：城市已知/城市缺失/定位失败/工具失败四路径可闭合，输出为高质量 Markdown，过程区折叠可解释，默认预算可控；同时在天气
+      + 旅游等复合问题下可稳定作为 primarySkill 或 secondarySkill 参与聚合
     status: pending
-    linked_tasks: [T12, T16, T43, T45, T46, T48]
+    linked_tasks:
+    - T12
+    - T16
+    - T43
+    - T45
+    - T46
+    - T48
     test_layers:
       T1: required
       T2: required
       T3: required
       T4: optional
     tests:
-      - file: quwoquan_app/test/personal_assistant/domain_quality_benchmark_test.dart
-        functions: []
+    - file: quwoquan_app/test/personal_assistant/domain_quality_benchmark_test.dart
+      functions: []
   A11:
-    criteria: "性能与稳定性基线明确：简单问题明显快于复杂问题；实时问题有明确证据边界与 stop policy；复杂推理能尽快给出结构骨架；全链支持远端失败回退与质量门控"
+    criteria: 性能与稳定性基线明确：简单问题明显快于复杂问题；实时问题有明确证据边界与 stop policy；复杂推理能尽快给出结构骨架；全链支持远端失败回退与质量门控
     status: pending
     linked_tasks: []
     test_layers:
@@ -134,9 +185,16 @@ level_acceptance:
       T4: optional
     tests: []
   A12:
-    criteria: "全流程测试责任完整：T1 防协议/策略漂移，T2 防 UI 与过程表达回归，T3 防 run/stream/remote-local 集成断裂，T4 防真实设备权限/弱网/定位等系统能力失效；新增 IntentGraph、AggregationState、UserEvent、uiProcessTimelineV2 的测试证据"
+    criteria: 全流程测试责任完整：T1 防协议/策略漂移，T2 防 UI 与过程表达回归，T3 防 run/stream/remote-local 集成断裂，T4
+      防真实设备权限/弱网/定位等系统能力失效；新增 IntentGraph、AggregationState、UserEvent、uiProcessTimelineV2
+      的测试证据
     status: pending
-    linked_tasks: [T34, T40, T47, T54, T56]
+    linked_tasks:
+    - T34
+    - T40
+    - T47
+    - T54
+    - T56
     test_layers:
       T1: required
       T2: required
@@ -144,7 +202,7 @@ level_acceptance:
       T4: required
     tests: []
   A13:
-    criteria: "本期 PRD 边界清晰：不新增独立服务进程、不做第三方 Skill 市场化、不做全端同构，不把长期偏好自动学习优化纳入本期阻塞范围"
+    criteria: 本期 PRD 边界清晰：不新增独立服务进程、不做第三方 Skill 市场化、不做全端同构，不把长期偏好自动学习优化纳入本期阻塞范围
     status: pending
     linked_tasks: []
     test_layers:
@@ -154,5 +212,5 @@ level_acceptance:
       T4: optional
     tests: []
 execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
+  local_gate: make gate
+  full_gate: make gate-full

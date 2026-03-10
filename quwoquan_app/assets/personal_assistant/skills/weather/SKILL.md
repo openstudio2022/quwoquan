@@ -3,8 +3,8 @@ name: weather-realtime
 description: 天气查询、出行建议、穿衣推荐、空气质量、紫外线指数。可设出行提醒。
 domain: weather
 mode: hybrid
-allowed_tools: local_context web_search
-trigger_keywords: [天气, 气温, 降雨, 风力, 湿度, 体感, 预报]
+allowed_tools: local_context web_search web_fetch memory_search
+trigger_keywords: [天气, 气温, 降雨, 风力, 湿度, 体感, 预报, 实时天气, 天气预报, 穿衣建议, 出行建议]
 problem_class: realtime_info
 searchPolicy:
   maxReflection: 1
@@ -12,8 +12,8 @@ searchPolicy:
   strategy: realtime
 execution_shell:
   problemClass: realtime_info
-  maxIterations: 2
-  toolBudget: 1
+  maxIterations: 3
+  toolBudget: 2
   variantBudget: 0
   reflectionBudget: 0
   providerPolicy: authority_first
@@ -21,7 +21,7 @@ execution_shell:
   authorityDomains: [weather.com.cn, cma.cn]
   freshnessHoursMax: 1
 requires:
-  tools: [web_search]
+  tools: [web_search, web_fetch, memory_search]
   permissions: [location]
 output_contract: assistant_turn_v2
 tool_observation_contract: tool_observation_v1

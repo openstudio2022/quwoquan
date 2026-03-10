@@ -1,6 +1,9 @@
 import 'aggregation_state.dart';
 import 'intent_graph.dart';
+import 'preference_fact.dart';
 import 'skill_run.dart';
+import 'subagent_plan.dart';
+import 'ui_process_timeline_entry.dart';
 import 'user_events.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -64,18 +67,20 @@ class AssistantTurnOutput {
     this.toolCalls = const <Map>[],
     this.slotState = const <String, dynamic>{},
     this.askUser = const <String, dynamic>{},
-    this.subagentPlan = const <Map<String, dynamic>>[],
+    this.subagentPlan = const <SubagentPlan>[],
     this.intentGraph,
     this.skillRuns = const <SkillRun>[],
     this.aggregationState,
     this.userEvents = const <UserEvent>[],
-    this.uiProcessTimelineV2 = const <Map<String, dynamic>>[],
+    this.uiProcessTimelineV2 = const <UiProcessTimelineEntry>[],
     this.toolPlan = const <Map<String, dynamic>>[],
     this.missingContextSlots = const <String>[],
     this.fillGuidance = const <Map<String, dynamic>>[],
     this.followupPrompt = '',
     this.processSummary = '',
     this.processReferenceCount = 0,
+    this.sessionPreferenceFacts = const <PreferenceFact>[],
+    this.longTermPreferenceFacts = const <PreferenceFact>[],
   });
 
   final String contractVersion;
@@ -116,8 +121,8 @@ class AssistantTurnOutput {
   /// 追问信息。
   final Map<String, dynamic> askUser;
 
-  /// 子任务计划列表，每项含 `goal`、`domainId`、`timeoutMs` 等。
-  final List<Map<String, dynamic>> subagentPlan;
+  /// 子任务计划列表，每项含 `goal`、`domainId`、`problemClass`、`timeoutMs` 等。
+  final List<SubagentPlan> subagentPlan;
 
   /// 首轮导引结构化结果。
   final IntentGraph? intentGraph;
@@ -132,7 +137,7 @@ class AssistantTurnOutput {
   final List<UserEvent> userEvents;
 
   /// 消息级过程树持久化结构。
-  final List<Map<String, dynamic>> uiProcessTimelineV2;
+  final List<UiProcessTimelineEntry> uiProcessTimelineV2;
 
   /// 工具执行计划，每项含 `tool`、`arguments`。
   final List<Map<String, dynamic>> toolPlan;
@@ -151,6 +156,12 @@ class AssistantTurnOutput {
 
   /// 过程区的可展开来源计数。
   final int processReferenceCount;
+
+  /// 本会话即时生效的偏好事实。
+  final List<PreferenceFact> sessionPreferenceFacts;
+
+  /// 长期偏好事实快照。
+  final List<PreferenceFact> longTermPreferenceFacts;
 
   // ── 快捷访问 ──────────────────────────────────────────────────────────────
 
@@ -225,24 +236,28 @@ class AssistantTurnOutput {
       askUser:
           (payload['askUser'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{},
-      subagentPlan: _parseMapList(payload['subagentPlan']),
+      subagentPlan: _parseMapList(
+        payload['subagentPlan'],
+      ).map(SubagentPlan.fromJson).toList(growable: false),
       intentGraph: (payload['intentGraph'] as Map?) != null
           ? IntentGraph.fromJson(
               (payload['intentGraph'] as Map).cast<String, dynamic>(),
             )
           : null,
-      skillRuns: _parseMapList(payload['skillRuns'])
-          .map(SkillRun.fromJson)
-          .toList(growable: false),
+      skillRuns: _parseMapList(
+        payload['skillRuns'],
+      ).map(SkillRun.fromJson).toList(growable: false),
       aggregationState: (payload['aggregationState'] as Map?) != null
           ? AggregationState.fromJson(
               (payload['aggregationState'] as Map).cast<String, dynamic>(),
             )
           : null,
-      userEvents: _parseMapList(payload['userEvents'])
-          .map(UserEvent.fromJson)
-          .toList(growable: false),
-      uiProcessTimelineV2: _parseMapList(payload['uiProcessTimelineV2']),
+      userEvents: _parseMapList(
+        payload['userEvents'],
+      ).map(UserEvent.fromJson).toList(growable: false),
+      uiProcessTimelineV2: _parseMapList(
+        payload['uiProcessTimelineV2'],
+      ).map(UiProcessTimelineEntry.fromJson).toList(growable: false),
       toolPlan: _parseMapList(payload['toolPlan']),
       missingContextSlots:
           (payload['missingContextSlots'] as List?)?.whereType<String>().toList(
@@ -251,9 +266,20 @@ class AssistantTurnOutput {
           const <String>[],
       fillGuidance: _parseMapList(payload['fillGuidance']),
       followupPrompt: (payload['followupPrompt'] as String?) ?? '',
-      processSummary: (payload['processSummary'] as String?)?.trim() ?? '',
+      processSummary:
+          (payload['processSummary'] as String?)?.trim() ??
+          (payload['processSummaryV1'] as String?)?.trim() ??
+          '',
       processReferenceCount:
-          (payload['processReferenceCount'] as num?)?.toInt() ?? 0,
+          (payload['processReferenceCount'] as num?)?.toInt() ??
+          (payload['processReferenceCountV1'] as num?)?.toInt() ??
+          0,
+      sessionPreferenceFacts: _parseMapList(
+        payload['sessionPreferenceFacts'],
+      ).map(PreferenceFact.fromJson).toList(growable: false),
+      longTermPreferenceFacts: _parseMapList(
+        payload['longTermPreferenceFacts'],
+      ).map(PreferenceFact.fromJson).toList(growable: false),
     );
   }
 
@@ -272,18 +298,30 @@ class AssistantTurnOutput {
     'toolCalls': toolCalls,
     'slotState': slotState,
     'askUser': askUser,
-    'subagentPlan': subagentPlan,
+    'subagentPlan': subagentPlan
+        .map((item) => item.toJson())
+        .toList(growable: false),
     'intentGraph': intentGraph?.toJson(),
     'skillRuns': skillRuns.map((item) => item.toJson()).toList(growable: false),
     'aggregationState': aggregationState?.toJson(),
-    'userEvents': userEvents.map((item) => item.toJson()).toList(growable: false),
-    'uiProcessTimelineV2': uiProcessTimelineV2,
+    'userEvents': userEvents
+        .map((item) => item.toJson())
+        .toList(growable: false),
+    'uiProcessTimelineV2': uiProcessTimelineV2
+        .map((item) => item.toJson())
+        .toList(growable: false),
     'toolPlan': toolPlan,
     'missingContextSlots': missingContextSlots,
     'fillGuidance': fillGuidance,
     'followupPrompt': followupPrompt,
     'processSummary': processSummary,
     'processReferenceCount': processReferenceCount,
+    'sessionPreferenceFacts': sessionPreferenceFacts
+        .map((item) => item.toJson())
+        .toList(growable: false),
+    'longTermPreferenceFacts': longTermPreferenceFacts
+        .map((item) => item.toJson())
+        .toList(growable: false),
   };
 
   static List<Map<String, dynamic>> _parseMapList(dynamic value) {

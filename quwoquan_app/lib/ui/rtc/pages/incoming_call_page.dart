@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
@@ -68,8 +69,8 @@ class _IncomingCallPageState extends ConsumerState<IncomingCallPage> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              AppColors.overlayDark,
-              AppColors.overlayStrong,
+              AppColors.welcomeGradientStart,
+              AppColors.welcomeGradientEnd,
             ],
           ),
         ),
@@ -78,7 +79,7 @@ class _IncomingCallPageState extends ConsumerState<IncomingCallPage> {
             children: [
               SizedBox(height: AppSpacing.xl * 2),
               Text(
-                '$initiatorId 邀请你${isVideo ? '视频' : '语音'}通话',
+                '$initiatorId ${isVideo ? UITextConstants.callIncomingVideo : UITextConstants.callIncomingVoice}',
                 style: TextStyle(
                   color: AppColors.white.withValues(alpha: 0.8),
                   fontSize: AppTypography.md,
@@ -119,7 +120,7 @@ class _IncomingCallPageState extends ConsumerState<IncomingCallPage> {
         children: [
           _CallActionButton(
             icon: CupertinoIcons.phone_down_fill,
-            label: '拒绝',
+            label: UITextConstants.callReject,
             color: AppColors.error,
             onTap: () {
               ref.read(callSessionProvider.notifier).rejectCall(widget.callId);
@@ -129,8 +130,8 @@ class _IncomingCallPageState extends ConsumerState<IncomingCallPage> {
             icon: session.callType.isVideo
                 ? CupertinoIcons.video_camera
                 : CupertinoIcons.phone,
-            label: '接听',
-            color: AppColors.success,
+            label: UITextConstants.callAccept,
+            color: AppColors.primaryColor,
             onTap: () {
               ref.read(callSessionProvider.notifier).answerCall(widget.callId);
             },

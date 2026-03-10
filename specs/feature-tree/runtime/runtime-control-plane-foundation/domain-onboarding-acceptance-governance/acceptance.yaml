@@ -1,125 +1,167 @@
 version: 1
-feature: "domain-onboarding-acceptance-governance"
-level: "L3_subfeature"
-template: "A1-A8"
+feature: domain-onboarding-acceptance-governance
+level: "L3_story"
+template: A1-A8
 archived: false
 tree_context:
-  feature_level: "L3_subfeature"
-  feature_path: "capability.runtime.feature.runtime-control-plane-foundation.subfeature.domain-onboarding-acceptance-governance"
-  parent_path: "capability.runtime.feature.runtime-control-plane-foundation"
-  acceptance_inherits_from: "capability.runtime.feature.runtime-control-plane-foundation"
+  feature_path: capability.runtime.feature.runtime-control-plane-foundation.subfeature.domain-onboarding-acceptance-governance
+  parent_path: capability.runtime.feature.runtime-control-plane-foundation
+  acceptance_inherits_from: capability.runtime.feature.runtime-control-plane-foundation
 execution:
-  local_gate: "PRD 基线阶段：文档与特性树结构检查；实施阶段：make gate"
-  full_gate: "实施阶段：make gate-full + 统一接入矩阵聚合校验 + 最终集中验收"
+  local_gate: PRD 基线阶段：文档与特性树结构检查；实施阶段：make gate
+  full_gate: 实施阶段：make gate-full + 统一接入矩阵聚合校验 + 最终集中验收
 level_acceptance:
   A1:
-    criteria: "`domain_onboarding` 元数据 schema 与按领域拆分的实例真相源被明确冻结，后续各领域接入统一控制面必须首先补该元数据，而不是手写清单或临时接口。"
+    criteria: '`domain_onboarding` 元数据 schema 与按领域拆分的实例真相源被明确冻结，后续各领域接入统一控制面必须首先补该元数据，而不是手写清单或临时接口。'
     status: implemented
-    linked_tasks: [P2, P8, D1]
+    linked_tasks:
+    - P2
+    - P8
+    - D1
     test_layers:
       T1: required
       T2: optional
       T3: optional
       T4: optional
     tests:
-      - file: specs/feature-tree/runtime/runtime-control-plane-foundation/domain-onboarding-acceptance-governance/design.md
-        functions: ["`domain_onboarding_schema.yaml` 设计", "`domains/<domain>.yaml` 模板"]
+    - file: specs/feature-tree/runtime/runtime-control-plane-foundation/domain-onboarding-acceptance-governance/design.md
+      functions:
+      - '`domain_onboarding_schema.yaml` 设计'
+      - '`domains/<domain>.yaml` 模板'
   A2:
-    criteria: "领域最小接入包被明确冻结，能够统一定义一个领域何时可被认定为“已接入 `platform-ops` 与 `product-ops`”，并可在单会话实施中从模板域复制到所有领域，而不要求大量手写代码。"
+    criteria: 领域最小接入包被明确冻结，能够统一定义一个领域何时可被认定为“已接入 `platform-ops` 与 `product-ops`”，并可在单会话实施中从模板域复制到所有领域，而不要求大量手写代码。
     status: implemented
-    linked_tasks: [P3, P8, D7]
+    linked_tasks:
+    - P3
+    - P8
+    - D7
     test_layers:
       T1: required
       T2: optional
       T3: required
       T4: optional
     tests:
-      - file: specs/feature-tree/runtime/runtime-control-plane-foundation/domain-onboarding-acceptance-governance/spec.md
-        functions: ["R2：冻结领域最小接入包"]
-      - file: specs/feature-tree/runtime/runtime-control-plane-foundation/domain-onboarding-acceptance-governance/design.md
-        functions: ["所有领域现状分析", "并行实施策略"]
+    - file: specs/feature-tree/runtime/runtime-control-plane-foundation/domain-onboarding-acceptance-governance/spec.md
+      functions:
+      - R2：冻结领域最小接入包
+    - file: specs/feature-tree/runtime/runtime-control-plane-foundation/domain-onboarding-acceptance-governance/design.md
+      functions:
+      - 所有领域现状分析
+      - 并行实施策略
   A3:
-    criteria: "本节点与后续统一实施会话的职责边界被明确冻结：本节点负责全局规范与最终集中验收，统一 `/dev` 会话负责先完成模板域，再复制到所有领域并回填证据。"
+    criteria: 本节点与后续统一实施会话的职责边界被明确冻结：本节点负责全局规范与最终集中验收，统一 `/dev` 会话负责先完成模板域，再复制到所有领域并回填证据。
     status: implemented
-    linked_tasks: [P4, P8, D7]
+    linked_tasks:
+    - P4
+    - P8
+    - D7
     test_layers:
       T1: required
       T2: optional
       T3: optional
       T4: optional
     tests:
-      - file: specs/feature-tree/runtime/runtime-control-plane-foundation/domain-onboarding-acceptance-governance/spec.md
-        functions: ["R3：冻结全局节点与领域实施批次边界"]
-      - file: specs/feature-tree/runtime/runtime-control-plane-foundation/domain-onboarding-acceptance-governance/design.md
-        functions: ["统一实施策略"]
+    - file: specs/feature-tree/runtime/runtime-control-plane-foundation/domain-onboarding-acceptance-governance/spec.md
+      functions:
+      - R3：冻结全局节点与领域实施批次边界
+    - file: specs/feature-tree/runtime/runtime-control-plane-foundation/domain-onboarding-acceptance-governance/design.md
+      functions:
+      - 统一实施策略
   A4:
-    criteria: "命令、规则与流程增强边界被明确冻结，后续 `/explore`、`/prd`、`/design`、`/dev`、`/extend`、`/verify`、`/deploy` 均可围绕统一接入矩阵做一致增强。"
+    criteria: 命令、规则与流程增强边界被明确冻结，后续 `/explore`、`/prd`、`/design`、`/dev`、`/extend`、`/verify`、`/deploy`
+      均可围绕统一接入矩阵做一致增强。
     status: implemented
-    linked_tasks: [P5, D4]
+    linked_tasks:
+    - P5
+    - D4
     test_layers:
       T1: required
       T2: required
       T3: optional
       T4: optional
     tests:
-      - file: specs/feature-tree/runtime/runtime-control-plane-foundation/domain-onboarding-acceptance-governance/spec.md
-        functions: ["R4：冻结命令、规则与流程增强边界"]
+    - file: specs/feature-tree/runtime/runtime-control-plane-foundation/domain-onboarding-acceptance-governance/spec.md
+      functions:
+      - R4：冻结命令、规则与流程增强边界
   A5:
-    criteria: "统一 gate 聚合口径被明确冻结，能够分层校验 onboarding metadata、codegen 消费、领域最低测试层与统一收口状态，并最终形成自动聚合而非人工对表。"
+    criteria: 统一 gate 聚合口径被明确冻结，能够分层校验 onboarding metadata、codegen 消费、领域最低测试层与统一收口状态，并最终形成自动聚合而非人工对表。
     status: implemented
-    linked_tasks: [P6, D4, D5]
+    linked_tasks:
+    - P6
+    - D4
+    - D5
     test_layers:
       T1: required
       T2: optional
       T3: required
       T4: optional
     tests:
-      - file: specs/feature-tree/runtime/runtime-control-plane-foundation/domain-onboarding-acceptance-governance/design.md
-        functions: ["gate 聚合设计", "最终集中验收模型"]
+    - file: specs/feature-tree/runtime/runtime-control-plane-foundation/domain-onboarding-acceptance-governance/design.md
+      functions:
+      - gate 聚合设计
+      - 最终集中验收模型
   A6:
-    criteria: "plane-aware deployment binding 被明确冻结，部署真相源必须支持 `domain-plane -> process`，并能表达短期 `seed-box` 共 Pod 与长期独立 Deployment / Pod 的演进。"
+    criteria: plane-aware deployment binding 被明确冻结，部署真相源必须支持 `domain-plane -> process`，并能表达短期
+      `seed-box` 共 Pod 与长期独立 Deployment / Pod 的演进。
     status: implemented
-    linked_tasks: [P7, D6]
+    linked_tasks:
+    - P7
+    - D6
     test_layers:
       T1: required
       T2: optional
       T3: required
       T4: optional
     tests:
-      - file: specs/feature-tree/runtime/runtime-control-plane-foundation/domain-onboarding-acceptance-governance/design.md
-        functions: ["plane-aware deployment binding 设计"]
+    - file: specs/feature-tree/runtime/runtime-control-plane-foundation/domain-onboarding-acceptance-governance/design.md
+      functions:
+      - plane-aware deployment binding 设计
   A7:
-    criteria: "最终集中验收口径被明确冻结：所有并行领域接入完成后，可回到本节点统一校验 onboarding metadata、gate 聚合、门户聚合视图、plane binding 与 acceptance 状态。"
+    criteria: 最终集中验收口径被明确冻结：所有并行领域接入完成后，可回到本节点统一校验 onboarding metadata、gate 聚合、门户聚合视图、plane
+      binding 与 acceptance 状态。
     status: implemented
-    linked_tasks: [P6, P8, D5, D6]
+    linked_tasks:
+    - P6
+    - P8
+    - D5
+    - D6
     test_layers:
       T1: optional
       T2: optional
       T3: required
       T4: required
     tests:
-      - file: specs/feature-tree/runtime/runtime-control-plane-foundation/domain-onboarding-acceptance-governance/spec.md
-        functions: ["R7：冻结最终集中验收口径"]
-      - file: specs/feature-tree/runtime/runtime-control-plane-foundation/domain-onboarding-acceptance-governance/design.md
-        functions: ["最终集中验收模型"]
+    - file: specs/feature-tree/runtime/runtime-control-plane-foundation/domain-onboarding-acceptance-governance/spec.md
+      functions:
+      - R7：冻结最终集中验收口径
+    - file: specs/feature-tree/runtime/runtime-control-plane-foundation/domain-onboarding-acceptance-governance/design.md
+      functions:
+      - 最终集中验收模型
   A8:
-    criteria: "该规范可直接作为后续单个统一实施会话的共同输入，支持以 metadata-first 的方式先完成一个模板域，再复制到所有领域，并在最终回到本节点完成统一收口。"
+    criteria: 该规范可直接作为后续单个统一实施会话的共同输入，支持以 metadata-first 的方式先完成一个模板域，再复制到所有领域，并在最终回到本节点完成统一收口。
     status: implemented
-    linked_tasks: [P1, P3, P4, P8]
+    linked_tasks:
+    - P1
+    - P3
+    - P4
+    - P8
     test_layers:
       T1: required
       T2: optional
       T3: required
       T4: optional
     tests:
-      - file: specs/feature-tree/runtime/runtime-control-plane-foundation/domain-onboarding-acceptance-governance/tasks.md
-        functions: ["`/design` 当前交付任务", "未来演进任务"]
+    - file: specs/feature-tree/runtime/runtime-control-plane-foundation/domain-onboarding-acceptance-governance/tasks.md
+      functions:
+      - '`/design` 当前交付任务'
+      - 未来演进任务
 design_readiness:
   status: ready_for_dev
-  meaning: "该节点已冻结统一接入 schema、领域实例模板、gate 聚合、plane-aware 部署绑定和最终收口模型，可在单个统一 `/dev` 会话中先接入模板域，再复制到所有领域。"
+  meaning: 该节点已冻结统一接入 schema、领域实例模板、gate 聚合、plane-aware 部署绑定和最终收口模型，可在单个统一 `/dev`
+    会话中先接入模板域，再复制到所有领域。
 notes:
   benchmark_inputs:
-    - "Backstage / Score：声明式服务接入、所有权与环境画像"
-    - "Argo Rollouts：灰度、回滚与阶段 gate"
-    - "LaunchDarkly / Statsig：策略/实验状态聚合与审批审计"
-    - "Trust & Safety Console：跨域 case/workflow/evidence/dual-approval 收口"
+  - Backstage / Score：声明式服务接入、所有权与环境画像
+  - Argo Rollouts：灰度、回滚与阶段 gate
+  - LaunchDarkly / Statsig：策略/实验状态聚合与审批审计
+  - Trust & Safety Console：跨域 case/workflow/evidence/dual-approval 收口

@@ -21,11 +21,13 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/input/customizable_chat_input_bar.dart';
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
+import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/personal_assistant/app/assistant_engine_provider.dart';
 import 'package:quwoquan_app/personal_assistant/app/capability_gateway.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/explainable_flow_event.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/user_events.dart';
 import 'package:quwoquan_app/personal_assistant/engine/llm_provider.dart';
 import 'package:quwoquan_app/personal_assistant/engine/llm_response_parser.dart';
@@ -39,13 +41,13 @@ import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_dev_replay_page.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_chat_settings_page.dart';
+import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_manager.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/regenerate_options_popup.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/streaming_scroll_fab.dart';
-import 'package:quwoquan_app/ui/chat/widgets/session/assistant_session_header.dart';
 
 /// 仅显示「上午/下午 HH:mm」，不显示「今天」或日期（图一）
 String formatChatTime(String? raw) {
@@ -85,10 +87,19 @@ class ChatDetailPage extends ConsumerStatefulWidget {
 }
 
 class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
+  static const int _assistantHistoryPageSize = 18;
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   List<Map<String, dynamic>> _messages = [];
   String? _resolvedTitle;
+
+  /// 会话基本信息（type/memberCount），initState 后异步加载
+  ConversationDto? _conversationDto;
+
+  /// 1v1 会话中对方的用户 ID（从成员列表推断）
+  String? _otherParticipantId;
+  RelationshipCapabilityDto? _relationshipCapability;
+
   bool _isSelectionMode = false;
   final Set<String> _selectedIds = {};
   Map<String, dynamic>? _actionMenuMessage;
@@ -96,7 +107,6 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   bool _showEmojiPanel = false;
   final FocusNode _inputFocusNode = FocusNode();
   bool _assistantResponding = false;
-  List<String> _availableSkillNames = const <String>[];
   final Map<String, Map<String, dynamic>> _assistantReplayByMessageId =
       <String, Map<String, dynamic>>{};
   final List<Map<String, dynamic>> _assistantReplayRecords =
@@ -114,11 +124,16 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   /// v4: Unified process state for the single-drawer UI.
   AssistantProcessState _currentProcessState = const AssistantProcessState();
 
+  /// v6: Explainable flow events for the unified process drawer.
+  List<ExplainableFlowEvent> _currentFlowEvents = <ExplainableFlowEvent>[];
+  bool _answerGateOpen = true;
+
   /// Accumulated structured content blocks for the process drawer.
   List<ProcessContentBlock> _processContentBlocks = <ProcessContentBlock>[];
 
   /// Accumulated search references across all tool calls in a single run.
   List<ProcessReference> _collectedSearchRefs = <ProcessReference>[];
+  bool _preferStructuredUserEvents = false;
 
   /// Whether the user has scrolled away from the bottom during streaming.
   bool _userScrolledAway = false;
@@ -128,6 +143,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   String _assistantRuntimeSessionId =
       AppConceptConstants.assistantConversationId;
   String _assistantTopicTitle = UITextConstants.assistantHistoryAll;
+  List<Map<String, dynamic>> _assistantHiddenHistory = <Map<String, dynamic>>[];
+  bool _assistantLoadingOlderHistory = false;
+  bool _showAssistantHistoryPeek = false;
   final ImagePicker _imagePicker = ImagePicker();
   final stt.SpeechToText _speechToText = stt.SpeechToText();
   bool _speechReady = false;
@@ -153,16 +171,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     _inputController.addListener(_onInputChanged);
     if (_isAssistantConversation) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
-        final skills = await ref.read(assistantGatewayProvider).listSkills();
-        if (!mounted) return;
-        setState(() {
-          _availableSkillNames = skills
-              .where((s) => s.enabled)
-              .map((s) => s.manifest.name)
-              .toList(growable: false);
-        });
-      });
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final synced = await _syncAssistantSessionInfo();
+        if (!mounted || synced) return;
         await _startFreshAssistantSessionOnOpen();
       });
     }
@@ -171,16 +181,54 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   Future<void> _loadConversationTitle() async {
     if (_resolvedTitle != null) return;
     try {
-      final conv = await ref
-          .read(chatRepositoryProvider)
-          .getConversation(widget.conversationId);
-      if (mounted) {
-        setState(() {
-          _resolvedTitle = conv['title'] as String? ?? widget.conversationId;
-        });
+      final repo = ref.read(chatRepositoryProvider);
+      final conv = await repo.getConversation(widget.conversationId);
+      final dto = ConversationDto.fromMap(conv);
+      if (!mounted) return;
+      setState(() {
+        _resolvedTitle = dto.title ?? widget.conversationId;
+        _conversationDto = dto;
+      });
+      // 1v1 会话：异步加载对方成员 ID，用于精确传递 targetUserId
+      if (dto.type == 'direct') {
+        _loadOtherParticipantId(repo);
       }
     } catch (_) {}
   }
+
+  Future<void> _loadOtherParticipantId(dynamic repo) async {
+    try {
+      final currentUserId =
+          ref.read(userDataProvider)?.id ?? '';
+      final members = await repo.listMembers(
+        conversationId: widget.conversationId,
+        limit: 10,
+      );
+      final other = (members as List<Map<String, dynamic>>).firstWhere(
+        (m) => (m['userId'] as String? ?? '') != currentUserId,
+        orElse: () => <String, dynamic>{},
+      );
+      final otherId = other['userId'] as String?;
+      if (mounted && otherId != null && otherId.isNotEmpty) {
+        setState(() => _otherParticipantId = otherId);
+        await _loadRelationshipCapability(otherId);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _loadRelationshipCapability(String otherId) async {
+    try {
+      final capability = await ref
+          .read(relationshipCapabilityRepositoryProvider)
+          .getCapability(otherId);
+      if (!mounted) return;
+      setState(() => _relationshipCapability = capability);
+    } catch (_) {}
+  }
+
+  bool get _isGroupChat => _conversationDto?.type == 'group';
+
+  int get _memberCount => _conversationDto?.memberCount ?? 0;
 
   Future<void> _loadMessages() async {
     if (_isAssistantConversation) {
@@ -220,6 +268,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     setState(() {
       _assistantRuntimeSessionId = freshSessionId;
       _assistantTopicTitle = UITextConstants.assistantHistoryAll;
+      _assistantHiddenHistory = <Map<String, dynamic>>[];
+      _assistantLoadingOlderHistory = false;
+      _showAssistantHistoryPeek = false;
       _messages = List<Map<String, dynamic>>.from(
         const <Map<String, dynamic>>[],
       );
@@ -235,6 +286,17 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     final maxScroll = _scrollController.position.maxScrollExtent;
     final currentScroll = _scrollController.offset;
     final isNearBottom = maxScroll - currentScroll < 80;
+
+    if (_isAssistantConversation && _assistantHiddenHistory.isNotEmpty) {
+      if (!_showAssistantHistoryPeek) {
+        setState(() => _showAssistantHistoryPeek = true);
+      }
+      if (!_assistantResponding &&
+          !_assistantLoadingOlderHistory &&
+          currentScroll <= AppSpacing.sm) {
+        _loadOlderAssistantHistory();
+      }
+    }
 
     if (_assistantResponding) {
       if (!isNearBottom && !_userScrolledAway) {
@@ -253,6 +315,44 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     }
   }
 
+  Future<void> _loadOlderAssistantHistory() async {
+    if (!_isAssistantConversation ||
+        _assistantLoadingOlderHistory ||
+        _assistantHiddenHistory.isEmpty) {
+      return;
+    }
+    final previousOffset = _scrollController.hasClients
+        ? _scrollController.offset
+        : 0.0;
+    final previousMaxExtent = _scrollController.hasClients
+        ? _scrollController.position.maxScrollExtent
+        : 0.0;
+    setState(() => _assistantLoadingOlderHistory = true);
+    final splitIndex = math.max(
+      0,
+      _assistantHiddenHistory.length - _assistantHistoryPageSize,
+    );
+    final olderChunk = _assistantHiddenHistory.sublist(splitIndex);
+    final remainingHidden = _assistantHiddenHistory.sublist(0, splitIndex);
+    setState(() {
+      _messages = List<Map<String, dynamic>>.from(<Map<String, dynamic>>[
+        ...olderChunk,
+        ..._messages,
+      ]);
+      _assistantHiddenHistory = List<Map<String, dynamic>>.from(
+        remainingHidden,
+      );
+      _assistantLoadingOlderHistory = false;
+      _showAssistantHistoryPeek = remainingHidden.isNotEmpty;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      final nextMaxExtent = _scrollController.position.maxScrollExtent;
+      final delta = nextMaxExtent - previousMaxExtent;
+      _scrollController.jumpTo(previousOffset + delta);
+    });
+  }
+
   void _scrollToBottom() {
     if (!_scrollController.hasClients) return;
     setState(() {
@@ -264,6 +364,14 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeOut,
     );
+  }
+
+  void _scrollToBottomIfOverflow() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      final max = _scrollController.position.maxScrollExtent;
+      if (max > 0) _scrollController.jumpTo(max);
+    });
   }
 
   @override
@@ -304,10 +412,10 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         : _assistantRuntimeSessionId;
   }
 
-  Future<void> _syncAssistantSessionInfo() async {
-    if (!_isAssistantConversation) return;
+  Future<bool> _syncAssistantSessionInfo() async {
+    if (!_isAssistantConversation) return false;
     final sessions = await ref.read(assistantGatewayProvider).listSessions();
-    if (!mounted || sessions.isEmpty) return;
+    if (!mounted || sessions.isEmpty) return false;
     Map<String, dynamic> active = sessions.first;
     for (final item in sessions) {
       if (item['isActive'] == true) {
@@ -325,7 +433,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             : UITextConstants.assistantHistoryAll;
       });
       await _loadAssistantSessionMessages(nextSessionId);
+      return true;
     }
+    return false;
   }
 
   Future<void> _loadAssistantSessionMessages(String sessionId) async {
@@ -362,14 +472,20 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           };
         })
         .toList(growable: false);
+    final splitIndex = math.max(0, mapped.length - _assistantHistoryPageSize);
+    final hiddenHistory = mapped.sublist(0, splitIndex);
+    final visibleMessages = mapped.sublist(splitIndex);
     setState(() {
-      // 始终使用 List.from 得到可 grow 列表，避免定长列表导致后续 add 抛 UnsupportedError。
-      _messages = List<Map<String, dynamic>>.from(mapped);
+      _assistantHiddenHistory = List<Map<String, dynamic>>.from(hiddenHistory);
+      _assistantLoadingOlderHistory = false;
+      _showAssistantHistoryPeek = hiddenHistory.isNotEmpty;
+      _messages = List<Map<String, dynamic>>.from(visibleMessages);
       final topic = (detail['topicTitle'] as String?)?.trim();
       if (topic != null && topic.isNotEmpty) {
         _assistantTopicTitle = topic;
       }
     });
+    _scrollToBottomIfOverflow();
   }
 
   Future<void> _switchAssistantSession(String sessionId) async {
@@ -380,16 +496,162 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     await _loadAssistantSessionMessages(sessionId);
   }
 
+  /// 构建输入区 `+` 面板中的通话入口项
+  /// 1v1：语音通话 / 视频通话（需同好关系才可见，当前阶段仅在已知对方 ID 时展示）
+  /// 群聊：发起语音通话 / 发起视频通话（始终展示）
+  List<ChatInputExtraPanelItem> _buildCallPanelItems() {
+    final canCall = _isGroupChat ||
+        (_otherParticipantId != null &&
+            (_relationshipCapability?.canStartVoiceCall == true ||
+                _relationshipCapability?.canStartVideoCall == true));
+    if (!canCall) return const <ChatInputExtraPanelItem>[];
+    final voiceLabel = _isGroupChat
+        ? UITextConstants.callGroupVoice
+        : UITextConstants.callVoice;
+    final videoLabel = _isGroupChat
+        ? UITextConstants.callGroupVideo
+        : UITextConstants.callVideo;
+    final items = <ChatInputExtraPanelItem>[
+      ChatInputExtraPanelItem(
+        icon: CupertinoIcons.phone,
+        text: voiceLabel,
+        onTap: () async => _initiateCall('voice'),
+      ),
+      ChatInputExtraPanelItem(
+        icon: CupertinoIcons.video_camera,
+        text: videoLabel,
+        onTap: () async => _initiateCall('video'),
+      ),
+    ];
+    if (kDebugMode) {
+      items.addAll(<ChatInputExtraPanelItem>[
+        ChatInputExtraPanelItem(
+          icon: CupertinoIcons.phone_badge_plus,
+          text: UITextConstants.callDebugSimulateIncomingVoice,
+          onTap: () async => _simulateIncomingCall('voice'),
+        ),
+        ChatInputExtraPanelItem(
+          icon: CupertinoIcons.video_camera_solid,
+          text: UITextConstants.callDebugSimulateIncomingVideo,
+          onTap: () async => _simulateIncomingCall('video'),
+        ),
+      ]);
+    }
+    return items;
+  }
+
   Future<void> _initiateCall(String callType) async {
     final notifier = ref.read(callSessionProvider.notifier);
+    final List<String> targetIds;
+    if (_isGroupChat) {
+      // 群聊：跳转选人页（<=8 人默认全选，>8 人默认不选）
+      final result = await context.push<List<String>>(
+        AppRoutePaths.rtcPickParticipants,
+        extra: <String, dynamic>{
+          'conversationId': widget.conversationId,
+          'defaultSelectAll': _memberCount <= 8,
+        },
+      );
+      if (result == null || result.isEmpty || !mounted) return;
+      targetIds = result;
+    } else {
+      // 1v1：使用已加载的对方 ID（仅同好/密友可见入口，此处对方 ID 应已加载）
+      final otherId = _otherParticipantId;
+      if (otherId == null || otherId.isEmpty) return;
+      targetIds = [otherId];
+    }
     final callId = await notifier.initiateCall(
       callTypeStr: callType,
-      targetUserIds: [widget.conversationId],
+      targetUserIds: targetIds,
       conversationId: widget.conversationId,
     );
     if (callId != null && mounted) {
       context.push(AppRoutePaths.rtcOutgoing(callId: callId));
     }
+  }
+
+  Future<void> _simulateIncomingCall(String callType) async {
+    final callId = 'debug_incoming_${DateTime.now().millisecondsSinceEpoch}';
+    final callerName = _conversationTitle;
+    ref.read(callSessionProvider.notifier).debugSeedIncomingCall(
+          callId: callId,
+          callerName: callerName,
+          callType: callType,
+          conversationId: widget.conversationId,
+        );
+    if (!mounted) return;
+    await context.push(AppRoutePaths.rtcIncoming(callId: callId));
+  }
+
+  Future<void> _sendSameInterestRequest() async {
+    final otherId = _otherParticipantId;
+    if (otherId == null || otherId.isEmpty) return;
+    try {
+      await ref.read(greetingRepositoryProvider).sendGreeting(
+            targetSubAccountId: otherId,
+            requestMessage: '想和你成为同好，一起聊聊吧',
+            source: 'chat',
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已发送同好邀请')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('发送失败，请稍后再试')),
+      );
+    }
+  }
+
+  Widget _buildSameInterestPromptBar() {
+    return Container(
+      width: double.infinity,
+      margin: EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.primaryColor.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+        border: Border.all(
+          color: AppColors.primaryColor.withValues(alpha: 0.18),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              '成为同好后可直接发起语音和视频通话',
+              style: TextStyle(
+                color: AppColors.primaryColor,
+                fontSize: AppTypography.sm,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          SizedBox(width: AppSpacing.sm),
+          CupertinoButton(
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.sm,
+              vertical: AppSpacing.xs,
+            ),
+            color: AppColors.primaryColor,
+            borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+            onPressed: _sendSameInterestRequest,
+            child: Text(
+              UITextConstants.profileAddSameInterest,
+              style: TextStyle(
+                color: AppColors.white,
+                fontSize: AppTypography.sm,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _openAssistantSettingsPage() async {
@@ -450,28 +712,43 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     if (type == AssistantTraceEventType.replanTriggered) {
       nextPhaseLabel = UITextConstants.assistantPhaseSearching;
     }
+    if (type == AssistantTraceEventType.thinkingProgress) {
+      final thinkingText = _sanitizeThinkingText(event.message);
+      if (thinkingText.isNotEmpty) {
+        _replaceLastTextBlock(thinkingText);
+      }
+    }
     final timelineChanged = _appendStreamingTimelineFromTrace(
       event: event,
       data: data,
       referenceCount: referenceCount,
     );
+    final thinkingBlockChanged =
+        type == AssistantTraceEventType.thinkingProgress;
     final phaseChanged =
         nextPhaseLabel != null && nextPhaseLabel != _assistantPhaseLabel;
     final countChanged =
         searchingCount != _assistantSearchingCount ||
         referenceCount != _assistantReferenceCount;
-    if (!phaseChanged && !countChanged && !timelineChanged) return;
+    if (!phaseChanged &&
+        !countChanged &&
+        !timelineChanged &&
+        !thinkingBlockChanged) {
+      return;
+    }
     setState(() {
       if (nextPhaseLabel != null) _assistantPhaseLabel = nextPhaseLabel;
       _assistantSearchingCount = searchingCount;
       _assistantReferenceCount = referenceCount;
-      // 同步更新 _currentProcessState，确保 trace 事件（来自远端/静默本地路径）
-      // 也能驱动过程抽屉的阶段标签与动画状态更新
       if (nextPhaseLabel != null &&
           nextPhaseLabel != _currentProcessState.stageLabel) {
         _currentProcessState = _currentProcessState.copyWith(
           stageLabel: nextPhaseLabel,
           stage: _mapLabelToProcessStage(nextPhaseLabel),
+          contentBlocks: List<ProcessContentBlock>.of(_processContentBlocks),
+        );
+      } else if (thinkingBlockChanged) {
+        _currentProcessState = _currentProcessState.copyWith(
           contentBlocks: List<ProcessContentBlock>.of(_processContentBlocks),
         );
       }
@@ -617,7 +894,10 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         ? _processBlocksFromTimelineV2(mergedTimeline)
         : <ProcessContentBlock>[
             ..._processContentBlocks,
-            ProcessContentBlock(type: ProcessContentBlockType.text, text: message),
+            ProcessContentBlock(
+              type: ProcessContentBlockType.text,
+              text: message,
+            ),
           ];
     setState(() {
       _processContentBlocks = List<ProcessContentBlock>.of(blocks);
@@ -876,13 +1156,55 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     final merged = <Map<String, dynamic>>[];
     final seen = <String>{};
     for (final item in [...streamed, ...completed]) {
-      final key =
-          '${(item['scope'] ?? '').toString()}::${(item['nodeId'] ?? '').toString()}::${(item['summary'] ?? '').toString()}';
+      final type = (item['type'] ?? '').toString();
+      if (type == 'processReplace') {
+        final scope = (item['scope'] ?? '').toString();
+        final nodeId = (item['nodeId'] ?? '').toString();
+        final runId = (item['runId'] ?? '').toString();
+        merged.removeWhere(
+          (existing) =>
+              (existing['scope'] ?? '').toString() == scope &&
+              (existing['nodeId'] ?? '').toString() == nodeId &&
+              (existing['runId'] ?? '').toString() == runId,
+        );
+        seen.removeWhere(
+          (key) => key.startsWith('$scope::$type::$nodeId::$runId::'),
+        );
+      }
+      final semanticKey =
+          '${(item['scope'] ?? '').toString()}::$type::${(item['nodeId'] ?? '').toString()}::${(item['runId'] ?? '').toString()}::${(item['summary'] ?? '').toString()}';
+      final eventId = (item['eventId'] ?? '').toString();
+      final key = type == 'processAppend' && eventId.isNotEmpty
+          ? '$semanticKey::$eventId'
+          : semanticKey;
       if (seen.contains(key)) continue;
       merged.add(item);
       seen.add(key);
     }
     return merged;
+  }
+
+  String _buildInitialProcessSummary(String query) {
+    final normalized = query.trim();
+    if (normalized.isEmpty) {
+      return '我先理清你这次想解决的问题';
+    }
+    final weatherLike = RegExp(
+      r'(天气|气温|降雨|风力|体感|预报|weather|forecast|temperature|humidity|rain)',
+      caseSensitive: false,
+    ).hasMatch(normalized);
+    if (weatherLike) {
+      final city =
+          RegExp(
+            r'([\u4e00-\u9fa5]{2,8}(?:市|区|县)|[\u4e00-\u9fa5]{2,8})',
+          ).firstMatch(normalized)?.group(1)?.trim() ??
+          '';
+      if (city.isNotEmpty) {
+        return '我先确认$city现在的天气情况';
+      }
+      return '我先确认你想查的实时天气信息';
+    }
+    return '我先理清“$normalized”里最需要优先解决的部分';
   }
 
   bool _appendStreamingTimelineV2FromUserEvent(UserEvent event) {
@@ -903,13 +1225,16 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       'type': event.type.name,
       'nodeId': event.nodeId,
       'runId': event.runId,
+      'eventId':
+          '${DateTime.now().microsecondsSinceEpoch}_${currentTimeline.length}',
       'summary': event.message,
       'payload': event.payload,
-      'references': const <Map<String, dynamic>>[],
+      'references': _extractReferencesFromUserEventPayload(event.payload),
     };
-    final merged = _mergeProcessTimelineV2(currentTimeline, <Map<String, dynamic>>[
-      entry,
-    ]);
+    final merged = _mergeProcessTimelineV2(
+      currentTimeline,
+      <Map<String, dynamic>>[entry],
+    );
     _messages[index] = <String, dynamic>{
       ..._messages[index],
       'uiProcessTimelineV2': merged,
@@ -918,6 +1243,22 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       ),
     };
     return true;
+  }
+
+  List<Map<String, dynamic>> _extractReferencesFromUserEventPayload(
+    Map<String, dynamic> payload,
+  ) {
+    return (payload['references'] as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .where(
+              (item) =>
+                  ((item['title'] as String?) ?? '').trim().isNotEmpty &&
+                  ((item['url'] as String?) ?? '').trim().isNotEmpty,
+            )
+            .take(6)
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[];
   }
 
   ProcessStage _mapPhaseToStage(String timelinePhaseType) {
@@ -1306,6 +1647,15 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     return '${text.substring(0, 80)}...';
   }
 
+  String _sanitizeThinkingText(String raw) {
+    String text = raw.trim();
+    if (text.isEmpty) return '';
+    if (text == '正在思考...') return '';
+    if (_isInternalChunk(text)) return '';
+    if (text.startsWith('{') && text.endsWith('}')) return '';
+    return text;
+  }
+
   static final _internalErrorRe = RegExp(
     r'模板渲染失败|模板缺失|template.*not.?found|'
     r'模型调用失败|模型调用异常|HTTP [45]\d\d|'
@@ -1381,6 +1731,78 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         constraints: const BoxConstraints(),
       ),
     );
+  }
+
+  Widget _buildAssistantComposerButton({
+    required IconData icon,
+    required VoidCallback onPressed,
+    required Color fgPrimary,
+    Color? backgroundColor,
+  }) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: Container(
+        width: AppSpacing.buttonSize,
+        height: AppSpacing.buttonSize,
+        decoration: BoxDecoration(
+          color: backgroundColor ?? Colors.transparent,
+          borderRadius: BorderRadius.circular(AppSpacing.buttonSize),
+        ),
+        alignment: Alignment.center,
+        child: Icon(icon, size: AppSpacing.iconMedium, color: fgPrimary),
+      ),
+    );
+  }
+
+  Widget _buildAssistantLeftButton(
+    BuildContext context,
+    ChatInputVisualState state,
+    ChatInputDefaultActions actions,
+  ) {
+    final isDark = ref.watch(isDarkProvider);
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    if (state.isVoiceMode) return const SizedBox.shrink();
+    return _buildAssistantComposerButton(
+      icon: Icons.add,
+      fgPrimary: fgPrimary.withValues(alpha: 0.72),
+      onPressed: () {
+        setState(() => _showEmojiPanel = false);
+        actions.toggleAddPanel();
+      },
+    );
+  }
+
+  List<Widget> _buildAssistantRightButtons(
+    BuildContext context,
+    ChatInputVisualState state,
+    ChatInputDefaultActions actions,
+  ) {
+    final isDark = ref.watch(isDarkProvider);
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    if (state.isVoiceMode) return const <Widget>[];
+    if (state.hasText || state.hasAttachments) {
+      return <Widget>[
+        _buildAssistantComposerButton(
+          icon: Icons.arrow_upward_rounded,
+          fgPrimary: Colors.white,
+          backgroundColor: AppColors.primaryColor,
+          onPressed: actions.send,
+        ),
+      ];
+    }
+    return <Widget>[
+      _buildAssistantComposerButton(
+        icon: Icons.mic_none,
+        fgPrimary: fgPrimary.withValues(alpha: 0.72),
+        onPressed: actions.toggleVoiceMode,
+      ),
+    ];
   }
 
   Widget _buildQuliaoLeftButton(
@@ -1706,12 +2128,15 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             'assistant_stream_${DateTime.now().millisecondsSinceEpoch}';
         _activeAssistantStreamingMessageId = streamingAssistantMessageId;
         _assistantResponding = true;
+        _preferStructuredUserEvents = true;
         _assistantPhaseLabel = UITextConstants.assistantPhaseUnderstanding;
         _assistantSearchingCount = 0;
         _assistantReferenceCount = 0;
         _currentProcessState = const AssistantProcessState(
           stageLabel: '正在理解问题...',
         );
+        _currentFlowEvents = <ExplainableFlowEvent>[];
+        _answerGateOpen = false;
         _processContentBlocks = <ProcessContentBlock>[];
         _collectedSearchRefs = <ProcessReference>[];
         _userScrolledAway = false;
@@ -1735,7 +2160,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
               'type': 'processReplace',
               'nodeId': 'root.intent',
               'runId': '',
-              'summary': '已收到问题，正在理解你的需求',
+              'summary': _buildInitialProcessSummary(text),
               'payload': const <String, dynamic>{},
               'references': const <Map<String, dynamic>>[],
             },
@@ -1894,7 +2319,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                   .runStream(request: request, mode: routeMode)) {
             switch (streamEvent.type) {
               case AssistantRunStreamEventType.trace:
-                if (streamEvent.trace != null) {
+                if (!_preferStructuredUserEvents && streamEvent.trace != null) {
                   _consumeAssistantTraceEvent(streamEvent.trace!);
                 }
                 continue;
@@ -1950,21 +2375,55 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                 }
                 continue;
               case AssistantRunStreamEventType.phaseTimeline:
-                if (streamEvent.trace != null) {
+                if (!_preferStructuredUserEvents && streamEvent.trace != null) {
                   _consumeAssistantTraceEvent(streamEvent.trace!);
                 }
                 continue;
               case AssistantRunStreamEventType.userPhaseEvent:
-                _consumeUserPhaseEvent(streamEvent);
+                if (!_preferStructuredUserEvents) {
+                  _consumeUserPhaseEvent(streamEvent);
+                }
                 continue;
               case AssistantRunStreamEventType.userEvent:
                 final userEvent = streamEvent.userFacingEvent;
                 if (userEvent != null) {
+                  _preferStructuredUserEvents = true;
                   _consumeStructuredUserEvent(userEvent);
                 }
                 continue;
+              case AssistantRunStreamEventType.explainableFlowEvent:
+                if (!mounted) continue;
+                final flowEvent = streamEvent.explainableEvent;
+                if (flowEvent == null) continue;
+                setState(() {
+                  final existingIdx = _currentFlowEvents.lastIndexWhere(
+                    (e) =>
+                        e.phaseId == flowEvent.phaseId &&
+                        e.agentId == flowEvent.agentId,
+                  );
+                  if (existingIdx >= 0) {
+                    _currentFlowEvents[existingIdx] = flowEvent;
+                  } else {
+                    _currentFlowEvents = [
+                      ..._currentFlowEvents,
+                      flowEvent,
+                    ];
+                  }
+                  _answerGateOpen = _currentFlowEvents.any(
+                    (e) =>
+                        (e.phaseId == PhaseId.aggregate ||
+                            e.phaseId == PhaseId.merge ||
+                            e.phaseId == PhaseId.answer) &&
+                        e.phaseStatus == ExplainablePhaseStatus.completed,
+                  );
+                });
+                _autoScrollToBottomIfNeeded();
+                continue;
               case AssistantRunStreamEventType.processUpdate:
-                if (mounted && _processContentBlocks.isEmpty) {
+                if (!mounted || _preferStructuredUserEvents) {
+                  continue;
+                }
+                if (_processContentBlocks.isEmpty) {
                   final data = streamEvent.trace?.data;
                   final stageStr = data?['stage'] as String? ?? '';
                   final processLines =
@@ -2100,19 +2559,19 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         final structuredProcessBlocks = _processBlocksFromStructuredResponse(
           runResponse.structuredResponse,
         );
-        final effectiveProcessBlocks = structuredProcessBlocks.isNotEmpty
-            ? structuredProcessBlocks
-            : (mergedTimelineV2.isNotEmpty
-                  ? _processBlocksFromTimelineV2(mergedTimelineV2)
+        final effectiveProcessBlocks = mergedTimelineV2.isNotEmpty
+            ? _processBlocksFromTimelineV2(mergedTimelineV2)
+            : (structuredProcessBlocks.isNotEmpty
+                  ? structuredProcessBlocks
                   : List<ProcessContentBlock>.of(_processContentBlocks));
         setState(() {
-          if (structuredProcessBlocks.isNotEmpty) {
-            _processContentBlocks = List<ProcessContentBlock>.of(
-              structuredProcessBlocks,
-            );
-          } else if (mergedTimelineV2.isNotEmpty) {
+          if (mergedTimelineV2.isNotEmpty) {
             _processContentBlocks = List<ProcessContentBlock>.of(
               _processBlocksFromTimelineV2(mergedTimelineV2),
+            );
+          } else if (structuredProcessBlocks.isNotEmpty) {
+            _processContentBlocks = List<ProcessContentBlock>.of(
+              structuredProcessBlocks,
             );
           }
           _ensureMessagesGrowable();
@@ -2173,8 +2632,10 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             });
           }
           _assistantResponding = false;
+          _preferStructuredUserEvents = false;
           _assistantPhaseLabel = '';
           _activeAssistantStreamingMessageId = null;
+          _answerGateOpen = true;
           _currentProcessState = AssistantProcessState(
             stage: ProcessStage.completed,
             stageLabel: '已完成',
@@ -2240,6 +2701,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         setState(() {
           _ensureMessagesGrowable();
           _assistantResponding = false;
+          _preferStructuredUserEvents = false;
           _assistantPhaseLabel = '';
           _activeAssistantStreamingMessageId = null;
           if (streamingAssistantMessageId != null) {
@@ -2444,7 +2906,6 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       if (text.isNotEmpty && text.length > 5 && !text.startsWith('{')) {
         return text;
       }
-
     } catch (_) {}
     return '';
   }
@@ -3003,6 +3464,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           'assistant_rewrite_${now.millisecondsSinceEpoch}';
       _activeAssistantStreamingMessageId = streamingAssistantMessageId;
       _assistantResponding = true;
+      _preferStructuredUserEvents = true;
       _assistantPhaseLabel = '正在重新生成...';
       _currentProcessState = AssistantProcessState(
         stage: ProcessStage.answering,
@@ -3085,31 +3547,31 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         final effectiveTimelineV2 = uiProcessTimelineV2.isNotEmpty
             ? uiProcessTimelineV2
             : _normalizeUiProcessTimelineV2(
-                (_messages
-                            .firstWhere(
+                (_messages.firstWhere(
                               (item) =>
                                   (item['id'] as String?) ==
                                   streamingAssistantMessageId,
                               orElse: () => const <String, dynamic>{},
-                            )['uiProcessTimelineV2'] as List?)
+                            )['uiProcessTimelineV2']
+                            as List?)
                         ?.whereType<Map>()
                         .toList(growable: false) ??
                     const <Map>[],
               );
-        final effectiveProcessBlocks = structuredProcessBlocks.isNotEmpty
-            ? structuredProcessBlocks
-            : (effectiveTimelineV2.isNotEmpty
-                  ? _processBlocksFromTimelineV2(effectiveTimelineV2)
+        final effectiveProcessBlocks = effectiveTimelineV2.isNotEmpty
+            ? _processBlocksFromTimelineV2(effectiveTimelineV2)
+            : (structuredProcessBlocks.isNotEmpty
+                  ? structuredProcessBlocks
                   : List<ProcessContentBlock>.of(_processContentBlocks));
         final finalText = _resolveAssistantDisplayText(response);
         setState(() {
-          if (structuredProcessBlocks.isNotEmpty) {
-            _processContentBlocks = List<ProcessContentBlock>.of(
-              structuredProcessBlocks,
-            );
-          } else if (effectiveTimelineV2.isNotEmpty) {
+          if (effectiveTimelineV2.isNotEmpty) {
             _processContentBlocks = List<ProcessContentBlock>.of(
               _processBlocksFromTimelineV2(effectiveTimelineV2),
+            );
+          } else if (structuredProcessBlocks.isNotEmpty) {
+            _processContentBlocks = List<ProcessContentBlock>.of(
+              structuredProcessBlocks,
             );
           }
           _ensureMessagesGrowable();
@@ -3145,6 +3607,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       if (mounted) {
         setState(() {
           _assistantResponding = false;
+          _preferStructuredUserEvents = false;
           _assistantPhaseLabel = '';
           _currentProcessState = AssistantProcessState(
             stage: ProcessStage.completed,
@@ -3435,18 +3898,6 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                   child: Text(UITextConstants.messageActionForward),
                 )
               else ...[
-                if (!_isAssistantConversation) ...[
-                  IconButton(
-                    icon: const Icon(CupertinoIcons.phone),
-                    tooltip: UITextConstants.call,
-                    onPressed: () => _initiateCall('voice'),
-                  ),
-                  IconButton(
-                    icon: const Icon(CupertinoIcons.video_camera),
-                    tooltip: UITextConstants.videoCall,
-                    onPressed: () => _initiateCall('video'),
-                  ),
-                ],
                 if (_isAssistantConversation)
                   IconButton(
                     icon: const Icon(CupertinoIcons.gear),
@@ -3465,75 +3916,6 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           ),
           body: Column(
             children: [
-              if (_isAssistantConversation)
-                AssistantSessionHeader(
-                  fgPrimary: fgPrimary,
-                  showWelcome: _messages.isEmpty,
-                ),
-              if (_isAssistantConversation &&
-                  widget.assistantOpenContext != null)
-                Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal:
-                        AppSpacing.semantic[DesignSemanticConstants
-                            .container]?[DesignSemanticConstants.sm] ??
-                        AppSpacing.containerSm,
-                    vertical: AppSpacing.sm,
-                  ),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      AssistantPromptConfig.getWelcomeMessage(
-                        widget.assistantOpenContext!,
-                      ),
-                      style: TextStyle(
-                        fontSize: AppTypography.sm,
-                        color: fgPrimary.withValues(alpha: 0.8),
-                      ),
-                    ),
-                  ),
-                ),
-              if (_isAssistantConversation && _availableSkillNames.isNotEmpty)
-                Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal:
-                        AppSpacing.semantic[DesignSemanticConstants
-                            .container]?[DesignSemanticConstants.sm] ??
-                        AppSpacing.containerSm,
-                    vertical: AppSpacing.xs,
-                  ),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: _availableSkillNames
-                          .map(
-                            (name) => Container(
-                              margin: EdgeInsets.only(right: AppSpacing.xs),
-                              padding: EdgeInsets.symmetric(
-                                horizontal: AppSpacing.containerSm,
-                                vertical: AppSpacing.xs,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.primaryColor.withValues(
-                                  alpha: 0.08,
-                                ),
-                                borderRadius: BorderRadius.circular(
-                                  AppSpacing.fullBorderRadius,
-                                ),
-                              ),
-                              child: Text(
-                                name,
-                                style: TextStyle(
-                                  fontSize: AppTypography.sm,
-                                  color: fgPrimary.withValues(alpha: 0.9),
-                                ),
-                              ),
-                            ),
-                          )
-                          .toList(growable: false),
-                    ),
-                  ),
-                ),
               Expanded(
                 child: Stack(
                   children: [
@@ -3637,6 +4019,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                                         : null,
                                     hideAvatarAndName: _isAssistantConversation,
                                     useFullWidth: _isAssistantConversation,
+                                    renderSelfTextWithoutBubble:
+                                        _isAssistantConversation,
                                     processState:
                                         _isAssistantConversation &&
                                             _assistantResponding &&
@@ -3644,6 +4028,19 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                                             isAssistantMessage
                                         ? _currentProcessState
                                         : null,
+                                    flowEvents:
+                                        _isAssistantConversation &&
+                                            _assistantResponding &&
+                                            index == _messages.length - 1 &&
+                                            isAssistantMessage
+                                        ? _currentFlowEvents
+                                        : const <ExplainableFlowEvent>[],
+                                    answerGateOpen:
+                                        !_isAssistantConversation ||
+                                        !_assistantResponding ||
+                                        index != _messages.length - 1 ||
+                                        !isAssistantMessage ||
+                                        _answerGateOpen,
                                     isAssistantRunning:
                                         _assistantResponding &&
                                         index == _messages.length - 1 &&
@@ -3660,6 +4057,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                                         : null,
                                     showFeedbackActions:
                                         isAssistantMessage &&
+                                        !_assistantResponding &&
                                         !_isSelectionMode &&
                                         (msg['type'] as String? ?? 'text') ==
                                             'text' &&
@@ -3836,6 +4234,83 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                         },
                       ),
                     ),
+                    if (_isAssistantConversation &&
+                        (_showAssistantHistoryPeek ||
+                            _assistantLoadingOlderHistory))
+                      Positioned(
+                        top: AppSpacing.sm,
+                        left: 0,
+                        right: 0,
+                        child: Center(
+                          child: GestureDetector(
+                            onTap: _assistantLoadingOlderHistory
+                                ? null
+                                : _loadOlderAssistantHistory,
+                            child: AnimatedOpacity(
+                              opacity: 1,
+                              duration: const Duration(milliseconds: 180),
+                              child: Container(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: AppSpacing.containerSm,
+                                  vertical: AppSpacing.xs,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isDark
+                                      ? bgColor.withValues(alpha: 0.92)
+                                      : Colors.white.withValues(alpha: 0.94),
+                                  borderRadius: BorderRadius.circular(
+                                    AppSpacing.fullBorderRadius,
+                                  ),
+                                  border: Border.all(
+                                    color: borderColor.withValues(alpha: 0.18),
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.04,
+                                      ),
+                                      blurRadius: AppSpacing.sm,
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (_assistantLoadingOlderHistory)
+                                      Padding(
+                                        padding: EdgeInsets.only(
+                                          right: AppSpacing.xs,
+                                        ),
+                                        child:
+                                            const CupertinoActivityIndicator(),
+                                      )
+                                    else
+                                      Icon(
+                                        CupertinoIcons.chevron_up,
+                                        size: AppSpacing.iconSmall,
+                                        color: fgPrimary.withValues(
+                                          alpha: 0.56,
+                                        ),
+                                      ),
+                                    if (!_assistantLoadingOlderHistory)
+                                      SizedBox(width: AppSpacing.xs / 2),
+                                    Text(
+                                      UITextConstants.assistantViewHistory,
+                                      style: TextStyle(
+                                        fontSize: AppTypography.sm,
+                                        color: fgPrimary.withValues(
+                                          alpha: 0.72,
+                                        ),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     if (_showScrollFab && _assistantResponding)
                       Positioned(
                         bottom: 16,
@@ -3866,9 +4341,17 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      if (!_isAssistantConversation &&
+                          !_isGroupChat &&
+                          _relationshipCapability?.isSameInterest != true &&
+                          _otherParticipantId != null)
+                        _buildSameInterestPromptBar(),
                       CustomizableChatInputBar(
                         controller: _inputController,
                         focusNode: _inputFocusNode,
+                        hintText: _isAssistantConversation
+                            ? UITextConstants.assistantAskPlaceholder
+                            : null,
                         maxTextLength: 5000,
                         maxVisibleLines: 4,
                         onPickImages: _pickChatImages,
@@ -3880,11 +4363,14 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                         onVoiceAsrTransform: _voiceAsrForChat,
                         onSend: _submitChatInput,
                         leftBuilder: _isAssistantConversation
-                            ? null
+                            ? _buildAssistantLeftButton
                             : _buildQuliaoLeftButton,
                         rightBuilder: _isAssistantConversation
-                            ? null
+                            ? _buildAssistantRightButtons
                             : _buildQuliaoRightButtons,
+                        extraPanelItems: _isAssistantConversation
+                            ? const <ChatInputExtraPanelItem>[]
+                            : _buildCallPanelItems(),
                       ),
                       if (_showEmojiPanel && !_isAssistantConversation)
                         UnifiedEmojiPicker(

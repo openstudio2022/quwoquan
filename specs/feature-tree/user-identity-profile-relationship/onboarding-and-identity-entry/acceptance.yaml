@@ -1,14 +1,111 @@
 version: 1
-feature: "onboarding-and-identity-entry"
-level: "L2"
-template: "A1-A8"
-focus_groups: []
-tests:
-  mock: []
-  unit: []
-  contract: []
-  integration: []
-  uat: []
+feature: onboarding-and-identity-entry
+level: "L2_feature"
+template: A1-A8
+archived: false
+tree_context:
+  feature_path: capability.user-identity-profile-relationship.feature.onboarding-and-identity-entry
+  parent_path: capability.user-identity-profile-relationship
+non_functional_acceptance:
+  realtime:
+    enabled: true
+    slo:
+    - 登录成功到进入正确应用落点 P95 < 2s（不含第三方授权页面停留）
+    - 多子账号用户选择子账号后，子账号上下文装配 P95 < 1s
+  weak_network:
+    enabled: true
+    scenarios:
+    - 验证码超时、第三方授权取消、弱网重试后不重复创建 OwnerAccount 或 SubAccount
+    - 欢迎页与登录页重进后可恢复上一步上下文
+  gray_release:
+    enabled: true
+    steps:
+    - 5
+    - 25
+    - 50
+    - 100
+    rollback_on:
+    - 登录成功后落到错误页面
+    - 单账号/多账号判断错误
+    - 新建默认 SubAccount 发生重复或丢失
+level_acceptance:
+  A1:
+    criteria: 欢迎页可根据未登录、已登录、登录失效、多子账号待选择等状态，把用户送入正确入口与正确落点。
+    status: pending
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: optional
+    tests: []
+  A2:
+    criteria: 手机号、微信、Apple 三种方式并行存在，且都能归入同一 OwnerAccount 世界观，而不是互相割裂的登录体系。
+    status: pending
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: required
+    tests: []
+  A3:
+    criteria: 新用户首次登录时可完成 OwnerAccount 与默认 SubAccount 建立；老用户可恢复已有 SubAccount，不发生重复创建。
+    status: pending
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: optional
+    tests: []
+  A4:
+    criteria: 多子账号用户登录后可以安全地选择、创建或恢复目标 SubAccount，单子账号用户默认无感进入应用。
+    status: pending
+    test_layers:
+      T1: optional
+      T2: required
+      T3: required
+      T4: optional
+    tests: []
+  A5:
+    criteria: 登录成功后应用上下文总是进入某个明确的 SubAccount，而不是把 OwnerAccount 直接暴露为应用默认主体。
+    status: pending
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: optional
+    tests: []
+  A6:
+    criteria: 通讯录授权属于可跳过但可恢复的 onboarding 步骤，不阻塞登录成功，并能在恰当时机引导用户完成发现链路。
+    status: pending
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: required
+    tests: []
+  A7:
+    criteria: 欢迎页路由、登录态判断、请求上下文、登录 operation、落点策略与 metadata 契约保持一致，没有第二份硬编码规则表。
+    status: pending
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests: []
+  A8:
+    criteria: 自动化测试职责覆盖欢迎页、并行登录、子账号选择、弱网恢复与落点一致性，可直接进入 `/design` 细化对象与工作流。
+    status: pending
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: required
+    tests: []
+notes:
+  benchmark_inputs:
+  - 微信：手机号/微信登录、通讯录引导、换机恢复
+  - 小红书：新用户 onboarding 与兴趣建立
+  - 微博：身份入口与社交落点一致性
 execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
+  local_gate: make gate
+  full_gate: make gate-full

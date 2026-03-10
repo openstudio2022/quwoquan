@@ -1,0 +1,39 @@
+version: 1
+entity: InviteRecord
+backend: postgres
+
+tables:
+  invite_records:
+    entity: InviteRecord
+    pk: id
+    columns:
+      - { name: id, type: VARCHAR(36), constraints: [PK] }
+      - { name: inviter_sub_account_id, type: VARCHAR(36), constraints: [NOT_NULL] }
+      - { name: inviter_owner_account_id, type: VARCHAR(36), constraints: [NOT_NULL] }
+      - { name: channel, type: VARCHAR(16), constraints: [NOT_NULL] }
+      - { name: link_code, type: VARCHAR(32), constraints: [NOT_NULL, UNIQUE] }
+      - { name: invitee_phone_hash, type: VARCHAR(64) }
+      - { name: status, type: VARCHAR(16), constraints: [NOT_NULL], default: "'generated'" }
+      - { name: expire_at, type: TIMESTAMPTZ, constraints: [NOT_NULL] }
+      - { name: generated_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
+      - { name: delivered_at, type: TIMESTAMPTZ }
+      - { name: viewed_at, type: TIMESTAMPTZ }
+      - { name: accepted_at, type: TIMESTAMPTZ }
+      - { name: converted_at, type: TIMESTAMPTZ }
+    indexes:
+      - { name: idx_invite_records_inviter_sub, columns: [inviter_sub_account_id] }
+      - { name: idx_invite_records_link_code, columns: [link_code] }
+      - { name: idx_invite_records_status, columns: [status] }
+      - { name: idx_invite_records_expire_at, columns: [expire_at] }
+    unique_constraints:
+      - name: uq_invite_idempotent
+        columns: [inviter_sub_account_id, channel, invitee_phone_hash]
+        condition: "status = 'generated' AND invitee_phone_hash IS NOT NULL"
+        description: 同一 (sub_account, channel, invitee) 处于 generated 状态时幂等
+
+redis_cache:
+  - key: "invite_link:{linkCode}"
+    ttl_seconds: 3600
+    entity: InviteRecord
+    description: 邀请码快速查找（减少 DB 压力）
+    invalidate_on: [InviteAccepted, InviteExpired]

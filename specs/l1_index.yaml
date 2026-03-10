@@ -1,7 +1,6 @@
 version: 1
 owner: quwoquan-platform
 source:
-  feature_tree: "changes/feature_tree.yaml"
   canonical: "specs/feature-tree/tree_index.yaml"
 
 l1:

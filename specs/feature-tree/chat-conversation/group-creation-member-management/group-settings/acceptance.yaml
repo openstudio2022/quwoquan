@@ -1,14 +1,55 @@
 version: 1
-feature: "group-settings"
-level: "L3"
-template: "A1-A8"
+feature: group-settings
+level: "L3_story"
+status: specified
+archived: false
+template: '2026-03-10'
 focus_groups: []
-tests:
-  mock: []
-  unit: []
-  contract: []
-  integration: []
-  uat: []
 execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
+  local_gate: make gate
+  full_gate: make gate-full
+level_acceptance:
+  A1:
+    criteria: 群聊设置页仅包含成员、群资料、会话配置、聊天背景/清空记录、退出群聊五类内容
+    status: pending
+    test_layers:
+      T2: required
+  A2:
+    criteria: 群聊设置页底部唯一危险操作为 `退出群聊`，不混入其他危险治理动作
+    status: pending
+    test_layers:
+      T2: required
+  A3:
+    criteria: 群聊设置页不提供 `举报群` 与 `拉黑群聊`
+    status: pending
+    test_layers:
+      T2: required
+  A4:
+    criteria: 成员对象治理下沉成立：用户可从成员卡片/主页执行 `举报用户`、`拉黑用户`
+    status: pending
+    test_layers:
+      T2: required
+      T3: required
+  A5:
+    criteria: 消息对象治理下沉成立：用户可从群消息长按菜单执行 `举报消息`
+    status: pending
+    test_layers:
+      T2: required
+      T3: required
+  A6:
+    criteria: 群聊实时语音/视频发起入口不在 AppBar、不在群设置页，而在会话输入区 `+` 面板
+    status: pending
+    test_layers:
+      T2: required
+      T3: required
+  A7:
+    criteria: 群聊多人呼叫选择规则满足 `<=8 人默认全选，>8 人默认不选`
+    status: pending
+    test_layers:
+      T2: required
+      T3: required
+  A8:
+    criteria: 用户在真实群聊旅程中能够明确区分 `退出群聊`、`举报消息`、`举报用户`、`拉黑用户` 四类动作对象
+    status: pending
+    test_layers:
+      T4: required

@@ -1,45 +1,44 @@
 version: 1
-feature: "metadata-loader-and-entity-registry"
-level: "L3_subfeature"
-template: "A1-A8"
+feature: metadata-loader-and-entity-registry
+level: "L3_story"
+template: A1-A8
 tree_context:
-  feature_level: "L3_subfeature"
-  feature_path: "capability.runtime.feature.runtime-registry.subfeature.metadata-loader-and-entity-registry"
-  parent_path: "capability.runtime.feature.runtime-registry"
-  acceptance_inherits_from: "capability.runtime.feature.runtime-registry"
+  feature_path: capability.runtime.feature.runtime-registry.subfeature.metadata-loader-and-entity-registry
+  parent_path: capability.runtime.feature.runtime-registry
+  acceptance_inherits_from: capability.runtime.feature.runtime-registry
 level_acceptance:
   focus_groups:
-    - A1_functional
-    - A7_contract_metadata_consistency
-  notes: "Loader 负责从 v3 目录解析并组装 EntityRegistry，支持跨文件引用解析。"
+  - A1_functional
+  - A7_contract_metadata_consistency
+  notes: Loader 负责从 v3 目录解析并组装 EntityRegistry，支持跨文件引用解析。
 global_acceptance:
   A1_functional:
     scenarios:
-      - given: "contracts/metadata/ v3 目录存在且结构正确"
-        when: "Loader 执行 Load()"
-        then: "返回完整 EntityRegistry，包含所有聚合/实体及其字段/事件/存储映射"
-      - given: "aggregate.yaml 引用 entity"
-        when: "Loader 解析"
-        then: "正确解析 entity.yaml 及对应 fields.yaml/events.yaml/storage.yaml"
+    - given: contracts/metadata/ v3 目录存在且结构正确
+      when: Loader 执行 Load()
+      then: 返回完整 EntityRegistry，包含所有聚合/实体及其字段/事件/存储映射
+    - given: aggregate.yaml 引用 entity
+      when: Loader 解析
+      then: 正确解析 entity.yaml 及对应 fields.yaml/events.yaml/storage.yaml
   A2_experience:
-    - "加载失败时错误信息包含具体文件路径和行号"
+  - 加载失败时错误信息包含具体文件路径和行号
   A3_service_governance:
-    - "加载耗时可观测，不阻塞主流程"
+  - 加载耗时可观测，不阻塞主流程
   A4_observability:
-    - "加载完成输出 entity 数量、加载耗时"
+  - 加载完成输出 entity 数量、加载耗时
   A5_product_ops:
-    - "可导出已加载 entity 列表"
+  - 可导出已加载 entity 列表
   A6_security_privacy:
-    - "敏感字段策略正确传递到 Registry"
+  - 敏感字段策略正确传递到 Registry
   A7_contract_metadata_consistency:
-    - "Loader 输出与 contracts/metadata/ YAML 内容完全一致"
+  - Loader 输出与 contracts/metadata/ YAML 内容完全一致
   A8_test_automation:
-    - "Loader 单元测试覆盖正常/异常/缺失文件场景"
+  - Loader 单元测试覆盖正常/异常/缺失文件场景
 tests:
   unit:
-    - "quwoquan_service/runtime/registry/tests/loader_test.go"
+  - quwoquan_service/runtime/registry/tests/loader_test.go
   contract:
-    - "quwoquan_service/runtime/registry/tests/metadata_consistency_test.go"
+  - quwoquan_service/runtime/registry/tests/metadata_consistency_test.go
 execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
+  local_gate: make gate
+  full_gate: make gate-full

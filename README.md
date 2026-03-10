@@ -56,9 +56,9 @@ bash scripts/new_feature_fullstack.sh "<slug>"
   - `/try`、`/land`
   - `/extend`、`/prune`
 
-特性目录位于：`changes/<date>-<slug>/`（验收标准与任务拆解在此目录维护）。
-全量特性台账位于：`changes/feature_catalog.yaml`。
-目录层级特性树位于：`changes/feature_tree.yaml`。
+特性目录位于：`specs/feature-tree/<l1-capability>/<l2-story>/`。
+特性树索引位于：`specs/feature-tree/tree_index.yaml`。
+全量变更台账仍位于：`changes/feature_catalog.yaml`。
 
 全局规范入口：`specs/README.md`。
 

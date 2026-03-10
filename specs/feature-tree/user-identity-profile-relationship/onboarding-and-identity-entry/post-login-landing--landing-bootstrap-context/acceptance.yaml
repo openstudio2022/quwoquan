@@ -1,0 +1,18 @@
+version: 1
+feature: landing-bootstrap-context
+level: "L3_story"
+template: A1-A8
+focus_groups: []
+tests:
+  mock: []
+  unit: []
+  contract: []
+  integration: []
+  uat: []
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+legacy_merged_acceptance:
+- source_path: user-identity-profile-relationship/onboarding-and-identity-entry/post-login-landing/landing-bootstrap-context/bootstrap-fallback-guard
+  task_bucket: bootstrap-fallback-guard
+  migrated_as: L3_task

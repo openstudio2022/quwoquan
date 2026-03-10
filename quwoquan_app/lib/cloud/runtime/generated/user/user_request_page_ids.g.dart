@@ -5,62 +5,120 @@ class UserRequestPageIds {
   const UserRequestPageIds._();
 
   static const Map<String, String> operationToPageId = <String, String>{
+    'AcceptInvite': 'user.accept.invite',
     'ActivatePersona': 'user.personas.activate',
+    'ActivateSubAccount': 'user.activate.sub.account',
     'ApplyProposal': 'user.apply.proposal',
+    'BindCredential': 'user.bind.credential',
     'BlockUser': 'user.block.create',
+    'CancelGreetingRequest': 'user.cancel.greeting.request',
     'ConfirmProposal': 'user.confirm.proposal',
     'CreatePersona': 'user.personas.create',
+    'CreateSubAccount': 'user.create.sub.account',
     'DeletePersona': 'user.personas.delete',
+    'DeleteSubAccount': 'user.delete.sub.account',
+    'DismissContactDiscovery': 'user.dismiss.contact.discovery',
     'FollowUser': 'user.follow',
+    'GenerateInvite': 'user.generate.invite',
+    'GetCallSettings': 'user.get.call.settings',
+    'GetInviteByCode': 'user.get.invite.by.code',
+    'GetLatestContactDiscovery': 'user.get.latest.contact.discovery',
+    'GetMeProfile': 'user.get.me.profile',
     'GetNotificationSettings': 'user.notification_settings.get',
     'GetPrivacySettings': 'user.settings.privacy.get',
     'GetRelationship': 'user.relationship',
+    'GetRelationshipCapability': 'user.get.relationship.capability',
+    'GetSubAccountProfile': 'user.get.sub.account.profile',
     'GetUserProfile': 'user.profile',
+    'IgnoreGreetingRequest': 'user.ignore.greeting.request',
+    'InitiateContactDiscovery': 'user.initiate.contact.discovery',
     'ListBlockedUsers': 'user.block.list',
+    'ListCredentials': 'user.list.credentials',
     'ListFollowers': 'user.followers',
     'ListFollowing': 'user.following',
+    'ListGreetingInbox': 'user.list.greeting.inbox',
+    'ListGreetingOutbox': 'user.list.greeting.outbox',
+    'ListMyInvites': 'user.list.my.invites',
     'ListPersonas': 'user.personas',
+    'ListSubAccounts': 'user.list.sub.accounts',
     'ListUserLifeItems': 'user.lifeItems',
     'ListUserLikes': 'user.likes',
     'ListUserWorks': 'user.works',
-    'Login': 'user.login',
+    'LoginWithApple': 'user.login.with.apple',
+    'LoginWithPhone': 'user.login.with.phone',
+    'LoginWithWechat': 'user.login.with.wechat',
+    'Logout': 'user.logout',
     'RefreshToken': 'user.refresh.token',
     'RegisterDevice': 'user.register.device',
     'RejectProposal': 'user.reject.proposal',
+    'ReplyGreetingRequest': 'user.reply.greeting.request',
+    'SendGreetingRequest': 'user.send.greeting.request',
+    'UnbindCredential': 'user.unbind.credential',
     'UnblockUser': 'user.block.delete',
     'UnfollowUser': 'user.unfollow',
+    'UpdateCallSettings': 'user.update.call.settings',
     'UpdateNotificationSettings': 'user.update.notification.settings',
     'UpdatePersona': 'user.personas.update',
     'UpdatePrivacySettings': 'user.settings.privacy.patch',
+    'UpdateSubAccount': 'user.update.sub.account',
     'UpdateUserProfile': 'user.profile.edit',
   };
 
+  static const String acceptInvite = 'user.accept.invite';
   static const String activatePersona = 'user.personas.activate';
+  static const String activateSubAccount = 'user.activate.sub.account';
   static const String applyProposal = 'user.apply.proposal';
+  static const String bindCredential = 'user.bind.credential';
   static const String blockUser = 'user.block.create';
+  static const String cancelGreetingRequest = 'user.cancel.greeting.request';
   static const String confirmProposal = 'user.confirm.proposal';
   static const String createPersona = 'user.personas.create';
+  static const String createSubAccount = 'user.create.sub.account';
   static const String deletePersona = 'user.personas.delete';
+  static const String deleteSubAccount = 'user.delete.sub.account';
+  static const String dismissContactDiscovery = 'user.dismiss.contact.discovery';
   static const String followUser = 'user.follow';
+  static const String generateInvite = 'user.generate.invite';
+  static const String getCallSettings = 'user.get.call.settings';
+  static const String getInviteByCode = 'user.get.invite.by.code';
+  static const String getLatestContactDiscovery = 'user.get.latest.contact.discovery';
+  static const String getMeProfile = 'user.get.me.profile';
   static const String getNotificationSettings = 'user.notification_settings.get';
   static const String getPrivacySettings = 'user.settings.privacy.get';
   static const String getRelationship = 'user.relationship';
+  static const String getRelationshipCapability = 'user.get.relationship.capability';
+  static const String getSubAccountProfile = 'user.get.sub.account.profile';
   static const String getUserProfile = 'user.profile';
+  static const String ignoreGreetingRequest = 'user.ignore.greeting.request';
+  static const String initiateContactDiscovery = 'user.initiate.contact.discovery';
   static const String listBlockedUsers = 'user.block.list';
+  static const String listCredentials = 'user.list.credentials';
   static const String listFollowers = 'user.followers';
   static const String listFollowing = 'user.following';
+  static const String listGreetingInbox = 'user.list.greeting.inbox';
+  static const String listGreetingOutbox = 'user.list.greeting.outbox';
+  static const String listMyInvites = 'user.list.my.invites';
   static const String listPersonas = 'user.personas';
+  static const String listSubAccounts = 'user.list.sub.accounts';
   static const String listUserLifeItems = 'user.lifeItems';
   static const String listUserLikes = 'user.likes';
   static const String listUserWorks = 'user.works';
-  static const String login = 'user.login';
+  static const String loginWithApple = 'user.login.with.apple';
+  static const String loginWithPhone = 'user.login.with.phone';
+  static const String loginWithWechat = 'user.login.with.wechat';
+  static const String logout = 'user.logout';
   static const String refreshToken = 'user.refresh.token';
   static const String registerDevice = 'user.register.device';
   static const String rejectProposal = 'user.reject.proposal';
+  static const String replyGreetingRequest = 'user.reply.greeting.request';
+  static const String sendGreetingRequest = 'user.send.greeting.request';
+  static const String unbindCredential = 'user.unbind.credential';
   static const String unblockUser = 'user.block.delete';
   static const String unfollowUser = 'user.unfollow';
+  static const String updateCallSettings = 'user.update.call.settings';
   static const String updateNotificationSettings = 'user.update.notification.settings';
   static const String updatePersona = 'user.personas.update';
   static const String updatePrivacySettings = 'user.settings.privacy.patch';
+  static const String updateSubAccount = 'user.update.sub.account';
   static const String updateUserProfile = 'user.profile.edit';
 }

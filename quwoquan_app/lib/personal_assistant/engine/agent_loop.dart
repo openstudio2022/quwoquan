@@ -8,12 +8,19 @@ import 'package:quwoquan_app/personal_assistant/contracts/aggregation_state.dart
 import 'package:quwoquan_app/personal_assistant/contracts/agent_run_observability.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/intent_graph.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/preference_fact.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/skill_run.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/subagent_plan.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/ui_process_timeline_entry.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/user_events.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/recall_result.dart';
+import 'package:quwoquan_app/personal_assistant/engine/aggregation_gate.dart';
 import 'package:quwoquan_app/personal_assistant/engine/context_orchestrator.dart';
 import 'package:quwoquan_app/personal_assistant/engine/dialogue_state_runtime.dart';
 import 'package:quwoquan_app/personal_assistant/engine/domain_router.dart';
+import 'package:quwoquan_app/personal_assistant/engine/mode_decider.dart';
 import 'package:quwoquan_app/personal_assistant/engine/react_runtime.dart';
+import 'package:quwoquan_app/personal_assistant/engine/recall_coordinator.dart';
 import 'package:quwoquan_app/personal_assistant/engine/llm_provider.dart';
 import 'package:quwoquan_app/personal_assistant/engine/session_manager.dart';
 import 'package:quwoquan_app/personal_assistant/debug/agent_loop_dev_logger.dart';
@@ -58,6 +65,9 @@ class PersonalAssistantAgentLoop {
       const PersonalAssistantSkillLoader();
   final PersonalAssistantSkillRouter _skillRouter =
       const PersonalAssistantSkillRouter();
+  final RecallCoordinator _recallCoordinator = RecallCoordinator();
+  final ModeDecider _modeDecider = const ModeDecider();
+  final AggregationGate _aggregationGate = const AggregationGate();
 
   Future<AssistantRunResponse> run(
     AssistantRunRequest request, {
@@ -110,11 +120,11 @@ class PersonalAssistantAgentLoop {
     final sessionId = requestedSessionId == 'assistant'
         ? _sessionManager.resolveAssistantSessionForQuery(latestUserQuery)
         : requestedSessionId;
-    for (final msg in request.messages) {
+    if (latestUserQuery.isNotEmpty) {
       _sessionManager.appendMessage(
         sessionId: sessionId,
-        role: msg.role,
-        content: msg.content,
+        role: 'user',
+        content: latestUserQuery,
       );
     }
     final enableChatRecent = _hasCapability(
@@ -167,39 +177,54 @@ class PersonalAssistantAgentLoop {
       forceRefresh: false,
       contextScopeHint: request.contextScopeHint,
     );
-    final skillCatalog = await _domainRouter.buildSkillCatalogPrompt(
+    final fullSkillCatalog = await _domainRouter.buildSkillCatalogPrompt(
       contextScopeHint: request.contextScopeHint,
     );
+    final allManifests = await _domainRouter.availableSkillManifests(
+      contextScopeHint: request.contextScopeHint,
+    );
+    final recallResult = _recallCoordinator.recall(latestUserQuery, allManifests);
+    final skillCatalog = recallResult.isEmpty
+        ? fullSkillCatalog
+        : recallResult.toPromptSnippet();
     final intentGraph = await _resolveIntentGraph(
       request: request,
       contextAssembly: contextAssembly,
       historySummary: historySummary,
       forceRefreshCatalog: forceRefreshDynamicCatalog,
       skillCatalog: skillCatalog,
+      recallResult: recallResult,
       sessionId: sessionId,
       runId: runId,
       traceId: traceId,
       onTraceEvent: onTraceEvent,
     );
-    final domainId =
-        intentGraph.primarySkill.trim().isNotEmpty
-            ? intentGraph.primarySkill.trim()
-            : await _resolveDomainId(
-                request,
-                forceRefreshCatalog: forceRefreshDynamicCatalog,
-              );
+    final domainId = intentGraph.primarySkill.trim().isNotEmpty
+        ? intentGraph.primarySkill.trim()
+        : await _resolveDomainId(
+            request,
+            forceRefreshCatalog: forceRefreshDynamicCatalog,
+          );
     final problemShape = intentGraph.problemShape.trim().isNotEmpty
         ? intentGraph.problemShape.trim()
         : (intentGraph.secondarySkills.isNotEmpty
               ? 'multi_skill'
               : 'single_skill');
+    final modeDecision = _modeDecider.decide(
+      intentGraph: intentGraph,
+      recallResult: recallResult,
+    );
     final intentTraceEvent = AssistantTraceEvent(
       type: AssistantTraceEventType.lifecycleStart,
       message: 'intent_graph_resolved',
       timestamp: DateTime.now(),
       runId: runId,
       traceId: traceId,
-      data: intentGraph.toJson(),
+      data: <String, dynamic>{
+        ...intentGraph.toJson(),
+        'agentMode': modeDecision.mode.name,
+        'agentModeReason': modeDecision.reason,
+      },
     );
     onTraceEvent?.call(intentTraceEvent);
     // 先构建对话轮次脚本，以便 phase-aware 加载根据当前状态选择参考资料
@@ -213,6 +238,12 @@ class PersonalAssistantAgentLoop {
       domainId: domainId,
       userQuery: latestUserQuery,
       dialogueRoundScript: dialogueRoundScript,
+    );
+    final effectiveExecutionShell = _resolveExecutionShellForRun(
+      domainId: domainId,
+      baseShell: skillContext.executionShell,
+      intentGraph: intentGraph,
+      request: request,
     );
     final plannerTemplateVersion = _templateCatalogRuntime.latestVersionFor(
       'planner.global_plan',
@@ -234,6 +265,7 @@ class PersonalAssistantAgentLoop {
     final effectiveToolNames = _resolveAvailableTools(
       domainId: domainId,
       runtimeToolNames: runtimeToolNames,
+      skillAllowedTools: skillContext.allowedTools,
     );
     final skillPersona = await _loadSkillPersona(domainId);
     final templateVariables = _buildTemplateVariables(
@@ -246,7 +278,7 @@ class PersonalAssistantAgentLoop {
       dialogueRoundScript: dialogueRoundScript,
       skillPersona: skillPersona,
       skillCatalog: skillCatalog,
-      skillExecutionShell: skillContext.executionShell,
+      skillExecutionShell: effectiveExecutionShell,
     );
     if (!contextAssembly.canEnterDomain) {
       final blocked = _buildBlockedResponse(
@@ -370,7 +402,7 @@ class PersonalAssistantAgentLoop {
         : effectiveToolNames;
     final shellMaxIterations = math.max(
       1,
-      skillContext.executionShell.maxIterations,
+      effectiveExecutionShell.maxIterations,
     );
     final rewriteMaxIterations = request.shouldSkipSearch
         ? 1
@@ -508,6 +540,10 @@ class PersonalAssistantAgentLoop {
     }
     final synthesisText = synthesisResult.finalText.trim();
     final phaseOneText = mergedResult.finalText;
+    final phaseOneAnswerPayload = _parseAnswerPayload(
+      rawFinalText: phaseOneText,
+      traces: mergedResult.traces,
+    );
     // 合成结果为空或是 react_runtime 兜底文案时，保留 Phase 1 的结果。
     // 避免好的 Phase 1 回答被无内容的合成兜底覆盖。
     final useSynthesis =
@@ -529,12 +565,39 @@ class PersonalAssistantAgentLoop {
       rawFinalText: mergedResult.finalText,
       traces: mergedResult.traces,
     );
+    if (((answerPayloadBeforeSubagent['subagentPlan'] as List?)?.isEmpty ??
+            true) &&
+        ((phaseOneAnswerPayload['subagentPlan'] as List?)?.isNotEmpty ??
+            false)) {
+      answerPayloadBeforeSubagent['subagentPlan'] =
+          phaseOneAnswerPayload['subagentPlan'];
+    }
+    final primaryToolResults = mergedResult.traces
+        .where((event) => event.type == AssistantTraceEventType.toolResult)
+        .map(
+          (event) => <String, dynamic>{
+            'message': event.message,
+            'data': event.data ?? const <String, dynamic>{},
+            'toolCallId': event.toolCallId ?? '',
+          },
+        )
+        .toList(growable: false);
+    final primaryUiReferences = _buildUiReferences(
+      primaryToolResults,
+      domainId: domainId,
+      isWeatherLike: _isWeatherLikeRequest(
+        domainId: domainId,
+        request: request,
+        answerPayload: answerPayloadBeforeSubagent,
+      ),
+    );
     final primarySkillRun = _buildPrimarySkillRun(
       intentGraph: intentGraph,
       domainId: domainId,
       answerPayload: answerPayloadBeforeSubagent,
       result: mergedResult,
-      executionShell: skillContext.executionShell,
+      executionShell: effectiveExecutionShell,
+      references: primaryUiReferences,
     );
     final skillRunPlans = _buildSkillRunPlans(
       intentGraph: intentGraph,
@@ -545,7 +608,9 @@ class PersonalAssistantAgentLoop {
     final subagentRuns = await _executeSubagentPlans(
       answerPayload: <String, dynamic>{
         ...answerPayloadBeforeSubagent,
-        'subagentPlan': skillRunPlans,
+        'subagentPlan': skillRunPlans
+            .map((item) => item.toJson())
+            .toList(growable: false),
       },
       request: request,
       sessionId: sessionId,
@@ -572,6 +637,7 @@ class PersonalAssistantAgentLoop {
         'skillRuns': jsonEncode(
           skillRuns.map((item) => item.toJson()).toList(growable: false),
         ),
+        'aggregationState': jsonEncode(aggregationState.toJson()),
         'subagentRuns': jsonEncode(runsForModel),
       };
       final fusionSynthesisTemplateId = subagentRuns.length > 1
@@ -642,7 +708,6 @@ class PersonalAssistantAgentLoop {
           ? displayTextForStorage
           : mergedResult.finalText,
     );
-    await _sessionManager.save();
     // 只存纯文本到记忆，绝不存含 contractVersion 的原始 JSON。
     // displayTextForStorage 为空（JSON 里无 userMarkdown）时，不存记忆，避免垃圾污染。
     final memoryText = displayTextForStorage;
@@ -673,6 +738,7 @@ class PersonalAssistantAgentLoop {
         intentGraph: intentGraph,
         skillRuns: skillRuns,
         aggregationState: aggregationState,
+        subagentPlan: skillRunPlans,
         subagentRuns: subagentRuns,
         dialogueRoundScript: dialogueRoundScript,
         candidateDomains: domainCatalog,
@@ -709,6 +775,7 @@ class PersonalAssistantAgentLoop {
         },
       );
     }
+    await _sessionManager.save();
     await _persistLearningTags(
       response: response,
       sessionId: sessionId,
@@ -928,55 +995,68 @@ class PersonalAssistantAgentLoop {
         (answerPayload['subagentPlan'] as List?)?.whereType<Map>().toList() ??
         const <Map>[];
     final plans = rawPlans
-        .map((item) => item.cast<String, dynamic>())
-        .where((item) => ((item['goal'] as String?)?.trim() ?? '').isNotEmpty)
+        .map((item) => SubagentPlan.fromJson(item.cast<String, dynamic>()))
+        .where((item) => item.goal.trim().isNotEmpty)
         .toList(growable: false);
     if (plans.isEmpty) return const <Map<String, dynamic>>[];
     // Build a single subagent execution closure for parallel dispatch
     Future<Map<String, dynamic>> runSingleSubagent(
       int index,
-      Map<String, dynamic> plan,
+      SubagentPlan plan,
     ) async {
-      final subagentId =
-          ((plan['subagentId'] as String?)?.trim().isNotEmpty == true)
-          ? (plan['subagentId'] as String).trim()
+      final subagentId = plan.subagentId.isNotEmpty
+          ? plan.subagentId
           : 'subagent_${index + 1}';
-      final goal = (plan['goal'] as String?)?.trim() ?? '';
-      final subagentDomainId = (plan['domainId'] as String?)?.trim() ?? '';
-      final timeoutMs = _positiveInt(plan['timeoutMs'], fallback: 12000);
-      var maxIterations = _positiveInt(plan['maxIterations'], fallback: 2);
-      final toolBudget = _positiveInt(plan['toolBudget'], fallback: 2);
-      final toolWhitelist =
-          (plan['toolWhitelist'] as List?)
-              ?.whereType<String>()
-              .map((item) => item.trim())
-              .where((item) => item.isNotEmpty)
-              .toList(growable: false) ??
-          const <String>[];
-      final subagentTools = _resolveSubagentToolNames(
-        toolWhitelist: toolWhitelist,
-        toolBudget: toolBudget,
-      );
+      final goal = plan.goal;
+      final subagentDomainId = plan.domainId;
+      final planMode = plan.mode;
+      final timeoutMs = plan.timeoutMs;
+      var maxIterations = plan.maxIterations;
+      var toolBudget = plan.toolBudget;
+      final toolWhitelist = plan.toolWhitelist;
       // Load domain-specific skill instruction for this subagent (P1-2)
       Map<String, dynamic> subagentTemplateVars = templateVariables;
+      var effectiveSubagentShell = const SkillExecutionShell();
       if (subagentDomainId.isNotEmpty) {
         final subagentSkillContext = await _resolveSkillContext(
           domainId: subagentDomainId,
           userQuery: goal,
+          preferExplicitDomain: true,
         );
-        final subagentShell = subagentSkillContext.executionShell;
+        effectiveSubagentShell = _resolveExecutionShellForProblemClass(
+          domainId: subagentDomainId,
+          baseShell: subagentSkillContext.executionShell,
+          rawProblemClass: plan.problemClass,
+          mode: planMode,
+          secondarySkills: const <String>[],
+          queryText: goal,
+        );
+        effectiveSubagentShell = _applySubagentStrategyToShell(
+          baseShell: effectiveSubagentShell,
+          plan: plan,
+        );
         subagentTemplateVars = <String, dynamic>{
           ...templateVariables,
           'domainId': subagentDomainId,
           'domainSkillInstruction': subagentSkillContext.instructionMarkdown,
           'domainSkillName': subagentSkillContext.skillName,
-          'skillExecutionShell': subagentShell.toJson(),
+          'skillExecutionShell': effectiveSubagentShell.toJson(),
+          'problemClass': effectiveSubagentShell.problemClass,
+          'subagentPlan': plan.toJson(),
         };
-        if (subagentShell.maxIterations > 0 &&
-            subagentShell.maxIterations < maxIterations) {
-          maxIterations = subagentShell.maxIterations;
+        if (effectiveSubagentShell.maxIterations > 0 &&
+            effectiveSubagentShell.maxIterations < maxIterations) {
+          maxIterations = effectiveSubagentShell.maxIterations;
+        }
+        if (effectiveSubagentShell.toolBudget > 0 &&
+            effectiveSubagentShell.toolBudget < toolBudget) {
+          toolBudget = effectiveSubagentShell.toolBudget;
         }
       }
+      final subagentTools = _resolveSubagentToolNames(
+        toolWhitelist: toolWhitelist,
+        toolBudget: toolBudget,
+      );
       onTraceEvent?.call(
         AssistantTraceEvent(
           type: AssistantTraceEventType.subagentStart,
@@ -988,6 +1068,14 @@ class PersonalAssistantAgentLoop {
             'subagentId': subagentId,
             'domainId': subagentDomainId,
             'goal': goal,
+            'mode': planMode,
+            'problemClass': effectiveSubagentShell.problemClass,
+            'shell': effectiveSubagentShell.toJson(),
+            'stopPolicy': plan.stopPolicy,
+            'searchIntensity': plan.searchIntensity,
+            'providerPolicy': plan.providerPolicy,
+            'freshnessHoursMax': plan.freshnessHoursMax,
+            'answerThreshold': plan.answerThreshold,
             'toolWhitelist': subagentTools,
             'timeoutMs': timeoutMs,
           },
@@ -1016,13 +1104,51 @@ class PersonalAssistantAgentLoop {
               onTraceEvent: onTraceEvent,
             )
             .timeout(Duration(milliseconds: timeoutMs));
+        final childAnswerPayload = _parseAnswerPayload(
+          rawFinalText: subagentResult.finalText,
+          traces: subagentResult.traces,
+        );
+        final childToolResults = subagentResult.traces
+            .where((event) => event.type == AssistantTraceEventType.toolResult)
+            .map(
+              (event) => <String, dynamic>{
+                'message': event.message,
+                'data': event.data ?? const <String, dynamic>{},
+                'toolCallId': event.toolCallId ?? '',
+              },
+            )
+            .toList(growable: false);
+        final childReferences = _buildUiReferences(
+          childToolResults,
+          domainId: subagentDomainId,
+          isWeatherLike: _isWeatherLikeQuery(goal, subagentDomainId),
+        );
         final run = <String, dynamic>{
           'version': 'subagent_result_v1',
           'subagentId': subagentId,
           'domainId': subagentDomainId,
           'status': 'success',
           'goal': goal,
+          'mode': planMode,
+          'problemClass': effectiveSubagentShell.problemClass,
+          'shell': effectiveSubagentShell.toJson(),
+          'stopPolicy': plan.stopPolicy,
+          'searchIntensity': plan.searchIntensity,
+          'providerPolicy': plan.providerPolicy,
+          'freshnessHoursMax': plan.freshnessHoursMax,
+          'answerThreshold': plan.answerThreshold,
           'summary': subagentResult.finalText,
+          'userMarkdown': (childAnswerPayload['userMarkdown'] as String?) ?? '',
+          'result':
+              (childAnswerPayload['result'] as Map?)?.cast<String, dynamic>() ??
+              const <String, dynamic>{},
+          'answerReady':
+              ((childAnswerPayload['userMarkdown'] as String?)
+                      ?.trim()
+                      .isNotEmpty ??
+                  false) ||
+              childAnswerPayload['result'] is Map,
+          'references': childReferences,
           'toolCallCount': subagentResult.traces
               .where((event) => event.type == AssistantTraceEventType.toolStart)
               .length,
@@ -1045,7 +1171,16 @@ class PersonalAssistantAgentLoop {
           'domainId': subagentDomainId,
           'status': 'timeout',
           'goal': goal,
+          'mode': planMode,
+          'problemClass': effectiveSubagentShell.problemClass,
+          'shell': effectiveSubagentShell.toJson(),
+          'stopPolicy': plan.stopPolicy,
+          'searchIntensity': plan.searchIntensity,
+          'providerPolicy': plan.providerPolicy,
+          'freshnessHoursMax': plan.freshnessHoursMax,
+          'answerThreshold': plan.answerThreshold,
           'summary': '',
+          'references': const <Map<String, dynamic>>[],
           'errorClass': 'timeout',
         };
         onTraceEvent?.call(
@@ -1066,7 +1201,16 @@ class PersonalAssistantAgentLoop {
           'domainId': subagentDomainId,
           'status': 'failed',
           'goal': goal,
+          'mode': planMode,
+          'problemClass': effectiveSubagentShell.problemClass,
+          'shell': effectiveSubagentShell.toJson(),
+          'stopPolicy': plan.stopPolicy,
+          'searchIntensity': plan.searchIntensity,
+          'providerPolicy': plan.providerPolicy,
+          'freshnessHoursMax': plan.freshnessHoursMax,
+          'answerThreshold': plan.answerThreshold,
           'summary': '',
+          'references': const <Map<String, dynamic>>[],
           'errorClass': 'execution_failed',
           'errorMessage': error.toString(),
         };
@@ -1104,11 +1248,209 @@ class PersonalAssistantAgentLoop {
     return scoped.take(toolBudget).toList(growable: false);
   }
 
-  int _positiveInt(Object? value, {required int fallback}) {
-    if (value is int && value > 0) return value;
+  int _nonNegativeInt(Object? value, {required int fallback}) {
+    if (value is int && value >= 0) return value;
     final parsed = int.tryParse(value?.toString() ?? '');
-    if (parsed != null && parsed > 0) return parsed;
+    if (parsed != null && parsed >= 0) return parsed;
     return fallback;
+  }
+
+  double _normalizedThreshold(Object? value, {required double fallback}) {
+    final parsed =
+        (value as num?)?.toDouble() ??
+        double.tryParse(value?.toString() ?? '') ??
+        fallback;
+    if (parsed.isNaN) return fallback;
+    if (parsed < 0) return 0.0;
+    if (parsed > 1) return 1.0;
+    return parsed;
+  }
+
+  SkillExecutionShell _applySubagentStrategyToShell({
+    required SkillExecutionShell baseShell,
+    required SubagentPlan plan,
+  }) {
+    var next = baseShell.copyWith(
+      providerPolicy: plan.providerPolicy.isNotEmpty
+          ? plan.providerPolicy
+          : baseShell.providerPolicy,
+      freshnessHoursMax: plan.freshnessHoursMax > 0
+          ? math.min(baseShell.freshnessHoursMax, plan.freshnessHoursMax)
+          : baseShell.freshnessHoursMax,
+    );
+    switch (plan.searchIntensity) {
+      case 'low':
+        next = next.copyWith(
+          maxIterations: math.min(
+            next.maxIterations,
+            math.max(1, plan.maxIterations),
+          ),
+          toolBudget: math.min(next.toolBudget, math.max(1, plan.toolBudget)),
+          variantBudget: math.min(next.variantBudget, 0),
+          reflectionBudget: math.min(next.reflectionBudget, 0),
+        );
+        break;
+      case 'high':
+        next = next.copyWith(
+          maxIterations: math.max(next.maxIterations, plan.maxIterations),
+          toolBudget: math.max(next.toolBudget, plan.toolBudget),
+          variantBudget: math.max(next.variantBudget, 1),
+          reflectionBudget: math.max(next.reflectionBudget, 1),
+        );
+        break;
+      default:
+        next = next.copyWith(
+          maxIterations: math.min(
+            math.max(1, plan.maxIterations),
+            math.max(next.maxIterations, plan.maxIterations),
+          ),
+          toolBudget: math.min(
+            math.max(1, plan.toolBudget),
+            math.max(next.toolBudget, plan.toolBudget),
+          ),
+        );
+    }
+    switch (plan.stopPolicy) {
+      case 'strict':
+        return next.copyWith(
+          maxIterations: math.min(next.maxIterations, 2),
+          toolBudget: math.min(next.toolBudget, 1),
+          variantBudget: math.min(next.variantBudget, 0),
+          reflectionBudget: math.min(next.reflectionBudget, 0),
+        );
+      case 'explore':
+        return next.copyWith(
+          maxIterations: math.max(next.maxIterations, 3),
+          toolBudget: math.max(next.toolBudget, 2),
+          variantBudget: math.max(next.variantBudget, 1),
+          reflectionBudget: math.max(next.reflectionBudget, 1),
+        );
+      default:
+        return next;
+    }
+  }
+
+  bool _isWeatherLikeQuery(String queryText, String domainId) {
+    final normalized = queryText.trim().toLowerCase();
+    if (domainId.trim() == 'weather') return true;
+    return RegExp(r'(天气|气温|降雨|风力|体感|预报|weather|forecast)').hasMatch(normalized);
+  }
+
+  List<Map<String, dynamic>> _extractReferencesFromPayload(
+    Map<String, dynamic> payload,
+  ) {
+    return (payload['references'] as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[];
+  }
+
+  List<PreferenceFact> _buildSessionPreferenceFacts({
+    required AssistantRunRequest request,
+    required Map<String, dynamic> answerPayload,
+    required List<SkillRun> skillRuns,
+    required List<Map<String, dynamic>> uiReferences,
+  }) {
+    final now = DateTime.now().toIso8601String();
+    final facts = <PreferenceFact>[
+      PreferenceFact(
+        factId: 'session_problem_class_$now',
+        scope: 'session',
+        key: 'problemClass',
+        value: skillRuns.isNotEmpty ? skillRuns.first.problemClass : '',
+        source: 'agent_loop',
+        createdAt: now,
+      ),
+      PreferenceFact(
+        factId: 'session_reference_count_$now',
+        scope: 'session',
+        key: 'referenceCount',
+        value: uiReferences.length.toString(),
+        source: 'agent_loop',
+        createdAt: now,
+      ),
+    ];
+    final feedbackHint = (request.contextScopeHint['preferenceFeedback'] ?? '')
+        .toString()
+        .trim();
+    if (feedbackHint.isNotEmpty) {
+      facts.add(
+        PreferenceFact(
+          factId: 'session_feedback_$now',
+          scope: 'session',
+          key: 'feedbackHint',
+          value: feedbackHint,
+          source: 'context_scope_hint',
+          createdAt: now,
+        ),
+      );
+    }
+    final followupPrompt =
+        (answerPayload['followupPrompt'] as String?)?.trim() ?? '';
+    if (followupPrompt.isNotEmpty) {
+      facts.add(
+        PreferenceFact(
+          factId: 'session_followup_$now',
+          scope: 'session',
+          key: 'followupPrompt',
+          value: followupPrompt,
+          source: 'answer_payload',
+          createdAt: now,
+        ),
+      );
+    }
+    return facts.where((item) => item.value.isNotEmpty).toList(growable: false);
+  }
+
+  List<PreferenceFact> _buildLongTermPreferenceFacts({
+    required AssistantRunRequest request,
+    required Map<String, dynamic> answerPayload,
+    required List<PreferenceFact> sessionFacts,
+  }) {
+    final seedFacts =
+        (request.contextScopeHint['longTermPreferenceFacts'] as List?)
+            ?.whereType<Map>()
+            .map(
+              (item) => PreferenceFact.fromJson(item.cast<String, dynamic>()),
+            )
+            .toList(growable: false) ??
+        const <PreferenceFact>[];
+    final emergedTags =
+        ((answerPayload['diagnostics'] as Map?)?['emergedTags'] as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[];
+    if (emergedTags.isEmpty) return seedFacts;
+    final now = DateTime.now().toIso8601String();
+    return <PreferenceFact>[
+          ...seedFacts,
+          ...emergedTags.map(
+            (item) => PreferenceFact(
+              factId: 'long_term_${item['tag'] ?? item['key'] ?? now}_$now',
+              scope: 'long_term',
+              key: (item['tag'] ?? item['key'] ?? '').toString(),
+              value: (item['value'] ?? item['label'] ?? '').toString(),
+              source: 'diagnostics.emergedTags',
+              createdAt: now,
+            ),
+          ),
+          ...sessionFacts
+              .where((item) => item.key == 'feedbackHint')
+              .map(
+                (item) => PreferenceFact(
+                  factId: 'long_term_feedback_${item.factId}',
+                  scope: 'long_term',
+                  key: item.key,
+                  value: item.value,
+                  source: item.source,
+                  createdAt: item.createdAt,
+                ),
+              ),
+        ]
+        .where((item) => item.key.isNotEmpty && item.value.isNotEmpty)
+        .toList(growable: false);
   }
 
   AssistantRunResponse _buildBlockedResponse({
@@ -1225,6 +1567,7 @@ class PersonalAssistantAgentLoop {
     required IntentGraph intentGraph,
     required List<SkillRun> skillRuns,
     required AggregationState aggregationState,
+    required List<SubagentPlan> subagentPlan,
     required List<Map<String, dynamic>> subagentRuns,
     required DialogueRoundScript dialogueRoundScript,
     required List<String> candidateDomains,
@@ -1295,7 +1638,16 @@ class PersonalAssistantAgentLoop {
     final learningSatisfaction = modelSelfScore >= 85
         ? 'high'
         : (modelSelfScore >= 70 ? 'medium' : 'low');
-    final uiReferences = _buildUiReferences(toolResults);
+    final isWeatherLike = _isWeatherLikeRequest(
+      domainId: dialogueRoundScript.domainId,
+      request: request,
+      answerPayload: answerPayload,
+    );
+    final uiReferences = _buildUiReferences(
+      toolResults,
+      domainId: dialogueRoundScript.domainId,
+      isWeatherLike: isWeatherLike,
+    );
     final processSummaryV1 = _resolveProcessSummary(
       answerPayload: answerPayload,
       domainId: dialogueRoundScript.domainId,
@@ -1332,20 +1684,47 @@ class PersonalAssistantAgentLoop {
       intentGraph: intentGraph,
       skillRuns: skillRuns,
       aggregationState: aggregationState,
+      request: request,
+      answerPayload: answerPayload,
       processSummary: processSummaryV1,
       uiReferences: uiReferences,
     );
     final uiProcessTimelineV2 = _buildUiProcessTimelineV2(
       userEvents: userEvents,
+    );
+    final sessionPreferenceFacts = _buildSessionPreferenceFacts(
+      request: request,
+      answerPayload: answerPayload,
+      skillRuns: skillRuns,
       uiReferences: uiReferences,
+    );
+    final longTermPreferenceFacts = _buildLongTermPreferenceFacts(
+      request: request,
+      answerPayload: answerPayload,
+      sessionFacts: sessionPreferenceFacts,
     );
     final enrichedAnswerPayload = <String, dynamic>{
       ...answerPayload,
       'intentGraph': intentGraph.toJson(),
-      'skillRuns': skillRuns.map((item) => item.toJson()).toList(growable: false),
+      'subagentPlan': subagentPlan
+          .map((item) => item.toJson())
+          .toList(growable: false),
+      'skillRuns': skillRuns
+          .map((item) => item.toJson())
+          .toList(growable: false),
       'aggregationState': aggregationState.toJson(),
-      'userEvents': userEvents.map((item) => item.toJson()).toList(growable: false),
-      'uiProcessTimelineV2': uiProcessTimelineV2,
+      'userEvents': userEvents
+          .map((item) => item.toJson())
+          .toList(growable: false),
+      'uiProcessTimelineV2': uiProcessTimelineV2
+          .map((item) => item.toJson())
+          .toList(growable: false),
+      'sessionPreferenceFacts': sessionPreferenceFacts
+          .map((item) => item.toJson())
+          .toList(growable: false),
+      'longTermPreferenceFacts': longTermPreferenceFacts
+          .map((item) => item.toJson())
+          .toList(growable: false),
     };
     if (normalizedMarkdown.isNotEmpty && onTraceEvent != null) {
       onTraceEvent(
@@ -1549,7 +1928,8 @@ class PersonalAssistantAgentLoop {
         'webEvidenceGatePassed': evidenceGatePassed,
       },
       'answerPayload': enrichedAnswerPayload,
-      'decisionJson': enrichedAnswerPayload['decision'] ?? const <String, dynamic>{},
+      'decisionJson':
+          enrichedAnswerPayload['decision'] ?? const <String, dynamic>{},
       'messageKind': messageKind,
       'toolObservations': <Map<String, dynamic>>[
         ...toolResults.map(
@@ -1569,10 +1949,23 @@ class PersonalAssistantAgentLoop {
           },
         ),
       ],
+      'subagentPlan': subagentPlan
+          .map((item) => item.toJson())
+          .toList(growable: false),
       'subagentRuns': subagentRuns,
-      'skillRuns': skillRuns.map((item) => item.toJson()).toList(growable: false),
+      'skillRuns': skillRuns
+          .map((item) => item.toJson())
+          .toList(growable: false),
       'aggregationState': aggregationState.toJson(),
-      'userEvents': userEvents.map((item) => item.toJson()).toList(growable: false),
+      'userEvents': userEvents
+          .map((item) => item.toJson())
+          .toList(growable: false),
+      'sessionPreferenceFacts': sessionPreferenceFacts
+          .map((item) => item.toJson())
+          .toList(growable: false),
+      'longTermPreferenceFacts': longTermPreferenceFacts
+          .map((item) => item.toJson())
+          .toList(growable: false),
       'renderMode': renderMode,
       'qualityMetrics': <String, dynamic>{
         'decisionParseSuccess': decisionParseSuccess,
@@ -1606,7 +1999,11 @@ class PersonalAssistantAgentLoop {
       },
       'processSummaryV1': processSummaryV1,
       'processReferenceCountV1': processReferenceCountV1,
-      'uiProcessTimelineV2': uiProcessTimelineV2,
+      'processSummary': processSummaryV1,
+      'processReferenceCount': processReferenceCountV1,
+      'uiProcessTimelineV2': uiProcessTimelineV2
+          .map((item) => item.toJson())
+          .toList(growable: false),
       'uiPhaseTimelineV1': _buildUiPhaseTimelineV1(
         traces: result.traces,
         toolResults: toolResults,
@@ -1944,12 +2341,21 @@ class PersonalAssistantAgentLoop {
   }
 
   List<Map<String, dynamic>> _buildUiReferences(
-    List<Map<String, dynamic>> toolResults,
-  ) {
+    List<Map<String, dynamic>> toolResults, {
+    required String domainId,
+    required bool isWeatherLike,
+  }) {
     final refs = <Map<String, dynamic>>[];
     final seen = <String>{};
     var totalSearched = 0;
+    final isWeatherDomain = domainId.trim() == 'weather' || isWeatherLike;
     for (final item in toolResults) {
+      final toolName = (item['toolName'] as String?)?.trim() ?? '';
+      if (toolName.isNotEmpty &&
+          toolName != 'web_search' &&
+          (!isWeatherDomain || toolName != 'local_context')) {
+        continue;
+      }
       final data =
           (item['data'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{};
@@ -1969,29 +2375,81 @@ class PersonalAssistantAgentLoop {
         if (url.isEmpty || seen.contains(url)) continue;
         final parsed = Uri.tryParse(url);
         final source = parsed?.host ?? (ref['source'] as String?) ?? '';
-        // Layer 5: 标记权威来源
+        final title = (ref['title'] as String?)?.trim() ?? '';
+        final snippet = (ref['snippet'] as String?)?.trim() ?? '';
         final isCited =
             authorityDomains.isNotEmpty &&
             authorityDomains.any((d) => source == d || source.endsWith('.$d'));
+        if (isWeatherDomain &&
+            !_isWeatherRelevantReference(
+              title: title,
+              source: source,
+              snippet: snippet,
+              isAuthoritative: isCited,
+            )) {
+          continue;
+        }
+        final dedupeKey = '${source.toLowerCase()}|${title.toLowerCase()}';
+        if (seen.contains(dedupeKey)) continue;
         refs.add(<String, dynamic>{
-          'title': (ref['title'] as String?)?.trim().isNotEmpty == true
-              ? (ref['title'] as String).trim()
-              : source,
+          'title': title.isNotEmpty ? title : source,
           'url': url,
           'source': source,
           'provider': (ref['provider'] as String?)?.trim() ?? '',
-          'snippet': (ref['snippet'] as String?)?.trim() ?? '',
+          'snippet': snippet,
           'cited': isCited,
           'authorityScore': isCited ? 1.0 : 0.0,
         });
         seen.add(url);
+        seen.add(dedupeKey);
       }
     }
+    refs.sort((a, b) {
+      final citedDelta =
+          ((b['cited'] == true) ? 1 : 0) - ((a['cited'] == true) ? 1 : 0);
+      if (citedDelta != 0) return citedDelta;
+      final authorityDelta =
+          (((b['authorityScore'] as num?)?.toDouble() ?? 0.0) * 100).round() -
+          (((a['authorityScore'] as num?)?.toDouble() ?? 0.0) * 100).round();
+      if (authorityDelta != 0) return authorityDelta;
+      return 0;
+    });
+    final curatedRefs = isWeatherDomain
+        ? refs
+              .where((item) => item['cited'] == true)
+              .take(4)
+              .toList(growable: false)
+        : refs.take(8).toList(growable: false);
     // Layer 5: 总搜索资料数注入到第一个参考资料的元数据中，供 UI 展示"共检索 N 篇资料，以下为参考来源"
-    if (refs.isNotEmpty && totalSearched > 0) {
-      refs.first['_totalSearched'] = totalSearched;
+    if (curatedRefs.isNotEmpty && totalSearched > 0) {
+      curatedRefs.first['_totalSearched'] = totalSearched;
     }
-    return refs;
+    return curatedRefs;
+  }
+
+  bool _isWeatherRelevantReference({
+    required String title,
+    required String source,
+    required String snippet,
+    required bool isAuthoritative,
+  }) {
+    if (isAuthoritative) return true;
+    final combined = '$title $source $snippet'.toLowerCase();
+    const weatherTokens = <String>[
+      '天气',
+      '气象',
+      '预报',
+      '实况',
+      '温度',
+      '湿度',
+      '降雨',
+      'weather',
+      'forecast',
+      'temperature',
+      'humidity',
+      'rain',
+    ];
+    return weatherTokens.any(combined.contains);
   }
 
   /// 将 LLM 最终文本解析为结构化的 answerPayload Map。
@@ -2062,9 +2520,11 @@ class PersonalAssistantAgentLoop {
       'askUser': turn?.askUser ?? const <String, dynamic>{},
       'subagentPlan': turn != null
           ? turn.subagentPlan
+                .map((item) => item.toJson())
+                .toList(growable: false)
           : _normalizeMapList(parsed['subagentPlan'], textKey: 'goal'),
-      'intentGraph': turn?.intentGraph?.toJson() ??
-          _normalizeMap(parsed['intentGraph']),
+      'intentGraph':
+          turn?.intentGraph?.toJson() ?? _normalizeMap(parsed['intentGraph']),
       'skillRuns': turn != null
           ? turn.skillRuns.map((item) => item.toJson()).toList(growable: false)
           : _normalizeMapList(parsed['skillRuns'], textKey: 'goal'),
@@ -2076,7 +2536,12 @@ class PersonalAssistantAgentLoop {
           : _normalizeMapList(parsed['userEvents'], textKey: 'message'),
       'uiProcessTimelineV2': turn != null
           ? turn.uiProcessTimelineV2
-          : _normalizeMapList(parsed['uiProcessTimelineV2'], textKey: 'summary'),
+                .map((item) => item.toJson())
+                .toList(growable: false)
+          : _normalizeMapList(
+              parsed['uiProcessTimelineV2'],
+              textKey: 'summary',
+            ),
       'toolPlan': turn != null
           ? turn.toolPlan
           : _normalizeMapList(parsed['toolPlan'], textKey: 'tool'),
@@ -2089,6 +2554,19 @@ class PersonalAssistantAgentLoop {
       'followupPrompt': turn?.followupPrompt ?? '',
       'processSummary': turn?.processSummary ?? '',
       'processReferenceCount': turn?.processReferenceCount ?? 0,
+      'sessionPreferenceFacts': turn != null
+          ? turn.sessionPreferenceFacts
+                .map((item) => item.toJson())
+                .toList(growable: false)
+          : _normalizeMapList(parsed['sessionPreferenceFacts'], textKey: 'key'),
+      'longTermPreferenceFacts': turn != null
+          ? turn.longTermPreferenceFacts
+                .map((item) => item.toJson())
+                .toList(growable: false)
+          : _normalizeMapList(
+              parsed['longTermPreferenceFacts'],
+              textKey: 'key',
+            ),
       'parseStatus': parseStatus,
     };
   }
@@ -2099,6 +2577,7 @@ class PersonalAssistantAgentLoop {
     required String historySummary,
     required bool forceRefreshCatalog,
     required String skillCatalog,
+    RecallResult? recallResult,
     required String sessionId,
     required String runId,
     required String traceId,
@@ -2110,15 +2589,17 @@ class PersonalAssistantAgentLoop {
     );
     final fallbackDialogueScript = await _dialogueStateRuntime.buildRoundScript(
       domainId: fallbackDomainId,
-      userQuery:
-          request.messages.isNotEmpty ? request.messages.last.content : '',
+      userQuery: request.messages.isNotEmpty
+          ? request.messages.last.content
+          : '',
       contextScopeHint: request.contextScopeHint,
       forceRefreshCatalog: forceRefreshCatalog,
     );
     final fallbackSkillContext = await _resolveSkillContext(
       domainId: fallbackDomainId,
-      userQuery:
-          request.messages.isNotEmpty ? request.messages.last.content : '',
+      userQuery: request.messages.isNotEmpty
+          ? request.messages.last.content
+          : '',
       dialogueRoundScript: fallbackDialogueScript,
     );
     final templateVariables = _buildTemplateVariables(
@@ -2183,27 +2664,46 @@ class PersonalAssistantAgentLoop {
           (parsed['inferredMotive'] as String?)?.trim().isNotEmpty == true
           ? (parsed['inferredMotive'] as String).trim()
           : (request.messages.isNotEmpty ? request.messages.last.content : '');
+      final problemClass = _normalizeProblemClass(
+        raw: (parsed['problemClass'] as String?)?.trim() ?? '',
+        primarySkill: primarySkill,
+        mode: (parsed['mode'] as String?)?.trim() ?? '',
+        secondarySkills: secondarySkills,
+        request: request,
+      );
       return IntentGraph(
         userGoal: userGoal,
         problemShape: secondarySkills.isEmpty ? 'single_skill' : 'multi_skill',
         primarySkill: primarySkill,
+        problemClass: problemClass,
+        inferredMotive:
+            (parsed['inferredMotive'] as String?)?.trim() ?? '',
         secondarySkills: secondarySkills,
         globalConstraints: <String, dynamic>{
           'mode': (parsed['mode'] as String?)?.trim() ?? '',
-          'queryNormalization':
-              _normalizeMap(parsed['queryNormalization']),
+          'queryNormalization': _normalizeMap(parsed['queryNormalization']),
           'slotFillPlan': _normalizeMap(parsed['slotFillPlan']),
           'contextSlots': _normalizeMap(parsed['contextSlots']),
         },
         clarificationNeeded:
             _normalizeStringList(parsed['missingContextSlots']).isNotEmpty ||
             ((parsed['slotFillAction'] as String?)?.trim() ?? '') == 'ask_user',
+        recallResult: recallResult,
       );
     } catch (_) {
       return IntentGraph(
-        userGoal: request.messages.isNotEmpty ? request.messages.last.content : '',
+        userGoal: request.messages.isNotEmpty
+            ? request.messages.last.content
+            : '',
         problemShape: 'single_skill',
         primarySkill: fallbackDomainId,
+        problemClass: _normalizeProblemClass(
+          raw: '',
+          primarySkill: fallbackDomainId,
+          mode: '',
+          secondarySkills: const <String>[],
+          request: request,
+        ),
       );
     }
   }
@@ -2251,13 +2751,14 @@ class PersonalAssistantAgentLoop {
     return _domainRouter.fallbackDomainId;
   }
 
-  List<Map<String, dynamic>> _buildSkillRunPlans({
+  List<SubagentPlan> _buildSkillRunPlans({
     required IntentGraph intentGraph,
     required Map<String, dynamic> answerPayload,
     required String latestUserQuery,
     required String primaryDomainId,
   }) {
-    final existingPlans = (answerPayload['subagentPlan'] as List?)
+    final existingPlans =
+        (answerPayload['subagentPlan'] as List?)
             ?.whereType<Map>()
             .map((item) => item.cast<String, dynamic>())
             .toList(growable: false) ??
@@ -2267,23 +2768,80 @@ class PersonalAssistantAgentLoop {
           .where(
             (item) =>
                 ((item['domainId'] as String?)?.trim() ?? '').isNotEmpty &&
-                ((item['domainId'] as String?)?.trim() ?? '') != primaryDomainId,
+                ((item['domainId'] as String?)?.trim() ?? '') !=
+                    primaryDomainId,
+          )
+          .map(
+            (item) => _normalizeSubagentPlan(
+              plan: item,
+              latestUserQuery: latestUserQuery,
+              fallbackProblemClass: intentGraph.problemClass,
+            ),
           )
           .toList(growable: false);
     }
     return intentGraph.secondarySkills
-        .where((item) => item.trim().isNotEmpty && item.trim() != primaryDomainId)
+        .where(
+          (item) => item.trim().isNotEmpty && item.trim() != primaryDomainId,
+        )
         .map(
-          (skillId) => <String, dynamic>{
-            'subagentId': 'skill_${skillId}_1',
-            'domainId': skillId,
-            'mode': 'qa',
-            'goal': '围绕用户问题补充 $skillId 视角的关键信息：$latestUserQuery',
-            'maxIterations': 2,
-            'toolBudget': 2,
-          },
+          (skillId) => _normalizeSubagentPlan(
+            plan: <String, dynamic>{
+              'subagentId': 'skill_${skillId}_1',
+              'domainId': skillId,
+              'problemClass': skillId.trim() == 'weather'
+                  ? 'realtime_info'
+                  : intentGraph.problemClass,
+              'mode': 'qa',
+              'goal': '围绕用户问题补充 $skillId 视角的关键信息：$latestUserQuery',
+              'maxIterations': 2,
+              'toolBudget': 2,
+              'stopPolicy': 'balanced',
+              'searchIntensity': skillId.trim() == 'weather' ? 'low' : 'medium',
+            },
+            latestUserQuery: latestUserQuery,
+            fallbackProblemClass: intentGraph.problemClass,
+          ),
         )
         .toList(growable: false);
+  }
+
+  SubagentPlan _normalizeSubagentPlan({
+    required Map<String, dynamic> plan,
+    required String latestUserQuery,
+    required String fallbackProblemClass,
+  }) {
+    final domainId = (plan['domainId'] as String?)?.trim() ?? '';
+    final goal = (plan['goal'] as String?)?.trim() ?? '';
+    final mode = (plan['mode'] as String?)?.trim() ?? 'qa';
+    final rawProblemClass =
+        (plan['problemClass'] as String?)?.trim() ?? fallbackProblemClass;
+    return SubagentPlan.fromJson(<String, dynamic>{
+      ...plan,
+      'domainId': domainId,
+      'goal': goal,
+      'mode': mode,
+      'problemClass': _normalizeProblemClassForQuery(
+        raw: rawProblemClass,
+        primarySkill: domainId,
+        mode: mode,
+        secondarySkills: const <String>[],
+        queryText: goal.isNotEmpty ? goal : latestUserQuery,
+      ),
+      'stopPolicy': (plan['stopPolicy'] as String?)?.trim() ?? 'balanced',
+      'searchIntensity':
+          (plan['searchIntensity'] as String?)?.trim() ?? 'medium',
+      'providerPolicy': (plan['providerPolicy'] as String?)?.trim() ?? '',
+      'freshnessHoursMax': _nonNegativeInt(
+        plan['freshnessHoursMax'],
+        fallback: 0,
+      ),
+      'answerThreshold': _normalizedThreshold(
+        plan['answerThreshold'],
+        fallback: 0.0,
+      ),
+      'dependencies': _normalizeStringList(plan['dependencies']),
+    });
   }
 
   SkillRun _buildPrimarySkillRun({
@@ -2292,6 +2850,7 @@ class PersonalAssistantAgentLoop {
     required Map<String, dynamic> answerPayload,
     required ReactRuntimeResult result,
     required SkillExecutionShell executionShell,
+    required List<Map<String, dynamic>> references,
   }) {
     return SkillRun(
       runId: 'skill_primary_$domainId',
@@ -2303,9 +2862,11 @@ class PersonalAssistantAgentLoop {
           (answerPayload['slotState'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{},
       answerReady:
-          (answerPayload['userMarkdown'] as String?)?.trim().isNotEmpty == true ||
+          (answerPayload['userMarkdown'] as String?)?.trim().isNotEmpty ==
+              true ||
           (answerPayload['result'] as Map?) != null,
       stopReason: (answerPayload['messageKind'] as String?)?.trim() ?? '',
+      references: references,
       resultSummary: _extractUiSummary(answerPayload, result.finalText),
     );
   }
@@ -2313,13 +2874,29 @@ class PersonalAssistantAgentLoop {
   SkillRun _skillRunFromLegacySubagentRun(Map<String, dynamic> run) {
     final domainId = (run['domainId'] as String?)?.trim() ?? '';
     final status = (run['status'] as String?)?.trim() ?? 'unknown';
+    final goal = (run['goal'] as String?)?.trim() ?? '';
     return SkillRun(
       runId: (run['subagentId'] as String?)?.trim() ?? 'skill_$domainId',
       domainId: domainId,
-      goal: (run['goal'] as String?)?.trim() ?? '',
-      problemClass: status == 'success' ? 'qa' : 'fallback_general',
-      answerReady: status == 'success',
+      goal: goal,
+      problemClass: _normalizeProblemClassForQuery(
+        raw: (run['problemClass'] as String?)?.trim() ?? '',
+        primarySkill: domainId,
+        mode: (run['mode'] as String?)?.trim() ?? 'qa',
+        secondarySkills: const <String>[],
+        queryText: goal,
+      ),
+      shell:
+          (run['shell'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{},
+      answerReady: run['answerReady'] == true || status == 'success',
       stopReason: status,
+      references:
+          (run['references'] as List?)
+              ?.whereType<Map>()
+              .map((item) => item.cast<String, dynamic>())
+              .toList(growable: false) ??
+          const <Map<String, dynamic>>[],
       resultSummary: (run['summary'] as String?)?.trim() ?? '',
     );
   }
@@ -2329,37 +2906,10 @@ class PersonalAssistantAgentLoop {
     required List<SkillRun> skillRuns,
     required Map<String, dynamic> answerPayload,
   }) {
-    final blockingSkills = skillRuns
-        .where((item) => !item.answerReady)
-        .map((item) => item.domainId)
-        .where((item) => item.isNotEmpty)
-        .toList(growable: false);
-    final allSkillsReady = skillRuns.isNotEmpty && blockingSkills.isEmpty;
-    final canGivePartialAnswer =
-        skillRuns.any((item) => item.answerReady) && blockingSkills.isNotEmpty;
-    final clarificationNeeded =
-        intentGraph.clarificationNeeded ||
-        ((answerPayload['messageKind'] as String?)?.trim() ?? '') == 'ask_user';
-    final needExpansion =
-        !allSkillsReady && !canGivePartialAnswer && !clarificationNeeded;
-    return AggregationState(
-      allSkillsReady: allSkillsReady,
-      blockingSkills: blockingSkills,
-      canGivePartialAnswer: canGivePartialAnswer,
-      needExpansion: needExpansion,
-      expansionPlan: needExpansion
-          ? <String, dynamic>{
-              'targetSkills': blockingSkills,
-              'strategy': 'broaden_or_retry',
-            }
-          : const <String, dynamic>{},
-      finalAnswerReady: allSkillsReady || canGivePartialAnswer,
-      finalAnswerMode: allSkillsReady
-          ? 'full'
-          : (canGivePartialAnswer
-                ? 'partial'
-                : (clarificationNeeded ? 'clarify' : 'expansion')),
-      clarificationNeeded: clarificationNeeded,
+    return _aggregationGate.evaluate(
+      intentGraph: intentGraph,
+      skillRuns: skillRuns,
+      answerPayload: answerPayload,
     );
   }
 
@@ -2367,6 +2917,8 @@ class PersonalAssistantAgentLoop {
     required IntentGraph intentGraph,
     required List<SkillRun> skillRuns,
     required AggregationState aggregationState,
+    required AssistantRunRequest request,
+    required Map<String, dynamic> answerPayload,
     required String processSummary,
     required List<Map<String, dynamic>> uiReferences,
   }) {
@@ -2375,16 +2927,20 @@ class PersonalAssistantAgentLoop {
         type: UserEventType.processReplace,
         scope: UserEventScope.root,
         nodeId: 'root.intent',
-        message: intentGraph.isMultiSkill
-            ? '已识别为复合问题，准备分任务处理'
-            : '已识别问题方向，准备开始处理',
+        message: _buildRootProcessMessage(
+          intentGraph: intentGraph,
+          request: request,
+          answerPayload: answerPayload,
+        ),
         payload: intentGraph.toJson(),
       ),
     ];
     for (final run in skillRuns) {
-      final message = run.resultSummary.isNotEmpty
-          ? run.resultSummary
-          : (run.answerReady ? '该部分信息已整理完成' : '该部分还需要继续补充');
+      final message = _buildSkillProcessMessage(
+        run,
+        request: request,
+        answerPayload: answerPayload,
+      );
       events.add(
         UserEvent(
           type: run.answerReady
@@ -2394,7 +2950,10 @@ class PersonalAssistantAgentLoop {
           nodeId: run.domainId,
           runId: run.runId,
           message: message,
-          payload: run.toJson(),
+          payload: <String, dynamic>{
+            ...run.toJson(),
+            'references': run.references,
+          },
         ),
       );
     }
@@ -2407,31 +2966,106 @@ class PersonalAssistantAgentLoop {
         payload: <String, dynamic>{
           ...aggregationState.toJson(),
           'referenceCount': uiReferences.length,
+          'references': uiReferences,
         },
       ),
     );
     return events;
   }
 
-  List<Map<String, dynamic>> _buildUiProcessTimelineV2({
+  List<UiProcessTimelineEntry> _buildUiProcessTimelineV2({
     required List<UserEvent> userEvents,
-    required List<Map<String, dynamic>> uiReferences,
   }) {
     return userEvents
         .map(
-          (event) => <String, dynamic>{
-            'scope': event.scope.name,
-            'type': event.type.name,
-            'nodeId': event.nodeId,
-            'runId': event.runId,
-            'summary': event.message,
-            'payload': event.payload,
-            'references': event.scope == UserEventScope.aggregation
-                ? uiReferences
-                : const <Map<String, dynamic>>[],
-          },
+          (event) => UiProcessTimelineEntry(
+            scope: event.scope.name,
+            type: event.type.name,
+            nodeId: event.nodeId,
+            runId: event.runId,
+            summary: event.message,
+            payload: event.payload,
+            references: _extractReferencesFromPayload(event.payload),
+          ),
         )
         .toList(growable: false);
+  }
+
+  String _buildRootProcessMessage({
+    required IntentGraph intentGraph,
+    required AssistantRunRequest request,
+    required Map<String, dynamic> answerPayload,
+  }) {
+    final query = request.messages.isNotEmpty
+        ? request.messages.last.content.trim()
+        : '';
+    final city = _inferWeatherCity(
+      request: request,
+      answerPayload: answerPayload,
+    );
+    final weatherLike = _isWeatherLikeRequest(
+      domainId: intentGraph.primarySkill,
+      request: request,
+      answerPayload: answerPayload,
+    );
+    if (intentGraph.isMultiSkill) {
+      if (weatherLike && city.isNotEmpty) {
+        return '我会把这次问题拆开处理，先确认$city天气，再补齐其他部分的信息';
+      }
+      final domains = <String>[
+        intentGraph.primarySkill,
+        ...intentGraph.secondarySkills,
+      ].where((item) => item.trim().isNotEmpty).join('、');
+      return domains.isNotEmpty
+          ? '我会把这次问题拆成$domains几部分分别处理，再一起给你结论'
+          : '我会把这次复合问题拆开处理，再一起给你结论';
+    }
+    if (weatherLike) {
+      if (city.isNotEmpty) {
+        return '我先确认$city现在的天气和相关出行信息';
+      }
+      return '我先确认你想查的实时天气情况';
+    }
+    if (query.isNotEmpty) {
+      return '我先理清“$query”里最需要优先解决的部分';
+    }
+    return '我先理清这次问题，再开始处理';
+  }
+
+  String _buildSkillProcessMessage(
+    SkillRun run, {
+    required AssistantRunRequest request,
+    required Map<String, dynamic> answerPayload,
+  }) {
+    final domainId = run.domainId.trim().toLowerCase();
+    final problemClass = run.problemClass.trim().toLowerCase();
+    final ready = run.answerReady;
+    final city = _inferWeatherCity(
+      request: request,
+      answerPayload: run.slotState.isNotEmpty
+          ? <String, dynamic>{'slotState': run.slotState}
+          : answerPayload,
+    );
+    final goal = run.goal.trim();
+    if (domainId == 'weather' || problemClass == 'realtime_info') {
+      return ready
+          ? '${city.isEmpty ? '实时天气' : '$city天气'}已经核对到，正在整理成更容易看的结论'
+          : '我先查一下${city.isEmpty ? '当前' : city}现在的天气和相关出行信息';
+    }
+    switch (problemClass) {
+      case 'task_execution':
+        return ready
+            ? '这部分执行条件已经确认好，我继续帮你往下整理'
+            : (goal.isNotEmpty ? '我先确认“$goal”需要的执行条件' : '我先确认这部分执行条件');
+      case 'complex_reasoning':
+        return ready
+            ? '这一部分关键信息已经整理好，我继续综合判断'
+            : (goal.isNotEmpty ? '我先补充“$goal”这部分分析信息' : '我先补充这部分分析信息');
+      case 'simple_qa':
+        return ready ? '这一部分答案已经整理好了' : '我先补充这一部分直接相关的信息';
+      default:
+        return ready ? '这一部分关键信息已经整理好了' : '我先补充这一部分相关信息';
+    }
   }
 
   String _resolveMessageKind({
@@ -2499,9 +3133,24 @@ class PersonalAssistantAgentLoop {
   ) {
     return runs
         .map((r) {
-          final m = Map<String, dynamic>.from(r);
-          m.remove('version');
-          return m;
+          return <String, dynamic>{
+            'subagentId': (r['subagentId'] ?? '').toString(),
+            'domainId': (r['domainId'] ?? '').toString(),
+            'status': (r['status'] ?? '').toString(),
+            'goal': (r['goal'] ?? '').toString(),
+            'problemClass': (r['problemClass'] ?? '').toString(),
+            'userMarkdown': (r['userMarkdown'] ?? '').toString(),
+            'result':
+                (r['result'] as Map?)?.cast<String, dynamic>() ??
+                const <String, dynamic>{},
+            'summary': (r['summary'] ?? '').toString(),
+            'references':
+                (r['references'] as List?)
+                    ?.whereType<Map>()
+                    .map((item) => item.cast<String, dynamic>())
+                    .toList(growable: false) ??
+                const <Map<String, dynamic>>[],
+          };
         })
         .toList(growable: false);
   }
@@ -3236,6 +3885,7 @@ class PersonalAssistantAgentLoop {
       'skillPersona': skillPersona,
       'skillCatalog': skillCatalog,
       'skillExecutionShell': skillExecutionShell.toJson(),
+      'problemClass': skillExecutionShell.problemClass,
       'traceId': '',
     };
   }
@@ -3244,6 +3894,7 @@ class PersonalAssistantAgentLoop {
     required String domainId,
     required String userQuery,
     DialogueRoundScript? dialogueRoundScript,
+    bool preferExplicitDomain = false,
   }) async {
     try {
       final skills = await _skillLoader.loadBundledSkills();
@@ -3254,6 +3905,7 @@ class PersonalAssistantAgentLoop {
           skillName: 'Global Policy',
           instructionMarkdown: globalPolicy,
           executionShell: const SkillExecutionShell(),
+          allowedTools: const <String>[],
         );
       }
       final matched = _skillRouter.resolveSkillForDomain(
@@ -3262,7 +3914,9 @@ class PersonalAssistantAgentLoop {
         skills: skills,
       );
       final effectiveMatch = domainId == _domainRouter.fallbackDomainId
-          ? (_skillRouter.resolveSkill(userQuery, skills) ?? matched)
+          ? (preferExplicitDomain
+                ? matched
+                : (_skillRouter.resolveSkill(userQuery, skills) ?? matched))
           : matched;
       if (effectiveMatch == null) {
         if (globalPolicy.isEmpty) return const _ResolvedSkillContext.empty();
@@ -3270,6 +3924,7 @@ class PersonalAssistantAgentLoop {
           skillName: 'Global Policy',
           instructionMarkdown: globalPolicy,
           executionShell: const SkillExecutionShell(),
+          allowedTools: const <String>[],
         );
       }
       final skillPolicy = await _loadSkillPolicyMarkdown(domainId);
@@ -3287,10 +3942,169 @@ class PersonalAssistantAgentLoop {
         skillName: effectiveMatch.name,
         instructionMarkdown: mergedInstruction,
         executionShell: effectiveMatch.executionShell,
+        allowedTools: effectiveMatch.allowedTools,
       );
     } catch (_) {
       return const _ResolvedSkillContext.empty();
     }
+  }
+
+  SkillExecutionShell _resolveExecutionShellForRun({
+    required String domainId,
+    required SkillExecutionShell baseShell,
+    required IntentGraph intentGraph,
+    required AssistantRunRequest request,
+  }) {
+    final rawProblemClass =
+        intentGraph.isMultiSkill &&
+            baseShell.problemClass.trim().isNotEmpty &&
+            baseShell.problemClass.trim().toLowerCase() != 'general'
+        ? baseShell.problemClass
+        : intentGraph.problemClass;
+    return _resolveExecutionShellForProblemClass(
+      domainId: domainId,
+      baseShell: baseShell,
+      rawProblemClass: rawProblemClass,
+      mode: (intentGraph.globalConstraints['mode'] as String?)?.trim() ?? '',
+      secondarySkills: intentGraph.secondarySkills,
+      queryText: request.messages.isNotEmpty
+          ? request.messages.last.content
+          : '',
+    );
+  }
+
+  SkillExecutionShell _resolveExecutionShellForProblemClass({
+    required String domainId,
+    required SkillExecutionShell baseShell,
+    required String rawProblemClass,
+    required String mode,
+    required List<String> secondarySkills,
+    required String queryText,
+  }) {
+    final adaptiveProblemClass = _normalizeProblemClassForQuery(
+      raw: rawProblemClass,
+      primarySkill: domainId,
+      mode: mode,
+      secondarySkills: secondarySkills,
+      queryText: queryText,
+    );
+    final isAdaptiveDomain =
+        domainId.trim() == _domainRouter.fallbackDomainId ||
+        baseShell.problemClass.trim().toLowerCase() == 'general';
+    if (!isAdaptiveDomain) {
+      return adaptiveProblemClass == 'general'
+          ? baseShell
+          : baseShell.copyWith(problemClass: adaptiveProblemClass);
+    }
+    switch (adaptiveProblemClass) {
+      case 'realtime_info':
+        return baseShell.copyWith(
+          problemClass: adaptiveProblemClass,
+          maxIterations: math.min(baseShell.maxIterations, 2),
+          toolBudget: math.min(baseShell.toolBudget, 1),
+          variantBudget: 0,
+          reflectionBudget: 0,
+          freshnessHoursMax: math.min(baseShell.freshnessHoursMax, 6),
+        );
+      case 'task_execution':
+        return baseShell.copyWith(
+          problemClass: adaptiveProblemClass,
+          maxIterations: math.min(baseShell.maxIterations, 3),
+          toolBudget: math.min(baseShell.toolBudget, 1),
+          variantBudget: 0,
+          reflectionBudget: 0,
+        );
+      case 'complex_reasoning':
+        return baseShell.copyWith(
+          problemClass: adaptiveProblemClass,
+          maxIterations: math.max(3, baseShell.maxIterations),
+          toolBudget: math.max(2, baseShell.toolBudget),
+          variantBudget: math.max(1, baseShell.variantBudget),
+          reflectionBudget: math.max(1, baseShell.reflectionBudget),
+        );
+      case 'simple_qa':
+        return baseShell.copyWith(
+          problemClass: adaptiveProblemClass,
+          maxIterations: math.min(baseShell.maxIterations, 2),
+          toolBudget: math.min(baseShell.toolBudget, 1),
+          variantBudget: 0,
+          reflectionBudget: 0,
+        );
+      default:
+        return baseShell.copyWith(problemClass: adaptiveProblemClass);
+    }
+  }
+
+  String _normalizeProblemClass({
+    required String raw,
+    required String primarySkill,
+    required String mode,
+    required List<String> secondarySkills,
+    required AssistantRunRequest request,
+  }) {
+    return _normalizeProblemClassForQuery(
+      raw: raw,
+      primarySkill: primarySkill,
+      mode: mode,
+      secondarySkills: secondarySkills,
+      queryText: request.messages.isNotEmpty
+          ? request.messages.last.content
+          : '',
+    );
+  }
+
+  String _normalizeProblemClassForQuery({
+    required String raw,
+    required String primarySkill,
+    required String mode,
+    required List<String> secondarySkills,
+    required String queryText,
+  }) {
+    final normalized = raw.trim().toLowerCase();
+    switch (normalized) {
+      case 'simple_qa':
+      case 'realtime_info':
+      case 'task_execution':
+      case 'complex_reasoning':
+        return normalized;
+      default:
+        return _deriveFallbackProblemClass(
+          primarySkill: primarySkill,
+          mode: mode,
+          secondarySkills: secondarySkills,
+          queryText: queryText,
+        );
+    }
+  }
+
+  String _deriveFallbackProblemClass({
+    required String primarySkill,
+    required String mode,
+    required List<String> secondarySkills,
+    required String queryText,
+  }) {
+    final query = queryText.trim().toLowerCase();
+    if (primarySkill.trim() == 'weather') return 'realtime_info';
+    if (secondarySkills.isNotEmpty) return 'complex_reasoning';
+    final normalizedMode = mode.trim().toLowerCase();
+    if (normalizedMode == 'task') return 'task_execution';
+    if (normalizedMode == 'hybrid') return 'complex_reasoning';
+    final taskLike = RegExp(
+      r'(帮我|替我|安排|设置|提醒|预订|订|预约|发送|创建|打开|导航|帮忙)',
+      caseSensitive: false,
+    ).hasMatch(query);
+    if (taskLike) return 'task_execution';
+    final realtimeLike = RegExp(
+      r'(现在|实时|今天|今日|最新|刚刚|当前|now|today|latest|current)',
+      caseSensitive: false,
+    ).hasMatch(query);
+    if (realtimeLike) return 'realtime_info';
+    final reasoningLike = RegExp(
+      r'(分析|对比|比较|区别|优缺点|方案|总结|梳理|推荐|为什么|怎么选|利弊|trade-off|compare|analysis|summar)',
+      caseSensitive: false,
+    ).hasMatch(query);
+    if (reasoningLike) return 'complex_reasoning';
+    return 'simple_qa';
   }
 
   /// 根据当前对话状态决定加载哪些 references/ 参考文件（phase-aware）。
@@ -3497,12 +4311,22 @@ class PersonalAssistantAgentLoop {
   List<String> _resolveAvailableTools({
     required String domainId,
     required List<String> runtimeToolNames,
+    List<String> skillAllowedTools = const <String>[],
   }) {
     final resolved = _toolMetadataRegistry?.availableToolsForDomain(
       domainId: domainId,
       fallbackNames: runtimeToolNames,
     );
-    return resolved ?? runtimeToolNames;
+    final domainTools = resolved ?? runtimeToolNames;
+    if (skillAllowedTools.isEmpty) return domainTools;
+    final allowSet = skillAllowedTools.map((item) => item.trim()).toSet();
+    final restricted = domainTools
+        .where((item) => allowSet.contains(item.trim()))
+        .toList(growable: false);
+    if (restricted.isNotEmpty) return restricted;
+    return runtimeToolNames
+        .where((item) => allowSet.contains(item.trim()))
+        .toList(growable: false);
   }
 
   Map<String, dynamic> _redactSensitiveProfile({
@@ -3593,6 +4417,14 @@ class PersonalAssistantAgentLoop {
       'messages': messages,
       'summary': _sessionManager.summarizeRecent(sessionId),
       'topicTitle': _sessionManager.topicTitleOf(sessionId),
+      'sessionPreferenceFacts': _sessionManager
+          .sessionPreferenceFactsOf(sessionId)
+          .map((item) => item.toJson())
+          .toList(growable: false),
+      'longTermPreferenceFacts': _sessionManager
+          .longTermPreferenceFactsOf(sessionId)
+          .map((item) => item.toJson())
+          .toList(growable: false),
     };
   }
 
@@ -3608,14 +4440,17 @@ class _ResolvedSkillContext {
     required this.skillName,
     required this.instructionMarkdown,
     required this.executionShell,
+    required this.allowedTools,
   });
 
   const _ResolvedSkillContext.empty()
     : skillName = '',
       instructionMarkdown = '',
-      executionShell = const SkillExecutionShell();
+      executionShell = const SkillExecutionShell(),
+      allowedTools = const <String>[];
 
   final String skillName;
   final String instructionMarkdown;
   final SkillExecutionShell executionShell;
+  final List<String> allowedTools;
 }

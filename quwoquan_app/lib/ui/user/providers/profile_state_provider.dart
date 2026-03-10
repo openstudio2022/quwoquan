@@ -1,9 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
-import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/user/mock/user_profile_mock_data.dart';
+import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 
 class ProfileState {
@@ -21,6 +23,7 @@ class ProfileState {
     this.isLoading = false,
     this.isFollowing = false,
     this.stats = const {},
+    this.capability,
   });
 
   final String userId;
@@ -37,6 +40,9 @@ class ProfileState {
   final bool isFollowing;
   final Map<String, dynamic> stats;
 
+  /// 关系能力位投影（null = 未载入）
+  final RelationshipCapabilityDto? capability;
+
   ProfileState copyWith({
     CreationSubTab? activeSubTab,
     CreationVisibility? activeVisibility,
@@ -50,6 +56,8 @@ class ProfileState {
     bool? isLoading,
     bool? isFollowing,
     Map<String, dynamic>? stats,
+    RelationshipCapabilityDto? capability,
+    bool clearCapability = false,
   }) {
     return ProfileState(
       userId: userId,
@@ -65,13 +73,15 @@ class ProfileState {
       isLoading: isLoading ?? this.isLoading,
       isFollowing: isFollowing ?? this.isFollowing,
       stats: stats ?? this.stats,
+      capability: clearCapability ? null : (capability ?? this.capability),
     );
   }
 }
 
 class ProfileNotifier extends ChangeNotifier {
   ProfileNotifier(this._ref, this._userId) {
-    loadProfile();
+    // Avoid notifying listeners during provider creation/build.
+    Future<void>(loadProfile);
   }
 
   final Ref _ref;
@@ -102,6 +112,24 @@ class ProfileNotifier extends ChangeNotifier {
       _state = _state.copyWith(isLoading: false);
     }
     notifyListeners();
+    // 异步加载关系能力位（不阻塞主内容展示）
+    _loadRelationshipCapability();
+  }
+
+  Future<void> _loadRelationshipCapability() async {
+    try {
+      final capRepo = _ref.read(relationshipCapabilityRepositoryProvider);
+      final cap = await capRepo.getCapability(_userId);
+      _state = _state.copyWith(
+        capability: cap,
+        isFollowing: cap.isFollowingOnly ||
+            cap.isSameInterest ||
+            cap.isCloseFriend,
+      );
+      notifyListeners();
+    } catch (_) {
+      // 加载失败时回退到旧版 isFollowing 显示
+    }
   }
 
   void setSubTab(CreationSubTab tab) {

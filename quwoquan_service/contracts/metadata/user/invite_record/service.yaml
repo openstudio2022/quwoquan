@@ -1,0 +1,70 @@
+version: 1
+entity: InviteRecord
+
+service:
+  name: user-service
+  domain: user
+  owner: backend-team
+  description: 邀请归因——SubAccount 发起邀请，追踪从生成到激活的全链路状态
+
+api_routes:
+  - method: POST
+    path: /v1/me/invites
+    operation: GenerateInvite
+    description: 生成邀请（幂等，同 subAccountId+channel+inviteePhone 复用已有记录）
+    auth_required: true
+    request_fields: [channel, inviteePhone]
+    response_fields: [id, linkCode, expireAt, status]
+    rate_limit: 1000次/24h/subAccountId
+
+  - method: GET
+    path: /v1/me/invites
+    operation: ListMyInvites
+    description: 查看我发出的邀请列表（按状态筛选）
+    auth_required: true
+    query_params: [status, cursor, limit]
+    response_entity: InviteRecord
+    response_fields: [id, channel, status, generatedAt, acceptedAt, convertedAt]
+
+  - method: GET
+    path: /v1/invites/{linkCode}
+    operation: GetInviteByCode
+    description: 根据邀请码获取邀请信息（注册页使用，无需登录）
+    auth_required: false
+    response_fields: [inviterDisplayName, inviterAvatarUrl, channel, expireAt, status]
+    security_note: 不暴露 inviterSubAccountId / inviterOwnerAccountId
+
+  - method: POST
+    path: /v1/invites/{linkCode}/accept
+    operation: AcceptInvite
+    description: 接受邀请（注册成功后调用，幂等）
+    auth_required: true
+    response_fields: [id, status, acceptedAt]
+
+consumers:
+  - name: app
+    capabilities: [generate_invite, list_my_invites, view_invite, accept_invite]
+
+contract_test:
+  scenarios:
+    - name: generate_invite_idempotent
+      description: 同参数重复调用返回相同记录
+      assertions:
+        - "两次 POST /v1/me/invites 同参数 → 相同 id"
+
+    - name: invite_attribution
+      description: 被邀请人注册后归因到正确 subAccountId
+      assertions:
+        - "AcceptInvite → status=accepted"
+        - "InviteAccepted 事件 payload.inviterSubAccountId 正确"
+
+    - name: invite_expired
+      description: 过期邀请不可接受
+      assertions:
+        - "expire_at 已过期 → USER.INVITE.expired"
+
+    - name: owner_id_not_exposed
+      description: API 不暴露 inviterOwnerAccountId
+      assertions:
+        - "GET /v1/invites/{code} response 不含 inviterOwnerAccountId"
+        - "GET /v1/me/invites response 不含 inviterOwnerAccountId"

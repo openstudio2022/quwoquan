@@ -1,54 +1,53 @@
 version: 1
-feature: "runtime-skill"
+feature: runtime-skill
 level: "L2_feature"
-template: "A1-A8"
+template: A1-A8
 tree_context:
-  feature_level: "L2_feature"
-  feature_path: "capability.runtime.feature.runtime-skill"
-  parent_path: "capability.runtime"
-  acceptance_inherits_from: "capability.runtime"
+  feature_path: capability.runtime.feature.runtime-skill
+  parent_path: capability.runtime
+  acceptance_inherits_from: capability.runtime
 level_acceptance:
   focus_groups:
-    - A1_functional
-    - A3_service_governance
-    - A6_security_privacy
-    - A7_contract_metadata_consistency
-    - A8_test_automation
-  notes: "Skill 框架支撑小趣能力可扩展，未来开放生态。"
+  - A1_functional
+  - A3_service_governance
+  - A6_security_privacy
+  - A7_contract_metadata_consistency
+  - A8_test_automation
+  notes: Skill 框架支撑小趣能力可扩展，未来开放生态。
 global_acceptance:
   A1_functional:
     scenarios:
-      - given: "用户在内容详情页查看一篇游记（tag=travel）"
-        when: "SkillRouter 匹配"
-        then: "路由到 travel_planner Skill"
-      - given: "travel_planner Skill 执行"
-        when: "获取 PageContext + 调用 content.search Tool"
-        then: "返回出行规划建议"
+    - given: 用户在内容详情页查看一篇游记（tag=travel）
+      when: SkillRouter 匹配
+      then: 路由到 travel_planner Skill
+    - given: travel_planner Skill 执行
+      when: 获取 PageContext + 调用 content.search Tool
+      then: 返回出行规划建议
   A2_experience:
-    - "Skill 执行延迟 < 2s（不含 LLM 推理）"
+  - Skill 执行延迟 < 2s（不含 LLM 推理）
   A3_service_governance:
-    - "Skill 执行有超时控制和资源限制"
-    - "Skill 异常不影响主路径"
+  - Skill 执行有超时控制和资源限制
+  - Skill 异常不影响主路径
   A4_observability:
-    - "Skill 执行延迟、成功率、调用链可监控"
+  - Skill 执行延迟、成功率、调用链可监控
   A5_product_ops:
-    - "运营可管理 Skill 上架/下架/灰度"
+  - 运营可管理 Skill 上架/下架/灰度
   A6_security_privacy:
-    - "Skill 访问上下文需用户授权"
-    - "DataClassMax 控制 Skill 可访问的数据级别"
-    - "Skill(DataClassMax=PUBLIC) 调用 Tool(DataClassMax=SENSITIVE) → 拒绝"
+  - Skill 访问上下文需用户授权
+  - DataClassMax 控制 Skill 可访问的数据级别
+  - Skill(DataClassMax=PUBLIC) 调用 Tool(DataClassMax=SENSITIVE) → 拒绝
   A7_contract_metadata_consistency:
-    - "Skill 注册与 skill_catalog.yaml 一致"
-    - "Tool 注册与 tool_catalog.yaml 一致"
-    - "授权记录与 skill_consent/ 实体一致"
+  - Skill 注册与 skill_catalog.yaml 一致
+  - Tool 注册与 tool_catalog.yaml 一致
+  - 授权记录与 skill_consent/ 实体一致
   A8_test_automation:
-    - "SkillRouter + SkillExecutor + ToolProxy + ContextAuthorizer 均有测试"
+  - SkillRouter + SkillExecutor + ToolProxy + ContextAuthorizer 均有测试
 tests:
   unit:
-    - "quwoquan_service/runtime/skill/tests/router_test.go"
-    - "quwoquan_service/runtime/skill/tests/authorizer_test.go"
+  - quwoquan_service/runtime/skill/tests/router_test.go
+  - quwoquan_service/runtime/skill/tests/authorizer_test.go
   contract:
-    - "quwoquan_service/runtime/skill/tests/skill_execution_contract_test.go"
+  - quwoquan_service/runtime/skill/tests/skill_execution_contract_test.go
 execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
+  local_gate: make gate
+  full_gate: make gate-full

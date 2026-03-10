@@ -1,0 +1,18 @@
+version: 1
+feature: comment-reply-pagination-contract
+level: "L3_story"
+template: A1-A8
+focus_groups: []
+tests:
+  mock: []
+  unit: []
+  contract: []
+  integration: []
+  uat: []
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+legacy_merged_acceptance:
+- source_path: discovery-content/publish-comment-reaction/comment-thread/comment-reply-pagination-contract/moderation-delete-audit-guard
+  task_bucket: moderation-delete-audit-guard
+  migrated_as: L3_task

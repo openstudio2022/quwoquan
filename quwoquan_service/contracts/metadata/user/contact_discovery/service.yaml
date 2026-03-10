@@ -1,0 +1,54 @@
+version: 1
+entity: ContactDiscoveryRecord
+
+service:
+  name: user-service
+  domain: user
+  owner: backend-team
+  description: 通讯录发现——哈希匹配已注册用户，结果只暴露 subAccountId
+
+api_routes:
+  - method: POST
+    path: /v1/owner/contact-discovery
+    operation: InitiateContactDiscovery
+    description: 上传哈希手机号列表，触发异步匹配
+    auth_required: true
+    request_fields: [hashedPhones]
+    response_fields: [id, status, expireAt]
+    rate_limit: 5次/24h/ownerAccountId
+
+  - method: GET
+    path: /v1/owner/contact-discovery/latest
+    operation: GetLatestContactDiscovery
+    description: 获取最近一次发现结果（含匹配的 subAccountId 列表）
+    auth_required: true
+    response_entity: ContactDiscoveryRecord
+    response_fields: [id, status, matchedSubAccountIds, matchCount, expireAt, completedAt]
+
+  - method: DELETE
+    path: /v1/owner/contact-discovery/{id}
+    operation: DismissContactDiscovery
+    description: 主动删除/忽略发现记录
+
+consumers:
+  - name: app
+    capabilities: [initiate_discovery, read_discovery_result, dismiss_discovery]
+
+contract_test:
+  scenarios:
+    - name: discovery_result_isolation
+      description: 匹配结果不含 ownerAccountId
+      assertions:
+        - "response.matchedSubAccountIds 不为空"
+        - "response 不含 ownerAccountId 字段"
+        - "response 不含 hashedPhones 字段"
+
+    - name: discovery_rate_limit
+      description: 超过 5 次/24h 触发限流
+      assertions:
+        - "第 6 次请求 → USER.CONTACT.rate_limited"
+
+    - name: discovery_ttl_cleanup
+      description: 72h 后记录不可查询
+      assertions:
+        - "expire_at 过期后 GET latest → 404 或空结果"

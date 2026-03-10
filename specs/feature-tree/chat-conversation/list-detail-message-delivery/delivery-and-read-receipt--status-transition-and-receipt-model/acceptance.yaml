@@ -1,0 +1,18 @@
+version: 1
+feature: status-transition-and-receipt-model
+level: "L3_story"
+template: A1-A8
+focus_groups: []
+tests:
+  mock: []
+  unit: []
+  contract: []
+  integration: []
+  uat: []
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+legacy_merged_acceptance:
+- source_path: chat-conversation/list-detail-message-delivery/delivery-and-read-receipt/status-transition-and-receipt-model/receipt-consistency-repair
+  task_bucket: receipt-consistency-repair
+  migrated_as: L3_task

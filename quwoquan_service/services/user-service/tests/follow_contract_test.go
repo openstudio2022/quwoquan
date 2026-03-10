@@ -7,6 +7,9 @@ import (
 )
 
 func TestFollow_Success(t *testing.T) {
+	if mongoDB == nil {
+		t.Skip("MongoDB unavailable - skipping follow test")
+	}
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "follower_1", "follower1")
 	createTestProfile(t, "followee_1", "followee1")
@@ -28,6 +31,9 @@ func TestFollow_Success(t *testing.T) {
 }
 
 func TestFollow_Idempotent(t *testing.T) {
+	if mongoDB == nil {
+		t.Skip("MongoDB unavailable")
+	}
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "follower_2", "follower2")
 	createTestProfile(t, "followee_2", "followee2")
@@ -47,6 +53,9 @@ func TestFollow_Idempotent(t *testing.T) {
 }
 
 func TestUnfollow_Success(t *testing.T) {
+	if mongoDB == nil {
+		t.Skip("MongoDB unavailable")
+	}
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "follower_3", "follower3")
 	createTestProfile(t, "followee_3", "followee3")
@@ -66,6 +75,9 @@ func TestUnfollow_Success(t *testing.T) {
 }
 
 func TestGetRelationship_Mutual(t *testing.T) {
+	if mongoDB == nil {
+		t.Skip("MongoDB unavailable")
+	}
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "user_a", "user_a")
 	createTestProfile(t, "user_b", "user_b")
@@ -73,7 +85,7 @@ func TestGetRelationship_Mutual(t *testing.T) {
 	doRequest(t, http.MethodPost, "/v1/user/follow/user_b", "", authHeaders("user_a"))
 	doRequest(t, http.MethodPost, "/v1/user/follow/user_a", "", authHeaders("user_b"))
 
-	rec := doRequest(t, http.MethodGet, "/v1/user/user_b/relationship", "", authHeaders("user_a"))
+	rec := doRequest(t, http.MethodGet, "/v1/users/user_b/relationship", "", authHeaders("user_a"))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -84,6 +96,9 @@ func TestGetRelationship_Mutual(t *testing.T) {
 }
 
 func TestListFollowing_Pagination(t *testing.T) {
+	if mongoDB == nil {
+		t.Skip("MongoDB unavailable")
+	}
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "paginator", "paginator")
 	for i := 0; i < 5; i++ {
@@ -92,7 +107,7 @@ func TestListFollowing_Pagination(t *testing.T) {
 		doRequest(t, http.MethodPost, "/v1/user/follow/"+uid, "", authHeaders("paginator"))
 	}
 
-	rec := doRequest(t, http.MethodGet, "/v1/user/paginator/following?limit=3", "", nil)
+	rec := doRequest(t, http.MethodGet, "/v1/users/paginator/following?limit=3", "", nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}

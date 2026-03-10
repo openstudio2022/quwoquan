@@ -60,6 +60,49 @@
 - [ ] GF-4: make gate 全量通过（rtc-service 已纳入）
 - [ ] GF-5: flutter test 端侧全量通过
 
+## Gap-Closing Phase GG — 关系门禁与入口迁移
+
+- [ ] GG-1: metadata 对齐 — rtc/call_session errors 增加关系门禁错误码
+- [ ] GG-2: 前端移除 ChatDetailPage AppBar 的语音/视频通话按钮
+- [ ] GG-3: 1v1 输入区 `+` 面板承载 `语音通话 / 视频通话`
+- [ ] GG-4: 群聊输入区 `+` 面板承载 `发起语音通话 / 发起视频通话`
+- [ ] GG-5: 接入 `contact-and-session-governance` 能力位，只有同好显示 1v1 音视频入口（密友仅为同好子态语义）
+- [ ] GG-6: 正式会话但未互关时，展示 `加同好` 关系条，不展示音视频入口
+
+## Gap-Closing Phase GH — 多人选择与通话中加人
+
+- [ ] GH-1: 群聊发起多人通话选人规则接入 `<=8 默认全选，>8 默认不选`
+- [ ] GH-2: 选人页补齐来源切换（当前会话 / 同好 / 其他群）、搜索、全不选、恢复默认
+- [ ] GH-3: 通话中邀请成员链路接入当前会话成员 / 同好 / 其他群成员三类来源
+- [ ] GH-4: 新增呼叫链接入会 API 与端侧分享链路
+- [ ] GH-5: 跨群拉人加入当前通话时，不要求先加入当前群；补齐服务端权限校验与端侧提示
+- [ ] GH-6: 链接失效与会话结束回收规则验证
+
+## Gap-Closing Phase GI — 关系门禁验证
+
+- [ ] GI-1: T1 — RtcErrorCode 增加 `blocked/not_same_interest/...` round-trip 测试
+- [ ] GI-2: T2 — AppBar 简洁化与输入区面板入口回归
+- [ ] GI-3: T2 — 同好/密友主页三按钮矩阵回归
+- [ ] GI-4: T3 — 打招呼未回复前无会话入口、回复后未同好无 RTC、加同好后解锁 RTC
+- [ ] GI-5: T4 — 通话中邀请与链接入会旅程
+
+## Gap-Closing Phase GJ — 来电唤醒与铃声策略
+
+- [ ] GJ-1: metadata 对齐 — user 域新增呼叫铃声与来电偏好（官方铃声库、是否启用发起方铃声）
+- [ ] GJ-2: codegen — 生成端侧铃声偏好 DTO / Repository 与错误码
+- [ ] GJ-3: CallKit / FullScreen Intent 接入发起方铃声解析，优先使用发起方专属呼叫铃声，失败回退默认铃声
+- [ ] GJ-4: 群邀请模式收敛为“仅响铃邀请”，移除静默邀请分支与占位文案
+- [ ] GJ-5: 群通话铃声固定归属 initiator，不随后续邀请链变化
+- [ ] GJ-6: 官方铃声库资产清单、试听与设置页接入（发起方设置自己的呼叫铃声，被叫设置默认铃声）
+
+## Gap-Closing Phase GK — 本地调试剧本与蓝色视觉统一
+
+- [ ] GK-1: 开发态新增“模拟来电”入口，支持语音 / 视频、前台 / 后台 / 锁屏调试
+- [ ] GK-2: OutgoingCallPage 开发态新增“5 秒自动接通”开关与“手动接通 / 拒接 / 超时”调试按钮
+- [ ] GK-3: VoiceCallPage / VideoCallPage 补齐固定的“加人”和“成员列表”入口，避免当前仅媒体布局
+- [ ] GK-4: active_call_bar、IncomingCallPage、OutgoingCallPage 与群邀请页统一切换到趣聊品牌蓝
+- [ ] GK-5: T2 / T4 回归 —— 蓝色通话条、响铃邀请、发起方铃声、本地调试剧本
+
 ## 搁置任务（带规划）
 
 | 任务 | 搁置原因 | 重启条件 | 承接节点 |

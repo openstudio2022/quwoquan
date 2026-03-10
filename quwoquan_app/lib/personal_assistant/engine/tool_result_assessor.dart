@@ -27,6 +27,12 @@ class ToolAssessmentResult {
 
 /// Evaluates tool results post-execution to determine next action.
 /// Tracks consecutive failures to break out of futile retry loops.
+///
+/// When [problemClass] is set, the assessor adapts its convergence
+/// strategy:
+///   - `realtime_info` / `simple_qa`: prefer fast convergence, skip
+///     low-quality retry loops.
+///   - `complex_reasoning` / `task_execution`: allow deeper search.
 class ToolResultAssessor {
   ToolResultAssessor();
 
@@ -34,6 +40,12 @@ class ToolResultAssessor {
   int _consecutiveLowQuality = 0;
   static const int _maxConsecutiveFailures = 2;
   static const int _maxConsecutiveLowQuality = 2;
+
+  /// Set before each run to influence convergence behavior.
+  String problemClass = '';
+
+  bool get _isFastConvergence =>
+      problemClass == 'realtime_info' || problemClass == 'simple_qa';
 
   void reset() {
     _consecutiveFailures = 0;
@@ -90,10 +102,15 @@ class ToolResultAssessor {
         (lastObservation['data'] as Map?)?['qualityScore'] as num? ?? 0.0;
     if (qualityScore < policy.reflectionQualityScoreMin) {
       _consecutiveLowQuality++;
-      if (_consecutiveLowQuality >= _maxConsecutiveLowQuality) {
-        return const ToolAssessmentResult(
+      // Fast-convergence problem types accept whatever results are available
+      // rather than entering additional search rounds.
+      if (_isFastConvergence ||
+          _consecutiveLowQuality >= _maxConsecutiveLowQuality) {
+        return ToolAssessmentResult(
           type: ToolAssessmentType.sufficient,
-          userMessage: '已尽力搜索，基于已有信息回答',
+          userMessage: _isFastConvergence
+              ? '信息获取完成，开始整理回答'
+              : '已尽力搜索，基于已有信息回答',
           shouldContinueLoop: false,
         );
       }
@@ -107,6 +124,13 @@ class ToolResultAssessor {
     _consecutiveLowQuality = 0;
 
     if (shouldReplan) {
+      if (_isFastConvergence) {
+        return const ToolAssessmentResult(
+          type: ToolAssessmentType.sufficient,
+          userMessage: '信息获取完成',
+          shouldContinueLoop: false,
+        );
+      }
       return const ToolAssessmentResult(
         type: ToolAssessmentType.needMoreSearch,
         userMessage: '还需要更多信息来回答您的问题',

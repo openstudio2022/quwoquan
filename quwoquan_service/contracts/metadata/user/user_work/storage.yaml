@@ -1,0 +1,22 @@
+version: 1
+entity: UserWork
+backend: postgres
+
+tables:
+  user_works:
+    entity: UserWork
+    pk: id
+    fk: { column: user_id, references: user_profiles.user_id, on_delete: CASCADE }
+    columns:
+      - { name: id,         type: VARCHAR(36),  constraints: [PK] }
+      - { name: user_id,    type: VARCHAR(36),  constraints: [NOT_NULL] }
+      - { name: title,      type: VARCHAR(128), constraints: [NOT_NULL] }
+      - { name: cover_url,  type: TEXT }
+      - { name: work_type,  type: VARCHAR(32),  constraints: [NOT_NULL] }
+      - { name: ref_id,     type: VARCHAR(64),  constraints: [NOT_NULL] }
+      - { name: sort_order, type: INTEGER,      constraints: [NOT_NULL], default: 0 }
+      - { name: created_at, type: TIMESTAMPTZ,  constraints: [NOT_NULL], default: NOW() }
+      - { name: updated_at, type: TIMESTAMPTZ,  constraints: [NOT_NULL], default: NOW() }
+    indexes:
+      - { name: idx_user_works_user_id,   columns: [user_id] }
+      - { name: idx_user_works_user_sort, columns: [user_id, sort_order] }

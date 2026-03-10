@@ -75,6 +75,17 @@ errors:
       zh: "操作太频繁，请稍后重试"
       en: "Too many requests, please retry later"
 
+  - code: USER.SETTING.invalid_call_ringtone
+    kind: SETTING
+    reason: invalid_argument
+    http_status: 400
+    retryable: false
+    dart_const: invalidCallRingtone
+    go_const: ErrInvalidCallRingtone
+    user_message:
+      zh: "所选铃声不可用，请从官方铃声库中重新选择"
+      en: "Selected ringtone is unavailable, please choose from the official library"
+
   - code: USER.SYSTEM.internal_error
     kind: SYSTEM
     reason: internal_error
@@ -85,3 +96,129 @@ errors:
     user_message:
       zh: "服务异常，请稍后重试"
       en: "Service error, please try again later"
+
+  # ── 认证与凭证错误 ─────────────────────────────────────────────────────────
+
+  - code: USER.AUTH.otp_expired
+    kind: AUTH
+    reason: otp_expired
+    http_status: 400
+    retryable: true
+    dart_const: otpExpired
+    go_const: ErrOtpExpired
+    user_message:
+      zh: "验证码已过期，请重新获取"
+      en: "Verification code expired, please request a new one"
+
+  - code: USER.AUTH.otp_mismatch
+    kind: AUTH
+    reason: otp_mismatch
+    http_status: 400
+    retryable: true
+    dart_const: otpMismatch
+    go_const: ErrOtpMismatch
+    user_message:
+      zh: "验证码错误，请重新输入"
+      en: "Incorrect verification code, please try again"
+
+  - code: USER.AUTH.credential_conflict
+    kind: AUTH
+    reason: conflict
+    http_status: 409
+    retryable: false
+    dart_const: credentialConflict
+    go_const: ErrCredentialConflict
+    user_message:
+      zh: "该账号已被其他用户绑定"
+      en: "This account is already linked to another user"
+
+  - code: USER.AUTH.last_credential
+    kind: AUTH
+    reason: constraint_violation
+    http_status: 400
+    retryable: false
+    dart_const: lastCredential
+    go_const: ErrLastCredential
+    user_message:
+      zh: "无法解绑，这是您唯一的登录方式"
+      en: "Cannot unlink the only login method"
+
+  - code: USER.AUTH.login_locked
+    kind: AUTH
+    reason: locked
+    http_status: 423
+    retryable: true
+    retry_after_seconds: 1800
+    dart_const: loginLocked
+    go_const: ErrLoginLocked
+    user_message:
+      zh: "账号因多次失败已暂时锁定，请30分钟后重试"
+      en: "Account temporarily locked due to multiple failed attempts, please retry in 30 minutes"
+
+  - code: USER.AUTH.wechat_auth_failed
+    kind: AUTH
+    reason: third_party_failure
+    http_status: 502
+    retryable: true
+    dart_const: wechatAuthFailed
+    go_const: ErrWechatAuthFailed
+    user_message:
+      zh: "微信授权失败，请重试"
+      en: "WeChat authorization failed, please try again"
+
+  - code: USER.AUTH.apple_auth_failed
+    kind: AUTH
+    reason: third_party_failure
+    http_status: 502
+    retryable: true
+    dart_const: appleAuthFailed
+    go_const: ErrAppleAuthFailed
+    user_message:
+      zh: "Apple 登录失败，请重试"
+      en: "Apple sign-in failed, please try again"
+
+  - code: USER.AUTH.token_expired
+    kind: AUTH
+    reason: token_expired
+    http_status: 401
+    retryable: true
+    dart_const: tokenExpired
+    go_const: ErrTokenExpired
+    user_message:
+      zh: "登录已过期，请重新登录"
+      en: "Session expired, please sign in again"
+
+  # ── 子账号错误 ─────────────────────────────────────────────────────────────
+
+  - code: USER.SUB_ACCOUNT.not_found
+    kind: SUB_ACCOUNT
+    reason: not_found
+    http_status: 404
+    retryable: false
+    dart_const: subAccountNotFound
+    go_const: ErrSubAccountNotFound
+    user_message:
+      zh: "子账号不存在"
+      en: "Sub-account not found"
+
+  - code: USER.SUB_ACCOUNT.last_sub_account
+    kind: SUB_ACCOUNT
+    reason: constraint_violation
+    http_status: 400
+    retryable: false
+    dart_const: lastSubAccount
+    go_const: ErrLastSubAccount
+    user_message:
+      zh: "无法删除，这是您的最后一个账号"
+      en: "Cannot delete the last sub-account"
+
+  - code: USER.SUB_ACCOUNT.strict_isolation
+    kind: SUB_ACCOUNT
+    reason: not_found
+    http_status: 404
+    retryable: false
+    dart_const: subAccountStrictIsolation
+    go_const: ErrSubAccountStrictIsolation
+    user_message:
+      zh: "该用户不存在"
+      en: "User not found"

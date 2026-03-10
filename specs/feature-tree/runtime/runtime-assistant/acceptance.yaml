@@ -1,44 +1,43 @@
 version: 1
-feature: "runtime-assistant"
+feature: runtime-assistant
 level: "L2_feature"
 archived: true
-archived_at: "2026-03-01T00:00:00Z"
-template: "A1-A8"
+archived_at: '2026-03-01T00:00:00Z'
+template: A1-A8
 tree_context:
-  feature_level: "L2_feature"
-  feature_path: "capability.runtime.feature.runtime-assistant"
-  parent_path: "capability.runtime"
-  acceptance_inherits_from: "capability.runtime"
+  feature_path: capability.runtime.feature.runtime-assistant
+  parent_path: capability.runtime
+  acceptance_inherits_from: capability.runtime
 level_acceptance:
   focus_groups:
-    - A1_functional
-    - A3_service_governance
-    - A8_test_automation
-  notes: "小趣主动建议 + 问答能力的运行时框架。"
+  - A1_functional
+  - A3_service_governance
+  - A8_test_automation
+  notes: 小趣主动建议 + 问答能力的运行时框架。
 global_acceptance:
   A1_functional:
     scenarios:
-      - given: "用户在内容详情页查看一张旅行图片"
-        when: "请求 SuggestedActions"
-        then: "返回包含地点识别、类似搜索等建议"
-      - given: "用户在聊天页"
-        when: "请求 SuggestedActions"
-        then: "返回对话总结和回复建议"
-      - given: "用户在圈子页"
-        when: "请求 SuggestedActions"
-        then: "返回圈子动态总结和关联圈子推荐"
-      - given: "用户提问「这张图是在哪拍的」"
-        when: "QA Runner 执行"
-        then: "结合 PageContext 中的图片信息返回位置"
+    - given: 用户在内容详情页查看一张旅行图片
+      when: 请求 SuggestedActions
+      then: 返回包含地点识别、类似搜索等建议
+    - given: 用户在聊天页
+      when: 请求 SuggestedActions
+      then: 返回对话总结和回复建议
+    - given: 用户在圈子页
+      when: 请求 SuggestedActions
+      then: 返回圈子动态总结和关联圈子推荐
+    - given: 用户提问「这张图是在哪拍的」
+      when: QA Runner 执行
+      then: 结合 PageContext 中的图片信息返回位置
   A3_service_governance:
-    - "Content Analyzer 缓存 24h（评论 1h），避免重复 LLM 调用"
-    - "QA Runner SSE 流式输出，不阻塞"
+  - Content Analyzer 缓存 24h（评论 1h），避免重复 LLM 调用
+  - QA Runner SSE 流式输出，不阻塞
   A8_test_automation:
-    - "SuggestedActions 场景覆盖测试"
-    - "QA Runner Prompt 构建测试"
-    - "Stream 输出格式测试"
+  - SuggestedActions 场景覆盖测试
+  - QA Runner Prompt 构建测试
+  - Stream 输出格式测试
 tests:
   unit:
-    - "quwoquan_service/runtime/assistant/assistant_test.go"
+  - quwoquan_service/runtime/assistant/assistant_test.go
 execution:
-  local_gate: "make gate"
+  local_gate: make gate

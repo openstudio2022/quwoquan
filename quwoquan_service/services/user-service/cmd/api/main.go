@@ -126,6 +126,9 @@ func main() {
 	blockStore := persistence.NewPgBlockStore(pgPool)
 	workStore := persistence.NewPgWorkStore(pgPool)
 	lifeItemStore := persistence.NewPgLifeItemStore(pgPool)
+	credentialStore := persistence.NewPgCredentialBindingStore(pgPool)
+	contactDiscoveryStore := persistence.NewPgContactDiscoveryStore(pgPool)
+	inviteStore := persistence.NewPgInviteStore(pgPool)
 
 	var followStore *persistence.MongoFollowStore
 	if mongoDB != nil {
@@ -148,11 +151,16 @@ func main() {
 	workService := application.NewWorkService(workStore)
 	lifeItemService := application.NewLifeItemService(lifeItemStore)
 	settingService := application.NewSettingService(settingStore, settingCache)
+	authService := application.NewAuthService(profileStore, personaStore, credentialStore, profileCache)
+	subAccountService := application.NewSubAccountService(personaStore, profileStore, profileCache)
+	contactDiscoveryService := application.NewContactDiscoveryService(contactDiscoveryStore)
+	inviteService := application.NewInviteService(inviteStore, personaStore)
 
 	// 8. Handler
 	handler := httpadapter.NewUserHandler(
 		profileService, followService, blockService,
 		personaService, workService, lifeItemService, settingService,
+		authService, subAccountService, contactDiscoveryService, inviteService,
 	).Routes()
 
 	// 9. Start

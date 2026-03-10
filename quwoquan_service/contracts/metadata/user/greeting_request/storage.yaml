@@ -1,0 +1,34 @@
+version: 1
+entity: GreetingRequest
+backend: postgresql
+
+tables:
+  greeting_requests:
+    entity: GreetingRequest
+    columns:
+      - { name: id, type: UUID, constraints: [PK, NOT_NULL, DEFAULT_GEN_RANDOM_UUID] }
+      - { name: requester_sub_account_id, type: VARCHAR(64), constraints: [NOT_NULL] }
+      - { name: target_sub_account_id, type: VARCHAR(64), constraints: [NOT_NULL] }
+      - { name: request_message, type: TEXT, constraints: [NULLABLE] }
+      - { name: status, type: VARCHAR(20), constraints: [NOT_NULL, DEFAULT_'pending'] }
+      - { name: source, type: VARCHAR(30), constraints: [NOT_NULL] }
+      - { name: promoted_conversation_id, type: VARCHAR(64), constraints: [NULLABLE] }
+      - { name: expire_at, type: TIMESTAMPTZ, constraints: [NULLABLE] }
+      - { name: decision_at, type: TIMESTAMPTZ, constraints: [NULLABLE] }
+      - { name: created_at, type: TIMESTAMPTZ, constraints: [NOT_NULL, DEFAULT_NOW] }
+      - { name: updated_at, type: TIMESTAMPTZ, constraints: [NOT_NULL, DEFAULT_NOW] }
+    indexes:
+      - { name: idx_gr_inbox, columns: [target_sub_account_id, status, created_at DESC] }
+      - { name: idx_gr_outbox, columns: [requester_sub_account_id, status, created_at DESC] }
+      - { name: idx_gr_unique_pending, columns: [requester_sub_account_id, target_sub_account_id],
+          where: "status = 'pending'", unique: true }
+      - { name: idx_gr_expire, columns: [expire_at], where: "status = 'pending'",
+          description: 过期清理任务扫描索引 }
+
+cache:
+  backend: redis
+  patterns:
+    - key: "greeting:inbox:{targetSubAccountId}:pending"
+      ttl: 60s
+      invalidate_on: [GreetingRequestSent, GreetingRequestReplied, GreetingRequestIgnored, GreetingRequestCancelled]
+      description: 收件箱 pending 数量缓存（红点角标）

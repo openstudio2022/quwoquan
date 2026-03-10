@@ -62,27 +62,32 @@ func TestMain(m *testing.M) {
 	// 3. MongoDB testcontainer
 	mongoURI := os.Getenv("TEST_MONGO_URI")
 	var mongoContainer *mongomod.MongoDBContainer
+	var mongoClient *mongo.Client
+	mongoSkipped := false
 	if mongoURI == "" {
 		container, runErr := tryRunMongoContainer(ctx)
 		if runErr != nil {
 			if os.Getenv("CI") == "true" || os.Getenv("GITHUB_ACTIONS") == "true" {
 				panic("CI: failed to start mongo testcontainer: " + runErr.Error())
 			}
-			fmt.Fprintf(os.Stderr, "\n[L2] WARN: Docker unavailable, skipping user-service L2 tests.\n")
-			os.Exit(0)
-		}
-		mongoContainer = container
-		mongoURI, err = container.ConnectionString(ctx)
-		if err != nil {
-			panic("mongo connection string: " + err.Error())
+			fmt.Fprintf(os.Stderr, "\n[L2] WARN: Docker unavailable, MongoDB-dependent tests will be skipped.\n")
+			mongoSkipped = true
+		} else {
+			mongoContainer = container
+			mongoURI, err = container.ConnectionString(ctx)
+			if err != nil {
+				panic("mongo connection string: " + err.Error())
+			}
 		}
 	}
 
-	mongoClient, err := mongo.Connect(mongoopts.Client().ApplyURI(mongoURI))
-	if err != nil {
-		panic("mongo connect: " + err.Error())
+	if !mongoSkipped {
+		mongoClient, err = mongo.Connect(mongoopts.Client().ApplyURI(mongoURI))
+		if err != nil {
+			panic("mongo connect: " + err.Error())
+		}
+		mongoDB = mongoClient.Database("user_test")
 	}
-	mongoDB = mongoClient.Database("user_test")
 
 	// 4. Stores
 	profileStore := persistence.NewPgProfileStore(pgPool)
@@ -91,8 +96,14 @@ func TestMain(m *testing.M) {
 	blockStore := persistence.NewPgBlockStore(pgPool)
 	workStore := persistence.NewPgWorkStore(pgPool)
 	lifeItemStore := persistence.NewPgLifeItemStore(pgPool)
-	followStore := persistence.NewMongoFollowStore(mongoDB)
-	_ = followStore.EnsureIndexes(ctx)
+	var followStore *persistence.MongoFollowStore
+	if mongoDB != nil {
+		followStore = persistence.NewMongoFollowStore(mongoDB)
+		_ = followStore.EnsureIndexes(ctx)
+	}
+	credentialStore := persistence.NewPgCredentialBindingStore(pgPool)
+	contactDiscoveryStore := persistence.NewPgContactDiscoveryStore(pgPool)
+	inviteStore := persistence.NewPgInviteStore(pgPool)
 
 	// 5. Caches
 	profileCache := cache.NewProfileCache(redisClient)
@@ -107,18 +118,25 @@ func TestMain(m *testing.M) {
 	workService := application.NewWorkService(workStore)
 	lifeItemService := application.NewLifeItemService(lifeItemStore)
 	settingService := application.NewSettingService(settingStore, settingCache)
+	authService := application.NewAuthService(profileStore, personaStore, credentialStore, profileCache)
+	subAccountService := application.NewSubAccountService(personaStore, profileStore, profileCache)
+	contactDiscoveryService := application.NewContactDiscoveryService(contactDiscoveryStore)
+	inviteService := application.NewInviteService(inviteStore, personaStore)
 
 	// 7. Handler
 	testHandler = httpadapter.NewUserHandler(
 		profileService, followService, blockService,
 		personaService, workService, lifeItemService, settingService,
+		authService, subAccountService, contactDiscoveryService, inviteService,
 	).Routes()
 
 	code := m.Run()
 
 	// Teardown
 	pgPool.Close()
-	_ = mongoClient.Disconnect(ctx)
+	if mongoClient != nil {
+		_ = mongoClient.Disconnect(ctx)
+	}
 	if mongoContainer != nil {
 		_ = mongoContainer.Terminate(ctx)
 	}

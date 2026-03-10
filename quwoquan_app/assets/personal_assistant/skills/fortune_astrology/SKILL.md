@@ -35,6 +35,19 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 - 默认以知识推理 + 已有上下文回答，不强制外部工具
 - 用户请求实时黄历/节气/天象时可调用 `web_search`
 - 工具失败可重试 1 次，仍失败需降级说明
+- 若调用 `local_context`，返回结构必须遵循 `local_context_v1`，并显式声明 `"media": {"included": false}`，不得携带相册内容
+
+## 触发与禁用条件
+- 触发信号：命中星座、塔罗、黄历、配对、运势、星盘等主题词
+- 禁用信号：用户明确在问实时天气、医疗诊断、投资决策等高确定性问题时不应强触发
+- 竞争冲突：当问题同时涉及多个垂类时，优先澄清主诉求，再决定是否进入本技能
+
+## 双轨输出契约
+若 nextAction 为 tool_call，必须同时返回：
+1. 机器轨 JSON：包含 `decision`、`toolPlan`、`slotState`
+2. 用户轨 Markdown：自然语言说明正在补充外部信息或上下文
+
+若 nextAction 为 answer，机器轨输出完整结构化字段，Markdown 侧保持有仪式感但不过度确定。
 
 ## Markdown 卡片结构
 
@@ -115,3 +128,15 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 - 不作确定性预言，用启发性语言
 - 强调用户主观能动性，不做宿命论表述
 - 若用户有明确关切，重点展开该维度
+
+## 参考资料
+- `references/domain-knowledge.md`: 领域边界、术语解释、风险措辞
+- `references/output-examples.md`: 标准答复与降级答复示例
+
+## 脚本指引
+- `references/tool-call-guidance.md`: 工具调用顺序、重试与降级说明
+
+## 轮次状态定义
+- `dialogue/state_machine.md`: 轮次状态与节点职责
+- `dialogue/state_transition_contract.json`: 状态迁移契约
+- `dialogue/state_prompts.md`: 每个状态的提示词摘要

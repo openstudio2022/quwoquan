@@ -1,14 +1,111 @@
 version: 1
-feature: "auth-profile-snapshot"
-level: "L2"
-template: "A1-A8"
-focus_groups: []
-tests:
-  mock: []
-  unit: []
-  contract: []
-  integration: []
-  uat: []
+feature: auth-profile-snapshot
+level: "L2_feature"
+template: A1-A8
+archived: false
+tree_context:
+  feature_path: capability.user-identity-profile-relationship.feature.auth-profile-snapshot
+  parent_path: capability.user-identity-profile-relationship
+non_functional_acceptance:
+  realtime:
+    enabled: true
+    slo:
+    - Refresh token 与当前子账号快照恢复 P95 < 500ms
+    - 资料更新后的快照缓存与主页数据 3 秒内刷新或失效
+  weak_network:
+    enabled: true
+    scenarios:
+    - 登录刷新失败后可重试，不丢失当前子账号选择
+    - 资料更新、设备注册、恢复发起失败后可恢复并保留上下文
+  gray_release:
+    enabled: true
+    steps:
+    - 5
+    - 25
+    - 50
+    - 100
+    rollback_on:
+    - 快照读取混入其他子账号数据
+    - 设备注册或刷新导致会话失效
+    - 恢复或风控锁定影响正常登录主路径
+level_acceptance:
+  A1:
+    criteria: 手机号、微信、Apple 三种登录方式可绑定到同一 OwnerAccount，并能恢复到正确会话。
+    status: pending
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: required
+    tests: []
+  A2:
+    criteria: 应用总能拿到当前目标 SubAccount 所需的最小身份快照，而不会泄露其他子账号的资料、关系或上下文。
+    status: pending
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests: []
+  A3:
+    criteria: token 刷新、设备注册、资料提案确认/应用/拒绝、恢复与风控锁定状态机具备幂等、版本控制和回滚语义。
+    status: pending
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests: []
+  A4:
+    criteria: OwnerAccount 与 SubAccount 的资料边界清晰：应用侧读取的是子账号视图而非主控全量视图。
+    status: pending
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: optional
+    tests: []
+  A5:
+    criteria: 高风险登录、登录失败、恢复申请、设备变更与锁定动作可被审计、追踪与回滚。
+    status: pending
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests: []
+  A6:
+    criteria: PII/SENSITIVE/SECRET 字段的分级、脱敏、缓存、日志与 API 暴露策略全部由 metadata 驱动并生效。
+    status: pending
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests: []
+  A7:
+    criteria: 登录、刷新、资料、设备、恢复相关 service/openapi/errors/fields 契约与 codegen 一致。
+    status: pending
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests: []
+  A8:
+    criteria: 自动化测试职责覆盖多方式登录、会话恢复、子账号快照读取、资料更新、设备注册与恢复入口，可进入 `/design` 细化 schema。
+    status: pending
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: required
+    tests: []
+notes:
+  benchmark_inputs:
+  - 微信：多设备安全、会话刷新、风险锁定与设备治理
+  - Apple/微信登录生态：第三方授权取消与重新绑定
+  - 微博/小红书：资料快照更新与主页刷新
 execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
+  local_gate: make gate
+  full_gate: make gate-full

@@ -1,0 +1,41 @@
+version: 1
+entity: InviteRecord
+
+events:
+  - name: InviteGenerated
+    description: 邀请已生成
+    producer: user-service
+    consumers: []
+    channel: event_store
+    payload_fields: [id, inviterSubAccountId, channel, linkCode, expireAt, generatedAt]
+    security_note: 不含 inviterOwnerAccountId
+
+  - name: InviteDelivered
+    description: 邀请链接被点击（已送达）
+    producer: user-service
+    consumers: [recommendation-engine]
+    channel: event_store
+    payload_fields: [id, inviterSubAccountId, channel, deliveredAt]
+
+  - name: InviteAccepted
+    description: 被邀请人注册成功
+    producer: user-service
+    consumers: [notification-service, recommendation-engine]
+    channel: event_store
+    payload_fields: [id, inviterSubAccountId, channel, acceptedAt]
+    recommend_impact: invite_attribution_signal
+
+  - name: InviteConverted
+    description: 被邀请人首次有效使用（激活完成）
+    producer: user-service
+    consumers: [notification-service, recommendation-engine]
+    channel: event_store
+    payload_fields: [id, inviterSubAccountId, channel, convertedAt]
+    recommend_impact: growth_conversion_signal
+
+  - name: InviteExpired
+    description: 邀请过期
+    producer: user-service
+    consumers: []
+    channel: event_store
+    payload_fields: [id, inviterSubAccountId, expireAt]

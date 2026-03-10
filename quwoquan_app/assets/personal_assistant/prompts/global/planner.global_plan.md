@@ -17,6 +17,7 @@
 - 跨域问题可额外选最多 2 个 `secondaryDomains`
 - 无明确匹配时使用 `fallback_general_search`
 - 判断 `mode`：用户在问问题(qa)、要你做事(task)、还是两者兼有(hybrid)
+- 必须额外判断 `problemClass`：`simple_qa | realtime_info | task_execution | complex_reasoning`
 
 ### 理解动机
 
@@ -70,6 +71,7 @@
 - `providerPolicy=authority_first` 时，优先围绕 `authorityDomains` 组织查询，不要随意指定非权威 provider
 - `freshnessHoursMax` 不得高于执行壳给出的上限
 - 简单实时问题优先快速收敛，不要为了“更懂用户动机”扩展成多主题检索
+- `problemClass` 必须反映本轮真实求解类型，不能因为落到 `fallback_general_search` 就一律写成简单问答
 
 #### 多技能融合（跨域时）
 
@@ -78,19 +80,41 @@
 {
   "subagentId": "weather_subagent_1",
   "domainId": "weather",
+  "problemClass": "realtime_info",
+  "stopPolicy": "strict",
+  "searchIntensity": "low",
+  "providerPolicy": "authority_first",
+  "freshnessHoursMax": 1,
+  "answerThreshold": 0.75,
   "mode": "qa",
   "goal": "查询目标日期天气"
 }
 ```
 
+要求：
+- 每个 `subagentPlan` 子任务都必须单独输出自己的 `problemClass`
+- 每个 `subagentPlan` 子任务都必须单独输出自己的 `stopPolicy`、`searchIntensity`、`providerPolicy`、`freshnessHoursMax`、`answerThreshold`
+- 子任务的 `problemClass` 要按该子任务自身目标判断，不能直接复制主问题类型
+- 例如“天气 + 旅游”中，天气子任务通常是 `realtime_info`，旅游建议子任务通常更接近 `complex_reasoning` 或 `task_execution`
+- `stopPolicy` 参考：`strict | balanced | explore`
+- `searchIntensity` 参考：`low | medium | high`
+- `answerThreshold` 为 0-1，表示子任务认为“证据达到可答标准”的最低阈值
+
 ## 约束
 
 - `primaryDomainId` 必须从 skill_catalog 中选择
 - `inferredMotive` 必须揭示用户深层需求，不能简单复述问题
+- `problemClass` 必须与用户真实诉求一致，且直接决定执行策略收敛速度：
+  - 简单事实问答 → `simple_qa`（1 轮即结束，无反思无扩搜）
+  - 强时效/当前状态/今天/最新 → `realtime_info`（最多 2 轮，无反思无扩搜无追问）
+  - 帮用户执行动作 → `task_execution`（按工具链步骤执行，每步验证）
+  - 对比/分析/总结/多维研究 → `complex_reasoning`（允许多轮反思、扩搜、追问）
 - 有 web_search 时 `queryNormalization` 必须输出
 - `queryVariants` 只有在 `variantBudget > 0` 时才允许输出，且必须覆盖表面需求和深层动机
 - `thinkingText` 必须为面向用户的自然中文，禁止出现 JSON 键名、字段路径、内部变量名
 - 跨域问题必须在 `subagentPlan` 中声明副技能
+- `subagentPlan` 中每个子任务都必须有 `problemClass`
+- `subagentPlan` 中每个子任务都必须有 `stopPolicy/searchIntensity/providerPolicy/freshnessHoursMax/answerThreshold`
 
 ## 执行要求
 
@@ -115,6 +139,7 @@
 ```json
 {
   "primaryDomainId": "finance_consumer",
+  "problemClass": "complex_reasoning",
   "mode": "qa",
   "inferredMotive": "在做投资研究，想找台积电供应链中的A股标的",
   "slotFillPlan": { ... },
@@ -146,11 +171,14 @@
 
 - [ ] primaryDomainId 是否从 skill_catalog 中选择？
 - [ ] inferredMotive 是否揭示了用户深层需求？
+- [ ] problemClass 是否正确反映本轮问题类型，而不是被 domain 名误导？
 - [ ] 有 web_search 时 queryNormalization 是否已输出？
 - [ ] 是否严格遵守了 `skillExecutionShell` 的预算、provider 和 freshness 限制？
 - [ ] 若 `variantBudget > 0`，queryVariants 是否覆盖了表面需求和深层动机？
 - [ ] thinkingText 是否为面向用户的自然语言？
 - [ ] 跨域问题是否在 subagentPlan 中声明了副技能？
+- [ ] 每个 subagentPlan 子任务是否都给出了自己的 problemClass，且与该子任务目标一致？
+- [ ] 每个 subagentPlan 子任务是否都给出了完整求解策略，而不是只有 domainId 和 goal？
 
 === CONTEXT_DATA_START ===
 {{contextEnvelope}}

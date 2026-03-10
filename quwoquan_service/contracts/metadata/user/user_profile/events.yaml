@@ -21,20 +21,28 @@ events:
     recommend_impact: profile_feature_refresh
 
   - name: PersonaActivated
-    description: 分身切换
+    description: 子账号切换（激活）
     producer: user-service
-    consumers: [chat-service, content-service]
+    consumers: [chat-service, content-service, circle-service, recommendation-engine]
     channel: event_store
     payload_entity: Persona
-    payload_fields: [userId, id, displayName, isPrivate]
+    payload_fields: [userId, id, subAccountId, displayName, isPrivate, isolationLevel]
 
   - name: PersonaCreated
-    description: 新分身创建
+    description: 新子账号创建
     producer: user-service
     consumers: []
     channel: event_store
     payload_entity: Persona
-    payload_fields: [userId, id, displayName, isPrimary, isPrivate]
+    payload_fields: [userId, id, subAccountId, displayName, isPrimary, isPrivate, isolationLevel]
+
+  - name: SubAccountIsolationUpdated
+    description: 子账号隔离等级变更
+    producer: user-service
+    consumers: [recommendation-engine]
+    channel: event_store
+    payload_entity: Persona
+    payload_fields: [userId, subAccountId, isolationLevel]
 
   - name: ProfileProposalCreated
     description: 资料修改提案创建
@@ -74,4 +82,36 @@ events:
     consumers: [notification-service, recommendation-engine]
     channel: event_store
     payload_entity: UserSetting
-    payload_fields: [userId, enablePush, profileVisibility, assistantEnabled, feedPreference]
+    payload_fields: [userId, enablePush, profileVisibility, assistantEnabled, feedPreference, defaultIncomingCallRingtoneId, allowCallerRingtoneOverride, enableCallVibration, enableGroupCallRing]
+
+  - name: CredentialBound
+    description: 用户绑定新凭证（手机/微信/Apple）
+    producer: user-service
+    consumers: [notification-service]
+    channel: event_store
+    payload_entity: CredentialBinding
+    payload_fields: [userId, credentialType, boundAt]
+
+  - name: CredentialUnbound
+    description: 用户解绑凭证
+    producer: user-service
+    consumers: [notification-service]
+    channel: event_store
+    payload_entity: CredentialBinding
+    payload_fields: [userId, credentialType]
+
+  - name: LoginSucceeded
+    description: 登录成功
+    producer: user-service
+    consumers: [recommendation-engine, notification-service]
+    channel: event_store
+    payload_fields: [ownerId, credentialType, loginAt, deviceId, platform]
+    security_note: 不含 credentialKey，不含 IP（单独脱敏存储）
+
+  - name: LoginFailed
+    description: 登录失败
+    producer: user-service
+    consumers: []
+    channel: event_store
+    payload_fields: [credentialType, failReason, attemptAt]
+    security_note: 不含 credentialKey，不含 ownerId（登录失败时身份未确认）

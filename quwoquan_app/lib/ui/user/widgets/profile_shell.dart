@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
@@ -80,6 +81,30 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
     _mainTabController.dispose();
     _pullBackController.dispose();
     super.dispose();
+  }
+
+  // — 关系动作 —
+
+  void _showGreetDialog(BuildContext context) {
+    // TODO(D2): 打招呼对话框（自定义内容 + GreetingRepository.sendGreeting）
+    // 当前阶段使用 Snackbar 占位，待 greeting_repository 后端就绪后替换
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('打招呼功能即将上线')),
+    );
+  }
+
+  Future<void> _startCall(BuildContext context, String callType) async {
+    final router = GoRouter.of(context);
+    final notifier = ref.read(callSessionProvider.notifier);
+    final callId = await notifier.initiateCall(
+      callTypeStr: callType,
+      targetUserIds: [widget.userId],
+      conversationId: widget.userId,
+    );
+    if (!mounted) return;
+    if (callId != null) {
+      router.push(AppRoutePaths.rtcOutgoing(callId: callId));
+    }
   }
 
   // — Tab management —
@@ -357,10 +382,18 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
                                   mode: widget.mode,
                                   isDark: isDark,
                                   isFollowing: state.isFollowing,
+                                  capability: state.capability,
                                   onEditProfile: () => context.push(AppRoutePaths.profileEdit),
                                   onManagePersonas: () => context.push(AppRoutePaths.profilePersonas),
                                   onFollow: notifier.toggleFollow,
-                                  onMessage: () {},
+                                  onMessage: () => context.push(
+                                    AppRoutePaths.chatDetail(
+                                      id: widget.userId,
+                                    ),
+                                  ),
+                                  onGreet: () => _showGreetDialog(context),
+                                  onVoiceCall: () => _startCall(context, 'voice'),
+                                  onVideoCall: () => _startCall(context, 'video'),
                                 ),
                               ],
                             ),

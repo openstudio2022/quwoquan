@@ -40,6 +40,8 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 1. 机器轨 JSON：包含 decision、toolPlan、slotState
 2. 用户轨 Markdown：温柔的过渡说明（"我稍微查一下，但我一直在这里陪你"）
 
+若调用 `local_context`，返回结构必须遵循 `local_context_v1`，且显式声明 `"media": {"included": false}`，禁止把相册内容混入情绪陪伴上下文。
+
 若 nextAction 为 answer，机器轨标记完成，Markdown 输出情感陪伴回复。
 
 ### 结构化 JSON 契约（必填字段）
@@ -54,6 +56,8 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
   "toolPlan": [
     {"tool": "web_search", "arguments": {"query": "示例查询"}}
   ],
+  "localContextContract": "local_context_v1",
+  "media": {"included": false},
   "askUser": {"needed": false, "question": ""},
   "userMarkdown": "我在这里，你说吧…"
 }

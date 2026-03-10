@@ -1,46 +1,49 @@
 version: 1
-feature: "runtime-messaging"
+feature: runtime-messaging
 level: "L2_feature"
-template: "A1-A8"
+template: A1-A8
 tree_context:
-  feature_level: "L2_feature"
-  feature_path: "capability.runtime.feature.runtime-messaging"
-  parent_path: "capability.runtime"
-  acceptance_inherits_from: "capability.runtime"
+  feature_path: capability.runtime.feature.runtime-messaging
+  parent_path: capability.runtime
+  acceptance_inherits_from: capability.runtime
 level_acceptance:
-  focus_groups: [A1_functional, A3_service_governance, A7_contract_metadata_consistency, A8_test_automation]
-  notes: "异步消息语义一致性为重点。"
+  focus_groups:
+  - A1_functional
+  - A3_service_governance
+  - A7_contract_metadata_consistency
+  - A8_test_automation
+  notes: 异步消息语义一致性为重点。
 global_acceptance:
   A1_functional:
     scenarios:
-      - given: "服务通过 runtime-messaging 发布事件"
-        when: "消费者处理并发生重试"
-        then: "幂等生效且最终状态可追踪"
+    - given: 服务通过 runtime-messaging 发布事件
+      when: 消费者处理并发生重试
+      then: 幂等生效且最终状态可追踪
   A2_experience:
-    - "重试机制不应造成用户侧长尾明显恶化"
+  - 重试机制不应造成用户侧长尾明显恶化
   A3_service_governance:
-    - "重试/死信/重放策略可配置并可审计"
+  - 重试/死信/重放策略可配置并可审计
   A4_observability:
-    - "消息链路可按 messageId/traceId 检索"
+  - 消息链路可按 messageId/traceId 检索
   A5_product_ops:
-    - "关键事件可进入运营分析闭环"
+  - 关键事件可进入运营分析闭环
   A6_security_privacy:
-    - "敏感 payload 字段按策略脱敏"
+  - 敏感 payload 字段按策略脱敏
   A7_contract_metadata_consistency:
-    - "envelope 与 event schema 一致"
+  - envelope 与 event schema 一致
   A8_test_automation:
-    - "producer/consumer/idempotency 自动化覆盖"
+  - producer/consumer/idempotency 自动化覆盖
 tests:
   mock:
-    - "quwoquan_service/runtime/messaging/tests/publisher_mock_test.go"
+  - quwoquan_service/runtime/messaging/tests/publisher_mock_test.go
   unit:
-    - "quwoquan_service/runtime/messaging/tests/envelope_idempotency_unit_test.go"
+  - quwoquan_service/runtime/messaging/tests/envelope_idempotency_unit_test.go
   contract:
-    - "quwoquan_service/contracts/tests/message_envelope_contract_test.go"
+  - quwoquan_service/contracts/tests/message_envelope_contract_test.go
   integration:
-    - "quwoquan_service/runtime/messaging/tests/retry_dlq_integration_test.go"
+  - quwoquan_service/runtime/messaging/tests/retry_dlq_integration_test.go
   uat:
-    - "UAT-RUNTIME-MESSAGING-IDEMPOTENCY-001"
+  - UAT-RUNTIME-MESSAGING-IDEMPOTENCY-001
 execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
+  local_gate: make gate
+  full_gate: make gate-full

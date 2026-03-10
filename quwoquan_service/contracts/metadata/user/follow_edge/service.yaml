@@ -31,6 +31,11 @@ api_routes:
     operation: GetRelationship
     description: 关系查询（是否互关）
 
+  - method: GET
+    path: /v1/user/{userId}/relationship/capability
+    operation: GetRelationshipCapability
+    description: "关系能力位投影（统一真相源）。基于 FollowEdge + CloseFriendFlag + BlockEdge 计算 relationTier 与各能力 bool（canGreet/canOpenConversation/canAddSameInterest/canSetCloseFriend/canStartVoiceCall/canStartVideoCall/isBlocked/isBlockedBy）。端侧用户主页按钮矩阵和 RTC 门禁直接消费。"
+
 consumers:
   - name: app
     capabilities: [follow, unfollow, list_following, list_followers, check_relationship]

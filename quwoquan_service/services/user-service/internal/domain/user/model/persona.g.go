@@ -6,13 +6,18 @@ import (
 )
 
 type Persona struct {
-	ID          string    `json:"id" db:"id"`
-	UserID      string    `json:"userId" db:"user_id"`
-	DisplayName string    `json:"displayName" db:"display_name"`
-	AvatarURL   string    `json:"avatarUrl" db:"avatar_url"`
-	IsPrimary   bool      `json:"isPrimary" db:"is_primary"`
-	IsPrivate   bool      `json:"isPrivate" db:"is_private"`
-	IsActive    bool      `json:"isActive" db:"is_active"`
-	CreatedAt   time.Time `json:"createdAt" db:"created_at"`
-	UpdatedAt   time.Time `json:"updatedAt" db:"updated_at"`
+	ID               string    `json:"id" db:"id"`
+	UserID           string    `json:"userId" db:"user_id"`
+	DisplayName      string    `json:"displayName" db:"display_name"`
+	AvatarURL        string    `json:"avatarUrl" db:"avatar_url"`
+	CallerRingtoneID string    `json:"callerRingtoneId" db:"caller_ringtone_id"`
+	IsPrimary        bool      `json:"isPrimary" db:"is_primary"`
+	IsPrivate        bool      `json:"isPrivate" db:"is_private"`
+	IsActive         bool      `json:"isActive" db:"is_active"`
+	SubAccountID     string    `json:"subAccountId" db:"sub_account_id"`
+	IsolationLevel   string    `json:"isolationLevel" db:"isolation_level"`
+	PurposeHint      string    `json:"-" db:"purpose_hint"`
+	InviteCount      int64     `json:"inviteCount" db:"invite_count"`
+	CreatedAt        time.Time `json:"createdAt" db:"created_at"`
+	UpdatedAt        time.Time `json:"updatedAt" db:"updated_at"`
 }

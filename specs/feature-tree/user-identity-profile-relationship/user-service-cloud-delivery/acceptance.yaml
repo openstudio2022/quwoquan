@@ -1,273 +1,87 @@
 feature: user-service-cloud-delivery
-level: L2_feature
+level: "L2_feature"
 archived: false
-
 execution:
   local_gate: make gate
   full_gate: make gate-full
-
 level_acceptance:
-
-  # ─────────────── 端云链路 ───────────────
-
   A1:
-    criteria: >
-      getUserProfile 端云完整链路可用：
-      端侧 RemoteUserProfileRepository.getUserProfile(userId) → HTTP GET /v1/user/profile/{userId}
-      → user-service ProfileService.GetProfile → PostgreSQL user_profiles JOIN personas(isActive=true)
-      JOIN user_settings → Redis cache:user_profile:{userId} (TTL=600s) → JSON 响应。
-      首次请求 cache miss 走 DB，二次请求 cache hit 走 Redis（可通过 X-Cache-Hit header 或日志验证）。
-      响应包含 fields.yaml 定义的全部字段：userId, nickname, avatarUrl, bio, gender, birthDate,
-      region, status, profileVersion, followerCount, followingCount, postCount, circleCount, likeCount,
-      activePersna, settings, createdAt, updatedAt。
-    status: pending
-    linked_tasks: []
-    test_layers:
-      T1: required    # 端侧 DTO 字段契约 × fields.yaml
-      T2: required    # 云侧 ProfileService + PG + Redis 契约测试
-      T3: required    # 端侧 Remote 实际调通
-      T4: optional
-    tests: []
+    criteria: 'getUserProfile 端云完整链路可用： 端侧 RemoteUserProfileRepository.getUserProfile(userId)
+      → HTTP GET /v1/user/profile/{userId} → user-service ProfileService.GetProfile
+      → PostgreSQL user_profiles JOIN personas(isActive=true) JOIN user_settings →
+      Redis cache:user_profile:{userId} (TTL=600s) → JSON 响应。 首次请求 cache miss 走 DB，二次请求
+      cache hit 走 Redis（可通过 X-Cache-Hit header 或日志验证）。 响应包含 fields.yaml 定义的全部字段：userId,
+      nickname, avatarUrl, bio, gender, birthDate, region, status, profileVersion,
+      followerCount, followingCount, postCount, circleCount, likeCount, activePersna,
+      settings, createdAt, updatedAt。
 
-  A2:
-    criteria: >
-      followUser/unfollowUser 幂等操作且计数实时更新：
-      POST /v1/user/follow/{targetUserId} 创建 follow_edge（MongoDB unique index 幂等），
-      同时更新 UserProfile 的 followerCount(+1) 和 followingCount(+1)（跨 MongoDB→PostgreSQL）。
-      重复 POST 不报错、不重复计数。
-      DELETE /v1/user/follow/{targetUserId} 删除 follow_edge，计数 -1。
-      GET /v1/user/{userId}/relationship 返回 { isFollowing, isFollowedBy, isMutual }。
-      listFollowing/listFollowers 支持游标分页（cursor + limit），按 createdAt 降序。
-    status: pending
-    linked_tasks: []
-    test_layers:
-      T1: required    # 端侧 follow/unfollow 契约
-      T2: required    # 云侧 FollowService + MongoDB + 计数更新契约
-      T3: required    # 端侧 Remote 调通
-      T4: required    # 关注/取关用户旅程
-    tests: []
-
-  A3:
-    criteria: >
-      blockUser/unblockUser 幂等且 O(1) 检查：
-      POST /v1/user/block/{targetUserId} 创建 block_edge（PostgreSQL unique 约束幂等），
-      同步写入 Redis blocked_set:{userId} (SET ADD, TTL=3600s)。
-      DELETE /v1/user/block/{targetUserId} 删除 block_edge，Redis SREM。
-      CheckBlocked(blockerId, blockedId) 通过 Redis SISMEMBER 实现 O(1) 查询。
-      blocked_set cache miss 时从 PostgreSQL 回填。
-      跨域消费方（chat-service、content-service、recommendation-engine）可通过
-      runtime/observability/NewUserClient() 调用 CheckBlocked。
-    status: pending
-    linked_tasks: []
-    test_layers:
-      T1: required    # 端侧 block/unblock 契约
-      T2: required    # 云侧 BlockService + PG + Redis set 契约
-      T3: optional    # 跨域调用属于集成验证
-      T4: required    # 屏蔽用户旅程
-    tests: []
-
-  A4:
-    criteria: >
-      Persona CRUD + Activate 事务一致性：
-      同一 userId 同时只有一个 isPrimary=true 的 persona 和一个 isActive=true 的 persona。
-      POST /v1/user/personas/{personaId}/activate 在事务内执行：
-      (1) 旧 active persona isActive=false (2) 新 persona isActive=true。
-      并发 activate 不违反唯一约束（PostgreSQL uq_personas_active）。
-      listPersonas 返回包含 isPrimary 和 isActive 标记。
-      deletePersona 不允许删除 isPrimary=true 的 persona。
-    status: pending
-    linked_tasks: []
-    test_layers:
-      T1: required    # 端侧 persona 契约
-      T2: required    # 云侧 PersonaService + PG 事务 + 唯一约束契约
-      T3: optional
-      T4: required    # 分身管理用户旅程
-    tests: []
-
-  # ─────────────── 存储与缓存 ───────────────
-
-  A5:
-    criteria: >
-      缓存策略严格按 storage.yaml 生效：
-      - cache:user_profile:{userId} TTL=600s，GetProfile 首次 DB→缓存→后续 Redis 命中
-      - UserProfileUpdated 事件触发缓存失效（DEL cache:user_profile:{userId}），下次请求重新回填
-      - cache:user_setting:{userId} TTL=600s，UserSettingUpdated 事件失效
-      - blocked_set:{userId} TTL=3600s（SET 类型），UserBlocked 事件 SADD，UserUnblocked 事件 SREM
-      - UserAuth 不缓存（cache_excluded=true）
-      - device_tokens:{userId} TTL=3600s（SET 类型）
-      Redis key pattern 和 TTL 与 storage.yaml 定义完全一致。
-    status: pending
-    linked_tasks: []
-    test_layers:
-      T1: optional
-      T2: required    # 云侧 cache 命中/失效/TTL 契约（miniredis）
-      T3: optional
-      T4: optional
-    tests: []
-
-  A6:
-    criteria: >
-      PostgreSQL Migration DDL 与 storage.yaml 一致：
-      - user_profiles 表：PK(user_id)，索引 idx_nickname, idx_phone, idx_status，GIN trigram (nickname, bio)
-      - personas 表：索引 idx_user_id，唯一约束 uq_primary(userId,isPrimary), uq_active(userId,isActive)
-      - user_settings 表：PK(user_id)
-      - block_edges 表：索引 idx_blocker, idx_blocked，唯一约束 uq_block_edge(blocker_id,blocked_id)
-      - user_works 表：索引 idx_user_id
-      - user_life_items 表：索引 idx_user_id + category
-      所有 DDL 可在干净数据库上执行成功，embedded-postgres 契约测试验证。
-    status: pending
-    linked_tasks: []
-    test_layers:
-      T1: optional
-      T2: required    # 云侧 migration + schema 契约（embedded-postgres）
-      T3: optional
-      T4: optional
-    tests: []
-
-  A7:
-    criteria: >
-      MongoDB follow_edges 集合索引与 storage.yaml 一致：
-      - idx_follow_follower: { followerId: 1, createdAt: -1 }
-      - idx_follow_followee: { followeeId: 1, createdAt: -1 }
-      - idx_follow_unique: { followerId: 1, followeeId: 1 } unique
-      - idx_follow_source: { source: 1 } sparse
-      索引在 testcontainers-mongodb 契约测试中验证。
-    status: pending
-    linked_tasks: []
-    test_layers:
-      T1: optional
-      T2: required    # 云侧 MongoDB 索引契约（testcontainers）
-      T3: optional
-      T4: optional
-    tests: []
-
-  # ─────────────── 端侧对齐 ───────────────
-
-  A8:
-    criteria: >
-      端侧 codegen 对齐完成：
-      - make codegen-app 生成 user_profile_dto.g.dart（含 fields.yaml 全部字段）
-      - 生成 user_work_dto.g.dart、user_life_item_dto.g.dart（替换手写 UserWorkItem/UserLifeItem）
-      - 生成 UserErrorCode 枚举（7 个错误码，对齐 errors.yaml）
-      - RemoteUserProfileRepository 错误处理使用 CloudException(UserErrorCode) 替代 throw Exception
-      - CloudErrorMapper 支持 UserErrorCode.fromCode(e.code)
-      - ProfileState 和 ProfileNotifier 中的 UserWorkItem/UserLifeItem 类型替换为 codegen DTO
-    status: pending
-    linked_tasks: []
-    test_layers:
-      T1: required    # 端侧 DTO 字段契约 + 错误码枚举契约
-      T2: optional
-      T3: required    # Remote 实际调通验证错误码
-      T4: optional
-    tests: []
-
-  A9:
-    criteria: >
-      错误码端云一致：
-      errors.yaml 定义的 7 个错误码（USER.USER.not_found / unauthorized / forbidden /
-      nickname_taken / invalid_argument / rate_limited / USER.SYSTEM.internal_error）
-      在云侧通过 generated AppError 返回，在端侧通过 UserErrorCode 枚举解析并显示 user_message。
-      不存在的 userId 返回 404 + USER.USER.not_found；
-      未授权操作返回 401 + USER.USER.unauthorized；
-      昵称冲突返回 409 + USER.USER.nickname_taken。
-      错误码字符串不在业务代码中硬编码（通过枚举 .code 引用）。
-    status: pending
-    linked_tasks: []
-    test_layers:
-      T1: required    # 端侧错误码枚举 × errors.yaml 对齐
-      T2: required    # 云侧错误码返回契约
-      T3: required    # 端云错误码集成验证
-      T4: optional
-    tests: []
-
-  # ─────────────── 部署 ───────────────
-
-  A10:
-    criteria: >
-      user-service 部署到 integration 环境成功：
-      - Dockerfile 多阶段构建成功，镜像体积 < 50MB
-      - seed-box Pod 包含 user-service sidecar 容器（port 18081）
-      - readinessProbe /healthz、livenessProbe /livez、startupProbe /startupz 全部通过
-      - user-service 成功连接 PostgreSQL、MongoDB、Redis
-      - kustomize build deploy/kustomization/{cloud-provider}-integration 成功
-      - kubectl apply 后 Pod Running + Ready
-    status: pending
-    linked_tasks: []
-    test_layers:
-      T1: optional
-      T2: optional
-      T3: required    # integration 环境端云集成
-      T4: optional
-    tests: []
-
-  A11:
-    criteria: >
-      灰度到 prod 可执行：
-      - deploy-prod-gray workflow 可触发
-      - Stage 1 (50% replicas) 自动执行，SLO 门禁通过：
-        error_rate < 0.01, p95_ms < 300, redis_error_rate < 0.01
-      - Stage 2 (100% replicas) 需人工审批
-      - config-rollback 可回退到前一版本
-      - process_domain_mapping.yaml 中 user 域 integration 与 prod 映射一致
-    status: pending
-    linked_tasks: []
-    test_layers:
-      T1: optional
-      T2: optional
-      T3: required    # integration 验证即 prod 的映射验证
-      T4: optional
-    tests: []
-
-  A12:
-    criteria: >
-      CI 流水线完整覆盖 user-service：
-      - service_pipeline.yml 构建 user-service Go 代码 + Docker 镜像
-      - delivery-gate.yml L2 门禁包含 user-service 契约测试
-      - pre-release-gate.yml 部署 integration 包含 user-service
-      - Makefile build/test-contract 目标包含 user-service 路径
-      - make gate 通过（含 verify_deployment_domain_mapping）
-    status: pending
-    linked_tasks: []
-    test_layers:
-      T1: optional
-      T2: required    # CI 中云侧契约测试
-      T3: optional
-      T4: optional
-    tests: []
-
-  # ─────────────── 四层测试覆盖 ───────────────
-
-  A13:
-    criteria: >
-      L1 端侧契约测试完整覆盖：
-      - user_profile_repository_contract_test.dart 18 个方法契约（已有，确认通过）
-      - user_dto_field_contract_test.dart 新增：UserWorkDto/UserLifeItemDto 字段 × fields.yaml
-      - user_error_code_contract_test.dart 新增：UserErrorCode 枚举 × errors.yaml 7 个错误码
-      - block_repository_contract_test.dart（已有，确认通过）
-      - remote_api_path_contract_test.dart 覆盖 user 域 URL 路径（已有，确认通过）
-      所有 L1 测试 flutter test 通过且无 skip。
+      '
     status: pending
     linked_tasks: []
     test_layers:
       T1: required
-      T2: optional
-      T3: optional
+      T2: required
+      T3: required
       T4: optional
     tests: []
+  A2:
+    criteria: 'followUser/unfollowUser 幂等操作且计数实时更新： POST /v1/user/follow/{targetUserId}
+      创建 follow_edge（MongoDB unique index 幂等）， 同时更新 UserProfile 的 followerCount(+1)
+      和 followingCount(+1)（跨 MongoDB→PostgreSQL）。 重复 POST 不报错、不重复计数。 DELETE /v1/user/follow/{targetUserId}
+      删除 follow_edge，计数 -1。 GET /v1/user/{userId}/relationship 返回 { isFollowing, isFollowedBy,
+      isMutual }。 listFollowing/listFollowers 支持游标分页（cursor + limit），按 createdAt 降序。
 
-  A14:
-    criteria: >
-      L2 云侧契约测试完整覆盖（全新）：
-      - profile_crud_contract_test.go: GetProfile + UpdateProfile + GetStats（embedded-postgres）
-      - follow_contract_test.go: Follow + Unfollow + ListFollowing + ListFollowers + GetRelationship
-        + 幂等 + 计数更新（testcontainers-mongodb + embedded-postgres）
-      - block_contract_test.go: Block + Unblock + ListBlocked + CheckBlocked + Redis SISMEMBER
-        （embedded-postgres + miniredis）
-      - persona_contract_test.go: CRUD + Activate 事务 + 唯一约束（embedded-postgres）
-      - cache_contract_test.go: 缓存命中 + 失效 + TTL（miniredis）
-      - error_contract_test.go: 7 个错误码 × HTTP status × error code 字符串
-      - work_life_contract_test.go: ListUserWorks + ListUserLifeItems（embedded-postgres）
-      所有 L2 测试 go test 通过。
+      '
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: required
+    tests: []
+  A3:
+    criteria: 'blockUser/unblockUser 幂等且 O(1) 检查： POST /v1/user/block/{targetUserId}
+      创建 block_edge（PostgreSQL unique 约束幂等）， 同步写入 Redis blocked_set:{userId} (SET
+      ADD, TTL=3600s)。 DELETE /v1/user/block/{targetUserId} 删除 block_edge，Redis SREM。
+      CheckBlocked(blockerId, blockedId) 通过 Redis SISMEMBER 实现 O(1) 查询。 blocked_set
+      cache miss 时从 PostgreSQL 回填。 跨域消费方（chat-service、content-service、recommendation-engine）可通过
+      runtime/observability/NewUserClient() 调用 CheckBlocked。
+
+      '
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: required
+    tests: []
+  A4:
+    criteria: 'Persona CRUD + Activate 事务一致性： 同一 userId 同时只有一个 isPrimary=true 的 persona
+      和一个 isActive=true 的 persona。 POST /v1/user/personas/{personaId}/activate 在事务内执行：
+      (1) 旧 active persona isActive=false (2) 新 persona isActive=true。 并发 activate
+      不违反唯一约束（PostgreSQL uq_personas_active）。 listPersonas 返回包含 isPrimary 和 isActive
+      标记。 deletePersona 不允许删除 isPrimary=true 的 persona。
+
+      '
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: required
+    tests: []
+  A5:
+    criteria: '缓存策略严格按 storage.yaml 生效： - cache:user_profile:{userId} TTL=600s，GetProfile
+      首次 DB→缓存→后续 Redis 命中 - UserProfileUpdated 事件触发缓存失效（DEL cache:user_profile:{userId}），下次请求重新回填
+      - cache:user_setting:{userId} TTL=600s，UserSettingUpdated 事件失效 - blocked_set:{userId}
+      TTL=3600s（SET 类型），UserBlocked 事件 SADD，UserUnblocked 事件 SREM - UserAuth 不缓存（cache_excluded=true）
+      - device_tokens:{userId} TTL=3600s（SET 类型） Redis key pattern 和 TTL 与 storage.yaml
+      定义完全一致。
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
@@ -276,15 +90,79 @@ level_acceptance:
       T3: optional
       T4: optional
     tests: []
+  A6:
+    criteria: 'PostgreSQL Migration DDL 与 storage.yaml 一致： - user_profiles 表：PK(user_id)，索引
+      idx_nickname, idx_phone, idx_status，GIN trigram (nickname, bio) - personas 表：索引
+      idx_user_id，唯一约束 uq_primary(userId,isPrimary), uq_active(userId,isActive) -
+      user_settings 表：PK(user_id) - block_edges 表：索引 idx_blocker, idx_blocked，唯一约束
+      uq_block_edge(blocker_id,blocked_id) - user_works 表：索引 idx_user_id - user_life_items
+      表：索引 idx_user_id + category 所有 DDL 可在干净数据库上执行成功，embedded-postgres 契约测试验证。
 
-  A15:
-    criteria: >
-      L3 端云集成测试（user-service 运行态）：
-      - user-service 在 integration 环境运行
-      - 端侧 Remote 调用 getUserProfile 返回有效 JSON + 正确字段
-      - 端侧 Remote 调用 followUser/unfollowUser 状态正确变更
-      - 端侧 Remote 调用 blockUser 后 CheckBlocked 返回 true
-      - 错误码场景：不存在的 userId 返回 USER.USER.not_found
+      '
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: optional
+    tests: []
+  A7:
+    criteria: 'MongoDB follow_edges 集合索引与 storage.yaml 一致： - idx_follow_follower:
+      { followerId: 1, createdAt: -1 } - idx_follow_followee: { followeeId: 1, createdAt:
+      -1 } - idx_follow_unique: { followerId: 1, followeeId: 1 } unique - idx_follow_source:
+      { source: 1 } sparse 索引在 testcontainers-mongodb 契约测试中验证。
+
+      '
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: optional
+    tests: []
+  A8:
+    criteria: '端侧 codegen 对齐完成： - make codegen-app 生成 user_profile_dto.g.dart（含 fields.yaml
+      全部字段） - 生成 user_work_dto.g.dart、user_life_item_dto.g.dart（替换手写 UserWorkItem/UserLifeItem）
+      - 生成 UserErrorCode 枚举（7 个错误码，对齐 errors.yaml） - RemoteUserProfileRepository 错误处理使用
+      CloudException(UserErrorCode) 替代 throw Exception - CloudErrorMapper 支持 UserErrorCode.fromCode(e.code)
+      - ProfileState 和 ProfileNotifier 中的 UserWorkItem/UserLifeItem 类型替换为 codegen
+      DTO
+
+      '
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests: []
+  A9:
+    criteria: '错误码端云一致： errors.yaml 定义的 7 个错误码（USER.USER.not_found / unauthorized
+      / forbidden / nickname_taken / invalid_argument / rate_limited / USER.SYSTEM.internal_error）
+      在云侧通过 generated AppError 返回，在端侧通过 UserErrorCode 枚举解析并显示 user_message。 不存在的 userId
+      返回 404 + USER.USER.not_found； 未授权操作返回 401 + USER.USER.unauthorized； 昵称冲突返回 409
+      + USER.USER.nickname_taken。 错误码字符串不在业务代码中硬编码（通过枚举 .code 引用）。
+
+      '
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: optional
+    tests: []
+  A10:
+    criteria: 'user-service 部署到 integration 环境成功： - Dockerfile 多阶段构建成功，镜像体积 < 50MB
+      - seed-box Pod 包含 user-service sidecar 容器（port 18081） - readinessProbe /healthz、livenessProbe
+      /livez、startupProbe /startupz 全部通过 - user-service 成功连接 PostgreSQL、MongoDB、Redis
+      - kustomize build deploy/kustomization/{cloud-provider}-integration 成功 - kubectl
+      apply 后 Pod Running + Ready
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
@@ -293,19 +171,89 @@ level_acceptance:
       T3: required
       T4: optional
     tests: []
+  A11:
+    criteria: "灰度到 prod 可执行： - deploy-prod-gray workflow 可触发 - Stage 1 (50% replicas)\
+      \ 自动执行，SLO 门禁通过：\n  error_rate < 0.01, p95_ms < 300, redis_error_rate < 0.01\n\
+      - Stage 2 (100% replicas) 需人工审批 - config-rollback 可回退到前一版本 - process_domain_mapping.yaml\
+      \ 中 user 域 integration 与 prod 映射一致\n"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: optional
+      T3: required
+      T4: optional
+    tests: []
+  A12:
+    criteria: 'CI 流水线完整覆盖 user-service： - service_pipeline.yml 构建 user-service Go
+      代码 + Docker 镜像 - delivery-gate.yml L2 门禁包含 user-service 契约测试 - pre-release-gate.yml
+      部署 integration 包含 user-service - Makefile build/test-contract 目标包含 user-service
+      路径 - make gate 通过（含 verify_deployment_domain_mapping）
 
+      '
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: optional
+    tests: []
+  A13:
+    criteria: 'L1 端侧契约测试完整覆盖： - user_profile_repository_contract_test.dart 18 个方法契约（已有，确认通过）
+      - user_dto_field_contract_test.dart 新增：UserWorkDto/UserLifeItemDto 字段 × fields.yaml
+      - user_error_code_contract_test.dart 新增：UserErrorCode 枚举 × errors.yaml 7 个错误码
+      - block_repository_contract_test.dart（已有，确认通过） - remote_api_path_contract_test.dart
+      覆盖 user 域 URL 路径（已有，确认通过） 所有 L1 测试 flutter test 通过且无 skip。
+
+      '
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    tests: []
+  A14:
+    criteria: "L2 云侧契约测试完整覆盖（全新）： - profile_crud_contract_test.go: GetProfile + UpdateProfile\
+      \ + GetStats（embedded-postgres） - follow_contract_test.go: Follow + Unfollow\
+      \ + ListFollowing + ListFollowers + GetRelationship\n  + 幂等 + 计数更新（testcontainers-mongodb\
+      \ + embedded-postgres）\n- block_contract_test.go: Block + Unblock + ListBlocked\
+      \ + CheckBlocked + Redis SISMEMBER\n  （embedded-postgres + miniredis）\n- persona_contract_test.go:\
+      \ CRUD + Activate 事务 + 唯一约束（embedded-postgres） - cache_contract_test.go: 缓存命中\
+      \ + 失效 + TTL（miniredis） - error_contract_test.go: 7 个错误码 × HTTP status × error\
+      \ code 字符串 - work_life_contract_test.go: ListUserWorks + ListUserLifeItems（embedded-postgres）\
+      \ 所有 L2 测试 go test 通过。\n"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: optional
+    tests: []
+  A15:
+    criteria: 'L3 端云集成测试（user-service 运行态）： - user-service 在 integration 环境运行 - 端侧
+      Remote 调用 getUserProfile 返回有效 JSON + 正确字段 - 端侧 Remote 调用 followUser/unfollowUser
+      状态正确变更 - 端侧 Remote 调用 blockUser 后 CheckBlocked 返回 true - 错误码场景：不存在的 userId 返回
+      USER.USER.not_found
+
+      '
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: optional
+      T3: required
+      T4: optional
+    tests: []
   A16:
-    criteria: >
-      L4 用户旅程测试完整覆盖：
-      - follow_unfollow_journey_test.dart:
-        进入作者主页 → 关注 → 粉丝数+1 → 取关 → 粉丝数-1
-      - edit_profile_journey_test.dart:
-        我的主页 → 编辑资料 → 修改昵称 → 保存 → 返回主页验证昵称更新
-      - persona_management_journey_test.dart:
-        我的主页 → 管理分身 → 创建分身 → 激活 → 返回验证
-      - block_user_journey_test.dart:
-        作者主页 → 更多 → 屏蔽 → 确认 → 验证屏蔽状态
-      所有 L4 测试 flutter test 通过。
+    criteria: "L4 用户旅程测试完整覆盖： - follow_unfollow_journey_test.dart:\n  进入作者主页 → 关注\
+      \ → 粉丝数+1 → 取关 → 粉丝数-1\n- edit_profile_journey_test.dart:\n  我的主页 → 编辑资料 → 修改昵称\
+      \ → 保存 → 返回主页验证昵称更新\n- persona_management_journey_test.dart:\n  我的主页 → 管理分身\
+      \ → 创建分身 → 激活 → 返回验证\n- block_user_journey_test.dart:\n  作者主页 → 更多 → 屏蔽 → 确认\
+      \ → 验证屏蔽状态\n所有 L4 测试 flutter test 通过。\n"
     status: pending
     linked_tasks: []
     test_layers:
@@ -314,46 +262,37 @@ level_acceptance:
       T3: optional
       T4: required
     tests: []
-
-  # ─────────────── 工程质量 ───────────────
-
   A17:
-    criteria: >
-      DDD 分层约束无违规：
-      - domain 层无 import application/adapters/infrastructure/数据库驱动
-      - application 层无 import adapters/infrastructure/数据库驱动
-      - 仅 infrastructure 和 tests import 数据库驱动（pgx/mongo-driver/go-redis）
-      - 必须使用 runtime/errors.AppError、runtime/config.RuntimeConfigProvider
-      - codegen 产物 DO NOT EDIT 未被手改（make gate hash 比对通过）
-      - 端侧 errors.yaml → codegen → UserErrorCode，无硬编码错误码字符串
+    criteria: 'DDD 分层约束无违规： - domain 层无 import application/adapters/infrastructure/数据库驱动
+      - application 层无 import adapters/infrastructure/数据库驱动 - 仅 infrastructure 和 tests
+      import 数据库驱动（pgx/mongo-driver/go-redis） - 必须使用 runtime/errors.AppError、runtime/config.RuntimeConfigProvider
+      - codegen 产物 DO NOT EDIT 未被手改（make gate hash 比对通过） - 端侧 errors.yaml → codegen
+      → UserErrorCode，无硬编码错误码字符串
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
-      T1: required    # make gate 结构约束检查
-      T2: required    # go vet + import 分析
+      T1: required
+      T2: required
       T3: optional
       T4: optional
     tests: []
-
   A18:
-    criteria: >
-      主页相关 API 路径端云严格一致：
-      端侧 RemoteUserProfileRepository 中的 HTTP 路径与 service.yaml 定义完全匹配：
-      - GET /v1/user/profile/{userId}
-      - PATCH /v1/user/profile
-      - POST/DELETE /v1/user/follow/{targetUserId}
-      - GET /v1/user/{userId}/following, /followers, /relationship
-      - POST/DELETE /v1/user/block/{targetUserId}
-      - GET /v1/user/blocked
-      - GET/POST/PATCH/DELETE /v1/user/personas[/{personaId}[/activate]]
-      - GET /v1/users/{userId}/works, /life-items, /likes
-      - GET/PATCH /v1/user/settings/notifications, /privacy
-      路径不一致 → L1 remote_api_path_contract_test 失败。
+    criteria: '主页相关 API 路径端云严格一致： 端侧 RemoteUserProfileRepository 中的 HTTP 路径与 service.yaml
+      定义完全匹配： - GET /v1/user/profile/{userId} - PATCH /v1/user/profile - POST/DELETE
+      /v1/user/follow/{targetUserId} - GET /v1/user/{userId}/following, /followers,
+      /relationship - POST/DELETE /v1/user/block/{targetUserId} - GET /v1/user/blocked
+      - GET/POST/PATCH/DELETE /v1/user/personas[/{personaId}[/activate]] - GET /v1/users/{userId}/works,
+      /life-items, /likes - GET/PATCH /v1/user/settings/notifications, /privacy 路径不一致
+      → L1 remote_api_path_contract_test 失败。
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
-      T1: required    # 端侧 URL 路径契约
-      T2: required    # 云侧路由注册 × service.yaml
-      T3: required    # 端云路径实际调通
+      T1: required
+      T2: required
+      T3: required
       T4: optional
     tests: []

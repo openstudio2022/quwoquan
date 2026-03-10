@@ -69,11 +69,13 @@ class WebSearchTool implements AssistantTool {
   Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
     // queryVariants: LLM 可传入多个差异化查询词，工具并发执行后合并结果。
     // 若存在 queryVariants，先用主 query 执行，再并发执行 variants，合并 references。
-    final variants = (arguments['queryVariants'] as List?)
-        ?.whereType<String>()
-        .map((v) => v.trim())
-        .where((v) => v.isNotEmpty)
-        .toList(growable: false) ?? const <String>[];
+    final variants =
+        (arguments['queryVariants'] as List?)
+            ?.whereType<String>()
+            .map((v) => v.trim())
+            .where((v) => v.isNotEmpty)
+            .toList(growable: false) ??
+        const <String>[];
     if (variants.length >= 2) {
       return _executeMultiQuery(arguments, variants);
     }
@@ -214,13 +216,15 @@ class WebSearchTool implements AssistantTool {
           (evidenceStats['authorityScore'] as double?) ?? 0.0;
       final primaryAuthCount =
           (evidenceStats['authoritativeCount'] as int?) ?? 0;
-      final primaryIsLowQuality = primaryAuthCount == 0 &&
+      final primaryIsLowQuality =
+          primaryAuthCount == 0 &&
           primaryAuthorityScore == 0.0 &&
           authorityDomains.isNotEmpty;
       if (primaryIsLowQuality) {
         return AssistantToolResult(
           success: false,
-          message: '检索完成但信息不足：返回结果与目标领域（${authorityDomains.join('/')}）无关联，建议降级回复。',
+          message:
+              '检索完成但信息不足：返回结果与目标领域（${authorityDomains.join('/')}）无关联，建议降级回复。',
           errorCode: AssistantErrorCode.executionFailed,
           data: <String, dynamic>{
             'provider': provider.name,
@@ -309,13 +313,15 @@ class WebSearchTool implements AssistantTool {
             (evidenceStats['authorityScore'] as double?) ?? 0.0;
         final fallbackAuthCount =
             (evidenceStats['authoritativeCount'] as int?) ?? 0;
-        final fallbackIsLowQuality = fallbackAuthCount == 0 &&
+        final fallbackIsLowQuality =
+            fallbackAuthCount == 0 &&
             fallbackAuthorityScore == 0.0 &&
             authorityDomains.isNotEmpty;
         if (fallbackIsLowQuality) {
           return AssistantToolResult(
             success: false,
-            message: '检索完成但信息不足：返回结果与目标领域（${authorityDomains.join('/')}）无关联，建议降级回复。',
+            message:
+                '检索完成但信息不足：返回结果与目标领域（${authorityDomains.join('/')}）无关联，建议降级回复。',
             errorCode: AssistantErrorCode.executionFailed,
             data: <String, dynamic>{
               'provider': fallback.providerLabel,
@@ -410,7 +416,9 @@ class WebSearchTool implements AssistantTool {
       }
     }
     final coverage = total <= 0 ? 0.0 : (total / 4).clamp(0.0, 1.0).toDouble();
-    final authorityScore = total <= 0 ? 0.0 : (authoritative / total).clamp(0.0, 1.0);
+    final authorityScore = total <= 0
+        ? 0.0
+        : (authoritative / total).clamp(0.0, 1.0);
     // Layer 3 综合质量评分：权威性(0.4) + 时效性(0.35) + 覆盖量(0.25)
     // 时效性：freshnessHours 越小越好，超过上限则线性惩罚至0
     final freshScore = freshnessHours <= timeConstraint.freshnessHoursMax
@@ -1101,8 +1109,9 @@ class WebSearchTool implements AssistantTool {
 
   String _summarizeDuckduckgo(dynamic decoded) {
     if (decoded is! Map) return '';
-    final organic =
-        (decoded['organic_results'] as List?)?.whereType<Map>().toList();
+    final organic = (decoded['organic_results'] as List?)
+        ?.whereType<Map>()
+        .toList();
     if (organic != null && organic.isNotEmpty) {
       final snippets = <String>[];
       for (final item in organic.take(4)) {
@@ -1404,7 +1413,10 @@ class WebSearchTool implements AssistantTool {
       }
     }
     final abstractText = results.isNotEmpty
-        ? results.take(3).map((r) => '${r['title']} - ${r['snippet']}').join('；')
+        ? results
+              .take(3)
+              .map((r) => '${r['title']} - ${r['snippet']}')
+              .join('；')
         : '';
     return <String, dynamic>{
       'AbstractText': abstractText,
@@ -1741,12 +1753,14 @@ class WebSearchTool implements AssistantTool {
       if (mainQuery.isNotEmpty) mainQuery,
       ...queryVariants,
     }.toList(growable: false);
-    final futures = allQueries.map((q) {
-      final singleArgs = Map<String, dynamic>.from(arguments)
-        ..['query'] = q
-        ..remove('queryVariants');
-      return execute(singleArgs);
-    }).toList(growable: false);
+    final futures = allQueries
+        .map((q) {
+          final singleArgs = Map<String, dynamic>.from(arguments)
+            ..['query'] = q
+            ..remove('queryVariants');
+          return execute(singleArgs);
+        })
+        .toList(growable: false);
     final results = await Future.wait(futures, eagerError: false);
     final mergedRefs = <Map<String, dynamic>>[];
     final seenUrls = <String>{};
@@ -1758,10 +1772,12 @@ class WebSearchTool implements AssistantTool {
     for (final r in results) {
       if (r.success) anySuccess = true;
       final data = r.data ?? const <String, dynamic>{};
-      final refs = (data['references'] as List?)
-          ?.whereType<Map>()
-          .map((e) => e.cast<String, dynamic>())
-          .toList(growable: false) ?? const <Map<String, dynamic>>[];
+      final refs =
+          (data['references'] as List?)
+              ?.whereType<Map>()
+              .map((e) => e.cast<String, dynamic>())
+              .toList(growable: false) ??
+          const <Map<String, dynamic>>[];
       for (final ref in refs) {
         final url = (ref['url'] as String?)?.trim() ?? '';
         if (url.isNotEmpty && seenUrls.add(url)) {
@@ -1782,7 +1798,8 @@ class WebSearchTool implements AssistantTool {
 
     return AssistantToolResult(
       success: true,
-      message: '多路检索完成（${allQueries.length} 条查询），找到 ${mergedRefs.length} 条参考资料。',
+      message:
+          '多路检索完成（${allQueries.length} 条查询），找到 ${mergedRefs.length} 条参考资料。',
       data: <String, dynamic>{
         'provider': bestProvider,
         'summary': bestSummary,

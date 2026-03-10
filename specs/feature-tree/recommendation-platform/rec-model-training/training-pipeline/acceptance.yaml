@@ -1,31 +1,30 @@
 version: 1
-feature: "training-pipeline"
-level: "L4_detail"
-template: "A1-A8"
+feature: training-pipeline
+level: "L3_story"
+template: A1-A8
 tree_context:
-  feature_level: "L4_detail"
-  feature_path: "capability.recommendation-platform.component.rec-model-training.object.training-pipeline"
-  parent_path: "capability.recommendation-platform.component.rec-model-training"
-  acceptance_inherits_from: "capability.recommendation-platform"
+  feature_path: capability.recommendation-platform.component.rec-model-training.object.training-pipeline
+  parent_path: capability.recommendation-platform.component.rec-model-training
+  acceptance_inherits_from: capability.recommendation-platform
 level_acceptance:
   focus_groups:
-    - A1_functional
-    - A7_contract_metadata_consistency
-    - A8_test_automation
-  notes: "样本生成、数据集管理、特征工程、模型训练、模型注册全链路。"
+  - A1_functional
+  - A7_contract_metadata_consistency
+  - A8_test_automation
+  notes: 样本生成、数据集管理、特征工程、模型训练、模型注册全链路。
 global_acceptance:
   A1_functional:
     scenarios:
-      - given: "rec_learning_events 有数据"
-        when: "SampleJoiner 运行"
-        then: "rec_training_samples 写入带 scenario 与特征的样本"
-      - given: "指定 datasetId"
-        when: "train.py 运行"
-        then: "产出模型文件并写入 ModelRegistry"
+    - given: rec_learning_events 有数据
+      when: SampleJoiner 运行
+      then: rec_training_samples 写入带 scenario 与特征的样本
+    - given: 指定 datasetId
+      when: train.py 运行
+      then: 产出模型文件并写入 ModelRegistry
   A7_contract_metadata_consistency:
-    - "特征注册表与推理侧一致"
+  - 特征注册表与推理侧一致
   A8_test_automation:
-    - "样本生成与训练可自动化或脚本化验证"
+  - 样本生成与训练可自动化或脚本化验证
 execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
+  local_gate: make gate
+  full_gate: make gate-full

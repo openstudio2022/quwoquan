@@ -1,0 +1,32 @@
+version: 1
+domain: user
+entity_name: ContactDiscoveryRecord
+aggregate_root: false
+
+description: |
+  通讯录发现记录。
+  OwnerAccount 上传已哈希的通讯录手机号，平台匹配已注册用户的 SubAccount。
+  结果只暴露 subAccountId，不泄露 OwnerAccount 关联（隐私隔离）。
+  记录有 72 小时自动过期（隐私合规），到期后自动删除。
+
+storage_backend: postgres
+cache_layer: none
+
+lifecycle:
+  ttl_hours: 72
+  cleanup_strategy: scheduled_job
+  cleanup_cron: "0 * * * *"
+
+business_rules:
+  - id: result_isolation
+    description: 匹配结果只返回 subAccountId，不含 ownerId/userId
+  - id: rate_limit
+    description: 每个 OwnerAccount 每 24 小时最多触发 5 次发现
+  - id: batch_size_limit
+    description: 单次上传最多 5000 条哈希手机号
+
+ddd_layer_mapping:
+  domain_model: internal/domain/user/model
+  repository: internal/domain/user/repository
+  application: internal/application/user
+  adapter_rest: internal/adapter/rest/user

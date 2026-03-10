@@ -1,7 +1,7 @@
 version: 1
-feature: "unified-entry-security"
-level: "L2"
-template: "A1-A8"
+feature: unified-entry-security
+level: "L2_feature"
+template: A1-A8
 focus_groups: []
 tests:
   mock: []
@@ -10,5 +10,5 @@ tests:
   integration: []
   uat: []
 execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
+  local_gate: make gate
+  full_gate: make gate-full

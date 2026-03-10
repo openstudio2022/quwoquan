@@ -3,7 +3,10 @@ domain: user
 aggregate_root: UserProfile
 
 description: |
-  用户档案聚合。用户核心身份、认证、设备、设置和分身管理。
+  用户档案聚合（主控账号 OwnerAccount 语义层）。
+  UserProfile 即 OwnerAccount：登录凭证、设备、恢复、子账号管理的主控容器。
+  Persona 即 SubAccount：应用内真实身份主体，可承担任意角色，强隔离。
+  CredentialBinding：第三方凭证绑定（手机号/微信/Apple 并行，独立成员）。
   全部实体 PostgreSQL 存储，保障强 ACID 和关系约束。
   热数据走 Redis 缓存（TTL 600s）。
 
@@ -20,14 +23,20 @@ vector_enabled: false
 
 members:
   - entity: Persona
+    alias: SubAccount
     relation: 1:N
     cascade_delete: true
-    description: 多分身（匿名/私密身份）
+    description: 子账号（应用内身份主体，强隔离，外部不可关联）
 
   - entity: UserAuth
     relation: 1:1
     cascade_delete: true
-    description: 认证凭证（安全隔离）
+    description: 主控账号安全凭证（密码/OTP/会话/锁定）
+
+  - entity: CredentialBinding
+    relation: 1:N
+    cascade_delete: true
+    description: 第三方凭证绑定（phone/wechat/apple 并行，各最多1个）
 
   - entity: UserDevice
     relation: 1:N
@@ -52,9 +61,13 @@ ddd_layer_mapping:
   adapter_event: internal/adapter/event/user
 
 join_paths:
-  user_with_active_persona: >
+  owner_with_active_sub_account: >
     UserProfile LEFT JOIN Persona WHERE isActive = true
-  user_with_settings: >
+  owner_with_credentials: >
+    UserProfile INNER JOIN CredentialBinding WHERE isActive = true
+  owner_with_settings: >
     UserProfile INNER JOIN UserSetting
-  user_full_snapshot: >
-    UserProfile + 激活 Persona + UserSetting（供 Profile API 返回）
+  owner_full_snapshot: >
+    UserProfile + 激活 Persona + UserSetting + 激活 CredentialBinding（供登录后初始化）
+  sub_account_public_view: >
+    Persona（subAccountId）+ 选定公开字段（供 /v1/user/{subAccountId} 接口返回）

@@ -38,9 +38,14 @@ void main() {
     ];
     const allowedToolSet = <String>{
       'web_search',
+      'web_fetch',
+      'memory_search',
       'local_context',
       'media_gallery',
       'intent_bridge',
+      'scheduler',
+      'deep_link',
+      'app_action',
     };
 
     Map<String, String> parseFrontmatter(String raw) {

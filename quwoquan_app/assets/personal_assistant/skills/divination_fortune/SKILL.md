@@ -106,6 +106,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 - 评分应有差异（不得所有维度都 5 星），且评分与内容描述一致
 - 不作确定性预言（"今天一定会遇到贵人"），用启发性语言（"今天适合主动出击"）
 - 若用户有明确关切（感情/考试），重点展开该维度，其余简略
+- 所有运势与占卜内容仅供参考，重点在于启发与陪伴，不替代用户自己的判断
 
 ## 参考资料
 - `references/domain-knowledge.md`: 运势类回答边界、信息确认原则、风险措辞约束

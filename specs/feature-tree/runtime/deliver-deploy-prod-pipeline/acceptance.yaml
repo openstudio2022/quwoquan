@@ -1,72 +1,89 @@
 version: 1
-feature: "deliver-deploy-prod-pipeline"
+feature: deliver-deploy-prod-pipeline
 archived: true
-archived_at: "2025-02-28T00:00:00Z"
-level: "L2"
-template: "A1-A8"
+archived_at: '2025-02-28T00:00:00Z'
+level: "L2_feature"
+template: A1-A8
 focus_groups: []
 tests:
   contract:
-    - 场景：pre-release-gate workflow 存在且 v*-rc* 可触发
-    - 场景：L3 对 integration 执行，失败即 fail
-    - 场景：L4 Patrol/FTL 在 pre-release 执行
+  - 场景：pre-release-gate workflow 存在且 v*-rc* 可触发
+  - 场景：L3 对 integration 执行，失败即 fail
+  - 场景：L4 Patrol/FTL 在 pre-release 执行
   integration:
-    - 场景：CLOUD_PROVIDER=aliyun 时 kustomize build 成功
-    - 场景：CLOUD_PROVIDER=volcengine 时 kustomize build 成功
-    - 场景：CLOUD_PROVIDER=huaweicloud 时 kustomize build 成功
+  - 场景：CLOUD_PROVIDER=aliyun 时 kustomize build 成功
+  - 场景：CLOUD_PROVIDER=volcengine 时 kustomize build 成功
+  - 场景：CLOUD_PROVIDER=huaweicloud 时 kustomize build 成功
   uat:
-    - 场景：deliver_to_production_runbook 端到端可执行
-    - 场景：灰度步进 5→25→50→100 可执行
-    - 场景：异常可 config-rollback 回滚
+  - 场景：deliver_to_production_runbook 端到端可执行
+  - 场景：灰度步进 5→25→50→100 可执行
+  - 场景：异常可 config-rollback 回滚
 execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
+  local_gate: make gate
+  full_gate: make gate-full
 level_acceptance:
   A1:
-    criteria: "pre-release tag 触发 gate-full + L3 + L4 串联"
+    criteria: pre-release tag 触发 gate-full + L3 + L4 串联
     status: implemented
-    linked_tasks: [T5, T6]
+    linked_tasks:
+    - T5
+    - T6
     tests:
-      - file: scripts/gate.sh
+    - file: scripts/gate.sh
   A2:
-    criteria: "L3 对 integration 执行，失败阻塞发布"
+    criteria: L3 对 integration 执行，失败阻塞发布
     status: implemented
-    linked_tasks: [T5, V4]
+    linked_tasks:
+    - T5
+    - V4
     tests:
-      - file: scripts/gate.sh
+    - file: scripts/gate.sh
   A3:
-    criteria: "L4 Patrol/FTL 在 pre-release 执行，失败阻塞发布"
+    criteria: L4 Patrol/FTL 在 pre-release 执行，失败阻塞发布
     status: implemented
-    linked_tasks: [T5, T6]
+    linked_tasks:
+    - T5
+    - T6
     tests:
-      - file: scripts/gate.sh
+    - file: scripts/gate.sh
   A4:
-    criteria: "支持通过 CLOUD_PROVIDER 切换部署到阿里云、火山引擎、华为云"
+    criteria: 支持通过 CLOUD_PROVIDER 切换部署到阿里云、火山引擎、华为云
     status: implemented
-    linked_tasks: [T1, T2, T3, T4, T8, V1, V2, V3, V5]
+    linked_tasks:
+    - T1
+    - T2
+    - T3
+    - T4
+    - T8
+    - V1
+    - V2
+    - V3
+    - V5
     tests:
-      - file: scripts/gate.sh
+    - file: scripts/gate.sh
   A5:
-    criteria: "灰度步进 5→25→50→100 可执行"
+    criteria: 灰度步进 5→25→50→100 可执行
     status: implemented
     linked_tasks: []
     tests:
-      - file: scripts/gate.sh
+    - file: scripts/gate.sh
   A6:
-    criteria: "每步 SLO 卡点可执行；异常可一键回滚"
+    criteria: 每步 SLO 卡点可执行；异常可一键回滚
     status: implemented
     linked_tasks: []
     tests:
-      - file: scripts/gate.sh
+    - file: scripts/gate.sh
   A7:
-    criteria: "deliver_to_production_runbook 完整可执行"
+    criteria: deliver_to_production_runbook 完整可执行
     status: implemented
-    linked_tasks: [T7, V4]
+    linked_tasks:
+    - T7
+    - V4
     tests:
-      - file: scripts/gate.sh
+    - file: scripts/gate.sh
   A8:
-    criteria: "process_domain_mapping 校验在 gate 中"
+    criteria: process_domain_mapping 校验在 gate 中
     status: implemented
     linked_tasks: []
     tests:
-      - file: scripts/gate.sh
+    - file: scripts/gate.sh

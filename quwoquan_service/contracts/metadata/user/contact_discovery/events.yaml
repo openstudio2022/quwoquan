@@ -1,0 +1,19 @@
+version: 1
+entity: ContactDiscoveryRecord
+
+events:
+  - name: ContactDiscoveryInitiated
+    description: 用户触发通讯录发现
+    producer: user-service
+    consumers: [user-service]
+    channel: event_store
+    payload_fields: [id, ownerAccountId, createdAt]
+    security_note: payload 不含 hashedPhones
+
+  - name: ContactDiscoveryCompleted
+    description: 通讯录匹配完成
+    producer: user-service
+    consumers: [notification-service]
+    channel: event_store
+    payload_fields: [id, ownerAccountId, matchCount, completedAt]
+    security_note: payload 不含 matchedSubAccountIds（端侧通过 API 拉取）

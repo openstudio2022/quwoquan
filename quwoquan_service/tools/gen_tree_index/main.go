@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"quwoquan_service/runtime/agentpack"
 )
@@ -22,6 +23,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	rewritePathsRelativeToOutput(index.Features, filepath.Dir(outPath))
+
 	if err := agentpack.WriteIndex(index, outPath); err != nil {
 		fmt.Fprintf(os.Stderr, "write: %v\n", err)
 		os.Exit(1)
@@ -37,4 +40,13 @@ func countFeatures(nodes []agentpack.FeatureNode) int {
 		count += countFeatures(n.Children)
 	}
 	return count
+}
+
+func rewritePathsRelativeToOutput(nodes []agentpack.FeatureNode, outputDir string) {
+	for i := range nodes {
+		if rel, err := filepath.Rel(outputDir, nodes[i].Path); err == nil {
+			nodes[i].Path = rel
+		}
+		rewritePathsRelativeToOutput(nodes[i].Children, outputDir)
+	}
 }

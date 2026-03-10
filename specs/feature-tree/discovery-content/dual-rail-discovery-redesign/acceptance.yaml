@@ -1,69 +1,86 @@
 feature: dual-rail-discovery-redesign
-level: L2_feature
+level: "L2_feature"
 template: A1-A10
 archived: false
-
 execution:
   local_gate: make build && make test-contract
   full_gate: make gate-full
-
 level_acceptance:
   A1:
-    criteria: "双轨切换：点击 [微趣]↔[作品] 触发 400ms 背景色渐变至 #0A0E14，worksForceDarkProvider 正确激活/关闭深色主题"
+    criteria: '双轨切换：点击 [微趣]↔[作品] 触发 400ms 背景色渐变至 #0A0E14，worksForceDarkProvider 正确激活/关闭深色主题'
     status: pending
-    linked_tasks: [B1, B2]
+    linked_tasks:
+    - B1
+    - B2
     tests: []
-
   A2:
-    criteria: "作品流加载：首屏 works-feed 加载，垂直强制分页滑动切换完整作品，滑到底追加下一页，无内容跳变或重复"
+    criteria: 作品流加载：首屏 works-feed 加载，垂直强制分页滑动切换完整作品，滑到底追加下一页，无内容跳变或重复
     status: pending
-    linked_tasks: [M1, C1, B3]
+    linked_tasks:
+    - M1
+    - C1
+    - B3
     tests: []
-
   A3:
-    criteria: "Tab 呼吸：进入作品频道 1.5s 后二级 Tab 平滑收起，点击箭头或下拉以 Elastic 动画展开；切换筛选类型触发 works-feed 重新请求（cursor 重置）"
+    criteria: Tab 呼吸：进入作品频道 1.5s 后二级 Tab 平滑收起，点击箭头或下拉以 Elastic 动画展开；切换筛选类型触发 works-feed
+      重新请求（cursor 重置）
     status: pending
-    linked_tasks: [W4]
+    linked_tasks:
+    - W4
     tests: []
-
   A4:
-    criteria: "美图媒体：水平翻页切换多图，底部 1.5px 蓝色线性进度条随页码更新；非 16:9 图片上下留白区域填充环境色模糊背景"
+    criteria: 美图媒体：水平翻页切换多图，底部 1.5px 蓝色线性进度条随页码更新；非 16:9 图片上下留白区域填充环境色模糊背景
     status: pending
-    linked_tasks: [W1]
+    linked_tasks:
+    - W1
     tests: []
-
   A5:
-    criteria: "视频媒体：进入视口自动播放，音量在 500ms 内从 0 淡入至 1；水平滑切换关联系列片段；无关联时展示作者集合卡"
+    criteria: 视频媒体：进入视口自动播放，音量在 500ms 内从 0 淡入至 1；水平滑切换关联系列片段；无关联时展示作者集合卡
     status: pending
-    linked_tasks: [W2]
+    linked_tasks:
+    - W2
     tests: []
-
   A6:
-    criteria: "文章媒体：第一屏强制封面模式（高清背景图 + 衬线大标题 + 作者徽标），水平翻卡进入正文；正文使用思源宋体，块渲染支持 half/third/full 宽度图片行内布局和图注"
+    criteria: 文章媒体：第一屏强制封面模式（高清背景图 + 衬线大标题 + 作者徽标），水平翻卡进入正文；正文使用思源宋体，块渲染支持 half/third/full
+      宽度图片行内布局和图注
     status: pending
-    linked_tasks: [M2, C1, W3]
+    linked_tasks:
+    - M2
+    - C1
+    - W3
     tests: []
-
   A7:
-    criteria: "微趣流：1/2/3-9 图自适应宫格正确渲染；文字超 5 行截断并显示展开按钮，点击就地展开（无跳转）；视频进入视口 ≥ 60% 自动播放"
+    criteria: 微趣流：1/2/3-9 图自适应宫格正确渲染；文字超 5 行截断并显示展开按钮，点击就地展开（无跳转）；视频进入视口 ≥ 60% 自动播放
     status: pending
-    linked_tasks: [Mo1, Mo2, Mo3]
+    linked_tasks:
+    - Mo1
+    - Mo2
+    - Mo3
     tests: []
-
   A8:
-    criteria: "毛玻璃 Drawer：右侧 40% 热区点击或左拉展开，BackdropFilter sigma ≥ 15，背景带深蓝倾向；不遮挡系统状态栏 / Home Indicator"
+    criteria: 毛玻璃 Drawer：右侧 40% 热区点击或左拉展开，BackdropFilter sigma ≥ 15，背景带深蓝倾向；不遮挡系统状态栏
+      / Home Indicator
     status: pending
-    linked_tasks: [W5]
+    linked_tasks:
+    - W5
     tests: []
-
   A9:
-    criteria: "点位评论 UI：长按 500ms 触发蓝色脉冲光点（ScaleTransition + AnimatedOpacity），PageView 双向锁定；点击光点打开 Drawer；松手/取消 200ms 淡出，PageView 解锁"
+    criteria: 点位评论 UI：长按 500ms 触发蓝色脉冲光点（ScaleTransition + AnimatedOpacity），PageView
+      双向锁定；点击光点打开 Drawer；松手/取消 200ms 淡出，PageView 解锁
     status: pending
-    linked_tasks: [An1, An2, An3]
+    linked_tasks:
+    - An1
+    - An2
+    - An3
     tests: []
-
   A10:
-    criteria: "工程门禁：ArticleBlock DTO codegen hash 一致，make gate 通过；Mock/Remote 双模式下 works-feed + moment-feed 全链路正确"
+    criteria: 工程门禁：ArticleBlock DTO codegen hash 一致，make gate 通过；Mock/Remote 双模式下
+      works-feed + moment-feed 全链路正确
     status: pending
-    linked_tasks: [M1, M2, C1, T8, T9]
+    linked_tasks:
+    - M1
+    - M2
+    - C1
+    - T8
+    - T9
     tests: []

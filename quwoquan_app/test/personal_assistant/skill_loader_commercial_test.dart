@@ -58,6 +58,27 @@ void main() {
       );
     });
 
+    test(
+      'loads fallback skill with adaptive baseline execution shell',
+      () async {
+        final loader = const PersonalAssistantSkillLoader();
+        final skills = await loader.loadBundledSkills();
+        final fallback = skills
+            .where((s) => s.id == 'fallback_general_search')
+            .toList();
+        expect(fallback, isNotEmpty);
+        final skill = fallback.first;
+        expect(skill.domainId, equals('fallback_general_search'));
+        expect(skill.allowedTools, contains('web_search'));
+        expect(skill.executionShell.problemClass, equals('general'));
+        expect(skill.executionShell.maxIterations, equals(4));
+        expect(skill.executionShell.toolBudget, equals(2));
+        expect(skill.executionShell.variantBudget, equals(1));
+        expect(skill.executionShell.reflectionBudget, equals(1));
+        expect(skill.executionShell.freshnessHoursMax, equals(24));
+      },
+    );
+
     test('loads fortune skill from SKILL.md and routes by trigger', () async {
       final loader = const PersonalAssistantSkillLoader();
       final router = const PersonalAssistantSkillRouter();

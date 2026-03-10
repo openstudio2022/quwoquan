@@ -1,0 +1,7 @@
+feature: list-detail-message-delivery--message-interaction-polish--voice-earpiece-and-speed
+level: "L3_story"
+archived: false
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+level_acceptance: {}

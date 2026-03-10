@@ -1,0 +1,16 @@
+version: 1
+entity: UserWork
+
+service:
+  name: user-service
+  domain: user
+
+api_routes:
+  - method: GET
+    path: /v1/users/{userId}/works
+    operation: ListUserWorks
+    description: 用户作品集列表
+
+consumers:
+  - name: app
+    capabilities: [read_works]

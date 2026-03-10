@@ -1,121 +1,59 @@
 feature: profile-homepage-redesign
-level: L2_feature
+level: "L2_feature"
 archived: false
-
 execution:
   local_gate: make gate
   full_gate: make gate-full
-
 level_acceptance:
   A1:
-    criteria: >
-      ProfileShell 统一组件正确渲染 mine/other 两种模式：
-      mine 模式显示 [编辑资料, 管理人设] 等宽双按钮、顶栏含设置入口、无私人助理入口；
-      other 模式显示 [关注/已关注, 私信] 等宽双按钮（与 mine 布局一致）、顶栏含返回+更多。
-      共享区域布局：头像靠左对齐（非居中），侵入背景图区域 1/3（顶部 1/3 在背景区、底部 2/3 在信息区）；
-      用户名与头像同行显示（Row），垂直对齐到头像下部 2/3 区域；不显示 @username。
+    criteria: 'ProfileShell 统一组件正确渲染 mine/other 两种模式： mine 模式显示 [编辑资料, 管理人设] 等宽双按钮、顶栏含设置入口、无私人助理入口；
+      other 模式显示 [关注/已关注, 私信] 等宽双按钮（与 mine 布局一致）、顶栏含返回+更多。 共享区域布局：头像靠左对齐（非居中），侵入背景图区域
+      1/3（顶部 1/3 在背景区、底部 2/3 在信息区）； 用户名与头像同行显示（Row），垂直对齐到头像下部 2/3 区域；不显示 @username。
       背景图拉伸、统计行、交集卡片在两种模式下保持一致。
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
-      T1: required    # Widget 属性断言
-      T2: required    # mine/other 渲染差异验证
+      T1: required
+      T2: required
       T3: optional
-      T4: required    # E2E 两个入口验证
+      T4: required
     tests: []
-
   A2:
-    criteria: >
-      一级 Tab 结构为 [创作 | 圈子 | 互动 | 生活]，默认选中「创作」Tab。
-      Tab 可左右滑动切换，TabBar 使用 CenteredScrollableTabBar 组件（与发现页一致），
-      切换时对应 TabBarView 正确联动。
+    criteria: '一级 Tab 结构为 [创作 | 圈子 | 互动 | 生活]，默认选中「创作」Tab。 Tab 可左右滑动切换，TabBar 使用 CenteredScrollableTabBar
+      组件（与发现页一致）， 切换时对应 TabBarView 正确联动。
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
-      T1: required    # Tab 数量/顺序断言
-      T2: required    # Tab 交互
+      T1: required
+      T2: required
       T3: optional
-      T4: required    # E2E Tab 切换
+      T4: required
     tests: []
-
   A3:
-    criteria: >
-      创作 Tab 二级 SubTab 为 [全部 | 微趣 | 图片 | 视频 | 文字]，默认选中「全部」，
-      SubTab 与发现页 contentType 枚举对齐（micro/image/video/article）。
-      点击已选中的「创作」一级 Tab 弹出可见性过滤 popup：
-      mine 模式: [全部 | 公开 | 私密]；other 模式: [全部 | 公开]。
-      选中非「全部」时，一级 Tab 文字旁显示筛选指示器圆点。
-      私密作品封面叠加半透明锁标 icon。
+    criteria: '创作 Tab 二级 SubTab 为 [全部 | 微趣 | 图片 | 视频 | 文字]，默认选中「全部」， SubTab 与发现页 contentType
+      枚举对齐（micro/image/video/article）。 点击已选中的「创作」一级 Tab 弹出可见性过滤 popup： mine 模式: [全部
+      | 公开 | 私密]；other 模式: [全部 | 公开]。 选中非「全部」时，一级 Tab 文字旁显示筛选指示器圆点。 私密作品封面叠加半透明锁标
+      icon。
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
-      T1: required    # SubTab 枚举与 contentType 对齐
-      T2: required    # 过滤 popup 交互、锁标渲染
+      T1: required
+      T2: required
       T3: optional
-      T4: required    # E2E 过滤切换
+      T4: required
     tests: []
-
   A4:
-    criteria: >
-      圈子 Tab 垂直列表展示用户已加入圈子，每张卡片显示封面图（16:9 裁切）+ 圈子名。
-      点击卡片跳转 circle_detail_page 且参数正确。
-      空态（无已加入圈子）显示引导文案「还没加入圈子」（mine）或「Ta 还没加入圈子」（other）。
-      mine 模式显示全部已加入圈子；other 模式仅显示公开可见圈子。
-    status: pending
-    linked_tasks: []
-    test_layers:
-      T1: required    # CircleCard DTO 结构
-      T2: required    # 列表渲染、空态渲染、跳转
-      T3: optional
-      T4: optional
-    tests: []
+    criteria: '圈子 Tab 垂直列表展示用户已加入圈子，每张卡片显示封面图（16:9 裁切）+ 圈子名。 点击卡片跳转 circle_detail_page
+      且参数正确。 空态（无已加入圈子）显示引导文案「还没加入圈子」（mine）或「Ta 还没加入圈子」（other）。 mine 模式显示全部已加入圈子；other
+      模式仅显示公开可见圈子。
 
-  A5:
-    criteria: >
-      features/profile/ 目录完整迁移到 lib/ui/user/：
-      - my_profile_page.dart 重写为 ProfileShell(mode: mine) 入口
-      - author_profile_page.dart 重写为 ProfileShell(mode: other) 入口
-      - edit_profile_page.dart, persona_management_page.dart, resonance_page.dart,
-        profile_stats_page.dart 迁移到 lib/ui/user/pages/（仅移动，不重写）
-      - app_router.dart 路由指向更新，无断链
-      - features/profile/ 目录删除
-      - flutter analyze 无新增错误
-    status: pending
-    linked_tasks: []
-    test_layers:
-      T1: required    # import 路径无断链
-      T2: optional
-      T3: optional
-      T4: required    # E2E 导航验证
-    tests: []
-
-  A6:
-    criteria: >
-      端云 DTO codegen 对齐完成：
-      - contracts/metadata/user/user_profile/fields.yaml 包含统计字段
-        （followingCount, circleCount, followerCount, likeCount）
-      - make codegen-app 生成 user_profile_dto.g.dart 包含上述字段
-      - UserProfileRepository 接口扩展 listUserCircles() 方法
-      - Mock 实现返回有效测试数据
-    status: pending
-    linked_tasks: []
-    test_layers:
-      T1: required    # DTO 契约测试
-      T2: optional
-      T3: required    # Repository 端云一致
-      T4: optional
-    tests: []
-
-  A7:
-    criteria: >
-      四层测试建立且全部通过：
-      L1a（契约）: ≥3 test case（DTO schema, 统计字段, 圈子 DTO）
-      L1b（Widget）: ≥8 test case
-        （ProfileShell mine/other、创作 Tab 子分类切换、可见性过滤 popup、
-          圈子 Tab 卡片渲染、圈子 Tab 空态、互动 Tab 方向切换、Tab 默认选中创作）
-      L1c（Journey）: ≥2 journey
-        （打开我的→Tab切换→过滤→返回、打开他人→关注→Tab→圈子跳转）
-      所有测试通过 flutter test 且无 skip。
+      '
     status: pending
     linked_tasks: []
     test_layers:
@@ -124,46 +62,65 @@ level_acceptance:
       T3: optional
       T4: optional
     tests: []
-
+  A5:
+    criteria: "features/profile/ 目录完整迁移到 lib/ui/user/： - my_profile_page.dart 重写为\
+      \ ProfileShell(mode: mine) 入口 - author_profile_page.dart 重写为 ProfileShell(mode:\
+      \ other) 入口 - edit_profile_page.dart, persona_management_page.dart, resonance_page.dart,\n\
+      \  profile_stats_page.dart 迁移到 lib/ui/user/pages/（仅移动，不重写）\n- app_router.dart\
+      \ 路由指向更新，无断链 - features/profile/ 目录删除 - flutter analyze 无新增错误\n"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: required
+    tests: []
+  A6:
+    criteria: "端云 DTO codegen 对齐完成： - contracts/metadata/user/user_profile/fields.yaml\
+      \ 包含统计字段\n  （followingCount, circleCount, followerCount, likeCount）\n- make\
+      \ codegen-app 生成 user_profile_dto.g.dart 包含上述字段 - UserProfileRepository 接口扩展\
+      \ listUserCircles() 方法 - Mock 实现返回有效测试数据\n"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests: []
+  A7:
+    criteria: "四层测试建立且全部通过： L1a（契约）: ≥3 test case（DTO schema, 统计字段, 圈子 DTO） L1b（Widget）:\
+      \ ≥8 test case\n  （ProfileShell mine/other、创作 Tab 子分类切换、可见性过滤 popup、\n    圈子\
+      \ Tab 卡片渲染、圈子 Tab 空态、互动 Tab 方向切换、Tab 默认选中创作）\nL1c（Journey）: ≥2 journey\n  （打开我的→Tab切换→过滤→返回、打开他人→关注→Tab→圈子跳转）\n\
+      所有测试通过 flutter test 且无 skip。\n"
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: optional
+    tests: []
   A8:
-    criteria: >
-      视觉一致性审计通过：
-      - verify_dart_semantic.py 零新增硬编码违规（颜色/间距/字号/文案）
-      - 所有间距使用 AppSpacing.* 语义标签
-      - 所有颜色使用 AppColorsFunctional / AppColors
-      - 所有字号使用 AppTypography.*
-      - 所有文案使用 UITextConstants / l10n
-      - 可交互元素最小热区 44×44
-      - Tab 导航使用 CenteredScrollableTabBar（与发现页共享）
+    criteria: '视觉一致性审计通过： - verify_dart_semantic.py 零新增硬编码违规（颜色/间距/字号/文案） - 所有间距使用
+      AppSpacing.* 语义标签 - 所有颜色使用 AppColorsFunctional / AppColors - 所有字号使用 AppTypography.*
+      - 所有文案使用 UITextConstants / l10n - 可交互元素最小热区 44×44 - Tab 导航使用 CenteredScrollableTabBar（与发现页共享）
+
+      '
     status: pending
     linked_tasks: []
     test_layers:
-      T1: required    # semantic verify 脚本
-      T2: required    # Widget golden test 可选
+      T1: required
+      T2: required
       T3: optional
       T4: optional
     tests: []
-
   A9:
-    criteria: >
-      互动 Tab 正确渲染子维度 [赞 | 评论]，mine 模式含方向切换 [收到 | 发出]，
-      other 模式仅显示公开的收到互动。
-      互动列表项包含：头像、用户名、互动内容摘要、时间。
-      空态显示友好提示。
-    status: pending
-    linked_tasks: []
-    test_layers:
-      T1: optional
-      T2: required    # Widget 渲染
-      T3: optional
-      T4: optional
-    tests: []
+    criteria: '互动 Tab 正确渲染子维度 [赞 | 评论]，mine 模式含方向切换 [收到 | 发出]， other 模式仅显示公开的收到互动。
+      互动列表项包含：头像、用户名、互动内容摘要、时间。 空态显示友好提示。
 
-  A10:
-    criteria: >
-      生活 Tab 正确渲染子分类 [足迹 | 书影音 | 味蕾 | 爱物]，
-      支持网格/列表视图切换。生活记录卡片渲染完整。
-      空态显示引导文案。
+      '
     status: pending
     linked_tasks: []
     test_layers:
@@ -172,75 +129,69 @@ level_acceptance:
       T3: optional
       T4: optional
     tests: []
+  A10:
+    criteria: '生活 Tab 正确渲染子分类 [足迹 | 书影音 | 味蕾 | 爱物]， 支持网格/列表视图切换。生活记录卡片渲染完整。 空态显示引导文案。
 
-  A11:
-    criteria: >
-      统计行（关注/圈子/粉丝/获赞）数字可点击，
-      mine 模式每个数字跳转对应详情页（followers_page, following_page 等），
-      other 模式同理但受隐私设置限制。
-      统计数字使用 DTO 中的 count 字段，非硬编码。
+      '
     status: pending
     linked_tasks: []
     test_layers:
-      T1: required    # count 字段映射
-      T2: required    # 跳转验证
+      T1: optional
+      T2: required
       T3: optional
       T4: optional
     tests: []
+  A11:
+    criteria: '统计行（关注/圈子/粉丝/获赞）数字可点击， mine 模式每个数字跳转对应详情页（followers_page, following_page
+      等）， other 模式同理但受隐私设置限制。 统计数字使用 DTO 中的 count 字段，非硬编码。
 
+      '
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: optional
+    tests: []
   A12:
-    criteria: >
-      多阶段滚动交互正确且流畅：
-      - 阶段 0（下拉超越）：背景图弹簧阻尼拉伸（非线性），释放回弹动效 ≤ 300ms
-      - 阶段 1→2（上滑折叠）：头像从大（信息区靠左）平滑过渡到小（工具栏 leading），
-        名字从信息区平滑过渡到工具栏 title，过渡使用交叉淡入淡出（非二元跳变）
-      - 阶段 2→3（一级 Tab 吸顶）：一级 Tab 固定在工具栏下方（双层吸顶）
-      - 阶段 3→4（深度滚动）：二级 Tab 跟随内容自然滚动，不吸顶
-      - 回拉：内层到外层无缝交接，Tab 脱离吸顶、头部重新展开，头像过渡回大尺寸
-      - BouncingScrollPhysics 全程有效
-      - SystemUI overlay 颜色跟随主题（亮/暗）
+    criteria: "多阶段滚动交互正确且流畅： - 阶段 0（下拉超越）：背景图弹簧阻尼拉伸（非线性），释放回弹动效 ≤ 300ms - 阶段 1→2（上滑折叠）：头像从大（信息区靠左）平滑过渡到小（工具栏\
+      \ leading），\n  名字从信息区平滑过渡到工具栏 title，过渡使用交叉淡入淡出（非二元跳变）\n- 阶段 2→3（一级 Tab 吸顶）：一级\
+      \ Tab 固定在工具栏下方（双层吸顶） - 阶段 3→4（深度滚动）：二级 Tab 跟随内容自然滚动，不吸顶 - 回拉：内层到外层无缝交接，Tab 脱离吸顶、头部重新展开，头像过渡回大尺寸\
+      \ - BouncingScrollPhysics 全程有效 - SystemUI overlay 颜色跟随主题（亮/暗）\n"
     status: pending
     linked_tasks: []
     test_layers:
       T1: optional
-      T2: required    # scroll physics + 过渡断言
+      T2: required
       T3: optional
-      T4: required    # E2E 真机滚动体验
+      T4: required
     tests: []
-
   A13:
-    criteria: >
-      暗色模式语义背景全面支持：
-      - 背景渐变遮罩的终点色跟随 backgroundPrimary（亮/暗）
-      - 工具栏折叠态背景从透明过渡到 backgroundPrimary（亮/暗）
-      - 用户信息区背景色使用 backgroundPrimary 语义色
-      - 头像侵入区（背景→信息区分界）的过渡在暗色模式下视觉无断层
-      - 所有文本、图标颜色使用 foregroundPrimary/Secondary 语义色
-      - 操作按钮边框、统计行分隔线使用 borderPrimary 语义色
-      - 暗色模式下状态栏图标为亮色（Brightness.light）
-    status: pending
-    linked_tasks: []
-    test_layers:
-      T1: optional
-      T2: required    # 暗色模式渲染断言
-      T3: optional
-      T4: required    # E2E 暗色模式真机验证
-    tests: []
+    criteria: '暗色模式语义背景全面支持： - 背景渐变遮罩的终点色跟随 backgroundPrimary（亮/暗） - 工具栏折叠态背景从透明过渡到
+      backgroundPrimary（亮/暗） - 用户信息区背景色使用 backgroundPrimary 语义色 - 头像侵入区（背景→信息区分界）的过渡在暗色模式下视觉无断层
+      - 所有文本、图标颜色使用 foregroundPrimary/Secondary 语义色 - 操作按钮边框、统计行分隔线使用 borderPrimary
+      语义色 - 暗色模式下状态栏图标为亮色（Brightness.light）
 
-  A14:
-    criteria: >
-      头像侵入布局正确：
-      - 头像圆形，靠左对齐，水平起点 containerMd
-      - 头像顶部 1/3 在背景图区域内，底部 2/3 在用户信息区内
-      - 用户名与头像同行（Row），垂直对齐到头像中下部
-      - 不显示 @username
-      - bio 在用户名下方，左对齐（与用户名起点一致）
-      - 操作按钮行（mine/other）均为等宽双按钮布局
+      '
     status: pending
     linked_tasks: []
     test_layers:
       T1: optional
-      T2: required    # Widget 布局断言
+      T2: required
       T3: optional
-      T4: required    # E2E 视觉验证
+      T4: required
+    tests: []
+  A14:
+    criteria: '头像侵入布局正确： - 头像圆形，靠左对齐，水平起点 containerMd - 头像顶部 1/3 在背景图区域内，底部 2/3 在用户信息区内
+      - 用户名与头像同行（Row），垂直对齐到头像中下部 - 不显示 @username - bio 在用户名下方，左对齐（与用户名起点一致） - 操作按钮行（mine/other）均为等宽双按钮布局
+
+      '
+    status: pending
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: required
     tests: []

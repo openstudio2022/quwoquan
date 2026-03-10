@@ -1,21 +1,19 @@
 version: 1
 feature: metadata-domain-restructure
-level: L3_subfeature
+level: "L3_story"
 status: specified
 archived: true
-archived_at: "2026-03-01T00:00:00Z"
-
+archived_at: '2026-03-01T00:00:00Z'
 acceptance_criteria:
-  - id: A1
-    description: 目录结构重组完成
-    assertions:
-      - contracts/metadata/content/post/ 存在且含5个核心YAML
-      - contracts/metadata/content/post/projections/ 含 photo/video/article/moment 4个文件
-      - contracts/metadata/content/openapi.yaml 存在
-      - _projections/ 不再含已迁移的 post 域投影
-
-  - id: A2
-    description: codegen 产物不变
-    assertions:
-      - make codegen-app 输出与重组前 hash 完全一致
-      - make verify-metadata PASS
+- id: A1
+  description: 目录结构重组完成
+  assertions:
+  - contracts/metadata/content/post/ 存在且含5个核心YAML
+  - contracts/metadata/content/post/projections/ 含 photo/video/article/moment 4个文件
+  - contracts/metadata/content/openapi.yaml 存在
+  - _projections/ 不再含已迁移的 post 域投影
+- id: A2
+  description: codegen 产物不变
+  assertions:
+  - make codegen-app 输出与重组前 hash 完全一致
+  - make verify-metadata PASS

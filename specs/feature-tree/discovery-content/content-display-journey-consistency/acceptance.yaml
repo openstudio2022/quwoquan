@@ -1,28 +1,28 @@
 version: 1
-feature: "content-display-journey-consistency"
-level: "L2"
-template: "A1-A8"
+feature: content-display-journey-consistency
+level: "L2_feature"
+template: A1-A8
 focus_groups: []
 tests:
   mock:
-    - 场景：DiscoveryFeedProvider mock 模式下返回 PrototypeMockData 或 DataServiceImpl 数据
-    - 场景：HomeState 关注/赞/收藏变更后，列表与浏览器展示一致
+  - 场景：DiscoveryFeedProvider mock 模式下返回 PrototypeMockData 或 DataServiceImpl 数据
+  - 场景：HomeState 关注/赞/收藏变更后，列表与浏览器展示一致
   unit:
-    - 场景：DiscoveryFeedProvider appendNextPage 正确追加 items 并更新 cursor
-    - 场景：路由 extra 传递 posts + initialIndex 正确解析
+  - 场景：DiscoveryFeedProvider appendNextPage 正确追加 items 并更新 cursor
+  - 场景：路由 extra 传递 posts + initialIndex 正确解析
   contract:
-    - 场景：ContentRepository.listDiscoveryFeedPage 与 post/service.yaml GetFeed 契约一致
+  - 场景：ContentRepository.listDiscoveryFeedPage 与 post/service.yaml GetFeed 契约一致
   integration:
-    - 场景：remote 模式下，列表→浏览器→作者详情 全链路使用同一 feed 数据
+  - 场景：remote 模式下，列表→浏览器→作者详情 全链路使用同一 feed 数据
   uat:
-    - 场景：美图频道点击 post → 浏览器展示与 post 一致 → 作者详情同源 → 关注变更返回同步
-    - 场景：浏览器滑动顺序与列表一致，加载更多后顺序正确
-    - 场景：退出再进，关注/赞/收藏状态保持
-    - 场景：视频旅程与图片一致
-    - 场景：Mock/Remote 切换后全链路正确
+  - 场景：美图频道点击 post → 浏览器展示与 post 一致 → 作者详情同源 → 关注变更返回同步
+  - 场景：浏览器滑动顺序与列表一致，加载更多后顺序正确
+  - 场景：退出再进，关注/赞/收藏状态保持
+  - 场景：视频旅程与图片一致
+  - 场景：Mock/Remote 切换后全链路正确
 execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
+  local_gate: make gate
+  full_gate: make gate-full
 level_acceptance:
   A1: 列表、浏览器、作者详情数据与 post 一致，来源一致
   A2: 关注/赞/收藏跨页面一致，重入后保持

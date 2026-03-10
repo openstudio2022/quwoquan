@@ -74,6 +74,28 @@ errors:
       zh: "你不是该通话的参与者"
       en: "You are not a participant of this call"
 
+  - code: RTC.USER.not_same_interest
+    kind: USER
+    reason: forbidden
+    http_status: 403
+    retryable: false
+    dart_const: notSameInterest
+    go_const: ErrNotSameInterest
+    user_message:
+      zh: "只有同好才能发起 1 对 1 实时通话"
+      en: "Only same-interest users can start a 1-on-1 realtime call"
+
+  - code: RTC.USER.blocked
+    kind: USER
+    reason: forbidden
+    http_status: 403
+    retryable: false
+    dart_const: blocked
+    go_const: ErrBlocked
+    user_message:
+      zh: "当前关系不允许发起通话"
+      en: "Current relationship does not allow calling"
+
   - code: RTC.USER.cannot_answer
     kind: USER
     reason: invalid_state

@@ -1,0 +1,18 @@
+version: 1
+feature: moderation-policy-contract
+level: "L3_story"
+template: A1-A8
+focus_groups: []
+tests:
+  mock: []
+  unit: []
+  contract: []
+  integration: []
+  uat: []
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+legacy_merged_acceptance:
+- source_path: circle-community/circle-management-and-stats/moderation-governance/moderation-policy-contract/governance-audit-guard
+  task_bucket: governance-audit-guard
+  migrated_as: L3_task

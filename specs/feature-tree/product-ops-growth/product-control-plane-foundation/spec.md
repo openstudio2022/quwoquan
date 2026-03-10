@@ -25,8 +25,10 @@
 
 - 为 `product-ops` 统一运营控制面建立共同产品基线，第一阶段作为一个产品交付，内部包含“治理处置”和“增长/实验/推荐运营”两大模块。
 - 为每个领域定义 `product-control-plane` 的统一管理接口规范，要求通过 `control_plane.yaml`、`workflow.yaml`、`audit_schema.yaml`、`config_schema.yaml` 表达，并由 codegen 生成 Web / Go / Python / App 契约。
+- 为用户域冻结“主控账号 / 子账号”双层模型在运营控制面的呈现边界：`OwnerAccount` 只承担管理、恢复、通讯录匹配与组合视角，`SubAccount` 承担应用、邀请与增长归因主体。
 - 冻结推荐运营深度，覆盖召回、粗排、精排/重排的受控干预，而不仅是实验分桶。
 - 冻结账号恢复工作流，要求支持客服、证据上传、SLA、人工复核双签，并形成正式 case model。
+- 冻结用户发展与经营基线，覆盖通讯录发现、已加入用户识别、未加入用户邀请、关系转化、分群经营与生命周期视图。
 - 冻结端侧 IA 与体验配置边界，允许 `ops.*` 管理一级/二级 tab、栏目、版面、布局与体验 feature flag，但不得混入 `sys.*` 运行时参数。
 - 冻结控制面部署原则：短期允许 `seed-box` 容器与领域处置服务同 Pod，共享部署；长期支持独立 Deployment / Pod 与独立扩缩容。
 - 明确统一门户中的 `Product Ops` 一级菜单、二级工作域和对象跳转边界。
@@ -46,6 +48,8 @@
 - 标签与分群
 - 实验与灰度
 - 推荐运营
+- 邀请与增长
+- 生命周期经营
 - 内容治理
 - 账号治理
 - 申诉与恢复
@@ -72,6 +76,9 @@
 - 标签
 - 实验
 - 活动
+- 通讯录发现
+- 邀请归因
+- 生命周期经营
 - 推荐干预
 - 优化闭环
 
@@ -82,6 +89,9 @@
 - 控制面契约不得侵入用户面 API
 - 审核、处罚、申诉、恢复必须可审计
 - 推荐运营只能在受限参数空间内干预
+- 用户发展与增长链路必须保留“主控账号管理视角”和“子账号应用视角”的语义分层
+- 通讯录匹配结果不得直接等同于社交关系；建立好友/圈子/群关系时必须落到具体子账号
+- 邀请归因、奖励与传播主体默认归属于具体子账号，而不是主控账号
 - 统一前端为 `React + TypeScript`
 - 后端主栈为 `Go`
 - 推荐训练 / 评估保留 `Python`
@@ -95,6 +105,7 @@
 
 吸收结论：
 - 借鉴点：统一产品壳层、实验与归因联动、治理 case/workflow、证据与双签审计
+- 借鉴点：把用户增长、邀请传播、恢复治理、分群经营纳入同一工作台，而不是散落在多个后台
 - 不借鉴点：不做多产品拆分，不照搬大型组织的复杂角色体系
 - 适用边界：当前适合一个统一产品、少角色拆分、全栈共担的团队形态
 - 成本取舍：先冻结共同上位模型，再在 `/design` 阶段按模块细化 schema 和权限模型
@@ -184,6 +195,10 @@
 - `MetricDefinition`
 - `Segment`
 - `Experiment`
+- `InviteAttribution`
+- `ContactDiscoveryMatch`
+- `LifecycleProfile`
+- `OwnerAccountPortfolioView`
 - `RecommendationPolicy`
 - `RecommendationOverride`
 - `OptimizationRun`
@@ -194,6 +209,8 @@
 - 治理处置：`reported -> triaged -> reviewing -> action_pending -> action_applied -> closed`
 - 申诉：`submitted -> evidence_pending -> under_review -> approved|rejected -> closed`
 - 账号恢复：`requested -> customer_service_intake -> evidence_verified -> dual_review -> recovered|rejected -> closed`
+- 邀请转化：`generated -> delivered -> viewed -> accepted -> activated|expired`
+- 生命周期经营：`new -> activated -> retained -> high_value|silent -> recalled|churned`
 - 实验：`draft -> review_pending -> running -> ramping -> completed|rolled_back -> archived`
 - 推荐策略：`draft -> simulated -> review_pending -> canary -> active -> rolled_back|retired`
 
@@ -202,6 +219,7 @@
 适用范围：
 - `product-ops` 统一运营控制面的共同产品基线
 - 各领域 `product-control-plane` 的接口、工作流、审计与策略对象上位约束
+- 用户域下 `OwnerAccount / SubAccount` 的增长、邀请、恢复、分群与生命周期经营基线
 - 后续 `event-ingestion-and-analytics`、`experiment-bucketing-and-rollout`、`feedback-optimization-loop` 等节点的共同前提
 
 约束：
@@ -213,6 +231,6 @@
 ## 验收标准概要
 - A1：`product-ops` 作为统一产品的范围、两大模块与核心对象/工作流清晰冻结
 - A3：各领域 `product-control-plane` 契约独立，且部署支持短期同 Pod、长期独立 Pod
-- A5：推荐运营覆盖召回 / 粗排 / 精排，治理处置覆盖申诉 / 恢复 / 双签
+- A5：推荐运营覆盖召回 / 粗排 / 精排，用户发展覆盖通讯录发现 / 邀请归因 / 生命周期经营，治理处置覆盖申诉 / 恢复 / 双签
 - A7：控制面元数据、工作流、审计与 codegen 目标一致
 - A8：后续 `/design` 可直接基于本节点展开方案比较与任务拆解

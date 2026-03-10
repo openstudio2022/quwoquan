@@ -1,0 +1,17 @@
+version: 1
+domain: user
+entity_name: UserWork
+aggregate_root: false
+
+description: |
+  用户主页展示的代表作品/作品集。
+  通过 workType（post、video、article 等）区分类型，refId 关联内容系统中的具体内容。
+  可自定义排序顺序。
+
+storage_backend: postgres
+cache_layer: none
+
+ddd_layer_mapping:
+  domain_model: internal/domain/user/model
+  repository: internal/domain/user/repository
+  application: internal/application

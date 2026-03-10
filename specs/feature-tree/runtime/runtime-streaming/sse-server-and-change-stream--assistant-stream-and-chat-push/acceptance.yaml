@@ -1,0 +1,53 @@
+version: 1
+feature: assistant-stream-and-chat-push
+level: "L3_story"
+template: A1-A8
+tree_context:
+  feature_path: capability.runtime.feature.runtime-streaming.subfeature.sse-server-and-change-stream.object.assistant-stream-and-chat-push
+  parent_path: capability.runtime.feature.runtime-streaming.subfeature.sse-server-and-change-stream
+  acceptance_inherits_from: capability.runtime.feature.runtime-streaming
+level_acceptance:
+  focus_groups:
+  - A1_functional
+  - A2_experience
+  - A8_test_automation
+  notes: 助手流式输出 + 聊天消息推送业务用例，基于 SSE + Change Stream。
+global_acceptance:
+  A1_functional:
+    scenarios:
+    - given: 用户与小趣助手对话
+      when: 助手生成回复
+      then: SSE 连接逐 chunk 推送，用户实时看到文字生成
+    - given: 用户 A 发送消息给用户 B
+      when: message.sent 事件产生
+      then: 用户 B 的 SSE 连接收到新消息推送
+    - given: 用户浏览动态流
+      when: 新 Post 发布
+      then: 订阅用户的 SSE 连接收到动态更新推送
+  A2_experience:
+  - SSE 推送延迟 < 100ms（本地环境）
+  - 助手流式输出无卡顿感
+  A3_service_governance:
+  - 推送事件类型与 events.yaml 一致
+  A4_observability:
+  - 助手流式延迟、聊天推送延迟可监控
+  A5_product_ops:
+  - N/A
+  A6_security_privacy:
+  - SSE 连接需认证，按 userId 隔离
+  A7_contract_metadata_consistency:
+  - 推送事件类型与 events.yaml 定义一致
+  A8_test_automation:
+  - 助手流式输出端到端测试
+  - 聊天消息推送端到端测试
+tests:
+  integration:
+  - quwoquan_service/runtime/streaming/tests/assistant_stream_test.go
+  - quwoquan_service/runtime/streaming/tests/chat_push_test.go
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+legacy_merged_acceptance:
+- source_path: runtime/runtime-streaming/sse-server-and-change-stream/assistant-stream-and-chat-push/backpressure-and-reconnection
+  task_bucket: backpressure-and-reconnection
+  migrated_as: L3_task

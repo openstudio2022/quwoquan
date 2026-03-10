@@ -63,6 +63,15 @@ entities:
         ops_exposure: read
         description: 发起者 userId
 
+      - name: initiatorRingtoneId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 发起通话时快照的发起方官方呼叫铃声 ID；群邀请后续加人沿用该值
+
       - name: conversationId
         type: string
         constraints: [NULLABLE]

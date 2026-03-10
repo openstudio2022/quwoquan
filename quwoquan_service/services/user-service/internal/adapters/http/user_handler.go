@@ -8,13 +8,17 @@ import (
 )
 
 type UserHandler struct {
-	profile  *application.ProfileService
-	follow   *application.FollowService
-	block    *application.BlockService
-	persona  *application.PersonaService
-	work     *application.WorkService
-	lifeItem *application.LifeItemService
-	setting  *application.SettingService
+	profile          *application.ProfileService
+	follow           *application.FollowService
+	block            *application.BlockService
+	persona          *application.PersonaService
+	work             *application.WorkService
+	lifeItem         *application.LifeItemService
+	setting          *application.SettingService
+	auth             *application.AuthService
+	subAccount       *application.SubAccountService
+	contactDiscovery *application.ContactDiscoveryService
+	invite           *application.InviteService
 }
 
 func NewUserHandler(
@@ -25,15 +29,23 @@ func NewUserHandler(
 	work *application.WorkService,
 	lifeItem *application.LifeItemService,
 	setting *application.SettingService,
+	auth *application.AuthService,
+	subAccount *application.SubAccountService,
+	contactDiscovery *application.ContactDiscoveryService,
+	invite *application.InviteService,
 ) *UserHandler {
 	return &UserHandler{
-		profile:  profile,
-		follow:   follow,
-		block:    block,
-		persona:  persona,
-		work:     work,
-		lifeItem: lifeItem,
-		setting:  setting,
+		profile:          profile,
+		follow:           follow,
+		block:            block,
+		persona:          persona,
+		work:             work,
+		lifeItem:         lifeItem,
+		setting:          setting,
+		auth:             auth,
+		subAccount:       subAccount,
+		contactDiscovery: contactDiscovery,
+		invite:           invite,
 	}
 }
 
@@ -49,9 +61,9 @@ func (h *UserHandler) Routes() http.Handler {
 
 	mux.HandleFunc("POST /v1/user/follow/{targetUserId}", h.handleFollow)
 	mux.HandleFunc("DELETE /v1/user/follow/{targetUserId}", h.handleUnfollow)
-	mux.HandleFunc("GET /v1/user/{userId}/following", h.handleListFollowing)
-	mux.HandleFunc("GET /v1/user/{userId}/followers", h.handleListFollowers)
-	mux.HandleFunc("GET /v1/user/{userId}/relationship", h.handleGetRelationship)
+	mux.HandleFunc("GET /v1/users/{userId}/following", h.handleListFollowing)
+	mux.HandleFunc("GET /v1/users/{userId}/followers", h.handleListFollowers)
+	mux.HandleFunc("GET /v1/users/{userId}/relationship", h.handleGetRelationship)
 
 	mux.HandleFunc("POST /v1/user/block/{targetUserId}", h.handleBlock)
 	mux.HandleFunc("DELETE /v1/user/block/{targetUserId}", h.handleUnblock)
@@ -72,6 +84,30 @@ func (h *UserHandler) Routes() http.Handler {
 	mux.HandleFunc("PATCH /v1/user/settings/notifications", h.handleUpdateNotificationSettings)
 	mux.HandleFunc("GET /v1/user/settings/privacy", h.handleGetPrivacySettings)
 	mux.HandleFunc("PATCH /v1/user/settings/privacy", h.handleUpdatePrivacySettings)
+
+	// Auth & Credentials
+	mux.HandleFunc("POST /v1/auth/login", h.handleLogin)
+	mux.HandleFunc("GET /v1/user/credentials", h.handleListCredentials)
+	mux.HandleFunc("POST /v1/user/credentials", h.handleBindCredential)
+	mux.HandleFunc("DELETE /v1/user/credentials/{credType}", h.handleUnbindCredential)
+
+	// SubAccounts
+	mux.HandleFunc("GET /v1/user/sub-accounts", h.handleListSubAccounts)
+	mux.HandleFunc("POST /v1/user/sub-accounts", h.handleCreateSubAccount)
+	mux.HandleFunc("POST /v1/user/sub-accounts/{subAccountId}/activate", h.handleActivateSubAccount)
+	mux.HandleFunc("DELETE /v1/user/sub-accounts/{subAccountId}", h.handleDeleteSubAccount)
+	mux.HandleFunc("GET /v1/sub-accounts/{subAccountId}", h.handleGetSubAccountProfile)
+
+	// Contact Discovery
+	mux.HandleFunc("POST /v1/user/contact-discovery", h.handleInitiateContactDiscovery)
+	mux.HandleFunc("GET /v1/user/contact-discovery/latest", h.handleGetLatestContactDiscovery)
+	mux.HandleFunc("DELETE /v1/user/contact-discovery/{id}", h.handleDismissContactDiscovery)
+
+	// Invites
+	mux.HandleFunc("POST /v1/user/invites", h.handleGenerateInvite)
+	mux.HandleFunc("GET /v1/user/invites", h.handleListInvites)
+	mux.HandleFunc("GET /v1/invites/{code}", h.handleGetInviteByCode)
+	mux.HandleFunc("POST /v1/invites/{code}/accept", h.handleAcceptInvite)
 
 	return mux
 }
@@ -447,4 +483,281 @@ func (h *UserHandler) handleUpdatePrivacySettings(w http.ResponseWriter, r *http
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
+// --- Auth & Credentials ---
+
+func (h *UserHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
+	body, err := readBody(r)
+	if err != nil {
+		writeInvalidArg(w, "invalid body")
+		return
+	}
+	credType, _ := body["credentialType"].(string)
+	credKey, _ := body["credentialKey"].(string)
+	label, _ := body["displayLabel"].(string)
+	if credType == "" || credKey == "" {
+		writeInvalidArg(w, "credentialType and credentialKey required")
+		return
+	}
+	result, err := h.auth.LoginWithCredential(r.Context(), credType, credKey, label)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *UserHandler) handleListCredentials(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, "X-Client-User-Id required")
+		return
+	}
+	creds, err := h.auth.ListCredentials(r.Context(), userID)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"credentials": creds})
+}
+
+func (h *UserHandler) handleBindCredential(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, "X-Client-User-Id required")
+		return
+	}
+	body, err := readBody(r)
+	if err != nil {
+		writeInvalidArg(w, "invalid body")
+		return
+	}
+	credType, _ := body["credentialType"].(string)
+	credKey, _ := body["credentialKey"].(string)
+	label, _ := body["displayLabel"].(string)
+	if err := h.auth.BindCredential(r.Context(), userID, credType, credKey, label); err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
+func (h *UserHandler) handleUnbindCredential(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, "X-Client-User-Id required")
+		return
+	}
+	credType := r.PathValue("credType")
+	if err := h.auth.UnbindCredential(r.Context(), userID, credType); err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
+// --- SubAccounts ---
+
+func (h *UserHandler) handleListSubAccounts(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, "X-Client-User-Id required")
+		return
+	}
+	accounts, err := h.subAccount.ListSubAccounts(r.Context(), userID)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"subAccounts": accounts})
+}
+
+func (h *UserHandler) handleCreateSubAccount(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, "X-Client-User-Id required")
+		return
+	}
+	body, err := readBody(r)
+	if err != nil {
+		writeInvalidArg(w, "invalid body")
+		return
+	}
+	account, err := h.subAccount.CreateSubAccount(r.Context(), userID, body)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, account)
+}
+
+func (h *UserHandler) handleActivateSubAccount(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, "X-Client-User-Id required")
+		return
+	}
+	subAccountID := r.PathValue("subAccountId")
+	if err := h.subAccount.ActivateSubAccount(r.Context(), userID, subAccountID); err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
+func (h *UserHandler) handleDeleteSubAccount(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, "X-Client-User-Id required")
+		return
+	}
+	subAccountID := r.PathValue("subAccountId")
+	if err := h.subAccount.DeleteSubAccount(r.Context(), userID, subAccountID); err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
+func (h *UserHandler) handleGetSubAccountProfile(w http.ResponseWriter, r *http.Request) {
+	subAccountID := r.PathValue("subAccountId")
+	profile, err := h.subAccount.GetSubAccountProfile(r.Context(), subAccountID)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	if profile == nil {
+		http.NotFound(w, r)
+		return
+	}
+	writeJSON(w, http.StatusOK, profile)
+}
+
+// --- Contact Discovery ---
+
+func (h *UserHandler) handleInitiateContactDiscovery(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, "X-Client-User-Id required")
+		return
+	}
+	body, err := readBody(r)
+	if err != nil {
+		writeInvalidArg(w, "invalid body")
+		return
+	}
+	rawPhones, _ := body["hashedPhones"].([]any)
+	phones := make([]string, 0, len(rawPhones))
+	for _, p := range rawPhones {
+		if s, ok := p.(string); ok {
+			phones = append(phones, s)
+		}
+	}
+	record, err := h.contactDiscovery.Initiate(r.Context(), userID, phones)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, record)
+}
+
+func (h *UserHandler) handleGetLatestContactDiscovery(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, "X-Client-User-Id required")
+		return
+	}
+	record, err := h.contactDiscovery.GetLatest(r.Context(), userID)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	if record == nil {
+		http.NotFound(w, r)
+		return
+	}
+	writeJSON(w, http.StatusOK, record)
+}
+
+func (h *UserHandler) handleDismissContactDiscovery(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, "X-Client-User-Id required")
+		return
+	}
+	id := r.PathValue("id")
+	if err := h.contactDiscovery.Dismiss(r.Context(), userID, id); err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
+// --- Invites ---
+
+func (h *UserHandler) handleGenerateInvite(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, "X-Client-User-Id required")
+		return
+	}
+	body, err := readBody(r)
+	if err != nil {
+		writeInvalidArg(w, "invalid body")
+		return
+	}
+	subAccountID, _ := body["subAccountId"].(string)
+	channel, _ := body["channel"].(string)
+	inviteePhone, _ := body["inviteePhone"].(string)
+	if subAccountID == "" || channel == "" {
+		writeInvalidArg(w, "subAccountId and channel required")
+		return
+	}
+	record, err := h.invite.Generate(r.Context(), subAccountID, userID, channel, inviteePhone)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, record)
+}
+
+func (h *UserHandler) handleListInvites(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, "X-Client-User-Id required")
+		return
+	}
+	subAccountID := r.URL.Query().Get("subAccountId")
+	statusFilter := r.URL.Query().Get("status")
+	records, err := h.invite.ListByInviter(r.Context(), subAccountID, statusFilter, 20, 0)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"invites": records})
+}
+
+func (h *UserHandler) handleGetInviteByCode(w http.ResponseWriter, r *http.Request) {
+	code := r.PathValue("code")
+	record, err := h.invite.GetByCode(r.Context(), code)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	if record == nil {
+		http.NotFound(w, r)
+		return
+	}
+	writeJSON(w, http.StatusOK, record)
+}
+
+func (h *UserHandler) handleAcceptInvite(w http.ResponseWriter, r *http.Request) {
+	code := r.PathValue("code")
+	record, err := h.invite.Accept(r.Context(), code)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, record)
 }

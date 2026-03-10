@@ -3,16 +3,27 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
+
+/// 在 UI 测试中使 capability 保持 null（legacy 关注/私信 布局）
+class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
+  @override
+  Future<RelationshipCapabilityDto> getCapability(String targetUserId) {
+    return Future.error(StateError('capability unavailable in test'));
+  }
+}
 
 Widget _scopedApp({ProfileMode mode = ProfileMode.mine}) {
   return ProviderScope(
     overrides: [
       userProfileRepositoryProvider
           .overrideWithValue(const MockUserProfileRepository()),
+      relationshipCapabilityRepositoryProvider
+          .overrideWithValue(_ThrowingCapabilityRepository()),
     ],
     child: MaterialApp(
       home: ProfileShell(mode: mode, userId: 'nature_photographer'),

@@ -109,6 +109,8 @@ class _AssistantChatSettingsPageState
                 ],
               ),
             ),
+            SizedBox(height: AppSpacing.containerMd),
+            _PreferenceFactsSection(currentSessionId: widget.currentSessionId),
           ],
         ),
       ),
@@ -205,8 +207,7 @@ class _AssistantChatSettingsPageState
     for (final item in sessions) {
       if ((item['sessionId'] ?? '').toString() != selected) continue;
       setState(() {
-        _topicTitle =
-            (item['topicTitle'] as String?)?.trim().isNotEmpty == true
+        _topicTitle = (item['topicTitle'] as String?)?.trim().isNotEmpty == true
             ? (item['topicTitle'] as String).trim()
             : UITextConstants.assistantHistoryAll;
       });
@@ -215,10 +216,134 @@ class _AssistantChatSettingsPageState
   }
 }
 
-class _AssistantConversationHistoryPage extends ConsumerWidget {
-  const _AssistantConversationHistoryPage({
-    required this.currentSessionId,
+class _PreferenceFactsSection extends ConsumerWidget {
+  const _PreferenceFactsSection({required this.currentSessionId});
+
+  final String currentSessionId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = ref.watch(isDarkProvider);
+    final blockBg = SettingsSemanticConstants.blockBackground(isDark);
+    final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
+    final fgSecondary = SettingsSemanticConstants.secondaryColor(isDark);
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: ref
+          .read(assistantGatewayProvider)
+          .sessionDetail(currentSessionId),
+      builder: (context, snapshot) {
+        final detail = snapshot.data ?? const <String, dynamic>{};
+        final sessionFacts =
+            (detail['sessionPreferenceFacts'] as List?)
+                ?.whereType<Map>()
+                .map((item) => item.cast<String, dynamic>())
+                .toList(growable: false) ??
+            const <Map<String, dynamic>>[];
+        final longTermFacts =
+            (detail['longTermPreferenceFacts'] as List?)
+                ?.whereType<Map>()
+                .map((item) => item.cast<String, dynamic>())
+                .toList(growable: false) ??
+            const <Map<String, dynamic>>[];
+        return Container(
+          padding: EdgeInsets.all(AppSpacing.containerMd),
+          decoration: BoxDecoration(
+            color: blockBg,
+            borderRadius: BorderRadius.circular(
+              SettingsSemanticConstants.blockBorderRadius,
+            ),
+            border: Border.all(
+              color: SettingsSemanticConstants.blockBorderColor(isDark),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '偏好事实',
+                style: TextStyle(
+                  fontSize: AppTypography.lg,
+                  fontWeight: AppTypography.semiBold,
+                  color: fgPrimary,
+                ),
+              ),
+              SizedBox(height: AppSpacing.xs),
+              Text(
+                '当前会话即时生效，长期事实会随历史积累展示在这里。',
+                style: TextStyle(
+                  fontSize: AppTypography.sm,
+                  color: fgSecondary,
+                ),
+              ),
+              SizedBox(height: AppSpacing.containerMd),
+              _PreferenceFactList(
+                title: '本会话',
+                facts: sessionFacts,
+                fgPrimary: fgPrimary,
+                fgSecondary: fgSecondary,
+              ),
+              SizedBox(height: AppSpacing.containerSm),
+              _PreferenceFactList(
+                title: '长期',
+                facts: longTermFacts,
+                fgPrimary: fgPrimary,
+                fgSecondary: fgSecondary,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _PreferenceFactList extends StatelessWidget {
+  const _PreferenceFactList({
+    required this.title,
+    required this.facts,
+    required this.fgPrimary,
+    required this.fgSecondary,
   });
+
+  final String title;
+  final List<Map<String, dynamic>> facts;
+  final Color fgPrimary;
+  final Color fgSecondary;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: AppTypography.md,
+            fontWeight: AppTypography.semiBold,
+            color: fgPrimary,
+          ),
+        ),
+        SizedBox(height: AppSpacing.xs),
+        if (facts.isEmpty)
+          Text(
+            '暂无记录',
+            style: TextStyle(fontSize: AppTypography.sm, color: fgSecondary),
+          ),
+        for (final fact in facts.take(6))
+          Padding(
+            padding: EdgeInsets.only(bottom: AppSpacing.xs),
+            child: Text(
+              '• ${fact['key'] ?? ''}：${fact['value'] ?? ''}',
+              style: TextStyle(fontSize: AppTypography.sm, color: fgSecondary),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _AssistantConversationHistoryPage extends ConsumerWidget {
+  const _AssistantConversationHistoryPage({required this.currentSessionId});
 
   final String currentSessionId;
 
@@ -336,10 +461,7 @@ class _SettingsEntryRow extends StatelessWidget {
           Expanded(
             child: Text(
               title,
-              style: TextStyle(
-                fontSize: AppTypography.base,
-                color: fgPrimary,
-              ),
+              style: TextStyle(fontSize: AppTypography.base, color: fgPrimary),
             ),
           ),
           if (value.trim().isNotEmpty)
@@ -415,7 +537,9 @@ class _SessionTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: AppTypography.xs,
-                      color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                      color: CupertinoColors.secondaryLabel.resolveFrom(
+                        context,
+                      ),
                     ),
                   ),
                 ],

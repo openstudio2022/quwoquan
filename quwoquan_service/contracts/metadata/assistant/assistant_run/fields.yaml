@@ -178,6 +178,15 @@ entities:
         ops_exposure: read
         description: 子代理任务计划与结果摘要
 
+      - name: subagentPlan
+        type: "[]object"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 多 skill 正式子任务计划（含 domainId/problemClass/stopPolicy/searchIntensity 等）
+
       - name: problemShape
         type: string
         constraints: [NULLABLE]
@@ -259,6 +268,15 @@ entities:
         ops_exposure: read
         description: 过程区一行摘要（面向用户任务进展，默认折叠展示）
 
+      - name: processSummary
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 统一过程区摘要字段（V1 兼容升级路径）
+
       - name: processReferenceCountV1
         type: int
         constraints: [NULLABLE]
@@ -267,6 +285,15 @@ entities:
         api_exposure: read
         ops_exposure: read
         description: 过程区可展开来源计数
+
+      - name: processReferenceCount
+        type: int
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 统一过程区来源计数字段（V1 兼容升级路径）
 
       - name: uiProcessTimelineV2
         type: "[]object"

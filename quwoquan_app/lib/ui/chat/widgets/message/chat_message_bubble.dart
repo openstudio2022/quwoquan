@@ -7,6 +7,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/personal_assistant/app/capability_gateway.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/explainable_flow_event.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/assistant_answer_toolbar.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/assistant_process_drawer.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/regenerate_options_popup.dart';
@@ -48,8 +49,11 @@ class ChatMessageBubble extends StatelessWidget {
     this.onReferenceTap,
     this.hideAvatarAndName = false,
     this.useFullWidth = false,
+    this.renderSelfTextWithoutBubble = false,
     this.runningStatusLabel,
     this.processState,
+    this.flowEvents = const <ExplainableFlowEvent>[],
+    this.answerGateOpen = true,
     this.isAssistantRunning = false,
     this.onRegenerateOptionSelected,
     this.receiptEnabled = false,
@@ -73,11 +77,21 @@ class ChatMessageBubble extends StatelessWidget {
   /// 为 true 时气泡内容占满可用宽度（新会话交互布局）
   final bool useFullWidth;
 
+  /// 为 true 时，自己的文本消息改为右对齐纯文本，不再使用气泡。
+  final bool renderSelfTextWithoutBubble;
+
   /// 当前轮助手回复的顶部状态文案（如「小趣正在规划与执行中」），非 null 时在气泡顶部展示
   final String? runningStatusLabel;
 
   /// Unified process state driving the single-drawer UI.
   final AssistantProcessState? processState;
+
+  /// Explainable flow events for the new unified process drawer.
+  final List<ExplainableFlowEvent> flowEvents;
+
+  /// Whether the answer gate is open (aggregate/merge phase completed).
+  /// When false and assistant is running, the answer area is suppressed.
+  final bool answerGateOpen;
 
   /// Whether the assistant is currently running (drives drawer animation).
   final bool isAssistantRunning;
@@ -125,9 +139,19 @@ class ChatMessageBubble extends StatelessWidget {
     final isAssistantMessage =
         (message['senderId'] as String?) ==
         AppConceptConstants.assistantSenderId;
-    final answerText = isAssistantMessage && streamFinalAnswer.trim().isNotEmpty
-        ? streamFinalAnswer
-        : content;
+    final gatedStreamAnswer =
+        isAssistantMessage && isAssistantRunning && !answerGateOpen
+            ? ''
+            : streamFinalAnswer;
+    final answerText =
+        isAssistantMessage && gatedStreamAnswer.trim().isNotEmpty
+            ? gatedStreamAnswer
+            : content;
+    final renderPlainSelfText =
+        renderSelfTextWithoutBubble &&
+        isRight &&
+        !isAssistantMessage &&
+        type == 'text';
 
     Widget contentWidget;
     if (type == 'task_card') {
@@ -247,6 +271,27 @@ class ChatMessageBubble extends StatelessWidget {
           textColor: textColor,
         ),
       );
+    } else if (renderPlainSelfText) {
+      contentWidget = Container(
+        constraints: BoxConstraints(maxWidth: effectiveMaxWidth),
+        padding: EdgeInsets.symmetric(
+          horizontal: AppSpacing.xs,
+          vertical: AppSpacing.xs / 2,
+        ),
+        alignment: Alignment.centerRight,
+        child: SelectableText(
+          answerText,
+          textAlign: TextAlign.right,
+          style: TextStyle(
+            fontSize:
+                Theme.of(context).textTheme.bodyLarge?.fontSize ??
+                AppSpacing.md,
+            color: textColor,
+            height: AppTypography.bodyLineHeight,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      );
     } else {
       contentWidget = _BubbleWithTail(
         isRight: isRight,
@@ -361,6 +406,7 @@ class ChatMessageBubble extends StatelessWidget {
                       processState: processState!,
                       isRunning: isAssistantRunning,
                       initiallyExpanded: isAssistantRunning,
+                      flowEvents: flowEvents,
                       onReferenceUrlTap: onReferenceTap != null
                           ? (url) =>
                                 onReferenceTap!(<String, dynamic>{'url': url})
@@ -416,7 +462,10 @@ class ChatMessageBubble extends StatelessWidget {
                             messageStatus: messageStatus,
                             textColor: textColor,
                           ),
-                        Expanded(child: contentWidget),
+                        if (renderPlainSelfText)
+                          Flexible(fit: FlexFit.loose, child: contentWidget)
+                        else
+                          Expanded(child: contentWidget),
                       ],
                     ),
                   if (followupPrompt.isNotEmpty || actionHints.isNotEmpty) ...[
@@ -589,14 +638,16 @@ AssistantProcessState _rebuildProcessStateFromMessage(
   Map<String, dynamic> message,
 ) {
   final rawBlocks = (() {
-    final persisted = (message['uiProcessContentBlocks'] as List?)
-            ?.whereType<Map>()
-            .toList(growable: false) ??
+    final persisted =
+        (message['uiProcessContentBlocks'] as List?)?.whereType<Map>().toList(
+          growable: false,
+        ) ??
         const <Map>[];
     if (persisted.isNotEmpty) return persisted;
-    final timeline = (message['uiProcessTimelineV2'] as List?)
-            ?.whereType<Map>()
-            .toList(growable: false) ??
+    final timeline =
+        (message['uiProcessTimelineV2'] as List?)?.whereType<Map>().toList(
+          growable: false,
+        ) ??
         const <Map>[];
     return timeline
         .map((item) => item.cast<String, dynamic>())
@@ -606,8 +657,8 @@ AssistantProcessState _rebuildProcessStateFromMessage(
         .map((item) {
           final refs =
               (item['references'] as List?)?.whereType<Map>().toList(
-                    growable: false,
-                  ) ??
+                growable: false,
+              ) ??
               const <Map>[];
           return <String, dynamic>{
             'type': refs.isNotEmpty ? 'analysisSummary' : 'text',
@@ -652,8 +703,8 @@ AssistantProcessState _rebuildProcessStateFromMessage(
   final stageLabel = timeline.isNotEmpty
       ? (((timeline.last as Map)['summary'] as String?)?.trim().isNotEmpty ??
                 false)
-          ? ((timeline.last as Map)['summary'] as String).trim()
-          : '已完成'
+            ? ((timeline.last as Map)['summary'] as String).trim()
+            : '已完成'
       : '已完成';
   return AssistantProcessState(
     stage: ProcessStage.completed,

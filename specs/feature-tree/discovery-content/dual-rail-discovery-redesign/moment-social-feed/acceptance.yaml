@@ -1,5 +1,5 @@
 feature: moment-social-feed
-level: L3_subfeature
+level: "L3_story"
 template: A1-A3
 archived: false
 execution:
@@ -7,29 +7,35 @@ execution:
   full_gate: make gate-full
 level_acceptance:
   A1:
-    criteria: "MomentPostDto 各类型（纯文字/图片/视频）在单列模式下正确渲染，无报错"
+    criteria: MomentPostDto 各类型（纯文字/图片/视频）在单列模式下正确渲染，无报错
     status: pending
-    linked_tasks: [Mo1, Mo2]
+    linked_tasks:
+    - Mo1
+    - Mo2
     tests: []
   A2:
-    criteria: "切换按钮有效：双列模式显示 SliverMasonryGrid，图片 8px 圆角；单列恢复 ListView"
+    criteria: 切换按钮有效：双列模式显示 SliverMasonryGrid，图片 8px 圆角；单列恢复 ListView
     status: pending
-    linked_tasks: [Mo3, Mo4]
+    linked_tasks:
+    - Mo3
+    - Mo4
     tests: []
   A3:
-    criteria: "子节点 moment-image-grid / moment-text-expand / moment-video-autoplay 各自验收通过"
+    criteria: 子节点 moment-image-grid / moment-text-expand / moment-video-autoplay 各自验收通过
     status: pending
     linked_tasks: []
     tests: []
-
   A4:
-    criteria: "操作栏（_ActionRow）与作品频道一致：顺序赞/分享/收藏/评论，图标使用 CupertinoIcons 同一套，等间距（spaceBetween），激活色语义化（赞 worksLike / 收藏 warning）"
+    criteria: 操作栏（_ActionRow）与作品频道一致：顺序赞/分享/收藏/评论，图标使用 CupertinoIcons 同一套，等间距（spaceBetween），激活色语义化（赞
+      worksLike / 收藏 warning）
     status: implemented
-    linked_tasks: [Mo5, Mo6]
+    linked_tasks:
+    - Mo5
+    - Mo6
     tests: []
-
   A5:
-    criteria: "操作数字格式与作品频道一致：< 10 000 原值；10 000–99 999 显示 m.n万+；≥ 100 000 显示 10万+"
+    criteria: 操作数字格式与作品频道一致：< 10 000 原值；10 000–99 999 显示 m.n万+；≥ 100 000 显示 10万+
     status: implemented
-    linked_tasks: [Mo7]
+    linked_tasks:
+    - Mo7
     tests: []

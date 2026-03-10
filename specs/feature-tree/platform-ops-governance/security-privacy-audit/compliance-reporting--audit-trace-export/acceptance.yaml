@@ -1,0 +1,18 @@
+version: 1
+feature: audit-trace-export
+level: "L3_story"
+template: A1-A8
+focus_groups: []
+tests:
+  mock: []
+  unit: []
+  contract: []
+  integration: []
+  uat: []
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+legacy_merged_acceptance:
+- source_path: platform-ops-governance/security-privacy-audit/compliance-reporting/audit-trace-export/compliance-gate-blocker
+  task_bucket: compliance-gate-blocker
+  migrated_as: L3_task

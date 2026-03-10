@@ -12,6 +12,7 @@ sources:
       - user_devices
       - user_settings
       - profile_update_proposals
+      - credential_bindings
     name_overrides:
       UserProfile: Profile
       UserSetting: Setting
@@ -35,3 +36,28 @@ sources:
     domain_pkg: block
     name_overrides:
       BlockEdge: Block
+
+  - metadata: user/contact_discovery
+    domain_pkg: user
+    name_overrides:
+      ContactDiscoveryRecord: ContactDiscovery
+
+  - metadata: user/invite_record
+    domain_pkg: user
+    name_overrides:
+      InviteRecord: Invite
+
+  - metadata: user/user_life_item
+    domain_pkg: user
+    name_overrides:
+      UserLifeItem: LifeItem
+
+  - metadata: user/user_work
+    domain_pkg: user
+    name_overrides:
+      UserWork: Work
+
+  - metadata: user/greeting_request
+    domain_pkg: user
+    name_overrides:
+      GreetingRequest: Greeting

@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/personal_assistant/engine/domain_routing_catalog_runtime.dart';
+import 'package:quwoquan_app/personal_assistant/skills/skill_manifest.dart';
 import 'package:quwoquan_app/personal_assistant/template_runtime/template_catalog_runtime.dart';
 
 /// Provides domain catalog data for the assistant.
@@ -92,6 +93,31 @@ class AssistantDomainRouter {
       if (rule.domainId == domainId) return rule;
     }
     return null;
+  }
+
+  /// Returns lightweight [PersonalAssistantSkillManifest] objects built from
+  /// the routing catalog rules, suitable for the recall layer.
+  Future<List<PersonalAssistantSkillManifest>> availableSkillManifests({
+    Map<String, dynamic> contextScopeHint = const <String, dynamic>{},
+  }) async {
+    await ensureLoaded();
+    final catalog = _routingCatalogRuntime.resolveCatalogForRequest(
+      contextScopeHint,
+    );
+    return catalog.rules
+        .where((rule) => rule.enabled)
+        .map((rule) => PersonalAssistantSkillManifest.fromMap(<String, dynamic>{
+              'id': rule.domainId,
+              'name': rule.domainId,
+              'description': rule.description,
+              'version': '1.0.0',
+              'executionTarget': 'tool_chain',
+              'parametersSchema': const <String, dynamic>{},
+              'domainId': rule.domainId,
+              'trigger_keywords': rule.intentKeywords,
+              'frontmatter': <String, dynamic>{'mode': rule.mode},
+            }))
+        .toList(growable: false);
   }
 
   String get fallbackDomainId {

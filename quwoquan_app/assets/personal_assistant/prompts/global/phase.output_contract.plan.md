@@ -22,7 +22,19 @@
   "queryTasks": [ ... ],
   "contextSlots": { ... },
   "toolPlan": [ ... ],
-  "subagentPlan": [],
+  "subagentPlan": [
+    {
+      "subagentId": "skill_weather_1",
+      "domainId": "weather",
+      "problemClass": "realtime_info",
+      "stopPolicy": "strict",
+      "searchIntensity": "low",
+      "providerPolicy": "authority_first",
+      "freshnessHoursMax": 1,
+      "answerThreshold": 0.75,
+      "goal": "补充目标城市的实时天气信息"
+    }
+  ],
   "selfCheck": {
     "checks": [
       {"rule": "slot_complete", "passed": true, "evidence": "city=深圳,timeScope=today"},
@@ -46,5 +58,7 @@
 3. 有 web_search 时 queryNormalization 是否已输出？
 4. 每个 queryTask 是否有依赖关系和停止条件？
 5. 跨垂类问题是否声明了 subagentPlan？
-6. selfCheck.checks 中是否每条规则都有 evidence？
-7. thinkingText 是否为面向用户的自然语言，无技术术语？
+6. subagentPlan 中每个子任务是否都带有 problemClass？
+7. subagentPlan 中每个子任务是否都带有 stopPolicy/searchIntensity/providerPolicy/freshnessHoursMax/answerThreshold？
+8. selfCheck.checks 中是否每条规则都有 evidence？
+9. thinkingText 是否为面向用户的自然语言，无技术术语？

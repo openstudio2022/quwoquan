@@ -1,0 +1,106 @@
+version: 1
+entity: GreetingRequest
+
+service:
+  name: user-service
+  domain: user
+
+api_routes:
+  - method: POST
+    path: /v1/user/greeting-request
+    operation: SendGreetingRequest
+    description: 发起打招呼（创建请求箱条目，未回复前不进入聊天列表）
+    writable_fields: [targetSubAccountId, requestMessage, source]
+
+  - method: GET
+    path: /v1/user/greeting-request/inbox
+    operation: ListGreetingInbox
+    description: 收件箱（我收到的待处理请求）
+    query_params: [status, cursor, limit]
+
+  - method: GET
+    path: /v1/user/greeting-request/outbox
+    operation: ListGreetingOutbox
+    description: 发件箱（我发出的请求）
+    query_params: [status, cursor, limit]
+
+  - method: POST
+    path: /v1/user/greeting-request/{requestId}/reply
+    operation: ReplyGreetingRequest
+    description: 回复打招呼（触发升级为正式会话，由 GreetingRequestReplied 事件创建 Conversation）
+
+  - method: POST
+    path: /v1/user/greeting-request/{requestId}/ignore
+    operation: IgnoreGreetingRequest
+    description: 忽略打招呼
+
+  - method: DELETE
+    path: /v1/user/greeting-request/{requestId}
+    operation: CancelGreetingRequest
+    description: 撤回打招呼（仅发起方可操作，仅 pending 状态可撤回）
+
+consumers:
+  - name: app
+    capabilities:
+      - send_greeting
+      - view_inbox
+      - view_outbox
+      - reply_greeting
+      - ignore_greeting
+      - cancel_greeting
+
+contract_test:
+  mock_strategy:
+    app_side:
+      mock_target: user-service API (greeting_request)
+      data_source: fields.yaml
+      scenarios:
+        - name: send_greeting_success
+          route: POST /v1/user/greeting-request
+          assertions: [status_201, greeting_in_pending, not_in_chat_list]
+
+        - name: send_greeting_duplicate_blocked
+          route: POST /v1/user/greeting-request
+          seed: [existing_pending_greeting]
+          assertions: [status_409, error_code_USER.GREETING.duplicate_pending]
+
+        - name: reply_upgrades_conversation
+          route: POST /v1/user/greeting-request/{requestId}/reply
+          assertions: [status_200, greeting_status_replied, conversation_created]
+
+        - name: ignore_greeting
+          route: POST /v1/user/greeting-request/{requestId}/ignore
+          assertions: [status_200, greeting_status_ignored]
+
+    service_side:
+      description: 使用真实 PostgreSQL 验证状态机与会话升级
+      real_engines:
+        postgresql: embedded-postgres
+      spy_targets: [event_publisher]
+      mock_targets: [chat_service_client, notification_service_client]
+      scenarios:
+        - name: send_greeting_idempotent
+          command: SendGreetingRequest x2 (same pair)
+          assertions:
+            - "second call → ErrGreetingDuplicatePending"
+            - "only one pending row in greeting_requests"
+
+        - name: reply_triggers_conversation_event
+          command: ReplyGreetingRequest
+          seed: [pending_greeting]
+          assertions:
+            - "greeting.status == replied"
+            - "eventSpy.AssertPublished('GreetingRequestReplied', {promotedConversationId})"
+
+        - name: blocked_user_gets_silent_rejection
+          command: SendGreetingRequest to blocked user
+          seed: [block_edge(target → requester)]
+          assertions:
+            - "response same as success (no info leak)"
+            - "greeting.status == blocked (internal only)"
+
+  coverage_requirements:
+    - status_machine_transitions_covered
+    - idempotency_tested
+    - block_privacy_leak_prevented
+    - rate_limit_tested

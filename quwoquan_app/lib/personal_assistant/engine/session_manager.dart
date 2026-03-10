@@ -3,21 +3,22 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:quwoquan_app/personal_assistant/contracts/assistant_turn_contract.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/preference_fact.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/assistant_content_filters.dart';
 import 'package:quwoquan_app/personal_assistant/storage/personal_assistant_storage_path.dart';
 
 class AssistantSessionManager {
-  AssistantSessionManager({
-    String? storagePath,
-  }) : _pathFuture = storagePath != null
-            ? Future<String>.value(storagePath)
-            : getPersonalAssistantStoragePath('sessions.json');
+  AssistantSessionManager({String? storagePath})
+    : _pathFuture = storagePath != null
+          ? Future<String>.value(storagePath)
+          : getPersonalAssistantStoragePath('sessions.json');
 
   final Future<String> _pathFuture;
   // ignore: unused_field
   static const String _assistantEntrySessionId = 'assistant';
   static const String _defaultTopicTitle = '全部历史';
-  final Map<String, List<Map<String, dynamic>>> _sessions = <String, List<Map<String, dynamic>>>{};
+  final Map<String, List<Map<String, dynamic>>> _sessions =
+      <String, List<Map<String, dynamic>>>{};
   final Map<String, Map<String, dynamic>> _sessionMeta =
       <String, Map<String, dynamic>>{};
   String _activeSessionId = '';
@@ -83,7 +84,9 @@ class AssistantSessionManager {
     for (final messages in _sessions.values) {
       for (int i = 0; i < messages.length; i++) {
         final content = (messages[i]['content'] as String?) ?? '';
-        if (content.trimLeft().isEmpty || content.trimLeft()[0] != '{') continue;
+        if (content.trimLeft().isEmpty || content.trimLeft()[0] != '{') {
+          continue;
+        }
         try {
           final decoded = jsonDecode(content);
           if (decoded is! Map) continue;
@@ -136,7 +139,9 @@ class AssistantSessionManager {
   String summarizeRecent(String sessionId, {int limit = 8}) {
     final history = getOrCreateSession(sessionId);
     if (history.isEmpty) return '';
-    final segment = history.length <= limit ? history : history.sublist(history.length - limit);
+    final segment = history.length <= limit
+        ? history
+        : history.sublist(history.length - limit);
     return segment
         .map((m) {
           final role = m['role'] ?? 'unknown';
@@ -171,8 +176,10 @@ class AssistantSessionManager {
           }
           final result = decoded['result'];
           if (result is Map) {
-            final text = (result['text'] as String?)?.trim() ??
-                (result['summary'] as String?)?.trim() ?? '';
+            final text =
+                (result['text'] as String?)?.trim() ??
+                (result['summary'] as String?)?.trim() ??
+                '';
             if (text.isNotEmpty &&
                 !AssistantContentFilters.isProgressPlaceholder(text)) {
               return text;
@@ -237,7 +244,8 @@ class AssistantSessionManager {
   }
 
   String ensureAssistantActiveSession() {
-    if (_activeSessionId.isNotEmpty && _sessions.containsKey(_activeSessionId)) {
+    if (_activeSessionId.isNotEmpty &&
+        _sessions.containsKey(_activeSessionId)) {
       return _activeSessionId;
     }
     String candidate = '';
@@ -269,7 +277,9 @@ class AssistantSessionManager {
   }
 
   String topicTitleOf(String sessionId) {
-    final raw = (_sessionMeta[sessionId]?['topicTitle'] ?? '').toString().trim();
+    final raw = (_sessionMeta[sessionId]?['topicTitle'] ?? '')
+        .toString()
+        .trim();
     if (raw.isNotEmpty) return raw;
     return _defaultTopicTitle;
   }
@@ -297,23 +307,31 @@ class AssistantSessionManager {
   }
 
   List<Map<String, dynamic>> listSessionDescriptors() {
-    final items = _sessions.entries.map((entry) {
-      final sessionId = entry.key;
-      final messages = entry.value;
-      final meta = _sessionMeta[sessionId] ?? const <String, dynamic>{};
-      final updatedAt = (meta['updatedAt'] ?? '').toString();
-      final topicTitle = (meta['topicTitle'] ?? '').toString().trim();
-      final topicSummary = (meta['topicSummary'] ?? '').toString().trim();
-      return <String, dynamic>{
-        'sessionId': sessionId,
-        'messageCount': messages.length,
-        'lastMessage': messages.isEmpty ? '' : (messages.last['content'] ?? ''),
-        'topicTitle': topicTitle.isEmpty ? _defaultTopicTitle : topicTitle,
-        'topicSummary': topicSummary,
-        'updatedAt': updatedAt,
-        'isActive': sessionId == _activeSessionId,
-      };
-    }).toList(growable: false);
+    final items = _sessions.entries
+        .map((entry) {
+          final sessionId = entry.key;
+          final messages = entry.value;
+          final meta = _sessionMeta[sessionId] ?? const <String, dynamic>{};
+          final sessionFacts = sessionPreferenceFactsOf(sessionId);
+          final longTermFacts = longTermPreferenceFactsOf(sessionId);
+          final updatedAt = (meta['updatedAt'] ?? '').toString();
+          final topicTitle = (meta['topicTitle'] ?? '').toString().trim();
+          final topicSummary = (meta['topicSummary'] ?? '').toString().trim();
+          return <String, dynamic>{
+            'sessionId': sessionId,
+            'messageCount': messages.length,
+            'lastMessage': messages.isEmpty
+                ? ''
+                : (messages.last['content'] ?? ''),
+            'topicTitle': topicTitle.isEmpty ? _defaultTopicTitle : topicTitle,
+            'topicSummary': topicSummary,
+            'sessionPreferenceFactCount': sessionFacts.length,
+            'longTermPreferenceFactCount': longTermFacts.length,
+            'updatedAt': updatedAt,
+            'isActive': sessionId == _activeSessionId,
+          };
+        })
+        .toList(growable: false);
     items.sort((a, b) {
       final ta = DateTime.tryParse((a['updatedAt'] ?? '').toString());
       final tb = DateTime.tryParse((b['updatedAt'] ?? '').toString());
@@ -323,6 +341,51 @@ class AssistantSessionManager {
       return tb.compareTo(ta);
     });
     return items;
+  }
+
+  List<PreferenceFact> sessionPreferenceFactsOf(String sessionId) {
+    return _collectPreferenceFacts(
+      sessionId,
+      selector: (turn) => turn.sessionPreferenceFacts,
+    );
+  }
+
+  List<PreferenceFact> longTermPreferenceFactsOf(String sessionId) {
+    return _collectPreferenceFacts(
+      sessionId,
+      selector: (turn) => turn.longTermPreferenceFacts,
+    );
+  }
+
+  List<PreferenceFact> _collectPreferenceFacts(
+    String sessionId, {
+    required List<PreferenceFact> Function(AssistantTurnOutput turn) selector,
+  }) {
+    final messages = _sessions[sessionId] ?? const <Map<String, dynamic>>[];
+    final collected = <PreferenceFact>[];
+    final seen = <String>{};
+    for (final message in messages) {
+      if ((message['role'] ?? '').toString() != 'assistant') continue;
+      final turn = _tryParseAssistantTurn(
+        (message['content'] as String?) ?? '',
+      );
+      if (turn == null) continue;
+      for (final fact in selector(turn)) {
+        final key = fact.factId.isNotEmpty
+            ? fact.factId
+            : '${fact.scope}:${fact.key}:${fact.value}';
+        if (!seen.add(key)) continue;
+        collected.add(fact);
+      }
+    }
+    return collected;
+  }
+
+  AssistantTurnOutput? _tryParseAssistantTurn(String raw) {
+    if (raw.trimLeft().isEmpty || !raw.trimLeft().startsWith('{')) return null;
+    final decoded = _jsonDecodeFirst(raw);
+    if (decoded is! Map) return null;
+    return AssistantTurnOutput.tryParse(decoded.cast<String, dynamic>());
   }
 
   String _createAssistantSessionId() {
@@ -348,7 +411,9 @@ class AssistantSessionManager {
     final query = userQuery.trim();
     final answer = assistantReply.trim();
     if (query.isEmpty && answer.isEmpty) return '';
-    final shortAnswer = answer.length > 80 ? '${answer.substring(0, 80)}...' : answer;
+    final shortAnswer = answer.length > 80
+        ? '${answer.substring(0, 80)}...'
+        : answer;
     return '$query\n$shortAnswer'.trim();
   }
 

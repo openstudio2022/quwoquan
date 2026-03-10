@@ -605,6 +605,12 @@
       "skillHints": ["fortune.interpretation", "astrology.chart_read", "fortune.safety_boundary"]
     },
     {
+      "domainId": "divination_fortune",
+      "allowedTools": ["web_search", "local_context", "memory_search"],
+      "preferredTools": ["web_search"],
+      "skillHints": ["fortune.interpretation", "fortune.daily_read", "fortune.safety_boundary"]
+    },
+    {
       "domainId": "fallback_general_search",
       "allowedTools": ["web_search", "web_fetch", "local_context", "memory_search", "deep_link", "app_action"],
       "preferredTools": ["web_search"],

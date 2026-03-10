@@ -250,6 +250,10 @@ class UITextConstants {
   /// 实时通话
   static const String call = '语音通话';
   static const String videoCall = '视频通话';
+  static const String callVoice = '语音通话';
+  static const String callVideo = '视频通话';
+  static const String callGroupVoice = '语音通话';
+  static const String callGroupVideo = '视频通话';
   static const String callEnded = '通话结束';
   static const String callConnecting = '连接中...';
   static const String callRinging = '等待接听...';
@@ -259,6 +263,7 @@ class UITextConstants {
   static const String callRecording = '录制中';
   static const String callScreenSharing = '屏幕共享中';
   static const String callReject = '拒绝';
+  static const String callDecline = '拒接';
   static const String callAccept = '接听';
   static const String callHangup = '挂断';
   static const String callMute = '静音';
@@ -269,6 +274,20 @@ class UITextConstants {
   static const String callIncoming = '来电';
   static const String callIncomingVoice = '语音来电';
   static const String callIncomingVideo = '视频来电';
+  static const String callSourceCurrentConversation = '当前会话';
+  static const String callSourceSameInterest = '同好';
+  static const String callSourceOtherGroups = '其他群';
+  static const String callParticipantList = '成员列表';
+  static const String callRestoreDefaultSelection = '恢复默认';
+  static const String callClearSelection = '全不选';
+  static const String callShareJoinLink = '分享入会链接';
+  static const String callDebugSimulateIncomingVoice = '模拟语音来电';
+  static const String callDebugSimulateIncomingVideo = '模拟视频来电';
+  static const String callDebugAutoConnectInFiveSeconds = '5 秒自动接通';
+  static const String callDebugManualAnswer = '手动接通';
+  static const String callDebugTimeout = '超时';
+  static const String callDebugOnlyHint = '仅开发态显示';
+  static const String callOutgoingCalling = '正在呼叫...';
 
   /// 统一 emoji 选择器「最近」Tab
   static const String emojiRecent = '最近';
@@ -387,6 +406,14 @@ class UITextConstants {
   static const String assistantReferenceCopied = '链接已复制';
   static const String assistantReferenceOpenFailed = '链接打开失败，已复制到剪贴板';
   static const String assistantReferenceHostBlocked = '该链接域名未通过安全白名单，已复制到剪贴板';
+  static const String assistantProcessThinking = '正在思考';
+  static const String assistantProcessSearching = '正在搜索';
+  static const String assistantProcessOrganizing = '正在整理';
+  static const String assistantProcessAnswering = '正在回答';
+  static const String assistantProcessCompleted = '已完成';
+  static const String assistantProcessModelCallCountTemplate = '模型调用 %s 次';
+  static const String assistantProcessTokensTemplate = '%s tokens';
+  static const String assistantProcessElapsedTemplate = '耗时 %s 秒';
   static const String assistantBookmarked = '已收藏';
   static const String assistantDevReplayTitle = '助理开发态回放';
   static const String assistantDevReplayOpen = '回放';
@@ -418,6 +445,30 @@ class UITextConstants {
   static const String profileEditLabel = '资料编辑';
   static const String profilePersonasLabel = '分身管理';
   static const String profileDirectMessage = '私信';
+  static const String profileGreet = '打招呼';
+  static const String profileSameInterest = '同好';
+  static const String profileCloseFriend = '密友';
+  static const String profileAddSameInterest = '加同好';
+  static const String profileSubAccountManagement = '子账号管理';
+  static const String profileSubAccountDeleteTitle = '删除子账号';
+  static const String profileSubAccountDeleteConfirmTemplate =
+      '确定要删除「%s」吗？此操作不可撤销。';
+  static const String profileSubAccountCreateTitle = '创建子账号';
+  static const String profileSubAccountNamePlaceholder =
+      '账号名称（如：职业号、匿名号）';
+  static const String profileSubAccountOpen = '公开';
+  static const String profileSubAccountSemi = '半隐';
+  static const String profileSubAccountStrict = '严格隔离';
+  static const String profileSubAccountSwitchFailed = '切换失败';
+  static const String profileSubAccountDeleteFailed = '删除失败';
+  static const String profileSubAccountCreateFailed = '创建失败';
+  static const String profileSubAccountMaxReachedTemplate = '最多创建 %s 个子账号';
+  static const String profileSubAccountEmpty = '暂无子账号';
+  static const String profileSubAccountStrictDescription =
+      '严格隔离 · 不出现在通讯录发现';
+  static const String profileSubAccountSemiDescription = '半隐私 · 仅好友可发现';
+  static const String profileSubAccountOpenDescription = '公开 · 可被通讯录发现';
+  static const String operationFailed = '操作失败';
 
   // ==================== 创作页（1:1 对应 CreatePage.tsx + MomentEditorCard.tsx） ====================
   static const String momentPlaceholder = '这一刻的想法...';

@@ -1,45 +1,45 @@
 version: 1
-feature: "redis-storage-elastic-infra"
-level: "L3_component"
+feature: redis-storage-elastic-infra
+level: "L3_story"
 archived: true
-archived_at: "2026-03-01T00:00:00Z"
-template: "A1-A8"
+archived_at: '2026-03-01T00:00:00Z'
+template: A1-A8
 tree_context:
-  feature_level: "L3_component"
-  feature_path: "capability.runtime.feature.runtime-recommendation.component.redis-storage-elastic-infra"
-  parent_path: "capability.runtime.feature.runtime-recommendation"
-  acceptance_inherits_from: "capability.runtime.feature.runtime-recommendation"
+  feature_path: capability.runtime.feature.runtime-recommendation.component.redis-storage-elastic-infra
+  parent_path: capability.runtime.feature.runtime-recommendation
+  acceptance_inherits_from: capability.runtime.feature.runtime-recommendation
 level_acceptance:
   focus_groups:
-    - A1_functional
-    - A3_service_governance
-    - A8_test_automation
-  notes: >
-    Redis 多云弹性基础设施：ClusterAdapter + hash tag 协议 + 多场景 config schema。
-    L3 验收通过两个 L4 子节点的验收汇总确认。
+  - A1_functional
+  - A3_service_governance
+  - A8_test_automation
+  notes: 'Redis 多云弹性基础设施：ClusterAdapter + hash tag 协议 + 多场景 config schema。 L3 验收通过两个
+    L4 子节点的验收汇总确认。
+
+    '
 global_acceptance:
   A1_functional:
     scenarios:
-      - given: "配置 mode=cluster + addrs=[node1,node2,node3]"
-        when: "content-service 启动"
-        then: "使用 RedisClusterAdapter，连接成功"
-      - given: "配置 mode=standalone + addr=host:port"
-        when: "content-service 启动"
-        then: "使用 RedisClientAdapter（standalone），行为与改动前一致"
-      - given: "addr 和 addrs 均为空"
-        when: "content-service 启动"
-        then: "fallback 到 in-memory Redis，服务正常启动"
-      - given: "GetSessionState 在 cluster 模式下调用"
-        when: "3 个 rec:* key 均带 {userId} hash tag"
-        then: "所有 key 同 slot，PipelineRead 单 RTT 完成"
+    - given: 配置 mode=cluster + addrs=[node1,node2,node3]
+      when: content-service 启动
+      then: 使用 RedisClusterAdapter，连接成功
+    - given: 配置 mode=standalone + addr=host:port
+      when: content-service 启动
+      then: 使用 RedisClientAdapter（standalone），行为与改动前一致
+    - given: addr 和 addrs 均为空
+      when: content-service 启动
+      then: fallback 到 in-memory Redis，服务正常启动
+    - given: GetSessionState 在 cluster 模式下调用
+      when: 3 个 rec:* key 均带 {userId} hash tag
+      then: 所有 key 同 slot，PipelineRead 单 RTT 完成
   A3_service_governance:
-    - "standalone/cluster 模式通过 CONTENT_REDIS_REC_MODE 切换，无需改代码"
-    - "阿里云 Tair 和火山引擎 VeCache 使用相同代码，仅 env 变量不同"
-    - "TLS 通过 CONTENT_REDIS_REC_TLS=true 启用，适用公网端点"
+  - standalone/cluster 模式通过 CONTENT_REDIS_REC_MODE 切换，无需改代码
+  - 阿里云 Tair 和火山引擎 VeCache 使用相同代码，仅 env 变量不同
+  - TLS 通过 CONTENT_REDIS_REC_TLS=true 启用，适用公网端点
   A8_test_automation:
-    - "ClusterAdapter 接口契约测试（见 redis-cluster-protocol）"
-    - "hash tag 格式测试（见 redis-cluster-protocol）"
-    - "config/env 解析测试（见 redis-service-multicloud-config）"
+  - ClusterAdapter 接口契约测试（见 redis-cluster-protocol）
+  - hash tag 格式测试（见 redis-cluster-protocol）
+  - config/env 解析测试（见 redis-service-multicloud-config）
 execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
+  local_gate: make gate
+  full_gate: make gate-full

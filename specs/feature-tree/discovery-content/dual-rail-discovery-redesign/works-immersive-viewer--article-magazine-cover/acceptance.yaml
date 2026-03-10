@@ -1,0 +1,36 @@
+feature: article-magazine-cover
+level: "L3_story"
+template: A1-A4
+archived: false
+execution:
+  local_gate: make build && make test-contract
+  full_gate: make gate-full
+level_acceptance:
+  A1:
+    criteria: 第一屏封面模式：coverUrl 全屏铺满，大标题使用思源宋体 ≥ 28pt，无任何正文内容
+    status: pending
+    linked_tasks:
+    - A3
+    tests: []
+  A2:
+    criteria: '水平翻卡浏览正文，强制禁止垂直滚动（scrollPhysics: NeverScrollableScrollPhysics 或等效）'
+    status: pending
+    linked_tasks:
+    - A4
+    tests: []
+  A3:
+    criteria: 块渲染正确：TextBlock 行高 2.0 字间距 0.8，ImageBlock half/third 行内 Row 布局，full
+      独立行 + caption，QuoteBlock 克莱因蓝竖线
+    status: pending
+    linked_tasks:
+    - A5
+    - A6
+    tests: []
+  A4:
+    criteria: 'AppArticleColors 色彩应用：背景 #0A0E14，正文 #B8C0CC，标题 #E8EDF3，引用 #4A8BF5，图注
+      #6B7585'
+    status: pending
+    linked_tasks:
+    - A2
+    - A5
+    tests: []

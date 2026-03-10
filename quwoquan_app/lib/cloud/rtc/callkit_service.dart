@@ -6,6 +6,7 @@ import 'package:flutter_callkit_incoming/entities/android_params.dart';
 import 'package:flutter_callkit_incoming/entities/ios_params.dart';
 import 'package:flutter_callkit_incoming/entities/call_event.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
+import 'package:quwoquan_app/cloud/services/user/call_settings_repository.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 
 enum CallKitAction { accept, decline, end, timeout }
@@ -24,8 +25,12 @@ class CallKitService {
     required String callerName,
     required bool isVideo,
     String? avatarUrl,
+    String? ringtoneId,
   }) async {
     _activeCallId = callId;
+    final ringtonePath = OfficialCallRingtoneCatalog.resolveCallkitPath(
+      ringtoneId,
+    );
 
     final params = CallKitParams(
       id: callId,
@@ -39,15 +44,15 @@ class CallKitService {
       textDecline: UITextConstants.callReject,
       extra: <String, dynamic>{'callId': callId},
       headers: <String, dynamic>{},
-      android: const AndroidParams(
+      android: AndroidParams(
         isCustomNotification: true,
         isShowLogo: false,
-        ringtonePath: 'system_ringtone_default',
+        ringtonePath: ringtonePath,
         backgroundColor: '#0955fa',
-        actionColor: '#4CAF50',
+        actionColor: '#0955fa',
         isShowFullLockedScreen: true,
       ),
-      ios: const IOSParams(
+      ios: IOSParams(
         iconName: 'CallKitLogo',
         handleType: 'generic',
         supportsVideo: true,
@@ -61,7 +66,7 @@ class CallKitService {
         supportsHolding: false,
         supportsGrouping: false,
         supportsUngrouping: false,
-        ringtonePath: 'system_ringtone_default',
+        ringtonePath: ringtonePath,
       ),
     );
 

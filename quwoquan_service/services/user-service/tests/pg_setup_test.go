@@ -16,12 +16,12 @@ var embeddedPG *embeddedpostgres.EmbeddedPostgres
 
 func startEmbeddedPostgres() string {
 	port := uint32(15433)
-	dsn := fmt.Sprintf("postgres://postgres:postgres@localhost:%d/user_test?sslmode=disable", port)
+	// Use the 'postgres' default database to avoid embedded-postgres PG-18 custom DB creation issue.
+	dsn := fmt.Sprintf("postgres://postgres:postgres@localhost:%d/postgres?sslmode=disable", port)
 
 	embeddedPG = embeddedpostgres.NewDatabase(
 		embeddedpostgres.DefaultConfig().
 			Port(port).
-			Database("user_test").
 			Username("postgres").
 			Password("postgres"),
 	)
@@ -32,6 +32,10 @@ func startEmbeddedPostgres() string {
 }
 
 func runTestMigrations(ctx context.Context, pool *pgxpool.Pool) {
+	// Reset schema for clean migration run.
+	if _, err := pool.Exec(ctx, "DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO postgres;"); err != nil {
+		panic("reset schema: " + err.Error())
+	}
 	dirs := []string{
 		"internal/infrastructure/migration",
 		"../internal/infrastructure/migration",

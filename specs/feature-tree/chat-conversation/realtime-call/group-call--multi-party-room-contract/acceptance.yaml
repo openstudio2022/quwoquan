@@ -1,0 +1,26 @@
+feature: multi-party-room-contract
+level: "L3_story"
+parent: group-call
+status: specified
+archived: false
+level_acceptance:
+  A22:
+    criteria: JoinCall → 新参与者加入房间 + call.participant_joined 事件 + 其他参与者收到通知
+    status: pending
+    ref: realtime-call/acceptance.yaml A22
+  A23:
+    criteria: LeaveCall → 参与者离开 + 最后一人离开时通话自动结束 + call.ended 发布
+    status: pending
+    ref: realtime-call/acceptance.yaml A23
+  A24:
+    criteria: InviteToCall → 被邀请人收到来电推送 + 可加入已有通话 + 32 人上限校验
+    status: pending
+    ref: realtime-call/acceptance.yaml A24
+  A29:
+    criteria: 32 人满房视频通话 → SFU 节点 CPU < 85% + 端到端延迟 p95 < 350ms
+    status: pending
+    ref: realtime-call/acceptance.yaml A29
+  A34:
+    criteria: 多人通话旅程：发起→4 人加入→网格布局正确→1 人离开→布局动态调整→通话继续
+    status: pending
+    ref: realtime-call/acceptance.yaml A34

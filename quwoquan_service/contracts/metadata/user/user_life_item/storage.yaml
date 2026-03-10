@@ -1,0 +1,24 @@
+version: 1
+entity: UserLifeItem
+backend: postgres
+
+tables:
+  user_life_items:
+    entity: UserLifeItem
+    pk: id
+    fk: { column: user_id, references: user_profiles.user_id, on_delete: CASCADE }
+    columns:
+      - { name: id,          type: VARCHAR(36),  constraints: [PK] }
+      - { name: user_id,     type: VARCHAR(36),  constraints: [NOT_NULL] }
+      - { name: category,    type: VARCHAR(32),  constraints: [NOT_NULL] }
+      - { name: title,       type: VARCHAR(128), constraints: [NOT_NULL] }
+      - { name: subtitle,    type: VARCHAR(256) }
+      - { name: image_url,   type: TEXT }
+      - { name: ref_id,      type: VARCHAR(64) }
+      - { name: sort_order,  type: INTEGER,      constraints: [NOT_NULL], default: 0 }
+      - { name: created_at,  type: TIMESTAMPTZ,  constraints: [NOT_NULL], default: NOW() }
+      - { name: updated_at,  type: TIMESTAMPTZ,  constraints: [NOT_NULL], default: NOW() }
+    indexes:
+      - { name: idx_life_items_user_id,          columns: [user_id] }
+      - { name: idx_life_items_user_category,    columns: [user_id, category] }
+      - { name: idx_life_items_user_sort,        columns: [user_id, sort_order] }

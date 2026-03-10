@@ -1,0 +1,54 @@
+version: 1
+feature: mongo-event-collection-and-mq-integration
+level: "L3_story"
+template: A1-A8
+tree_context:
+  feature_path: capability.runtime.feature.runtime-eventstore.subfeature.event-persist-and-publish.object.mongo-event-collection-and-mq-integration
+  parent_path: capability.runtime.feature.runtime-eventstore.subfeature.event-persist-and-publish
+  acceptance_inherits_from: capability.runtime.feature.runtime-eventstore
+level_acceptance:
+  focus_groups:
+  - A1_functional
+  - A8_test_automation
+  notes: MongoDB events 集合存储实现 + RocketMQ 生产者集成；Outbox 持久化与投递。
+global_acceptance:
+  A1_functional:
+    scenarios:
+    - given: MongoDB events 集合已创建
+      when: EventStore.Persist(event)
+      then: 事件写入 events 集合，字段完整
+    - given: RocketMQ topic 已配置
+      when: EventStore.Publish(event)
+      then: 事件发送到 topic，消费者可消费
+    - given: Outbox 模式启用
+      when: 事件发布失败
+      then: 事件写入 outbox 表，定时任务重试投递
+    - given: 按 aggregate_id 查询
+      when: QueryByAggregateID(aggregate_id)
+      then: 返回该聚合的全部事件，按时间排序
+  A2_experience:
+  - 存储与 MQ 细节对业务透明
+  A3_service_governance:
+  - Outbox 保证最终一致性
+  A4_observability:
+  - 事件发布延迟和失败率可监控
+  A5_product_ops:
+  - 运营可查看 events 集合
+  A6_security_privacy:
+  - 事件 payload 遵循 classification 策略
+  A7_contract_metadata_consistency:
+  - events 集合 schema 与 events.yaml 一致
+  A8_test_automation:
+  - MongoDB 持久化契约测试（testcontainers）
+  - RocketMQ 发布契约测试
+tests:
+  contract:
+  - quwoquan_service/runtime/eventstore/tests/persist_contract_test.go
+  - quwoquan_service/runtime/eventstore/tests/publish_contract_test.go
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+legacy_merged_acceptance:
+- source_path: runtime/runtime-eventstore/event-persist-and-publish/mongo-event-collection-and-mq-integration/event-replay-and-schema-evolution
+  task_bucket: event-replay-and-schema-evolution
+  migrated_as: L3_task

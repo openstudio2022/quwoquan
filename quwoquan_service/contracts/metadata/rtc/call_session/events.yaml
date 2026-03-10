@@ -8,7 +8,7 @@ events:
     consumers: [realtime-gateway, notification-service]
     channel: event_store
     payload_entity: CallSession
-    payload_fields: [_id, callType, initiatorId, conversationId, circleId, maxParticipants, createdAt]
+    payload_fields: [_id, callType, initiatorId, initiatorRingtoneId, conversationId, circleId, maxParticipants, createdAt]
     realtime_channel: "rt:rtc:call:{callId}"
 
   - name: CallRinging
@@ -16,7 +16,7 @@ events:
     producer: rtc-service
     consumers: [realtime-gateway, notification-service]
     channel: event_store
-    payload_fields: [callId, callType, initiatorId, targetUserId, conversationId]
+    payload_fields: [callId, callType, initiatorId, initiatorRingtoneId, targetUserId, conversationId]
     realtime_channel: "rt:rtc:user:{targetUserId}"
     push_policy:
       online: websocket

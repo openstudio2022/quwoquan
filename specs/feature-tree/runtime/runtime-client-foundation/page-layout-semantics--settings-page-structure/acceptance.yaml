@@ -1,0 +1,7 @@
+feature: runtime-client-foundation--page-layout-semantics--settings-page-structure
+level: "L3_story"
+archived: false
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+level_acceptance: {}

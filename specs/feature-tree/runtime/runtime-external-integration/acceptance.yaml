@@ -1,25 +1,36 @@
 version: 1
-feature: "runtime-external-integration"
+feature: runtime-external-integration
 level: "L2_feature"
-template: "A1-A8"
+template: A1-A8
 status: specified
-focus_groups: [service_bootstrap, metadata_contract, config_governance]
+focus_groups:
+- service_bootstrap
+- metadata_contract
+- config_governance
 execution:
-  local_gate: "make verify && make -C quwoquan_service verify-metadata"
-  full_gate: "make gate-full"
+  local_gate: make verify && make -C quwoquan_service verify-metadata
+  full_gate: make gate-full
 level_acceptance:
   A1:
-    criteria: "integration-service 服务骨架、环境配置、发布配置目录创建完成"
+    criteria: integration-service 服务骨架、环境配置、发布配置目录创建完成
     status: passed
-    linked_tasks: [B1]
+    linked_tasks:
+    - B1
     tests: []
   A2:
-    criteria: "integration/location 元数据五件套定义完成并可通过验证"
+    criteria: integration/location 元数据五件套定义完成并可通过验证
     status: passed
-    linked_tasks: [M1, C1]
+    linked_tasks:
+    - M1
+    - C1
     tests: []
   A3:
-    criteria: "特性树与云侧服务文档已同步，节点可进入 deliver"
+    criteria: 特性树与云侧服务文档已同步，节点可进入 deliver
     status: passed
-    linked_tasks: [B2, T1, B3, B4, B5]
+    linked_tasks:
+    - B2
+    - T1
+    - B3
+    - B4
+    - B5
     tests: []

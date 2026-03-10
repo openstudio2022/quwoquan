@@ -1,0 +1,7 @@
+feature: discovery-content
+level: "L1_capability"
+archived: false
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+level_acceptance: {}

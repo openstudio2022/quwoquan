@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     post_count               INTEGER NOT NULL DEFAULT 0,
     circle_count             INTEGER NOT NULL DEFAULT 0,
     like_count               INTEGER NOT NULL DEFAULT 0,
+    owner_display_name       VARCHAR(64),
+    sub_account_count        INTEGER NOT NULL DEFAULT 1,
     created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

@@ -1,41 +1,38 @@
 version: 1
 feature: privacy-ui-config-contract
-level: L3_subfeature
+level: "L3_story"
 status: specified
 archived: true
-archived_at: "2026-03-01T00:00:00Z"
-
+archived_at: '2026-03-01T00:00:00Z'
 acceptance_criteria:
-  - id: A1
-    description: privacy.yaml 完整性
-    assertions:
-      - fields.yaml 中所有 classification=PII 或 SENSITIVE 的字段在 privacy.yaml app_log_policy 中有声明
-      - data_lifecycle.deletion_cascade 覆盖全部 aggregate.yaml members
-      - make gate G8 PASS
-
-  - id: A2
-    description: Dart 隐私过滤 codegen 正确
-    assertions:
-      - ContentPrivacyPolicy.sanitizeForLog('location', geoPoint) 不返回精确坐标
-      - ContentPrivacyPolicy.sanitizeForLog('embedding', [...]) 返回 null
-      - ContentPrivacyPolicy.sanitizeForLog('body', longText) 截断到 ≤200 chars
-
-  - id: A3
-    description: ui_config.yaml 完整性
-    assertions:
-      - discovery_tabs 含 photo/video/moment/article 4个 tab
-      - feature_flags 每个 key 有明确 default 值和 description
-      - make gate G6 PASS（contentType ⊆ types.yaml enum）
-
-  - id: A4
-    description: Dart UI 配置 codegen 正确
-    assertions:
-      - ContentUIConfig.discoveryTabs.length == 4
-      - ContentUIConfig.featureFlags['enable_helper_read'] == false
-      - ContentUIConfig.cardConfigs.containsKey('photo')
-
-  - id: A5
-    description: Discovery 页消费 codegen 配置
-    assertions:
-      - lib/ui/discovery/pages/discovery_page.dart 无硬编码 'image'/'video'/'micro'/'article' 字符串
-      - flutter analyze lib/ui/discovery/ PASS
+- id: A1
+  description: privacy.yaml 完整性
+  assertions:
+  - fields.yaml 中所有 classification=PII 或 SENSITIVE 的字段在 privacy.yaml app_log_policy
+    中有声明
+  - data_lifecycle.deletion_cascade 覆盖全部 aggregate.yaml members
+  - make gate G8 PASS
+- id: A2
+  description: Dart 隐私过滤 codegen 正确
+  assertions:
+  - ContentPrivacyPolicy.sanitizeForLog('location', geoPoint) 不返回精确坐标
+  - ContentPrivacyPolicy.sanitizeForLog('embedding', [...]) 返回 null
+  - ContentPrivacyPolicy.sanitizeForLog('body', longText) 截断到 ≤200 chars
+- id: A3
+  description: ui_config.yaml 完整性
+  assertions:
+  - discovery_tabs 含 photo/video/moment/article 4个 tab
+  - feature_flags 每个 key 有明确 default 值和 description
+  - make gate G6 PASS（contentType ⊆ types.yaml enum）
+- id: A4
+  description: Dart UI 配置 codegen 正确
+  assertions:
+  - ContentUIConfig.discoveryTabs.length == 4
+  - ContentUIConfig.featureFlags['enable_helper_read'] == false
+  - ContentUIConfig.cardConfigs.containsKey('photo')
+- id: A5
+  description: Discovery 页消费 codegen 配置
+  assertions:
+  - lib/ui/discovery/pages/discovery_page.dart 无硬编码 'image'/'video'/'micro'/'article'
+    字符串
+  - flutter analyze lib/ui/discovery/ PASS

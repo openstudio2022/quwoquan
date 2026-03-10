@@ -1,0 +1,57 @@
+version: 1
+entity: GreetingRequest
+
+errors:
+  - code: USER.GREETING.target_blocked_sender
+    go_const: ErrGreetingTargetBlockedSender
+    dart_const: greetingTargetBlockedSender
+    l10n_key: error_greeting_target_blocked_sender
+    user_message:
+      zh: 发送失败，对方开启了消息保护
+      en: Failed to send, the recipient has message protection enabled
+    debug_hint: target has blocked sender or has allowStrangerGreeting=false
+
+  - code: USER.GREETING.duplicate_pending
+    go_const: ErrGreetingDuplicatePending
+    dart_const: greetingDuplicatePending
+    l10n_key: error_greeting_duplicate_pending
+    user_message:
+      zh: 已发送过打招呼，请等待对方回复
+      en: You have already sent a greeting request, please wait for a reply
+    debug_hint: pending greeting already exists between same pair
+
+  - code: USER.GREETING.rate_limited
+    go_const: ErrGreetingRateLimited
+    dart_const: greetingRateLimited
+    l10n_key: error_greeting_rate_limited
+    user_message:
+      zh: 打招呼发送频率超限，请稍后再试
+      en: Greeting rate limit exceeded, please try again later
+    debug_hint: sender exceeded daily greeting quota
+
+  - code: USER.GREETING.already_contact
+    go_const: ErrGreetingAlreadyContact
+    dart_const: greetingAlreadyContact
+    l10n_key: error_greeting_already_contact
+    user_message:
+      zh: 已是同好，可直接发消息
+      en: Already a contact, you can send messages directly
+    debug_hint: requester and target are already mutual followers
+
+  - code: USER.GREETING.not_found
+    go_const: ErrGreetingNotFound
+    dart_const: greetingNotFound
+    l10n_key: error_greeting_not_found
+    user_message:
+      zh: 打招呼请求不存在
+      en: Greeting request not found
+    debug_hint: greeting request id not found or access denied
+
+  - code: USER.GREETING.invalid_status_transition
+    go_const: ErrGreetingInvalidStatusTransition
+    dart_const: greetingInvalidStatusTransition
+    l10n_key: error_greeting_invalid_status
+    user_message:
+      zh: 操作不可用，请求状态已变更
+      en: Operation not available, request status has changed
+    debug_hint: attempted status transition is not allowed

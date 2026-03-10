@@ -6,6 +6,21 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 enum ChatInputAttachmentType { image, file }
 
+/// 输入区 `+` 面板中的自定义功能项（扩展点，宿主按需注入）
+class ChatInputExtraPanelItem {
+  const ChatInputExtraPanelItem({
+    required this.icon,
+    required this.text,
+    required this.onTap,
+    this.disabled = false,
+  });
+
+  final IconData icon;
+  final String text;
+  final Future<void> Function() onTap;
+  final bool disabled;
+}
+
 class ChatInputAttachment {
   const ChatInputAttachment({
     required this.id,
@@ -64,17 +79,19 @@ class ChatInputDefaultActions {
   final VoidCallback send;
 }
 
-typedef ChatInputLeftBuilder = Widget Function(
-  BuildContext context,
-  ChatInputVisualState state,
-  ChatInputDefaultActions actions,
-);
+typedef ChatInputLeftBuilder =
+    Widget Function(
+      BuildContext context,
+      ChatInputVisualState state,
+      ChatInputDefaultActions actions,
+    );
 
-typedef ChatInputRightBuilder = List<Widget> Function(
-  BuildContext context,
-  ChatInputVisualState state,
-  ChatInputDefaultActions actions,
-);
+typedef ChatInputRightBuilder =
+    List<Widget> Function(
+      BuildContext context,
+      ChatInputVisualState state,
+      ChatInputDefaultActions actions,
+    );
 
 class CustomizableChatInputBar extends StatefulWidget {
   const CustomizableChatInputBar({
@@ -99,6 +116,7 @@ class CustomizableChatInputBar extends StatefulWidget {
     this.onAttachmentChanged,
     this.onToast,
     this.showAddPanel = true,
+    this.extraPanelItems = const <ChatInputExtraPanelItem>[],
   });
 
   final TextEditingController? controller;
@@ -122,8 +140,12 @@ class CustomizableChatInputBar extends StatefulWidget {
   final ValueChanged<String>? onToast;
   final bool showAddPanel;
 
+  /// 注入到 `+` 面板第二行的自定义功能项（如语音通话、视频通话）
+  final List<ChatInputExtraPanelItem> extraPanelItems;
+
   @override
-  State<CustomizableChatInputBar> createState() => _CustomizableChatInputBarState();
+  State<CustomizableChatInputBar> createState() =>
+      _CustomizableChatInputBarState();
 }
 
 class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
@@ -200,9 +222,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
       widget.onToast!(text);
       return;
     }
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
   bool _acceptAttachmentType(ChatInputAttachmentType type) {
@@ -213,10 +233,8 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
     return false;
   }
 
-  int get _remainingAttachmentCount => math.max(
-    0,
-    widget.maxAttachmentCount - _attachments.length,
-  );
+  int get _remainingAttachmentCount =>
+      math.max(0, widget.maxAttachmentCount - _attachments.length);
 
   Future<void> _addAttachments(List<ChatInputAttachment> attachments) async {
     if (attachments.isEmpty) return;
@@ -237,7 +255,9 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
     setState(() {
       _attachments.addAll(toAdd);
     });
-    widget.onAttachmentChanged?.call(List<ChatInputAttachment>.from(_attachments));
+    widget.onAttachmentChanged?.call(
+      List<ChatInputAttachment>.from(_attachments),
+    );
     if (attachments.length > canAdd) {
       _emitToast(
         UITextConstants.chatAttachmentMaxCount.replaceFirst(
@@ -276,7 +296,9 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
     setState(() {
       _attachments.removeWhere((item) => item.id == id);
     });
-    widget.onAttachmentChanged?.call(List<ChatInputAttachment>.from(_attachments));
+    widget.onAttachmentChanged?.call(
+      List<ChatInputAttachment>.from(_attachments),
+    );
   }
 
   void _toggleAddPanel() {
@@ -305,19 +327,23 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
       isVoiceMessage: false,
       voiceDuration: Duration.zero,
     );
-    await widget.onSend(payload);
-    if (!mounted) return;
+    final hadAttachments = _attachments.isNotEmpty;
     setState(() {
       _controller.clear();
       _attachments.clear();
       _showAddPanel = false;
     });
-    widget.onAttachmentChanged?.call(const <ChatInputAttachment>[]);
+    if (hadAttachments) {
+      widget.onAttachmentChanged?.call(const <ChatInputAttachment>[]);
+    }
+    await widget.onSend(payload);
   }
 
   Future<void> _startVoiceRecord() async {
     if (_isRecording) return;
-    final hasPermission = await (widget.onRequestMicPermission?.call() ?? Future<bool>.value(true));
+    final hasPermission =
+        await (widget.onRequestMicPermission?.call() ??
+            Future<bool>.value(true));
     if (!mounted) return;
     if (!hasPermission) {
       _emitToast(UITextConstants.chatVoicePermissionDenied);
@@ -354,7 +380,8 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
       if (!mounted || !_isRecording) return;
       setState(() {
         for (var i = 0; i < _waveBars.length; i++) {
-          final seed = (DateTime.now().millisecondsSinceEpoch / 1000) + i * 0.23;
+          final seed =
+              (DateTime.now().millisecondsSinceEpoch / 1000) + i * 0.23;
           final base = (math.sin(seed * 4.2) + 1) / 2;
           _waveBars[i] = 0.15 + base * 0.85;
         }
@@ -386,24 +413,15 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
     if (_isVoiceMode) return const <Widget>[];
     if (_canSend) {
       return <Widget>[
-        _buildIconButton(
-          icon: Icons.add,
-          onTap: _toggleAddPanel,
-        ),
+        _buildIconButton(icon: Icons.add, onTap: _toggleAddPanel),
         SizedBox(width: AppSpacing.xs),
         _buildSendButton(),
       ];
     }
     return <Widget>[
-      _buildIconButton(
-        icon: Icons.mic_none,
-        onTap: _toggleVoiceMode,
-      ),
+      _buildIconButton(icon: Icons.mic_none, onTap: _toggleVoiceMode),
       SizedBox(width: AppSpacing.xs),
-      _buildIconButton(
-        icon: Icons.add,
-        onTap: _toggleAddPanel,
-      ),
+      _buildIconButton(icon: Icons.add, onTap: _toggleAddPanel),
     ];
   }
 
@@ -452,67 +470,71 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
         child: Row(
-          children: _attachments.map((item) {
-            final bg = item.type == ChatInputAttachmentType.image
-                ? Colors.grey.withValues(alpha: 0.16)
-                : Colors.grey.withValues(alpha: 0.12);
-            return Container(
-              width: AppSpacing.twoHundredTwenty,
-              margin: EdgeInsets.only(right: AppSpacing.sm),
-              padding: EdgeInsets.all(AppSpacing.sm),
-              decoration: BoxDecoration(
-                color: bg,
-                borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-              ),
-              child: Row(
-                children: [
-                  _buildAttachmentLeading(item),
-                  SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          item.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: AppTypography.base,
-                            color: Colors.black.withValues(alpha: 0.85),
+          children: _attachments
+              .map((item) {
+                final bg = item.type == ChatInputAttachmentType.image
+                    ? Colors.grey.withValues(alpha: 0.16)
+                    : Colors.grey.withValues(alpha: 0.12);
+                return Container(
+                  width: AppSpacing.twoHundredTwenty,
+                  margin: EdgeInsets.only(right: AppSpacing.sm),
+                  padding: EdgeInsets.all(AppSpacing.sm),
+                  decoration: BoxDecoration(
+                    color: bg,
+                    borderRadius: BorderRadius.circular(
+                      AppSpacing.borderRadius,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      _buildAttachmentLeading(item),
+                      SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              item.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: AppTypography.base,
+                                color: Colors.black.withValues(alpha: 0.85),
+                              ),
+                            ),
+                            if ((item.subtitle ?? '').trim().isNotEmpty)
+                              Text(
+                                item.subtitle!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: AppTypography.sm,
+                                  color: Colors.black.withValues(alpha: 0.5),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(width: AppSpacing.xs),
+                      GestureDetector(
+                        onTap: () => _removeAttachment(item.id),
+                        child: Container(
+                          width: AppSpacing.iconButtonMinSizeSm,
+                          height: AppSpacing.iconButtonMinSizeSm,
+                          alignment: Alignment.center,
+                          child: Icon(
+                            Icons.close,
+                            size: AppSpacing.iconSmall,
+                            color: Colors.black.withValues(alpha: 0.6),
                           ),
                         ),
-                        if ((item.subtitle ?? '').trim().isNotEmpty)
-                          Text(
-                            item.subtitle!,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: AppTypography.sm,
-                              color: Colors.black.withValues(alpha: 0.5),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(width: AppSpacing.xs),
-                  GestureDetector(
-                    onTap: () => _removeAttachment(item.id),
-                    child: Container(
-                      width: AppSpacing.iconButtonMinSizeSm,
-                      height: AppSpacing.iconButtonMinSizeSm,
-                      alignment: Alignment.center,
-                      child: Icon(
-                        Icons.close,
-                        size: AppSpacing.iconSmall,
-                        color: Colors.black.withValues(alpha: 0.6),
                       ),
-                    ),
+                    ],
                   ),
-                ],
-              ),
-            );
-          }).toList(growable: false),
+                );
+              })
+              .toList(growable: false),
         ),
       ),
     );
@@ -612,29 +634,34 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
       builder: (context, _) {
         return Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: _waveBars.map((value) {
-            final h = 4 + (AppSpacing.buttonSize * 0.7 * value);
-            return Container(
-              width: AppSpacing.three,
-              height: h,
-              margin: EdgeInsets.symmetric(horizontal: AppSpacing.oneHalf),
-              decoration: BoxDecoration(
-                color: AppColors.primaryColor.withValues(alpha: 0.45 + value * 0.5),
-                borderRadius: BorderRadius.circular(AppSpacing.three),
-              ),
-            );
-          }).toList(growable: false),
+          children: _waveBars
+              .map((value) {
+                final h = 4 + (AppSpacing.buttonSize * 0.7 * value);
+                return Container(
+                  width: AppSpacing.three,
+                  height: h,
+                  margin: EdgeInsets.symmetric(horizontal: AppSpacing.oneHalf),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryColor.withValues(
+                      alpha: 0.45 + value * 0.5,
+                    ),
+                    borderRadius: BorderRadius.circular(AppSpacing.three),
+                  ),
+                );
+              })
+              .toList(growable: false),
         );
       },
     );
   }
 
   Widget _buildInputRow() {
-    final left = widget.leftBuilder?.call(context, _visualState, _defaultActions) ??
+    final left =
+        widget.leftBuilder?.call(context, _visualState, _defaultActions) ??
         _defaultLeftButton(context);
     final right =
         widget.rightBuilder?.call(context, _visualState, _defaultActions) ??
-            _defaultRightButtons(context);
+        _defaultRightButtons(context);
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
@@ -651,7 +678,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
         ],
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           left,
           if (left is! SizedBox) SizedBox(width: AppSpacing.xs),
@@ -663,6 +690,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
               maxLength: widget.maxTextLength,
               maxLines: widget.maxVisibleLines,
               minLines: 1,
+              textAlignVertical: TextAlignVertical.center,
               style: TextStyle(
                 fontSize: AppTypography.base,
                 color: Colors.black.withValues(alpha: 0.88),
@@ -688,10 +716,13 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
 
   Widget _buildAddPanel() {
     if (!_showAddPanel || _isVoiceMode) return const SizedBox.shrink();
-    final disableImage = _attachments.isNotEmpty &&
+    final disableImage =
+        _attachments.isNotEmpty &&
         _attachments.first.type == ChatInputAttachmentType.file;
-    final disableFile = _attachments.isNotEmpty &&
+    final disableFile =
+        _attachments.isNotEmpty &&
         _attachments.first.type == ChatInputAttachmentType.image;
+    final hasExtras = widget.extraPanelItems.isNotEmpty;
     return Container(
       margin: EdgeInsets.only(top: AppSpacing.sm),
       padding: EdgeInsets.symmetric(
@@ -702,28 +733,52 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
         color: Colors.white,
         borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          _buildPanelItem(
-            icon: Icons.photo_library_outlined,
-            text: UITextConstants.chatMorePhoto,
-            disabled: disableImage,
-            onTap: _pickImages,
+          Row(
+            children: [
+              _buildPanelItem(
+                icon: Icons.photo_library_outlined,
+                text: UITextConstants.chatMorePhoto,
+                disabled: disableImage,
+                onTap: _pickImages,
+              ),
+              SizedBox(width: AppSpacing.sm),
+              _buildPanelItem(
+                icon: Icons.camera_alt_outlined,
+                text: UITextConstants.chatMoreShoot,
+                disabled: disableImage,
+                onTap: _capturePhoto,
+              ),
+              SizedBox(width: AppSpacing.sm),
+              _buildPanelItem(
+                icon: Icons.insert_drive_file_outlined,
+                text: UITextConstants.chatMoreFile,
+                disabled: disableFile,
+                onTap: _pickFiles,
+              ),
+            ],
           ),
-          SizedBox(width: AppSpacing.sm),
-          _buildPanelItem(
-            icon: Icons.camera_alt_outlined,
-            text: UITextConstants.chatMoreShoot,
-            disabled: disableImage,
-            onTap: _capturePhoto,
-          ),
-          SizedBox(width: AppSpacing.sm),
-          _buildPanelItem(
-            icon: Icons.insert_drive_file_outlined,
-            text: UITextConstants.chatMoreFile,
-            disabled: disableFile,
-            onTap: _pickFiles,
-          ),
+          if (hasExtras) ...[
+            SizedBox(height: AppSpacing.sm),
+            Row(
+              children: widget.extraPanelItems
+                  .expand(
+                    (item) => [
+                      if (widget.extraPanelItems.indexOf(item) > 0)
+                        SizedBox(width: AppSpacing.sm),
+                      _buildPanelItem(
+                        icon: item.icon,
+                        text: item.text,
+                        disabled: item.disabled,
+                        onTap: item.onTap,
+                      ),
+                    ],
+                  )
+                  .toList(),
+            ),
+          ],
         ],
       ),
     );
@@ -754,10 +809,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
               SizedBox(height: AppSpacing.xs),
               Text(
                 text,
-                style: TextStyle(
-                  fontSize: AppTypography.sm,
-                  color: fg,
-                ),
+                style: TextStyle(fontSize: AppTypography.sm, color: fg),
               ),
             ],
           ),

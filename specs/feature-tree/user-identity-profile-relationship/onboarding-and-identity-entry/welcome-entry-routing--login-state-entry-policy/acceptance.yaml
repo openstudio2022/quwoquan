@@ -1,0 +1,18 @@
+version: 1
+feature: login-state-entry-policy
+level: "L3_story"
+template: A1-A8
+focus_groups: []
+tests:
+  mock: []
+  unit: []
+  contract: []
+  integration: []
+  uat: []
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+legacy_merged_acceptance:
+- source_path: user-identity-profile-relationship/onboarding-and-identity-entry/welcome-entry-routing/login-state-entry-policy/entry-consistency-guard
+  task_bucket: entry-consistency-guard
+  migrated_as: L3_task

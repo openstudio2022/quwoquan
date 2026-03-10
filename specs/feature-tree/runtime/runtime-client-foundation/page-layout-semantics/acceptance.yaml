@@ -1,42 +1,45 @@
 version: 1
-feature: "page-layout-semantics"
-level: "L3_subfeature"
-template: "A1-A8"
+feature: page-layout-semantics
+level: "L3_story"
+template: A1-A8
 tree_context:
-  feature_level: "L3_subfeature"
-  feature_path: "capability.runtime.feature.runtime-client-foundation.subfeature.page-layout-semantics"
-  parent_path: "capability.runtime.feature.runtime-client-foundation"
+  feature_path: capability.runtime.feature.runtime-client-foundation.subfeature.page-layout-semantics
+  parent_path: capability.runtime.feature.runtime-client-foundation
 level_acceptance:
   focus_groups:
-    - A1_functional
-    - A7_contract_metadata_consistency
-  notes: "页面布局统一语义；规范见 specs/ux/page-layout-semantics.md；不含用户/作者/圈子主页；包含圈子一级 tab 的频道管理面板语义"
+  - A1_functional
+  - A7_contract_metadata_consistency
+  notes: 页面布局统一语义；规范见 specs/ux/page-layout-semantics.md；不含用户/作者/圈子主页；包含圈子一级 tab 的频道管理面板语义
   A1:
-    criteria: "Modal 页使用 close，Stack 页使用 arrow_back"
+    criteria: Modal 页使用 close，Stack 页使用 arrow_back
     status: implemented
-    linked_tasks: [top-toolbar-and-selection-pattern]
+    linked_tasks:
+    - top-toolbar-and-selection-pattern
     tests: []
   A2:
-    criteria: "多选选择器底部 取消|完成；单选 tap 即返回"
+    criteria: 多选选择器底部 取消|完成；单选 tap 即返回
     status: implemented
-    linked_tasks: [top-toolbar-and-selection-pattern]
+    linked_tasks:
+    - top-toolbar-and-selection-pattern
     tests: []
   A3:
-    criteria: "设置类页面统一使用 SettingsSemanticConstants 与块结构"
+    criteria: 设置类页面统一使用 SettingsSemanticConstants 与块结构
     status: implemented
-    linked_tasks: [settings-page-structure]
+    linked_tasks:
+    - settings-page-structure
     tests: []
   A7:
-    criteria: "specs/ux/page-layout-semantics.md 与特性树一致"
+    criteria: specs/ux/page-layout-semantics.md 与特性树一致
     status: implemented
     linked_tasks: []
     tests: []
   A5:
-    criteria: "圈子页右上角使用三横频道管理入口，点击后在一级 tab 下方滑出微博式频道面板，支持我的频道/全部频道切换、增删与顺序调整，并落盘本地偏好"
+    criteria: 圈子页右上角使用三横频道管理入口，点击后在一级 tab 下方滑出微博式频道面板，支持我的频道/全部频道切换、增删与顺序调整，并落盘本地偏好
     status: pending
-    linked_tasks: [circles-channel-management-panel]
+    linked_tasks:
+    - circles-channel-management-panel
     tests: []
 execution:
-  # 迁移后统一使用 lib/ui/{domain}/（specs/01_APP_DIRECTORY_MIGRATION_TASKS）
-  local_gate: "flutter analyze lib/ui/content/entry/ lib/ui/settings/ lib/ui/chat/ lib/ui/assistant/"
-  full_gate: "make gate"
+  local_gate: flutter analyze lib/ui/content/entry/ lib/ui/settings/ lib/ui/chat/
+    lib/ui/assistant/
+  full_gate: make gate

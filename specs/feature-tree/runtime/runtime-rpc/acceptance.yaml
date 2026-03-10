@@ -1,46 +1,49 @@
 version: 1
-feature: "runtime-rpc"
+feature: runtime-rpc
 level: "L2_feature"
-template: "A1-A8"
+template: A1-A8
 tree_context:
-  feature_level: "L2_feature"
-  feature_path: "capability.runtime.feature.runtime-rpc"
-  parent_path: "capability.runtime"
-  acceptance_inherits_from: "capability.runtime"
+  feature_path: capability.runtime.feature.runtime-rpc
+  parent_path: capability.runtime
+  acceptance_inherits_from: capability.runtime
 level_acceptance:
-  focus_groups: [A1_functional, A3_service_governance, A4_observability, A8_test_automation]
-  notes: "RPC 拦截器运行时与兼容策略为重点。"
+  focus_groups:
+  - A1_functional
+  - A3_service_governance
+  - A4_observability
+  - A8_test_automation
+  notes: RPC 拦截器运行时与兼容策略为重点。
 global_acceptance:
   A1_functional:
     scenarios:
-      - given: "服务启用 runtime-rpc 拦截器"
-        when: "执行 unary 与 stream 调用"
-        then: "metadata、错误映射、治理策略均生效"
+    - given: 服务启用 runtime-rpc 拦截器
+      when: 执行 unary 与 stream 调用
+      then: metadata、错误映射、治理策略均生效
   A2_experience:
-    - "RPC 调用尾延迟无明显回归"
+  - RPC 调用尾延迟无明显回归
   A3_service_governance:
-    - "超时/重试/熔断策略可配置"
+  - 超时/重试/熔断策略可配置
   A4_observability:
-    - "RPC 链路可被 trace/request 关联检索"
+  - RPC 链路可被 trace/request 关联检索
   A5_product_ops:
-    - "关键调用结果可输出运营关联字段"
+  - 关键调用结果可输出运营关联字段
   A6_security_privacy:
-    - "敏感 metadata 不写入普通日志"
+  - 敏感 metadata 不写入普通日志
   A7_contract_metadata_consistency:
-    - "RPC metadata 与错误映射契约一致"
+  - RPC metadata 与错误映射契约一致
   A8_test_automation:
-    - "interceptor/stub/integration 自动化覆盖"
+  - interceptor/stub/integration 自动化覆盖
 tests:
   mock:
-    - "quwoquan_service/runtime/rpc/tests/interceptor_mock_test.go"
+  - quwoquan_service/runtime/rpc/tests/interceptor_mock_test.go
   unit:
-    - "quwoquan_service/runtime/rpc/tests/metadata_mapping_unit_test.go"
+  - quwoquan_service/runtime/rpc/tests/metadata_mapping_unit_test.go
   contract:
-    - "quwoquan_service/contracts/tests/rpc_mapping_contract_test.go"
+  - quwoquan_service/contracts/tests/rpc_mapping_contract_test.go
   integration:
-    - "quwoquan_service/runtime/rpc/tests/rpc_call_chain_integration_test.go"
+  - quwoquan_service/runtime/rpc/tests/rpc_call_chain_integration_test.go
   uat:
-    - "UAT-RUNTIME-RPC-METADATA-PROPAGATION-001"
+  - UAT-RUNTIME-RPC-METADATA-PROPAGATION-001
 execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
+  local_gate: make gate
+  full_gate: make gate-full

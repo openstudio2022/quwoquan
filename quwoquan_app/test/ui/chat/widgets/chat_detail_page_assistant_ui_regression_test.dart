@@ -213,6 +213,59 @@ void main() {
     );
   });
 
+  testWidgets('多 skill timeline 可同时恢复 root/skill/aggregation 过程', (
+    tester,
+  ) async {
+    final message = _assistantMessage(
+      id: 'assistant_msg_multiskill_timeline_v2',
+      content: '深圳天气与出游建议',
+      extra: {
+        'uiProcessTimelineV2': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'scope': 'root',
+            'type': 'processReplace',
+            'nodeId': 'root.intent',
+            'summary': '我先拆成天气和出游两部分分别处理',
+            'references': const <Map<String, dynamic>>[],
+          },
+          <String, dynamic>{
+            'scope': 'skill',
+            'type': 'processCommit',
+            'nodeId': 'weather',
+            'runId': 'skill_weather_1',
+            'summary': '天气部分已核对完成，适合轻松出门',
+            'references': const <Map<String, dynamic>>[],
+          },
+          <String, dynamic>{
+            'scope': 'skill',
+            'type': 'processCommit',
+            'nodeId': 'fallback_general_search',
+            'runId': 'skill_travel_1',
+            'summary': '出游部分已补充室内外备选方案',
+            'references': const <Map<String, dynamic>>[],
+          },
+          <String, dynamic>{
+            'scope': 'aggregation',
+            'type': 'processCommit',
+            'nodeId': 'aggregation.final',
+            'summary': '已汇总成最终建议',
+            'references': const <Map<String, dynamic>>[],
+          },
+        ],
+      },
+    );
+    await tester.pumpWidget(_bubbleHarness(message));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.textContaining('已汇总成最终建议'), findsOneWidget);
+
+    await tester.tap(find.textContaining('已汇总成最终建议'));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.textContaining('天气部分已核对完成'), findsOneWidget);
+    expect(find.textContaining('出游部分已补充'), findsOneWidget);
+  });
+
   testWidgets('助理 Markdown 与 card block 按层次渲染', (tester) async {
     final message = _assistantMessage(
       id: 'assistant_msg_md',

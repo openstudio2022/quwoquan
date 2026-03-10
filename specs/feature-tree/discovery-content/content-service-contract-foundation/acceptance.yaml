@@ -1,87 +1,78 @@
 version: 1
 feature: content-service-contract-foundation
-level: L2_feature
+level: "L2_feature"
 status: archived
 archived: true
-
 acceptance_criteria:
-  - id: A1
-    description: metadata 目录重组完成
-    assertions:
-      - contracts/metadata/content/post/ 包含 aggregate/fields/storage/events/service.yaml
-      - contracts/metadata/content/post/projections/ 包含 photo/video/article/moment 4个投影
-      - contracts/metadata/content/openapi.yaml 存在
-      - make verify-metadata PASS
-
-  - id: A2
-    description: 端侧 codegen 产物全部生成
-    assertions:
-      - lib/cloud/content/generated/content_errors.g.dart 存在且包含 ContentErrorCode enum
-      - lib/cloud/content/generated/content_behaviors.g.dart 存在且包含 ContentBehaviorTracker
-      - lib/cloud/content/generated/content_ui_config.g.dart 存在且包含 ContentUIConfig.discoveryTabs
-      - lib/cloud/content/generated/content_privacy_policy.g.dart 存在且包含 sanitizeForLog
-      - 全部文件头部含 "DO NOT EDIT" 标记
-      - make codegen-app PASS
-
-  - id: A3
-    description: 云侧 codegen 产物生成
-    assertions:
-      - services/content-service/internal/generated/errors.go 存在且包含 ErrPostNotFound 等常量
-      - services/rec-model-service/generated/content_features.py 存在（Pydantic BaseModel）
-      - services/rec-model-service/generated/training_sample.py 存在
-      - make codegen PASS
-
-  - id: A4
-    description: CloudErrorMapper 解析结构化错误码
-    assertions:
-      - CloudErrorMapper.fromErrorResponse('{"code":"CONTENT.USER.post_not_found"}') → ContentErrorCode.postNotFound
-      - ContentErrorMessages.zh[ContentErrorCode.postNotFound] == '内容不存在或已删除'
-      - ContentErrorCode.rateLimited.isRetryable == true
-      - 旧的 _readCode() 返回 'REMOTE_ERROR' 的行为已消除
-
-  - id: A5
-    description: 端侧 Discovery 页零硬编码 contentType
-    assertions:
-      - discovery_page.dart 中不包含字符串 'image' / 'video' / 'micro' / 'article'（除 import）
-      - TabBar 由 ContentUIConfig.discoveryTabs 驱动
-      - flutter analyze lib/ui/discovery/ 无错误
-
-  - id: A6
-    description: BehaviorTracker 可调用且路由与契约一致
-    assertions:
-      - ContentBehaviorTracker.trackImpression(postId) 可调用
-      - ContentBehaviorTracker.trackDwell(postId, dwellMs) 可调用
-      - BehaviorTracker 内部路由常量 == service.yaml POST /v1/content/behaviors
-      - like/favorite 不在 BehaviorTracker 中（由 intent layer 处理）
-
-  - id: A7
-    description: 三层测试契约声明完整
-    assertions:
-      - tests/mock.yaml 覆盖全部 errors.yaml 错误码（每个 code 至少一个场景）
-      - tests/mock.yaml 覆盖全部 behaviors.yaml behavior_events（每个 type 至少一个）
-      - tests/contract.yaml 覆盖 service.yaml 全部 api_routes（每个路由至少一个场景）
-      - tests/e2e.yaml 包含核心用户旅程（feed load / like / behavior report）
-
-  - id: A8
-    description: make gate 全部通过（G1-G10）
-    assertions:
-      - G4 错误码覆盖：PASS
-      - G5 行为路由一致性：PASS
-      - G6 UI配置完整性：PASS
-      - G7 测试场景覆盖：PASS
-      - G8 隐私字段完整性：PASS
-      - G9 行为类型合法：PASS
-      - G10 feature flags 对齐：PASS
-
+- id: A1
+  description: metadata 目录重组完成
+  assertions:
+  - contracts/metadata/content/post/ 包含 aggregate/fields/storage/events/service.yaml
+  - contracts/metadata/content/post/projections/ 包含 photo/video/article/moment 4个投影
+  - contracts/metadata/content/openapi.yaml 存在
+  - make verify-metadata PASS
+- id: A2
+  description: 端侧 codegen 产物全部生成
+  assertions:
+  - lib/cloud/content/generated/content_errors.g.dart 存在且包含 ContentErrorCode enum
+  - lib/cloud/content/generated/content_behaviors.g.dart 存在且包含 ContentBehaviorTracker
+  - lib/cloud/content/generated/content_ui_config.g.dart 存在且包含 ContentUIConfig.discoveryTabs
+  - lib/cloud/content/generated/content_privacy_policy.g.dart 存在且包含 sanitizeForLog
+  - 全部文件头部含 "DO NOT EDIT" 标记
+  - make codegen-app PASS
+- id: A3
+  description: 云侧 codegen 产物生成
+  assertions:
+  - services/content-service/internal/generated/errors.go 存在且包含 ErrPostNotFound 等常量
+  - services/rec-model-service/generated/content_features.py 存在（Pydantic BaseModel）
+  - services/rec-model-service/generated/training_sample.py 存在
+  - make codegen PASS
+- id: A4
+  description: CloudErrorMapper 解析结构化错误码
+  assertions:
+  - CloudErrorMapper.fromErrorResponse('{"code":"CONTENT.USER.post_not_found"}') →
+    ContentErrorCode.postNotFound
+  - ContentErrorMessages.zh[ContentErrorCode.postNotFound] == '内容不存在或已删除'
+  - ContentErrorCode.rateLimited.isRetryable == true
+  - 旧的 _readCode() 返回 'REMOTE_ERROR' 的行为已消除
+- id: A5
+  description: 端侧 Discovery 页零硬编码 contentType
+  assertions:
+  - discovery_page.dart 中不包含字符串 'image' / 'video' / 'micro' / 'article'（除 import）
+  - TabBar 由 ContentUIConfig.discoveryTabs 驱动
+  - flutter analyze lib/ui/discovery/ 无错误
+- id: A6
+  description: BehaviorTracker 可调用且路由与契约一致
+  assertions:
+  - ContentBehaviorTracker.trackImpression(postId) 可调用
+  - ContentBehaviorTracker.trackDwell(postId, dwellMs) 可调用
+  - BehaviorTracker 内部路由常量 == service.yaml POST /v1/content/behaviors
+  - like/favorite 不在 BehaviorTracker 中（由 intent layer 处理）
+- id: A7
+  description: 三层测试契约声明完整
+  assertions:
+  - tests/mock.yaml 覆盖全部 errors.yaml 错误码（每个 code 至少一个场景）
+  - tests/mock.yaml 覆盖全部 behaviors.yaml behavior_events（每个 type 至少一个）
+  - tests/contract.yaml 覆盖 service.yaml 全部 api_routes（每个路由至少一个场景）
+  - tests/e2e.yaml 包含核心用户旅程（feed load / like / behavior report）
+- id: A8
+  description: make gate 全部通过（G1-G10）
+  assertions:
+  - G4 错误码覆盖：PASS
+  - G5 行为路由一致性：PASS
+  - G6 UI配置完整性：PASS
+  - G7 测试场景覆盖：PASS
+  - G8 隐私字段完整性：PASS
+  - G9 行为类型合法：PASS
+  - G10 feature flags 对齐：PASS
 focus_groups:
-  - backend
-  - frontend
-  - platform
-
+- backend
+- frontend
+- platform
 execution:
   mode: automated
   gate_command: make gate
   test_commands:
-    - flutter test test/cloud/content/
-    - go test ./services/content-service/...
-    - make verify-metadata
+  - flutter test test/cloud/content/
+  - go test ./services/content-service/...
+  - make verify-metadata

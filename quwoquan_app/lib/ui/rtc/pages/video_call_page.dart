@@ -18,6 +18,7 @@ import 'package:quwoquan_app/ui/rtc/providers/call_timer_provider.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_controls_bar.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_duration_badge.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_quality_indicator.dart';
+import 'package:quwoquan_app/ui/rtc/widgets/participant_list_sheet.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/speaker_highlight_layout.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/video_grid_layout.dart';
 
@@ -41,10 +42,13 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
   @override
   void initState() {
     super.initState();
-    final timer = ref.read(callTimerProvider);
-    if (!timer.isRunning) {
-      ref.read(callTimerProvider.notifier).start();
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final timer = ref.read(callTimerProvider);
+      if (!timer.isRunning) {
+        ref.read(callTimerProvider.notifier).start();
+      }
+    });
     _startControlsHideTimer();
   }
 
@@ -92,13 +96,18 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) {
           ref.read(activeCallProvider.notifier).enterPipMode();
-          context.pop();
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go(AppRoutePaths.chat);
+          }
         }
       },
       child: Scaffold(
         backgroundColor: AppColors.black,
         body: GestureDetector(
           onTap: _toggleControls,
+          behavior: HitTestBehavior.opaque,
           onScaleUpdate: (details) {
             if (details.scale > 1.2 && _layoutMode == CallLayoutMode.grid) {
               setState(() => _layoutMode = CallLayoutMode.speaker);
@@ -217,7 +226,14 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
             Positioned(
               top: MediaQuery.paddingOf(context).top + AppSpacing.xl * 2,
               right: AppSpacing.md,
-              child: _buildLayoutToggle(),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildParticipantListButton(session),
+                  SizedBox(width: AppSpacing.sm),
+                  _buildLayoutToggle(),
+                ],
+              ),
             ),
             Positioned(
               left: 0,
@@ -262,6 +278,43 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
           _layoutMode.isGrid
               ? CupertinoIcons.person_2
               : CupertinoIcons.square_grid_2x2,
+          color: AppColors.white,
+          size: AppSpacing.iconMedium,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildParticipantListButton(CallSessionState session) {
+    return GestureDetector(
+      onTap: () {
+        showModalBottomSheet<void>(
+          context: context,
+          backgroundColor: Colors.transparent,
+          builder: (_) => ParticipantListSheet(
+            maxParticipants: session.session?.maxParticipants ?? 32,
+            onInviteMore: () {
+              Navigator.of(context).pop();
+              context.push(
+                AppRoutePaths.rtcPickParticipants,
+                extra: <String, dynamic>{
+                  'callId': widget.callId,
+                  'maxParticipants': session.session?.maxParticipants ?? 32,
+                },
+              );
+            },
+          ),
+        );
+      },
+      child: Container(
+        width: AppSpacing.minInteractiveSize,
+        height: AppSpacing.minInteractiveSize,
+        decoration: BoxDecoration(
+          color: AppColors.overlayMedium,
+          borderRadius: BorderRadius.circular(AppSpacing.sm),
+        ),
+        child: Icon(
+          CupertinoIcons.person_2,
           color: AppColors.white,
           size: AppSpacing.iconMedium,
         ),

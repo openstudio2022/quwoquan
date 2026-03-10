@@ -9,6 +9,16 @@ searchPolicy:
   maxReflection: 2
   qualityThreshold: 0.4
   strategy: research
+execution_shell:
+  problemClass: general
+  maxIterations: 4
+  toolBudget: 2
+  variantBudget: 1
+  reflectionBudget: 1
+  providerPolicy: model_choice
+  preferredProviders: [web]
+  authorityDomains: []
+  freshnessHoursMax: 24
 requires:
   tools: [web_search]
 output_contract: assistant_turn_v2

@@ -1,20 +1,18 @@
-import 'dart:math' as math;
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/personal_assistant/app/capability_gateway.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/explainable_flow_event.dart';
 
 /// Single collapsible process drawer for the assistant's reasoning pipeline.
 ///
-/// Displays the four-phase reasoning process:
-///   Phase 1 – understanding (waiting for model, twin-bar opposite-rotation animation)
-///   Phase 2 – searching (tool calls, three-dot animation)
-///   Phase 3 – analyzing (evidence synthesis, three-dot animation)
-///   Phase 4 – answering (generation / judgment loop, three-dot animation)
+/// Two rendering modes:
+///   1. New: consumes [flowEvents] (list of [ExplainableFlowEvent]) — tree-
+///      structured, deduped, user-language phases.
+///   2. Legacy: consumes [processState] (AssistantProcessState) — flat lines
+///      and content blocks.
 ///
-/// Each phase shows structured [ProcessContentBlock]s including collapsible
-/// reference lists for search/analysis results.
+/// When [flowEvents] is non-empty, the legacy [processState] is ignored.
 class AssistantProcessDrawer extends StatefulWidget {
   const AssistantProcessDrawer({
     super.key,
@@ -22,96 +20,99 @@ class AssistantProcessDrawer extends StatefulWidget {
     required this.isRunning,
     this.initiallyExpanded = false,
     this.onReferenceUrlTap,
+    this.flowEvents = const <ExplainableFlowEvent>[],
   });
 
   final AssistantProcessState processState;
   final bool isRunning;
   final bool initiallyExpanded;
   final void Function(String url)? onReferenceUrlTap;
+  final List<ExplainableFlowEvent> flowEvents;
 
   @override
   State<AssistantProcessDrawer> createState() => _AssistantProcessDrawerState();
 }
 
-class _AssistantProcessDrawerState extends State<AssistantProcessDrawer>
-    with TickerProviderStateMixin {
+class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
   bool _expanded = false;
-  late final AnimationController _twinBarController;
   final Set<int> _expandedBlockIndices = <int>{};
+  final Set<int> _expandedFlowIndices = <int>{};
 
-  // Track previous stage to auto-expand when a new phase starts
   ProcessStage? _prevStage;
+  int _prevFlowEventCount = 0;
+
+  bool get _useFlowEvents => widget.flowEvents.isNotEmpty;
 
   @override
   void initState() {
     super.initState();
     _expanded = widget.initiallyExpanded;
-    _twinBarController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1600),
-    );
-    if (widget.isRunning) _twinBarController.repeat();
   }
 
   @override
   void didUpdateWidget(covariant AssistantProcessDrawer oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Manage twin-bar animation lifecycle
-    if (widget.isRunning && !_twinBarController.isAnimating) {
-      _twinBarController.repeat();
-    } else if (!widget.isRunning && _twinBarController.isAnimating) {
-      _twinBarController.stop();
+    if (_useFlowEvents) {
+      if (widget.isRunning &&
+          widget.flowEvents.length > _prevFlowEventCount &&
+          widget.flowEvents.length > 1 &&
+          !_expanded) {
+        setState(() => _expanded = true);
+      }
+      _prevFlowEventCount = widget.flowEvents.length;
+    } else {
+      if (widget.isRunning &&
+          _prevStage != widget.processState.stage &&
+          widget.processState.stage != ProcessStage.understanding &&
+          !_expanded) {
+        setState(() => _expanded = true);
+      }
+      _prevStage = widget.processState.stage;
     }
-    // Auto-expand when a new search/analysis phase starts during a run
-    if (widget.isRunning &&
-        _prevStage != widget.processState.stage &&
-        widget.processState.stage != ProcessStage.understanding &&
-        !_expanded) {
-      setState(() => _expanded = true);
-    }
-    _prevStage = widget.processState.stage;
   }
 
   @override
-  void dispose() {
-    _twinBarController.dispose();
-    super.dispose();
+  void dispose() => super.dispose();
+
+  bool get _hasContentBlocks => widget.processState.contentBlocks.isNotEmpty;
+
+  bool get _isInitialWait {
+    if (_useFlowEvents) {
+      return widget.flowEvents.isEmpty;
+    }
+    return widget.processState.stage == ProcessStage.understanding &&
+        !_hasContentBlocks &&
+        widget.processState.processLines.isEmpty;
   }
-
-  bool get _hasContentBlocks =>
-      widget.processState.contentBlocks.isNotEmpty;
-
-  bool get _isInitialWait =>
-      widget.processState.stage == ProcessStage.understanding &&
-      !_hasContentBlocks &&
-      widget.processState.processLines.isEmpty;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final bgColor = isDark
-        ? const Color(0xFF1C1C1E)
-        : const Color(0xFFF5F5F7);
-    final borderColor = isDark
-        ? const Color(0xFF38383A)
-        : const Color(0xFFE5E5EA);
-    final textColor = isDark
-        ? const Color(0xFFEBEBF5)
-        : const Color(0xFF3A3A3C);
-    final secondaryTextColor = isDark
-        ? const Color(0xFF98989F)
-        : const Color(0xFF8E8E93);
-    final accentColor = isDark
-        ? const Color(0xFF64D2FF)
-        : const Color(0xFF007AFF);
+    final bgColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
+    final borderColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.borderPrimary,
+    );
+    final textColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final secondaryTextColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final accentColor = AppColorsFunctional.getColor(isDark, ColorType.primary);
 
     return Container(
       margin: EdgeInsets.only(bottom: AppSpacing.xs),
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-        border: Border.all(color: borderColor, width: 0.5),
+        border: Border.all(color: borderColor, width: AppSpacing.one / 2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -123,11 +124,17 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer>
             accentColor: accentColor,
           ),
           if (_expanded)
-            _buildBody(
-              textColor: textColor,
-              secondaryTextColor: secondaryTextColor,
-              accentColor: accentColor,
-            ),
+            _useFlowEvents
+                ? _buildFlowEventsBody(
+                    textColor: textColor,
+                    secondaryTextColor: secondaryTextColor,
+                    accentColor: accentColor,
+                  )
+                : _buildBody(
+                    textColor: textColor,
+                    secondaryTextColor: secondaryTextColor,
+                    accentColor: accentColor,
+                  ),
         ],
       ),
     );
@@ -138,6 +145,8 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer>
     required Color secondaryTextColor,
     required Color accentColor,
   }) {
+    final headerLabel = _shortHeaderLabel();
+    final monochrome = Color.lerp(secondaryTextColor, accentColor, 0.22)!;
     return GestureDetector(
       onTap: () => setState(() => _expanded = !_expanded),
       behavior: HitTestBehavior.opaque,
@@ -146,58 +155,43 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer>
           horizontal: AppSpacing.sm,
           vertical: AppSpacing.intraGroupSm,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
+        child: Row(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          widget.processState.stageLabel,
-                          style: TextStyle(
-                            fontSize: AppTypography.sm,
-                            fontWeight: FontWeight.w500,
-                            color: textColor,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Padding(
-                        padding: EdgeInsets.only(left: AppSpacing.xs),
-                        child: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: Center(
-                            child: _buildStatusIndicator(accentColor, secondaryTextColor),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+            if (!widget.isRunning)
+              Padding(
+                padding: EdgeInsets.only(right: AppSpacing.xs),
+                child: Icon(
+                  CupertinoIcons.checkmark_circle_fill,
+                  size: AppTypography.base,
+                  color: accentColor,
                 ),
-                // Phase progress indicator (4 steps)
-                if (widget.isRunning || widget.processState.stage == ProcessStage.completed)
-                  Padding(
-                    padding: EdgeInsets.only(right: AppSpacing.xs),
-                    child: _PhaseStepRow(
-                      stage: widget.processState.stage,
-                      activeColor: accentColor,
-                      inactiveColor: secondaryTextColor.withValues(alpha: 0.3),
-                    ),
-                  ),
-                Icon(
-                  _expanded
-                      ? CupertinoIcons.chevron_up
-                      : CupertinoIcons.chevron_down,
-                  size: 13,
-                  color: secondaryTextColor,
-                ),
-              ],
+              ),
+            if (widget.isRunning && _isInitialWait)
+              Padding(
+                padding: EdgeInsets.only(right: AppSpacing.xs + AppSpacing.xs / 2),
+                child: _BreathingCapsule(color: monochrome),
+              ),
+            Text(
+              headerLabel,
+              style: TextStyle(
+                fontSize: AppTypography.base,
+                fontWeight: FontWeight.w500,
+                color: textColor,
+                height: AppTypography.bodyLineHeight,
+              ),
+            ),
+            if (widget.isRunning && !_isInitialWait)
+              Padding(
+                padding: EdgeInsets.only(left: AppSpacing.xs),
+                child: _ThreeDotPulse(color: monochrome, size: AppSpacing.xs),
+              ),
+            const Spacer(),
+            Icon(
+              _expanded
+                  ? CupertinoIcons.chevron_up
+                  : CupertinoIcons.chevron_down,
+              size: AppTypography.smPlus,
+              color: secondaryTextColor,
             ),
           ],
         ),
@@ -205,26 +199,283 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer>
     );
   }
 
-  /// Status indicator shown after the stage label:
-  /// - Completed: Checkmark icon
-  /// - Phase 1 (initial wait, no content): Twin rotating bars
-  /// - Phase 2+ while running: Three-dot pulse
-  Widget _buildStatusIndicator(Color accentColor, Color secondaryTextColor) {
+  String _shortHeaderLabel() {
+    if (_useFlowEvents) {
+      return _flowEventsHeaderLabel();
+    }
+    final stage = widget.processState.stage;
     if (!widget.isRunning) {
-      return Icon(
-        CupertinoIcons.checkmark_circle_fill,
-        size: 16,
-        color: accentColor,
-      );
+      final label = widget.processState.stageLabel;
+      if (label.length <= 12) return label;
+      return '${label.substring(0, AppSpacing.ten.toInt())}\u2026';
     }
-    if (_isInitialWait) {
-      return _TwinBarAnimation(
-        controller: _twinBarController,
-        color: accentColor,
-      );
+    switch (stage) {
+      case ProcessStage.understanding:
+        return UITextConstants.assistantProcessThinking;
+      case ProcessStage.searching:
+        return UITextConstants.assistantProcessSearching;
+      case ProcessStage.analyzing:
+        return UITextConstants.assistantProcessOrganizing;
+      case ProcessStage.answering:
+        return UITextConstants.assistantProcessAnswering;
+      case ProcessStage.completed:
+        return UITextConstants.assistantProcessCompleted;
     }
-    // For active phases, show a compact three-dot indicator
-    return _ThreeDotPulse(color: accentColor, size: 4);
+  }
+
+  String _flowEventsHeaderLabel() {
+    final events = widget.flowEvents;
+    if (events.isEmpty) return UITextConstants.assistantProcessThinking;
+    if (!widget.isRunning) {
+      final last = events.last;
+      final label = last.headline;
+      if (label.length <= 12) return label;
+      return '${label.substring(0, 10)}\u2026';
+    }
+    final activeEvent = events.lastWhere(
+      (e) => e.phaseStatus == ExplainablePhaseStatus.active,
+      orElse: () => events.last,
+    );
+    final label = activeEvent.headline;
+    if (label.length <= 12) return label;
+    return '${label.substring(0, 10)}\u2026';
+  }
+
+  Widget _buildFlowEventsBody({
+    required Color textColor,
+    required Color secondaryTextColor,
+    required Color accentColor,
+  }) {
+    final events = widget.flowEvents;
+    if (events.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: EdgeInsets.only(
+        left: AppSpacing.sm,
+        right: AppSpacing.sm,
+        bottom: AppSpacing.intraGroupSm,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: double.infinity,
+            height: AppSpacing.one / 2,
+            color: secondaryTextColor.withValues(alpha: 0.15),
+          ),
+          SizedBox(height: AppSpacing.xs),
+          for (var i = 0; i < events.length; i++)
+            _buildFlowEventRow(
+              index: i,
+              event: events[i],
+              textColor: textColor,
+              secondaryTextColor: secondaryTextColor,
+              accentColor: accentColor,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFlowEventRow({
+    required int index,
+    required ExplainableFlowEvent event,
+    required Color textColor,
+    required Color secondaryTextColor,
+    required Color accentColor,
+  }) {
+    final isActive = event.phaseStatus == ExplainablePhaseStatus.active;
+    final isCompleted = event.phaseStatus == ExplainablePhaseStatus.completed;
+    final isSkipped = event.phaseStatus == ExplainablePhaseStatus.skipped;
+    final isFailed = event.phaseStatus == ExplainablePhaseStatus.failed;
+    final isChild = event.parentPhaseId.isNotEmpty;
+    final hasDetail =
+        event.detail.isNotEmpty || event.references.isNotEmpty;
+    final isRowExpanded = _expandedFlowIndices.contains(index);
+
+    final IconData statusIcon;
+    final Color iconColor;
+    if (isCompleted) {
+      statusIcon = CupertinoIcons.checkmark_circle_fill;
+      iconColor = accentColor;
+    } else if (isActive) {
+      statusIcon = CupertinoIcons.circle;
+      iconColor = accentColor;
+    } else if (isFailed) {
+      statusIcon = CupertinoIcons.xmark_circle_fill;
+      iconColor = AppColors.error;
+    } else {
+      statusIcon = CupertinoIcons.minus_circle;
+      iconColor = secondaryTextColor.withValues(alpha: 0.4);
+    }
+
+    return Padding(
+      padding: EdgeInsets.only(
+        left: isChild ? AppSpacing.sm + AppSpacing.xs : 0,
+        bottom: AppSpacing.xs / 2,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          GestureDetector(
+            onTap: hasDetail
+                ? () {
+                    setState(() {
+                      if (isRowExpanded) {
+                        _expandedFlowIndices.remove(index);
+                      } else {
+                        _expandedFlowIndices.add(index);
+                      }
+                    });
+                  }
+                : null,
+            behavior: HitTestBehavior.opaque,
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: AppSpacing.xs / 2),
+              child: Row(
+                children: [
+                  if (isChild)
+                    Padding(
+                      padding: EdgeInsets.only(right: AppSpacing.xs / 2),
+                      child: Text(
+                        '├─',
+                        style: TextStyle(
+                          fontSize: AppTypography.xs,
+                          color: secondaryTextColor.withValues(alpha: 0.3),
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ),
+                  if (isActive && widget.isRunning)
+                    Padding(
+                      padding: EdgeInsets.only(right: AppSpacing.xs),
+                      child: SizedBox(
+                        width: AppSpacing.fourteen,
+                        height: AppSpacing.fourteen,
+                        child: CircularProgressIndicator(
+                          strokeWidth: AppSpacing.oneHalf,
+                          color: accentColor,
+                        ),
+                      ),
+                    )
+                  else
+                    Padding(
+                      padding: EdgeInsets.only(right: AppSpacing.xs),
+                      child: Icon(
+                        statusIcon,
+                        size: AppTypography.base,
+                        color: iconColor,
+                      ),
+                    ),
+                  Expanded(
+                    child: Text(
+                      event.headline,
+                      style: TextStyle(
+                        fontSize: AppTypography.base,
+                        fontWeight: isActive ? FontWeight.w500 : FontWeight.w400,
+                        color: isSkipped
+                            ? secondaryTextColor.withValues(alpha: 0.5)
+                            : textColor,
+                        decoration: isSkipped
+                            ? TextDecoration.lineThrough
+                            : TextDecoration.none,
+                        height: AppTypography.bodyLineHeight,
+                      ),
+                    ),
+                  ),
+                  if (hasDetail)
+                    Icon(
+                      isRowExpanded
+                          ? CupertinoIcons.chevron_up
+                          : CupertinoIcons.chevron_down,
+                      size: AppTypography.xsPlus,
+                      color: secondaryTextColor,
+                    ),
+                ],
+              ),
+            ),
+          ),
+          if (isRowExpanded) ...[
+            if (event.detail.isNotEmpty)
+              Padding(
+                padding: EdgeInsets.only(
+                  left: isChild
+                      ? AppSpacing.twenty
+                      : AppSpacing.fourteen + AppSpacing.xs,
+                  bottom: AppSpacing.xs / 2,
+                ),
+                child: Text(
+                  event.detail,
+                  style: TextStyle(
+                    fontSize: AppTypography.sm,
+                    color: secondaryTextColor,
+                    height: AppTypography.lineHeightRelaxed,
+                  ),
+                ),
+              ),
+            if (event.references.isNotEmpty)
+              Padding(
+                padding: EdgeInsets.only(
+                  left: isChild
+                      ? AppSpacing.twenty
+                      : AppSpacing.fourteen + AppSpacing.xs,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: event.references
+                      .map((ref) {
+                        return GestureDetector(
+                          onTap: ref.url.isNotEmpty
+                              ? () =>
+                                    widget.onReferenceUrlTap?.call(ref.url)
+                              : null,
+                          child: Padding(
+                            padding: EdgeInsets.only(
+                              bottom: AppSpacing.xs / 2,
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    ref.title,
+                                    style: TextStyle(
+                                      fontSize: AppTypography.sm,
+                                      color: accentColor,
+                                      decoration: TextDecoration.underline,
+                                      decorationColor:
+                                          accentColor.withValues(alpha: 0.4),
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (ref.url.isNotEmpty)
+                                  Padding(
+                                    padding: EdgeInsets.only(
+                                      left: AppSpacing.xs,
+                                    ),
+                                    child: Icon(
+                                      CupertinoIcons.arrow_up_right,
+                                      size: AppTypography.xs,
+                                      color: accentColor.withValues(
+                                        alpha: 0.6,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      })
+                      .toList(growable: false),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
   }
 
   Widget _buildBody({
@@ -249,6 +500,7 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer>
   }) {
     final blocks = widget.processState.contentBlocks;
     if (blocks.isEmpty) return const SizedBox.shrink();
+    final detailLabel = widget.processState.stageLabel;
     return Padding(
       padding: EdgeInsets.only(
         left: AppSpacing.sm,
@@ -261,10 +513,22 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer>
         children: [
           Container(
             width: double.infinity,
-            height: 0.5,
+            height: AppSpacing.one / 2,
             color: secondaryTextColor.withValues(alpha: 0.15),
           ),
           SizedBox(height: AppSpacing.xs),
+          if (detailLabel.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.only(bottom: AppSpacing.xs),
+              child: Text(
+                detailLabel,
+                style: TextStyle(
+                  fontSize: AppTypography.base,
+                  color: secondaryTextColor,
+                  height: AppTypography.lineHeightRelaxed,
+                ),
+              ),
+            ),
           for (var i = 0; i < blocks.length; i++)
             _buildContentBlock(
               index: i,
@@ -310,13 +574,13 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer>
         );
       case ProcessContentBlockType.text:
         return Padding(
-          padding: const EdgeInsets.only(bottom: 3),
+          padding: const EdgeInsets.only(bottom: AppSpacing.three),
           child: Text(
             block.text,
             style: TextStyle(
               fontSize: AppTypography.base,
               color: secondaryTextColor,
-              height: 1.5,
+              height: AppTypography.lineHeightRelaxed,
             ),
           ),
         );
@@ -354,7 +618,7 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer>
               padding: EdgeInsets.symmetric(vertical: AppSpacing.xs / 2),
               child: Row(
                 children: [
-                  Icon(icon, size: 13, color: accentColor),
+                  Icon(icon, size: AppTypography.smPlus, color: accentColor),
                   SizedBox(width: AppSpacing.xs),
                   Expanded(
                     child: Text(
@@ -370,7 +634,7 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer>
                     isBlockExpanded
                         ? CupertinoIcons.chevron_up
                         : CupertinoIcons.chevron_down,
-                    size: 11,
+                    size: AppTypography.xsPlus,
                     color: secondaryTextColor,
                   ),
                 ],
@@ -379,46 +643,50 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer>
           ),
           if (isBlockExpanded && references.isNotEmpty)
             Padding(
-              padding: EdgeInsets.only(left: 13 + AppSpacing.xs),
+              padding: EdgeInsets.only(left: AppTypography.smPlus + AppSpacing.xs),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
-                children: references.map((ref) {
-                  return GestureDetector(
-                    onTap: ref.url.isNotEmpty
-                        ? () => widget.onReferenceUrlTap?.call(ref.url)
-                        : null,
-                    child: Padding(
-                      padding: EdgeInsets.only(bottom: AppSpacing.xs / 2),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              ref.title,
-                              style: TextStyle(
-                                fontSize: AppTypography.base,
-                                color: accentColor,
-                                decoration: TextDecoration.underline,
-                                decorationColor: accentColor.withValues(alpha: 0.4),
+                children: references
+                    .map((ref) {
+                      return GestureDetector(
+                        onTap: ref.url.isNotEmpty
+                            ? () => widget.onReferenceUrlTap?.call(ref.url)
+                            : null,
+                        child: Padding(
+                          padding: EdgeInsets.only(bottom: AppSpacing.xs / 2),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  ref.title,
+                                  style: TextStyle(
+                                    fontSize: AppTypography.base,
+                                    color: accentColor,
+                                    decoration: TextDecoration.underline,
+                                    decorationColor: accentColor.withValues(
+                                      alpha: 0.4,
+                                    ),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                              if (ref.url.isNotEmpty)
+                                Padding(
+                                  padding: EdgeInsets.only(left: AppSpacing.xs),
+                                  child: Icon(
+                                    CupertinoIcons.arrow_up_right,
+                                    size: AppTypography.xs,
+                                    color: accentColor.withValues(alpha: 0.6),
+                                  ),
+                                ),
+                            ],
                           ),
-                          if (ref.url.isNotEmpty)
-                            Padding(
-                              padding: EdgeInsets.only(left: AppSpacing.xs),
-                              child: Icon(
-                                CupertinoIcons.arrow_up_right,
-                                size: 10,
-                                color: accentColor.withValues(alpha: 0.6),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  );
-                }).toList(growable: false),
+                        ),
+                      );
+                    })
+                    .toList(growable: false),
               ),
             ),
         ],
@@ -428,7 +696,9 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer>
 
   Widget _buildLegacyBody({required Color secondaryTextColor}) {
     final lines = widget.processState.processLines;
-    if (lines.isEmpty) return const SizedBox.shrink();
+    final detailLabel = widget.processState.stageLabel;
+    if (lines.isEmpty && detailLabel.isEmpty) return const SizedBox.shrink();
+    final isStreaming = widget.processState.isStreaming;
     return Padding(
       padding: EdgeInsets.only(
         left: AppSpacing.sm,
@@ -441,23 +711,39 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer>
         children: [
           Container(
             width: double.infinity,
-            height: 0.5,
+            height: AppSpacing.one / 2,
             color: secondaryTextColor.withValues(alpha: 0.15),
           ),
           SizedBox(height: AppSpacing.xs),
-          for (final line in lines)
+          if (detailLabel.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.only(bottom: 2),
+              padding: EdgeInsets.only(bottom: AppSpacing.xs),
               child: Text(
-                line,
+                detailLabel,
                 style: TextStyle(
                   fontSize: AppTypography.base,
                   color: secondaryTextColor,
-                  height: 1.5,
+                  height: AppTypography.lineHeightRelaxed,
                 ),
               ),
             ),
-          if (!widget.processState.isStreaming)
+          for (var i = 0; i < lines.length; i++)
+            Padding(
+              padding: EdgeInsets.only(bottom: AppSpacing.xs / 2),
+              child: AnimatedOpacity(
+                opacity: (isStreaming && i == lines.length - 1) ? 0.7 : 1.0,
+                duration: const Duration(milliseconds: 300),
+                child: Text(
+                  lines[i],
+                  style: TextStyle(
+                    fontSize: AppTypography.base,
+                    color: secondaryTextColor,
+                    height: AppTypography.lineHeightRelaxed,
+                  ),
+                ),
+              ),
+            ),
+          if (!isStreaming)
             _buildUsageStatsLine(secondaryTextColor: secondaryTextColor),
         ],
       ),
@@ -473,11 +759,30 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer>
       return const SizedBox.shrink();
     }
     final parts = <String>[];
-    if (modelCalls > 0) parts.add('模型调用 $modelCalls 次');
-    if (totalTokens > 0) parts.add('$totalTokens tokens');
+    if (modelCalls > 0) {
+      parts.add(
+        UITextConstants.assistantProcessModelCallCountTemplate.replaceFirst(
+          '%s',
+          '$modelCalls',
+        ),
+      );
+    }
+    if (totalTokens > 0) {
+      parts.add(
+        UITextConstants.assistantProcessTokensTemplate.replaceFirst(
+          '%s',
+          '$totalTokens',
+        ),
+      );
+    }
     if (elapsed > 0) {
       final seconds = (elapsed / 1000).toStringAsFixed(1);
-      parts.add('耗时 ${seconds}s');
+      parts.add(
+        UITextConstants.assistantProcessElapsedTemplate.replaceFirst(
+          '%s',
+          seconds,
+        ),
+      );
     }
     return Padding(
       padding: EdgeInsets.only(top: AppSpacing.xs),
@@ -486,120 +791,90 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer>
         style: TextStyle(
           fontSize: AppTypography.xs,
           color: secondaryTextColor.withValues(alpha: 0.6),
-          height: 1.4,
+          height: AppTypography.bodyLineHeight,
         ),
       ),
     );
   }
 }
 
-/// Phase 1 animation: two short rectangular bars rotating in opposite directions.
-/// The left bar rotates clockwise, the right bar counter-clockwise.
-/// This creates a symmetric "thinking" visual cue for the initial wait state.
-class _TwinBarAnimation extends StatelessWidget {
-  const _TwinBarAnimation({
-    required this.controller,
-    required this.color,
-  });
+/// Breathing capsule: a rounded shape that smoothly stretches and contracts,
+/// inspired by 元宝-style "circle → elongate right → elongate left → circle"
+/// loop. Monochrome, calming, minimal.
+class _BreathingCapsule extends StatefulWidget {
+  const _BreathingCapsule({required this.color});
 
-  final AnimationController controller;
   final Color color;
+
+  @override
+  State<_BreathingCapsule> createState() => _BreathingCapsuleState();
+}
+
+class _BreathingCapsuleState extends State<_BreathingCapsule>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: controller,
+      animation: _controller,
       builder: (context, child) {
-        final angle = controller.value * 2 * math.pi;
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Transform.rotate(
-              angle: angle,
-              child: _bar(color),
-            ),
-            const SizedBox(width: 3),
-            Transform.rotate(
-              angle: -angle,
-              child: _bar(color),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _bar(Color color) {
-    return Container(
-      width: 7,
-      height: 3,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(1.5),
-      ),
-    );
-  }
-}
-
-/// Four-step phase progress indicator shown in the drawer header.
-/// Each step is a small circle dot; completed/current steps are filled.
-class _PhaseStepRow extends StatelessWidget {
-  const _PhaseStepRow({
-    required this.stage,
-    required this.activeColor,
-    required this.inactiveColor,
-  });
-
-  final ProcessStage stage;
-  final Color activeColor;
-  final Color inactiveColor;
-
-  static const List<ProcessStage> _order = [
-    ProcessStage.understanding,
-    ProcessStage.searching,
-    ProcessStage.analyzing,
-    ProcessStage.answering,
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final currentIdx = _stageIndex(stage);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: List.generate(_order.length, (i) {
-        final isActive = i <= currentIdx;
-        final isCurrent = i == currentIdx && stage != ProcessStage.completed;
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 1.5),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
-            width: isCurrent ? 6 : 4,
-            height: 4,
-            decoration: BoxDecoration(
-              color: isActive ? activeColor : inactiveColor,
-              borderRadius: BorderRadius.circular(2),
+        final t = _controller.value;
+        // 0→0.25: circle→elongate right
+        // 0.25→0.5: elongate right→circle
+        // 0.5→0.75: circle→elongate left
+        // 0.75→1.0: elongate left→circle
+        final double phase;
+        if (t < 0.25) {
+          phase = Curves.easeInOut.transform(t * 4);
+        } else if (t < 0.5) {
+          phase = Curves.easeInOut.transform(1 - (t - 0.25) * 4);
+        } else if (t < 0.75) {
+          phase = -Curves.easeInOut.transform((t - 0.5) * 4);
+        } else {
+          phase = -Curves.easeInOut.transform(1 - (t - 0.75) * 4);
+        }
+        final w = 10.0 + phase.abs() * 6;
+        final h = 10.0 - phase.abs() * 2;
+        final dx = phase * 2;
+        final opacity = 0.5 + (1 - phase.abs()) * 0.5;
+        return SizedBox(
+          width: AppSpacing.eighteen,
+          height: AppSpacing.fourteen,
+          child: Center(
+            child: Transform.translate(
+              offset: Offset(dx, 0),
+              child: Opacity(
+                opacity: opacity,
+                child: Container(
+                  width: w,
+                  height: h,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(h / 2),
+                    color: widget.color.withValues(alpha: 0.7),
+                  ),
+                ),
+              ),
             ),
           ),
         );
-      }),
+      },
     );
-  }
-
-  int _stageIndex(ProcessStage s) {
-    switch (s) {
-      case ProcessStage.understanding:
-        return 0;
-      case ProcessStage.searching:
-        return 1;
-      case ProcessStage.analyzing:
-        return 2;
-      case ProcessStage.answering:
-        return 3;
-      case ProcessStage.completed:
-        return 3;
-    }
   }
 }
 
@@ -643,19 +918,24 @@ class _ThreeDotPulseState extends State<_ThreeDotPulse>
           mainAxisSize: MainAxisSize.min,
           children: List.generate(3, (i) {
             final delay = i * 0.22;
-            final t = (_controller.value - delay).clamp(0.0, 1.0);
-            final opacity =
-                t < 0.5 ? 0.25 + 0.75 * (t * 2) : 0.25 + 0.75 * (1 - (t - 0.5) * 2);
+            final shifted = (_controller.value + 1 - delay) % 1;
+            final opacity = shifted < 0.5
+                ? 0.28 + 0.72 * (shifted * 2)
+                : 0.28 + 0.72 * (1 - (shifted - 0.5) * 2);
+            final scale = 0.78 + shifted * 0.22;
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 1),
-              child: Opacity(
-                opacity: opacity,
-                child: Container(
-                  width: widget.size,
-                  height: widget.size,
-                  decoration: BoxDecoration(
-                    color: widget.color,
-                    shape: BoxShape.circle,
+              child: Transform.scale(
+                scale: scale,
+                child: Opacity(
+                  opacity: opacity,
+                  child: Container(
+                    width: widget.size,
+                    height: widget.size,
+                    decoration: BoxDecoration(
+                      color: widget.color,
+                      shape: BoxShape.circle,
+                    ),
                   ),
                 ),
               ),

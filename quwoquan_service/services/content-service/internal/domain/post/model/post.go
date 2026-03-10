@@ -11,6 +11,54 @@ type GeoPoint struct {
 
 var _ = time.Now
 
+// ContentReaction domain model.
+type ContentReaction struct {
+	ID          string    `json:"_id" bson:"_id"`
+	PostId      string    `json:"postId" bson:"postId"`
+	UserId      string    `json:"userId" bson:"userId"`
+	Liked       bool      `json:"liked" bson:"liked"`
+	Favorited   bool      `json:"favorited" bson:"favorited"`
+	Shared      bool      `json:"shared" bson:"shared"`
+	Reported    bool      `json:"reported" bson:"reported"`
+	LikedAt     time.Time `json:"likedAt" bson:"likedAt"`
+	FavoritedAt time.Time `json:"favoritedAt" bson:"favoritedAt"`
+	UpdatedAt   time.Time `json:"updatedAt" bson:"updatedAt"`
+}
+
+// PostCircleDistribution domain model.
+type PostCircleDistribution struct {
+	ID            string    `json:"_id" bson:"_id"`
+	PostId        string    `json:"postId" bson:"postId"`
+	OwnerAuthorId string    `json:"ownerAuthorId" bson:"ownerAuthorId"`
+	CircleId      string    `json:"circleId" bson:"circleId"`
+	State         string    `json:"state" bson:"state"`
+	CreatedAt     time.Time `json:"createdAt" bson:"createdAt"`
+	UpdatedAt     time.Time `json:"updatedAt" bson:"updatedAt"`
+}
+
+// PostCircleReshare domain model.
+type PostCircleReshare struct {
+	ID             string    `json:"_id" bson:"_id"`
+	PostId         string    `json:"postId" bson:"postId"`
+	SourcePostId   string    `json:"sourcePostId" bson:"sourcePostId"`
+	ResharerUserId string    `json:"resharerUserId" bson:"resharerUserId"`
+	CircleId       string    `json:"circleId" bson:"circleId"`
+	QuoteText      string    `json:"quoteText" bson:"quoteText"`
+	State          string    `json:"state" bson:"state"`
+	CreatedAt      time.Time `json:"createdAt" bson:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt" bson:"updatedAt"`
+}
+
+// DeletedPostTombstone domain model.
+type DeletedPostTombstone struct {
+	ID        string    `json:"_id" bson:"_id"`
+	PostId    string    `json:"postId" bson:"postId"`
+	AuthorId  string    `json:"authorId" bson:"authorId"`
+	Reason    string    `json:"reason" bson:"reason"`
+	DeletedAt time.Time `json:"deletedAt" bson:"deletedAt"`
+	ExpireAt  time.Time `json:"expireAt" bson:"expireAt"`
+}
+
 // Post domain model.
 type Post struct {
 	ID                  string         `json:"_id" bson:"_id"`
@@ -84,52 +132,4 @@ type MediaAsset struct {
 	ManualCoverAssetId string    `json:"manualCoverAssetId" bson:"manualCoverAssetId"`
 	CreatedAt          time.Time `json:"createdAt" bson:"createdAt"`
 	UpdatedAt          time.Time `json:"updatedAt" bson:"updatedAt"`
-}
-
-// ContentReaction domain model.
-type ContentReaction struct {
-	ID          string    `json:"_id" bson:"_id"`
-	PostId      string    `json:"postId" bson:"postId"`
-	UserId      string    `json:"userId" bson:"userId"`
-	Liked       bool      `json:"liked" bson:"liked"`
-	Favorited   bool      `json:"favorited" bson:"favorited"`
-	Shared      bool      `json:"shared" bson:"shared"`
-	Reported    bool      `json:"reported" bson:"reported"`
-	LikedAt     time.Time `json:"likedAt" bson:"likedAt"`
-	FavoritedAt time.Time `json:"favoritedAt" bson:"favoritedAt"`
-	UpdatedAt   time.Time `json:"updatedAt" bson:"updatedAt"`
-}
-
-// PostCircleDistribution domain model.
-type PostCircleDistribution struct {
-	ID            string    `json:"_id" bson:"_id"`
-	PostId        string    `json:"postId" bson:"postId"`
-	OwnerAuthorId string    `json:"ownerAuthorId" bson:"ownerAuthorId"`
-	CircleId      string    `json:"circleId" bson:"circleId"`
-	State         string    `json:"state" bson:"state"`
-	CreatedAt     time.Time `json:"createdAt" bson:"createdAt"`
-	UpdatedAt     time.Time `json:"updatedAt" bson:"updatedAt"`
-}
-
-// PostCircleReshare domain model.
-type PostCircleReshare struct {
-	ID             string    `json:"_id" bson:"_id"`
-	PostId         string    `json:"postId" bson:"postId"`
-	SourcePostId   string    `json:"sourcePostId" bson:"sourcePostId"`
-	ResharerUserId string    `json:"resharerUserId" bson:"resharerUserId"`
-	CircleId       string    `json:"circleId" bson:"circleId"`
-	QuoteText      string    `json:"quoteText" bson:"quoteText"`
-	State          string    `json:"state" bson:"state"`
-	CreatedAt      time.Time `json:"createdAt" bson:"createdAt"`
-	UpdatedAt      time.Time `json:"updatedAt" bson:"updatedAt"`
-}
-
-// DeletedPostTombstone domain model.
-type DeletedPostTombstone struct {
-	ID        string    `json:"_id" bson:"_id"`
-	PostId    string    `json:"postId" bson:"postId"`
-	AuthorId  string    `json:"authorId" bson:"authorId"`
-	Reason    string    `json:"reason" bson:"reason"`
-	DeletedAt time.Time `json:"deletedAt" bson:"deletedAt"`
-	ExpireAt  time.Time `json:"expireAt" bson:"expireAt"`
 }

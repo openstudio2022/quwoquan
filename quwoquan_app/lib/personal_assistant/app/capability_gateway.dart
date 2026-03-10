@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:quwoquan_app/personal_assistant/app/assistant_gateway.dart';
 import 'package:quwoquan_app/personal_assistant/connectors/openclaw_bridge.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/assistant_turn_contract.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/explainable_flow_event.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/user_events.dart';
 import 'package:quwoquan_app/personal_assistant/engine/llm_response_parser.dart';
+import 'package:quwoquan_app/personal_assistant/engine/process_event_consolidator.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/assistant_content_filters.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/run_response.dart';
@@ -30,6 +32,8 @@ enum AssistantRunStreamEventType {
   userEvent,
   // v4 unified process update for single-drawer UI
   processUpdate,
+  // v6 unified explainable flow event (replaces v2-v5 for process drawer)
+  explainableFlowEvent,
 }
 
 /// Unified process state consumed by the single-drawer process view.
@@ -132,6 +136,7 @@ class AssistantRunStreamEvent {
     this.chunkText,
     this.response,
     this.errorMessage,
+    this.explainableEvent,
   });
 
   factory AssistantRunStreamEvent.trace(AssistantTraceEvent trace) =>
@@ -242,11 +247,20 @@ class AssistantRunStreamEvent {
         ),
       );
 
+  factory AssistantRunStreamEvent.explainableFlow(
+    ExplainableFlowEvent event,
+  ) => AssistantRunStreamEvent._(
+    type: AssistantRunStreamEventType.explainableFlowEvent,
+    chunkText: event.headline,
+    explainableEvent: event,
+  );
+
   final AssistantRunStreamEventType type;
   final AssistantTraceEvent? trace;
   final String? chunkText;
   final AssistantRunResponse? response;
   final String? errorMessage;
+  final ExplainableFlowEvent? explainableEvent;
 
   /// For userPhaseEvent type, returns the [UserPhaseEventType].
   UserPhaseEventType? get userPhaseType {
@@ -283,6 +297,8 @@ class CapabilityGateway {
 
   final AssistantGateway _assistantGateway;
   final OpenClawBridge _openClawBridge;
+
+  ProcessEventConsolidator? _consolidator;
 
   bool _isRemoteResponseCommercialReady(AssistantRunResponse response) {
     if (response.degraded) return false;
@@ -401,21 +417,32 @@ class CapabilityGateway {
     StreamController<AssistantRunStreamEvent> controller,
   ) async {
     try {
+      _consolidator = ProcessEventConsolidator(
+        userGoalSummary: _extractUserMessage(request),
+      );
+      var streamedUserEventCount = 0;
       final response = await _assistantGateway.runWithTraceStream(
         request,
         onTraceEvent: (event) {
           if (controller.isClosed) return;
           controller.add(AssistantRunStreamEvent.trace(event));
-          // v2: emit semantic events based on trace type for granular UI
+          // v6: unified explainable flow event via consolidator
+          _emitExplainableEvent(event, controller);
+          // Legacy: keep old paths for backward-compat consumers
           _emitSemanticEvent(event, controller);
-          _emitUserEvent(event, controller);
+          if (_emitUserEvent(event, controller)) {
+            streamedUserEventCount += 1;
+          }
         },
       );
       final userEvents = (response.structuredResponse['userEvents'] as List?)
           ?.whereType<Map>()
           .map((item) => UserEvent.fromJson(item.cast<String, dynamic>()))
           .toList(growable: false);
-      if (userEvents != null && userEvents.isNotEmpty && !controller.isClosed) {
+      if (streamedUserEventCount == 0 &&
+          userEvents != null &&
+          userEvents.isNotEmpty &&
+          !controller.isClosed) {
         for (final event in userEvents) {
           controller.add(AssistantRunStreamEvent.userEvent(event));
         }
@@ -429,6 +456,22 @@ class CapabilityGateway {
       }
       final chunkText = _resolveChunkDisplayText(response);
       if (chunkText.isNotEmpty && !controller.isClosed) {
+        // Mark the consolidator's aggregate phase as completed so the
+        // answer gate opens before final chunks are emitted.
+        if (_consolidator != null && !_consolidator!.answerGateOpen) {
+          final gateEvent = _consolidator!.consolidate(
+            AssistantTraceEvent(
+              type: AssistantTraceEventType.lifecycleEnd,
+              message: 'finished',
+              timestamp: DateTime.now(),
+            ),
+          );
+          if (gateEvent != null) {
+            controller.add(
+              AssistantRunStreamEvent.explainableFlow(gateEvent),
+            );
+          }
+        }
         for (final chunk in _chunkText(chunkText)) {
           if (chunk.trim().isEmpty) continue;
           controller.add(AssistantRunStreamEvent.chunk(chunk));
@@ -457,12 +500,15 @@ class CapabilityGateway {
     StreamController<AssistantRunStreamEvent> controller,
   ) async {
     try {
+      _consolidator ??= ProcessEventConsolidator(
+        userGoalSummary: _extractUserMessage(request),
+      );
       final response = await _assistantGateway.runWithTraceStream(
         request,
         onTraceEvent: (event) {
           if (!controller.isClosed) {
             controller.add(AssistantRunStreamEvent.trace(event));
-            // 静默路径同样需要语义化，确保 UI 过程抽屉阶段正确推进
+            _emitExplainableEvent(event, controller);
             _emitSemanticEvent(event, controller);
             _emitUserEvent(event, controller);
           }
@@ -603,7 +649,7 @@ class CapabilityGateway {
       if (event.type == OpenClawRemoteStreamEventType.trace &&
           event.trace != null) {
         controller.add(AssistantRunStreamEvent.trace(event.trace!));
-        // 远端 trace 事件同样需要语义化，确保 UI 过程抽屉阶段正确推进
+        _emitExplainableEvent(event.trace!, controller);
         _emitSemanticEvent(event.trace!, controller);
         _emitUserEvent(event.trace!, controller);
         continue;
@@ -627,13 +673,42 @@ class CapabilityGateway {
     return completed;
   }
 
-  void _emitUserEvent(
+  /// Whether the answer gate is currently open (aggregate/merge phase completed).
+  bool get answerGateOpen => _consolidator?.answerGateOpen ?? false;
+
+  /// Snapshot of all explainable flow events emitted so far.
+  List<ExplainableFlowEvent> get flowEventSnapshot =>
+      _consolidator?.snapshot ?? const <ExplainableFlowEvent>[];
+
+  static String _extractUserMessage(AssistantRunRequest request) {
+    for (int i = request.messages.length - 1; i >= 0; i--) {
+      final m = request.messages[i];
+      if (m.role == 'user' && m.content.trim().isNotEmpty) {
+        return m.content.trim();
+      }
+    }
+    return '';
+  }
+
+  void _emitExplainableEvent(
+    AssistantTraceEvent event,
+    StreamController<AssistantRunStreamEvent> controller,
+  ) {
+    final consolidator = _consolidator;
+    if (consolidator == null || controller.isClosed) return;
+    final flowEvent = consolidator.consolidate(event);
+    if (flowEvent == null) return;
+    controller.add(AssistantRunStreamEvent.explainableFlow(flowEvent));
+  }
+
+  bool _emitUserEvent(
     AssistantTraceEvent event,
     StreamController<AssistantRunStreamEvent> controller,
   ) {
     final userEvent = _UserEventTranslator.translate(event);
-    if (userEvent == null || controller.isClosed) return;
+    if (userEvent == null || controller.isClosed) return false;
     controller.add(AssistantRunStreamEvent.userEvent(userEvent));
+    return true;
   }
 
   void _emitSemanticEvent(
@@ -861,11 +936,11 @@ class _UserEventTranslator {
     final data = event.data ?? const <String, dynamic>{};
     switch (event.type) {
       case AssistantTraceEventType.planStarted:
-        return const UserEvent(
+        return UserEvent(
           type: UserEventType.processReplace,
           scope: UserEventScope.root,
           nodeId: 'root.intent',
-          message: '已理解你的问题，准备开始处理',
+          message: _buildPlanStartedMessage(data),
         );
       case AssistantTraceEventType.toolStart:
         if (_isSearchLike(event, data)) {
@@ -874,16 +949,14 @@ class _UserEventTranslator {
             type: UserEventType.processAppend,
             scope: UserEventScope.skill,
             nodeId: toolName.isEmpty ? 'skill.search' : 'skill.$toolName',
-            message: '正在补充与问题相关的信息',
+            message: _buildToolStartMessage(data),
             payload: <String, dynamic>{'toolName': toolName},
           );
         }
         return null;
       case AssistantTraceEventType.toolResult:
         if (data['isAssessment'] == true) {
-          final userMessage = _sanitizeMessage(
-            (data['userMessage'] as String?)?.trim() ?? '',
-          );
+          final userMessage = _buildAssessmentMessage(data);
           if (userMessage.isEmpty) return null;
           return UserEvent(
             type: UserEventType.processAppend,
@@ -894,12 +967,34 @@ class _UserEventTranslator {
         }
         final refs = (data['references'] as List?)?.length ?? 0;
         if (refs > 0) {
+          final references =
+              (data['references'] as List?)
+                  ?.whereType<Map>()
+                  .map((item) => item.cast<String, dynamic>())
+                  .map(
+                    (item) => <String, dynamic>{
+                      'title': (item['title'] as String?)?.trim() ?? '',
+                      'url': (item['url'] as String?)?.trim() ?? '',
+                      'source': (item['source'] as String?)?.trim() ?? '',
+                    },
+                  )
+                  .where(
+                    (item) =>
+                        (item['title'] as String).isNotEmpty &&
+                        (item['url'] as String).isNotEmpty,
+                  )
+                  .take(6)
+                  .toList(growable: false) ??
+              const <Map<String, dynamic>>[];
           return UserEvent(
             type: UserEventType.processAppend,
             scope: UserEventScope.skill,
             nodeId: _toolName(data),
             message: '已核对 $refs 个来源，继续整理关键信息',
-            payload: <String, dynamic>{'referenceCount': refs},
+            payload: <String, dynamic>{
+              'referenceCount': refs,
+              'references': references,
+            },
           );
         }
         return null;
@@ -932,9 +1027,7 @@ class _UserEventTranslator {
           payload: data,
         );
       case AssistantTraceEventType.lifecycleEnd:
-        final userMessage = _sanitizeMessage(
-          (data['userMessage'] as String?)?.trim() ?? '',
-        );
+        final userMessage = _buildLifecycleEndMessage(data);
         if (userMessage.isEmpty) return null;
         return UserEvent(
           type: UserEventType.processCommit,
@@ -968,11 +1061,99 @@ class _UserEventTranslator {
   }
 
   static String _summarizeSubtask(Map<String, dynamic> data) {
-    final summary = _sanitizeMessage((data['summary'] as String?)?.trim() ?? '');
+    final summary = _sanitizeMessage(
+      (data['summary'] as String?)?.trim() ?? '',
+    );
     if (summary.isNotEmpty) return summary;
     final goal = _sanitizeMessage((data['goal'] as String?)?.trim() ?? '');
     if (goal.isNotEmpty) return '已完成：$goal';
     return '已完成这部分信息整理';
+  }
+
+  static String _buildPlanStartedMessage(Map<String, dynamic> data) {
+    final goal = _sanitizeMessage((data['goal'] as String?)?.trim() ?? '');
+    if (_isWeatherLikeText(goal)) {
+      final city = _extractCity(goal);
+      if (city.isNotEmpty) {
+        return '我先确认$city现在的天气情况';
+      }
+      return '我先确认你想查的实时天气情况';
+    }
+    if (goal.isNotEmpty) {
+      return '我先理清“$goal”里最需要优先解决的部分';
+    }
+    return '我先理清你的问题，再开始处理';
+  }
+
+  static String _buildToolStartMessage(Map<String, dynamic> data) {
+    final query = _sanitizeMessage((data['query'] as String?)?.trim() ?? '');
+    if (_isWeatherLikeText(query)) {
+      final city = _extractCity(query);
+      if (city.isNotEmpty) {
+        return '我先查一下$city现在的天气和相关出行信息';
+      }
+      return '我先查一下当前的实时天气信息';
+    }
+    if (query.isNotEmpty) {
+      return '我先补充“$query”这部分相关信息';
+    }
+    return '我先补充与你问题直接相关的信息';
+  }
+
+  static String _buildAssessmentMessage(Map<String, dynamic> data) {
+    final assessmentType =
+        (data['assessmentType'] as String?)?.trim().toLowerCase() ?? '';
+    final shouldContinue = data['shouldContinueLoop'] == true;
+    final refs = (data['references'] as List?)?.length ?? 0;
+    switch (assessmentType) {
+      case 'needMoreSearch':
+        return shouldContinue ? '现有信息还不够稳，我再补一轮更可靠的来源' : '我先用已确认的信息帮你整理结果';
+      case 'toolFailed':
+        return shouldContinue
+            ? '这一轮没有拿到稳定结果，我换个方式再试一次'
+            : '这次没拿到可靠结果，我先基于已确认的信息整理给你';
+      case 'budgetExhausted':
+        return '已经拿到一部分可用信息，我先整理成你容易看的结论';
+      case 'sufficient':
+        if (refs > 0) {
+          return '已经拿到一批可用信息，我开始整理答案';
+        }
+        return '关键信息已经够用了，我开始整理答案';
+      default:
+        final userMessage = _sanitizeMessage(
+          (data['userMessage'] as String?)?.trim() ?? '',
+        );
+        return userMessage;
+    }
+  }
+
+  static String _buildLifecycleEndMessage(Map<String, dynamic> data) {
+    final userMessage = _sanitizeMessage(
+      (data['userMessage'] as String?)?.trim() ?? '',
+    );
+    if (userMessage.isNotEmpty) {
+      if (userMessage.contains('基于已有信息')) {
+        return '这一轮没有拿到更多可靠信息，我先把已经确认的内容整理给你';
+      }
+      return userMessage;
+    }
+    return '';
+  }
+
+  static bool _isWeatherLikeText(String text) {
+    if (text.isEmpty) return false;
+    return RegExp(
+      r'(天气|气温|降雨|风力|体感|预报|weather|forecast|temperature|humidity|rain)',
+      caseSensitive: false,
+    ).hasMatch(text);
+  }
+
+  static String _extractCity(String text) {
+    if (text.isEmpty) return '';
+    return RegExp(
+          r'([\u4e00-\u9fa5]{2,8}(?:市|区|县)|[\u4e00-\u9fa5]{2,8})',
+        ).firstMatch(text)?.group(1)?.trim() ??
+        '';
   }
 
   static String _sanitizeMessage(String raw) {
