@@ -38,6 +38,10 @@ export 'navigation/tab_navigation.dart';
 export 'navigation/centered_scrollable_tab_bar.dart';
 export 'media/image/navigation/image_sub_tab_navigation.dart';
 
+// ==================== 头像组件 ====================
+export 'avatar/rounded_square_avatar.dart';
+export 'avatar/group_avatar_grid.dart';
+
 // ==================== 助理组件 ====================
 export 'assistant/assistant_avatar.dart';
 export 'assistant/assistant_floating_ball.dart';

@@ -107,6 +107,31 @@ abstract class ChatRepository {
   });
 
   Future<List<Map<String, dynamic>>> searchContacts({required String query});
+
+  // ── 会话时间戳索引（端云同步） ─────────────────────────────────────────────
+  Future<List<Map<String, dynamic>>> getConversationTimestamps();
+
+  Future<List<Map<String, dynamic>>> batchGetConversations(List<String> ids);
+
+  // ── 群管理 ──────────────────────────────────────────────────────────────────
+  Future<Map<String, dynamic>> getGroupSettings(String conversationId);
+
+  Future<void> updateGroupSettings(
+    String conversationId,
+    Map<String, dynamic> settings,
+  );
+
+  Future<void> transferOwnership(
+    String conversationId,
+    String newOwnerId,
+  );
+
+  Future<void> updateGroupAdmins(
+    String conversationId,
+    List<String> adminIds,
+  );
+
+  Future<void> dissolveConversation(String conversationId);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -272,6 +297,57 @@ class MockChatRepository implements ChatRepository {
         )
         .toList();
   }
+
+  @override
+  Future<List<Map<String, dynamic>>> getConversationTimestamps() async {
+    return ChatMockData.conversations.map((c) {
+      return {
+        'id': c['_id'] ?? c['id'],
+        'updatedAt': c['updatedAt'] ?? DateTime.now().toIso8601String(),
+        'type': c['type'] ?? 'direct',
+      };
+    }).toList();
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> batchGetConversations(
+    List<String> ids,
+  ) async {
+    return ChatMockData.conversations
+        .where((c) => ids.contains(c['_id'] ?? c['id']))
+        .toList();
+  }
+
+  @override
+  Future<Map<String, dynamic>> getGroupSettings(String conversationId) async {
+    return {
+      'qrCodeJoinEnabled': true,
+      'joinRequiresApproval': false,
+      'nameEditableByAdminOnly': false,
+      'privacyShieldAdminOnly': false,
+    };
+  }
+
+  @override
+  Future<void> updateGroupSettings(
+    String conversationId,
+    Map<String, dynamic> settings,
+  ) async {}
+
+  @override
+  Future<void> transferOwnership(
+    String conversationId,
+    String newOwnerId,
+  ) async {}
+
+  @override
+  Future<void> updateGroupAdmins(
+    String conversationId,
+    List<String> adminIds,
+  ) async {}
+
+  @override
+  Future<void> dissolveConversation(String conversationId) async {}
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -635,5 +711,115 @@ class RemoteChatRepository implements ChatRepository {
       return items.cast<Map<String, dynamic>>();
     }
     return [];
+  }
+
+  // ── 会话时间戳索引 ──────────────────────────────────────────────────────────
+
+  @override
+  Future<List<Map<String, dynamic>>> getConversationTimestamps() async {
+    final uri = _uri('/chat/v1/conversations/timestamps');
+    final decoded = await _httpClient.getJson(
+      uri,
+      headers: CloudRequestHeaders.forPage(
+        ChatRequestPageIds.listConversations,
+      ),
+    );
+    final items = decoded['items'];
+    if (items is List) {
+      return items.cast<Map<String, dynamic>>();
+    }
+    return [];
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> batchGetConversations(
+    List<String> ids,
+  ) async {
+    final uri = _uri('/chat/v1/conversations/batch');
+    final decoded = await _httpClient.postJson(
+      uri,
+      headers: CloudRequestHeaders.forPage(
+        ChatRequestPageIds.listConversations,
+      ),
+      body: {'ids': ids},
+    );
+    final items = decoded['items'];
+    if (items is List) {
+      return items.cast<Map<String, dynamic>>();
+    }
+    return [];
+  }
+
+  // ── 群管理 ──────────────────────────────────────────────────────────────────
+
+  @override
+  Future<Map<String, dynamic>> getGroupSettings(
+    String conversationId,
+  ) async {
+    final uri = _uri('/chat/v1/conversations/$conversationId/settings');
+    return await _httpClient.getJson(
+      uri,
+      headers: CloudRequestHeaders.forPage(
+        ChatRequestPageIds.getConversation,
+      ),
+    );
+  }
+
+  @override
+  Future<void> updateGroupSettings(
+    String conversationId,
+    Map<String, dynamic> settings,
+  ) async {
+    final uri = _uri('/chat/v1/conversations/$conversationId/settings');
+    await _httpClient.patchJson(
+      uri,
+      headers: CloudRequestHeaders.forPage(
+        ChatRequestPageIds.getConversation,
+      ),
+      body: settings,
+    );
+  }
+
+  @override
+  Future<void> transferOwnership(
+    String conversationId,
+    String newOwnerId,
+  ) async {
+    final uri = _uri(
+      '/chat/v1/conversations/$conversationId/transfer-ownership',
+    );
+    await _httpClient.postJson(
+      uri,
+      headers: CloudRequestHeaders.forPage(
+        ChatRequestPageIds.getConversation,
+      ),
+      body: {'newOwnerId': newOwnerId},
+    );
+  }
+
+  @override
+  Future<void> updateGroupAdmins(
+    String conversationId,
+    List<String> adminIds,
+  ) async {
+    final uri = _uri('/chat/v1/conversations/$conversationId/admins');
+    await _httpClient.patchJson(
+      uri,
+      headers: CloudRequestHeaders.forPage(
+        ChatRequestPageIds.getConversation,
+      ),
+      body: {'adminIds': adminIds},
+    );
+  }
+
+  @override
+  Future<void> dissolveConversation(String conversationId) async {
+    final uri = _uri('/chat/v1/conversations/$conversationId');
+    await _httpClient.deleteJson(
+      uri,
+      headers: CloudRequestHeaders.forPage(
+        ChatRequestPageIds.getConversation,
+      ),
+    );
   }
 }

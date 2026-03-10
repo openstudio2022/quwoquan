@@ -19,6 +19,7 @@ import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/input/customizable_chat_input_bar.dart';
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';

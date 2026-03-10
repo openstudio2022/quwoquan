@@ -312,7 +312,21 @@ class UITextConstants {
   static const String setChatBackground = '设置当前聊天背景';
   static const String clearChatHistory = '清空聊天记录';
   static const String exitGroupChat = '退出群聊';
+  static const String dissolveGroupChat = '解散该群聊';
   static const String addMember = '添加成员';
+  static const String groupManagement = '群管理';
+  static const String groupNameAdminOnly = '群组已设定为只有群主或管理员才能修改群名';
+  static const String qrCodeJoin = '二维码进群';
+  static const String joinRequiresApproval = '进群需要群主/群管理员确认';
+  static const String nameEditableByAdminOnly = '仅群主/群管理员可修改群聊名称';
+  static const String transferOwnership = '群主管理权转让';
+  static const String groupAdmins = '群管理员';
+  static const String selectNewOwner = '选择新群主';
+  static const String selectGroupMembers = '选择群成员';
+  static const String transferOwnershipConfirmPrefix = '确定选择 ';
+  static const String transferOwnershipConfirmSuffix = ' 为新群主，你将自动放弃群主身份。';
+  static const String maxAdminsReached = '最多选择 3 位管理员';
+  static const String done = '完成';
 
   /// 发起群聊页（图一）
   static const String startGroupChat = '发起群聊';

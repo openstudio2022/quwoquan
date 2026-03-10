@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
+import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/personal_assistant/app/capability_gateway.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/explainable_flow_event.dart';
@@ -352,9 +353,10 @@ class ChatMessageBubble extends StatelessWidget {
       } else if (avatar != null && avatar.isNotEmpty) {
         avatarWidget = GestureDetector(
           onTap: onAvatarTap,
-          child: CircleAvatar(
-            radius: chatAvatarRadius,
-            backgroundImage: NetworkImage(avatar),
+          child: RoundedSquareAvatar(
+            size: AppSpacing.avatarUserSm,
+            imageUrl: avatar,
+            name: senderName,
           ),
         );
       }

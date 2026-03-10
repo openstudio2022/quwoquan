@@ -3,6 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 /// 聊天设置/聊天信息页（1:1 图二）
@@ -21,6 +22,8 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
   bool _privacyShield = false;
   bool _membersExpanded = false;
   List<Map<String, dynamic>> _members = [];
+  String _currentUserRole = 'member';
+  bool _nameEditableByAdminOnly = false;
 
   static const int _memberColumns = 5;
 
@@ -31,10 +34,14 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
   static const int _memberSlotsExpanded =
       (_memberColumns * 5) - 1; // 24 成员 + 1 添加 = 25 格 = 5 行
 
+  bool get _isAdminOrOwner =>
+      _currentUserRole == 'owner' || _currentUserRole == 'admin';
+
   @override
   void initState() {
     super.initState();
     _loadMembers();
+    _loadGroupSettings();
   }
 
   Future<void> _loadMembers() async {
@@ -47,11 +54,33 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
       if (mounted) {
         setState(() {
           _members = members;
+          final currentUserId = 'current_user';
+          for (final m in members) {
+            if (m['userId'] == currentUserId || m['isCurrentUser'] == true) {
+              _currentUserRole = m['role'] as String? ?? 'member';
+              break;
+            }
+          }
         });
       }
     } catch (_) {
       if (mounted) setState(() {});
     }
+  }
+
+  Future<void> _loadGroupSettings() async {
+    try {
+      final repo = ref.read(chatRepositoryProvider);
+      final settings = await repo.getGroupSettings(widget.conversationId);
+      if (mounted) {
+        setState(() {
+          _nameEditableByAdminOnly =
+              settings['nameEditableByAdminOnly'] as bool? ?? false;
+          _privacyShield =
+              settings['privacyShieldAdminOnly'] as bool? ?? false;
+        });
+      }
+    } catch (_) {}
   }
 
   @override
@@ -233,7 +262,23 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                         ),
                       ],
                     ),
-                    onTap: () {},
+                    onTap: () {
+                      if (_nameEditableByAdminOnly && !_isAdminOrOwner) {
+                        showCupertinoDialog<void>(
+                          context: context,
+                          builder: (_) => CupertinoAlertDialog(
+                            content: Text(UITextConstants.groupNameAdminOnly),
+                            actions: [
+                              CupertinoDialogAction(
+                                child: Text(UITextConstants.confirm),
+                                onPressed: () => Navigator.pop(context),
+                              ),
+                            ],
+                          ),
+                        );
+                        return;
+                      }
+                    },
                   ),
                   _divider(isDark),
                   _SettingsRow(
@@ -299,7 +344,9 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                     trailing: _buildSettingSwitch(
                       isDark: isDark,
                       value: _privacyShield,
-                      onChanged: (v) => setState(() => _privacyShield = v),
+                      onChanged: _isAdminOrOwner
+                          ? (v) => setState(() => _privacyShield = v)
+                          : null,
                     ),
                   ),
                 ],
@@ -335,6 +382,25 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                 ],
               ),
             ),
+            if (_isAdminOrOwner) ...[
+              SizedBox(height: SettingsSemanticConstants.blockSpacing),
+              _section(
+                context,
+                blockSurface: blockSurface,
+                child: _SettingsRow(
+                  label: UITextConstants.groupManagement,
+                  fgPrimary: fgPrimary,
+                  trailing: Icon(
+                    CupertinoIcons.chevron_forward,
+                    size: AppSpacing.iconMedium,
+                    color: secondaryColor,
+                  ),
+                  onTap: () => context.push(
+                    '/chat/${widget.conversationId}/manage',
+                  ),
+                ),
+              ),
+            ],
             SizedBox(height: SettingsSemanticConstants.blockSpacing),
             _section(
               context,
@@ -418,7 +484,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
   Widget _buildSettingSwitch({
     required bool isDark,
     required bool value,
-    required ValueChanged<bool> onChanged,
+    ValueChanged<bool>? onChanged,
   }) {
     return Transform.scale(
       scale: 0.82,
@@ -456,6 +522,8 @@ class _MemberAvatar extends StatelessWidget {
   final String username;
   final VoidCallback onTap;
 
+  static const double _settingsAvatarSize = 52;
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -463,9 +531,10 @@ class _MemberAvatar extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          CircleAvatar(
-            radius: AppSpacing.avatarUserXs,
-            backgroundImage: NetworkImage(avatarUrl),
+          RoundedSquareAvatar(
+            size: _settingsAvatarSize,
+            imageUrl: avatarUrl,
+            name: name,
           ),
           SizedBox(height: AppSpacing.xs),
           SizedBox(

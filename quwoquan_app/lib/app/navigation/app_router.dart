@@ -19,6 +19,9 @@ import 'package:quwoquan_app/ui/settings/pages/developer_settings_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_detail_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_settings_page.dart';
+import 'package:quwoquan_app/ui/chat/pages/group_manage_page.dart';
+import 'package:quwoquan_app/ui/chat/pages/transfer_ownership_page.dart';
+import 'package:quwoquan_app/ui/chat/pages/group_admins_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/start_group_chat_page.dart';
 import 'package:quwoquan_app/ui/user/pages/edit_profile_page.dart';
 import 'package:quwoquan_app/ui/user/pages/persona_management_page.dart';
@@ -376,6 +379,27 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   }
                 },
               );
+            },
+          ),
+          GoRoute(
+            path: 'manage',
+            builder: (context, state) {
+              final id = state.pathParameters['id'] ?? '';
+              return GroupManagePage(conversationId: id);
+            },
+          ),
+          GoRoute(
+            path: 'transfer-ownership',
+            builder: (context, state) {
+              final id = state.pathParameters['id'] ?? '';
+              return TransferOwnershipPage(conversationId: id);
+            },
+          ),
+          GoRoute(
+            path: 'admins',
+            builder: (context, state) {
+              final id = state.pathParameters['id'] ?? '';
+              return GroupAdminsPage(conversationId: id);
             },
           ),
         ],

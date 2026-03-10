@@ -1,0 +1,35 @@
+version: 1
+feature: chat-experience-optimization
+level: "L2_feature"
+status: specified
+archived: false
+template: '2026-03-10'
+focus_groups: []
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+level_acceptance:
+  A1:
+    criteria: 聊天列表页头像全部为圆角方形，与微信一致
+    status: pending
+    test_layers:
+      T2: required
+      T4: required
+  A2:
+    criteria: 会话列表本地缓存后，冷启动到首屏渲染 ≤100ms，无白屏
+    status: pending
+    test_layers:
+      T2: required
+      T4: required
+  A3:
+    criteria: 进入对话页可见对方用户头像（圆角方形），点击可跳转用户主页
+    status: pending
+    test_layers:
+      T2: required
+      T3: required
+  A4:
+    criteria: 群管理页面完整：群主转让、管理员设置（最多 3 人）、群名称权限、隐私屏障权限
+    status: pending
+    test_layers:
+      T2: required
+      T3: required

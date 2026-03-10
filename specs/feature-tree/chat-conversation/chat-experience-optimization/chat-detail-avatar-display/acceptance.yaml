@@ -1,0 +1,61 @@
+version: 1
+feature: chat-detail-avatar-display
+level: "L3_story"
+status: specified
+archived: false
+template: '2026-03-10'
+focus_groups: []
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+level_acceptance:
+  A1:
+    criteria: 1v1 对话页 AppBar 显示对方用户圆角方形头像和昵称
+    status: pending
+    test_layers:
+      T2: required
+      T4: required
+  A2:
+    criteria: 对话页每条消息旁显示发送者圆角方形头像（非自己的消息）
+    status: pending
+    test_layers:
+      T2: required
+  A3:
+    criteria: 点击消息旁头像可跳转用户主页
+    status: pending
+    test_layers:
+      T2: required
+      T3: required
+  A4:
+    criteria: 内存 LRU 缓存上限 200 条，超出时淘汰最久未访问的用户信息
+    status: pending
+    test_layers:
+      T2: required
+  A5:
+    criteria: 磁盘缓存无 TTL，永久保存，App 重启后本地用户信息仍在
+    status: pending
+    test_layers:
+      T2: required
+  A6:
+    criteria: 进入对话时后台批量查用户时间戳（POST /users/timestamps），仅拉取有变化的用户完整信息
+    status: pending
+    test_layers:
+      T1: required
+      T3: required
+  A7:
+    criteria: 同一会话 30 秒内不重复检查用户时间戳（冷却时间）
+    status: pending
+    test_layers:
+      T2: required
+  A8:
+    criteria: 后台刷新失败时静默忽略，以本地缓存数据为准，不影响 UI
+    status: pending
+    test_layers:
+      T2: required
+      T4: required
+  A9:
+    criteria: 对话设置页头像尺寸（52px）比对话页消息头像（40px）大一号
+    status: pending
+    test_layers:
+      T2: required
+      T4: required

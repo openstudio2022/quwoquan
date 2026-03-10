@@ -75,6 +75,12 @@ l2:
           - feature: user-state-isolation-policy
             l5:
               - feature: unread-count-accuracy-guard
+  - feature: chat-experience-optimization
+    l3:
+      - feature: chat-list-ui-polish
+      - feature: chat-list-local-cache
+      - feature: chat-detail-avatar-display
+      - feature: chat-group-admin-govern
   - feature: contact-and-session-governance
     l3:
       - feature: contact-search-index

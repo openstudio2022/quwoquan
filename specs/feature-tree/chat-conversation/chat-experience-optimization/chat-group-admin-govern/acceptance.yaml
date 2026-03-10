@@ -1,0 +1,70 @@
+version: 1
+feature: chat-group-admin-govern
+level: "L3_story"
+status: specified
+archived: false
+template: '2026-03-10'
+focus_groups: []
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+level_acceptance:
+  A1:
+    criteria: 群管理页入口仅群主和管理员可见，普通成员不可见
+    status: pending
+    test_layers:
+      T2: required
+  A2:
+    criteria: 群管理页包含：二维码进群、进群需确认、仅管理员改群名、群主转让、管理员设置、解散群聊
+    status: pending
+    test_layers:
+      T2: required
+  A3:
+    criteria: 群主转让：选择成员后弹出确认弹窗（屏幕居中），确认后原群主变为普通成员、新成员变为群主
+    status: pending
+    test_layers:
+      T2: required
+      T3: required
+  A4:
+    criteria: 管理员设置：最多选择 3 人，超过时无法再选中并提示"最多选择 3 位管理员"
+    status: pending
+    test_layers:
+      T2: required
+  A5:
+    criteria: 非管理员点击群名称时弹窗提示"群组已设定为只有群主或管理员才能修改群名"（当 nameEditableByAdminOnly=true 时）
+    status: pending
+    test_layers:
+      T2: required
+  A6:
+    criteria: 隐私屏障开关对非管理员显示为 disabled（灰色不可操作），管理员可正常操作
+    status: pending
+    test_layers:
+      T2: required
+      T4: required
+  A7:
+    criteria: 解散群聊仅群主可见并可操作，管理员和普通成员不可见该入口
+    status: pending
+    test_layers:
+      T2: required
+  A8:
+    criteria: 群设置变更后通过 WebSocket 推送到所有在线群成员，端侧缓存自动更新
+    status: pending
+    test_layers:
+      T3: required
+  A9:
+    criteria: 群主转让为原子操作，不存在两个群主的中间态
+    status: pending
+    test_layers:
+      T1: required
+      T3: required
+  A10:
+    criteria: 群设置页成员头像为圆角方形，尺寸 52px（比对话页消息头像 40px 大一号）
+    status: pending
+    test_layers:
+      T2: required
+      T4: required
+  A11:
+    criteria: 群名称修改成功后通知所有群成员并同步到其他成员端侧
+    status: pending
+    test_layers:
+      T3: required

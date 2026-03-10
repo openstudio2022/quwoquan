@@ -4,13 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
+import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
+import 'package:quwoquan_app/components/avatar/group_avatar_grid.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
-import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/core/models/assistant_open_context.dart';
-import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 
 /// 趣聊页
 ///
@@ -81,17 +79,6 @@ class _ChatPageState extends ConsumerState<ChatPage>
   final TextEditingController _secretPasswordController = TextEditingController();
   String _secretAuthError = '';
   bool _secretShowPassword = false;
-
-  void _openAssistantHalfSheet() {
-    final target = VisitTarget.page('chat');
-    final service = ref.read(visitRecorderServiceProvider);
-    final ctx = AssistantOpenContext(
-      source: AssistantSource.chat,
-      visitTarget: target,
-      experienceLevel: service.getExperience(target),
-    );
-    AssistantHalfSheet.show(context, ctx);
-  }
 
   void _onScroll() {
     final y = _scrollController.hasClients ? _scrollController.offset : 0.0;
@@ -192,6 +179,10 @@ class _ChatPageState extends ConsumerState<ChatPage>
             _subTabIndex = 0;
           });
         },
+        leadingActions: [
+          // 对称占位：与右侧按钮等宽，使 Tab 居中不受 trailing 影响
+          SizedBox(width: AppSpacing.iconButtonMinSizeSm * 2 + AppSpacing.intraGroupXs),
+        ],
         trailingActions: [
           IconButton(
             icon: Icon(Icons.search, color: fgSecondary),
@@ -473,9 +464,6 @@ class _ChatPageState extends ConsumerState<ChatPage>
     Color fgSecondary,
     Color borderColor,
   ) {
-    final showAssistant =
-        _mainTabIndex == 0 && _messageSubTabs[_subTabIndex] == '全部';
-
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: _loadConversations(),
       builder: (context, snapshot) {
@@ -492,7 +480,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
           );
         }
 
-        if (showAssistant == false && convs.isEmpty) {
+        if (convs.isEmpty) {
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -519,16 +507,6 @@ class _ChatPageState extends ConsumerState<ChatPage>
         return ListView(
           controller: _scrollController,
           children: [
-            if (showAssistant)
-              _ConversationTile(
-                conversation:
-                    ref.read(appContentRepositoryProvider).chatAssistantConversation,
-                isSpecial: true,
-                onTap: _openAssistantHalfSheet,
-                fgPrimary: fgPrimary,
-                fgSecondary: fgSecondary,
-                borderColor: borderColor,
-              ),
             ...convs.map(
               (c) => _ConversationTile(
                 conversation: c,
@@ -623,7 +601,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
               decoration: BoxDecoration(border: Border(bottom: BorderSide(color: borderColor.withValues(alpha: 0.3)))),
               child: Row(
                 children: [
-                  CircleAvatar(radius: 28, backgroundImage: avatar.isNotEmpty ? NetworkImage(avatar) : null, onBackgroundImageError: (_, __) {}),
+                  RoundedSquareAvatar(size: 56, imageUrl: avatar, name: title),
                   SizedBox(width: AppSpacing.interGroupSm),
                   Expanded(
                     child: Column(
@@ -833,7 +811,7 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
               decoration: BoxDecoration(border: Border(bottom: BorderSide(color: widget.borderColor.withValues(alpha: 0.3)))),
               child: Row(
                 children: [
-                  CircleAvatar(radius: 28, backgroundImage: avatar.isNotEmpty ? NetworkImage(avatar) : null, onBackgroundImageError: (_, __) {}),
+                  RoundedSquareAvatar(size: 56, imageUrl: avatar, name: title),
                   SizedBox(width: AppSpacing.interGroupSm),
                   Expanded(
                     child: Column(
@@ -968,6 +946,30 @@ class _ConversationTile extends StatelessWidget {
     this.showEncryptedBadge = false,
   });
 
+  static const double _avatarSize = 56;
+
+  Widget _buildConversationAvatar() {
+    final type = conversation['type'] as String? ?? 'direct';
+    final isGroup = type == 'group';
+
+    if (isGroup) {
+      final memberAvatars = (conversation['memberAvatars'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          <String>[];
+      return GroupAvatarGrid(
+        size: _avatarSize,
+        avatarUrls: memberAvatars,
+      );
+    }
+
+    return RoundedSquareAvatar(
+      size: _avatarSize,
+      imageUrl: conversation['avatar'] as String? ?? '',
+      name: conversation['title'] as String? ?? '',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final unread = conversation['unreadCount'] as int? ?? 0;
@@ -991,15 +993,7 @@ class _ConversationTile extends StatelessWidget {
               Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  isSpecial
-                      ? AssistantAvatar(radius: 28)
-                      : CircleAvatar(
-                          radius: 28,
-                          backgroundImage: NetworkImage(
-                            conversation['avatar'] as String? ?? '',
-                          ),
-                          onBackgroundImageError: (_, __) {},
-                        ),
+                  _buildConversationAvatar(),
                   if (isEncrypted)
                     Positioned(
                       right: -2,

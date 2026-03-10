@@ -19,6 +19,9 @@ import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
 import 'package:quwoquan_app/cloud/services/rtc/rtc_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/design_system/providers/theme_provider.dart';
+import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
+import 'package:quwoquan_app/core/services/cache/conversation_sync_service.dart';
+import 'package:quwoquan_app/core/services/cache/user_profile_cache_service.dart';
 import 'package:quwoquan_app/core/services/data_service.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
@@ -249,6 +252,24 @@ final chatRepositoryProvider = Provider<ChatRepository>((ref) {
     return RemoteChatRepository();
   }
   return MockChatRepository();
+});
+
+/// 会话缓存（LRU 内存 200 条 + 磁盘持久化无 TTL）
+final conversationCacheProvider = Provider<ConversationCacheService>((ref) {
+  return ConversationCacheService();
+});
+
+/// 用户资料缓存（LRU 内存 200 条 + 磁盘持久化无 TTL）
+final userProfileCacheProvider = Provider<UserProfileCacheService>((ref) {
+  return UserProfileCacheService();
+});
+
+/// 会话同步引擎
+final conversationSyncProvider = Provider<ConversationSyncService>((ref) {
+  return ConversationSyncService(
+    repo: ref.watch(chatRepositoryProvider),
+    cache: ref.watch(conversationCacheProvider),
+  );
 });
 
 /// User Repository（按业务对象组织的端侧入口）
