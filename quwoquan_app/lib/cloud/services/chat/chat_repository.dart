@@ -141,6 +141,20 @@ abstract class ChatRepository {
 class MockChatRepository implements ChatRepository {
   int _seqCounter = 100;
 
+  // 实例级可变成员缓存（key: conversationId），首次访问时从 ChatMockData 深拷贝初始化
+  // 使用实例级（非 static）保证测试隔离；在同一 ProviderContainer 内 Provider 返回同一实例，故应用内有效
+  final Map<String, List<Map<String, dynamic>>> _membersCache = {};
+
+  // 实例级可变设置缓存（key: conversationId）
+  final Map<String, Map<String, dynamic>> _settingsCache = {};
+
+  static const Map<String, dynamic> _defaultSettings = {
+    'qrCodeJoinEnabled': true,
+    'joinRequiresApproval': false,
+    'nameEditableByAdminOnly': false,
+    'privacyShieldAdminOnly': false,
+  };
+
   @override
   Future<List<Map<String, dynamic>>> listConversations({
     String? cursor,
@@ -244,7 +258,14 @@ class MockChatRepository implements ChatRepository {
     int limit = CloudApiDefaults.pageLimit,
     String? role,
   }) async {
-    return ChatMockData.membersFor(conversationId);
+    if (!_membersCache.containsKey(conversationId)) {
+      _membersCache[conversationId] = ChatMockData.membersFor(conversationId)
+          .map((m) => Map<String, dynamic>.from(m))
+          .toList();
+    }
+    return _membersCache[conversationId]!
+        .map((m) => Map<String, dynamic>.from(m))
+        .toList();
   }
 
   @override
@@ -320,31 +341,48 @@ class MockChatRepository implements ChatRepository {
 
   @override
   Future<Map<String, dynamic>> getGroupSettings(String conversationId) async {
-    return {
-      'qrCodeJoinEnabled': true,
-      'joinRequiresApproval': false,
-      'nameEditableByAdminOnly': false,
-      'privacyShieldAdminOnly': false,
-    };
+    return Map<String, dynamic>.from(
+      _settingsCache[conversationId] ?? _defaultSettings,
+    );
   }
 
   @override
   Future<void> updateGroupSettings(
     String conversationId,
     Map<String, dynamic> settings,
-  ) async {}
+  ) async {
+    final current = Map<String, dynamic>.from(
+      _settingsCache[conversationId] ?? _defaultSettings,
+    );
+    current.addAll(settings);
+    _settingsCache[conversationId] = current;
+  }
 
   @override
   Future<void> transferOwnership(
     String conversationId,
     String newOwnerId,
-  ) async {}
+  ) async {
+    final members = await listMembers(conversationId: conversationId);
+    for (final m in members) {
+      if (m['isCurrentUser'] == true) m['role'] = 'member';
+      if (m['userId'] == newOwnerId) m['role'] = 'owner';
+    }
+    _membersCache[conversationId] = members;
+  }
 
   @override
   Future<void> updateGroupAdmins(
     String conversationId,
     List<String> adminIds,
-  ) async {}
+  ) async {
+    final members = await listMembers(conversationId: conversationId);
+    for (final m in members) {
+      if (m['role'] == 'owner') continue;
+      m['role'] = adminIds.contains(m['userId']) ? 'admin' : 'member';
+    }
+    _membersCache[conversationId] = members;
+  }
 
   @override
   Future<void> dissolveConversation(String conversationId) async {}

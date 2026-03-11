@@ -213,23 +213,25 @@ class AssistantHttpGateway {
               ),
             )
             .toList(growable: false);
-        final response = await _gateway.run(
-          AssistantRunRequest(
-            messages: messages,
-            sessionId: json['sessionId'] as String?,
-            userId: json['userId'] as String?,
-            deviceProfile: (json['deviceProfile'] as String?) ?? 'mobile',
-            channel: (json['channel'] as String?) ?? 'app',
-            traceId: json['traceId'] as String?,
-            maxIterations: (json['maxIterations'] as int?) ?? 6,
-          ),
-        );
         request.response.headers.set(HttpHeaders.contentTypeHeader, 'text/event-stream');
         request.response.headers.set(HttpHeaders.cacheControlHeader, 'no-cache');
-        for (final trace in response.traces) {
-          request.response.write('event: trace\n');
-          request.response.write('data: ${jsonEncode(trace.toJson())}\n\n');
-        }
+        request.response.bufferOutput = false;
+        final runRequest = AssistantRunRequest(
+          messages: messages,
+          sessionId: json['sessionId'] as String?,
+          userId: json['userId'] as String?,
+          deviceProfile: (json['deviceProfile'] as String?) ?? 'mobile',
+          channel: (json['channel'] as String?) ?? 'app',
+          traceId: json['traceId'] as String?,
+          maxIterations: (json['maxIterations'] as int?) ?? 6,
+        );
+        final response = await _gateway.runWithTraceStream(
+          runRequest,
+          onTraceEvent: (trace) {
+            request.response.write('event: trace\n');
+            request.response.write('data: ${jsonEncode(trace.toJson())}\n\n');
+          },
+        );
         request.response.write('event: final\n');
         request.response.write(
           'data: ${jsonEncode(<String, dynamic>{"finalText": response.finalText, "runId": response.runId, "traceId": response.traceId, "degraded": response.degraded, "errorCode": response.errorCode})}\n\n',

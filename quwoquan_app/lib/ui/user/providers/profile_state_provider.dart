@@ -13,7 +13,7 @@ class ProfileState {
     required this.userId,
     this.activeSubTab = CreationSubTab.all,
     this.activeVisibility = CreationVisibility.all,
-    this.interactionSubTab = InteractionSubTab.likes,
+    this.interactionSubTab = InteractionSubTab.comments,
     this.interactionDirection = InteractionDirection.received,
     this.lifestyleSubTab = LifestyleSubTab.footprint,
     this.creations = const [],

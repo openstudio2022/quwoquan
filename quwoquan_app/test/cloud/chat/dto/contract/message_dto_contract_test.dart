@@ -46,7 +46,7 @@ void main() {
       expect(dto.recalledAt!.year, equals(2026));
       expect(dto.metadata, isNotNull);
       expect(dto.metadata!['source'], equals('mobile'));
-      expect(dto.timestamp.year, equals(2026));
+      expect(dto.timestamp!.year, equals(2026));
     });
 
     test('fromMap 使用 id 字段（非 _id）', () {

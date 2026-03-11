@@ -56,6 +56,7 @@ class ChatMessageBubble extends StatelessWidget {
     this.flowEvents = const <ExplainableFlowEvent>[],
     this.answerGateOpen = true,
     this.isAssistantRunning = false,
+    this.streamingThinkingText = '',
     this.onRegenerateOptionSelected,
     this.receiptEnabled = false,
     this.memberCount = 2,
@@ -96,6 +97,9 @@ class ChatMessageBubble extends StatelessWidget {
 
   /// Whether the assistant is currently running (drives drawer animation).
   final bool isAssistantRunning;
+
+  /// Accumulated model thinking text for the drawer body.
+  final String streamingThinkingText;
 
   /// Callback from the regenerate options popup.
   final void Function(RegenerateOption option)? onRegenerateOptionSelected;
@@ -262,6 +266,7 @@ class ChatMessageBubble extends StatelessWidget {
     } else if (isAssistantMessage) {
       contentWidget = Container(
         width: double.infinity,
+        constraints: BoxConstraints(maxWidth: effectiveMaxWidth),
         padding: EdgeInsets.symmetric(
           horizontal: AppSpacing.containerSm,
           vertical: AppSpacing.intraGroupLg,
@@ -273,23 +278,28 @@ class ChatMessageBubble extends StatelessWidget {
         ),
       );
     } else if (renderPlainSelfText) {
-      contentWidget = Container(
-        constraints: BoxConstraints(maxWidth: effectiveMaxWidth),
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.xs,
-          vertical: AppSpacing.xs / 2,
-        ),
+      contentWidget = Align(
         alignment: Alignment.centerRight,
-        child: SelectableText(
-          answerText,
-          textAlign: TextAlign.right,
-          style: TextStyle(
-            fontSize:
-                Theme.of(context).textTheme.bodyLarge?.fontSize ??
-                AppSpacing.md,
-            color: textColor,
-            height: AppTypography.bodyLineHeight,
-            fontWeight: FontWeight.w500,
+        child: Container(
+          constraints: BoxConstraints(maxWidth: effectiveMaxWidth * 0.8),
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.containerSm,
+            vertical: AppSpacing.intraGroupLg,
+          ),
+          decoration: BoxDecoration(
+            color: bubbleColor,
+            borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+          ),
+          child: SelectableText(
+            answerText,
+            textAlign: TextAlign.left,
+            style: TextStyle(
+              fontSize:
+                  Theme.of(context).textTheme.bodyLarge?.fontSize ??
+                  AppSpacing.md,
+              color: Colors.white,
+              height: AppTypography.bodyLineHeight,
+            ),
           ),
         ),
       );
@@ -344,18 +354,29 @@ class ChatMessageBubble extends StatelessWidget {
         const <String>[];
     Widget? avatarWidget;
     if (!hideAvatarAndName) {
-      final chatAvatarRadius = AppSpacing.avatarUserSm / 2;
+      final chatAvatarSize = AppSpacing.avatarUserMd;
       if (showAssistantAvatar) {
         avatarWidget = AssistantAvatar(
-          radius: chatAvatarRadius,
+          radius: chatAvatarSize / 2,
           onTap: onAvatarTap,
         );
       } else if (avatar != null && avatar.isNotEmpty) {
         avatarWidget = GestureDetector(
           onTap: onAvatarTap,
           child: RoundedSquareAvatar(
-            size: AppSpacing.avatarUserSm,
+            size: chatAvatarSize,
             imageUrl: avatar,
+            name: senderName,
+          ),
+        );
+      } else if (onAvatarTap != null) {
+        // 头像 URL 为空但有点击回调（如当前用户消息未填头像 URL），
+        // 渲染 fallback 头像（首字母）确保点击区域存在。
+        avatarWidget = GestureDetector(
+          onTap: onAvatarTap,
+          child: RoundedSquareAvatar(
+            size: chatAvatarSize,
+            imageUrl: null,
             name: senderName,
           ),
         );
@@ -409,6 +430,7 @@ class ChatMessageBubble extends StatelessWidget {
                       isRunning: isAssistantRunning,
                       initiallyExpanded: isAssistantRunning,
                       flowEvents: flowEvents,
+                      streamingThinkingText: streamingThinkingText,
                       onReferenceUrlTap: onReferenceTap != null
                           ? (url) =>
                                 onReferenceTap!(<String, dynamic>{'url': url})
@@ -420,6 +442,8 @@ class ChatMessageBubble extends StatelessWidget {
                       processState: _rebuildProcessStateFromMessage(message),
                       isRunning: false,
                       initiallyExpanded: false,
+                      streamingThinkingText:
+                          (message['processThinkingText'] as String?) ?? '',
                       onReferenceUrlTap: onReferenceTap != null
                           ? (url) =>
                                 onReferenceTap!(<String, dynamic>{'url': url})
@@ -464,10 +488,10 @@ class ChatMessageBubble extends StatelessWidget {
                             messageStatus: messageStatus,
                             textColor: textColor,
                           ),
-                        if (renderPlainSelfText)
-                          Flexible(fit: FlexFit.loose, child: contentWidget)
-                        else
-                          Expanded(child: contentWidget),
+                        Flexible(
+                          fit: FlexFit.loose,
+                          child: contentWidget,
+                        ),
                       ],
                     ),
                   if (followupPrompt.isNotEmpty || actionHints.isNotEmpty) ...[
@@ -600,30 +624,71 @@ class ChatMessageBubble extends StatelessWidget {
     );
   }
 
+  static final _gfmTableBlockRe = RegExp(
+    r'((?:^|\n)\|[^\n]+\|\s*\n\|[\s:|-]+\|\s*\n(?:\|[^\n]+\|\s*\n?)*)',
+    multiLine: true,
+  );
+
   Widget _safeMarkdownBody({
     required String markdownText,
     required MarkdownStyleSheet styleSheet,
     required TextStyle textStyle,
   }) {
-    final hasTable =
-        markdownText.contains('|') &&
-        RegExp(r'\|[^\n]+\|').hasMatch(markdownText);
     try {
-      final body = MarkdownBody(
-        data: markdownText,
-        selectable: true,
-        styleSheet: styleSheet,
-      );
-      if (hasTable) {
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 360),
-            child: body,
-          ),
+      final tableMatches = _gfmTableBlockRe.allMatches(markdownText).toList();
+      if (tableMatches.isEmpty) {
+        return MarkdownBody(
+          data: markdownText,
+          selectable: true,
+          styleSheet: styleSheet,
         );
       }
-      return body;
+
+      final children = <Widget>[];
+      var cursor = 0;
+      for (final match in tableMatches) {
+        if (match.start > cursor) {
+          final before = markdownText.substring(cursor, match.start).trim();
+          if (before.isNotEmpty) {
+            children.add(
+              MarkdownBody(
+                data: before,
+                selectable: true,
+                styleSheet: styleSheet,
+              ),
+            );
+          }
+        }
+        final tableText = match.group(0)!.trim();
+        children.add(
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: MarkdownBody(
+              data: tableText,
+              selectable: true,
+              styleSheet: styleSheet,
+            ),
+          ),
+        );
+        cursor = match.end;
+      }
+      if (cursor < markdownText.length) {
+        final after = markdownText.substring(cursor).trim();
+        if (after.isNotEmpty) {
+          children.add(
+            MarkdownBody(
+              data: after,
+              selectable: true,
+              styleSheet: styleSheet,
+            ),
+          );
+        }
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: children,
+      );
     } catch (_) {
       return SelectableText(markdownText, style: textStyle);
     }
@@ -633,7 +698,10 @@ class ChatMessageBubble extends StatelessWidget {
 bool _hasPersistedProcessBlocks(Map<String, dynamic> message) {
   final rawBlocks = (message['uiProcessContentBlocks'] as List?) ?? const [];
   final rawTimeline = (message['uiProcessTimelineV2'] as List?) ?? const [];
-  return rawBlocks.isNotEmpty || rawTimeline.isNotEmpty;
+  final thinkingText = (message['processThinkingText'] as String?) ?? '';
+  return rawBlocks.isNotEmpty ||
+      rawTimeline.isNotEmpty ||
+      thinkingText.isNotEmpty;
 }
 
 AssistantProcessState _rebuildProcessStateFromMessage(
@@ -1423,10 +1491,34 @@ class _AssistantPhaseTimelineCardState
   }
 
   String _usageLabel(Map<String, dynamic> usage) {
-    final calls = (usage['modelCallCount'] as num?)?.toInt() ?? 0;
-    final total = (usage['totalTokens'] as num?)?.toInt() ?? 0;
-    final max = (usage['maxTokensPerCall'] as num?)?.toInt() ?? 0;
-    return '模型调用 $calls 次  ·  总 Token $total  ·  单次最大 $max';
+    final runCalls =
+        ((usage['runModelCallCount'] as num?)?.toInt() ??
+            (usage['modelCallCount'] as num?)?.toInt() ??
+            0);
+    final runTotal =
+        ((usage['runTotalTokens'] as num?)?.toInt() ??
+            (usage['totalTokens'] as num?)?.toInt() ??
+            0);
+    final calls =
+        ((usage['cumulativeModelCallCount'] as num?)?.toInt() ?? runCalls);
+    final total =
+        ((usage['cumulativeTotalTokens'] as num?)?.toInt() ?? runTotal);
+    final max =
+        ((usage['cumulativeMaxTokensPerCall'] as num?)?.toInt() ??
+            (usage['maxTokensPerCall'] as num?)?.toInt() ??
+            0);
+    final parts = <String>[
+      '模型调用 $calls 次',
+      '总 Token $total',
+      '单次最大 $max',
+    ];
+    if (runCalls > 0 && runCalls != calls) {
+      parts.add('本轮调用 $runCalls 次');
+    }
+    if (runTotal > 0 && runTotal != total) {
+      parts.add('本轮 Token $runTotal');
+    }
+    return parts.join('  ·  ');
   }
 }
 

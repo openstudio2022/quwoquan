@@ -1,9 +1,9 @@
 /// 一级 Tab — 与 ui_config.yaml profile_tabs 对齐
 enum ProfileTab {
-  creations,
+  moments,
+  works,
   circles,
   interaction,
-  lifestyle,
 }
 
 /// 创作二级 SubTab — contentType 与 discoveryTabs 对齐
@@ -24,8 +24,8 @@ enum CreationVisibility {
 
 /// 互动子维度
 enum InteractionSubTab {
-  likes,
   comments,
+  favorites,
 }
 
 /// 互动方向

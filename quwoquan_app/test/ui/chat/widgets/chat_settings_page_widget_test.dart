@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_settings_page.dart';
+import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 
 Widget _scopedApp({ChatRepository? mock}) {
   final repo = mock ?? MockChatRepository();
@@ -23,6 +25,13 @@ Widget _scopedApp({ChatRepository? mock}) {
             ),
           ),
           GoRoute(path: '/chat/:id', builder: (_, _) => const SizedBox()),
+          GoRoute(path: '/chat/:id/manage', builder: (_, _) => const SizedBox()),
+          GoRoute(path: '/chat/:id/add-members', builder: (_, _) => const SizedBox()),
+          GoRoute(
+            path: '/user/:id',
+            builder: (_, state) =>
+                Scaffold(body: Text('User ${state.pathParameters['id']}')),
+          ),
         ],
       ),
     ),
@@ -59,6 +68,37 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
 
       expect(find.byType(Scaffold), findsWidgets);
+    });
+  });
+
+  group('ChatSettingsPage — 权限呈现契约', () {
+    testWidgets('conv_002 群主 Provider state 正确（isOwner=true）', (tester) async {
+      // 用 ProviderContainer 直接验证 Provider state（避免 widget 时序问题）
+      final container = ProviderContainer(
+        overrides: [
+          chatRepositoryProvider.overrideWithValue(MockChatRepository()),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final notifier =
+          container.read(conversationMembersProvider('conv_002').notifier);
+      await notifier.load();
+
+      final state = container.read(conversationMembersProvider('conv_002'));
+      expect(state.isOwner, isTrue,
+          reason: 'conv_002 当前用户（user_001）应为群主');
+      expect(state.isAdminOrOwner, isTrue);
+      expect(state.members.any((m) => m['isCurrentUser'] == true), isTrue);
+    });
+
+    testWidgets('普通成员角色时不显示群管理入口', (tester) async {
+      _suppressImageErrors();
+      await tester.pumpWidget(_scopedApp(mock: _MemberRoleChatRepository()));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(find.text(UITextConstants.groupManagement), findsNothing);
     });
   });
 
@@ -125,5 +165,32 @@ class _ErrorChatRepository extends MockChatRepository {
     String? role,
   }) async {
     throw Exception('Network error');
+  }
+}
+
+/// 当前用户为普通成员
+class _MemberRoleChatRepository extends MockChatRepository {
+  @override
+  Future<List<Map<String, dynamic>>> listMembers({
+    required String conversationId,
+    String? cursor,
+    int limit = 20,
+    String? role,
+  }) async {
+    return [
+      {
+        'userId': 'user_001',
+        'role': 'member',
+        'isCurrentUser': true,
+        'displayName': '我',
+        'avatarUrl': '',
+      },
+      {
+        'userId': 'user_002',
+        'role': 'member',
+        'displayName': '李明',
+        'avatarUrl': '',
+      },
+    ];
   }
 }

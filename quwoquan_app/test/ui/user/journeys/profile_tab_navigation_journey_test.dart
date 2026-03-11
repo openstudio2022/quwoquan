@@ -48,15 +48,13 @@ void main() {
   });
 
   group('旅程正常路径', () {
-    testWidgets('旅程 A1：默认展示创作 Tab 及子分类', (tester) async {
+    testWidgets('旅程 A1：默认展示微趣 Tab', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
       await tester.pumpWidget(_scopedApp());
-      await _pumpFrames(tester);
-      expect(find.text('创作'), findsOneWidget);
-      expect(find.text('全部'), findsOneWidget);
+      await _pumpFrames(tester, count: 20);
       expect(find.text('微趣'), findsOneWidget);
     });
 
@@ -72,16 +70,16 @@ void main() {
       expect(find.text('极简摄影俱乐部'), findsOneWidget);
     });
 
-    testWidgets('旅程 A3：切换到生活 Tab', (tester) async {
+    testWidgets('旅程 A3：切换到互动 Tab', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
       await tester.pumpWidget(_scopedApp());
       await _pumpFrames(tester);
-      await tester.tap(find.text('生活'));
+      await tester.tap(find.text('互动'));
       await _pumpFrames(tester, count: 20);
-      expect(find.text('足迹'), findsOneWidget);
+      expect(find.text('接收'), findsOneWidget);
     });
   });
 
@@ -120,14 +118,15 @@ void main() {
   });
 
   group('旅程数据加载正确性', () {
-    testWidgets('旅程 E1：创作 Tab 展示 Repository 帖子数据（点赞数可见）', (tester) async {
+    testWidgets('旅程 E1：微趣 Tab 展示 Repository 帖子数据（点赞数可见）', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
       await tester.pumpWidget(_scopedApp());
-      await _pumpFrames(tester, count: 20);
-      expect(find.text('1200'), findsOneWidget);
+      await tester.pumpAndSettle(const Duration(seconds: 5));
+      // 微趣 Tab 以微博风格卡片展示 moment 帖子，互动行显示点赞数
+      expect(find.text('560'), findsAtLeastNWidgets(1));
     });
 
     testWidgets('旅程 E2：圈子 Tab 展示 Repository 圈子数据', (tester) async {
@@ -142,16 +141,16 @@ void main() {
       expect(find.text('极简摄影俱乐部'), findsOneWidget);
     });
 
-    testWidgets('旅程 E3：生活 Tab 展示 Repository 生活记录', (tester) async {
+    testWidgets('旅程 E3：互动 Tab 展示 Repository 互动列表', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
       await tester.pumpWidget(_scopedApp());
       await _pumpFrames(tester);
-      await tester.tap(find.text('生活'));
+      await tester.tap(find.text('互动'));
       await _pumpFrames(tester, count: 20);
-      expect(find.text('阿那亚礼堂'), findsOneWidget);
+      expect(find.text('你的皮炎有点辣'), findsOneWidget);
     });
 
     testWidgets('旅程 E4：统计数据从 Repository 加载', (tester) async {
@@ -162,7 +161,7 @@ void main() {
       await tester.pumpWidget(_scopedApp());
       await _pumpFrames(tester, count: 20);
       expect(find.text('284'), findsOneWidget);
-      expect(find.text('1200'), findsOneWidget);
+      expect(find.text('1.2k'), findsOneWidget);
     });
   });
 
@@ -182,15 +181,13 @@ void main() {
       expect(find.widgetWithText(OutlinedButton, '已关注'), findsOneWidget);
     });
 
-    testWidgets('旅程 F2：创作子 Tab 切换到微趣', (tester) async {
+    testWidgets('旅程 F2：微趣 Tab 展示用户微趣内容', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
       await tester.pumpWidget(_scopedApp());
-      await _pumpFrames(tester);
-      await tester.tap(find.text('微趣'));
-      await _pumpFrames(tester);
+      await _pumpFrames(tester, count: 20);
       expect(find.text('微趣'), findsOneWidget);
     });
   });
@@ -214,7 +211,7 @@ void main() {
         ),
       ));
       await _pumpFrames(tester);
-      expect(find.text('创作'), findsOneWidget);
+      expect(find.text('微趣'), findsOneWidget);
     });
   });
 

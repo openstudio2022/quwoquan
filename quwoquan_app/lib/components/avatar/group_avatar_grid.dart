@@ -40,8 +40,14 @@ class GroupAvatarGrid extends StatelessWidget {
 
     final rows = _getLayout(count);
     final maxCols = rows.fold<int>(0, math.max);
-    final cellSize = (size - gap * (maxCols - 1)) / maxCols;
-    final totalHeight = rows.length * cellSize + (rows.length - 1) * gap;
+    final maxRows = rows.length;
+
+    final bool fillSquare = count <= 4;
+    final double innerSize = fillSquare ? size : size * 0.88;
+    final cellSizeByWidth = (innerSize - gap * (maxCols - 1)) / maxCols;
+    final cellSizeByHeight = (innerSize - gap * (maxRows - 1)) / maxRows;
+    final cellSize = math.min(cellSizeByWidth, cellSizeByHeight);
+    final totalHeight = maxRows * cellSize + (maxRows - 1) * gap;
 
     return Container(
       width: size,
@@ -54,10 +60,10 @@ class GroupAvatarGrid extends StatelessWidget {
       child: Center(
         child: SizedBox(
           height: totalHeight,
-          width: size,
+          width: innerSize,
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: _buildRows(validUrls, rows, cellSize, gap, size),
+            children: _buildRows(validUrls, rows, cellSize, gap, innerSize),
           ),
         ),
       ),
@@ -68,7 +74,7 @@ class GroupAvatarGrid extends StatelessWidget {
   List<int> _getLayout(int count) {
     switch (count) {
       case 2:
-        return [1, 1];
+        return [2];
       case 3:
         return [1, 2];
       case 4:

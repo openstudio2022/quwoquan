@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 
 /// 群主转让页 — 选择成员后确认弹窗
 class TransferOwnershipPage extends ConsumerStatefulWidget {
@@ -18,37 +19,13 @@ class TransferOwnershipPage extends ConsumerStatefulWidget {
 
 class _TransferOwnershipPageState
     extends ConsumerState<TransferOwnershipPage> {
-  List<Map<String, dynamic>> _members = [];
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _loadMembers();
-  }
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
-  }
-
-  Future<void> _loadMembers() async {
-    try {
-      final repo = ref.read(chatRepositoryProvider);
-      final members = await repo.listMembers(
-        conversationId: widget.conversationId,
-        limit: 200,
-      );
-      if (mounted) {
-        setState(() {
-          _members = members
-              .where((m) => m['role'] != 'owner' && m['isCurrentUser'] != true)
-              .toList();
-        });
-      }
-    } catch (_) {}
   }
 
   void _onMemberSelected(Map<String, dynamic> member) {
@@ -74,11 +51,15 @@ class _TransferOwnershipPageState
             onPressed: () async {
               Navigator.pop(context);
               try {
-                final repo = ref.read(chatRepositoryProvider);
-                await repo.transferOwnership(
-                  widget.conversationId,
-                  member['userId'] as String? ?? '',
-                );
+                await ref
+                    .read(
+                      conversationMembersProvider(
+                        widget.conversationId,
+                      ).notifier,
+                    )
+                    .transferOwnership(
+                      member['userId'] as String? ?? '',
+                    );
                 if (mounted) context.pop();
               } catch (_) {}
             },
@@ -96,9 +77,17 @@ class _TransferOwnershipPageState
     final bgColor =
         AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
 
+    final membersState =
+        ref.watch(conversationMembersProvider(widget.conversationId));
+
+    // 排除群主（当前用户）自身
+    final candidates = membersState.members
+        .where((m) => m['role'] != 'owner' && m['isCurrentUser'] != true)
+        .toList();
+
     final filtered = _searchQuery.isEmpty
-        ? _members
-        : _members.where((m) {
+        ? candidates
+        : candidates.where((m) {
             final name = (m['displayName'] ?? m['name'] ?? '') as String;
             return name.toLowerCase().contains(_searchQuery.toLowerCase());
           }).toList();
@@ -136,50 +125,52 @@ class _TransferOwnershipPageState
             ),
           ),
           Expanded(
-            child: ListView.builder(
-              itemCount: filtered.length,
-              itemBuilder: (context, i) {
-                final m = filtered[i];
-                final name = m['displayName'] as String? ??
-                    m['name'] as String? ??
-                    '';
-                final avatar = m['avatarUrl'] as String? ??
-                    m['avatar'] as String? ??
-                    '';
+            child: membersState.isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : ListView.builder(
+                    itemCount: filtered.length,
+                    itemBuilder: (context, i) {
+                      final m = filtered[i];
+                      final name = m['displayName'] as String? ??
+                          m['name'] as String? ??
+                          '';
+                      final avatar = m['avatarUrl'] as String? ??
+                          m['avatar'] as String? ??
+                          '';
 
-                return Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () => _onMemberSelected(m),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: AppSpacing.md,
-                        vertical: AppSpacing.sm,
-                      ),
-                      child: Row(
-                        children: [
-                          RoundedSquareAvatar(
-                            size: AppSpacing.largeButtonSize,
-                            imageUrl: avatar,
-                            name: name,
-                          ),
-                          SizedBox(width: AppSpacing.interGroupSm),
-                          Expanded(
-                            child: Text(
-                              name,
-                              style: TextStyle(
-                                fontSize: AppTypography.lg,
-                                color: fgPrimary,
-                              ),
+                      return Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () => _onMemberSelected(m),
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md,
+                              vertical: AppSpacing.sm,
+                            ),
+                            child: Row(
+                              children: [
+                                RoundedSquareAvatar(
+                                  size: AppSpacing.largeButtonSize,
+                                  imageUrl: avatar,
+                                  name: name,
+                                ),
+                                SizedBox(width: AppSpacing.interGroupSm),
+                                Expanded(
+                                  child: Text(
+                                    name,
+                                    style: TextStyle(
+                                      fontSize: AppTypography.lg,
+                                      color: fgPrimary,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        ],
-                      ),
-                    ),
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
           ),
         ],
       ),

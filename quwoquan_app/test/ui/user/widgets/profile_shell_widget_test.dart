@@ -12,7 +12,6 @@ import 'package:quwoquan_app/ui/user/widgets/profile_header.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_circles_tab.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_interaction_tab.dart';
-import 'package:quwoquan_app/ui/user/widgets/profile_lifestyle_tab.dart';
 
 /// 在 UI 测试中使 capability 保持 null（legacy 关注/私信 布局）
 class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
@@ -88,10 +87,10 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester);
-      expect(find.text('创作'), findsOneWidget);
+      expect(find.text('微趣'), findsOneWidget);
+      expect(find.text('作品'), findsOneWidget);
       expect(find.widgetWithText(Tab, '圈子'), findsOneWidget);
       expect(find.text('互动'), findsOneWidget);
-      expect(find.text('生活'), findsOneWidget);
     });
   });
 
@@ -157,18 +156,6 @@ void main() {
       await _pumpFrames(tester, count: 20);
       expect(find.byType(ProfileInteractionTab), findsOneWidget);
     });
-
-    testWidgets('切换到生活 Tab 渲染 ProfileLifestyleTab', (tester) async {
-      _setPhoneSize(tester);
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
-      await _pumpFrames(tester);
-      await tester.tap(find.text('生活'));
-      await _pumpFrames(tester, count: 20);
-      expect(find.byType(ProfileLifestyleTab), findsOneWidget);
-    });
   });
 
   group('ProfileShell — 暗色模式 (T61)', () {
@@ -182,7 +169,7 @@ void main() {
         themeMode: ThemeMode.dark,
       ));
       await _pumpFrames(tester);
-      expect(find.text('创作'), findsOneWidget);
+      expect(find.text('微趣'), findsOneWidget);
       expect(find.byIcon(Icons.settings_outlined), findsOneWidget);
     });
 
@@ -227,7 +214,7 @@ void main() {
         userId: '',
       ));
       await _pumpFrames(tester);
-      expect(find.text('创作'), findsOneWidget);
+      expect(find.text('微趣'), findsOneWidget);
     });
   });
 }

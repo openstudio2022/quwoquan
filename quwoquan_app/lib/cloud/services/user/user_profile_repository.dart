@@ -8,6 +8,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_pag
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
+import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/cloud/services/user/mock/user_profile_mock_data.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -49,6 +50,18 @@ abstract class UserProfileRepository {
   });
   Future<Map<String, dynamic>> getRelationship(String userId);
   Future<List<Map<String, dynamic>>> listUserLikes(
+    String userId, {
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  });
+
+  // ── 互动（收到/发出）──────────────────────────────────────────────────────
+  Future<List<Map<String, dynamic>>> listUserInteractionReceived(
+    String userId, {
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  });
+  Future<List<Map<String, dynamic>>> listUserInteractionSent(
     String userId, {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
@@ -105,18 +118,21 @@ class MockUserProfileRepository implements UserProfileRepository {
         'name': '极简摄影俱乐部',
         'coverUrl': 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600',
         'memberCount': 2340,
+        'postCount': 128,
       },
       {
         'id': 'c2',
         'name': '旅行手账',
         'coverUrl': 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=600',
         'memberCount': 1280,
+        'postCount': 56,
       },
       {
         'id': 'c3',
         'name': '咖啡品鉴',
         'coverUrl': 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=600',
         'memberCount': 890,
+        'postCount': 34,
       },
     ].take(limit).toList();
   }
@@ -170,6 +186,24 @@ class MockUserProfileRepository implements UserProfileRepository {
   }
 
   @override
+  Future<List<Map<String, dynamic>>> listUserInteractionReceived(
+    String userId, {
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    return _mockInteractions.take(limit).toList();
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> listUserInteractionSent(
+    String userId, {
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    return _mockInteractionsSent.take(limit).toList();
+  }
+
+  @override
   Future<List<Map<String, dynamic>>> listPersonas() async {
     return _mockPersonas;
   }
@@ -191,21 +225,35 @@ class MockUserProfileRepository implements UserProfileRepository {
   // ── Mock 数据 ─────────────────────────────────────────────────────────────
 
   static Map<String, dynamic> _defaultProfile(String userId) {
+    final chatName = ChatMockData.nameFor(userId);
+    final hasChatIdentity = chatName != userId;
     return {
       'userId': userId,
-      'nickname': userId,
-      'avatarUrl': 'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100',
-      'bio': '',
+      'nickname': hasChatIdentity ? chatName : userId,
+      'avatarUrl': ChatMockData.avatarFor(userId),
+      'bio': hasChatIdentity ? '趣屋圈用户' : '',
       'backgroundUrl': 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200',
-      'followerCount': 0,
-      'followingCount': 0,
-      'postCount': 0,
-      'circleCount': 0,
-      'likeCount': 0,
+      'followerCount': hasChatIdentity ? 120 : 0,
+      'followingCount': hasChatIdentity ? 85 : 0,
+      'postCount': hasChatIdentity ? 30 : 0,
+      'circleCount': hasChatIdentity ? 3 : 0,
+      'likeCount': hasChatIdentity ? 480 : 0,
     };
   }
 
   static final Map<String, Map<String, dynamic>> _mockProfiles = {
+    'user_001': {
+      'userId': 'user_001',
+      'nickname': '趣我圈用户',
+      'avatarUrl': ChatMockData.avatarFor('user_001'),
+      'bio': '关心时事、关注新闻、思考人生、思索生命',
+      'backgroundUrl': 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200',
+      'followerCount': 120,
+      'followingCount': 85,
+      'postCount': 30,
+      'circleCount': 3,
+      'likeCount': 480,
+    },
     'nature_photographer': {
       'userId': 'nature_photographer',
       'nickname': '自然摄影师',
@@ -272,6 +320,60 @@ class MockUserProfileRepository implements UserProfileRepository {
       'avatarUrl': 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100',
       'bio': '产品经理',
       'isFollowing': false,
+    },
+  ];
+
+  static final List<Map<String, dynamic>> _mockInteractions = [
+    {
+      'userId': 'u1',
+      'nickname': '你的皮炎有点辣',
+      'avatarUrl': 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=100',
+      'contentType': 'comment',
+      'targetTitle': '评论了你的《川西秘境摄影集》',
+      'createdAt': '2025-12-21T10:00:00Z',
+    },
+    {
+      'userId': 'u2',
+      'nickname': '王小明',
+      'avatarUrl': 'https://images.unsplash.com/photo-1643816831234-e7cb32194e92?w=100',
+      'contentType': 'comment',
+      'targetTitle': '评论了你的《摄影器材交流区》',
+      'createdAt': '2025-12-20T10:05:00Z',
+    },
+    {
+      'userId': 'u3',
+      'nickname': '原价帝吧',
+      'avatarUrl': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
+      'contentType': 'favorite',
+      'targetTitle': '收藏了你的《森林的呼吸》',
+      'createdAt': '2025-12-20T08:00:00Z',
+    },
+    {
+      'userId': 'u4',
+      'nickname': '李想',
+      'avatarUrl': 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100',
+      'contentType': 'favorite',
+      'targetTitle': '收藏了你的《光影的节奏》',
+      'createdAt': '2025-12-19T16:00:00Z',
+    },
+  ];
+
+  static final List<Map<String, dynamic>> _mockInteractionsSent = [
+    {
+      'userId': 'u3',
+      'nickname': '原价帝吧',
+      'avatarUrl': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
+      'contentType': 'comment',
+      'targetTitle': '你评论了《森林的呼吸》',
+      'createdAt': '2025-12-19T14:00:00Z',
+    },
+    {
+      'userId': 'u1',
+      'nickname': '你的皮炎有点辣',
+      'avatarUrl': 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=100',
+      'contentType': 'favorite',
+      'targetTitle': '你收藏了《川西秘境摄影集》',
+      'createdAt': '2025-12-18T20:00:00Z',
     },
   ];
 
@@ -551,6 +653,28 @@ class RemoteUserProfileRepository implements UserProfileRepository {
     }
     final data = json.decode(resp.body) as Map<String, dynamic>;
     return (data['items'] as List? ?? <dynamic>[]).cast<Map<String, dynamic>>();
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> listUserInteractionReceived(
+    String userId, {
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    throw UnimplementedError(
+      'listUserInteractionReceived: 云侧 API 未就绪，见 design.md 搁置任务',
+    );
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> listUserInteractionSent(
+    String userId, {
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    throw UnimplementedError(
+      'listUserInteractionSent: 云侧 API 未就绪，见 design.md 搁置任务',
+    );
   }
 
   // ── 分身 ──────────────────────────────────────────────────────────────────

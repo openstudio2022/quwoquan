@@ -106,6 +106,45 @@ class CircleMockData {
 
   static List<Map<String, dynamic>> get circles => [
         {
+          'id': 'c1',
+          'name': '极简摄影俱乐部',
+          'coverUrl':
+              'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600',
+          'cover':
+              'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600',
+          'avatar':
+              'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600',
+          'memberCount': 2340,
+          'postCount': 128,
+          'domainId': 'culture_arts',
+        },
+        {
+          'id': 'c2',
+          'name': '旅行手账',
+          'coverUrl':
+              'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=600',
+          'cover':
+              'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=600',
+          'avatar':
+              'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=600',
+          'memberCount': 1280,
+          'postCount': 56,
+          'domainId': 'culture_arts',
+        },
+        {
+          'id': 'c3',
+          'name': '咖啡品鉴',
+          'coverUrl':
+              'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=600',
+          'cover':
+              'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=600',
+          'avatar':
+              'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=600',
+          'memberCount': 890,
+          'postCount': 34,
+          'domainId': 'culture_arts',
+        },
+        {
           'id': 'c-cam-1',
           'name': '上海交大·2020级校友',
           'avatar':

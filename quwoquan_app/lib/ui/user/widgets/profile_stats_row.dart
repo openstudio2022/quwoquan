@@ -27,10 +27,9 @@ class ProfileStatsRow extends StatelessWidget {
     final fgSecondary = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
 
     final items = [
+      _StatItem(value: _formatCount(stats['circleCount']), label: UITextConstants.contactsTabCircles, type: 'circles'),
       _StatItem(value: _formatCount(stats['followingCount']), label: UITextConstants.follow, type: 'following'),
-      _StatItem(value: _formatCount(stats['circleCount']), label: '圈子', type: 'circles'),
       _StatItem(value: _formatCount(stats['followerCount']), label: UITextConstants.circleFans, type: 'fans'),
-      _StatItem(value: _formatCount(stats['likeCount']), label: UITextConstants.circleLikes, type: 'likes'),
     ];
 
     return Row(

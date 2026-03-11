@@ -326,7 +326,15 @@ class UITextConstants {
   static const String transferOwnershipConfirmPrefix = '确定选择 ';
   static const String transferOwnershipConfirmSuffix = ' 为新群主，你将自动放弃群主身份。';
   static const String maxAdminsReached = '最多选择 3 位管理员';
-  static const String done = '完成';
+  static const String editGroupName = '修改群聊名称';
+  static const String groupNameHint = '请输入群聊名称';
+  static const String groupNameUpdated = '群聊名称已更新';
+  static const String groupAdminDescription =
+      '管理员可协助群主管理群聊，拥有发布群公告、移除群成员等能力。';
+  static const String groupAdminOnlyOwner = '只有群主具备设置管理员、解散群聊的能力。';
+  static const String groupAdminMaxCount = '最多可设置3个管理员。';
+  static const String admin = '管理员';
+  static const String owner = '群主';
 
   /// 发起群聊页（图一）
   static const String startGroupChat = '发起群聊';

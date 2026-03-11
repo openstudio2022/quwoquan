@@ -10,7 +10,7 @@ execution:
   full_gate: make gate-full
 level_acceptance:
   A1:
-    criteria: "趣聊/同好" Tab 文字在页面水平真正居中，不受右侧 trailingActions 按钮数量影响
+    criteria: "趣聊/同好 Tab 文字在页面水平真正居中，不受右侧 trailingActions 按钮数量影响"
     status: pending
     test_layers:
       T2: required

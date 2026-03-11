@@ -5,6 +5,15 @@ class ChatMockData {
 
   static const assistantConversationId = 'conv_assistant_001';
 
+  /// 当前用户在消息中的 senderId — 与 chat_detail_page / chat_message_provider 保持一致
+  static const currentUserSenderId = 'current_user';
+  /// 当前用户的 profile userId — 成员列表、用户主页使用
+  static const currentUserProfileId = 'user_001';
+
+  /// Mock 用户头像池 — 保证所有页面（列表、详情、设置、主页）引用同一 URL
+  static String avatarFor(String userId) =>
+      'https://i.pravatar.cc/150?u=$userId';
+
   // ── Conversations ──────────────────────────────────────────────────────────
 
   static List<Map<String, dynamic>> get conversations => [
@@ -13,7 +22,8 @@ class ChatMockData {
           'id': 'conv_001',
           'type': 'direct',
           'title': '李明',
-          'avatarUrl': 'https://i.pravatar.cc/150?u=liming',
+          'avatarUrl': avatarFor('user_002'),
+          'avatar': avatarFor('user_002'),
           'creatorId': 'user_001',
           'maxSeq': 42,
           'memberCount': 2,
@@ -31,25 +41,29 @@ class ChatMockData {
           'id': 'conv_002',
           'type': 'group',
           'title': '周末登山群',
-          'avatarUrl': 'https://i.pravatar.cc/150?u=hiking',
-          'creatorId': 'user_002',
+          'avatarUrl': avatarFor('hiking'),
+          'creatorId': currentUserProfileId,
           'maxSeq': 256,
           'memberCount': 15,
           'maxGroupSize': 1000,
           'receiptEnabled': true,
-          'lastMessagePreview': '周六早上8点出发',
-          'lastMessageTime': '2026-03-07T09:15:00Z',
+          'lastMessagePreview': '周六早上8点出发，大家别迟到',
+          'lastMessageTime': '2026-03-11T15:15:00Z',
           'messageCount': 256,
           'status': 'active',
           'createdAt': '2026-02-01T10:00:00Z',
           'updatedAt': '2026-03-07T09:15:00Z',
+          'memberAvatars': [
+            for (int i = 2; i <= 10; i++) avatarFor('user_${i.toString().padLeft(3, '0')}'),
+          ],
         },
+        ..._groupAvatarTestConversations(),
         {
           '_id': 'conv_003',
           'id': 'conv_003',
           'type': 'circle',
           'title': '摄影爱好者圈子',
-          'avatarUrl': 'https://i.pravatar.cc/150?u=photo',
+          'avatarUrl': avatarFor('photo'),
           'creatorId': 'user_003',
           'circleId': 'circle_001',
           'maxSeq': 1024,
@@ -68,7 +82,8 @@ class ChatMockData {
           'id': 'conv_004',
           'type': 'encrypted',
           'title': '密信 - 张华',
-          'avatarUrl': 'https://i.pravatar.cc/150?u=zhanghua',
+          'avatarUrl': avatarFor('user_003'),
+          'avatar': avatarFor('user_003'),
           'creatorId': 'user_001',
           'maxSeq': 8,
           'memberCount': 2,
@@ -83,10 +98,75 @@ class ChatMockData {
         },
       ];
 
+  /// 群聊九宫格测试 — 1~16 人群分别验证布局
+  static List<Map<String, dynamic>> _groupAvatarTestConversations() {
+    final result = <Map<String, dynamic>>[];
+    for (int n = 1; n <= 16; n++) {
+      result.add({
+        '_id': 'conv_grid_$n',
+        'id': 'conv_grid_$n',
+        'type': 'group',
+        'title': '$n人测试群',
+        'creatorId': 'user_001',
+        'maxSeq': n,
+        'memberCount': n,
+        'maxGroupSize': 1000,
+        'receiptEnabled': false,
+        'lastMessagePreview': '$n人群聊测试',
+        'lastMessageTime': '2026-03-07T0${n < 10 ? n : 9}:00:00Z',
+        'messageCount': n,
+        'status': 'active',
+        'createdAt': '2026-03-01T10:00:00Z',
+        'updatedAt': '2026-03-07T0${n < 10 ? n : 9}:00:00Z',
+        'memberAvatars': [
+          for (int i = 1; i <= n; i++) avatarFor('grid_${n}_member_$i'),
+        ],
+      });
+    }
+    return result;
+  }
+
   // ── Messages ───────────────────────────────────────────────────────────────
 
   static List<Map<String, dynamic>> messagesFor(String conversationId) {
-    return _messagesByConversation[conversationId] ?? _defaultMessages;
+    if (_messagesByConversation.containsKey(conversationId)) {
+      return _messagesByConversation[conversationId]!;
+    }
+    if (conversationId.startsWith('conv_grid_')) {
+      final n = int.tryParse(conversationId.replaceFirst('conv_grid_', ''));
+      if (n != null && n > 0) return _generateGridMessages(conversationId, n);
+    }
+    return _defaultMessages;
+  }
+
+  static List<Map<String, dynamic>> _generateGridMessages(
+      String conversationId, int memberCount) {
+    final messages = <Map<String, dynamic>>[];
+    final sampleTexts = [
+      '大家好！', '欢迎欢迎', '今天天气不错', '周末有什么安排吗？',
+      '我来了', '哈哈好的', '收到', '+1', '赞同', '不错不错',
+    ];
+    var seq = memberCount * 2;
+    for (int i = 1; i <= memberCount && i <= 6; i++) {
+      final isFirst = i == 1;
+      final userId = isFirst ? currentUserSenderId : 'grid_${memberCount}_member_$i';
+      final name = isFirst ? '我' : '测试成员$i';
+      messages.add({
+        '_id': 'msg_grid_${memberCount}_$i',
+        'id': 'msg_grid_${memberCount}_$i',
+        'conversationId': conversationId,
+        'seq': seq--,
+        'clientMsgId': 'client-grid-${memberCount}_$i',
+        'senderId': userId,
+        'senderName': name,
+        'senderAvatar': isFirst ? avatarFor(currentUserProfileId) : avatarFor(userId),
+        'type': 'text',
+        'content': sampleTexts[(i - 1) % sampleTexts.length],
+        'status': isFirst ? 'read' : 'sent',
+        'timestamp': '2026-03-11T${(10 + i).toString().padLeft(2, '0')}:00:00Z',
+      });
+    }
+    return messages;
   }
 
   static final Map<String, List<Map<String, dynamic>>> _messagesByConversation =
@@ -99,10 +179,12 @@ class ChatMockData {
         'seq': 42,
         'clientMsgId': 'client-uuid-001',
         'senderId': 'user_002',
+        'senderName': '李明',
+        'senderAvatar': avatarFor('user_002'),
         'type': 'text',
         'content': '好的，明天见',
         'status': 'sent',
-        'timestamp': '2026-03-07T10:30:00Z',
+        'timestamp': '2026-03-11T14:30:00Z',
       },
       {
         '_id': 'msg_001_02',
@@ -110,14 +192,157 @@ class ChatMockData {
         'conversationId': 'conv_001',
         'seq': 41,
         'clientMsgId': 'client-uuid-002',
-        'senderId': 'user_001',
+        'senderId': currentUserSenderId,
+        'senderName': '我',
+        'senderAvatar': avatarFor(currentUserProfileId),
         'type': 'text',
         'content': '那我们明天下午三点见面？',
         'status': 'read',
-        'timestamp': '2026-03-07T10:29:00Z',
+        'timestamp': '2026-03-11T14:29:00Z',
+      },
+      {
+        '_id': 'msg_001_03',
+        'id': 'msg_001_03',
+        'conversationId': 'conv_001',
+        'seq': 40,
+        'clientMsgId': 'client-uuid-001-03',
+        'senderId': 'user_002',
+        'senderName': '李明',
+        'senderAvatar': avatarFor('user_002'),
+        'type': 'text',
+        'content': '下午可以，地点你定',
+        'status': 'sent',
+        'timestamp': '2026-03-11T09:15:00Z',
+      },
+      {
+        '_id': 'msg_001_04',
+        'id': 'msg_001_04',
+        'conversationId': 'conv_001',
+        'seq': 39,
+        'clientMsgId': 'client-uuid-001-04',
+        'senderId': currentUserSenderId,
+        'senderName': '我',
+        'senderAvatar': avatarFor(currentUserProfileId),
+        'type': 'text',
+        'content': '明天有空吗？想约你聊聊项目的事',
+        'status': 'read',
+        'timestamp': '2026-03-11T09:10:00Z',
+      },
+      {
+        '_id': 'msg_001_05',
+        'id': 'msg_001_05',
+        'conversationId': 'conv_001',
+        'seq': 38,
+        'clientMsgId': 'client-uuid-001-05',
+        'senderId': 'user_002',
+        'senderName': '李明',
+        'senderAvatar': avatarFor('user_002'),
+        'type': 'text',
+        'content': '那个摄影展的照片太棒了！',
+        'status': 'sent',
+        'timestamp': '2026-03-09T20:30:00Z',
+      },
+      {
+        '_id': 'msg_001_06',
+        'id': 'msg_001_06',
+        'conversationId': 'conv_001',
+        'seq': 37,
+        'clientMsgId': 'client-uuid-001-06',
+        'senderId': currentUserSenderId,
+        'senderName': '我',
+        'senderAvatar': avatarFor(currentUserProfileId),
+        'type': 'text',
+        'content': '周末去看了个摄影展，拍了几张',
+        'status': 'read',
+        'timestamp': '2026-03-09T18:45:00Z',
+      },
+      {
+        '_id': 'msg_001_07',
+        'id': 'msg_001_07',
+        'conversationId': 'conv_001',
+        'seq': 36,
+        'clientMsgId': 'client-uuid-001-07',
+        'senderId': 'user_002',
+        'senderName': '李明',
+        'senderAvatar': avatarFor('user_002'),
+        'type': 'text',
+        'content': '收到，回头看看',
+        'status': 'sent',
+        'timestamp': '2026-02-20T15:00:00Z',
+      },
+      {
+        '_id': 'msg_001_08',
+        'id': 'msg_001_08',
+        'conversationId': 'conv_001',
+        'seq': 35,
+        'clientMsgId': 'client-uuid-001-08',
+        'senderId': currentUserSenderId,
+        'senderName': '我',
+        'senderAvatar': avatarFor(currentUserProfileId),
+        'type': 'text',
+        'content': '我把文档发你邮箱了，有空看下',
+        'status': 'read',
+        'timestamp': '2026-02-20T14:55:00Z',
+      },
+      {
+        '_id': 'msg_001_09',
+        'id': 'msg_001_09',
+        'conversationId': 'conv_001',
+        'seq': 34,
+        'clientMsgId': 'client-uuid-001-09',
+        'senderId': 'user_002',
+        'senderName': '李明',
+        'senderAvatar': avatarFor('user_002'),
+        'type': 'text',
+        'content': '新年快乐！🎉',
+        'status': 'sent',
+        'timestamp': '2026-01-01T00:05:00Z',
+      },
+      {
+        '_id': 'msg_001_10',
+        'id': 'msg_001_10',
+        'conversationId': 'conv_001',
+        'seq': 33,
+        'clientMsgId': 'client-uuid-001-10',
+        'senderId': currentUserSenderId,
+        'senderName': '我',
+        'senderAvatar': avatarFor(currentUserProfileId),
+        'type': 'text',
+        'content': '新年快乐！今年一起加油 💪',
+        'status': 'read',
+        'timestamp': '2026-01-01T00:02:00Z',
+      },
+      {
+        '_id': 'msg_001_11',
+        'id': 'msg_001_11',
+        'conversationId': 'conv_001',
+        'seq': 32,
+        'clientMsgId': 'client-uuid-001-11',
+        'senderId': 'user_002',
+        'senderName': '李明',
+        'senderAvatar': avatarFor('user_002'),
+        'type': 'text',
+        'content': '倒计时开始了！',
+        'status': 'sent',
+        'timestamp': '2025-12-31T23:58:00Z',
+      },
+      {
+        '_id': 'msg_001_12',
+        'id': 'msg_001_12',
+        'conversationId': 'conv_001',
+        'seq': 31,
+        'clientMsgId': 'client-uuid-001-12',
+        'senderId': currentUserSenderId,
+        'senderName': '我',
+        'senderAvatar': avatarFor(currentUserProfileId),
+        'type': 'text',
+        'content': '在看跨年晚会呢',
+        'status': 'read',
+        'timestamp': '2025-12-31T22:30:00Z',
       },
     ],
     'conv_002': [
+      // ── 当天下午 (2026-03-11 PM) ──
       {
         '_id': 'msg_002_01',
         'id': 'msg_002_01',
@@ -125,10 +350,283 @@ class ChatMockData {
         'seq': 256,
         'clientMsgId': 'client-uuid-003',
         'senderId': 'user_003',
+        'senderName': '张华',
+        'senderAvatar': avatarFor('user_003'),
         'type': 'text',
-        'content': '周六早上8点出发',
+        'content': '周六早上8点出发，大家别迟到',
         'status': 'sent',
-        'timestamp': '2026-03-07T09:15:00Z',
+        'timestamp': '2026-03-11T15:15:00Z',
+      },
+      {
+        '_id': 'msg_002_02',
+        'id': 'msg_002_02',
+        'conversationId': 'conv_002',
+        'seq': 255,
+        'clientMsgId': 'client-uuid-004',
+        'senderId': currentUserSenderId,
+        'senderName': '我',
+        'senderAvatar': avatarFor(currentUserProfileId),
+        'type': 'text',
+        'content': '收到！我负责带帐篷和炉子',
+        'status': 'read',
+        'timestamp': '2026-03-11T15:10:00Z',
+      },
+      {
+        '_id': 'msg_002_03',
+        'id': 'msg_002_03',
+        'conversationId': 'conv_002',
+        'seq': 254,
+        'clientMsgId': 'client-uuid-005',
+        'senderId': 'user_004',
+        'senderName': '王芳',
+        'senderAvatar': avatarFor('user_004'),
+        'type': 'text',
+        'content': '我带水果和零食',
+        'status': 'sent',
+        'timestamp': '2026-03-11T14:58:00Z',
+      },
+      {
+        '_id': 'msg_002_04',
+        'id': 'msg_002_04',
+        'conversationId': 'conv_002',
+        'seq': 253,
+        'clientMsgId': 'client-uuid-006',
+        'senderId': 'user_005',
+        'senderName': '赵磊',
+        'senderAvatar': avatarFor('user_005'),
+        'type': 'text',
+        'content': '装备清单谁整理一下？',
+        'status': 'sent',
+        'timestamp': '2026-03-11T14:45:00Z',
+      },
+      // ── 当天上午 (2026-03-11 AM) ──
+      {
+        '_id': 'msg_002_05',
+        'id': 'msg_002_05',
+        'conversationId': 'conv_002',
+        'seq': 252,
+        'clientMsgId': 'client-uuid-007',
+        'senderId': 'user_002',
+        'senderName': '李明',
+        'senderAvatar': avatarFor('user_002'),
+        'type': 'text',
+        'content': '大家早！这周六的登山路线我规划好了，走北坡那条',
+        'status': 'sent',
+        'timestamp': '2026-03-11T08:30:00Z',
+      },
+      {
+        '_id': 'msg_002_06',
+        'id': 'msg_002_06',
+        'conversationId': 'conv_002',
+        'seq': 251,
+        'clientMsgId': 'client-uuid-008',
+        'senderId': 'user_006',
+        'senderName': '孙悦',
+        'senderAvatar': avatarFor('user_006'),
+        'type': 'text',
+        'content': '北坡风景好，上次去拍了很多照片',
+        'status': 'sent',
+        'timestamp': '2026-03-11T08:35:00Z',
+      },
+      {
+        '_id': 'msg_002_07',
+        'id': 'msg_002_07',
+        'conversationId': 'conv_002',
+        'seq': 250,
+        'clientMsgId': 'client-uuid-009',
+        'senderId': currentUserSenderId,
+        'senderName': '我',
+        'senderAvatar': avatarFor(currentUserProfileId),
+        'type': 'text',
+        'content': '北坡那条难度怎么样？新手能走吗',
+        'status': 'read',
+        'timestamp': '2026-03-11T08:40:00Z',
+      },
+      // ── 本周 (2026-03-09) ──
+      {
+        '_id': 'msg_002_08',
+        'id': 'msg_002_08',
+        'conversationId': 'conv_002',
+        'seq': 249,
+        'clientMsgId': 'client-uuid-010',
+        'senderId': 'user_007',
+        'senderName': '周杰',
+        'senderAvatar': avatarFor('user_007'),
+        'type': 'text',
+        'content': '上次登山的合照我整理好了，发到相册里了',
+        'status': 'sent',
+        'timestamp': '2026-03-09T16:20:00Z',
+      },
+      {
+        '_id': 'msg_002_09',
+        'id': 'msg_002_09',
+        'conversationId': 'conv_002',
+        'seq': 248,
+        'clientMsgId': 'client-uuid-011',
+        'senderId': 'user_003',
+        'senderName': '张华',
+        'senderAvatar': avatarFor('user_003'),
+        'type': 'text',
+        'content': '谢谢！那天天气真好',
+        'status': 'sent',
+        'timestamp': '2026-03-09T16:25:00Z',
+      },
+      {
+        '_id': 'msg_002_10',
+        'id': 'msg_002_10',
+        'conversationId': 'conv_002',
+        'seq': 247,
+        'clientMsgId': 'client-uuid-012',
+        'senderId': 'user_002',
+        'senderName': '李明',
+        'senderAvatar': avatarFor('user_002'),
+        'type': 'text',
+        'content': '下周六继续约起来！',
+        'status': 'sent',
+        'timestamp': '2026-03-09T17:00:00Z',
+      },
+      // ── 月内 (2026-03-03) ──
+      {
+        '_id': 'msg_002_11',
+        'id': 'msg_002_11',
+        'conversationId': 'conv_002',
+        'seq': 246,
+        'clientMsgId': 'client-uuid-013',
+        'senderId': 'user_008',
+        'senderName': '吴涵',
+        'senderAvatar': avatarFor('user_008'),
+        'type': 'text',
+        'content': '有人推荐一下好的登山杖吗？预算200以内',
+        'status': 'sent',
+        'timestamp': '2026-03-03T19:45:00Z',
+      },
+      {
+        '_id': 'msg_002_12',
+        'id': 'msg_002_12',
+        'conversationId': 'conv_002',
+        'seq': 245,
+        'clientMsgId': 'client-uuid-014',
+        'senderId': currentUserSenderId,
+        'senderName': '我',
+        'senderAvatar': avatarFor(currentUserProfileId),
+        'type': 'text',
+        'content': '我用的黑鹿的，性价比挺高',
+        'status': 'read',
+        'timestamp': '2026-03-03T20:00:00Z',
+      },
+      {
+        '_id': 'msg_002_13',
+        'id': 'msg_002_13',
+        'conversationId': 'conv_002',
+        'seq': 244,
+        'clientMsgId': 'client-uuid-015',
+        'senderId': 'user_005',
+        'senderName': '赵磊',
+        'senderAvatar': avatarFor('user_005'),
+        'type': 'text',
+        'content': '迪卡侬的也不错，便宜好用',
+        'status': 'sent',
+        'timestamp': '2026-03-03T20:05:00Z',
+      },
+      // ── 本年跨月 (2026-02-15) ──
+      {
+        '_id': 'msg_002_14',
+        'id': 'msg_002_14',
+        'conversationId': 'conv_002',
+        'seq': 243,
+        'clientMsgId': 'client-uuid-016',
+        'senderId': 'user_002',
+        'senderName': '李明',
+        'senderAvatar': avatarFor('user_002'),
+        'type': 'text',
+        'content': '元宵节快乐！下个月开始恢复每周登山',
+        'status': 'sent',
+        'timestamp': '2026-02-15T10:00:00Z',
+      },
+      {
+        '_id': 'msg_002_15',
+        'id': 'msg_002_15',
+        'conversationId': 'conv_002',
+        'seq': 242,
+        'clientMsgId': 'client-uuid-017',
+        'senderId': 'user_004',
+        'senderName': '王芳',
+        'senderAvatar': avatarFor('user_004'),
+        'type': 'text',
+        'content': '期待！冬天憋太久了',
+        'status': 'sent',
+        'timestamp': '2026-02-15T10:15:00Z',
+      },
+      {
+        '_id': 'msg_002_16',
+        'id': 'msg_002_16',
+        'conversationId': 'conv_002',
+        'seq': 241,
+        'clientMsgId': 'client-uuid-018',
+        'senderId': 'user_009',
+        'senderName': '郑敏',
+        'senderAvatar': avatarFor('user_009'),
+        'type': 'text',
+        'content': '我春节回来胖了五斤，正好减减肥 😂',
+        'status': 'sent',
+        'timestamp': '2026-02-15T10:20:00Z',
+      },
+      // ── 跨年 (2025-12-28) ──
+      {
+        '_id': 'msg_002_17',
+        'id': 'msg_002_17',
+        'conversationId': 'conv_002',
+        'seq': 240,
+        'clientMsgId': 'client-uuid-019',
+        'senderId': 'user_002',
+        'senderName': '李明',
+        'senderAvatar': avatarFor('user_002'),
+        'type': 'text',
+        'content': '年底了最后一次活动总结，今年一共爬了38座山！',
+        'status': 'sent',
+        'timestamp': '2025-12-28T20:00:00Z',
+      },
+      {
+        '_id': 'msg_002_18',
+        'id': 'msg_002_18',
+        'conversationId': 'conv_002',
+        'seq': 239,
+        'clientMsgId': 'client-uuid-020',
+        'senderId': 'user_003',
+        'senderName': '张华',
+        'senderAvatar': avatarFor('user_003'),
+        'type': 'text',
+        'content': '太厉害了！我参加了20次',
+        'status': 'sent',
+        'timestamp': '2025-12-28T20:05:00Z',
+      },
+      {
+        '_id': 'msg_002_19',
+        'id': 'msg_002_19',
+        'conversationId': 'conv_002',
+        'seq': 238,
+        'clientMsgId': 'client-uuid-021',
+        'senderId': currentUserSenderId,
+        'senderName': '我',
+        'senderAvatar': avatarFor(currentUserProfileId),
+        'type': 'text',
+        'content': '明年目标50座 💪',
+        'status': 'read',
+        'timestamp': '2025-12-28T20:10:00Z',
+      },
+      {
+        '_id': 'msg_002_20',
+        'id': 'msg_002_20',
+        'conversationId': 'conv_002',
+        'seq': 237,
+        'clientMsgId': 'client-uuid-022',
+        'senderId': 'user_010',
+        'senderName': '陈博',
+        'senderAvatar': avatarFor('user_010'),
+        'type': 'text',
+        'content': '新年快乐！明年见',
+        'status': 'sent',
+        'timestamp': '2025-12-28T20:15:00Z',
       },
     ],
   };
@@ -140,7 +638,9 @@ class ChatMockData {
       'conversationId': '',
       'seq': 1,
       'clientMsgId': 'client-uuid-default',
-      'senderId': 'user_001',
+      'senderId': currentUserSenderId,
+      'senderName': '我',
+      'senderAvatar': avatarFor(currentUserProfileId),
       'type': 'text',
       'content': '你好',
       'status': 'sent',
@@ -150,8 +650,61 @@ class ChatMockData {
 
   // ── Members ────────────────────────────────────────────────────────────────
 
+  /// 成员名字池，保证 userId → displayName 全局一致
+  static const Map<String, String> _memberNames = {
+    'user_001': '我',
+    'user_002': '李明',
+    'user_003': '张华',
+    'user_004': '王芳',
+    'user_005': '赵磊',
+    'user_006': '孙悦',
+    'user_007': '周杰',
+    'user_008': '吴涵',
+    'user_009': '郑敏',
+    'user_010': '陈博',
+    'user_011': '林雪',
+    'user_012': '黄伟',
+    'user_013': '刘洋',
+    'user_014': '钱程',
+    'user_015': '徐凡',
+  };
+
+  /// 根据 userId 获取 displayName，保证全局一致
+  static String nameFor(String userId) =>
+      _memberNames[userId] ?? userId;
+
   static List<Map<String, dynamic>> membersFor(String conversationId) {
-    return _membersByConversation[conversationId] ?? _defaultMembers;
+    if (_membersByConversation.containsKey(conversationId)) {
+      return _membersByConversation[conversationId]!;
+    }
+    // 九宫格测试群动态生成成员
+    if (conversationId.startsWith('conv_grid_')) {
+      final n = int.tryParse(conversationId.replaceFirst('conv_grid_', ''));
+      if (n != null && n > 0) return _generateGridMembers(conversationId, n);
+    }
+    return _defaultMembers;
+  }
+
+  static List<Map<String, dynamic>> _generateGridMembers(
+      String conversationId, int count) {
+    final members = <Map<String, dynamic>>[];
+    for (int i = 1; i <= count; i++) {
+      final userId = 'grid_${count}_member_$i';
+      final isFirst = i == 1;
+      members.add({
+        '_id': 'cm_grid_${count}_$i',
+        'id': 'cm_grid_${count}_$i',
+        'conversationId': conversationId,
+        'userId': isFirst ? 'user_001' : userId,
+        'displayName': isFirst ? '我' : '测试成员$i',
+        'avatarUrl': isFirst ? avatarFor('user_001') : avatarFor(userId),
+        'memberType': 'user',
+        'role': isFirst ? 'owner' : (i == 2 ? 'admin' : 'member'),
+        'isCurrentUser': isFirst,
+        'joinedAt': '2026-03-01T10:${i.toString().padLeft(2, '0')}:00Z',
+      });
+    }
+    return members;
   }
 
   static final Map<String, List<Map<String, dynamic>>>
@@ -163,9 +716,10 @@ class ChatMockData {
         'conversationId': 'conv_001',
         'userId': 'user_001',
         'displayName': '我',
-        'avatarUrl': 'https://i.pravatar.cc/150?u=me',
+        'avatarUrl': avatarFor('user_001'),
         'memberType': 'user',
         'role': 'member',
+        'isCurrentUser': true,
         'joinedAt': '2026-01-15T08:00:00Z',
       },
       {
@@ -174,7 +728,7 @@ class ChatMockData {
         'conversationId': 'conv_001',
         'userId': 'user_002',
         'displayName': '李明',
-        'avatarUrl': 'https://i.pravatar.cc/150?u=liming',
+        'avatarUrl': avatarFor('user_002'),
         'memberType': 'user',
         'role': 'member',
         'joinedAt': '2026-01-15T08:00:00Z',
@@ -185,36 +739,47 @@ class ChatMockData {
         '_id': 'cm_002_01',
         'id': 'cm_002_01',
         'conversationId': 'conv_002',
-        'userId': 'user_002',
-        'displayName': '群主小王',
-        'avatarUrl': 'https://i.pravatar.cc/150?u=wang',
+        'userId': 'user_001',
+        'displayName': '我',
+        'avatarUrl': avatarFor('user_001'),
         'memberType': 'user',
         'role': 'owner',
+        'isCurrentUser': true,
         'joinedAt': '2026-02-01T10:00:00Z',
       },
       {
         '_id': 'cm_002_02',
         'id': 'cm_002_02',
         'conversationId': 'conv_002',
-        'userId': 'user_001',
-        'displayName': '我',
-        'avatarUrl': 'https://i.pravatar.cc/150?u=me',
+        'userId': 'user_002',
+        'displayName': '李明',
+        'avatarUrl': avatarFor('user_002'),
         'memberType': 'user',
-        'role': 'member',
-        'invitedBy': 'user_002',
+        'role': 'admin',
         'joinedAt': '2026-02-01T10:05:00Z',
       },
-      for (int i = 3; i <= 15; i++)
+      {
+        '_id': 'cm_002_03',
+        'id': 'cm_002_03',
+        'conversationId': 'conv_002',
+        'userId': 'user_003',
+        'displayName': '张华',
+        'avatarUrl': avatarFor('user_003'),
+        'memberType': 'user',
+        'role': 'member',
+        'joinedAt': '2026-02-01T10:10:00Z',
+      },
+      for (int i = 4; i <= 15; i++)
         {
           '_id': 'cm_002_${i.toString().padLeft(2, '0')}',
           'id': 'cm_002_${i.toString().padLeft(2, '0')}',
           'conversationId': 'conv_002',
           'userId': 'user_${i.toString().padLeft(3, '0')}',
-          'displayName': '成员$i',
-          'avatarUrl': 'https://i.pravatar.cc/150?u=member$i',
+          'displayName': nameFor('user_${i.toString().padLeft(3, '0')}'),
+          'avatarUrl': avatarFor('user_${i.toString().padLeft(3, '0')}'),
           'memberType': 'user',
           'role': 'member',
-          'invitedBy': 'user_002',
+          'invitedBy': 'user_001',
           'joinedAt': '2026-02-01T10:${i.toString().padLeft(2, '0')}:00Z',
         },
     ],
@@ -227,9 +792,10 @@ class ChatMockData {
       'conversationId': '',
       'userId': 'user_001',
       'displayName': '我',
-      'avatarUrl': 'https://i.pravatar.cc/150?u=me',
+      'avatarUrl': avatarFor('user_001'),
       'memberType': 'user',
       'role': 'owner',
+      'isCurrentUser': true,
       'joinedAt': '2026-01-01T00:00:00Z',
     },
   ];
@@ -240,17 +806,17 @@ class ChatMockData {
         {
           'userId': 'user_002',
           'displayName': '李明',
-          'avatarUrl': 'https://i.pravatar.cc/150?u=liming',
+          'avatarUrl': avatarFor('user_002'),
         },
         {
           'userId': 'user_003',
           'displayName': '张华',
-          'avatarUrl': 'https://i.pravatar.cc/150?u=zhanghua',
+          'avatarUrl': avatarFor('user_003'),
         },
         {
           'userId': 'user_004',
           'displayName': '王芳',
-          'avatarUrl': 'https://i.pravatar.cc/150?u=wangfang',
+          'avatarUrl': avatarFor('user_004'),
         },
       ];
 }

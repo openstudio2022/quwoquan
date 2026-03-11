@@ -5,7 +5,7 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
-import 'package:quwoquan_app/ui/user/widgets/circle_card.dart';
+import 'package:quwoquan_app/ui/user/widgets/circle_compact_card.dart';
 
 class ProfileCirclesTab extends ConsumerWidget {
   const ProfileCirclesTab({
@@ -67,9 +67,11 @@ class ProfileCirclesTab extends ConsumerWidget {
       separatorBuilder: (_, _) => SizedBox(height: AppSpacing.sm),
       itemBuilder: (context, index) {
         final circle = state.circles[index];
-        return CircleCard(
+        final postCount = circle['postCount'] as int? ?? 0;
+        return CircleCompactCard(
           name: circle['name']?.toString() ?? '',
           coverUrl: circle['coverUrl']?.toString() ?? '',
+          postCount: postCount,
           isDark: isDark,
           onTap: () => context.push(
             AppRoutePaths.circleDetail(id: '${circle['id']}'),

@@ -3,8 +3,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 
 /// 聊天设置/聊天信息页（1:1 图二）
 class ChatSettingsPage extends ConsumerStatefulWidget {
@@ -19,11 +21,8 @@ class ChatSettingsPage extends ConsumerStatefulWidget {
 class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
   bool _mute = false;
   bool _pin = false;
-  bool _privacyShield = false;
   bool _membersExpanded = false;
-  List<Map<String, dynamic>> _members = [];
-  String _currentUserRole = 'member';
-  bool _nameEditableByAdminOnly = false;
+  String _groupName = '';
 
   static const int _memberColumns = 5;
 
@@ -34,58 +33,108 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
   static const int _memberSlotsExpanded =
       (_memberColumns * 5) - 1; // 24 成员 + 1 添加 = 25 格 = 5 行
 
-  bool get _isAdminOrOwner =>
-      _currentUserRole == 'owner' || _currentUserRole == 'admin';
-
   @override
   void initState() {
     super.initState();
-    _loadMembers();
-    _loadGroupSettings();
+    _loadConversation();
   }
 
-  Future<void> _loadMembers() async {
+  Future<void> _loadConversation() async {
     try {
       final repo = ref.read(chatRepositoryProvider);
-      final members = await repo.listMembers(
-        conversationId: widget.conversationId,
-        limit: 50,
-      );
+      final conv = await repo.getConversation(widget.conversationId);
       if (mounted) {
         setState(() {
-          _members = members;
-          final currentUserId = 'current_user';
-          for (final m in members) {
-            if (m['userId'] == currentUserId || m['isCurrentUser'] == true) {
-              _currentUserRole = m['role'] as String? ?? 'member';
-              break;
-            }
-          }
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() {});
-    }
-  }
-
-  Future<void> _loadGroupSettings() async {
-    try {
-      final repo = ref.read(chatRepositoryProvider);
-      final settings = await repo.getGroupSettings(widget.conversationId);
-      if (mounted) {
-        setState(() {
-          _nameEditableByAdminOnly =
-              settings['nameEditableByAdminOnly'] as bool? ?? false;
-          _privacyShield =
-              settings['privacyShieldAdminOnly'] as bool? ?? false;
+          _groupName = conv['title'] as String? ?? '';
         });
       }
     } catch (_) {}
   }
 
+  void _showEditGroupNameDialog() {
+    final controller = TextEditingController(text: _groupName);
+    final membersState =
+        ref.read(conversationMembersProvider(widget.conversationId));
+    final isAdminOrOwner = membersState.isAdminOrOwner;
+    final nameEditableByAdminOnly =
+        membersState.settings['nameEditableByAdminOnly'] as bool? ?? false;
+
+    if (nameEditableByAdminOnly && !isAdminOrOwner) {
+      showCupertinoDialog<void>(
+        context: context,
+        builder: (_) => CupertinoAlertDialog(
+          content: Text(UITextConstants.groupNameAdminOnly),
+          actions: [
+            CupertinoDialogAction(
+              child: Text(UITextConstants.confirm),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    showCupertinoDialog<void>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text(UITextConstants.editGroupName),
+        content: Padding(
+          padding: EdgeInsets.only(top: AppSpacing.sm),
+          child: CupertinoTextField(
+            controller: controller,
+            placeholder: UITextConstants.groupNameHint,
+            autofocus: true,
+            maxLength: 30,
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            child: Text(UITextConstants.cancel),
+            onPressed: () => Navigator.pop(ctx),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            child: Text(UITextConstants.confirm),
+            onPressed: () async {
+              final newName = controller.text.trim();
+              Navigator.pop(ctx);
+              if (newName.isNotEmpty && newName != _groupName) {
+                try {
+                  await ref
+                      .read(
+                        conversationMembersProvider(
+                          widget.conversationId,
+                        ).notifier,
+                      )
+                      .updateSettings({'title': newName});
+                  if (mounted) {
+                    setState(() => _groupName = newName);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(UITextConstants.groupNameUpdated),
+                      ),
+                    );
+                  }
+                } catch (_) {}
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
+    final membersState =
+        ref.watch(conversationMembersProvider(widget.conversationId));
+    final members = membersState.members;
+    final isAdminOrOwner = membersState.isAdminOrOwner;
+    final privacyShield =
+        membersState.settings['privacyShieldAdminOnly'] as bool? ?? false;
+
     final pageBg = SettingsSemanticConstants.pageBackground(isDark);
     final blockSurface = SettingsSemanticConstants.blockBackground(isDark);
     final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
@@ -94,7 +143,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
       isDark,
       ColorType.borderPrimary,
     );
-    final memberCount = _members.length;
+    final memberCount = members.length;
 
     final dividerColor = SettingsSemanticConstants.dividerColor(isDark);
     return Scaffold(
@@ -152,9 +201,9 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                       final maxMembers = _membersExpanded
                           ? _memberSlotsExpanded
                           : _memberSlotsCollapsed;
-                      final visibleCount = _members.length > maxMembers
+                      final visibleCount = members.length > maxMembers
                           ? maxMembers
-                          : _members.length;
+                          : members.length;
                       final totalCells = visibleCount + 1;
                       return GridView.builder(
                         shrinkWrap: true,
@@ -179,7 +228,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                               ),
                             );
                           }
-                          final m = _members[index];
+                          final m = members[index];
                           final username =
                               m['userId'] as String? ?? 'user_$index';
                           return _MemberAvatar(
@@ -193,6 +242,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                                 '',
                             textColor: fgPrimary,
                             username: username,
+                            role: m['role'] as String?,
                             onTap: () => context.push(
                               AppRoutePaths.userProfile(username: username),
                             ),
@@ -201,7 +251,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                       );
                     },
                   ),
-                  if (_members.length > _memberSlotsCollapsed) ...[
+                  if (members.length > _memberSlotsCollapsed) ...[
                     SizedBox(height: AppSpacing.xs),
                     Center(
                       child: GestureDetector(
@@ -248,11 +298,22 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          '示例群聊',
-                          style: TextStyle(
-                            fontSize: AppTypography.md,
-                            color: fgPrimary,
+                        ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: MediaQuery.of(context).size.width * 0.4,
+                          ),
+                          child: Text(
+                            _groupName.isEmpty
+                                ? UITextConstants.groupNameHint
+                                : _groupName,
+                            style: TextStyle(
+                              fontSize: AppTypography.md,
+                              color: _groupName.isEmpty
+                                  ? secondaryColor
+                                  : fgPrimary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         Icon(
@@ -262,23 +323,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                         ),
                       ],
                     ),
-                    onTap: () {
-                      if (_nameEditableByAdminOnly && !_isAdminOrOwner) {
-                        showCupertinoDialog<void>(
-                          context: context,
-                          builder: (_) => CupertinoAlertDialog(
-                            content: Text(UITextConstants.groupNameAdminOnly),
-                            actions: [
-                              CupertinoDialogAction(
-                                child: Text(UITextConstants.confirm),
-                                onPressed: () => Navigator.pop(context),
-                              ),
-                            ],
-                          ),
-                        );
-                        return;
-                      }
-                    },
+                    onTap: _showEditGroupNameDialog,
                   ),
                   _divider(isDark),
                   _SettingsRow(
@@ -302,6 +347,21 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                     onTap: () {},
                   ),
                   _divider(isDark),
+                  if (isAdminOrOwner) ...[
+                    _SettingsRow(
+                      label: UITextConstants.groupManagement,
+                      fgPrimary: fgPrimary,
+                      trailing: Icon(
+                        CupertinoIcons.chevron_forward,
+                        size: AppSpacing.iconMedium,
+                        color: secondaryColor,
+                      ),
+                      onTap: () => context.push(
+                        '/chat/${widget.conversationId}/manage',
+                      ),
+                    ),
+                    _divider(isDark),
+                  ],
                   _SettingsRow(
                     label: UITextConstants.groupAnnouncement,
                     fgPrimary: fgPrimary,
@@ -343,9 +403,17 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                     label: UITextConstants.privacyShield,
                     trailing: _buildSettingSwitch(
                       isDark: isDark,
-                      value: _privacyShield,
-                      onChanged: _isAdminOrOwner
-                          ? (v) => setState(() => _privacyShield = v)
+                      value: privacyShield,
+                      onChanged: isAdminOrOwner
+                          ? (v) {
+                              ref
+                                  .read(
+                                    conversationMembersProvider(
+                                      widget.conversationId,
+                                    ).notifier,
+                                  )
+                                  .updateSettings({'privacyShieldAdminOnly': v});
+                            }
                           : null,
                     ),
                   ),
@@ -382,25 +450,6 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                 ],
               ),
             ),
-            if (_isAdminOrOwner) ...[
-              SizedBox(height: SettingsSemanticConstants.blockSpacing),
-              _section(
-                context,
-                blockSurface: blockSurface,
-                child: _SettingsRow(
-                  label: UITextConstants.groupManagement,
-                  fgPrimary: fgPrimary,
-                  trailing: Icon(
-                    CupertinoIcons.chevron_forward,
-                    size: AppSpacing.iconMedium,
-                    color: secondaryColor,
-                  ),
-                  onTap: () => context.push(
-                    '/chat/${widget.conversationId}/manage',
-                  ),
-                ),
-              ),
-            ],
             SizedBox(height: SettingsSemanticConstants.blockSpacing),
             _section(
               context,
@@ -514,6 +563,7 @@ class _MemberAvatar extends StatelessWidget {
     required this.textColor,
     required this.username,
     required this.onTap,
+    this.role,
   });
 
   final String name;
@@ -521,20 +571,59 @@ class _MemberAvatar extends StatelessWidget {
   final Color textColor;
   final String username;
   final VoidCallback onTap;
+  final String? role;
 
-  static const double _settingsAvatarSize = 52;
+  static final double _settingsAvatarSize = AppSpacing.avatarUserLg;
 
   @override
   Widget build(BuildContext context) {
+    final roleLabel = role == 'owner'
+        ? UITextConstants.owner
+        : role == 'admin'
+            ? UITextConstants.admin
+            : null;
     return GestureDetector(
       onTap: onTap,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          RoundedSquareAvatar(
-            size: _settingsAvatarSize,
-            imageUrl: avatarUrl,
-            name: name,
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              RoundedSquareAvatar(
+                size: _settingsAvatarSize,
+                imageUrl: avatarUrl,
+                name: name,
+              ),
+              if (roleLabel != null)
+                Positioned(
+                  bottom: -2,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppSpacing.xs,
+                        vertical: AppSpacing.one,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryColor,
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.borderRadius,
+                        ),
+                      ),
+                      child: Text(
+                        roleLabel,
+                        style: TextStyle(
+                          fontSize: AppTypography.xxs,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
           SizedBox(height: AppSpacing.xs),
           SizedBox(

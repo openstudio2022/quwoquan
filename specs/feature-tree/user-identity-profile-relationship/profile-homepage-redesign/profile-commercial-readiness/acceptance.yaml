@@ -1,0 +1,104 @@
+feature: profile-commercial-readiness
+level: L3_story
+source_path: user-identity-profile-relationship/profile-homepage-redesign/profile-commercial-readiness
+archived: true
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+level_acceptance:
+  A1:
+    criteria: '我的主页进入时自动加载当前用户档案：displayName 展示真实昵称（非 "me"），avatar、backgroundImage 正确展示。
+      通过 userDataProvider.loadUser(currentUserId) 或 ProfileShell 内等效逻辑触发。
+      Mock 模式与 Remote 模式均可验证。'
+    status: implemented
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: required
+      T4: optional
+    tests: []
+  A2:
+    criteria: '背景图默认高度为屏幕 1/4；下拉可拉伸至最多 1/2 屏高，且不超过图片底部；
+      拉伸时图片跟随放大，松手后弹簧阻尼回弹（≤300ms）。
+      Debug 模式有 mock 背景；发布态从 getUserProfile 获取 backgroundUrl。'
+    status: implemented
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: required
+    tests: []
+  A3:
+    criteria: '统计行顺序为 圈子 | 关注 | 粉丝，无获赞。
+      统计数字与进入详情列表的数据一致，均通过 UserProfileRepository 获取。
+      点击圈子 → 圈子列表（圈子头像+名称+创作数，点击进圈子详情）；
+      点击关注 → 关注列表（用户卡片，点击进用户主页）；
+      点击粉丝 → 粉丝列表（粉丝=关注我的人，用户卡片，点击进用户主页）。
+      ProfileStatsPage 对接 Repository，支持 type=following|fans|circles；Mock 与 Remote 切换一致。'
+    status: implemented
+    linked_tasks: []
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: optional
+    tests: []
+  A4:
+    criteria: '一级 Tab 为 [创作 | 圈子 | 互动]，无生活 Tab。默认选中「创作」。'
+    status: implemented
+    linked_tasks: []
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: optional
+    tests: []
+  A5:
+    criteria: '创作 Tab：去掉 SubTab 与可见性过滤；宫格卡片分块展示 微趣、图片、视频、文章；
+      布局不等高，与圈子列表创作展示一致（非 childAspectRatio 等高）。
+      每种创作格式支持宫格卡片展示。'
+    status: implemented
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: optional
+    tests: []
+  A6:
+    criteria: '圈子 Tab：卡片形式为 圈子头像 + 名称 + 圈子内创作数（非 16:9 大图）。
+      点击跳转 circle_detail_page。空态友好提示。'
+    status: implemented
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: optional
+    tests: []
+  A7:
+    criteria: '互动 Tab：子维度 收到 | 发出（mine 双向，other 仅 Ta 收到）；
+      展示互动列表（头像、用户名、摘要、时间）。
+      UserProfileRepository 新增互动相关接口；Mock 数据补齐；Remote 对接就绪后可切换。
+      空态有友好提示。'
+    status: implemented
+    linked_tasks: []
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: optional
+    tests: []
+  A8:
+    criteria: '用户名字可设置：编辑资料页修改昵称后，我的主页/他人主页展示真实昵称；
+      返回主页时昵称即时更新。非 "me" 或 userId 占位。'
+    status: implemented
+    linked_tasks: []
+    test_layers:
+      T1: optional
+      T2: required
+      T3: required
+      T4: optional
+    tests: []

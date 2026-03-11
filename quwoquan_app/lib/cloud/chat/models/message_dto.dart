@@ -8,6 +8,8 @@ class MessageDto {
   final int seq;
   final String clientMsgId;
   final String senderId;
+  final String? senderName;
+  final String? senderAvatar;
   final String? senderPersonaId;
   final String type;
   final String? content;
@@ -27,6 +29,8 @@ class MessageDto {
     required this.seq,
     required this.clientMsgId,
     required this.senderId,
+    this.senderName,
+    this.senderAvatar,
     this.senderPersonaId,
     required this.type,
     this.content,
@@ -48,6 +52,8 @@ class MessageDto {
       seq: (map['seq'] as num?)?.toInt() ?? 0,
       clientMsgId: (map['clientMsgId'] ?? '') as String,
       senderId: (map['senderId'] ?? '') as String,
+      senderName: map['senderName'] as String?,
+      senderAvatar: map['senderAvatar'] as String?,
       senderPersonaId: map['senderPersonaId'] as String?,
       type: (map['type'] ?? 'text') as String,
       content: map['content'] as String?,
@@ -82,6 +88,8 @@ class MessageDto {
     int? seq,
     String? clientMsgId,
     String? senderId,
+    String? senderName,
+    String? senderAvatar,
     String? senderPersonaId,
     String? type,
     String? content,
@@ -101,6 +109,8 @@ class MessageDto {
       seq: seq ?? this.seq,
       clientMsgId: clientMsgId ?? this.clientMsgId,
       senderId: senderId ?? this.senderId,
+      senderName: senderName ?? this.senderName,
+      senderAvatar: senderAvatar ?? this.senderAvatar,
       senderPersonaId: senderPersonaId ?? this.senderPersonaId,
       type: type ?? this.type,
       content: content ?? this.content,
@@ -122,6 +132,8 @@ class MessageDto {
     'seq': seq,
     'clientMsgId': clientMsgId,
     'senderId': senderId,
+    if (senderName != null) 'senderName': senderName,
+    if (senderAvatar != null) 'senderAvatar': senderAvatar,
     if (senderPersonaId != null) 'senderPersonaId': senderPersonaId,
     'type': type,
     if (content != null) 'content': content,
@@ -150,6 +162,8 @@ class MessageDto {
       'seq': seq,
       'clientMsgId': clientMsgId,
       'senderId': senderId,
+      if (senderName != null) 'senderName': senderName,
+      if (senderAvatar != null) 'senderAvatar': senderAvatar,
       if (senderPersonaId != null) 'senderPersonaId': senderPersonaId,
       'type': type,
       'content': content ?? '',

@@ -29,6 +29,7 @@ import 'package:quwoquan_app/ui/user/pages/profile_comments_page.dart';
 import 'package:quwoquan_app/ui/user/pages/profile_stats_page.dart';
 import 'package:quwoquan_app/ui/user/pages/resonance_page.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
+import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_home_page.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_management_page.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_center_page.dart';
@@ -182,21 +183,38 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutePaths.userProfilePathTemplate.replaceAll('{username}', ':username'),
         builder: (context, state) {
           final username = state.pathParameters['username'] ?? '';
-          final extra = state.extra is UserProfileRouteExtra
-              ? state.extra! as UserProfileRouteExtra
-              : null;
+          final currentUser = ref.read(userDataProvider);
+          final isSelf = currentUser != null &&
+              (username == currentUser.id ||
+                  (currentUser.username != null &&
+                      username == currentUser.username));
+          final onBack = () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(AppRoutePaths.home);
+            }
+          };
+          if (isSelf) {
+            return MyProfilePage(onBack: onBack);
+          }
+          UserProfileRouteExtra? extra;
+          if (state.extra is UserProfileRouteExtra) {
+            extra = state.extra! as UserProfileRouteExtra;
+          } else if (state.extra is Map) {
+            final m = state.extra! as Map;
+            extra = UserProfileRouteExtra(
+              avatar: m['avatar']?.toString(),
+              displayName: m['displayName']?.toString(),
+              backgroundImage: m['backgroundImage']?.toString(),
+            );
+          }
           return OtherProfilePage(
             username: username,
             initialAvatarUrl: extra?.safeAvatar,
             initialDisplayName: extra?.safeDisplayName,
             initialBackgroundImageUrl: extra?.safeBackgroundImage,
-            onBack: () {
-              if (context.canPop()) {
-                context.pop();
-              } else {
-                context.go(AppRoutePaths.home);
-              }
-            },
+            onBack: onBack,
           );
         },
       ),
@@ -324,7 +342,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final type =
               state.uri.queryParameters['type'] ?? 'fans';
-          return ProfileStatsPage(type: type);
+          final userId =
+              state.uri.queryParameters['userId'] ?? '';
+          return ProfileStatsPage(type: type, userId: userId);
         },
       ),
       GoRoute(

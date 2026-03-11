@@ -246,6 +246,13 @@ class ReactRuntime {
           },
         ),
       );
+      var anyDeltaForwarded = false;
+      final wrappedOnDelta = onDelta != null
+          ? (String delta) {
+              anyDeltaForwarded = true;
+              onDelta(delta);
+            }
+          : null;
       final output = await _llmProvider.reason(
         messages: messages,
         availableTools: availableToolNames,
@@ -257,7 +264,7 @@ class ReactRuntime {
         runId: runId ?? '',
         traceId: traceId ?? '',
         callOptions: callOptions,
-        onDelta: onDelta,
+        onDelta: wrappedOnDelta,
       );
       final currentDomainId =
           (templateVariables['domainId'] as String?)?.trim() ?? '';
@@ -292,7 +299,7 @@ class ReactRuntime {
         output.text,
         output.reasoningText,
       );
-      if (extractedThinking.isNotEmpty) {
+      if (extractedThinking.isNotEmpty && !anyDeltaForwarded) {
         pushTrace(
           AssistantTraceEvent(
             type: AssistantTraceEventType.thinkingProgress,

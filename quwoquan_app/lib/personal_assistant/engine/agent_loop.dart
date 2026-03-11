@@ -69,6 +69,27 @@ class PersonalAssistantAgentLoop {
   final ModeDecider _modeDecider = const ModeDecider();
   final AggregationGate _aggregationGate = const AggregationGate();
 
+  static void Function(String delta)? _buildThinkingDeltaForwarder(
+    void Function(AssistantTraceEvent event)? onTraceEvent,
+    String? runId,
+    String? traceId,
+  ) {
+    if (onTraceEvent == null) return null;
+    return (delta) {
+      if (delta.isEmpty) return;
+      onTraceEvent(
+        AssistantTraceEvent(
+          type: AssistantTraceEventType.thinkingProgress,
+          message: delta,
+          timestamp: DateTime.now(),
+          runId: runId ?? '',
+          traceId: traceId ?? '',
+          data: const <String, dynamic>{'streaming': true},
+        ),
+      );
+    };
+  }
+
   Future<AssistantRunResponse> run(
     AssistantRunRequest request, {
     void Function(AssistantTraceEvent event)? onTraceEvent,
@@ -420,7 +441,7 @@ class PersonalAssistantAgentLoop {
       runId: runId,
       traceId: traceId,
       onTraceEvent: onTraceEvent,
-      onDelta: onTraceEvent != null ? (_) {} : null,
+      onDelta: _buildThinkingDeltaForwarder(onTraceEvent, runId, traceId),
     );
     final hasToolResult = result.traces.any(
       (event) => event.type == AssistantTraceEventType.toolResult,
@@ -456,7 +477,7 @@ class PersonalAssistantAgentLoop {
         runId: runId,
         traceId: traceId,
         onTraceEvent: onTraceEvent,
-        onDelta: onTraceEvent != null ? (_) {} : null,
+        onDelta: _buildThinkingDeltaForwarder(onTraceEvent, runId, traceId),
       );
       final retryGapFillEvent = AssistantTraceEvent(
         type: AssistantTraceEventType.lifecycleStart,
@@ -516,9 +537,21 @@ class PersonalAssistantAgentLoop {
     );
     final ReactRuntimeResult synthesisResult;
     if (streamedText.trim().isNotEmpty) {
+      final synthesisTrace = AssistantTraceEvent(
+        type: AssistantTraceEventType.lifecycleStart,
+        message: 'llm request synthesis stream',
+        timestamp: DateTime.now(),
+        runId: runId,
+        traceId: traceId,
+        data: <String, dynamic>{
+          'stage': 'synthesis_stream',
+          'estimatedTokens': _estimateTokenCount(streamedText),
+        },
+      );
+      onTraceEvent?.call(synthesisTrace);
       synthesisResult = ReactRuntimeResult(
         finalText: streamedText,
-        traces: const <AssistantTraceEvent>[],
+        traces: <AssistantTraceEvent>[synthesisTrace],
       );
     } else {
       synthesisResult = await _runtime.run(
@@ -535,7 +568,7 @@ class PersonalAssistantAgentLoop {
         traceId: traceId,
         onTraceEvent: onTraceEvent,
         callOptions: const LlmCallOptions.synthesis(),
-        onDelta: onTraceEvent != null ? (_) {} : null,
+        onDelta: _buildThinkingDeltaForwarder(onTraceEvent, runId, traceId),
       );
     }
     final synthesisText = synthesisResult.finalText.trim();
@@ -676,7 +709,7 @@ class PersonalAssistantAgentLoop {
         traceId: traceId,
         onTraceEvent: onTraceEvent,
         callOptions: const LlmCallOptions.synthesis(),
-        onDelta: onTraceEvent != null ? (_) {} : null,
+        onDelta: _buildThinkingDeltaForwarder(onTraceEvent, runId, traceId),
       );
       mergedResult = ReactRuntimeResult(
         finalText: _ensureAssistantTurnEnvelopeText(
@@ -1123,6 +1156,11 @@ class PersonalAssistantAgentLoop {
           domainId: subagentDomainId,
           isWeatherLike: _isWeatherLikeQuery(goal, subagentDomainId),
         );
+        final subagentUsage = _buildUsageStatsFromTraces(
+          traces: subagentResult.traces,
+          fallbackInputText: goal,
+          fallbackOutputText: subagentResult.finalText,
+        );
         final run = <String, dynamic>{
           'version': 'subagent_result_v1',
           'subagentId': subagentId,
@@ -1152,6 +1190,11 @@ class PersonalAssistantAgentLoop {
           'toolCallCount': subagentResult.traces
               .where((event) => event.type == AssistantTraceEventType.toolStart)
               .length,
+          'modelCallCount': subagentUsage['modelCallCount'],
+          'totalTokens': subagentUsage['totalTokens'],
+          'maxTokensPerCall': subagentUsage['maxTokensPerCall'],
+          'tokenSource': subagentUsage['tokenSource'],
+          'tokenSampleCount': subagentUsage['tokenSampleCount'],
         };
         onTraceEvent?.call(
           AssistantTraceEvent(
@@ -2276,6 +2319,48 @@ class PersonalAssistantAgentLoop {
     required List<Map<String, dynamic>> subagentRuns,
     required String outputText,
   }) {
+    final inputText = request.messages.map((item) => item.content).join('\n');
+    final mainUsage = _buildUsageStatsFromTraces(
+      traces: traces,
+      fallbackInputText: inputText,
+      fallbackOutputText: outputText,
+    );
+    final mainCalls = (mainUsage['modelCallCount'] as num?)?.toInt() ?? 0;
+    final mainTokens = (mainUsage['totalTokens'] as num?)?.toInt() ?? 0;
+    final mainMaxTokens = (mainUsage['maxTokensPerCall'] as num?)?.toInt() ?? 0;
+    final mainTokenSamples = (mainUsage['tokenSampleCount'] as num?)?.toInt() ?? 0;
+
+    var subagentCalls = 0;
+    var subagentTokens = 0;
+    var subagentMaxTokens = 0;
+    var subagentTokenSamples = 0;
+    for (final run in subagentRuns) {
+      subagentCalls += _safeNonNegativeInt(run['modelCallCount']);
+      subagentTokens += _safeNonNegativeInt(run['totalTokens']);
+      final maxTokens = _safeNonNegativeInt(run['maxTokensPerCall']);
+      if (maxTokens > subagentMaxTokens) subagentMaxTokens = maxTokens;
+      subagentTokenSamples += _safeNonNegativeInt(run['tokenSampleCount']);
+    }
+
+    final tokenSampleCount = mainTokenSamples + subagentTokenSamples;
+    final modelCalls = math.max(1, mainCalls + subagentCalls);
+    final totalTokens = mainTokens + subagentTokens;
+    final maxTokens = math.max(mainMaxTokens, subagentMaxTokens);
+
+    return <String, dynamic>{
+      'modelCallCount': modelCalls,
+      'totalTokens': totalTokens,
+      'maxTokensPerCall': maxTokens,
+      'tokenSource': tokenSampleCount > 0 ? 'trace_or_subagent' : 'estimated',
+      'tokenSampleCount': tokenSampleCount,
+    };
+  }
+
+  Map<String, dynamic> _buildUsageStatsFromTraces({
+    required List<AssistantTraceEvent> traces,
+    required String fallbackInputText,
+    required String fallbackOutputText,
+  }) {
     int totalTokensFromTrace = 0;
     int maxTokensFromTrace = 0;
     var tokenSampleCount = 0;
@@ -2310,34 +2395,51 @@ class PersonalAssistantAgentLoop {
       collectTokenValues(trace.data);
     }
 
-    final inputText = request.messages.map((item) => item.content).join('\n');
-    final estimatedTotalTokens = ((inputText.length + outputText.length) / 4)
-        .ceil();
-    final estimatedMaxTokens = (outputText.length / 4).ceil();
+    final estimatedInputTokens = _estimateTokenCount(fallbackInputText);
+    final estimatedOutputTokens = _estimateTokenCount(fallbackOutputText);
+    final estimatedTotalTokens = estimatedInputTokens + estimatedOutputTokens;
+    final estimatedMaxTokens = math.max(estimatedInputTokens, estimatedOutputTokens);
+
     final totalTokens = tokenSampleCount > 0
         ? totalTokensFromTrace
         : estimatedTotalTokens;
     final maxTokens = tokenSampleCount > 0
         ? maxTokensFromTrace
         : estimatedMaxTokens;
-    final iterationCalls = traces
-        .where(
-          (trace) =>
-              trace.type == AssistantTraceEventType.lifecycleStart &&
-              trace.message.startsWith('llm request iteration '),
-        )
-        .length;
-    final modelCalls = math.max(
-      1,
-      iterationCalls > 0 ? iterationCalls : (1 + subagentRuns.length),
-    );
+    final modelCalls = _countModelCallsFromTraces(traces);
 
     return <String, dynamic>{
       'modelCallCount': modelCalls,
       'totalTokens': totalTokens,
       'maxTokensPerCall': maxTokens,
       'tokenSource': tokenSampleCount > 0 ? 'trace' : 'estimated',
+      'tokenSampleCount': tokenSampleCount,
     };
+  }
+
+  int _countModelCallsFromTraces(List<AssistantTraceEvent> traces) {
+    final calls = traces
+        .where(
+          (trace) =>
+              trace.type == AssistantTraceEventType.lifecycleStart &&
+              (trace.message.startsWith('llm request iteration ') ||
+                  trace.message.startsWith('llm request synthesis ')),
+        )
+        .length;
+    return math.max(1, calls);
+  }
+
+  int _estimateTokenCount(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return 0;
+    return (trimmed.length / 4).ceil();
+  }
+
+  int _safeNonNegativeInt(Object? value) {
+    if (value is num) return value.toInt() < 0 ? 0 : value.toInt();
+    final parsed = int.tryParse(value?.toString() ?? '');
+    if (parsed == null || parsed < 0) return 0;
+    return parsed;
   }
 
   List<Map<String, dynamic>> _buildUiReferences(

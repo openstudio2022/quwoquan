@@ -639,11 +639,13 @@ class CapabilityGateway {
     AssistantRunRequest request,
     StreamController<AssistantRunStreamEvent> controller,
   ) async {
+    _consolidator ??= ProcessEventConsolidator(
+      userGoalSummary: _extractUserMessage(request),
+    );
     AssistantRunResponse? completed;
     var completedSeen = false;
     await for (final event in _openClawBridge.runRemoteStream(request)) {
       if (completedSeen) {
-        // Strict ordering: ignore late events after completed.
         continue;
       }
       if (event.type == OpenClawRemoteStreamEventType.trace &&
@@ -666,6 +668,18 @@ class CapabilityGateway {
       }
       if (event.type == OpenClawRemoteStreamEventType.completed &&
           event.response != null) {
+        if (_consolidator != null && !_consolidator!.answerGateOpen) {
+          final gateEvent = _consolidator!.consolidate(
+            AssistantTraceEvent(
+              type: AssistantTraceEventType.lifecycleEnd,
+              message: 'finished',
+              timestamp: DateTime.now(),
+            ),
+          );
+          if (gateEvent != null) {
+            controller.add(AssistantRunStreamEvent.explainableFlow(gateEvent));
+          }
+        }
         completed = event.response;
         completedSeen = true;
       }
@@ -698,7 +712,10 @@ class CapabilityGateway {
     if (consolidator == null || controller.isClosed) return;
     final flowEvent = consolidator.consolidate(event);
     if (flowEvent == null) return;
-    controller.add(AssistantRunStreamEvent.explainableFlow(flowEvent));
+    for (final e in consolidator.snapshot) {
+      if (controller.isClosed) return;
+      controller.add(AssistantRunStreamEvent.explainableFlow(e));
+    }
   }
 
   bool _emitUserEvent(

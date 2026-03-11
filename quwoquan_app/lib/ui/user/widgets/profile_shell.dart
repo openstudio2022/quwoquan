@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -9,17 +8,15 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
-import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_header.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_stats_row.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_action_bar.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_resonance_card.dart';
-import 'package:quwoquan_app/ui/user/widgets/profile_creations_tab.dart';
+import 'package:quwoquan_app/ui/user/widgets/profile_moments_tab.dart';
+import 'package:quwoquan_app/ui/user/widgets/profile_works_tab.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_circles_tab.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_interaction_tab.dart';
-import 'package:quwoquan_app/ui/user/widgets/profile_lifestyle_tab.dart';
-import 'package:quwoquan_app/ui/user/widgets/creation_visibility_popup.dart';
 
 class ProfileShell extends ConsumerStatefulWidget {
   const ProfileShell({
@@ -48,17 +45,12 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
   late TabController _mainTabController;
   late AnimationController _pullBackController;
   int _activeTabIndex = 0;
-  bool _showVisibilityPopup = false;
   double _pullOffset = 0;
   double _rawPullOffset = 0;
   bool _isPulling = false;
   bool _isHeaderCollapsed = false;
 
-  final LayerLink _tabBarLayerLink = LayerLink();
-  OverlayEntry? _popupEntry;
-  Timer? _autoDismissTimer;
-
-  static const _tabLabels = ['创作', '圈子', '互动', '生活'];
+  static const _tabLabels = ['微趣', '作品', '圈子', '互动'];
 
   @override
   void initState() {
@@ -73,10 +65,6 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
 
   @override
   void dispose() {
-    _autoDismissTimer?.cancel();
-    _autoDismissTimer = null;
-    _popupEntry?.remove();
-    _popupEntry = null;
     _mainTabController.removeListener(_onTabChanged);
     _mainTabController.dispose();
     _pullBackController.dispose();
@@ -115,61 +103,10 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
     if (newIndex != _activeTabIndex) {
       setState(() => _activeTabIndex = newIndex);
     }
-    if (newIndex != 0) _dismissPopup();
   }
 
   void _onTabTap(int index) {
-    if (index == 0) {
-      if (_showVisibilityPopup) {
-        _dismissPopup();
-      } else {
-        _openVisibilityPopup();
-      }
-    } else {
-      _dismissPopup();
-      setState(() => _activeTabIndex = index);
-    }
-  }
-
-  // — Visibility popup —
-
-  void _openVisibilityPopup() {
-    if (!mounted) return;
-    setState(() => _showVisibilityPopup = true);
-
-    _popupEntry = OverlayEntry(
-      builder: (overlayCtx) => Consumer(
-        builder: (ctx, ref, _) {
-          final notifier = ref.watch(profileNotifierProvider(widget.userId));
-          final isDark = ref.watch(isDarkProvider);
-          return _VisibilityPopupOverlay(
-            link: _tabBarLayerLink,
-            mode: widget.mode,
-            current: notifier.state.activeVisibility,
-            isDark: isDark,
-            onSelected: (v) {
-              notifier.setVisibility(v);
-              _dismissPopup();
-            },
-            onDismiss: _dismissPopup,
-          );
-        },
-      ),
-    );
-    Overlay.of(context).insert(_popupEntry!);
-    _autoDismissTimer = Timer(const Duration(seconds: 5), () {
-      if (mounted) _dismissPopup();
-    });
-  }
-
-  void _dismissPopup() {
-    _autoDismissTimer?.cancel();
-    _autoDismissTimer = null;
-    _popupEntry?.remove();
-    _popupEntry = null;
-    if (mounted && _showVisibilityPopup) {
-      setState(() => _showVisibilityPopup = false);
-    }
+    setState(() => _activeTabIndex = index);
   }
 
   // — Spring-damped pull-to-stretch (KD11) —
@@ -185,7 +122,9 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
       final pixels = notification.metrics.pixels;
       if (pixels < 0) {
         final screenHeight = MediaQuery.of(context).size.height;
-        final maxPull = screenHeight * 0.25;
+        final expandedHeight =
+            max(420.0, screenHeight * 0.25 + kToolbarHeight);
+        final maxPull = min(screenHeight * 0.25, expandedHeight);
         setState(() {
           _rawPullOffset = -pixels;
           _pullOffset = _springDampedOffset(_rawPullOffset, maxPull);
@@ -268,7 +207,10 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
 
               return [
                 SliverAppBar(
-                  expandedHeight: 420,
+                  expandedHeight: max(
+                    420.0,
+                    MediaQuery.sizeOf(context).height * 0.25 + kToolbarHeight,
+                  ),
                   pinned: true,
                   backgroundColor: bg,
                   foregroundColor: fg,
@@ -374,7 +316,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
                                   isDark: isDark,
                                   stats: state.stats,
                                   onStatTap: (type) => context.push(
-                                    AppRoutePaths.profileStats(type: type),
+                                    '${AppRoutePaths.profileStats(type: type)}&userId=${Uri.encodeComponent(widget.userId)}',
                                   ),
                                 ),
                                 SizedBox(height: AppSpacing.sm),
@@ -406,57 +348,26 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
                 SliverPersistentHeader(
                   pinned: true,
                   delegate: _TabBarDelegate(
-                    child: CompositedTransformTarget(
-                      link: _tabBarLayerLink,
-                      child: Container(
-                        color: bg,
-                        child: TabBar(
-                          controller: _mainTabController,
-                          labelColor: fg,
-                          unselectedLabelColor: fgSecondary,
-                          labelStyle: TextStyle(
-                            fontSize: AppTypography.lg,
-                            fontWeight: AppTypography.semiBold,
-                          ),
-                          unselectedLabelStyle: TextStyle(
-                            fontSize: AppTypography.lg,
-                            fontWeight: AppTypography.normal,
-                          ),
-                          indicatorColor: primary,
-                          indicatorSize: TabBarIndicatorSize.label,
-                          tabs: List.generate(_tabLabels.length, (i) {
-                            if (i == 0) {
-                              return Tab(
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(_tabLabels[0]),
-                                    SizedBox(width: AppSpacing.intraGroupXs / 2),
-                                    Visibility(
-                                      visible: _activeTabIndex == 0,
-                                      maintainSize: true,
-                                      maintainAnimation: true,
-                                      maintainState: true,
-                                      child: AnimatedRotation(
-                                        turns: _showVisibilityPopup ? 0.5 : 0,
-                                        duration: const Duration(milliseconds: 200),
-                                        child: Icon(
-                                          Icons.keyboard_arrow_down,
-                                          size: AppTypography.lg,
-                                          color: _activeTabIndex == 0
-                                              ? fg
-                                              : Colors.transparent,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }
-                            return Tab(child: Text(_tabLabels[i]));
-                          }),
-                          onTap: _onTabTap,
+                    child: Container(
+                      color: bg,
+                      child: TabBar(
+                        controller: _mainTabController,
+                        labelColor: fg,
+                        unselectedLabelColor: fgSecondary,
+                        labelStyle: TextStyle(
+                          fontSize: AppTypography.lg,
+                          fontWeight: AppTypography.semiBold,
                         ),
+                        unselectedLabelStyle: TextStyle(
+                          fontSize: AppTypography.lg,
+                          fontWeight: AppTypography.normal,
+                        ),
+                        indicatorColor: primary,
+                        indicatorSize: TabBarIndicatorSize.label,
+                        tabs: _tabLabels
+                            .map((l) => Tab(child: Text(l)))
+                            .toList(),
+                        onTap: _onTabTap,
                       ),
                     ),
                     height: AppSpacing.tabNavigationHeight,
@@ -475,10 +386,10 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
     final tabView = TabBarView(
       controller: _mainTabController,
       children: [
-        ProfileCreationsTab(mode: widget.mode, userId: widget.userId, isDark: isDark),
+        ProfileMomentsTab(mode: widget.mode, userId: widget.userId, isDark: isDark),
+        ProfileWorksTab(mode: widget.mode, userId: widget.userId, isDark: isDark),
         ProfileCirclesTab(mode: widget.mode, userId: widget.userId, isDark: isDark),
         ProfileInteractionTab(mode: widget.mode, userId: widget.userId, isDark: isDark),
-        ProfileLifestyleTab(mode: widget.mode, userId: widget.userId, isDark: isDark),
       ],
     );
 
@@ -536,63 +447,6 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
           ],
         ),
       ),
-    );
-  }
-}
-
-class _VisibilityPopupOverlay extends StatelessWidget {
-  const _VisibilityPopupOverlay({
-    required this.link,
-    required this.mode,
-    required this.current,
-    required this.isDark,
-    required this.onSelected,
-    required this.onDismiss,
-  });
-
-  final LayerLink link;
-  final ProfileMode mode;
-  final CreationVisibility current;
-  final bool isDark;
-  final ValueChanged<CreationVisibility> onSelected;
-  final VoidCallback onDismiss;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onTap: onDismiss,
-          ),
-        ),
-        CompositedTransformFollower(
-          link: link,
-          showWhenUnlinked: false,
-          targetAnchor: Alignment.bottomLeft,
-          followerAnchor: Alignment.topLeft,
-          child: Material(
-            type: MaterialType.transparency,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () {},
-              child: Padding(
-                padding: EdgeInsets.only(
-                  left: AppSpacing.containerMd,
-                  top: AppSpacing.xs,
-                ),
-                child: CreationVisibilityPopup(
-                  mode: mode,
-                  current: current,
-                  isDark: isDark,
-                  onSelected: onSelected,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

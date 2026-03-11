@@ -121,6 +121,10 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   List<ExplainableFlowEvent> _currentFlowEvents = <ExplainableFlowEvent>[];
   bool _answerGateOpen = true;
 
+  /// v7: Accumulated model thinking text for the process drawer body.
+  String _streamingThinkingText = '';
+  int _streamingThinkingRefCount = 0;
+
   /// Accumulated structured content blocks for the process drawer.
   List<ProcessContentBlock> _processContentBlocks = <ProcessContentBlock>[];
 
@@ -1177,6 +1181,75 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     return merged;
   }
 
+  int _usageInt(Object? value) {
+    if (value is num) {
+      final n = value.toInt();
+      return n < 0 ? 0 : n;
+    }
+    final parsed = int.tryParse(value?.toString() ?? '');
+    if (parsed == null || parsed < 0) return 0;
+    return parsed;
+  }
+
+  Map<String, dynamic> _buildConversationCumulativeUsageStats({
+    required Map<String, dynamic> runUsageStats,
+    String? excludeMessageId,
+  }) {
+    final currentRunCalls = _usageInt(
+      runUsageStats['runModelCallCount'] ?? runUsageStats['modelCallCount'],
+    );
+    final currentRunTokens = _usageInt(
+      runUsageStats['runTotalTokens'] ?? runUsageStats['totalTokens'],
+    );
+    final currentRunMaxTokens = _usageInt(
+      runUsageStats['runMaxTokensPerCall'] ?? runUsageStats['maxTokensPerCall'],
+    );
+
+    var prevCalls = 0;
+    var prevTokens = 0;
+    var prevMaxTokens = 0;
+    for (final message in _messages) {
+      if ((message['senderId'] as String?) != AppConceptConstants.assistantSenderId) {
+        continue;
+      }
+      if (excludeMessageId != null &&
+          (message['id'] as String?) == excludeMessageId) {
+        continue;
+      }
+      final usageStats = (message['uiUsageStatsV1'] as Map?)
+          ?.cast<String, dynamic>();
+      if (usageStats == null || usageStats.isEmpty) continue;
+      prevCalls += _usageInt(
+        usageStats['runModelCallCount'] ?? usageStats['modelCallCount'],
+      );
+      prevTokens += _usageInt(
+        usageStats['runTotalTokens'] ?? usageStats['totalTokens'],
+      );
+      final maxTokens = _usageInt(
+        usageStats['runMaxTokensPerCall'] ?? usageStats['maxTokensPerCall'],
+      );
+      if (maxTokens > prevMaxTokens) prevMaxTokens = maxTokens;
+    }
+
+    final cumulativeCalls = prevCalls + currentRunCalls;
+    final cumulativeTokens = prevTokens + currentRunTokens;
+    final cumulativeMaxTokens = math.max(prevMaxTokens, currentRunMaxTokens);
+
+    return <String, dynamic>{
+      ...runUsageStats,
+      'runModelCallCount': currentRunCalls,
+      'runTotalTokens': currentRunTokens,
+      'runMaxTokensPerCall': currentRunMaxTokens,
+      'cumulativeModelCallCount': cumulativeCalls,
+      'cumulativeTotalTokens': cumulativeTokens,
+      'cumulativeMaxTokensPerCall': cumulativeMaxTokens,
+      // Backward-compatible fields now expose conversation cumulative values.
+      'modelCallCount': cumulativeCalls,
+      'totalTokens': cumulativeTokens,
+      'maxTokensPerCall': cumulativeMaxTokens,
+    };
+  }
+
   String _buildInitialProcessSummary(String query) {
     final normalized = query.trim();
     if (normalized.isEmpty) {
@@ -1640,13 +1713,59 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     return '${text.substring(0, 80)}...';
   }
 
+  static final _jsonEnvelopeFragmentRe = RegExp(
+    r'"?(contractVersion|turnPhase|thinkingText|assistant_turn_|traceId"?\s*:|'
+    r'"decision"|"toolPlan"|"nextAction"|"userMarkdown")',
+  );
+
   String _sanitizeThinkingText(String raw) {
     String text = raw.trim();
     if (text.isEmpty) return '';
-    if (text == '正在思考...') return '';
+    if (text == '正在思考...' || text == '正在深入分析...') return '';
     if (_isInternalChunk(text)) return '';
-    if (text.startsWith('{') && text.endsWith('}')) return '';
+    if (text.startsWith('{')) return '';
+    if (_jsonEnvelopeFragmentRe.hasMatch(text)) return '';
     return text;
+  }
+
+  void _captureThinkingTextFromTrace(AssistantTraceEvent event) {
+    if (!mounted || !_assistantResponding) return;
+    final type = event.type;
+
+    if (type == AssistantTraceEventType.thinkingProgress) {
+      final cleaned = _sanitizeThinkingText(event.message);
+      if (cleaned.isEmpty) return;
+      final isStreamingDelta =
+          (event.data ?? const <String, dynamic>{})['streaming'] == true;
+      setState(() {
+        if (isStreamingDelta) {
+          _streamingThinkingText = '$_streamingThinkingText$cleaned';
+        } else if (_streamingThinkingText.isNotEmpty) {
+          _streamingThinkingText = '$_streamingThinkingText\n\n$cleaned';
+        } else {
+          _streamingThinkingText = cleaned;
+        }
+      });
+      _autoScrollToBottomIfNeeded();
+      return;
+    }
+
+    if (type == AssistantTraceEventType.toolResult) {
+      final data = event.data ?? const <String, dynamic>{};
+      if (data['isAssessment'] == true) return;
+      final refs = (data['references'] as List?) ?? const <dynamic>[];
+      if (refs.isNotEmpty && refs.length != _streamingThinkingRefCount) {
+        _streamingThinkingRefCount = refs.length;
+        final prefix = _streamingThinkingText.isNotEmpty ? '\n' : '';
+        setState(() {
+          _streamingThinkingText =
+              '$_streamingThinkingText$prefix'
+              '\u00b7 找到了 $_streamingThinkingRefCount 篇相关资料';
+        });
+        _autoScrollToBottomIfNeeded();
+      }
+      return;
+    }
   }
 
   static final _internalErrorRe = RegExp(
@@ -2127,6 +2246,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         );
         _currentFlowEvents = <ExplainableFlowEvent>[];
         _answerGateOpen = false;
+        _streamingThinkingText = '';
+        _streamingThinkingRefCount = 0;
         _processContentBlocks = <ProcessContentBlock>[];
         _collectedSearchRefs = <ProcessReference>[];
         _userScrolledAway = false;
@@ -2309,8 +2430,11 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                   .runStream(request: request, mode: routeMode)) {
             switch (streamEvent.type) {
               case AssistantRunStreamEventType.trace:
-                if (!_preferStructuredUserEvents && streamEvent.trace != null) {
-                  _consumeAssistantTraceEvent(streamEvent.trace!);
+                if (streamEvent.trace != null) {
+                  _captureThinkingTextFromTrace(streamEvent.trace!);
+                  if (!_preferStructuredUserEvents) {
+                    _consumeAssistantTraceEvent(streamEvent.trace!);
+                  }
                 }
                 continue;
               case AssistantRunStreamEventType.failed:
@@ -2518,10 +2642,13 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             (runResponse.structuredResponse['uiAnswer'] as Map?)
                 ?.cast<String, dynamic>() ??
             const <String, dynamic>{};
-        final uiUsageStatsV1 =
-            (runResponse.structuredResponse['uiUsageStatsV1'] as Map?)
-                ?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
+        final uiUsageStatsV1 = _buildConversationCumulativeUsageStats(
+          runUsageStats:
+              (runResponse.structuredResponse['uiUsageStatsV1'] as Map?)
+                  ?.cast<String, dynamic>() ??
+              const <String, dynamic>{},
+          excludeMessageId: streamingAssistantMessageId,
+        );
         final uiProcessTimelineV2 = _timelineV2FromStructuredResponse(
           runResponse.structuredResponse,
         );
@@ -2589,6 +2716,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                 'uiProcessContentBlocks': _serializeProcessBlocks(
                   effectiveProcessBlocks,
                 ),
+                'processThinkingText': _streamingThinkingText,
               };
             }
           } else {
@@ -2617,6 +2745,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
               'uiProcessContentBlocks': _serializeProcessBlocks(
                 effectiveProcessBlocks,
               ),
+              'processThinkingText': _streamingThinkingText,
             });
           }
           _assistantResponding = false;
@@ -3528,10 +3657,13 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         final structuredProcessBlocks = _processBlocksFromStructuredResponse(
           response.structuredResponse,
         );
-        final uiUsageStats =
-            (response.structuredResponse['uiUsageStatsV1'] as Map?)
-                ?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
+        final uiUsageStats = _buildConversationCumulativeUsageStats(
+          runUsageStats:
+              (response.structuredResponse['uiUsageStatsV1'] as Map?)
+                  ?.cast<String, dynamic>() ??
+              const <String, dynamic>{},
+          excludeMessageId: streamingAssistantMessageId,
+        );
         final effectiveTimelineV2 = uiProcessTimelineV2.isNotEmpty
             ? uiProcessTimelineV2
             : _normalizeUiProcessTimelineV2(
@@ -4011,18 +4143,27 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                                         _isAssistantConversation,
                                     processState:
                                         _isAssistantConversation &&
-                                            _assistantResponding &&
                                             index == _messages.length - 1 &&
-                                            isAssistantMessage
+                                            isAssistantMessage &&
+                                            (_assistantResponding ||
+                                                _streamingThinkingText
+                                                    .isNotEmpty)
                                         ? _currentProcessState
                                         : null,
                                     flowEvents:
                                         _isAssistantConversation &&
-                                            _assistantResponding &&
                                             index == _messages.length - 1 &&
-                                            isAssistantMessage
+                                            isAssistantMessage &&
+                                            (_assistantResponding ||
+                                                _currentFlowEvents.isNotEmpty)
                                         ? _currentFlowEvents
                                         : const <ExplainableFlowEvent>[],
+                                    streamingThinkingText:
+                                        _isAssistantConversation &&
+                                            index == _messages.length - 1 &&
+                                            isAssistantMessage
+                                        ? _streamingThinkingText
+                                        : '',
                                     answerGateOpen:
                                         !_isAssistantConversation ||
                                         !_assistantResponding ||
@@ -4202,9 +4343,13 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                                                 msg['senderId'] as String? ??
                                                 '';
                                             if (senderId == 'current_user') {
-                                              context.push(
-                                                AppRoutePaths.profile,
-                                              );
+                                              final currentUser = ref.read(userDataProvider);
+                                              final userId = currentUser?.username ?? currentUser?.id;
+                                              if (userId != null && userId.isNotEmpty) {
+                                                context.push(
+                                                  AppRoutePaths.userProfile(username: userId),
+                                                );
+                                              }
                                             } else if (senderId.isNotEmpty) {
                                               context.push(
                                                 AppRoutePaths.userProfile(
@@ -4311,18 +4456,21 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                   ],
                 ),
               ),
-              Container(
+              Padding(
                 padding: EdgeInsets.symmetric(
                   horizontal:
                       AppSpacing.semantic[DesignSemanticConstants
                           .container]?[DesignSemanticConstants.sm] ??
                       AppSpacing.containerSm,
+                ),
+                child: Container(
+                padding: EdgeInsets.symmetric(
                   vertical: AppSpacing.sm,
                 ),
                 decoration: BoxDecoration(
                   color: isDark ? bgColor : AppColors.chatToolbarBackground,
-                  border: Border(
-                    top: BorderSide(color: borderColor.withValues(alpha: 0.3)),
+                  borderRadius: BorderRadius.circular(
+                    AppSpacing.largeBorderRadius,
                   ),
                 ),
                 child: SafeArea(
@@ -4371,6 +4519,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                     ],
                   ),
                 ),
+              ),
               ),
             ],
           ),

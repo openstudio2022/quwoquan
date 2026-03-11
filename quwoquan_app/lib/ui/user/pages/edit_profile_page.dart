@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
 
@@ -16,13 +17,28 @@ class EditProfilePage extends ConsumerStatefulWidget {
 }
 
 class _EditProfilePageState extends ConsumerState<EditProfilePage> {
-  final _displayNameController = TextEditingController(text: '我的账号');
-  final _usernameController = TextEditingController(text: 'my_account');
-  final _bioController = TextEditingController(text: '分享美好生活...');
-  final _websiteController = TextEditingController();
-  final _bioFocusNode = FocusNode();
+  late final TextEditingController _displayNameController;
+  late final TextEditingController _usernameController;
+  late final TextEditingController _bioController;
+  final TextEditingController _websiteController = TextEditingController();
+  final FocusNode _bioFocusNode = FocusNode();
   bool _isSaving = false;
   bool _showEmojiPanel = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final userData = ref.read(userDataProvider);
+    _displayNameController = TextEditingController(
+      text: userData?.displayName ?? '我的账号',
+    );
+    _usernameController = TextEditingController(
+      text: userData?.username ?? 'my_account',
+    );
+    _bioController = TextEditingController(
+      text: userData?.bio ?? '分享美好生活...',
+    );
+  }
 
   @override
   void dispose() {
@@ -36,10 +52,24 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
 
   Future<void> _save() async {
     setState(() => _isSaving = true);
-    await Future<void>.delayed(const Duration(milliseconds: 500));
-    if (mounted) {
-      setState(() => _isSaving = false);
-      context.pop();
+    try {
+      final repo = ref.read(userProfileRepositoryProvider);
+      await repo.updateProfile({
+        'nickname': _displayNameController.text,
+        'username': _usernameController.text,
+        'bio': _bioController.text,
+        'website': _websiteController.text,
+      });
+      if (mounted) {
+        final currentUserId = ref.read(currentUserIdProvider);
+        ref.read(userDataProvider.notifier).loadUser(currentUserId);
+        setState(() => _isSaving = false);
+        context.pop();
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
     }
   }
 

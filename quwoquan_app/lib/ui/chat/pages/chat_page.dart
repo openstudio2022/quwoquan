@@ -30,8 +30,17 @@ class _ChatPageState extends ConsumerState<ChatPage>
   final ScrollController _scrollController = ScrollController();
   double _lastScrollY = 0;
 
+  List<Map<String, dynamic>>? _conversations;
+  bool _isLoading = true;
+
   @override
   bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadConversationsWithCache();
+  }
 
   @override
   void dispose() {
@@ -95,13 +104,50 @@ class _ChatPageState extends ConsumerState<ChatPage>
     _lastScrollY = y;
   }
 
-  Future<List<Map<String, dynamic>>> _loadConversations() async {
+  /// 本地缓存优先 → 异步云端同步 → 增量刷新
+  Future<void> _loadConversationsWithCache() async {
+    final cache = ref.read(conversationCacheProvider);
+    final cached = cache.getAll();
+    if (cached.isNotEmpty && mounted) {
+      setState(() {
+        _conversations = cached;
+        _isLoading = false;
+      });
+    }
+
     try {
       final repo = ref.read(chatRepositoryProvider);
-      return await repo.listConversations(limit: 100);
+      final remote = await repo.listConversations(limit: 100);
+      cache.putAll(remote);
+      if (mounted) {
+        setState(() {
+          _conversations = remote;
+          _isLoading = false;
+        });
+      }
     } catch (_) {
-      return ref.read(appContentRepositoryProvider).chatMockConversations;
+      if (_conversations == null || _conversations!.isEmpty) {
+        final fallback =
+            ref.read(appContentRepositoryProvider).chatMockConversations;
+        if (mounted) {
+          setState(() {
+            _conversations = fallback;
+            _isLoading = false;
+          });
+        }
+      } else if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
+
+    try {
+      final sync = ref.read(conversationSyncProvider);
+      await sync.sync();
+      final updated = cache.getAll();
+      if (updated.isNotEmpty && mounted) {
+        setState(() => _conversations = updated);
+      }
+    } catch (_) {}
   }
 
   @override
@@ -464,65 +510,62 @@ class _ChatPageState extends ConsumerState<ChatPage>
     Color fgSecondary,
     Color borderColor,
   ) {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _loadConversations(),
-      builder: (context, snapshot) {
-        final rawList = snapshot.data ?? const <Map<String, dynamic>>[];
-        final convs = _filterConversationListForSubTab(rawList);
+    final rawList = _conversations ?? const <Map<String, dynamic>>[];
+    final convs = _filterConversationListForSubTab(rawList);
 
-        if (snapshot.connectionState == ConnectionState.waiting &&
-            rawList.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: EdgeInsets.all(AppSpacing.lg),
-              child: CircularProgressIndicator(color: AppColors.primaryColor),
-            ),
-          );
-        }
+    if (_isLoading && rawList.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: EdgeInsets.all(AppSpacing.lg),
+          child: CircularProgressIndicator(color: AppColors.primaryColor),
+        ),
+      );
+    }
 
-        if (convs.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.chat_bubble_outline,
-                  size: AppSpacing.iconButtonMinSizeMd,
-                  color: fgSecondary,
-                ),
-                SizedBox(height: AppSpacing.md),
-                Text(
-                  UITextConstants.noConversations,
-                  style: TextStyle(fontSize: AppTypography.lg, color: fgSecondary),
-                ),
-                Text(
-                  UITextConstants.startChatHint,
-                  style: TextStyle(fontSize: AppTypography.md, color: fgSecondary),
-                ),
-              ],
-            ),
-          );
-        }
-
-        return ListView(
-          controller: _scrollController,
+    if (convs.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            ...convs.map(
-              (c) => _ConversationTile(
-                conversation: c,
-                onTap: () => context.push(
-                  AppRoutePaths.chatDetail(id: '${c['id']}'),
-                ),
-                fgPrimary: fgPrimary,
-                fgSecondary: fgSecondary,
-                borderColor: borderColor,
-              ),
+            Icon(
+              Icons.chat_bubble_outline,
+              size: AppSpacing.iconButtonMinSizeMd,
+              color: fgSecondary,
             ),
-            SizedBox(height: MediaQuery.of(context).padding.bottom + 80),
+            SizedBox(height: AppSpacing.md),
+            Text(
+              UITextConstants.noConversations,
+              style: TextStyle(fontSize: AppTypography.lg, color: fgSecondary),
+            ),
+            Text(
+              UITextConstants.startChatHint,
+              style: TextStyle(fontSize: AppTypography.md, color: fgSecondary),
+            ),
           ],
-        );
-      },
-    );
+        ),
+      );
+    }
+
+    {
+
+      return ListView(
+        controller: _scrollController,
+        children: [
+          ...convs.map(
+            (c) => _ConversationTile(
+              conversation: c,
+              onTap: () => context.push(
+                AppRoutePaths.chatDetail(id: '${c['id']}'),
+              ),
+              fgPrimary: fgPrimary,
+              fgSecondary: fgSecondary,
+              borderColor: borderColor,
+            ),
+          ),
+          SizedBox(height: MediaQuery.of(context).padding.bottom + 80),
+        ],
+      );
+    }
   }
 
   List<Map<String, dynamic>> _filterConversationListForSubTab(
@@ -974,7 +1017,9 @@ class _ConversationTile extends StatelessWidget {
 
     return RoundedSquareAvatar(
       size: _avatarSize,
-      imageUrl: conversation['avatar'] as String? ?? '',
+      imageUrl: conversation['avatar'] as String?
+          ?? conversation['avatarUrl'] as String?
+          ?? '',
       name: conversation['title'] as String? ?? '',
     );
   }
@@ -990,7 +1035,7 @@ class _ConversationTile extends StatelessWidget {
         child: Container(
           padding: EdgeInsets.symmetric(
             horizontal: AppSpacing.md,
-            vertical: 12,
+            vertical: AppSpacing.sm + AppSpacing.xs,
           ),
           decoration: BoxDecoration(
             border: Border(

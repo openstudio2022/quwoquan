@@ -454,6 +454,10 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
         );
       }
 
+      _inThinkBlock = false;
+      _inXmlToolBlock = false;
+      _thinkingPhaseEnded = false;
+
       final contentBuffer = StringBuffer();
       final reasoningBuffer = StringBuffer();
       final toolCallAccum = <String, _StreamingToolCallAccum>{};
@@ -493,9 +497,11 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
           final textDelta = (delta['content'] as String?) ?? '';
           if (textDelta.isNotEmpty) {
             contentBuffer.write(textDelta);
-            final thinkingDelta = _extractStreamingThinking(textDelta);
-            if (thinkingDelta.isNotEmpty) {
-              onDelta(thinkingDelta);
+            if (!profile.supportsReasoningField) {
+              final thinkingDelta = _extractStreamingThinking(textDelta);
+              if (thinkingDelta.isNotEmpty) {
+                onDelta(thinkingDelta);
+              }
             }
           }
 
@@ -631,6 +637,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
   );
   bool _inThinkBlock = false;
   bool _inXmlToolBlock = false;
+  bool _thinkingPhaseEnded = false;
 
   /// Extracts user-visible thinking content from streaming deltas.
   ///
@@ -653,35 +660,42 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
           buf.write(remaining.substring(0, closeMatch.start));
           remaining = remaining.substring(closeMatch.end);
           _inThinkBlock = false;
+          _thinkingPhaseEnded = true;
         } else {
           buf.write(remaining);
           remaining = '';
         }
       } else if (_inXmlToolBlock) {
-        // Look for </tool_call> or </function> to close the block.
         final closeIdx = remaining.indexOf('</tool_call>');
         final closeFnIdx = remaining.indexOf('</function>');
         final close = _minPositive(closeIdx, closeFnIdx);
         if (close >= 0) {
-          // Skip past the closing tag.
           final tag = closeIdx >= 0 && (closeFnIdx < 0 || closeIdx <= closeFnIdx)
               ? '</tool_call>'
               : '</function>';
           remaining = remaining.substring(close + tag.length);
           _inXmlToolBlock = false;
         } else {
-          remaining = ''; // swallow remainder, block continues in next chunk
+          remaining = '';
+        }
+      } else if (_thinkingPhaseEnded) {
+        // After </think>, remaining content is the JSON action envelope.
+        // Check if a new <think> block starts (multi-iteration scenario).
+        final thinkMatch = _thinkTagOpen.firstMatch(remaining);
+        if (thinkMatch != null) {
+          _thinkingPhaseEnded = false;
+          remaining = remaining.substring(thinkMatch.end);
+          _inThinkBlock = true;
+        } else {
+          remaining = '';
         }
       } else {
-        // Check for <think> open tag.
         final thinkMatch = _thinkTagOpen.firstMatch(remaining);
-        // Check for XML tool call open.
         final toolCallIdx = remaining.indexOf('<tool_call>');
         final funcIdx = _findXmlFunctionTag(remaining);
         final xmlStart = _minPositive(toolCallIdx, funcIdx);
 
         if (thinkMatch != null && (xmlStart < 0 || thinkMatch.start < xmlStart)) {
-          // Plain text before <think> → emit as thinking.
           final before = remaining.substring(0, thinkMatch.start).trim();
           if (before.isNotEmpty && !_looksLikeJsonEnvelope(before)) {
             buf.write(before);
@@ -689,17 +703,14 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
           remaining = remaining.substring(thinkMatch.end);
           _inThinkBlock = true;
         } else if (xmlStart >= 0) {
-          // Plain text before XML tool call → emit as thinking.
           final before = remaining.substring(0, xmlStart).trim();
           if (before.isNotEmpty && !_looksLikeJsonEnvelope(before)) {
             buf.write(before);
           }
           _inXmlToolBlock = true;
-          // Advance past the opening tag.
           final tagEnd = remaining.indexOf('>', xmlStart);
           remaining = tagEnd >= 0 ? remaining.substring(tagEnd + 1) : '';
         } else {
-          // No special tags — emit everything that is NOT a JSON envelope.
           final text = remaining.trim();
           if (text.isNotEmpty && !_looksLikeJsonEnvelope(text)) {
             buf.write(text);

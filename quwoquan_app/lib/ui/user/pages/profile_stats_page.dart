@@ -1,25 +1,31 @@
-// ignore_for_file: unnecessary_underscores
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
-/// 粉丝/获赞/关注列表页（1:1 对应 AuthorStatsList.tsx 的 fans/likes/following 列表）
-/// 路由：/profile/stats?type=following|fans|likes
+/// 圈子/关注/粉丝列表页。根据 type 调用 Repository 获取数据，移除硬编码。
+/// 路由：/profile/stats?type=circles|following|fans&userId=...
 class ProfileStatsPage extends ConsumerStatefulWidget {
-  const ProfileStatsPage({super.key, this.type = 'fans'});
+  const ProfileStatsPage({
+    super.key,
+    this.type = 'fans',
+    this.userId = '',
+  });
 
   final String type;
+  final String userId;
 
   static String _title(String type) {
     switch (type) {
+      case 'circles':
+        return UITextConstants.contactsTabCircles;
       case 'following':
         return UITextConstants.follow;
       case 'fans':
         return UITextConstants.circleFans;
-      case 'likes':
-        return UITextConstants.circleLikes;
       default:
         return UITextConstants.circleFans;
     }
@@ -31,93 +37,115 @@ class ProfileStatsPage extends ConsumerStatefulWidget {
 
 class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
   String get _type => widget.type;
+  String get _userId => widget.userId;
   String _searchQuery = '';
 
-  /// 1:1 AuthorStatsList.tsx mockUsers（粉丝/关注列表用），可修改 isFollowed
-  late List<Map<String, dynamic>> _users;
+  List<Map<String, dynamic>>? _circles;
+  List<Map<String, dynamic>>? _users;
+  bool _loading = true;
+  Object? _error;
 
   @override
   void initState() {
     super.initState();
-    _users = [
-        {
-          'id': 'u1',
-          'name': '陈一发',
-          'avatar':
-              'https://images.unsplash.com/photo-1630939687530-241d630735df?q=80&w=100',
-          'worksCount': '0',
-          'fansCount': '230',
-          'likesCount': '1.2k',
-          'isFollowed': false,
-        },
-        {
-          'id': 'u2',
-          'name': '周杰伦',
-          'avatar':
-              'https://images.unsplash.com/photo-1603987248955-9c142c5ae89b?q=80&w=100',
-          'worksCount': '0',
-          'fansCount': '15.8M',
-          'likesCount': '99M',
-          'isFollowed': true,
-        },
-        {
-          'id': 'u3',
-          'name': '李青云',
-          'avatar':
-              'https://images.unsplash.com/photo-1603110502322-93cd2173d19a?q=80&w=100',
-          'worksCount': '128',
-          'fansCount': '45k',
-          'likesCount': '128k',
-          'isFollowed': true,
-        },
-    ];
+    _load();
   }
 
-  /// 1:1 AuthorStatsList.tsx mockInteractions（获赞列表用）
-  static List<Map<String, dynamic>> get _mockLikes => [
-        {
-          'id': 'i1',
-          'userName': '陈一发',
-          'userAvatar':
-              'https://images.unsplash.com/photo-1630939687530-241d630735df?q=80&w=100',
-          'content': '赞了你的作品',
-          'targetTitle': '《川西秘境摄影集》',
-          'time': '14:20',
-        },
-        {
-          'id': 'i2',
-          'userName': '王小明',
-          'userAvatar':
-              'https://images.unsplash.com/photo-1643816831234-e7cb32194e92?q=80&w=100',
-          'content': '赞了你的评论：徕卡镜头确实有种空气感...',
-          'targetTitle': '摄影器材交流区',
-          'time': '10:05',
-        },
-      ];
+  @override
+  void didUpdateWidget(covariant ProfileStatsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.type != widget.type || oldWidget.userId != widget.userId) {
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    if (_userId.isEmpty) {
+      setState(() {
+        _circles = [];
+        _users = [];
+        _loading = false;
+      });
+      return;
+    }
+    setState(() => _loading = true);
+    final repo = ref.read(userProfileRepositoryProvider);
+    try {
+      if (_type == 'circles') {
+        final list = await repo.listUserCircles(_userId);
+        if (mounted) setState(() {
+          _circles = list;
+          _loading = false;
+          _error = null;
+        });
+      } else {
+        final list = _type == 'following'
+            ? await repo.listFollowing(_userId)
+            : await repo.listFollowers(_userId);
+        if (mounted) setState(() {
+          _users = list;
+          _loading = false;
+          _error = null;
+        });
+      }
+    } catch (e, st) {
+      if (mounted) setState(() {
+        _circles = null;
+        _users = null;
+        _loading = false;
+        _error = e;
+      });
+    }
+  }
+
+  List<Map<String, dynamic>> get _filteredCircles {
+    final list = _circles ?? [];
+    if (_searchQuery.isEmpty) return list;
+    final q = _searchQuery.toLowerCase();
+    return list
+        .where((c) =>
+            (c['name'] as String?)?.toLowerCase().contains(q) == true)
+        .toList();
+  }
 
   List<Map<String, dynamic>> get _filteredUsers {
-    if (_searchQuery.isEmpty) return _users;
+    final list = _users ?? [];
+    if (_searchQuery.isEmpty) return list;
     final q = _searchQuery.toLowerCase();
-    return _users.where((u) => (u['name'] as String?)?.toLowerCase().contains(q) == true).toList();
-  }
-
-  List<Map<String, dynamic>> get _filteredLikes {
-    if (_searchQuery.isEmpty) return _mockLikes;
-    final q = _searchQuery.toLowerCase();
-    return _mockLikes.where((i) => (i['userName'] as String?)?.toLowerCase().contains(q) == true).toList();
+    return list
+        .where((u) =>
+            (u['nickname'] as String?)?.toLowerCase().contains(q) == true)
+        .toList();
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
-    final bg = AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
-    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
+    final bg =
+        AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
+    final fg =
+        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
     final fgSecondary =
         AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
     final borderColor =
         AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
     final inputBg =
         AppColorsFunctional.getColor(isDark, ColorType.backgroundTertiary);
+
+    String searchHint;
+    switch (_type) {
+      case 'circles':
+        searchHint = UITextConstants.searchCircleHint;
+        break;
+      case 'following':
+        searchHint = '搜索关注';
+        break;
+      case 'fans':
+        searchHint = UITextConstants.searchFansHint;
+        break;
+      default:
+        searchHint = UITextConstants.searchFansHint;
+    }
 
     return Scaffold(
       backgroundColor: bg,
@@ -144,11 +172,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
             child: TextField(
               onChanged: (v) => setState(() => _searchQuery = v),
               decoration: InputDecoration(
-                hintText: _type == 'likes'
-                    ? '搜索获赞记录...'
-                    : _type == 'fans'
-                        ? '搜索粉丝姓名...'
-                        : '搜索关注...',
+                hintText: searchHint,
                 hintStyle: TextStyle(color: fgSecondary, fontSize: 14),
                 prefixIcon: Icon(Icons.search, size: 20, color: fgSecondary),
                 filled: true,
@@ -166,22 +190,38 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
             ),
           ),
           Expanded(
-            child: _type == 'likes'
-                ? _buildLikesList(fg, fgSecondary, borderColor, bg)
-                : _buildUsersList(fg, fgSecondary, borderColor, bg),
+            child: _loading
+                ? Center(
+                    child: CircularProgressIndicator(
+                      color: AppColors.primaryColor,
+                    ),
+                  )
+                : _error != null
+                    ? Center(
+                        child: Text(
+                          '加载失败',
+                          style: TextStyle(color: fgSecondary, fontSize: 14),
+                        ),
+                      )
+                    : _type == 'circles'
+                        ? _buildCirclesList(
+                            fg, fgSecondary, borderColor, bg)
+                        : _buildUsersList(
+                            fg, fgSecondary, borderColor, bg),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildUsersList(
-      Color fg, Color fgSecondary, Color borderColor, Color bg) {
-    final list = _filteredUsers;
+  Widget _buildCirclesList(
+    Color fg, Color fgSecondary, Color borderColor, Color bg,
+  ) {
+    final list = _filteredCircles;
     if (list.isEmpty) {
       return Center(
         child: Text(
-          '暂无数据',
+          UITextConstants.noData,
           style: TextStyle(color: fgSecondary, fontSize: 14),
         ),
       );
@@ -189,26 +229,34 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
     return ListView.separated(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       itemCount: list.length,
-      separatorBuilder: (_, __) => Divider(height: 1, color: borderColor.withValues(alpha: 0.3)),
+      separatorBuilder: (_, __) => Divider(
+        height: 1,
+        color: borderColor.withValues(alpha: 0.3),
+      ),
       itemBuilder: (context, i) {
-        final u = list[i];
-        final name = u['name'] as String? ?? '';
-        final avatar = u['avatar'] as String? ?? '';
-        final worksCount = u['worksCount'] as String? ?? '0';
-        final fansCount = u['fansCount'] as String? ?? '0';
-        final likesCount = u['likesCount'] as String? ?? '0';
-        final isFollowed = u['isFollowed'] as bool? ?? false;
+        final c = list[i];
+        final id = c['id'] as String? ?? '';
+        final name = c['name'] as String? ?? '';
+        final coverUrl = c['coverUrl'] as String? ?? '';
+        final postCount = c['postCount'] as int? ?? 0;
         return InkWell(
-          onTap: () {},
+          onTap: () {
+            if (id.isNotEmpty) {
+              context.push(AppRoutePaths.circleDetail(id: id));
+            }
+          },
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
             child: Row(
               children: [
                 CircleAvatar(
                   radius: 24,
-                  backgroundImage: avatar.isNotEmpty ? NetworkImage(avatar) : null,
+                  backgroundImage:
+                      coverUrl.isNotEmpty ? NetworkImage(coverUrl) : null,
                   onBackgroundImageError: (_, __) {},
-                  child: avatar.isEmpty ? Icon(Icons.person, color: fgSecondary) : null,
+                  child: coverUrl.isEmpty
+                      ? Icon(Icons.group, color: fgSecondary)
+                      : null,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -227,7 +275,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '$worksCount 作品 · $fansCount 粉丝 · $likesCount 获赞',
+                        '$postCount 创作',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
@@ -239,36 +287,6 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
                     ],
                   ),
                 ),
-                const SizedBox(width: 12),
-                TextButton(
-                  onPressed: () {
-                    setState(() {
-                      final idx = _users.indexWhere((e) => e['id'] == u['id']);
-                      if (idx >= 0) {
-                        _users[idx] = Map<String, dynamic>.from(_users[idx])
-                          ..['isFollowed'] = !(_users[idx]['isFollowed'] as bool? ?? false);
-                      }
-                    });
-                  },
-                  style: TextButton.styleFrom(
-                    backgroundColor: isFollowed
-                        ? borderColor.withValues(alpha: 0.3)
-                        : AppColors.primaryColor.withValues(alpha: 0.12),
-                    foregroundColor: isFollowed ? fgSecondary : AppColors.primaryColor,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    minimumSize: const Size(72, 32),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                  ),
-                  child: Text(
-                    isFollowed ? UITextConstants.following : UITextConstants.follow,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
               ],
             ),
           ),
@@ -277,13 +295,14 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
     );
   }
 
-  Widget _buildLikesList(
-      Color fg, Color fgSecondary, Color borderColor, Color bg) {
-    final list = _filteredLikes;
+  Widget _buildUsersList(
+    Color fg, Color fgSecondary, Color borderColor, Color bg,
+  ) {
+    final list = _filteredUsers;
     if (list.isEmpty) {
       return Center(
         child: Text(
-          '暂无获赞记录',
+          '暂无数据',
           style: TextStyle(color: fgSecondary, fontSize: 14),
         ),
       );
@@ -291,86 +310,85 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
     return ListView.separated(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       itemCount: list.length,
-      separatorBuilder: (_, __) => Divider(height: 1, color: borderColor.withValues(alpha: 0.3)),
+      separatorBuilder: (_, __) => Divider(
+        height: 1,
+        color: borderColor.withValues(alpha: 0.3),
+      ),
       itemBuilder: (context, i) {
-        final item = list[i];
-        final userName = item['userName'] as String? ?? '';
-        final userAvatar = item['userAvatar'] as String? ?? '';
-        final content = item['content'] as String? ?? '';
-        final targetTitle = item['targetTitle'] as String? ?? '';
-        final time = item['time'] as String? ?? '';
+        final u = list[i];
+        final userId = u['userId'] as String? ?? '';
+        final nickname = u['nickname'] as String? ?? '';
+        final avatarUrl = u['avatarUrl'] as String? ?? '';
+        final isFollowing = u['isFollowing'] as bool? ?? false;
         return InkWell(
-          onTap: () {},
+          onTap: () {
+            if (userId.isNotEmpty) {
+              context.push(
+                AppRoutePaths.userProfile(username: userId),
+                extra: UserProfileRouteExtra(
+                  avatar: avatarUrl.isNotEmpty ? avatarUrl : null,
+                  displayName: nickname.isNotEmpty ? nickname : null,
+                ),
+              );
+            }
+          },
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 CircleAvatar(
                   radius: 24,
-                  backgroundImage: userAvatar.isNotEmpty ? NetworkImage(userAvatar) : null,
+                  backgroundImage:
+                      avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
                   onBackgroundImageError: (_, __) {},
-                  child: userAvatar.isEmpty ? Icon(Icons.person, color: fgSecondary) : null,
+                  child: avatarUrl.isEmpty
+                      ? Icon(Icons.person, color: fgSecondary)
+                      : null,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            userName,
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w800,
-                              color: fg,
-                            ),
-                          ),
-                          Text(
-                            time,
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: fgSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
                       Text(
-                        content,
+                        nickname,
                         style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: fgSecondary,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: fg,
                         ),
-                        maxLines: 2,
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: bg,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: borderColor.withValues(alpha: 0.3),
-                          ),
-                        ),
-                        child: Text(
-                          targetTitle,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: fgSecondary,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
                     ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                TextButton(
+                  onPressed: () {},
+                  style: TextButton.styleFrom(
+                    backgroundColor: isFollowing
+                        ? borderColor.withValues(alpha: 0.3)
+                        : AppColors.primaryColor.withValues(alpha: 0.12),
+                    foregroundColor:
+                        isFollowing ? fgSecondary : AppColors.primaryColor,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    minimumSize: const Size(72, 32),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                  child: Text(
+                    isFollowing
+                        ? UITextConstants.following
+                        : UITextConstants.follow,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
               ],

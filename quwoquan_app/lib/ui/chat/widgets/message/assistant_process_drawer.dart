@@ -21,6 +21,7 @@ class AssistantProcessDrawer extends StatefulWidget {
     this.initiallyExpanded = false,
     this.onReferenceUrlTap,
     this.flowEvents = const <ExplainableFlowEvent>[],
+    this.streamingThinkingText = '',
   });
 
   final AssistantProcessState processState;
@@ -28,6 +29,7 @@ class AssistantProcessDrawer extends StatefulWidget {
   final bool initiallyExpanded;
   final void Function(String url)? onReferenceUrlTap;
   final List<ExplainableFlowEvent> flowEvents;
+  final String streamingThinkingText;
 
   @override
   State<AssistantProcessDrawer> createState() => _AssistantProcessDrawerState();
@@ -36,7 +38,6 @@ class AssistantProcessDrawer extends StatefulWidget {
 class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
   bool _expanded = false;
   final Set<int> _expandedBlockIndices = <int>{};
-  final Set<int> _expandedFlowIndices = <int>{};
 
   ProcessStage? _prevStage;
   int _prevFlowEventCount = 0;
@@ -53,10 +54,11 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
   void didUpdateWidget(covariant AssistantProcessDrawer oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (_useFlowEvents) {
-      if (widget.isRunning &&
-          widget.flowEvents.length > _prevFlowEventCount &&
-          widget.flowEvents.length > 1 &&
-          !_expanded) {
+      final hasNewContent =
+          widget.streamingThinkingText.length >
+              oldWidget.streamingThinkingText.length ||
+          widget.flowEvents.length > _prevFlowEventCount;
+      if (widget.isRunning && hasNewContent && !_expanded) {
         setState(() => _expanded = true);
       }
       _prevFlowEventCount = widget.flowEvents.length;
@@ -78,7 +80,7 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
 
   bool get _isInitialWait {
     if (_useFlowEvents) {
-      return widget.flowEvents.isEmpty;
+      return widget.flowEvents.isEmpty && widget.streamingThinkingText.isEmpty;
     }
     return widget.processState.stage == ProcessStage.understanding &&
         !_hasContentBlocks &&
@@ -225,20 +227,45 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
 
   String _flowEventsHeaderLabel() {
     final events = widget.flowEvents;
-    if (events.isEmpty) return UITextConstants.assistantProcessThinking;
+    if (events.isEmpty && widget.streamingThinkingText.isEmpty) {
+      return UITextConstants.assistantProcessThinking;
+    }
     if (!widget.isRunning) {
-      final last = events.last;
-      final label = last.headline;
-      if (label.length <= 12) return label;
-      return '${label.substring(0, 10)}\u2026';
+      final elapsed = widget.processState.elapsedMs;
+      if (elapsed > 0) {
+        final seconds = (elapsed / 1000).toStringAsFixed(1);
+        return '已完成深度思考（用时$seconds秒）';
+      }
+      return UITextConstants.assistantProcessCompleted;
+    }
+    if (events.isEmpty) {
+      return UITextConstants.assistantProcessThinking;
     }
     final activeEvent = events.lastWhere(
       (e) => e.phaseStatus == ExplainablePhaseStatus.active,
       orElse: () => events.last,
     );
-    final label = activeEvent.headline;
-    if (label.length <= 12) return label;
-    return '${label.substring(0, 10)}\u2026';
+    return _phaseIdToLabel(activeEvent.phaseId);
+  }
+
+  static String _phaseIdToLabel(String phaseId) {
+    switch (phaseId) {
+      case PhaseId.understand:
+      case PhaseId.classify:
+        return UITextConstants.assistantProcessThinking;
+      case PhaseId.plan:
+        return UITextConstants.assistantProcessThinking;
+      case PhaseId.execute:
+      case PhaseId.subExecute:
+        return UITextConstants.assistantProcessSearching;
+      case PhaseId.aggregate:
+      case PhaseId.merge:
+        return UITextConstants.assistantProcessOrganizing;
+      case PhaseId.answer:
+        return UITextConstants.assistantProcessAnswering;
+      default:
+        return UITextConstants.assistantProcessThinking;
+    }
   }
 
   Widget _buildFlowEventsBody({
@@ -246,8 +273,9 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
     required Color secondaryTextColor,
     required Color accentColor,
   }) {
-    final events = widget.flowEvents;
-    if (events.isEmpty) return const SizedBox.shrink();
+    final text = widget.streamingThinkingText;
+    if (text.isEmpty) return const SizedBox.shrink();
+
     return Padding(
       padding: EdgeInsets.only(
         left: AppSpacing.sm,
@@ -264,215 +292,26 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
             color: secondaryTextColor.withValues(alpha: 0.15),
           ),
           SizedBox(height: AppSpacing.xs),
-          for (var i = 0; i < events.length; i++)
-            _buildFlowEventRow(
-              index: i,
-              event: events[i],
-              textColor: textColor,
-              secondaryTextColor: secondaryTextColor,
-              accentColor: accentColor,
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFlowEventRow({
-    required int index,
-    required ExplainableFlowEvent event,
-    required Color textColor,
-    required Color secondaryTextColor,
-    required Color accentColor,
-  }) {
-    final isActive = event.phaseStatus == ExplainablePhaseStatus.active;
-    final isCompleted = event.phaseStatus == ExplainablePhaseStatus.completed;
-    final isSkipped = event.phaseStatus == ExplainablePhaseStatus.skipped;
-    final isFailed = event.phaseStatus == ExplainablePhaseStatus.failed;
-    final isChild = event.parentPhaseId.isNotEmpty;
-    final hasDetail =
-        event.detail.isNotEmpty || event.references.isNotEmpty;
-    final isRowExpanded = _expandedFlowIndices.contains(index);
-
-    final IconData statusIcon;
-    final Color iconColor;
-    if (isCompleted) {
-      statusIcon = CupertinoIcons.checkmark_circle_fill;
-      iconColor = accentColor;
-    } else if (isActive) {
-      statusIcon = CupertinoIcons.circle;
-      iconColor = accentColor;
-    } else if (isFailed) {
-      statusIcon = CupertinoIcons.xmark_circle_fill;
-      iconColor = AppColors.error;
-    } else {
-      statusIcon = CupertinoIcons.minus_circle;
-      iconColor = secondaryTextColor.withValues(alpha: 0.4);
-    }
-
-    return Padding(
-      padding: EdgeInsets.only(
-        left: isChild ? AppSpacing.sm + AppSpacing.xs : 0,
-        bottom: AppSpacing.xs / 2,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          GestureDetector(
-            onTap: hasDetail
-                ? () {
-                    setState(() {
-                      if (isRowExpanded) {
-                        _expandedFlowIndices.remove(index);
-                      } else {
-                        _expandedFlowIndices.add(index);
-                      }
-                    });
-                  }
-                : null,
-            behavior: HitTestBehavior.opaque,
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical: AppSpacing.xs / 2),
-              child: Row(
-                children: [
-                  if (isChild)
-                    Padding(
-                      padding: EdgeInsets.only(right: AppSpacing.xs / 2),
-                      child: Text(
-                        '├─',
-                        style: TextStyle(
-                          fontSize: AppTypography.xs,
-                          color: secondaryTextColor.withValues(alpha: 0.3),
-                          fontFamily: 'monospace',
-                        ),
-                      ),
-                    ),
-                  if (isActive && widget.isRunning)
-                    Padding(
-                      padding: EdgeInsets.only(right: AppSpacing.xs),
-                      child: SizedBox(
-                        width: AppSpacing.fourteen,
-                        height: AppSpacing.fourteen,
-                        child: CircularProgressIndicator(
-                          strokeWidth: AppSpacing.oneHalf,
-                          color: accentColor,
-                        ),
-                      ),
-                    )
-                  else
-                    Padding(
-                      padding: EdgeInsets.only(right: AppSpacing.xs),
-                      child: Icon(
-                        statusIcon,
-                        size: AppTypography.base,
-                        color: iconColor,
-                      ),
-                    ),
-                  Expanded(
-                    child: Text(
-                      event.headline,
-                      style: TextStyle(
-                        fontSize: AppTypography.base,
-                        fontWeight: isActive ? FontWeight.w500 : FontWeight.w400,
-                        color: isSkipped
-                            ? secondaryTextColor.withValues(alpha: 0.5)
-                            : textColor,
-                        decoration: isSkipped
-                            ? TextDecoration.lineThrough
-                            : TextDecoration.none,
-                        height: AppTypography.bodyLineHeight,
-                      ),
-                    ),
-                  ),
-                  if (hasDetail)
-                    Icon(
-                      isRowExpanded
-                          ? CupertinoIcons.chevron_up
-                          : CupertinoIcons.chevron_down,
-                      size: AppTypography.xsPlus,
-                      color: secondaryTextColor,
-                    ),
-                ],
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            alignment: Alignment.topLeft,
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: AppTypography.sm,
+                color: secondaryTextColor,
+                height: AppTypography.lineHeightRelaxed,
               ),
             ),
           ),
-          if (isRowExpanded) ...[
-            if (event.detail.isNotEmpty)
-              Padding(
-                padding: EdgeInsets.only(
-                  left: isChild
-                      ? AppSpacing.twenty
-                      : AppSpacing.fourteen + AppSpacing.xs,
-                  bottom: AppSpacing.xs / 2,
-                ),
-                child: Text(
-                  event.detail,
-                  style: TextStyle(
-                    fontSize: AppTypography.sm,
-                    color: secondaryTextColor,
-                    height: AppTypography.lineHeightRelaxed,
-                  ),
-                ),
+          if (widget.isRunning)
+            Padding(
+              padding: EdgeInsets.only(top: AppSpacing.xs / 2),
+              child: _ThreeDotPulse(
+                color: accentColor.withValues(alpha: 0.5),
+                size: AppSpacing.xs,
               ),
-            if (event.references.isNotEmpty)
-              Padding(
-                padding: EdgeInsets.only(
-                  left: isChild
-                      ? AppSpacing.twenty
-                      : AppSpacing.fourteen + AppSpacing.xs,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: event.references
-                      .map((ref) {
-                        return GestureDetector(
-                          onTap: ref.url.isNotEmpty
-                              ? () =>
-                                    widget.onReferenceUrlTap?.call(ref.url)
-                              : null,
-                          child: Padding(
-                            padding: EdgeInsets.only(
-                              bottom: AppSpacing.xs / 2,
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    ref.title,
-                                    style: TextStyle(
-                                      fontSize: AppTypography.sm,
-                                      color: accentColor,
-                                      decoration: TextDecoration.underline,
-                                      decorationColor:
-                                          accentColor.withValues(alpha: 0.4),
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                if (ref.url.isNotEmpty)
-                                  Padding(
-                                    padding: EdgeInsets.only(
-                                      left: AppSpacing.xs,
-                                    ),
-                                    child: Icon(
-                                      CupertinoIcons.arrow_up_right,
-                                      size: AppTypography.xs,
-                                      color: accentColor.withValues(
-                                        alpha: 0.6,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        );
-                      })
-                      .toList(growable: false),
-                ),
-              ),
-          ],
+            ),
         ],
       ),
     );
@@ -753,8 +592,18 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
   Widget _buildUsageStatsLine({required Color secondaryTextColor}) {
     final stats = widget.processState.usageStats;
     final elapsed = widget.processState.elapsedMs;
-    final modelCalls = (stats['modelCallCount'] as num?)?.toInt() ?? 0;
-    final totalTokens = (stats['totalTokens'] as num?)?.toInt() ?? 0;
+    final runModelCalls =
+        ((stats['runModelCallCount'] as num?)?.toInt() ??
+            (stats['modelCallCount'] as num?)?.toInt() ??
+            0);
+    final runTotalTokens =
+        ((stats['runTotalTokens'] as num?)?.toInt() ??
+            (stats['totalTokens'] as num?)?.toInt() ??
+            0);
+    final modelCalls =
+        ((stats['cumulativeModelCallCount'] as num?)?.toInt() ?? runModelCalls);
+    final totalTokens =
+        ((stats['cumulativeTotalTokens'] as num?)?.toInt() ?? runTotalTokens);
     if (modelCalls == 0 && totalTokens == 0 && elapsed == 0) {
       return const SizedBox.shrink();
     }
@@ -766,6 +615,9 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
           '$modelCalls',
         ),
       );
+      if (runModelCalls > 0 && runModelCalls != modelCalls) {
+        parts.add('本轮 $runModelCalls');
+      }
     }
     if (totalTokens > 0) {
       parts.add(
@@ -774,6 +626,9 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
           '$totalTokens',
         ),
       );
+      if (runTotalTokens > 0 && runTotalTokens != totalTokens) {
+        parts.add('本轮Token $runTotalTokens');
+      }
     }
     if (elapsed > 0) {
       final seconds = (elapsed / 1000).toStringAsFixed(1);
@@ -943,6 +798,57 @@ class _ThreeDotPulseState extends State<_ThreeDotPulse>
           }),
         );
       },
+    );
+  }
+}
+
+/// Fade-and-slide-in animation for streaming flow event rows.
+/// Each row plays its entrance animation once on first build, giving
+/// a progressive "streaming" feel similar to 元宝.
+class _FlowEventFadeIn extends StatefulWidget {
+  const _FlowEventFadeIn({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_FlowEventFadeIn> createState() => _FlowEventFadeInState();
+}
+
+class _FlowEventFadeInState extends State<_FlowEventFadeIn>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _opacity;
+  late final Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    );
+    _opacity = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+    _slide = Tween<Offset>(
+      begin: const Offset(0, 0.18),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _opacity,
+      child: SlideTransition(
+        position: _slide,
+        child: widget.child,
+      ),
     );
   }
 }

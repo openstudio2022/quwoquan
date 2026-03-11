@@ -66,6 +66,8 @@ class ChatMessageNotifier extends StateNotifier<ChatMessageState> {
     String content, {
     String? mediaUrl,
     Map<String, dynamic>? media,
+    String? senderName,
+    String? senderAvatar,
   }) async {
     final clientMsgId = _uuid.v4();
     final optimistic = MessageDto(
@@ -74,6 +76,8 @@ class ChatMessageNotifier extends StateNotifier<ChatMessageState> {
       seq: _unconfirmedSeq,
       clientMsgId: clientMsgId,
       senderId: 'current_user',
+      senderName: senderName,
+      senderAvatar: senderAvatar,
       type: type,
       content: content,
       mediaUrl: mediaUrl,

@@ -74,7 +74,7 @@ class ProcessEventConsolidator {
         }
         final cleaned = _sanitizeForUser(event.message);
         if (cleaned.isNotEmpty) {
-          return _updateCurrentDetail(cleaned);
+          return _updateCurrentHeadline(cleaned);
         }
         return null;
 
