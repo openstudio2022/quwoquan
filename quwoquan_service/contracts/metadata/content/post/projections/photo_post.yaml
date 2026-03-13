@@ -18,6 +18,7 @@ consumers:
 fields:
   - { name: postId,         type: ObjectId }
   - { name: contentType,    type: enum,   description: "固定为 image" }
+  - { name: contentIdentity, type: enum,  description: "内容身份层。图片作品固定为 work" }
   - { name: authorId,              type: string }
   - { name: authorNickname,        type: string, description: 作者昵称（反范式） }
   - { name: authorAvatarUrl,       type: string, description: 作者头像（反范式） }
@@ -41,6 +42,11 @@ client_projection:
   base_class: PostBaseDto
   output_path: cloud/runtime/generated/content/photo_post_dto.g.dart
   computed_getters:
+    - name: displayFormat
+      dart_return_type: String
+      nullable: false
+      description: "展示格式。图片作品固定为 image。"
+      body: "return 'image';"
     - name: aspectRatio
       dart_return_type: "double?"
       nullable: true
@@ -62,6 +68,20 @@ client_projection:
       source: contentType
       aliases: [contentType, category]
       default: "'photo'"
+
+    - name: identity
+      dart_type: String
+      nullable: false
+      source: contentIdentity
+      aliases: [contentIdentity, identity]
+      default: "'work'"
+
+    - name: assistantUsePolicy
+      dart_type: String
+      nullable: false
+      source: assistantUsePolicy
+      aliases: [assistantUsePolicy]
+      default: "'inherit'"
 
     - name: authorId
       dart_type: String

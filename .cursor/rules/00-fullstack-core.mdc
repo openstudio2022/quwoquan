@@ -1,72 +1,30 @@
 ---
-description: quwoquan 端云一体核心规则（DDD + 契约 + 元数据 + runtime + 全栈看护）
+description: quwoquan 全栈核心约束：spec、metadata、DDD、商用准入
 alwaysApply: true
 ---
 
-# quwoquan 端云一体核心规则（SDD：Spec-Driven Development）
+# quwoquan 全栈核心约束
 
-> 端侧不再单独维护规则和命令，所有开发均为端云一体化。
-> 唯一主线见 `specs/00_MASTER_DEVELOPMENT_FLOW.md`。
+唯一主线见 `specs/00_MASTER_DEVELOPMENT_FLOW.md`。
 
-## 核心原则
+## 必守约束
 
-- `spec-first`：需求规格（spec + acceptance）先于设计，设计先于实现。
-- `acceptance-first`：先定义 `A1~An` 与 `T1~T4` 责任，再进入设计与编码。
-- `test-first`：默认执行 TDD，先写失败测试，再写最小实现，再重构。
-- `contracts-first`：先 contracts/metadata YAML，再 codegen，再业务逻辑。
-- `metadata-single-source`：凡涉及 API path、operation、surface、route、decoder context、path template，必须由 metadata 定义并经 codegen 消费，禁止代码维护第二份字符串规则表。
-- DDD 分层：domain → application → adapters → infrastructure（单向依赖）。
-- 元数据驱动：字段策略由 `contracts/metadata/*` 声明，禁止硬编码。
-- 横切统一 `runtime`，领域服务禁止自行实现横切（`01-arch-constraints §1.3`）。
-- 验收先行：`acceptance.yaml` A1~An 须在实施前定义。
-- 非功能先行：实时性、弱网、并发、容量、性能、弹性、灰度生产要求须在 `/prd` 与 `/design` 明确。
-- 对标先行：对标一流体验必须形成借鉴点、禁借鉴点、适用边界、体验目标与差距收敛计划。
-- 扩展遵从：25 个场景必须经 `/extend` 入口，metadata-first → codegen → 测试 → gate。
-- 门禁拦截：`make gate` / `make gate-full` 全部通过才可合入。
-- **原型例外**：`/try` 豁免特性树分解，其余约束完整遵从；验证成功后必须执行 `/land` 基线化。
+- `spec-first` + `acceptance-first` + `test-first`。
+- DDD 依赖方向固定为 `domain <- application <- adapters <- infrastructure`。
+- `contracts/metadata/*` 是字段、错误码、`path / operation / surface / route / decoder context` 的唯一真相源。
+- codegen 文件禁止手改；新增字段、接口、路由、错误码必须先 metadata，再 verify/codegen。
+- UI、Repository、Router、埋点与文档不得维护第二套 IA、path、surface、operation 或 decoder 规则表。
+- 凡是用户可见、可灰度、可分享、可被小趣消费的能力，必须在 `/prd` 与 `/design` 先冻结 benchmark、`SLO/KPI`、权限边界、数据生命周期、迁移/灰度/回滚、观测方案。
+- 与既有 Story 冲突时，先在 `spec.md` 明确覆盖矩阵与优先级，再进入设计。
+- `/dev` 前必须已有稳定的 `spec.md`、`acceptance.yaml`、`design.md`、`tasks.md`，且 codegen 已通过。
+- 测试层只使用 `T1~T4`。
+- 缺关键前置时直接 `GATE_BLOCK`，不要绕过流程直接实现。
 
-## SDD 阶段卡点
+## 交付口径
 
-```
-Phase Gate → 阶段准入自检（PRD/Design/Dev/Deliver Gate）
-G0  explore → prd       PRD Gate 通过
-G1  prd → design        Design Gate + make verify-metadata + make codegen
-G2  design → dev        Dev Gate + Red/Green/Refactor + 每 task 后 make build + make test-contract
-G3  dev 内收口         make gate-full + T1~T4 自验证 + gray-release ready + 自动归档
-G4  dev → commit        L1+L2 门禁 + 审计 + git commit + push
-G5  commit → deploy     部署 integration + L3/L4 + 灰度 prod + SLO/回滚卡点
-```
-
-## 规则集
-
-| 编号 | 守护内容 |
-|-----|---------|
-| 00 | 本规则：端云一体核心（SDD 主线） |
-| 01-arch-constraints | DDD 导入 + 数据库隔离 + runtime 统一 + codegen 保护 + 25 扩展场景 |
-| 02-dart-coding | Dart 编码标准 + 设计系统 + 状态管理 |
-| 03-testing | 端云契约测试标准 |
-
-## SDD 命令集
-
-| 命令 | 用途 |
-|------|------|
-| `/explore` | 探索思考，不写代码（SDD 入口） |
-| `/prd` | 需求规格基线（spec + acceptance 草稿） |
-| `/design` | 设计基线（design + tasks + metadata + codegen） |
-| `/dev` | 实施特性（逐 task，完成后自动 G3、自归档、等待提交） |
-| `/archive` | 兼容归档入口（标准流不单独使用） |
-| `/commit` | 提交入库（根流程唯一 submit 语义命令） |
-| `/deploy` | 部署（integration → L3/L4 → prod 灰度） |
-| `/deliver` | 全链路：dev + archive + commit 一气呵成 |
-| `/verify` | 特性级漂移检测 + G3 |
-| `/audit` | 代码库级结构健康度审计 |
-| `/try` | 原型模式（豁免特性树，其余约束完整遵从） |
-| `/land` | 原型落地基线化（try 验证成功后） |
-| `/extend` | 实施阶段增量扩展（S01~S25） |
-| `/prune` | 清理过期特性树节点 |
-
-说明：
-- 标准流程不再要求单独执行 `/archive`
-- `/dev` 完成后应已处于“已归档、可提交、可灰度发布”状态
-- 原型流程仍通过 `/land` 完成基线化与归档语义
+- `/explore`：定位 `L1/L2/L3`，识别 metadata、NFR、权限与发布风险。
+- `/prd`：冻结规格、验收、商用基线。
+- `/design`：冻结方案、任务、metadata/codegen、迁移与回滚。
+- `/dev`：按 `metadata -> codegen -> 业务逻辑 -> 测试` 执行。
+- `/commit` / `/deploy`：以门禁、SLO、灰度与回滚演练为准。
 

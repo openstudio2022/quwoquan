@@ -86,6 +86,17 @@ errors:
       zh: "所选铃声不可用，请从官方铃声库中重新选择"
       en: "Selected ringtone is unavailable, please choose from the official library"
 
+  - code: USER.SETTING.invalid_appearance_scope
+    kind: SETTING
+    reason: invalid_argument
+    http_status: 400
+    retryable: false
+    dart_const: invalidAppearanceScope
+    go_const: ErrInvalidAppearanceScope
+    user_message:
+      zh: "外观设置作用范围无效，请重试"
+      en: "Appearance settings scope is invalid, please try again"
+
   - code: USER.SYSTEM.internal_error
     kind: SYSTEM
     reason: internal_error

@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_tab.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
@@ -28,25 +29,16 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   String? _error;
   List<Map<String, dynamic>> _feedItems = const [];
 
-  static const _subTabLabels = {
-    CreationSubTab.all: UITextConstants.circleSubAll,
-    CreationSubTab.micro: UITextConstants.circleSubMicro,
-    CreationSubTab.image: UITextConstants.circleSubPhoto,
-    CreationSubTab.video: UITextConstants.circleSubVideo,
-    CreationSubTab.article: UITextConstants.circleSubArticle,
-  };
+  List<IdentityFilterConfig> get _identityFilters =>
+      ContentUIConfig.creationIdentityFilters;
+
+  List<WorkFormatFilterConfig> get _workFormatFilters =>
+      ContentUIConfig.workFormatFilters;
 
   static const _sortLabels = {
     CreationSortMode.latest: UITextConstants.circleSortLatest,
     CreationSortMode.hot: UITextConstants.circleSortHot,
     CreationSortMode.featured: UITextConstants.circleSortFeatured,
-  };
-
-  static const _subTabTypeMap = {
-    CreationSubTab.micro: 'moment',
-    CreationSubTab.image: 'photo',
-    CreationSubTab.video: 'video',
-    CreationSubTab.article: 'article',
   };
 
   @override
@@ -63,8 +55,11 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     try {
       final notifier = ref.read(circleStateProvider(widget.circleId));
       final repo = ref.read(circleRepositoryProvider);
+      final query = _feedQueryForState(notifier.state);
       final items = await repo.getCircleFeed(
         widget.circleId,
+        identity: query.identity,
+        type: query.type,
         sort: notifier.state.sortMode.name,
       );
       if (mounted) {
@@ -86,14 +81,26 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   @override
   Widget build(BuildContext context) {
     final notifier = ref.watch(circleStateProvider(widget.circleId));
-    final fg = AppColorsFunctional.getColor(widget.isDark, ColorType.foregroundPrimary);
-    final fgSecondary = AppColorsFunctional.getColor(widget.isDark, ColorType.foregroundSecondary);
+    final fg = AppColorsFunctional.getColor(
+      widget.isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      widget.isDark,
+      ColorType.foregroundSecondary,
+    );
 
     return Column(
       children: [
-        _buildSubTabRow(notifier, fg, fgSecondary),
-        if (_isAdminOrOwner)
+        _buildIdentityFilterRow(notifier, fg, fgSecondary),
+        if (notifier.state.activeSubTab == CreationSubTab.work) ...[
+          SizedBox(height: AppSpacing.sm),
+          _buildWorkFormatFilterRow(notifier, fg, fgSecondary),
+        ],
+        if (_isAdminOrOwner) ...[
           _buildSortControls(notifier, fg, fgSecondary),
+          _buildViewModeToggle(notifier),
+        ],
         SizedBox(height: AppSpacing.sm),
         Expanded(child: _buildContent(notifier, fg, fgSecondary)),
       ],
@@ -103,36 +110,219 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   bool get _isAdminOrOwner =>
       widget.role == CircleRole.owner || widget.role == CircleRole.admin;
 
-  Widget _buildSubTabRow(CircleStateNotifier notifier, Color fg, Color fgSecondary) {
-    final activeTab = notifier.state.activeSubTab;
-    return SizedBox(
-      height: AppSpacing.subTabNavigationHeight,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
-        children: CreationSubTab.values.map((tab) {
-          final isActive = tab == activeTab;
-          return GestureDetector(
-            onTap: () => notifier.setSubTab(tab),
-            child: Container(
-              alignment: Alignment.center,
-              padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
-              child: Text(
-                _subTabLabels[tab]!,
-                style: TextStyle(
-                  fontSize: AppTypography.md,
-                  fontWeight: isActive ? AppTypography.semiBold : AppTypography.normal,
-                  color: isActive ? AppColors.primaryColor : fgSecondary,
+  ({String? identity, String? type}) _feedQueryForState(CircleState state) {
+    switch (state.activeSubTab) {
+      case CreationSubTab.moment:
+        return (identity: 'moment', type: null);
+      case CreationSubTab.work:
+        return (
+          identity: 'work',
+          type: _contentTypeForWorkFormat(state.activeWorkFormat),
+        );
+      case CreationSubTab.all:
+        return (identity: null, type: null);
+    }
+  }
+
+  Widget _buildIdentityFilterRow(
+    CircleStateNotifier notifier,
+    Color fg,
+    Color fgSecondary,
+  ) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
+      child: Row(
+        children: _identityFilters
+            .map((filter) {
+              final tab = _creationSubTabForId(filter.id);
+              final selected = notifier.state.activeSubTab == tab;
+              return Padding(
+                padding: EdgeInsets.only(right: AppSpacing.sm),
+                child: ChoiceChip(
+                  label: Text(
+                    UITextConstants.contentLabelForKey(filter.labelKey),
+                  ),
+                  selected: selected,
+                  onSelected: (_) {
+                    notifier.setSubTab(tab);
+                    _loadFeed();
+                  },
+                  labelStyle: TextStyle(
+                    color: selected ? fg : fgSecondary,
+                    fontWeight: AppTypography.semiBold,
+                  ),
+                  selectedColor: AppColors.primaryColor.withValues(alpha: 0.14),
+                  backgroundColor: Colors.transparent,
+                  side: BorderSide(
+                    color: selected
+                        ? AppColors.primaryColor.withValues(alpha: 0.45)
+                        : fgSecondary.withValues(alpha: 0.2),
+                  ),
                 ),
-              ),
-            ),
-          );
-        }).toList(),
+              );
+            })
+            .toList(growable: false),
       ),
     );
   }
 
-  Widget _buildSortControls(CircleStateNotifier notifier, Color fg, Color fgSecondary) {
+  Widget _buildWorkFormatFilterRow(
+    CircleStateNotifier notifier,
+    Color fg,
+    Color fgSecondary,
+  ) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
+      child: Row(
+        children: _workFormatFilters
+            .map((filter) {
+              final format = _creationWorkFormatForId(filter.id);
+              final selected = notifier.state.activeWorkFormat == format;
+              return Padding(
+                padding: EdgeInsets.only(right: AppSpacing.sm),
+                child: ChoiceChip(
+                  label: Text(
+                    UITextConstants.contentLabelForKey(filter.labelKey),
+                  ),
+                  selected: selected,
+                  onSelected: (_) {
+                    notifier.setWorkFormat(format);
+                    _loadFeed();
+                  },
+                  labelStyle: TextStyle(
+                    color: selected ? fg : fgSecondary,
+                    fontWeight: AppTypography.semiBold,
+                  ),
+                  selectedColor: AppColors.primaryColor.withValues(alpha: 0.14),
+                  backgroundColor: Colors.transparent,
+                  side: BorderSide(
+                    color: selected
+                        ? AppColors.primaryColor.withValues(alpha: 0.45)
+                        : fgSecondary.withValues(alpha: 0.2),
+                  ),
+                ),
+              );
+            })
+            .toList(growable: false),
+      ),
+    );
+  }
+
+  CreationSubTab _creationSubTabForId(String id) {
+    switch (id) {
+      case 'moment':
+        return CreationSubTab.moment;
+      case 'work':
+        return CreationSubTab.work;
+      default:
+        return CreationSubTab.all;
+    }
+  }
+
+  CreationWorkFormat _creationWorkFormatForId(String id) {
+    switch (id) {
+      case 'image':
+        return CreationWorkFormat.image;
+      case 'video':
+        return CreationWorkFormat.video;
+      case 'note':
+        return CreationWorkFormat.note;
+      default:
+        return CreationWorkFormat.all;
+    }
+  }
+
+  String? _contentTypeForWorkFormat(CreationWorkFormat format) {
+    switch (format) {
+      case CreationWorkFormat.image:
+        return 'image';
+      case CreationWorkFormat.video:
+        return 'video';
+      case CreationWorkFormat.note:
+        return 'article';
+      case CreationWorkFormat.all:
+        return null;
+    }
+  }
+
+  bool _matchesIdentityFilter(Map<String, dynamic> item, CreationSubTab tab) {
+    switch (tab) {
+      case CreationSubTab.moment:
+        return _itemIdentity(item) == 'moment';
+      case CreationSubTab.work:
+        return _itemIdentity(item) == 'work';
+      case CreationSubTab.all:
+        return true;
+    }
+  }
+
+  bool _matchesWorkFormat(
+    Map<String, dynamic> item,
+    CreationSubTab activeSubTab,
+    CreationWorkFormat format,
+  ) {
+    if (activeSubTab != CreationSubTab.work ||
+        format == CreationWorkFormat.all) {
+      return true;
+    }
+    switch (format) {
+      case CreationWorkFormat.image:
+        return _itemDisplayFormat(item) == 'image';
+      case CreationWorkFormat.video:
+        return _itemDisplayFormat(item) == 'video';
+      case CreationWorkFormat.note:
+        return _itemDisplayFormat(item) == 'note';
+      case CreationWorkFormat.all:
+        return true;
+    }
+  }
+
+  String _itemIdentity(Map<String, dynamic> item) {
+    return (item['contentIdentity'] ??
+            (item['type']?.toString() == 'moment' ? 'moment' : 'work'))
+        .toString();
+  }
+
+  String _itemDisplayFormat(Map<String, dynamic> item) {
+    final type = (item['type'] ?? '').toString();
+    switch (type) {
+      case 'image':
+        return 'image';
+      case 'video':
+        return 'video';
+      case 'article':
+        return 'note';
+      case 'moment':
+        return 'moment';
+      default:
+        return type;
+    }
+  }
+
+  String _itemTypeLabel(Map<String, dynamic> item) {
+    final identity = _itemIdentity(item);
+    if (identity == 'moment') {
+      return UITextConstants.creationFilterMoment;
+    }
+    switch (_itemDisplayFormat(item)) {
+      case 'image':
+        return UITextConstants.workFormatFilterImage;
+      case 'video':
+        return UITextConstants.workFormatFilterVideo;
+      case 'note':
+        return UITextConstants.workFormatFilterNote;
+      default:
+        return UITextConstants.creationFilterWork;
+    }
+  }
+
+  Widget _buildSortControls(
+    CircleStateNotifier notifier,
+    Color fg,
+    Color fgSecondary,
+  ) {
     final activeSortMode = notifier.state.sortMode;
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
@@ -154,10 +344,12 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
                 decoration: BoxDecoration(
                   color: selected
                       ? (widget.isDark
-                          ? Colors.white.withValues(alpha: 0.1)
-                          : Colors.black.withValues(alpha: 0.06))
+                            ? Colors.white.withValues(alpha: 0.1)
+                            : Colors.black.withValues(alpha: 0.06))
                       : null,
-                  borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+                  borderRadius: BorderRadius.circular(
+                    AppSpacing.circularBorderRadius,
+                  ),
                   border: Border.all(
                     color: widget.isDark ? Colors.white24 : Colors.black12,
                   ),
@@ -178,7 +370,43 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     );
   }
 
-  Widget _buildContent(CircleStateNotifier notifier, Color fg, Color fgSecondary) {
+  Widget _buildViewModeToggle(CircleStateNotifier notifier) {
+    final activeMode = notifier.state.viewMode;
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          IconButton(
+            tooltip: '网格视图',
+            onPressed: () => notifier.setViewMode(CreationViewMode.grid),
+            icon: Icon(
+              Icons.grid_view_rounded,
+              color: activeMode == CreationViewMode.grid
+                  ? AppColors.primaryColor
+                  : null,
+            ),
+          ),
+          IconButton(
+            tooltip: '列表视图',
+            onPressed: () => notifier.setViewMode(CreationViewMode.list),
+            icon: Icon(
+              Icons.view_agenda_outlined,
+              color: activeMode == CreationViewMode.list
+                  ? AppColors.primaryColor
+                  : null,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContent(
+    CircleStateNotifier notifier,
+    Color fg,
+    Color fgSecondary,
+  ) {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator.adaptive());
     }
@@ -187,14 +415,26 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     }
 
     final activeSubTab = notifier.state.activeSubTab;
+    final activeWorkFormat = notifier.state.activeWorkFormat;
     final filtered = _feedItems.where((item) {
-      if (activeSubTab == CreationSubTab.all) return true;
-      final postType = (item['type'] ?? '').toString();
-      return postType == _subTabTypeMap[activeSubTab];
+      return _matchesIdentityFilter(item, activeSubTab) &&
+          _matchesWorkFormat(item, activeSubTab, activeWorkFormat);
     }).toList();
 
     if (filtered.isEmpty) {
       return _buildEmpty(fgSecondary);
+    }
+
+    if (notifier.state.viewMode == CreationViewMode.list) {
+      return ListView.separated(
+        padding: EdgeInsets.all(AppSpacing.containerSm),
+        itemCount: filtered.length,
+        separatorBuilder: (_, _) => SizedBox(height: AppSpacing.sm),
+        itemBuilder: (context, index) {
+          final item = filtered[index];
+          return _buildListItem(item, fgSecondary);
+        },
+      );
     }
 
     return GridView.builder(
@@ -218,7 +458,9 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     final imageUrls = item['imageUrls'];
     final resolvedCover = cover.isNotEmpty
         ? cover
-        : (imageUrls is List && imageUrls.isNotEmpty ? imageUrls[0].toString() : '');
+        : (imageUrls is List && imageUrls.isNotEmpty
+              ? imageUrls[0].toString()
+              : '');
     final likeCount = item['likeCount'] ?? item['likes'] ?? 0;
 
     return ClipRRect(
@@ -258,7 +500,11 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.favorite, size: AppTypography.sm, color: Colors.white),
+                  Icon(
+                    Icons.favorite,
+                    size: AppTypography.sm,
+                    color: Colors.white,
+                  ),
                   SizedBox(width: AppSpacing.intraGroupXs),
                   Text(
                     '$likeCount',
@@ -270,6 +516,72 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
                   ),
                 ],
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildListItem(Map<String, dynamic> item, Color fgSecondary) {
+    final cover = (item['coverUrl'] ?? item['thumbnailUrl'] ?? '').toString();
+    final likeCount = item['likeCount'] ?? item['likes'] ?? 0;
+    final typeLabel = _itemTypeLabel(item);
+    return Container(
+      padding: EdgeInsets.all(AppSpacing.containerSm),
+      decoration: BoxDecoration(
+        color: widget.isDark
+            ? Colors.white10
+            : Colors.black.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+      ),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+            child: SizedBox(
+              width: AppSpacing.followButtonWidth + AppSpacing.intraGroupMd,
+              height: AppSpacing.followButtonWidth + AppSpacing.intraGroupMd,
+              child: cover.isNotEmpty
+                  ? Image.network(
+                      cover,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => Container(
+                        color: fgSecondary.withValues(alpha: 0.1),
+                        child: Icon(Icons.image, color: fgSecondary),
+                      ),
+                    )
+                  : Container(
+                      color: fgSecondary.withValues(alpha: 0.1),
+                      child: Icon(Icons.image, color: fgSecondary),
+                    ),
+            ),
+          ),
+          SizedBox(width: AppSpacing.containerSm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  typeLabel,
+                  style: TextStyle(
+                    fontSize: AppTypography.sm,
+                    color: AppColors.primaryColor,
+                    fontWeight: AppTypography.semiBold,
+                  ),
+                ),
+                SizedBox(height: AppSpacing.intraGroupXs),
+                Text(
+                  '赞 $likeCount',
+                  style: TextStyle(
+                    fontSize: AppTypography.base,
+                    color: AppColorsFunctional.getColor(
+                      widget.isDark,
+                      ColorType.foregroundPrimary,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -302,7 +614,11 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.error_outline, color: AppColors.error, size: AppSpacing.iconLarge),
+          Icon(
+            Icons.error_outline,
+            color: AppColors.error,
+            size: AppSpacing.iconLarge,
+          ),
           SizedBox(height: AppSpacing.sm),
           Text(
             UITextConstants.loadFailed,

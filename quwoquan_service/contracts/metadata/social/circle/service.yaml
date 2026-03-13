@@ -70,7 +70,7 @@ api_routes:
     path: /v1/circles/{circleId}/feed
     operation: GetCircleFeed
     description: 圈子动态流
-    query_params: [cursor, limit, sort]
+    query_params: [identity, type, cursor, limit, sort]
 
   - method: GET
     path: /v1/circles/{circleId}/stats

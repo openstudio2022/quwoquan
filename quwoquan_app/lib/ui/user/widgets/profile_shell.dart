@@ -13,7 +13,6 @@ import 'package:quwoquan_app/ui/user/widgets/profile_header.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_stats_row.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_action_bar.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_resonance_card.dart';
-import 'package:quwoquan_app/ui/user/widgets/profile_moments_tab.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_works_tab.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_circles_tab.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_interaction_tab.dart';
@@ -50,12 +49,12 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
   bool _isPulling = false;
   bool _isHeaderCollapsed = false;
 
-  static const _tabLabels = ['微趣', '作品', '圈子', '互动'];
+  static const _tabLabels = ['创作', '圈子', '互动'];
 
   @override
   void initState() {
     super.initState();
-    _mainTabController = TabController(length: 4, vsync: this);
+    _mainTabController = TabController(length: 3, vsync: this);
     _mainTabController.addListener(_onTabChanged);
     _pullBackController = AnimationController(
       duration: const Duration(milliseconds: 250),
@@ -76,9 +75,9 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
   void _showGreetDialog(BuildContext context) {
     // TODO(D2): 打招呼对话框（自定义内容 + GreetingRepository.sendGreeting）
     // 当前阶段使用 Snackbar 占位，待 greeting_repository 后端就绪后替换
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('打招呼功能即将上线')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('打招呼功能即将上线')));
   }
 
   Future<void> _startCall(BuildContext context, String callType) async {
@@ -122,8 +121,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
       final pixels = notification.metrics.pixels;
       if (pixels < 0) {
         final screenHeight = MediaQuery.of(context).size.height;
-        final expandedHeight =
-            max(420.0, screenHeight * 0.25 + kToolbarHeight);
+        final expandedHeight = max(420.0, screenHeight * 0.25 + kToolbarHeight);
         final maxPull = min(screenHeight * 0.25, expandedHeight);
         setState(() {
           _rawPullOffset = -pixels;
@@ -173,15 +171,26 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
     final notifier = ref.watch(profileNotifierProvider(widget.userId));
     final state = notifier.state;
     final userData = ref.watch(userDataProvider);
-    final bg = AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
-    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    final bg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
+    final fg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
     final primary = AppColors.primaryColor;
 
     final avatarUrl = widget.initialAvatarUrl ?? userData?.avatar;
-    final displayName = widget.initialDisplayName ?? userData?.displayName ?? widget.userId;
+    final displayName =
+        widget.initialDisplayName ?? userData?.displayName ?? widget.userId;
     final bio = userData?.bio;
-    final backgroundUrl = widget.initialBackgroundUrl ?? userData?.backgroundImage;
+    final backgroundUrl =
+        widget.initialBackgroundUrl ?? userData?.backgroundImage;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
@@ -201,7 +210,8 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
             headerSliverBuilder: (context, innerBoxIsScrolled) {
               if (innerBoxIsScrolled != _isHeaderCollapsed) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted) setState(() => _isHeaderCollapsed = innerBoxIsScrolled);
+                  if (mounted)
+                    setState(() => _isHeaderCollapsed = innerBoxIsScrolled);
                 });
               }
 
@@ -263,7 +273,12 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
                       children: [
                         if (backgroundUrl != null && backgroundUrl.isNotEmpty)
                           Transform.scale(
-                            scale: 1 + (_pullOffset / (MediaQuery.of(context).size.height * 0.25 + 1) / 2),
+                            scale:
+                                1 +
+                                (_pullOffset /
+                                    (MediaQuery.of(context).size.height * 0.25 +
+                                        1) /
+                                    2),
                             child: Image.network(
                               backgroundUrl,
                               fit: BoxFit.cover,
@@ -309,7 +324,9 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
                                   mode: widget.mode,
                                   isDark: isDark,
                                   resonanceCount: 128,
-                                  onTap: () => context.push(AppRoutePaths.profileResonance),
+                                  onTap: () => context.push(
+                                    AppRoutePaths.profileResonance,
+                                  ),
                                 ),
                                 SizedBox(height: AppSpacing.sm),
                                 ProfileStatsRow(
@@ -325,17 +342,20 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
                                   isDark: isDark,
                                   isFollowing: state.isFollowing,
                                   capability: state.capability,
-                                  onEditProfile: () => context.push(AppRoutePaths.profileEdit),
-                                  onManagePersonas: () => context.push(AppRoutePaths.profilePersonas),
+                                  onEditProfile: () =>
+                                      context.push(AppRoutePaths.profileEdit),
+                                  onManagePersonas: () => context.push(
+                                    AppRoutePaths.profilePersonas,
+                                  ),
                                   onFollow: notifier.toggleFollow,
                                   onMessage: () => context.push(
-                                    AppRoutePaths.chatDetail(
-                                      id: widget.userId,
-                                    ),
+                                    AppRoutePaths.chatDetail(id: widget.userId),
                                   ),
                                   onGreet: () => _showGreetDialog(context),
-                                  onVoiceCall: () => _startCall(context, 'voice'),
-                                  onVideoCall: () => _startCall(context, 'video'),
+                                  onVoiceCall: () =>
+                                      _startCall(context, 'voice'),
+                                  onVideoCall: () =>
+                                      _startCall(context, 'video'),
                                 ),
                               ],
                             ),
@@ -386,10 +406,21 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
     final tabView = TabBarView(
       controller: _mainTabController,
       children: [
-        ProfileMomentsTab(mode: widget.mode, userId: widget.userId, isDark: isDark),
-        ProfileWorksTab(mode: widget.mode, userId: widget.userId, isDark: isDark),
-        ProfileCirclesTab(mode: widget.mode, userId: widget.userId, isDark: isDark),
-        ProfileInteractionTab(mode: widget.mode, userId: widget.userId, isDark: isDark),
+        ProfileWorksTab(
+          mode: widget.mode,
+          userId: widget.userId,
+          isDark: isDark,
+        ),
+        ProfileCirclesTab(
+          mode: widget.mode,
+          userId: widget.userId,
+          isDark: isDark,
+        ),
+        ProfileInteractionTab(
+          mode: widget.mode,
+          userId: widget.userId,
+          isDark: isDark,
+        ),
       ],
     );
 
@@ -405,8 +436,14 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
   }
 
   void _showMoreOptions(BuildContext context, bool isDark) {
-    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final bg = AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
+    final fg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final bg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
 
     showModalBottomSheet<void>(
       context: context,
@@ -426,7 +463,9 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
               height: AppSpacing.intraGroupXs,
               decoration: BoxDecoration(
                 color: fg.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(AppSpacing.smallBorderRadius),
+                borderRadius: BorderRadius.circular(
+                  AppSpacing.smallBorderRadius,
+                ),
               ),
             ),
             ListTile(
@@ -464,7 +503,11 @@ class _TabBarDelegate extends SliverPersistentHeaderDelegate {
   double get maxExtent => height;
 
   @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
     return SizedBox.expand(child: child);
   }
 

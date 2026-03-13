@@ -111,26 +111,29 @@
   - 对比/分析/总结/多维研究 → `complex_reasoning`（允许多轮反思、扩搜、追问）
 - 有 web_search 时 `queryNormalization` 必须输出
 - `queryVariants` 只有在 `variantBudget > 0` 时才允许输出，且必须覆盖表面需求和深层动机
-- `thinkingText` 必须为面向用户的自然中文，禁止出现 JSON 键名、字段路径、内部变量名
+- 优先输出 `reasonShort` 作为面向用户的短理由；如仍输出 `thinkingText`，必须与 `reasonShort` 完全一致
 - 跨域问题必须在 `subagentPlan` 中声明副技能
 - `subagentPlan` 中每个子任务都必须有 `problemClass`
 - `subagentPlan` 中每个子任务都必须有 `stopPolicy/searchIntensity/providerPolicy/freshnessHoursMax/answerThreshold`
 
 ## 执行要求
 
-### thinkingText 要求
+### reasonShort / thinkingText 要求
 
-`thinkingText` 会实时展示给用户，必须是自然中文：
+`reasonShort` 会实时展示给用户，必须是自然中文短理由：
 
 **理解问题阶段**（首次规划）：
-- 说明你理解到用户想知道什么、选了哪个技能、关键词怎么设计
-- 示例："用户想了解深圳今天的天气情况，我先获取位置确认城市，再搜索最新气象数据。"
+- 只解释为什么现在这样规划，不要列内部步骤清单
+- 示例：`先确认问题落点，后面查资料才不会跑偏。`
 
 **分析整理阶段**（获得工具结果后）：
-- 说明搜到了什么关键信息、哪些来源最可靠
-- 示例："搜索到深圳今天多云转晴，22-28°C。气象局和天气网数据一致，以气象局为主。"
+- 只解释为什么现在可以收敛，或为什么还要补一轮
+- 示例：`主线已经有了，但还差一处会影响判断的信息，所以再补一轮。`
 
-禁止在 thinkingText 中出现 JSON 键名、字段路径、内部变量名。
+禁止拼接或改写用户原话。
+禁止 `我先帮你把…`、`收一收`、`你更像是想知道…`、`我先替你…`。
+禁止在 `reasonShort` / `thinkingText` 中出现 JSON 键名、字段路径、内部变量名。
+若输出 `thinkingText`，内容必须与 `reasonShort` 完全一致。
 
 ## 输出格式
 
@@ -141,6 +144,12 @@
   "primaryDomainId": "finance_consumer",
   "problemClass": "complex_reasoning",
   "mode": "qa",
+  "phaseId": "understanding",
+  "actionCode": "frame_problem",
+  "reasonCode": "align_goal",
+  "reasonShort": "先确认问题落点，后面查资料才不会跑偏。",
+  "source": "model",
+  "thinkingText": "兼容字段；如输出，必须与 reasonShort 完全一致，否则留空",
   "inferredMotive": "在做投资研究，想找台积电供应链中的A股标的",
   "slotFillPlan": { ... },
   "queryNormalization": { ... },
@@ -175,7 +184,7 @@
 - [ ] 有 web_search 时 queryNormalization 是否已输出？
 - [ ] 是否严格遵守了 `skillExecutionShell` 的预算、provider 和 freshness 限制？
 - [ ] 若 `variantBudget > 0`，queryVariants 是否覆盖了表面需求和深层动机？
-- [ ] thinkingText 是否为面向用户的自然语言？
+- [ ] reasonShort 是否为面向用户的短理由，且没有拼接用户原话？
 - [ ] 跨域问题是否在 subagentPlan 中声明了副技能？
 - [ ] 每个 subagentPlan 子任务是否都给出了自己的 problemClass，且与该子任务目标一致？
 - [ ] 每个 subagentPlan 子任务是否都给出了完整求解策略，而不是只有 domainId 和 goal？

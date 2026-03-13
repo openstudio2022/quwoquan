@@ -30,6 +30,7 @@ class ContentRequestPageIds {
     'ListCommentsByAuthor': 'content.list.comments.by.author',
     'ListCommentsForPostAuthor': 'content.list.comments.for.post.author',
     'ListUserPosts': 'content.user.posts',
+    'PromotePostToWork': 'content.post.promote',
     'PublishPost': 'content.post.publish',
     'QuoteToCircle': 'content.post.quote',
     'ReportBehaviors': 'content.behaviors.report',
@@ -42,6 +43,7 @@ class ContentRequestPageIds {
     'UnlikePost': 'content.post.unlike',
     'UpdatePost': 'content.post.update',
     'UpdatePostCircles': 'content.post.circles',
+    'UpdatePostSettings': 'content.post.settings',
   };
 
   static const String abortMediaUpload = 'content.media.abort';
@@ -69,6 +71,7 @@ class ContentRequestPageIds {
   static const String listCommentsByAuthor = 'content.list.comments.by.author';
   static const String listCommentsForPostAuthor = 'content.list.comments.for.post.author';
   static const String listUserPosts = 'content.user.posts';
+  static const String promotePostToWork = 'content.post.promote';
   static const String publishPost = 'content.post.publish';
   static const String quoteToCircle = 'content.post.quote';
   static const String reportBehaviors = 'content.behaviors.report';
@@ -81,4 +84,5 @@ class ContentRequestPageIds {
   static const String unlikePost = 'content.post.unlike';
   static const String updatePost = 'content.post.update';
   static const String updatePostCircles = 'content.post.circles';
+  static const String updatePostSettings = 'content.post.settings';
 }

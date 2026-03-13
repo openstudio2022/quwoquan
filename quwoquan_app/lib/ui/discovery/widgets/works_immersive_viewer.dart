@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagement_bar.dart';
@@ -21,6 +22,9 @@ import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
+import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
+import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
+import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 
 class WorksImmersiveViewer extends ConsumerStatefulWidget {
@@ -40,7 +44,8 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
     String? avatarUrl,
     String? displayName,
     String? backgroundUrl,
-  }) onUserTap;
+  })
+  onUserTap;
   final VoidCallback onAssistantTap;
   final VoidCallback? onSwitchToMoment;
   final VoidCallback? onRevealSystemNav;
@@ -63,6 +68,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   final Set<String> _likedPosts = <String>{};
   final Set<String> _savedPosts = <String>{};
   final Set<String> _followingUsers = <String>{};
+  final Map<String, int> _shareCountDelta = <String, int>{};
   final Map<String, int> _photoInnerIndex = <String, int>{};
   final Map<String, int> _articleInnerIndex = <String, int>{};
   final Map<String, int> _videoInnerIndex = <String, int>{};
@@ -159,17 +165,24 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         ? null
         : posts[_currentPage.clamp(0, posts.length - 1)] as PostBaseDto?;
     if (post == null) return;
+    final enableIdentityTemplate = ref.read(
+      contentFeatureFlagProvider('enable_identity_share_template'),
+    );
     MoreActionPopup.show(
       context: context,
       config: MediaPostMoreActionConfig(
         post: post,
         onSave: () => _onFavorite(post),
-        onCopyLink: () {
-          // TODO: copy link to clipboard
-        },
-        onShare: () {
-          ref.read(contentBehaviorTrackerProvider).trackShare(post.id);
-        },
+        onCopyLink: () => _copyLink(
+          context,
+          post,
+          enableIdentityTemplate: enableIdentityTemplate,
+        ),
+        onShare: () => _sharePost(
+          context,
+          post,
+          enableIdentityTemplate: enableIdentityTemplate,
+        ),
         onNotInterested: () {
           ref.read(contentBehaviorTrackerProvider).trackDislike(post.id);
         },
@@ -179,18 +192,21 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         onBlockWords: () async {
           final keyword = _keywordForPost(post);
           if (keyword.isEmpty) return;
-          await ref.read(keywordBlockRepositoryProvider).addBlockedKeyword(keyword);
+          await ref
+              .read(keywordBlockRepositoryProvider)
+              .addBlockedKeyword(keyword);
         },
         onReport: () {
-          ref.read(behaviorRepositoryProvider).reportSingle(
-            contentId: post.id,
-            action: 'report',
-          );
-          ref.read(reportRepositoryProvider).createReport(
-            targetId: post.id,
-            targetType: 'post',
-            reason: 'inappropriate',
-          );
+          ref
+              .read(behaviorRepositoryProvider)
+              .reportSingle(contentId: post.id, action: 'report');
+          ref
+              .read(reportRepositoryProvider)
+              .createReport(
+                targetId: post.id,
+                targetType: 'post',
+                reason: 'inappropriate',
+              );
         },
       ),
     );
@@ -219,9 +235,9 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   int _articleCardCount(String postId) {
     final raw = ref.watch(appContentRepositoryProvider).discoveryArticleData;
     final target = raw.cast<Map<String, dynamic>?>().firstWhere(
-          (item) => item?['postId']?.toString() == postId,
-          orElse: () => null,
-        );
+      (item) => item?['postId']?.toString() == postId,
+      orElse: () => null,
+    );
     final cards = target?['cards'];
     if (cards is List) return cards.length.clamp(1, 99);
     return 1;
@@ -230,14 +246,12 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   List<Map<String, dynamic>> _articleCardsForPost(String postId) {
     final raw = ref.watch(appContentRepositoryProvider).discoveryArticleData;
     final target = raw.cast<Map<String, dynamic>?>().firstWhere(
-          (item) => item?['postId']?.toString() == postId,
-          orElse: () => null,
-        );
+      (item) => item?['postId']?.toString() == postId,
+      orElse: () => null,
+    );
     final cards = target?['cards'];
     if (cards is List) {
-      return cards
-          .whereType<Map<String, dynamic>>()
-          .toList(growable: false);
+      return cards.whereType<Map<String, dynamic>>().toList(growable: false);
     }
     return const <Map<String, dynamic>>[];
   }
@@ -309,9 +323,9 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       ...repo.discoveryMomentData,
     ];
     return all.cast<Map<String, dynamic>?>().firstWhere(
-          (item) => item?['postId']?.toString() == postId,
-          orElse: () => null,
-        );
+      (item) => item?['postId']?.toString() == postId,
+      orElse: () => null,
+    );
   }
 
   String _circleIdForPost(PostBaseDto post) {
@@ -338,7 +352,8 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   void _flushDwell(PostBaseDto post) {
     final enterTime = _pageEnterTime;
     if (enterTime == null) return;
-    final durationSec = DateTime.now().difference(enterTime).inMilliseconds / 1000.0;
+    final durationSec =
+        DateTime.now().difference(enterTime).inMilliseconds / 1000.0;
     final tracker = ref.read(contentBehaviorTrackerProvider);
     tracker.trackDwell(post.id, durationSeconds: durationSec);
     _pageEnterTime = null;
@@ -407,8 +422,9 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   @override
   Widget build(BuildContext context) {
     final posts = _buildFeed();
-    final currentPost =
-        posts.isEmpty ? null : posts[_currentPage.clamp(0, posts.length - 1)];
+    final currentPost = posts.isEmpty
+        ? null
+        : posts[_currentPage.clamp(0, posts.length - 1)];
     final progress = _innerProgress(posts);
     return GestureDetector(
       behavior: HitTestBehavior.deferToChild,
@@ -418,143 +434,155 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       child: Stack(
         fit: StackFit.expand,
         children: [
-        Positioned(
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: PageView.builder(
-            controller: _pageController,
-            scrollDirection: Axis.vertical,
-            physics: const PageScrollPhysics(),
-            itemCount: posts.isEmpty ? 1 : posts.length,
-            onPageChanged: (index) {
-              if (_currentPage != index) {
-                // Flush dwell time for the previous post
-                final prevPost = posts[_currentPage.clamp(0, posts.length - 1)];
-                _flushDwell(prevPost);
-
-                setState(() => _currentPage = index);
-                // Reset + restart the follow-button timer for the new post.
-                final newPost = posts[index.clamp(0, posts.length - 1)];
-                _startFollowButtonTimer(newPost);
-                _trackImpressionForPost(newPost);
-                _pageEnterTime = DateTime.now();
-              }
-            },
-            itemBuilder: (context, index) {
-              if (posts.isEmpty) {
-                return Center(
-                  child: CircularProgressIndicator(
-                    color: AppColors.worksAccent,
-                  ),
-                );
-              }
-              return _buildPostCanvas(posts[index]);
-            },
-          ),
-        ),
-
-        if (_isFilterExpanded)
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onTap: _collapseFilterPanel,
-              child: const SizedBox.expand(),
-            ),
-          ),
-
-        Positioned(
-          top: 0,
-          left: 0,
-          right: 0,
-          child: SafeArea(
-            bottom: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _WorksPrimaryTopBar(
-                  isFilterExpanded: _isFilterExpanded,
-                  onTapClose: widget.onSwitchToMoment,
-                  onTapMore: () => _showWorksMoreSheet(context),
-                  onTapMoment: widget.onSwitchToMoment,
-                  onTapWorksArrow: _toggleFilterPanel,
-                ),
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 420),
-                  switchInCurve: Curves.elasticOut,
-                  switchOutCurve: Curves.easeInCubic,
-                  transitionBuilder: (child, animation) => SizeTransition(
-                    sizeFactor: animation,
-                    axisAlignment: -1,
-                    child: FadeTransition(opacity: animation, child: child),
-                  ),
-                  child: _isFilterExpanded
-                      ? _WorksSecondaryFilterBar(
-                          key: const ValueKey<String>('works-filter-open'),
-                          activeFilter: _filterType,
-                          onFilterChange: _applyFilter,
-                        )
-                      : const SizedBox.shrink(
-                          key: ValueKey<String>('works-filter-close'),
-                        ),
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        if (currentPost != null && progress.total > 1)
           Positioned(
-            left: AppSpacing.containerLg,
-            right: AppSpacing.containerLg,
-            bottom: _toolbarReservedHeight + AppSpacing.containerSm,
-            child: Center(
-              child: _WorksCapsuleIndicator(
-                total: progress.total,
-                current: progress.current,
-              ),
-            ),
-          ),
-
-        if (currentPost != null && widget.showWorksToolbar)
-          Positioned(
+            top: 0,
             left: 0,
             right: 0,
             bottom: 0,
-            child: ImmersiveEngagementBar(
-              avatarUrl: currentPost.avatarUrl,
-              displayName: currentPost.displayName,
-              circleName: _circleNameForPost(currentPost),
-              likeCount: currentPost.likeCount + (_likedPosts.contains(currentPost.id) ? 1 : 0),
-              shareCount: currentPost.shareCount,
-              favoriteCount: currentPost.favoriteCount + (_savedPosts.contains(currentPost.id) ? 1 : 0),
-              commentCount: currentPost.commentCount,
-              isLiked: _likedPosts.contains(currentPost.id),
-              isSaved: _savedPosts.contains(currentPost.id),
-              isFollowing: _followingUsers.contains(currentPost.authorId),
-              showFollowButton: _showFollowButton,
-              onUserTap: () => widget.onUserTap(
-                currentPost.authorId,
-                avatarUrl: currentPost.avatarUrl,
-                displayName: currentPost.displayName,
-                backgroundUrl: currentPost.authorBackgroundUrl,
-              ),
-              onCircleTap: () => context.push(
-                AppRoutePaths.circleDetail(
-                  id: _circleIdForPost(currentPost),
-                ),
-              ),
-              onFollowTap: () => _onFollow(currentPost),
-              onLikeTap: () => _onLike(currentPost),
-              onFavoriteTap: () => _onFavorite(currentPost),
-              onCommentTap: () => _openCommentFor(context, currentPost.id),
-              onShareTap: () => _sharePost(context),
-              onRevealSystemNav: widget.onRevealSystemNav,
-              formatCount: _formatCount,
+            child: PageView.builder(
+              controller: _pageController,
+              scrollDirection: Axis.vertical,
+              physics: const PageScrollPhysics(),
+              itemCount: posts.isEmpty ? 1 : posts.length,
+              onPageChanged: (index) {
+                if (_currentPage != index) {
+                  // Flush dwell time for the previous post
+                  final prevPost =
+                      posts[_currentPage.clamp(0, posts.length - 1)];
+                  _flushDwell(prevPost);
+
+                  setState(() => _currentPage = index);
+                  // Reset + restart the follow-button timer for the new post.
+                  final newPost = posts[index.clamp(0, posts.length - 1)];
+                  _startFollowButtonTimer(newPost);
+                  _trackImpressionForPost(newPost);
+                  _pageEnterTime = DateTime.now();
+                }
+              },
+              itemBuilder: (context, index) {
+                if (posts.isEmpty) {
+                  return Center(
+                    child: CircularProgressIndicator(
+                      color: AppColors.worksAccent,
+                    ),
+                  );
+                }
+                return _buildPostCanvas(posts[index]);
+              },
             ),
           ),
 
+          if (_isFilterExpanded)
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: _collapseFilterPanel,
+                child: const SizedBox.expand(),
+              ),
+            ),
+
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              bottom: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _WorksPrimaryTopBar(
+                    isFilterExpanded: _isFilterExpanded,
+                    onTapClose: widget.onSwitchToMoment,
+                    onTapMore: () => _showWorksMoreSheet(context),
+                    onTapMoment: widget.onSwitchToMoment,
+                    onTapWorksArrow: _toggleFilterPanel,
+                  ),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 420),
+                    switchInCurve: Curves.elasticOut,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) => SizeTransition(
+                      sizeFactor: animation,
+                      axisAlignment: -1,
+                      child: FadeTransition(opacity: animation, child: child),
+                    ),
+                    child: _isFilterExpanded
+                        ? _WorksSecondaryFilterBar(
+                            key: const ValueKey<String>('works-filter-open'),
+                            activeFilter: _filterType,
+                            onFilterChange: _applyFilter,
+                          )
+                        : const SizedBox.shrink(
+                            key: ValueKey<String>('works-filter-close'),
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          if (currentPost != null && progress.total > 1)
+            Positioned(
+              left: AppSpacing.containerLg,
+              right: AppSpacing.containerLg,
+              bottom: _toolbarReservedHeight + AppSpacing.containerSm,
+              child: Center(
+                child: _WorksCapsuleIndicator(
+                  total: progress.total,
+                  current: progress.current,
+                ),
+              ),
+            ),
+
+          if (currentPost != null && widget.showWorksToolbar)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: ImmersiveEngagementBar(
+                avatarUrl: currentPost.avatarUrl,
+                displayName: currentPost.displayName,
+                circleName: _circleNameForPost(currentPost),
+                likeCount:
+                    currentPost.likeCount +
+                    (_likedPosts.contains(currentPost.id) ? 1 : 0),
+                shareCount:
+                    currentPost.shareCount +
+                    (_shareCountDelta[currentPost.id] ?? 0),
+                favoriteCount:
+                    currentPost.favoriteCount +
+                    (_savedPosts.contains(currentPost.id) ? 1 : 0),
+                commentCount: currentPost.commentCount,
+                isLiked: _likedPosts.contains(currentPost.id),
+                isSaved: _savedPosts.contains(currentPost.id),
+                isFollowing: _followingUsers.contains(currentPost.authorId),
+                showFollowButton: _showFollowButton,
+                onUserTap: () => widget.onUserTap(
+                  currentPost.authorId,
+                  avatarUrl: currentPost.avatarUrl,
+                  displayName: currentPost.displayName,
+                  backgroundUrl: currentPost.authorBackgroundUrl,
+                ),
+                onCircleTap: () => context.push(
+                  AppRoutePaths.circleDetail(id: _circleIdForPost(currentPost)),
+                ),
+                onFollowTap: () => _onFollow(currentPost),
+                onLikeTap: () => _onLike(currentPost),
+                onFavoriteTap: () => _onFavorite(currentPost),
+                onCommentTap: () => _openCommentFor(context, currentPost.id),
+                onShareTap: () => _sharePost(
+                  context,
+                  currentPost,
+                  enableIdentityTemplate: ref.read(
+                    contentFeatureFlagProvider(
+                      'enable_identity_share_template',
+                    ),
+                  ),
+                ),
+                onRevealSystemNav: widget.onRevealSystemNav,
+                formatCount: _formatCount,
+              ),
+            ),
         ],
       ),
     );
@@ -568,7 +596,8 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     if (post is PhotoPostDto) {
       return _WorksPhotoCanvas(
         post: post,
-        onImageChanged: (index) => setState(() => _photoInnerIndex[post.id] = index),
+        onImageChanged: (index) =>
+            setState(() => _photoInnerIndex[post.id] = index),
       );
     }
     if (post is VideoPostDto) {
@@ -576,7 +605,8 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       return _WorksVideoCanvas(
         post: post,
         episodes: episodes,
-        onEpisodeChanged: (idx) => setState(() => _videoInnerIndex[post.id] = idx),
+        onEpisodeChanged: (idx) =>
+            setState(() => _videoInnerIndex[post.id] = idx),
       );
     }
     if (post is ArticlePostDto) {
@@ -584,33 +614,84 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       return _WorksArticleCanvas(
         post: post,
         cards: cards,
-        onPageChanged: (index) => setState(() => _articleInnerIndex[post.id] = index),
+        onPageChanged: (index) =>
+            setState(() => _articleInnerIndex[post.id] = index),
       );
     }
     return Container(color: AppColors.worksBackground);
   }
 
   void _openCommentFor(BuildContext ctx, String postId) {
-    CommentViewer.showModal(
-      context: ctx,
-      postId: postId,
+    CommentViewer.showModal(context: ctx, postId: postId);
+  }
+
+  void _sharePost(
+    BuildContext ctx,
+    PostBaseDto post, {
+    required bool enableIdentityTemplate,
+  }) {
+    final template = _buildShareTemplate(
+      post: post,
+      enableIdentityTemplate: enableIdentityTemplate,
+    );
+    ContentShareSheet.show(
+      ctx,
+      template: template,
+      onActionCompleted: (result) async {
+        _recordShare(post.id, result.actionId);
+      },
     );
   }
 
-  void _sharePost(BuildContext ctx) {
-    showModalBottomSheet<void>(
-      context: ctx,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: EdgeInsets.all(AppSpacing.containerMd),
-          child: ListTile(
-            leading: const Icon(Icons.link),
-            title: Text(UITextConstants.copyLink),
-            onTap: () => Navigator.pop(context),
-          ),
-        ),
+  Future<void> _copyLink(
+    BuildContext context,
+    PostBaseDto post, {
+    required bool enableIdentityTemplate,
+  }) async {
+    final result = await const DefaultContentShareActionHandler().execute(
+      context,
+      _buildShareTemplate(
+        post: post,
+        enableIdentityTemplate: enableIdentityTemplate,
+      ),
+      const ContentShareAction(
+        id: 'copy_link',
+        label: UITextConstants.copyLink,
       ),
     );
+    if (result.success) {
+      _recordShare(post.id, result.actionId);
+    }
+  }
+
+  ContentShareTemplate _buildShareTemplate({
+    required PostBaseDto post,
+    required bool enableIdentityTemplate,
+  }) {
+    final raw = _rawPostById(post.id);
+    final visibility = raw?['visibility']?.toString() ?? 'public';
+    final tags =
+        (raw?['tags'] as List?)
+            ?.map((item) => item.toString().trim())
+            .where((item) => item.isNotEmpty)
+            .toList(growable: false) ??
+        const <String>[];
+    return ContentShareTemplateBuilder.build(
+      post: post,
+      enableIdentityTemplate: enableIdentityTemplate,
+      visibility: visibility,
+      tags: tags,
+      circleNames: <String>[_circleNameForPost(post)],
+    );
+  }
+
+  void _recordShare(String postId, String actionId) {
+    setState(() {
+      _shareCountDelta[postId] = (_shareCountDelta[postId] ?? 0) + 1;
+    });
+    ref
+        .read(contentBehaviorTrackerProvider)
+        .trackShare(postId, tags: <String>[actionId]);
   }
 }
 
@@ -691,7 +772,9 @@ class _WorksPrimaryTopBar extends StatelessWidget {
                       child: Text(
                         UITextConstants.discoveryRailMoment,
                         style: TextStyle(
-                          color: AppColors.worksBodyText.withValues(alpha: 0.74),
+                          color: AppColors.worksBodyText.withValues(
+                            alpha: 0.74,
+                          ),
                           fontSize: tabFontSize,
                           fontWeight: AppTypography.bold,
                         ),
@@ -721,7 +804,9 @@ class _WorksPrimaryTopBar extends StatelessWidget {
                               isFilterExpanded
                                   ? Icons.keyboard_arrow_up
                                   : Icons.keyboard_arrow_down,
-                              color: AppColors.worksBodyText.withValues(alpha: 0.8),
+                              color: AppColors.worksBodyText.withValues(
+                                alpha: 0.8,
+                              ),
                               size: AppSpacing.iconSmall + 1,
                             ),
                           ),
@@ -765,6 +850,7 @@ class _WorksSecondaryFilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final filters = ContentUIConfig.workFormatFilters;
     return Align(
       alignment: Alignment.center,
       child: ClipRect(
@@ -777,7 +863,9 @@ class _WorksSecondaryFilterBar extends StatelessWidget {
             ),
             decoration: BoxDecoration(
               color: AppColors.worksDrawerBg.withValues(alpha: 0.54),
-              borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+              borderRadius: BorderRadius.circular(
+                AppSpacing.circularBorderRadius,
+              ),
               border: Border.all(
                 color: AppColors.worksBodyText.withValues(alpha: 0.22),
                 width: AppSpacing.toolPanelItemBorderWidthUnselected,
@@ -785,15 +873,27 @@ class _WorksSecondaryFilterBar extends StatelessWidget {
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
-              children: [
-                _chip(null, UITextConstants.discoveryWorksFilterAll),
-                SizedBox(width: AppSpacing.intraGroupSm),
-                _chip('image', UITextConstants.discoveryWorksFilterImage),
-                SizedBox(width: AppSpacing.intraGroupSm),
-                _chip('video', UITextConstants.discoveryWorksFilterVideo),
-                SizedBox(width: AppSpacing.intraGroupSm),
-                _chip('article', UITextConstants.discoveryWorksFilterArticle),
-              ],
+              children: filters
+                  .asMap()
+                  .entries
+                  .map((entry) {
+                    final filter = entry.value;
+                    final chip = _chip(
+                      filter.contentType,
+                      UITextConstants.contentLabelForKey(filter.labelKey),
+                    );
+                    if (entry.key == filters.length - 1) {
+                      return chip;
+                    }
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        chip,
+                        SizedBox(width: AppSpacing.intraGroupSm),
+                      ],
+                    );
+                  })
+                  .toList(growable: false),
             ),
           ),
         ),
@@ -836,10 +936,7 @@ class _WorksSecondaryFilterBar extends StatelessWidget {
 }
 
 class _WorksPhotoCanvas extends StatefulWidget {
-  const _WorksPhotoCanvas({
-    required this.post,
-    required this.onImageChanged,
-  });
+  const _WorksPhotoCanvas({required this.post, required this.onImageChanged});
 
   final PhotoPostDto post;
   final void Function(int index) onImageChanged;
@@ -936,12 +1033,15 @@ class _WorksPhotoCanvasState extends State<_WorksPhotoCanvas> {
               widget.onImageChanged(i);
             },
             itemBuilder: (context, i) {
-              if (images.isEmpty) return Container(color: AppColors.worksBackground);
+              if (images.isEmpty)
+                return Container(color: AppColors.worksBackground);
               return CachedNetworkImage(
                 imageUrl: images[i],
                 fit: BoxFit.cover,
-                placeholder: (context, url) => Container(color: AppColors.worksBackground),
-                errorWidget: (context, url, error) => Container(color: AppColors.worksBackground),
+                placeholder: (context, url) =>
+                    Container(color: AppColors.worksBackground),
+                errorWidget: (context, url, error) =>
+                    Container(color: AppColors.worksBackground),
               );
             },
           ),
@@ -1056,11 +1156,10 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.2),
               shape: BoxShape.circle,
-              border:
-                  Border.all(
-                    color: Colors.white.withValues(alpha: 0.5),
-                    width: AppSpacing.toolPanelItemBorderWidthSelected,
-                  ),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.5),
+                width: AppSpacing.toolPanelItemBorderWidthSelected,
+              ),
             ),
             child: Icon(
               CupertinoIcons.play_fill,
@@ -1127,7 +1226,9 @@ class _WorksArticleCanvas extends StatelessWidget {
           left: AppSpacing.containerMd,
           right: AppSpacing.containerMd,
           top: MediaQuery.of(context).padding.top + AppSpacing.containerLg,
-          bottom: _WorksImmersiveViewerState._toolbarReservedHeight + AppSpacing.containerMd,
+          bottom:
+              _WorksImmersiveViewerState._toolbarReservedHeight +
+              AppSpacing.containerMd,
           child: PageView.builder(
             itemCount: pages.length,
             onPageChanged: onPageChanged,
@@ -1402,6 +1503,7 @@ class _WorksBottomToolbar extends StatelessWidget {
   final bool isLiked;
   final bool isSaved;
   final bool isFollowing;
+
   /// Whether the follow button has been "unlocked" for this post view.
   /// Managed by the parent timer: 3 s for photos, 5 s for video/article.
   /// Already-following authors skip the timer and show the button immediately.
@@ -1428,22 +1530,22 @@ class _WorksBottomToolbar extends StatelessWidget {
   ///   regular  360–599  → 44 px  (icon 24 px + 10 px each side)
   ///   expanded ≥ 600 px → 52 px  (icon 24 px + 14 px each side)
   static double _cellWidth(BuildContext ctx) => AppSpacing.responsiveValue(
-        ctx,
-        compact: 40.0,
-        regular: 44.0,
-        expanded: 52.0,
-      );
+    ctx,
+    compact: 40.0,
+    regular: 44.0,
+    expanded: 52.0,
+  );
 
   /// Gap between adjacent action icons:
   ///   compact  → intraGroupXs (4 px)
   ///   regular  → intraGroupSm (6 px)
   ///   expanded → intraGroupMd (8 px)
   static double _actionGap(BuildContext ctx) => AppSpacing.responsiveValue(
-        ctx,
-        compact: AppSpacing.intraGroupXs,
-        regular: AppSpacing.intraGroupSm,
-        expanded: AppSpacing.intraGroupMd,
-      );
+    ctx,
+    compact: AppSpacing.intraGroupXs,
+    regular: AppSpacing.intraGroupSm,
+    expanded: AppSpacing.intraGroupMd,
+  );
 
   /// Gap between author area and action group (≈ actionGap × 1.33,
   /// one semantic step wider to signal cross-group boundary):
@@ -1451,11 +1553,11 @@ class _WorksBottomToolbar extends StatelessWidget {
   ///   regular  → intraGroupMd  (8 px)
   ///   expanded → intraGroupLg  (12 px)
   static double _dividerGap(BuildContext ctx) => AppSpacing.responsiveValue(
-        ctx,
-        compact: AppSpacing.intraGroupSm,
-        regular: AppSpacing.intraGroupMd,
-        expanded: AppSpacing.intraGroupLg,
-      );
+    ctx,
+    compact: AppSpacing.intraGroupSm,
+    regular: AppSpacing.intraGroupMd,
+    expanded: AppSpacing.intraGroupLg,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -1526,25 +1628,30 @@ class _WorksBottomToolbar extends StatelessWidget {
                                 // how narrow the name column gets.
                                 shaderCallback: (bounds) {
                                   const fadeWidth = 18.0;
-                                  final start = ((bounds.width - fadeWidth) /
-                                          bounds.width)
-                                      .clamp(0.0, 1.0);
+                                  final start =
+                                      ((bounds.width - fadeWidth) /
+                                              bounds.width)
+                                          .clamp(0.0, 1.0);
                                   return LinearGradient(
                                     begin: Alignment.centerLeft,
                                     end: Alignment.centerRight,
                                     stops: [start, 1.0],
                                     colors: const [
                                       Colors.white,
-                                      Colors.transparent
+                                      Colors.transparent,
                                     ],
                                   ).createShader(bounds);
                                 },
                                 blendMode: BlendMode.dstIn,
                                 child: _nameColumn(
-                                    compressText: compressText, clip: true),
+                                  compressText: compressText,
+                                  clip: true,
+                                ),
                               )
                             : _nameColumn(
-                                compressText: compressText, clip: false),
+                                compressText: compressText,
+                                clip: false,
+                              ),
                       ),
 
                       // Follow button — slides in from the RIGHT (near the
@@ -1560,7 +1667,8 @@ class _WorksBottomToolbar extends StatelessWidget {
                         child: showFollowButton
                             ? Padding(
                                 padding: const EdgeInsets.only(
-                                    left: AppSpacing.intraGroupSm),
+                                  left: AppSpacing.intraGroupSm,
+                                ),
                                 child: GestureDetector(
                                   onTap: onFollowTap,
                                   behavior: HitTestBehavior.opaque,
@@ -1583,7 +1691,7 @@ class _WorksBottomToolbar extends StatelessWidget {
                                       style: TextStyle(
                                         color: isFollowing
                                             ? AppColors.worksBodyText
-                                                .withValues(alpha: 0.72)
+                                                  .withValues(alpha: 0.72)
                                             : AppColors.white,
                                         fontSize: AppTypography.xs,
                                         fontWeight: AppTypography.semiBold,
@@ -1645,7 +1753,8 @@ class _WorksBottomToolbar extends StatelessWidget {
                         size: AppSpacing.iconMedium,
                       ),
                       label: formatCount(
-                          post.favoriteCount + (isSaved ? 1 : 0)),
+                        post.favoriteCount + (isSaved ? 1 : 0),
+                      ),
                       onTap: onFavoriteTap,
                       cellWidth: cellWidth,
                     ),
@@ -1684,8 +1793,7 @@ class _WorksBottomToolbar extends StatelessWidget {
           curve: Curves.easeOut,
           style: TextStyle(
             color: AppColors.worksTitle,
-            fontSize:
-                compressText ? AppTypography.sm : AppTypography.base,
+            fontSize: compressText ? AppTypography.sm : AppTypography.base,
             fontWeight: AppTypography.bold,
           ),
           child: Text(post.displayName, maxLines: 1, overflow: overflow),
@@ -1696,8 +1804,7 @@ class _WorksBottomToolbar extends StatelessWidget {
           curve: Curves.easeOut,
           style: TextStyle(
             color: AppColors.worksBodyText.withValues(alpha: 0.72),
-            fontSize:
-                compressText ? AppTypography.xxs : AppTypography.xs,
+            fontSize: compressText ? AppTypography.xxs : AppTypography.xs,
             fontWeight: AppTypography.medium,
           ),
           child: GestureDetector(
@@ -1740,4 +1847,3 @@ class _WorksBottomToolbar extends StatelessWidget {
     );
   }
 }
-

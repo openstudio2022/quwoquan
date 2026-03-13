@@ -155,6 +155,8 @@ class _FailingContentRepository extends MockContentRepository {
   @override
   Future<CursorPage<PostBaseDto>> listDiscoveryFeedPage({
     required String category,
+    String? identity,
+    String? type,
     String? subCategory,
     int limit = 20,
     String? cursor,
@@ -166,6 +168,8 @@ class _FailingContentRepository extends MockContentRepository {
   @override
   Future<List<PostBaseDto>> listDiscoveryFeed({
     required String category,
+    String? identity,
+    String? type,
     String? subCategory,
     int limit = 20,
     String? cursor,

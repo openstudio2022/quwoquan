@@ -10,7 +10,13 @@
   "contractVersion": "assistant_turn_v4",
   "traceId": "{{traceId}}",
   "turnPhase": "plan",
-  "thinkingText": "面向用户的自然语言思考过程（用户实时可见，禁止 JSON 键名或技术术语）",
+  "phaseId": "understanding",
+  "actionCode": "frame_problem",
+  "reasonCode": "align_goal",
+  "reasonShort": "先确认问题落点，后面查资料才不会跑偏。",
+  "source": "model",
+  "references": [],
+  "thinkingText": "兼容字段；如输出，必须与 reasonShort 完全一致，否则留空",
   "decision": {
     "nextAction": "tool_call | answer | ask_user",
     "confidence": 0.0-1.0,
@@ -46,11 +52,13 @@
 }
 ```
 
-## thinkingText 书写要求
-- 用自然中文描述你的分析过程，用户会实时看到这段文字
-- 内容包括：你理解用户想知道什么、你决定使用哪些工具及理由、你的搜索策略设计
+## reasonShort / thinkingText 书写要求
+- `reasonShort` 是用户实时可见的主字段，必须是 1 句短理由
+- 只说明“为什么现在这样规划”，不要描述内部步骤清单
+- 禁止拼接、裁剪或改写用户原话；禁止 `我先帮你把…`、`收一收`、`你更像是想知道…`、`我先替你…`
 - 禁止出现 JSON 键名、内部字段名、技术术语
-- 示例："用户想了解深圳今天的天气情况，这是一个实时信息查询。我会先获取用户位置确认城市，然后通过搜索获取最新的气象数据，包括温度、湿度和天气状况。"
+- 若输出 `thinkingText`，内容必须与 `reasonShort` 完全一致；否则留空
+- 示例：`"reasonShort": "先确认问题落点，后面查资料才不会跑偏。"`
 
 ## 自检清单（输出前必须逐条验证）
 1. 是否覆盖用户所有子问题？
@@ -61,4 +69,4 @@
 6. subagentPlan 中每个子任务是否都带有 problemClass？
 7. subagentPlan 中每个子任务是否都带有 stopPolicy/searchIntensity/providerPolicy/freshnessHoursMax/answerThreshold？
 8. selfCheck.checks 中是否每条规则都有 evidence？
-9. thinkingText 是否为面向用户的自然语言，无技术术语？
+9. reasonShort 是否为面向用户的短理由，且未拼接用户原话？

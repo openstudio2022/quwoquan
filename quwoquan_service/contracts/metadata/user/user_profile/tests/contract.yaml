@@ -33,6 +33,19 @@ scenarios:
       - follow_edge_count_exactly_1
       - event_UserFollowed_published_once
 
+  - name: get_appearance_settings
+    command: GetAppearanceSettings
+    assertions:
+      - response_contains_owner_default_theme_and_font_size
+      - source_matches_owner_or_sub_override
+
+  - name: update_appearance_settings_all_accounts
+    command: UpdateAppearanceSettings(applyScope=all_accounts)
+    assertions:
+      - user_settings_owner_default_updated
+      - persona_overrides_cleared
+      - event_UserAppearanceSettingsChanged_published
+
   - name: delete_user_cascade
     command: DeleteUser
     assertions:

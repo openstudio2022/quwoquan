@@ -17,22 +17,112 @@ class DiscoveryTabConfig {
   });
 }
 
+class DiscoveryRailConfig {
+  final String id;
+  final String labelKey;
+  final String identity;
+  final bool isDefault;
+
+  const DiscoveryRailConfig({
+    required this.id,
+    required this.labelKey,
+    required this.identity,
+    required this.isDefault,
+  });
+}
+
+class IdentityFilterConfig {
+  final String id;
+  final String labelKey;
+  final String? identity;
+
+  const IdentityFilterConfig({
+    required this.id,
+    required this.labelKey,
+    required this.identity,
+  });
+}
+
+class WorkFormatFilterConfig {
+  final String id;
+  final String labelKey;
+  final String? contentType;
+
+  const WorkFormatFilterConfig({
+    required this.id,
+    required this.labelKey,
+    required this.contentType,
+  });
+}
+
+class ShareTemplateProfileConfig {
+  final String id;
+  final String titleKey;
+  final String subtitleKey;
+  final String layout;
+  final String coverStrategy;
+  final bool includeAuthor;
+  final bool includeTimeContext;
+  final bool includeCircleContext;
+  final bool includeTags;
+
+  const ShareTemplateProfileConfig({
+    required this.id,
+    required this.titleKey,
+    required this.subtitleKey,
+    required this.layout,
+    required this.coverStrategy,
+    required this.includeAuthor,
+    required this.includeTimeContext,
+    required this.includeCircleContext,
+    required this.includeTags,
+  });
+}
+
 // ignore: avoid_classes_with_only_static_members
 class ContentUIConfig {
   const ContentUIConfig._();
 
   static const List<DiscoveryTabConfig> discoveryTabs = <DiscoveryTabConfig>[
-    DiscoveryTabConfig(id: 'photo', labelKey: 'tab_photo', icon: 'photo_camera_outlined', contentType: 'image', layout: 'waterfall_grid'),
-    DiscoveryTabConfig(id: 'video', labelKey: 'tab_video', icon: 'play_circle_outline', contentType: 'video', layout: 'full_width_vertical_pager'),
-    DiscoveryTabConfig(id: 'moment', labelKey: 'tab_moment', icon: 'chat_bubble_outline', contentType: 'micro', layout: 'list_with_optional_media'),
-    DiscoveryTabConfig(id: 'article', labelKey: 'tab_article', icon: 'article_outlined', contentType: 'article', layout: 'list_with_cover'),
+    DiscoveryTabConfig(id: "photo", labelKey: "tab_photo", icon: "photo_camera_outlined", contentType: "image", layout: "waterfall_grid"),
+    DiscoveryTabConfig(id: "video", labelKey: "tab_video", icon: "play_circle_outline", contentType: "video", layout: "full_width_vertical_pager"),
+    DiscoveryTabConfig(id: "moment", labelKey: "tab_moment", icon: "chat_bubble_outline", contentType: "micro", layout: "list_with_optional_media"),
+    DiscoveryTabConfig(id: "article", labelKey: "tab_article", icon: "article_outlined", contentType: "article", layout: "list_with_cover"),
+  ];
+
+  static const List<DiscoveryRailConfig> discoveryRails = <DiscoveryRailConfig>[
+    DiscoveryRailConfig(id: "moment", labelKey: "discovery_rail_moment", identity: "moment", isDefault: true),
+    DiscoveryRailConfig(id: "work", labelKey: "discovery_rail_work", identity: "work", isDefault: false),
+  ];
+
+  static const List<IdentityFilterConfig> creationIdentityFilters = <IdentityFilterConfig>[
+    IdentityFilterConfig(id: "all", labelKey: "creation_filter_all", identity: null),
+    IdentityFilterConfig(id: "moment", labelKey: "creation_filter_moment", identity: "moment"),
+    IdentityFilterConfig(id: "work", labelKey: "creation_filter_work", identity: "work"),
+  ];
+
+  static const List<WorkFormatFilterConfig> workFormatFilters = <WorkFormatFilterConfig>[
+    WorkFormatFilterConfig(id: "all", labelKey: "work_format_all", contentType: null),
+    WorkFormatFilterConfig(id: "image", labelKey: "work_format_image", contentType: "image"),
+    WorkFormatFilterConfig(id: "video", labelKey: "work_format_video", contentType: "video"),
+    WorkFormatFilterConfig(id: "note", labelKey: "work_format_note", contentType: "article"),
+  ];
+
+  static const List<ShareTemplateProfileConfig> shareTemplateProfiles = <ShareTemplateProfileConfig>[
+    ShareTemplateProfileConfig(id: "moment", titleKey: "share_template_moment_title", subtitleKey: "share_template_moment_subtitle", layout: "moment_card", coverStrategy: "first_media_or_gradient", includeAuthor: true, includeTimeContext: true, includeCircleContext: true, includeTags: false),
+    ShareTemplateProfileConfig(id: "work", titleKey: "share_template_work_title", subtitleKey: "share_template_work_subtitle", layout: "work_card", coverStrategy: "cover_or_first_media", includeAuthor: true, includeTimeContext: false, includeCircleContext: false, includeTags: true),
   ];
 
   static const Map<String, bool> featureFlags = <String, bool>{
+    'enable_assistant_content_identity_index': false,
     'enable_behavior_tracking': true,
+    'enable_create_action_entry': false,
     'enable_helper_read': false,
+    'enable_identity_based_surfaces': false,
+    'enable_identity_share_template': false,
     'enable_photo_waterfall': true,
     'enable_share_to_circle': true,
+    'enable_unified_create_editor': false,
     'show_view_count': false,
   };
 

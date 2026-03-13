@@ -1,6 +1,7 @@
 import 'aggregation_state.dart';
 import 'intent_graph.dart';
 import 'preference_fact.dart';
+import 'run_artifacts.dart';
 import 'skill_run.dart';
 import 'subagent_plan.dart';
 import 'ui_process_timeline_entry.dart';
@@ -79,6 +80,12 @@ class AssistantTurnOutput {
     this.followupPrompt = '',
     this.processSummary = '',
     this.processReferenceCount = 0,
+    this.phaseId = '',
+    this.actionCode = '',
+    this.reasonCode = '',
+    this.reasonShort = '',
+    this.narrativeSource = '',
+    this.narrativeReferences = const <ProcessSourceReference>[],
     this.sessionPreferenceFacts = const <PreferenceFact>[],
     this.longTermPreferenceFacts = const <PreferenceFact>[],
   });
@@ -156,6 +163,24 @@ class AssistantTurnOutput {
 
   /// 过程区的可展开来源计数。
   final int processReferenceCount;
+
+  /// 过程叙事所属阶段。
+  final String phaseId;
+
+  /// 当前叙事动作编码。
+  final String actionCode;
+
+  /// 当前叙事原因编码。
+  final String reasonCode;
+
+  /// 当前叙事短理由，优先用于流式用户态过程展示。
+  final String reasonShort;
+
+  /// 叙事来源，如 `model` / `trace_translator`。
+  final String narrativeSource;
+
+  /// 与当前叙事直接关联的引用。
+  final List<ProcessSourceReference> narrativeReferences;
 
   /// 本会话即时生效的偏好事实。
   final List<PreferenceFact> sessionPreferenceFacts;
@@ -274,6 +299,20 @@ class AssistantTurnOutput {
           (payload['processReferenceCount'] as num?)?.toInt() ??
           (payload['processReferenceCountV1'] as num?)?.toInt() ??
           0,
+      phaseId: (payload['phaseId'] as String?)?.trim() ?? '',
+      actionCode: (payload['actionCode'] as String?)?.trim() ?? '',
+      reasonCode: (payload['reasonCode'] as String?)?.trim() ?? '',
+      reasonShort:
+          (payload['reasonShort'] as String?)?.trim() ??
+          (payload['thinkingText'] as String?)?.trim() ??
+          '',
+      narrativeSource:
+          (payload['source'] as String?)?.trim() ??
+          (payload['narrativeSource'] as String?)?.trim() ??
+          '',
+      narrativeReferences: _parseMapList(
+        payload['references'] ?? payload['narrativeReferences'],
+      ).map(ProcessSourceReference.fromJson).toList(growable: false),
       sessionPreferenceFacts: _parseMapList(
         payload['sessionPreferenceFacts'],
       ).map(PreferenceFact.fromJson).toList(growable: false),
@@ -316,6 +355,14 @@ class AssistantTurnOutput {
     'followupPrompt': followupPrompt,
     'processSummary': processSummary,
     'processReferenceCount': processReferenceCount,
+    'phaseId': phaseId,
+    'actionCode': actionCode,
+    'reasonCode': reasonCode,
+    'reasonShort': reasonShort,
+    'source': narrativeSource,
+    'references': narrativeReferences
+        .map((item) => item.toJson())
+        .toList(growable: false),
     'sessionPreferenceFacts': sessionPreferenceFacts
         .map((item) => item.toJson())
         .toList(growable: false),

@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/personal_assistant/api/assistent_api_gateway.dart';
 import 'package:quwoquan_app/personal_assistant/config/assistent_configuration_center.dart';
 import 'package:quwoquan_app/personal_assistant/cost/assistent_cost_ledger.dart';
@@ -37,8 +38,12 @@ final assistantGatewayProvider = Provider<AssistantGateway>((ref) {
 
 final openClawBridgeProvider = Provider<OpenClawBridge>((ref) {
   return OpenClawBridge(
-    baseUrl: const String.fromEnvironment('PERSONAL_ASSISTANT_OPENCLAW_BASE_URL'),
-    authToken: const String.fromEnvironment('PERSONAL_ASSISTANT_OPENCLAW_TOKEN'),
+    baseUrl: const String.fromEnvironment(
+      'PERSONAL_ASSISTANT_OPENCLAW_BASE_URL',
+    ),
+    authToken: const String.fromEnvironment(
+      'PERSONAL_ASSISTANT_OPENCLAW_TOKEN',
+    ),
   );
 });
 
@@ -46,15 +51,22 @@ final capabilityGatewayProvider = Provider<CapabilityGateway>((ref) {
   return CapabilityGateway(
     assistantGateway: ref.watch(assistantGatewayProvider),
     openClawBridge: ref.watch(openClawBridgeProvider),
+    isPersonalContentAccessGranted: () =>
+        ref.read(assistantPersonalContentAccessGrantedProvider),
+    isAssistantContentIdentityIndexEnabled: () =>
+        ref.read(assistantContentIdentityIndexEnabledProvider),
   );
 });
 
-final assistantSkillMarketProvider = FutureProvider<List<PersonalAssistantSkillInfo>>((ref) async {
-  final gateway = ref.watch(assistantGatewayProvider);
-  return gateway.listSkills();
-});
+final assistantSkillMarketProvider =
+    FutureProvider<List<PersonalAssistantSkillInfo>>((ref) async {
+      final gateway = ref.watch(assistantGatewayProvider);
+      return gateway.listSkills();
+    });
 
-final assistentProviderRegistryProvider = Provider<AssistentProviderRegistry>((ref) {
+final assistentProviderRegistryProvider = Provider<AssistentProviderRegistry>((
+  ref,
+) {
   final registry = AssistentProviderRegistry();
   final modelRefs = ref.watch(assistantGatewayProvider).listAvailableModels();
   if (modelRefs.isEmpty) {
@@ -75,7 +87,10 @@ final assistentProviderRegistryProvider = Provider<AssistentProviderRegistry>((r
           type: AssistentProviderType.llm,
           version: 'v1',
           enabled: true,
-          metadata: const <String, dynamic>{'costWeight': 1.0, 'latencyWeight': 1.0},
+          metadata: const <String, dynamic>{
+            'costWeight': 1.0,
+            'latencyWeight': 1.0,
+          },
         ),
       );
     }
@@ -101,23 +116,24 @@ final assistentProviderRegistryProvider = Provider<AssistentProviderRegistry>((r
   return registry;
 });
 
-final assistentConfigurationCenterProvider = Provider<AssistentConfigurationCenter>((ref) {
-  final center = AssistentConfigurationCenter();
-  center.update(
-    version: 'v1',
-    values: <String, dynamic>{
-      'slo.maxP95LatencyMs': 2800,
-      'slo.minAvailability': 0.985,
-      'slo.maxErrorRate': 0.015,
-      'alert.suppressSeconds': 180,
-      'alert.logEnabled': true,
-      'alert.webhookUrl': '',
-      'alert.feishuWebhook': '',
-      'sync.mode': 'local_mock',
-    },
-  );
-  return center;
-});
+final assistentConfigurationCenterProvider =
+    Provider<AssistentConfigurationCenter>((ref) {
+      final center = AssistentConfigurationCenter();
+      center.update(
+        version: 'v1',
+        values: <String, dynamic>{
+          'slo.maxP95LatencyMs': 2800,
+          'slo.minAvailability': 0.985,
+          'slo.maxErrorRate': 0.015,
+          'alert.suppressSeconds': 180,
+          'alert.logEnabled': true,
+          'alert.webhookUrl': '',
+          'alert.feishuWebhook': '',
+          'sync.mode': 'local_mock',
+        },
+      );
+      return center;
+    });
 
 final assistentCostLedgerProvider = Provider<AssistentCostLedger>((ref) {
   return AssistentCostLedger();
@@ -131,13 +147,16 @@ final assistentAuthAclProvider = Provider<AssistentAuthAcl>((ref) {
   return const AssistentAuthAcl();
 });
 
-final assistentProviderPolicyProvider = Provider<AssistentProviderPolicy>((ref) {
+final assistentProviderPolicyProvider = Provider<AssistentProviderPolicy>((
+  ref,
+) {
   return const AssistentProviderPolicy();
 });
 
-final assistentProviderHealthServiceProvider = Provider<AssistentProviderHealthService>((ref) {
-  return AssistentProviderHealthService();
-});
+final assistentProviderHealthServiceProvider =
+    Provider<AssistentProviderHealthService>((ref) {
+      return AssistentProviderHealthService();
+    });
 
 final assistentSloMonitorProvider = Provider<AssistentSloMonitor>((ref) {
   final cfg = ref.watch(assistentConfigurationCenterProvider);
@@ -150,7 +169,9 @@ final assistentSloMonitorProvider = Provider<AssistentSloMonitor>((ref) {
   );
 });
 
-final assistentAlertDispatcherProvider = Provider<AssistentAlertDispatcher>((ref) {
+final assistentAlertDispatcherProvider = Provider<AssistentAlertDispatcher>((
+  ref,
+) {
   final cfg = ref.watch(assistentConfigurationCenterProvider);
   return AssistentAlertDispatcher(
     webhookUrl: cfg.readString(
@@ -163,7 +184,10 @@ final assistentAlertDispatcherProvider = Provider<AssistentAlertDispatcher>((ref
     ),
     suppressWindowSeconds: cfg.readInt(
       'alert.suppressSeconds',
-      const int.fromEnvironment('ASSISTENT_ALERT_SUPPRESS_SECONDS', defaultValue: 180),
+      const int.fromEnvironment(
+        'ASSISTENT_ALERT_SUPPRESS_SECONDS',
+        defaultValue: 180,
+      ),
     ),
     logChannelEnabled: cfg.readBool('alert.logEnabled', true),
   );
@@ -184,22 +208,28 @@ final assistentApiGatewayProvider = Provider<AssistentApiGateway>((ref) {
   );
 });
 
-final assistentAdapterRegistryProvider = Provider<AssistentAdapterRegistry>((ref) {
+final assistentAdapterRegistryProvider = Provider<AssistentAdapterRegistry>((
+  ref,
+) {
   final registry = AssistentAdapterRegistry();
-  final feishuModeRaw =
-      const String.fromEnvironment('ASSISTENT_FEISHU_SIGN_MODE', defaultValue: 'hmac_sha256');
+  final feishuModeRaw = const String.fromEnvironment(
+    'ASSISTENT_FEISHU_SIGN_MODE',
+    defaultValue: 'hmac_sha256',
+  );
   final feishuMode = feishuModeRaw == 'none'
       ? AssistentSignatureMode.none
       : feishuModeRaw == 'token'
-          ? AssistentSignatureMode.token
-          : AssistentSignatureMode.hmacSha256;
-  final openclawModeRaw =
-      const String.fromEnvironment('ASSISTENT_OPENCLAW_SIGN_MODE', defaultValue: 'hmac_sha256');
+      ? AssistentSignatureMode.token
+      : AssistentSignatureMode.hmacSha256;
+  final openclawModeRaw = const String.fromEnvironment(
+    'ASSISTENT_OPENCLAW_SIGN_MODE',
+    defaultValue: 'hmac_sha256',
+  );
   final openclawMode = openclawModeRaw == 'none'
       ? AssistentSignatureMode.none
       : openclawModeRaw == 'token'
-          ? AssistentSignatureMode.token
-          : AssistentSignatureMode.hmacSha256;
+      ? AssistentSignatureMode.token
+      : AssistentSignatureMode.hmacSha256;
   registry.register(
     AssistentFeishuAdapter(
       signaturePolicy: AssistentSignaturePolicy(
@@ -208,7 +238,10 @@ final assistentAdapterRegistryProvider = Provider<AssistentAdapterRegistry>((ref
         signatureHeader: 'x-lark-signature',
         tokenHeader: 'x-feishu-token',
         timestampHeader: 'x-lark-request-timestamp',
-        maxSkewSeconds: const int.fromEnvironment('ASSISTENT_FEISHU_MAX_SKEW_SECONDS', defaultValue: 300),
+        maxSkewSeconds: const int.fromEnvironment(
+          'ASSISTENT_FEISHU_MAX_SKEW_SECONDS',
+          defaultValue: 300,
+        ),
       ),
     ),
   );
@@ -220,21 +253,27 @@ final assistentAdapterRegistryProvider = Provider<AssistentAdapterRegistry>((ref
         signatureHeader: 'x-openclaw-signature',
         tokenHeader: 'x-openclaw-token',
         timestampHeader: 'x-openclaw-timestamp',
-        maxSkewSeconds:
-            const int.fromEnvironment('ASSISTENT_OPENCLAW_MAX_SKEW_SECONDS', defaultValue: 300),
+        maxSkewSeconds: const int.fromEnvironment(
+          'ASSISTENT_OPENCLAW_MAX_SKEW_SECONDS',
+          defaultValue: 300,
+        ),
       ),
     ),
   );
   return registry;
 });
 
-final assistentAdapterRuntimeProvider = Provider<AssistentAdapterRuntime>((ref) {
+final assistentAdapterRuntimeProvider = Provider<AssistentAdapterRuntime>((
+  ref,
+) {
   return AssistentAdapterRuntime(ref.watch(assistentAdapterRegistryProvider));
 });
 
 final assistentSyncModeProvider = Provider<AssistentSyncMode>((ref) {
   final cfg = ref.watch(assistentConfigurationCenterProvider);
-  return AssistentSyncModeParser.parse(cfg.readString('sync.mode', 'local_mock'));
+  return AssistentSyncModeParser.parse(
+    cfg.readString('sync.mode', 'local_mock'),
+  );
 });
 
 final assistentSyncAdapterProvider = Provider<AssistentSyncAdapter>((ref) {
@@ -257,7 +296,9 @@ final assistentLearningStoreProvider = Provider<AssistentLearningStore>((ref) {
   return AssistentLearningStore();
 });
 
-final assistentLearningServiceProvider = Provider<AssistentLearningService>((ref) {
+final assistentLearningServiceProvider = Provider<AssistentLearningService>((
+  ref,
+) {
   return AssistentLearningService(
     store: ref.watch(assistentLearningStoreProvider),
     syncGateway: ref.watch(assistentSyncGatewayProvider),

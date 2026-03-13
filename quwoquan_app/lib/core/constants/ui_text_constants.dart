@@ -4,20 +4,29 @@ class UITextConstants {
   static const String discovery = '发现';
 
   /// 发现页 Tab（1:1 对应 DiscoveryFeed.tsx CATEGORIES）
-  static const String discoveryTabMoment = '微趣';
-  static const String discoveryTabPhoto = '美图';
+  static const String discoveryTabMoment = '点滴';
+  static const String discoveryTabPhoto = '图片';
   static const String discoveryTabVideo = '视频';
-  static const String discoveryTabArticle = '文章';
+  static const String discoveryTabArticle = '笔记';
 
   /// 双轨道架构主 Rail 标签
-  static const String discoveryRailMoment = '微趣';
+  static const String discoveryRailMoment = '点滴';
   static const String discoveryRailWorks = '作品';
 
   /// 作品频道二级过滤器
   static const String discoveryWorksFilterAll = '全部';
   static const String discoveryWorksFilterVideo = '视频';
-  static const String discoveryWorksFilterImage = '美图';
-  static const String discoveryWorksFilterArticle = '文章';
+  static const String discoveryWorksFilterImage = '图片';
+  static const String discoveryWorksFilterArticle = '笔记';
+
+  /// 统一创作容器过滤器（profile / circle）
+  static const String creationFilterAll = '全部';
+  static const String creationFilterMoment = '点滴';
+  static const String creationFilterWork = '作品';
+  static const String workFormatFilterAll = '全部';
+  static const String workFormatFilterImage = '图片';
+  static const String workFormatFilterVideo = '视频';
+  static const String workFormatFilterNote = '笔记';
 
   /// 发现页 V1：帮读/美图/视频
   static const String discoveryTabHelperRead = '帮读';
@@ -40,10 +49,10 @@ class UITextConstants {
   static const String discoveryHelperTimelineToday = '今天';
   static const String discoveryHelperTimelineYesterday = '昨天';
   static const String discoveryHelperTimelineThisWeek = '本周';
-  static const String discoveryHelperExpandMoments = '展开微趣';
-  static const String discoveryHelperExpandArticles = '查看文章列表';
-  static const String discoveryHelperSectionMoments = '微趣';
-  static const String discoveryHelperSectionArticles = '文章';
+  static const String discoveryHelperExpandMoments = '展开点滴';
+  static const String discoveryHelperExpandArticles = '查看笔记列表';
+  static const String discoveryHelperSectionMoments = '点滴';
+  static const String discoveryHelperSectionArticles = '笔记';
   static const String discoveryHelperActionReadOriginal = '看原文';
   static const String discoveryHelperActionLater = '稍后处理';
   static const String discoveryHelperActionPreference = '更像这个';
@@ -115,6 +124,15 @@ class UITextConstants {
   static const String report = '举报';
   static const String notInterested = '不感兴趣';
   static const String shareTo = '分享到';
+  static const String shareActionSavePoster = '保存海报';
+  static const String shareActionSystemShare = '系统分享';
+  static const String sharePrivateBlocked = '仅自己可见内容不可对外分享';
+  static const String shareCircleVisibilityNotice = '圈内可见内容将生成受控链接';
+  static const String shareLegacyFallbackNotice = '当前已回退到通用分享面板';
+  static const String shareLinkCopied = '分享链接已复制';
+  static const String sharePosterSaved = '海报已保存到本地文件';
+  static const String shareCancelled = '已取消分享';
+  static const String shareFailed = '分享失败，请稍后重试';
   static const String savePhoto = '保存图片';
   static const String saveVideo = '保存视频';
   static const String savePost = '收藏';
@@ -161,10 +179,10 @@ class UITextConstants {
   static const String circleSubAll = '全部';
   static const String circleSubPhoto = '图片';
   static const String circleSubVideo = '视频';
-  static const String circleSubArticle = '文章';
+  static const String circleSubArticle = '笔记';
   static const String circleSubLikes = '赞';
   static const String circleSubComments = '评论';
-  static const String circleSubMicro = '微趣';
+  static const String circleSubMicro = '点滴';
   static const String circleSortLatest = '最新';
   static const String circleSortHot = '最热';
   static const String circleSortFeatured = '精选';
@@ -329,8 +347,7 @@ class UITextConstants {
   static const String editGroupName = '修改群聊名称';
   static const String groupNameHint = '请输入群聊名称';
   static const String groupNameUpdated = '群聊名称已更新';
-  static const String groupAdminDescription =
-      '管理员可协助群主管理群聊，拥有发布群公告、移除群成员等能力。';
+  static const String groupAdminDescription = '管理员可协助群主管理群聊，拥有发布群公告、移除群成员等能力。';
   static const String groupAdminOnlyOwner = '只有群主具备设置管理员、解散群聊的能力。';
   static const String groupAdminMaxCount = '最多可设置3个管理员。';
   static const String admin = '管理员';
@@ -379,20 +396,30 @@ class UITextConstants {
   static const String assistantModelUnavailable =
       '当前未配置可用模型，请先在模型配置中接入远程模型或桥接服务。';
   static const String assistantRunningHint = '小趣正在规划与执行中...';
-  /// v3 用户视角阶段：理解问题
-  static const String assistantPhaseUnderstanding = '理解问题';
-  /// v3 用户视角阶段：搜索资料（工具执行，由元数据覆盖）
-  static const String assistantPhaseSearching = '搜索资料';
-  /// v3 用户视角阶段：分析整理
-  static const String assistantPhaseAnalyzing = '分析整理';
-  /// v3 用户视角阶段：组织回答
-  static const String assistantPhaseAnswering = '组织回答';
-  /// v3 用户视角阶段：检查结果
-  static const String assistantPhaseAssessing = '检查结果';
+
+  /// v3 用户视角阶段：先帮用户理清问题
+  static const String assistantPhaseUnderstanding = '我先帮你理清问题';
+
+  /// v3 用户视角阶段：替用户核对资料（工具执行，由元数据覆盖）
+  static const String assistantPhaseSearching = '我在替你核对资料';
+
+  /// v3 用户视角阶段：替用户整理判断
+  static const String assistantPhaseAnalyzing = '我在帮你整理判断';
+
+  /// v3 用户视角阶段：替用户组织最终回答
+  static const String assistantPhaseAnswering = '我在组织最终回答';
+
+  /// v3 用户视角阶段：确认当前信息是否已经够答
+  static const String assistantPhaseAssessing = '我在确认现在的信息够不够回答';
+
+  /// v3 用户视角阶段：完成
+  static const String assistantPhaseCompleted = '已为你整理好';
+
   /// 旧版兼容：等待
-  static const String assistantPhaseWaiting = '理解问题';
+  static const String assistantPhaseWaiting = '我先帮你理清问题';
+
   /// 旧版兼容：深度思考
-  static const String assistantPhaseThinking = '分析整理';
+  static const String assistantPhaseThinking = '我在帮你整理判断';
   static const String assistantFeedbackHelpful = '有帮助';
   static const String assistantFeedbackUnhelpful = '没帮助';
   static const String assistantFeedbackCorrect = '纠正';
@@ -476,8 +503,7 @@ class UITextConstants {
   static const String profileSubAccountDeleteConfirmTemplate =
       '确定要删除「%s」吗？此操作不可撤销。';
   static const String profileSubAccountCreateTitle = '创建子账号';
-  static const String profileSubAccountNamePlaceholder =
-      '账号名称（如：职业号、匿名号）';
+  static const String profileSubAccountNamePlaceholder = '账号名称（如：职业号、匿名号）';
   static const String profileSubAccountOpen = '公开';
   static const String profileSubAccountSemi = '半隐';
   static const String profileSubAccountStrict = '严格隔离';
@@ -486,8 +512,7 @@ class UITextConstants {
   static const String profileSubAccountCreateFailed = '创建失败';
   static const String profileSubAccountMaxReachedTemplate = '最多创建 %s 个子账号';
   static const String profileSubAccountEmpty = '暂无子账号';
-  static const String profileSubAccountStrictDescription =
-      '严格隔离 · 不出现在通讯录发现';
+  static const String profileSubAccountStrictDescription = '严格隔离 · 不出现在通讯录发现';
   static const String profileSubAccountSemiDescription = '半隐私 · 仅好友可发现';
   static const String profileSubAccountOpenDescription = '公开 · 可被通讯录发现';
   static const String operationFailed = '操作失败';
@@ -495,10 +520,29 @@ class UITextConstants {
   // ==================== 创作页（1:1 对应 CreatePage.tsx + MomentEditorCard.tsx） ====================
   static const String momentPlaceholder = '这一刻的想法...';
   static const String drafts = '草稿箱';
-  static const String postMoment = '发微趣';
-  static const String postPhoto = '发美图';
+  static const String createActionGallery = '从相册选';
+  static const String createActionGalleryHint = '先挑素材，再决定发成点滴还是作品';
+  static const String createActionWrite = '写点什么';
+  static const String createActionWriteHint = '快速记录当下，也能随时升级成作品';
+  static const String createActionCapture = '拍一下';
+  static const String createActionCaptureHint = '直接拍照或录视频，立刻开始创作';
+  static const String createIdentityMoment = '点滴';
+  static const String createIdentityWork = '作品';
+  static const String createSwitchToMoment = '切到点滴';
+  static const String createSwitchToWork = '切到作品';
+  static const String createWorkFormatImage = '图片';
+  static const String createWorkFormatVideo = '视频';
+  static const String createWorkFormatNote = '笔记';
+  static const String createSuggestionKeepCurrent = '仍按当前发布';
+  static const String createSuggestionSwitch = '去调整';
+  static const String createAssistantUseLabel = '允许小趣使用';
+  static const String createAssistantUseHint = '关闭后，这条内容不会被小趣读取或引用';
+  static const String createSuggestionToWork = '当前内容更适合作为作品发布';
+  static const String createSuggestionToMoment = '这条内容也可以更轻量地作为点滴发布';
+  static const String postMoment = '发点滴';
+  static const String postPhoto = '发图片';
   static const String postVideo = '发视频';
-  static const String postArticle = '写文章';
+  static const String postArticle = '写笔记';
   static const String publish = '发表';
   static const String publishAction = '发布';
   static const String locationLabel = '所在位置';
@@ -693,10 +737,10 @@ class UITextConstants {
   static const String discardAndExit = '放弃并退出';
   static const String saveAndExit = '保存并退出';
   static const String draftCount = '草稿箱';
-  static const String draftMoment = '微趣草稿';
-  static const String draftPhoto = '美图草稿';
+  static const String draftMoment = '点滴草稿';
+  static const String draftPhoto = '图片草稿';
   static const String draftVideo = '视频草稿';
-  static const String draftArticle = '文章草稿';
+  static const String draftArticle = '笔记草稿';
   static const String unlabeled = '[未填写]';
 
   /// 创作页表单占位（美图/视频/文章）
@@ -744,4 +788,50 @@ class UITextConstants {
 
   /// 文章（ArticleEditorCard 1:1）
   static const String articleTitlePlaceholder = '请输入标题';
+
+  static const String shareTemplateMomentTitle = '分享点滴';
+  static const String shareTemplateMomentSubtitle = '保留当时的语境与氛围';
+  static const String shareTemplateWorkTitle = '分享作品';
+  static const String shareTemplateWorkSubtitle = '突出标题、摘要与收藏价值';
+
+  static String contentLabelForKey(String labelKey) {
+    switch (labelKey) {
+      case 'discovery_rail_moment':
+        return discoveryRailMoment;
+      case 'discovery_rail_work':
+        return discoveryRailWorks;
+      case 'creation_filter_all':
+        return creationFilterAll;
+      case 'creation_filter_moment':
+        return creationFilterMoment;
+      case 'creation_filter_work':
+        return creationFilterWork;
+      case 'work_format_all':
+        return workFormatFilterAll;
+      case 'work_format_image':
+        return workFormatFilterImage;
+      case 'work_format_video':
+        return workFormatFilterVideo;
+      case 'work_format_note':
+        return workFormatFilterNote;
+      case 'share_template_moment_title':
+        return shareTemplateMomentTitle;
+      case 'share_template_moment_subtitle':
+        return shareTemplateMomentSubtitle;
+      case 'share_template_work_title':
+        return shareTemplateWorkTitle;
+      case 'share_template_work_subtitle':
+        return shareTemplateWorkSubtitle;
+      case 'tab_photo':
+        return discoveryTabPhoto;
+      case 'tab_video':
+        return discoveryTabVideo;
+      case 'tab_moment':
+        return discoveryTabMoment;
+      case 'tab_article':
+        return discoveryTabArticle;
+      default:
+        return labelKey;
+    }
+  }
 }

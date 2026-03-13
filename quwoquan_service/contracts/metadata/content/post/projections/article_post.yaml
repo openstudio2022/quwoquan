@@ -17,6 +17,7 @@ consumers:
 fields:
   - { name: postId,         type: ObjectId }
   - { name: contentType,    type: enum,   description: "固定为 article" }
+  - { name: contentIdentity, type: enum,  description: "内容身份层。笔记作品固定为 work" }
   - { name: authorId,              type: string }
   - { name: authorNickname,        type: string, description: 作者昵称（反范式） }
   - { name: authorAvatarUrl,       type: string, description: 作者头像（反范式） }
@@ -37,6 +38,12 @@ client_projection:
   dart_class: ArticlePostDto
   base_class: PostBaseDto
   output_path: cloud/runtime/generated/content/article_post_dto.g.dart
+  computed_getters:
+    - name: displayFormat
+      dart_return_type: String
+      nullable: false
+      description: "展示格式。作品态 article 在 UI 术语上统一映射为 note。"
+      body: "return 'note';"
   fields:
     - name: id
       dart_type: String
@@ -51,6 +58,20 @@ client_projection:
       source: contentType
       aliases: [contentType, category]
       default: "'article'"
+
+    - name: identity
+      dart_type: String
+      nullable: false
+      source: contentIdentity
+      aliases: [contentIdentity, identity]
+      default: "'work'"
+
+    - name: assistantUsePolicy
+      dart_type: String
+      nullable: false
+      source: assistantUsePolicy
+      aliases: [assistantUsePolicy]
+      default: "'inherit'"
 
     - name: authorId
       dart_type: String

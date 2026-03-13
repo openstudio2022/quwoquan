@@ -22,11 +22,11 @@ type pgPersonaStoreBase struct {
 	pool *pgxpool.Pool
 }
 
-const personaCols = `id, user_id, display_name, avatar_url, caller_ringtone_id, is_primary, is_private, is_active, sub_account_id, isolation_level, purpose_hint, invite_count, created_at, updated_at`
+const personaCols = `id, user_id, display_name, avatar_url, caller_ringtone_id, theme_mode_override, font_size_preset_override, appearance_override_updated_at, is_primary, is_private, is_active, sub_account_id, isolation_level, purpose_hint, invite_count, created_at, updated_at`
 
 func scanPersona(row pgx.Row) (*model.Persona, error) {
 	e := &model.Persona{}
-	err := row.Scan(&e.ID, &e.UserID, &e.DisplayName, &e.AvatarURL, &e.CallerRingtoneID, &e.IsPrimary, &e.IsPrivate, &e.IsActive, &e.SubAccountID, &e.IsolationLevel, &e.PurposeHint, &e.InviteCount, &e.CreatedAt, &e.UpdatedAt)
+	err := row.Scan(&e.ID, &e.UserID, &e.DisplayName, &e.AvatarURL, &e.CallerRingtoneID, &e.ThemeModeOverride, &e.FontSizePresetOverride, &e.AppearanceOverrideUpdatedAt, &e.IsPrimary, &e.IsPrivate, &e.IsActive, &e.SubAccountID, &e.IsolationLevel, &e.PurposeHint, &e.InviteCount, &e.CreatedAt, &e.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -48,8 +48,8 @@ func (s *pgPersonaStoreBase) Create(ctx context.Context, e *model.Persona) error
 	e.CreatedAt = now
 	e.UpdatedAt = now
 	_, err := s.pool.Exec(ctx,
-		`INSERT INTO personas (id, user_id, display_name, avatar_url, caller_ringtone_id, is_primary, is_private, is_active, sub_account_id, isolation_level, purpose_hint, invite_count, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-		e.ID, e.UserID, e.DisplayName, e.AvatarURL, e.CallerRingtoneID, e.IsPrimary, e.IsPrivate, e.IsActive, e.SubAccountID, e.IsolationLevel, e.PurposeHint, e.InviteCount, e.CreatedAt, e.UpdatedAt)
+		`INSERT INTO personas (id, user_id, display_name, avatar_url, caller_ringtone_id, theme_mode_override, font_size_preset_override, appearance_override_updated_at, is_primary, is_private, is_active, sub_account_id, isolation_level, purpose_hint, invite_count, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+		e.ID, e.UserID, e.DisplayName, e.AvatarURL, e.CallerRingtoneID, e.ThemeModeOverride, e.FontSizePresetOverride, e.AppearanceOverrideUpdatedAt, e.IsPrimary, e.IsPrivate, e.IsActive, e.SubAccountID, e.IsolationLevel, e.PurposeHint, e.InviteCount, e.CreatedAt, e.UpdatedAt)
 	return err
 }
 
@@ -57,8 +57,8 @@ func (s *pgPersonaStoreBase) Create(ctx context.Context, e *model.Persona) error
 func (s *pgPersonaStoreBase) Update(ctx context.Context, e *model.Persona) error {
 	e.UpdatedAt = time.Now().UTC()
 	tag, err := s.pool.Exec(ctx,
-		`UPDATE personas SET user_id=$2, display_name=$3, avatar_url=$4, caller_ringtone_id=$5, is_primary=$6, is_private=$7, is_active=$8, sub_account_id=$9, isolation_level=$10, purpose_hint=$11, invite_count=$12, created_at=$13, updated_at=$14 WHERE id = $1`,
-		e.ID, e.UserID, e.DisplayName, e.AvatarURL, e.CallerRingtoneID, e.IsPrimary, e.IsPrivate, e.IsActive, e.SubAccountID, e.IsolationLevel, e.PurposeHint, e.InviteCount, e.CreatedAt, e.UpdatedAt)
+		`UPDATE personas SET user_id=$2, display_name=$3, avatar_url=$4, caller_ringtone_id=$5, theme_mode_override=$6, font_size_preset_override=$7, appearance_override_updated_at=$8, is_primary=$9, is_private=$10, is_active=$11, sub_account_id=$12, isolation_level=$13, purpose_hint=$14, invite_count=$15, created_at=$16, updated_at=$17 WHERE id = $1`,
+		e.ID, e.UserID, e.DisplayName, e.AvatarURL, e.CallerRingtoneID, e.ThemeModeOverride, e.FontSizePresetOverride, e.AppearanceOverrideUpdatedAt, e.IsPrimary, e.IsPrivate, e.IsActive, e.SubAccountID, e.IsolationLevel, e.PurposeHint, e.InviteCount, e.CreatedAt, e.UpdatedAt)
 	if err != nil {
 		return err
 	}
@@ -86,7 +86,7 @@ func (s *pgPersonaStoreBase) ListByUserID(ctx context.Context, fkID string) ([]m
 	var result []model.Persona
 	for rows.Next() {
 		var e model.Persona
-		if err := rows.Scan(&e.ID, &e.UserID, &e.DisplayName, &e.AvatarURL, &e.CallerRingtoneID, &e.IsPrimary, &e.IsPrivate, &e.IsActive, &e.SubAccountID, &e.IsolationLevel, &e.PurposeHint, &e.InviteCount, &e.CreatedAt, &e.UpdatedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.UserID, &e.DisplayName, &e.AvatarURL, &e.CallerRingtoneID, &e.ThemeModeOverride, &e.FontSizePresetOverride, &e.AppearanceOverrideUpdatedAt, &e.IsPrimary, &e.IsPrivate, &e.IsActive, &e.SubAccountID, &e.IsolationLevel, &e.PurposeHint, &e.InviteCount, &e.CreatedAt, &e.UpdatedAt); err != nil {
 			return nil, err
 		}
 		result = append(result, e)

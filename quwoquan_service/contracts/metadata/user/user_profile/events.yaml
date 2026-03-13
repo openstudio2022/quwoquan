@@ -82,7 +82,14 @@ events:
     consumers: [notification-service, recommendation-engine]
     channel: event_store
     payload_entity: UserSetting
-    payload_fields: [userId, enablePush, profileVisibility, assistantEnabled, feedPreference, defaultIncomingCallRingtoneId, allowCallerRingtoneOverride, enableCallVibration, enableGroupCallRing]
+    payload_fields: [userId, enablePush, profileVisibility, assistantEnabled, feedPreference, defaultIncomingCallRingtoneId, allowCallerRingtoneOverride, enableCallVibration, enableGroupCallRing, defaultThemeMode, defaultFontSizePreset, appearanceVersion]
+
+  - name: UserAppearanceSettingsChanged
+    description: owner 默认值或子账号 override 发生变化，客户端据此失效并重新拉取最新快照
+    producer: user-service
+    consumers: [notification-service]
+    channel: event_store
+    payload_fields: [userId, version, source]
 
   - name: CredentialBound
     description: 用户绑定新凭证（手机/微信/Apple）

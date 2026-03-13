@@ -169,6 +169,28 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PrivacySettings" }
+  /v1/user/settings/appearance:
+    get:
+      summary: Get appearance settings
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AppearanceSettings" }
+    patch:
+      summary: Update appearance settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AppearanceSettingsPatch" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AppearanceSettings" }
   /v1/user/devices/push-tokens:
     post:
       summary: Register push token
@@ -260,6 +282,55 @@ components:
     PrivacySettingsPatch:
       type: object
       additionalProperties: true
+    AppearanceSettings:
+      type: object
+      required:
+        [
+          themeMode,
+          fontSizePreset,
+          source,
+          ownerDefaultThemeMode,
+          ownerDefaultFontSizePreset,
+          hasSubAccountOverride,
+          version,
+          updatedAt,
+        ]
+      properties:
+        themeMode:
+          type: string
+          enum: [system, light, dark]
+        fontSizePreset:
+          type: string
+          enum: [xs, sm, md, lg, xl]
+        source:
+          type: string
+          enum: [owner_default, sub_override, system_default]
+        ownerDefaultThemeMode:
+          type: string
+          enum: [system, light, dark]
+        ownerDefaultFontSizePreset:
+          type: string
+          enum: [xs, sm, md, lg, xl]
+        hasSubAccountOverride:
+          type: boolean
+        version:
+          type: integer
+        updatedAt:
+          type: string
+          format: date-time
+    AppearanceSettingsPatch:
+      type: object
+      required: [themeMode, fontSizePreset, applyScope]
+      properties:
+        themeMode:
+          type: string
+          enum: [system, light, dark]
+        fontSizePreset:
+          type: string
+          enum: [xs, sm, md, lg, xl]
+        applyScope:
+          type: string
+          enum: [all_accounts, current_sub_account, inherit_owner_default]
     RegisterPushTokenRequest:
       type: object
       required: [platform, token, deviceId]

@@ -23,11 +23,12 @@ import (
 )
 
 var (
-	testHandler http.Handler
-	eventSpy    *testinfra.EventSpy
-	mongoDB     *mongo.Database
-	mongoClient *mongo.Client
-	testRouter  *rtredis.Router
+	testHandler     http.Handler
+	testPostService *application.PostService
+	eventSpy        *testinfra.EventSpy
+	mongoDB         *mongo.Database
+	mongoClient     *mongo.Client
+	testRouter      *rtredis.Router
 )
 
 func TestMain(m *testing.M) {
@@ -95,7 +96,11 @@ func TestMain(m *testing.M) {
 	postService := application.NewPostService(
 		postStore,
 		application.WithEventPublisher(eventSpy),
+		application.WithProjector(&testProjectorAdapter{
+			p: recinfra.NewDiscoveryFeedProjector(mongoDB),
+		}),
 	)
+	testPostService = postService
 	reportService := application.NewReportService(reportStore, eventSpy)
 	behaviorService := application.NewBehaviorService(hotPath, postStore)
 	testHandler = contenhttp.NewContentHandler(feedService, postService, reportService, behaviorService).Routes()
@@ -136,4 +141,18 @@ func cleanPosts(t *testing.T) {
 		t.Logf("cleanPosts: %v", err)
 	}
 	eventSpy.Reset()
+}
+
+type testProjectorAdapter struct {
+	p *recinfra.DiscoveryFeedProjector
+}
+
+func (a *testProjectorAdapter) Project(ctx context.Context, event application.ProjectorEvent) error {
+	return a.p.Project(ctx, recinfra.ProjectorEvent{
+		Type:          event.Type,
+		AggregateType: event.AggregateType,
+		AggregateID:   event.AggregateID,
+		Payload:       event.Payload,
+		OccurredAt:    event.OccurredAt,
+	})
 }

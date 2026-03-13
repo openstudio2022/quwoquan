@@ -3,16 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/components/more_actions_popup/configs/media_post_config.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 
 /// 更多操作弹窗组件
 class MoreActionPopup extends StatelessWidget {
   final dynamic config;
-  
-  const MoreActionPopup({
-    super.key,
-    required this.config,
-  });
-  
+
+  const MoreActionPopup({super.key, required this.config});
+
   /// 显示更多操作弹窗
   static Future<void> show({
     required BuildContext context,
@@ -29,7 +27,7 @@ class MoreActionPopup extends StatelessWidget {
       );
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Container(); // Stub
@@ -42,7 +40,7 @@ class _ScrollAction {
   final IconData icon;
   final String label;
   final VoidCallback? onTap;
-  
+
   const _ScrollAction({
     required this.id,
     required this.icon,
@@ -58,7 +56,7 @@ class _BottomAction {
   final String label;
   final String? description;
   final VoidCallback? onTap;
-  
+
   const _BottomAction({
     required this.id,
     required this.icon,
@@ -71,16 +69,16 @@ class _BottomAction {
 /// 媒体帖子更多操作底部弹窗
 class _MediaPostMoreActionSheet extends ConsumerStatefulWidget {
   final MediaPostMoreActionConfig config;
-  
-  const _MediaPostMoreActionSheet({
-    required this.config,
-  });
-  
+
+  const _MediaPostMoreActionSheet({required this.config});
+
   @override
-  ConsumerState<_MediaPostMoreActionSheet> createState() => _MediaPostMoreActionSheetState();
+  ConsumerState<_MediaPostMoreActionSheet> createState() =>
+      _MediaPostMoreActionSheetState();
 }
 
-class _MediaPostMoreActionSheetState extends ConsumerState<_MediaPostMoreActionSheet> {
+class _MediaPostMoreActionSheetState
+    extends ConsumerState<_MediaPostMoreActionSheet> {
   List<_ScrollAction> _buildScrollActions(bool isDark) {
     return [
       _ScrollAction(
@@ -108,6 +106,12 @@ class _MediaPostMoreActionSheetState extends ConsumerState<_MediaPostMoreActionS
         onTap: widget.config.onCopyLink,
       ),
       _ScrollAction(
+        id: 'share',
+        icon: Icons.ios_share_outlined,
+        label: UITextConstants.share,
+        onTap: widget.config.onShare,
+      ),
+      _ScrollAction(
         id: 'viewOriginal',
         icon: Icons.image_outlined,
         label: AppStrings.viewOriginal,
@@ -133,7 +137,7 @@ class _MediaPostMoreActionSheetState extends ConsumerState<_MediaPostMoreActionS
       ),
     ];
   }
-  
+
   List<_BottomAction> _buildBottomActions() {
     return [
       _BottomAction(
@@ -166,16 +170,19 @@ class _MediaPostMoreActionSheetState extends ConsumerState<_MediaPostMoreActionS
       ),
     ];
   }
-  
+
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
     final scrollActions = _buildScrollActions(isDark);
     final bottomActions = _buildBottomActions();
-    
+
     return Container(
       decoration: BoxDecoration(
-        color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
+        color: AppColorsFunctional.getColor(
+          isDark,
+          ColorType.backgroundPrimary,
+        ),
         borderRadius: BorderRadius.only(
           topLeft: Radius.circular(20.r),
           topRight: Radius.circular(20.r),
@@ -198,9 +205,12 @@ class _MediaPostMoreActionSheetState extends ConsumerState<_MediaPostMoreActionS
                     child: Text(
                       AppStrings.moreActionsTitle,
                       style: TextStyle(
-                        fontSize: 16.sp,
+                        fontSize: AppTypography.lg.sp,
                         fontWeight: FontWeight.normal,
-                        color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
+                        color: AppColorsFunctional.getColor(
+                          isDark,
+                          ColorType.foregroundPrimary,
+                        ),
                       ),
                     ),
                   ),
@@ -208,8 +218,11 @@ class _MediaPostMoreActionSheetState extends ConsumerState<_MediaPostMoreActionS
                 IconButton(
                   icon: Icon(
                     Icons.close,
-                    size: 20.sp,
-                    color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
+                    size: AppSpacing.twenty.sp,
+                    color: AppColorsFunctional.getColor(
+                      isDark,
+                      ColorType.foregroundPrimary,
+                    ),
                   ),
                   onPressed: () => Navigator.pop(context),
                   padding: EdgeInsets.zero,
@@ -218,13 +231,13 @@ class _MediaPostMoreActionSheetState extends ConsumerState<_MediaPostMoreActionS
               ],
             ),
           ),
-          
-          SizedBox(height: 24.h),
-          
+
+          SizedBox(height: AppSpacing.lg.h),
+
           // 滚动行区域
           if (scrollActions.isNotEmpty) ...[
             SizedBox(
-              height: 100.h, // 圆形按钮高度 + 文字高度 + 间距
+              height: AppSpacing.oneHundred.h,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 padding: EdgeInsets.symmetric(horizontal: AppSpacing.md.w),
@@ -232,8 +245,12 @@ class _MediaPostMoreActionSheetState extends ConsumerState<_MediaPostMoreActionS
                 itemBuilder: (context, index) {
                   final action = scrollActions[index];
                   return Container(
-                    width: 80.w,
-                    margin: EdgeInsets.only(right: index < scrollActions.length - 1 ? AppSpacing.xs.w : 0),
+                    width: AppSpacing.storyHeight.w,
+                    margin: EdgeInsets.only(
+                      right: index < scrollActions.length - 1
+                          ? AppSpacing.xs.w
+                          : 0,
+                    ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -244,26 +261,35 @@ class _MediaPostMoreActionSheetState extends ConsumerState<_MediaPostMoreActionS
                             action.onTap?.call();
                           },
                           child: Container(
-                            width: 56.w, // avatar-xlarge: 56px
-                            height: 56.w,
+                            width: AppSpacing.avatarUserLg.w,
+                            height: AppSpacing.avatarUserLg.w,
                             decoration: BoxDecoration(
-                              color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary),
+                              color: AppColorsFunctional.getColor(
+                                isDark,
+                                ColorType.backgroundSecondary,
+                              ),
                               shape: BoxShape.circle,
                             ),
                             child: Icon(
                               action.icon,
-                              size: 24.sp, // icon-pure-medium: 24px
-                              color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),
+                              size: AppSpacing.iconMedium.sp,
+                              color: AppColorsFunctional.getColor(
+                                isDark,
+                                ColorType.foregroundSecondary,
+                              ),
                             ),
                           ),
                         ),
-                        SizedBox(height: 8.h),
+                        SizedBox(height: AppSpacing.sm.h),
                         // 文字标签
                         Text(
                           action.label,
                           style: TextStyle(
-                            fontSize: 12.sp,
-                            color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
+                            fontSize: AppTypography.sm.sp,
+                            color: AppColorsFunctional.getColor(
+                              isDark,
+                              ColorType.foregroundPrimary,
+                            ),
                           ),
                           textAlign: TextAlign.center,
                           maxLines: 1,
@@ -275,28 +301,36 @@ class _MediaPostMoreActionSheetState extends ConsumerState<_MediaPostMoreActionS
                 },
               ),
             ),
-            SizedBox(height: 24.h),
+            SizedBox(height: AppSpacing.lg.h),
           ],
-          
+
           // 分隔线
           if (scrollActions.isNotEmpty && bottomActions.isNotEmpty) ...[
             Divider(
-              height: 1,
+              height: AppSpacing.one,
               thickness: 1,
-              color: AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary).withValues(alpha: 0.3),
+              color: AppColorsFunctional.getColor(
+                isDark,
+                ColorType.foregroundTertiary,
+              ).withValues(alpha: 0.3),
               indent: AppSpacing.md.w,
               endIndent: AppSpacing.md.w,
             ),
-            SizedBox(height: 16.h),
+            SizedBox(height: AppSpacing.md.h),
           ],
-          
+
           // 底部操作项区域
           if (bottomActions.isNotEmpty) ...[
             Container(
               margin: EdgeInsets.symmetric(horizontal: AppSpacing.md.w),
               decoration: BoxDecoration(
-                color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary).withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(12.r),
+                color: AppColorsFunctional.getColor(
+                  isDark,
+                  ColorType.backgroundSecondary,
+                ).withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(
+                  AppSpacing.largeBorderRadius.r,
+                ),
               ),
               child: Column(
                 children: bottomActions.asMap().entries.map((entry) {
@@ -318,17 +352,23 @@ class _MediaPostMoreActionSheetState extends ConsumerState<_MediaPostMoreActionS
                             children: [
                               Icon(
                                 action.icon,
-                                size: 20.sp, // h-5 w-5: 20px
-                                color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
+                                size: AppSpacing.twenty.sp,
+                                color: AppColorsFunctional.getColor(
+                                  isDark,
+                                  ColorType.foregroundPrimary,
+                                ),
                               ),
                               SizedBox(width: AppSpacing.sm.w),
                               Expanded(
                                 child: Text(
                                   action.label,
                                   style: TextStyle(
-                                    fontSize: 16.sp,
+                                    fontSize: AppTypography.lg.sp,
                                     fontWeight: FontWeight.normal,
-                                    color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
+                                    color: AppColorsFunctional.getColor(
+                                      isDark,
+                                      ColorType.foregroundPrimary,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -336,8 +376,11 @@ class _MediaPostMoreActionSheetState extends ConsumerState<_MediaPostMoreActionS
                                 Text(
                                   action.description!,
                                   style: TextStyle(
-                                    fontSize: 14.sp,
-                                    color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),
+                                    fontSize: AppTypography.base.sp,
+                                    color: AppColorsFunctional.getColor(
+                                      isDark,
+                                      ColorType.foregroundSecondary,
+                                    ),
                                   ),
                                   textAlign: TextAlign.right,
                                 ),
@@ -348,9 +391,12 @@ class _MediaPostMoreActionSheetState extends ConsumerState<_MediaPostMoreActionS
                       // 分隔线 (除了最后一个选项)
                       if (index < bottomActions.length - 1)
                         Divider(
-                          height: 1,
+                          height: AppSpacing.one,
                           thickness: 1,
-                          color: AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary).withValues(alpha: 0.2),
+                          color: AppColorsFunctional.getColor(
+                            isDark,
+                            ColorType.foregroundTertiary,
+                          ).withValues(alpha: 0.2),
                           indent: AppSpacing.md.w,
                           endIndent: AppSpacing.md.w,
                         ),
@@ -359,7 +405,7 @@ class _MediaPostMoreActionSheetState extends ConsumerState<_MediaPostMoreActionS
                 }).toList(),
               ),
             ),
-            SizedBox(height: 24.h),
+            SizedBox(height: AppSpacing.lg.h),
           ],
         ],
       ),

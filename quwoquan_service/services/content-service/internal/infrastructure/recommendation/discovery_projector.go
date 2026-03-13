@@ -2,6 +2,7 @@ package recommendation
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -23,7 +24,15 @@ func NewDiscoveryFeedProjector(db *mongo.Database) *DiscoveryFeedProjector {
 func (p *DiscoveryFeedProjector) Name() string { return "DiscoveryFeedProjector" }
 
 func (p *DiscoveryFeedProjector) EventTypes() []string {
-	return []string{"PostCreated", "PostPublished", "ContentReacted", "BehaviorBatchReported"}
+	return []string{
+		"PostCreated",
+		"PostPublished",
+		"PostSettingsUpdated",
+		"PostPromotedToWork",
+		"PostDeleted",
+		"ContentReacted",
+		"BehaviorBatchReported",
+	}
 }
 
 // ProjectorEvent mirrors the event structure from runtime/projector.
@@ -42,6 +51,12 @@ func (p *DiscoveryFeedProjector) Project(ctx context.Context, event ProjectorEve
 		return p.onPostCreated(ctx, event)
 	case "PostPublished":
 		return p.onPostPublished(ctx, event)
+	case "PostSettingsUpdated":
+		return p.onPostSettingsUpdated(ctx, event)
+	case "PostPromotedToWork":
+		return p.onPostPromotedToWork(ctx, event)
+	case "PostDeleted":
+		return p.onPostDeleted(ctx, event)
 	case "ContentReacted":
 		return p.onContentReacted(ctx, event)
 	case "BehaviorBatchReported":
@@ -52,47 +67,69 @@ func (p *DiscoveryFeedProjector) Project(ctx context.Context, event ProjectorEve
 }
 
 func (p *DiscoveryFeedProjector) onPostCreated(ctx context.Context, event ProjectorEvent) error {
+	return p.syncPost(ctx, event)
+}
+
+func (p *DiscoveryFeedProjector) onPostPublished(ctx context.Context, event ProjectorEvent) error {
+	return p.syncPost(ctx, event)
+}
+
+func (p *DiscoveryFeedProjector) onPostSettingsUpdated(ctx context.Context, event ProjectorEvent) error {
+	return p.syncPost(ctx, event)
+}
+
+func (p *DiscoveryFeedProjector) onPostPromotedToWork(ctx context.Context, event ProjectorEvent) error {
+	return p.syncPost(ctx, event)
+}
+
+func (p *DiscoveryFeedProjector) onPostDeleted(ctx context.Context, event ProjectorEvent) error {
 	postID := strVal(event.Payload, "_id")
 	if postID == "" {
 		return nil
 	}
+	_, err := p.coll.DeleteOne(ctx, bson.M{"postId": postID})
+	return err
+}
 
-	doc := bson.M{
-		"$set": bson.M{
-			"postId":      postID,
-			"contentType": strVal(event.Payload, "contentType"),
-			"authorId":    strVal(event.Payload, "authorId"),
-			"title":       strVal(event.Payload, "title"),
-			"tags":        anySlice(event.Payload, "tags"),
-			"coverUrl":    strVal(event.Payload, "coverUrl"),
-			"publishedAt": event.OccurredAt,
-			"recScore":    0.0,
-		},
+func (p *DiscoveryFeedProjector) syncPost(ctx context.Context, event ProjectorEvent) error {
+	postID := strVal(event.Payload, "_id")
+	if postID == "" {
+		return nil
+	}
+	if !eligibleForDiscovery(event.Payload) {
+		_, err := p.coll.DeleteOne(ctx, bson.M{"postId": postID})
+		return err
+	}
+
+	set := bson.M{
+		"postId":             postID,
+		"authorId":           strVal(event.Payload, "authorId"),
+		"contentType":        strVal(event.Payload, "contentType"),
+		"contentIdentity":    strVal(event.Payload, "contentIdentity"),
+		"title":              strVal(event.Payload, "title"),
+		"tags":               anySlice(event.Payload, "tags"),
+		"coverUrl":           strVal(event.Payload, "coverUrl"),
+		"status":             normalizedStatus(event.Payload),
+		"visibility":         normalizeVisibility(strVal(event.Payload, "visibility")),
+		"assistantUsePolicy": strVal(event.Payload, "assistantUsePolicy"),
+		"circleIds":          anySlice(event.Payload, "circleIds"),
+	}
+	if publishedAt := parseEventTime(strVal(event.Payload, "publishedAt"), event.OccurredAt); !publishedAt.IsZero() {
+		set["publishedAt"] = publishedAt
+	}
+
+	update := bson.M{
+		"$set": set,
 		"$setOnInsert": bson.M{
 			"likeCount":     int64(0),
 			"commentCount":  int64(0),
 			"favoriteCount": int64(0),
 			"viewCount":     int64(0),
+			"recScore":      0.0,
 		},
 	}
-
 	opts := options.UpdateOne().SetUpsert(true)
-	_, err := p.coll.UpdateOne(ctx, bson.M{"postId": postID}, doc, opts)
-	return err
-}
-
-func (p *DiscoveryFeedProjector) onPostPublished(ctx context.Context, event ProjectorEvent) error {
-	postID := strVal(event.Payload, "_id")
-	if postID == "" {
-		return nil
-	}
-
-	update := bson.M{
-		"$set": bson.M{
-			"publishedAt": event.OccurredAt,
-		},
-	}
-	_, err := p.coll.UpdateOne(ctx, bson.M{"postId": postID}, update)
+	_, err := p.coll.UpdateOne(ctx, bson.M{"postId": postID}, update, opts)
 	return err
 }
 
@@ -159,6 +196,44 @@ func strVal(m map[string]any, key string) string {
 func boolVal(m map[string]any, key string) bool {
 	v, _ := m[key].(bool)
 	return v
+}
+
+func normalizedStatus(payload map[string]any) string {
+	if status := strings.TrimSpace(strings.ToLower(strVal(payload, "status"))); status != "" {
+		return status
+	}
+	return "published"
+}
+
+func normalizeVisibility(value string) string {
+	switch strings.TrimSpace(strings.ToLower(value)) {
+	case "", "public":
+		return "public"
+	case "circle_visible", "circle-visible", "circle":
+		return "circle_visible"
+	case "private":
+		return "private"
+	default:
+		return "public"
+	}
+}
+
+func eligibleForDiscovery(payload map[string]any) bool {
+	return normalizedStatus(payload) == "published" &&
+		normalizeVisibility(strVal(payload, "visibility")) == "public"
+}
+
+func parseEventTime(raw string, fallback time.Time) time.Time {
+	raw = strings.TrimSpace(raw)
+	if raw != "" {
+		if ts, err := time.Parse(time.RFC3339, raw); err == nil {
+			return ts
+		}
+	}
+	if fallback.IsZero() {
+		return time.Time{}
+	}
+	return fallback.UTC()
 }
 
 func anySlice(m map[string]any, key string) []string {

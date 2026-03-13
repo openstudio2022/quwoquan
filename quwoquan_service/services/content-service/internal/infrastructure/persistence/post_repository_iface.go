@@ -12,6 +12,7 @@ type PostRepository interface {
 	Create(ctx context.Context, post *postmodel.Post) error
 	Update(ctx context.Context, id string, post *postmodel.Post) bool
 	FindByID(ctx context.Context, id string) (*postmodel.Post, bool)
+	ListAll(ctx context.Context) []postmodel.Post
 	ListPublished(ctx context.Context, limit int, cursor string) []postmodel.Post
 	ListByAuthor(ctx context.Context, authorID string, limit int, cursor string) []postmodel.Post
 }

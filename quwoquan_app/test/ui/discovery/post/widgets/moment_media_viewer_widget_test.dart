@@ -20,6 +20,8 @@ PostSummaryView _momentPost({
   final dto = MomentPostDto(
     id: id,
     type: 'moment',
+    identity: 'moment',
+    assistantUsePolicy: 'inherit',
     authorId: 'u1',
     displayName: '测试用户',
     avatarUrl: 'https://example.com/avatar.jpg',

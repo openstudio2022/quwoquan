@@ -26,6 +26,7 @@ consumers:
 fields:
   - { name: postId, type: ObjectId }
   - { name: contentType, type: enum }
+  - { name: contentIdentity, type: enum, description: "内容身份层。moment/work，用于跨面统一过滤" }
   - { name: authorId, type: string }
   - { name: title, type: string }
   - { name: tags, type: "[]string" }
@@ -50,6 +51,17 @@ indexes:
 client_projection:
   dart_class: FeedItemDto
   output_path: cloud/runtime/generated/content/feed_item_dto.g.dart
+  computed_getters:
+    - name: displayFormat
+      dart_return_type: String
+      nullable: false
+      description: "发现流展示格式：moment 由素材组合推导，work 由 type 映射。"
+      body: |
+        if (type == 'video' || (videoUrl != null && videoUrl!.isNotEmpty)) return 'video';
+        if (type == 'article') return 'note';
+        if (type == 'image' || type == 'photo') return 'image';
+        if (imageUrls.isNotEmpty) return 'image';
+        return 'note';
   fields:
     - name: id
       dart_type: String
@@ -65,6 +77,20 @@ client_projection:
       aliases: [contentType, category]
       default: "''"
       description: "photo / video / article / moment（客户端展示类型，micro→moment 在服务侧已处理）"
+
+    - name: identity
+      dart_type: String
+      nullable: false
+      source: contentIdentity
+      aliases: [contentIdentity, identity]
+      default: "((m['contentType']?.toString() == 'micro' || m['contentType']?.toString() == 'moment') ? 'moment' : 'work')"
+
+    - name: assistantUsePolicy
+      dart_type: String
+      nullable: false
+      source: assistantUsePolicy
+      aliases: [assistantUsePolicy]
+      default: "'inherit'"
 
     - name: authorId
       dart_type: String

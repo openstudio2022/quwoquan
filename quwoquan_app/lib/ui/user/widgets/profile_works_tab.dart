@@ -5,13 +5,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
 
-/// 作品 Tab：二级 SubTab 筛选 + 圈子页同款两列瀑布流不等高布局。
+/// 创作 Tab：统一承载 `全部 / 点滴 / 作品`。
 class ProfileWorksTab extends ConsumerStatefulWidget {
   const ProfileWorksTab({
     super.key,
@@ -28,98 +29,44 @@ class ProfileWorksTab extends ConsumerStatefulWidget {
   ConsumerState<ProfileWorksTab> createState() => _ProfileWorksTabState();
 }
 
-class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab>
-    with SingleTickerProviderStateMixin {
-  late TabController _subTabController;
+class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
+  List<IdentityFilterConfig> get _identityFilters =>
+      ContentUIConfig.creationIdentityFilters;
 
-  static const _subTabs = [
-    CreationSubTab.all,
-    CreationSubTab.image,
-    CreationSubTab.video,
-    CreationSubTab.article,
-  ];
-
-  static const _subTabLabels = {
-    CreationSubTab.all: '全部',
-    CreationSubTab.image: '图片',
-    CreationSubTab.video: '视频',
-    CreationSubTab.article: '文章',
-  };
-
-  static const _subTabTypeMap = {
-    CreationSubTab.image: 'photo',
-    CreationSubTab.video: 'video',
-    CreationSubTab.article: 'article',
-  };
-
-  @override
-  void initState() {
-    super.initState();
-    _subTabController = TabController(length: _subTabs.length, vsync: this);
-    _subTabController.addListener(_onSubTabChanged);
-  }
-
-  @override
-  void dispose() {
-    _subTabController.removeListener(_onSubTabChanged);
-    _subTabController.dispose();
-    super.dispose();
-  }
-
-  void _onSubTabChanged() {
-    if (_subTabController.indexIsChanging) return;
-    final notifier = ref.read(profileNotifierProvider(widget.userId));
-    notifier.setSubTab(_subTabs[_subTabController.index]);
-  }
+  List<WorkFormatFilterConfig> get _workFormatFilters =>
+      ContentUIConfig.workFormatFilters;
 
   @override
   Widget build(BuildContext context) {
+    final notifier = ref.read(profileNotifierProvider(widget.userId));
     final state = ref.watch(profileNotifierProvider(widget.userId)).state;
-    final fg =
-        AppColorsFunctional.getColor(widget.isDark, ColorType.foregroundPrimary);
+    final fg = AppColorsFunctional.getColor(
+      widget.isDark,
+      ColorType.foregroundPrimary,
+    );
     final fgSecondary = AppColorsFunctional.getColor(
       widget.isDark,
       ColorType.foregroundSecondary,
     );
-    final primary = AppColors.primaryColor;
-
-    final works = state.creations
-        .where((p) => p.type != 'moment')
+    final filtered = state.creations
+        .where(
+          (post) =>
+              _matchesIdentityFilter(post, state.activeSubTab) &&
+              _matchesWorkFormat(
+                post,
+                state.activeSubTab,
+                state.activeWorkFormat,
+              ),
+        )
         .toList(growable: false);
-
-    final activeSubTab = state.activeSubTab;
-    final filtered = works.where((p) {
-      if (activeSubTab == CreationSubTab.all) return true;
-      final mapped = _subTabTypeMap[activeSubTab];
-      return p.type == mapped;
-    }).toList(growable: false);
 
     return Column(
       children: [
-        Container(
-          color: AppColorsFunctional.getColor(
-            widget.isDark,
-            ColorType.backgroundPrimary,
-          ),
-          child: TabBar(
-            controller: _subTabController,
-            labelColor: fg,
-            unselectedLabelColor: fgSecondary,
-            labelStyle: TextStyle(
-              fontSize: AppTypography.base,
-              fontWeight: AppTypography.semiBold,
-            ),
-            unselectedLabelStyle: TextStyle(
-              fontSize: AppTypography.base,
-              fontWeight: AppTypography.normal,
-            ),
-            indicatorColor: primary,
-            indicatorSize: TabBarIndicatorSize.label,
-            tabs: _subTabs
-                .map((t) => Tab(child: Text(_subTabLabels[t] ?? '')))
-                .toList(),
-          ),
-        ),
+        _buildIdentityFilters(notifier, state, fg, fgSecondary),
+        if (state.activeSubTab == CreationSubTab.work) ...[
+          SizedBox(height: AppSpacing.sm),
+          _buildWorkFormatFilters(notifier, state, fg, fgSecondary),
+        ],
         Expanded(
           child: filtered.isEmpty
               ? Center(
@@ -133,9 +80,10 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab>
                       ),
                       SizedBox(height: AppSpacing.md),
                       Text(
-                        widget.mode == ProfileMode.mine
-                            ? '还没有作品'
-                            : 'Ta 还没有作品',
+                        _emptyStateTitle(
+                          state.activeSubTab,
+                          state.activeWorkFormat,
+                        ),
                         style: TextStyle(
                           fontSize: AppTypography.md,
                           color: fgSecondary,
@@ -175,8 +123,176 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab>
     );
   }
 
+  Widget _buildIdentityFilters(
+    ProfileNotifier notifier,
+    ProfileState state,
+    Color fg,
+    Color fgSecondary,
+  ) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
+      child: Row(
+        children: _identityFilters
+            .map((filter) {
+              final tab = _creationSubTabForId(filter.id);
+              return Padding(
+                padding: EdgeInsets.only(right: AppSpacing.sm),
+                child: ChoiceChip(
+                  label: Text(
+                    UITextConstants.contentLabelForKey(filter.labelKey),
+                  ),
+                  selected: state.activeSubTab == tab,
+                  onSelected: (_) => notifier.setSubTab(tab),
+                  labelStyle: TextStyle(
+                    color: state.activeSubTab == tab ? fg : fgSecondary,
+                    fontWeight: AppTypography.semiBold,
+                  ),
+                  selectedColor: AppColors.primaryColor.withValues(alpha: 0.14),
+                  backgroundColor: Colors.transparent,
+                  side: BorderSide(
+                    color: state.activeSubTab == tab
+                        ? AppColors.primaryColor.withValues(alpha: 0.45)
+                        : fgSecondary.withValues(alpha: 0.2),
+                  ),
+                ),
+              );
+            })
+            .toList(growable: false),
+      ),
+    );
+  }
+
+  Widget _buildWorkFormatFilters(
+    ProfileNotifier notifier,
+    ProfileState state,
+    Color fg,
+    Color fgSecondary,
+  ) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
+      child: Row(
+        children: _workFormatFilters
+            .map((filter) {
+              final format = _creationWorkFormatForId(filter.id);
+              return Padding(
+                padding: EdgeInsets.only(right: AppSpacing.sm),
+                child: ChoiceChip(
+                  label: Text(
+                    UITextConstants.contentLabelForKey(filter.labelKey),
+                  ),
+                  selected: state.activeWorkFormat == format,
+                  onSelected: (_) => notifier.setWorkFormat(format),
+                  labelStyle: TextStyle(
+                    color: state.activeWorkFormat == format ? fg : fgSecondary,
+                    fontWeight: AppTypography.semiBold,
+                  ),
+                  selectedColor: AppColors.primaryColor.withValues(alpha: 0.14),
+                  backgroundColor: Colors.transparent,
+                  side: BorderSide(
+                    color: state.activeWorkFormat == format
+                        ? AppColors.primaryColor.withValues(alpha: 0.45)
+                        : fgSecondary.withValues(alpha: 0.2),
+                  ),
+                ),
+              );
+            })
+            .toList(growable: false),
+      ),
+    );
+  }
+
+  CreationSubTab _creationSubTabForId(String id) {
+    switch (id) {
+      case 'moment':
+        return CreationSubTab.moment;
+      case 'work':
+        return CreationSubTab.work;
+      default:
+        return CreationSubTab.all;
+    }
+  }
+
+  CreationWorkFormat _creationWorkFormatForId(String id) {
+    switch (id) {
+      case 'image':
+        return CreationWorkFormat.image;
+      case 'video':
+        return CreationWorkFormat.video;
+      case 'note':
+        return CreationWorkFormat.note;
+      default:
+        return CreationWorkFormat.all;
+    }
+  }
+
+  bool _matchesIdentityFilter(PostBaseDto post, CreationSubTab tab) {
+    switch (tab) {
+      case CreationSubTab.moment:
+        return post.identity == 'moment';
+      case CreationSubTab.work:
+        return post.identity == 'work';
+      case CreationSubTab.all:
+        return true;
+    }
+  }
+
+  bool _matchesWorkFormat(
+    PostBaseDto post,
+    CreationSubTab activeSubTab,
+    CreationWorkFormat format,
+  ) {
+    if (activeSubTab != CreationSubTab.work ||
+        format == CreationWorkFormat.all) {
+      return true;
+    }
+    switch (format) {
+      case CreationWorkFormat.image:
+        return post.displayFormat == 'image';
+      case CreationWorkFormat.video:
+        return post.displayFormat == 'video';
+      case CreationWorkFormat.note:
+        return post.displayFormat == 'note';
+      case CreationWorkFormat.all:
+        return true;
+    }
+  }
+
+  String _emptyStateTitle(
+    CreationSubTab filter,
+    CreationWorkFormat activeWorkFormat,
+  ) {
+    final isMine = widget.mode == ProfileMode.mine;
+    switch (filter) {
+      case CreationSubTab.moment:
+        return isMine ? '还没有点滴' : 'Ta 还没有点滴';
+      case CreationSubTab.work:
+        switch (activeWorkFormat) {
+          case CreationWorkFormat.image:
+            return isMine ? '还没有图片作品' : 'Ta 还没有图片作品';
+          case CreationWorkFormat.video:
+            return isMine ? '还没有视频作品' : 'Ta 还没有视频作品';
+          case CreationWorkFormat.note:
+            return isMine ? '还没有笔记作品' : 'Ta 还没有笔记作品';
+          case CreationWorkFormat.all:
+            return isMine ? '还没有作品' : 'Ta 还没有作品';
+        }
+      case CreationSubTab.all:
+        return isMine ? '还没有创作内容' : 'Ta 还没有创作内容';
+    }
+  }
+
   void _onPostTap(BuildContext context, PostBaseDto post) {
-    context.push(AppRoutePaths.articleDetail(id: post.id));
+    if (post.identity == 'work' && post.displayFormat == 'note') {
+      context.push(AppRoutePaths.articleDetail(id: post.id));
+      return;
+    }
+    if (post.displayFormat == 'video') {
+      context.push(AppRoutePaths.videoViewer(index: '0'));
+      return;
+    }
+    context.push(AppRoutePaths.mediaViewer(category: 'photo', index: '0'));
   }
 }
 
@@ -218,15 +334,19 @@ class _WorksPostCard extends StatelessWidget {
     if (body != null && body.isNotEmpty) {
       return body.length > 40 ? '${body.substring(0, 40)}…' : body;
     }
-    return '作品';
+    return post.identity == 'moment' ? '点滴' : '作品';
   }
 
   @override
   Widget build(BuildContext context) {
-    final fgPrimary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
     final gridMetaFontSize = AppTypography.responsive(
       context,
       compact: AppTypography.sm,
@@ -260,9 +380,7 @@ class _WorksPostCard extends StatelessWidget {
                               color: fgSecondary.withValues(alpha: 0.15),
                             ),
                           )
-                        : Container(
-                            color: fgSecondary.withValues(alpha: 0.15),
-                          ),
+                        : Container(color: fgSecondary.withValues(alpha: 0.15)),
                     if (post.type == 'video')
                       Positioned(
                         top: AppSpacing.intraGroupSm,
@@ -282,10 +400,7 @@ class _WorksPostCard extends StatelessWidget {
               _title,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: gridMetaFontSize,
-                color: fgPrimary,
-              ),
+              style: TextStyle(fontSize: gridMetaFontSize, color: fgPrimary),
             ),
             SizedBox(height: AppSpacing.intraGroupXs),
             Row(

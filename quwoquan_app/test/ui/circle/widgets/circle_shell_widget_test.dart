@@ -78,6 +78,7 @@ void main() {
       await _pumpIgnoringTabPaintErrors(tester);
 
       expect(find.byType(TabBar), findsOneWidget);
+      expect(find.text('创作'), findsOneWidget);
     });
   });
 

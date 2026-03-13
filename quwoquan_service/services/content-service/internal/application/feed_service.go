@@ -28,6 +28,7 @@ func NewFeedService(engine *rtrec.Engine, reader postReader) *FeedService {
 type ListFeedRequest struct {
 	UserID          string
 	SessionID       string
+	Identity        string
 	Type            string
 	Sort            string
 	SubCategory     string
@@ -80,6 +81,7 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (*ListF
 	}
 
 	views := make([]FeedItemView, 0, limit)
+	requestedIdentity := normalizeRequestedIdentity(req.Identity)
 	requestedType := normalizeRequestType(req.Type)
 	blockedUsers := toLowerSet(req.BlockedUserIDs)
 	blockedKeywords := toLowerSet(req.BlockedKeywords)
@@ -94,8 +96,12 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (*ListF
 		if containsBlockedKeyword(post, blockedKeywords) {
 			continue
 		}
+		postIdentity := resolvedContentIdentity(post.ContentType, post.ContentIdentity)
+		if requestedIdentity != "" && postIdentity != requestedIdentity {
+			continue
+		}
 		viewType := mapContentTypeToViewType(post.ContentType)
-		if requestedType != "" && viewType != requestedType {
+		if requestedType != "" && requestedIdentity != "moment" && viewType != requestedType {
 			continue
 		}
 		views = append(views, FeedItemView{
@@ -181,9 +187,31 @@ func normalizeRequestType(t string) string {
 		return ""
 	case "photo":
 		return "image"
+	case "note":
+		return "article"
 	default:
 		return strings.TrimSpace(strings.ToLower(t))
 	}
+}
+
+func normalizeRequestedIdentity(identity string) string {
+	switch strings.TrimSpace(strings.ToLower(identity)) {
+	case "moment", "work":
+		return strings.TrimSpace(strings.ToLower(identity))
+	default:
+		return ""
+	}
+}
+
+func resolvedContentIdentity(contentType, contentIdentity string) string {
+	normalized := strings.TrimSpace(strings.ToLower(contentIdentity))
+	if normalized == "moment" || normalized == "work" {
+		return normalized
+	}
+	if strings.TrimSpace(strings.ToLower(contentType)) == "micro" {
+		return "moment"
+	}
+	return "work"
 }
 
 func toStringSlice(v any) []string {

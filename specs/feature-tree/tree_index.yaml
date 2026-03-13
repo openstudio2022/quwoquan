@@ -817,6 +817,14 @@ features:
           domain: ""
           status: in_progress
           tags: []
+          children:
+            - id: creation-mode-and-surface-ia-unification
+              name: creation-mode-and-surface-ia-unification
+              level: L3_story
+              path: discovery-content/content-type-framework/creation-mode-and-surface-ia-unification
+              domain: ""
+              status: completed
+              tags: []
         - id: dual-rail-discovery-redesign
           name: dual-rail-discovery-redesign
           level: L2_feature
@@ -2492,6 +2500,13 @@ features:
           status: specified
           tags: []
           children:
+            - id: appearance-accessibility-settings
+              name: appearance-accessibility-settings
+              level: L3_story
+              path: user-identity-profile-relationship/settings-and-device-token/appearance-accessibility-settings
+              domain: ""
+              status: specified
+              tags: []
             - id: device-token-register
               name: device-token-register
               level: L3_story

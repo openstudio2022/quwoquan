@@ -32,6 +32,7 @@ class UserApiMetadata {
     'DismissContactDiscovery': '/v1/owner/contact-discovery/{id}',
     'FollowUser': '/v1/user/follow/{targetUserId}',
     'GenerateInvite': '/v1/me/invites',
+    'GetAppearanceSettings': '/v1/user/settings/appearance',
     'GetCallSettings': '/v1/user/settings/calls',
     'GetInviteByCode': '/v1/invites/{linkCode}',
     'GetLatestContactDiscovery': '/v1/owner/contact-discovery/latest',
@@ -68,6 +69,7 @@ class UserApiMetadata {
     'UnbindCredential': '/v1/owner/credentials/{credentialType}',
     'UnblockUser': '/v1/user/block/{targetUserId}',
     'UnfollowUser': '/v1/user/follow/{targetUserId}',
+    'UpdateAppearanceSettings': '/v1/user/settings/appearance',
     'UpdateCallSettings': '/v1/user/settings/calls',
     'UpdateNotificationSettings': '/v1/user/settings/notifications',
     'UpdatePersona': '/v1/user/personas/{personaId}',
@@ -92,6 +94,7 @@ class UserApiMetadata {
     'DismissContactDiscovery': 'DELETE',
     'FollowUser': 'POST',
     'GenerateInvite': 'POST',
+    'GetAppearanceSettings': 'GET',
     'GetCallSettings': 'GET',
     'GetInviteByCode': 'GET',
     'GetLatestContactDiscovery': 'GET',
@@ -128,6 +131,7 @@ class UserApiMetadata {
     'UnbindCredential': 'DELETE',
     'UnblockUser': 'DELETE',
     'UnfollowUser': 'DELETE',
+    'UpdateAppearanceSettings': 'PATCH',
     'UpdateCallSettings': 'PATCH',
     'UpdateNotificationSettings': 'PATCH',
     'UpdatePersona': 'PATCH',
@@ -206,6 +210,7 @@ class UserApiMetadata {
     });
   }
   static const String generateInvitePath = '/v1/me/invites';
+  static const String getAppearanceSettingsPath = '/v1/user/settings/appearance';
   static const String getCallSettingsPath = '/v1/user/settings/calls';
   static const String getInviteByCodePathTemplate = '/v1/invites/{linkCode}';
   static String getInviteByCodePath({required String linkCode}) {
@@ -322,6 +327,7 @@ class UserApiMetadata {
       'targetUserId': targetUserId,
     });
   }
+  static const String updateAppearanceSettingsPath = '/v1/user/settings/appearance';
   static const String updateCallSettingsPath = '/v1/user/settings/calls';
   static const String updateNotificationSettingsPath = '/v1/user/settings/notifications';
   static const String updatePersonaPathTemplate = '/v1/user/personas/{personaId}';

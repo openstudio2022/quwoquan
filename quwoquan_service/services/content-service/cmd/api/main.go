@@ -138,6 +138,7 @@ func main() {
 	var postServiceOpts []application.PostServiceOption
 	postServiceOpts = append(postServiceOpts, application.WithSignalProcessor(bufferedWriter))
 	postServiceOpts = append(postServiceOpts, application.WithLogger(logger))
+	postServiceOpts = append(postServiceOpts, application.WithStoryRuntimeConfig(resolveStoryRuntimeConfig()))
 
 	mongoURI := resolveMongoURI(cfg)
 	if mongoURI != "" {
@@ -520,6 +521,52 @@ func resolveReportDSN(cfg config) string {
 		return ""
 	}
 	return dsn
+}
+
+func resolveStoryRuntimeConfig() application.StoryRuntimeConfig {
+	return application.StoryRuntimeConfig{
+		FeatureFlags: map[string]bool{
+			"enable_create_action_entry": parseBoolEnv("CONTENT_FLAG_ENABLE_CREATE_ACTION_ENTRY", true),
+			"enable_unified_create_editor": parseBoolEnv(
+				"CONTENT_FLAG_ENABLE_UNIFIED_CREATE_EDITOR",
+				true,
+			),
+			"enable_identity_based_surfaces": parseBoolEnv(
+				"CONTENT_FLAG_ENABLE_IDENTITY_BASED_SURFACES",
+				true,
+			),
+			"enable_identity_share_template": parseBoolEnv(
+				"CONTENT_FLAG_ENABLE_IDENTITY_SHARE_TEMPLATE",
+				true,
+			),
+			"enable_assistant_content_identity_index": parseBoolEnv(
+				"CONTENT_FLAG_ENABLE_ASSISTANT_CONTENT_IDENTITY_INDEX",
+				true,
+			),
+		},
+		ExperimentBucket: getenvOrDefault(
+			"CONTENT_STORY_EXPERIMENT_BUCKET",
+			"local_story_enabled",
+		),
+		CurrentStage: getenvOrDefault("CONTENT_STORY_CURRENT_STAGE", "100%"),
+		CanaryMatrix: []application.StoryCanaryStage{
+			{Stage: "5%", RolloutPercent: 5},
+			{Stage: "20%", RolloutPercent: 20},
+			{Stage: "50%", RolloutPercent: 50},
+			{Stage: "100%", RolloutPercent: 100},
+		},
+	}
+}
+
+func parseBoolEnv(key string, fallback bool) bool {
+	switch strings.TrimSpace(strings.ToLower(os.Getenv(key))) {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return fallback
+	}
 }
 
 // buildRedisRouter creates a redis.Router from the YAML config.

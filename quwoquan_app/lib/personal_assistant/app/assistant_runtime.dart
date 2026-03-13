@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/personal_assistant/engine/agent_loop.dart';
+import 'package:quwoquan_app/personal_assistant/engine/default_processing/baseline_kernel.dart';
 import 'package:quwoquan_app/personal_assistant/engine/llm_provider.dart';
 import 'package:quwoquan_app/personal_assistant/engine/model_config.dart';
 import 'package:quwoquan_app/personal_assistant/engine/react_runtime.dart';
@@ -13,6 +14,7 @@ import 'package:quwoquan_app/personal_assistant/skills/skill_executor.dart';
 import 'package:quwoquan_app/personal_assistant/skills/skill_loader.dart';
 import 'package:quwoquan_app/personal_assistant/template_runtime/template_registry.dart';
 import 'package:quwoquan_app/personal_assistant/template_runtime/template_runtime.dart';
+import 'package:quwoquan_app/personal_assistant/retrieval/legacy_tool_retrieval_broker.dart';
 import 'package:quwoquan_app/personal_assistant/tools/app_action_tool.dart';
 import 'package:quwoquan_app/personal_assistant/tools/deep_link_tool.dart';
 import 'package:quwoquan_app/personal_assistant/tools/intent_bridge_tool.dart';
@@ -72,10 +74,11 @@ class AssistantRuntime {
     final sessionManager = AssistantSessionManager();
     final memoryRepository = AssistantMemoryRepository(memoryStore);
     final toolMetadataRegistry = ToolMetadataRegistry();
+    final retrievalBroker = LegacyToolRetrievalBroker();
     final toolRegistry =
         AssistantToolRegistry(metadataRegistry: toolMetadataRegistry)
-          ..register(WebSearchTool())
-          ..register(WebFetchTool())
+          ..register(WebSearchTool(broker: retrievalBroker))
+          ..register(WebFetchTool(broker: retrievalBroker))
           ..register(MemorySearchTool(memoryRepository: memoryRepository))
           ..register(LocalContextTool(channelAdapter))
           ..register(MediaGalleryTool(channelAdapter))
@@ -90,7 +93,9 @@ class AssistantRuntime {
           ..register(AppActionTool());
     final templateRuntime = PromptTemplateRuntime(registry: TemplateRegistry());
     final switchableProvider = SwitchableAssistantLlmProvider(
-      fallbackProvider: const HeuristicLocalLlmProvider(),
+      fallbackProvider: const HeuristicLocalLlmProvider(
+        baselineKernel: BaselineKernel(),
+      ),
       templateRuntime: templateRuntime,
       toolMetadataRegistry: toolMetadataRegistry,
       plannerTemplateVersion: '',

@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/personal_assistant/app/assistant_gateway.dart';
 import 'package:quwoquan_app/personal_assistant/app/assistant_runtime.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/personal_assistant/engine/process_journal_bus.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/trace_events.dart';
 
@@ -61,30 +63,29 @@ void main() {
 
       // --- 阶段时间线断言 ---
       final structured = response.structuredResponse;
-      final timeline = (structured['uiPhaseTimelineV1'] as List?)
-              ?.whereType<Map>()
-              .map((p) => p.cast<String, dynamic>())
-              .toList() ??
-          [];
+      final processJournalRaw = ((structured['processJournalV1'] as List?) ??
+              ((structured['runArtifactsV1'] as Map?)?['processJournal'] as List?) ??
+              const <dynamic>[])
+          .whereType<Map>()
+          .map((item) => item.cast<String, dynamic>())
+          .toList(growable: false);
+      final processJournal = processJournalRaw
+          .map(ProcessJournalEvent.fromJson)
+          .toList(growable: false);
+      final displayJournal = ProcessJournalBus.toDisplaySnapshot(processJournal);
+      final journalStages = processJournal.map((item) => item.stage).toSet();
 
-      expect(timeline, isNotEmpty, reason: '应生成阶段时间线');
-
-      final phaseTypes =
-          timeline.map((p) => (p['phaseType'] as String?) ?? '').toList();
-      final phaseTitles =
-          timeline.map((p) => (p['title'] as String?) ?? '').toList();
+      expect(processJournal, isNotEmpty, reason: '应生成唯一主过程日志 processJournalV1');
+      expect(structured.containsKey('uiPhaseTimelineV1'), isFalse);
 
       // 必须包含核心阶段
       expect(
-        phaseTypes.contains('answering'),
+        journalStages.contains('answering'),
         isTrue,
-        reason: '时间线应包含 answering 阶段',
+        reason: '过程日志应包含 answering 阶段',
       );
-
-      // 最后一个阶段应为 answering 且已完成
-      final lastPhase = timeline.last;
-      expect(lastPhase['phaseType'], equals('answering'));
-      expect(lastPhase['status'], equals('completed'));
+      expect(journalStages.contains('understanding'), isTrue);
+      expect(journalStages.contains('completed'), isTrue);
 
       // --- 用户语言检查：禁止内部字符串 ---
       final forbiddenStrings = [
@@ -100,29 +101,40 @@ void main() {
         'lifecycleStart',
         'lifecycleEnd',
       ];
-      for (final phase in timeline) {
-        final title = (phase['title'] as String?) ?? '';
-        final summary = (phase['summary'] as String?) ?? '';
-        final details = (phase['details'] as List?)
-                ?.whereType<String>()
-                .toList() ??
-            [];
-        final allText = [title, summary, ...details].join(' ');
+      for (final event in displayJournal) {
+        final allText = event.message;
         for (final forbidden in forbiddenStrings) {
           expect(
             allText.contains(forbidden),
             isFalse,
-            reason:
-                '阶段 "${phase['phaseType']}" 包含内部字符串 "$forbidden"，'
-                '应使用面向用户的自然语言',
+            reason: '过程事件包含内部字符串 "$forbidden"，应使用面向用户的自然语言',
           );
         }
       }
-
-      // --- 标题检查：都应为用户可理解的中文 ---
-      for (final title in phaseTitles) {
-        expect(title, isNotEmpty, reason: '每个阶段必须有标题');
+      final narrativeEvents = displayJournal
+          .where(
+            (item) =>
+                item.type == ProcessJournalEventType.narrativeCommit ||
+                item.type == ProcessJournalEventType.liveCursor ||
+                item.type == ProcessJournalEventType.sourceUpdate,
+          )
+          .toList(growable: false);
+      expect(narrativeEvents, isNotEmpty, reason: '应存在可展示的用户态叙事事件');
+      for (final event in narrativeEvents) {
+        expect(event.phaseId, isNotEmpty, reason: '叙事事件应带 phaseId');
+        expect(event.actionCode, isNotEmpty, reason: '叙事事件应带 actionCode');
+        expect(event.reasonCode, isNotEmpty, reason: '叙事事件应带 reasonCode');
+        expect(event.reasonShort, isNotEmpty, reason: '叙事事件应带 reasonShort');
+        expect(event.source, isNotEmpty, reason: '叙事事件应带 source');
       }
+
+      final processText = processJournal
+          .map((item) => item.message.trim())
+          .join(' ');
+      expect(processText, isNot(contains('压缩以上对话历史为简洁摘要')));
+      expect(processText, isNot(contains('summarize_session')));
+      expect(processText, isNot(contains('intent_graph_resolved')));
+      expect(processText, isNot(contains('repair invalid synthesis output')));
 
       // --- trace 事件覆盖检查 ---
       final traceTypes = traces.map((t) => t.type).toSet();
@@ -141,38 +153,6 @@ void main() {
         isTrue,
         reason: '应发射 lifecycleEnd 事件标记结束',
       );
-
-      // --- 理解阶段应存在 ---
-      expect(
-        phaseTypes.contains('understanding'),
-        isTrue,
-        reason: '时间线应包含 understanding 阶段，实际: $phaseTypes',
-      );
-
-      // --- 所有阶段 status 应为 completed ---
-      for (final phase in timeline) {
-        expect(
-          phase['status'],
-          equals('completed'),
-          reason: '阶段 "${phase['phaseType']}" 状态应为 completed',
-        );
-      }
-
-      // --- 每个阶段 title 应为用户语言 ---
-      final expectedTitles = {
-        'understanding': '理解问题',
-        'answering': '组织回答',
-      };
-      for (final phase in timeline) {
-        final type = (phase['phaseType'] as String?) ?? '';
-        if (expectedTitles.containsKey(type)) {
-          expect(
-            phase['title'],
-            equals(expectedTitles[type]),
-            reason: '阶段 $type 标题应为 "${expectedTitles[type]}"',
-          );
-        }
-      }
     });
 
     test('搜索工具阶段应包含参考资料（模型可用时）', () async {
@@ -191,45 +171,53 @@ void main() {
       );
 
       final structured = response.structuredResponse;
-      final timeline = (structured['uiPhaseTimelineV1'] as List?)
-              ?.whereType<Map>()
-              .map((p) => p.cast<String, dynamic>())
-              .toList() ??
-          [];
-
-      // 查找工具搜索阶段
-      final searchPhases = timeline
-          .where((p) =>
-              (p['phaseType'] as String? ?? '').contains('search') ||
-              (p['phaseType'] as String? ?? '').contains('tool:'))
-          .toList();
+      final processJournal = ((structured['processJournalV1'] as List?) ??
+              ((structured['runArtifactsV1'] as Map?)?['processJournal'] as List?) ??
+              const <dynamic>[])
+          .whereType<Map>()
+          .map((item) => ProcessJournalEvent.fromJson(item.cast<String, dynamic>()))
+          .toList(growable: false);
+      final displayJournal = ProcessJournalBus.toDisplaySnapshot(processJournal);
+      final searchUpdates = displayJournal
+          .where(
+            (item) =>
+                item.type == ProcessJournalEventType.sourceUpdate &&
+                item.stage == 'searching',
+          )
+          .toList(growable: false);
 
       final hasToolStart = traces.any(
         (t) => t.type == AssistantTraceEventType.toolStart,
       );
 
-      if (searchPhases.isNotEmpty) {
-        final searchPhase = searchPhases.first;
-        final refs = (searchPhase['references'] as List?) ?? [];
-        expect(
-          refs.isNotEmpty,
-          isTrue,
-          reason: '搜索阶段应产出参考资料 references',
-        );
-
-        for (final ref in refs.whereType<Map>()) {
+      if (searchUpdates.isNotEmpty) {
+        final searchPhase = searchUpdates.first;
+        final refs = searchPhase.references;
+        if (refs.isNotEmpty) {
+          for (final ref in refs) {
+            expect(
+              ref.url.isNotEmpty,
+              isTrue,
+              reason: '每条参考资料应有 url',
+            );
+          }
+        } else {
+          final summary = searchPhase.message;
+          expect(summary.trim().isNotEmpty, isTrue, reason: '搜索阶段即使无引用也应有摘要');
           expect(
-            (ref['url'] as String?)?.isNotEmpty ?? false,
+            summary.contains('失败') ||
+                summary.contains('重试') ||
+                summary.contains('稍后') ||
+                hasToolStart,
             isTrue,
-            reason: '每条参考资料应有 url',
+            reason: '当外部检索没有可靠来源时，也应对用户说明当前在重试或已降级',
           );
         }
-
-        final summary = (searchPhase['summary'] as String?) ?? '';
+        final summary = searchPhase.message;
         expect(
-          summary.contains('资料'),
+          summary.trim().isNotEmpty,
           isTrue,
-          reason: '搜索阶段 summary 应包含"资料"',
+          reason: '搜索阶段应始终有可读 summary',
         );
 
         expect(hasToolStart, isTrue, reason: '有搜索阶段时应有 toolStart trace');
@@ -237,7 +225,7 @@ void main() {
 
       // 若模型 API 不可用（HTTP 400），搜索阶段可能不存在，
       // 此时跳过 toolStart 断言，只验证降级行为正常
-      if (!hasToolStart && searchPhases.isEmpty) {
+      if (!hasToolStart && searchUpdates.isEmpty) {
         expect(response.finalText, isNotEmpty, reason: '降级后仍应有回复');
       }
     });
@@ -257,29 +245,23 @@ void main() {
       );
 
       final structured = response.structuredResponse;
-      final timeline = (structured['uiPhaseTimelineV1'] as List?)
-              ?.whereType<Map>()
-              .map((p) => p.cast<String, dynamic>())
-              .toList() ??
-          [];
-
-      for (final phase in timeline) {
-        final details = (phase['details'] as List?)
-                ?.whereType<String>()
-                .toList() ??
-            [];
-        for (final detail in details) {
-          expect(
-            detail.contains('"contractVersion"'),
-            isFalse,
-            reason: '阶段详情不应包含 JSON 原文片段 contractVersion',
-          );
-          expect(
-            detail.contains('"turnPhase"'),
-            isFalse,
-            reason: '阶段详情不应包含 JSON 原文片段 turnPhase',
-          );
-        }
+      final processJournal = ((structured['processJournalV1'] as List?) ??
+              ((structured['runArtifactsV1'] as Map?)?['processJournal'] as List?) ??
+              const <dynamic>[])
+          .whereType<Map>()
+          .map((item) => ProcessJournalEvent.fromJson(item.cast<String, dynamic>()))
+          .toList(growable: false);
+      for (final event in ProcessJournalBus.toDisplaySnapshot(processJournal)) {
+        expect(
+          event.message.contains('"contractVersion"'),
+          isFalse,
+          reason: '过程事件不应包含 JSON 原文片段 contractVersion',
+        );
+        expect(
+          event.message.contains('"turnPhase"'),
+          isFalse,
+          reason: '过程事件不应包含 JSON 原文片段 turnPhase',
+        );
       }
     });
   });

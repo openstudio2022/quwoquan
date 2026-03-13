@@ -9,8 +9,8 @@ import (
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
-	"quwoquan_service/runtime/repository"
 	rtrec "quwoquan_service/runtime/recommendation"
+	"quwoquan_service/runtime/repository"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
 	"quwoquan_service/services/content-service/internal/generated"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
@@ -29,22 +29,51 @@ type ProjectorEvent struct {
 	OccurredAt    time.Time      `json:"occurredAt"`
 }
 
+type ProjectionRebuildReport struct {
+	DryRun                       bool `json:"dryRun"`
+	TotalPosts                   int  `json:"totalPosts"`
+	DraftPosts                   int  `json:"draftPosts"`
+	PublishedPosts               int  `json:"publishedPosts"`
+	DeletedPosts                 int  `json:"deletedPosts"`
+	PublicPosts                  int  `json:"publicPosts"`
+	PrivatePosts                 int  `json:"privatePosts"`
+	CircleVisiblePosts           int  `json:"circleVisiblePosts"`
+	AssistantExcludedPosts       int  `json:"assistantExcludedPosts"`
+	BackfilledContentIdentity    int  `json:"backfilledContentIdentity"`
+	BackfilledAssistantUsePolicy int  `json:"backfilledAssistantUsePolicy"`
+	DiscoveryEligiblePosts       int  `json:"discoveryEligiblePosts"`
+	DiscoveryRevokedPosts        int  `json:"discoveryRevokedPosts"`
+}
+
+type StoryCanaryStage struct {
+	Stage          string `json:"stage"`
+	RolloutPercent int    `json:"rolloutPercent"`
+}
+
+type StoryRuntimeConfig struct {
+	FeatureFlags     map[string]bool    `json:"featureFlags"`
+	ExperimentBucket string             `json:"experimentBucket"`
+	CurrentStage     string             `json:"currentStage"`
+	CanaryMatrix     []StoryCanaryStage `json:"canaryMatrix"`
+}
+
 type PostService struct {
-	store     persistence.PostRepository
-	signaler  rtrec.SignalProcessor
-	publisher repository.EventPublisher
-	projector Projector
-	logger    *slog.Logger
-	mu        sync.Mutex
-	reactions map[string]map[string]contentReactionState // postID -> userID -> state
-	distributions map[string]map[string]bool             // postID -> circleID -> active
-	reshares      map[string]map[string]bool             // postID -> (circleID:userID) -> active
-	tombstones    map[string]time.Time                   // postID -> deletedAt
-	mediaAssets   map[string]postmodel.MediaAsset        // mediaID -> asset
-	uploadSession map[string]string                      // sessionID -> mediaID
-	comments      map[string][]map[string]any            // postID -> comments list
-	commentLikes  map[string]map[string]bool             // commentID -> userID -> liked
-	commentMaxLen int                                    // configurable, default 500
+	store         persistence.PostRepository
+	signaler      rtrec.SignalProcessor
+	publisher     repository.EventPublisher
+	projector     Projector
+	logger        *slog.Logger
+	mu            sync.Mutex
+	reactions     map[string]map[string]contentReactionState // postID -> userID -> state
+	distributions map[string]map[string]bool                 // postID -> circleID -> active
+	reshares      map[string]map[string]bool                 // postID -> (circleID:userID) -> active
+	tombstones    map[string]time.Time                       // postID -> deletedAt
+	mediaAssets   map[string]postmodel.MediaAsset            // mediaID -> asset
+	uploadSession map[string]string                          // sessionID -> mediaID
+	comments      map[string][]map[string]any                // postID -> comments list
+	commentLikes  map[string]map[string]bool                 // commentID -> userID -> liked
+	commentMaxLen int                                        // configurable, default 500
+	storyRuntime  StoryRuntimeConfig
 }
 
 func NewPostService(store persistence.PostRepository, opts ...PostServiceOption) *PostService {
@@ -60,6 +89,7 @@ func NewPostService(store persistence.PostRepository, opts ...PostServiceOption)
 		comments:      map[string][]map[string]any{},
 		commentLikes:  map[string]map[string]bool{},
 		commentMaxLen: 500,
+		storyRuntime:  defaultStoryRuntimeConfig(),
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -94,6 +124,160 @@ func WithLogger(l *slog.Logger) PostServiceOption {
 	return func(s *PostService) { s.logger = l }
 }
 
+func WithStoryRuntimeConfig(cfg StoryRuntimeConfig) PostServiceOption {
+	return func(s *PostService) {
+		s.storyRuntime = normalizeStoryRuntimeConfig(cfg)
+	}
+}
+
+func defaultStoryRuntimeConfig() StoryRuntimeConfig {
+	return StoryRuntimeConfig{
+		FeatureFlags: map[string]bool{
+			"enable_create_action_entry":              true,
+			"enable_unified_create_editor":            true,
+			"enable_identity_based_surfaces":          true,
+			"enable_identity_share_template":          true,
+			"enable_assistant_content_identity_index": true,
+		},
+		ExperimentBucket: "local_story_enabled",
+		CurrentStage:     "100%",
+		CanaryMatrix: []StoryCanaryStage{
+			{Stage: "5%", RolloutPercent: 5},
+			{Stage: "20%", RolloutPercent: 20},
+			{Stage: "50%", RolloutPercent: 50},
+			{Stage: "100%", RolloutPercent: 100},
+		},
+	}
+}
+
+func normalizeStoryRuntimeConfig(cfg StoryRuntimeConfig) StoryRuntimeConfig {
+	fallback := defaultStoryRuntimeConfig()
+	normalized := StoryRuntimeConfig{
+		FeatureFlags:     map[string]bool{},
+		ExperimentBucket: strings.TrimSpace(cfg.ExperimentBucket),
+		CurrentStage:     strings.TrimSpace(cfg.CurrentStage),
+		CanaryMatrix:     cfg.CanaryMatrix,
+	}
+	for key, fallbackValue := range fallback.FeatureFlags {
+		normalized.FeatureFlags[key] = fallbackValue
+	}
+	for key, value := range cfg.FeatureFlags {
+		normalized.FeatureFlags[key] = value
+	}
+	if normalized.ExperimentBucket == "" {
+		normalized.ExperimentBucket = fallback.ExperimentBucket
+	}
+	if normalized.CurrentStage == "" {
+		normalized.CurrentStage = fallback.CurrentStage
+	}
+	if len(normalized.CanaryMatrix) == 0 {
+		normalized.CanaryMatrix = fallback.CanaryMatrix
+	}
+	return normalized
+}
+
+func (s *PostService) publishPostEvent(
+	ctx context.Context,
+	eventType string,
+	post *postmodel.Post,
+	payload map[string]any,
+	occurredAt time.Time,
+) {
+	if s.publisher == nil || post == nil {
+		return
+	}
+	_ = s.publisher.Publish(ctx, repository.DomainEvent{
+		Type:          eventType,
+		AggregateType: "Post",
+		AggregateID:   post.ID,
+		Payload:       payload,
+		OccurredAt:    occurredAt.Format(time.RFC3339),
+	})
+}
+
+func (s *PostService) projectPostEvent(
+	ctx context.Context,
+	eventType string,
+	post *postmodel.Post,
+	payload map[string]any,
+	occurredAt time.Time,
+) {
+	if s.projector == nil || post == nil {
+		return
+	}
+	projErr := s.projector.Project(ctx, ProjectorEvent{
+		Type:          eventType,
+		AggregateType: "Post",
+		AggregateID:   post.ID,
+		Payload:       payload,
+		OccurredAt:    occurredAt,
+	})
+	if projErr != nil {
+		s.logger.Warn("projector failed after post event", "type", eventType, "postId", post.ID, "err", projErr)
+	}
+}
+
+func (s *PostService) syncDistributionsFromPost(post *postmodel.Post) {
+	if post == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	circleIDs := asStringSlice(post.CircleIds)
+	if len(circleIDs) == 0 {
+		delete(s.distributions, post.ID)
+		return
+	}
+	byPost := map[string]bool{}
+	for _, circleID := range circleIDs {
+		if cid := strings.TrimSpace(circleID); cid != "" {
+			byPost[cid] = true
+		}
+	}
+	if len(byPost) == 0 {
+		delete(s.distributions, post.ID)
+		return
+	}
+	s.distributions[post.ID] = byPost
+}
+
+func normalizePostForRead(post *postmodel.Post) *postmodel.Post {
+	if post == nil {
+		return nil
+	}
+	copy := *post
+	if strings.TrimSpace(copy.ContentIdentity) == "" {
+		copy.ContentIdentity = normalizeContentIdentity(copy.ContentType, "")
+	}
+	if strings.TrimSpace(copy.AssistantUsePolicy) == "" {
+		copy.AssistantUsePolicy = "inherit"
+	}
+	copy.Visibility = normalizeVisibility(copy.Visibility)
+	return &copy
+}
+
+func canViewPost(post *postmodel.Post, viewerID string, viewerCircleIDs []string) bool {
+	if post == nil {
+		return false
+	}
+	viewerID = strings.TrimSpace(viewerID)
+	if !strings.EqualFold(strings.TrimSpace(post.Status), "published") {
+		return viewerID != "" && viewerID == strings.TrimSpace(post.AuthorId)
+	}
+	visibility := normalizeVisibility(post.Visibility)
+	switch visibility {
+	case "public":
+		return true
+	case "circle_visible":
+		if viewerID != "" && viewerID == strings.TrimSpace(post.AuthorId) {
+			return true
+		}
+		return sharesCircle(asStringSlice(post.CircleIds), viewerCircleIDs)
+	default:
+		return viewerID != "" && viewerID == strings.TrimSpace(post.AuthorId)
+	}
+}
+
 func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (*postmodel.Post, error) {
 	contentType := strings.TrimSpace(asString(payload["contentType"]))
 	if contentType == "" {
@@ -108,33 +292,41 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (*
 		)
 	}
 	now := time.Now().UTC()
+	contentIdentity := normalizeContentIdentity(
+		contentType,
+		strings.TrimSpace(asString(payload["contentIdentity"])),
+	)
+	assistantUsePolicy := normalizeAssistantUsePolicy(
+		strings.TrimSpace(asString(payload["assistantUsePolicy"])),
+	)
 	post := &postmodel.Post{
-		ID:               fmt.Sprintf("post_%d", now.UnixNano()),
-		AuthorId:         strings.TrimSpace(asString(payload["authorId"])),
-		PersonaId:        strings.TrimSpace(asString(payload["personaId"])),
-		ContentType:      contentType,
-		Title:            strings.TrimSpace(asString(payload["title"])),
-		Body:             strings.TrimSpace(asString(payload["body"])),
-		Tags:             asStringSlice(payload["tags"]),
-		MediaUrls:        asStringSlice(payload["mediaUrls"]),
-		CoverUrl:         strings.TrimSpace(asString(payload["coverUrl"])),
-		VideoUrl:         strings.TrimSpace(asString(payload["videoUrl"])),
-		Location:         parseGeoPoint(payload["location"]),
-		LocationName:     strings.TrimSpace(asString(payload["locationName"])),
-		Visibility:       defaultString(strings.TrimSpace(asString(payload["visibility"])), "public"),
-		CircleId:         strings.TrimSpace(asString(payload["circleId"])),
-		CircleIds:        asStringSlice(payload["circleIds"]),
-		SourcePostId:     strings.TrimSpace(asString(payload["sourcePostId"])),
-		SourceType:       defaultString(strings.TrimSpace(asString(payload["sourceType"])), "original"),
-		Summary:          strings.TrimSpace(asString(payload["summary"])),
+		ID:                  fmt.Sprintf("post_%d", now.UnixNano()),
+		AuthorId:            strings.TrimSpace(asString(payload["authorId"])),
+		PersonaId:           strings.TrimSpace(asString(payload["personaId"])),
+		ContentType:         contentType,
+		ContentIdentity:     contentIdentity,
+		Title:               strings.TrimSpace(asString(payload["title"])),
+		Body:                strings.TrimSpace(asString(payload["body"])),
+		Tags:                asStringSlice(payload["tags"]),
+		MediaUrls:           asStringSlice(payload["mediaUrls"]),
+		CoverUrl:            strings.TrimSpace(asString(payload["coverUrl"])),
+		VideoUrl:            strings.TrimSpace(asString(payload["videoUrl"])),
+		Location:            parseGeoPoint(payload["location"]),
+		LocationName:        strings.TrimSpace(asString(payload["locationName"])),
+		Visibility:          normalizeVisibility(asString(payload["visibility"])),
+		AssistantUsePolicy:  assistantUsePolicy,
+		CircleId:            strings.TrimSpace(asString(payload["circleId"])),
+		CircleIds:           asStringSlice(payload["circleIds"]),
+		SourcePostId:        strings.TrimSpace(asString(payload["sourcePostId"])),
+		SourceType:          defaultString(strings.TrimSpace(asString(payload["sourceType"])), "original"),
+		Summary:             strings.TrimSpace(asString(payload["summary"])),
 		IllustrationAssetId: strings.TrimSpace(asString(payload["illustrationAssetId"])),
-		PublishLocation:  asMap(payload["publishLocation"]),
-		DeviceInfo:       asMap(payload["deviceInfo"]),
-		Status:           "published",
-		ModerationStatus: "pending",
-		CreatedAt:        now,
-		UpdatedAt:        now,
-		PublishedAt:      now,
+		PublishLocation:     asMap(payload["publishLocation"]),
+		DeviceInfo:          asMap(payload["deviceInfo"]),
+		Status:              "draft",
+		ModerationStatus:    "pending",
+		CreatedAt:           now,
+		UpdatedAt:           now,
 	}
 	if post.AuthorId == "" {
 		post.AuthorId = "user_guest"
@@ -166,18 +358,6 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (*
 	}
 	s.mu.Unlock()
 
-	// Notify recommendation pipeline so the new post enters recall immediately.
-	if s.signaler != nil {
-		tags := behaviorTagsFromPost(post)
-		_ = s.signaler.ProcessSignal(ctx, rtrec.BehaviorSignal{
-			UserID:    post.AuthorId,
-			ContentID: post.ID,
-			Action:    "impression",
-			Tags:      tags,
-			Timestamp: now,
-		})
-	}
-
 	// Publish PostCreated domain event for downstream consumers.
 	if s.publisher != nil {
 		_ = s.publisher.Publish(ctx, repository.DomainEvent{
@@ -185,8 +365,13 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (*
 			AggregateType: "Post",
 			AggregateID:   post.ID,
 			Payload: map[string]any{
-				"authorId":    post.AuthorId,
-				"contentType": post.ContentType,
+				"authorId":           post.AuthorId,
+				"contentType":        post.ContentType,
+				"contentIdentity":    post.ContentIdentity,
+				"status":             post.Status,
+				"visibility":         post.Visibility,
+				"circleIds":          asStringSlice(post.CircleIds),
+				"assistantUsePolicy": post.AssistantUsePolicy,
 			},
 			OccurredAt: now.Format(time.RFC3339),
 		})
@@ -199,12 +384,17 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (*
 			AggregateType: "Post",
 			AggregateID:   post.ID,
 			Payload: map[string]any{
-				"_id":         post.ID,
-				"authorId":    post.AuthorId,
-				"contentType": post.ContentType,
-				"title":       post.Title,
-				"tags":        post.Tags,
-				"coverUrl":    post.CoverUrl,
+				"_id":                post.ID,
+				"authorId":           post.AuthorId,
+				"contentType":        post.ContentType,
+				"contentIdentity":    post.ContentIdentity,
+				"status":             post.Status,
+				"visibility":         post.Visibility,
+				"assistantUsePolicy": post.AssistantUsePolicy,
+				"circleIds":          asStringSlice(post.CircleIds),
+				"title":              post.Title,
+				"tags":               post.Tags,
+				"coverUrl":           post.CoverUrl,
 			},
 			OccurredAt: now,
 		})
@@ -237,8 +427,20 @@ func (s *PostService) UpdatePost(ctx context.Context, id string, payload map[str
 	if title, exists := payload["title"]; exists {
 		post.Title = strings.TrimSpace(asString(title))
 	}
+	if contentType, exists := payload["contentType"]; exists {
+		post.ContentType = strings.TrimSpace(asString(contentType))
+	}
+	if contentIdentity, exists := payload["contentIdentity"]; exists {
+		post.ContentIdentity = normalizeContentIdentity(
+			post.ContentType,
+			strings.TrimSpace(asString(contentIdentity)),
+		)
+	}
 	if body, exists := payload["body"]; exists {
 		post.Body = strings.TrimSpace(asString(body))
+	}
+	if summary, exists := payload["summary"]; exists {
+		post.Summary = strings.TrimSpace(asString(summary))
 	}
 	if tags, exists := payload["tags"]; exists {
 		post.Tags = asStringSlice(tags)
@@ -258,7 +460,24 @@ func (s *PostService) UpdatePost(ctx context.Context, id string, payload map[str
 	if locName, exists := payload["locationName"]; exists {
 		post.LocationName = strings.TrimSpace(asString(locName))
 	}
+	if visibility, exists := payload["visibility"]; exists {
+		post.Visibility = normalizeVisibility(asString(visibility))
+	}
+	if circles, exists := payload["circleIds"]; exists {
+		post.CircleIds = asStringSlice(circles)
+	}
+	if assistantUsePolicy, exists := payload["assistantUsePolicy"]; exists {
+		post.AssistantUsePolicy = normalizeAssistantUsePolicy(
+			strings.TrimSpace(asString(assistantUsePolicy)),
+		)
+	}
+	if illustrationAssetID, exists := payload["illustrationAssetId"]; exists {
+		post.IllustrationAssetId = strings.TrimSpace(asString(illustrationAssetID))
+	}
 	post.UpdatedAt = time.Now().UTC()
+	if err := validateCreatePostPayload(post); err != nil {
+		return nil, err
+	}
 	if updated := s.store.Update(ctx, post.ID, post); !updated {
 		return nil, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "update_failed"),
@@ -270,7 +489,7 @@ func (s *PostService) UpdatePost(ctx context.Context, id string, payload map[str
 	return post, nil
 }
 
-func (s *PostService) PublishPost(ctx context.Context, postID string) (*postmodel.Post, error) {
+func (s *PostService) PublishPost(ctx context.Context, postID string, payload map[string]any) (*postmodel.Post, error) {
 	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
 	if !ok {
 		return nil, rterr.NewAppError(
@@ -288,12 +507,15 @@ func (s *PostService) PublishPost(ctx context.Context, postID string) (*postmode
 			false,
 		)
 	}
-	if strings.EqualFold(post.Status, "published") {
-		return post, nil
+	if err := applyPostSettingsPayload(post, payload); err != nil {
+		return nil, err
 	}
+	now := time.Now().UTC()
 	post.Status = "published"
-	post.PublishedAt = time.Now().UTC()
-	post.UpdatedAt = post.PublishedAt
+	if post.PublishedAt.IsZero() {
+		post.PublishedAt = now
+	}
+	post.UpdatedAt = now
 	if !s.store.Update(ctx, post.ID, post) {
 		return nil, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "internal_error"),
@@ -302,6 +524,201 @@ func (s *PostService) PublishPost(ctx context.Context, postID string) (*postmode
 			true,
 		)
 	}
+	s.syncDistributionsFromPost(post)
+	if s.signaler != nil {
+		tags := behaviorTagsFromPost(post)
+		_ = s.signaler.ProcessSignal(ctx, rtrec.BehaviorSignal{
+			UserID:    post.AuthorId,
+			ContentID: post.ID,
+			Action:    "impression",
+			Tags:      tags,
+			Timestamp: now,
+		})
+	}
+	if s.publisher != nil {
+		_ = s.publisher.Publish(ctx, repository.DomainEvent{
+			Type:          "PostPublished",
+			AggregateType: "Post",
+			AggregateID:   post.ID,
+			Payload: map[string]any{
+				"_id":                post.ID,
+				"authorId":           post.AuthorId,
+				"contentType":        post.ContentType,
+				"contentIdentity":    post.ContentIdentity,
+				"status":             post.Status,
+				"visibility":         post.Visibility,
+				"circleIds":          asStringSlice(post.CircleIds),
+				"assistantUsePolicy": post.AssistantUsePolicy,
+				"publishedAt":        post.PublishedAt.Format(time.RFC3339),
+			},
+			OccurredAt: now.Format(time.RFC3339),
+		})
+	}
+	if s.projector != nil {
+		_ = s.projector.Project(ctx, ProjectorEvent{
+			Type:          "PostPublished",
+			AggregateType: "Post",
+			AggregateID:   post.ID,
+			Payload: map[string]any{
+				"_id":                post.ID,
+				"authorId":           post.AuthorId,
+				"contentType":        post.ContentType,
+				"contentIdentity":    post.ContentIdentity,
+				"status":             post.Status,
+				"visibility":         post.Visibility,
+				"circleIds":          asStringSlice(post.CircleIds),
+				"assistantUsePolicy": post.AssistantUsePolicy,
+				"publishedAt":        post.PublishedAt.Format(time.RFC3339),
+			},
+			OccurredAt: now,
+		})
+	}
+	return post, nil
+}
+
+func (s *PostService) UpdatePostSettings(ctx context.Context, postID, userID string, payload map[string]any) (*postmodel.Post, error) {
+	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
+	if !ok {
+		return nil, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
+			"内容不存在",
+			"post not found",
+			false,
+		)
+	}
+	if post.AuthorId != "" && userID != "" && post.AuthorId != userID {
+		return nil, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "forbidden"),
+			"无权更新内容设置",
+			"author mismatch",
+			false,
+		)
+	}
+	if err := applyPostSettingsPayload(post, payload); err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+	post.UpdatedAt = now
+	if !s.store.Update(ctx, post.ID, post) {
+		return nil, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "update_failed"),
+			"更新内容设置失败",
+			"post disappeared while updating settings",
+			true,
+		)
+	}
+	s.syncDistributionsFromPost(post)
+	s.publishPostEvent(ctx, "PostSettingsUpdated", post, map[string]any{
+		"_id":                post.ID,
+		"authorId":           post.AuthorId,
+		"contentType":        post.ContentType,
+		"contentIdentity":    post.ContentIdentity,
+		"status":             post.Status,
+		"visibility":         post.Visibility,
+		"circleIds":          asStringSlice(post.CircleIds),
+		"assistantUsePolicy": post.AssistantUsePolicy,
+		"publishedAt":        formatTimePtr(post.PublishedAt),
+		"title":              post.Title,
+		"tags":               asStringSlice(post.Tags),
+		"coverUrl":           post.CoverUrl,
+	}, now)
+	s.projectPostEvent(ctx, "PostSettingsUpdated", post, map[string]any{
+		"_id":                post.ID,
+		"authorId":           post.AuthorId,
+		"contentType":        post.ContentType,
+		"contentIdentity":    post.ContentIdentity,
+		"status":             post.Status,
+		"visibility":         post.Visibility,
+		"circleIds":          asStringSlice(post.CircleIds),
+		"assistantUsePolicy": post.AssistantUsePolicy,
+		"publishedAt":        formatTimePtr(post.PublishedAt),
+		"title":              post.Title,
+		"tags":               asStringSlice(post.Tags),
+		"coverUrl":           post.CoverUrl,
+	}, now)
+	return post, nil
+}
+
+func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID string, payload map[string]any) (*postmodel.Post, error) {
+	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
+	if !ok {
+		return nil, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
+			"内容不存在",
+			"post not found",
+			false,
+		)
+	}
+	if post.AuthorId != "" && userID != "" && post.AuthorId != userID {
+		return nil, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "forbidden"),
+			"无权升级该内容",
+			"author mismatch",
+			false,
+		)
+	}
+	post.ContentIdentity = "work"
+	if contentType := strings.TrimSpace(asString(payload["contentType"])); contentType != "" {
+		post.ContentType = contentType
+	} else {
+		post.ContentType = recommendedPromotedContentType(post)
+	}
+	if title, exists := payload["title"]; exists {
+		post.Title = strings.TrimSpace(asString(title))
+	}
+	if summary, exists := payload["summary"]; exists {
+		post.Summary = strings.TrimSpace(asString(summary))
+	}
+	if tags, exists := payload["tags"]; exists {
+		post.Tags = asStringSlice(tags)
+	}
+	if coverURL, exists := payload["coverUrl"]; exists {
+		post.CoverUrl = strings.TrimSpace(asString(coverURL))
+	}
+	if err := applyPostSettingsPayload(post, payload); err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+	post.UpdatedAt = now
+	if !s.store.Update(ctx, post.ID, post) {
+		return nil, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "update_failed"),
+			"升级作品失败",
+			"post disappeared while promoting",
+			true,
+		)
+	}
+	s.syncDistributionsFromPost(post)
+	s.publishPostEvent(ctx, "PostPromotedToWork", post, map[string]any{
+		"_id":                post.ID,
+		"authorId":           post.AuthorId,
+		"contentType":        post.ContentType,
+		"contentIdentity":    post.ContentIdentity,
+		"status":             post.Status,
+		"visibility":         post.Visibility,
+		"circleIds":          asStringSlice(post.CircleIds),
+		"publishedAt":        formatTimePtr(post.PublishedAt),
+		"title":              post.Title,
+		"summary":            post.Summary,
+		"coverUrl":           post.CoverUrl,
+		"tags":               asStringSlice(post.Tags),
+		"assistantUsePolicy": post.AssistantUsePolicy,
+	}, now)
+	s.projectPostEvent(ctx, "PostPromotedToWork", post, map[string]any{
+		"_id":                post.ID,
+		"authorId":           post.AuthorId,
+		"contentType":        post.ContentType,
+		"contentIdentity":    post.ContentIdentity,
+		"status":             post.Status,
+		"visibility":         post.Visibility,
+		"circleIds":          asStringSlice(post.CircleIds),
+		"publishedAt":        formatTimePtr(post.PublishedAt),
+		"title":              post.Title,
+		"summary":            post.Summary,
+		"coverUrl":           post.CoverUrl,
+		"tags":               asStringSlice(post.Tags),
+		"assistantUsePolicy": post.AssistantUsePolicy,
+	}, now)
 	return post, nil
 }
 
@@ -327,12 +744,32 @@ func (s *PostService) DeletePost(ctx context.Context, postID, userID string) err
 	post.Status = "deleted"
 	post.DeletedAt = now
 	post.UpdatedAt = now
-	_ = s.store.Update(ctx, post.ID, post)
+	if !s.store.Update(ctx, post.ID, post) {
+		return rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "delete_failed"),
+			"删除内容失败",
+			"post disappeared while deleting",
+			true,
+		)
+	}
 	s.mu.Lock()
 	s.tombstones[post.ID] = now
 	delete(s.distributions, post.ID)
 	delete(s.reshares, post.ID)
 	s.mu.Unlock()
+	s.publishPostEvent(ctx, "PostDeleted", post, map[string]any{
+		"_id":             post.ID,
+		"authorId":        post.AuthorId,
+		"contentType":     post.ContentType,
+		"contentIdentity": post.ContentIdentity,
+		"deletedAt":       post.DeletedAt.Format(time.RFC3339),
+	}, now)
+	s.projectPostEvent(ctx, "PostDeleted", post, map[string]any{
+		"_id":             post.ID,
+		"contentType":     post.ContentType,
+		"contentIdentity": post.ContentIdentity,
+		"deletedAt":       post.DeletedAt.Format(time.RFC3339),
+	}, now)
 	return nil
 }
 
@@ -354,8 +791,12 @@ func (s *PostService) UpdatePostCircles(ctx context.Context, postID, userID stri
 			false,
 		)
 	}
-	if strings.TrimSpace(strings.ToLower(post.Visibility)) != "public" {
-		return nil, rterr.NewInvalidArgument(rterr.ModuleContent, "发布到圈子前需设置为公开", "visibility must be public")
+	if !supportsCircleDistribution(post.Visibility) {
+		return nil, rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"发布到圈子前需设置为公开或圈内可见",
+			"visibility must be public or circle_visible",
+		)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -379,8 +820,38 @@ func (s *PostService) UpdatePostCircles(ctx context.Context, postID, userID stri
 		}
 	}
 	post.CircleIds = active
-	post.UpdatedAt = time.Now().UTC()
+	now := time.Now().UTC()
+	post.UpdatedAt = now
 	_ = s.store.Update(ctx, post.ID, post)
+	s.syncDistributionsFromPost(post)
+	s.publishPostEvent(ctx, "PostSettingsUpdated", post, map[string]any{
+		"_id":                post.ID,
+		"authorId":           post.AuthorId,
+		"contentType":        post.ContentType,
+		"contentIdentity":    post.ContentIdentity,
+		"status":             post.Status,
+		"visibility":         post.Visibility,
+		"circleIds":          asStringSlice(post.CircleIds),
+		"assistantUsePolicy": post.AssistantUsePolicy,
+		"publishedAt":        formatTimePtr(post.PublishedAt),
+		"title":              post.Title,
+		"tags":               asStringSlice(post.Tags),
+		"coverUrl":           post.CoverUrl,
+	}, now)
+	s.projectPostEvent(ctx, "PostSettingsUpdated", post, map[string]any{
+		"_id":                post.ID,
+		"authorId":           post.AuthorId,
+		"contentType":        post.ContentType,
+		"contentIdentity":    post.ContentIdentity,
+		"status":             post.Status,
+		"visibility":         post.Visibility,
+		"circleIds":          asStringSlice(post.CircleIds),
+		"assistantUsePolicy": post.AssistantUsePolicy,
+		"publishedAt":        formatTimePtr(post.PublishedAt),
+		"title":              post.Title,
+		"tags":               asStringSlice(post.Tags),
+		"coverUrl":           post.CoverUrl,
+	}, now)
 	return map[string]any{
 		"postId":    post.ID,
 		"circleIds": active,
@@ -405,8 +876,12 @@ func (s *PostService) RepostToCircle(ctx context.Context, postID, userID, circle
 			false,
 		)
 	}
-	if strings.TrimSpace(strings.ToLower(post.Visibility)) != "public" {
-		return nil, rterr.NewInvalidArgument(rterr.ModuleContent, "发布到圈子前需设置为公开", "visibility must be public")
+	if !supportsCircleDistribution(post.Visibility) {
+		return nil, rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"发布到圈子前需设置为公开或圈内可见",
+			"visibility must be public or circle_visible",
+		)
 	}
 	circleID = strings.TrimSpace(circleID)
 	if circleID == "" {
@@ -575,12 +1050,27 @@ func (s *PostService) GenerateArticleSummary(title, body string) string {
 func (s *PostService) GetPostOrTombstone(ctx context.Context, postID string) (*postmodel.Post, bool, bool) {
 	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
 	if ok && !strings.EqualFold(strings.TrimSpace(post.Status), "deleted") {
-		return post, true, false
+		return normalizePostForRead(post), true, false
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	_, deleted := s.tombstones[strings.TrimSpace(postID)]
 	return nil, false, deleted
+}
+
+func (s *PostService) GetPostForViewer(
+	ctx context.Context,
+	postID, viewerID string,
+	viewerCircleIDs []string,
+) (*postmodel.Post, bool, bool, bool) {
+	post, ok, deleted := s.GetPostOrTombstone(ctx, postID)
+	if !ok {
+		return nil, false, deleted, false
+	}
+	if !canViewPost(post, viewerID, viewerCircleIDs) {
+		return nil, false, false, true
+	}
+	return post, true, false, false
 }
 
 func (s *PostService) LikePost(ctx context.Context, postID, userID string) (int64, bool, error) {
@@ -1153,12 +1643,30 @@ func (s *PostService) ListCommentsForPostAuthor(ctx context.Context, userID, cur
 }
 
 func (s *PostService) GetAppConfig() map[string]any {
+	runtimeConfig := normalizeStoryRuntimeConfig(s.storyRuntime)
+	canaryMatrix := make([]map[string]any, 0, len(runtimeConfig.CanaryMatrix))
+	for _, stage := range runtimeConfig.CanaryMatrix {
+		canaryMatrix = append(canaryMatrix, map[string]any{
+			"stage":          stage.Stage,
+			"rolloutPercent": stage.RolloutPercent,
+		})
+	}
+	featureFlags := make(map[string]any, len(runtimeConfig.FeatureFlags))
+	for key, value := range runtimeConfig.FeatureFlags {
+		featureFlags[key] = value
+	}
 	return map[string]any{
 		"content": map[string]any{
 			"comment": map[string]any{
 				"max_length":          s.commentMaxLen,
 				"reply_preview_count": 3,
 				"fold_line_count":     3,
+			},
+			"feature_flags": featureFlags,
+			"gray_release": map[string]any{
+				"experiment_bucket": runtimeConfig.ExperimentBucket,
+				"current_stage":     runtimeConfig.CurrentStage,
+				"canary_matrix":     canaryMatrix,
 			},
 		},
 	}
@@ -1182,17 +1690,43 @@ func (s *PostService) GetCounters(ctx context.Context, postID string) (map[strin
 	}, nil
 }
 
-func (s *PostService) ListUserPosts(ctx context.Context, userID, cursor string, limit int) ([]postmodel.Post, string, error) {
+func (s *PostService) ListUserPosts(
+	ctx context.Context,
+	authorID, viewerID string,
+	viewerCircleIDs []string,
+	identity, requestedType, cursor string,
+	limit int,
+) ([]postmodel.Post, string, error) {
 	if limit <= 0 {
 		limit = 20
 	}
-	posts := s.store.ListByAuthor(ctx, strings.TrimSpace(userID), limit+1, cursor)
-	nextCursor := ""
-	if len(posts) > limit {
-		nextCursor = posts[limit-1].ID
-		posts = posts[:limit]
+	posts := s.store.ListByAuthor(ctx, strings.TrimSpace(authorID), limit*5, cursor)
+	filtered := make([]postmodel.Post, 0, len(posts))
+	expectedIdentity := normalizeRequestedIdentity(identity)
+	expectedType := normalizeRequestType(requestedType)
+	for _, stored := range posts {
+		post := *normalizePostForRead(&stored)
+		if !canViewPost(&post, viewerID, viewerCircleIDs) {
+			continue
+		}
+		postIdentity := strings.TrimSpace(strings.ToLower(post.ContentIdentity))
+		if expectedIdentity != "" && postIdentity != expectedIdentity {
+			continue
+		}
+		if expectedType != "" {
+			viewType := mapContentTypeToViewType(post.ContentType)
+			if expectedIdentity != "moment" && viewType != expectedType {
+				continue
+			}
+		}
+		filtered = append(filtered, post)
 	}
-	return posts, nextCursor, nil
+	nextCursor := ""
+	if len(filtered) > limit {
+		nextCursor = filtered[limit-1].ID
+		filtered = filtered[:limit]
+	}
+	return filtered, nextCursor, nil
 }
 
 func (s *PostService) GetHelperRead(ctx context.Context, postID string) (map[string]any, error) {
@@ -1227,6 +1761,60 @@ func (s *PostService) GetHelperRead(ctx context.Context, postID string) (map[str
 		"title":       post.Title,
 		"summary":     summary,
 	}, nil
+}
+
+func (s *PostService) RebuildProjectionDryRun(
+	ctx context.Context,
+	apply bool,
+) (ProjectionRebuildReport, error) {
+	report := ProjectionRebuildReport{DryRun: !apply}
+	posts := s.store.ListAll(ctx)
+	now := time.Now().UTC()
+	for _, stored := range posts {
+		rawIdentity := strings.TrimSpace(strings.ToLower(stored.ContentIdentity))
+		rawAssistantUsePolicy := strings.TrimSpace(strings.ToLower(stored.AssistantUsePolicy))
+		post := normalizePostForRead(&stored)
+		if post == nil {
+			continue
+		}
+		report.TotalPosts++
+		switch strings.TrimSpace(strings.ToLower(post.Status)) {
+		case "deleted":
+			report.DeletedPosts++
+		case "published":
+			report.PublishedPosts++
+		default:
+			report.DraftPosts++
+		}
+		switch normalizeVisibility(post.Visibility) {
+		case "private":
+			report.PrivatePosts++
+		case "circle_visible":
+			report.CircleVisiblePosts++
+		default:
+			report.PublicPosts++
+		}
+		if rawIdentity == "" {
+			report.BackfilledContentIdentity++
+		}
+		if rawAssistantUsePolicy == "" {
+			report.BackfilledAssistantUsePolicy++
+		}
+		if strings.EqualFold(post.AssistantUsePolicy, "exclude") {
+			report.AssistantExcludedPosts++
+		}
+		if strings.EqualFold(post.Status, "published") && normalizeVisibility(post.Visibility) == "public" {
+			report.DiscoveryEligiblePosts++
+		} else {
+			report.DiscoveryRevokedPosts++
+		}
+		if !apply {
+			continue
+		}
+		eventType := projectionEventTypeForPost(post)
+		s.projectPostEvent(ctx, eventType, post, projectionPayloadForPost(post), now)
+	}
+	return report, nil
 }
 
 func asString(v any) string {
@@ -1268,6 +1856,48 @@ func defaultString(v string, fallback string) string {
 	return v
 }
 
+func formatTimePtr(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format(time.RFC3339)
+}
+
+func projectionEventTypeForPost(post *postmodel.Post) string {
+	if post == nil {
+		return ""
+	}
+	switch strings.TrimSpace(strings.ToLower(post.Status)) {
+	case "deleted":
+		return "PostDeleted"
+	case "published":
+		return "PostPublished"
+	default:
+		return "PostCreated"
+	}
+}
+
+func projectionPayloadForPost(post *postmodel.Post) map[string]any {
+	if post == nil {
+		return nil
+	}
+	return map[string]any{
+		"_id":                post.ID,
+		"authorId":           post.AuthorId,
+		"contentType":        post.ContentType,
+		"contentIdentity":    post.ContentIdentity,
+		"status":             post.Status,
+		"visibility":         normalizeVisibility(post.Visibility),
+		"circleIds":          asStringSlice(post.CircleIds),
+		"assistantUsePolicy": post.AssistantUsePolicy,
+		"publishedAt":        formatTimePtr(post.PublishedAt),
+		"title":              post.Title,
+		"summary":            post.Summary,
+		"coverUrl":           post.CoverUrl,
+		"tags":               asStringSlice(post.Tags),
+	}
+}
+
 func parseGeoPoint(v any) postmodel.GeoPoint {
 	m, ok := v.(map[string]any)
 	if !ok {
@@ -1302,7 +1932,165 @@ func behaviorTagsFromPost(p *postmodel.Post) []string {
 	return tags
 }
 
+func normalizeContentIdentity(contentType, requested string) string {
+	requested = strings.TrimSpace(strings.ToLower(requested))
+	if requested != "" {
+		return requested
+	}
+	switch strings.TrimSpace(strings.ToLower(contentType)) {
+	case "micro":
+		return "moment"
+	default:
+		return "work"
+	}
+}
+
+func normalizeAssistantUsePolicy(value string) string {
+	switch strings.TrimSpace(strings.ToLower(value)) {
+	case "", "inherit":
+		return "inherit"
+	case "exclude":
+		return "exclude"
+	default:
+		return "inherit"
+	}
+}
+
+func normalizeVisibility(value string) string {
+	switch strings.TrimSpace(strings.ToLower(value)) {
+	case "", "public":
+		return "public"
+	case "private":
+		return "private"
+	case "circle_visible", "circle-visible", "circle":
+		return "circle_visible"
+	default:
+		return "public"
+	}
+}
+
+func supportsCircleDistribution(visibility string) bool {
+	switch normalizeVisibility(visibility) {
+	case "public", "circle_visible":
+		return true
+	default:
+		return false
+	}
+}
+
+func sharesCircle(postCircleIDs, viewerCircleIDs []string) bool {
+	if len(postCircleIDs) == 0 || len(viewerCircleIDs) == 0 {
+		return false
+	}
+	allowed := make(map[string]struct{}, len(postCircleIDs))
+	for _, circleID := range postCircleIDs {
+		circleID = strings.TrimSpace(circleID)
+		if circleID == "" {
+			continue
+		}
+		allowed[circleID] = struct{}{}
+	}
+	for _, circleID := range viewerCircleIDs {
+		circleID = strings.TrimSpace(circleID)
+		if circleID == "" {
+			continue
+		}
+		if _, ok := allowed[circleID]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func validateContentIdentity(contentType, identity string) error {
+	contentType = strings.TrimSpace(strings.ToLower(contentType))
+	identity = strings.TrimSpace(strings.ToLower(identity))
+	switch identity {
+	case "moment":
+		if contentType != "micro" {
+			return rterr.NewInvalidArgument(
+				rterr.ModuleContent,
+				"点滴内容类型不合法",
+				"moment must use contentType=micro",
+			)
+		}
+	case "work":
+		if contentType == "micro" {
+			return rterr.NewInvalidArgument(
+				rterr.ModuleContent,
+				"作品内容类型不合法",
+				"work cannot use contentType=micro",
+			)
+		}
+	default:
+		return rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"内容身份不合法",
+			"unsupported contentIdentity",
+		)
+	}
+	return nil
+}
+
+func applyPostSettingsPayload(post *postmodel.Post, payload map[string]any) error {
+	if contentIdentity, exists := payload["contentIdentity"]; exists {
+		post.ContentIdentity = normalizeContentIdentity(
+			post.ContentType,
+			strings.TrimSpace(asString(contentIdentity)),
+		)
+	}
+	if visibility, exists := payload["visibility"]; exists {
+		post.Visibility = normalizeVisibility(asString(visibility))
+	}
+	if circles, exists := payload["circleIds"]; exists {
+		post.CircleIds = asStringSlice(circles)
+	}
+	if assistantUsePolicy, exists := payload["assistantUsePolicy"]; exists {
+		post.AssistantUsePolicy = normalizeAssistantUsePolicy(
+			strings.TrimSpace(asString(assistantUsePolicy)),
+		)
+	}
+	if post.ContentIdentity == "" {
+		post.ContentIdentity = normalizeContentIdentity(post.ContentType, "")
+	}
+	if post.AssistantUsePolicy == "" {
+		post.AssistantUsePolicy = "inherit"
+	}
+	if err := validateContentIdentity(post.ContentType, post.ContentIdentity); err != nil {
+		return err
+	}
+	post.Visibility = normalizeVisibility(post.Visibility)
+	if circles := asStringSlice(post.CircleIds); len(circles) > 0 && !supportsCircleDistribution(post.Visibility) {
+		return rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"发布到圈子前需设置为公开或圈内可见",
+			"visibility must be public or circle_visible",
+		)
+	}
+	return nil
+}
+
+func recommendedPromotedContentType(post *postmodel.Post) string {
+	if strings.TrimSpace(post.VideoUrl) != "" {
+		return "video"
+	}
+	if len(asStringSlice(post.MediaUrls)) > 0 {
+		return "image"
+	}
+	return "article"
+}
+
 func validateCreatePostPayload(post *postmodel.Post) error {
+	if post.ContentIdentity == "" {
+		post.ContentIdentity = normalizeContentIdentity(post.ContentType, "")
+	}
+	if post.AssistantUsePolicy == "" {
+		post.AssistantUsePolicy = "inherit"
+	}
+	if err := validateContentIdentity(post.ContentType, post.ContentIdentity); err != nil {
+		return err
+	}
+	post.Visibility = normalizeVisibility(post.Visibility)
 	switch strings.TrimSpace(post.ContentType) {
 	case "micro":
 		hasBody := strings.TrimSpace(post.Body) != ""
@@ -1324,8 +2112,12 @@ func validateCreatePostPayload(post *postmodel.Post) error {
 			return rterr.NewInvalidArgument(rterr.ModuleContent, "文章标题必填", "article requires title")
 		}
 	}
-	if circles := asStringSlice(post.CircleIds); len(circles) > 0 && strings.TrimSpace(strings.ToLower(post.Visibility)) != "public" {
-		return rterr.NewInvalidArgument(rterr.ModuleContent, "发布到圈子前需设置为公开", "visibility must be public")
+	if circles := asStringSlice(post.CircleIds); len(circles) > 0 && !supportsCircleDistribution(post.Visibility) {
+		return rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"发布到圈子前需设置为公开或圈内可见",
+			"visibility must be public or circle_visible",
+		)
 	}
 	return nil
 }

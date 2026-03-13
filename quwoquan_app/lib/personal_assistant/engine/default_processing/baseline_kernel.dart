@@ -1,0 +1,99 @@
+import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/personal_assistant/engine/default_processing/answer_composer.dart';
+import 'package:quwoquan_app/personal_assistant/engine/default_processing/evidence_evaluator.dart';
+import 'package:quwoquan_app/personal_assistant/engine/default_processing/narrative_engine.dart';
+import 'package:quwoquan_app/personal_assistant/engine/default_processing/problem_framer.dart';
+import 'package:quwoquan_app/personal_assistant/engine/default_processing/retrieval_planner.dart';
+
+class BaselineKernel {
+  const BaselineKernel({
+    this.problemFramer = const DefaultProblemFramer(),
+    this.retrievalPlanner = const DefaultRetrievalPlanner(),
+    this.evidenceEvaluator = const DefaultEvidenceEvaluator(),
+    this.narrativeEngine = const NarrativeEngine(),
+    this.answerComposer = const AnswerComposer(),
+  });
+
+  final DefaultProblemFramer problemFramer;
+  final DefaultRetrievalPlanner retrievalPlanner;
+  final DefaultEvidenceEvaluator evidenceEvaluator;
+  final NarrativeEngine narrativeEngine;
+  final AnswerComposer answerComposer;
+
+  ProblemFrame frame(String query) => problemFramer.frame(query);
+
+  Map<String, dynamic> buildIntentPayload(String query) {
+    return frame(query).toIntentPayload();
+  }
+
+  BaselineRetrievalPlan? buildRetrievalPlan(
+    String query,
+    List<String> availableTools,
+  ) {
+    final problemFrame = frame(query);
+    return retrievalPlanner.plan(
+      frame: problemFrame,
+      availableTools: availableTools,
+    );
+  }
+
+  List<EvidenceLedgerEntry> buildEvidenceLedger({
+    required String domainId,
+    required List<Map<String, dynamic>> toolResults,
+    required SlotStateSnapshot slotState,
+    required Map<String, dynamic> retrievalPolicy,
+  }) {
+    return evidenceEvaluator.buildLedger(
+      domainId: domainId,
+      toolResults: toolResults,
+      slotState: slotState,
+      retrievalPolicy: retrievalPolicy,
+    );
+  }
+
+  EvidenceEvaluationResult evaluateEvidence({
+    required List<EvidenceLedgerEntry> ledger,
+    bool evidenceRequired = false,
+    bool authorityRequired = false,
+    int freshnessHoursMax = 72,
+    List<String> requiredDimensions = const <String>[],
+    List<String> blockingDimensions = const <String>[],
+  }) {
+    return evidenceEvaluator.evaluate(
+      ledger: ledger,
+      evidenceRequired: evidenceRequired,
+      authorityRequired: authorityRequired,
+      freshnessHoursMax: freshnessHoursMax,
+      requiredDimensions: requiredDimensions,
+      blockingDimensions: blockingDimensions,
+    );
+  }
+
+  BaselineComposedAnswer composeHeuristicAnswer({
+    required String query,
+    required List<Map<String, dynamic>> observations,
+  }) {
+    return answerComposer.composeHeuristicAnswer(
+      frame: frame(query),
+      observations: observations,
+    );
+  }
+
+  BaselineComposedAnswer composeFallbackAnswer({
+    required String query,
+    required SlotStateSnapshot slotState,
+    required EvidenceEvaluationResult evidenceEvaluation,
+    required String decisionMode,
+    required List<String> missingCriticalSlots,
+    required List<Map<String, dynamic>> toolErrors,
+  }) {
+    return answerComposer.composeFallbackAnswer(
+      frame: frame(query),
+      slotState: slotState,
+      evidenceEvaluation: evidenceEvaluation,
+      decisionMode: decisionMode,
+      missingCriticalSlots: missingCriticalSlots,
+      toolErrors: toolErrors,
+    );
+  }
+}

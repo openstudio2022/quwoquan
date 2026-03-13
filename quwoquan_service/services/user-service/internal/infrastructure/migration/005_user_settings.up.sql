@@ -15,6 +15,10 @@ CREATE TABLE IF NOT EXISTS user_settings (
     content_language         VARCHAR(16),
     feed_preference          VARCHAR(16),
     assistant_enabled        BOOLEAN NOT NULL DEFAULT true,
+    default_theme_mode       VARCHAR(16) NOT NULL DEFAULT 'system',
+    default_font_size_preset VARCHAR(16) NOT NULL DEFAULT 'md',
+    appearance_version       INTEGER NOT NULL DEFAULT 1,
+    appearance_updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
     ,CONSTRAINT fk_user_settings_user_id FOREIGN KEY (user_id) REFERENCES user_profiles(user_id) ON DELETE CASCADE
 );

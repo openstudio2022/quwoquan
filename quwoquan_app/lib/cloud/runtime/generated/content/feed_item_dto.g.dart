@@ -4,6 +4,8 @@
 class FeedItemDto {
   final String id;
   final String type;
+  final String identity;
+  final String assistantUsePolicy;
   final String authorId;
   final String displayName;
   final String avatarUrl;
@@ -23,6 +25,8 @@ class FeedItemDto {
   const FeedItemDto({
     required this.id,
     required this.type,
+    required this.identity,
+    required this.assistantUsePolicy,
     required this.authorId,
     required this.displayName,
     required this.avatarUrl,
@@ -44,6 +48,8 @@ class FeedItemDto {
     return FeedItemDto(
       id: m['postId']?.toString() ?? m['_id']?.toString() ?? '',
       type: m['contentType']?.toString() ?? m['category']?.toString() ?? '',
+      identity: m['contentIdentity']?.toString() ?? m['identity']?.toString() ?? ((m['contentType']?.toString() == 'micro' || m['contentType']?.toString() == 'moment') ? 'moment' : 'work'),
+      assistantUsePolicy: m['assistantUsePolicy']?.toString() ?? 'inherit',
       authorId: m['authorId']?.toString() ?? m['userId']?.toString() ?? m['author_id']?.toString() ?? '',
       displayName: m['authorNickname']?.toString() ?? m['nickname']?.toString() ?? m['username']?.toString() ?? m['displayName']?.toString() ?? '',
       avatarUrl: m['authorAvatarUrl']?.toString() ?? m['avatarUrl']?.toString() ?? m['avatar']?.toString() ?? '',
@@ -66,6 +72,8 @@ class FeedItemDto {
     return <String, dynamic>{
       'id': id,
       'type': type,
+      'identity': identity,
+      'assistantUsePolicy': assistantUsePolicy,
       'authorId': authorId,
       'displayName': displayName,
       'avatarUrl': avatarUrl,
@@ -87,6 +95,8 @@ class FeedItemDto {
   FeedItemDto copyWith({
     String? id,
     String? type,
+    String? identity,
+    String? assistantUsePolicy,
     String? authorId,
     String? displayName,
     String? avatarUrl,
@@ -106,6 +116,8 @@ class FeedItemDto {
     return FeedItemDto(
       id: id ?? this.id,
       type: type ?? this.type,
+      identity: identity ?? this.identity,
+      assistantUsePolicy: assistantUsePolicy ?? this.assistantUsePolicy,
       authorId: authorId ?? this.authorId,
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
@@ -122,6 +134,15 @@ class FeedItemDto {
       shareCount: shareCount ?? this.shareCount,
       createdAt: createdAt ?? this.createdAt,
     );
+  }
+
+  /// 发现流展示格式：moment 由素材组合推导，work 由 type 映射。
+  String get displayFormat {
+    if (type == 'video' || (videoUrl != null && videoUrl!.isNotEmpty)) return 'video';
+    if (type == 'article') return 'note';
+    if (type == 'image' || type == 'photo') return 'image';
+    if (imageUrls.isNotEmpty) return 'image';
+    return 'note';
   }
 }
 

@@ -195,6 +195,22 @@ api_routes:
     request_fields: [defaultIncomingCallRingtoneId, allowCallerRingtoneOverride, enableCallVibration, enableGroupCallRing]
 
   - method: GET
+    path: /v1/user/settings/appearance
+    operation: GetAppearanceSettings
+    description: 获取 owner 默认值与当前子账号 override 聚合后的外观与字号设置
+    response_entity: AppearanceSettingsView
+    response_fields: [themeMode, fontSizePreset, source, ownerDefaultThemeMode, ownerDefaultFontSizePreset, hasSubAccountOverride, version, updatedAt]
+
+  - method: PATCH
+    path: /v1/user/settings/appearance
+    operation: UpdateAppearanceSettings
+    description: 更新外观与字号设置；支持全账号同步、当前子账号覆盖、恢复继承 owner 默认
+    request_entity: AppearanceSettingsMutation
+    request_fields: [themeMode, fontSizePreset, applyScope]
+    response_entity: AppearanceSettingsView
+    response_fields: [themeMode, fontSizePreset, source, ownerDefaultThemeMode, ownerDefaultFontSizePreset, hasSubAccountOverride, version, updatedAt]
+
+  - method: GET
     path: /v1/users/{userId}/works
     operation: ListUserWorks
     description: 用户作品集列表（用户主页-创作 Tab 作品子分类）
@@ -282,6 +298,16 @@ contract_test:
             - POST /v1/user/profile/proposals/{id}/apply
           assertions: [status_transitions_valid]
 
+        - name: get_appearance_settings
+          route: GET /v1/user/settings/appearance
+          mock_response: auto_from_fields
+          assertions: [status_200, response_matches_schema]
+
+        - name: update_appearance_settings
+          route: PATCH /v1/user/settings/appearance
+          mock_request: auto_from_writable_fields
+          assertions: [status_200, updated_fields_reflected]
+
     service_side:
       description: 服务只依赖自身，使用真实测试数据库，不 mock 存储层
       real_engines:
@@ -328,6 +354,23 @@ contract_test:
             - "SELECT status FROM profile_update_proposals → 'applied' after apply"
             - "SELECT nickname FROM user_profiles → matches proposedChanges"
             - "eventSpy.AssertPublished('ProfileProposalResolved')"
+
+        - name: update_appearance_all_accounts
+          command: UpdateAppearanceSettings(applyScope='all_accounts')
+          seed: [fixture.NewUserProfile(), fixture.NewUserSetting(), fixture.NewPersona(active=true), fixture.NewPersona(active=false)]
+          assertions:
+            - "SELECT default_theme_mode, default_font_size_preset FROM user_settings WHERE user_id=? → updated to requested values"
+            - "SELECT theme_mode_override, font_size_preset_override FROM personas WHERE user_id=? → all NULL"
+            - "SELECT appearance_version FROM user_settings WHERE user_id=? → incremented by 1"
+            - "eventSpy.AssertPublished('UserAppearanceSettingsChanged', {userId, version})"
+
+        - name: update_appearance_current_sub_account
+          command: UpdateAppearanceSettings(applyScope='current_sub_account')
+          seed: [fixture.NewUserProfile(), fixture.NewUserSetting(), fixture.NewPersona(active=true)]
+          assertions:
+            - "SELECT theme_mode_override, font_size_preset_override FROM personas WHERE user_id=? AND is_active=true → updated to requested values"
+            - "SELECT default_theme_mode, default_font_size_preset FROM user_settings WHERE user_id=? → unchanged"
+            - "GET /v1/user/settings/appearance → source='sub_override'"
 
         - name: login_fail_lockout
           command: Login (5x wrong password)

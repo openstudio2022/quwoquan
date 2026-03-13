@@ -261,4 +261,26 @@ void main() {
     await expectLater(sm.load(), completes);
     expect(sm.getOrCreateSession('assistant').isEmpty, isTrue);
   });
+
+  // ── 规则 9：load() 对损坏文件安全降级，不得让运行崩溃 ────────────────────
+  test('Rule-9: load() with invalid utf8/json degrades safely', () async {
+    final file = File('${tempDir.path}/sessions_corrupted.json');
+    await file.writeAsBytes(const <int>[0xff, 0xfe, 0xfd, 0x00]);
+
+    final sm = AssistantSessionManager(storagePath: file.path);
+    await expectLater(sm.load(), completes);
+    expect(
+      sm.getOrCreateSession('assistant').isEmpty,
+      isTrue,
+      reason: '损坏的 session 文件应被安全跳过，而不是污染内存或让加载崩溃',
+    );
+
+    await file.writeAsString('{not valid json');
+    await expectLater(sm.load(), completes);
+    expect(
+      sm.getOrCreateSession('assistant').isEmpty,
+      isTrue,
+      reason: '非法 JSON 也应被安全跳过',
+    );
+  });
 }

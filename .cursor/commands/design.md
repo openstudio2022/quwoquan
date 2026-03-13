@@ -2,7 +2,7 @@
 name: /design
 id: design
 category: Workflow
-description: 设计基线（面向 L3_story，产出 Task）
+description: 设计基线（面向 L3_story，落实商用方案与任务）
 ---
 
 > SDD 主流程：explore → prd → **design** → dev → commit → deploy
@@ -14,8 +14,12 @@ description: 设计基线（面向 L3_story，产出 Task）
 - `spec.md` 已存在且稳定
 - `acceptance.yaml` 已定义
 - 已明确 `L1_capability / L2_feature / L3_story`
-- 已识别约束、依赖、测试策略
 - 至少有 2 个方案可比较
+- 已识别约束、依赖、测试策略
+- 选定方案能够覆盖 metadata/codegen、字段或模型演进、数据迁移/回填、必要时双读双写、feature flag、观测、SLO 验证与回滚
+- 若涉及小趣或私密内容，权限、撤销、保留模型已冻结
+- `T1~T4` 证据矩阵已形成
+- `tasks.md` 顺序明确，且遵循 `metadata -> codegen -> 业务逻辑 -> 测试`
 
 ## 执行对象
 
@@ -37,8 +41,11 @@ description: 设计基线（面向 L3_story，产出 Task）
 - 方案对比
 - 选型决策
 - 关键设计决策
+- metadata/codegen 方案
+- 字段演进、迁移/回填、必要时双读双写方案
+- feature flag、观测、SLO 验证与回滚方案
 - TDD / ATDD 策略
-- `Task` 与测试层映射
+- `Task` 与 `T1~T4` 证据矩阵映射
 - 未来演进
 
 ## `tasks.md` 要求
@@ -52,6 +59,7 @@ description: 设计基线（面向 L3_story，产出 Task）
 约束：
 
 - `tasks.md` 只承载 `Task`
+- 顺序必须是 `metadata -> codegen -> 业务逻辑 -> 测试`
 - 不得把任务重新建成树层级
 
 ## G1

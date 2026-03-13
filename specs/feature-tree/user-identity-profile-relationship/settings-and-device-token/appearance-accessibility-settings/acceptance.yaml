@@ -1,0 +1,66 @@
+version: 1
+feature: appearance-accessibility-settings
+level: "L3_story"
+status: specified
+archived: false
+template: "2026-03-12"
+tree_context:
+  feature_path: capability.user-identity-profile-relationship.feature.settings-and-device-token.subfeature.appearance-accessibility-settings
+  parent_path: capability.user-identity-profile-relationship.feature.settings-and-device-token
+  acceptance_inherits_from: capability.user-identity-profile-relationship.feature.settings-and-device-token
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+level_acceptance:
+  A1:
+    criteria: owner 可读写外观默认值，首发至少包含 `themeMode(system/light/dark)` 与 `fontSizePreset`，并可在新设备登录后恢复
+    status: pending
+    test_layers:
+      T1: required
+      T3: required
+  A2:
+    criteria: 子账号在无 override 时自动继承 owner 默认值，切换子账号后外观与字号结果可预测、可解释
+    status: pending
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+  A3:
+    criteria: 子账号取消“同步所有账号”后，仅写当前子账号 override，不影响 owner 默认值与其他子账号
+    status: pending
+    test_layers:
+      T1: required
+      T3: required
+  A4:
+    criteria: 子账号修改时“同步所有账号”默认勾选；勾选后写入 owner 默认值，并让全部子账号收敛到新的统一默认值（清空或覆盖历史 override）
+    status: pending
+    test_layers:
+      T2: required
+      T3: required
+  A5:
+    criteria: 修改后当前账号本地生效 `<=100ms`，全 app 主题/字号稳定完成 `<=300ms`，且无闪屏
+    status: pending
+    test_layers:
+      T2: required
+      T3: required
+      T4: required
+  A6:
+    criteria: 正常网络下跨账号/跨端同步 `p95 <= 3s`，弱网最终一致 `<= 10s`
+    status: pending
+    test_layers:
+      T3: required
+      T4: required
+  A7:
+    criteria: 离线时本地先应用并保留待同步标记；联网后自动补同步；同一作用域冲突采用 `last-write-wins`；所有修改产生可审计记录
+    status: pending
+    test_layers:
+      T1: required
+      T3: required
+      T4: required
+  A8:
+    criteria: 设置读写、继承、广播、待同步、恢复与冲突链路具备契约测试、集成测试与真机验证证据，可作为统一生效门禁
+    status: pending
+    test_layers:
+      T1: required
+      T3: required
+      T4: required

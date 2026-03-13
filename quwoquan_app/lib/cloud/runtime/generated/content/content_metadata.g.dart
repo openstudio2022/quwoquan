@@ -7,6 +7,7 @@ class GeneratedPostRuntimeMetadata {
 
   // Field defaults derived from post/fields.yaml constraints.
   static const Map<String, dynamic> postFieldDefaults = <String, dynamic>{
+    'assistantUsePolicy': 'inherit',
     'circleIds': <String>[],
     'commentCount': 0,
     'embedding': <double>[],
@@ -61,6 +62,7 @@ class GeneratedPostRuntimeMetadata {
   static const String recommendPath = '/v1/content/recommend';
 
   static const List<String> feedQueryParams = <String>[
+    'identity',
     'type',
     'sort',
     'cursor',
@@ -70,6 +72,7 @@ class GeneratedPostRuntimeMetadata {
 
   static const List<String> createWritableFields = <String>[
     'contentType',
+    'contentIdentity',
     'title',
     'body',
     'summary',
@@ -82,6 +85,7 @@ class GeneratedPostRuntimeMetadata {
     'locationName',
     'visibility',
     'circleIds',
+    'assistantUsePolicy',
     'sourcePostId',
     'sourceType',
     'deviceInfo',

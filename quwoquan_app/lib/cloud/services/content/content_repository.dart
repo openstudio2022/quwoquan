@@ -26,6 +26,8 @@ const String kFeedSortRecommend = 'recommend';
 abstract class ContentRepository {
   Future<CursorPage<PostBaseDto>> listDiscoveryFeedPage({
     required String category,
+    String? identity,
+    String? type,
     String? subCategory,
     int limit = GeneratedPostRuntimeMetadata.feedDefaultLimit,
     String? cursor,
@@ -34,6 +36,8 @@ abstract class ContentRepository {
 
   Future<List<PostBaseDto>> listDiscoveryFeed({
     required String category,
+    String? identity,
+    String? type,
     String? subCategory,
     int limit = GeneratedPostRuntimeMetadata.feedDefaultLimit,
     String? cursor,
@@ -51,7 +55,18 @@ abstract class ContentRepository {
     required Map<String, dynamic> payload,
   });
   Future<void> deletePost({required String postId});
-  Future<Map<String, dynamic>> publishPost({required String postId});
+  Future<Map<String, dynamic>> publishPost({
+    required String postId,
+    Map<String, dynamic> payload = const <String, dynamic>{},
+  });
+  Future<Map<String, dynamic>> updatePostSettings({
+    required String postId,
+    required Map<String, dynamic> payload,
+  });
+  Future<Map<String, dynamic>> promotePostToWork({
+    required String postId,
+    required Map<String, dynamic> payload,
+  });
 
   Future<Map<String, dynamic>> updatePostCircles({
     required String postId,
@@ -91,6 +106,8 @@ abstract class ContentRepository {
 
   Future<CursorPage<PostBaseDto>> listUserPosts({
     required String userId,
+    String? identity,
+    String? type,
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   });
@@ -182,34 +199,30 @@ class CommentDto {
       likeCount: (m['likeCount'] as num?)?.toInt() ?? 0,
       status: (m['status'] ?? 'visible').toString(),
       isAuthor: m['isAuthor'] == true,
-      createdAt: DateTime.tryParse(m['createdAt']?.toString() ?? '') ??
-          DateTime.now(),
+      createdAt:
+          DateTime.tryParse(m['createdAt']?.toString() ?? '') ?? DateTime.now(),
     );
   }
 
   Map<String, dynamic> toMap() => {
-        'id': id,
-        'postId': postId,
-        'authorId': authorId,
-        'personaId': personaId,
-        'displayName': displayName,
-        'avatarUrl': avatarUrl,
-        'content': content,
-        'replyToCommentId': replyToCommentId,
-        'replyToUserId': replyToUserId,
-        'replyToDisplayName': replyToDisplayName,
-        'replyCount': replyCount,
-        'likeCount': likeCount,
-        'status': status,
-        'isAuthor': isAuthor,
-        'createdAt': createdAt.toIso8601String(),
-      };
+    'id': id,
+    'postId': postId,
+    'authorId': authorId,
+    'personaId': personaId,
+    'displayName': displayName,
+    'avatarUrl': avatarUrl,
+    'content': content,
+    'replyToCommentId': replyToCommentId,
+    'replyToUserId': replyToUserId,
+    'replyToDisplayName': replyToDisplayName,
+    'replyCount': replyCount,
+    'likeCount': likeCount,
+    'status': status,
+    'isAuthor': isAuthor,
+    'createdAt': createdAt.toIso8601String(),
+  };
 
-  CommentDto copyWith({
-    int? replyCount,
-    int? likeCount,
-    String? status,
-  }) {
+  CommentDto copyWith({int? replyCount, int? likeCount, String? status}) {
     return CommentDto(
       id: id,
       postId: postId,
@@ -255,12 +268,18 @@ class MockContentRepository implements ContentRepository {
   @override
   Future<CursorPage<PostBaseDto>> listDiscoveryFeedPage({
     required String category,
+    String? identity,
+    String? type,
     String? subCategory,
     int limit = GeneratedPostRuntimeMetadata.feedDefaultLimit,
     String? cursor,
     String sort = kFeedSortRecommend,
   }) async {
-    final rawList = _getRawListForCategory(category);
+    final rawList = _resolveDiscoveryRaw(
+      category: category,
+      identity: identity,
+      type: type,
+    );
     final items = rawList.map(postBaseDtoFromMap).toList(growable: false);
     return CursorPage<PostBaseDto>(items: items, nextCursor: null);
   }
@@ -268,6 +287,8 @@ class MockContentRepository implements ContentRepository {
   @override
   Future<List<PostBaseDto>> listDiscoveryFeed({
     required String category,
+    String? identity,
+    String? type,
     String? subCategory,
     int limit = GeneratedPostRuntimeMetadata.feedDefaultLimit,
     String? cursor,
@@ -275,6 +296,8 @@ class MockContentRepository implements ContentRepository {
   }) async {
     final page = await listDiscoveryFeedPage(
       category: category,
+      identity: identity,
+      type: type,
       subCategory: subCategory,
       limit: limit,
       cursor: cursor,
@@ -418,6 +441,23 @@ class MockContentRepository implements ContentRepository {
           'reply_preview_count': 3,
           'fold_line_count': 3,
         },
+        'feature_flags': {
+          'enable_create_action_entry': true,
+          'enable_unified_create_editor': true,
+          'enable_identity_based_surfaces': true,
+          'enable_identity_share_template': true,
+          'enable_assistant_content_identity_index': true,
+        },
+        'gray_release': {
+          'experiment_bucket': 'local_story_enabled',
+          'current_stage': '100%',
+          'canary_matrix': [
+            {'stage': '5%', 'rolloutPercent': 5},
+            {'stage': '20%', 'rolloutPercent': 20},
+            {'stage': '50%', 'rolloutPercent': 50},
+            {'stage': '100%', 'rolloutPercent': 100},
+          ],
+        },
       },
     };
   }
@@ -447,8 +487,32 @@ class MockContentRepository implements ContentRepository {
   Future<void> deletePost({required String postId}) async {}
 
   @override
-  Future<Map<String, dynamic>> publishPost({required String postId}) async {
-    return {'postId': postId, 'status': 'published'};
+  Future<Map<String, dynamic>> publishPost({
+    required String postId,
+    Map<String, dynamic> payload = const <String, dynamic>{},
+  }) async {
+    return {'postId': postId, 'status': 'published', ...payload};
+  }
+
+  @override
+  Future<Map<String, dynamic>> updatePostSettings({
+    required String postId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return {'postId': postId, ...payload};
+  }
+
+  @override
+  Future<Map<String, dynamic>> promotePostToWork({
+    required String postId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return {
+      'postId': postId,
+      'contentIdentity': 'work',
+      'status': 'published',
+      ...payload,
+    };
   }
 
   @override
@@ -557,35 +621,116 @@ class MockContentRepository implements ContentRepository {
   @override
   Future<CursorPage<PostBaseDto>> listUserPosts({
     required String userId,
+    String? identity,
+    String? type,
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    final allRaw = [
-      ...ContentMockData.discoveryPhotoData,
-      ...ContentMockData.discoveryVideoData,
-      ...ContentMockData.discoveryMomentData,
-      ...ContentMockData.discoveryArticleData,
-    ];
+    final allRaw = _allRawPosts();
     final filtered = allRaw
         .where((m) => m['authorId']?.toString() == userId)
+        .where(
+          (m) => _matchesIdentityAndType(m, identity: identity, type: type),
+        )
         .toList();
     final items = filtered.map(postBaseDtoFromMap).toList(growable: false);
     return CursorPage<PostBaseDto>(items: items, nextCursor: null);
   }
 
-  List<Map<String, dynamic>> _getRawListForCategory(String category) {
-    final feedType =
-        GeneratedPostRuntimeMetadata.feedCategoryToRequestType[category] ?? '';
-    switch (feedType) {
+  List<Map<String, dynamic>> _allRawPosts() {
+    return <Map<String, dynamic>>[
+      ...ContentMockData.discoveryPhotoData,
+      ...ContentMockData.discoveryVideoData,
+      ...ContentMockData.discoveryMomentData,
+      ...ContentMockData.discoveryArticleData,
+    ];
+  }
+
+  List<Map<String, dynamic>> _resolveDiscoveryRaw({
+    required String category,
+    String? identity,
+    String? type,
+  }) {
+    final resolvedIdentity = identity ?? _mapCategoryToIdentity(category);
+    final resolvedType = _normalizeFeedType(
+      type ?? _mapCategoryToFeedType(category),
+    );
+    return _allRawPosts()
+        .where(
+          (item) => _matchesIdentityAndType(
+            item,
+            identity: resolvedIdentity,
+            type: resolvedType,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  String? _mapCategoryToIdentity(String category) {
+    switch (category.trim()) {
+      case 'moment':
+      case 'recommended':
+      case 'following':
+        return 'moment';
+      case 'work':
+      case 'works':
       case 'photo':
-        return ContentMockData.discoveryPhotoData;
+      case 'images':
       case 'video':
-        return ContentMockData.discoveryVideoData;
       case 'article':
-        return ContentMockData.discoveryArticleData;
+        return 'work';
       default:
-        return ContentMockData.discoveryMomentData;
+        return null;
     }
+  }
+
+  String? _mapCategoryToFeedType(String category) {
+    final mapped =
+        GeneratedPostRuntimeMetadata.feedCategoryToRequestType[category];
+    return _normalizeFeedType(mapped);
+  }
+
+  String? _normalizeFeedType(String? type) {
+    final normalized = (type ?? '').trim().toLowerCase();
+    switch (normalized) {
+      case '':
+        return null;
+      case 'photo':
+        return 'image';
+      case 'note':
+        return 'article';
+      default:
+        return normalized;
+    }
+  }
+
+  bool _matchesIdentityAndType(
+    Map<String, dynamic> item, {
+    String? identity,
+    String? type,
+  }) {
+    final itemType = _normalizeFeedType(
+      item['contentType']?.toString() ?? item['type']?.toString(),
+    );
+    final itemIdentity =
+        (item['contentIdentity'] ??
+                item['identity'] ??
+                ((itemType == 'micro' || item['type']?.toString() == 'moment')
+                    ? 'moment'
+                    : 'work'))
+            .toString();
+    final expectedIdentity = (identity ?? '').trim();
+    final expectedType = _normalizeFeedType(type);
+    if (expectedIdentity.isNotEmpty && itemIdentity != expectedIdentity) {
+      return false;
+    }
+    if (expectedType != null && expectedType.isNotEmpty) {
+      if (expectedType == 'moment') {
+        return itemIdentity == 'moment';
+      }
+      return itemType == expectedType;
+    }
+    return true;
   }
 }
 
@@ -602,22 +747,37 @@ class RemoteContentRepository implements ContentRepository {
   final String _baseUrl;
 
   Uri _uri(String path, {Map<String, String>? queryParameters}) {
-    return Uri.parse('$_baseUrl$path').replace(queryParameters: queryParameters);
+    return Uri.parse(
+      '$_baseUrl$path',
+    ).replace(queryParameters: queryParameters);
   }
 
   @override
   Future<CursorPage<PostBaseDto>> listDiscoveryFeedPage({
     required String category,
+    String? identity,
+    String? type,
     String? subCategory,
     int limit = GeneratedPostRuntimeMetadata.feedDefaultLimit,
     String? cursor,
     String sort = kFeedSortRecommend,
   }) async {
-    final type = _mapCategoryToFeedType(category);
+    final resolvedIdentity = identity ?? _mapCategoryToIdentity(category);
+    final resolvedType = _normalizeFeedType(
+      type ?? _mapCategoryToFeedType(category),
+    );
     final query = <String, String>{};
     final keys = GeneratedPostRuntimeMetadata.feedQueryParams;
-    if (keys.contains('type') && type != null && type.isNotEmpty) {
-      query['type'] = type;
+    if (keys.contains('identity') &&
+        resolvedIdentity != null &&
+        resolvedIdentity.isNotEmpty) {
+      query['identity'] = resolvedIdentity;
+    }
+    if (keys.contains('type') &&
+        resolvedType != null &&
+        resolvedType.isNotEmpty &&
+        !(resolvedIdentity == 'moment' && (type == null || type.isEmpty))) {
+      query['type'] = resolvedType;
     }
     if (keys.contains('cursor') && cursor?.isNotEmpty == true) {
       query['cursor'] = cursor!;
@@ -631,10 +791,7 @@ class RemoteContentRepository implements ContentRepository {
     if (keys.contains('subCategory') && subCategory?.isNotEmpty == true) {
       query['subCategory'] = subCategory!;
     }
-    final uri = _uri(
-      ContentApiMetadata.getFeedPath,
-      queryParameters: query,
-    );
+    final uri = _uri(ContentApiMetadata.getFeedPath, queryParameters: query);
     final decoded = await _httpClient.getJson(
       uri,
       headers: CloudRequestHeaders.forPage(ContentRequestPageIds.getFeed),
@@ -655,6 +812,8 @@ class RemoteContentRepository implements ContentRepository {
   @override
   Future<List<PostBaseDto>> listDiscoveryFeed({
     required String category,
+    String? identity,
+    String? type,
     String? subCategory,
     int limit = GeneratedPostRuntimeMetadata.feedDefaultLimit,
     String? cursor,
@@ -662,6 +821,8 @@ class RemoteContentRepository implements ContentRepository {
   }) async {
     final page = await listDiscoveryFeedPage(
       category: category,
+      identity: identity,
+      type: type,
       subCategory: subCategory,
       limit: limit,
       cursor: cursor,
@@ -967,16 +1128,57 @@ class RemoteContentRepository implements ContentRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> publishPost({required String postId}) async {
+  Future<Map<String, dynamic>> publishPost({
+    required String postId,
+    Map<String, dynamic> payload = const <String, dynamic>{},
+  }) async {
     final uri = _uri(ContentApiMetadata.publishPostPath(postId: postId));
     final decoded = await _httpClient.postJson(
       uri,
       headers: CloudRequestHeaders.forPage(ContentRequestPageIds.publishPost),
-      body: {},
+      body: payload,
     );
     return CloudResponseDecoder.asObject(
       decoded,
       context: ContentRequestPageIds.publishPost,
+    );
+  }
+
+  @override
+  Future<Map<String, dynamic>> updatePostSettings({
+    required String postId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final uri = _uri(ContentApiMetadata.updatePostSettingsPath(postId: postId));
+    final decoded = await _httpClient.patchJson(
+      uri,
+      headers: CloudRequestHeaders.forPage(
+        ContentRequestPageIds.updatePostSettings,
+      ),
+      body: payload,
+    );
+    return CloudResponseDecoder.asObject(
+      decoded,
+      context: ContentRequestPageIds.updatePostSettings,
+    );
+  }
+
+  @override
+  Future<Map<String, dynamic>> promotePostToWork({
+    required String postId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final uri = _uri(ContentApiMetadata.promotePostToWorkPath(postId: postId));
+    final decoded = await _httpClient.postJson(
+      uri,
+      headers: CloudRequestHeaders.forPage(
+        ContentRequestPageIds.promotePostToWork,
+      ),
+      body: payload,
+    );
+    return CloudResponseDecoder.asObject(
+      decoded,
+      context: ContentRequestPageIds.promotePostToWork,
     );
   }
 
@@ -1008,7 +1210,9 @@ class RemoteContentRepository implements ContentRepository {
     final uri = _uri(ContentApiMetadata.repostToCirclePath(postId: postId));
     final decoded = await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.repostToCircle),
+      headers: CloudRequestHeaders.forPage(
+        ContentRequestPageIds.repostToCircle,
+      ),
       body: {'circleId': circleId},
     );
     return CloudResponseDecoder.asObject(
@@ -1042,7 +1246,9 @@ class RemoteContentRepository implements ContentRepository {
     final uri = _uri(ContentApiMetadata.initMediaUploadPath);
     final decoded = await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.initMediaUpload),
+      headers: CloudRequestHeaders.forPage(
+        ContentRequestPageIds.initMediaUpload,
+      ),
       body: {'mediaType': mediaType},
     );
     return CloudResponseDecoder.asObject(
@@ -1180,11 +1386,18 @@ class RemoteContentRepository implements ContentRepository {
   @override
   Future<CursorPage<PostBaseDto>> listUserPosts({
     required String userId,
+    String? identity,
+    String? type,
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
     final query = <String, String>{'limit': '$limit'};
     if (cursor != null) query['cursor'] = cursor;
+    if (identity != null && identity.isNotEmpty) query['identity'] = identity;
+    final resolvedType = _normalizeFeedType(type);
+    if (resolvedType != null && resolvedType.isNotEmpty) {
+      query['type'] = resolvedType;
+    }
     final uri = _uri(
       ContentApiMetadata.listUserPostsPath(userId: userId),
       queryParameters: query,
@@ -1208,5 +1421,37 @@ class RemoteContentRepository implements ContentRepository {
 
   String? _mapCategoryToFeedType(String category) {
     return GeneratedPostRuntimeMetadata.feedCategoryToRequestType[category];
+  }
+
+  String? _mapCategoryToIdentity(String category) {
+    switch (category.trim()) {
+      case 'moment':
+      case 'recommended':
+      case 'following':
+        return 'moment';
+      case 'work':
+      case 'works':
+      case 'photo':
+      case 'images':
+      case 'video':
+      case 'article':
+        return 'work';
+      default:
+        return null;
+    }
+  }
+
+  String? _normalizeFeedType(String? type) {
+    final normalized = (type ?? '').trim().toLowerCase();
+    switch (normalized) {
+      case '':
+        return null;
+      case 'photo':
+        return 'image';
+      case 'note':
+        return 'article';
+      default:
+        return normalized;
+    }
   }
 }

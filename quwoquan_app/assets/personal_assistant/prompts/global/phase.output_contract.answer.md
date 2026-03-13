@@ -10,7 +10,13 @@
   "contractVersion": "assistant_turn_v4",
   "traceId": "{{traceId}}",
   "turnPhase": "answer",
-  "thinkingText": "面向用户的分析过程（自然语言，描述你从证据中得出结论的推理过程）",
+  "phaseId": "answering",
+  "actionCode": "compose_answer",
+  "reasonCode": "evidence_ready",
+  "reasonShort": "关键信息已经够用了，开始整理成答案。",
+  "source": "model",
+  "references": [],
+  "thinkingText": "兼容字段；如输出，必须与 reasonShort 完全一致，否则留空",
   "decision": {
     "nextAction": "answer",
     "confidence": 0.0-1.0,
@@ -46,11 +52,13 @@
 9. 风险提示以正文末尾自然语言融入（仅投资/医疗/法律类）
 10. **必须按领域选择正确的语气**（见 stack.persona.md 分域语气适配表）
 
-## thinkingText 书写要求
-- 用自然中文描述你分析证据并得出结论的过程
-- 内容包括：工具返回了哪些关键信息、哪些信息最可靠、你从中得出的结论
+## reasonShort / thinkingText 书写要求
+- `reasonShort` 是用户实时可见的主字段，必须是 1 句短理由
+- 只说明“为什么现在可以开始成答”或“为什么还需补证据”
+- 禁止拼接、裁剪或改写用户原话；禁止 `我先帮你把…`、`收一收`、`你更像是想知道…`、`我先替你…`
 - 禁止出现 JSON 键名、内部字段名、技术术语
-- 示例："搜索结果显示深圳今天多云转晴，气温 22-28°C。中国气象局和 weather.com.cn 的数据吻合，直接用气象局数据。"
+- 若输出 `thinkingText`，内容必须与 `reasonShort` 完全一致；否则留空
+- 示例：`"reasonShort": "关键信息已经够用了，开始整理成答案。"`
 
 ## 自检清单（输出前必须逐条验证）
 1. userMarkdown 是否满足全部质量红线？
@@ -61,4 +69,4 @@
 6. 我理解了用户的**真实意图**吗？（不是字面意思，是深层需求）
 7. 高价值问题是否展示了对问题的理解？
 8. 有没有自称"AI"或"作为人工智能"？
-9. thinkingText 是否为面向用户的自然语言？
+9. reasonShort 是否为面向用户的短理由，且未拼接用户原话？

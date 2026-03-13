@@ -3,6 +3,7 @@ import 'package:quwoquan_app/personal_assistant/contracts/aggregation_state.dart
 import 'package:quwoquan_app/personal_assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/preference_fact.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/subagent_plan.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/ui_process_timeline_entry.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/user_events.dart';
@@ -80,6 +81,47 @@ void main() {
   });
 
   group('Typed contract models', () {
+    test('RunArtifacts 支持主过程契约序列化', () {
+      final artifacts = RunArtifacts.fromJson(const <String, dynamic>{
+        'processJournal': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'eventId': 'stage_set::understanding',
+            'type': 'stage_set',
+            'stage': 'understanding',
+            'nodeId': 'stage.understanding',
+          },
+          <String, dynamic>{
+            'eventId': 'source_update::skill.search.result',
+            'type': 'source_update',
+            'stage': 'searching',
+            'nodeId': 'skill.search.result',
+            'message': '已核对 2 个来源',
+            'references': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'title': '中国气象局',
+                'url': 'https://weather.cma.cn/',
+              },
+            ],
+          },
+        ],
+        'slotState': <String, dynamic>{
+          'domainId': 'weather',
+          'slots': <String, dynamic>{'city': '深圳'},
+          'missingSlots': <String>[],
+        },
+        'answerDecision': <String, dynamic>{'nextAction': 'answer'},
+        'diagnostics': <String, dynamic>{'renderMode': 'fallback_text'},
+        'domainPolicyBundle': <String, dynamic>{'domainId': 'weather'},
+      });
+
+      expect(artifacts.processJournal.length, 2);
+      expect(artifacts.processJournal.last.type, ProcessJournalEventType.sourceUpdate);
+      expect(artifacts.slotState.domainId, equals('weather'));
+      expect(artifacts.answerDecision['nextAction'], equals('answer'));
+      expect(artifacts.domainPolicyBundle?.domainId, equals('weather'));
+      expect(artifacts.toJson()['processJournal'], isA<List<dynamic>>());
+    });
+
     test('SubagentPlan 支持完整策略字段解析', () {
       final plan = SubagentPlan.fromJson(const <String, dynamic>{
         'subagentId': 'travel_planner_1',

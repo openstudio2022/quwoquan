@@ -18,6 +18,7 @@ consumers:
 fields:
   - { name: postId,         type: ObjectId }
   - { name: contentType,    type: enum,   description: "固定为 video" }
+  - { name: contentIdentity, type: enum,  description: "内容身份层。视频作品固定为 work" }
   - { name: authorId,              type: string }
   - { name: authorNickname,        type: string, description: 作者昵称（反范式） }
   - { name: authorAvatarUrl,       type: string, description: 作者头像（反范式） }
@@ -42,6 +43,11 @@ client_projection:
   base_class: PostBaseDto
   output_path: cloud/runtime/generated/content/video_post_dto.g.dart
   computed_getters:
+    - name: displayFormat
+      dart_return_type: String
+      nullable: false
+      description: "展示格式。视频作品固定为 video。"
+      body: "return 'video';"
     - name: aspectRatio
       dart_return_type: "double?"
       nullable: true
@@ -63,6 +69,20 @@ client_projection:
       source: contentType
       aliases: [contentType, category]
       default: "'video'"
+
+    - name: identity
+      dart_type: String
+      nullable: false
+      source: contentIdentity
+      aliases: [contentIdentity, identity]
+      default: "'work'"
+
+    - name: assistantUsePolicy
+      dart_type: String
+      nullable: false
+      source: assistantUsePolicy
+      aliases: [assistantUsePolicy]
+      default: "'inherit'"
 
     - name: authorId
       dart_type: String

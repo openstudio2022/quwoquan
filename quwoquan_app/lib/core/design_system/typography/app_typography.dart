@@ -24,21 +24,36 @@ class AppTypography {
   static const double toolPanelItemLabel = base;
   static const double toolPanelCategoryLabel = base;
   static const double actionCount = lg;
+
   /// 一级 Tab 字号（发现/圈子/趣聊统一，与正文一致）
   static const double primaryTabLabel = lg;
+
   /// 一级 Tab 字重（选中/未选中统一，避免切换时布局抖动）
   static const FontWeight primaryTabLabelWeight = medium;
+
   /// 底部栏未选中字号（与一级 Tab 一致）
   static const double bottomNavLabelUnselected = primaryTabLabel;
+
   /// 底部栏选中字号（比未选中大一档）
   static const double bottomNavLabelSelected = xl;
+
   /// 底部栏字重（选中不加粗）
   static const FontWeight bottomNavLabelWeight = medium;
+
   /// 欢迎页主标题（hero）
   static const double welcomeHeroTitle = 48.0;
 
+  /// 内容分享海报标题/正文层级
+  static const double sharePosterEyebrow = 42.0;
+  static const double sharePosterSubtitle = 28.0;
+  static const double sharePosterHeadline = 58.0;
+  static const double sharePosterBody = 34.0;
+  static const double sharePosterDeeplink = 30.0;
+  static const double sharePosterMeta = 26.0;
+
   /// 正文行高倍数（TextStyle.height）
   static const double bodyLineHeight = 1.4;
+
   /// 宽松行高倍数（展开文本等）
   static const double lineHeightRelaxed = 1.5;
 

@@ -41,6 +41,16 @@ entities:
         ops_exposure: read
         recommend_feature: true
 
+      - name: contentIdentity
+        type: enum
+        enum_ref: ContentIdentity
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 内容身份层。moment=点滴，work=作品；历史数据允许为空，读路径按 contentType 推导
+
       - name: title
         type: string
         constraints: [NULLABLE]
@@ -132,6 +142,16 @@ entities:
         log_policy: allow
         api_exposure: read_write
         ops_exposure: read
+
+      - name: assistantUsePolicy
+        type: enum
+        enum_ref: AssistantUsePolicy
+        constraints: [NOT_NULL, DEFAULT_INHERIT]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 小趣内容消费策略。inherit=遵循全局授权，exclude=排除当前内容
 
       - name: circleId
         type: string

@@ -42,7 +42,37 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
   ProcessStage? _prevStage;
   int _prevFlowEventCount = 0;
 
-  bool get _useFlowEvents => widget.flowEvents.isNotEmpty;
+  bool get _useFlowEvents =>
+      widget.processState.contentBlocks.isEmpty &&
+      widget.processState.processLines.isEmpty &&
+      widget.flowEvents.isNotEmpty;
+
+  List<ProcessContentBlock> get _effectiveBlocks {
+    if (widget.processState.contentBlocks.isNotEmpty) {
+      return widget.processState.contentBlocks;
+    }
+    if (widget.streamingThinkingText.trim().isNotEmpty) {
+      return <ProcessContentBlock>[
+        ProcessContentBlock(
+          type: ProcessContentBlockType.text,
+          text: widget.streamingThinkingText.trim(),
+        ),
+      ];
+    }
+    if (widget.flowEvents.isNotEmpty) {
+      return _flowEventsToBlocks(widget.flowEvents);
+    }
+    return const <ProcessContentBlock>[];
+  }
+
+  ProcessStage get _effectiveStage {
+    if (!_useFlowEvents) return widget.processState.stage;
+    final activeEvent = widget.flowEvents.lastWhere(
+      (e) => e.phaseStatus == ExplainablePhaseStatus.active,
+      orElse: () => widget.flowEvents.last,
+    );
+    return _phaseIdToProcessStage(activeEvent.phaseId);
+  }
 
   @override
   void initState() {
@@ -76,13 +106,10 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
   @override
   void dispose() => super.dispose();
 
-  bool get _hasContentBlocks => widget.processState.contentBlocks.isNotEmpty;
+  bool get _hasContentBlocks => _effectiveBlocks.isNotEmpty;
 
   bool get _isInitialWait {
-    if (_useFlowEvents) {
-      return widget.flowEvents.isEmpty && widget.streamingThinkingText.isEmpty;
-    }
-    return widget.processState.stage == ProcessStage.understanding &&
+    return _effectiveStage == ProcessStage.understanding &&
         !_hasContentBlocks &&
         widget.processState.processLines.isEmpty;
   }
@@ -170,7 +197,9 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
               ),
             if (widget.isRunning && _isInitialWait)
               Padding(
-                padding: EdgeInsets.only(right: AppSpacing.xs + AppSpacing.xs / 2),
+                padding: EdgeInsets.only(
+                  right: AppSpacing.xs + AppSpacing.xs / 2,
+                ),
                 child: _BreathingCapsule(color: monochrome),
               ),
             Text(
@@ -205,66 +234,47 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
     if (_useFlowEvents) {
       return _flowEventsHeaderLabel();
     }
-    final stage = widget.processState.stage;
-    if (!widget.isRunning) {
-      final label = widget.processState.stageLabel;
-      if (label.length <= 12) return label;
-      return '${label.substring(0, AppSpacing.ten.toInt())}\u2026';
+    if (!widget.isRunning && _effectiveStage == ProcessStage.completed) {
+      return UITextConstants.assistantPhaseCompleted;
     }
-    switch (stage) {
-      case ProcessStage.understanding:
-        return UITextConstants.assistantProcessThinking;
-      case ProcessStage.searching:
-        return UITextConstants.assistantProcessSearching;
-      case ProcessStage.analyzing:
-        return UITextConstants.assistantProcessOrganizing;
-      case ProcessStage.answering:
-        return UITextConstants.assistantProcessAnswering;
-      case ProcessStage.completed:
-        return UITextConstants.assistantProcessCompleted;
-    }
+    return _stageToHeaderLabel(_effectiveStage);
   }
 
   String _flowEventsHeaderLabel() {
-    final events = widget.flowEvents;
-    if (events.isEmpty && widget.streamingThinkingText.isEmpty) {
-      return UITextConstants.assistantProcessThinking;
-    }
-    if (!widget.isRunning) {
-      final elapsed = widget.processState.elapsedMs;
-      if (elapsed > 0) {
-        final seconds = (elapsed / 1000).toStringAsFixed(1);
-        return '已完成深度思考（用时$seconds秒）';
-      }
-      return UITextConstants.assistantProcessCompleted;
-    }
-    if (events.isEmpty) {
-      return UITextConstants.assistantProcessThinking;
-    }
-    final activeEvent = events.lastWhere(
-      (e) => e.phaseStatus == ExplainablePhaseStatus.active,
-      orElse: () => events.last,
-    );
-    return _phaseIdToLabel(activeEvent.phaseId);
+    return _stageToHeaderLabel(_effectiveStage);
   }
 
-  static String _phaseIdToLabel(String phaseId) {
+  static ProcessStage _phaseIdToProcessStage(String phaseId) {
     switch (phaseId) {
       case PhaseId.understand:
       case PhaseId.classify:
-        return UITextConstants.assistantProcessThinking;
       case PhaseId.plan:
-        return UITextConstants.assistantProcessThinking;
+        return ProcessStage.understanding;
       case PhaseId.execute:
       case PhaseId.subExecute:
-        return UITextConstants.assistantProcessSearching;
+        return ProcessStage.searching;
       case PhaseId.aggregate:
       case PhaseId.merge:
-        return UITextConstants.assistantProcessOrganizing;
+        return ProcessStage.analyzing;
       case PhaseId.answer:
-        return UITextConstants.assistantProcessAnswering;
+        return ProcessStage.answering;
       default:
-        return UITextConstants.assistantProcessThinking;
+        return ProcessStage.understanding;
+    }
+  }
+
+  static String _stageToHeaderLabel(ProcessStage stage) {
+    switch (stage) {
+      case ProcessStage.understanding:
+        return UITextConstants.assistantPhaseUnderstanding;
+      case ProcessStage.searching:
+        return UITextConstants.assistantPhaseSearching;
+      case ProcessStage.analyzing:
+        return UITextConstants.assistantPhaseAnalyzing;
+      case ProcessStage.answering:
+        return UITextConstants.assistantPhaseAnswering;
+      case ProcessStage.completed:
+        return UITextConstants.assistantPhaseCompleted;
     }
   }
 
@@ -273,9 +283,70 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
     required Color secondaryTextColor,
     required Color accentColor,
   }) {
-    final text = widget.streamingThinkingText;
-    if (text.isEmpty) return const SizedBox.shrink();
+    final flowBlocks = _flowEventsToBlocks(widget.flowEvents);
+    final blocks = flowBlocks.isNotEmpty ? flowBlocks : _effectiveBlocks;
+    if (blocks.isEmpty) return const SizedBox.shrink();
+    return _buildNarrativeBody(
+      blocks: blocks,
+      textColor: textColor,
+      secondaryTextColor: secondaryTextColor,
+      accentColor: accentColor,
+      showUsageStats: false,
+    );
+  }
 
+  List<ProcessContentBlock> _flowEventsToBlocks(
+    List<ExplainableFlowEvent> events,
+  ) {
+    final blocks = <ProcessContentBlock>[];
+    for (final event in events) {
+      final detail = event.detail.trim();
+      final refs = event.references
+          .map(
+            (ref) => ProcessReference(
+              title: ref.title,
+              url: ref.url,
+              source: ref.source,
+            ),
+          )
+          .where((ref) => ref.title.isNotEmpty && ref.url.isNotEmpty)
+          .toList(growable: false);
+      if (detail.isNotEmpty) {
+        blocks.add(
+          ProcessContentBlock(
+            type: ProcessContentBlockType.text,
+            text: detail,
+            references: const <ProcessReference>[],
+          ),
+        );
+      }
+      if (refs.isNotEmpty) {
+        final type =
+            _phaseIdToProcessStage(event.phaseId) == ProcessStage.searching
+            ? ProcessContentBlockType.searchSummary
+            : ProcessContentBlockType.analysisSummary;
+        blocks.add(
+          ProcessContentBlock(
+            type: type,
+            text: event.headline.trim().isNotEmpty
+                ? event.headline.trim()
+                : '已核对参考资料',
+            references: refs,
+          ),
+        );
+      }
+    }
+    return blocks;
+  }
+
+  Widget _buildNarrativeBody({
+    required List<ProcessContentBlock> blocks,
+    required Color textColor,
+    required Color secondaryTextColor,
+    required Color accentColor,
+    required bool showUsageStats,
+  }) {
+    if (blocks.isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: EdgeInsets.only(
         left: AppSpacing.sm,
@@ -292,18 +363,14 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
             color: secondaryTextColor.withValues(alpha: 0.15),
           ),
           SizedBox(height: AppSpacing.xs),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 200),
-            alignment: Alignment.topLeft,
-            child: Text(
-              text,
-              style: TextStyle(
-                fontSize: AppTypography.sm,
-                color: secondaryTextColor,
-                height: AppTypography.lineHeightRelaxed,
-              ),
+          for (var i = 0; i < blocks.length; i++)
+            _buildContentBlock(
+              index: i,
+              block: blocks[i],
+              textColor: textColor,
+              secondaryTextColor: secondaryTextColor,
+              accentColor: accentColor,
             ),
-          ),
           if (widget.isRunning)
             Padding(
               padding: EdgeInsets.only(top: AppSpacing.xs / 2),
@@ -312,6 +379,8 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
                 size: AppSpacing.xs,
               ),
             ),
+          if (showUsageStats && !widget.processState.isStreaming)
+            _buildUsageStatsLine(secondaryTextColor: secondaryTextColor),
         ],
       ),
     );
@@ -337,49 +406,12 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
     required Color secondaryTextColor,
     required Color accentColor,
   }) {
-    final blocks = widget.processState.contentBlocks;
-    if (blocks.isEmpty) return const SizedBox.shrink();
-    final detailLabel = widget.processState.stageLabel;
-    return Padding(
-      padding: EdgeInsets.only(
-        left: AppSpacing.sm,
-        right: AppSpacing.sm,
-        bottom: AppSpacing.intraGroupSm,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: double.infinity,
-            height: AppSpacing.one / 2,
-            color: secondaryTextColor.withValues(alpha: 0.15),
-          ),
-          SizedBox(height: AppSpacing.xs),
-          if (detailLabel.isNotEmpty)
-            Padding(
-              padding: EdgeInsets.only(bottom: AppSpacing.xs),
-              child: Text(
-                detailLabel,
-                style: TextStyle(
-                  fontSize: AppTypography.base,
-                  color: secondaryTextColor,
-                  height: AppTypography.lineHeightRelaxed,
-                ),
-              ),
-            ),
-          for (var i = 0; i < blocks.length; i++)
-            _buildContentBlock(
-              index: i,
-              block: blocks[i],
-              textColor: textColor,
-              secondaryTextColor: secondaryTextColor,
-              accentColor: accentColor,
-            ),
-          if (!widget.processState.isStreaming)
-            _buildUsageStatsLine(secondaryTextColor: secondaryTextColor),
-        ],
-      ),
+    return _buildNarrativeBody(
+      blocks: _effectiveBlocks,
+      textColor: textColor,
+      secondaryTextColor: secondaryTextColor,
+      accentColor: accentColor,
+      showUsageStats: true,
     );
   }
 
@@ -482,7 +514,9 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
           ),
           if (isBlockExpanded && references.isNotEmpty)
             Padding(
-              padding: EdgeInsets.only(left: AppTypography.smPlus + AppSpacing.xs),
+              padding: EdgeInsets.only(
+                left: AppTypography.smPlus + AppSpacing.xs,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
@@ -594,41 +628,21 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
     final elapsed = widget.processState.elapsedMs;
     final runModelCalls =
         ((stats['runModelCallCount'] as num?)?.toInt() ??
-            (stats['modelCallCount'] as num?)?.toInt() ??
-            0);
+        (stats['modelCallCount'] as num?)?.toInt() ??
+        0);
     final runTotalTokens =
         ((stats['runTotalTokens'] as num?)?.toInt() ??
-            (stats['totalTokens'] as num?)?.toInt() ??
-            0);
-    final modelCalls =
-        ((stats['cumulativeModelCallCount'] as num?)?.toInt() ?? runModelCalls);
-    final totalTokens =
-        ((stats['cumulativeTotalTokens'] as num?)?.toInt() ?? runTotalTokens);
-    if (modelCalls == 0 && totalTokens == 0 && elapsed == 0) {
+        (stats['totalTokens'] as num?)?.toInt() ??
+        0);
+    if (runModelCalls == 0 && runTotalTokens == 0 && elapsed == 0) {
       return const SizedBox.shrink();
     }
     final parts = <String>[];
-    if (modelCalls > 0) {
-      parts.add(
-        UITextConstants.assistantProcessModelCallCountTemplate.replaceFirst(
-          '%s',
-          '$modelCalls',
-        ),
-      );
-      if (runModelCalls > 0 && runModelCalls != modelCalls) {
-        parts.add('本轮 $runModelCalls');
-      }
+    if (runModelCalls > 0) {
+      parts.add('本轮模型调用 $runModelCalls 次');
     }
-    if (totalTokens > 0) {
-      parts.add(
-        UITextConstants.assistantProcessTokensTemplate.replaceFirst(
-          '%s',
-          '$totalTokens',
-        ),
-      );
-      if (runTotalTokens > 0 && runTotalTokens != totalTokens) {
-        parts.add('本轮Token $runTotalTokens');
-      }
+    if (runTotalTokens > 0) {
+      parts.add('本轮 Token $runTotalTokens');
     }
     if (elapsed > 0) {
       final seconds = (elapsed / 1000).toStringAsFixed(1);
@@ -845,10 +859,7 @@ class _FlowEventFadeInState extends State<_FlowEventFadeIn>
   Widget build(BuildContext context) {
     return FadeTransition(
       opacity: _opacity,
-      child: SlideTransition(
-        position: _slide,
-        child: widget.child,
-      ),
+      child: SlideTransition(position: _slide, child: widget.child),
     );
   }
 }

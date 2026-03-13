@@ -50,6 +50,9 @@ l2:
       - feature: video-display-journey
       - feature: article-display-journey
       - feature: moment-display-journey
+  - feature: content-type-framework
+    l3:
+      - feature: creation-mode-and-surface-ia-unification
   - feature: media-processing-helper-read
     l3:
       - feature: media-status-pipeline

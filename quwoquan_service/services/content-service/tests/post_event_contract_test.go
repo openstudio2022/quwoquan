@@ -81,6 +81,110 @@ func TestCommentDeletedEvent(t *testing.T) {
 	}
 }
 
+func TestPostSettingsUpdatedEvent(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+	created := createPostWithAuthor(t, "settings_event_author", `{
+		"contentType":"article",
+		"title":"Event settings",
+		"body":"正文"
+	}`)
+	postID, _ := created["_id"].(string)
+
+	eventSpy.Reset()
+
+	req := httptest.NewRequest(
+		http.MethodPatch,
+		"/v1/content/posts/"+postID+"/settings",
+		strings.NewReader(`{"visibility":"public","assistantUsePolicy":"exclude"}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Client-User-Id", "settings_event_author")
+	rec := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update settings: %d", rec.Code)
+	}
+
+	events := eventSpy.EventsOfType("PostSettingsUpdated")
+	if len(events) != 1 {
+		t.Fatalf("expected 1 PostSettingsUpdated event, got %d", len(events))
+	}
+	ev := events[0]
+	if ev.Payload["assistantUsePolicy"] != "exclude" {
+		t.Errorf("payload.assistantUsePolicy: %v", ev.Payload["assistantUsePolicy"])
+	}
+	if ev.Payload["visibility"] != "public" {
+		t.Errorf("payload.visibility: %v", ev.Payload["visibility"])
+	}
+}
+
+func TestPostPromotedToWorkEvent(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+	created := createPostWithAuthor(t, "promote_event_author", `{
+		"contentType":"micro",
+		"body":"从点滴升级"
+	}`)
+	postID, _ := created["_id"].(string)
+
+	eventSpy.Reset()
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/v1/content/posts/"+postID+":promoteToWork",
+		strings.NewReader(`{"contentType":"image","title":"升级后的作品"}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Client-User-Id", "promote_event_author")
+	rec := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("promote post: %d", rec.Code)
+	}
+
+	events := eventSpy.EventsOfType("PostPromotedToWork")
+	if len(events) != 1 {
+		t.Fatalf("expected 1 PostPromotedToWork event, got %d", len(events))
+	}
+	ev := events[0]
+	if ev.Payload["contentIdentity"] != "work" {
+		t.Errorf("payload.contentIdentity: %v", ev.Payload["contentIdentity"])
+	}
+	if ev.Payload["contentType"] != "image" {
+		t.Errorf("payload.contentType: %v", ev.Payload["contentType"])
+	}
+}
+
+func TestPostDeletedEvent(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+	created := createPostWithAuthor(t, "delete_event_author", `{
+		"contentType":"image",
+		"mediaUrls":["https://example.com/img.jpg"]
+	}`)
+	postID, _ := created["_id"].(string)
+
+	eventSpy.Reset()
+
+	req := httptest.NewRequest(http.MethodDelete, "/v1/content/posts/"+postID, nil)
+	req.Header.Set("X-Client-User-Id", "delete_event_author")
+	rec := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("delete post: %d", rec.Code)
+	}
+
+	events := eventSpy.EventsOfType("PostDeleted")
+	if len(events) != 1 {
+		t.Fatalf("expected 1 PostDeleted event, got %d", len(events))
+	}
+	ev := events[0]
+	if ev.AggregateID != postID {
+		t.Errorf("aggregateID: want %s, got %s", postID, ev.AggregateID)
+	}
+	if ev.Payload["deletedAt"] == "" {
+		t.Error("payload.deletedAt must not be empty")
+	}
+}
+
 func TestNoSpuriousEventsOnRead(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 

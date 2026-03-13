@@ -12,6 +12,7 @@ class ProfileState {
   const ProfileState({
     required this.userId,
     this.activeSubTab = CreationSubTab.all,
+    this.activeWorkFormat = CreationWorkFormat.all,
     this.activeVisibility = CreationVisibility.all,
     this.interactionSubTab = InteractionSubTab.comments,
     this.interactionDirection = InteractionDirection.received,
@@ -28,6 +29,7 @@ class ProfileState {
 
   final String userId;
   final CreationSubTab activeSubTab;
+  final CreationWorkFormat activeWorkFormat;
   final CreationVisibility activeVisibility;
   final InteractionSubTab interactionSubTab;
   final InteractionDirection interactionDirection;
@@ -45,6 +47,7 @@ class ProfileState {
 
   ProfileState copyWith({
     CreationSubTab? activeSubTab,
+    CreationWorkFormat? activeWorkFormat,
     CreationVisibility? activeVisibility,
     InteractionSubTab? interactionSubTab,
     InteractionDirection? interactionDirection,
@@ -62,6 +65,7 @@ class ProfileState {
     return ProfileState(
       userId: userId,
       activeSubTab: activeSubTab ?? this.activeSubTab,
+      activeWorkFormat: activeWorkFormat ?? this.activeWorkFormat,
       activeVisibility: activeVisibility ?? this.activeVisibility,
       interactionSubTab: interactionSubTab ?? this.interactionSubTab,
       interactionDirection: interactionDirection ?? this.interactionDirection,
@@ -122,9 +126,8 @@ class ProfileNotifier extends ChangeNotifier {
       final cap = await capRepo.getCapability(_userId);
       _state = _state.copyWith(
         capability: cap,
-        isFollowing: cap.isFollowingOnly ||
-            cap.isSameInterest ||
-            cap.isCloseFriend,
+        isFollowing:
+            cap.isFollowingOnly || cap.isSameInterest || cap.isCloseFriend,
       );
       notifyListeners();
     } catch (_) {
@@ -133,7 +136,17 @@ class ProfileNotifier extends ChangeNotifier {
   }
 
   void setSubTab(CreationSubTab tab) {
-    _state = _state.copyWith(activeSubTab: tab);
+    _state = _state.copyWith(
+      activeSubTab: tab,
+      activeWorkFormat: tab == CreationSubTab.work
+          ? _state.activeWorkFormat
+          : CreationWorkFormat.all,
+    );
+    notifyListeners();
+  }
+
+  void setWorkFormat(CreationWorkFormat format) {
+    _state = _state.copyWith(activeWorkFormat: format);
     notifyListeners();
   }
 
@@ -177,5 +190,5 @@ class ProfileNotifier extends ChangeNotifier {
 
 final profileNotifierProvider =
     ChangeNotifierProvider.family<ProfileNotifier, String>(
-  (ref, userId) => ProfileNotifier(ref, userId),
-);
+      (ref, userId) => ProfileNotifier(ref, userId),
+    );

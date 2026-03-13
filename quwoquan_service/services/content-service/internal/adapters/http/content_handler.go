@@ -82,6 +82,7 @@ func (h *ContentHandler) handleGetFeed(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.feedService.ListFeed(r.Context(), application.ListFeedRequest{
 		UserID:          resolveUserID(r),
 		SessionID:       resolveSessionID(r),
+		Identity:        params.Identity,
 		Type:            params.Type,
 		Sort:            params.Sort,
 		SubCategory:     params.SubCategory,
@@ -107,13 +108,27 @@ func (h *ContentHandler) handleGetPost(w http.ResponseWriter, r *http.Request) {
 		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid post id", "missing postId path segment"))
 		return
 	}
-	post, ok, deleted := h.postService.GetPostOrTombstone(r.Context(), postID)
+	post, ok, deleted, forbidden := h.postService.GetPostForViewer(
+		r.Context(),
+		postID,
+		resolveUserID(r),
+		resolveViewerCircleIDs(r),
+	)
 	if !ok {
 		if deleted {
 			writeHTTPError(w, rterr.NewAppError(
 				rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "conflict"),
 				"内容已删除",
 				"post deleted",
+				false,
+			))
+			return
+		}
+		if forbidden {
+			writeHTTPError(w, rterr.NewAppError(
+				rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "forbidden"),
+				"无权查看该内容",
+				"post visibility blocked",
 				false,
 			))
 			return
@@ -265,7 +280,54 @@ func (h *ContentHandler) handleResolveReport(w http.ResponseWriter, r *http.Requ
 
 func (h *ContentHandler) handlePublishPost(w http.ResponseWriter, r *http.Request) {
 	postID := postIDFromPath(r.URL.Path)
-	post, err := h.postService.PublishPost(r.Context(), postID)
+	payload, err := BindGeneratedWritableBodyFromRequest(r, "PublishPost")
+	if err != nil {
+		writeHTTPError(w, rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"请求体字段不合法",
+			err.Error(),
+		))
+		return
+	}
+	post, err := h.postService.PublishPost(r.Context(), postID, payload)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, post)
+}
+
+func (h *ContentHandler) handleUpdatePostSettings(w http.ResponseWriter, r *http.Request) {
+	payload, err := BindGeneratedWritableBodyFromRequest(r, "UpdatePostSettings")
+	if err != nil {
+		writeHTTPError(w, rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"请求体字段不合法",
+			err.Error(),
+		))
+		return
+	}
+	postID := postIDFromPath(r.URL.Path)
+	post, err := h.postService.UpdatePostSettings(r.Context(), postID, resolveUserID(r), payload)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, post)
+}
+
+func (h *ContentHandler) handlePromotePostToWork(w http.ResponseWriter, r *http.Request) {
+	payload, err := BindGeneratedWritableBodyFromRequest(r, "PromotePostToWork")
+	if err != nil {
+		writeHTTPError(w, rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"请求体字段不合法",
+			err.Error(),
+		))
+		return
+	}
+	postID := postIDFromPath(r.URL.Path)
+	post, err := h.postService.PromotePostToWork(r.Context(), postID, resolveUserID(r), payload)
 	if err != nil {
 		writeHTTPError(w, err)
 		return
@@ -730,18 +792,35 @@ func (h *ContentHandler) handleGetHelperRead(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *ContentHandler) handleListUserPosts(w http.ResponseWriter, r *http.Request) {
-	userID := strings.TrimSpace(r.URL.Query().Get("userId"))
-	if userID == "" {
-		userID = resolveUserID(r)
+	viewerID := resolveViewerUserID(r)
+	userID := viewerID
+	if raw := strings.TrimPrefix(r.URL.Path, "/v1/users/"); raw != r.URL.Path {
+		if idx := strings.Index(raw, "/posts"); idx > 0 {
+			userID = strings.TrimSpace(raw[:idx])
+		}
+	}
+	if queryUserID := strings.TrimSpace(r.URL.Query().Get("userId")); queryUserID != "" {
+		userID = queryUserID
 	}
 	cursor := strings.TrimSpace(r.URL.Query().Get("cursor"))
+	identity := strings.TrimSpace(r.URL.Query().Get("identity"))
+	postType := strings.TrimSpace(r.URL.Query().Get("type"))
 	limit := 20
 	if raw := r.URL.Query().Get("limit"); raw != "" {
 		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
 			limit = n
 		}
 	}
-	posts, nextCursor, err := h.postService.ListUserPosts(r.Context(), userID, cursor, limit)
+	posts, nextCursor, err := h.postService.ListUserPosts(
+		r.Context(),
+		userID,
+		viewerID,
+		resolveViewerCircleIDs(r),
+		identity,
+		postType,
+		cursor,
+		limit,
+	)
 	if err != nil {
 		writeHTTPError(w, err)
 		return
@@ -795,6 +874,12 @@ func (h *ContentHandler) handleNotImplemented(w http.ResponseWriter, r *http.Req
 		return
 	case "PublishPost":
 		h.handlePublishPost(w, r)
+		return
+	case "UpdatePostSettings":
+		h.handleUpdatePostSettings(w, r)
+		return
+	case "PromotePostToWork":
+		h.handlePromotePostToWork(w, r)
 		return
 	case "DeletePost":
 		h.handleDeletePost(w, r)
@@ -897,6 +982,20 @@ func resolveSessionID(r *http.Request) string {
 // resolveUserID extracts userId from query param → X-Client-User-Id header.
 func resolveUserID(r *http.Request) string {
 	if v := strings.TrimSpace(r.URL.Query().Get("userId")); v != "" {
+		return v
+	}
+	return strings.TrimSpace(r.Header.Get("X-Client-User-Id"))
+}
+
+func resolveViewerCircleIDs(r *http.Request) []string {
+	if v := strings.TrimSpace(r.URL.Query().Get("viewerCircleIds")); v != "" {
+		return splitCSV(v)
+	}
+	return splitCSV(r.Header.Get("X-Client-Circle-Ids"))
+}
+
+func resolveViewerUserID(r *http.Request) string {
+	if v := strings.TrimSpace(r.URL.Query().Get("viewerId")); v != "" {
 		return v
 	}
 	return strings.TrimSpace(r.Header.Get("X-Client-User-Id"))

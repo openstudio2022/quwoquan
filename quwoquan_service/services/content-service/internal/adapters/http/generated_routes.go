@@ -69,6 +69,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleNotImplemented(w, r, operation)
 	case "ListUserPosts":
 		h.handleNotImplemented(w, r, operation)
+	case "PromotePostToWork":
+		h.handleNotImplemented(w, r, operation)
 	case "PublishPost":
 		h.handleNotImplemented(w, r, operation)
 	case "QuoteToCircle":
@@ -90,6 +92,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	case "UpdatePost":
 		h.handleUpdatePost(w, r)
 	case "UpdatePostCircles":
+		h.handleNotImplemented(w, r, operation)
+	case "UpdatePostSettings":
 		h.handleNotImplemented(w, r, operation)
 	default:
 		h.handleNotImplemented(w, r, operation)
@@ -127,6 +131,8 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/quote", operation: "QuoteToCircle"},
 	{method: "GET", pathTemplate: "/v1/content/posts/{postId}/reactions", operation: "GetReactionState"},
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/repost", operation: "RepostToCircle"},
+	{method: "PATCH", pathTemplate: "/v1/content/posts/{postId}/settings", operation: "UpdatePostSettings"},
+	{method: "POST", pathTemplate: "/v1/content/posts/{postId}:promoteToWork", operation: "PromotePostToWork"},
 	{method: "POST", pathTemplate: "/v1/content/recommend", operation: "GetRecommendation"},
 	{method: "GET", pathTemplate: "/v1/content/users/me/comments", operation: "ListCommentsByAuthor"},
 	{method: "GET", pathTemplate: "/v1/content/users/me/received-comments", operation: "ListCommentsForPostAuthor"},
@@ -184,6 +190,7 @@ func generatedSplitPath(raw string) []string {
 }
 
 type GeneratedGetFeedParams struct {
+	Identity    string
 	Type        string
 	Sort        string
 	Cursor      string
@@ -194,6 +201,7 @@ type GeneratedGetFeedParams struct {
 func BindGeneratedGetFeedParams(r *http.Request, defaultLimit int) GeneratedGetFeedParams {
 	out := GeneratedGetFeedParams{Limit: defaultLimit}
 	q := r.URL.Query()
+	out.Identity = strings.TrimSpace(q.Get("identity"))
 	out.Type = strings.TrimSpace(q.Get("type"))
 	out.Sort = strings.TrimSpace(q.Get("sort"))
 	out.Cursor = strings.TrimSpace(q.Get("cursor"))
@@ -218,6 +226,7 @@ var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
 	},
 	"CreatePost": {
 		"contentType":         {},
+		"contentIdentity":     {},
 		"title":               {},
 		"body":                {},
 		"summary":             {},
@@ -230,10 +239,49 @@ var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
 		"locationName":        {},
 		"visibility":          {},
 		"circleIds":           {},
+		"assistantUsePolicy":  {},
 		"sourcePostId":        {},
 		"sourceType":          {},
 		"deviceInfo":          {},
 		"publishLocation":     {},
+	},
+	"PromotePostToWork": {
+		"contentType":        {},
+		"title":              {},
+		"summary":            {},
+		"tags":               {},
+		"coverUrl":           {},
+		"visibility":         {},
+		"circleIds":          {},
+		"assistantUsePolicy": {},
+	},
+	"PublishPost": {
+		"contentIdentity":    {},
+		"visibility":         {},
+		"circleIds":          {},
+		"assistantUsePolicy": {},
+	},
+	"UpdatePost": {
+		"contentType":         {},
+		"contentIdentity":     {},
+		"title":               {},
+		"body":                {},
+		"summary":             {},
+		"tags":                {},
+		"mediaUrls":           {},
+		"coverUrl":            {},
+		"videoUrl":            {},
+		"illustrationAssetId": {},
+		"location":            {},
+		"locationName":        {},
+		"visibility":          {},
+		"circleIds":           {},
+		"assistantUsePolicy":  {},
+	},
+	"UpdatePostSettings": {
+		"visibility":         {},
+		"circleIds":          {},
+		"assistantUsePolicy": {},
 	},
 }
 

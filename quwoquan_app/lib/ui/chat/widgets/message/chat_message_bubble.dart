@@ -9,6 +9,8 @@ import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/personal_assistant/app/capability_gateway.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/explainable_flow_event.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/personal_assistant/engine/process_journal_bus.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/assistant_answer_toolbar.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/assistant_process_drawer.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/regenerate_options_popup.dart';
@@ -53,10 +55,10 @@ class ChatMessageBubble extends StatelessWidget {
     this.renderSelfTextWithoutBubble = false,
     this.runningStatusLabel,
     this.processState,
-    this.flowEvents = const <ExplainableFlowEvent>[],
     this.answerGateOpen = true,
     this.isAssistantRunning = false,
     this.streamingThinkingText = '',
+    this.flowEvents = const <ExplainableFlowEvent>[],
     this.onRegenerateOptionSelected,
     this.receiptEnabled = false,
     this.memberCount = 2,
@@ -88,9 +90,6 @@ class ChatMessageBubble extends StatelessWidget {
   /// Unified process state driving the single-drawer UI.
   final AssistantProcessState? processState;
 
-  /// Explainable flow events for the new unified process drawer.
-  final List<ExplainableFlowEvent> flowEvents;
-
   /// Whether the answer gate is open (aggregate/merge phase completed).
   /// When false and assistant is running, the answer area is suppressed.
   final bool answerGateOpen;
@@ -100,6 +99,9 @@ class ChatMessageBubble extends StatelessWidget {
 
   /// Accumulated model thinking text for the drawer body.
   final String streamingThinkingText;
+
+  /// Flow events for the new explainable process drawer (replaces legacy processState when non-empty).
+  final List<ExplainableFlowEvent> flowEvents;
 
   /// Callback from the regenerate options popup.
   final void Function(RegenerateOption option)? onRegenerateOptionSelected;
@@ -590,7 +592,8 @@ class ChatMessageBubble extends StatelessWidget {
         horizontal: AppSpacing.xs,
         vertical: AppSpacing.xs / 2,
       ),
-      tableBody: textStyle.copyWith(fontSize: AppTypography.sm),
+      tableHead: textStyle.copyWith(fontWeight: FontWeight.w600),
+      tableBody: textStyle,
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -641,6 +644,7 @@ class ChatMessageBubble extends StatelessWidget {
           data: markdownText,
           selectable: true,
           styleSheet: styleSheet,
+          onTapLink: _handleMarkdownLinkTap,
         );
       }
 
@@ -655,6 +659,7 @@ class ChatMessageBubble extends StatelessWidget {
                 data: before,
                 selectable: true,
                 styleSheet: styleSheet,
+                onTapLink: _handleMarkdownLinkTap,
               ),
             );
           }
@@ -667,6 +672,7 @@ class ChatMessageBubble extends StatelessWidget {
               data: tableText,
               selectable: true,
               styleSheet: styleSheet,
+              onTapLink: _handleMarkdownLinkTap,
             ),
           ),
         );
@@ -680,6 +686,7 @@ class ChatMessageBubble extends StatelessWidget {
               data: after,
               selectable: true,
               styleSheet: styleSheet,
+              onTapLink: _handleMarkdownLinkTap,
             ),
           );
         }
@@ -693,13 +700,25 @@ class ChatMessageBubble extends StatelessWidget {
       return SelectableText(markdownText, style: textStyle);
     }
   }
+
+  void _handleMarkdownLinkTap(String text, String? href, String title) {
+    final url = (href ?? '').trim();
+    if (url.isEmpty) return;
+    onReferenceTap?.call(<String, dynamic>{
+      'title': text.trim().isNotEmpty ? text.trim() : title,
+      'url': url,
+      'source': title,
+    });
+  }
 }
 
 bool _hasPersistedProcessBlocks(Map<String, dynamic> message) {
   final rawBlocks = (message['uiProcessContentBlocks'] as List?) ?? const [];
   final rawTimeline = (message['uiProcessTimelineV2'] as List?) ?? const [];
+  final rawJournal = (message['processJournalV1'] as List?) ?? const [];
   final thinkingText = (message['processThinkingText'] as String?) ?? '';
-  return rawBlocks.isNotEmpty ||
+  return rawJournal.isNotEmpty ||
+      rawBlocks.isNotEmpty ||
       rawTimeline.isNotEmpty ||
       thinkingText.isNotEmpty;
 }
@@ -707,6 +726,20 @@ bool _hasPersistedProcessBlocks(Map<String, dynamic> message) {
 AssistantProcessState _rebuildProcessStateFromMessage(
   Map<String, dynamic> message,
 ) {
+  final persistedJournal = _processJournalFromMessage(message);
+  if (persistedJournal.isNotEmpty) {
+    final usageStats =
+        (message['uiUsageStatsV1'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final contentBlocks = _processBlocksFromJournalSnapshot(persistedJournal);
+    return AssistantProcessState(
+      stage: ProcessStage.completed,
+      stageLabel: _stageLabelFromJournalSnapshot(persistedJournal),
+      isStreaming: false,
+      contentBlocks: contentBlocks,
+      usageStats: usageStats,
+    );
+  }
   final rawBlocks = (() {
     final persisted =
         (message['uiProcessContentBlocks'] as List?)?.whereType<Map>().toList(
@@ -774,8 +807,8 @@ AssistantProcessState _rebuildProcessStateFromMessage(
       ? (((timeline.last as Map)['summary'] as String?)?.trim().isNotEmpty ??
                 false)
             ? ((timeline.last as Map)['summary'] as String).trim()
-            : '已完成'
-      : '已完成';
+            : UITextConstants.assistantPhaseCompleted
+      : UITextConstants.assistantPhaseCompleted;
   return AssistantProcessState(
     stage: ProcessStage.completed,
     stageLabel: stageLabel,
@@ -783,6 +816,98 @@ AssistantProcessState _rebuildProcessStateFromMessage(
     contentBlocks: contentBlocks,
     usageStats: usageStats,
   );
+}
+
+List<ProcessJournalEvent> _processJournalFromMessage(Map<String, dynamic> message) {
+  final raw = (message['processJournalV1'] as List?)?.whereType<Map>().toList(
+        growable: false,
+      ) ??
+      (((message['runArtifactsV1'] as Map?)?['processJournal'] as List?)
+              ?.whereType<Map>()
+              .toList(growable: false) ??
+          const <Map>[]);
+  final normalized = <ProcessJournalEvent>[];
+  final indexById = <String, int>{};
+  for (final item in raw) {
+    final event = ProcessJournalEvent.fromJson(item.cast<String, dynamic>());
+    if (event.eventId.isEmpty) continue;
+    final existing = indexById[event.eventId];
+    if (existing == null) {
+      indexById[event.eventId] = normalized.length;
+      normalized.add(event);
+    } else if (_isLegacyProjectionEventId(event.eventId)) {
+      normalized[existing] = event;
+    }
+  }
+  return normalized;
+}
+
+bool _isLegacyProjectionEventId(String eventId) {
+  return eventId.startsWith('live_cursor::') ||
+      eventId.startsWith('source_update::') ||
+      eventId.startsWith('stage_set::') ||
+      eventId == 'completed.final';
+}
+
+List<ProcessContentBlock> _processBlocksFromJournalSnapshot(
+  List<ProcessJournalEvent> journal,
+) {
+  final snapshot = ProcessJournalBus.toDisplaySnapshot(journal);
+  final blocks = <ProcessContentBlock>[];
+  for (final item in snapshot) {
+    switch (item.type) {
+      case ProcessJournalEventType.narrativeCommit:
+      case ProcessJournalEventType.liveCursor:
+        final text = item.displayMessage;
+        if (text.isEmpty) continue;
+        blocks.add(
+          ProcessContentBlock(type: ProcessContentBlockType.text, text: text),
+        );
+        break;
+      case ProcessJournalEventType.sourceUpdate:
+        final refs = item.references
+            .map(
+              (ref) => ProcessReference(
+                title: ref.title,
+                url: ref.url,
+                source: ref.source,
+              ),
+            )
+            .where((ref) => ref.title.isNotEmpty && ref.url.isNotEmpty)
+            .toList(growable: false);
+        if (item.displayMessage.isEmpty && refs.isEmpty) continue;
+        blocks.add(
+          ProcessContentBlock(
+            type: item.stage == 'searching'
+                ? ProcessContentBlockType.searchSummary
+                : ProcessContentBlockType.analysisSummary,
+            text: item.displayMessage,
+            references: refs,
+          ),
+        );
+        break;
+      case ProcessJournalEventType.stageSet:
+      case ProcessJournalEventType.answerDelta:
+      case ProcessJournalEventType.completed:
+        continue;
+    }
+  }
+  return blocks;
+}
+
+String _stageLabelFromJournalSnapshot(List<ProcessJournalEvent> journal) {
+  final snapshot = ProcessJournalBus.toDisplaySnapshot(journal);
+  for (var i = snapshot.length - 1; i >= 0; i--) {
+    final event = snapshot[i];
+    final message = event.displayMessage;
+    if (message.isEmpty) continue;
+    if (event.type == ProcessJournalEventType.narrativeCommit ||
+        event.type == ProcessJournalEventType.liveCursor ||
+        event.type == ProcessJournalEventType.sourceUpdate) {
+      return message;
+    }
+  }
+  return UITextConstants.assistantPhaseCompleted;
 }
 
 /// 助手当前轮回复顶部的状态行：按阶段展示不同动效 + 文案 + 可选引用数
@@ -856,7 +981,8 @@ class _PhaseActivityIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (phaseLabel.contains(UITextConstants.assistantPhaseSearching) ||
-        phaseLabel.contains('搜索')) {
+        phaseLabel.contains('搜索') ||
+        phaseLabel.contains('查')) {
       return _SearchingFlowIndicator(animation: animation, color: color);
     }
     if (phaseLabel.contains(UITextConstants.assistantPhaseThinking) ||
@@ -1507,16 +1633,21 @@ class _AssistantPhaseTimelineCardState
         ((usage['cumulativeMaxTokensPerCall'] as num?)?.toInt() ??
             (usage['maxTokensPerCall'] as num?)?.toInt() ??
             0);
-    final parts = <String>[
-      '模型调用 $calls 次',
-      '总 Token $total',
-      '单次最大 $max',
-    ];
-    if (runCalls > 0 && runCalls != calls) {
-      parts.add('本轮调用 $runCalls 次');
+    final parts = <String>[];
+    if (runCalls > 0) {
+      parts.add('本轮模型调用 $runCalls 次');
     }
-    if (runTotal > 0 && runTotal != total) {
+    if (runTotal > 0) {
       parts.add('本轮 Token $runTotal');
+    }
+    if (calls > 0 && calls != runCalls) {
+      parts.add('累计调用 $calls 次');
+    }
+    if (total > 0 && total != runTotal) {
+      parts.add('累计 Token $total');
+    }
+    if (max > 0) {
+      parts.add('单次最大 $max');
     }
     return parts.join('  ·  ');
   }

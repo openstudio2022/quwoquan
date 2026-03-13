@@ -239,6 +239,35 @@ entities:
         ops_exposure: read
         description: 发起实时通话时对外使用的官方呼叫铃声 ID；为空时回退平台默认铃声
 
+      - name: themeModeOverride
+        type: enum
+        enum_ref: ThemeModeSetting
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 子账号对 owner 默认主题模式的覆盖；为空表示继承 owner 默认值
+
+      - name: fontSizePresetOverride
+        type: enum
+        enum_ref: FontSizePreset
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 子账号对 owner 默认字号预设的覆盖；为空表示继承 owner 默认值
+
+      - name: appearanceOverrideUpdatedAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 子账号 appearance override 最后更新时间
+
       - name: isPrimary
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
@@ -713,6 +742,46 @@ entities:
         ops_exposure: read
         description: 小趣助手开关
 
+      - name: defaultThemeMode
+        type: enum
+        enum_ref: ThemeModeSetting
+        constraints: [NOT_NULL]
+        default_value: system
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: owner 默认主题模式
+
+      - name: defaultFontSizePreset
+        type: enum
+        enum_ref: FontSizePreset
+        constraints: [NOT_NULL]
+        default_value: md
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: owner 默认字号预设
+
+      - name: appearanceVersion
+        type: int
+        constraints: [NOT_NULL, DEFAULT_1]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: appearance 设置版本号（LWW 最终一致性判定基线）
+
+      - name: appearanceUpdatedAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: owner 默认 appearance 最后更新时间
+
       - name: blockedKeywords
         type: "string[]"
         constraints: [NULLABLE]
@@ -729,6 +798,109 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+
+  AppearanceSettingsView:
+    description: 聚合 owner 默认值与当前子账号 override 后的 appearance 快照
+    fields:
+      - name: themeMode
+        type: enum
+        enum_ref: ThemeModeSetting
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: fontSizePreset
+        type: enum
+        enum_ref: FontSizePreset
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: source
+        type: enum
+        enum_ref: AppearanceSource
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: ownerDefaultThemeMode
+        type: enum
+        enum_ref: ThemeModeSetting
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: ownerDefaultFontSizePreset
+        type: enum
+        enum_ref: FontSizePreset
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: hasSubAccountOverride
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: version
+        type: int
+        constraints: [NOT_NULL, DEFAULT_1]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: updatedAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+  AppearanceSettingsMutation:
+    description: 写入外观与字号偏好的统一 mutation
+    fields:
+      - name: themeMode
+        type: enum
+        enum_ref: ThemeModeSetting
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: fontSizePreset
+        type: enum
+        enum_ref: FontSizePreset
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: applyScope
+        type: enum
+        enum_ref: AppearanceApplyScope
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 当前子账号 / 全部账号 / 恢复继承
 
   ProfileUpdateProposal:
     description: 资料修改提案（状态机 + 乐观锁）

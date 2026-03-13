@@ -39,6 +39,7 @@ class ContentApiMetadata {
     'ListCommentsByAuthor': '/v1/content/users/me/comments',
     'ListCommentsForPostAuthor': '/v1/content/users/me/received-comments',
     'ListUserPosts': '/v1/users/{userId}/posts',
+    'PromotePostToWork': '/v1/content/posts/{postId}:promoteToWork',
     'PublishPost': '/v1/content/posts/{postId}/publish',
     'QuoteToCircle': '/v1/content/posts/{postId}/quote',
     'ReportBehaviors': '/v1/content/behaviors',
@@ -51,6 +52,7 @@ class ContentApiMetadata {
     'UnlikePost': '/v1/content/posts/{postId}/like',
     'UpdatePost': '/v1/content/posts/{postId}',
     'UpdatePostCircles': '/v1/content/posts/{postId}/circles',
+    'UpdatePostSettings': '/v1/content/posts/{postId}/settings',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
@@ -79,6 +81,7 @@ class ContentApiMetadata {
     'ListCommentsByAuthor': 'GET',
     'ListCommentsForPostAuthor': 'GET',
     'ListUserPosts': 'GET',
+    'PromotePostToWork': 'POST',
     'PublishPost': 'POST',
     'QuoteToCircle': 'POST',
     'ReportBehaviors': 'POST',
@@ -91,6 +94,7 @@ class ContentApiMetadata {
     'UnlikePost': 'DELETE',
     'UpdatePost': 'PATCH',
     'UpdatePostCircles': 'PATCH',
+    'UpdatePostSettings': 'PATCH',
   };
 
   static const String abortMediaUploadPathTemplate = '/v1/content/media/uploads/{sessionId}:abort';
@@ -199,6 +203,12 @@ class ContentApiMetadata {
       'userId': userId,
     });
   }
+  static const String promotePostToWorkPathTemplate = '/v1/content/posts/{postId}:promoteToWork';
+  static String promotePostToWorkPath({required String postId}) {
+    return _fillPath(promotePostToWorkPathTemplate, <String, String>{
+      'postId': postId,
+    });
+  }
   static const String publishPostPathTemplate = '/v1/content/posts/{postId}/publish';
   static String publishPostPath({required String postId}) {
     return _fillPath(publishPostPathTemplate, <String, String>{
@@ -263,6 +273,12 @@ class ContentApiMetadata {
   static const String updatePostCirclesPathTemplate = '/v1/content/posts/{postId}/circles';
   static String updatePostCirclesPath({required String postId}) {
     return _fillPath(updatePostCirclesPathTemplate, <String, String>{
+      'postId': postId,
+    });
+  }
+  static const String updatePostSettingsPathTemplate = '/v1/content/posts/{postId}/settings';
+  static String updatePostSettingsPath({required String postId}) {
+    return _fillPath(updatePostSettingsPathTemplate, <String, String>{
       'postId': postId,
     });
   }

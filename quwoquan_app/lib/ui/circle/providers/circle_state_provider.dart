@@ -18,6 +18,7 @@ class CircleState {
     this.isFollowed = false,
     this.activeTabType = 'works',
     this.activeSubTab = CreationSubTab.all,
+    this.activeWorkFormat = CreationWorkFormat.all,
     this.sortMode = CreationSortMode.latest,
     this.viewMode = CreationViewMode.grid,
     this.isLoading = false,
@@ -32,6 +33,7 @@ class CircleState {
   final bool isFollowed;
   final String activeTabType;
   final CreationSubTab activeSubTab;
+  final CreationWorkFormat activeWorkFormat;
   final CreationSortMode sortMode;
   final CreationViewMode viewMode;
   final bool isLoading;
@@ -45,6 +47,7 @@ class CircleState {
     bool? isFollowed,
     String? activeTabType,
     CreationSubTab? activeSubTab,
+    CreationWorkFormat? activeWorkFormat,
     CreationSortMode? sortMode,
     CreationViewMode? viewMode,
     bool? isLoading,
@@ -59,6 +62,7 @@ class CircleState {
       isFollowed: isFollowed ?? this.isFollowed,
       activeTabType: activeTabType ?? this.activeTabType,
       activeSubTab: activeSubTab ?? this.activeSubTab,
+      activeWorkFormat: activeWorkFormat ?? this.activeWorkFormat,
       sortMode: sortMode ?? this.sortMode,
       viewMode: viewMode ?? this.viewMode,
       isLoading: isLoading ?? this.isLoading,
@@ -103,7 +107,17 @@ class CircleStateNotifier extends ChangeNotifier {
   }
 
   void setSubTab(CreationSubTab tab) {
-    _state = _state.copyWith(activeSubTab: tab);
+    _state = _state.copyWith(
+      activeSubTab: tab,
+      activeWorkFormat: tab == CreationSubTab.work
+          ? _state.activeWorkFormat
+          : CreationWorkFormat.all,
+    );
+    notifyListeners();
+  }
+
+  void setWorkFormat(CreationWorkFormat format) {
+    _state = _state.copyWith(activeWorkFormat: format);
     notifyListeners();
   }
 
@@ -171,5 +185,5 @@ class CircleStateNotifier extends ChangeNotifier {
 
 final circleStateProvider =
     ChangeNotifierProvider.family<CircleStateNotifier, String>(
-  (ref, circleId) => CircleStateNotifier(ref, circleId),
-);
+      (ref, circleId) => CircleStateNotifier(ref, circleId),
+    );

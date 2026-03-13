@@ -11,14 +11,19 @@ import 'package:quwoquan_app/personal_assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/preference_fact.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/skill_run.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/subagent_plan.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/ui_process_timeline_entry.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/user_events.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/recall_result.dart';
 import 'package:quwoquan_app/personal_assistant/engine/aggregation_gate.dart';
+import 'package:quwoquan_app/personal_assistant/engine/conversation_state_kernel.dart';
 import 'package:quwoquan_app/personal_assistant/engine/context_orchestrator.dart';
+import 'package:quwoquan_app/personal_assistant/engine/default_processing/baseline_kernel.dart';
+import 'package:quwoquan_app/personal_assistant/engine/default_processing/answer_composer.dart';
+import 'package:quwoquan_app/personal_assistant/engine/default_processing/evidence_evaluator.dart';
+import 'package:quwoquan_app/personal_assistant/engine/default_processing/problem_framer.dart';
 import 'package:quwoquan_app/personal_assistant/engine/dialogue_state_runtime.dart';
 import 'package:quwoquan_app/personal_assistant/engine/domain_router.dart';
 import 'package:quwoquan_app/personal_assistant/engine/mode_decider.dart';
+import 'package:quwoquan_app/personal_assistant/engine/process_journal_bus.dart';
 import 'package:quwoquan_app/personal_assistant/engine/react_runtime.dart';
 import 'package:quwoquan_app/personal_assistant/engine/recall_coordinator.dart';
 import 'package:quwoquan_app/personal_assistant/engine/llm_provider.dart';
@@ -68,6 +73,9 @@ class PersonalAssistantAgentLoop {
   final RecallCoordinator _recallCoordinator = RecallCoordinator();
   final ModeDecider _modeDecider = const ModeDecider();
   final AggregationGate _aggregationGate = const AggregationGate();
+  final BaselineKernel _baselineKernel = const BaselineKernel();
+  final ConversationStateKernel _conversationStateKernel =
+      const ConversationStateKernel();
 
   static void Function(String delta)? _buildThinkingDeltaForwarder(
     void Function(AssistantTraceEvent event)? onTraceEvent,
@@ -75,19 +83,17 @@ class PersonalAssistantAgentLoop {
     String? traceId,
   ) {
     if (onTraceEvent == null) return null;
-    return (delta) {
-      if (delta.isEmpty) return;
-      onTraceEvent(
-        AssistantTraceEvent(
-          type: AssistantTraceEventType.thinkingProgress,
-          message: delta,
-          timestamp: DateTime.now(),
-          runId: runId ?? '',
-          traceId: traceId ?? '',
-          data: const <String, dynamic>{'streaming': true},
-        ),
-      );
-    };
+    // 仅用于开启 provider 侧流式输出。真正带 phase 的 thinking trace
+    // 由 react_runtime 在收到 delta 时直接落库并转发，避免这里丢失阶段信息。
+    return (_) {};
+  }
+
+  static void Function(AssistantTraceEvent event)? _withTraceVisibility(
+    void Function(AssistantTraceEvent event)? onTraceEvent,
+    TraceVisibility visibility,
+  ) {
+    if (onTraceEvent == null) return null;
+    return (event) => onTraceEvent(event.copyWith(visibility: visibility));
   }
 
   Future<AssistantRunResponse> run(
@@ -137,6 +143,12 @@ class PersonalAssistantAgentLoop {
     final latestUserQuery = request.messages.isNotEmpty
         ? request.messages.last.content
         : '';
+    final supplementalTraces = <AssistantTraceEvent>[];
+    void emitSupplementalTrace(AssistantTraceEvent event) {
+      supplementalTraces.add(event);
+      onTraceEvent?.call(event);
+    }
+
     await _sessionManager.load();
     final sessionId = requestedSessionId == 'assistant'
         ? _sessionManager.resolveAssistantSessionForQuery(latestUserQuery)
@@ -164,6 +176,7 @@ class PersonalAssistantAgentLoop {
               sessionId: sessionId,
               runId: runId,
               traceId: traceId,
+              onTraceEvent: emitSupplementalTrace,
             ),
           )
         : '';
@@ -204,7 +217,10 @@ class PersonalAssistantAgentLoop {
     final allManifests = await _domainRouter.availableSkillManifests(
       contextScopeHint: request.contextScopeHint,
     );
-    final recallResult = _recallCoordinator.recall(latestUserQuery, allManifests);
+    final recallResult = _recallCoordinator.recall(
+      latestUserQuery,
+      allManifests,
+    );
     final skillCatalog = recallResult.isEmpty
         ? fullSkillCatalog
         : recallResult.toPromptSnippet();
@@ -218,7 +234,7 @@ class PersonalAssistantAgentLoop {
       sessionId: sessionId,
       runId: runId,
       traceId: traceId,
-      onTraceEvent: onTraceEvent,
+      onTraceEvent: emitSupplementalTrace,
     );
     final domainId = intentGraph.primarySkill.trim().isNotEmpty
         ? intentGraph.primarySkill.trim()
@@ -241,6 +257,7 @@ class PersonalAssistantAgentLoop {
       timestamp: DateTime.now(),
       runId: runId,
       traceId: traceId,
+      visibility: TraceVisibility.internal,
       data: <String, dynamic>{
         ...intentGraph.toJson(),
         'agentMode': modeDecision.mode.name,
@@ -265,6 +282,19 @@ class PersonalAssistantAgentLoop {
       baseShell: skillContext.executionShell,
       intentGraph: intentGraph,
       request: request,
+    );
+    final previousRunArtifacts = _recoverPreviousRunArtifacts(
+      request.contextScopeHint,
+    );
+    final previousSlotState = _recoverPreviousSlotState(
+      request.contextScopeHint,
+      fallbackDomainId: domainId,
+      runArtifacts: previousRunArtifacts,
+    );
+    final previousDomainPolicyBundle = _recoverPreviousDomainPolicyBundle(
+      request.contextScopeHint,
+      fallbackDomainId: domainId,
+      runArtifacts: previousRunArtifacts,
     );
     final plannerTemplateVersion = _templateCatalogRuntime.latestVersionFor(
       'planner.global_plan',
@@ -300,6 +330,8 @@ class PersonalAssistantAgentLoop {
       skillPersona: skillPersona,
       skillCatalog: skillCatalog,
       skillExecutionShell: effectiveExecutionShell,
+      previousSlotState: previousSlotState,
+      previousDomainPolicyBundle: previousDomainPolicyBundle,
     );
     if (!contextAssembly.canEnterDomain) {
       final blocked = _buildBlockedResponse(
@@ -335,6 +367,20 @@ class PersonalAssistantAgentLoop {
     dataLayerBuffer.writeln('<context_slots>');
     dataLayerBuffer.writeln(jsonEncode(contextAssembly.contextEnvelope));
     dataLayerBuffer.writeln('</context_slots>');
+    if (previousSlotState.slotValues.isNotEmpty ||
+        previousSlotState.slots.isNotEmpty ||
+        previousSlotState.missingSlots.isNotEmpty) {
+      dataLayerBuffer.writeln();
+      dataLayerBuffer.writeln('<slot_state_snapshot>');
+      dataLayerBuffer.writeln(jsonEncode(previousSlotState.toJson()));
+      dataLayerBuffer.writeln('</slot_state_snapshot>');
+    }
+    if (previousDomainPolicyBundle != null) {
+      dataLayerBuffer.writeln();
+      dataLayerBuffer.writeln('<domain_policy_bundle>');
+      dataLayerBuffer.writeln(jsonEncode(previousDomainPolicyBundle.toJson()));
+      dataLayerBuffer.writeln('</domain_policy_bundle>');
+    }
     if (historySummary.isNotEmpty) {
       dataLayerBuffer.writeln();
       dataLayerBuffer.writeln('<session_history>');
@@ -349,6 +395,11 @@ class PersonalAssistantAgentLoop {
                 t.isNotEmpty &&
                 !t.contains('"contractVersion"') &&
                 !t.contains('"decision"') &&
+                !t.contains('assistant_turn_v4') &&
+                !t.contains('queryTasks') &&
+                !t.contains('tool_call') &&
+                !t.contains('<tool_call>') &&
+                !t.contains('provider') &&
                 !t.startsWith('{'),
           )
           .join('\n');
@@ -485,6 +536,7 @@ class PersonalAssistantAgentLoop {
         timestamp: DateTime.now(),
         runId: runId,
         traceId: traceId,
+        visibility: TraceVisibility.internal,
         data: <String, dynamic>{
           'reason': synthesisReadiness.reason,
           'gapFillTask': gap.toJson(),
@@ -521,6 +573,7 @@ class PersonalAssistantAgentLoop {
       },
       <String, dynamic>{'role': 'user', 'content': latestUserQuery},
     ];
+    final phaseOneText = mergedResult.finalText;
     // Attempt SSE streaming for real-time typewriter effect (P4-1)
     final streamedText = await _runtime.streamSynthesis(
       messages: synthesisInput,
@@ -535,17 +588,36 @@ class PersonalAssistantAgentLoop {
       traceId: traceId,
       onTraceEvent: onTraceEvent,
     );
-    final ReactRuntimeResult synthesisResult;
+    ReactRuntimeResult synthesisResult;
     if (streamedText.trim().isNotEmpty) {
+      final synthesisInputText = synthesisInput
+          .map((item) => (item['content'] ?? '').toString())
+          .join('\n');
+      final outputTokens = _estimateTokenCount(streamedText);
+      final inputTokens = _estimateTokenCount(synthesisInputText);
       final synthesisTrace = AssistantTraceEvent(
         type: AssistantTraceEventType.lifecycleStart,
         message: 'llm request synthesis stream',
         timestamp: DateTime.now(),
         runId: runId,
         traceId: traceId,
+        visibility: TraceVisibility.system,
         data: <String, dynamic>{
           'stage': 'synthesis_stream',
-          'estimatedTokens': _estimateTokenCount(streamedText),
+          'estimatedTokens': outputTokens,
+          'usageEntries': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'provider': 'synthesis_stream',
+              'modelId': 'streaming_final_answer',
+              'modelRef': 'streaming_final_answer',
+              'streaming': true,
+              'source': 'estimated',
+              'inputTokens': inputTokens,
+              'outputTokens': outputTokens,
+              'totalTokens': inputTokens + outputTokens,
+              'latencyMs': 0,
+            },
+          ],
         },
       );
       onTraceEvent?.call(synthesisTrace);
@@ -571,8 +643,20 @@ class PersonalAssistantAgentLoop {
         onDelta: _buildThinkingDeltaForwarder(onTraceEvent, runId, traceId),
       );
     }
+    synthesisResult = await _repairInvalidSynthesisResult(
+      currentResult: synthesisResult,
+      synthesisInput: synthesisInput,
+      latestUserQuery: latestUserQuery,
+      templateContext: request.contextScopeHint,
+      templateVariables: synthesisTemplateVars,
+      templateId: 'synthesizer.final_answer',
+      templateVersion: synthTemplateVersion,
+      sessionId: sessionId,
+      runId: runId,
+      traceId: traceId,
+      onTraceEvent: onTraceEvent,
+    );
     final synthesisText = synthesisResult.finalText.trim();
-    final phaseOneText = mergedResult.finalText;
     final phaseOneAnswerPayload = _parseAnswerPayload(
       rawFinalText: phaseOneText,
       traces: mergedResult.traces,
@@ -692,7 +776,7 @@ class PersonalAssistantAgentLoop {
         },
         <String, dynamic>{'role': 'user', 'content': latestUserQuery},
       ];
-      final subagentSynthesis = await _runtime.run(
+      var subagentSynthesis = await _runtime.run(
         messages: subagentSynthesisInput,
         maxIterations: 1,
         goal: latestUserQuery,
@@ -710,6 +794,22 @@ class PersonalAssistantAgentLoop {
         onTraceEvent: onTraceEvent,
         callOptions: const LlmCallOptions.synthesis(),
         onDelta: _buildThinkingDeltaForwarder(onTraceEvent, runId, traceId),
+      );
+      subagentSynthesis = await _repairInvalidSynthesisResult(
+        currentResult: subagentSynthesis,
+        synthesisInput: subagentSynthesisInput,
+        latestUserQuery: latestUserQuery,
+        templateContext: request.contextScopeHint,
+        templateVariables: fusionTemplateVars,
+        templateId: fusionSynthesisTemplateId,
+        templateVersion:
+            fusionSynthesisTemplateId == 'synthesizer.multi_skill_fusion'
+            ? fusionSynthTemplateVersion
+            : synthTemplateVersion,
+        sessionId: sessionId,
+        runId: runId,
+        traceId: traceId,
+        onTraceEvent: onTraceEvent,
       );
       mergedResult = ReactRuntimeResult(
         finalText: _ensureAssistantTurnEnvelopeText(
@@ -730,24 +830,59 @@ class PersonalAssistantAgentLoop {
     final isDegradedReply =
         mergedResult.degraded ||
         AssistantContentFilters.isDegradedText(mergedResult.finalText);
-    // 提取用于存储的纯文本摘要（优先 userMarkdown，避免 JSON 进入记忆/摘要）
-    final displayTextForStorage = _extractDisplayTextForStorage(
-      mergedResult.finalText,
+    final responseTraces = <AssistantTraceEvent>[
+      ...supplementalTraces,
+      ...mergedResult.traces,
+    ];
+    final finalResult = ReactRuntimeResult(
+      finalText: mergedResult.finalText,
+      traces: responseTraces,
+      degraded: mergedResult.degraded,
+      failureCode: mergedResult.failureCode,
     );
+    final structuredResponse = await _buildStructuredResponse(
+      request: request,
+      contextAssembly: contextAssembly,
+      synthesisReadiness: synthesisReadiness,
+      result: finalResult,
+      intentGraph: intentGraph,
+      skillRuns: skillRuns,
+      aggregationState: aggregationState,
+      subagentPlan: skillRunPlans,
+      subagentRuns: subagentRuns,
+      dialogueRoundScript: dialogueRoundScript,
+      candidateDomains: domainCatalog,
+      skillExecutionShell: effectiveExecutionShell,
+      templateVersionUsed: synthTemplateVersion,
+      domainCatalogVersion: domainCatalogVersion,
+      sessionId: sessionId,
+      previousSlotState: previousSlotState,
+      previousDomainPolicyBundle: previousDomainPolicyBundle,
+      onTraceEvent: onTraceEvent,
+      runId: runId,
+      traceId: traceId,
+    );
+    final runArtifactsMap =
+        (structuredResponse['runArtifactsV1'] as Map?)
+            ?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final completedArtifact = RunArtifacts.fromJson(runArtifactsMap);
+    final displayMarkdown = completedArtifact.displayMarkdown.trim();
+    final displayPlainText = completedArtifact.displayPlainText.trim();
+    final displayTextForSession = displayMarkdown.isNotEmpty
+        ? displayMarkdown
+        : displayPlainText;
     _sessionManager.updateSessionTopicSummary(
       sessionId: sessionId,
       latestUserQuery: latestUserQuery,
-      latestAssistantReply: displayTextForStorage.isNotEmpty
-          ? displayTextForStorage
-          : mergedResult.finalText,
+      latestAssistantReply: displayPlainText.isNotEmpty
+          ? displayPlainText
+          : displayTextForSession,
     );
-    // 只存纯文本到记忆，绝不存含 contractVersion 的原始 JSON。
-    // displayTextForStorage 为空（JSON 里无 userMarkdown）时，不存记忆，避免垃圾污染。
-    final memoryText = displayTextForStorage;
-    if (memoryText.isNotEmpty) {
+    if (displayPlainText.isNotEmpty) {
       await _memoryRepository.rememberText(
         id: '${sessionId}_${DateTime.now().millisecondsSinceEpoch}',
-        text: memoryText,
+        text: displayPlainText,
         metadata: <String, dynamic>{
           'sessionId': sessionId,
           'userId': request.userId ?? '',
@@ -758,52 +893,43 @@ class PersonalAssistantAgentLoop {
       );
     }
     final response = AssistantRunResponse(
-      finalText: mergedResult.finalText,
-      traces: mergedResult.traces,
+      finalText: finalResult.finalText,
+      traces: finalResult.traces,
       runId: runId,
       traceId: traceId,
-      degraded: _hasDegradedTrace(mergedResult.traces),
-      structuredResponse: await _buildStructuredResponse(
-        request: request,
-        contextAssembly: contextAssembly,
-        synthesisReadiness: synthesisReadiness,
-        result: mergedResult,
-        intentGraph: intentGraph,
-        skillRuns: skillRuns,
-        aggregationState: aggregationState,
-        subagentPlan: skillRunPlans,
-        subagentRuns: subagentRuns,
-        dialogueRoundScript: dialogueRoundScript,
-        candidateDomains: domainCatalog,
-        templateVersionUsed: synthTemplateVersion,
-        domainCatalogVersion: domainCatalogVersion,
-        sessionId: sessionId,
-        onTraceEvent: onTraceEvent,
-        runId: runId,
-        traceId: traceId,
-      ),
+      degraded: _hasDegradedTrace(finalResult.traces),
+      structuredResponse: structuredResponse,
       profileUpdateProposal: _buildProfileUpdateProposal(request: request),
     );
-    if (!isDegradedReply && displayTextForStorage.isNotEmpty) {
+    if (!isDegradedReply && displayTextForSession.isNotEmpty) {
       _sessionManager.appendMessage(
         sessionId: sessionId,
         role: 'assistant',
-        content: displayTextForStorage,
+        content: displayTextForSession,
         metadata: <String, dynamic>{
+          'displayMarkdown': displayMarkdown,
+          'displayPlainText': displayPlainText,
+          'machineEnvelope': completedArtifact.machineEnvelope,
+          'runArtifactsV1': completedArtifact.toJson(),
+          'processJournalV1':
+              (structuredResponse['processJournalV1'] as List?) ??
+              const <dynamic>[],
+          'uiProcessContentBlocks':
+              (structuredResponse['uiProcessContentBlocks'] as List?) ??
+              const <dynamic>[],
           'uiProcessTimelineV2':
-              (response.structuredResponse['uiProcessTimelineV2'] as List?) ??
+              (structuredResponse['uiProcessTimelineV2'] as List?) ??
               const <dynamic>[],
           'uiUsageStatsV1':
-              (response.structuredResponse['uiUsageStatsV1'] as Map?) ??
+              (structuredResponse['uiUsageStatsV1'] as Map?) ??
               const <String, dynamic>{},
           'intentGraph':
-              (response.structuredResponse['intentGraph'] as Map?) ??
+              (structuredResponse['intentGraph'] as Map?) ??
               const <String, dynamic>{},
           'skillRuns':
-              (response.structuredResponse['skillRuns'] as List?) ??
-              const <dynamic>[],
+              (structuredResponse['skillRuns'] as List?) ?? const <dynamic>[],
           'aggregationState':
-              (response.structuredResponse['aggregationState'] as Map?) ??
+              (structuredResponse['aggregationState'] as Map?) ??
               const <String, dynamic>{},
         },
       );
@@ -921,6 +1047,104 @@ class PersonalAssistantAgentLoop {
       }
     }
   }
+
+  Future<ReactRuntimeResult> _repairInvalidSynthesisResult({
+    required ReactRuntimeResult currentResult,
+    required List<Map<String, dynamic>> synthesisInput,
+    required String latestUserQuery,
+    required Map<String, dynamic> templateContext,
+    required Map<String, dynamic> templateVariables,
+    required String templateId,
+    required String templateVersion,
+    required String sessionId,
+    required String runId,
+    required String traceId,
+    required void Function(AssistantTraceEvent event)? onTraceEvent,
+  }) async {
+    if (!_needsSynthesisRepair(currentResult.finalText)) {
+      return currentResult;
+    }
+    final repairTrace = AssistantTraceEvent(
+      type: AssistantTraceEventType.lifecycleStart,
+      message: 'repair invalid synthesis output',
+      timestamp: DateTime.now(),
+      runId: runId,
+      traceId: traceId,
+      visibility: TraceVisibility.internal,
+      data: const <String, dynamic>{'stage': 'synthesis_repair'},
+    );
+    onTraceEvent?.call(repairTrace);
+    final repaired = await _runtime.run(
+      messages: <Map<String, dynamic>>[
+        ...synthesisInput,
+        <String, dynamic>{
+          'role': 'system',
+          'content':
+              '上一次输出无效：出现了空回答、内部 JSON/XML 或 tool_call。'
+              '现在禁止任何工具调用，禁止输出 XML 标签，'
+              '必须直接返回标准 assistant_turn_v4 最终答案，'
+              'decision.nextAction=answer，messageKind=answer，'
+              'userMarkdown 必须是可直接展示的 Markdown。',
+        },
+      ],
+      maxIterations: 1,
+      goal: latestUserQuery,
+      availableToolNamesOverride: const <String>[],
+      templateId: templateId,
+      templateVersion: templateVersion,
+      templateContext: templateContext,
+      templateVariables: templateVariables,
+      sessionId: sessionId,
+      runId: runId,
+      traceId: traceId,
+      onTraceEvent: _withTraceVisibility(
+        onTraceEvent,
+        TraceVisibility.internal,
+      ),
+      callOptions: const LlmCallOptions.synthesis(),
+      onDelta: _buildThinkingDeltaForwarder(onTraceEvent, runId, traceId),
+    );
+    return ReactRuntimeResult(
+      finalText: repaired.finalText,
+      traces: <AssistantTraceEvent>[
+        ...currentResult.traces,
+        repairTrace,
+        ...repaired.traces,
+      ],
+      degraded: repaired.degraded,
+      failureCode: repaired.failureCode,
+    );
+  }
+
+  bool _needsSynthesisRepair(String rawText) {
+    final trimmed = rawText.trim();
+    if (trimmed.isEmpty || trimmed.contains('没有生成可展示结果')) {
+      return true;
+    }
+    if (_containsXmlToolCallMarkup(trimmed)) return true;
+    final parseResult = LlmResponseParser.parse(trimmed);
+    if (!parseResult.ok) return true;
+    final parsed = parseResult.json!;
+    final turn = AssistantTurnOutput.tryParse(parsed);
+    final decision =
+        turn?.decision ??
+        (parsed['decision'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final nextAction = (decision['nextAction'] as String?)?.trim() ?? '';
+    final userMarkdown = (turn?.userMarkdown ?? parseResult.userMarkdown)
+        .trim();
+    if (nextAction.isNotEmpty && nextAction != 'answer') return true;
+    if (userMarkdown.isEmpty) return true;
+    if (AssistantContentFilters.isJsonEnvelope(userMarkdown) ||
+        AssistantContentFilters.isProgressPlaceholder(userMarkdown) ||
+        _containsXmlToolCallMarkup(userMarkdown)) {
+      return true;
+    }
+    return false;
+  }
+
+  bool _containsXmlToolCallMarkup(String text) =>
+      _xmlToolCallTagRe.hasMatch(text);
 
   /// Guards the synthesis output to ensure nextAction is always 'answer'.
   /// This prevents the synthesizer from accidentally triggering further tool calls.
@@ -1379,16 +1603,6 @@ class PersonalAssistantAgentLoop {
     return RegExp(r'(天气|气温|降雨|风力|体感|预报|weather|forecast)').hasMatch(normalized);
   }
 
-  List<Map<String, dynamic>> _extractReferencesFromPayload(
-    Map<String, dynamic> payload,
-  ) {
-    return (payload['references'] as List?)
-            ?.whereType<Map>()
-            .map((item) => item.cast<String, dynamic>())
-            .toList(growable: false) ??
-        const <Map<String, dynamic>>[];
-  }
-
   List<PreferenceFact> _buildSessionPreferenceFacts({
     required AssistantRunRequest request,
     required Map<String, dynamic> answerPayload,
@@ -1507,6 +1721,7 @@ class PersonalAssistantAgentLoop {
       timestamp: DateTime.now(),
       runId: runId,
       traceId: traceId,
+      visibility: TraceVisibility.system,
       data: <String, dynamic>{
         'contextEnvelope': contextAssembly.contextEnvelope,
         'fillTasks': contextAssembly.fillTasks.map((e) => e.toJson()).toList(),
@@ -1524,6 +1739,7 @@ class PersonalAssistantAgentLoop {
       timestamp: DateTime.now(),
       runId: runId,
       traceId: traceId,
+      visibility: TraceVisibility.system,
     );
     return AssistantRunResponse(
       finalText: finalText,
@@ -1614,14 +1830,17 @@ class PersonalAssistantAgentLoop {
     required List<Map<String, dynamic>> subagentRuns,
     required DialogueRoundScript dialogueRoundScript,
     required List<String> candidateDomains,
+    required SkillExecutionShell skillExecutionShell,
     required String templateVersionUsed,
     required String domainCatalogVersion,
     required String sessionId,
+    required SlotStateSnapshot previousSlotState,
+    DomainPolicyBundle? previousDomainPolicyBundle,
     void Function(AssistantTraceEvent event)? onTraceEvent,
     String? runId,
     String? traceId,
   }) async {
-    final answerPayload = _parseAnswerPayload(
+    final parsedAnswerPayload = _parseAnswerPayload(
       rawFinalText: result.finalText,
       traces: result.traces,
     );
@@ -1653,7 +1872,9 @@ class PersonalAssistantAgentLoop {
         (profileSnapshot['ipResidenceProfile'] as Map?)
             ?.cast<String, dynamic>() ??
         const <String, dynamic>{};
-    final webEvidencePacks = _extractWebEvidencePacks(toolResults);
+    final latestUserQuery = request.messages.isNotEmpty
+        ? request.messages.last.content
+        : '';
     final retrievalPolicy = await _loadRetrievalPolicy(
       dialogueRoundScript.domainId,
     );
@@ -1661,12 +1882,100 @@ class PersonalAssistantAgentLoop {
         (retrievalPolicy['defaultFreshnessHoursMax'] as num?)?.toInt() ?? 72;
     final authorityRequired =
         (retrievalPolicy['authorityRequired'] as bool?) ?? false;
-    final evidenceGatePassed = _webEvidenceGatePassed(
-      webEvidencePacks,
-      freshnessHoursMax: freshnessHoursMax,
-      authorityRequired: authorityRequired,
+    final problemFrame = _baselineKernel.frame(latestUserQuery);
+    final problemClass = skillExecutionShell.problemClass.trim().isNotEmpty
+        ? skillExecutionShell.problemClass.trim()
+        : (intentGraph.problemClass.isNotEmpty
+              ? intentGraph.problemClass
+              : problemFrame.problemClass);
+    final slotSchema = _conversationStateKernel.defaultSlotSchema(
+      query: latestUserQuery,
+      domainId: dialogueRoundScript.domainId,
+      problemClass: problemClass,
+      dialogueRoundScript: dialogueRoundScript,
     );
-    final answerEligible = synthesisReadiness.ready && evidenceGatePassed;
+    final initialStateDecision = _conversationStateKernel.evaluate(
+      query: latestUserQuery,
+      domainId: dialogueRoundScript.domainId,
+      problemClass: problemClass,
+      dialogueRoundScript: dialogueRoundScript,
+      aggregationState: aggregationState,
+      answerPayload: parsedAnswerPayload,
+      previousSlotState: previousSlotState,
+      evidenceEvaluation: const EvidenceEvaluationResult(),
+      slotSchema: slotSchema,
+    );
+    final blockingDimensions = _blockingEvidenceDimensions(
+      frame: problemFrame,
+      toolResults: toolResults,
+    );
+    final provisionalLedger = _baselineKernel.buildEvidenceLedger(
+      domainId: dialogueRoundScript.domainId,
+      toolResults: _toolResultsForEvidenceLedger(toolResults),
+      slotState: initialStateDecision.slotState,
+      retrievalPolicy: retrievalPolicy,
+    );
+    final provisionalEvidenceEvaluation = _baselineKernel.evaluateEvidence(
+      ledger: provisionalLedger,
+      evidenceRequired: _requiresEvidence(
+        domainId: dialogueRoundScript.domainId,
+        problemClass: problemClass,
+        authorityRequired: authorityRequired,
+      ),
+      authorityRequired: authorityRequired,
+      freshnessHoursMax: freshnessHoursMax,
+      blockingDimensions: blockingDimensions,
+    );
+    var stateDecision = _conversationStateKernel.evaluate(
+      query: latestUserQuery,
+      domainId: dialogueRoundScript.domainId,
+      problemClass: problemClass,
+      dialogueRoundScript: dialogueRoundScript,
+      aggregationState: aggregationState,
+      answerPayload: parsedAnswerPayload,
+      previousSlotState: previousSlotState,
+      evidenceEvaluation: provisionalEvidenceEvaluation,
+      slotSchema: slotSchema,
+    );
+    final evidenceLedger = _baselineKernel.buildEvidenceLedger(
+      domainId: dialogueRoundScript.domainId,
+      toolResults: _toolResultsForEvidenceLedger(toolResults),
+      slotState: stateDecision.slotState,
+      retrievalPolicy: retrievalPolicy,
+    );
+    final evidenceEvaluation = _baselineKernel.evaluateEvidence(
+      ledger: evidenceLedger,
+      evidenceRequired: _requiresEvidence(
+        domainId: dialogueRoundScript.domainId,
+        problemClass: problemClass,
+        authorityRequired: authorityRequired,
+      ),
+      authorityRequired: authorityRequired,
+      freshnessHoursMax: freshnessHoursMax,
+      blockingDimensions: blockingDimensions,
+    );
+    stateDecision = _conversationStateKernel.evaluate(
+      query: latestUserQuery,
+      domainId: dialogueRoundScript.domainId,
+      problemClass: problemClass,
+      dialogueRoundScript: dialogueRoundScript,
+      aggregationState: aggregationState,
+      answerPayload: parsedAnswerPayload,
+      previousSlotState: previousSlotState,
+      evidenceEvaluation: evidenceEvaluation,
+      slotSchema: slotSchema,
+    );
+    final answerPayload = _applyConversationStateDecision(
+      parsedAnswerPayload,
+      stateDecision,
+      evidenceEvaluation: evidenceEvaluation,
+      synthesisReadiness: synthesisReadiness,
+    );
+    final webEvidencePacks = _extractWebEvidencePacks(toolResults);
+    final evidenceGatePassed =
+        evidenceEvaluation.passed ||
+        evidenceEvaluation.status == 'bounded' ||
+        !evidenceEvaluation.evidenceRequired;
     final modelSelfScore = _asDouble(
       ((answerPayload['modelSelfScore'] as Map?)?['score']),
     );
@@ -1686,10 +1995,74 @@ class PersonalAssistantAgentLoop {
       request: request,
       answerPayload: answerPayload,
     );
-    final uiReferences = _buildUiReferences(
-      toolResults,
-      domainId: dialogueRoundScript.domainId,
-      isWeatherLike: isWeatherLike,
+    final uiReferences = evidenceLedger.isNotEmpty
+        ? _buildUiReferencesFromLedger(
+            evidenceLedger,
+            toolResults: toolResults,
+            domainId: dialogueRoundScript.domainId,
+            isWeatherLike: isWeatherLike,
+          )
+        : _buildUiReferences(
+            toolResults,
+            domainId: dialogueRoundScript.domainId,
+            isWeatherLike: isWeatherLike,
+          );
+    final directMarkdown = _extractUiMarkdown(answerPayload, result.finalText);
+    final qualityAssuredAnswer = _qualityAssuredBaselineAnswer(
+      frame: problemFrame,
+      toolResults: toolResults,
+      nextAction: stateDecision.nextAction,
+    );
+    final preferredMarkdown =
+        (qualityAssuredAnswer?.markdown.trim().isNotEmpty == true)
+        ? qualityAssuredAnswer!.markdown.trim()
+        : directMarkdown.trim();
+    final hasDirectMarkdown = preferredMarkdown.isNotEmpty;
+    final answerEligible =
+        stateDecision.nextAction == 'answer' && hasDirectMarkdown;
+    final fallbackAnswer = !answerEligible
+        ? _baselineKernel.composeFallbackAnswer(
+            query: latestUserQuery,
+            slotState: stateDecision.slotState,
+            evidenceEvaluation: evidenceEvaluation,
+            decisionMode: stateDecision.nextAction == 'ask_user'
+                ? 'clarify'
+                : (stateDecision.nextAction == 'retry'
+                      ? 'retry'
+                      : stateDecision.finalAnswerMode),
+            missingCriticalSlots: stateDecision.missingCriticalSlots,
+            toolErrors: toolErrors,
+          )
+        : null;
+    final normalizedMarkdown = preferredMarkdown.isNotEmpty
+        ? preferredMarkdown
+        : (fallbackAnswer?.markdown.trim().isNotEmpty == true
+              ? fallbackAnswer!.markdown.trim()
+              : _buildFallbackMarkdown(
+                  answerPayload: answerPayload,
+                  domainId: dialogueRoundScript.domainId,
+                  request: request,
+                  uiReferences: uiReferences,
+                  toolErrors: toolErrors,
+                  result: result,
+                  synthesisReadiness: synthesisReadiness,
+                ));
+    final evidenceLinks = _buildInlineEvidenceLinks(
+      answerPayload: answerPayload,
+      uiReferences: uiReferences,
+      evidenceLedger: evidenceLedger,
+    );
+    final answerEvidenceBindings = evidenceLinks
+        .map(AnswerEvidenceBinding.fromJson)
+        .toList(growable: false);
+    final linkedMarkdown = _applyInlineEvidenceLinks(
+      normalizedMarkdown,
+      evidenceLinks,
+    );
+    final displayPlainText = _resolveDisplayPlainText(
+      answerPayload: answerPayload,
+      displayMarkdown: linkedMarkdown,
+      machineEnvelope: result.finalText,
     );
     final processSummaryV1 = _resolveProcessSummary(
       answerPayload: answerPayload,
@@ -1697,48 +2070,138 @@ class PersonalAssistantAgentLoop {
       request: request,
       uiReferences: uiReferences,
       toolErrors: toolErrors,
-      result: result,
+      displayPlainText: displayPlainText,
     );
     final processReferenceCountV1 = _resolveProcessReferenceCount(
       answerPayload: answerPayload,
       uiReferences: uiReferences,
     );
-    final directMarkdown = _extractUiMarkdown(answerPayload, result.finalText);
-    final normalizedMarkdown = directMarkdown.trim().isNotEmpty
-        ? directMarkdown
-        : _buildFallbackMarkdown(
-            answerPayload: answerPayload,
-            domainId: dialogueRoundScript.domainId,
-            request: request,
-            uiReferences: uiReferences,
-            toolErrors: toolErrors,
-            result: result,
-            synthesisReadiness: synthesisReadiness,
-          );
-    final renderMode = normalizedMarkdown.trim().isNotEmpty
+    final renderMode = linkedMarkdown.trim().isNotEmpty
         ? 'md_json_dual'
         : 'fallback_text';
     final renderFallback = renderMode == 'fallback_text';
+    final processJournalBus = ProcessJournalBus(
+      userGoalSummary: request.messages.isNotEmpty
+          ? request.messages.last.content
+          : '',
+      problemClass: intentGraph.problemClass,
+    );
+    processJournalBus.consumeTraces(result.traces);
+    final hasAnsweringTrace = result.traces.any(
+      (trace) =>
+          trace.type == AssistantTraceEventType.answerDelta ||
+          trace.type == AssistantTraceEventType.streamDelta ||
+          (trace.type == AssistantTraceEventType.thinkingProgress &&
+              ((trace.data?['phase'] as String?)?.trim().toLowerCase() ==
+                  'answering')),
+    );
+    final synthesizedAnsweringTraces = <AssistantTraceEvent>[];
+    if (linkedMarkdown.isNotEmpty && !hasAnsweringTrace) {
+      synthesizedAnsweringTraces.add(
+        AssistantTraceEvent(
+          type: AssistantTraceEventType.thinkingProgress,
+          message: '关键信息差不多齐了，我在整理成更容易看的答案。',
+          timestamp: DateTime.now(),
+          runId: runId ?? '',
+          traceId: traceId ?? '',
+          data: const <String, dynamic>{
+            'phase': 'answering',
+            'extracted': true,
+          },
+        ),
+      );
+      for (final chunk in _chunkMarkdownForStreaming(linkedMarkdown)) {
+        synthesizedAnsweringTraces.add(
+          AssistantTraceEvent(
+            type: AssistantTraceEventType.answerDelta,
+            message: chunk,
+            timestamp: DateTime.now(),
+            runId: runId ?? '',
+            traceId: traceId ?? '',
+            data: <String, dynamic>{'delta': chunk, 'phase': 'answering'},
+          ),
+        );
+      }
+      processJournalBus.consumeTraces(synthesizedAnsweringTraces);
+    }
+    final processJournal = processJournalBus.snapshot;
+    final domainPolicyBundle = _buildDomainPolicyBundle(
+      domainId: dialogueRoundScript.domainId,
+      previous: previousDomainPolicyBundle,
+      skillExecutionShell: skillExecutionShell,
+      slotSchema: slotSchema,
+      dialogueRoundScript: dialogueRoundScript,
+      retrievalPolicy: retrievalPolicy,
+      evidenceEvaluation: evidenceEvaluation,
+      stateDecision: stateDecision,
+    );
+    final effectiveAggregationState = AggregationState(
+      allSkillsReady: aggregationState.allSkillsReady,
+      blockingSkills: aggregationState.blockingSkills,
+      blockedBy: aggregationState.blockedBy,
+      canGivePartialAnswer: aggregationState.canGivePartialAnswer,
+      needExpansion: aggregationState.needExpansion,
+      expansionPlan: aggregationState.expansionPlan,
+      finalAnswerReady: answerEligible,
+      finalAnswerMode: stateDecision.finalAnswerMode,
+      clarificationNeeded:
+          stateDecision.nextAction == 'ask_user' ||
+          stateDecision.finalAnswerMode == 'clarify',
+      answerOwner: aggregationState.answerOwner,
+      clarificationSource:
+          (stateDecision.askUser['slotId'] as String?)?.trim().isNotEmpty ==
+              true
+          ? (stateDecision.askUser['slotId'] as String).trim()
+          : aggregationState.clarificationSource,
+      dependencies: aggregationState.dependencies,
+    );
+    final effectiveSkillRuns = _finalizeSkillRuns(
+      skillRuns: skillRuns,
+      primaryDomainId: dialogueRoundScript.domainId,
+      slotState: stateDecision.slotState,
+      answerReady: answerEligible,
+      stopReason: stateDecision.finalAnswerMode,
+      references: uiReferences,
+      resultSummary: _extractUiSummary(answerPayload, displayPlainText),
+    );
+    final resolvedAnswerEligibility = answerEligible
+        ? stateDecision.answerEligibility
+        : 'blocked';
+    final runArtifacts = RunArtifacts(
+      machineEnvelope: result.finalText,
+      displayMarkdown: linkedMarkdown.trim(),
+      displayPlainText: displayPlainText,
+      processJournal: processJournal,
+      liveCursor: processJournalBus.liveCursor,
+      evidenceLedger: evidenceLedger,
+      answerEvidenceBindings: answerEvidenceBindings,
+      slotState: stateDecision.slotState,
+      answerDecision: <String, dynamic>{
+        ...((answerPayload['decision'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{}),
+        ...stateDecision.toDecisionMap(),
+        'evidenceSummary': evidenceEvaluation.summary,
+      },
+      diagnostics: <String, dynamic>{
+        'domainId': dialogueRoundScript.domainId,
+        'renderMode': renderMode,
+        'renderFallback': renderFallback,
+        'answerEligibility': resolvedAnswerEligibility,
+        'qualityGates': stateDecision.qualityGates,
+        'evidenceEvaluation': evidenceEvaluation.toJson(),
+        ...((answerPayload['diagnostics'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{}),
+      },
+      domainPolicyBundle: domainPolicyBundle,
+    );
     final uiProcessContentBlocks = _buildUiProcessContentBlocks(
       processSummary: processSummaryV1,
       uiReferences: uiReferences,
     );
-    final userEvents = _buildUserEvents(
-      intentGraph: intentGraph,
-      skillRuns: skillRuns,
-      aggregationState: aggregationState,
-      request: request,
-      answerPayload: answerPayload,
-      processSummary: processSummaryV1,
-      uiReferences: uiReferences,
-    );
-    final uiProcessTimelineV2 = _buildUiProcessTimelineV2(
-      userEvents: userEvents,
-    );
     final sessionPreferenceFacts = _buildSessionPreferenceFacts(
       request: request,
       answerPayload: answerPayload,
-      skillRuns: skillRuns,
+      skillRuns: effectiveSkillRuns,
       uiReferences: uiReferences,
     );
     final longTermPreferenceFacts = _buildLongTermPreferenceFacts(
@@ -1749,17 +2212,25 @@ class PersonalAssistantAgentLoop {
     final enrichedAnswerPayload = <String, dynamic>{
       ...answerPayload,
       'intentGraph': intentGraph.toJson(),
+      'messageKind': messageKind,
       'subagentPlan': subagentPlan
           .map((item) => item.toJson())
           .toList(growable: false),
-      'skillRuns': skillRuns
+      'skillRuns': effectiveSkillRuns
           .map((item) => item.toJson())
           .toList(growable: false),
-      'aggregationState': aggregationState.toJson(),
-      'userEvents': userEvents
-          .map((item) => item.toJson())
-          .toList(growable: false),
-      'uiProcessTimelineV2': uiProcessTimelineV2
+      'aggregationState': effectiveAggregationState.toJson(),
+      'evidenceEvaluation': evidenceEvaluation.toJson(),
+      'slotState': _slotStatePayloadFromSnapshot(stateDecision.slotState),
+      'missingContextSlots': stateDecision.missingCriticalSlots,
+      'askUser': stateDecision.askUser,
+      'decision': <String, dynamic>{
+        ...stateDecision.toDecisionMap(),
+        ...((answerPayload['decision'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{}),
+      },
+      'runArtifactsV1': runArtifacts.toJson(),
+      'processJournalV1': processJournal
           .map((item) => item.toJson())
           .toList(growable: false),
       'sessionPreferenceFacts': sessionPreferenceFacts
@@ -1769,31 +2240,9 @@ class PersonalAssistantAgentLoop {
           .map((item) => item.toJson())
           .toList(growable: false),
     };
-    if (normalizedMarkdown.isNotEmpty && onTraceEvent != null) {
-      onTraceEvent(
-        AssistantTraceEvent(
-          type: AssistantTraceEventType.thinkingProgress,
-          message: '正在组织回答...',
-          timestamp: DateTime.now(),
-          runId: runId ?? '',
-          traceId: traceId ?? '',
-          data: const <String, dynamic>{
-            'phase': 'answering',
-            'extracted': true,
-          },
-        ),
-      );
-      for (final chunk in _chunkMarkdownForStreaming(normalizedMarkdown)) {
-        onTraceEvent(
-          AssistantTraceEvent(
-            type: AssistantTraceEventType.answerDelta,
-            message: chunk,
-            timestamp: DateTime.now(),
-            runId: runId ?? '',
-            traceId: traceId ?? '',
-            data: const <String, dynamic>{'stage': 'synthesis'},
-          ),
-        );
+    if (synthesizedAnsweringTraces.isNotEmpty && onTraceEvent != null) {
+      for (final trace in synthesizedAnsweringTraces) {
+        onTraceEvent(trace);
       }
     }
     return <String, dynamic>{
@@ -1823,6 +2272,7 @@ class PersonalAssistantAgentLoop {
       'webEvidencePacks': webEvidencePacks,
       'webEvidenceGate': <String, dynamic>{
         'passed': evidenceGatePassed,
+        'evaluation': evidenceEvaluation.toJson(),
         'thresholds': <String, dynamic>{
           'coverageMin': 0.7,
           'confidenceMin': 0.65,
@@ -1848,12 +2298,10 @@ class PersonalAssistantAgentLoop {
         if (synthesisReadiness.gapFillTask != null)
           synthesisReadiness.gapFillTask!.toJson(),
       ],
-      'missingCriticalSlots':
-          (contextAssembly.contextEnvelope['missingSlots'] as List?)
-              ?.whereType<String>()
-              .toList(growable: false) ??
-          const <String>[],
-      'answerEligibility': answerEligible ? 'eligible' : 'blocked',
+      'missingCriticalSlots': stateDecision.missingCriticalSlots,
+      'answerEligibility': resolvedAnswerEligibility,
+      'conversationStateDecision': stateDecision.toDecisionMap(),
+      'finalAnswerMode': stateDecision.finalAnswerMode,
       'nextActions': _buildNextActions(contextAssembly, synthesisReadiness),
       'experimentBucket': _resolveExperimentBucket(
         request.contextScopeHint,
@@ -1969,6 +2417,7 @@ class PersonalAssistantAgentLoop {
         'toolResultCount': toolResults.length,
         'toolErrorCount': toolErrors.length,
         'webEvidenceGatePassed': evidenceGatePassed,
+        'qualityGates': stateDecision.qualityGates,
       },
       'answerPayload': enrichedAnswerPayload,
       'decisionJson':
@@ -1996,13 +2445,10 @@ class PersonalAssistantAgentLoop {
           .map((item) => item.toJson())
           .toList(growable: false),
       'subagentRuns': subagentRuns,
-      'skillRuns': skillRuns
+      'skillRuns': effectiveSkillRuns
           .map((item) => item.toJson())
           .toList(growable: false),
-      'aggregationState': aggregationState.toJson(),
-      'userEvents': userEvents
-          .map((item) => item.toJson())
-          .toList(growable: false),
+      'aggregationState': effectiveAggregationState.toJson(),
       'sessionPreferenceFacts': sessionPreferenceFacts
           .map((item) => item.toJson())
           .toList(growable: false),
@@ -2030,28 +2476,32 @@ class PersonalAssistantAgentLoop {
             .inMilliseconds,
       ).toJson(),
       'uiAnswer': <String, dynamic>{
-        'summaryText': _extractUiSummary(answerPayload, result.finalText),
-        'markdownText': normalizedMarkdown,
+        'summaryText': _extractUiSummary(answerPayload, displayPlainText),
+        'markdownText': linkedMarkdown,
+        'plainText': displayPlainText,
+        'evidenceBindings': answerEvidenceBindings
+            .map((item) => item.toJson())
+            .toList(growable: false),
+        'evidenceLinks': evidenceLinks,
         'actionHints':
             ((answerPayload['result'] as Map?)?['actionHints'] as List?)
                 ?.whereType<String>()
                 .toList(growable: false) ??
             const <String>[],
-        'followupPrompt': (answerPayload['followupPrompt'] as String?) ?? '',
+        'followupPrompt': _resolveFollowupPrompt(
+          answerPayload: answerPayload,
+          askUser: stateDecision.askUser,
+        ),
         'selfScore': modelSelfScore,
       },
       'processSummaryV1': processSummaryV1,
       'processReferenceCountV1': processReferenceCountV1,
       'processSummary': processSummaryV1,
       'processReferenceCount': processReferenceCountV1,
-      'uiProcessTimelineV2': uiProcessTimelineV2
+      'runArtifactsV1': runArtifacts.toJson(),
+      'processJournalV1': processJournal
           .map((item) => item.toJson())
           .toList(growable: false),
-      'uiPhaseTimelineV1': _buildUiPhaseTimelineV1(
-        traces: result.traces,
-        toolResults: toolResults,
-        subagentRuns: subagentRuns,
-      ),
       'uiTimeline': <Map<String, dynamic>>[
         for (final run in subagentRuns)
           <String, dynamic>{
@@ -2061,6 +2511,10 @@ class PersonalAssistantAgentLoop {
           },
       ],
       'uiReferences': uiReferences,
+      'evidenceLedger': evidenceLedger
+          .map((entry) => entry.toJson())
+          .toList(growable: false),
+      'domainPolicyBundle': domainPolicyBundle.toJson(),
       'uiProcessContentBlocks': uiProcessContentBlocks,
       'uiActions': <Map<String, dynamic>>[
         <String, dynamic>{'id': 'regenerate'},
@@ -2080,214 +2534,6 @@ class PersonalAssistantAgentLoop {
     };
   }
 
-  List<Map<String, dynamic>> _buildUiPhaseTimelineV1({
-    required List<AssistantTraceEvent> traces,
-    required List<Map<String, dynamic>> toolResults,
-    required List<Map<String, dynamic>> subagentRuns,
-  }) {
-    final phases = <Map<String, dynamic>>[];
-    Map<String, dynamic>? understandingPhase;
-    Map<String, dynamic>? searchingPhase;
-    Map<String, dynamic>? analyzingPhase;
-    int retryCount = 0;
-
-    void ensureUnderstandingPhase() {
-      understandingPhase ??= <String, dynamic>{
-        'phaseId': 'phase_understanding_1',
-        'phaseType': 'understanding',
-        'status': 'running',
-        'title': '理解问题',
-        'summary': '正在分析您的问题...',
-        'details': <String>[],
-        'references': <Map<String, dynamic>>[],
-      };
-      if (!phases.contains(understandingPhase)) phases.add(understandingPhase!);
-    }
-
-    void ensureSearchingPhase() {
-      searchingPhase ??= <String, dynamic>{
-        'phaseId': 'phase_searching_1',
-        'phaseType': 'tool:web_search',
-        'status': 'running',
-        'title': '搜索资料',
-        'summary': '正在搜索相关资料',
-        'details': <String>[],
-        'references': <Map<String, dynamic>>[],
-      };
-      if (!phases.contains(searchingPhase)) phases.add(searchingPhase!);
-    }
-
-    void ensureAnalyzingPhase() {
-      analyzingPhase ??= <String, dynamic>{
-        'phaseId': 'phase_analyzing_1',
-        'phaseType': 'analyzing',
-        'status': 'running',
-        'title': '分析整理',
-        'summary': '正在分析获取到的信息...',
-        'details': <String>[],
-        'references': <Map<String, dynamic>>[],
-      };
-      if (!phases.contains(analyzingPhase)) phases.add(analyzingPhase!);
-    }
-
-    void appendDetail(Map<String, dynamic> phase, String detail) {
-      final text = _sanitizeUiDetail(detail);
-      if (text.isEmpty) return;
-      final details = (phase['details'] as List).cast<String>();
-      if (details.isNotEmpty && details.last == text) return;
-      details.add(text);
-    }
-
-    bool hasToolResults = false;
-
-    for (final trace in traces) {
-      final data = trace.data ?? const <String, dynamic>{};
-      if (trace.type == AssistantTraceEventType.toolStart) {
-        final toolName =
-            (data['tool'] ?? data['toolName'] ?? data['name'] ?? '')
-                .toString()
-                .trim()
-                .toLowerCase();
-        if (toolName.contains('search') || toolName.contains('retrieval')) {
-          ensureSearchingPhase();
-          final args =
-              (data['arguments'] as Map?)?.cast<String, dynamic>() ??
-              const <String, dynamic>{};
-          final query =
-              ((data['query'] ?? args['query'] ?? data['keyword']) as Object?)
-                  ?.toString()
-                  .trim() ??
-              '';
-          if (query.isNotEmpty) {
-            appendDetail(searchingPhase!, '检索查询：$query');
-          }
-        } else if (toolName.contains('fetch')) {
-          ensureSearchingPhase();
-          final url = (data['url'] as String?)?.trim() ?? '';
-          if (url.isNotEmpty) {
-            appendDetail(searchingPhase!, '深度阅读：$url');
-          }
-        }
-      } else if (trace.type == AssistantTraceEventType.assistantDelta) {
-        final plannedQueries =
-            (data['searchQueries'] as List?)
-                ?.whereType<String>()
-                .map((item) => item.trim())
-                .where((item) => item.isNotEmpty)
-                .toList(growable: false) ??
-            const <String>[];
-        if (plannedQueries.isNotEmpty) {
-          ensureSearchingPhase();
-          for (final query in plannedQueries.take(3)) {
-            appendDetail(searchingPhase!, '检索查询：$query');
-          }
-        } else if (!hasToolResults) {
-          ensureUnderstandingPhase();
-          final detail = _sanitizeUiDetail(trace.message);
-          if (detail.isNotEmpty) {
-            appendDetail(understandingPhase!, detail);
-          }
-        } else {
-          ensureAnalyzingPhase();
-          final detail = _sanitizeUiDetail(trace.message);
-          if (detail.isNotEmpty) {
-            appendDetail(analyzingPhase!, detail);
-          }
-        }
-      } else if (trace.type == AssistantTraceEventType.thinkingProgress) {
-        final phase = (data['phase'] as String?) ?? 'understanding';
-        final detail = _sanitizeUiDetail(trace.message);
-        if (phase == 'analyzing') {
-          ensureAnalyzingPhase();
-          if (detail.isNotEmpty) appendDetail(analyzingPhase!, detail);
-        } else {
-          ensureUnderstandingPhase();
-          if (detail.isNotEmpty) appendDetail(understandingPhase!, detail);
-        }
-      } else if (trace.type == AssistantTraceEventType.toolResult) {
-        hasToolResults = true;
-        if (data['isAssessment'] == true) {
-          // Merge assessment into searching phase instead of creating separate phases
-          retryCount++;
-          ensureSearchingPhase();
-          if (retryCount <= 1) {
-            appendDetail(searchingPhase!, '正在验证搜索结果...');
-          } else {
-            appendDetail(searchingPhase!, '尝试其他搜索途径（第 $retryCount 次）');
-          }
-        } else {
-          final refs =
-              (data['references'] as List?)
-                  ?.whereType<Map>()
-                  .map((item) => item.cast<String, dynamic>())
-                  .toList(growable: false) ??
-              const <Map<String, dynamic>>[];
-          if (refs.isNotEmpty) {
-            ensureSearchingPhase();
-            final current = (searchingPhase!['references'] as List)
-                .cast<Map<String, dynamic>>();
-            final seen = current
-                .map((item) => (item['url'] as String?) ?? '')
-                .where((item) => item.isNotEmpty)
-                .toSet();
-            for (final ref in refs) {
-              final url = (ref['url'] as String?)?.trim() ?? '';
-              if (url.isEmpty || seen.contains(url)) continue;
-              current.add(<String, dynamic>{
-                'title': (ref['title'] ?? '').toString(),
-                'url': url,
-                'source': (ref['source'] ?? '').toString(),
-                'provider': (ref['provider'] ?? '').toString(),
-                'snippet': (ref['snippet'] ?? '').toString(),
-              });
-              seen.add(url);
-            }
-            searchingPhase!['summary'] = '已找到 ${current.length} 篇相关资料';
-          }
-        }
-      } else if (trace.type == AssistantTraceEventType.subagentResult) {
-        ensureAnalyzingPhase();
-        appendDetail(analyzingPhase!, trace.message);
-      } else if (trace.type == AssistantTraceEventType.replanTriggered ||
-          (trace.type == AssistantTraceEventType.lifecycleStart &&
-              trace.message.toLowerCase().contains('replanning'))) {
-        // Merge replan into searching phase instead of creating separate phases
-        ensureSearchingPhase();
-        appendDetail(searchingPhase!, '扩大搜索范围...');
-      }
-    }
-
-    if (understandingPhase != null) {
-      understandingPhase!['status'] = 'completed';
-      if ((understandingPhase!['details'] as List).isEmpty) {
-        (understandingPhase!['details'] as List).add('已完成问题分析');
-      }
-    }
-    if (searchingPhase != null) {
-      searchingPhase!['status'] = 'completed';
-      final refs = (searchingPhase!['references'] as List);
-      if (refs.isEmpty && retryCount > 0) {
-        searchingPhase!['summary'] = '搜索完成（部分来源暂时不可用）';
-      }
-    }
-    if (analyzingPhase != null) {
-      analyzingPhase!['status'] = 'completed';
-    }
-    if (subagentRuns.isNotEmpty && analyzingPhase != null) {
-      analyzingPhase!['summary'] = '已完成 ${subagentRuns.length} 个子任务';
-    }
-    phases.add(<String, dynamic>{
-      'phaseId': 'phase_answering_final',
-      'phaseType': 'answering',
-      'status': 'completed',
-      'title': '组织回答',
-      'summary': '回答已生成',
-      'details': <String>[],
-      'references': <Map<String, dynamic>>[],
-    });
-    return phases;
-  }
-
   static final RegExp _xmlToolCallTagRe = RegExp(
     r'<tool_call>[\s\S]*?</tool_call>|'
     r'<function=[^>]+>[\s\S]*?</function>|'
@@ -2296,22 +2542,6 @@ class PersonalAssistantAgentLoop {
     r'<parameter=[^>]*>[\s\S]*?</parameter>|'
     r'</?parameter[^>]*>',
   );
-
-  String _sanitizeUiDetail(String raw) {
-    String text = raw.trim();
-    if (text.isEmpty) return '';
-    if (text.contains('"contractVersion"')) return '';
-    // Filter internal dispatch messages
-    if (text.startsWith('calling ') && text.length < 40) return '';
-    if (text.startsWith('{') && text.contains('"tool_calls"')) return '';
-    // Strip XML tool-call markup that some models emit
-    if (text.contains('<tool_call>') || text.contains('<function=')) {
-      text = text.replaceAll(_xmlToolCallTagRe, '').trim();
-      if (text.isEmpty) return '';
-    }
-    if (text.length <= 120) return text;
-    return '${text.substring(0, 120)}...';
-  }
 
   Map<String, dynamic> _buildUiUsageStatsV1({
     required List<AssistantTraceEvent> traces,
@@ -2325,21 +2555,42 @@ class PersonalAssistantAgentLoop {
       fallbackInputText: inputText,
       fallbackOutputText: outputText,
     );
+    final mainLedger =
+        (mainUsage['usageLedger'] as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[];
     final mainCalls = (mainUsage['modelCallCount'] as num?)?.toInt() ?? 0;
     final mainTokens = (mainUsage['totalTokens'] as num?)?.toInt() ?? 0;
     final mainMaxTokens = (mainUsage['maxTokensPerCall'] as num?)?.toInt() ?? 0;
-    final mainTokenSamples = (mainUsage['tokenSampleCount'] as num?)?.toInt() ?? 0;
+    final mainTokenSamples =
+        (mainUsage['tokenSampleCount'] as num?)?.toInt() ?? 0;
+    final mainInputTokens = (mainUsage['inputTokens'] as num?)?.toInt() ?? 0;
+    final mainOutputTokens = (mainUsage['outputTokens'] as num?)?.toInt() ?? 0;
 
     var subagentCalls = 0;
     var subagentTokens = 0;
     var subagentMaxTokens = 0;
     var subagentTokenSamples = 0;
+    var subagentInputTokens = 0;
+    var subagentOutputTokens = 0;
+    final usageLedger = <Map<String, dynamic>>[...mainLedger];
     for (final run in subagentRuns) {
       subagentCalls += _safeNonNegativeInt(run['modelCallCount']);
       subagentTokens += _safeNonNegativeInt(run['totalTokens']);
       final maxTokens = _safeNonNegativeInt(run['maxTokensPerCall']);
       if (maxTokens > subagentMaxTokens) subagentMaxTokens = maxTokens;
       subagentTokenSamples += _safeNonNegativeInt(run['tokenSampleCount']);
+      subagentInputTokens += _safeNonNegativeInt(run['inputTokens']);
+      subagentOutputTokens += _safeNonNegativeInt(run['outputTokens']);
+      final subagentLedger =
+          (run['usageLedger'] as List?)
+              ?.whereType<Map>()
+              .map((item) => item.cast<String, dynamic>())
+              .toList(growable: false) ??
+          const <Map<String, dynamic>>[];
+      usageLedger.addAll(subagentLedger);
     }
 
     final tokenSampleCount = mainTokenSamples + subagentTokenSamples;
@@ -2351,8 +2602,11 @@ class PersonalAssistantAgentLoop {
       'modelCallCount': modelCalls,
       'totalTokens': totalTokens,
       'maxTokensPerCall': maxTokens,
+      'inputTokens': mainInputTokens + subagentInputTokens,
+      'outputTokens': mainOutputTokens + subagentOutputTokens,
       'tokenSource': tokenSampleCount > 0 ? 'trace_or_subagent' : 'estimated',
       'tokenSampleCount': tokenSampleCount,
+      if (usageLedger.isNotEmpty) 'usageLedger': usageLedger,
     };
   }
 
@@ -2361,6 +2615,52 @@ class PersonalAssistantAgentLoop {
     required String fallbackInputText,
     required String fallbackOutputText,
   }) {
+    final usageLedger = <Map<String, dynamic>>[];
+    for (final trace in traces) {
+      final entries =
+          (trace.data?['usageEntries'] as List?)
+              ?.whereType<Map>()
+              .map((item) => item.cast<String, dynamic>())
+              .toList(growable: false) ??
+          const <Map<String, dynamic>>[];
+      if (entries.isEmpty) continue;
+      usageLedger.addAll(entries);
+    }
+    if (usageLedger.isNotEmpty) {
+      var totalTokens = 0;
+      var maxTokens = 0;
+      var inputTokens = 0;
+      var outputTokens = 0;
+      final sources = <String>{};
+      for (final entry in usageLedger) {
+        final total = _safeNonNegativeInt(
+          entry['totalTokens'] ?? entry['tokenUsage'],
+        );
+        final input = _safeNonNegativeInt(entry['inputTokens']);
+        final output = _safeNonNegativeInt(entry['outputTokens']);
+        totalTokens += total;
+        inputTokens += input;
+        outputTokens += output;
+        if (total > maxTokens) maxTokens = total;
+        final source = (entry['source'] as String?)?.trim() ?? '';
+        if (source.isNotEmpty) {
+          sources.add(source);
+        }
+      }
+      return <String, dynamic>{
+        'modelCallCount': usageLedger.length,
+        'totalTokens': totalTokens,
+        'maxTokensPerCall': maxTokens,
+        'inputTokens': inputTokens,
+        'outputTokens': outputTokens,
+        'tokenSource': sources.isEmpty
+            ? 'usage_ledger'
+            : (sources.length == 1 ? sources.first : 'mixed_ledger'),
+        'tokenSampleCount': usageLedger.length,
+        'usageLedger': usageLedger,
+      };
+    }
+
     int totalTokensFromTrace = 0;
     int maxTokensFromTrace = 0;
     var tokenSampleCount = 0;
@@ -2398,7 +2698,10 @@ class PersonalAssistantAgentLoop {
     final estimatedInputTokens = _estimateTokenCount(fallbackInputText);
     final estimatedOutputTokens = _estimateTokenCount(fallbackOutputText);
     final estimatedTotalTokens = estimatedInputTokens + estimatedOutputTokens;
-    final estimatedMaxTokens = math.max(estimatedInputTokens, estimatedOutputTokens);
+    final estimatedMaxTokens = math.max(
+      estimatedInputTokens,
+      estimatedOutputTokens,
+    );
 
     final totalTokens = tokenSampleCount > 0
         ? totalTokensFromTrace
@@ -2527,6 +2830,332 @@ class PersonalAssistantAgentLoop {
       curatedRefs.first['_totalSearched'] = totalSearched;
     }
     return curatedRefs;
+  }
+
+  List<Map<String, dynamic>> _buildInlineEvidenceLinks({
+    required Map<String, dynamic> answerPayload,
+    required List<Map<String, dynamic>> uiReferences,
+    required List<EvidenceLedgerEntry> evidenceLedger,
+  }) {
+    return _buildAnswerEvidenceBindings(
+      answerPayload: answerPayload,
+      uiReferences: uiReferences,
+      evidenceLedger: evidenceLedger,
+    ).map((item) => item.toJson()).toList(growable: false);
+  }
+
+  List<AnswerEvidenceBinding> _buildAnswerEvidenceBindings({
+    required Map<String, dynamic> answerPayload,
+    required List<Map<String, dynamic>> uiReferences,
+    required List<EvidenceLedgerEntry> evidenceLedger,
+  }) {
+    final bindings = <AnswerEvidenceBinding>[];
+    final seenKeys = <String>{};
+    final rawEvidence =
+        (answerPayload['evidence'] as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[];
+    for (final item in rawEvidence) {
+      final candidate = _normalizeInlineEvidenceBinding(
+        item: item,
+        uiReferences: uiReferences,
+        evidenceLedger: evidenceLedger,
+        index: bindings.length + 1,
+      );
+      if (candidate == null) continue;
+      final dedupeKey = candidate.evidenceId.isNotEmpty
+          ? candidate.evidenceId
+          : candidate.url;
+      if (dedupeKey.isEmpty || !seenKeys.add(dedupeKey)) continue;
+      bindings.add(candidate);
+      if (bindings.length >= 4) break;
+    }
+    if (bindings.isEmpty) {
+      for (final entry in evidenceLedger.take(2)) {
+        final dedupeKey = entry.evidenceId.isNotEmpty
+            ? entry.evidenceId
+            : entry.url;
+        if (dedupeKey.isEmpty || !seenKeys.add(dedupeKey)) continue;
+        bindings.add(
+          _fallbackBindingFromEvidenceEntry(
+            entry: entry,
+            index: bindings.length + 1,
+          ),
+        );
+      }
+    }
+    if (bindings.isEmpty) {
+      for (final ref in uiReferences.take(2)) {
+        final url = (ref['url'] as String?)?.trim() ?? '';
+        if (url.isEmpty || !seenKeys.add(url)) continue;
+        bindings.add(
+          _fallbackBindingFromReference(ref: ref, index: bindings.length + 1),
+        );
+      }
+    }
+    return bindings;
+  }
+
+  AnswerEvidenceBinding? _normalizeInlineEvidenceBinding({
+    required Map<String, dynamic> item,
+    required List<Map<String, dynamic>> uiReferences,
+    required List<EvidenceLedgerEntry> evidenceLedger,
+    required int index,
+  }) {
+    final claim =
+        ((item['text'] as String?)?.trim().isNotEmpty == true
+            ? (item['text'] as String).trim()
+            : (item['claim'] as String?)?.trim()) ??
+        '';
+    final directEvidenceId = (item['evidenceId'] as String?)?.trim() ?? '';
+    final directUrl = (item['url'] as String?)?.trim() ?? '';
+    final directTitle = (item['title'] as String?)?.trim() ?? '';
+    final directSnippet = (item['snippet'] as String?)?.trim() ?? '';
+    final matchedEvidence = _matchEvidenceEntryForBinding(
+      claim: claim,
+      title: directTitle,
+      snippet: directSnippet,
+      directUrl: directUrl,
+      directEvidenceId: directEvidenceId,
+      evidenceLedger: evidenceLedger,
+    );
+    Map<String, dynamic> matchedReference = const <String, dynamic>{};
+    if (directUrl.isEmpty && matchedEvidence == null) {
+      matchedReference = _matchReferenceForEvidence(
+        claim: claim,
+        title: directTitle,
+        snippet: directSnippet,
+        uiReferences: uiReferences,
+      );
+    }
+    final url = directUrl.isNotEmpty
+        ? directUrl
+        : (matchedEvidence?.url.isNotEmpty == true
+              ? matchedEvidence!.url
+              : (matchedReference['url'] as String?)?.trim() ?? '');
+    if (url.isEmpty) return null;
+    final title = directTitle.isNotEmpty
+        ? directTitle
+        : (matchedEvidence?.title.isNotEmpty == true
+              ? matchedEvidence!.title
+              : ((matchedReference['title'] as String?)?.trim().isNotEmpty ==
+                        true
+                    ? (matchedReference['title'] as String).trim()
+                    : url));
+    final source = matchedEvidence?.sourceHost.isNotEmpty == true
+        ? matchedEvidence!.sourceHost
+        : (matchedReference['source'] as String?)?.trim() ?? '';
+    final snippet = directSnippet.isNotEmpty
+        ? directSnippet
+        : (matchedEvidence?.snippet.isNotEmpty == true
+              ? matchedEvidence!.snippet
+              : (matchedReference['snippet'] as String?)?.trim() ?? '');
+    return AnswerEvidenceBinding(
+      bindingId:
+          'answer_evidence_${index}_${matchedEvidence?.evidenceId.isNotEmpty == true ? matchedEvidence!.evidenceId : url.hashCode}',
+      label: '来源$index',
+      claim: claim,
+      evidenceId: matchedEvidence?.evidenceId ?? '',
+      url: url,
+      title: title,
+      source: source,
+      snippet: snippet,
+    );
+  }
+
+  AnswerEvidenceBinding _fallbackBindingFromEvidenceEntry({
+    required EvidenceLedgerEntry entry,
+    required int index,
+  }) {
+    return AnswerEvidenceBinding(
+      bindingId:
+          'answer_evidence_${index}_${entry.evidenceId.isNotEmpty ? entry.evidenceId : entry.url.hashCode}',
+      label: '来源$index',
+      claim: entry.title,
+      evidenceId: entry.evidenceId,
+      url: entry.url,
+      title: entry.title.isNotEmpty ? entry.title : entry.url,
+      source: entry.sourceHost,
+      snippet: entry.snippet,
+    );
+  }
+
+  AnswerEvidenceBinding _fallbackBindingFromReference({
+    required Map<String, dynamic> ref,
+    required int index,
+  }) {
+    final url = (ref['url'] as String?)?.trim() ?? '';
+    final title = (ref['title'] as String?)?.trim() ?? url;
+    return AnswerEvidenceBinding(
+      bindingId: 'answer_evidence_${index}_${url.hashCode}',
+      label: '来源$index',
+      claim: title,
+      evidenceId: (ref['evidenceId'] as String?)?.trim() ?? '',
+      url: url,
+      title: title,
+      source: (ref['source'] as String?)?.trim() ?? '',
+      snippet: (ref['snippet'] as String?)?.trim() ?? '',
+    );
+  }
+
+  EvidenceLedgerEntry? _matchEvidenceEntryForBinding({
+    required String claim,
+    required String title,
+    required String snippet,
+    required String directUrl,
+    required String directEvidenceId,
+    required List<EvidenceLedgerEntry> evidenceLedger,
+  }) {
+    for (final entry in evidenceLedger) {
+      if (directEvidenceId.isNotEmpty && entry.evidenceId == directEvidenceId) {
+        return entry;
+      }
+      if (directUrl.isNotEmpty && entry.url == directUrl) {
+        return entry;
+      }
+    }
+    final scoreTarget = '$claim $title $snippet'.toLowerCase();
+    EvidenceLedgerEntry? best;
+    var bestScore = 0;
+    for (final entry in evidenceLedger) {
+      final haystack =
+          '${entry.title} ${entry.snippet} ${entry.sourceHost} ${entry.url}'
+              .toLowerCase();
+      var score = 0;
+      if (claim.isNotEmpty && haystack.contains(claim.toLowerCase())) {
+        score += claim.length + 6;
+      }
+      if (title.isNotEmpty && haystack.contains(title.toLowerCase())) {
+        score += title.length + 4;
+      }
+      for (final token in _evidenceScoreTokens(scoreTarget)) {
+        if (haystack.contains(token)) score += token.length;
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        best = entry;
+      }
+    }
+    return bestScore > 0 ? best : null;
+  }
+
+  Map<String, dynamic> _matchReferenceForEvidence({
+    required String claim,
+    required String title,
+    required String snippet,
+    required List<Map<String, dynamic>> uiReferences,
+  }) {
+    final scoreTarget = '$claim $title $snippet'.toLowerCase();
+    Map<String, dynamic> best = const <String, dynamic>{};
+    var bestScore = 0;
+    for (final ref in uiReferences) {
+      final refText =
+          '${(ref['title'] ?? '').toString()} ${(ref['snippet'] ?? '').toString()} ${(ref['source'] ?? '').toString()}'
+              .toLowerCase();
+      var score = 0;
+      for (final token in _evidenceScoreTokens(scoreTarget)) {
+        if (refText.contains(token)) score += token.length;
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        best = ref;
+      }
+    }
+    return best;
+  }
+
+  String _applyInlineEvidenceLinks(
+    String markdown,
+    List<Map<String, dynamic>> evidenceLinks,
+  ) {
+    final trimmed = markdown.trimRight();
+    if (trimmed.isEmpty || evidenceLinks.isEmpty) return trimmed;
+    final lines = trimmed.split('\n');
+    final candidateIndices = <int>[];
+    for (var i = 0; i < lines.length; i++) {
+      if (_isEvidenceCandidateLine(lines[i])) {
+        candidateIndices.add(i);
+      }
+    }
+    if (candidateIndices.isEmpty) return trimmed;
+    final usedIndices = <int>{};
+    for (final link in evidenceLinks.take(2)) {
+      final targetIndex = _pickEvidenceTargetLine(
+        lines: lines,
+        candidates: candidateIndices,
+        usedIndices: usedIndices,
+        link: link,
+      );
+      if (targetIndex < 0) continue;
+      final url = (link['url'] as String?)?.trim() ?? '';
+      final label = (link['label'] as String?)?.trim() ?? '来源';
+      if (url.isEmpty || lines[targetIndex].contains('($url)')) continue;
+      lines[targetIndex] = '${lines[targetIndex].trimRight()} 🔗[$label]($url)';
+      usedIndices.add(targetIndex);
+    }
+    return lines.join('\n');
+  }
+
+  int _pickEvidenceTargetLine({
+    required List<String> lines,
+    required List<int> candidates,
+    required Set<int> usedIndices,
+    required Map<String, dynamic> link,
+  }) {
+    var bestIndex = -1;
+    var bestScore = -1;
+    for (final index in candidates) {
+      if (usedIndices.contains(index)) continue;
+      final score = _scoreLineForEvidence(lines[index], link);
+      if (score > bestScore) {
+        bestScore = score;
+        bestIndex = index;
+      }
+    }
+    if (bestIndex >= 0 && bestScore > 0) return bestIndex;
+    for (final index in candidates) {
+      if (!usedIndices.contains(index)) return index;
+    }
+    return -1;
+  }
+
+  int _scoreLineForEvidence(String line, Map<String, dynamic> link) {
+    final haystack = line.toLowerCase();
+    var score = 0;
+    final claim = (link['claim'] as String?)?.trim().toLowerCase() ?? '';
+    if (claim.isNotEmpty && haystack.contains(claim)) {
+      score += claim.length + 4;
+    }
+    final title = (link['title'] as String?)?.trim().toLowerCase() ?? '';
+    if (title.isNotEmpty && haystack.contains(title)) {
+      score += title.length + 2;
+    }
+    for (final token in _evidenceScoreTokens('$claim $title')) {
+      if (haystack.contains(token)) score += token.length;
+    }
+    return score;
+  }
+
+  Iterable<String> _evidenceScoreTokens(String raw) {
+    return RegExp(r'[\u4e00-\u9fa5A-Za-z0-9]{2,}')
+        .allMatches(raw)
+        .map((m) => m.group(0)!.toLowerCase())
+        .where((token) => token.length >= 2)
+        .take(8);
+  }
+
+  bool _isEvidenceCandidateLine(String line) {
+    final trimmed = line.trim();
+    if (trimmed.isEmpty) return false;
+    if (trimmed.startsWith('#') ||
+        trimmed.startsWith('```') ||
+        trimmed.startsWith('|') ||
+        trimmed.startsWith('>')) {
+      return false;
+    }
+    return true;
   }
 
   bool _isWeatherRelevantReference({
@@ -2744,7 +3373,10 @@ class PersonalAssistantAgentLoop {
         sessionId: sessionId,
         runId: runId,
         traceId: traceId,
-        onTraceEvent: onTraceEvent,
+        onTraceEvent: _withTraceVisibility(
+          onTraceEvent,
+          TraceVisibility.internal,
+        ),
         onDelta: null,
         callOptions: const LlmCallOptions(
           temperature: 0.2,
@@ -2778,8 +3410,7 @@ class PersonalAssistantAgentLoop {
         problemShape: secondarySkills.isEmpty ? 'single_skill' : 'multi_skill',
         primarySkill: primarySkill,
         problemClass: problemClass,
-        inferredMotive:
-            (parsed['inferredMotive'] as String?)?.trim() ?? '',
+        inferredMotive: (parsed['inferredMotive'] as String?)?.trim() ?? '',
         secondarySkills: secondarySkills,
         globalConstraints: <String, dynamic>{
           'mode': (parsed['mode'] as String?)?.trim() ?? '',
@@ -2969,7 +3600,14 @@ class PersonalAssistantAgentLoop {
           (answerPayload['result'] as Map?) != null,
       stopReason: (answerPayload['messageKind'] as String?)?.trim() ?? '',
       references: references,
-      resultSummary: _extractUiSummary(answerPayload, result.finalText),
+      resultSummary: _extractUiSummary(
+        answerPayload,
+        _resolveDisplayPlainText(
+          answerPayload: answerPayload,
+          displayMarkdown: _extractUiMarkdown(answerPayload, result.finalText),
+          machineEnvelope: result.finalText,
+        ),
+      ),
     );
   }
 
@@ -3013,161 +3651,6 @@ class PersonalAssistantAgentLoop {
       skillRuns: skillRuns,
       answerPayload: answerPayload,
     );
-  }
-
-  List<UserEvent> _buildUserEvents({
-    required IntentGraph intentGraph,
-    required List<SkillRun> skillRuns,
-    required AggregationState aggregationState,
-    required AssistantRunRequest request,
-    required Map<String, dynamic> answerPayload,
-    required String processSummary,
-    required List<Map<String, dynamic>> uiReferences,
-  }) {
-    final events = <UserEvent>[
-      UserEvent(
-        type: UserEventType.processReplace,
-        scope: UserEventScope.root,
-        nodeId: 'root.intent',
-        message: _buildRootProcessMessage(
-          intentGraph: intentGraph,
-          request: request,
-          answerPayload: answerPayload,
-        ),
-        payload: intentGraph.toJson(),
-      ),
-    ];
-    for (final run in skillRuns) {
-      final message = _buildSkillProcessMessage(
-        run,
-        request: request,
-        answerPayload: answerPayload,
-      );
-      events.add(
-        UserEvent(
-          type: run.answerReady
-              ? UserEventType.processCommit
-              : UserEventType.processAppend,
-          scope: UserEventScope.skill,
-          nodeId: run.domainId,
-          runId: run.runId,
-          message: message,
-          payload: <String, dynamic>{
-            ...run.toJson(),
-            'references': run.references,
-          },
-        ),
-      );
-    }
-    events.add(
-      UserEvent(
-        type: UserEventType.processCommit,
-        scope: UserEventScope.aggregation,
-        nodeId: 'aggregation.final',
-        message: processSummary,
-        payload: <String, dynamic>{
-          ...aggregationState.toJson(),
-          'referenceCount': uiReferences.length,
-          'references': uiReferences,
-        },
-      ),
-    );
-    return events;
-  }
-
-  List<UiProcessTimelineEntry> _buildUiProcessTimelineV2({
-    required List<UserEvent> userEvents,
-  }) {
-    return userEvents
-        .map(
-          (event) => UiProcessTimelineEntry(
-            scope: event.scope.name,
-            type: event.type.name,
-            nodeId: event.nodeId,
-            runId: event.runId,
-            summary: event.message,
-            payload: event.payload,
-            references: _extractReferencesFromPayload(event.payload),
-          ),
-        )
-        .toList(growable: false);
-  }
-
-  String _buildRootProcessMessage({
-    required IntentGraph intentGraph,
-    required AssistantRunRequest request,
-    required Map<String, dynamic> answerPayload,
-  }) {
-    final query = request.messages.isNotEmpty
-        ? request.messages.last.content.trim()
-        : '';
-    final city = _inferWeatherCity(
-      request: request,
-      answerPayload: answerPayload,
-    );
-    final weatherLike = _isWeatherLikeRequest(
-      domainId: intentGraph.primarySkill,
-      request: request,
-      answerPayload: answerPayload,
-    );
-    if (intentGraph.isMultiSkill) {
-      if (weatherLike && city.isNotEmpty) {
-        return '我会把这次问题拆开处理，先确认$city天气，再补齐其他部分的信息';
-      }
-      final domains = <String>[
-        intentGraph.primarySkill,
-        ...intentGraph.secondarySkills,
-      ].where((item) => item.trim().isNotEmpty).join('、');
-      return domains.isNotEmpty
-          ? '我会把这次问题拆成$domains几部分分别处理，再一起给你结论'
-          : '我会把这次复合问题拆开处理，再一起给你结论';
-    }
-    if (weatherLike) {
-      if (city.isNotEmpty) {
-        return '我先确认$city现在的天气和相关出行信息';
-      }
-      return '我先确认你想查的实时天气情况';
-    }
-    if (query.isNotEmpty) {
-      return '我先理清“$query”里最需要优先解决的部分';
-    }
-    return '我先理清这次问题，再开始处理';
-  }
-
-  String _buildSkillProcessMessage(
-    SkillRun run, {
-    required AssistantRunRequest request,
-    required Map<String, dynamic> answerPayload,
-  }) {
-    final domainId = run.domainId.trim().toLowerCase();
-    final problemClass = run.problemClass.trim().toLowerCase();
-    final ready = run.answerReady;
-    final city = _inferWeatherCity(
-      request: request,
-      answerPayload: run.slotState.isNotEmpty
-          ? <String, dynamic>{'slotState': run.slotState}
-          : answerPayload,
-    );
-    final goal = run.goal.trim();
-    if (domainId == 'weather' || problemClass == 'realtime_info') {
-      return ready
-          ? '${city.isEmpty ? '实时天气' : '$city天气'}已经核对到，正在整理成更容易看的结论'
-          : '我先查一下${city.isEmpty ? '当前' : city}现在的天气和相关出行信息';
-    }
-    switch (problemClass) {
-      case 'task_execution':
-        return ready
-            ? '这部分执行条件已经确认好，我继续帮你往下整理'
-            : (goal.isNotEmpty ? '我先确认“$goal”需要的执行条件' : '我先确认这部分执行条件');
-      case 'complex_reasoning':
-        return ready
-            ? '这一部分关键信息已经整理好，我继续综合判断'
-            : (goal.isNotEmpty ? '我先补充“$goal”这部分分析信息' : '我先补充这部分分析信息');
-      case 'simple_qa':
-        return ready ? '这一部分答案已经整理好了' : '我先补充这一部分直接相关的信息';
-      default:
-        return ready ? '这一部分关键信息已经整理好了' : '我先补充这一部分相关信息';
-    }
   }
 
   String _resolveMessageKind({
@@ -3348,7 +3831,7 @@ class PersonalAssistantAgentLoop {
     required AssistantRunRequest request,
     required List<Map<String, dynamic>> uiReferences,
     required List<Map<String, dynamic>> toolErrors,
-    required ReactRuntimeResult result,
+    required String displayPlainText,
   }) {
     final fromPayload =
         (answerPayload['processSummary'] as String?)?.trim() ?? '';
@@ -3377,7 +3860,7 @@ class PersonalAssistantAgentLoop {
       }
       return '已尝试获取相关信息，但暂时没有拿到足够可靠的来源，先给你当前可执行的建议。';
     }
-    final fallback = _extractUiSummary(answerPayload, result.finalText).trim();
+    final fallback = _extractUiSummary(answerPayload, displayPlainText).trim();
     if (fallback.isNotEmpty) return fallback;
     return '已整理出当前可直接查看的回答。';
   }
@@ -3552,6 +4035,86 @@ class PersonalAssistantAgentLoop {
     final result = LlmResponseParser.parse(t);
     if (!result.ok) return '';
     return result.userMarkdown;
+  }
+
+  String _resolveDisplayPlainText({
+    required Map<String, dynamic> answerPayload,
+    required String displayMarkdown,
+    required String machineEnvelope,
+  }) {
+    final result =
+        (answerPayload['result'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final directText = _sanitizeDisplayPlainCandidate(
+      (result['text'] as String?)?.trim() ?? '',
+    );
+    if (directText.isNotEmpty) {
+      return directText;
+    }
+    final summaryText = _sanitizeDisplayPlainCandidate(
+      (result['summary'] as String?)?.trim() ?? '',
+    );
+    if (summaryText.isNotEmpty) {
+      return summaryText;
+    }
+    final markdownSource = displayMarkdown.trim().isNotEmpty
+        ? displayMarkdown
+        : _extractDisplayTextForStorage(machineEnvelope);
+    final plainFromMarkdown = _sanitizeDisplayPlainCandidate(
+      _stripMarkdownForPlainText(markdownSource),
+    );
+    if (plainFromMarkdown.isNotEmpty) return plainFromMarkdown;
+    final fallback = _sanitizeDisplayPlainCandidate(
+      OpenAiCompatibleLlmProvider.stripXmlToolCalls(machineEnvelope),
+    ).trim();
+    if (fallback.isNotEmpty) {
+      return fallback;
+    }
+    return '';
+  }
+
+  String _sanitizeDisplayPlainCandidate(String raw) {
+    final text = OpenAiCompatibleLlmProvider.stripXmlToolCalls(raw).trim();
+    if (text.isEmpty) return '';
+    if (AssistantContentFilters.isProgressPlaceholder(text) ||
+        AssistantContentFilters.isJsonEnvelope(text)) {
+      return '';
+    }
+    if (text.contains('assistant_turn_v4') ||
+        text.contains('contractVersion') ||
+        text.contains('tool_call') ||
+        text.contains('<tool_call>')) {
+      return '';
+    }
+    return text;
+  }
+
+  String _stripMarkdownForPlainText(String markdown) {
+    final raw = markdown.trim();
+    if (raw.isEmpty) return '';
+    var text = raw
+        .replaceAllMapped(
+          RegExp(r'\[([^\]]+)\]\(([^)]+)\)'),
+          (match) => match.group(1) ?? '',
+        )
+        .replaceAllMapped(RegExp(r'`([^`]+)`'), (match) => match.group(1) ?? '')
+        .replaceAll(RegExp(r'^#{1,6}\s*', multiLine: true), '')
+        .replaceAll(RegExp(r'^\s*[-*+]\s+', multiLine: true), '')
+        .replaceAll(RegExp(r'^\s*\d+\.\s+', multiLine: true), '')
+        .replaceAll('**', '')
+        .replaceAll('__', '')
+        .replaceAll('*', '')
+        .replaceAll('_', '')
+        .replaceAll('```', '')
+        .replaceAll('|', ' ')
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n');
+    final lines = text
+        .split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList(growable: false);
+    text = lines.join('\n');
+    return text.trim();
   }
 
   String _extractUiMarkdown(
@@ -3768,7 +4331,30 @@ class PersonalAssistantAgentLoop {
       if (event.type != AssistantTraceEventType.assistantDelta) continue;
       final data = event.data ?? const <String, dynamic>{};
       final path = (data['modelPath'] as String?)?.trim() ?? '';
-      if (path == 'fallback_local') return true;
+      if (path != 'fallback_local') continue;
+      final parsed = LlmResponseParser.parse(event.message);
+      if (!parsed.ok) {
+        final raw = event.message.trim();
+        if (raw.isNotEmpty) return true;
+        continue;
+      }
+      final payload = parsed.json ?? const <String, dynamic>{};
+      final diagnostics =
+          (payload['diagnostics'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      if (diagnostics['heuristicFallbackUsed'] == true) {
+        return true;
+      }
+      final messageKind = (payload['messageKind'] as String?)?.trim() ?? '';
+      final phaseId = (payload['phaseId'] as String?)?.trim() ?? '';
+      final turnPhase = (payload['turnPhase'] as String?)?.trim() ?? '';
+      final isAnswerLike =
+          messageKind == 'answer' ||
+          phaseId == 'answering' ||
+          turnPhase == 'answer';
+      if (isAnswerLike && parsed.userMarkdown.isNotEmpty) {
+        return true;
+      }
     }
     return false;
   }
@@ -3847,6 +4433,439 @@ class PersonalAssistantAgentLoop {
     return const <String, dynamic>{};
   }
 
+  RunArtifacts? _recoverPreviousRunArtifacts(
+    Map<String, dynamic> contextScopeHint,
+  ) {
+    // M4/M5 收口后不再跨轮回传整个 runArtifacts。
+    // 仅允许 slotState / domainPolicyBundle 等拆分后的安全字段继续流转。
+    return null;
+  }
+
+  SlotStateSnapshot _recoverPreviousSlotState(
+    Map<String, dynamic> contextScopeHint, {
+    required String fallbackDomainId,
+    RunArtifacts? runArtifacts,
+  }) {
+    final fromArtifacts = runArtifacts?.slotState;
+    if (fromArtifacts != null &&
+        (fromArtifacts.slotValues.isNotEmpty ||
+            fromArtifacts.slots.isNotEmpty ||
+            fromArtifacts.missingSlots.isNotEmpty)) {
+      return fromArtifacts;
+    }
+    final raw = (contextScopeHint['slotState'] as Map?)
+        ?.cast<String, dynamic>();
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        if (raw.containsKey('slots') ||
+            raw.containsKey('slotValues') ||
+            raw.containsKey('missingSlots')) {
+          return SlotStateSnapshot.fromJson(raw);
+        }
+        return SlotStateSnapshot(
+          domainId: fallbackDomainId,
+          slots: raw,
+          slotValues: SlotStateSnapshot.fromJson(<String, dynamic>{
+            'domainId': fallbackDomainId,
+            'slots': raw,
+          }).slotValues,
+        );
+      } catch (_) {
+        // Fall through to default snapshot.
+      }
+    }
+    return SlotStateSnapshot(domainId: fallbackDomainId);
+  }
+
+  DomainPolicyBundle? _recoverPreviousDomainPolicyBundle(
+    Map<String, dynamic> contextScopeHint, {
+    required String fallbackDomainId,
+    RunArtifacts? runArtifacts,
+  }) {
+    final fromArtifacts = runArtifacts?.domainPolicyBundle;
+    if (fromArtifacts != null &&
+        (fromArtifacts.executionPolicy.isNotEmpty ||
+            fromArtifacts.slotSchema.isNotEmpty ||
+            fromArtifacts.dialoguePolicy.isNotEmpty ||
+            fromArtifacts.retrievalPolicy.isNotEmpty)) {
+      return fromArtifacts;
+    }
+    final raw = (contextScopeHint['domainPolicyBundle'] as Map?)
+        ?.cast<String, dynamic>();
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      return DomainPolicyBundle.fromJson(<String, dynamic>{
+        'domainId': fallbackDomainId,
+        ...raw,
+      });
+    } catch (_) {
+      return null;
+    }
+  }
+
+  List<Map<String, dynamic>> _toolResultsForEvidenceLedger(
+    List<Map<String, dynamic>> toolResults,
+  ) {
+    return toolResults
+        .map((item) {
+          final data =
+              (item['data'] as Map?)?.cast<String, dynamic>() ??
+              const <String, dynamic>{};
+          return <String, dynamic>{
+            'toolName': (data['toolName'] as String?)?.trim().isNotEmpty == true
+                ? (data['toolName'] as String).trim()
+                : (item['toolName'] as String?)?.trim() ?? '',
+            'data': data,
+          };
+        })
+        .toList(growable: false);
+  }
+
+  BaselineComposedAnswer? _qualityAssuredBaselineAnswer({
+    required ProblemFrame frame,
+    required List<Map<String, dynamic>> toolResults,
+    required String nextAction,
+  }) {
+    if (nextAction != 'answer') return null;
+    if (frame.queryIntent != 'travelAlternativeOptions' &&
+        frame.queryIntent != 'wildlifeBestTime') {
+      return null;
+    }
+    final observations = _toolObservationsForBaselineAnswer(toolResults);
+    if (observations.isEmpty) return null;
+    return _baselineKernel.composeHeuristicAnswer(
+      query: frame.normalizedQuery,
+      observations: observations,
+    );
+  }
+
+  List<Map<String, dynamic>> _toolObservationsForBaselineAnswer(
+    List<Map<String, dynamic>> toolResults,
+  ) {
+    return toolResults
+        .map((item) {
+          final data =
+              (item['data'] as Map?)?.cast<String, dynamic>() ??
+              const <String, dynamic>{};
+          final rawRefs =
+              (data['references'] as List?)?.whereType<Map>().toList(
+                growable: false,
+              ) ??
+              (item['references'] as List?)?.whereType<Map>().toList(
+                growable: false,
+              ) ??
+              const <Map>[];
+          final refs = rawRefs
+              .map((ref) => ref.cast<String, dynamic>())
+              .map(
+                (ref) => <String, dynamic>{
+                  'title': (ref['title'] as String?)?.trim() ?? '',
+                  'url': (ref['url'] as String?)?.trim() ?? '',
+                  'source': (ref['source'] as String?)?.trim() ?? '',
+                  'snippet': (ref['snippet'] as String?)?.trim() ?? '',
+                },
+              )
+              .where(
+                (ref) =>
+                    (ref['title'] as String).isNotEmpty &&
+                    (ref['url'] as String).isNotEmpty,
+              )
+              .toList(growable: false);
+          final summary =
+              (data['summary'] as String?)?.trim().isNotEmpty == true
+              ? (data['summary'] as String).trim()
+              : ((item['summary'] as String?)?.trim().isNotEmpty == true
+                    ? (item['summary'] as String).trim()
+                    : ((item['message'] as String?)?.trim() ?? ''));
+          return <String, dynamic>{
+            'toolName': (data['toolName'] as String?)?.trim().isNotEmpty == true
+                ? (data['toolName'] as String).trim()
+                : (item['toolName'] as String?)?.trim() ?? '',
+            'summary': summary,
+            'references': refs,
+          };
+        })
+        .where(
+          (item) =>
+              ((item['summary'] as String?)?.trim().isNotEmpty ?? false) ||
+              ((item['references'] as List?)?.isNotEmpty ?? false),
+        )
+        .toList(growable: false);
+  }
+
+  bool _requiresEvidence({
+    required String domainId,
+    required String problemClass,
+    required bool authorityRequired,
+  }) {
+    if (authorityRequired) return true;
+    final normalized = problemClass.trim().toLowerCase();
+    return domainId.trim() == 'weather' ||
+        normalized == 'realtime_info' ||
+        normalized == 'evidence_lookup' ||
+        normalized == 'complex_reasoning' ||
+        normalized == 'multi_skill';
+  }
+
+  List<String> _blockingEvidenceDimensions({
+    required ProblemFrame frame,
+    required List<Map<String, dynamic>> toolResults,
+  }) {
+    final dimensions = <String>{};
+    for (final item in toolResults) {
+      final data =
+          (item['data'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      final explicitBlocking =
+          (data['blockingDimensions'] as List?)
+              ?.whereType<String>()
+              .map((value) => value.trim())
+              .where((value) => value.isNotEmpty) ??
+          const Iterable<String>.empty();
+      dimensions.addAll(explicitBlocking);
+    }
+    if (dimensions.isNotEmpty) {
+      return dimensions.toList(growable: false);
+    }
+    switch (frame.queryIntent) {
+      case 'travelAlternativeOptions':
+        return const <String>['候选路线', '适用条件'];
+      case 'wildlifeBestTime':
+        return const <String>['季节窗口', '日内时段', '天气条件'];
+      case 'stayPlanning':
+        return const <String>['位置与通勤', '价格与档位'];
+      default:
+        return const <String>[];
+    }
+  }
+
+  Map<String, dynamic> _applyConversationStateDecision(
+    Map<String, dynamic> answerPayload,
+    ConversationStateDecision decision, {
+    required EvidenceEvaluationResult evidenceEvaluation,
+    required SynthesisReadinessResult synthesisReadiness,
+  }) {
+    final diagnostics =
+        (answerPayload['diagnostics'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final existingDecision =
+        (answerPayload['decision'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final prompt = (decision.askUser['prompt'] as String?)?.trim() ?? '';
+    final userMarkdown =
+        (answerPayload['userMarkdown'] as String?)?.trim() ?? '';
+    final resultPayload =
+        (answerPayload['result'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final resultText = (resultPayload['text'] as String?)?.trim() ?? '';
+    final hasRenderableAnswer =
+        userMarkdown.isNotEmpty || resultText.isNotEmpty;
+    final messageKind = decision.nextAction == 'ask_user'
+        ? 'ask_user'
+        : (decision.nextAction == 'answer' && hasRenderableAnswer
+              ? 'answer'
+              : 'fallback');
+    return <String, dynamic>{
+      ...answerPayload,
+      'messageKind': messageKind,
+      'slotState': _slotStatePayloadFromSnapshot(decision.slotState),
+      'missingContextSlots': decision.missingCriticalSlots,
+      'askUser': decision.askUser,
+      if (prompt.isNotEmpty) 'followupPrompt': prompt,
+      'decision': <String, dynamic>{
+        ...existingDecision,
+        ...decision.toDecisionMap(),
+        'synthesisReady': synthesisReadiness.ready,
+        'synthesisReason': synthesisReadiness.reason,
+        'evidenceSummary': evidenceEvaluation.summary,
+      },
+      'diagnostics': <String, dynamic>{
+        ...diagnostics,
+        'qualityGates': decision.qualityGates,
+        'evidenceSummary': evidenceEvaluation.summary,
+        'evidencePassed': evidenceEvaluation.passed,
+        'finalAnswerMode': decision.finalAnswerMode,
+        'answerEligibility': decision.answerEligibility,
+        'synthesisReady': synthesisReadiness.ready,
+        'synthesisReason': synthesisReadiness.reason,
+      },
+    };
+  }
+
+  Map<String, dynamic> _slotStatePayloadFromSnapshot(
+    SlotStateSnapshot slotState,
+  ) {
+    if (slotState.slotValues.isNotEmpty) {
+      return <String, dynamic>{
+        for (final entry in slotState.slotValues.entries)
+          entry.key: entry.value.toJson(),
+      };
+    }
+    return slotState.slots;
+  }
+
+  List<Map<String, dynamic>> _buildUiReferencesFromLedger(
+    List<EvidenceLedgerEntry> ledger, {
+    required List<Map<String, dynamic>> toolResults,
+    required String domainId,
+    required bool isWeatherLike,
+  }) {
+    if (ledger.isEmpty) {
+      return _buildUiReferences(
+        toolResults,
+        domainId: domainId,
+        isWeatherLike: isWeatherLike,
+      );
+    }
+    final refs = <Map<String, dynamic>>[];
+    final seen = <String>{};
+    final totalSearched = toolResults.fold<int>(0, (sum, item) {
+      final data =
+          (item['data'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      return sum + ((data['totalReferences'] as num?)?.toInt() ?? 0);
+    });
+    for (final entry in ledger) {
+      final source = entry.sourceHost.isNotEmpty ? entry.sourceHost : entry.url;
+      final dedupeKey = '${source.toLowerCase()}|${entry.title.toLowerCase()}';
+      if (!seen.add(entry.url) || !seen.add(dedupeKey)) continue;
+      refs.add(<String, dynamic>{
+        'evidenceId': entry.evidenceId,
+        'title': entry.title.isNotEmpty ? entry.title : source,
+        'url': entry.url,
+        'source': source,
+        'provider': entry.queryTaskId,
+        'snippet': entry.snippet,
+        'cited': entry.sourceTier == 'authority' || entry.authorityScore >= 0.8,
+        'authorityScore': entry.authorityScore,
+        'dimension': entry.dimension,
+        'queryTaskId': entry.queryTaskId,
+      });
+    }
+    refs.sort((a, b) {
+      final citedDelta =
+          ((b['cited'] == true) ? 1 : 0) - ((a['cited'] == true) ? 1 : 0);
+      if (citedDelta != 0) return citedDelta;
+      final authorityDelta =
+          (((b['authorityScore'] as num?)?.toDouble() ?? 0.0) * 100).round() -
+          (((a['authorityScore'] as num?)?.toDouble() ?? 0.0) * 100).round();
+      if (authorityDelta != 0) return authorityDelta;
+      return 0;
+    });
+    final isWeatherDomain = domainId.trim() == 'weather' || isWeatherLike;
+    final curated = isWeatherDomain
+        ? refs
+              .where((item) => item['cited'] == true)
+              .take(4)
+              .toList(growable: false)
+        : refs.take(8).toList(growable: false);
+    if (curated.isNotEmpty && totalSearched > 0) {
+      curated.first['_totalSearched'] = totalSearched;
+    }
+    return curated;
+  }
+
+  DomainPolicyBundle _buildDomainPolicyBundle({
+    required String domainId,
+    required SkillExecutionShell skillExecutionShell,
+    required Map<String, dynamic> slotSchema,
+    required DialogueRoundScript dialogueRoundScript,
+    required Map<String, dynamic> retrievalPolicy,
+    required EvidenceEvaluationResult evidenceEvaluation,
+    required ConversationStateDecision stateDecision,
+    DomainPolicyBundle? previous,
+  }) {
+    return DomainPolicyBundle(
+      domainId: domainId,
+      executionPolicy: <String, dynamic>{
+        ...?previous?.executionPolicy,
+        'problemClass': skillExecutionShell.problemClass,
+        'maxIterations': skillExecutionShell.maxIterations,
+        'toolBudget': skillExecutionShell.toolBudget,
+        'variantBudget': skillExecutionShell.variantBudget,
+        'reflectionBudget': skillExecutionShell.reflectionBudget,
+        'providerPolicy': skillExecutionShell.providerPolicy,
+        'preferredProviders': skillExecutionShell.preferredProviders,
+        'freshnessHoursMax': skillExecutionShell.freshnessHoursMax,
+        'finalAnswerMode': stateDecision.finalAnswerMode,
+        'nextAction': stateDecision.nextAction,
+      },
+      slotSchema: <String, dynamic>{...?previous?.slotSchema, ...slotSchema},
+      dialoguePolicy: <String, dynamic>{
+        ...?previous?.dialoguePolicy,
+        'currentStateId': dialogueRoundScript.currentStateId,
+        'suggestedNextStateId': dialogueRoundScript.suggestedNextStateId,
+        'detectedEvent': dialogueRoundScript.detectedEvent,
+        'requiredFieldsForNextState':
+            dialogueRoundScript.requiredFieldsForNextState,
+        'missingCriticalSlots': stateDecision.missingCriticalSlots,
+        'askUser': stateDecision.askUser,
+      },
+      authorityPolicy: <String, dynamic>{
+        ...?previous?.authorityPolicy,
+        'authorityRequired': retrievalPolicy['authorityRequired'] == true,
+        'authoritySatisfied': evidenceEvaluation.authoritySatisfied,
+        'freshnessSatisfied': evidenceEvaluation.freshnessSatisfied,
+      },
+      retrievalPolicy: <String, dynamic>{
+        ...?previous?.retrievalPolicy,
+        ...retrievalPolicy,
+        'coveredDimensions': evidenceEvaluation.coveredDimensions,
+        'missingDimensions': evidenceEvaluation.missingDimensions,
+        'coveredQueryTaskIds': evidenceEvaluation.coveredQueryTaskIds,
+      },
+      answerPolicy: <String, dynamic>{
+        ...?previous?.answerPolicy,
+        'answerEligibility': stateDecision.answerEligibility,
+        'finalAnswerMode': stateDecision.finalAnswerMode,
+        'qualityGates': stateDecision.qualityGates,
+      },
+      narrativePolicy: <String, dynamic>{
+        ...?previous?.narrativePolicy,
+        'style': 'user_facing',
+        'referencesMode': 'inline_links',
+        'fallbackReasoning': evidenceEvaluation.summary,
+      },
+    );
+  }
+
+  List<SkillRun> _finalizeSkillRuns({
+    required List<SkillRun> skillRuns,
+    required String primaryDomainId,
+    required SlotStateSnapshot slotState,
+    required bool answerReady,
+    required String stopReason,
+    required List<Map<String, dynamic>> references,
+    required String resultSummary,
+  }) {
+    return skillRuns
+        .map((item) {
+          if (item.domainId != primaryDomainId) return item;
+          return SkillRun(
+            runId: item.runId,
+            domainId: item.domainId,
+            goal: item.goal,
+            problemClass: item.problemClass,
+            shell: item.shell,
+            slotState: _slotStatePayloadFromSnapshot(slotState),
+            answerReady: answerReady,
+            stopReason: stopReason,
+            references: references,
+            resultSummary: resultSummary,
+          );
+        })
+        .toList(growable: false);
+  }
+
+  String _resolveFollowupPrompt({
+    required Map<String, dynamic> answerPayload,
+    required Map<String, dynamic> askUser,
+  }) {
+    final prompt = (answerPayload['followupPrompt'] as String?)?.trim() ?? '';
+    if (prompt.isNotEmpty) return prompt;
+    return (askUser['prompt'] as String?)?.trim() ?? '';
+  }
+
   double _asDouble(Object? raw) {
     if (raw is num) return raw.toDouble();
     return double.tryParse(raw?.toString() ?? '') ?? 0;
@@ -3893,6 +4912,7 @@ class PersonalAssistantAgentLoop {
     required String sessionId,
     required String runId,
     required String traceId,
+    void Function(AssistantTraceEvent event)? onTraceEvent,
   }) async {
     final result = await _runtime.run(
       messages: <Map<String, dynamic>>[
@@ -3907,6 +4927,10 @@ class PersonalAssistantAgentLoop {
       sessionId: sessionId,
       runId: runId,
       traceId: traceId,
+      onTraceEvent: _withTraceVisibility(
+        onTraceEvent,
+        TraceVisibility.internal,
+      ),
     );
     return result.finalText.trim();
   }
@@ -3955,6 +4979,8 @@ class PersonalAssistantAgentLoop {
     String skillPersona = '',
     String skillCatalog = '',
     required SkillExecutionShell skillExecutionShell,
+    SlotStateSnapshot previousSlotState = const SlotStateSnapshot(),
+    DomainPolicyBundle? previousDomainPolicyBundle,
   }) {
     final query = request.messages.isEmpty ? '' : request.messages.last.content;
     final toolGuidelines =
@@ -3984,6 +5010,9 @@ class PersonalAssistantAgentLoop {
       'availableTools': availableToolNames,
       'toolInvocationGuidelines': toolGuidelines,
       'dialogueRoundScript': _dialogueScriptForModel(dialogueRoundScript),
+      'slotStateSnapshot': previousSlotState.toJson(),
+      'domainPolicyBundle':
+          previousDomainPolicyBundle?.toJson() ?? const <String, dynamic>{},
       'skillPersona': skillPersona,
       'skillCatalog': skillCatalog,
       'skillExecutionShell': skillExecutionShell.toJson(),

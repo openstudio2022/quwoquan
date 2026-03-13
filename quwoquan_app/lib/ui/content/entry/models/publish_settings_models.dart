@@ -4,6 +4,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/integration/location_poi_dt
 class PublishSettings {
   const PublishSettings({
     this.isPublic = true,
+    this.allowAssistantUse = true,
     this.locationName = '',
     this.location = const <String, dynamic>{},
     this.circleIds = const <String>[],
@@ -11,6 +12,7 @@ class PublishSettings {
   });
 
   final bool isPublic;
+  final bool allowAssistantUse;
   final String locationName;
   final Map<String, dynamic> location;
   final List<String> circleIds;
@@ -19,8 +21,11 @@ class PublishSettings {
   /// 从 Map（如 _tabData）解析
   factory PublishSettings.fromMap(Map<String, dynamic> map) {
     final vis = (map['visibility']?.toString() ?? 'public').toLowerCase();
+    final assistantUsePolicy =
+        (map['assistantUsePolicy']?.toString() ?? 'inherit').toLowerCase();
     return PublishSettings(
       isPublic: vis == 'public',
+      allowAssistantUse: assistantUsePolicy != 'exclude',
       locationName: (map['locationName'] as String? ?? '').trim(),
       location: Map<String, dynamic>.from(
         map['location'] as Map? ?? const <String, dynamic>{},
@@ -35,17 +40,19 @@ class PublishSettings {
   }
 
   Map<String, dynamic> toMap() => <String, dynamic>{
-        'visibility': isPublic ? 'public' : 'private',
-        'locationName': locationName,
-        'location': location,
-        'circleIds': circleIds,
-        'circleNames': circleNames,
-      };
+    'visibility': isPublic ? 'public' : 'private',
+    'assistantUsePolicy': allowAssistantUse ? 'inherit' : 'exclude',
+    'locationName': locationName,
+    'location': location,
+    'circleIds': circleIds,
+    'circleNames': circleNames,
+  };
 
   /// 生成发布 payload 字段
   Map<String, dynamic> toPayloadFields() {
     final payload = <String, dynamic>{
       'visibility': isPublic ? 'public' : 'private',
+      'assistantUsePolicy': allowAssistantUse ? 'inherit' : 'exclude',
       'circleIds': circleIds,
     };
     if (locationName.isNotEmpty) payload['locationName'] = locationName;
@@ -57,18 +64,19 @@ class PublishSettings {
 
   PublishSettings copyWith({
     bool? isPublic,
+    bool? allowAssistantUse,
     String? locationName,
     Map<String, dynamic>? location,
     List<String>? circleIds,
     List<String>? circleNames,
-  }) =>
-      PublishSettings(
-        isPublic: isPublic ?? this.isPublic,
-        locationName: locationName ?? this.locationName,
-        location: location ?? this.location,
-        circleIds: circleIds ?? this.circleIds,
-        circleNames: circleNames ?? this.circleNames,
-      );
+  }) => PublishSettings(
+    isPublic: isPublic ?? this.isPublic,
+    allowAssistantUse: allowAssistantUse ?? this.allowAssistantUse,
+    locationName: locationName ?? this.locationName,
+    location: location ?? this.location,
+    circleIds: circleIds ?? this.circleIds,
+    circleNames: circleNames ?? this.circleNames,
+  );
 }
 
 class CreateLocationOption {
@@ -82,12 +90,12 @@ class CreateLocationOption {
 
   /// 从 LocationPoiDto 构造，供 CreateLocationService 解析云响应时使用。
   factory CreateLocationOption.from(LocationPoiDto dto) => CreateLocationOption(
-        name: dto.name,
-        latitude: dto.latitude,
-        longitude: dto.longitude,
-        address: dto.address ?? '',
-        distanceMeters: dto.distanceMeters,
-      );
+    name: dto.name,
+    latitude: dto.latitude,
+    longitude: dto.longitude,
+    address: dto.address ?? '',
+    distanceMeters: dto.distanceMeters,
+  );
 
   final String name;
   final double latitude;
@@ -120,10 +128,13 @@ class CreateCircleOption {
 
   final String id;
   final String name;
+
   /// 成员数，用于小字标注。null 时显示「已加入」无数字。
   final int? memberCount;
+
   /// 推荐理由，仅推荐区使用。如「与你兴趣相似」。
   final String? recommendationReason;
+
   /// true=已加入（可勾选发布），false=推荐加入（显示 + 关注）
   final bool isJoined;
 
@@ -133,12 +144,11 @@ class CreateCircleOption {
     int? memberCount,
     String? recommendationReason,
     bool? isJoined,
-  }) =>
-      CreateCircleOption(
-        id: id ?? this.id,
-        name: name ?? this.name,
-        memberCount: memberCount ?? this.memberCount,
-        recommendationReason: recommendationReason ?? this.recommendationReason,
-        isJoined: isJoined ?? this.isJoined,
-      );
+  }) => CreateCircleOption(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    memberCount: memberCount ?? this.memberCount,
+    recommendationReason: recommendationReason ?? this.recommendationReason,
+    isJoined: isJoined ?? this.isJoined,
+  );
 }

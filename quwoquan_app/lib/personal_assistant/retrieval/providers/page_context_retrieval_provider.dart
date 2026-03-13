@@ -14,14 +14,28 @@ class PageContextRetrievalProvider implements AssistentRetrievalProvider {
 
   @override
   List<String> get capabilityIds => const <String>[
-        AssistentCapabilityCatalog.currentPage,
-        AssistentCapabilityCatalog.pageComments,
-        AssistentCapabilityCatalog.behaviorTimeline,
-      ];
+    AssistentCapabilityCatalog.currentPage,
+    AssistentCapabilityCatalog.pageComments,
+    AssistentCapabilityCatalog.behaviorTimeline,
+  ];
 
   @override
-  Future<AssistentRetrievalResult> retrieve(AssistentRetrievalRequest request) async {
+  Future<AssistentRetrievalResult> retrieve(
+    AssistentRetrievalRequest request,
+  ) async {
     final scope = request.contextScopeHint;
+    final contentAccess =
+        (scope['assistantContentAccess'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final contentIndex =
+        (scope['assistantContentIndex'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final consentGranted = contentAccess.isEmpty
+        ? true
+        : contentAccess['granted'] != false;
+    final identityIndexEnabled = contentIndex.isEmpty
+        ? true
+        : contentIndex['enabled'] == true;
     final pageType = (scope['pageType'] as String?)?.trim() ?? 'chat';
     final policy = AssistentPrivacyPolicy.fromInputs(
       privacyProfile: request.privacyProfile,
@@ -31,6 +45,14 @@ class PageContextRetrievalProvider implements AssistentRetrievalProvider {
       },
       fallbackCapabilities: request.requestedCapabilities,
     );
+    if (!consentGranted) {
+      return AssistentRetrievalResult(
+        success: false,
+        message: '未授权读取创作内容。',
+        providersUsed: const <String>['page_context'],
+        errorCode: 'assistant_content_access_denied',
+      );
+    }
     if (!policy.allowsPageType(pageType)) {
       return AssistentRetrievalResult(
         success: false,
@@ -39,7 +61,12 @@ class PageContextRetrievalProvider implements AssistentRetrievalProvider {
         errorCode: 'privacy_page_blocked',
       );
     }
-    final items = _buildPageItems(pageType: pageType, scope: scope, query: request.query);
+    final items = _buildPageItems(
+      pageType: pageType,
+      scope: scope,
+      query: request.query,
+      identityIndexEnabled: identityIndexEnabled,
+    );
     if (items.isEmpty) {
       return AssistentRetrievalResult(
         success: false,
@@ -62,6 +89,7 @@ class PageContextRetrievalProvider implements AssistentRetrievalProvider {
     required String pageType,
     required Map<String, dynamic> scope,
     required String query,
+    required bool identityIndexEnabled,
   }) {
     final results = <AssistentRetrievalItem>[];
     switch (pageType) {
@@ -72,20 +100,13 @@ class PageContextRetrievalProvider implements AssistentRetrievalProvider {
           ..._repository.discoveryVideoData.take(1),
         ];
         for (final item in cards) {
-          final text = _firstNonEmpty(
-            item['content']?.toString(),
-            item['title']?.toString(),
-            item['caption']?.toString(),
+          final routed = _buildDiscoveryItem(
+            item,
+            query,
+            identityIndexEnabled: identityIndexEnabled,
           );
-          if (text.isEmpty) continue;
-          results.add(
-            AssistentRetrievalItem(
-              content: text,
-              sourceType: 'page.discovery',
-              sourceId: item['id']?.toString() ?? 'discovery_item',
-              relevance: _relevance(text, query),
-            ),
-          );
+          if (routed == null) continue;
+          results.add(routed);
         }
         break;
       case 'circles':
@@ -105,13 +126,16 @@ class PageContextRetrievalProvider implements AssistentRetrievalProvider {
         }
         break;
       case 'create':
-        final hints = (scope['hints'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{};
+        final hints =
+            (scope['hints'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
         final createSummary = <String>[
           '创作页当前状态',
           if (hints['hasAddedMedia'] == true) '已添加媒体',
           if (hints['hasDraft'] == true) '存在草稿',
           if (hints['channelCount'] != null) '已选渠道:${hints['channelCount']}',
-          if (hints['optimizeAction'] != null) '最近优化:${hints['optimizeAction']}',
+          if (hints['optimizeAction'] != null)
+            '最近优化:${hints['optimizeAction']}',
         ].join('，');
         results.add(
           AssistentRetrievalItem(
@@ -140,7 +164,9 @@ class PageContextRetrievalProvider implements AssistentRetrievalProvider {
       case 'chat':
       default:
         final conversationId = scope['sessionId']?.toString() ?? 'assistant';
-        final chatMessages = _repository.chatMessagesFor(conversationId).take(4);
+        final chatMessages = _repository
+            .chatMessagesFor(conversationId)
+            .take(4);
         for (final message in chatMessages) {
           final text = (message['content'] as String?)?.trim() ?? '';
           if (text.isEmpty) continue;
@@ -156,7 +182,8 @@ class PageContextRetrievalProvider implements AssistentRetrievalProvider {
         break;
     }
 
-    final behaviorTimeline = (scope['behaviorTimeline'] as List?)
+    final behaviorTimeline =
+        (scope['behaviorTimeline'] as List?)
             ?.whereType<Map>()
             .take(3)
             .map((entry) => entry['action']?.toString() ?? '')
@@ -190,5 +217,92 @@ class PageContextRetrievalProvider implements AssistentRetrievalProvider {
     if (text.contains(query)) return 0.9;
     return 0.6;
   }
-}
 
+  AssistentRetrievalItem? _buildDiscoveryItem(
+    Map<String, dynamic> item,
+    String query, {
+    required bool identityIndexEnabled,
+  }) {
+    if (_assistantUsePolicyForItem(item) == 'exclude') {
+      return null;
+    }
+    final text = _firstNonEmpty(
+      item['content']?.toString(),
+      item['body']?.toString(),
+      item['title']?.toString(),
+    );
+    if (text.isEmpty) return null;
+    final identity = _contentIdentityForItem(item);
+    final route = !identityIndexEnabled
+        ? 'legacy_context'
+        : (identity == 'moment' ? 'context_memory' : 'knowledge_index');
+    final tier = _derivedContentTier(item);
+    return AssistentRetrievalItem(
+      content: text,
+      sourceType: !identityIndexEnabled
+          ? 'page.discovery.legacy_context'
+          : (identity == 'moment'
+                ? 'page.discovery.moment_context'
+                : 'page.discovery.work_knowledge'),
+      sourceId:
+          item['id']?.toString() ??
+          item['postId']?.toString() ??
+          'discovery_item',
+      relevance: _relevance(text, query),
+      metadata: <String, dynamic>{
+        if (identityIndexEnabled) 'contentIdentity': identity,
+        'assistantRoute': route,
+        'assistantUsePolicy': _assistantUsePolicyForItem(item),
+        'assistantEligible': true,
+        if (identityIndexEnabled) 'contentTier': tier,
+        'identityIndexEnabled': identityIndexEnabled,
+        if ((item['title']?.toString() ?? '').trim().isNotEmpty)
+          'title': item['title']?.toString() ?? '',
+      },
+    );
+  }
+
+  String _contentIdentityForItem(Map<String, dynamic> item) {
+    final explicit = (item['contentIdentity'] ?? item['identity'] ?? '')
+        .toString()
+        .trim();
+    if (explicit.isNotEmpty) return explicit;
+    final contentType = (item['contentType'] ?? item['type'] ?? '')
+        .toString()
+        .trim();
+    switch (contentType) {
+      case 'micro':
+      case 'moment':
+        return 'moment';
+      default:
+        return 'work';
+    }
+  }
+
+  String _assistantUsePolicyForItem(Map<String, dynamic> item) {
+    final policy = (item['assistantUsePolicy'] ?? 'inherit').toString().trim();
+    return policy.isEmpty ? 'inherit' : policy;
+  }
+
+  String _derivedContentTier(Map<String, dynamic> item) {
+    final tags =
+        (item['tags'] as List?)
+            ?.map((tag) => tag.toString().trim().toLowerCase())
+            .where((tag) => tag.isNotEmpty)
+            .toList(growable: false) ??
+        const <String>[];
+    final title = (item['title'] ?? '').toString();
+    final summary = (item['summary'] ?? '').toString();
+    final joined = '$title $summary'.toLowerCase();
+    if (tags.contains('checklist') || joined.contains('清单')) {
+      return 'checklist';
+    }
+    if (tags.contains('guide') || joined.contains('攻略')) {
+      return 'guide';
+    }
+    if (tags.contains('featured')) {
+      return 'featured';
+    }
+    return 'normal';
+  }
+}

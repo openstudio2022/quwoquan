@@ -2,6 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:quwoquan_app/personal_assistant/app/assistant_gateway.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/user_events.dart';
+import 'package:quwoquan_app/personal_assistant/engine/process_journal_bus.dart';
+import 'package:quwoquan_app/personal_assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/run_request.dart';
 
 class AssistantHttpGateway {
@@ -184,18 +187,12 @@ class AssistantHttpGateway {
           ),
         );
         final includeTraces = json['includeTraces'] == true;
+        final payload = response.toJson();
+        if (!includeTraces) {
+          payload.remove('traces');
+        }
         request.response.headers.contentType = ContentType.json;
-        request.response.write(
-          jsonEncode(<String, dynamic>{
-            'finalText': response.finalText,
-            'runId': response.runId,
-            'traceId': response.traceId,
-            if (includeTraces)
-              'traces': response.traces.map((e) => e.toJson()).toList(growable: false),
-            'degraded': response.degraded,
-            'errorCode': response.errorCode,
-          }),
-        );
+        request.response.write(jsonEncode(payload));
         _audit('run', requestId, request, auditKey, HttpStatus.ok);
         await request.response.close();
         return;
@@ -216,6 +213,9 @@ class AssistantHttpGateway {
         request.response.headers.set(HttpHeaders.contentTypeHeader, 'text/event-stream');
         request.response.headers.set(HttpHeaders.cacheControlHeader, 'no-cache');
         request.response.bufferOutput = false;
+        final journalBus = ProcessJournalBus(
+          userGoalSummary: _latestUserMessage(messages),
+        );
         final runRequest = AssistantRunRequest(
           messages: messages,
           sessionId: json['sessionId'] as String?,
@@ -228,13 +228,21 @@ class AssistantHttpGateway {
         final response = await _gateway.runWithTraceStream(
           runRequest,
           onTraceEvent: (trace) {
-            request.response.write('event: trace\n');
-            request.response.write('data: ${jsonEncode(trace.toJson())}\n\n');
+            final journalEvents = journalBus.consumeTrace(trace);
+            final legacyEvents = ProcessJournalBus.toLegacyUserEvents(journalEvents);
+            for (final event in legacyEvents) {
+              final eventName = event.type == UserEventType.answerDelta
+                  ? 'answer_delta'
+                  : 'user_event';
+              request.response.write('event: $eventName\n');
+              request.response.write('data: ${jsonEncode(event.toJson())}\n\n');
+            }
           },
         );
         request.response.write('event: final\n');
+        final responseJson = response.toJson()..remove('traces');
         request.response.write(
-          'data: ${jsonEncode(<String, dynamic>{"finalText": response.finalText, "runId": response.runId, "traceId": response.traceId, "degraded": response.degraded, "errorCode": response.errorCode})}\n\n',
+          'data: ${jsonEncode(responseJson)}\n\n',
         );
         await request.response.close();
         _audit('run_stream', requestId, request, auditKey, HttpStatus.ok);
@@ -274,6 +282,16 @@ class AssistantHttpGateway {
     stdout.writeln(
       '[assistant_gateway] event=$event requestId=$requestId method=${request.method} path=${request.uri.path} actor=$actor status=$statusCode',
     );
+  }
+
+  static String _latestUserMessage(List<AssistantRunMessage> messages) {
+    for (var i = messages.length - 1; i >= 0; i--) {
+      final item = messages[i];
+      if (item.role == 'user' && item.content.trim().isNotEmpty) {
+        return item.content.trim();
+      }
+    }
+    return '';
   }
 }
 

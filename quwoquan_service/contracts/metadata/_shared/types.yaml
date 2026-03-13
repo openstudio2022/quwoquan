@@ -19,8 +19,10 @@ types:
 
 enums:
   ContentType: [image, video, micro, article]
+  ContentIdentity: [moment, work]
   PostStatus: [draft, pending_review, published, archived, deleted]
   Visibility: [public, private]
+  AssistantUsePolicy: [inherit, exclude]
   PostSourceType: [original, repost, quote]
   DistributionState: [active, removed, cascade_deleted]
   TombstoneLookupResult: [deleted, not_found]
@@ -72,6 +74,10 @@ enums:
   GreetingRequestSource: [profile, recommendation, group_member, invite]
   ConversationOriginType: [direct_init, greeting_reply]
   RelationTier: [none, following_only, same_interest, close_friend, self]
+  ThemeModeSetting: [system, light, dark]
+  FontSizePreset: [xs, sm, md, lg, xl]
+  AppearanceSource: [owner_default, sub_override, system_default]
+  AppearanceApplyScope: [all_accounts, current_sub_account, inherit_owner_default]
 
 classifications:
   PUBLIC: 公开数据

@@ -1,12 +1,14 @@
 import 'dart:async';
 
+import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/personal_assistant/app/assistant_gateway.dart';
 import 'package:quwoquan_app/personal_assistant/connectors/openclaw_bridge.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/explainable_flow_event.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/user_events.dart';
 import 'package:quwoquan_app/personal_assistant/engine/llm_response_parser.dart';
-import 'package:quwoquan_app/personal_assistant/engine/process_event_consolidator.dart';
+import 'package:quwoquan_app/personal_assistant/engine/process_journal_bus.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/assistant_content_filters.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/run_response.dart';
@@ -15,9 +17,12 @@ import 'package:quwoquan_app/personal_assistant/tools/tool_schema.dart';
 
 enum CapabilityRouteMode { localOnly, remotePreferred, hybrid }
 
+bool _alwaysEnabled() => true;
+
 enum AssistantRunStreamEventType {
   trace,
   chunk,
+  answerReset,
   completed,
   failed,
   // v2 semantic event types
@@ -34,6 +39,8 @@ enum AssistantRunStreamEventType {
   processUpdate,
   // v6 unified explainable flow event (replaces v2-v5 for process drawer)
   explainableFlowEvent,
+  // v7 canonical user-facing process bus
+  processJournalEvent,
 }
 
 /// Unified process state consumed by the single-drawer process view.
@@ -137,6 +144,7 @@ class AssistantRunStreamEvent {
     this.response,
     this.errorMessage,
     this.explainableEvent,
+    this.processJournalEvent,
   });
 
   factory AssistantRunStreamEvent.trace(AssistantTraceEvent trace) =>
@@ -149,6 +157,11 @@ class AssistantRunStreamEvent {
       AssistantRunStreamEvent._(
         type: AssistantRunStreamEventType.chunk,
         chunkText: chunkText,
+      );
+
+  factory AssistantRunStreamEvent.answerReset() =>
+      const AssistantRunStreamEvent._(
+        type: AssistantRunStreamEventType.answerReset,
       );
 
   factory AssistantRunStreamEvent.completed(AssistantRunResponse response) =>
@@ -247,13 +260,19 @@ class AssistantRunStreamEvent {
         ),
       );
 
-  factory AssistantRunStreamEvent.explainableFlow(
-    ExplainableFlowEvent event,
-  ) => AssistantRunStreamEvent._(
-    type: AssistantRunStreamEventType.explainableFlowEvent,
-    chunkText: event.headline,
-    explainableEvent: event,
-  );
+  factory AssistantRunStreamEvent.explainableFlow(ExplainableFlowEvent event) =>
+      AssistantRunStreamEvent._(
+        type: AssistantRunStreamEventType.explainableFlowEvent,
+        chunkText: event.headline,
+        explainableEvent: event,
+      );
+
+  factory AssistantRunStreamEvent.processJournal(ProcessJournalEvent event) =>
+      AssistantRunStreamEvent._(
+        type: AssistantRunStreamEventType.processJournalEvent,
+        chunkText: event.message,
+        processJournalEvent: event,
+      );
 
   final AssistantRunStreamEventType type;
   final AssistantTraceEvent? trace;
@@ -261,6 +280,7 @@ class AssistantRunStreamEvent {
   final AssistantRunResponse? response;
   final String? errorMessage;
   final ExplainableFlowEvent? explainableEvent;
+  final ProcessJournalEvent? processJournalEvent;
 
   /// For userPhaseEvent type, returns the [UserPhaseEventType].
   UserPhaseEventType? get userPhaseType {
@@ -290,15 +310,23 @@ class CapabilityGateway {
   CapabilityGateway({
     required AssistantGateway assistantGateway,
     required OpenClawBridge openClawBridge,
+    bool Function()? isPersonalContentAccessGranted,
+    bool Function()? isAssistantContentIdentityIndexEnabled,
   }) : _assistantGateway = assistantGateway,
-       _openClawBridge = openClawBridge {
+       _openClawBridge = openClawBridge,
+       _isPersonalContentAccessGranted =
+           isPersonalContentAccessGranted ?? _alwaysEnabled,
+       _isAssistantContentIdentityIndexEnabled =
+           isAssistantContentIdentityIndexEnabled ?? _alwaysEnabled {
     _openClawBridge.bindLocalGateway(assistantGateway);
   }
 
   final AssistantGateway _assistantGateway;
   final OpenClawBridge _openClawBridge;
+  final bool Function() _isPersonalContentAccessGranted;
+  final bool Function() _isAssistantContentIdentityIndexEnabled;
 
-  ProcessEventConsolidator? _consolidator;
+  ProcessJournalBus? _journalBus;
 
   bool _isRemoteResponseCommercialReady(AssistantRunResponse response) {
     if (response.degraded) return false;
@@ -322,20 +350,21 @@ class CapabilityGateway {
     required AssistantRunRequest request,
     CapabilityRouteMode mode = CapabilityRouteMode.hybrid,
   }) async {
+    final effectiveRequest = _applyPersonalContentAccessPolicy(request);
     await AssistantContentFilters.ensureLoaded();
     if (mode == CapabilityRouteMode.localOnly) {
-      return _safeLocalRun(request);
+      return _safeLocalRun(effectiveRequest);
     }
     if (mode == CapabilityRouteMode.remotePreferred) {
-      final remote = await _safeRemoteRun(request);
+      final remote = await _safeRemoteRun(effectiveRequest);
       if (remote != null && _isRemoteResponseCommercialReady(remote)) {
         return remote;
       }
-      return _safeLocalRun(request);
+      return _safeLocalRun(effectiveRequest);
     }
-    final local = await _safeLocalRun(request);
+    final local = await _safeLocalRun(effectiveRequest);
     if (local.degraded) {
-      final remote = await _safeRemoteRun(request);
+      final remote = await _safeRemoteRun(effectiveRequest);
       if (remote != null && _isRemoteResponseCommercialReady(remote)) {
         return remote;
       }
@@ -350,34 +379,44 @@ class CapabilityGateway {
     final controller = StreamController<AssistantRunStreamEvent>();
     () async {
       try {
+        final effectiveRequest = _applyPersonalContentAccessPolicy(request);
         await AssistantContentFilters.ensureLoaded();
         if (mode == CapabilityRouteMode.localOnly) {
-          final local = await _runLocalWithStream(request, controller);
+          final local = await _runLocalWithStream(effectiveRequest, controller);
           controller.add(AssistantRunStreamEvent.completed(local));
           return;
         }
         if (mode == CapabilityRouteMode.remotePreferred) {
-          final remote = await _runRemoteWithStream(request, controller);
+          final remote = await _runRemoteWithStream(
+            effectiveRequest,
+            controller,
+          );
           if (remote != null && _isRemoteResponseCommercialReady(remote)) {
             controller.add(AssistantRunStreamEvent.completed(remote));
             return;
           }
-          // Remote 不满足要求时，清除已累积的 streamFinalAnswer（发送一个空 chunk 标记重置）
-          // 然后走 local，但 local 此时只取 completed，不发 chunk，避免两路叠加
-          controller.add(AssistantRunStreamEvent.chunk(''));
-          final local = await _runLocalWithStreamSilent(request, controller);
+          // Remote 不满足要求时，显式重置答案流，再走 local，
+          // 避免 keep-alive 空 chunk 和“清空正文”共用同一语义。
+          controller.add(AssistantRunStreamEvent.answerReset());
+          final local = await _runLocalWithStreamSilent(
+            effectiveRequest,
+            controller,
+          );
           controller.add(AssistantRunStreamEvent.completed(local));
           return;
         }
-        final local = await _runLocalWithStream(request, controller);
+        final local = await _runLocalWithStream(effectiveRequest, controller);
         if (!local.degraded) {
           controller.add(AssistantRunStreamEvent.completed(local));
           return;
         }
-        final remote = await _safeRemoteRun(request);
+        final remote = await _safeRemoteRun(effectiveRequest);
         if (remote != null && _isRemoteResponseCommercialReady(remote)) {
+          _journalBus = ProcessJournalBus(
+            userGoalSummary: _extractUserMessage(effectiveRequest),
+          );
           for (final trace in remote.traces) {
-            controller.add(AssistantRunStreamEvent.trace(trace));
+            _emitCanonicalTraceEvent(trace, controller);
           }
           controller.add(AssistantRunStreamEvent.completed(remote));
         } else {
@@ -400,6 +439,76 @@ class CapabilityGateway {
     return controller.stream;
   }
 
+  AssistantRunRequest _applyPersonalContentAccessPolicy(
+    AssistantRunRequest request,
+  ) {
+    final consentGranted = _isPersonalContentAccessGranted();
+    final identityIndexEnabled = _isAssistantContentIdentityIndexEnabled();
+    final basePrivacyPolicy = <String, dynamic>{
+      ...((request.contextScopeHint['privacyPolicy'] as Map?)
+              ?.cast<String, dynamic>() ??
+          const <String, dynamic>{}),
+      ...request.privacyPolicy,
+    };
+    final allowedProviders = _stringList(basePrivacyPolicy['allowedProviders']);
+    final blockedProviders = _stringList(basePrivacyPolicy['blockedProviders']);
+    if (!consentGranted) {
+      allowedProviders.remove('page_context');
+      if (!blockedProviders.contains('page_context')) {
+        blockedProviders.add('page_context');
+      }
+    }
+    final nextPrivacyPolicy = <String, dynamic>{
+      ...basePrivacyPolicy,
+      if (allowedProviders.isNotEmpty) 'allowedProviders': allowedProviders,
+      'blockedProviders': blockedProviders,
+    };
+    final nextContextScope = <String, dynamic>{
+      ...request.contextScopeHint,
+      'assistantContentAccess': <String, dynamic>{
+        'skillId': kPersonalContentAccessSkillId,
+        'granted': consentGranted,
+        'grantedScope': kPersonalContentAccessSkillId,
+      },
+      'assistantContentIndex': <String, dynamic>{
+        'enabled': identityIndexEnabled,
+        'fallbackReason': consentGranted
+            ? (identityIndexEnabled ? '' : 'feature_flag_disabled')
+            : 'consent_denied',
+      },
+      'privacyPolicy': nextPrivacyPolicy,
+    };
+    if (!consentGranted) {
+      nextContextScope.remove('behaviorTimeline');
+    }
+    return AssistantRunRequest(
+      messages: request.messages,
+      sessionId: request.sessionId,
+      userId: request.userId,
+      deviceProfile: request.deviceProfile,
+      deviceModel: request.deviceModel,
+      deviceOs: request.deviceOs,
+      gpsLocation: request.gpsLocation,
+      channel: request.channel,
+      traceId: request.traceId,
+      maxIterations: request.maxIterations,
+      capabilityCatalog: request.capabilityCatalog,
+      contextScopeHint: nextContextScope,
+      privacyProfile: request.privacyProfile,
+      privacyPolicy: nextPrivacyPolicy,
+      userProfileSnapshot: request.userProfileSnapshot,
+      rewriteInstruction: request.rewriteInstruction,
+    );
+  }
+
+  List<String> _stringList(Object? raw) {
+    if (raw is! List) return <String>[];
+    return raw
+        .map((item) => item.toString().trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: true);
+  }
+
   Future<AssistantRunResponse> _safeLocalRun(
     AssistantRunRequest request,
   ) async {
@@ -417,64 +526,38 @@ class CapabilityGateway {
     StreamController<AssistantRunStreamEvent> controller,
   ) async {
     try {
-      _consolidator = ProcessEventConsolidator(
+      _journalBus = ProcessJournalBus(
         userGoalSummary: _extractUserMessage(request),
       );
-      var streamedUserEventCount = 0;
+      var hasLiveAnswerDelta = false;
       final response = await _assistantGateway.runWithTraceStream(
         request,
         onTraceEvent: (event) {
           if (controller.isClosed) return;
-          controller.add(AssistantRunStreamEvent.trace(event));
-          // v6: unified explainable flow event via consolidator
-          _emitExplainableEvent(event, controller);
-          // Legacy: keep old paths for backward-compat consumers
-          _emitSemanticEvent(event, controller);
-          if (_emitUserEvent(event, controller)) {
-            streamedUserEventCount += 1;
+          final delta = _traceAnswerDelta(event);
+          if (delta.isNotEmpty) {
+            hasLiveAnswerDelta = true;
           }
+          _emitCanonicalTraceEvent(event, controller);
         },
       );
-      final userEvents = (response.structuredResponse['userEvents'] as List?)
-          ?.whereType<Map>()
-          .map((item) => UserEvent.fromJson(item.cast<String, dynamic>()))
-          .toList(growable: false);
-      if (streamedUserEventCount == 0 &&
-          userEvents != null &&
-          userEvents.isNotEmpty &&
-          !controller.isClosed) {
-        for (final event in userEvents) {
-          controller.add(AssistantRunStreamEvent.userEvent(event));
-        }
-      }
-      // v2: emit phase timeline from structured response
-      final phases = (response.structuredResponse['uiPhaseTimelineV1'] as List?)
-          ?.whereType<Map<String, dynamic>>()
-          .toList(growable: false);
-      if (phases != null && phases.isNotEmpty && !controller.isClosed) {
-        controller.add(AssistantRunStreamEvent.phaseTimeline(phases));
-      }
       final chunkText = _resolveChunkDisplayText(response);
-      if (chunkText.isNotEmpty && !controller.isClosed) {
-        // Mark the consolidator's aggregate phase as completed so the
-        // answer gate opens before final chunks are emitted.
-        if (_consolidator != null && !_consolidator!.answerGateOpen) {
-          final gateEvent = _consolidator!.consolidate(
-            AssistantTraceEvent(
-              type: AssistantTraceEventType.lifecycleEnd,
-              message: 'finished',
-              timestamp: DateTime.now(),
-            ),
-          );
-          if (gateEvent != null) {
-            controller.add(
-              AssistantRunStreamEvent.explainableFlow(gateEvent),
-            );
-          }
-        }
+      if (chunkText.isNotEmpty && !controller.isClosed && !hasLiveAnswerDelta) {
         for (final chunk in _chunkText(chunkText)) {
           if (chunk.trim().isEmpty) continue;
-          controller.add(AssistantRunStreamEvent.chunk(chunk));
+          controller.add(AssistantRunStreamEvent.answerDelta(chunk));
+          controller.add(
+            AssistantRunStreamEvent.processJournal(
+              ProcessJournalEvent(
+                eventId:
+                    'answer_delta_fallback_${DateTime.now().microsecondsSinceEpoch}',
+                type: ProcessJournalEventType.answerDelta,
+                stage: 'answering',
+                nodeId: 'answer.stream',
+                message: chunk,
+              ),
+            ),
+          );
         }
       }
       return response;
@@ -485,33 +568,26 @@ class CapabilityGateway {
         'local_with_stream',
       );
       for (final trace in fallback.traces) {
-        if (!controller.isClosed) {
-          controller.add(AssistantRunStreamEvent.trace(trace));
-        }
+        _emitCanonicalTraceEvent(trace, controller);
       }
       return fallback;
     }
   }
 
-  /// 静默运行本地网关：只发 trace 事件和语义阶段事件，不发 chunk。
-  /// 用于 remote 失败 fallback 到 local 的场景，避免 chunk 两路叠加。
+  /// 静默运行本地网关：只发用户态过程事件，不补发答案 chunk。
+  /// 用于 remote 失败 fallback 到 local 的场景，避免两路答案增量叠加。
   Future<AssistantRunResponse> _runLocalWithStreamSilent(
     AssistantRunRequest request,
     StreamController<AssistantRunStreamEvent> controller,
   ) async {
     try {
-      _consolidator ??= ProcessEventConsolidator(
+      _journalBus = ProcessJournalBus(
         userGoalSummary: _extractUserMessage(request),
       );
       final response = await _assistantGateway.runWithTraceStream(
         request,
         onTraceEvent: (event) {
-          if (!controller.isClosed) {
-            controller.add(AssistantRunStreamEvent.trace(event));
-            _emitExplainableEvent(event, controller);
-            _emitSemanticEvent(event, controller);
-            _emitUserEvent(event, controller);
-          }
+          _emitCanonicalTraceEvent(event, controller);
         },
       );
       return response;
@@ -522,9 +598,7 @@ class CapabilityGateway {
         'local_with_stream_silent',
       );
       for (final trace in fallback.traces) {
-        if (!controller.isClosed) {
-          controller.add(AssistantRunStreamEvent.trace(trace));
-        }
+        _emitCanonicalTraceEvent(trace, controller);
       }
       return fallback;
     }
@@ -544,6 +618,7 @@ class CapabilityGateway {
           type: AssistantTraceEventType.toolError,
           message: 'gateway_error[$source]: ${error.runtimeType}: $error',
           timestamp: DateTime.now(),
+          visibility: TraceVisibility.system,
           data: <String, dynamic>{
             'source': source,
             'errorType': error.runtimeType.toString(),
@@ -570,7 +645,19 @@ class CapabilityGateway {
     }
     if (decision.messageKind == AssistantMessageKind.progress) return '';
 
-    // Gate 2: uiAnswer.markdownText 是引擎层保证的纯文本，优先使用
+    // Gate 2: completed artifact 的展示账是最终真相源
+    final artifactMarkdown = response.displayMarkdownV1;
+    if (artifactMarkdown.isNotEmpty &&
+        !AssistantContentFilters.isNotDisplayable(artifactMarkdown)) {
+      return artifactMarkdown;
+    }
+    final artifactPlain = response.displayPlainTextV1;
+    if (artifactPlain.isNotEmpty &&
+        !AssistantContentFilters.isNotDisplayable(artifactPlain)) {
+      return artifactPlain;
+    }
+
+    // Gate 3: uiAnswer.markdownText 是引擎层保证的纯文本，优先使用
     final uiAnswer =
         (structured['uiAnswer'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
@@ -580,7 +667,7 @@ class CapabilityGateway {
       return markdownText;
     }
 
-    // Gate 3: 从 finalText 用 LlmResponseParser 提取 userMarkdown
+    // Gate 4: 从 finalText 用 LlmResponseParser 提取 userMarkdown
     final parsed = LlmResponseParser.parse(response.finalText);
     if (parsed.ok) {
       final um = parsed.userMarkdown;
@@ -589,7 +676,7 @@ class CapabilityGateway {
       }
     }
 
-    // Gate 4: answerPayload.userMarkdown
+    // Gate 5: answerPayload.userMarkdown
     final userMd = (answerPayload['userMarkdown'] as String?)?.trim() ?? '';
     if (userMd.isNotEmpty &&
         !AssistantContentFilters.isNotDisplayable(userMd)) {
@@ -639,7 +726,7 @@ class CapabilityGateway {
     AssistantRunRequest request,
     StreamController<AssistantRunStreamEvent> controller,
   ) async {
-    _consolidator ??= ProcessEventConsolidator(
+    _journalBus = ProcessJournalBus(
       userGoalSummary: _extractUserMessage(request),
     );
     AssistantRunResponse? completed;
@@ -648,51 +735,44 @@ class CapabilityGateway {
       if (completedSeen) {
         continue;
       }
+      if (event.type == OpenClawRemoteStreamEventType.failed) {
+        return null;
+      }
       if (event.type == OpenClawRemoteStreamEventType.trace &&
           event.trace != null) {
-        controller.add(AssistantRunStreamEvent.trace(event.trace!));
-        _emitExplainableEvent(event.trace!, controller);
-        _emitSemanticEvent(event.trace!, controller);
-        _emitUserEvent(event.trace!, controller);
+        _emitCanonicalTraceEvent(event.trace!, controller);
         continue;
       }
       if (event.type == OpenClawRemoteStreamEventType.userEvent &&
           event.userEvent != null) {
-        controller.add(AssistantRunStreamEvent.userEvent(event.userEvent!));
+        _emitCanonicalUserEvent(event.userEvent!, controller);
         continue;
       }
       if (event.type == OpenClawRemoteStreamEventType.chunk &&
           (event.chunkText?.isNotEmpty ?? false)) {
-        controller.add(AssistantRunStreamEvent.chunk(event.chunkText!));
+        controller.add(AssistantRunStreamEvent.answerDelta(event.chunkText!));
+        controller.add(
+          AssistantRunStreamEvent.processJournal(
+            ProcessJournalEvent(
+              eventId:
+                  'answer_delta_remote_${DateTime.now().microsecondsSinceEpoch}',
+              type: ProcessJournalEventType.answerDelta,
+              stage: 'answering',
+              nodeId: 'answer.stream',
+              message: event.chunkText!,
+            ),
+          ),
+        );
         continue;
       }
       if (event.type == OpenClawRemoteStreamEventType.completed &&
           event.response != null) {
-        if (_consolidator != null && !_consolidator!.answerGateOpen) {
-          final gateEvent = _consolidator!.consolidate(
-            AssistantTraceEvent(
-              type: AssistantTraceEventType.lifecycleEnd,
-              message: 'finished',
-              timestamp: DateTime.now(),
-            ),
-          );
-          if (gateEvent != null) {
-            controller.add(AssistantRunStreamEvent.explainableFlow(gateEvent));
-          }
-        }
         completed = event.response;
         completedSeen = true;
       }
     }
     return completed;
   }
-
-  /// Whether the answer gate is currently open (aggregate/merge phase completed).
-  bool get answerGateOpen => _consolidator?.answerGateOpen ?? false;
-
-  /// Snapshot of all explainable flow events emitted so far.
-  List<ExplainableFlowEvent> get flowEventSnapshot =>
-      _consolidator?.snapshot ?? const <ExplainableFlowEvent>[];
 
   static String _extractUserMessage(AssistantRunRequest request) {
     for (int i = request.messages.length - 1; i >= 0; i--) {
@@ -704,203 +784,54 @@ class CapabilityGateway {
     return '';
   }
 
-  void _emitExplainableEvent(
+  void _emitProcessJournalEvent(
     AssistantTraceEvent event,
     StreamController<AssistantRunStreamEvent> controller,
   ) {
-    final consolidator = _consolidator;
-    if (consolidator == null || controller.isClosed) return;
-    final flowEvent = consolidator.consolidate(event);
-    if (flowEvent == null) return;
-    for (final e in consolidator.snapshot) {
+    final journalBus = _journalBus;
+    if (journalBus == null || controller.isClosed) return;
+    final events = journalBus.consumeTrace(event);
+    for (final item in events) {
       if (controller.isClosed) return;
-      controller.add(AssistantRunStreamEvent.explainableFlow(e));
+      controller.add(AssistantRunStreamEvent.processJournal(item));
     }
   }
 
-  bool _emitUserEvent(
-    AssistantTraceEvent event,
-    StreamController<AssistantRunStreamEvent> controller,
-  ) {
-    final userEvent = _UserEventTranslator.translate(event);
-    if (userEvent == null || controller.isClosed) return false;
-    controller.add(AssistantRunStreamEvent.userEvent(userEvent));
-    return true;
-  }
-
-  void _emitSemanticEvent(
+  void _emitCanonicalTraceEvent(
     AssistantTraceEvent event,
     StreamController<AssistantRunStreamEvent> controller,
   ) {
     if (controller.isClosed) return;
-
-    switch (event.type) {
-      case AssistantTraceEventType.planStarted:
-        controller.add(
-          AssistantRunStreamEvent.planStarted(planSummary: event.message),
-        );
-        controller.add(
-          AssistantRunStreamEvent.userPhase(
-            phaseType: UserPhaseEventType.understandingStarted,
-            message: '正在理解您的问题...',
-          ),
-        );
-        break;
-
-      case AssistantTraceEventType.thinkingStarted:
-        final hasEvidence = (event.data?['iteration'] as int? ?? 1) > 1;
-        if (hasEvidence) {
-          controller.add(
-            AssistantRunStreamEvent.userPhase(
-              phaseType: UserPhaseEventType.analyzingStarted,
-              message: '正在分析获取到的信息...',
-            ),
-          );
-        } else {
-          controller.add(
-            AssistantRunStreamEvent.userPhase(
-              phaseType: UserPhaseEventType.understandingStarted,
-              message: '正在分析您的问题...',
-            ),
-          );
-        }
-        controller.add(AssistantRunStreamEvent.thinkingProgress(event.message));
-        break;
-
-      case AssistantTraceEventType.thinkingProgress:
-        final phase = (event.data?['phase'] as String?) ?? 'understanding';
-        final isExtracted = event.data?['extracted'] == true;
-        final phaseType = phase == 'analyzing'
-            ? UserPhaseEventType.analyzingThinking
-            : phase == 'answering'
-            ? UserPhaseEventType.answeringStarted
-            : UserPhaseEventType.understandingThinking;
-        controller.add(
-          AssistantRunStreamEvent.userPhase(
-            phaseType: phaseType,
-            message: event.message,
-            data: isExtracted ? <String, dynamic>{'extracted': true} : null,
-          ),
-        );
-        controller.add(AssistantRunStreamEvent.thinkingProgress(event.message));
-        break;
-
-      case AssistantTraceEventType.toolStart:
-        final toolName = (event.data?['stepId'] as String? ?? '')
-            .split('_')
-            .first;
-        final actualToolName =
-            (event.data?['tool'] ?? event.data?['toolName'] ?? toolName)
-                .toString()
-                .trim();
-        controller.add(
-          AssistantRunStreamEvent.userPhase(
-            phaseType: UserPhaseEventType.toolExecutionStarted,
-            toolName: actualToolName,
-            message: event.message,
-            data: event.data,
-          ),
-        );
-        if (actualToolName.contains('search')) {
-          controller.add(
-            AssistantRunStreamEvent.searchProgress(
-              '正在搜索: ${event.data?['query'] ?? event.message}',
-            ),
-          );
-        }
-        break;
-
-      case AssistantTraceEventType.toolResult:
-        final isAssessment = event.data?['isAssessment'] == true;
-        if (isAssessment) {
-          final assessmentType =
-              (event.data?['assessmentType'] as String?) ?? '';
-          final userMsg =
-              (event.data?['userMessage'] as String?) ?? event.message;
-          controller.add(
-            AssistantRunStreamEvent.userPhase(
-              phaseType: UserPhaseEventType.toolAssessmentResult,
-              message: userMsg,
-              data: <String, dynamic>{'assessmentType': assessmentType},
-            ),
-          );
-        } else {
-          final toolName = (event.data?['toolName'] ?? '').toString().trim();
-          controller.add(
-            AssistantRunStreamEvent.userPhase(
-              phaseType: UserPhaseEventType.toolExecutionCompleted,
-              toolName: toolName,
-              message: event.message,
-              data: event.data,
-            ),
-          );
-          final refs = event.data?['references'] as List?;
-          if (refs != null && refs.isNotEmpty) {
-            controller.add(
-              AssistantRunStreamEvent.searchProgress('已获取 ${refs.length} 条结果'),
-            );
-          }
-        }
-        break;
-
-      case AssistantTraceEventType.toolError:
-        controller.add(
-          AssistantRunStreamEvent.userPhase(
-            phaseType: UserPhaseEventType.toolAssessmentResult,
-            message: '工具执行遇到问题',
-            data: <String, dynamic>{'assessmentType': 'toolFailed'},
-          ),
-        );
-        break;
-
-      case AssistantTraceEventType.replanTriggered:
-        controller.add(
-          AssistantRunStreamEvent.userPhase(
-            phaseType: UserPhaseEventType.toolAssessmentResult,
-            message: event.message,
-            data: <String, dynamic>{
-              'assessmentType': event.data?['reason'] ?? 'needMoreSearch',
-            },
-          ),
-        );
-        break;
-
-      case AssistantTraceEventType.searchStarted:
-      case AssistantTraceEventType.searchQueryGenerated:
-        controller.add(AssistantRunStreamEvent.searchProgress(event.message));
-        break;
-
-      case AssistantTraceEventType.answerDelta:
-        final delta = event.data?['delta'] as String? ?? event.message;
-        controller.add(AssistantRunStreamEvent.answerDelta(delta));
-        break;
-
-      case AssistantTraceEventType.streamDelta:
-        break;
-
-      case AssistantTraceEventType.lifecycleEnd:
-        final data = event.data;
-        if (data != null && data.containsKey('userMessage')) {
-          controller.add(
-            AssistantRunStreamEvent.userPhase(
-              phaseType: UserPhaseEventType.loopDegraded,
-              message: data['userMessage'] as String? ?? '处理完成',
-            ),
-          );
-        }
-        if (event.message.contains('finished')) {
-          controller.add(
-            AssistantRunStreamEvent.userPhase(
-              phaseType: UserPhaseEventType.answeringCompleted,
-              message: '回答完成',
-            ),
-          );
-        }
-        break;
-
-      default:
-        break;
+    final delta = _traceAnswerDelta(event);
+    if (delta.isNotEmpty) {
+      controller.add(AssistantRunStreamEvent.answerDelta(delta));
     }
+    _emitProcessJournalEvent(event, controller);
+  }
+
+  void _emitCanonicalUserEvent(
+    UserEvent event,
+    StreamController<AssistantRunStreamEvent> controller,
+  ) {
+    if (controller.isClosed) return;
+    if (event.type == UserEventType.answerDelta &&
+        event.message.trim().isNotEmpty) {
+      controller.add(AssistantRunStreamEvent.answerDelta(event.message));
+    }
+    final journalEvents = _journalBus?.consumeUserEvent(event);
+    if (journalEvents == null) return;
+    for (final item in journalEvents) {
+      if (controller.isClosed) return;
+      controller.add(AssistantRunStreamEvent.processJournal(item));
+    }
+  }
+
+  String _traceAnswerDelta(AssistantTraceEvent event) {
+    if (event.type != AssistantTraceEventType.answerDelta &&
+        event.type != AssistantTraceEventType.streamDelta) {
+      return '';
+    }
+    return ((event.data?['delta'] as String?) ?? event.message).trim();
   }
 
   Future<AssistantToolResult> invokeSkill({
@@ -945,252 +876,5 @@ class CapabilityGateway {
       }
     }
     return local;
-  }
-}
-
-class _UserEventTranslator {
-  static UserEvent? translate(AssistantTraceEvent event) {
-    final data = event.data ?? const <String, dynamic>{};
-    switch (event.type) {
-      case AssistantTraceEventType.planStarted:
-        return UserEvent(
-          type: UserEventType.processReplace,
-          scope: UserEventScope.root,
-          nodeId: 'root.intent',
-          message: _buildPlanStartedMessage(data),
-        );
-      case AssistantTraceEventType.toolStart:
-        if (_isSearchLike(event, data)) {
-          final toolName = _toolName(data);
-          return UserEvent(
-            type: UserEventType.processAppend,
-            scope: UserEventScope.skill,
-            nodeId: toolName.isEmpty ? 'skill.search' : 'skill.$toolName',
-            message: _buildToolStartMessage(data),
-            payload: <String, dynamic>{'toolName': toolName},
-          );
-        }
-        return null;
-      case AssistantTraceEventType.toolResult:
-        if (data['isAssessment'] == true) {
-          final userMessage = _buildAssessmentMessage(data);
-          if (userMessage.isEmpty) return null;
-          return UserEvent(
-            type: UserEventType.processAppend,
-            scope: UserEventScope.aggregation,
-            nodeId: 'aggregation.assessment',
-            message: userMessage,
-          );
-        }
-        final refs = (data['references'] as List?)?.length ?? 0;
-        if (refs > 0) {
-          final references =
-              (data['references'] as List?)
-                  ?.whereType<Map>()
-                  .map((item) => item.cast<String, dynamic>())
-                  .map(
-                    (item) => <String, dynamic>{
-                      'title': (item['title'] as String?)?.trim() ?? '',
-                      'url': (item['url'] as String?)?.trim() ?? '',
-                      'source': (item['source'] as String?)?.trim() ?? '',
-                    },
-                  )
-                  .where(
-                    (item) =>
-                        (item['title'] as String).isNotEmpty &&
-                        (item['url'] as String).isNotEmpty,
-                  )
-                  .take(6)
-                  .toList(growable: false) ??
-              const <Map<String, dynamic>>[];
-          return UserEvent(
-            type: UserEventType.processAppend,
-            scope: UserEventScope.skill,
-            nodeId: _toolName(data),
-            message: '已核对 $refs 个来源，继续整理关键信息',
-            payload: <String, dynamic>{
-              'referenceCount': refs,
-              'references': references,
-            },
-          );
-        }
-        return null;
-      case AssistantTraceEventType.subagentStart:
-        final goal = _sanitizeMessage((data['goal'] as String?)?.trim() ?? '');
-        return UserEvent(
-          type: UserEventType.processAppend,
-          scope: UserEventScope.skill,
-          nodeId: (data['domainId'] as String?)?.trim() ?? 'skill.secondary',
-          runId: (data['subagentId'] as String?)?.trim() ?? '',
-          message: goal.isNotEmpty ? goal : '正在并行补充另一部分信息',
-          payload: data,
-        );
-      case AssistantTraceEventType.subagentResult:
-        return UserEvent(
-          type: UserEventType.processCommit,
-          scope: UserEventScope.skill,
-          nodeId: (data['domainId'] as String?)?.trim() ?? 'skill.secondary',
-          runId: (data['subagentId'] as String?)?.trim() ?? '',
-          message: _summarizeSubtask(data),
-          payload: data,
-        );
-      case AssistantTraceEventType.subagentError:
-        return UserEvent(
-          type: UserEventType.processAppend,
-          scope: UserEventScope.skill,
-          nodeId: (data['domainId'] as String?)?.trim() ?? 'skill.secondary',
-          runId: (data['subagentId'] as String?)?.trim() ?? '',
-          message: '这部分信息暂时还不完整，我继续用已有信息整理结果',
-          payload: data,
-        );
-      case AssistantTraceEventType.lifecycleEnd:
-        final userMessage = _buildLifecycleEndMessage(data);
-        if (userMessage.isEmpty) return null;
-        return UserEvent(
-          type: UserEventType.processCommit,
-          scope: UserEventScope.aggregation,
-          nodeId: 'aggregation.final',
-          message: userMessage,
-          payload: data,
-        );
-      default:
-        return null;
-    }
-  }
-
-  static bool _isSearchLike(
-    AssistantTraceEvent event,
-    Map<String, dynamic> data,
-  ) {
-    final toolName = _toolName(data).toLowerCase();
-    if (toolName.contains('search') || toolName.contains('fetch')) {
-      return true;
-    }
-    return event.message.toLowerCase().contains('search');
-  }
-
-  static String _toolName(Map<String, dynamic> data) {
-    return (data['toolName'] ?? data['tool'] ?? data['stepId'] ?? '')
-        .toString()
-        .split('_')
-        .first
-        .trim();
-  }
-
-  static String _summarizeSubtask(Map<String, dynamic> data) {
-    final summary = _sanitizeMessage(
-      (data['summary'] as String?)?.trim() ?? '',
-    );
-    if (summary.isNotEmpty) return summary;
-    final goal = _sanitizeMessage((data['goal'] as String?)?.trim() ?? '');
-    if (goal.isNotEmpty) return '已完成：$goal';
-    return '已完成这部分信息整理';
-  }
-
-  static String _buildPlanStartedMessage(Map<String, dynamic> data) {
-    final goal = _sanitizeMessage((data['goal'] as String?)?.trim() ?? '');
-    if (_isWeatherLikeText(goal)) {
-      final city = _extractCity(goal);
-      if (city.isNotEmpty) {
-        return '我先确认$city现在的天气情况';
-      }
-      return '我先确认你想查的实时天气情况';
-    }
-    if (goal.isNotEmpty) {
-      return '我先理清“$goal”里最需要优先解决的部分';
-    }
-    return '我先理清你的问题，再开始处理';
-  }
-
-  static String _buildToolStartMessage(Map<String, dynamic> data) {
-    final query = _sanitizeMessage((data['query'] as String?)?.trim() ?? '');
-    if (_isWeatherLikeText(query)) {
-      final city = _extractCity(query);
-      if (city.isNotEmpty) {
-        return '我先查一下$city现在的天气和相关出行信息';
-      }
-      return '我先查一下当前的实时天气信息';
-    }
-    if (query.isNotEmpty) {
-      return '我先补充“$query”这部分相关信息';
-    }
-    return '我先补充与你问题直接相关的信息';
-  }
-
-  static String _buildAssessmentMessage(Map<String, dynamic> data) {
-    final assessmentType =
-        (data['assessmentType'] as String?)?.trim().toLowerCase() ?? '';
-    final shouldContinue = data['shouldContinueLoop'] == true;
-    final refs = (data['references'] as List?)?.length ?? 0;
-    switch (assessmentType) {
-      case 'needMoreSearch':
-        return shouldContinue ? '现有信息还不够稳，我再补一轮更可靠的来源' : '我先用已确认的信息帮你整理结果';
-      case 'toolFailed':
-        return shouldContinue
-            ? '这一轮没有拿到稳定结果，我换个方式再试一次'
-            : '这次没拿到可靠结果，我先基于已确认的信息整理给你';
-      case 'budgetExhausted':
-        return '已经拿到一部分可用信息，我先整理成你容易看的结论';
-      case 'sufficient':
-        if (refs > 0) {
-          return '已经拿到一批可用信息，我开始整理答案';
-        }
-        return '关键信息已经够用了，我开始整理答案';
-      default:
-        final userMessage = _sanitizeMessage(
-          (data['userMessage'] as String?)?.trim() ?? '',
-        );
-        return userMessage;
-    }
-  }
-
-  static String _buildLifecycleEndMessage(Map<String, dynamic> data) {
-    final userMessage = _sanitizeMessage(
-      (data['userMessage'] as String?)?.trim() ?? '',
-    );
-    if (userMessage.isNotEmpty) {
-      if (userMessage.contains('基于已有信息')) {
-        return '这一轮没有拿到更多可靠信息，我先把已经确认的内容整理给你';
-      }
-      return userMessage;
-    }
-    return '';
-  }
-
-  static bool _isWeatherLikeText(String text) {
-    if (text.isEmpty) return false;
-    return RegExp(
-      r'(天气|气温|降雨|风力|体感|预报|weather|forecast|temperature|humidity|rain)',
-      caseSensitive: false,
-    ).hasMatch(text);
-  }
-
-  static String _extractCity(String text) {
-    if (text.isEmpty) return '';
-    return RegExp(
-          r'([\u4e00-\u9fa5]{2,8}(?:市|区|县)|[\u4e00-\u9fa5]{2,8})',
-        ).firstMatch(text)?.group(1)?.trim() ??
-        '';
-  }
-
-  static String _sanitizeMessage(String raw) {
-    var text = raw.trim();
-    if (text.isEmpty) return '';
-    const blockedFragments = <String>[
-      'queryVariants',
-      'freshnessHoursMax',
-      'provider',
-      'contractVersion',
-      'assistant_turn_v4',
-      'tool_call',
-      '<tool_call>',
-      '</tool_call>',
-      'timeScope',
-    ];
-    for (final fragment in blockedFragments) {
-      if (text.contains(fragment)) return '';
-    }
-    if (text.startsWith('{') || text.startsWith('[')) return '';
-    return text;
   }
 }

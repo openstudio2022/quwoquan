@@ -2,45 +2,48 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-
-/// 创作入口类型
-enum CreateEntryType {
-  weiquPhoto,
-  weiquText,
-  weiquVideo,
-  zuopinImage,
-  zuopinArticle,
-  zuopinVideo,
-}
+import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 
 /// 创作入口抽屉
 ///
-/// 微趣（照片/文字/视频）+ 作品（图片/文章/视频）六入口。
-/// 与原型 CreateEntrySheet 一致。
+/// 动作优先：先选动作，再在编辑器里决定点滴/作品。
 class CreateEntrySheet extends ConsumerWidget {
   const CreateEntrySheet({
     super.key,
     required this.isOpen,
     required this.onClose,
     required this.onSelect,
+    this.onOpenLegacyTab,
   });
 
   final bool isOpen;
   final VoidCallback onClose;
-  final void Function(CreateEntryType type) onSelect;
+  final void Function(EditorStartAction action) onSelect;
+  final void Function(String tabKey)? onOpenLegacyTab;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (!isOpen) return const SizedBox.shrink();
 
     final isDark = ref.watch(isDarkProvider);
-    final bgColor =
-        AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
-    final fgColor =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    final bgColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
+    final fgColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final enableCreateActionEntry = ref.watch(
+      contentFeatureFlagProvider('enable_create_action_entry'),
+    );
 
     return Material(
       color: Colors.transparent,
@@ -48,15 +51,14 @@ class CreateEntrySheet extends ConsumerWidget {
         children: [
           GestureDetector(
             onTap: onClose,
-            child: Container(
-              color: Colors.black.withValues(alpha: 0.5),
-            ),
+            child: Container(color: Colors.black.withValues(alpha: 0.5)),
           ),
           Align(
             alignment: Alignment.bottomCenter,
             child: Container(
               constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height *
+                maxHeight:
+                    MediaQuery.of(context).size.height *
                     AppSpacing.createEntrySheetMaxHeightRatio,
               ),
               padding: EdgeInsets.only(
@@ -86,8 +88,8 @@ class CreateEntrySheet extends ConsumerWidget {
                     children: [
                       Padding(
                         padding: EdgeInsets.all(
-                          AppSpacing.semantic[DesignSemanticConstants.container]
-                                  ?[DesignSemanticConstants.md] ??
+                          AppSpacing.semantic[DesignSemanticConstants
+                                  .container]?[DesignSemanticConstants.md] ??
                               AppSpacing.containerMd,
                         ),
                         child: Column(
@@ -95,21 +97,16 @@ class CreateEntrySheet extends ConsumerWidget {
                           children: [
                             _buildSectionTitle(
                               context,
-                              AppConceptConstants.weiqu,
-                              AppConceptConstants.weiquSubtitle,
+                              AppConceptConstants.create,
+                              enableCreateActionEntry
+                                  ? '先做动作，再决定发成点滴还是作品'
+                                  : '回退到旧版创作入口',
                               fgColor,
                             ),
                             SizedBox(height: AppSpacing.sm),
-                            _buildWeiquGrid(context, ref, onSelect, fgColor),
-                            SizedBox(height: AppSpacing.lg),
-                            _buildSectionTitle(
-                              context,
-                              AppConceptConstants.zuopin,
-                              AppConceptConstants.zuopinSubtitle,
-                              fgColor,
-                            ),
-                            SizedBox(height: AppSpacing.sm),
-                            _buildZuopinGrid(context, ref, onSelect, fgColor),
+                            enableCreateActionEntry
+                                ? _buildActionGrid(context, ref, fgColor)
+                                : _buildLegacyGrid(context, ref, fgColor),
                           ],
                         ),
                       ),
@@ -139,52 +136,92 @@ class CreateEntrySheet extends ConsumerWidget {
     Color fgColor,
   ) {
     final theme = Theme.of(context).textTheme;
-    final baseStyle = theme.bodyMedium?.copyWith(color: fgColor) ??
+    final baseStyle =
+        theme.bodyMedium?.copyWith(color: fgColor) ??
         TextStyle(color: fgColor, fontSize: AppTypography.md);
     return RichText(
       text: TextSpan(
         style: baseStyle,
         children: [
-          TextSpan(text: title, style: baseStyle.copyWith(fontWeight: FontWeight.bold)),
+          TextSpan(
+            text: title,
+            style: baseStyle.copyWith(fontWeight: FontWeight.bold),
+          ),
           TextSpan(text: '·$subtitle', style: baseStyle),
         ],
       ),
     );
   }
 
-  Widget _buildWeiquGrid(
-    BuildContext context,
-    WidgetRef ref,
-    void Function(CreateEntryType) onSelect,
-    Color fgColor,
-  ) {
-    final items = [
-      (AppConceptConstants.weiquPhoto, AppConceptConstants.weiquPhotoHint, CreateEntryType.weiquPhoto, Icons.photo_library, _CreateEntryPreviewUrls.weiquPhoto),
-      (AppConceptConstants.weiquText, AppConceptConstants.weiquTextHint, CreateEntryType.weiquText, Icons.text_fields, _CreateEntryPreviewUrls.weiquText),
-      (AppConceptConstants.weiquVideo, AppConceptConstants.weiquVideoHint, CreateEntryType.weiquVideo, Icons.videocam, _CreateEntryPreviewUrls.weiquVideo),
+  Widget _buildActionGrid(BuildContext context, WidgetRef ref, Color fgColor) {
+    final items = <_CreateActionCardSpec>[
+      _CreateActionCardSpec(
+        title: UITextConstants.createActionGallery,
+        hint: UITextConstants.createActionGalleryHint,
+        onTap: () => onSelect(EditorStartAction.gallery),
+        icon: Icons.photo_library_outlined,
+        previewImageUrl: _CreateEntryPreviewUrls.gallery,
+        key: TestKeys.createActionGallery,
+      ),
+      _CreateActionCardSpec(
+        title: UITextConstants.createActionWrite,
+        hint: UITextConstants.createActionWriteHint,
+        onTap: () => onSelect(EditorStartAction.write),
+        icon: Icons.edit_note_outlined,
+        previewImageUrl: _CreateEntryPreviewUrls.write,
+        key: TestKeys.createActionWrite,
+      ),
+      _CreateActionCardSpec(
+        title: UITextConstants.createActionCapture,
+        hint: UITextConstants.createActionCaptureHint,
+        onTap: () => onSelect(EditorStartAction.capture),
+        icon: Icons.camera_alt_outlined,
+        previewImageUrl: _CreateEntryPreviewUrls.capture,
+        key: TestKeys.createActionCapture,
+      ),
     ];
-    return _buildEntryGrid(context, ref, items, onSelect, fgColor);
+    return _buildEntryGrid(context, ref, items, fgColor);
   }
 
-  Widget _buildZuopinGrid(
-    BuildContext context,
-    WidgetRef ref,
-    void Function(CreateEntryType) onSelect,
-    Color fgColor,
-  ) {
-    final items = [
-      (AppConceptConstants.zuopinImage, AppConceptConstants.zuopinImageHint, CreateEntryType.zuopinImage, Icons.image, _CreateEntryPreviewUrls.zuopinImage),
-      (AppConceptConstants.zuopinArticle, AppConceptConstants.zuopinArticleHint, CreateEntryType.zuopinArticle, Icons.article, _CreateEntryPreviewUrls.zuopinArticle),
-      (AppConceptConstants.zuopinVideo, AppConceptConstants.zuopinVideoHint, CreateEntryType.zuopinVideo, Icons.movie, _CreateEntryPreviewUrls.zuopinVideo),
+  Widget _buildLegacyGrid(BuildContext context, WidgetRef ref, Color fgColor) {
+    final openLegacyTab = onOpenLegacyTab;
+    final items = <_CreateActionCardSpec>[
+      _CreateActionCardSpec(
+        title: UITextConstants.postMoment,
+        hint: '直接进入点滴编辑器',
+        onTap: () => openLegacyTab?.call('moment'),
+        icon: Icons.chat_bubble_outline,
+        previewImageUrl: _CreateEntryPreviewUrls.write,
+      ),
+      _CreateActionCardSpec(
+        title: UITextConstants.postPhoto,
+        hint: '沿用图片作品入口',
+        onTap: () => openLegacyTab?.call('photo'),
+        icon: Icons.photo_outlined,
+        previewImageUrl: _CreateEntryPreviewUrls.gallery,
+      ),
+      _CreateActionCardSpec(
+        title: UITextConstants.postVideo,
+        hint: '沿用视频作品入口',
+        onTap: () => openLegacyTab?.call('video'),
+        icon: Icons.videocam_outlined,
+        previewImageUrl: _CreateEntryPreviewUrls.capture,
+      ),
+      _CreateActionCardSpec(
+        title: UITextConstants.postArticle,
+        hint: '沿用笔记编辑入口',
+        onTap: () => openLegacyTab?.call('article'),
+        icon: Icons.article_outlined,
+        previewImageUrl: _CreateEntryPreviewUrls.write,
+      ),
     ];
-    return _buildEntryGrid(context, ref, items, onSelect, fgColor);
+    return _buildEntryGrid(context, ref, items, fgColor);
   }
 
   Widget _buildEntryGrid(
     BuildContext context,
     WidgetRef ref,
-    List<(String, String, CreateEntryType, IconData, String)> items,
-    void Function(CreateEntryType) onSelect,
+    List<_CreateActionCardSpec> items,
     Color fgColor,
   ) {
     return GridView.count(
@@ -193,16 +230,17 @@ class CreateEntrySheet extends ConsumerWidget {
       crossAxisCount: 3,
       mainAxisSpacing: AppSpacing.sm,
       crossAxisSpacing: AppSpacing.sm,
-      childAspectRatio: 0.85,
+      childAspectRatio: 0.8,
       children: items.map((item) {
         return _buildEntryCard(
           context: context,
           ref: ref,
-          title: item.$1,
-          hint: item.$2,
-          icon: item.$4,
-          onTap: () => onSelect(item.$3),
-          previewImageUrl: item.$5,
+          title: item.title,
+          hint: item.hint,
+          icon: item.icon,
+          onTap: item.onTap,
+          previewImageUrl: item.previewImageUrl,
+          cardKey: item.key,
         );
       }).toList(),
     );
@@ -215,27 +253,35 @@ class CreateEntrySheet extends ConsumerWidget {
     required String hint,
     required IconData icon,
     required VoidCallback onTap,
+    Key? cardKey,
     String? previewImageUrl,
   }) {
     final isDark = ref.watch(isDarkProvider);
-    final fgColor =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
-    final borderColor =
-        AppColorsFunctional.getColor(isDark, ColorType.borderSecondary);
-    final titleStyle = Theme.of(context).textTheme.labelLarge?.copyWith(
+    final fgColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final borderColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.borderSecondary,
+    );
+    final titleStyle =
+        Theme.of(context).textTheme.labelLarge?.copyWith(
           color: fgColor,
           fontWeight: FontWeight.w600,
         ) ??
         TextStyle(color: fgColor, fontWeight: FontWeight.w600);
-    final hintStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: fgSecondary,
-        ) ??
+    final hintStyle =
+        Theme.of(context).textTheme.labelSmall?.copyWith(color: fgSecondary) ??
         TextStyle(color: fgSecondary, fontSize: AppTypography.xs);
     return Material(
       color: Colors.transparent,
       child: InkWell(
+        key: cardKey,
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
         child: Container(
@@ -259,15 +305,23 @@ class CreateEntrySheet extends ConsumerWidget {
               Expanded(
                 child: ClipRRect(
                   borderRadius: BorderRadius.only(
-                    bottomLeft: Radius.circular(AppSpacing.largeBorderRadius - 1),
-                    bottomRight: Radius.circular(AppSpacing.largeBorderRadius - 1),
+                    bottomLeft: Radius.circular(
+                      AppSpacing.largeBorderRadius - 1,
+                    ),
+                    bottomRight: Radius.circular(
+                      AppSpacing.largeBorderRadius - 1,
+                    ),
                   ),
                   child: previewImageUrl != null
                       ? Image.network(
                           previewImageUrl,
                           fit: BoxFit.cover,
                           width: double.infinity,
-                          errorBuilder: (_, __, ___) => Icon(icon, size: AppSpacing.iconLarge, color: fgColor),
+                          errorBuilder: (_, __, ___) => Icon(
+                            icon,
+                            size: AppSpacing.iconLarge,
+                            color: fgColor,
+                          ),
                         )
                       : Icon(icon, size: AppSpacing.iconLarge, color: fgColor),
                 ),
@@ -280,18 +334,29 @@ class CreateEntrySheet extends ConsumerWidget {
   }
 }
 
-/// 1:1 来自 CreateEntrySheet.tsx 各按钮预览图 URL
 class _CreateEntryPreviewUrls {
-  static const String weiquPhoto =
+  static const String gallery =
       'https://images.unsplash.com/photo-1552383276-790b5de4b55b?w=400&fit=crop';
-  static const String weiquText =
+  static const String write =
       'https://images.unsplash.com/photo-1712762056200-50d8f803ba10?w=400&fit=crop';
-  static const String weiquVideo =
+  static const String capture =
       'https://images.unsplash.com/photo-1726935068680-73cef7e8412b?w=400&fit=crop';
-  static const String zuopinImage =
-      'https://images.unsplash.com/photo-1759070725320-2bdd608c8eab?w=400&fit=crop';
-  static const String zuopinArticle =
-      'https://images.unsplash.com/photo-1638342863994-ae4eee256688?w=400&fit=crop';
-  static const String zuopinVideo =
-      'https://images.unsplash.com/photo-1741836198509-7297c2d8bb24?w=400&fit=crop';
+}
+
+class _CreateActionCardSpec {
+  const _CreateActionCardSpec({
+    required this.title,
+    required this.hint,
+    required this.onTap,
+    required this.icon,
+    required this.previewImageUrl,
+    this.key,
+  });
+
+  final String title;
+  final String hint;
+  final VoidCallback onTap;
+  final IconData icon;
+  final String previewImageUrl;
+  final Key? key;
 }

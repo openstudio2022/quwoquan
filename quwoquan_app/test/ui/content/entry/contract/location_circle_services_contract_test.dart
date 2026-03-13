@@ -5,52 +5,25 @@ import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/integration/integration_location_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
-import 'package:quwoquan_app/core/services/data_service.dart';
+import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/ui/content/entry/services/publish_settings_services.dart';
 
-class _FakeDataService implements DataService {
-  _FakeDataService({required this.circles});
+class _FakeCircleRepository extends MockCircleRepository {
+  _FakeCircleRepository({required this.circles});
 
   final List<Map<String, dynamic>> circles;
 
   @override
-  Future<Map<String, dynamic>> createDataItem({
-    required String endpoint,
-    required Map<String, dynamic> data,
-  }) async => <String, dynamic>{};
-
-  @override
-  Future<void> deleteDataItem({
-    required String endpoint,
-    required String id,
-  }) async {}
-
-  @override
-  Future<Map<String, dynamic>> getDataItem({
-    required String endpoint,
-    required String id,
-    Map<String, dynamic>? params,
-  }) async => <String, dynamic>{};
-
-  @override
-  Future<List<Map<String, dynamic>>> getDataList({
-    required String endpoint,
-    Map<String, dynamic>? params,
-    int? limit,
-    int? offset,
+  Future<List<Map<String, dynamic>>> listCircles({
+    String? category,
+    String? domainId,
+    String? recommendFor,
+    String? cursor,
+    int limit = 20,
+    String? sort,
   }) async {
-    if (endpoint == '/circles') {
-      return circles;
-    }
-    return <Map<String, dynamic>>[];
+    return circles.take(limit).toList(growable: false);
   }
-
-  @override
-  Future<Map<String, dynamic>> updateDataItem({
-    required String endpoint,
-    required String id,
-    required Map<String, dynamic> data,
-  }) async => <String, dynamic>{};
 }
 
 class _StubCloudHttpClient extends CloudHttpClient {
@@ -151,7 +124,7 @@ void main() {
   group('CreateCircleService', () {
     test('uses remote circles when endpoint has data', () async {
       const service = CreateCircleService();
-      final fake = _FakeDataService(
+      final fake = _FakeCircleRepository(
         circles: <Map<String, dynamic>>[
           <String, dynamic>{'id': 'c1', 'name': '测试圈子A'},
           <String, dynamic>{'id': 'c2', 'name': '测试圈子B'},

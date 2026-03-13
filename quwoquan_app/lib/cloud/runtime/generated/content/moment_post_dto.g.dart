@@ -6,6 +6,8 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart'
 class MomentPostDto extends PostBaseDto {
   @override final String id;
   @override final String type;
+  @override final String identity;
+  @override final String assistantUsePolicy;
   @override final String authorId;
   @override final String displayName;
   @override final String avatarUrl;
@@ -23,6 +25,8 @@ class MomentPostDto extends PostBaseDto {
   const MomentPostDto({
     required this.id,
     required this.type,
+    required this.identity,
+    required this.assistantUsePolicy,
     required this.authorId,
     required this.displayName,
     required this.avatarUrl,
@@ -42,6 +46,8 @@ class MomentPostDto extends PostBaseDto {
     return MomentPostDto(
       id: m['postId']?.toString() ?? m['_id']?.toString() ?? '',
       type: m['contentType']?.toString() ?? m['category']?.toString() ?? 'moment',
+      identity: m['contentIdentity']?.toString() ?? m['identity']?.toString() ?? 'moment',
+      assistantUsePolicy: m['assistantUsePolicy']?.toString() ?? 'inherit',
       authorId: m['authorId']?.toString() ?? m['userId']?.toString() ?? m['author_id']?.toString() ?? '',
       displayName: m['authorNickname']?.toString() ?? m['nickname']?.toString() ?? m['username']?.toString() ?? m['displayName']?.toString() ?? '',
       avatarUrl: m['authorAvatarUrl']?.toString() ?? m['avatarUrl']?.toString() ?? m['avatar']?.toString() ?? '',
@@ -63,6 +69,8 @@ class MomentPostDto extends PostBaseDto {
     return <String, dynamic>{
       'id': id,
       'type': type,
+      'identity': identity,
+      'assistantUsePolicy': assistantUsePolicy,
       'authorId': authorId,
       'displayName': displayName,
       'avatarUrl': avatarUrl,
@@ -82,6 +90,8 @@ class MomentPostDto extends PostBaseDto {
   MomentPostDto copyWith({
     String? id,
     String? type,
+    String? identity,
+    String? assistantUsePolicy,
     String? authorId,
     String? displayName,
     String? avatarUrl,
@@ -99,6 +109,8 @@ class MomentPostDto extends PostBaseDto {
     return MomentPostDto(
       id: id ?? this.id,
       type: type ?? this.type,
+      identity: identity ?? this.identity,
+      assistantUsePolicy: assistantUsePolicy ?? this.assistantUsePolicy,
       authorId: authorId ?? this.authorId,
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
@@ -115,6 +127,12 @@ class MomentPostDto extends PostBaseDto {
     );
   }
 
+  /// 点滴的展示格式由当前素材组合推导。
+  String get displayFormat {
+    if (videoUrl != null && videoUrl!.isNotEmpty) return 'video';
+    if (imageUrls.isNotEmpty) return 'image';
+    return 'note';
+  }
   /// 是否包含图片（图文帖）。
   bool get hasImages {
     return imageUrls.isNotEmpty;

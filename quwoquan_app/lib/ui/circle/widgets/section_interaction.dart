@@ -56,7 +56,15 @@ class _SectionInteractionState extends ConsumerState<SectionInteraction> {
 
   // Fallback mock data when feed is empty
   List<Map<String, dynamic>> get _displayInteractions {
-    if (_interactions.isNotEmpty) return _interactions;
+    if (_interactions.isNotEmpty &&
+        _interactions.every(
+          (item) =>
+              item['userName'] is String &&
+              item['avatar'] is String &&
+              item['time'] is String,
+        )) {
+      return _interactions;
+    }
     return [
       {
         'id': 'i1',
@@ -97,8 +105,14 @@ class _SectionInteractionState extends ConsumerState<SectionInteraction> {
       return _buildErrorCard();
     }
 
-    final fgPrimary = AppColorsFunctional.getColor(widget.isDark, ColorType.foregroundPrimary);
-    final fgSecondary = AppColorsFunctional.getColor(widget.isDark, ColorType.foregroundSecondary);
+    final fgPrimary = AppColorsFunctional.getColor(
+      widget.isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      widget.isDark,
+      ColorType.foregroundSecondary,
+    );
 
     return Column(
       children: [
@@ -131,10 +145,12 @@ class _SectionInteractionState extends ConsumerState<SectionInteraction> {
               decoration: BoxDecoration(
                 color: selected
                     ? (widget.isDark
-                        ? Colors.white.withValues(alpha: 0.1)
-                        : Colors.black.withValues(alpha: 0.06))
+                          ? Colors.white.withValues(alpha: 0.1)
+                          : Colors.black.withValues(alpha: 0.06))
                     : null,
-                borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+                borderRadius: BorderRadius.circular(
+                  AppSpacing.circularBorderRadius,
+                ),
                 border: Border.all(
                   color: widget.isDark ? Colors.white24 : Colors.black12,
                 ),
@@ -211,13 +227,20 @@ class _SectionInteractionState extends ConsumerState<SectionInteraction> {
   }
 
   Widget _buildErrorCard() {
-    final fgSecondary = AppColorsFunctional.getColor(widget.isDark, ColorType.foregroundSecondary);
+    final fgSecondary = AppColorsFunctional.getColor(
+      widget.isDark,
+      ColorType.foregroundSecondary,
+    );
     return Container(
       padding: EdgeInsets.all(AppSpacing.lg),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.error_outline, color: AppColors.error, size: AppSpacing.iconLarge),
+          Icon(
+            Icons.error_outline,
+            color: AppColors.error,
+            size: AppSpacing.iconLarge,
+          ),
           SizedBox(height: AppSpacing.sm),
           Text(
             UITextConstants.loadFailed,

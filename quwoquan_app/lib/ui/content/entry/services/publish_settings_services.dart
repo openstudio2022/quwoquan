@@ -7,7 +7,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/app_request_page_ids.g.dart
 import 'package:quwoquan_app/cloud/runtime/generated/integration/integration_location_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/integration/location_poi_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
-import 'package:quwoquan_app/core/services/data_service.dart';
+import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/core/services/location_permission_checker.dart';
 import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
 
@@ -23,11 +23,12 @@ class CreateLocationService {
     http.Client? client,
     String? baseUrl,
     LocationPermissionChecker? locationPermissionChecker,
-  })  : _httpClient =
-            httpClient ?? CloudHttpClient(client: client ?? http.Client()),
-        _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim(),
-        _locationPermissionChecker =
-            locationPermissionChecker ?? const GeolocatorLocationPermissionChecker();
+  }) : _httpClient =
+           httpClient ?? CloudHttpClient(client: client ?? http.Client()),
+       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim(),
+       _locationPermissionChecker =
+           locationPermissionChecker ??
+           const GeolocatorLocationPermissionChecker();
 
   final CloudHttpClient _httpClient;
   final String _baseUrl;
@@ -45,29 +46,29 @@ class CreateLocationService {
 
   /// 检查并请求定位权限，返回权限状态；若已授予则返回当前位置。
   Future<({LocationPermissionResult result, Position? position})>
-      ensureLocationPermission() =>
-          _locationPermissionChecker.ensureLocationPermission();
+  ensureLocationPermission() =>
+      _locationPermissionChecker.ensureLocationPermission();
 
   /// 打开应用权限设置页面。
   Future<bool> openAppSettings() =>
       _locationPermissionChecker.openAppSettings();
 
-  Future<List<CreateLocationOption>> nearby({
-    double? lat,
-    double? lng,
-  }) async {
+  Future<List<CreateLocationOption>> nearby({double? lat, double? lng}) async {
     final params = <String, String>{'limit': '20'};
     if (lat != null && lng != null) {
       params['lat'] = lat.toString();
       params['lng'] = lng.toString();
     }
-    final uri = Uri.parse('$_baseUrl${IntegrationLocationMetadata.nearbyPath}')
-        .replace(queryParameters: params);
+    final uri = Uri.parse(
+      '$_baseUrl${IntegrationLocationMetadata.nearbyPath}',
+    ).replace(queryParameters: params);
 
     try {
       final decoded = await _httpClient.getJson(
         uri,
-        headers: CloudRequestHeaders.forPage(AppRequestPageIds.createLocationNearby),
+        headers: CloudRequestHeaders.forPage(
+          AppRequestPageIds.createLocationNearby,
+        ),
       );
       final items = _parseItems(decoded);
       if (items.isNotEmpty) {
@@ -98,13 +99,16 @@ class CreateLocationService {
       params['lat'] = lat.toString();
       params['lng'] = lng.toString();
     }
-    final uri = Uri.parse('$_baseUrl${IntegrationLocationMetadata.searchPath}')
-        .replace(queryParameters: params);
+    final uri = Uri.parse(
+      '$_baseUrl${IntegrationLocationMetadata.searchPath}',
+    ).replace(queryParameters: params);
 
     try {
       final decoded = await _httpClient.getJson(
         uri,
-        headers: CloudRequestHeaders.forPage(AppRequestPageIds.createLocationSearch),
+        headers: CloudRequestHeaders.forPage(
+          AppRequestPageIds.createLocationSearch,
+        ),
       );
       final items = _parseItems(decoded);
       if (items.isNotEmpty) {
@@ -141,12 +145,11 @@ class CreateLocationService {
 class CreateCircleService {
   const CreateCircleService();
 
-  Future<List<CreateCircleOption>> listCircles(DataService dataService) async {
+  Future<List<CreateCircleOption>> listCircles(
+    CircleRepository circleRepository,
+  ) async {
     try {
-      final result = await dataService.getDataList(
-        endpoint: '/circles',
-        limit: 20,
-      );
+      final result = await circleRepository.listCircles(limit: 20);
       if (result.isNotEmpty) {
         return result
             .map(
@@ -156,8 +159,8 @@ class CreateCircleService {
                 memberCount: item['memberCount'] is int
                     ? item['memberCount'] as int
                     : item['member_count'] is int
-                        ? item['member_count'] as int
-                        : null,
+                    ? item['member_count'] as int
+                    : null,
               ),
             )
             .where((item) => item.id.isNotEmpty && item.name.isNotEmpty)
@@ -174,7 +177,11 @@ const List<CreateCircleOption> _mockCircles = <CreateCircleOption>[
   CreateCircleOption(id: 'circle-photo', name: '摄影圈', memberCount: 123),
   CreateCircleOption(id: 'circle-travel', name: '旅行圈', memberCount: 56),
   CreateCircleOption(id: 'circle-food', name: '美食圈', memberCount: 89),
-  CreateCircleOption(id: 'circle-citywalk', name: 'CityWalk圈', memberCount: 234),
+  CreateCircleOption(
+    id: 'circle-citywalk',
+    name: 'CityWalk圈',
+    memberCount: 234,
+  ),
   CreateCircleOption(id: 'circle-video', name: '短视频创作圈', memberCount: 156),
   CreateCircleOption(id: 'circle-article', name: '图文写作圈', memberCount: 78),
 ];

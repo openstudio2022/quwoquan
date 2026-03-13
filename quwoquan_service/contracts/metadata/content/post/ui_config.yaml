@@ -50,6 +50,81 @@ discovery_tabs:
     preload_count: 6
     order: 3
 
+# ── 1.2、发现页 identity rails（新 IA）─────────────────────────────────────
+discovery_rails:
+  - id: moment
+    label_key: discovery_rail_moment
+    identity: moment
+    default: true
+    order: 0
+
+  - id: work
+    label_key: discovery_rail_work
+    identity: work
+    default: false
+    order: 1
+
+# ── 1.3、主页/圈子统一 identity filter ─────────────────────────────────────
+creation_identity_filters:
+  - id: all
+    label_key: creation_filter_all
+    identity: null
+    order: 0
+
+  - id: moment
+    label_key: creation_filter_moment
+    identity: moment
+    order: 1
+
+  - id: work
+    label_key: creation_filter_work
+    identity: work
+    order: 2
+
+# ── 1.4、作品格式筛选 ──────────────────────────────────────────────────────
+work_format_filters:
+  - id: all
+    label_key: work_format_all
+    content_type: null
+    order: 0
+
+  - id: image
+    label_key: work_format_image
+    content_type: image
+    order: 1
+
+  - id: video
+    label_key: work_format_video
+    content_type: video
+    order: 2
+
+  - id: note
+    label_key: work_format_note
+    content_type: article
+    order: 3
+
+# ── 1.45、分享模板 profile ─────────────────────────────────────────────────
+share_template_profiles:
+  - id: moment
+    title_key: share_template_moment_title
+    subtitle_key: share_template_moment_subtitle
+    layout: moment_card
+    cover_strategy: first_media_or_gradient
+    include_author: true
+    include_time_context: true
+    include_circle_context: true
+    include_tags: false
+
+  - id: work
+    title_key: share_template_work_title
+    subtitle_key: share_template_work_subtitle
+    layout: work_card
+    cover_strategy: cover_or_first_media
+    include_author: true
+    include_time_context: false
+    include_circle_context: false
+    include_tags: true
+
 # ── 1.5、个人主页 Tab 配置 ─────────────────────────────────────────────
 profile_tabs:
   - id: creations
@@ -185,6 +260,31 @@ interaction_config:
 
 # ── 四、Feature Flags（编译期常量）─────────────────────────────────────
 feature_flags:
+  - flag: enable_create_action_entry
+    default: false
+    runtime_overridable: true
+    description: "动作优先创作入口（相册 / 写点什么 / 拍一下）"
+
+  - flag: enable_unified_create_editor
+    default: false
+    runtime_overridable: true
+    description: "统一创作编辑器壳层"
+
+  - flag: enable_identity_based_surfaces
+    default: false
+    runtime_overridable: true
+    description: "发现 / 主页 / 圈子切换到点滴 / 作品统一 IA"
+
+  - flag: enable_identity_share_template
+    default: false
+    runtime_overridable: true
+    description: "按点滴 / 作品生成差异化分享模板"
+
+  - flag: enable_assistant_content_identity_index
+    default: false
+    runtime_overridable: true
+    description: "小趣按内容身份写入 context / knowledge index"
+
   - flag: enable_helper_read
     default: false
     runtime_overridable: true

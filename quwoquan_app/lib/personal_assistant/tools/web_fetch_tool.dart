@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/personal_assistant/retrieval/retrieval_broker.dart';
 import 'package:quwoquan_app/personal_assistant/tools/tool_schema.dart';
 
 /// Fetches a URL and extracts readable text content as markdown.
@@ -7,9 +10,14 @@ import 'package:quwoquan_app/personal_assistant/tools/tool_schema.dart';
 /// Handles timeouts, content-length limits, and HTML-to-text conversion
 /// with a lightweight built-in extractor (no external dependency).
 class WebFetchTool implements AssistantTool {
-  WebFetchTool({http.Client? client}) : _client = client ?? http.Client();
+  WebFetchTool({
+    http.Client? client,
+    RetrievalBroker? broker,
+  }) : _client = client ?? http.Client(),
+       _broker = broker;
 
   final http.Client _client;
+  final RetrievalBroker? _broker;
   static const Duration _timeout = Duration(seconds: 12);
   static const int _defaultMaxChars = 10000;
   static const int _absoluteMaxChars = 50000;
@@ -22,6 +30,13 @@ class WebFetchTool implements AssistantTool {
 
   @override
   Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
+    final broker = _broker;
+    if (broker != null) {
+      final result = await broker.fetch(
+        RetrievalFetchRequest.fromToolArguments(arguments),
+      );
+      return result.toToolResult();
+    }
     final url = (arguments['url'] as String?)?.trim() ?? '';
     if (url.isEmpty) {
       return const AssistantToolResult(
@@ -53,11 +68,16 @@ class WebFetchTool implements AssistantTool {
         if (kDebugMode) {
           debugPrint('[WebFetchTool] HTTP ${response.statusCode}: $url');
         }
+        final errorCode = _statusCodeToErrorCode(response.statusCode);
         return AssistantToolResult(
           success: false,
-          message: 'HTTP ${response.statusCode} fetching $url',
-          errorCode: AssistantErrorCode.executionFailed,
-          data: <String, dynamic>{'statusCode': response.statusCode},
+          message: _statusCodeToMessage(response.statusCode, url),
+          errorCode: errorCode,
+          degraded: errorCode != AssistantErrorCode.invalidArguments,
+          data: <String, dynamic>{
+            'statusCode': response.statusCode,
+            'retryable': _isRetryableStatusCode(response.statusCode),
+          },
         );
       }
 
@@ -82,6 +102,10 @@ class WebFetchTool implements AssistantTool {
       final truncated = bodyText.length > maxChars;
       final content = truncated ? bodyText.substring(0, maxChars) : bodyText;
       final charCount = content.length;
+      final sourceHost = uri.host.toLowerCase().trim();
+      final queryTaskId = (arguments['queryTaskId'] as String?)?.trim() ?? '';
+      final dimension = (arguments['dimension'] as String?)?.trim() ?? '';
+      final snippet = content.length <= 180 ? content : '${content.substring(0, 180)}...';
 
       if (kDebugMode) {
         debugPrint('[WebFetchTool] OK: $url ($charCount chars, truncated=$truncated)');
@@ -94,9 +118,27 @@ class WebFetchTool implements AssistantTool {
           'url': url,
           'title': title,
           'content': content,
+          'summary': snippet,
           'charCount': charCount,
           'truncated': truncated,
           'contentType': contentType,
+          'sourceHost': sourceHost,
+          'sourceTier': 'page',
+          'queryTaskId': queryTaskId,
+          'dimension': dimension,
+          'references': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'title': title.isNotEmpty ? title : url,
+              'url': url,
+              'source': sourceHost,
+              'sourceHost': sourceHost,
+              'sourceTier': 'page',
+              'snippet': snippet,
+              'queryTaskId': queryTaskId,
+              'dimension': dimension,
+              'retrievedAt': DateTime.now().toIso8601String(),
+            },
+          ],
         },
       );
     } on FormatException {
@@ -105,17 +147,35 @@ class WebFetchTool implements AssistantTool {
         message: 'Invalid URL format: $url',
         errorCode: AssistantErrorCode.invalidArguments,
       );
+    } on TimeoutException {
+      if (kDebugMode) {
+        debugPrint('[WebFetchTool] timeout: $url');
+      }
+      return const AssistantToolResult(
+        success: false,
+        message: '网页加载超时，请稍后重试',
+        errorCode: AssistantErrorCode.networkUnavailable,
+        degraded: true,
+      );
+    } on http.ClientException catch (e) {
+      if (kDebugMode) {
+        debugPrint('[WebFetchTool] client error: $url — $e');
+      }
+      return AssistantToolResult(
+        success: false,
+        message: '网页读取失败，网络连接异常',
+        errorCode: AssistantErrorCode.networkUnavailable,
+        degraded: true,
+        data: <String, dynamic>{'detail': e.message},
+      );
     } catch (e) {
-      final isTimeout = e.toString().contains('TimeoutException');
       if (kDebugMode) {
         debugPrint('[WebFetchTool] error: $url — $e');
       }
       return AssistantToolResult(
         success: false,
-        message: isTimeout ? '网页加载超时，请稍后重试' : '网页读取失败: $e',
-        errorCode: isTimeout
-            ? AssistantErrorCode.networkUnavailable
-            : AssistantErrorCode.executionFailed,
+        message: '网页读取失败: $e',
+        errorCode: AssistantErrorCode.executionFailed,
         degraded: true,
       );
     }
@@ -127,6 +187,39 @@ class WebFetchTool implements AssistantTool {
         'Accept': 'text/html,application/xhtml+xml,text/plain,application/json',
         'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
       };
+
+  AssistantErrorCode _statusCodeToErrorCode(int statusCode) {
+    if (statusCode == 401 || statusCode == 403) {
+      return AssistantErrorCode.unauthorized;
+    }
+    if (statusCode == 429) {
+      return AssistantErrorCode.rateLimited;
+    }
+    if (statusCode >= 500) {
+      return AssistantErrorCode.networkUnavailable;
+    }
+    return AssistantErrorCode.executionFailed;
+  }
+
+  bool _isRetryableStatusCode(int statusCode) {
+    return statusCode == 429 || statusCode >= 500;
+  }
+
+  String _statusCodeToMessage(int statusCode, String url) {
+    if (statusCode == 401 || statusCode == 403) {
+      return '目标页面拒绝访问：$url';
+    }
+    if (statusCode == 404) {
+      return '目标页面不存在：$url';
+    }
+    if (statusCode == 429) {
+      return '目标站点请求过于频繁，请稍后重试';
+    }
+    if (statusCode >= 500) {
+      return '目标站点暂时不可用，请稍后重试';
+    }
+    return 'HTTP $statusCode fetching $url';
+  }
 
   static String _extractTitle(String html) {
     final match = RegExp(

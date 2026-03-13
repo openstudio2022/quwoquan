@@ -1,16 +1,66 @@
 version: 1
 feature: app-theme-infrastructure
 level: "L3_story"
-template: A1-A8
+status: specified
+archived: false
+template: "2026-03-12"
 tree_context:
   feature_path: capability.runtime.feature.runtime-client-foundation.subfeature.app-theme-infrastructure
   parent_path: capability.runtime.feature.runtime-client-foundation
   acceptance_inherits_from: capability.runtime.feature.runtime-client-foundation
-level_acceptance:
-  focus_groups:
-  - A1_functional
-  - A8_test_automation
-  notes: 主题与设计 token 基础设施，规划阶段。
 execution:
   local_gate: make gate
   full_gate: make gate-full
+level_acceptance:
+  A1:
+    criteria: "全 app 建立以 Apple HIG 为基线的 Cupertino-first 主题运行时，`ThemeData + CupertinoThemeData + semantic tokens` 成为唯一视觉真相源"
+    status: pending
+    test_layers:
+      T1: required
+      T2: required
+  A2:
+    criteria: "支持 `system / light / dark` 三种主题模式，状态栏、导航栏、弹层、沉浸式媒体页的明暗与表面策略全局一致"
+    status: pending
+    test_layers:
+      T1: required
+      T2: required
+      T4: required
+  A3:
+    criteria: "当前账号本地外观应用体感即时 `<=100ms`，全 app 主题/字号切换稳定完成 `<=300ms`，且无闪屏、无明暗错帧"
+    status: pending
+    test_layers:
+      T2: required
+      T3: required
+      T4: required
+  A4:
+    criteria: "字体梯度、行高、图标语义、圆角、边框、阴影、表面层级、最小热区统一为苹果风格 token，全量页面不得继续维护第二套视觉规则"
+    status: pending
+    test_layers:
+      T1: required
+      T2: required
+  A5:
+    criteria: "Dynamic Type / App 内字号档位应用链路可用，并为高对比、粗体、减弱动效提供统一运行时接入点"
+    status: pending
+    test_layers:
+      T1: required
+      T2: required
+      T4: required
+  A6:
+    criteria: "全量页面在手机高低分辨率、刘海/挖孔、安全区差异、平板、横屏、分屏、桌面窗口下无系统性 overflow、裁切、不可点击区域"
+    status: pending
+    test_layers:
+      T2: required
+      T4: required
+  A7:
+    criteria: "Apple HIG、Instagram、小红书、微信、抖音的吸收边界被冻结，并通过主题运行时与语义门禁防止 Android-first 风格回流"
+    status: pending
+    test_layers:
+      T1: required
+      T2: required
+  A8:
+    criteria: "`flutter analyze`、`verify_dart_semantic`、主题/字号回归测试、关键页面 UI regression 与真机验证链路齐全，可作为全量页面推广门禁"
+    status: pending
+    test_layers:
+      T1: required
+      T2: required
+      T4: required

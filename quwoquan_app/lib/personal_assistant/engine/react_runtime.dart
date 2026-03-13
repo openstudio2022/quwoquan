@@ -8,6 +8,7 @@ import 'package:quwoquan_app/personal_assistant/engine/react_state.dart';
 import 'package:quwoquan_app/personal_assistant/engine/tool_execution_guard.dart';
 import 'package:quwoquan_app/personal_assistant/engine/tool_result_assessor.dart';
 import 'package:quwoquan_app/personal_assistant/engine/tool_result_truncator.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/personal_assistant/tools/metadata/tool_metadata_registry.dart';
 import 'package:quwoquan_app/personal_assistant/tools/tool_registry.dart';
@@ -97,31 +98,50 @@ class ReactRuntime {
     void Function(AssistantTraceEvent event)? onTraceEvent,
   }) async {
     final provider = _llmProvider;
-    if (provider is! OpenAiCompatibleLlmProvider) return '';
-    return provider.reasonStream(
-      messages: messages,
-      availableTools: const <String>[],
-      onDelta: (delta) {
-        onDelta(delta);
-        onTraceEvent?.call(
-          AssistantTraceEvent(
-            type: AssistantTraceEventType.streamDelta,
-            message: delta,
-            timestamp: DateTime.now(),
-            runId: runId,
-            traceId: traceId,
-            data: const <String, dynamic>{'stage': 'synthesis'},
-          ),
-        );
-      },
-      templateContext: templateContext,
-      templateVariables: templateVariables,
-      templateId: templateId,
-      templateVersion: templateVersion,
-      sessionId: sessionId,
-      runId: runId ?? '',
-      traceId: traceId ?? '',
-    );
+    void forwardDelta(String delta) {
+      onDelta(delta);
+      onTraceEvent?.call(
+        AssistantTraceEvent(
+          type: AssistantTraceEventType.streamDelta,
+          message: delta,
+          timestamp: DateTime.now(),
+          runId: runId,
+          traceId: traceId,
+          data: const <String, dynamic>{'stage': 'synthesis'},
+        ),
+      );
+    }
+
+    if (provider is SwitchableAssistantLlmProvider) {
+      return provider.reasonStream(
+        messages: messages,
+        availableTools: const <String>[],
+        onDelta: forwardDelta,
+        templateContext: templateContext,
+        templateVariables: templateVariables,
+        templateId: templateId,
+        templateVersion: templateVersion,
+        sessionId: sessionId,
+        runId: runId ?? '',
+        traceId: traceId ?? '',
+      );
+    }
+
+    if (provider is OpenAiCompatibleLlmProvider) {
+      return provider.reasonStream(
+        messages: messages,
+        availableTools: const <String>[],
+        onDelta: forwardDelta,
+        templateContext: templateContext,
+        templateVariables: templateVariables,
+        templateId: templateId,
+        templateVersion: templateVersion,
+        sessionId: sessionId,
+        runId: runId ?? '',
+        traceId: traceId ?? '',
+      );
+    }
+    return '';
   }
 
   Future<ReactRuntimeResult> run({
@@ -174,6 +194,7 @@ class ReactRuntime {
         timestamp: DateTime.now(),
         runId: runId,
         traceId: traceId,
+        visibility: TraceVisibility.system,
       ),
     );
     pushTrace(
@@ -217,6 +238,7 @@ class ReactRuntime {
           timestamp: DateTime.now(),
           runId: runId,
           traceId: traceId,
+          visibility: TraceVisibility.internal,
           data: <String, dynamic>{
             'iteration': state.iteration,
             'goal': state.goal,
@@ -249,7 +271,23 @@ class ReactRuntime {
       var anyDeltaForwarded = false;
       final wrappedOnDelta = onDelta != null
           ? (String delta) {
+              if (delta.trim().isEmpty) return;
               anyDeltaForwarded = true;
+              pushTrace(
+                AssistantTraceEvent(
+                  type: AssistantTraceEventType.thinkingProgress,
+                  message: delta,
+                  timestamp: DateTime.now(),
+                  runId: runId,
+                  traceId: traceId,
+                  data: <String, dynamic>{
+                    'phase': currentPhase,
+                    'iteration': state.iteration,
+                    'streaming': true,
+                    'extracted': true,
+                  },
+                ),
+              );
               onDelta(delta);
             }
           : null;
@@ -279,6 +317,7 @@ class ReactRuntime {
           timestamp: DateTime.now(),
           runId: runId,
           traceId: traceId,
+          visibility: TraceVisibility.system,
           data: <String, dynamic>{
             'iteration': state.iteration,
             'degraded': output.degraded,
@@ -292,6 +331,8 @@ class ReactRuntime {
                 )
                 .toList(growable: false),
             'searchQueries': _extractPlannedSearchQueries(output.toolCalls),
+            if (output.usageEntries.isNotEmpty)
+              'usageEntries': output.usageEntries,
           },
         ),
       );
@@ -353,7 +394,7 @@ class ReactRuntime {
             traceId: traceId,
             data: <String, dynamic>{
               'consecutiveEmptyIterations': state.consecutiveEmptyIterations,
-              'userMessage': '遇到困难，基于已有信息为您回答',
+              'userMessage': '这轮补不到更稳的信息了，我先把已经确认的内容整理给你。',
             },
           ),
         );
@@ -516,6 +557,7 @@ class ReactRuntime {
               runId: runId,
               traceId: traceId,
               toolCallId: step.id,
+              visibility: TraceVisibility.system,
               data: <String, dynamic>{'tool': step.toolName, 'query': query},
             ),
           );
@@ -556,6 +598,13 @@ class ReactRuntime {
           toolArguments,
         );
         final isOk = result.success;
+        _executionGuard.recordExecutionResult(
+          step.toolName,
+          step.arguments,
+          success: isOk,
+          message: result.message,
+          errorCode: result.errorCode.name,
+        );
         final shouldSuppressToolErrorForUser =
             !isOk && _shouldSuppressToolErrorForUser(step.toolName, result);
         state.evidences.add(<String, dynamic>{
@@ -593,6 +642,7 @@ class ReactRuntime {
               runId: runId,
               traceId: traceId,
               toolCallId: step.id,
+              visibility: TraceVisibility.system,
               data: <String, dynamic>{
                 'tool': step.toolName,
                 'referenceCount': refs,
@@ -726,11 +776,20 @@ class ReactRuntime {
               'userMessage': assessment.userMessage,
               'shouldContinueLoop': assessment.shouldContinueLoop,
               'isAssessment': true,
+              'referenceCount':
+                  ((result.data?['referenceCount'] as num?)?.toInt() ??
+                  ((result.data?['references'] as List?)?.length ?? 0)),
+              if (result.data?['queryCount'] != null)
+                'queryCount': result.data?['queryCount'],
+              if (result.data?['queryLabels'] is List)
+                'queryLabels': result.data?['queryLabels'],
+              if (result.data?['coveredDimensions'] is List)
+                'coveredDimensions': result.data?['coveredDimensions'],
             },
           ),
         );
 
-        if (replan) {
+        if (replan && assessment.shouldContinueLoop) {
           state.openQuestions.add('step ${step.id} result needs re-check');
           pushTrace(
             AssistantTraceEvent(
@@ -918,17 +977,32 @@ class ReactRuntime {
     if (toolCalls.isEmpty) return toolCalls;
     return toolCalls
         .map((call) {
-          if (call.name != 'web_search') return call;
-          final args = Map<String, dynamic>.from(call.arguments);
-          final queryVariantsRaw = args['queryVariants'];
-          if (shell.variantBudget <= 0) {
+          final args = _flattenToolArguments(call.arguments);
+          if (call.name != 'web_search') {
+            return AssistantToolCall(
+              name: call.name,
+              arguments: args,
+              id: call.id,
+            );
+          }
+          final queryTasks = _buildSearchQueryTasks(args: args, shell: shell);
+          if (queryTasks.length >= 2) {
+            args['queryTasks'] = queryTasks;
             args.remove('queryVariants');
-          } else if (queryVariantsRaw is List) {
-            args['queryVariants'] = queryVariantsRaw
-                .map((item) => item.toString().trim())
-                .where((item) => item.isNotEmpty)
-                .take(shell.variantBudget)
-                .toList(growable: false);
+            final count = _RuntimeExecutionShell._positiveInt(
+              args['count'],
+              fallback: 5,
+            );
+            if (count > 4) {
+              args['count'] = 4;
+            }
+          } else if (queryTasks.length == 1) {
+            args['query'] = queryTasks.first['query'];
+            args.remove('queryVariants');
+            args.remove('queryTasks');
+          } else {
+            args.remove('queryVariants');
+            args.remove('queryTasks');
           }
           if (shell.providerPolicy == 'authority_first') {
             args.remove('provider');
@@ -952,6 +1026,191 @@ class ReactRuntime {
           );
         })
         .toList(growable: false);
+  }
+
+  Map<String, dynamic> _flattenToolArguments(
+    Map<String, dynamic> rawArguments,
+  ) {
+    final flattened = Map<String, dynamic>.from(rawArguments);
+
+    void mergeNested(String key) {
+      final nested = flattened.remove(key);
+      if (nested is! Map) return;
+      for (final entry in nested.entries) {
+        final nestedKey = entry.key.toString().trim();
+        if (nestedKey.isEmpty || flattened.containsKey(nestedKey)) continue;
+        flattened[nestedKey] = entry.value;
+      }
+    }
+
+    mergeNested('params');
+    mergeNested('arguments');
+    return flattened;
+  }
+
+  List<Map<String, dynamic>> _buildSearchQueryTasks({
+    required Map<String, dynamic> args,
+    required _RuntimeExecutionShell shell,
+  }) {
+    final taskBudget = shell.variantBudget <= 0 ? 1 : shell.variantBudget;
+    final existingTasks = _coerceSearchTasks(args['queryTasks']);
+    if (existingTasks.isNotEmpty) {
+      return _normalizeSearchTasks(
+        existingTasks,
+      ).take(taskBudget).toList(growable: false);
+    }
+
+    final directQuery = (args['query'] as String?)?.trim() ?? '';
+    final queryVariants =
+        (args['queryVariants'] as List?)
+            ?.map((item) => item.toString().trim())
+            .where((item) => item.isNotEmpty)
+            .toList(growable: false) ??
+        const <String>[];
+
+    final tasks = <Map<String, dynamic>>[];
+    final seen = <String>{};
+
+    void addTask(String query, {String label = ''}) {
+      final normalizedQuery = query.trim().replaceAll(RegExp(r'\s+'), ' ');
+      if (normalizedQuery.isEmpty || !seen.add(normalizedQuery)) return;
+      tasks.add(<String, dynamic>{
+        'query': normalizedQuery,
+        'label': label.isNotEmpty ? label : _compactTaskLabel(normalizedQuery),
+      });
+    }
+
+    final heuristicTasks = queryVariants.isEmpty && taskBudget > 1
+        ? _splitCompositeSearchQuery(directQuery, maxTasks: taskBudget)
+        : const <Map<String, dynamic>>[];
+    if (heuristicTasks.length >= 2) {
+      for (final task in heuristicTasks) {
+        addTask(
+          (task['query'] as String?)?.trim() ?? '',
+          label: (task['label'] as String?)?.trim() ?? '',
+        );
+      }
+    } else {
+      if (directQuery.isNotEmpty) {
+        addTask(directQuery);
+      }
+      for (final variant in queryVariants) {
+        addTask(variant);
+      }
+    }
+
+    if (tasks.isEmpty) return const <Map<String, dynamic>>[];
+    final limit = queryVariants.isNotEmpty ? taskBudget + 1 : taskBudget;
+    return tasks.take(limit).toList(growable: false);
+  }
+
+  List<Map<String, dynamic>> _coerceSearchTasks(Object? raw) {
+    if (raw is List) {
+      return raw
+          .whereType<Map>()
+          .map((item) => item.cast<String, dynamic>())
+          .toList(growable: false);
+    }
+    if (raw is Map) {
+      return <Map<String, dynamic>>[raw.cast<String, dynamic>()];
+    }
+    final text = raw?.toString().trim() ?? '';
+    if (text.isEmpty) return const <Map<String, dynamic>>[];
+    if (text.startsWith('[') || text.startsWith('{')) {
+      try {
+        return _coerceSearchTasks(jsonDecode(text));
+      } catch (_) {
+        // Fall through to a single query task.
+      }
+    }
+    return <Map<String, dynamic>>[
+      <String, dynamic>{'query': text, 'label': _compactTaskLabel(text)},
+    ];
+  }
+
+  List<Map<String, dynamic>> _normalizeSearchTasks(
+    List<Map<String, dynamic>> tasks,
+  ) {
+    final normalized = <Map<String, dynamic>>[];
+    final seen = <String>{};
+    for (final task in tasks) {
+      final query = (task['query'] as String?)?.trim() ?? '';
+      if (query.isEmpty || !seen.add(query)) continue;
+      normalized.add(<String, dynamic>{
+        'query': query,
+        'label': (task['label'] as String?)?.trim().isNotEmpty == true
+            ? (task['label'] as String).trim()
+            : _compactTaskLabel(query),
+        if ((task['dimension'] as String?)?.trim().isNotEmpty == true)
+          'dimension': (task['dimension'] as String).trim(),
+      });
+    }
+    return normalized;
+  }
+
+  List<Map<String, dynamic>> _splitCompositeSearchQuery(
+    String query, {
+    required int maxTasks,
+  }) {
+    final normalized = query.trim();
+    if (normalized.isEmpty) return const <Map<String, dynamic>>[];
+    final pieces = normalized
+        .split(RegExp(r'[、，,/\|；;]+'))
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    if (pieces.length < 2 || pieces.length > 8) {
+      return const <Map<String, dynamic>>[];
+    }
+    final topic = _extractSearchTopic(normalized);
+    final tasks = <Map<String, dynamic>>[];
+    for (final piece in pieces) {
+      if (piece.length > 18 ||
+          piece == topic ||
+          piece.contains('住宿') ||
+          piece.contains('酒店')) {
+        continue;
+      }
+      final taskQuery = topic.isEmpty ? piece : '$piece $topic';
+      tasks.add(<String, dynamic>{
+        'query': taskQuery,
+        'label': piece,
+        'dimension': piece,
+      });
+      if (tasks.length >= maxTasks) break;
+    }
+    return tasks.length >= 2 ? tasks : const <Map<String, dynamic>>[];
+  }
+
+  String _extractSearchTopic(String query) {
+    const topicTokens = <String>[
+      '住宿',
+      '酒店',
+      '民宿',
+      '客栈',
+      '旅馆',
+      '天气',
+      '温度',
+      '交通',
+      '路况',
+      '门票',
+      '景点',
+      '攻略',
+      '餐厅',
+      '美食',
+      '预算',
+      '行程',
+    ];
+    for (final token in topicTokens) {
+      if (query.contains(token)) return token;
+    }
+    return '';
+  }
+
+  String _compactTaskLabel(String query) {
+    final normalized = query.trim().replaceAll(RegExp(r'\s+'), ' ');
+    if (normalized.length <= 18) return normalized;
+    return '${normalized.substring(0, 18)}...';
   }
 
   Map<String, dynamic> _extractSlotDelta({
@@ -1059,6 +1318,12 @@ class ReactRuntime {
     final phases = _phaseHintsConfig['phases'] as Map?;
     final phaseConfig = (phases?[phase] as Map?)?.cast<String, dynamic>();
     final baseHint = (phaseConfig?['systemHint'] as String?) ?? '';
+    const userFacingNarrativeHint =
+        '过程说明只用用户能听懂的话，重点解释为什么现在这样做、这一步能帮用户减少什么不确定性、信息是否已经够答。'
+        '语气要像贴身助手，简洁、自然、有陪伴感，不要输出内部步骤编号、协议字段名或生硬的系统状态播报。';
+    final effectiveBaseHint = baseHint.isEmpty
+        ? userFacingNarrativeHint
+        : '$baseHint\n\n$userFacingNarrativeHint';
 
     if (phase == 'understanding' || phase == 'analyzing') {
       final toolHints = <String>[];
@@ -1071,12 +1336,12 @@ class ReactRuntime {
           }
         }
       }
-      if (toolHints.isEmpty) return baseHint;
+      if (toolHints.isEmpty) return effectiveBaseHint;
       final prefix = (_phaseHintsConfig['toolHintPrefix'] as String?) ?? '';
       final suffix = (_phaseHintsConfig['toolHintSuffix'] as String?) ?? '';
-      return '$baseHint\n\n$prefix${toolHints.join('\n')}$suffix';
+      return '$effectiveBaseHint\n\n$prefix${toolHints.join('\n')}$suffix';
     }
-    return baseHint;
+    return effectiveBaseHint;
   }
 
   Future<void> _ensurePhaseHintsLoaded() async {
@@ -1105,6 +1370,8 @@ class ReactRuntime {
     try {
       final decoded = jsonDecode(text);
       if (decoded is Map) {
+        final rs = (decoded['reasonShort'] as String?)?.trim() ?? '';
+        if (rs.isNotEmpty) return rs;
         final tt = (decoded['thinkingText'] as String?)?.trim() ?? '';
         if (tt.isNotEmpty) return tt;
         final um = (decoded['userMarkdown'] as String?)?.trim() ?? '';

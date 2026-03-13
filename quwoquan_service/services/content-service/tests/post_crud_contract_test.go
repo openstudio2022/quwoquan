@@ -42,6 +42,9 @@ func TestCreatePostAggregate(t *testing.T) {
 	if result["authorId"] != "user_test_001" {
 		t.Errorf("expected authorId=user_test_001, got %v", result["authorId"])
 	}
+	if result["status"] != "draft" {
+		t.Errorf("expected status=draft after create, got %v", result["status"])
+	}
 }
 
 // TestCreatePostAllTypes verifies that all four supported content types
@@ -76,7 +79,76 @@ func TestCreatePostAllTypes(t *testing.T) {
 			if result["contentType"] != tc.contentType {
 				t.Errorf("contentType=%s: response contentType mismatch: got %v", tc.contentType, result["contentType"])
 			}
+			if result["status"] != "draft" {
+				t.Errorf("contentType=%s: expected status=draft, got %v", tc.contentType, result["status"])
+			}
 		})
+	}
+}
+
+// TestPublishPostContract verifies CreatePost returns a draft and PublishPost
+// transitions the same aggregate into a published post with stable postId.
+func TestPublishPostContract(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+
+	created := createDraftPostWithAuthor(t, "publish_author", `{
+		"contentType":"article",
+		"contentIdentity":"work",
+		"title":"待发布作品",
+		"body":"先保存为草稿"
+	}`)
+	postID, _ := created["_id"].(string)
+	if postID == "" {
+		t.Fatal("draft post missing _id")
+	}
+	if created["status"] != "draft" {
+		t.Fatalf("expected draft status after create, got %v", created["status"])
+	}
+
+	published := publishPostWithAuthor(t, "publish_author", postID, `{
+		"visibility":"public",
+		"assistantUsePolicy":"inherit"
+	}`)
+	if published["_id"] != postID {
+		t.Fatalf("expected publish keep same post id, got %v", published["_id"])
+	}
+	if published["status"] != "published" {
+		t.Fatalf("expected status=published, got %v", published["status"])
+	}
+	if published["publishedAt"] == nil || published["publishedAt"] == "" {
+		t.Fatalf("expected publishedAt set, got %v", published["publishedAt"])
+	}
+}
+
+// TestDeletePostContract verifies deleting a published post tombstones the
+// aggregate and GET then returns 404.
+func TestDeletePostContract(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+
+	created := createPostWithAuthor(t, "delete_author", `{
+		"contentType":"micro",
+		"contentIdentity":"moment",
+		"body":"准备删除的点滴"
+	}`)
+	postID, _ := created["_id"].(string)
+	if postID == "" {
+		t.Fatal("published post missing _id")
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, "/v1/content/posts/"+postID, nil)
+	req.Header.Set("X-Client-User-Id", "delete_author")
+	rec := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/v1/content/posts/"+postID, nil)
+	getReq.Header.Set("X-Client-User-Id", "delete_author")
+	getRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(getRec, getReq)
+	if getRec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 after delete, got %d: %s", getRec.Code, getRec.Body.String())
 	}
 }
 

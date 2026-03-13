@@ -42,6 +42,21 @@ func (s *MongoPostStore) FindByID(ctx context.Context, id string) (*postmodel.Po
 	return &post, true
 }
 
+func (s *MongoPostStore) ListAll(ctx context.Context) []postmodel.Post {
+	opts := options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}})
+	cur, err := s.coll.Find(ctx, bson.M{}, opts)
+	if err != nil {
+		return nil
+	}
+	defer cur.Close(ctx)
+
+	var posts []postmodel.Post
+	if err := cur.All(ctx, &posts); err != nil {
+		return nil
+	}
+	return posts
+}
+
 // ListPublished returns published/public posts in reverse-chronological order.
 // cursor is the ID of the last item from the previous page; when set, only
 // posts with createdAt earlier than the cursor document are returned.

@@ -21,6 +21,7 @@ import 'package:quwoquan_app/personal_assistant/observability/logging/app_log_se
 import 'package:quwoquan_app/personal_assistant/observability/logging/app_trace_context_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:quwoquan_app/app/navigation/app_router.dart';
+import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';
 import 'package:quwoquan_app/app/providers/welcome_state_provider.dart';
 import 'package:quwoquan_app/ui/welcome/pages/welcome_screen.dart';
 
@@ -45,12 +46,7 @@ void main() async {
 
   // 设置系统UI样式
   SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.dark,
-      systemNavigationBarColor: Colors.transparent,
-      systemNavigationBarIconBrightness: Brightness.dark,
-    ),
+    AppTheme.systemUiOverlayStyleFor(Brightness.light),
   );
 
   // 设置屏幕方向
@@ -158,6 +154,24 @@ Future<void> _preInitializeAnalytics() async {
   }
 }
 
+Widget _wrapWithAppAppearance({
+  required BuildContext context,
+  required AppearanceSnapshot snapshot,
+  required Widget child,
+}) {
+  return AnnotatedRegion<SystemUiOverlayStyle>(
+    value: AppTheme.systemUiOverlayStyleFor(snapshot.effectiveBrightness),
+    child: MediaQuery(
+      data: MediaQuery.of(context).copyWith(
+        textScaler: TextScaler.linear(snapshot.textScaleFactor),
+        boldText: snapshot.boldText,
+        highContrast: snapshot.highContrast,
+      ),
+      child: child,
+    ),
+  );
+}
+
 /// 根组件：欢迎页完成后展示主应用
 class QuWoQuanAppRoot extends ConsumerWidget {
   const QuWoQuanAppRoot({super.key});
@@ -165,11 +179,20 @@ class QuWoQuanAppRoot extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final welcomeCompleted = ref.watch(welcomeCompletedProvider);
+    final snapshot = ref.watch(appearanceSnapshotProvider);
 
     if (!welcomeCompleted) {
       return MaterialApp(
         title: '趣我圈',
         debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: snapshot.themeMode,
+        builder: (context, child) => _wrapWithAppAppearance(
+          context: context,
+          snapshot: snapshot,
+          child: child ?? const SizedBox.shrink(),
+        ),
         home: WelcomeScreen(
           onFinish: () {
             ref.read(welcomeCompletedProvider.notifier).setCompleted(true);
@@ -219,8 +242,7 @@ class _QuWoQuanAppState extends ConsumerState<QuWoQuanApp>
 
     switch (state) {
       case AppLifecycleState.resumed:
-        // 应用恢复时更新最后活跃时间
-        // ref.read(appStateProvider.notifier).updateLastActiveTime();
+        ref.read(appearanceSettingsControllerProvider.notifier).refresh();
         break;
       case AppLifecycleState.paused:
         // 应用暂停时保存状态
@@ -243,23 +265,31 @@ class _QuWoQuanAppState extends ConsumerState<QuWoQuanApp>
   @override
   void didChangeAccessibilityFeatures() {
     super.didChangeAccessibilityFeatures();
-    // 更新无障碍设置
-    // ref.read(accessibilityProvider.notifier).updateFromSystemSettings(context);
+    final mediaQuery = MediaQuery.maybeOf(context);
+    if (mediaQuery != null) {
+      ref.read(accessibilityProvider.notifier).updateFromMediaQueryData(
+            mediaQuery,
+          );
+    }
   }
 
   @override
   void didChangeTextScaleFactor() {
     super.didChangeTextScaleFactor();
-    // 更新文本缩放因子
-    // final mediaQuery = MediaQuery.of(context);
-    // ref.read(accessibilityProvider.notifier).setTextScaleFactor(mediaQuery.textScaleFactor);
+    final mediaQuery = MediaQuery.maybeOf(context);
+    if (mediaQuery != null) {
+      ref.read(accessibilityProvider.notifier).updateFromMediaQueryData(
+            mediaQuery,
+          );
+    }
   }
 
   @override
   void didChangePlatformBrightness() {
     super.didChangePlatformBrightness();
-    // 更新主题
-    // ref.read(themeProvider.notifier).updateSystemTheme();
+    ref.read(themeProvider.notifier).updateSystemBrightness(
+          WidgetsBinding.instance.platformDispatcher.platformBrightness,
+        );
   }
 
   Future<void> _initializeApp() async {
@@ -274,17 +304,10 @@ class _QuWoQuanAppState extends ConsumerState<QuWoQuanApp>
         await ref.read(assistentApiGatewayProvider).start();
         _assistentApiStarted = true;
       }
-      // 初始化应用状态
-      // await ref.read(appStateProvider.notifier).initialize();
-
-      // 更新响应式状态
-      // ref.read(responsiveProvider.notifier).updateState(context);
-
-      // 更新无障碍设置
-      // ref.read(accessibilityProvider.notifier).updateFromSystemSettings(context);
-
-      // 更新主题
-      // ref.read(themeProvider.notifier).updateSystemTheme();
+      await ref.read(appearanceSettingsControllerProvider.notifier).ensureLoaded();
+      ref.read(themeProvider.notifier).updateSystemBrightness(
+            WidgetsBinding.instance.platformDispatcher.platformBrightness,
+          );
     } catch (e) {
       // 处理初始化错误
       // ref.read(appStateProvider.notifier).setError('应用初始化失败: $e');
@@ -296,20 +319,14 @@ class _QuWoQuanAppState extends ConsumerState<QuWoQuanApp>
     return Consumer(
       builder: (context, ref, child) {
         final router = ref.watch(appRouterProvider);
-        final themeState = ref.watch(themeProvider);
-        final accessibilityState = ref.watch(accessibilityProvider);
-
-        // 创建主题数据
-        final themeData = themeState.isDark
-            ? AppTheme.darkTheme
-            : AppTheme.lightTheme;
+        final snapshot = ref.watch(appearanceSnapshotProvider);
 
         return MaterialApp.router(
           title: '趣我圈',
           debugShowCheckedModeBanner: false,
-          theme: themeData,
-          darkTheme: themeData,
-          themeMode: themeState.isDark ? ThemeMode.dark : ThemeMode.light,
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: snapshot.themeMode,
           routerConfig: router,
           localizationsDelegates: const [
             AppLocalizations.delegate,
@@ -320,19 +337,21 @@ class _QuWoQuanAppState extends ConsumerState<QuWoQuanApp>
           supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
           locale: const Locale('zh', 'CN'),
           builder: (context, child) {
-            // 监听MediaQuery变化，更新响应式状态
+            final mediaQuery = MediaQuery.of(context);
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              // ref.read(responsiveProvider.notifier).updateState(context);
+              ref.read(responsiveProvider.notifier).updateFromMediaQueryData(
+                    mediaQuery,
+                  );
+              ref.read(accessibilityProvider.notifier).updateFromMediaQueryData(
+                    mediaQuery,
+                  );
+              ref.read(themeProvider.notifier).updateSystemBrightness(
+                    WidgetsBinding.instance.platformDispatcher.platformBrightness,
+                  );
             });
-
-            return MediaQuery(
-              data: MediaQuery.of(context).copyWith(
-                textScaler: const TextScaler.linear(
-                  1.0,
-                ), // accessibilityState.actualTextScaleFactor,
-                boldText: accessibilityState.boldText,
-                highContrast: accessibilityState.highContrast,
-              ),
+            return _wrapWithAppAppearance(
+              context: context,
+              snapshot: snapshot,
               child: child ?? const SizedBox.shrink(),
             );
           },

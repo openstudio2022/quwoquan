@@ -6,6 +6,8 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart'
 class VideoPostDto extends PostBaseDto {
   @override final String id;
   @override final String type;
+  @override final String identity;
+  @override final String assistantUsePolicy;
   @override final String authorId;
   @override final String displayName;
   @override final String avatarUrl;
@@ -25,6 +27,8 @@ class VideoPostDto extends PostBaseDto {
   const VideoPostDto({
     required this.id,
     required this.type,
+    required this.identity,
+    required this.assistantUsePolicy,
     required this.authorId,
     required this.displayName,
     required this.avatarUrl,
@@ -46,6 +50,8 @@ class VideoPostDto extends PostBaseDto {
     return VideoPostDto(
       id: m['postId']?.toString() ?? m['_id']?.toString() ?? '',
       type: m['contentType']?.toString() ?? m['category']?.toString() ?? 'video',
+      identity: m['contentIdentity']?.toString() ?? m['identity']?.toString() ?? 'work',
+      assistantUsePolicy: m['assistantUsePolicy']?.toString() ?? 'inherit',
       authorId: m['authorId']?.toString() ?? m['userId']?.toString() ?? m['author_id']?.toString() ?? '',
       displayName: m['authorNickname']?.toString() ?? m['nickname']?.toString() ?? m['username']?.toString() ?? m['displayName']?.toString() ?? '',
       avatarUrl: m['authorAvatarUrl']?.toString() ?? m['avatarUrl']?.toString() ?? m['avatar']?.toString() ?? '',
@@ -69,6 +75,8 @@ class VideoPostDto extends PostBaseDto {
     return <String, dynamic>{
       'id': id,
       'type': type,
+      'identity': identity,
+      'assistantUsePolicy': assistantUsePolicy,
       'authorId': authorId,
       'displayName': displayName,
       'avatarUrl': avatarUrl,
@@ -90,6 +98,8 @@ class VideoPostDto extends PostBaseDto {
   VideoPostDto copyWith({
     String? id,
     String? type,
+    String? identity,
+    String? assistantUsePolicy,
     String? authorId,
     String? displayName,
     String? avatarUrl,
@@ -109,6 +119,8 @@ class VideoPostDto extends PostBaseDto {
     return VideoPostDto(
       id: id ?? this.id,
       type: type ?? this.type,
+      identity: identity ?? this.identity,
+      assistantUsePolicy: assistantUsePolicy ?? this.assistantUsePolicy,
       authorId: authorId ?? this.authorId,
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
@@ -127,6 +139,10 @@ class VideoPostDto extends PostBaseDto {
     );
   }
 
+  /// 展示格式。视频作品固定为 video。
+  String get displayFormat {
+    return 'video';
+  }
   /// 视频宽高比（w/h）。未记录分辨率时返回 null。
   double? get aspectRatio {
     if (width == null || height == null || height! <= 0) return null;

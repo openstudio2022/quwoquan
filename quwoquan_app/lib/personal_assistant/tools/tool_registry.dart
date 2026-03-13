@@ -9,6 +9,7 @@ class AssistantToolRegistry {
   final Map<String, AssistantTool> _tools = <String, AssistantTool>{};
   final ToolMetadataRegistry? _metadataRegistry;
   final ToolCallHistory _callHistory = ToolCallHistory();
+  final _ToolResilienceManager _resilienceManager = _ToolResilienceManager();
 
   void register(AssistantTool tool) {
     _tools[tool.name] = tool;
@@ -60,7 +61,11 @@ class AssistantToolRegistry {
     }
 
     try {
-      final result = await tool.execute(arguments);
+      final result = await _executeWithResilience(
+        tool: tool,
+        name: name,
+        arguments: arguments,
+      );
 
       // after_tool_call hook: record outcome
       _callHistory.recordOutcome(
@@ -99,6 +104,119 @@ class AssistantToolRegistry {
         errorCode: AssistantErrorCode.executionFailed,
         degraded: true,
       );
+    }
+  }
+
+  Future<AssistantToolResult> _executeWithResilience({
+    required AssistantTool tool,
+    required String name,
+    required Map<String, dynamic> arguments,
+  }) async {
+    final policy = _resilienceManager.policyFor(name);
+    final breakerResult = policy?.checkBeforeExecute(name);
+    if (breakerResult != null) {
+      return breakerResult;
+    }
+    final maxAttempts = policy?.maxAttempts ?? 1;
+    AssistantToolResult? lastResult;
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        lastResult = await tool.execute(arguments);
+      } catch (error) {
+        lastResult = AssistantToolResult(
+          success: false,
+          message: 'Tool execution failed: $error',
+          errorCode: AssistantErrorCode.executionFailed,
+          degraded: true,
+        );
+      }
+      if (lastResult.success) {
+        policy?.recordSuccess();
+        return _attachRetryMetadata(
+          lastResult,
+          attempts: attempt,
+          recovered: attempt > 1,
+        );
+      }
+      final retryable = _isRetryableFailure(name: name, result: lastResult);
+      if (!retryable || attempt >= maxAttempts) {
+        if (retryable) {
+          policy?.recordTransientFailure();
+        } else {
+          policy?.recordNonTransientFailure();
+        }
+        return _attachRetryMetadata(
+          lastResult,
+          attempts: attempt,
+          recovered: false,
+        );
+      }
+      await Future<void>.delayed(policy?.retryDelay ?? Duration.zero);
+    }
+    return lastResult ??
+        const AssistantToolResult(
+          success: false,
+          message: 'Tool execution failed',
+          errorCode: AssistantErrorCode.executionFailed,
+          degraded: true,
+        );
+  }
+
+  AssistantToolResult _attachRetryMetadata(
+    AssistantToolResult result, {
+    required int attempts,
+    required bool recovered,
+  }) {
+    if (attempts <= 1) return result;
+    return AssistantToolResult(
+      success: result.success,
+      message: result.message,
+      errorCode: result.errorCode,
+      degraded: result.degraded,
+      data: <String, dynamic>{
+        ...?result.data,
+        'retry': <String, dynamic>{
+          'attempts': attempts,
+          'recovered': recovered,
+        },
+      },
+    );
+  }
+
+  bool _isRetryableFailure({
+    required String name,
+    required AssistantToolResult result,
+  }) {
+    if (result.success) return false;
+    if (name != 'web_search' && name != 'web_fetch') return false;
+    switch (result.errorCode) {
+      case AssistantErrorCode.networkUnavailable:
+      case AssistantErrorCode.rateLimited:
+        return true;
+      case AssistantErrorCode.invalidArguments:
+      case AssistantErrorCode.toolNotFound:
+      case AssistantErrorCode.skillNotFound:
+      case AssistantErrorCode.unsupportedTarget:
+      case AssistantErrorCode.permissionDenied:
+      case AssistantErrorCode.unauthorized:
+      case AssistantErrorCode.none:
+        return false;
+      case AssistantErrorCode.executionFailed:
+        final payload = <Object?>[result.message, result.data].join(' ').toLowerCase();
+        return payload.contains('timeout') ||
+            payload.contains('timed out') ||
+            payload.contains('network') ||
+            payload.contains('socket') ||
+            payload.contains('connection') ||
+            payload.contains('temporarily') ||
+            payload.contains('unavailable') ||
+            payload.contains('429') ||
+            payload.contains('500') ||
+            payload.contains('502') ||
+            payload.contains('503') ||
+            payload.contains('504') ||
+            payload.contains('超时') ||
+            payload.contains('网络');
     }
   }
 
@@ -207,5 +325,91 @@ class AssistantToolRegistry {
       current = current[part];
     }
     return current != null;
+  }
+}
+
+class _ToolResilienceManager {
+  final Map<String, _ToolResiliencePolicy> _policies =
+      <String, _ToolResiliencePolicy>{
+        'web_search': _ToolResiliencePolicy(
+          maxAttempts: 2,
+          retryDelay: const Duration(milliseconds: 350),
+          breakerThreshold: 3,
+          breakerWindow: const Duration(seconds: 45),
+          breakerDuration: const Duration(seconds: 20),
+        ),
+        'web_fetch': _ToolResiliencePolicy(
+          maxAttempts: 2,
+          retryDelay: const Duration(milliseconds: 250),
+          breakerThreshold: 2,
+          breakerWindow: const Duration(seconds: 30),
+          breakerDuration: const Duration(seconds: 15),
+        ),
+      };
+
+  _ToolResiliencePolicy? policyFor(String toolName) => _policies[toolName];
+}
+
+class _ToolResiliencePolicy {
+  _ToolResiliencePolicy({
+    required this.maxAttempts,
+    required this.retryDelay,
+    required this.breakerThreshold,
+    required this.breakerWindow,
+    required this.breakerDuration,
+  });
+
+  final int maxAttempts;
+  final Duration retryDelay;
+  final int breakerThreshold;
+  final Duration breakerWindow;
+  final Duration breakerDuration;
+  final List<DateTime> _recentTransientFailures = <DateTime>[];
+  DateTime? _breakerOpenUntil;
+
+  AssistantToolResult? checkBeforeExecute(String toolName) {
+    final now = DateTime.now();
+    if (_breakerOpenUntil != null && now.isBefore(_breakerOpenUntil!)) {
+      final remainingSeconds =
+          _breakerOpenUntil!.difference(now).inSeconds.clamp(1, 60);
+      return AssistantToolResult(
+        success: false,
+        message: '$toolName 当前处于短暂保护期，请在 ${remainingSeconds}s 后重试。',
+        errorCode: AssistantErrorCode.networkUnavailable,
+        degraded: true,
+        data: <String, dynamic>{
+          'breakerOpen': true,
+          'retryAfterSeconds': remainingSeconds,
+        },
+      );
+    }
+    if (_breakerOpenUntil != null && !now.isBefore(_breakerOpenUntil!)) {
+      _breakerOpenUntil = null;
+      _recentTransientFailures.clear();
+    }
+    return null;
+  }
+
+  void recordSuccess() {
+    _breakerOpenUntil = null;
+    _recentTransientFailures.clear();
+  }
+
+  void recordTransientFailure() {
+    final now = DateTime.now();
+    _recentTransientFailures.removeWhere(
+      (time) => now.difference(time) > breakerWindow,
+    );
+    _recentTransientFailures.add(now);
+    if (_recentTransientFailures.length >= breakerThreshold) {
+      _breakerOpenUntil = now.add(breakerDuration);
+    }
+  }
+
+  void recordNonTransientFailure() {
+    final now = DateTime.now();
+    _recentTransientFailures.removeWhere(
+      (time) => now.difference(time) > breakerWindow,
+    );
   }
 }

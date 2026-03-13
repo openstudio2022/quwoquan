@@ -6,6 +6,8 @@ const (
 	PostCreated                   = "PostCreated"
 	PostPublished                 = "PostPublished"
 	PostUpdated                   = "PostUpdated"
+	PostSettingsUpdated           = "PostSettingsUpdated"
+	PostPromotedToWork            = "PostPromotedToWork"
 	PostDeleted                   = "PostDeleted"
 	PostCircleDistributionUpdated = "PostCircleDistributionUpdated"
 	PostReshared                  = "PostReshared"

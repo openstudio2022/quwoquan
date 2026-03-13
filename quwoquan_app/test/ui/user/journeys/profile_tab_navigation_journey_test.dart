@@ -20,10 +20,12 @@ class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
 Widget _scopedApp({ProfileMode mode = ProfileMode.mine}) {
   return ProviderScope(
     overrides: [
-      userProfileRepositoryProvider
-          .overrideWithValue(const MockUserProfileRepository()),
-      relationshipCapabilityRepositoryProvider
-          .overrideWithValue(_ThrowingCapabilityRepository()),
+      userProfileRepositoryProvider.overrideWithValue(
+        const MockUserProfileRepository(),
+      ),
+      relationshipCapabilityRepositoryProvider.overrideWithValue(
+        _ThrowingCapabilityRepository(),
+      ),
     ],
     child: MaterialApp(
       home: ProfileShell(mode: mode, userId: 'nature_photographer'),
@@ -48,14 +50,14 @@ void main() {
   });
 
   group('旅程正常路径', () {
-    testWidgets('旅程 A1：默认展示微趣 Tab', (tester) async {
+    testWidgets('旅程 A1：默认展示创作 Tab', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
       await tester.pumpWidget(_scopedApp());
       await _pumpFrames(tester, count: 20);
-      expect(find.text('微趣'), findsOneWidget);
+      expect(find.text('创作'), findsOneWidget);
     });
 
     testWidgets('旅程 A2：切换到圈子 Tab', (tester) async {
@@ -118,15 +120,15 @@ void main() {
   });
 
   group('旅程数据加载正确性', () {
-    testWidgets('旅程 E1：微趣 Tab 展示 Repository 帖子数据（点赞数可见）', (tester) async {
+    testWidgets('旅程 E1：创作 Tab 展示 Repository 帖子数据（点赞数可见）', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
       await tester.pumpWidget(_scopedApp());
       await tester.pumpAndSettle(const Duration(seconds: 5));
-      // 微趣 Tab 以微博风格卡片展示 moment 帖子，互动行显示点赞数
-      expect(find.text('560'), findsAtLeastNWidgets(1));
+      // 创作 Tab 默认展示统一创作内容，至少应渲染首屏作品标题。
+      expect(find.text('光影的节奏'), findsAtLeastNWidgets(1));
     });
 
     testWidgets('旅程 E2：圈子 Tab 展示 Repository 圈子数据', (tester) async {
@@ -181,14 +183,14 @@ void main() {
       expect(find.widgetWithText(OutlinedButton, '已关注'), findsOneWidget);
     });
 
-    testWidgets('旅程 F2：微趣 Tab 展示用户微趣内容', (tester) async {
+    testWidgets('旅程 F2：创作 Tab 展示用户创作内容', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
       await tester.pumpWidget(_scopedApp());
       await _pumpFrames(tester, count: 20);
-      expect(find.text('微趣'), findsOneWidget);
+      expect(find.text('创作'), findsOneWidget);
     });
   });
 
@@ -198,20 +200,23 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(ProviderScope(
-        overrides: [
-          userProfileRepositoryProvider
-              .overrideWithValue(const MockUserProfileRepository()),
-        ],
-        child: MaterialApp(
-          home: ProfileShell(
-            mode: ProfileMode.mine,
-            userId: 'nonexistent_user_xyz',
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            userProfileRepositoryProvider.overrideWithValue(
+              const MockUserProfileRepository(),
+            ),
+          ],
+          child: MaterialApp(
+            home: ProfileShell(
+              mode: ProfileMode.mine,
+              userId: 'nonexistent_user_xyz',
+            ),
           ),
         ),
-      ));
+      );
       await _pumpFrames(tester);
-      expect(find.text('微趣'), findsOneWidget);
+      expect(find.text('创作'), findsOneWidget);
     });
   });
 

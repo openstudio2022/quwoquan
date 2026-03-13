@@ -20,6 +20,7 @@ class UserRequestPageIds {
     'DismissContactDiscovery': 'user.dismiss.contact.discovery',
     'FollowUser': 'user.follow',
     'GenerateInvite': 'user.generate.invite',
+    'GetAppearanceSettings': 'user.settings.appearance.get',
     'GetCallSettings': 'user.get.call.settings',
     'GetInviteByCode': 'user.get.invite.by.code',
     'GetLatestContactDiscovery': 'user.get.latest.contact.discovery',
@@ -56,6 +57,7 @@ class UserRequestPageIds {
     'UnbindCredential': 'user.unbind.credential',
     'UnblockUser': 'user.block.delete',
     'UnfollowUser': 'user.unfollow',
+    'UpdateAppearanceSettings': 'user.settings.appearance.patch',
     'UpdateCallSettings': 'user.update.call.settings',
     'UpdateNotificationSettings': 'user.update.notification.settings',
     'UpdatePersona': 'user.personas.update',
@@ -79,6 +81,7 @@ class UserRequestPageIds {
   static const String dismissContactDiscovery = 'user.dismiss.contact.discovery';
   static const String followUser = 'user.follow';
   static const String generateInvite = 'user.generate.invite';
+  static const String getAppearanceSettings = 'user.settings.appearance.get';
   static const String getCallSettings = 'user.get.call.settings';
   static const String getInviteByCode = 'user.get.invite.by.code';
   static const String getLatestContactDiscovery = 'user.get.latest.contact.discovery';
@@ -115,6 +118,7 @@ class UserRequestPageIds {
   static const String unbindCredential = 'user.unbind.credential';
   static const String unblockUser = 'user.block.delete';
   static const String unfollowUser = 'user.unfollow';
+  static const String updateAppearanceSettings = 'user.settings.appearance.patch';
   static const String updateCallSettings = 'user.update.call.settings';
   static const String updateNotificationSettings = 'user.update.notification.settings';
   static const String updatePersona = 'user.personas.update';

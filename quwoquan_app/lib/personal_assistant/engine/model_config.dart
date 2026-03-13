@@ -20,6 +20,15 @@ class AssistantModelRuntimeConfig {
   final String apiKey;
 }
 
+enum ModelReasoningMode {
+  none,
+  nativeField,
+  thinkTag,
+  jsonThinkingText,
+}
+
+enum ModelToolCallMode { nativeFunction, xmlTagged, jsonEnvelope }
+
 /// Declares per-model capability differences so the streaming parser,
 /// tool-call extraction, and prompt construction can adapt automatically.
 class ModelCapabilityProfile {
@@ -29,6 +38,9 @@ class ModelCapabilityProfile {
     this.supportsThinkTags = false,
     this.reasoningFieldName = '',
     this.supportsJsonMode = true,
+    this.reasoningMode = ModelReasoningMode.jsonThinkingText,
+    this.toolCallMode = ModelToolCallMode.nativeFunction,
+    this.supportsStreamingAnswer = true,
     this.defaultMaxTokens = 4096,
     this.defaultTemperature = 0.3,
   });
@@ -38,6 +50,9 @@ class ModelCapabilityProfile {
   final bool supportsThinkTags;
   final String reasoningFieldName;
   final bool supportsJsonMode;
+  final ModelReasoningMode reasoningMode;
+  final ModelToolCallMode toolCallMode;
+  final bool supportsStreamingAnswer;
   final int defaultMaxTokens;
   final double defaultTemperature;
 
@@ -49,6 +64,8 @@ class ModelCapabilityProfile {
     supportsReasoningField: true,
     reasoningFieldName: 'reasoning',
     supportsJsonMode: false,
+    reasoningMode: ModelReasoningMode.nativeField,
+    toolCallMode: ModelToolCallMode.jsonEnvelope,
     defaultTemperature: 0.6,
   );
 
@@ -56,10 +73,14 @@ class ModelCapabilityProfile {
     supportsThinkTags: true,
     supportsReasoningField: true,
     reasoningFieldName: 'reasoning_content',
+    reasoningMode: ModelReasoningMode.nativeField,
+    toolCallMode: ModelToolCallMode.nativeFunction,
   );
 
   static const ModelCapabilityProfile qwen = ModelCapabilityProfile(
     supportsThinkTags: true,
+    reasoningMode: ModelReasoningMode.thinkTag,
+    toolCallMode: ModelToolCallMode.xmlTagged,
   );
 
   /// Resolves the best-matching profile for a given modelRef (e.g. "mimo/mimo-v2-flash").

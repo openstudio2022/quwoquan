@@ -3,8 +3,10 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/personal_assistant/engine/agent_loop.dart';
 import 'package:quwoquan_app/personal_assistant/engine/llm_provider.dart';
+import 'package:quwoquan_app/personal_assistant/engine/process_journal_bus.dart';
 import 'package:quwoquan_app/personal_assistant/engine/react_runtime.dart';
 import 'package:quwoquan_app/personal_assistant/engine/session_manager.dart';
 import 'package:quwoquan_app/personal_assistant/memory/memory_repository.dart';
@@ -184,6 +186,127 @@ class _FakeWeatherSearchTool implements AssistantTool {
           },
         ],
       },
+    );
+  }
+}
+
+class _UsageLedgerWeatherLlm implements AssistantLlmProvider {
+  int totalCallCount = 0;
+  int totalTokensIssued = 0;
+
+  AssistantModelOutput _withUsage({
+    required String text,
+    List<AssistantToolCall> toolCalls = const <AssistantToolCall>[],
+  }) {
+    totalCallCount += 1;
+    final entry = <String, dynamic>{
+      'provider': 'mock',
+      'modelId': 'usage-ledger-model',
+      'modelRef': 'usage-ledger-model',
+      'source': 'provider',
+      'streaming': false,
+      'inputTokens': 80 + totalCallCount,
+      'outputTokens': 20 + totalCallCount,
+      'totalTokens': 100 + totalCallCount * 2,
+      'latencyMs': 10,
+    };
+    totalTokensIssued += entry['totalTokens'] as int;
+    return AssistantModelOutput(
+      text: text,
+      toolCalls: toolCalls,
+      usageEntries: <Map<String, dynamic>>[entry],
+    );
+  }
+
+  @override
+  Future<AssistantModelOutput> reason({
+    required List<Map<String, dynamic>> messages,
+    required List<String> availableTools,
+    Map<String, dynamic> templateContext = const <String, dynamic>{},
+    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    String templateId = 'planner.global_plan',
+    String templateVersion = '',
+    String sessionId = '',
+    String runId = '',
+    String traceId = '',
+    LlmCallOptions? callOptions,
+    void Function(String delta)? onDelta,
+  }) async {
+    final isPlannerCall =
+        templateId == 'planner.global_plan' ||
+        templateId == 'planner.postcondition_check';
+    final isSynthesisCall =
+        templateId.contains('synthesizer') ||
+        templateId.contains('final_answer');
+    final isIntentStage =
+        templateId == 'planner.global_plan' && availableTools.isEmpty;
+    final hasToolMessage = messages.any((item) => item['role'] == 'tool');
+
+    if (!isPlannerCall && !isSynthesisCall) {
+      return _withUsage(
+        text: '{"summary":"用户想查询深圳天气。"}',
+      );
+    }
+    if (isIntentStage) {
+      return _withUsage(
+        text: jsonEncode(const <String, dynamic>{
+          'primaryDomainId': 'weather',
+          'secondaryDomains': <String>[],
+          'inferredMotive': '查询深圳实时天气',
+          'problemClass': 'realtime_info',
+          'mode': 'qa',
+          'queryNormalization': <String, dynamic>{'query': '深圳天气怎么样'},
+        }),
+      );
+    }
+    if (isPlannerCall && !hasToolMessage) {
+      return _withUsage(
+        text: jsonEncode(<String, dynamic>{
+          'contractVersion': 'assistant_turn_v4',
+          'decision': {'nextAction': 'tool_call'},
+          'toolCalls': [
+            {
+              'tool': 'web_search',
+              'arguments': {
+                'query': '深圳天气实况 今天 温度 湿度',
+                'queryVariants': <String>['深圳今天天气实况'],
+                'freshnessHoursMax': 6,
+              },
+            },
+          ],
+        }),
+        toolCalls: const <AssistantToolCall>[
+          AssistantToolCall(
+            name: 'web_search',
+            arguments: <String, dynamic>{
+              'query': '深圳天气实况 今天 温度 湿度',
+              'queryVariants': <String>['深圳今天天气实况'],
+              'freshnessHoursMax': 6,
+            },
+          ),
+        ],
+      );
+    }
+    return _withUsage(
+      text: jsonEncode(<String, dynamic>{
+        'contractVersion': 'assistant_turn_v4',
+        'decision': {'nextAction': 'answer'},
+        'messageKind': 'answer',
+        'userMarkdown': '深圳天气晴朗，约 25°C。',
+        'result': {'text': '深圳天气晴朗，约 25°C。', 'interpretation': '天气概况'},
+        'selfCheck': {
+          'goalSatisfied': true,
+          'constraintSatisfied': true,
+          'safetyBoundarySatisfied': true,
+          'failedItems': <String>[],
+        },
+        'diagnostics': {
+          'whyThisAnswer': '基于天气结果整理',
+          'riskFlags': <String>[],
+        },
+        'modelSelfScore': {'score': 95, 'reason': '可直接回答'},
+        'toolCalls': <dynamic>[],
+      }),
     );
   }
 }
@@ -482,6 +605,275 @@ class _FailingWeatherSearchTool implements AssistantTool {
   }
 }
 
+class _JourneyReplayLlm implements AssistantLlmProvider {
+  final Map<String, int> _plannerCallsByQuery = <String, int>{};
+  final Map<String, List<List<Map<String, dynamic>>>> plannerRequestsByQuery =
+      <String, List<List<Map<String, dynamic>>>>{};
+
+  List<List<Map<String, dynamic>>> requestsFor(String query) =>
+      plannerRequestsByQuery[query] ?? const <List<Map<String, dynamic>>>[];
+
+  @override
+  Future<AssistantModelOutput> reason({
+    required List<Map<String, dynamic>> messages,
+    required List<String> availableTools,
+    Map<String, dynamic> templateContext = const <String, dynamic>{},
+    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    String templateId = 'planner.global_plan',
+    String templateVersion = '',
+    String sessionId = '',
+    String runId = '',
+    String traceId = '',
+    LlmCallOptions? callOptions,
+    void Function(String delta)? onDelta,
+  }) async {
+    final isPlannerCall =
+        templateId == 'planner.global_plan' ||
+        templateId == 'planner.postcondition_check';
+    final isSynthesisCall =
+        templateId.contains('synthesizer') ||
+        templateId.contains('final_answer') ||
+        templateId.contains('output_contract.answer');
+    final isIntentStage =
+        templateId == 'planner.global_plan' && availableTools.isEmpty;
+    final query = _latestUserQuery(messages);
+
+    if (isIntentStage) {
+      final isTripPlanning = query.contains('九寨沟');
+      return AssistantModelOutput(
+        text: jsonEncode(<String, dynamic>{
+          'primaryDomainId': 'fallback_general_search',
+          'secondaryDomains': const <String>[],
+          'inferredMotive': isTripPlanning ? '想补齐旅行路线与住宿备选' : '想确认一个更聚焦的观赏时间问题',
+          'problemClass': isTripPlanning ? 'complex_reasoning' : 'simple_qa',
+          'mode': 'qa',
+        }),
+      );
+    }
+
+    if (!isPlannerCall && !isSynthesisCall) {
+      return const AssistantModelOutput(
+        text: '{"summary":"用户在继续追问旅行安排。"}',
+      );
+    }
+
+    if (isPlannerCall) {
+      plannerRequestsByQuery.putIfAbsent(query, () => <List<Map<String, dynamic>>>[]).add(
+        messages
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList(growable: false),
+      );
+    }
+    final count = isPlannerCall ? (_plannerCallsByQuery[query] ?? 0) + 1 : 0;
+    if (isPlannerCall) {
+      _plannerCallsByQuery[query] = count;
+    }
+
+    if (isPlannerCall && count == 1 && availableTools.contains('web_search')) {
+      final reasonShort = query.contains('九寨沟')
+          ? '先把路线、住宿和观景时间拆开核对，后面更容易收敛。'
+          : '先确认观赏时间和天气窗口，结论才更稳。';
+      onDelta?.call(reasonShort);
+      return AssistantModelOutput(
+        text: jsonEncode(<String, dynamic>{
+          'contractVersion': 'assistant_turn_v4',
+          'phaseId': 'understanding',
+          'actionCode': 'frame_problem',
+          'reasonCode': 'align_goal',
+          'reasonShort': reasonShort,
+          'thinkingText': '用户想了解$query，我需要搜索最新资料。',
+          'decision': const <String, dynamic>{'nextAction': 'tool_call'},
+          'toolCalls': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'tool': 'web_search',
+              'arguments': <String, dynamic>{
+                'query': query,
+                'queryTasks': query.contains('九寨沟')
+                    ? <Map<String, dynamic>>[
+                        <String, dynamic>{'label': '路线可选项'},
+                        <String, dynamic>{'label': '住宿备选'},
+                        <String, dynamic>{'label': '观景时间'},
+                      ]
+                    : <Map<String, dynamic>>[
+                        <String, dynamic>{'label': '最佳月份'},
+                        <String, dynamic>{'label': '天气窗口'},
+                      ],
+                'provider': 'mock_search',
+              },
+            },
+          ],
+        }),
+        toolCalls: <AssistantToolCall>[
+          AssistantToolCall(
+            name: 'web_search',
+            arguments: <String, dynamic>{
+              'query': query,
+              'queryTasks': query.contains('九寨沟')
+                  ? <Map<String, dynamic>>[
+                      <String, dynamic>{'label': '路线可选项'},
+                      <String, dynamic>{'label': '住宿备选'},
+                      <String, dynamic>{'label': '观景时间'},
+                    ]
+                  : <Map<String, dynamic>>[
+                      <String, dynamic>{'label': '最佳月份'},
+                      <String, dynamic>{'label': '天气窗口'},
+                    ],
+              'provider': 'mock_search',
+            },
+          ),
+        ],
+      );
+    }
+
+    final answerTitle = query.contains('九寨沟') ? '九寨沟方向备选方案' : '土拨鼠观赏时间建议';
+    final answerBody = query.contains('九寨沟')
+        ? '- 先看川西主线，再把九寨沟方向作为备选。\n- 住宿优先选交通更稳的节点。'
+        : '- 更适合在草甸返青后的稳定天气窗口前往。\n- 先确认当地天气，再决定具体日期。';
+    return AssistantModelOutput(
+      text: jsonEncode(<String, dynamic>{
+        'contractVersion': 'assistant_turn_v4',
+        'phaseId': 'answering',
+        'actionCode': 'compose_answer',
+        'reasonCode': 'evidence_ready',
+        'reasonShort': '关键信息已经够用了，开始整理成答案。',
+        'thinkingText': '搜索结果显示$query相关资料已够用，我来整理回答。',
+        'decision': const <String, dynamic>{'nextAction': 'answer'},
+        'messageKind': 'answer',
+        'userMarkdown': '## $answerTitle\n\n$answerBody',
+        'result': <String, dynamic>{'text': answerBody},
+        'evidence': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'claim': answerTitle,
+            'source': 'mock_search',
+            'confidence': 'high',
+          },
+        ],
+        'toolCalls': const <dynamic>[],
+      }),
+    );
+  }
+
+  String _latestUserQuery(List<Map<String, dynamic>> messages) {
+    for (var i = messages.length - 1; i >= 0; i--) {
+      final role = (messages[i]['role'] as String?)?.trim() ?? '';
+      if (role == 'user') {
+        final content = (messages[i]['content'] as String?)?.trim() ?? '';
+        if (content.isNotEmpty) return content;
+      }
+    }
+    return '';
+  }
+}
+
+class _JourneyReplaySearchTool implements AssistantTool {
+  int executeCount = 0;
+
+  @override
+  String get name => 'web_search';
+
+  @override
+  String get description => '网络搜索';
+
+  @override
+  Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
+    executeCount += 1;
+    final query = (arguments['query'] as String?)?.trim() ?? '';
+    final tasks =
+        (arguments['queryTasks'] as List?)
+                ?.whereType<Map>()
+                .map((item) => item.cast<String, dynamic>())
+                .toList(growable: false) ??
+            const <Map<String, dynamic>>[];
+    final dimensions = tasks
+        .map(
+          (task) =>
+              ((task['dimension'] as String?)?.trim().isNotEmpty == true
+                  ? (task['dimension'] as String).trim()
+                  : (task['label'] as String?)?.trim() ?? ''),
+        )
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+
+    if (query.contains('九寨沟')) {
+      return AssistantToolResult(
+        success: true,
+        message: '搜索完成',
+        data: <String, dynamic>{
+          'provider': 'mock_search',
+          'qualityScore': 0.93,
+          'summary': '九寨沟方向可以作为川西主线的备选，关键在路线取舍、住宿节点和观景时间。',
+          'totalReferences': 3,
+          'referenceCount': 3,
+          'queryCount': dimensions.length,
+          'queryLabels': dimensions,
+          'queryTasks': tasks,
+          'coveredDimensions': dimensions,
+          'references': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'title': '九寨沟景区游览提示',
+              'url': 'https://example.com/jiuzhaigou-route',
+              'source': '景区资料',
+              'snippet': '旺季建议把主线景点和转场时间拆开规划，避免当天行程过满。',
+              'queryTaskId': 'route_options',
+              'dimension': '路线可选项',
+            },
+            <String, dynamic>{
+              'title': '川西游线住宿节点整理',
+              'url': 'https://example.com/jiuzhaigou-stay',
+              'source': '出行攻略',
+              'snippet': '住宿更适合卡在交通更稳的中转节点，方便第二天机动调整。',
+              'queryTaskId': 'stay_options',
+              'dimension': '住宿备选',
+            },
+            <String, dynamic>{
+              'title': '九寨沟观景高峰与时间建议',
+              'url': 'https://example.com/jiuzhaigou-timing',
+              'source': '游览指南',
+              'snippet': '观景时间更适合避开拥挤时段，把核心景观点留在光线更稳的时段。',
+              'queryTaskId': 'viewing_window',
+              'dimension': '观景时间',
+            },
+          ],
+        },
+      );
+    }
+
+    return AssistantToolResult(
+      success: true,
+      message: '搜索完成',
+      data: <String, dynamic>{
+        'provider': 'mock_search',
+        'qualityScore': 0.9,
+        'summary': '土拨鼠更适合在草甸返青后、天气稳定的窗口观察。',
+        'totalReferences': 2,
+        'referenceCount': 2,
+        'queryCount': dimensions.length,
+        'queryLabels': dimensions,
+        'queryTasks': tasks,
+        'coveredDimensions': dimensions,
+        'references': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'title': '高原草甸返青期观察建议',
+            'url': 'https://example.com/marmot-season',
+            'source': '生态观察',
+            'snippet': '返青后的草甸食物更稳定，更容易观察到活动频率较高的土拨鼠。',
+            'queryTaskId': 'best_month',
+            'dimension': dimensions.isNotEmpty ? dimensions.first : '最佳月份',
+          },
+          <String, dynamic>{
+            'title': '高原天气窗口与野生动物活动',
+            'url': 'https://example.com/marmot-weather',
+            'source': '户外提示',
+            'snippet': '连续晴稳天气更适合观察，遇到风雪或强降温时活动明显减少。',
+            'queryTaskId': 'weather_window',
+            'dimension': dimensions.length > 1 ? dimensions[1] : '天气窗口',
+          },
+        ],
+      },
+    );
+  }
+}
+
 void main() {
   group('Full phase pipeline — mock 深圳天气', () {
     late PersonalAssistantAgentLoop loop;
@@ -636,69 +1028,47 @@ void main() {
 
       // ---- 阶段时间线验证 ----
       final structured = response.structuredResponse;
-      final timeline =
-          (structured['uiPhaseTimelineV1'] as List?)
-              ?.whereType<Map>()
-              .map((p) => p.cast<String, dynamic>())
-              .toList() ??
-          [];
+      final processJournalRaw = ((structured['processJournalV1'] as List?) ??
+              ((structured['runArtifactsV1'] as Map?)?['processJournal'] as List?) ??
+              const <dynamic>[])
+          .whereType<Map>()
+          .map((item) => item.cast<String, dynamic>())
+          .toList(growable: false);
+      final processJournal = processJournalRaw
+          .map(ProcessJournalEvent.fromJson)
+          .toList(growable: false);
+      final displayJournal = ProcessJournalBus.toDisplaySnapshot(processJournal);
+      final journalStages = processJournal.map((item) => item.stage).toSet();
 
+      expect(processJournal, isNotEmpty, reason: '应输出 append-only processJournalV1');
+      expect(journalStages.contains('understanding'), isTrue, reason: '应覆盖 understanding 阶段');
+      expect(journalStages.contains('searching'), isTrue, reason: '应覆盖 searching 阶段');
+      expect(journalStages.contains('answering'), isTrue, reason: '应覆盖 answering 阶段');
+      expect(journalStages.contains('completed'), isTrue, reason: '应覆盖 completed 阶段');
+
+      final searchUpdates = displayJournal
+          .where(
+            (item) =>
+                item.type == ProcessJournalEventType.sourceUpdate &&
+                item.stage == 'searching',
+          )
+          .toList(growable: false);
+      expect(searchUpdates, isNotEmpty, reason: '搜索阶段应产出 sourceUpdate');
       expect(
-        timeline.length,
-        greaterThanOrEqualTo(2),
-        reason: '至少应有 understanding + answering 两个阶段',
+        searchUpdates.first.references,
+        isNotEmpty,
+        reason: '搜索阶段 sourceUpdate 应带引用',
       );
-
-      final phaseTypes = timeline
-          .map((p) => (p['phaseType'] as String?) ?? '')
-          .toList();
-
-      // 核心阶段检查
       expect(
-        phaseTypes.contains('understanding'),
+        searchUpdates.first.message.contains('来源') ||
+            searchUpdates.first.message.contains('资料') ||
+            searchUpdates.first.message.contains('交叉看'),
         isTrue,
-        reason: '应有 understanding 阶段',
+        reason: '搜索阶段叙事应是面向用户语言',
       );
-      expect(phaseTypes.last, equals('answering'), reason: '最后阶段应为 answering');
 
-      // 搜索阶段或工具阶段检查
-      final hasSearchPhase = phaseTypes.any(
-        (t) => t.contains('search') || t.startsWith('tool:'),
-      );
-      expect(hasSearchPhase, isTrue, reason: '应有搜索或工具阶段，实际: $phaseTypes');
-
-      // 搜索阶段应有 references
-      final searchPhase = timeline.firstWhere((p) {
-        final t = (p['phaseType'] as String?) ?? '';
-        return t.contains('search') || t.startsWith('tool:');
-      }, orElse: () => <String, dynamic>{});
-      if (searchPhase.isNotEmpty) {
-        final refs = (searchPhase['references'] as List?) ?? [];
-        expect(refs, isNotEmpty, reason: '搜索阶段应产出 references');
-        final summary = (searchPhase['summary'] as String?) ?? '';
-        expect(summary.contains('资料'), isTrue, reason: '搜索阶段 summary 应提及资料数量');
-      }
-
-      // 所有阶段标题应为中文
-      for (final phase in timeline) {
-        final title = (phase['title'] as String?) ?? '';
-        expect(title, isNotEmpty, reason: '每个阶段必须有标题');
-      }
-
-      // 所有阶段应为 completed
-      for (final phase in timeline) {
-        expect(
-          phase['status'],
-          equals('completed'),
-          reason: '阶段 "${phase['phaseType']}" 应为 completed',
-        );
-      }
-
-      // ---- 禁止内部字符串泄露 ----
-      for (final phase in timeline) {
-        final title = (phase['title'] as String?) ?? '';
-        final summary = (phase['summary'] as String?) ?? '';
-        final allText = '$title $summary';
+      for (final event in displayJournal) {
+        final allText = '${event.message} ${event.payload}';
         expect(allText.contains('contractVersion'), isFalse);
         expect(allText.contains('AssistantTrace'), isFalse);
         expect(allText.contains('toolStart'), isFalse);
@@ -710,6 +1080,33 @@ void main() {
           const <String, dynamic>{};
       final mdText = (uiAnswer['markdownText'] as String?) ?? '';
       final summaryText = (uiAnswer['summaryText'] as String?) ?? '';
+      final runArtifacts =
+          (structured['runArtifactsV1'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      final artifacts = RunArtifacts.fromJson(runArtifacts);
+      expect((runArtifacts['machineEnvelope'] as String?)?.trim(), equals(response.finalText.trim()));
+      expect((runArtifacts['displayMarkdown'] as String?)?.trim(), equals(mdText.trim()));
+      expect(
+        ((runArtifacts['displayPlainText'] as String?)?.trim() ?? '').isNotEmpty,
+        isTrue,
+        reason: 'runArtifactsV1 应落纯文本展示账',
+      );
+      expect(artifacts.evidenceLedger, isNotEmpty, reason: 'M3 应将证据账写入 runArtifacts');
+      expect(
+        artifacts.evidenceLedger.any((entry) => entry.url.contains('weather.cma.cn')),
+        isTrue,
+        reason: '证据账应收拢权威天气来源',
+      );
+      expect(
+        artifacts.slotState.slotValueOf('city')?.value,
+        equals('深圳'),
+        reason: 'M4 应把关键槽位状态写入 runArtifacts',
+      );
+      expect(
+        artifacts.domainPolicyBundle?.domainId,
+        equals('weather'),
+        reason: 'M4 应同步落 domainPolicyBundle',
+      );
       final combined = '$mdText $summaryText ${response.finalText}';
       expect(
         combined.contains('天气') ||
@@ -772,22 +1169,41 @@ void main() {
           (structured['aggregationState'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{};
       expect(aggregationState['finalAnswerReady'], isTrue);
-      final userEvents =
-          (structured['userEvents'] as List?)
-              ?.whereType<Map>()
-              .map((item) => item.cast<String, dynamic>())
-              .toList(growable: false) ??
-          const <Map<String, dynamic>>[];
-      expect(userEvents, isNotEmpty, reason: '应输出 userEvents');
-      expect(userEvents.first['scope'], equals('root'));
-      final userMessages = userEvents
-          .map((item) => (item['message'] as String?)?.trim() ?? '')
+      final conversationDecision =
+          (structured['conversationStateDecision'] as Map?)
+              ?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      expect(conversationDecision['finalAnswerMode'], equals('full'));
+      expect(conversationDecision['nextAction'], equals('answer'));
+      expect(structured.containsKey('userEvents'), isFalse, reason: 'legacy userEvents 应已清退');
+      expect(
+        structured.containsKey('uiProcessTimelineV2'),
+        isFalse,
+        reason: 'legacy uiProcessTimelineV2 不应再作为新结果输出',
+      );
+      expect(
+        structured.containsKey('uiPhaseTimelineV1'),
+        isFalse,
+        reason: 'legacy uiPhaseTimelineV1 不应再作为新结果输出',
+      );
+      final userMessages = displayJournal
+          .map((item) => item.displayMessage.trim())
           .where((item) => item.isNotEmpty)
           .toList(growable: false);
       expect(
         userMessages.any((item) => item.contains('深圳') && item.contains('天气')),
         isTrue,
         reason: '天气过程语言应带当前问题语义，而不是只显示系统状态',
+      );
+      expect(
+        userMessages.any((item) => item.contains('先确认') || item.contains('我在')),
+        isTrue,
+        reason: '过程事件应解释当前为什么这样收敛，而不是只报系统状态',
+      );
+      expect(
+        userMessages.any((item) => item.contains('用户想了解') || item.contains('我需要搜索')),
+        isFalse,
+        reason: '过程事件应尽量避免把内部推理口吻直接暴露给用户',
       );
       expect(
         userMessages.any(
@@ -799,27 +1215,250 @@ void main() {
         isFalse,
         reason: '过程事件不应退化成通用系统状态文案',
       );
-      final uiProcessTimelineV2 =
-          (structured['uiProcessTimelineV2'] as List?)
-              ?.whereType<Map>()
-              .map((item) => item.cast<String, dynamic>())
-              .toList(growable: false) ??
-          const <Map<String, dynamic>>[];
-      expect(
-        uiProcessTimelineV2,
-        isNotEmpty,
-        reason: '应输出 uiProcessTimelineV2',
+      final rootIntentEntry = displayJournal.firstWhere(
+        (item) => item.nodeId.startsWith('root.intent'),
+        orElse: () => const ProcessJournalEvent(
+          eventId: '',
+          type: ProcessJournalEventType.narrativeCommit,
+          stage: '',
+        ),
       );
+      final rootIntentSummary = rootIntentEntry.displayMessage;
       expect(
-        uiProcessTimelineV2.last['summary'],
-        contains('已核对'),
-        reason: 'timeline v2 应保留最终过程摘要',
+        rootIntentSummary.contains('先确认'),
+        isTrue,
+        reason: '首个阶段应先向用户解释为什么从这个方向开始处理，而不是只报内部状态',
       );
+      expect(rootIntentEntry.actionCode, equals('frame_problem'));
+      expect(rootIntentEntry.reasonCode, isNotEmpty);
+      expect(rootIntentSummary, isNot(contains('我先帮你把')));
+      expect(rootIntentSummary, isNot(contains('收一收')));
+      expect(rootIntentSummary, isNot(contains('你更像是想知道')));
       expect(
-        (uiProcessTimelineV2.last['references'] as List?) ?? const <dynamic>[],
-        isNotEmpty,
-        reason: '最终过程事件应携带聚合后的来源真相源，供过程区与最终答案复用',
+        displayJournal.any((item) => item.references.isNotEmpty),
+        isTrue,
+        reason: '过程日志中至少应有一条事件携带来源真相源，供过程区与最终答案复用',
       );
+    });
+
+    test('上一轮 slotState 与 domainPolicyBundle 会续转到下一轮', () async {
+      final carryLlm = _WeatherPipelineLlm();
+      final carrySearch = _FakeWeatherSearchTool();
+      final carryLoop = PersonalAssistantAgentLoop(
+        ReactRuntime(
+          llmProvider: carryLlm,
+          toolRegistry: AssistantToolRegistry()..register(carrySearch),
+        ),
+        sessionManager: AssistantSessionManager(
+          storagePath: '${tempDir.path}/carry_sessions.json',
+        ),
+        memoryRepository: AssistantMemoryRepository(
+          ObjectBoxVectorStore(storagePath: '${tempDir.path}/carry_memory.json'),
+        ),
+      );
+
+      final firstResponse = await carryLoop.run(
+        const AssistantRunRequest(
+          sessionId: 'pipeline_slot_carry',
+          messages: <AssistantRunMessage>[
+            AssistantRunMessage(role: 'user', content: '深圳天气怎么样'),
+          ],
+        ),
+      );
+      final firstArtifacts = firstResponse.runArtifactsV1;
+      expect(firstArtifacts, isNotNull);
+      expect(firstArtifacts!.slotState.slotValueOf('city')?.value, equals('深圳'));
+
+      final secondLoop = PersonalAssistantAgentLoop(
+        ReactRuntime(
+          llmProvider: _WeatherPipelineLlm(),
+          toolRegistry: AssistantToolRegistry()..register(_FakeWeatherSearchTool()),
+        ),
+        sessionManager: AssistantSessionManager(
+          storagePath: '${tempDir.path}/carry_sessions_second.json',
+        ),
+        memoryRepository: AssistantMemoryRepository(
+          ObjectBoxVectorStore(
+            storagePath: '${tempDir.path}/carry_memory_second.json',
+          ),
+        ),
+      );
+
+      final secondResponse = await secondLoop.run(
+        AssistantRunRequest(
+          sessionId: 'pipeline_slot_carry',
+          messages: const <AssistantRunMessage>[
+            AssistantRunMessage(role: 'user', content: '明天呢'),
+          ],
+          contextScopeHint: <String, dynamic>{
+            'runArtifactsV1': firstArtifacts.toJson(),
+            'slotState': firstArtifacts.slotState.toJson(),
+            if (firstArtifacts.domainPolicyBundle != null)
+              'domainPolicyBundle': firstArtifacts.domainPolicyBundle!.toJson(),
+          },
+        ),
+      );
+
+      final secondArtifacts = secondResponse.runArtifactsV1;
+      expect(secondArtifacts, isNotNull);
+      expect(
+        secondArtifacts!.slotState.slotValueOf('city')?.value,
+        equals('深圳'),
+        reason: '未显式再说城市时，也应从上一轮槽位续转',
+      );
+      expect(secondArtifacts.domainPolicyBundle?.domainId, equals('weather'));
+
+      final structured = secondResponse.structuredResponse;
+      final decision =
+          (structured['conversationStateDecision'] as Map?)
+              ?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      expect(decision['nextAction'], equals('answer'));
+      expect(decision['finalAnswerMode'], equals('full'));
+      expect(structured['answerEligibility'], equals('eligible'));
+    });
+
+    test('最近两次真实追问样例不会跨轮污染 JSON、tool_call 与模板化过程话术', () async {
+      final replayLlm = _JourneyReplayLlm();
+      final replayMemory = AssistantMemoryRepository(
+        ObjectBoxVectorStore(
+          storagePath: '${tempDir.path}/journey_replay_memory.json',
+        ),
+      );
+      final replayLoop = PersonalAssistantAgentLoop(
+        ReactRuntime(
+          llmProvider: replayLlm,
+          toolRegistry: AssistantToolRegistry()..register(_JourneyReplaySearchTool()),
+        ),
+        sessionManager: AssistantSessionManager(
+          storagePath: '${tempDir.path}/journey_replay_sessions.json',
+        ),
+        memoryRepository: replayMemory,
+      );
+
+      final firstResponse = await replayLoop.run(
+        const AssistantRunRequest(
+          sessionId: 'journey_replay_session',
+          messages: <AssistantRunMessage>[
+            AssistantRunMessage(
+              role: 'user',
+              content: '如果把九寨沟方向考虑进去，多给我几个备选方案',
+            ),
+          ],
+        ),
+      );
+
+      final secondResponse = await replayLoop.run(
+        const AssistantRunRequest(
+          sessionId: 'journey_replay_session',
+          messages: <AssistantRunMessage>[
+            AssistantRunMessage(role: 'user', content: '土拨鼠观赏最佳时间'),
+          ],
+        ),
+      );
+
+      final secondPlannerRequests = replayLlm.requestsFor('土拨鼠观赏最佳时间');
+      expect(secondPlannerRequests, isNotEmpty, reason: '应记录第二轮规划输入，便于验证跨轮清洗');
+      final secondPlannerTranscript = secondPlannerRequests
+          .expand((request) => request)
+          .map((item) => (item['content'] ?? '').toString())
+          .join('\n');
+      for (final forbidden in const <String>[
+        'assistant_turn_v4',
+        'contractVersion',
+        '<tool_call>',
+        'machineEnvelope',
+        'longtermMemorySummary":"{',
+        'historySummarySnippet":"{',
+      ]) {
+        expect(
+          secondPlannerTranscript.contains(forbidden),
+          isFalse,
+          reason: '第二轮输入不应再带入内部污染片段: $forbidden',
+        );
+      }
+
+      final sessionManager = AssistantSessionManager(
+        storagePath: '${tempDir.path}/journey_replay_sessions.json',
+      );
+      await sessionManager.load();
+      final summary = sessionManager.summarizeRecent('journey_replay_session');
+      expect(summary, isNotEmpty);
+      for (final forbidden in const <String>[
+        'assistant_turn_v4',
+        'contractVersion',
+        'queryTasks',
+        'tool_call',
+        '<tool_call>',
+        'provider',
+        'machineEnvelope',
+      ]) {
+        expect(
+          summary.contains(forbidden),
+          isFalse,
+          reason: 'session_history 摘要不应再带入内部污染片段: $forbidden',
+        );
+      }
+
+      final recalledMemory = await replayMemory.recallByText(
+        query: '土拨鼠观赏最佳时间',
+        limit: 5,
+      );
+      final recalledText = recalledMemory.map((item) => item.text).join('\n');
+      for (final forbidden in const <String>[
+        'assistant_turn_v4',
+        'contractVersion',
+        'queryTasks',
+        'tool_call',
+        '<tool_call>',
+        'provider',
+        'machineEnvelope',
+      ]) {
+        expect(
+          recalledText.contains(forbidden),
+          isFalse,
+          reason: 'longterm_memory 不应再带入内部污染片段: $forbidden',
+        );
+      }
+
+      final processJournal = ((secondResponse.structuredResponse['processJournalV1'] as List?) ??
+              ((secondResponse.structuredResponse['runArtifactsV1'] as Map?)?['processJournal']
+                  as List?) ??
+              const <dynamic>[])
+          .whereType<Map>()
+          .map((item) => ProcessJournalEvent.fromJson(item.cast<String, dynamic>()))
+          .toList(growable: false);
+      final displayJournal = ProcessJournalBus.toDisplaySnapshot(processJournal);
+      final narrativeEvents = displayJournal
+          .where(
+            (item) =>
+                item.type == ProcessJournalEventType.narrativeCommit ||
+                item.type == ProcessJournalEventType.liveCursor ||
+                item.type == ProcessJournalEventType.sourceUpdate,
+          )
+          .toList(growable: false);
+      expect(narrativeEvents, isNotEmpty);
+      for (final event in narrativeEvents) {
+        expect(event.reasonShort, isNotEmpty, reason: '过程事件应提供短理由');
+        expect(event.actionCode, isNotEmpty, reason: '过程事件应提供 actionCode');
+        expect(event.reasonCode, isNotEmpty, reason: '过程事件应提供 reasonCode');
+        expect(event.source, isNotEmpty, reason: '过程事件应提供 source');
+        expect(event.displayMessage, isNot(contains('我先帮你把')));
+        expect(event.displayMessage, isNot(contains('收一收')));
+        expect(event.displayMessage, isNot(contains('你更像是想知道')));
+        expect(event.displayMessage, isNot(contains('我先替你')));
+      }
+
+      expect(firstResponse.displayMarkdownV1, contains('九寨沟方向备选方案'));
+      expect(firstResponse.displayMarkdownV1, isNot(contains('先给你当前最稳的部分')));
+      expect(secondResponse.displayMarkdownV1, contains('土拨鼠观赏时间建议'));
+      expect(secondResponse.displayMarkdownV1, contains('草甸返青后的稳定天气窗口'));
+      expect(secondResponse.displayMarkdownV1, isNot(contains('先给你当前最稳的部分')));
+      expect(secondResponse.displayMarkdownV1, isNot(contains('contractVersion')));
+      expect(secondResponse.displayMarkdownV1, isNot(contains('<tool_call>')));
+      expect(secondResponse.displayPlainTextV1, contains('草甸返青后的稳定天气窗口'));
+      expect(secondResponse.displayPlainTextV1, isNot(contains('用户在继续追问旅行安排')));
+      expect(secondResponse.displayPlainTextV1, isNot(contains('queryTasks')));
     });
 
     test('onDelta 流式思考被正确传递和记录', () async {
@@ -852,6 +1491,47 @@ void main() {
         equals('understanding'),
         reason: '第一轮思考应标记为 understanding 阶段',
       );
+    });
+
+    test('uiUsageStatsV1 使用 usage ledger 统计真实模型调用与 token', () async {
+      final usageLlm = _UsageLedgerWeatherLlm();
+      final usageSearch = _FakeWeatherSearchTool();
+      final usageLoop = PersonalAssistantAgentLoop(
+        ReactRuntime(
+          llmProvider: usageLlm,
+          toolRegistry: AssistantToolRegistry()..register(usageSearch),
+        ),
+        sessionManager: AssistantSessionManager(
+          storagePath: '${tempDir.path}/usage_sessions.json',
+        ),
+        memoryRepository: AssistantMemoryRepository(
+          ObjectBoxVectorStore(storagePath: '${tempDir.path}/usage_memory.json'),
+        ),
+      );
+
+      final response = await usageLoop.run(
+        const AssistantRunRequest(
+          sessionId: 'pipeline_usage_ledger',
+          messages: <AssistantRunMessage>[
+            AssistantRunMessage(role: 'user', content: '深圳天气怎么样'),
+          ],
+        ),
+      );
+
+      final usage =
+          (response.structuredResponse['uiUsageStatsV1'] as Map?)
+              ?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      final usageLedger = (usage['usageLedger'] as List?) ?? const <dynamic>[];
+
+      expect(usage['modelCallCount'], equals(usageLlm.totalCallCount));
+      expect(usage['totalTokens'], equals(usageLlm.totalTokensIssued));
+      expect(usage['tokenSampleCount'], equals(usageLlm.totalCallCount));
+      expect(
+        ((usage['tokenSource'] as String?) ?? '').isNotEmpty,
+        isTrue,
+      );
+      expect(usageLedger.length, equals(usageLlm.totalCallCount));
     });
 
     test('天气搜索失败时生成高质量 fallback 与统一过程摘要', () async {
@@ -986,11 +1666,14 @@ void main() {
       expect(shell['toolBudget'], equals(2));
       expect(shell['variantBudget'], equals(1));
       expect(shell['reflectionBudget'], equals(1));
+      final queryTasks =
+          (adaptiveSearch.lastArguments['queryTasks'] as List?) ?? const <dynamic>[];
       expect(
-        (adaptiveSearch.lastArguments['queryVariants'] as List?)?.length ?? 0,
-        equals(1),
-        reason: '复杂 fallback 允许有限扩搜，但不能无限并发变体',
+        queryTasks.length,
+        equals(2),
+        reason: '复杂 fallback 保留主查询 + 1 条补充方向，形成有限并行批次',
       );
+      expect(adaptiveSearch.lastArguments.containsKey('queryVariants'), isFalse);
     });
 
     test('多 skill 分发时每个 subagent 都带独立 problemClass 并各自收敛', () async {

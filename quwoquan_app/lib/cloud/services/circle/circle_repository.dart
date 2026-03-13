@@ -8,6 +8,20 @@ import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_request_page_
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 
+String? _normalizeCircleFeedType(String? type) {
+  final normalized = (type ?? '').trim().toLowerCase();
+  switch (normalized) {
+    case '':
+      return null;
+    case 'photo':
+      return 'image';
+    case 'note':
+      return 'article';
+    default:
+      return normalized;
+  }
+}
+
 /// Circle 域 Repository（三层模式：Abstract + Mock + Remote）。
 ///
 /// Mock：使用 [CircleMockData]（canonical 字段数据），不发 HTTP。
@@ -43,24 +57,18 @@ abstract class CircleRepository {
     int limit = CloudApiDefaults.pageLimit,
   });
 
-  Future<void> updateMemberRole(
-    String circleId,
-    String userId,
-    String role,
-  );
+  Future<void> updateMemberRole(String circleId, String userId, String role);
 
   Future<List<Map<String, dynamic>>> getCircleFeed(
     String circleId, {
+    String? identity,
+    String? type,
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
     String sort = 'latest',
   });
 
-  Future<void> pinPost(
-    String circleId,
-    String postId, {
-    required bool pinned,
-  });
+  Future<void> pinPost(String circleId, String postId, {required bool pinned});
 
   Future<void> featurePost(
     String circleId,
@@ -196,11 +204,32 @@ class MockCircleRepository implements CircleRepository {
   @override
   Future<List<Map<String, dynamic>>> getCircleFeed(
     String circleId, {
+    String? identity,
+    String? type,
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
     String sort = 'latest',
   }) async {
-    return <Map<String, dynamic>>[];
+    final normalizedType = _normalizeCircleFeedType(type);
+    return CircleMockData.circleFeedItems
+        .where((item) => item['circleId'] == circleId)
+        .where((item) {
+          if (identity != null && identity.isNotEmpty) {
+            if ((item['contentIdentity'] ?? '').toString() != identity) {
+              return false;
+            }
+          }
+          if (normalizedType != null && normalizedType.isNotEmpty) {
+            final itemType = _normalizeCircleFeedType(
+              item['contentType']?.toString() ?? item['type']?.toString(),
+            );
+            return itemType == normalizedType;
+          }
+          return true;
+        })
+        .take(limit)
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList(growable: false);
   }
 
   @override
@@ -301,14 +330,16 @@ class MockCircleRepository implements CircleRepository {
 
 class RemoteCircleRepository implements CircleRepository {
   RemoteCircleRepository({http.Client? client, String? baseUrl})
-      : _client = client ?? http.Client(),
-        _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
+    : _client = client ?? http.Client(),
+      _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
 
   final http.Client _client;
   final String _baseUrl;
 
   Uri _uri(String path, {Map<String, String>? queryParameters}) {
-    return Uri.parse('$_baseUrl$path').replace(queryParameters: queryParameters);
+    return Uri.parse(
+      '$_baseUrl$path',
+    ).replace(queryParameters: queryParameters);
   }
 
   // -- Circles ---------------------------------------------------------------
@@ -329,10 +360,7 @@ class RemoteCircleRepository implements CircleRepository {
     if (cursor != null) query['cursor'] = cursor;
     if (sort != null) query['sort'] = sort;
 
-    final uri = _uri(
-      CircleApiMetadata.listCirclesPath,
-      queryParameters: query,
-    );
+    final uri = _uri(CircleApiMetadata.listCirclesPath, queryParameters: query);
     final resp = await _client.get(
       uri,
       headers: CloudRequestHeaders.forPage(CircleRequestPageIds.listCircles),
@@ -428,7 +456,9 @@ class RemoteCircleRepository implements CircleRepository {
     );
     final resp = await _client.get(
       uri,
-      headers: CloudRequestHeaders.forPage(CircleRequestPageIds.listCircleMembers),
+      headers: CloudRequestHeaders.forPage(
+        CircleRequestPageIds.listCircleMembers,
+      ),
     );
     return _decodeList(resp);
   }
@@ -461,12 +491,19 @@ class RemoteCircleRepository implements CircleRepository {
   @override
   Future<List<Map<String, dynamic>>> getCircleFeed(
     String circleId, {
+    String? identity,
+    String? type,
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
     String sort = 'latest',
   }) async {
     final query = <String, String>{'limit': '$limit', 'sort': sort};
     if (cursor != null) query['cursor'] = cursor;
+    if (identity != null && identity.isNotEmpty) query['identity'] = identity;
+    final normalizedType = _normalizeCircleFeedType(type);
+    if (normalizedType != null && normalizedType.isNotEmpty) {
+      query['type'] = normalizedType;
+    }
 
     final uri = _uri(
       CircleApiMetadata.getCircleFeedPath(circleId: circleId),
@@ -486,10 +523,7 @@ class RemoteCircleRepository implements CircleRepository {
     required bool pinned,
   }) async {
     final uri = _uri(
-      CircleApiMetadata.pinCirclePostPath(
-        circleId: circleId,
-        postId: postId,
-      ),
+      CircleApiMetadata.pinCirclePostPath(circleId: circleId, postId: postId),
     );
     final resp = await _client.patch(
       uri,
@@ -558,7 +592,9 @@ class RemoteCircleRepository implements CircleRepository {
     );
     final resp = await _client.get(
       uri,
-      headers: CloudRequestHeaders.forPage(CircleRequestPageIds.listCircleFiles),
+      headers: CloudRequestHeaders.forPage(
+        CircleRequestPageIds.listCircleFiles,
+      ),
     );
     return _decodeList(resp);
   }
@@ -568,7 +604,9 @@ class RemoteCircleRepository implements CircleRepository {
     String circleId,
     Map<String, dynamic> data,
   ) async {
-    final uri = _uri(CircleApiMetadata.createCircleFilePath(circleId: circleId));
+    final uri = _uri(
+      CircleApiMetadata.createCircleFilePath(circleId: circleId),
+    );
     final resp = await _client.post(
       uri,
       headers: {
@@ -690,7 +728,9 @@ class RemoteCircleRepository implements CircleRepository {
     );
     final resp = await _client.get(
       uri,
-      headers: CloudRequestHeaders.forPage(CircleRequestPageIds.listUserCircles),
+      headers: CloudRequestHeaders.forPage(
+        CircleRequestPageIds.listUserCircles,
+      ),
     );
     return _decodeList(resp);
   }
@@ -699,9 +739,7 @@ class RemoteCircleRepository implements CircleRepository {
 
   void _ensureSuccess(http.Response resp) {
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
-      throw Exception(
-        'Circle API error ${resp.statusCode}: ${resp.body}',
-      );
+      throw Exception('Circle API error ${resp.statusCode}: ${resp.body}');
     }
   }
 

@@ -54,16 +54,17 @@ l2:
               - feature: graph-consistency-repair
   - feature: settings-and-device-token
     l3:
-      - feature: notification-privacy-settings
-        l4:
-          - feature: settings-read-write-contract
-            l5:
-              - feature: settings-audit-guard
+      - feature: appearance-accessibility-settings
       - feature: device-token-register
         l4:
           - feature: device-token-upsert-contract
             l5:
               - feature: duplicate-token-cleanup-guard
+      - feature: notification-privacy-settings
+        l4:
+          - feature: settings-read-write-contract
+            l5:
+              - feature: settings-audit-guard
       - feature: settings-audit
         l4:
           - feature: settings-change-trace-link

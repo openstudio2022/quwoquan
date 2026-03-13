@@ -20,5 +20,9 @@ type UserSetting struct {
 	ContentLanguage               *string   `json:"contentLanguage" db:"content_language"`
 	FeedPreference                *string   `json:"feedPreference" db:"feed_preference"`
 	AssistantEnabled              bool      `json:"assistantEnabled" db:"assistant_enabled"`
+	DefaultThemeMode              string    `json:"defaultThemeMode" db:"default_theme_mode"`
+	DefaultFontSizePreset         string    `json:"defaultFontSizePreset" db:"default_font_size_preset"`
+	AppearanceVersion             int       `json:"appearanceVersion" db:"appearance_version"`
+	AppearanceUpdatedAt           time.Time `json:"appearanceUpdatedAt" db:"appearance_updated_at"`
 	UpdatedAt                     time.Time `json:"updatedAt" db:"updated_at"`
 }

@@ -98,6 +98,34 @@ void main() {
       expect(result.data?['statusCode'], 404);
     });
 
+    test('classifies 429 as rate limited and retryable', () async {
+      final mockClient = MockClient((request) async {
+        return http.Response('Too many requests', 429);
+      });
+      tool = WebFetchTool(client: mockClient);
+      final result = await tool.execute(<String, dynamic>{
+        'url': 'https://example.com/rate-limited',
+      });
+
+      expect(result.success, false);
+      expect(result.errorCode, AssistantErrorCode.rateLimited);
+      expect(result.data?['retryable'], isTrue);
+    });
+
+    test('classifies 503 as transient upstream failure', () async {
+      final mockClient = MockClient((request) async {
+        return http.Response('Service unavailable', 503);
+      });
+      tool = WebFetchTool(client: mockClient);
+      final result = await tool.execute(<String, dynamic>{
+        'url': 'https://example.com/unavailable',
+      });
+
+      expect(result.success, false);
+      expect(result.errorCode, AssistantErrorCode.networkUnavailable);
+      expect(result.data?['retryable'], isTrue);
+    });
+
     test('handles unsupported content type', () async {
       final mockClient = MockClient((request) async {
         return http.Response(

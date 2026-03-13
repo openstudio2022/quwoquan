@@ -22,7 +22,10 @@ void main() {
           'authorNickname': '摄影师',
           'authorAvatarUrl': 'https://example.com/avatar.jpg',
           'coverUrl': 'https://example.com/cover.jpg',
-          'mediaUrls': ['https://example.com/img1.jpg', 'https://example.com/img2.jpg'],
+          'mediaUrls': [
+            'https://example.com/img1.jpg',
+            'https://example.com/img2.jpg',
+          ],
           'width': 1200,
           'height': 800,
           'likeCount': 100,
@@ -37,6 +40,8 @@ void main() {
         expect(dto.authorId, equals('auth1'));
         expect(dto.displayName, equals('摄影师'));
         expect(dto.imageUrls.length, equals(2));
+        expect(dto.identity, equals('work'));
+        expect(dto.displayFormat, equals('image'));
         expect(dto.width, equals(1200));
         expect(dto.height, equals(800));
         expect(dto.likeCount, equals(100));
@@ -62,14 +67,26 @@ void main() {
       test('mock data: all photo entries have width > 0 and height > 0', () {
         for (final raw in ContentMockData.discoveryPhotoData) {
           final dto = PhotoPostDto.fromMap(raw);
-          expect(dto.width, isNotNull,
-              reason: 'postId=${raw['postId']} should have width');
-          expect(dto.height, isNotNull,
-              reason: 'postId=${raw['postId']} should have height');
-          expect(dto.width!, greaterThan(0),
-              reason: 'postId=${raw['postId']} width should be > 0');
-          expect(dto.height!, greaterThan(0),
-              reason: 'postId=${raw['postId']} height should be > 0');
+          expect(
+            dto.width,
+            isNotNull,
+            reason: 'postId=${raw['postId']} should have width',
+          );
+          expect(
+            dto.height,
+            isNotNull,
+            reason: 'postId=${raw['postId']} should have height',
+          );
+          expect(
+            dto.width!,
+            greaterThan(0),
+            reason: 'postId=${raw['postId']} width should be > 0',
+          );
+          expect(
+            dto.height!,
+            greaterThan(0),
+            reason: 'postId=${raw['postId']} height should be > 0',
+          );
         }
       });
     });
@@ -98,6 +115,8 @@ void main() {
         expect(dto.type, equals('video'));
         expect(dto.videoUrl, equals('https://example.com/video.mp4'));
         expect(dto.thumbnailUrl, equals('https://example.com/thumb.jpg'));
+        expect(dto.identity, equals('work'));
+        expect(dto.displayFormat, equals('video'));
         expect(dto.width, equals(1080));
         expect(dto.height, equals(1920));
         expect(dto.durationMs, equals(30000));
@@ -125,10 +144,16 @@ void main() {
       test('mock data: all video entries have width > 0 and height > 0', () {
         for (final raw in ContentMockData.discoveryVideoData) {
           final dto = VideoPostDto.fromMap(raw);
-          expect(dto.width, isNotNull,
-              reason: 'postId=${raw['postId']} should have width');
-          expect(dto.height, isNotNull,
-              reason: 'postId=${raw['postId']} should have height');
+          expect(
+            dto.width,
+            isNotNull,
+            reason: 'postId=${raw['postId']} should have width',
+          );
+          expect(
+            dto.height,
+            isNotNull,
+            reason: 'postId=${raw['postId']} should have height',
+          );
           expect(dto.width!, greaterThan(0));
           expect(dto.height!, greaterThan(0));
         }
@@ -155,6 +180,8 @@ void main() {
         final dto = ArticlePostDto.fromMap(raw);
         expect(dto.id, equals('art1'));
         expect(dto.type, equals('article'));
+        expect(dto.identity, equals('work'));
+        expect(dto.displayFormat, equals('note'));
         expect(dto.title, equals('2026年AI趋势'));
         expect(dto.body, equals('文章摘要内容'));
         expect(dto.coverUrl, equals('https://example.com/cover3.jpg'));
@@ -163,8 +190,11 @@ void main() {
       test('mock article data: title non-empty', () {
         for (final raw in ContentMockData.discoveryArticleData) {
           final dto = ArticlePostDto.fromMap(raw);
-          expect(dto.title, isNotEmpty,
-              reason: 'postId=${raw['postId']} should have non-empty title');
+          expect(
+            dto.title,
+            isNotEmpty,
+            reason: 'postId=${raw['postId']} should have non-empty title',
+          );
         }
       });
     });
@@ -183,6 +213,8 @@ void main() {
         final dto = MomentPostDto.fromMap(raw);
         expect(dto.id, equals('m1'));
         expect(dto.type, equals('micro'));
+        expect(dto.identity, equals('moment'));
+        expect(dto.displayFormat, equals('note'));
         expect(dto.body, equals('一条微趣文字'));
         expect(dto.imageUrls, isEmpty);
         expect(dto.videoUrl, isNull);
@@ -198,11 +230,15 @@ void main() {
           'displayName': '用户B',
           'authorAvatarUrl': '',
           'body': '图文微趣',
-          'mediaUrls': ['https://example.com/img1.jpg', 'https://example.com/img2.jpg'],
+          'mediaUrls': [
+            'https://example.com/img1.jpg',
+            'https://example.com/img2.jpg',
+          ],
           'publishedAt': '2026-01-13T08:00:00Z',
         };
         final dto = MomentPostDto.fromMap(raw);
         expect(dto.imageUrls.length, equals(2));
+        expect(dto.displayFormat, equals('image'));
         expect(dto.hasImages, isTrue);
         expect(dto.hasVideo, isFalse);
       });
@@ -222,28 +258,47 @@ void main() {
         final dto = MomentPostDto.fromMap(raw);
         expect(dto.videoUrl, equals('https://example.com/video.mp4'));
         expect(dto.durationMs, equals(15000));
+        expect(dto.displayFormat, equals('video'));
         expect(dto.hasVideo, isTrue);
       });
     });
 
     group('PostBaseDto polymorphism & postBaseDtoFromMap dispatch', () {
       test('dispatches image contentType to PhotoPostDto', () {
-        final dto = postBaseDtoFromMap({'postId': 'x', 'contentType': 'image', 'publishedAt': '2025-01-01T00:00:00Z'});
+        final dto = postBaseDtoFromMap({
+          'postId': 'x',
+          'contentType': 'image',
+          'publishedAt': '2025-01-01T00:00:00Z',
+        });
         expect(dto, isA<PhotoPostDto>());
       });
 
       test('dispatches video contentType to VideoPostDto', () {
-        final dto = postBaseDtoFromMap({'postId': 'x', 'contentType': 'video', 'videoUrl': '', 'thumbnailUrl': '', 'publishedAt': '2025-01-01T00:00:00Z'});
+        final dto = postBaseDtoFromMap({
+          'postId': 'x',
+          'contentType': 'video',
+          'videoUrl': '',
+          'thumbnailUrl': '',
+          'publishedAt': '2025-01-01T00:00:00Z',
+        });
         expect(dto, isA<VideoPostDto>());
       });
 
       test('dispatches article contentType to ArticlePostDto', () {
-        final dto = postBaseDtoFromMap({'postId': 'x', 'contentType': 'article', 'publishedAt': '2025-01-01T00:00:00Z'});
+        final dto = postBaseDtoFromMap({
+          'postId': 'x',
+          'contentType': 'article',
+          'publishedAt': '2025-01-01T00:00:00Z',
+        });
         expect(dto, isA<ArticlePostDto>());
       });
 
       test('dispatches micro contentType to MomentPostDto', () {
-        final dto = postBaseDtoFromMap({'postId': 'x', 'contentType': 'micro', 'publishedAt': '2025-01-01T00:00:00Z'});
+        final dto = postBaseDtoFromMap({
+          'postId': 'x',
+          'contentType': 'micro',
+          'publishedAt': '2025-01-01T00:00:00Z',
+        });
         expect(dto, isA<MomentPostDto>());
       });
 
@@ -262,14 +317,28 @@ void main() {
         final moments = dtos.whereType<MomentPostDto>().toList();
         final articles = dtos.whereType<ArticlePostDto>().toList();
 
-        expect(photos.length, equals(ContentMockData.discoveryPhotoData.length));
-        expect(videos.length, equals(ContentMockData.discoveryVideoData.length));
-        expect(moments.length, equals(ContentMockData.discoveryMomentData.length));
-        expect(articles.length, equals(ContentMockData.discoveryArticleData.length));
+        expect(
+          photos.length,
+          equals(ContentMockData.discoveryPhotoData.length),
+        );
+        expect(
+          videos.length,
+          equals(ContentMockData.discoveryVideoData.length),
+        );
+        expect(
+          moments.length,
+          equals(ContentMockData.discoveryMomentData.length),
+        );
+        expect(
+          articles.length,
+          equals(ContentMockData.discoveryArticleData.length),
+        );
       });
 
       test('base fields accessible via PostBaseDto interface', () {
-        final dtos = ContentMockData.discoveryPhotoData.map(postBaseDtoFromMap).toList();
+        final dtos = ContentMockData.discoveryPhotoData
+            .map(postBaseDtoFromMap)
+            .toList();
         for (final dto in dtos) {
           expect(dto.id, isNotEmpty);
           expect(dto.authorId, isNotEmpty);
@@ -283,22 +352,25 @@ void main() {
   // 兼容性契约：旧字段名/alias 仍正确解析；round-trip 稳定
   // ──────────────────────────────────────────────────────────────────
   group('PostDto — 兼容性契约', () {
-    test('PhotoPostDto: alias imageWidth/imageHeight alternate field names', () {
-      const raw = <String, dynamic>{
-        'postId': 'p4',
-        'contentType': 'image',
-        'authorId': 'a',
-        'displayName': 'A',
-        'authorAvatarUrl': '',
-        'coverUrl': '',
-        'imageWidth': 800,
-        'imageHeight': 600,
-        'publishedAt': '2025-01-01T00:00:00Z',
-      };
-      final dto = PhotoPostDto.fromMap(raw);
-      expect(dto.width, equals(800));
-      expect(dto.height, equals(600));
-    });
+    test(
+      'PhotoPostDto: alias imageWidth/imageHeight alternate field names',
+      () {
+        const raw = <String, dynamic>{
+          'postId': 'p4',
+          'contentType': 'image',
+          'authorId': 'a',
+          'displayName': 'A',
+          'authorAvatarUrl': '',
+          'coverUrl': '',
+          'imageWidth': 800,
+          'imageHeight': 600,
+          'publishedAt': '2025-01-01T00:00:00Z',
+        };
+        final dto = PhotoPostDto.fromMap(raw);
+        expect(dto.width, equals(800));
+        expect(dto.height, equals(600));
+      },
+    );
 
     test('PhotoPostDto: toMap round-trip preserves width/height', () {
       const raw = <String, dynamic>{
@@ -337,26 +409,33 @@ void main() {
       expect(updated.id, equals(original.id));
     });
 
-    test('VideoPostDto: alias videoWidth/videoHeight alternate field names', () {
-      const raw = <String, dynamic>{
-        'postId': 'v3',
-        'contentType': 'video',
-        'authorId': 'a',
-        'displayName': 'A',
-        'authorAvatarUrl': '',
-        'videoUrl': '',
-        'thumbnailUrl': '',
-        'videoWidth': 1920,
-        'videoHeight': 1080,
-        'publishedAt': '2026-01-01T00:00:00Z',
-      };
-      final dto = VideoPostDto.fromMap(raw);
-      expect(dto.width, equals(1920));
-      expect(dto.height, equals(1080));
-    });
+    test(
+      'VideoPostDto: alias videoWidth/videoHeight alternate field names',
+      () {
+        const raw = <String, dynamic>{
+          'postId': 'v3',
+          'contentType': 'video',
+          'authorId': 'a',
+          'displayName': 'A',
+          'authorAvatarUrl': '',
+          'videoUrl': '',
+          'thumbnailUrl': '',
+          'videoWidth': 1920,
+          'videoHeight': 1080,
+          'publishedAt': '2026-01-01T00:00:00Z',
+        };
+        final dto = VideoPostDto.fromMap(raw);
+        expect(dto.width, equals(1920));
+        expect(dto.height, equals(1080));
+      },
+    );
 
     test('PostBaseDto: dispatches photo contentType alias to PhotoPostDto', () {
-      final dto = postBaseDtoFromMap({'postId': 'x', 'contentType': 'photo', 'publishedAt': '2025-01-01T00:00:00Z'});
+      final dto = postBaseDtoFromMap({
+        'postId': 'x',
+        'contentType': 'photo',
+        'publishedAt': '2025-01-01T00:00:00Z',
+      });
       expect(dto, isA<PhotoPostDto>());
     });
   });
@@ -381,41 +460,54 @@ void main() {
       expect(dto.aspectRatio, isNull);
     });
 
-    test('PhotoPostDto: all fields missing → fromMap returns object without crash', () {
-      expect(() => PhotoPostDto.fromMap(const {}), returnsNormally);
-      final dto = PhotoPostDto.fromMap(const {});
-      expect(dto.id, isEmpty);
-      expect(dto.width, isNull);
-      expect(dto.aspectRatio, isNull);
-    });
+    test(
+      'PhotoPostDto: all fields missing → fromMap returns object without crash',
+      () {
+        expect(() => PhotoPostDto.fromMap(const {}), returnsNormally);
+        final dto = PhotoPostDto.fromMap(const {});
+        expect(dto.id, isEmpty);
+        expect(dto.width, isNull);
+        expect(dto.aspectRatio, isNull);
+      },
+    );
 
-    test('VideoPostDto: all fields missing → fromMap returns object without crash', () {
-      expect(() => VideoPostDto.fromMap(const {}), returnsNormally);
-      final dto = VideoPostDto.fromMap(const {});
-      expect(dto.durationMs, isNull);
-      expect(dto.aspectRatio, isNull);
-    });
+    test(
+      'VideoPostDto: all fields missing → fromMap returns object without crash',
+      () {
+        expect(() => VideoPostDto.fromMap(const {}), returnsNormally);
+        final dto = VideoPostDto.fromMap(const {});
+        expect(dto.durationMs, isNull);
+        expect(dto.aspectRatio, isNull);
+      },
+    );
 
-    test('MomentPostDto: no images or video → hasImages and hasVideo are false', () {
-      const raw = <String, dynamic>{
-        'postId': 'mx',
-        'contentType': 'micro',
-        'authorId': 'u',
-        'displayName': 'U',
-        'authorAvatarUrl': '',
-        'body': '纯文字',
-        'publishedAt': '2026-01-01T00:00:00Z',
-      };
-      final dto = MomentPostDto.fromMap(raw);
-      expect(dto.hasImages, isFalse);
-      expect(dto.hasVideo, isFalse);
-      expect(dto.imageUrls, isEmpty);
-      expect(dto.videoUrl, isNull);
-    });
+    test(
+      'MomentPostDto: no images or video → hasImages and hasVideo are false',
+      () {
+        const raw = <String, dynamic>{
+          'postId': 'mx',
+          'contentType': 'micro',
+          'authorId': 'u',
+          'displayName': 'U',
+          'authorAvatarUrl': '',
+          'body': '纯文字',
+          'publishedAt': '2026-01-01T00:00:00Z',
+        };
+        final dto = MomentPostDto.fromMap(raw);
+        expect(dto.hasImages, isFalse);
+        expect(dto.hasVideo, isFalse);
+        expect(dto.imageUrls, isEmpty);
+        expect(dto.videoUrl, isNull);
+      },
+    );
 
     test('postBaseDtoFromMap: unknown contentType falls back gracefully', () {
       expect(
-        () => postBaseDtoFromMap({'postId': 'x', 'contentType': 'unknown_type', 'publishedAt': '2025-01-01T00:00:00Z'}),
+        () => postBaseDtoFromMap({
+          'postId': 'x',
+          'contentType': 'unknown_type',
+          'publishedAt': '2025-01-01T00:00:00Z',
+        }),
         returnsNormally,
       );
     });

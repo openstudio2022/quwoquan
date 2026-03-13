@@ -1,3 +1,4 @@
+import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/profile_update_proposal.dart';
 
@@ -21,6 +22,23 @@ class AssistantRunResponse {
   final String? errorCode;
   final Map<String, dynamic> structuredResponse;
   final ProfileUpdateProposal? profileUpdateProposal;
+
+  RunArtifacts? get runArtifactsV1 {
+    final raw =
+        (structuredResponse['runArtifactsV1'] as Map?)?.cast<String, dynamic>();
+    if (raw == null) return null;
+    return RunArtifacts.fromJson(raw);
+  }
+
+  String get machineEnvelopeV1 {
+    final raw = runArtifactsV1?.machineEnvelope.trim() ?? '';
+    return raw.isNotEmpty ? raw : finalText;
+  }
+
+  String get displayMarkdownV1 => runArtifactsV1?.displayMarkdown.trim() ?? '';
+
+  String get displayPlainTextV1 =>
+      runArtifactsV1?.displayPlainText.trim() ?? '';
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{

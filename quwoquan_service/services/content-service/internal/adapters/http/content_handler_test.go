@@ -196,6 +196,17 @@ func TestPostImmutableAfterPublish(t *testing.T) {
 	var created map[string]any
 	_ = json.Unmarshal(createRec.Body.Bytes(), &created)
 	postID, _ := created["_id"].(string)
+	publishReq := httptest.NewRequest(
+		"POST",
+		"/v1/content/posts/"+postID+"/publish",
+		bytes.NewBufferString(`{}`),
+	)
+	publishReq.Header.Set("X-Client-User-Id", "u1")
+	publishRec := httptest.NewRecorder()
+	handler.ServeHTTP(publishRec, publishReq)
+	if publishRec.Code != http.StatusOK {
+		t.Fatalf("unexpected publish status: %d", publishRec.Code)
+	}
 
 	updateReq := httptest.NewRequest(
 		"PATCH",

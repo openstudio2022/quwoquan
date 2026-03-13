@@ -6,6 +6,8 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart'
 class ArticlePostDto extends PostBaseDto {
   @override final String id;
   @override final String type;
+  @override final String identity;
+  @override final String assistantUsePolicy;
   @override final String authorId;
   @override final String displayName;
   @override final String avatarUrl;
@@ -22,6 +24,8 @@ class ArticlePostDto extends PostBaseDto {
   const ArticlePostDto({
     required this.id,
     required this.type,
+    required this.identity,
+    required this.assistantUsePolicy,
     required this.authorId,
     required this.displayName,
     required this.avatarUrl,
@@ -40,6 +44,8 @@ class ArticlePostDto extends PostBaseDto {
     return ArticlePostDto(
       id: m['postId']?.toString() ?? m['_id']?.toString() ?? '',
       type: m['contentType']?.toString() ?? m['category']?.toString() ?? 'article',
+      identity: m['contentIdentity']?.toString() ?? m['identity']?.toString() ?? 'work',
+      assistantUsePolicy: m['assistantUsePolicy']?.toString() ?? 'inherit',
       authorId: m['authorId']?.toString() ?? m['userId']?.toString() ?? m['author_id']?.toString() ?? '',
       displayName: m['authorNickname']?.toString() ?? m['nickname']?.toString() ?? m['username']?.toString() ?? m['displayName']?.toString() ?? '',
       avatarUrl: m['authorAvatarUrl']?.toString() ?? m['avatarUrl']?.toString() ?? m['avatar']?.toString() ?? '',
@@ -60,6 +66,8 @@ class ArticlePostDto extends PostBaseDto {
     return <String, dynamic>{
       'id': id,
       'type': type,
+      'identity': identity,
+      'assistantUsePolicy': assistantUsePolicy,
       'authorId': authorId,
       'displayName': displayName,
       'avatarUrl': avatarUrl,
@@ -78,6 +86,8 @@ class ArticlePostDto extends PostBaseDto {
   ArticlePostDto copyWith({
     String? id,
     String? type,
+    String? identity,
+    String? assistantUsePolicy,
     String? authorId,
     String? displayName,
     String? avatarUrl,
@@ -94,6 +104,8 @@ class ArticlePostDto extends PostBaseDto {
     return ArticlePostDto(
       id: id ?? this.id,
       type: type ?? this.type,
+      identity: identity ?? this.identity,
+      assistantUsePolicy: assistantUsePolicy ?? this.assistantUsePolicy,
       authorId: authorId ?? this.authorId,
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
@@ -107,6 +119,11 @@ class ArticlePostDto extends PostBaseDto {
       shareCount: shareCount ?? this.shareCount,
       createdAt: createdAt ?? this.createdAt,
     );
+  }
+
+  /// 展示格式。作品态 article 在 UI 术语上统一映射为 note。
+  String get displayFormat {
+    return 'note';
   }
 }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
 
 /// Helper that wraps a [ChatMessageBubble] inside a minimal widget tree
@@ -132,12 +133,12 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
 
     expect(
-      find.textContaining('已完成'),
+      find.textContaining(UITextConstants.assistantPhaseCompleted),
       findsOneWidget,
-      reason: '过程抽屉头部应显示「已完成」阶段标签',
+      reason: '过程抽屉头部应显示新的完成态标签',
     );
 
-    await tester.tap(find.textContaining('已完成'));
+    await tester.tap(find.textContaining(UITextConstants.assistantPhaseCompleted));
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(
@@ -195,15 +196,21 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(
-      find.textContaining('已核对 2 个来源'),
+      find.textContaining(UITextConstants.assistantPhaseCompleted),
       findsOneWidget,
-      reason: '应优先从 uiProcessTimelineV2 恢复完成态摘要',
+      reason: 'timeline v2 恢复后头部应显示完成态标签',
     );
 
-    await tester.tap(find.textContaining('已核对 2 个来源').first);
+    await tester.tap(find.textContaining(UITextConstants.assistantPhaseCompleted));
     await tester.pump(const Duration(milliseconds: 300));
 
-    await tester.tap(find.textContaining('已核对 2 个来源').last);
+    expect(
+      find.textContaining('已核对 2 个来源'),
+      findsOneWidget,
+      reason: '展开后应恢复 timeline v2 的摘要文本',
+    );
+
+    await tester.tap(find.textContaining('已核对 2 个来源'));
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(
@@ -211,6 +218,107 @@ void main() {
       findsOneWidget,
       reason: 'timeline v2 中的来源应可展开显示',
     );
+  });
+
+  testWidgets('助理过程抽屉可直接从 processJournalV1 恢复', (tester) async {
+    final message = _assistantMessage(
+      id: 'assistant_msg_process_journal_v1',
+      content: '深圳天气晴朗',
+      extra: {
+        'processJournalV1': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'eventId': 'stage_set::understanding',
+            'type': 'stage_set',
+            'stage': 'understanding',
+            'nodeId': 'stage.understanding',
+            'message': '',
+            'references': const <Map<String, dynamic>>[],
+            'payload': const <String, dynamic>{},
+          },
+          <String, dynamic>{
+            'eventId': 'narrative_0',
+            'type': 'narrative_commit',
+            'stage': 'understanding',
+            'nodeId': 'root.intent.plan',
+            'message': '我先确认你最想拿到的是实时天气还是出门建议。',
+            'references': const <Map<String, dynamic>>[],
+            'payload': const <String, dynamic>{'stage': 'understanding'},
+          },
+          <String, dynamic>{
+            'eventId': 'source_update::searching::skill.web.result',
+            'type': 'source_update',
+            'stage': 'searching',
+            'nodeId': 'skill.web.result',
+            'message': '已核对 2 个天气来源，正在整理可直接参考的结论。',
+            'references': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'title': '中国气象局',
+                'url': 'https://weather.cma.cn/shenzhen',
+                'source': 'weather.cma.cn',
+              },
+            ],
+            'payload': const <String, dynamic>{'stage': 'searching'},
+          },
+        ],
+      },
+    );
+    await tester.pumpWidget(_bubbleHarness(message));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(
+      find.textContaining(UITextConstants.assistantPhaseCompleted),
+      findsOneWidget,
+      reason: '仅有 processJournalV1 时也应恢复完成态过程抽屉',
+    );
+
+    await tester.tap(find.textContaining(UITextConstants.assistantPhaseCompleted));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.textContaining('已核对 2 个天气来源'), findsOneWidget);
+
+    await tester.tap(find.textContaining('已核对 2 个天气来源'));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.textContaining('中国气象局'), findsOneWidget);
+  });
+
+  testWidgets('processJournalV1 恢复时优先显示 reasonShort 而不是脏 message', (
+    tester,
+  ) async {
+    final message = _assistantMessage(
+      id: 'assistant_msg_process_reason_short',
+      content: '最终回答',
+      extra: {
+        'processJournalV1': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'eventId': 'narrative_reason_short_0',
+            'type': 'narrative_commit',
+            'stage': 'understanding',
+            'phaseId': 'understanding',
+            'actionCode': 'frame_problem',
+            'reasonCode': 'align_goal',
+            'reasonShort': '先确认问题落点，后面的资料才更容易收敛。',
+            'source': 'trace_translator',
+            'nodeId': 'root.intent.plan',
+            'message': '{"contractVersion":"assistant_turn_v4","queryTasks":[1]}',
+            'references': const <Map<String, dynamic>>[],
+            'payload': const <String, dynamic>{
+              'stage': 'understanding',
+              'phaseId': 'understanding',
+            },
+          },
+        ],
+      },
+    );
+    await tester.pumpWidget(_bubbleHarness(message));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    await tester.tap(find.textContaining(UITextConstants.assistantPhaseCompleted));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.textContaining('先确认问题落点'), findsOneWidget);
+    expect(find.textContaining('contractVersion'), findsNothing);
+    expect(find.textContaining('queryTasks'), findsNothing);
   });
 
   testWidgets('多 skill timeline 可同时恢复 root/skill/aggregation 过程', (
@@ -257,11 +365,12 @@ void main() {
     await tester.pumpWidget(_bubbleHarness(message));
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.textContaining('已汇总成最终建议'), findsOneWidget);
+    expect(find.textContaining(UITextConstants.assistantPhaseCompleted), findsOneWidget);
 
-    await tester.tap(find.textContaining('已汇总成最终建议'));
+    await tester.tap(find.textContaining(UITextConstants.assistantPhaseCompleted));
     await tester.pump(const Duration(milliseconds: 300));
 
+    expect(find.textContaining('已汇总成最终建议'), findsOneWidget);
     expect(find.textContaining('天气部分已核对完成'), findsOneWidget);
     expect(find.textContaining('出游部分已补充'), findsOneWidget);
   });

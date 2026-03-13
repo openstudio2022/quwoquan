@@ -48,6 +48,8 @@ const (
 	RouteListCommentsForPostAuthorPath   = "/v1/content/users/me/received-comments"
 	RouteListUserPostsMethod             = "GET"
 	RouteListUserPostsPath               = "/v1/users/{userId}/posts"
+	RoutePromotePostToWorkMethod         = "POST"
+	RoutePromotePostToWorkPath           = "/v1/content/posts/{postId}:promoteToWork"
 	RoutePublishPostMethod               = "POST"
 	RoutePublishPostPath                 = "/v1/content/posts/{postId}/publish"
 	RouteQuoteToCircleMethod             = "POST"
@@ -70,6 +72,8 @@ const (
 	RouteUpdatePostPath                  = "/v1/content/posts/{postId}"
 	RouteUpdatePostCirclesMethod         = "PATCH"
 	RouteUpdatePostCirclesPath           = "/v1/content/posts/{postId}/circles"
+	RouteUpdatePostSettingsMethod        = "PATCH"
+	RouteUpdatePostSettingsPath          = "/v1/content/posts/{postId}/settings"
 	OrchestratorDiscoveryFeedPath        = "/v1/orch/discovery/feed"
 )
 

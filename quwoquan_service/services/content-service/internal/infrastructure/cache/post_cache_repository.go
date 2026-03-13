@@ -72,6 +72,10 @@ func (c *PostCacheRepository) FindByID(ctx context.Context, id string) (*postmod
 	return post, true
 }
 
+func (c *PostCacheRepository) ListAll(ctx context.Context) []postmodel.Post {
+	return c.inner.ListAll(ctx)
+}
+
 func (c *PostCacheRepository) ListPublished(ctx context.Context, limit int, cursor string) []postmodel.Post {
 	return c.inner.ListPublished(ctx, limit, cursor)
 }

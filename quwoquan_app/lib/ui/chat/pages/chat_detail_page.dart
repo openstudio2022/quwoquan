@@ -26,12 +26,15 @@ import 'package:quwoquan_app/cloud/services/user/relationship_capability_reposit
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/personal_assistant/app/assistant_engine_provider.dart';
 import 'package:quwoquan_app/personal_assistant/app/capability_gateway.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/explainable_flow_event.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/user_events.dart';
 import 'package:quwoquan_app/personal_assistant/engine/llm_provider.dart';
 import 'package:quwoquan_app/personal_assistant/engine/llm_response_parser.dart';
+import 'package:quwoquan_app/personal_assistant/engine/process_journal_bus.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/assistant_content_filters.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/run_response.dart';
@@ -44,6 +47,7 @@ import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_chat_settings_page.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
+import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_manager.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
@@ -113,6 +117,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   /// 当前轮过程状态机展示文案（等待/深度搜索中/深度思考中），由 trace 事件驱动
   String _assistantPhaseLabel = '';
   String? _activeAssistantStreamingMessageId;
+  String _streamingAnswerRawBuffer = '';
+  String _streamingAnswerVisibleBuffer = '';
 
   /// v4: Unified process state for the single-drawer UI.
   AssistantProcessState _currentProcessState = const AssistantProcessState();
@@ -131,6 +137,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   /// Accumulated search references across all tool calls in a single run.
   List<ProcessReference> _collectedSearchRefs = <ProcessReference>[];
   bool _preferStructuredUserEvents = false;
+  bool _preferProcessJournalEvents = false;
+  List<ProcessJournalEvent> _currentProcessJournal = <ProcessJournalEvent>[];
 
   /// Whether the user has scrolled away from the bottom during streaming.
   bool _userScrolledAway = false;
@@ -195,8 +203,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
 
   Future<void> _loadOtherParticipantId(dynamic repo) async {
     try {
-      final currentUserId =
-          ref.read(userDataProvider)?.id ?? '';
+      final currentUserId = ref.read(userDataProvider)?.id ?? '';
       final members = await repo.listMembers(
         conversationId: widget.conversationId,
         limit: 10,
@@ -452,12 +459,19 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     final mapped = messages
         .map((item) {
           final isUser = (item['role'] ?? '').toString() == 'user';
+          final normalizedContent = isUser
+              ? (item['content'] ?? '').toString()
+              : _assistantHistoryContentForModel(item);
+          if (!isUser && normalizedContent.trim().isEmpty) {
+            return null;
+          }
           serial += 1;
           return <String, dynamic>{
+            ...item,
             'id': 'assistant_${sessionId}_$serial',
             'conversationId': widget.conversationId,
             'type': 'text',
-            'content': (item['content'] ?? '').toString(),
+            'content': normalizedContent,
             'senderId': isUser
                 ? 'current_user'
                 : AppConceptConstants.assistantSenderId,
@@ -468,6 +482,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             'isSelf': isUser,
           };
         })
+        .whereType<Map<String, dynamic>>()
         .toList(growable: false);
     final splitIndex = math.max(0, mapped.length - _assistantHistoryPageSize);
     final hiddenHistory = mapped.sublist(0, splitIndex);
@@ -497,7 +512,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   /// 1v1：语音通话 / 视频通话（需同好关系才可见，当前阶段仅在已知对方 ID 时展示）
   /// 群聊：发起语音通话 / 发起视频通话（始终展示）
   List<ChatInputExtraPanelItem> _buildCallPanelItems() {
-    final canCall = _isGroupChat ||
+    final canCall =
+        _isGroupChat ||
         (_otherParticipantId != null &&
             (_relationshipCapability?.canStartVoiceCall == true ||
                 _relationshipCapability?.canStartVideoCall == true));
@@ -570,7 +586,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   Future<void> _simulateIncomingCall(String callType) async {
     final callId = 'debug_incoming_${DateTime.now().millisecondsSinceEpoch}';
     final callerName = _conversationTitle;
-    ref.read(callSessionProvider.notifier).debugSeedIncomingCall(
+    ref
+        .read(callSessionProvider.notifier)
+        .debugSeedIncomingCall(
           callId: callId,
           callerName: callerName,
           callType: callType,
@@ -584,20 +602,22 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     final otherId = _otherParticipantId;
     if (otherId == null || otherId.isEmpty) return;
     try {
-      await ref.read(greetingRepositoryProvider).sendGreeting(
+      await ref
+          .read(greetingRepositoryProvider)
+          .sendGreeting(
             targetSubAccountId: otherId,
             requestMessage: '想和你成为同好，一起聊聊吧',
             source: 'chat',
           );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已发送同好邀请')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已发送同好邀请')));
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('发送失败，请稍后再试')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('发送失败，请稍后再试')));
     }
   }
 
@@ -739,9 +759,10 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       _assistantReferenceCount = referenceCount;
       if (nextPhaseLabel != null &&
           nextPhaseLabel != _currentProcessState.stageLabel) {
+        final stage = _mapLabelToProcessStage(nextPhaseLabel);
         _currentProcessState = _currentProcessState.copyWith(
-          stageLabel: nextPhaseLabel,
-          stage: _mapLabelToProcessStage(nextPhaseLabel),
+          stageLabel: _stageHeaderLabel(stage),
+          stage: stage,
           contentBlocks: List<ProcessContentBlock>.of(_processContentBlocks),
         );
       } else if (thinkingBlockChanged) {
@@ -765,6 +786,357 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       return ProcessStage.answering;
     }
     return ProcessStage.understanding;
+  }
+
+  String _stageHeaderLabel(ProcessStage stage) {
+    switch (stage) {
+      case ProcessStage.understanding:
+        return UITextConstants.assistantPhaseUnderstanding;
+      case ProcessStage.searching:
+        return UITextConstants.assistantPhaseSearching;
+      case ProcessStage.analyzing:
+        return UITextConstants.assistantPhaseAnalyzing;
+      case ProcessStage.answering:
+        return UITextConstants.assistantPhaseAnswering;
+      case ProcessStage.completed:
+        return UITextConstants.assistantPhaseCompleted;
+    }
+  }
+
+  void _syncProcessBlocksToActiveMessage() {
+    final messageId = _activeAssistantStreamingMessageId;
+    if (messageId == null || messageId.isEmpty) return;
+    final index = _messages.indexWhere(
+      (item) => (item['id'] as String?) == messageId,
+    );
+    if (index < 0) return;
+    _messages[index] = <String, dynamic>{
+      ..._messages[index],
+      'uiProcessContentBlocks': _serializeProcessBlocks(_processContentBlocks),
+      'processThinkingText': _streamingThinkingText,
+    };
+  }
+
+  void _resetStreamingAnswerDecoder() {
+    _streamingAnswerRawBuffer = '';
+    _streamingAnswerVisibleBuffer = '';
+  }
+
+  String _extractLenientJsonStringField(String raw, String fieldName) {
+    final key = '"$fieldName"';
+    final fieldIndex = raw.indexOf(key);
+    if (fieldIndex < 0) return '';
+    var cursor = fieldIndex + key.length;
+    while (cursor < raw.length && _isWhitespaceCode(raw.codeUnitAt(cursor))) {
+      cursor += 1;
+    }
+    if (cursor >= raw.length || raw[cursor] != ':') return '';
+    cursor += 1;
+    while (cursor < raw.length && _isWhitespaceCode(raw.codeUnitAt(cursor))) {
+      cursor += 1;
+    }
+    if (cursor >= raw.length || raw[cursor] != '"') return '';
+    cursor += 1;
+    final buffer = StringBuffer();
+    var escaped = false;
+    while (cursor < raw.length) {
+      final ch = raw[cursor];
+      if (escaped) {
+        switch (ch) {
+          case 'n':
+            buffer.write('\n');
+            break;
+          case 'r':
+            buffer.write('\r');
+            break;
+          case 't':
+            buffer.write('\t');
+            break;
+          case '"':
+          case r'\':
+          case '/':
+            buffer.write(ch);
+            break;
+          case 'u':
+            if (cursor + 4 < raw.length) {
+              final hex = raw.substring(cursor + 1, cursor + 5);
+              final codePoint = int.tryParse(hex, radix: 16);
+              if (codePoint != null) {
+                buffer.writeCharCode(codePoint);
+                cursor += 4;
+                break;
+              }
+            }
+            break;
+          default:
+            buffer.write(ch);
+            break;
+        }
+        escaped = false;
+        cursor += 1;
+        continue;
+      }
+      if (ch == r'\') {
+        escaped = true;
+        cursor += 1;
+        continue;
+      }
+      if (ch == '"') {
+        break;
+      }
+      buffer.write(ch);
+      cursor += 1;
+    }
+    return buffer.toString();
+  }
+
+  bool _isWhitespaceCode(int codeUnit) {
+    return codeUnit == 0x20 ||
+        codeUnit == 0x0A ||
+        codeUnit == 0x0D ||
+        codeUnit == 0x09;
+  }
+
+  String _visibleStreamingAnswerChunk(String rawChunk) {
+    final strippedXml = _stripXmlToolCalls(rawChunk).trimRight();
+    if (strippedXml.trim().isEmpty) return '';
+    _streamingAnswerRawBuffer = '$_streamingAnswerRawBuffer$strippedXml';
+    final extractedVisible = _extractLenientJsonStringField(
+      _streamingAnswerRawBuffer,
+      'userMarkdown',
+    );
+    if (extractedVisible.isNotEmpty) {
+      if (!_streamingChunkCanDisplayAnswer(_streamingAnswerRawBuffer)) {
+        return '';
+      }
+      if (extractedVisible.length <= _streamingAnswerVisibleBuffer.length) {
+        return '';
+      }
+      final delta = extractedVisible.substring(
+        _streamingAnswerVisibleBuffer.length,
+      );
+      _streamingAnswerVisibleBuffer = extractedVisible;
+      return delta;
+    }
+    final normalized = strippedXml.trim();
+    if (normalized.startsWith('{') ||
+        normalized.startsWith('[') ||
+        _jsonEnvelopeFragmentRe.hasMatch(normalized) ||
+        _jsonKeyFragmentRe.hasMatch(normalized) ||
+        _jsonSyntaxOnlyRe.hasMatch(normalized)) {
+      return '';
+    }
+    _streamingAnswerVisibleBuffer =
+        '$_streamingAnswerVisibleBuffer$strippedXml';
+    return strippedXml;
+  }
+
+  bool _streamingChunkCanDisplayAnswer(String rawBuffer) {
+    final raw = rawBuffer.trim();
+    if (raw.isEmpty) return false;
+    if (!raw.startsWith('{') && !raw.startsWith('[')) {
+      return !_containsInternalDisplayFragment(raw);
+    }
+    final parsed = LlmResponseParser.parse(raw);
+    if (parsed.ok) {
+      return _parsedEnvelopeCanDisplayAnswer(parsed.json!);
+    }
+    final normalized = raw.replaceAll(RegExp(r'\s+'), '');
+    if (normalized.contains('"nextAction":"ask_user"') ||
+        normalized.contains('"nextAction":"tool_call"') ||
+        normalized.contains('"nextAction":"clarify"') ||
+        normalized.contains('"nextAction":"retry"') ||
+        normalized.contains('"messageKind":"progress"')) {
+      return false;
+    }
+    return normalized.contains('"nextAction":"answer"') ||
+        normalized.contains('"messageKind":"answer"');
+  }
+
+  bool _parsedEnvelopeCanDisplayAnswer(Map<String, dynamic> envelope) {
+    final nextAction = _envelopeNextAction(envelope);
+    final messageKind = _envelopeMessageKind(envelope);
+    if (nextAction.isNotEmpty && nextAction != 'answer') {
+      return false;
+    }
+    if (messageKind == 'progress' ||
+        messageKind == 'tool_call' ||
+        messageKind == 'clarify') {
+      return false;
+    }
+    final userMarkdown = _envelopeUserMarkdown(envelope);
+    if (userMarkdown.isEmpty) return false;
+    return !_containsInternalDisplayFragment(userMarkdown);
+  }
+
+  String _envelopeNextAction(Map<String, dynamic> envelope) {
+    final answerPayload =
+        (envelope['answerPayload'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final decision =
+        (envelope['decision'] as Map?)?.cast<String, dynamic>() ??
+        (answerPayload['decision'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    return (decision['nextAction'] as String?)?.trim() ?? '';
+  }
+
+  String _envelopeMessageKind(Map<String, dynamic> envelope) {
+    final topLevel = (envelope['messageKind'] as String?)?.trim() ?? '';
+    if (topLevel.isNotEmpty) return topLevel;
+    final answerPayload =
+        (envelope['answerPayload'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    return (answerPayload['messageKind'] as String?)?.trim() ?? '';
+  }
+
+  String _envelopeUserMarkdown(Map<String, dynamic> envelope) {
+    final topLevel = (envelope['userMarkdown'] as String?)?.trim() ?? '';
+    if (topLevel.isNotEmpty) return topLevel;
+    final answerPayload =
+        (envelope['answerPayload'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    return (answerPayload['userMarkdown'] as String?)?.trim() ?? '';
+  }
+
+  void _appendStreamingAnswerChunk(String chunk) {
+    if (!mounted) return;
+    final messageId = _activeAssistantStreamingMessageId;
+    if (messageId == null || messageId.isEmpty) return;
+    final value = _visibleStreamingAnswerChunk(chunk);
+
+    if (value.isEmpty) {
+      return;
+    }
+
+    if (_isInternalChunk(value)) return;
+    final now = DateTime.now();
+    final ts = '${now.hour}:${now.minute.toString().padLeft(2, '0')}';
+    setState(() {
+      _ensureMessagesGrowable();
+      final existingIndex = _messages.indexWhere(
+        (item) => (item['id'] as String?) == messageId,
+      );
+      _answerGateOpen = true;
+      if (existingIndex >= 0) {
+        final prev =
+            (_messages[existingIndex]['streamFinalAnswer'] as String?) ?? '';
+        _messages[existingIndex] = <String, dynamic>{
+          ..._messages[existingIndex],
+          'streamFinalAnswer': '$prev$value',
+        };
+      } else {
+        _messages.add(<String, dynamic>{
+          'id': messageId,
+          'conversationId': widget.conversationId,
+          'type': 'text',
+          'content': '',
+          'streamFinalAnswer': value,
+          'senderId': AppConceptConstants.assistantSenderId,
+          'senderName': AppConceptConstants.assistantLabel,
+          'senderAvatar': '',
+          'timestamp': ts,
+          'isRead': true,
+          'isSelf': false,
+          'streaming': true,
+        });
+      }
+    });
+    _autoScrollToBottomIfNeeded();
+  }
+
+  void _resetStreamingAnswer() {
+    if (!mounted) return;
+    _resetStreamingAnswerDecoder();
+    final messageId = _activeAssistantStreamingMessageId;
+    if (messageId == null || messageId.isEmpty) return;
+    setState(() {
+      _ensureMessagesGrowable();
+      final existingIndex = _messages.indexWhere(
+        (item) => (item['id'] as String?) == messageId,
+      );
+      if (existingIndex >= 0) {
+        _messages[existingIndex] = <String, dynamic>{
+          ..._messages[existingIndex],
+          'streamFinalAnswer': '',
+          'content': '',
+        };
+      }
+    });
+  }
+
+  String _reconcileCompletedAnswerText({
+    required String streamedText,
+    required String completedText,
+  }) {
+    final streamed = streamedText.trim();
+    final completed = completedText.trim();
+    if (completed.isEmpty) return streamed;
+    if (streamed.isEmpty) return completed;
+    if (completed == streamed) return completed;
+    if (_containsInternalDisplayFragment(streamed) &&
+        !_containsInternalDisplayFragment(completed)) {
+      return completed;
+    }
+    if (completed.startsWith(streamed)) return completed;
+    if (completed.length >= streamed.length &&
+        !_containsInternalDisplayFragment(completed)) {
+      return completed;
+    }
+    return streamed;
+  }
+
+  bool _containsInternalDisplayFragment(String value) {
+    final text = value.trim();
+    if (text.isEmpty) return false;
+    return _jsonEnvelopeFragmentRe.hasMatch(text) ||
+        _jsonKeyFragmentRe.hasMatch(text) ||
+        text.contains('assistant_turn_v4') ||
+        text.contains('contractVersion') ||
+        text.contains('queryTasks') ||
+        text.contains('machineEnvelope') ||
+        _containsXmlToolCall(text);
+  }
+
+  void _appendThinkingNarrativeBlock(String text, {required bool inline}) {
+    final normalized = text.trim();
+    if (normalized.isEmpty) return;
+    int lastTextIdx = -1;
+    for (int i = _processContentBlocks.length - 1; i >= 0; i--) {
+      if (_processContentBlocks[i].type == ProcessContentBlockType.text) {
+        lastTextIdx = i;
+        break;
+      }
+    }
+    if (inline && lastTextIdx >= 0) {
+      final prev = _processContentBlocks[lastTextIdx].text;
+      final merged = prev.isEmpty ? normalized : '$prev$normalized';
+      _processContentBlocks[lastTextIdx] = ProcessContentBlock(
+        type: ProcessContentBlockType.text,
+        text: merged,
+      );
+    } else {
+      if (lastTextIdx >= 0 &&
+          _processContentBlocks[lastTextIdx].text == normalized) {
+        return;
+      }
+      _processContentBlocks.add(
+        ProcessContentBlock(
+          type: ProcessContentBlockType.text,
+          text: normalized,
+        ),
+      );
+    }
+    _syncProcessBlocksToActiveMessage();
+  }
+
+  void _mergeCollectedSearchRefs(List<ProcessReference> refs) {
+    if (refs.isEmpty) return;
+    final seenUrls = _collectedSearchRefs.map((r) => r.url).toSet();
+    for (final ref in refs) {
+      if (ref.url.isEmpty || seenUrls.contains(ref.url)) continue;
+      _collectedSearchRefs.add(ref);
+      seenUrls.add(ref.url);
+    }
   }
 
   void _consumeUserPhaseEvent(AssistantRunStreamEvent streamEvent) {
@@ -840,10 +1212,12 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     final effectiveLabel = nextPhaseLabel;
     if (effectiveLabel != null && effectiveLabel != _assistantPhaseLabel) {
       setState(() {
-        _assistantPhaseLabel = effectiveLabel;
+        final stage = _mapPhaseToStage(timelinePhaseType);
+        final headerLabel = _stageHeaderLabel(stage);
+        _assistantPhaseLabel = headerLabel;
         _currentProcessState = _currentProcessState.copyWith(
-          stageLabel: effectiveLabel,
-          stage: _mapPhaseToStage(timelinePhaseType),
+          stageLabel: headerLabel,
+          stage: stage,
           isStreaming: phaseType == UserPhaseEventType.answeringDelta,
           contentBlocks: List<ProcessContentBlock>.of(_processContentBlocks),
         );
@@ -863,15 +1237,17 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     final message = _sanitizeTraceDetail(event.message);
     if (message.isEmpty) return;
     final appended = _appendStreamingTimelineV2FromUserEvent(event);
-    final nextStage = switch (event.scope) {
-      UserEventScope.root => ProcessStage.understanding,
-      UserEventScope.skill => ProcessStage.searching,
-      UserEventScope.aggregation =>
-        event.type == UserEventType.processCommit
-            ? ProcessStage.completed
-            : ProcessStage.analyzing,
-      UserEventScope.unknown => _currentProcessState.stage,
-    };
+    final nextStage =
+        _stageFromUserEventPayload(event.payload) ??
+        switch (event.scope) {
+          UserEventScope.root => ProcessStage.understanding,
+          UserEventScope.skill => ProcessStage.searching,
+          UserEventScope.aggregation =>
+            event.type == UserEventType.processCommit
+                ? ProcessStage.completed
+                : ProcessStage.analyzing,
+          UserEventScope.unknown => _currentProcessState.stage,
+        };
     List<Map<String, dynamic>> mergedTimeline = const <Map<String, dynamic>>[];
     if (appended) {
       final activeId = _activeAssistantStreamingMessageId;
@@ -898,17 +1274,42 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           ];
     setState(() {
       _processContentBlocks = List<ProcessContentBlock>.of(blocks);
+      final headerLabel = _stageHeaderLabel(nextStage);
       _currentProcessState = _currentProcessState.copyWith(
         stage: nextStage,
-        stageLabel: nextStage == ProcessStage.completed ? '已完成' : message,
+        stageLabel: headerLabel,
         contentBlocks: List<ProcessContentBlock>.of(blocks),
         isStreaming: nextStage != ProcessStage.completed,
       );
       if (nextStage == ProcessStage.completed) {
         _assistantPhaseLabel = '';
       } else {
-        _assistantPhaseLabel = message;
+        _assistantPhaseLabel = headerLabel;
       }
+    });
+    _autoScrollToBottomIfNeeded();
+  }
+
+  void _consumeProcessJournalEvent(ProcessJournalEvent event) {
+    if (!mounted || !_assistantResponding) return;
+    final updated = _appendStreamingProcessJournalEvent(event);
+    if (!updated) return;
+    final journal = List<ProcessJournalEvent>.of(_currentProcessJournal);
+    final blocks = _processBlocksFromJournal(journal);
+    final stage = event.type == ProcessJournalEventType.completed
+        ? ProcessStage.completed
+        : _stageFromProcessJournal(journal);
+    final headerLabel = _stageHeaderLabel(stage);
+    setState(() {
+      _preferProcessJournalEvents = true;
+      _processContentBlocks = List<ProcessContentBlock>.of(blocks);
+      _currentProcessState = _currentProcessState.copyWith(
+        stage: stage,
+        stageLabel: headerLabel,
+        contentBlocks: List<ProcessContentBlock>.of(blocks),
+        isStreaming: stage != ProcessStage.completed,
+      );
+      _assistantPhaseLabel = stage == ProcessStage.completed ? '' : headerLabel;
     });
     _autoScrollToBottomIfNeeded();
   }
@@ -930,18 +1331,12 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         isSearchTool) {
       final refs = _extractReferencesFromData(data);
       if (refs.isNotEmpty) {
-        final seenUrls = _collectedSearchRefs.map((r) => r.url).toSet();
-        for (final ref in refs) {
-          if (ref.url.isNotEmpty && !seenUrls.contains(ref.url)) {
-            _collectedSearchRefs.add(ref);
-            seenUrls.add(ref.url);
-          }
-        }
+        _mergeCollectedSearchRefs(refs);
         _replaceOrAppendBlock(
           ProcessContentBlockType.searchSummary,
           ProcessContentBlock(
             type: ProcessContentBlockType.searchSummary,
-            text: '搜索了 ${_collectedSearchRefs.length} 篇文档',
+            text: '这一批已核对 ${_collectedSearchRefs.length} 个来源，我先帮你筛掉重复和噪音。',
             references: List<ProcessReference>.of(_collectedSearchRefs),
           ),
         );
@@ -952,7 +1347,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         ProcessContentBlockType.analysisSummary,
         ProcessContentBlock(
           type: ProcessContentBlockType.analysisSummary,
-          text: '分析参考了 ${_collectedSearchRefs.length} 篇文档',
+          text: '我正把 ${_collectedSearchRefs.length} 个来源放在一起对一遍，先收拢最影响结论的部分。',
           references: List<ProcessReference>.of(_collectedSearchRefs),
         ),
       );
@@ -965,6 +1360,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         );
       }
     }
+    _syncProcessBlocksToActiveMessage();
   }
 
   /// Replace the last text block with extracted thinking text, removing
@@ -986,6 +1382,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     } else {
       _processContentBlocks.add(block);
     }
+    _syncProcessBlocksToActiveMessage();
   }
 
   /// Replace the first block of [type] in [_processContentBlocks], or append.
@@ -999,6 +1396,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     } else {
       _processContentBlocks.add(block);
     }
+    _syncProcessBlocksToActiveMessage();
   }
 
   List<ProcessReference> _extractReferencesFromData(
@@ -1028,6 +1426,10 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   List<ProcessContentBlock> _processBlocksFromStructuredResponse(
     Map<String, dynamic> structuredResponse,
   ) {
+    final journal = _journalFromStructuredResponse(structuredResponse);
+    if (journal.isNotEmpty) {
+      return _processBlocksFromJournal(journal);
+    }
     final rawBlocks =
         (structuredResponse['uiProcessContentBlocks'] as List?)
             ?.whereType<Map>()
@@ -1104,12 +1506,238 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   List<Map<String, dynamic>> _timelineV2FromStructuredResponse(
     Map<String, dynamic> structuredResponse,
   ) {
+    final journal = _journalFromStructuredResponse(structuredResponse);
+    if (journal.isNotEmpty) {
+      return _legacyTimelineFromJournal(journal);
+    }
     return _normalizeUiProcessTimelineV2(
       (structuredResponse['uiProcessTimelineV2'] as List?)
               ?.whereType<Map>()
               .toList(growable: false) ??
           const <Map>[],
     );
+  }
+
+  List<ProcessJournalEvent> _journalFromStructuredResponse(
+    Map<String, dynamic> structuredResponse,
+  ) {
+    final artifacts =
+        (structuredResponse['runArtifactsV1'] as Map?)
+            ?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final raw =
+        (artifacts['processJournal'] as List?)?.whereType<Map>().toList(
+          growable: false,
+        ) ??
+        (structuredResponse['processJournalV1'] as List?)
+            ?.whereType<Map>()
+            .toList(growable: false) ??
+        const <Map>[];
+    return _normalizeProcessJournal(raw);
+  }
+
+  List<ProcessJournalEvent> _normalizeProcessJournal(List<Map> raw) {
+    final normalized = <ProcessJournalEvent>[];
+    final indexById = <String, int>{};
+    final indexBySemanticKey = <String, int>{};
+    for (final item in raw) {
+      final event = ProcessJournalEvent.fromJson(item.cast<String, dynamic>());
+      final semanticKey = _processJournalMergeKey(event);
+      final existingIndex =
+          (event.eventId.isNotEmpty ? indexById[event.eventId] : null) ??
+          (semanticKey.isNotEmpty ? indexBySemanticKey[semanticKey] : null);
+      if (existingIndex == null) {
+        if (event.eventId.isNotEmpty) {
+          indexById[event.eventId] = normalized.length;
+        }
+        if (semanticKey.isNotEmpty) {
+          indexBySemanticKey[semanticKey] = normalized.length;
+        }
+        normalized.add(event);
+      } else {
+        normalized[existingIndex] = _preferProcessJournalEvent(
+          normalized[existingIndex],
+          event,
+        );
+      }
+    }
+    return normalized;
+  }
+
+  List<ProcessJournalEvent> _mergeProcessJournalEvents(
+    List<ProcessJournalEvent> existing,
+    List<ProcessJournalEvent> incoming,
+  ) {
+    final merged = List<ProcessJournalEvent>.of(existing);
+    final indexById = <String, int>{
+      for (var i = 0; i < merged.length; i++) merged[i].eventId: i,
+    };
+    final indexBySemanticKey = <String, int>{
+      for (var i = 0; i < merged.length; i++)
+        if (_processJournalMergeKey(merged[i]).isNotEmpty)
+          _processJournalMergeKey(merged[i]): i,
+    };
+    for (final event in incoming) {
+      final semanticKey = _processJournalMergeKey(event);
+      final index =
+          (event.eventId.isNotEmpty ? indexById[event.eventId] : null) ??
+          (semanticKey.isNotEmpty ? indexBySemanticKey[semanticKey] : null);
+      if (index == null) {
+        if (event.eventId.isNotEmpty) {
+          indexById[event.eventId] = merged.length;
+        }
+        if (semanticKey.isNotEmpty) {
+          indexBySemanticKey[semanticKey] = merged.length;
+        }
+        merged.add(event);
+      } else {
+        merged[index] = _preferProcessJournalEvent(merged[index], event);
+      }
+    }
+    return merged;
+  }
+
+  String _processJournalMergeKey(ProcessJournalEvent event) {
+    if (event.type == ProcessJournalEventType.answerDelta) {
+      return '';
+    }
+    return <String>[
+      processJournalEventTypeToWire(event.type),
+      event.phaseId.isNotEmpty ? event.phaseId : event.stage,
+      event.actionCode,
+      event.reasonCode,
+      event.nodeId,
+    ].join('::');
+  }
+
+  ProcessJournalEvent _preferProcessJournalEvent(
+    ProcessJournalEvent existing,
+    ProcessJournalEvent incoming,
+  ) {
+    final incomingRefs = incoming.references.length;
+    final existingRefs = existing.references.length;
+    if (incomingRefs > existingRefs) return incoming;
+    if (incoming.displayMessage.length >= existing.displayMessage.length) {
+      return incoming;
+    }
+    return existing;
+  }
+
+  bool _isLegacyProjectionEventId(String eventId) {
+    return eventId.startsWith('live_cursor::') ||
+        eventId.startsWith('source_update::') ||
+        eventId.startsWith('stage_set::') ||
+        eventId == 'completed.final';
+  }
+
+  List<ProcessJournalEvent> _displayProcessJournalSnapshot(
+    List<ProcessJournalEvent> journal,
+  ) {
+    return ProcessJournalBus.toDisplaySnapshot(journal);
+  }
+
+  List<Map<String, dynamic>> _legacyTimelineFromJournal(
+    List<ProcessJournalEvent> journal,
+  ) {
+    return ProcessJournalBus.toLegacyTimelineEntries(
+      journal,
+    ).map((item) => item.toJson()).toList(growable: false);
+  }
+
+  List<ProcessContentBlock> _processBlocksFromJournal(
+    List<ProcessJournalEvent> journal,
+  ) {
+    final snapshot = _displayProcessJournalSnapshot(journal);
+    final blocks = <ProcessContentBlock>[];
+    for (final item in snapshot) {
+      switch (item.type) {
+        case ProcessJournalEventType.narrativeCommit:
+        case ProcessJournalEventType.liveCursor:
+          final text = item.displayMessage;
+          if (text.isEmpty) continue;
+          blocks.add(
+            ProcessContentBlock(type: ProcessContentBlockType.text, text: text),
+          );
+          break;
+        case ProcessJournalEventType.sourceUpdate:
+          final refs = item.references
+              .map(
+                (ref) => ProcessReference(
+                  title: ref.title,
+                  url: ref.url,
+                  source: ref.source,
+                ),
+              )
+              .where((ref) => ref.title.isNotEmpty && ref.url.isNotEmpty)
+              .toList(growable: false);
+          if (item.displayMessage.isEmpty && refs.isEmpty) continue;
+          blocks.add(
+            ProcessContentBlock(
+              type: item.stage == 'searching'
+                  ? ProcessContentBlockType.searchSummary
+                  : ProcessContentBlockType.analysisSummary,
+              text: item.displayMessage,
+              references: refs,
+            ),
+          );
+          break;
+        case ProcessJournalEventType.stageSet:
+        case ProcessJournalEventType.answerDelta:
+        case ProcessJournalEventType.completed:
+          continue;
+      }
+    }
+    return blocks;
+  }
+
+  ProcessStage _stageFromProcessJournal(List<ProcessJournalEvent> journal) {
+    final snapshot = _displayProcessJournalSnapshot(journal);
+    for (var i = snapshot.length - 1; i >= 0; i--) {
+      final stage = snapshot[i].stage.trim();
+      switch (stage) {
+        case 'completed':
+          return ProcessStage.completed;
+        case 'answering':
+          return ProcessStage.answering;
+        case 'analyzing':
+          return ProcessStage.analyzing;
+        case 'searching':
+          return ProcessStage.searching;
+        case 'understanding':
+          return ProcessStage.understanding;
+      }
+    }
+    return ProcessStage.understanding;
+  }
+
+  bool _appendStreamingProcessJournalEvent(ProcessJournalEvent event) {
+    final messageId = _activeAssistantStreamingMessageId;
+    if (messageId == null || messageId.isEmpty) return false;
+    final index = _messages.indexWhere(
+      (item) => (item['id'] as String?) == messageId,
+    );
+    if (index < 0) return false;
+    final currentJournal = _normalizeProcessJournal(
+      ((_messages[index]['processJournalV1'] as List?)?.whereType<Map>().toList(
+            growable: false,
+          )) ??
+          const <Map>[],
+    );
+    final mergedJournal = _mergeProcessJournalEvents(
+      currentJournal,
+      <ProcessJournalEvent>[event],
+    );
+    _messages[index] = <String, dynamic>{
+      ..._messages[index],
+      'processJournalV1': mergedJournal
+          .map((item) => item.toJson())
+          .toList(growable: false),
+      'uiProcessContentBlocks': _serializeProcessBlocks(
+        _processBlocksFromJournal(mergedJournal),
+      ),
+    };
+    _currentProcessJournal = mergedJournal;
+    return true;
   }
 
   List<ProcessContentBlock> _processBlocksFromTimelineV2(
@@ -1134,10 +1762,14 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           const <ProcessReference>[];
       if (summary.isEmpty && references.isEmpty) continue;
       final scope = (item['scope'] as String?)?.trim() ?? '';
+      final payload =
+          (item['payload'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      final stage = _stageFromUserEventPayload(payload);
       final type = references.isNotEmpty
-          ? (scope == 'aggregation'
-                ? ProcessContentBlockType.analysisSummary
-                : ProcessContentBlockType.searchSummary)
+          ? (stage == ProcessStage.searching || scope == 'skill'
+                ? ProcessContentBlockType.searchSummary
+                : ProcessContentBlockType.analysisSummary)
           : ProcessContentBlockType.text;
       blocks.add(
         ProcessContentBlock(type: type, text: summary, references: references),
@@ -1150,35 +1782,147 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     List<Map<String, dynamic>> streamed,
     List<Map<String, dynamic>> completed,
   ) {
-    final merged = <Map<String, dynamic>>[];
-    final seen = <String>{};
-    for (final item in [...streamed, ...completed]) {
-      final type = (item['type'] ?? '').toString();
-      if (type == 'processReplace') {
-        final scope = (item['scope'] ?? '').toString();
-        final nodeId = (item['nodeId'] ?? '').toString();
-        final runId = (item['runId'] ?? '').toString();
-        merged.removeWhere(
-          (existing) =>
-              (existing['scope'] ?? '').toString() == scope &&
-              (existing['nodeId'] ?? '').toString() == nodeId &&
-              (existing['runId'] ?? '').toString() == runId,
-        );
-        seen.removeWhere(
-          (key) => key.startsWith('$scope::$type::$nodeId::$runId::'),
-        );
+    final merged = streamed
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList(growable: true);
+    final appendKeys = <String>{
+      for (final item in merged.where(
+        (entry) => (entry['type'] as String?) == 'processAppend',
+      ))
+        _timelineAppendKey(item),
+    };
+    for (final raw in completed) {
+      final item = Map<String, dynamic>.from(raw);
+      final type = (item['type'] as String?)?.trim() ?? '';
+      if (type == 'processAppend') {
+        final appendKey = _timelineAppendKey(item);
+        if (appendKeys.contains(appendKey)) continue;
+        appendKeys.add(appendKey);
+        merged.add(item);
+        continue;
       }
-      final semanticKey =
-          '${(item['scope'] ?? '').toString()}::$type::${(item['nodeId'] ?? '').toString()}::${(item['runId'] ?? '').toString()}::${(item['summary'] ?? '').toString()}';
-      final eventId = (item['eventId'] ?? '').toString();
-      final key = type == 'processAppend' && eventId.isNotEmpty
-          ? '$semanticKey::$eventId'
-          : semanticKey;
-      if (seen.contains(key)) continue;
-      merged.add(item);
-      seen.add(key);
+      final nodeKey = _timelineNodeKey(item);
+      if (nodeKey.isEmpty) {
+        merged.add(item);
+        continue;
+      }
+      final existingIndex = merged.indexWhere(
+        (entry) => _timelineNodeKey(entry) == nodeKey,
+      );
+      if (existingIndex < 0) {
+        merged.add(item);
+        continue;
+      }
+      merged[existingIndex] = _mergeTimelineEntry(merged[existingIndex], item);
     }
     return merged;
+  }
+
+  ProcessStage? _stageFromUserEventPayload(Map<String, dynamic> payload) {
+    final raw = (payload['stage'] as String?)?.trim().toLowerCase() ?? '';
+    switch (raw) {
+      case 'understanding':
+        return ProcessStage.understanding;
+      case 'searching':
+        return ProcessStage.searching;
+      case 'analyzing':
+        return ProcessStage.analyzing;
+      case 'answering':
+        return ProcessStage.answering;
+      case 'completed':
+        return ProcessStage.completed;
+      default:
+        return null;
+    }
+  }
+
+  String _timelineNodeKey(Map<String, dynamic> item) {
+    final scope = (item['scope'] as String?)?.trim() ?? '';
+    final nodeId = (item['nodeId'] as String?)?.trim() ?? '';
+    final runId = (item['runId'] as String?)?.trim() ?? '';
+    if (scope.isEmpty && nodeId.isEmpty && runId.isEmpty) return '';
+    return '$scope::$nodeId::$runId';
+  }
+
+  String _timelineAppendKey(Map<String, dynamic> item) {
+    final eventId = (item['eventId'] as String?)?.trim() ?? '';
+    if (eventId.isNotEmpty) return eventId;
+    return '${_timelineNodeKey(item)}::${(item['summary'] as String?)?.trim() ?? ''}';
+  }
+
+  Map<String, dynamic> _mergeTimelineEntry(
+    Map<String, dynamic> existing,
+    Map<String, dynamic> incoming,
+  ) {
+    final existingPayload =
+        (existing['payload'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final incomingPayload =
+        (incoming['payload'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final mergedPayload = <String, dynamic>{
+      ...existingPayload,
+      ...incomingPayload,
+    };
+    return <String, dynamic>{
+      ...existing,
+      ...incoming,
+      'summary': _mergeTimelineSummary(
+        (existing['summary'] as String?)?.trim() ?? '',
+        (incoming['summary'] as String?)?.trim() ?? '',
+        existingPayload,
+        incomingPayload,
+      ),
+      'payload': mergedPayload,
+      'references': _mergeTimelineReferences(existing, incoming),
+    };
+  }
+
+  String _mergeTimelineSummary(
+    String existingSummary,
+    String incomingSummary,
+    Map<String, dynamic> existingPayload,
+    Map<String, dynamic> incomingPayload,
+  ) {
+    final current = existingSummary.trim();
+    final incoming = incomingSummary.trim();
+    if (incoming.isEmpty) return current;
+    if (incomingPayload['streaming'] == true) {
+      if (current.isEmpty) return incoming;
+      if (incoming.startsWith(current)) return incoming;
+      if (current.endsWith(incoming) || current.contains(incoming)) {
+        return current;
+      }
+      final joiner = existingPayload['streaming'] == true ? '' : '\n\n';
+      return '$current$joiner$incoming';
+    }
+    return incoming;
+  }
+
+  List<Map<String, dynamic>> _mergeTimelineReferences(
+    Map<String, dynamic> existing,
+    Map<String, dynamic> incoming,
+  ) {
+    final refs = <Map<String, dynamic>>[];
+    final seenUrls = <String>{};
+    for (final source in <Object?>[
+      existing['references'],
+      incoming['references'],
+    ]) {
+      final list =
+          (source as List?)
+              ?.whereType<Map>()
+              .map((item) => item.cast<String, dynamic>())
+              .toList(growable: false) ??
+          const <Map<String, dynamic>>[];
+      for (final ref in list) {
+        final url = (ref['url'] as String?)?.trim() ?? '';
+        final title = (ref['title'] as String?)?.trim() ?? '';
+        if (url.isEmpty || title.isEmpty || !seenUrls.add(url)) continue;
+        refs.add(ref);
+      }
+    }
+    return refs;
   }
 
   int _usageInt(Object? value) {
@@ -1204,12 +1948,20 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     final currentRunMaxTokens = _usageInt(
       runUsageStats['runMaxTokensPerCall'] ?? runUsageStats['maxTokensPerCall'],
     );
+    final currentRunLedger =
+        (runUsageStats['usageLedger'] as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[];
 
     var prevCalls = 0;
     var prevTokens = 0;
     var prevMaxTokens = 0;
+    final cumulativeLedger = <Map<String, dynamic>>[];
     for (final message in _messages) {
-      if ((message['senderId'] as String?) != AppConceptConstants.assistantSenderId) {
+      if ((message['senderId'] as String?) !=
+          AppConceptConstants.assistantSenderId) {
         continue;
       }
       if (excludeMessageId != null &&
@@ -1229,7 +1981,15 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         usageStats['runMaxTokensPerCall'] ?? usageStats['maxTokensPerCall'],
       );
       if (maxTokens > prevMaxTokens) prevMaxTokens = maxTokens;
+      final messageLedger =
+          ((usageStats['runUsageLedger'] ?? usageStats['usageLedger']) as List?)
+              ?.whereType<Map>()
+              .map((item) => item.cast<String, dynamic>())
+              .toList(growable: false) ??
+          const <Map<String, dynamic>>[];
+      cumulativeLedger.addAll(messageLedger);
     }
+    cumulativeLedger.addAll(currentRunLedger);
 
     final cumulativeCalls = prevCalls + currentRunCalls;
     final cumulativeTokens = prevTokens + currentRunTokens;
@@ -1240,37 +2000,22 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       'runModelCallCount': currentRunCalls,
       'runTotalTokens': currentRunTokens,
       'runMaxTokensPerCall': currentRunMaxTokens,
+      'runUsageLedger': currentRunLedger,
+      'sessionUsageStatsV1': <String, dynamic>{
+        'modelCallCount': cumulativeCalls,
+        'totalTokens': cumulativeTokens,
+        'maxTokensPerCall': cumulativeMaxTokens,
+        'usageLedger': cumulativeLedger,
+      },
       'cumulativeModelCallCount': cumulativeCalls,
       'cumulativeTotalTokens': cumulativeTokens,
       'cumulativeMaxTokensPerCall': cumulativeMaxTokens,
-      // Backward-compatible fields now expose conversation cumulative values.
-      'modelCallCount': cumulativeCalls,
-      'totalTokens': cumulativeTokens,
-      'maxTokensPerCall': cumulativeMaxTokens,
+      'cumulativeUsageLedger': cumulativeLedger,
+      // Backward-compatible fields expose当前轮数据；累计值走 cumulative* 字段。
+      'modelCallCount': currentRunCalls,
+      'totalTokens': currentRunTokens,
+      'maxTokensPerCall': currentRunMaxTokens,
     };
-  }
-
-  String _buildInitialProcessSummary(String query) {
-    final normalized = query.trim();
-    if (normalized.isEmpty) {
-      return '我先理清你这次想解决的问题';
-    }
-    final weatherLike = RegExp(
-      r'(天气|气温|降雨|风力|体感|预报|weather|forecast|temperature|humidity|rain)',
-      caseSensitive: false,
-    ).hasMatch(normalized);
-    if (weatherLike) {
-      final city =
-          RegExp(
-            r'([\u4e00-\u9fa5]{2,8}(?:市|区|县)|[\u4e00-\u9fa5]{2,8})',
-          ).firstMatch(normalized)?.group(1)?.trim() ??
-          '';
-      if (city.isNotEmpty) {
-        return '我先确认$city现在的天气情况';
-      }
-      return '我先确认你想查的实时天气信息';
-    }
-    return '我先理清“$normalized”里最需要优先解决的部分';
   }
 
   bool _appendStreamingTimelineV2FromUserEvent(UserEvent event) {
@@ -1291,8 +2036,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       'type': event.type.name,
       'nodeId': event.nodeId,
       'runId': event.runId,
-      'eventId':
-          '${DateTime.now().microsecondsSinceEpoch}_${currentTimeline.length}',
+      'eventId': _streamingTimelineEventId(event),
       'summary': event.message,
       'payload': event.payload,
       'references': _extractReferencesFromUserEventPayload(event.payload),
@@ -1309,6 +2053,14 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       ),
     };
     return true;
+  }
+
+  String _streamingTimelineEventId(UserEvent event) {
+    final base = '${event.scope.name}::${event.nodeId}::${event.runId}';
+    if (event.type == UserEventType.processAppend) {
+      return '$base::${event.message.trim()}';
+    }
+    return '$base::${event.type.name}';
   }
 
   List<Map<String, dynamic>> _extractReferencesFromUserEventPayload(
@@ -1565,13 +2317,13 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       // TODO: read from ToolMetadataRegistry.userInteractionForTool when available
       switch (toolName) {
         case 'web_search':
-          return '搜索资料';
+          return '替你核对资料';
         case 'local_context':
-          return '获取位置';
+          return '替你确认位置';
         case 'media_gallery':
-          return '浏览相册';
+          return '帮你看相册';
         case 'intent_bridge':
-          return '执行操作';
+          return '替你执行操作';
         default:
           return toolName;
       }
@@ -1579,55 +2331,63 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     // Legacy compatibility
     switch (phaseType) {
       case 'searching':
-        return '搜索资料';
+        return '替你核对资料';
       case 'thinking':
         return UITextConstants.assistantPhaseAnalyzing;
       case 'replan_searching':
-        return '补充搜索';
+        return '再补一处关键信息';
       case 'subagent_running':
-        return '并行研究';
+        return '并行补另一部分信息';
       case 'subagent_done':
-        return '子任务完成';
+        return '并行部分已整理好';
       default:
-        return '处理中';
+        return '继续处理中';
     }
   }
 
   String _phaseSummary(String phaseType) {
     // v3: fixed user-facing phases
-    if (phaseType == 'understanding') return '正在分析您的问题...';
-    if (phaseType == 'analyzing') return '正在分析获取到的信息...';
-    if (phaseType == 'answering') return '正在组织回答...';
-    if (phaseType == 'assessing') return '正在检查信息是否充分...';
+    if (phaseType == 'understanding') {
+      return '我先帮你把问题收一收，确认最该先解决哪一层。';
+    }
+    if (phaseType == 'analyzing') {
+      return '我在对齐几路信息，先把一致和分歧分开。';
+    }
+    if (phaseType == 'answering') {
+      return '关键信息差不多齐了，我在整理成你更容易看的答案。';
+    }
+    if (phaseType == 'assessing') {
+      return '我在看现在的信息够不够稳，不够的话会继续补。';
+    }
     // v3: tool phases
     if (phaseType.startsWith('tool:')) {
       final toolName = phaseType.substring(5).split(':').first;
       switch (toolName) {
         case 'web_search':
-          return '正在搜索相关资料';
+          return '我在查最影响结论的资料，尽量少带回无关信息。';
         case 'local_context':
-          return '正在获取您的位置';
+          return '我先确认位置相关信息，免得建议偏掉。';
         case 'media_gallery':
-          return '正在浏览相册';
+          return '我先看和当前问题直接相关的内容。';
         case 'intent_bridge':
-          return '正在执行操作';
+          return '我正在帮你执行这一步。';
         default:
-          return '正在处理...';
+          return '我正在处理这一部分。';
       }
     }
     // Legacy compatibility
     switch (phaseType) {
       case 'searching':
       case 'replan_searching':
-        return '正在搜索相关资料';
+        return '我在补关键资料，尽量让结论更稳。';
       case 'thinking':
-        return '正在分析与整理信息';
+        return '我在把信息收拢成更清晰的判断。';
       case 'answering':
-        return '正在组织回答';
+        return '我在整理最终回答。';
       case 'subagent_running':
-        return '并行执行子任务';
+        return '我同时补另一块关键信息，尽量不让你久等。';
       case 'subagent_done':
-        return '子任务已完成';
+        return '这部分已经补齐。';
       default:
         return '';
     }
@@ -1729,14 +2489,21 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   }
 
   void _captureThinkingTextFromTrace(AssistantTraceEvent event) {
-    if (!mounted || !_assistantResponding) return;
+    if (!mounted || !_assistantResponding || _preferStructuredUserEvents)
+      return;
     final type = event.type;
 
     if (type == AssistantTraceEventType.thinkingProgress) {
       final cleaned = _sanitizeThinkingText(event.message);
       if (cleaned.isEmpty) return;
-      final isStreamingDelta =
-          (event.data ?? const <String, dynamic>{})['streaming'] == true;
+      final data = event.data ?? const <String, dynamic>{};
+      final isStreamingDelta = data['streaming'] == true;
+      final phase = (data['phase'] as String?) ?? 'understanding';
+      final nextStage = switch (phase) {
+        'analyzing' => ProcessStage.analyzing,
+        'answering' => ProcessStage.answering,
+        _ => ProcessStage.understanding,
+      };
       setState(() {
         if (isStreamingDelta) {
           _streamingThinkingText = '$_streamingThinkingText$cleaned';
@@ -1745,6 +2512,13 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         } else {
           _streamingThinkingText = cleaned;
         }
+        _appendThinkingNarrativeBlock(cleaned, inline: isStreamingDelta);
+        _currentProcessState = _currentProcessState.copyWith(
+          stage: nextStage,
+          stageLabel: _stageHeaderLabel(nextStage),
+          isStreaming: true,
+          contentBlocks: List<ProcessContentBlock>.of(_processContentBlocks),
+        );
       });
       _autoScrollToBottomIfNeeded();
       return;
@@ -1756,11 +2530,23 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       final refs = (data['references'] as List?) ?? const <dynamic>[];
       if (refs.isNotEmpty && refs.length != _streamingThinkingRefCount) {
         _streamingThinkingRefCount = refs.length;
-        final prefix = _streamingThinkingText.isNotEmpty ? '\n' : '';
+        final processRefs = _extractReferencesFromData(data);
         setState(() {
-          _streamingThinkingText =
-              '$_streamingThinkingText$prefix'
-              '\u00b7 找到了 $_streamingThinkingRefCount 篇相关资料';
+          _mergeCollectedSearchRefs(processRefs);
+          _replaceOrAppendBlock(
+            ProcessContentBlockType.searchSummary,
+            ProcessContentBlock(
+              type: ProcessContentBlockType.searchSummary,
+              text: '这一批已核对 ${_collectedSearchRefs.length} 个来源，我先帮你筛掉重复和噪音。',
+              references: List<ProcessReference>.of(_collectedSearchRefs),
+            ),
+          );
+          _currentProcessState = _currentProcessState.copyWith(
+            stage: ProcessStage.searching,
+            stageLabel: _stageHeaderLabel(ProcessStage.searching),
+            isStreaming: true,
+            contentBlocks: List<ProcessContentBlock>.of(_processContentBlocks),
+          );
         });
         _autoScrollToBottomIfNeeded();
       }
@@ -2231,24 +3017,26 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       final streamNow = DateTime.now();
       final streamTs =
           '${streamNow.hour}:${streamNow.minute.toString().padLeft(2, '0')}';
+      _resetStreamingAnswerDecoder();
       setState(() {
         _ensureMessagesGrowable();
         streamingAssistantMessageId =
             'assistant_stream_${DateTime.now().millisecondsSinceEpoch}';
         _activeAssistantStreamingMessageId = streamingAssistantMessageId;
+        _answerGateOpen = false;
         _assistantResponding = true;
-        _preferStructuredUserEvents = true;
+        _preferStructuredUserEvents = false;
+        _preferProcessJournalEvents = true;
         _assistantPhaseLabel = UITextConstants.assistantPhaseUnderstanding;
         _assistantSearchingCount = 0;
         _assistantReferenceCount = 0;
         _currentProcessState = const AssistantProcessState(
-          stageLabel: '正在理解问题...',
+          stageLabel: UITextConstants.assistantPhaseUnderstanding,
         );
-        _currentFlowEvents = <ExplainableFlowEvent>[];
-        _answerGateOpen = false;
         _streamingThinkingText = '';
         _streamingThinkingRefCount = 0;
         _processContentBlocks = <ProcessContentBlock>[];
+        _currentProcessJournal = <ProcessJournalEvent>[];
         _collectedSearchRefs = <ProcessReference>[];
         _userScrolledAway = false;
         _showScrollFab = false;
@@ -2265,28 +3053,10 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           'isSelf': false,
           'streaming': true,
           'streamFinalAnswer': '',
-          'uiProcessTimelineV2': <Map<String, dynamic>>[
-            <String, dynamic>{
-              'scope': 'root',
-              'type': 'processReplace',
-              'nodeId': 'root.intent',
-              'runId': '',
-              'summary': _buildInitialProcessSummary(text),
-              'payload': const <String, dynamic>{},
-              'references': const <Map<String, dynamic>>[],
-            },
-          ],
-          'uiPhaseTimelineV1': <Map<String, dynamic>>[
-            <String, dynamic>{
-              'phaseId': 'phase_understanding_1',
-              'phaseType': 'understanding',
-              'status': 'running',
-              'title': UITextConstants.assistantPhaseUnderstanding,
-              'summary': '正在分析您的问题...',
-              'details': <String>[],
-              'references': <Map<String, dynamic>>[],
-            },
-          ],
+          'displayMarkdown': '',
+          'displayPlainText': '',
+          'machineEnvelope': '',
+          'processJournalV1': <Map<String, dynamic>>[],
         });
       });
       _startAssistantProgress();
@@ -2306,44 +3076,23 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             .where((m) {
               if ((m['type'] as String? ?? 'text') != 'text') return false;
               if (m['streaming'] == true) return false;
-              // 过滤错误消息：不发送降级/错误提示文本给 LLM
               if (m['isError'] == true) return false;
-              final content = (m['content'] as String?)?.trim() ?? '';
-              if (content.isEmpty) return false;
-              // 过滤已知的降级/错误/进度文本，防止这类内容污染 LLM 历史
-              if (content.startsWith('助手暂时不可用') ||
-                  content.startsWith('模型调用失败') ||
-                  content.startsWith('模型调用异常') ||
-                  content.startsWith('当前模型服务不可用') ||
-                  content.contains('HTTP 400') ||
-                  content.contains('HTTP 500')) {
-                return false;
+              if (m['isSelf'] == true) {
+                return ((m['content'] as String?)?.trim().isNotEmpty ?? false);
               }
-              // 过滤进度/占位文本
-              if (content.contains('正在查询') ||
-                  content.contains('正在获取') ||
-                  content.contains('正在检索') ||
-                  content.contains('正在搜索') ||
-                  content.contains('正在为您') ||
-                  content.contains('正在规划') ||
-                  content.contains('正在执行')) {
-                return false;
-              }
-              // 过滤未解析的 JSON 格式 assistant 消息（历史遗留）
-              if (m['isSelf'] != true &&
-                  content.startsWith('{') &&
-                  (content.contains('"decision"') ||
-                      content.contains('"contractVersion"'))) {
-                return false;
-              }
-              return true;
+              return _assistantHistoryContentForModel(m).trim().isNotEmpty;
             })
-            .map(
-              (m) => AssistantRunMessage(
-                role: (m['isSelf'] == true) ? 'user' : 'assistant',
-                content: (m['content'] as String?) ?? '',
-              ),
-            )
+            .map((m) {
+              final isUser = m['isSelf'] == true;
+              final content = isUser
+                  ? ((m['content'] as String?) ?? '')
+                  : _assistantHistoryContentForModel(m);
+              return AssistantRunMessage(
+                role: isUser ? 'user' : 'assistant',
+                content: content,
+              );
+            })
+            .where((message) => message.content.trim().isNotEmpty)
             .toList(growable: false);
         final contextScope = _buildAssistantContextScope();
         final request = AssistantRunRequest(
@@ -2363,66 +3112,6 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         // 商用模式默认优先远端模型链路，避免先走本地启发式导致垂类与总分总失效。
         final routeMode = CapabilityRouteMode.remotePreferred;
         AssistantRunResponse? response;
-        void appendStreamingChunk(String chunk) {
-          if (!mounted) return;
-          final messageId = streamingAssistantMessageId!;
-          final value = chunk.trimRight();
-
-          // 空 chunk 是重置信号：清除已积累的 streamFinalAnswer（用于 remote→local fallback）
-          if (value.isEmpty) {
-            setState(() {
-              _ensureMessagesGrowable();
-              final existingIndex = _messages.indexWhere(
-                (item) => (item['id'] as String?) == messageId,
-              );
-              if (existingIndex >= 0) {
-                _messages[existingIndex] = <String, dynamic>{
-                  ..._messages[existingIndex],
-                  'streamFinalAnswer': '',
-                };
-              }
-            });
-            return;
-          }
-
-          if (_isInternalChunk(value)) {
-            return;
-          }
-          final now = DateTime.now();
-          final ts = '${now.hour}:${now.minute.toString().padLeft(2, '0')}';
-          setState(() {
-            _ensureMessagesGrowable();
-            final existingIndex = _messages.indexWhere(
-              (item) => (item['id'] as String?) == messageId,
-            );
-            if (existingIndex >= 0) {
-              final prev =
-                  (_messages[existingIndex]['streamFinalAnswer'] as String?) ??
-                  '';
-              _messages[existingIndex] = <String, dynamic>{
-                ..._messages[existingIndex],
-                'streamFinalAnswer': '$prev$value',
-              };
-            } else {
-              _messages.add(<String, dynamic>{
-                'id': messageId,
-                'conversationId': widget.conversationId,
-                'type': 'text',
-                'content': '',
-                'streamFinalAnswer': value,
-                'senderId': AppConceptConstants.assistantSenderId,
-                'senderName': AppConceptConstants.assistantLabel,
-                'senderAvatar': '',
-                'timestamp': ts,
-                'isRead': true,
-                'isSelf': false,
-                'streaming': true,
-              });
-            }
-          });
-          _autoScrollToBottomIfNeeded();
-        }
-
         try {
           await for (final streamEvent
               in ref
@@ -2430,12 +3119,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                   .runStream(request: request, mode: routeMode)) {
             switch (streamEvent.type) {
               case AssistantRunStreamEventType.trace:
-                if (streamEvent.trace != null) {
-                  _captureThinkingTextFromTrace(streamEvent.trace!);
-                  if (!_preferStructuredUserEvents) {
-                    _consumeAssistantTraceEvent(streamEvent.trace!);
-                  }
-                }
+                continue;
+              case AssistantRunStreamEventType.answerReset:
+                _resetStreamingAnswer();
                 continue;
               case AssistantRunStreamEventType.failed:
                 response = AssistantRunResponse(
@@ -2446,8 +3132,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                 );
                 break;
               case AssistantRunStreamEventType.chunk:
-                if (streamEvent.chunkText != null) {
-                  appendStreamingChunk(streamEvent.chunkText!);
+                if ((streamEvent.chunkText ?? '').isNotEmpty) {
+                  _appendStreamingAnswerChunk(streamEvent.chunkText!);
                 }
                 continue;
               case AssistantRunStreamEventType.completed:
@@ -2455,110 +3141,26 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                   response = streamEvent.response;
                 }
                 break;
-              // v2 semantic events
               case AssistantRunStreamEventType.planStarted:
-                _consumeAssistantTraceEvent(
-                  AssistantTraceEvent(
-                    type: AssistantTraceEventType.planStarted,
-                    message: streamEvent.chunkText ?? '规划中...',
-                    timestamp: DateTime.now(),
-                  ),
-                );
-                continue;
               case AssistantRunStreamEventType.searchProgress:
-                _consumeAssistantTraceEvent(
-                  AssistantTraceEvent(
-                    type: AssistantTraceEventType.searchStarted,
-                    message: streamEvent.chunkText ?? '检索中...',
-                    timestamp: DateTime.now(),
-                  ),
-                );
-                continue;
               case AssistantRunStreamEventType.thinkingProgress:
-                _consumeAssistantTraceEvent(
-                  AssistantTraceEvent(
-                    type: AssistantTraceEventType.thinkingProgress,
-                    message: streamEvent.chunkText ?? '思考中...',
-                    timestamp: DateTime.now(),
-                  ),
-                );
                 continue;
               case AssistantRunStreamEventType.answerDelta:
-                if (streamEvent.chunkText != null) {
-                  appendStreamingChunk(streamEvent.chunkText!);
+                if ((streamEvent.chunkText ?? '').isNotEmpty) {
+                  _appendStreamingAnswerChunk(streamEvent.chunkText!);
+                }
+                continue;
+              case AssistantRunStreamEventType.processJournalEvent:
+                final journalEvent = streamEvent.processJournalEvent;
+                if (journalEvent != null) {
+                  _consumeProcessJournalEvent(journalEvent);
                 }
                 continue;
               case AssistantRunStreamEventType.phaseTimeline:
-                if (!_preferStructuredUserEvents && streamEvent.trace != null) {
-                  _consumeAssistantTraceEvent(streamEvent.trace!);
-                }
-                continue;
               case AssistantRunStreamEventType.userPhaseEvent:
-                if (!_preferStructuredUserEvents) {
-                  _consumeUserPhaseEvent(streamEvent);
-                }
-                continue;
               case AssistantRunStreamEventType.userEvent:
-                final userEvent = streamEvent.userFacingEvent;
-                if (userEvent != null) {
-                  _preferStructuredUserEvents = true;
-                  _consumeStructuredUserEvent(userEvent);
-                }
-                continue;
               case AssistantRunStreamEventType.explainableFlowEvent:
-                if (!mounted) continue;
-                final flowEvent = streamEvent.explainableEvent;
-                if (flowEvent == null) continue;
-                setState(() {
-                  final existingIdx = _currentFlowEvents.lastIndexWhere(
-                    (e) =>
-                        e.phaseId == flowEvent.phaseId &&
-                        e.agentId == flowEvent.agentId,
-                  );
-                  if (existingIdx >= 0) {
-                    _currentFlowEvents[existingIdx] = flowEvent;
-                  } else {
-                    _currentFlowEvents = [
-                      ..._currentFlowEvents,
-                      flowEvent,
-                    ];
-                  }
-                  _answerGateOpen = _currentFlowEvents.any(
-                    (e) =>
-                        (e.phaseId == PhaseId.aggregate ||
-                            e.phaseId == PhaseId.merge ||
-                            e.phaseId == PhaseId.answer) &&
-                        e.phaseStatus == ExplainablePhaseStatus.completed,
-                  );
-                });
-                _autoScrollToBottomIfNeeded();
-                continue;
               case AssistantRunStreamEventType.processUpdate:
-                if (!mounted || _preferStructuredUserEvents) {
-                  continue;
-                }
-                if (_processContentBlocks.isEmpty) {
-                  final data = streamEvent.trace?.data;
-                  final stageStr = data?['stage'] as String? ?? '';
-                  final processLines =
-                      (data?['processLines'] as List?)
-                          ?.whereType<String>()
-                          .toList(growable: false) ??
-                      const <String>[];
-                  final isStreaming = data?['isStreaming'] == true;
-                  setState(() {
-                    _currentProcessState = AssistantProcessState(
-                      stage: ProcessStage.values.firstWhere(
-                        (s) => s.name == stageStr,
-                        orElse: () => ProcessStage.understanding,
-                      ),
-                      stageLabel: streamEvent.chunkText ?? '处理中',
-                      processLines: processLines,
-                      isStreaming: isStreaming,
-                    );
-                  });
-                  _autoScrollToBottomIfNeeded();
-                }
                 continue;
             }
             if (response != null) break;
@@ -2584,6 +3186,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         );
         final runResponse = response;
         final displayText = _resolveAssistantDisplayText(runResponse);
+        final displayPlainText = _resolveAssistantDisplayPlainText(runResponse);
+        _resetStreamingAnswerDecoder();
         final effectiveSessionId =
             (runResponse.structuredResponse['effectiveSessionId'] as String?)
                 ?.trim() ??
@@ -2601,31 +3205,6 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         final replyTime = ChatTimeFormatter.format(DateTime.now());
         final assistantMessageId =
             'assistant_${DateTime.now().millisecondsSinceEpoch}';
-        final uiPhaseTimelineV1 = _normalizeUiPhaseTimelineV1(
-          (runResponse.structuredResponse['uiPhaseTimelineV1'] as List?)
-                  ?.whereType<Map>()
-                  .map((item) => item.cast<String, dynamic>())
-                  .toList(growable: false) ??
-              const <Map<String, dynamic>>[],
-        );
-        final streamedPhases = (() {
-          if (streamingAssistantMessageId == null) {
-            return const <Map<String, dynamic>>[];
-          }
-          final existingIndex = _messages.indexWhere(
-            (item) => (item['id'] as String?) == streamingAssistantMessageId,
-          );
-          if (existingIndex < 0) return const <Map<String, dynamic>>[];
-          return ((_messages[existingIndex]['uiPhaseTimelineV1'] as List?)
-                  ?.whereType<Map>()
-                  .map((item) => item.cast<String, dynamic>())
-                  .toList(growable: false)) ??
-              const <Map<String, dynamic>>[];
-        })();
-        final mergedPhases = _normalizeUiPhaseTimelineV1(<Map<String, dynamic>>[
-          ...streamedPhases,
-          ...uiPhaseTimelineV1,
-        ]);
         final uiReferences =
             (runResponse.structuredResponse['uiReferences'] as List?)
                 ?.whereType<Map>()
@@ -2649,9 +3228,12 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
               const <String, dynamic>{},
           excludeMessageId: streamingAssistantMessageId,
         );
-        final uiProcessTimelineV2 = _timelineV2FromStructuredResponse(
+        final structuredJournal = _journalFromStructuredResponse(
           runResponse.structuredResponse,
         );
+        final uiProcessTimelineV2 = structuredJournal.isNotEmpty
+            ? _legacyTimelineFromJournal(structuredJournal)
+            : _timelineV2FromStructuredResponse(runResponse.structuredResponse);
         final streamedTimelineV2 = (() {
           if (streamingAssistantMessageId == null) {
             return const <Map<String, dynamic>>[];
@@ -2667,20 +3249,48 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                 const <Map>[],
           );
         })();
-        final mergedTimelineV2 = _mergeProcessTimelineV2(
-          streamedTimelineV2,
-          uiProcessTimelineV2,
+        final streamedJournal = (() {
+          if (streamingAssistantMessageId == null) {
+            return const <ProcessJournalEvent>[];
+          }
+          final existingIndex = _messages.indexWhere(
+            (item) => (item['id'] as String?) == streamingAssistantMessageId,
+          );
+          if (existingIndex < 0) return const <ProcessJournalEvent>[];
+          return _normalizeProcessJournal(
+            ((_messages[existingIndex]['processJournalV1'] as List?)
+                    ?.whereType<Map>()
+                    .toList(growable: false)) ??
+                const <Map>[],
+          );
+        })();
+        final mergedJournal = _mergeProcessJournalEvents(
+          streamedJournal,
+          structuredJournal,
         );
+        final mergedTimelineV2 = mergedJournal.isNotEmpty
+            ? _legacyTimelineFromJournal(mergedJournal)
+            : _mergeProcessTimelineV2(streamedTimelineV2, uiProcessTimelineV2);
         final structuredProcessBlocks = _processBlocksFromStructuredResponse(
           runResponse.structuredResponse,
         );
-        final effectiveProcessBlocks = mergedTimelineV2.isNotEmpty
+        final effectiveProcessBlocks = mergedJournal.isNotEmpty
+            ? _processBlocksFromJournal(mergedJournal)
+            : mergedTimelineV2.isNotEmpty
             ? _processBlocksFromTimelineV2(mergedTimelineV2)
             : (structuredProcessBlocks.isNotEmpty
                   ? structuredProcessBlocks
                   : List<ProcessContentBlock>.of(_processContentBlocks));
+        if (!mounted) return;
         setState(() {
-          if (mergedTimelineV2.isNotEmpty) {
+          if (mergedJournal.isNotEmpty) {
+            _currentProcessJournal = List<ProcessJournalEvent>.of(
+              mergedJournal,
+            );
+            _processContentBlocks = List<ProcessContentBlock>.of(
+              _processBlocksFromJournal(mergedJournal),
+            );
+          } else if (mergedTimelineV2.isNotEmpty) {
             _processContentBlocks = List<ProcessContentBlock>.of(
               _processBlocksFromTimelineV2(mergedTimelineV2),
             );
@@ -2695,23 +3305,44 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
               (item) => (item['id'] as String?) == streamingAssistantMessageId,
             );
             if (existingIndex >= 0) {
+              final existingMessage = _messages[existingIndex];
+              final effectiveDisplayText = _reconcileCompletedAnswerText(
+                streamedText:
+                    (existingMessage['streamFinalAnswer'] as String?) ?? '',
+                completedText: displayText,
+              );
               _messages[existingIndex] = <String, dynamic>{
-                ..._messages[existingIndex],
-                'id': assistantMessageId,
-                'content': displayText,
+                ...existingMessage,
+                'content': effectiveDisplayText,
                 'timestamp': replyTime,
                 'runId': runResponse.runId ?? '',
                 'traceId': runResponse.traceId ?? '',
                 'sourceQuery': text,
+                'displayMarkdown': runResponse.displayMarkdownV1,
+                'displayPlainText': displayPlainText,
+                'machineEnvelope': runResponse.machineEnvelopeV1,
+                'degraded': runResponse.degraded,
+                'qualityMetrics':
+                    (runResponse.structuredResponse['qualityMetrics'] as Map?)
+                        ?.cast<String, dynamic>() ??
+                    const <String, dynamic>{},
+                'heuristicFallbackUsed':
+                    (((runResponse.structuredResponse['qualityMetrics'] as Map?)
+                        ?.cast<String, dynamic>())?['heuristicFallbackUsed']) ==
+                    true,
+                'runArtifactsV1':
+                    runResponse.runArtifactsV1?.toJson() ??
+                    const <String, dynamic>{},
                 'domainId': (dialogueRuntime['domainId'] ?? '').toString(),
                 'dialogueState': dialogueRuntime,
-                'uiPhaseTimelineV1': mergedPhases,
                 'uiReferences': uiReferences,
                 'uiActions': uiActions,
                 'uiAnswer': uiAnswer,
                 'uiUsageStatsV1': uiUsageStatsV1,
-                'uiProcessTimelineV2': mergedTimelineV2,
-                'streamFinalAnswer': displayText,
+                'processJournalV1': mergedJournal
+                    .map((item) => item.toJson())
+                    .toList(growable: false),
+                'streamFinalAnswer': effectiveDisplayText,
                 'streaming': false,
                 'uiProcessContentBlocks': _serializeProcessBlocks(
                   effectiveProcessBlocks,
@@ -2734,14 +3365,30 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
               'runId': runResponse.runId ?? '',
               'traceId': runResponse.traceId ?? '',
               'sourceQuery': text,
+              'displayMarkdown': runResponse.displayMarkdownV1,
+              'displayPlainText': displayPlainText,
+              'machineEnvelope': runResponse.machineEnvelopeV1,
+              'degraded': runResponse.degraded,
+              'qualityMetrics':
+                  (runResponse.structuredResponse['qualityMetrics'] as Map?)
+                      ?.cast<String, dynamic>() ??
+                  const <String, dynamic>{},
+              'heuristicFallbackUsed':
+                  (((runResponse.structuredResponse['qualityMetrics'] as Map?)
+                      ?.cast<String, dynamic>())?['heuristicFallbackUsed']) ==
+                  true,
+              'runArtifactsV1':
+                  runResponse.runArtifactsV1?.toJson() ??
+                  const <String, dynamic>{},
               'domainId': (dialogueRuntime['domainId'] ?? '').toString(),
               'dialogueState': dialogueRuntime,
-              'uiPhaseTimelineV1': mergedPhases,
               'uiReferences': uiReferences,
               'uiActions': uiActions,
               'uiAnswer': uiAnswer,
               'uiUsageStatsV1': uiUsageStatsV1,
-              'uiProcessTimelineV2': mergedTimelineV2,
+              'processJournalV1': mergedJournal
+                  .map((item) => item.toJson())
+                  .toList(growable: false),
               'uiProcessContentBlocks': _serializeProcessBlocks(
                 effectiveProcessBlocks,
               ),
@@ -2750,12 +3397,13 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           }
           _assistantResponding = false;
           _preferStructuredUserEvents = false;
+          _preferProcessJournalEvents = false;
           _assistantPhaseLabel = '';
           _activeAssistantStreamingMessageId = null;
           _answerGateOpen = true;
           _currentProcessState = AssistantProcessState(
             stage: ProcessStage.completed,
-            stageLabel: '已完成',
+            stageLabel: UITextConstants.assistantPhaseCompleted,
             contentBlocks: List<ProcessContentBlock>.of(effectiveProcessBlocks),
             usageStats: uiUsageStatsV1,
             elapsedMs: elapsedMs,
@@ -2802,7 +3450,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
               sessionId: _effectiveAssistantSessionId,
               pageType: (contextScope['pageType'] as String?) ?? 'chat',
               queryText: text,
-              answerText: runResponse.finalText,
+              answerText: _resolveAssistantDisplayPlainText(runResponse),
               userTags: userTags,
               durationMs: elapsedMs,
             );
@@ -2815,6 +3463,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         // 外层 catch 是最后防线：包含错误类型用于诊断，
         // 正常路径下不应到达此处（stream 错误已在内层 catch 处理）。
         final errorHint = kDebugMode ? '助手异常: ${e.runtimeType}' : '助手出现异常，请重试。';
+        _resetStreamingAnswerDecoder();
         setState(() {
           _ensureMessagesGrowable();
           _assistantResponding = false;
@@ -2878,6 +3527,36 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           'allowedReferenceHosts':
               AppConceptConstants.assistantReferenceHostWhitelist,
         };
+    final contentAccessState = ref.read(personalContentAccessProvider);
+    final identityIndexFeatureFlag = ref.read(
+      contentFeatureFlagProvider('enable_assistant_content_identity_index'),
+    );
+    final identityIndexEnabled = ref.read(
+      assistantContentIdentityIndexEnabledProvider,
+    );
+    final allowedProviders =
+        ((privacyPolicy['allowedProviders'] as List?)
+            ?.map((item) => item.toString().trim())
+            .where((item) => item.isNotEmpty)
+            .toList(growable: true) ??
+        <String>[]);
+    final blockedProviders =
+        ((privacyPolicy['blockedProviders'] as List?)
+            ?.map((item) => item.toString().trim())
+            .where((item) => item.isNotEmpty)
+            .toList(growable: true) ??
+        <String>[]);
+    if (!contentAccessState.granted) {
+      allowedProviders.remove('page_context');
+      if (!blockedProviders.contains('page_context')) {
+        blockedProviders.add('page_context');
+      }
+    }
+    final normalizedPrivacyPolicy = <String, dynamic>{
+      ...privacyPolicy,
+      'allowedProviders': allowedProviders,
+      'blockedProviders': blockedProviders,
+    };
     final userTags =
         (hints['userTags'] as List?)
             ?.whereType<String>()
@@ -2886,6 +3565,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             .toList(growable: false) ??
         const <String>[];
     final latestDialogueState = _latestAssistantDialogueState();
+    final latestRunArtifacts = _latestAssistantRunArtifacts();
+    final latestSlotState = latestRunArtifacts?.slotState;
+    final latestDomainPolicyBundle = latestRunArtifacts?.domainPolicyBundle;
     return <String, dynamic>{
       'pageType': _assistantSourceToPageType(openContext?.source),
       'sessionId': _effectiveAssistantSessionId,
@@ -2897,15 +3579,75 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         'behaviorTimeline': hints['behaviorTimeline'],
       if (userTags.isNotEmpty) 'userTags': userTags,
       if (latestDialogueState.isNotEmpty) 'dialogueState': latestDialogueState,
+      if (latestSlotState != null) 'slotState': latestSlotState.toJson(),
+      if (latestDomainPolicyBundle != null)
+        'domainPolicyBundle': latestDomainPolicyBundle.toJson(),
       if (latestDialogueState['suggestedNextStateId'] is String &&
           (latestDialogueState['suggestedNextStateId'] as String)
               .trim()
               .isNotEmpty)
         'currentStateId':
             (latestDialogueState['suggestedNextStateId'] as String).trim(),
+      'assistantContentAccess': <String, dynamic>{
+        'skillId': kPersonalContentAccessSkillId,
+        'granted': contentAccessState.granted,
+        'grantedScope': contentAccessState.grantedScope,
+        'source': contentAccessState.source,
+        if (contentAccessState.updatedAt != null)
+          'updatedAt': contentAccessState.updatedAt!.toIso8601String(),
+      },
+      'assistantContentIndex': <String, dynamic>{
+        'enabled': identityIndexEnabled,
+        'featureFlagEnabled': identityIndexFeatureFlag,
+        'fallbackReason': contentAccessState.granted
+            ? (identityIndexEnabled ? '' : 'feature_flag_disabled')
+            : 'consent_denied',
+      },
       'privacyProfile': 'default',
-      'privacyPolicy': privacyPolicy,
+      'privacyPolicy': normalizedPrivacyPolicy,
     };
+  }
+
+  String _assistantHistoryContentForModel(Map<String, dynamic> message) {
+    final candidates = <String>[
+      (message['displayPlainText'] ?? '').toString(),
+      (message['displayMarkdown'] ?? '').toString(),
+      (message['content'] ?? '').toString(),
+    ];
+    for (final candidate in candidates) {
+      final sanitized = _sanitizeAssistantHistoryContent(candidate);
+      if (sanitized.isNotEmpty) return sanitized;
+    }
+    return '';
+  }
+
+  String _sanitizeAssistantHistoryContent(String raw) {
+    final strippedXml = OpenAiCompatibleLlmProvider.stripXmlToolCalls(
+      raw,
+    ).trim();
+    if (strippedXml.isEmpty) return '';
+    if (_containsXmlToolCall(raw)) return '';
+    if (_isInternalChunk(strippedXml)) return '';
+    if (AssistantContentFilters.isDegradedText(strippedXml)) return '';
+    if (AssistantContentFilters.isProgressPlaceholder(strippedXml)) return '';
+    if (strippedXml.contains('tool_call') ||
+        strippedXml.contains('queryTasks') ||
+        strippedXml.contains('queryVariants') ||
+        strippedXml.contains('正在调用工具')) {
+      return '';
+    }
+    if (strippedXml.startsWith('{') ||
+        strippedXml.startsWith('[') ||
+        strippedXml.startsWith('```')) {
+      final display = _stripJsonForDisplay(strippedXml).trim();
+      if (display.isEmpty ||
+          _isInternalChunk(display) ||
+          AssistantContentFilters.isProgressPlaceholder(display)) {
+        return '';
+      }
+      return display;
+    }
+    return strippedXml;
   }
 
   Map<String, dynamic> _latestAssistantDialogueState() {
@@ -2921,8 +3663,37 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     return const <String, dynamic>{};
   }
 
+  RunArtifacts? _latestAssistantRunArtifacts() {
+    for (var i = _messages.length - 1; i >= 0; i--) {
+      final message = _messages[i];
+      if ((message['senderId'] as String?) !=
+          AppConceptConstants.assistantSenderId) {
+        continue;
+      }
+      final raw = (message['runArtifactsV1'] as Map?)?.cast<String, dynamic>();
+      if (raw == null || raw.isEmpty) continue;
+      try {
+        return RunArtifacts.fromJson(raw);
+      } catch (_) {
+        continue;
+      }
+    }
+    return null;
+  }
+
   String _resolveAssistantDisplayText(AssistantRunResponse response) {
     final structured = response.structuredResponse;
+
+    final artifactMarkdown = response.displayMarkdownV1;
+    if (artifactMarkdown.isNotEmpty &&
+        !AssistantContentFilters.isProgressPlaceholder(artifactMarkdown)) {
+      return artifactMarkdown;
+    }
+    final artifactPlain = response.displayPlainTextV1;
+    if (artifactPlain.isNotEmpty &&
+        !AssistantContentFilters.isProgressPlaceholder(artifactPlain)) {
+      return artifactPlain;
+    }
 
     // Gate 1: uiAnswer.markdownText — 引擎层已保证是纯文本
     final uiAnswer =
@@ -2988,6 +3759,15 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     }
 
     return '助手未生成有效回答，请重试。';
+  }
+
+  String _resolveAssistantDisplayPlainText(AssistantRunResponse response) {
+    final artifactPlain = response.displayPlainTextV1;
+    if (artifactPlain.isNotEmpty &&
+        !AssistantContentFilters.isProgressPlaceholder(artifactPlain)) {
+      return artifactPlain;
+    }
+    return _resolveAssistantDisplayText(response);
   }
 
   /// Attempt to extract displayable text from a JSON-formatted LLM output.
@@ -3080,20 +3860,15 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       'runId': response.runId ?? '',
       'traceId': response.traceId ?? '',
       'query': query,
-      'answer': response.finalText,
+      'answer': _resolveAssistantDisplayText(response),
+      'displayPlainText': _resolveAssistantDisplayPlainText(response),
+      'machineEnvelope': response.machineEnvelopeV1,
+      'runArtifactsV1':
+          response.runArtifactsV1?.toJson() ?? const <String, dynamic>{},
       'createdAt': DateTime.now().toIso8601String(),
-      'uiPhaseTimelineV1': _normalizeUiPhaseTimelineV1(
-        (structured['uiPhaseTimelineV1'] as List?)?.whereType<Map>().toList(
-              growable: false,
-            ) ??
-            const <Map>[],
-      ),
-      'uiProcessTimelineV2': _normalizeUiProcessTimelineV2(
-        (structured['uiProcessTimelineV2'] as List?)?.whereType<Map>().toList(
-              growable: false,
-            ) ??
-            const <Map>[],
-      ),
+      'processJournalV1': _journalFromStructuredResponse(
+        structured,
+      ).map((item) => item.toJson()).toList(growable: false),
       'uiReferences':
           (structured['uiReferences'] as List?)?.whereType<Map>().toList(
             growable: false,
@@ -3154,74 +3929,6 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       'roundTraces': const <Map<String, dynamic>>[],
       'webSearchDiagnostics': webSearchDiagnostics,
     };
-  }
-
-  List<Map<String, dynamic>> _normalizeUiPhaseTimelineV1(List<Map> rawPhases) {
-    final normalized = rawPhases
-        .map((item) => item.cast<String, dynamic>())
-        .where(
-          (item) =>
-              ((item['phaseType'] as String?)?.trim().isNotEmpty ?? false),
-        )
-        .toList(growable: false);
-    if (normalized.isEmpty) return const <Map<String, dynamic>>[];
-    final mergedByType = <String, Map<String, dynamic>>{};
-    for (final phase in normalized) {
-      final type = (phase['phaseType'] as String?)?.trim() ?? '';
-      if (type.isEmpty) continue;
-      final details =
-          (phase['details'] as List?)
-              ?.map((item) => item.toString().trim())
-              .where((item) => item.isNotEmpty)
-              .toList(growable: false) ??
-          const <String>[];
-      final references =
-          (phase['references'] as List?)
-              ?.whereType<Map>()
-              .map((item) => item.cast<String, dynamic>())
-              .toList(growable: false) ??
-          const <Map<String, dynamic>>[];
-      if (!mergedByType.containsKey(type)) {
-        mergedByType[type] = <String, dynamic>{
-          'phaseId': (phase['phaseId'] ?? 'phase_${type}_1').toString(),
-          'phaseType': type,
-          'status': (phase['status'] ?? 'completed').toString(),
-          'title': ((phase['title'] as String?)?.trim().isNotEmpty ?? false)
-              ? (phase['title'] as String).trim()
-              : _phaseTitle(type),
-          'summary': ((phase['summary'] as String?)?.trim() ?? ''),
-          'details': <String>[...details],
-          'references': <Map<String, dynamic>>[...references],
-          'keywords':
-              (phase['keywords'] as List?)?.whereType<String>().toList(
-                growable: false,
-              ) ??
-              const <String>[],
-        };
-        continue;
-      }
-      final current = mergedByType[type]!;
-      current['status'] = (phase['status'] ?? current['status']).toString();
-      final currentSummary = (phase['summary'] as String?)?.trim() ?? '';
-      if (currentSummary.isNotEmpty) current['summary'] = currentSummary;
-      final currentDetails = (current['details'] as List).cast<String>();
-      for (final detail in details) {
-        if (!currentDetails.contains(detail)) currentDetails.add(detail);
-      }
-      final currentRefs = (current['references'] as List)
-          .cast<Map<String, dynamic>>();
-      final seenUrls = currentRefs
-          .map((item) => (item['url'] as String?) ?? '')
-          .where((item) => item.isNotEmpty)
-          .toSet();
-      for (final ref in references) {
-        final url = (ref['url'] as String?)?.trim() ?? '';
-        if (url.isEmpty || seenUrls.contains(url)) continue;
-        currentRefs.add(ref);
-        seenUrls.add(url);
-      }
-    }
-    return mergedByType.values.toList(growable: false);
   }
 
   Future<void> _submitAssistantFeedback({
@@ -3470,7 +4177,12 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           sessionId: _effectiveAssistantSessionId,
           pageType: (contextScope['pageType'] as String?) ?? 'chat',
           queryText: (message['sourceQuery'] as String?) ?? '',
-          answerText: (message['content'] as String?) ?? '',
+          answerText:
+              ((message['displayPlainText'] as String?)?.trim().isNotEmpty ==
+                      true
+                  ? (message['displayPlainText'] as String)
+                  : (message['content'] as String?)) ??
+              '',
           userTags: tags,
           durationMs: 0,
           copiedAnswer: copiedAnswer,
@@ -3575,19 +4287,23 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       rewriteInstruction: rewrite,
     );
     String? streamingAssistantMessageId;
+    _resetStreamingAnswerDecoder();
     setState(() {
       _ensureMessagesGrowable();
       streamingAssistantMessageId =
           'assistant_rewrite_${now.millisecondsSinceEpoch}';
       _activeAssistantStreamingMessageId = streamingAssistantMessageId;
+      _answerGateOpen = false;
       _assistantResponding = true;
-      _preferStructuredUserEvents = true;
-      _assistantPhaseLabel = '正在重新生成...';
+      _preferStructuredUserEvents = false;
+      _preferProcessJournalEvents = true;
+      _assistantPhaseLabel = UITextConstants.assistantPhaseAnswering;
       _currentProcessState = AssistantProcessState(
         stage: ProcessStage.answering,
-        stageLabel: '正在重新生成...',
+        stageLabel: UITextConstants.assistantPhaseAnswering,
         isStreaming: true,
       );
+      _currentProcessJournal = <ProcessJournalEvent>[];
       _processContentBlocks = <ProcessContentBlock>[];
       _collectedSearchRefs = <ProcessReference>[];
       _messages.add(<String, dynamic>{
@@ -3604,6 +4320,10 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         'isSelf': false,
         'streaming': true,
         'sourceQuery': query,
+        'displayMarkdown': '',
+        'displayPlainText': '',
+        'machineEnvelope': '',
+        'processJournalV1': <Map<String, dynamic>>[],
       });
     });
     _autoScrollToBottomIfNeeded();
@@ -3615,27 +4335,19 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
               .read(capabilityGatewayProvider)
               .runStream(request: request, mode: routeMode)) {
         switch (streamEvent.type) {
+          case AssistantRunStreamEventType.answerReset:
+            _resetStreamingAnswer();
+            continue;
+          case AssistantRunStreamEventType.processJournalEvent:
+            final journalEvent = streamEvent.processJournalEvent;
+            if (journalEvent != null) {
+              _consumeProcessJournalEvent(journalEvent);
+            }
+            continue;
           case AssistantRunStreamEventType.chunk:
           case AssistantRunStreamEventType.answerDelta:
-            if (streamEvent.chunkText != null &&
-                streamEvent.chunkText!.isNotEmpty &&
-                streamingAssistantMessageId != null) {
-              setState(() {
-                _ensureMessagesGrowable();
-                final idx = _messages.indexWhere(
-                  (item) =>
-                      (item['id'] as String?) == streamingAssistantMessageId,
-                );
-                if (idx >= 0) {
-                  final prev =
-                      (_messages[idx]['streamFinalAnswer'] as String?) ?? '';
-                  _messages[idx] = <String, dynamic>{
-                    ..._messages[idx],
-                    'streamFinalAnswer': '$prev${streamEvent.chunkText}',
-                  };
-                }
-              });
-              _autoScrollToBottomIfNeeded();
+            if ((streamEvent.chunkText ?? '').isNotEmpty) {
+              _appendStreamingAnswerChunk(streamEvent.chunkText!);
             }
             continue;
           case AssistantRunStreamEventType.completed:
@@ -3647,47 +4359,57 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         if (response != null) break;
       }
       if (response != null && mounted) {
+        final finalResponse = response;
         final uiAnswer =
-            (response.structuredResponse['uiAnswer'] as Map?)
+            (finalResponse.structuredResponse['uiAnswer'] as Map?)
                 ?.cast<String, dynamic>() ??
             const <String, dynamic>{};
-        final uiProcessTimelineV2 = _timelineV2FromStructuredResponse(
-          response.structuredResponse,
+        final structuredJournal = _journalFromStructuredResponse(
+          finalResponse.structuredResponse,
         );
         final structuredProcessBlocks = _processBlocksFromStructuredResponse(
-          response.structuredResponse,
+          finalResponse.structuredResponse,
         );
         final uiUsageStats = _buildConversationCumulativeUsageStats(
           runUsageStats:
-              (response.structuredResponse['uiUsageStatsV1'] as Map?)
+              (finalResponse.structuredResponse['uiUsageStatsV1'] as Map?)
                   ?.cast<String, dynamic>() ??
               const <String, dynamic>{},
           excludeMessageId: streamingAssistantMessageId,
         );
-        final effectiveTimelineV2 = uiProcessTimelineV2.isNotEmpty
-            ? uiProcessTimelineV2
-            : _normalizeUiProcessTimelineV2(
-                (_messages.firstWhere(
-                              (item) =>
-                                  (item['id'] as String?) ==
-                                  streamingAssistantMessageId,
-                              orElse: () => const <String, dynamic>{},
-                            )['uiProcessTimelineV2']
-                            as List?)
-                        ?.whereType<Map>()
-                        .toList(growable: false) ??
-                    const <Map>[],
-              );
-        final effectiveProcessBlocks = effectiveTimelineV2.isNotEmpty
-            ? _processBlocksFromTimelineV2(effectiveTimelineV2)
+        final streamedJournal = _normalizeProcessJournal(
+          (_messages.firstWhere(
+                        (item) =>
+                            (item['id'] as String?) ==
+                            streamingAssistantMessageId,
+                        orElse: () => const <String, dynamic>{},
+                      )['processJournalV1']
+                      as List?)
+                  ?.whereType<Map>()
+                  .toList(growable: false) ??
+              const <Map>[],
+        );
+        final effectiveJournal = _mergeProcessJournalEvents(
+          streamedJournal,
+          structuredJournal,
+        );
+        final effectiveProcessBlocks = effectiveJournal.isNotEmpty
+            ? _processBlocksFromJournal(effectiveJournal)
             : (structuredProcessBlocks.isNotEmpty
                   ? structuredProcessBlocks
                   : List<ProcessContentBlock>.of(_processContentBlocks));
-        final finalText = _resolveAssistantDisplayText(response);
+        final finalText = _resolveAssistantDisplayText(finalResponse);
+        final displayPlainText = _resolveAssistantDisplayPlainText(
+          finalResponse,
+        );
+        _resetStreamingAnswerDecoder();
         setState(() {
-          if (effectiveTimelineV2.isNotEmpty) {
+          if (effectiveJournal.isNotEmpty) {
+            _currentProcessJournal = List<ProcessJournalEvent>.of(
+              effectiveJournal,
+            );
             _processContentBlocks = List<ProcessContentBlock>.of(
-              _processBlocksFromTimelineV2(effectiveTimelineV2),
+              _processBlocksFromJournal(effectiveJournal),
             );
           } else if (structuredProcessBlocks.isNotEmpty) {
             _processContentBlocks = List<ProcessContentBlock>.of(
@@ -3699,14 +4421,37 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             (item) => (item['id'] as String?) == streamingAssistantMessageId,
           );
           if (idx >= 0) {
+            final existingMessage = _messages[idx];
+            final effectiveFinalText = _reconcileCompletedAnswerText(
+              streamedText:
+                  (existingMessage['streamFinalAnswer'] as String?) ?? '',
+              completedText: finalText,
+            );
             _messages[idx] = <String, dynamic>{
-              ..._messages[idx],
-              'content': finalText,
-              'streamFinalAnswer': finalText,
+              ...existingMessage,
+              'content': effectiveFinalText,
+              'streamFinalAnswer': effectiveFinalText,
               'streaming': false,
               'sourceQuery': query,
+              'displayMarkdown': finalResponse.displayMarkdownV1,
+              'displayPlainText': displayPlainText,
+              'machineEnvelope': finalResponse.machineEnvelopeV1,
+              'degraded': finalResponse.degraded,
+              'qualityMetrics':
+                  (finalResponse.structuredResponse['qualityMetrics'] as Map?)
+                      ?.cast<String, dynamic>() ??
+                  const <String, dynamic>{},
+              'heuristicFallbackUsed':
+                  (((finalResponse.structuredResponse['qualityMetrics'] as Map?)
+                      ?.cast<String, dynamic>())?['heuristicFallbackUsed']) ==
+                  true,
+              'runArtifactsV1':
+                  finalResponse.runArtifactsV1?.toJson() ??
+                  const <String, dynamic>{},
               'uiAnswer': uiAnswer,
-              'uiProcessTimelineV2': effectiveTimelineV2,
+              'processJournalV1': effectiveJournal
+                  .map((item) => item.toJson())
+                  .toList(growable: false),
               'uiProcessContentBlocks': _serializeProcessBlocks(
                 effectiveProcessBlocks,
               ),
@@ -3715,7 +4460,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           }
           _currentProcessState = AssistantProcessState(
             stage: ProcessStage.completed,
-            stageLabel: '已完成',
+            stageLabel: UITextConstants.assistantPhaseCompleted,
             contentBlocks: List<ProcessContentBlock>.of(effectiveProcessBlocks),
             usageStats: uiUsageStats,
           );
@@ -3724,14 +4469,17 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     } catch (_) {
       // Swallow exceptions; message will show whatever was streamed.
     } finally {
+      _resetStreamingAnswerDecoder();
       if (mounted) {
         setState(() {
           _assistantResponding = false;
           _preferStructuredUserEvents = false;
+          _preferProcessJournalEvents = false;
           _assistantPhaseLabel = '';
+          _activeAssistantStreamingMessageId = null;
           _currentProcessState = AssistantProcessState(
             stage: ProcessStage.completed,
-            stageLabel: '已完成',
+            stageLabel: UITextConstants.assistantPhaseCompleted,
             contentBlocks: List<ProcessContentBlock>.of(_processContentBlocks),
           );
         });
@@ -4343,11 +5091,18 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                                                 msg['senderId'] as String? ??
                                                 '';
                                             if (senderId == 'current_user') {
-                                              final currentUser = ref.read(userDataProvider);
-                                              final userId = currentUser?.username ?? currentUser?.id;
-                                              if (userId != null && userId.isNotEmpty) {
+                                              final currentUser = ref.read(
+                                                userDataProvider,
+                                              );
+                                              final userId =
+                                                  currentUser?.username ??
+                                                  currentUser?.id;
+                                              if (userId != null &&
+                                                  userId.isNotEmpty) {
                                                 context.push(
-                                                  AppRoutePaths.userProfile(username: userId),
+                                                  AppRoutePaths.userProfile(
+                                                    username: userId,
+                                                  ),
                                                 );
                                               }
                                             } else if (senderId.isNotEmpty) {
@@ -4464,62 +5219,60 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                       AppSpacing.containerSm,
                 ),
                 child: Container(
-                padding: EdgeInsets.symmetric(
-                  vertical: AppSpacing.sm,
-                ),
-                decoration: BoxDecoration(
-                  color: isDark ? bgColor : AppColors.chatToolbarBackground,
-                  borderRadius: BorderRadius.circular(
-                    AppSpacing.largeBorderRadius,
+                  padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                  decoration: BoxDecoration(
+                    color: isDark ? bgColor : AppColors.chatToolbarBackground,
+                    borderRadius: BorderRadius.circular(
+                      AppSpacing.largeBorderRadius,
+                    ),
                   ),
-                ),
-                child: SafeArea(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (!_isAssistantConversation &&
-                          !_isGroupChat &&
-                          _relationshipCapability?.isSameInterest != true &&
-                          _otherParticipantId != null)
-                        _buildSameInterestPromptBar(),
-                      CustomizableChatInputBar(
-                        controller: _inputController,
-                        focusNode: _inputFocusNode,
-                        hintText: _isAssistantConversation
-                            ? UITextConstants.assistantAskPlaceholder
-                            : null,
-                        maxTextLength: 5000,
-                        maxVisibleLines: 4,
-                        onPickImages: _pickChatImages,
-                        onCapturePhoto: _captureChatPhoto,
-                        onPickFiles: _pickChatFiles,
-                        onRequestMicPermission: _requestMicPermissionForChat,
-                        onStartRecord: _startVoiceRecordForChat,
-                        onStopRecord: _stopVoiceRecordForChat,
-                        onVoiceAsrTransform: _voiceAsrForChat,
-                        onSend: _submitChatInput,
-                        leftBuilder: _isAssistantConversation
-                            ? _buildAssistantLeftButton
-                            : _buildQuliaoLeftButton,
-                        rightBuilder: _isAssistantConversation
-                            ? _buildAssistantRightButtons
-                            : _buildQuliaoRightButtons,
-                        extraPanelItems: _isAssistantConversation
-                            ? const <ChatInputExtraPanelItem>[]
-                            : _buildCallPanelItems(),
-                      ),
-                      if (_showEmojiPanel && !_isAssistantConversation)
-                        UnifiedEmojiPicker(
-                          showCloseButton: true,
-                          onClose: () =>
-                              setState(() => _showEmojiPanel = false),
-                          onEmojiSelected: (char) =>
-                              setState(() => _inputController.text += char),
+                  child: SafeArea(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (!_isAssistantConversation &&
+                            !_isGroupChat &&
+                            _relationshipCapability?.isSameInterest != true &&
+                            _otherParticipantId != null)
+                          _buildSameInterestPromptBar(),
+                        CustomizableChatInputBar(
+                          controller: _inputController,
+                          focusNode: _inputFocusNode,
+                          hintText: _isAssistantConversation
+                              ? UITextConstants.assistantAskPlaceholder
+                              : null,
+                          maxTextLength: 5000,
+                          maxVisibleLines: 4,
+                          onPickImages: _pickChatImages,
+                          onCapturePhoto: _captureChatPhoto,
+                          onPickFiles: _pickChatFiles,
+                          onRequestMicPermission: _requestMicPermissionForChat,
+                          onStartRecord: _startVoiceRecordForChat,
+                          onStopRecord: _stopVoiceRecordForChat,
+                          onVoiceAsrTransform: _voiceAsrForChat,
+                          onSend: _submitChatInput,
+                          leftBuilder: _isAssistantConversation
+                              ? _buildAssistantLeftButton
+                              : _buildQuliaoLeftButton,
+                          rightBuilder: _isAssistantConversation
+                              ? _buildAssistantRightButtons
+                              : _buildQuliaoRightButtons,
+                          extraPanelItems: _isAssistantConversation
+                              ? const <ChatInputExtraPanelItem>[]
+                              : _buildCallPanelItems(),
                         ),
-                    ],
+                        if (_showEmojiPanel && !_isAssistantConversation)
+                          UnifiedEmojiPicker(
+                            showCloseButton: true,
+                            onClose: () =>
+                                setState(() => _showEmojiPanel = false),
+                            onEmojiSelected: (char) =>
+                                setState(() => _inputController.text += char),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
               ),
             ],
           ),

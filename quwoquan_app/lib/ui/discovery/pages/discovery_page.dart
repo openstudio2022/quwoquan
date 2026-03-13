@@ -18,7 +18,11 @@ import 'package:quwoquan_app/components/more_actions_popup/configs/media_post_co
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
+import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
+import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
+import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
@@ -33,7 +37,7 @@ import 'package:quwoquan_app/ui/discovery/widgets/moment_social_feed.dart';
 
 /// 发现页 — 双轨道架构
 ///
-/// 主轨道：[微趣] 社交信息流  |  [作品] 沉浸式美图/视频/文章混合频道
+/// 主轨道：[点滴] 社交信息流  |  [作品] 沉浸式图片/视频/笔记混合频道
 /// 切换时背景色在 400ms 内从浅色平滑过渡至墨浆蓝（#0A0E14）
 class DiscoveryPage extends ConsumerStatefulWidget {
   const DiscoveryPage({super.key});
@@ -45,8 +49,10 @@ class DiscoveryPage extends ConsumerStatefulWidget {
 class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   static String _lastActiveType = 'moment';
-  /// 双轨道主 Rail：'moment' | 'works'，默认微趣
+
+  /// 双轨道主 rail：`moment` | `work`，默认点滴。
   String _activeType = _lastActiveType;
+
   /// 保存 notifier 供 dispose 回调使用，避免 dispose 后使用 ref
   VideoForceDarkNotifier? _videoForceDarkNotifier;
   BottomNavHiddenNotifier? _bottomNavHiddenNotifier;
@@ -56,29 +62,49 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   @override
   bool get wantKeepAlive => true;
 
-  /// 双轨道 Rail 列表：[微趣, 作品]
-  static const List<Map<String, String>> _railCategories =
-      <Map<String, String>>[
-    <String, String>{
-      'id': 'moment',
-      'label': UITextConstants.discoveryRailMoment,
-    },
-    <String, String>{
-      'id': 'works',
-      'label': UITextConstants.discoveryRailWorks,
-    },
-  ];
-  List<Map<String, String>> get _categories => _railCategories;
+  String _railLabel(String id) {
+    switch (id) {
+      case 'moment':
+        return UITextConstants.discoveryRailMoment;
+      case 'work':
+        return UITextConstants.discoveryRailWorks;
+      default:
+        return id;
+    }
+  }
 
-  DiscoveryTabConfig? _tabConfigFor(String tabId) =>
-      ContentUIConfig.discoveryTabs.cast<DiscoveryTabConfig?>().firstWhere(
-        (t) => t!.id == tabId,
-        orElse: () => null,
-      );
+  List<Map<String, String>> get _categories {
+    final enableIdentityBasedSurfaces = ref.read(
+      contentFeatureFlagProvider('enable_identity_based_surfaces'),
+    );
+    if (enableIdentityBasedSurfaces) {
+      return ContentUIConfig.discoveryRails
+          .map(
+            (rail) => <String, String>{
+              'id': rail.id,
+              'label': _railLabel(rail.id),
+            },
+          )
+          .toList(growable: false);
+    }
+    return ContentUIConfig.discoveryTabs
+        .map(
+          (tab) => <String, String>{
+            'id': tab.id,
+            'label': UITextConstants.contentLabelForKey(tab.labelKey),
+          },
+        )
+        .toList(growable: false);
+  }
+
+  DiscoveryTabConfig? _tabConfigFor(String tabId) => ContentUIConfig
+      .discoveryTabs
+      .cast<DiscoveryTabConfig?>()
+      .firstWhere((t) => t!.id == tabId, orElse: () => null);
 
   /// 作品频道 & 视频全屏均触发深色模式 + 隐藏底部导航
   bool get _isVideoMode =>
-      _activeType == 'works' ||
+      _activeType == 'work' ||
       _tabConfigFor(_activeType)?.layout == 'full_width_vertical_pager';
 
   List<String> get _primaryTabIds =>
@@ -129,7 +155,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
 
   void _hideSystemBottomNav() {
     _systemNavAutoHideTimer?.cancel();
-    if (_activeType == 'works') {
+    if (_activeType == 'work') {
       ref.read(bottomNavHiddenProvider.notifier).setHidden(true);
     }
   }
@@ -139,18 +165,20 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
         ? post.id
         : (post is Map ? (post['id']?.toString() ?? '') : '');
     if (contentId.isEmpty) return;
-    ref.read(behaviorRepositoryProvider).reportSingle(
-      contentId: contentId,
-      action: action,
-      tags: const <String>[],
-      duration: duration,
-    );
+    ref
+        .read(behaviorRepositoryProvider)
+        .reportSingle(
+          contentId: contentId,
+          action: action,
+          tags: const <String>[],
+          duration: duration,
+        );
   }
 
   void _recordDiscoveryVisit(String tabId) {
-    ref.read(visitRecorderServiceProvider).recordVisit(
-          VisitTarget.page('discovery_$tabId'),
-        );
+    ref
+        .read(visitRecorderServiceProvider)
+        .recordVisit(VisitTarget.page('discovery_$tabId'));
   }
 
   void _openAssistantHalfSheet() {
@@ -169,14 +197,16 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   void initState() {
     super.initState();
     _primaryPageController = PageController(
-      initialPage: _primaryTabIds.indexOf(_activeType).clamp(0, _primaryTabIds.length - 1),
+      initialPage: _primaryTabIds
+          .indexOf(_activeType)
+          .clamp(0, _primaryTabIds.length - 1),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _videoForceDarkNotifier = ref.read(videoForceDarkProvider.notifier);
       _bottomNavHiddenNotifier = ref.read(bottomNavHiddenProvider.notifier);
       _applyVideoForceDark();
       _recordDiscoveryVisit(_activeType);
-      // 默认预加载微趣 feed
+      // 默认预加载点滴 feed
       _ensureFeedLoaded('moment');
     });
   }
@@ -240,11 +270,11 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       ],
     );
 
-    final targetBg = _activeType == 'works'
+    final targetBg = _activeType == 'work'
         ? AppColors.worksBackground
         : _isVideoMode
-            ? Colors.black
-            : AppColorsFunctional.getColor(themeDark, ColorType.backgroundPrimary);
+        ? Colors.black
+        : AppColorsFunctional.getColor(themeDark, ColorType.backgroundPrimary);
 
     return Scaffold(
       key: TestKeys.discoveryPage,
@@ -257,7 +287,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
             curve: Curves.easeInOutCubic,
             color: targetBg,
           ),
-          if (_activeType == 'works')
+          if (_activeType == 'work')
             AnnotatedRegion<SystemUiOverlayStyle>(
               value: const SystemUiOverlayStyle(
                 statusBarColor: Colors.transparent,
@@ -303,7 +333,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
                 .toList(growable: false),
             activeTab: _activeType,
             isDark: isDark,
-            excludeUnderlineTabIds: const ['works'],
+            excludeUnderlineTabIds: const ['work'],
             onTabChange: _setActiveType,
             leadingActions: [
               // 左侧锚点占位可直接替换成图标，不影响中轴。
@@ -313,8 +343,9 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
               SizedBox(
                 width: sideAnchorWidth,
                 child: CupertinoButton(
+                  key: TestKeys.discoveryCreateButton,
                   padding: EdgeInsets.zero,
-                  onPressed: () => context.go(AppRoutePaths.create()),
+                  onPressed: () => context.go(AppRoutePaths.createEntry),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -352,8 +383,11 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   Widget _buildVideoImmersionView(bool isDark, {String tabId = 'video'}) {
     final feedMap = ref.watch(discoveryFeedMapProvider);
     final feedAsync = ref.watch(discoveryFeedProvider(tabId));
-    final fallbackRaw = ref.watch(appContentRepositoryProvider).discoveryVideoData;
-    final dtos = feedAsync.value?.items ??
+    final fallbackRaw = ref
+        .watch(appContentRepositoryProvider)
+        .discoveryVideoData;
+    final dtos =
+        feedAsync.value?.items ??
         fallbackRaw.map(postBaseDtoFromMap).toList(growable: false);
     final videos = dtos;
     final hasError = feedAsync.value?.error != null;
@@ -379,16 +413,22 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
         _applyVideoForceDark();
       },
       onToggleUI: () {},
-      onUserClick: (userId, {String? avatarUrl, String? displayName, String? backgroundUrl}) {
-        context.push(
-          '/user/$userId',
-          extra: UserProfileRouteExtra(
-            avatar: avatarUrl,
-            displayName: displayName,
-            backgroundImage: backgroundUrl,
-          ),
-        );
-      },
+      onUserClick:
+          (
+            userId, {
+            String? avatarUrl,
+            String? displayName,
+            String? backgroundUrl,
+          }) {
+            context.push(
+              '/user/$userId',
+              extra: UserProfileRouteExtra(
+                avatar: avatarUrl,
+                displayName: displayName,
+                backgroundImage: backgroundUrl,
+              ),
+            );
+          },
       onAssistantTap: _openAssistantHalfSheet,
       onCommentTap: _onMomentCommentTap,
       onShareTap: _onMomentShareTap,
@@ -401,24 +441,27 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     );
   }
 
-  /// 作品频道全屏视图（独立于 PageView 之外，由 Scaffold body 直接渲染）
+  /// 作品频道全屏视图（独立于 `PageView` 之外，由 `Scaffold.body` 直接渲染）
   Widget _buildWorksView() {
     final isSystemNavVisible = !ref.watch(bottomNavHiddenProvider).hidden;
     return WorksImmersiveViewer(
       showWorksToolbar: !isSystemNavVisible,
-      onUserTap: (userId,
-          {String? avatarUrl,
-          String? displayName,
-          String? backgroundUrl}) {
-        context.push(
-          '/user/$userId',
-          extra: UserProfileRouteExtra(
-            avatar: avatarUrl,
-            displayName: displayName,
-            backgroundImage: backgroundUrl,
-          ),
-        );
-      },
+      onUserTap:
+          (
+            userId, {
+            String? avatarUrl,
+            String? displayName,
+            String? backgroundUrl,
+          }) {
+            context.push(
+              '/user/$userId',
+              extra: UserProfileRouteExtra(
+                avatar: avatarUrl,
+                displayName: displayName,
+                backgroundImage: backgroundUrl,
+              ),
+            );
+          },
       onAssistantTap: _openAssistantHalfSheet,
       onSwitchToMoment: () => _setActiveType('moment'),
       onRevealSystemNav: _revealSystemBottomNav,
@@ -427,27 +470,30 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   }
 
   Widget _buildContentForTab(String tabId, bool isDark) {
-    // 作品频道由 _buildWorksView 直接挂在 Scaffold，不经过 PageView 路径
-    if (tabId == 'works') {
+    // 作品频道由 `_buildWorksView` 直接挂在 Scaffold，不经过 PageView 路径。
+    if (tabId == 'work') {
       return const SizedBox.shrink();
     }
-    // 微趣频道：新 Weibo 风格信息流
+    // 点滴频道：信息流
     if (tabId == 'moment') {
       return MomentSocialFeed(
         isDark: isDark,
-        onUserTap: (userId,
-            {String? avatarUrl,
-            String? displayName,
-            String? backgroundUrl}) {
-          context.push(
-            '/user/$userId',
-            extra: UserProfileRouteExtra(
-              avatar: avatarUrl,
-              displayName: displayName,
-              backgroundImage: backgroundUrl,
-            ),
-          );
-        },
+        onUserTap:
+            (
+              userId, {
+              String? avatarUrl,
+              String? displayName,
+              String? backgroundUrl,
+            }) {
+              context.push(
+                '/user/$userId',
+                extra: UserProfileRouteExtra(
+                  avatar: avatarUrl,
+                  displayName: displayName,
+                  backgroundImage: backgroundUrl,
+                ),
+              );
+            },
         onPostTap: (post, index, {feedPosts}) {
           _trackBehavior('click', post);
           _onPostTap(post, index, feedPosts: feedPosts, category: 'moment');
@@ -501,8 +547,11 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   Widget _buildMomentContent(bool isDark, {String tabId = 'moment'}) {
     final feedMap = ref.watch(discoveryFeedMapProvider);
     final feedAsync = ref.watch(discoveryFeedProvider(tabId));
-    final fallbackRaw = ref.watch(appContentRepositoryProvider).discoveryMomentData;
-    final dtos = feedAsync.value?.items ??
+    final fallbackRaw = ref
+        .watch(appContentRepositoryProvider)
+        .discoveryMomentData;
+    final dtos =
+        feedAsync.value?.items ??
         fallbackRaw.map(postBaseDtoFromMap).toList(growable: false);
     final moments = dtos.whereType<MomentPostDto>().toList(growable: false);
     final hasError = feedAsync.value?.error != null;
@@ -521,7 +570,8 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     return ListView.builder(
       padding: EdgeInsets.only(
         top: AppSpacing.containerSm,
-        bottom: MediaQuery.of(context).padding.bottom +
+        bottom:
+            MediaQuery.of(context).padding.bottom +
             AppSpacing.bottomNavHeight +
             AppSpacing.interGroupMd,
       ),
@@ -540,18 +590,17 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
                 isDark: isDark,
                 isFirst: isFirst,
                 onUserTap: (id) {
-                  context.push(AppRoutePaths.userProfile(username: id), extra: <String, String?>{
-                    'avatar': dto.avatarUrl,
-                    'displayName': dto.displayName,
-                    'backgroundImage': dto.authorBackgroundUrl,
-                  });
+                  context.push(
+                    AppRoutePaths.userProfile(username: id),
+                    extra: <String, String?>{
+                      'avatar': dto.avatarUrl,
+                      'displayName': dto.displayName,
+                      'backgroundImage': dto.authorBackgroundUrl,
+                    },
+                  );
                 },
-                onPostTap: (post, i) => _onPostTap(
-                  post,
-                  i,
-                  feedPosts: moments,
-                  category: tabId,
-                ),
+                onPostTap: (post, i) =>
+                    _onPostTap(post, i, feedPosts: moments, category: tabId),
                 onCommentTap: (post) => _onMomentCommentTap(context, post),
                 onShareTap: (post) => _onMomentShareTap(context, post),
                 onMoreTap: (post) => _onMomentMoreTap(context, post),
@@ -575,8 +624,11 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   Widget _buildArticleContent(bool isDark, {String tabId = 'article'}) {
     final feedMap = ref.watch(discoveryFeedMapProvider);
     final feedAsync = ref.watch(discoveryFeedProvider(tabId));
-    final fallbackRaw = ref.watch(appContentRepositoryProvider).discoveryArticleData;
-    final dtos = feedAsync.value?.items ??
+    final fallbackRaw = ref
+        .watch(appContentRepositoryProvider)
+        .discoveryArticleData;
+    final dtos =
+        feedAsync.value?.items ??
         fallbackRaw.map(postBaseDtoFromMap).toList(growable: false);
     final articles = dtos.whereType<ArticlePostDto>().toList(growable: false);
     final hasError = feedAsync.value?.error != null;
@@ -595,7 +647,8 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     return ListView.builder(
       padding: EdgeInsets.only(
         top: AppSpacing.containerSm,
-        bottom: MediaQuery.of(context).padding.bottom +
+        bottom:
+            MediaQuery.of(context).padding.bottom +
             AppSpacing.bottomNavHeight +
             AppSpacing.interGroupMd,
       ),
@@ -618,11 +671,14 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
                   context.push(AppRoutePaths.articleDetail(id: dto.id));
                 },
                 onUserTap: () {
-                  context.push(AppRoutePaths.userProfile(username: dto.authorId), extra: <String, String?>{
-                    'avatar': dto.avatarUrl,
-                    'displayName': dto.displayName,
-                    'backgroundImage': dto.authorBackgroundUrl,
-                  });
+                  context.push(
+                    AppRoutePaths.userProfile(username: dto.authorId),
+                    extra: <String, String?>{
+                      'avatar': dto.avatarUrl,
+                      'displayName': dto.displayName,
+                      'backgroundImage': dto.authorBackgroundUrl,
+                    },
+                  );
                 },
               ),
             ),
@@ -675,7 +731,10 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     return post.likeCount > 0 ? post.likeCount : null;
   }
 
-  static int? _displayBookmarksCount(DiscoveryState homeState, PostBaseDto post) {
+  static int? _displayBookmarksCount(
+    DiscoveryState homeState,
+    PostBaseDto post,
+  ) {
     final n = homeState.getPostBookmarksCount(post.id);
     if (n > 0) return n;
     return post.favoriteCount > 0 ? post.favoriteCount : null;
@@ -685,8 +744,11 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     final homeState = ref.watch(discoveryStateProvider);
     final feedMap = ref.watch(discoveryFeedMapProvider);
     final feedAsync = ref.watch(discoveryFeedProvider(tabId));
-    final fallbackRaw = ref.watch(appContentRepositoryProvider).discoveryPhotoData;
-    final dtos = feedAsync.value?.items ??
+    final fallbackRaw = ref
+        .watch(appContentRepositoryProvider)
+        .discoveryPhotoData;
+    final dtos =
+        feedAsync.value?.items ??
         fallbackRaw.map(postBaseDtoFromMap).toList(growable: false);
     final photos = dtos.whereType<PhotoPostDto>().toList(growable: false);
     final hasError = feedAsync.value?.error != null;
@@ -738,7 +800,12 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
                 key: index == 0 ? TestKeys.photoPostCard : null,
                 child: _DiscoveryItemCard(
                   post: post,
-                  onTap: () => _onPostTap(post, index, feedPosts: photos, category: tabId),
+                  onTap: () => _onPostTap(
+                    post,
+                    index,
+                    feedPosts: photos,
+                    category: tabId,
+                  ),
                   isLiked: homeState.likedPosts.contains(post.id),
                   isSaved: homeState.savedPosts.contains(post.id),
                   likesCount: likesDisplay,
@@ -752,16 +819,15 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     );
   }
 
-  /// 触发指定 tab 的 feed 加载（若已有数据则跳过）
-  /// 'works' 是伪 Rail，feeds 由 WorksImmersiveViewer 内部管理，不在此处加载。
+  /// 触发指定 tab 的 feed 加载（若已有数据则跳过）。
+  /// `work` 是伪 rail，feeds 由 `WorksImmersiveViewer` 内部管理。
   void _ensureFeedLoaded(String tabId) {
-    if (tabId == 'works') return;
+    if (tabId == 'work') return;
     final feedMap = ref.read(discoveryFeedMapProvider);
     if (!feedMap.containsKey(tabId)) {
       ref.read(discoveryFeedMapProvider.notifier).load(tabId);
     }
   }
-
 
   void _onPostTap(
     PostBaseDto post,
@@ -770,33 +836,31 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     String? category,
   }) {
     _trackBehavior('click', post);
-    // Resolve tab config by matching post.type (API ContentType) against ContentUIConfig.
-    final tabConfig = ContentUIConfig.discoveryTabs.cast<DiscoveryTabConfig?>().firstWhere(
-      (t) => t!.contentType == post.type,
-      orElse: () => null,
-    );
-    if (tabConfig?.layout == 'list_with_cover') {
+    if (post.identity == 'work' && post.displayFormat == 'note') {
       context.push(AppRoutePaths.articleDetail(id: post.id));
       return;
     }
     final postViews = feedPosts?.map(PostSummaryView.fromDto).toList();
     // For moment (multi-image per post): initialIndex = post index so viewer shows correct post
     final initialIndex = (feedPosts != null && feedPosts.isNotEmpty)
-        ? feedPosts.indexWhere((p) => p.id == post.id).clamp(0, feedPosts.length - 1)
+        ? feedPosts
+              .indexWhere((p) => p.id == post.id)
+              .clamp(0, feedPosts.length - 1)
         : mediaIndex;
-    // 微趣图片/视频分流：有 videoUrl 则进视频浏览器
+    // 点滴图片/视频分流：有 videoUrl 则进视频浏览器
     final moment = post is MomentPostDto ? post : null;
-    final hasVideo = moment != null &&
+    final hasVideo =
+        moment != null &&
         moment.videoUrl != null &&
         moment.videoUrl!.trim().isNotEmpty;
-    if (tabConfig?.layout == 'full_width_vertical_pager' || (category == 'moment' && hasVideo)) {
+    if (post.displayFormat == 'video' || (category == 'moment' && hasVideo)) {
       if (postViews != null && postViews.isNotEmpty) {
         context.push(
           '/video-viewer/$initialIndex',
           extra: MediaViewerExtra(
             posts: postViews,
             initialIndex: initialIndex,
-            category: category ?? tabConfig!.id,
+            category: category ?? 'video',
           ),
         );
       } else {
@@ -811,13 +875,16 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
         extra: MediaViewerExtra(
           posts: postViews,
           initialIndex: initialIndex,
-          category: category ?? (tabConfig?.id ?? 'photo'),
+          category: category ?? post.displayFormat,
           initialImageIndex: isMoment ? mediaIndex : 0,
         ),
       );
     } else {
       context.push(
-        AppRoutePaths.mediaViewer(category: 'photo', index: '$initialIndex'),
+        AppRoutePaths.mediaViewer(
+          category: post.displayFormat == 'video' ? 'video' : 'photo',
+          index: '$initialIndex',
+        ),
       );
     }
   }
@@ -835,53 +902,102 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   }
 
   void _onMomentShareTap(BuildContext context, dynamic post) {
-    _trackBehavior('share', post);
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: EdgeInsets.all(AppSpacing.containerMd),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                UITextConstants.shareTo,
-                style: TextStyle(
-                  fontSize: AppTypography.lg,
-                  fontWeight: AppTypography.semiBold,
-                ),
-              ),
-              SizedBox(height: AppSpacing.interGroupMd),
-              ListTile(
-                leading: const Icon(Icons.chat_bubble_outline),
-                title: Text(UITextConstants.shareTargetWechat),
-                onTap: () => Navigator.pop(context),
-              ),
-              ListTile(
-                leading: const Icon(Icons.people_outline),
-                title: Text(UITextConstants.shareTargetMoments),
-                onTap: () => Navigator.pop(context),
-              ),
-              ListTile(
-                leading: const Icon(Icons.link),
-                title: Text(UITextConstants.copyLink),
-                onTap: () => Navigator.pop(context),
-              ),
-            ],
-          ),
-        ),
-      ),
+    final dto = _resolveSharePost(post);
+    if (dto == null) return;
+    final template = _buildShareTemplate(dto, post);
+    ContentShareSheet.show(
+      context,
+      template: template,
+      onActionCompleted: (result) async {
+        _trackShareAction(dto.id, result.actionId);
+      },
     );
   }
 
   void _onMomentMoreTap(BuildContext context, dynamic post) {
+    final dto = _resolveSharePost(post);
     MoreActionPopup.show(
       context: context,
-      config: MediaPostMoreActionConfig(post: post),
+      config: MediaPostMoreActionConfig(
+        post: post,
+        onCopyLink: dto == null
+            ? null
+            : () => _copyLinkFromMore(context, dto, post),
+        onShare: dto == null ? null : () => _onMomentShareTap(context, post),
+      ),
     );
   }
 
+  Future<void> _copyLinkFromMore(
+    BuildContext context,
+    PostBaseDto dto,
+    dynamic rawPost,
+  ) async {
+    final result = await const DefaultContentShareActionHandler().execute(
+      context,
+      _buildShareTemplate(dto, rawPost),
+      const ContentShareAction(
+        id: 'copy_link',
+        label: UITextConstants.copyLink,
+      ),
+    );
+    if (result.success) {
+      _trackShareAction(dto.id, result.actionId);
+    }
+  }
+
+  PostBaseDto? _resolveSharePost(dynamic post) {
+    if (post is PostBaseDto) {
+      return post;
+    }
+    if (post is Map) {
+      return postBaseDtoFromMap(post.cast<String, dynamic>());
+    }
+    return null;
+  }
+
+  ContentShareTemplate _buildShareTemplate(PostBaseDto post, dynamic rawPost) {
+    final raw = rawPost is Map<String, dynamic>
+        ? rawPost
+        : ref
+                  .read(appContentRepositoryProvider)
+                  .discoveryMomentData
+                  .cast<Map<String, dynamic>?>()
+                  .firstWhere(
+                    (item) =>
+                        item?['postId']?.toString() == post.id ||
+                        item?['id']?.toString() == post.id,
+                    orElse: () => null,
+                  ) ??
+              post.toMap();
+    final tags =
+        (raw['tags'] as List?)
+            ?.map((item) => item.toString().trim())
+            .where((item) => item.isNotEmpty)
+            .toList(growable: false) ??
+        const <String>[];
+    final circleName = raw['circleName']?.toString().trim() ?? '';
+    final enableIdentityTemplate = ref.read(
+      contentFeatureFlagProvider('enable_identity_share_template'),
+    );
+    return ContentShareTemplateBuilder.build(
+      post: post,
+      enableIdentityTemplate: enableIdentityTemplate,
+      visibility: raw['visibility']?.toString() ?? 'public',
+      tags: tags,
+      circleNames: circleName.isEmpty ? const <String>[] : <String>[circleName],
+    );
+  }
+
+  void _trackShareAction(String postId, String actionId) {
+    ref
+        .read(behaviorRepositoryProvider)
+        .reportSingle(
+          contentId: postId,
+          action: 'share',
+          tags: <String>[actionId],
+        );
+  }
 }
 
 String _toTimeAgo(DateTime time, AppLocalizations l10n) {
@@ -949,9 +1065,18 @@ class _MomentPostCardState extends State<_MomentPostCard>
     final item = widget.item;
     final isDark = widget.isDark;
     final isFirst = widget.isFirst;
-    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final muted = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
-    final quotedBg = AppColorsFunctional.getColor(isDark, ColorType.backgroundQuoted);
+    final fg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final muted = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final quotedBg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundQuoted,
+    );
     final likeColor = _isLiked ? AppColors.error : muted;
     final bookmarkColor = _isBookmarked ? AppColors.warning : muted;
 
@@ -965,7 +1090,10 @@ class _MomentPostCardState extends State<_MomentPostCard>
     return Container(
       padding: EdgeInsets.symmetric(vertical: AppSpacing.md.h),
       decoration: BoxDecoration(
-        color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
+        color: AppColorsFunctional.getColor(
+          isDark,
+          ColorType.backgroundPrimary,
+        ),
         borderRadius: borderRadius,
       ),
       child: Column(
@@ -1006,7 +1134,11 @@ class _MomentPostCardState extends State<_MomentPostCard>
               ),
               if (widget.onMoreTap != null)
                 IconButton(
-                  icon: Icon(Icons.more_horiz, size: AppSpacing.iconMedium, color: muted),
+                  icon: Icon(
+                    Icons.more_horiz,
+                    size: AppSpacing.iconMedium,
+                    color: muted,
+                  ),
                   onPressed: () => widget.onMoreTap!(item),
                   style: IconButton.styleFrom(
                     minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
@@ -1080,7 +1212,9 @@ class _MomentPostCardState extends State<_MomentPostCard>
                   if (_isBookmarked) widget.onBehavior?.call('favorite', item);
                 },
                 child: _actionChip(
-                  _isBookmarked ? CupertinoIcons.star_fill : CupertinoIcons.star,
+                  _isBookmarked
+                      ? CupertinoIcons.star_fill
+                      : CupertinoIcons.star,
                   _formatCount(item.favoriteCount + (_isBookmarked ? 1 : 0)),
                   isDark,
                   iconColor: bookmarkColor,
@@ -1107,13 +1241,19 @@ class _MomentPostCardState extends State<_MomentPostCard>
     if (n < 10000) return '$n';
     if (n >= 100000) return '10万+';
     final tenK = (n / 10000 * 10).floor() / 10;
-    return (tenK * 10).round() % 10 == 0
-        ? '${tenK.truncate()}万+'
-        : '$tenK万+';
+    return (tenK * 10).round() % 10 == 0 ? '${tenK.truncate()}万+' : '$tenK万+';
   }
 
-  Widget _actionChip(IconData icon, String count, bool isDark, {Color? iconColor}) {
-    final muted = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+  Widget _actionChip(
+    IconData icon,
+    String count,
+    bool isDark, {
+    Color? iconColor,
+  }) {
+    final muted = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1146,8 +1286,14 @@ class _ArticleCardPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final muted = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    final fg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final muted = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
 
     final borderRadius = isFirst
         ? BorderRadius.only(
@@ -1161,7 +1307,10 @@ class _ArticleCardPlaceholder extends StatelessWidget {
       child: Container(
         padding: EdgeInsets.symmetric(vertical: AppSpacing.md.h),
         decoration: BoxDecoration(
-          color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
+          color: AppColorsFunctional.getColor(
+            isDark,
+            ColorType.backgroundPrimary,
+          ),
           borderRadius: borderRadius,
         ),
         child: Column(
@@ -1194,7 +1343,9 @@ class _ArticleCardPlaceholder extends StatelessWidget {
             ),
             SizedBox(height: AppSpacing.intraGroupSm),
             Text(
-              article.type,
+              article.displayFormat == 'note'
+                  ? UITextConstants.createWorkFormatNote
+                  : article.displayFormat,
               style: TextStyle(
                 fontSize: AppTypography.sm,
                 color: AppColors.primaryColor,
@@ -1230,17 +1381,26 @@ class _ArticleCardPlaceholder extends StatelessWidget {
                     ),
                     Text(
                       ' ${article.likeCount} ',
-                      style: TextStyle(fontSize: AppTypography.base, color: muted),
+                      style: TextStyle(
+                        fontSize: AppTypography.base,
+                        color: muted,
+                      ),
                     ),
                     AppStarIcon(size: AppSpacing.iconMedium, color: muted),
                     Text(
                       ' ${article.favoriteCount} ',
-                      style: TextStyle(fontSize: AppTypography.base, color: muted),
+                      style: TextStyle(
+                        fontSize: AppTypography.base,
+                        color: muted,
+                      ),
                     ),
                     AppBubbleIcon(size: AppSpacing.iconMedium, color: muted),
                     Text(
                       ' ${article.commentCount} ',
-                      style: TextStyle(fontSize: AppTypography.base, color: muted),
+                      style: TextStyle(
+                        fontSize: AppTypography.base,
+                        color: muted,
+                      ),
                     ),
                   ],
                 ),
@@ -1368,9 +1528,12 @@ class _DiscoveryItemCard extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.25),
-                        borderRadius:
-                            BorderRadius.circular(AppSpacing.smallBorderRadius),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.smallBorderRadius,
+                        ),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.1),
+                        ),
                       ),
                       child: Text(
                         '$imageCount',
@@ -1387,7 +1550,9 @@ class _DiscoveryItemCard extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.25),
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.1),
+                        ),
                       ),
                       child: Icon(
                         Icons.play_arrow,
@@ -1407,7 +1572,9 @@ class _DiscoveryItemCard extends StatelessWidget {
                   Icon(
                     isLiked ? Icons.favorite : Icons.favorite_border,
                     size: AppSpacing.iconSmall,
-                    color: isLiked ? Colors.red : Colors.white.withValues(alpha: 0.9),
+                    color: isLiked
+                        ? Colors.red
+                        : Colors.white.withValues(alpha: 0.9),
                   ),
                   if (likesCount != null && likesCount! > 0) ...[
                     SizedBox(width: AppSpacing.xs),
@@ -1423,7 +1590,9 @@ class _DiscoveryItemCard extends StatelessWidget {
                   Icon(
                     isSaved ? Icons.bookmark : Icons.bookmark_border,
                     size: AppSpacing.iconSmall,
-                    color: isSaved ? Colors.amber : Colors.white.withValues(alpha: 0.9),
+                    color: isSaved
+                        ? Colors.amber
+                        : Colors.white.withValues(alpha: 0.9),
                   ),
                   if (bookmarksCount != null && bookmarksCount! > 0) ...[
                     SizedBox(width: AppSpacing.xs),
@@ -1474,11 +1643,18 @@ class _VideoImmersionView extends StatefulWidget {
   final String activeTab;
   final List<PostBaseDto> videos;
   final bool isUIVisible;
+
   /// 是否启用「点击视频区域切换 overlay」的剧场模式；false 时 overlay 常显、点击无切换。
   final bool theaterModeTapToToggle;
   final void Function(String id) onTabChange;
   final VoidCallback onToggleUI;
-  final void Function(String userId, {String? avatarUrl, String? displayName, String? backgroundUrl}) onUserClick;
+  final void Function(
+    String userId, {
+    String? avatarUrl,
+    String? displayName,
+    String? backgroundUrl,
+  })
+  onUserClick;
   final VoidCallback onAssistantTap;
   final void Function(BuildContext context, dynamic post)? onCommentTap;
   final void Function(BuildContext context, dynamic post)? onShareTap;
@@ -1500,8 +1676,9 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
   late Animation<double> _likeScaleAnimation;
   late Animation<double> _bookmarkScaleAnimation;
 
-  List<String> get _primaryTabIds =>
-      widget.categories.map((category) => category['id']!).toList(growable: false);
+  List<String> get _primaryTabIds => widget.categories
+      .map((category) => category['id']!)
+      .toList(growable: false);
 
   void _switchPrimaryByDelta(int delta) {
     final currentIndex = _primaryTabIds.indexOf(widget.activeTab);
@@ -1513,10 +1690,9 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
     }
     final nextId = _primaryTabIds[nextIndex];
     // Only switch to non-video tabs (video is handled via full-screen pager, not tab switch).
-    final nextTab = ContentUIConfig.discoveryTabs.cast<DiscoveryTabConfig?>().firstWhere(
-      (t) => t!.id == nextId,
-      orElse: () => null,
-    );
+    final nextTab = ContentUIConfig.discoveryTabs
+        .cast<DiscoveryTabConfig?>()
+        .firstWhere((t) => t!.id == nextId, orElse: () => null);
     if (nextTab?.layout != 'full_width_vertical_pager') {
       widget.onTabChange(nextId);
     }
@@ -1540,34 +1716,38 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
       vsync: this,
       duration: const Duration(milliseconds: 200),
     );
-    _likeScaleAnimation = TweenSequence<double>(
-      <TweenSequenceItem<double>>[
-        TweenSequenceItem(
-          tween: Tween<double>(begin: 1.0, end: 1.2)
-              .chain(CurveTween(curve: Curves.easeOut)),
-          weight: 50,
-        ),
-        TweenSequenceItem(
-          tween: Tween<double>(begin: 1.2, end: 1.0)
-              .chain(CurveTween(curve: Curves.easeIn)),
-          weight: 50,
-        ),
-      ],
-    ).animate(_likeAnimationController);
-    _bookmarkScaleAnimation = TweenSequence<double>(
-      <TweenSequenceItem<double>>[
-        TweenSequenceItem(
-          tween: Tween<double>(begin: 1.0, end: 1.2)
-              .chain(CurveTween(curve: Curves.easeOut)),
-          weight: 50,
-        ),
-        TweenSequenceItem(
-          tween: Tween<double>(begin: 1.2, end: 1.0)
-              .chain(CurveTween(curve: Curves.easeIn)),
-          weight: 50,
-        ),
-      ],
-    ).animate(_bookmarkAnimationController);
+    _likeScaleAnimation = TweenSequence<double>(<TweenSequenceItem<double>>[
+      TweenSequenceItem(
+        tween: Tween<double>(
+          begin: 1.0,
+          end: 1.2,
+        ).chain(CurveTween(curve: Curves.easeOut)),
+        weight: 50,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(
+          begin: 1.2,
+          end: 1.0,
+        ).chain(CurveTween(curve: Curves.easeIn)),
+        weight: 50,
+      ),
+    ]).animate(_likeAnimationController);
+    _bookmarkScaleAnimation = TweenSequence<double>(<TweenSequenceItem<double>>[
+      TweenSequenceItem(
+        tween: Tween<double>(
+          begin: 1.0,
+          end: 1.2,
+        ).chain(CurveTween(curve: Curves.easeOut)),
+        weight: 50,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(
+          begin: 1.2,
+          end: 1.0,
+        ).chain(CurveTween(curve: Curves.easeIn)),
+        weight: 50,
+      ),
+    ]).animate(_bookmarkAnimationController);
   }
 
   @override
@@ -1605,7 +1785,9 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                   final authorAvatar = post.avatarUrl;
                   final authorName = post.displayName;
                   final authorBg = post.authorBackgroundUrl;
-                  final thumbnail = post is VideoPostDto ? post.thumbnailUrl : '';
+                  final thumbnail = post is VideoPostDto
+                      ? post.thumbnailUrl
+                      : '';
                   final isLiked = _likedIndexes.contains(index);
                   return GestureDetector(
                     onTap: () {
@@ -1631,7 +1813,10 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                             gradient: LinearGradient(
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
-                              colors: [Colors.transparent, Colors.black.withValues(alpha: 0.8)],
+                              colors: [
+                                Colors.transparent,
+                                Colors.black.withValues(alpha: 0.8),
+                              ],
                             ),
                           ),
                         ),
@@ -1639,7 +1824,8 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                         if (widget.isUIVisible)
                           Positioned(
                             right: AppSpacing.containerMd,
-                            bottom: AppSpacing.interGroupMd +
+                            bottom:
+                                AppSpacing.interGroupMd +
                                 MediaQuery.of(context).padding.bottom,
                             child: GestureDetector(
                               onTap: () {},
@@ -1663,48 +1849,63 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                                           CircleAvatar(
                                             radius: AppSpacing.buttonHeight / 2,
                                             backgroundColor: Colors.white,
-                                            backgroundImage: NetworkImage(authorAvatar),
+                                            backgroundImage: NetworkImage(
+                                              authorAvatar,
+                                            ),
                                           ),
-                                          if (!(widget.followingUsers?.contains(authorId) ?? false))
+                                          if (!(widget.followingUsers?.contains(
+                                                authorId,
+                                              ) ??
+                                              false))
                                             Positioned(
                                               left: 0,
                                               right: 0,
-                                              bottom: -AppSpacing.buttonHeightXs /
+                                              bottom:
+                                                  -AppSpacing.buttonHeightXs /
                                                   2,
                                               child: Center(
                                                 child: IntrinsicWidth(
                                                   child: GestureDetector(
                                                     onTap: () {
-                                                      widget.onFollowClick?.call(authorId, true);
+                                                      widget.onFollowClick
+                                                          ?.call(
+                                                            authorId,
+                                                            true,
+                                                          );
                                                     },
                                                     child: Container(
                                                       padding:
                                                           AppSpacing.buttonPaddingCompact(
-                                                        context,
-                                                        DesignSemanticConstants.sm,
-                                                      ),
-                                                      height: AppSpacing
-                                                          .buttonHeightForSizeCompact(
-                                                        DesignSemanticConstants.sm,
-                                                      ),
+                                                            context,
+                                                            DesignSemanticConstants
+                                                                .sm,
+                                                          ),
+                                                      height:
+                                                          AppSpacing.buttonHeightForSizeCompact(
+                                                            DesignSemanticConstants
+                                                                .sm,
+                                                          ),
                                                       decoration: BoxDecoration(
-                                                        color:
-                                                            AppColors.primaryColor,
+                                                        color: AppColors
+                                                            .primaryColor,
                                                         borderRadius:
                                                             BorderRadius.circular(
-                                                          AppSpacing
-                                                              .circularBorderRadius,
-                                                        ),
+                                                              AppSpacing
+                                                                  .circularBorderRadius,
+                                                            ),
                                                       ),
                                                       child: Center(
                                                         child: Text(
                                                           '+ ${UITextConstants.follow}',
                                                           style: TextStyle(
                                                             fontSize:
-                                                                AppTypography.sm,
+                                                                AppTypography
+                                                                    .sm,
                                                             fontWeight:
-                                                                AppTypography.medium,
-                                                            color: AppColors.white,
+                                                                AppTypography
+                                                                    .medium,
+                                                            color:
+                                                                AppColors.white,
                                                           ),
                                                           overflow:
                                                               TextOverflow.clip,
@@ -1743,7 +1944,9 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                                       filled: _savedIndexes.contains(index),
                                       color: _savedIndexes.contains(index)
                                           ? AppColors.warning
-                                          : Colors.white.withValues(alpha: 0.78),
+                                          : Colors.white.withValues(
+                                              alpha: 0.78,
+                                            ),
                                     ),
                                     UITextConstants.bookmarks,
                                     () {
@@ -1754,26 +1957,36 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                                           _savedIndexes.add(index);
                                         }
                                       });
-                                      _bookmarkAnimationController.forward(from: 0);
+                                      _bookmarkAnimationController.forward(
+                                        from: 0,
+                                      );
                                     },
                                     scaleAnimation: _bookmarkScaleAnimation,
                                   ),
                                   _videoActionWidget(
                                     AppBubbleIcon(
                                       size: AppSpacing.iconMedium,
-                                      color: Colors.white.withValues(alpha: 0.78),
+                                      color: Colors.white.withValues(
+                                        alpha: 0.78,
+                                      ),
                                     ),
                                     '${post.commentCount}',
-                                    () => widget.onCommentTap?.call(context, post),
+                                    () => widget.onCommentTap?.call(
+                                      context,
+                                      post,
+                                    ),
                                   ),
                                   _videoActionWidget(
                                     Icon(
                                       CupertinoIcons.arrowshape_turn_up_right,
                                       size: AppSpacing.iconMedium,
-                                      color: Colors.white.withValues(alpha: 0.78),
+                                      color: Colors.white.withValues(
+                                        alpha: 0.78,
+                                      ),
                                     ),
                                     UITextConstants.share,
-                                    () => widget.onShareTap?.call(context, post),
+                                    () =>
+                                        widget.onShareTap?.call(context, post),
                                   ),
                                 ],
                               ),
@@ -1788,7 +2001,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                  GestureDetector(
+                                GestureDetector(
                                   onTap: () => widget.onUserClick(
                                     authorId,
                                     avatarUrl: authorAvatar,
@@ -1828,7 +2041,9 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                                         '${UITextConstants.discovery} • $authorName 创作的原声',
                                         style: TextStyle(
                                           fontSize: AppTypography.sm,
-                                          color: Colors.white.withValues(alpha: 0.8),
+                                          color: Colors.white.withValues(
+                                            alpha: 0.8,
+                                          ),
                                         ),
                                         overflow: TextOverflow.ellipsis,
                                       ),
@@ -1863,11 +2078,13 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                   isDark: true,
                   transparentBackground: true,
                   leftAlignedCompactMode: true,
-                  excludeUnderlineTabIds: const ['works'],
+                  excludeUnderlineTabIds: const ['work'],
                   onTabChange: (id) {
-                    final tab = ContentUIConfig.discoveryTabs.cast<DiscoveryTabConfig?>().firstWhere(
-                      (t) => t!.id == id, orElse: () => null);
-                    if (tab?.layout != 'full_width_vertical_pager') widget.onTabChange(id);
+                    final tab = ContentUIConfig.discoveryTabs
+                        .cast<DiscoveryTabConfig?>()
+                        .firstWhere((t) => t!.id == id, orElse: () => null);
+                    if (tab?.layout != 'full_width_vertical_pager')
+                      widget.onTabChange(id);
                   },
                   onHorizontalDragEnd: _onPrimaryDragEnd,
                   trailingActions: [
@@ -1876,7 +2093,9 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                       icon: AssistantAvatar(radius: AppSpacing.iconMedium / 2),
                       onPressed: widget.onAssistantTap,
                       style: IconButton.styleFrom(
-                        minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+                        minimumSize: Size.square(
+                          AppSpacing.iconButtonMinSizeSm,
+                        ),
                       ),
                     ),
                   ],
@@ -1896,16 +2115,15 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
     VoidCallback onTap, {
     Animation<double>? scaleAnimation,
   }) {
-    final iconToken = AppSpacing.semantic[DesignSemanticConstants.intraGroup]?[
-            DesignSemanticConstants.xs] ??
+    final iconToken =
+        AppSpacing.semantic[DesignSemanticConstants
+            .intraGroup]?[DesignSemanticConstants.xs] ??
         AppSpacing.intraGroupXs;
     final iconWidget = Icon(
       icon == CupertinoIcons.heart
           ? (filled ? CupertinoIcons.heart_fill : CupertinoIcons.heart)
           : icon,
-      color: filled
-          ? AppColors.error
-          : Colors.white.withValues(alpha: 0.78),
+      color: filled ? AppColors.error : Colors.white.withValues(alpha: 0.78),
       size: AppSpacing.iconMedium,
     );
     return Padding(
@@ -1917,10 +2135,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
           mainAxisSize: MainAxisSize.min,
           children: [
             scaleAnimation != null
-                ? ScaleTransition(
-                    scale: scaleAnimation,
-                    child: iconWidget,
-                  )
+                ? ScaleTransition(scale: scaleAnimation, child: iconWidget)
                 : iconWidget,
             SizedBox(height: iconToken),
             Text(
@@ -1943,14 +2158,12 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
     VoidCallback onTap, {
     Animation<double>? scaleAnimation,
   }) {
-    final iconToken = AppSpacing.semantic[DesignSemanticConstants.intraGroup]?[
-            DesignSemanticConstants.xs] ??
+    final iconToken =
+        AppSpacing.semantic[DesignSemanticConstants
+            .intraGroup]?[DesignSemanticConstants.xs] ??
         AppSpacing.intraGroupXs;
     final child = scaleAnimation != null
-        ? ScaleTransition(
-            scale: scaleAnimation,
-            child: iconWidget,
-          )
+        ? ScaleTransition(scale: scaleAnimation, child: iconWidget)
         : iconWidget;
     return Padding(
       padding: EdgeInsets.only(bottom: AppSpacing.interGroupMd),
@@ -1976,4 +2189,3 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
     );
   }
 }
-

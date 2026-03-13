@@ -12,7 +12,7 @@ api_routes:
     path: /v1/content/feed
     operation: GetFeed
     description: 发现流（推荐排序 + cursor 分页；cursor 为 opaque token，仅用于 future window）
-    query_params: [type, sort, cursor, limit, subCategory]
+    query_params: [identity, type, sort, cursor, limit, subCategory]
     response_entity: Post
 
   - method: POST
@@ -20,13 +20,13 @@ api_routes:
     operation: CreatePost
     description: 创建内容（可草稿或直发）
     request_entity: Post
-    writable_fields: [contentType, title, body, summary, tags, mediaUrls, coverUrl, videoUrl, illustrationAssetId, location, locationName, visibility, circleIds, sourcePostId, sourceType, deviceInfo, publishLocation]
+    writable_fields: [contentType, contentIdentity, title, body, summary, tags, mediaUrls, coverUrl, videoUrl, illustrationAssetId, location, locationName, visibility, circleIds, assistantUsePolicy, sourcePostId, sourceType, deviceInfo, publishLocation]
 
   - method: GET
     path: /v1/users/{userId}/posts
     operation: ListUserPosts
     description: 用户发布的帖子列表（用户主页-创作 Tab）
-    query_params: [type, visibility, cursor, limit]
+    query_params: [identity, type, visibility, cursor, limit]
     response_entity: Post
 
   - method: GET
@@ -39,11 +39,13 @@ api_routes:
     path: /v1/content/posts/{postId}
     operation: UpdatePost
     description: 更新内容（仅 draft 可改；published 后不可变）
+    writable_fields: [contentType, contentIdentity, title, body, summary, tags, mediaUrls, coverUrl, videoUrl, illustrationAssetId, location, locationName, visibility, circleIds, assistantUsePolicy]
 
   - method: POST
     path: /v1/content/posts/{postId}/publish
     operation: PublishPost
     description: 发布草稿（发布后内容本体不可修改）
+    writable_fields: [contentIdentity, visibility, circleIds, assistantUsePolicy]
 
   - method: DELETE
     path: /v1/content/posts/{postId}
@@ -54,6 +56,20 @@ api_routes:
     path: /v1/content/posts/{postId}/circles
     operation: UpdatePostCircles
     description: 更新作者主动分发圈子关系（支持 add/remove，发布后允许）
+    auth: required
+
+  - method: PATCH
+    path: /v1/content/posts/{postId}/settings
+    operation: UpdatePostSettings
+    description: 更新发布后仍可调整的内容设置（visibility / circleIds / assistantUsePolicy）
+    writable_fields: [visibility, circleIds, assistantUsePolicy]
+    auth: required
+
+  - method: POST
+    path: /v1/content/posts/{postId}:promoteToWork
+    operation: PromotePostToWork
+    description: 点滴升级为作品（原地升级，保持 postId 与 deeplink 不变）
+    writable_fields: [contentType, title, summary, tags, coverUrl, visibility, circleIds, assistantUsePolicy]
     auth: required
 
   - method: GET

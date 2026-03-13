@@ -34,7 +34,23 @@ class AssistantSessionManager {
     final path = await _pathFuture;
     final file = File(path);
     if (!await file.exists()) return;
-    final raw = jsonDecode(await file.readAsString());
+    String rawText;
+    try {
+      rawText = await file.readAsString();
+    } on FileSystemException {
+      // 历史 session 文件损坏或存在非法编码时，直接跳过加载，
+      // 避免污染本轮运行或让 E2E 因历史垃圾文件崩溃。
+      return;
+    } on FormatException {
+      return;
+    }
+    if (rawText.trim().isEmpty) return;
+    dynamic raw;
+    try {
+      raw = jsonDecode(rawText);
+    } on FormatException {
+      return;
+    }
     if (raw is! Map) return;
     if (raw['sessions'] is Map) {
       final rawSessions = (raw['sessions'] as Map).entries;
@@ -44,7 +60,11 @@ class AssistantSessionManager {
         if (value is! List) continue;
         _sessions[key] = value
             .whereType<Map>()
-            .map((m) => m.map((k, v) => MapEntry(k.toString(), v)))
+            .map(
+              (m) => _normalizeLoadedMessage(
+                m.map((k, v) => MapEntry(k.toString(), v)),
+              ),
+            )
             .where((m) => !_isDegradedAssistantMessage(m))
             .toList(growable: true);
       }
@@ -58,18 +78,22 @@ class AssistantSessionManager {
         }
       }
       _activeSessionId = (raw['activeSessionId'] ?? '').toString();
-      return;
-    }
-    // 向后兼容 v1: 根对象直接是 sessionId -> message[].
-    for (final entry in raw.entries) {
-      final key = entry.key.toString();
-      final value = entry.value;
-      if (value is! List) continue;
-      _sessions[key] = value
-          .whereType<Map>()
-          .map((m) => m.map((k, v) => MapEntry(k.toString(), v)))
-          .where((m) => !_isDegradedAssistantMessage(m))
-          .toList(growable: true);
+    } else {
+      // 向后兼容 v1: 根对象直接是 sessionId -> message[].
+      for (final entry in raw.entries) {
+        final key = entry.key.toString();
+        final value = entry.value;
+        if (value is! List) continue;
+        _sessions[key] = value
+            .whereType<Map>()
+            .map(
+              (m) => _normalizeLoadedMessage(
+                m.map((k, v) => MapEntry(k.toString(), v)),
+              ),
+            )
+            .where((m) => !_isDegradedAssistantMessage(m))
+            .toList(growable: true);
+      }
     }
     // 迁移历史消息到当前契约版本（见 02-dart-coding §5.3）
     _migrateSessionsToCurrentContractVersion();
@@ -145,9 +169,9 @@ class AssistantSessionManager {
     return segment
         .map((m) {
           final role = m['role'] ?? 'unknown';
-          final raw = (m['content'] ?? '').toString().trim();
-          // 过滤 JSON 格式回复和降级文本，只保留纯文本内容
-          final content = _sanitizeForSummary(raw);
+          final content = _sanitizeForSummary(
+            _bestAssistantDisplayCandidate(m),
+          );
           if (content.isEmpty) return null;
           return '$role: $content';
         })
@@ -160,19 +184,31 @@ class AssistantSessionManager {
   /// - 若是降级文本，跳过
   String _sanitizeForSummary(String raw) {
     if (raw.isEmpty) return '';
+    final stripped = _stripXmlToolCalls(raw).trim();
+    if (stripped.isEmpty) return '';
+    if (_containsInternalHistoryText(stripped)) return '';
     // 跳过降级/错误文本（统一使用 AssistantContentFilters，不在此处维护独立词表）
-    if (AssistantContentFilters.isDegradedText(raw)) return '';
+    if (AssistantContentFilters.isDegradedText(stripped)) return '';
+    if (AssistantContentFilters.isProgressPlaceholder(stripped)) return '';
     // 尝试提取 JSON 里的 userMarkdown
-    if (raw.trimLeft().startsWith('{')) {
+    if (stripped.trimLeft().startsWith('{')) {
       try {
-        final start = raw.indexOf('{');
-        final decoded = _jsonDecodeFirst(raw.substring(start));
+        final start = stripped.indexOf('{');
+        final decoded = _jsonDecodeFirst(stripped.substring(start));
         if (decoded is Map) {
           final um = (decoded['userMarkdown'] as String?)?.trim() ?? '';
           if (um.isNotEmpty &&
               !um.startsWith('{') &&
-              !AssistantContentFilters.isProgressPlaceholder(um)) {
+              !AssistantContentFilters.isProgressPlaceholder(um) &&
+              !_containsInternalHistoryText(um)) {
             return um;
+          }
+          final summary = (decoded['summary'] as String?)?.trim() ?? '';
+          if (summary.isNotEmpty &&
+              !summary.startsWith('{') &&
+              !AssistantContentFilters.isProgressPlaceholder(summary) &&
+              !_containsInternalHistoryText(summary)) {
+            return summary;
           }
           final result = decoded['result'];
           if (result is Map) {
@@ -181,7 +217,8 @@ class AssistantSessionManager {
                 (result['summary'] as String?)?.trim() ??
                 '';
             if (text.isNotEmpty &&
-                !AssistantContentFilters.isProgressPlaceholder(text)) {
+                !AssistantContentFilters.isProgressPlaceholder(text) &&
+                !_containsInternalHistoryText(text)) {
               return text;
             }
           }
@@ -189,7 +226,7 @@ class AssistantSessionManager {
         }
       } catch (_) {}
     }
-    return raw;
+    return stripped;
   }
 
   dynamic _jsonDecodeFirst(String text) {
@@ -216,7 +253,8 @@ class AssistantSessionManager {
       final result = compressed.trim();
       if (result.isEmpty) return raw;
       if (AssistantContentFilters.isDegradedText(result)) return raw;
-      return result;
+      final sanitized = _sanitizeForSummary(result);
+      return sanitized.isNotEmpty ? sanitized : raw;
     } catch (_) {
       return raw;
     }
@@ -448,10 +486,106 @@ class AssistantSessionManager {
   bool _isDegradedAssistantMessage(Map<String, dynamic> m) {
     final role = m['role']?.toString() ?? '';
     if (role != 'assistant') return false;
-    final content = m['content']?.toString().trim() ?? '';
-    if (content.isEmpty) return false;
-    // 统一使用 AssistantContentFilters，消除此处独立维护词表的漂移风险。
-    // JSON 信封、进度占位、降级/错误文本均不应写回 session 历史。
-    return AssistantContentFilters.isNotDisplayable(content);
+    final candidates = <String>[
+      (m['displayPlainText'] ?? '').toString(),
+      (m['displayMarkdown'] ?? '').toString(),
+      (m['content'] ?? '').toString(),
+    ];
+    for (final candidate in candidates) {
+      final raw = _stripXmlToolCalls(candidate).trim();
+      if (raw.isEmpty) continue;
+      // 加载阶段必须基于原始展示文本判断是否降级，
+      // 不能先走 _sanitizeForSummary()，否则降级文本会被净化为空串，
+      // 反而绕过历史过滤。
+      if (AssistantContentFilters.isNotDisplayable(raw) ||
+          _containsInternalHistoryText(raw)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Map<String, dynamic> _normalizeLoadedMessage(Map<String, dynamic> raw) {
+    final normalized = Map<String, dynamic>.from(raw);
+    final role = (normalized['role'] ?? '').toString();
+    if (role != 'assistant') return normalized;
+    final displayPlain = _sanitizeForSummary(
+      (normalized['displayPlainText'] ?? '').toString(),
+    );
+    final displayMarkdown = _sanitizeForSummary(
+      (normalized['displayMarkdown'] ?? '').toString(),
+    );
+    final content = _sanitizeForSummary(
+      (normalized['content'] ?? '').toString(),
+    );
+    final best = [
+      displayPlain,
+      displayMarkdown,
+      content,
+    ].firstWhere((item) => item.trim().isNotEmpty, orElse: () => '');
+    if (best.isNotEmpty) {
+      normalized['content'] = best;
+    }
+    final machineEnvelope = (normalized['machineEnvelope'] ?? '').toString();
+    if (_containsInternalHistoryText(machineEnvelope) ||
+        AssistantContentFilters.isJsonEnvelope(machineEnvelope) ||
+        _containsXmlToolCall(machineEnvelope)) {
+      normalized['machineEnvelope'] = '';
+    }
+    final runArtifacts = (normalized['runArtifactsV1'] as Map?)
+        ?.cast<String, dynamic>();
+    if (runArtifacts != null && runArtifacts.isNotEmpty) {
+      final sanitizedArtifacts = Map<String, dynamic>.from(runArtifacts)
+        ..remove('machineEnvelope');
+      normalized['runArtifactsV1'] = sanitizedArtifacts;
+    }
+    return normalized;
+  }
+
+  String _bestAssistantDisplayCandidate(Map<String, dynamic> message) {
+    final candidates = <String>[
+      (message['displayPlainText'] ?? '').toString(),
+      (message['displayMarkdown'] ?? '').toString(),
+      (message['content'] ?? '').toString(),
+    ];
+    for (final candidate in candidates) {
+      final sanitized = _sanitizeForSummary(candidate);
+      if (sanitized.isNotEmpty) return sanitized;
+    }
+    return '';
+  }
+
+  static final RegExp _xmlToolCallTagRe = RegExp(
+    r'<tool_call>[\s\S]*?</tool_call>|'
+    r'<function=[^>]+>[\s\S]*?</function>|'
+    r'<tool_call>|</tool_call>|'
+    r'<function=[^>]*>|</function>|'
+    r'<parameter=[^>]*>[\s\S]*?</parameter>|'
+    r'</?parameter[^>]*>',
+  );
+  static final RegExp _xmlToolCallOpenRe = RegExp(r'<tool_call>|<function=');
+
+  bool _containsXmlToolCall(String text) => _xmlToolCallOpenRe.hasMatch(text);
+
+  String _stripXmlToolCalls(String text) =>
+      text.replaceAll(_xmlToolCallTagRe, '').trim();
+
+  bool _containsInternalHistoryText(String text) {
+    if (text.trim().isEmpty) return false;
+    const fragments = <String>[
+      'contractVersion',
+      'assistant_turn_v4',
+      'turnPhase',
+      'queryTasks',
+      'tool_call',
+      '<tool_call>',
+      'provider',
+      'machineEnvelope',
+      '正在调用工具',
+    ];
+    for (final fragment in fragments) {
+      if (text.contains(fragment)) return true;
+    }
+    return false;
   }
 }

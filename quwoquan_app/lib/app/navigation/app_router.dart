@@ -13,6 +13,7 @@ import 'package:quwoquan_app/ui/content/pages/video_detail_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_detail_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_stats_page.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_entry_sheet.dart';
+import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/components/media/image/editor/image_editor_page.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/developer_settings_page.dart';
@@ -60,17 +61,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     routes: [
       ShellRoute(
         builder: (context, state, child) {
-          return MainAppShell(
-            currentLocation: state.uri.path,
-            child: child,
-          );
+          return MainAppShell(currentLocation: state.uri.path, child: child);
         },
         routes: [
           GoRoute(
             path: AppRoutePaths.home,
             pageBuilder: (context, state) => NoTransitionPage(
               key: state.pageKey,
-              child: const SizedBox.shrink(), // DiscoveryPage 在 MainAppShell 中渲染
+              child:
+                  const SizedBox.shrink(), // DiscoveryPage 在 MainAppShell 中渲染
             ),
           ),
           GoRoute(
@@ -91,7 +90,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: AppRoutePaths.profile,
             pageBuilder: (context, state) => NoTransitionPage(
               key: state.pageKey,
-              child: const SizedBox.shrink(), // MyProfilePage 在 MainAppShell 中渲染
+              child:
+                  const SizedBox.shrink(), // MyProfilePage 在 MainAppShell 中渲染
             ),
           ),
         ],
@@ -106,16 +106,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutePaths.createPathTemplate,
         builder: (context, state) {
           final typeStr = state.uri.queryParameters['type'];
-          CreateEntryType? type;
+          final initialTabKey = state.uri.queryParameters['tab'];
+          EditorStartAction? action;
           if (typeStr != null) {
             try {
-              type = CreateEntryType.values
-                  .firstWhere((e) => e.name == typeStr);
+              action = EditorStartAction.values.firstWhere(
+                (e) => e.name == typeStr,
+              );
             } on StateError {
-              type = null;
+              action = null;
             }
           }
-          return CreatePage(initialType: type);
+          return CreatePage(
+            initialAction: action,
+            initialTabKey: initialTabKey,
+          );
         },
         routes: [
           GoRoute(
@@ -123,8 +128,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             pageBuilder: (context, state) {
               final path = state.uri.queryParameters['path'] ?? '';
               final source = state.uri.queryParameters['source'] ?? 'moment';
-              final index = int.tryParse(state.uri.queryParameters['index'] ?? '0') ?? 0;
-              final total = int.tryParse(state.uri.queryParameters['total'] ?? '1') ?? 1;
+              final index =
+                  int.tryParse(state.uri.queryParameters['index'] ?? '0') ?? 0;
+              final total =
+                  int.tryParse(state.uri.queryParameters['total'] ?? '1') ?? 1;
               final paths = <String>[];
               for (var i = 0; i < total; i++) {
                 final p = state.uri.queryParameters['path$i'];
@@ -180,11 +187,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
-        path: AppRoutePaths.userProfilePathTemplate.replaceAll('{username}', ':username'),
+        path: AppRoutePaths.userProfilePathTemplate.replaceAll(
+          '{username}',
+          ':username',
+        ),
         builder: (context, state) {
           final username = state.pathParameters['username'] ?? '';
           final currentUser = ref.read(userDataProvider);
-          final isSelf = currentUser != null &&
+          final isSelf =
+              currentUser != null &&
               (username == currentUser.id ||
                   (currentUser.username != null &&
                       username == currentUser.username));
@@ -240,7 +251,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
-        path: AppRoutePaths.videoViewerPathTemplate.replaceAll('{index}', ':index'),
+        path: AppRoutePaths.videoViewerPathTemplate.replaceAll(
+          '{index}',
+          ':index',
+        ),
         builder: (context, state) {
           final indexStr = state.pathParameters['index'] ?? '0';
           final index = int.tryParse(indexStr) ?? 0;
@@ -267,7 +281,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 context.go(AppRoutePaths.chat);
               }
             },
-            onManageClick: () => context.push(AppRoutePaths.assistantManagement),
+            onManageClick: () =>
+                context.push(AppRoutePaths.assistantManagement),
           );
         },
       ),
@@ -340,10 +355,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutePaths.profileStatsPathTemplate,
         builder: (context, state) {
-          final type =
-              state.uri.queryParameters['type'] ?? 'fans';
-          final userId =
-              state.uri.queryParameters['userId'] ?? '';
+          final type = state.uri.queryParameters['type'] ?? 'fans';
+          final userId = state.uri.queryParameters['userId'] ?? '';
           return ProfileStatsPage(type: type, userId: userId);
         },
       ),
@@ -354,18 +367,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final assistantOpenContext = state.extra is AssistantOpenContext
               ? state.extra as AssistantOpenContext
               : null;
-          final isAssistant =
-              id == AppConceptConstants.assistantConversationId;
+          final isAssistant = id == AppConceptConstants.assistantConversationId;
           return ChatDetailPage(
             conversationId: id,
             onBack: () {
               if (context.canPop()) {
                 context.pop();
               } else if (isAssistant) {
-                final lastTab =
-                    ref.read(lastMainTabBeforeAssistantProvider);
-                ref.read(lastMainTabBeforeAssistantProvider.notifier)
-                    .set(null);
+                final lastTab = ref.read(lastMainTabBeforeAssistantProvider);
+                ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
                 final route = lastTab != null
                     ? _routeFromMainTabIndex(lastTab)
                     : '/chat';
@@ -425,28 +435,40 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ],
       ),
       GoRoute(
-        path: AppRoutePaths.rtcOutgoingPathTemplate.replaceAll('{callId}', ':callId'),
+        path: AppRoutePaths.rtcOutgoingPathTemplate.replaceAll(
+          '{callId}',
+          ':callId',
+        ),
         builder: (context, state) {
           final callId = state.pathParameters['callId'] ?? '';
           return OutgoingCallPage(callId: callId);
         },
       ),
       GoRoute(
-        path: AppRoutePaths.rtcIncomingPathTemplate.replaceAll('{callId}', ':callId'),
+        path: AppRoutePaths.rtcIncomingPathTemplate.replaceAll(
+          '{callId}',
+          ':callId',
+        ),
         builder: (context, state) {
           final callId = state.pathParameters['callId'] ?? '';
           return IncomingCallPage(callId: callId);
         },
       ),
       GoRoute(
-        path: AppRoutePaths.rtcVoicePathTemplate.replaceAll('{callId}', ':callId'),
+        path: AppRoutePaths.rtcVoicePathTemplate.replaceAll(
+          '{callId}',
+          ':callId',
+        ),
         builder: (context, state) {
           final callId = state.pathParameters['callId'] ?? '';
           return VoiceCallPage(callId: callId);
         },
       ),
       GoRoute(
-        path: AppRoutePaths.rtcVideoPathTemplate.replaceAll('{callId}', ':callId'),
+        path: AppRoutePaths.rtcVideoPathTemplate.replaceAll(
+          '{callId}',
+          ':callId',
+        ),
         builder: (context, state) {
           final callId = state.pathParameters['callId'] ?? '';
           return VideoCallPage(callId: callId);
@@ -479,12 +501,18 @@ class _CreateEntryRoutePage extends ConsumerWidget {
       child: CreateEntrySheet(
         isOpen: true,
         onClose: () => context.pop(),
-        onSelect: (CreateEntryType type) {
+        onSelect: (EditorStartAction action) {
           // 用 go 替换当前路由，避免先 pop 再 push 导致 CreateEntrySheet 卸载时触发 Element 依赖断言
-          context.go(AppRoutePaths.create(type: type.name));
+          context.go(AppRoutePaths.create(type: action.name));
+        },
+        onOpenLegacyTab: (String tabKey) {
+          final uri = Uri(
+            path: AppRoutePaths.createPathTemplate,
+            queryParameters: <String, String>{'tab': tabKey},
+          );
+          context.go(uri.toString());
         },
       ),
     );
   }
 }
-

@@ -28,10 +28,12 @@ Widget _scopedApp({
 }) {
   return ProviderScope(
     overrides: [
-      userProfileRepositoryProvider
-          .overrideWithValue(const MockUserProfileRepository()),
-      relationshipCapabilityRepositoryProvider
-          .overrideWithValue(_ThrowingCapabilityRepository()),
+      userProfileRepositoryProvider.overrideWithValue(
+        const MockUserProfileRepository(),
+      ),
+      relationshipCapabilityRepositoryProvider.overrideWithValue(
+        _ThrowingCapabilityRepository(),
+      ),
     ],
     child: MaterialApp(
       themeMode: themeMode,
@@ -80,15 +82,14 @@ void main() {
       expect(find.byIcon(Icons.more_horiz), findsOneWidget);
     });
 
-    testWidgets('渲染四个主 Tab', (tester) async {
+    testWidgets('渲染三个主 Tab', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester);
-      expect(find.text('微趣'), findsOneWidget);
-      expect(find.text('作品'), findsOneWidget);
+      expect(find.text('创作'), findsOneWidget);
       expect(find.widgetWithText(Tab, '圈子'), findsOneWidget);
       expect(find.text('互动'), findsOneWidget);
     });
@@ -164,12 +165,11 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(_scopedApp(
-        mode: ProfileMode.mine,
-        themeMode: ThemeMode.dark,
-      ));
+      await tester.pumpWidget(
+        _scopedApp(mode: ProfileMode.mine, themeMode: ThemeMode.dark),
+      );
       await _pumpFrames(tester);
-      expect(find.text('微趣'), findsOneWidget);
+      expect(find.text('创作'), findsOneWidget);
       expect(find.byIcon(Icons.settings_outlined), findsOneWidget);
     });
 
@@ -178,10 +178,9 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(_scopedApp(
-        mode: ProfileMode.other,
-        themeMode: ThemeMode.dark,
-      ));
+      await tester.pumpWidget(
+        _scopedApp(mode: ProfileMode.other, themeMode: ThemeMode.dark),
+      );
       await _pumpFrames(tester);
       expect(find.widgetWithText(OutlinedButton, '关注'), findsOneWidget);
       expect(find.widgetWithText(OutlinedButton, '私信'), findsOneWidget);
@@ -209,12 +208,9 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(_scopedApp(
-        mode: ProfileMode.mine,
-        userId: '',
-      ));
+      await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine, userId: ''));
       await _pumpFrames(tester);
-      expect(find.text('微趣'), findsOneWidget);
+      expect(find.text('创作'), findsOneWidget);
     });
   });
 }

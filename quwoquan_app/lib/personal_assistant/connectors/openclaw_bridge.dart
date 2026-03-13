@@ -338,8 +338,8 @@ class OpenClawBridge {
           AssistantRunResponse.fromJson(decoded),
         );
       }
-      return OpenClawRemoteStreamEvent.completed(
-        AssistantRunResponse(finalText: payloadRaw, traces: const []),
+      return OpenClawRemoteStreamEvent.failed(
+        'remote completed payload is not valid json',
       );
     }
     if (decoded != null && decoded.containsKey('finalText')) {

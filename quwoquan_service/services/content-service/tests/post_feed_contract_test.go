@@ -56,6 +56,41 @@ func TestGetFeedByType(t *testing.T) {
 	}
 }
 
+// TestGetFeedByIdentity verifies discovery feed can filter by content identity.
+func TestGetFeedByIdentity(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+
+	createPost(t, `{"contentType":"micro","contentIdentity":"moment","body":"点滴 1"}`)
+	createPost(t, `{"contentType":"micro","contentIdentity":"moment","body":"点滴 2"}`)
+	createPost(t, `{"contentType":"image","contentIdentity":"work","title":"作品 1","mediaUrls":["https://example.com/a.jpg"]}`)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/v1/content/feed?identity=moment&type=article&limit=10",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var page struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(page.Items) == 0 {
+		t.Fatal("expected moment items in identity filtered feed")
+	}
+	for _, item := range page.Items {
+		if item["type"] != "moment" && item["contentType"] != "micro" {
+			t.Fatalf("expected only moment items, got %v", item)
+		}
+	}
+}
+
 // TestGetFeedExcludesPrivatePosts verifies that feed only returns visibility=public
 // content; private posts must never appear in discovery.
 // contract.yaml: get_feed_excludes_private_posts / go_func: TestGetFeedExcludesPrivatePosts

@@ -145,6 +145,16 @@ scenarios:
       - response.items.length == 10
       - cursor present
 
+  - name: get_feed_by_identity
+    operation: GetFeed
+    go_func: TestGetFeedByIdentity
+    command: GetFeed (identity=moment/work)
+    seed: [fixture.NewPosts(count=6, contentType=micro), fixture.NewPosts(count=4, contentType=image)]
+    assertions:
+      - identity=moment -> response.items all resolve identity=moment
+      - identity=work -> response.items all resolve identity=work
+      - identity=moment 时忽略 type 过滤
+
   - name: get_feed_excludes_private_posts
     operation: GetFeed
     go_func: TestGetFeedExcludesPrivatePosts
@@ -228,12 +238,10 @@ scenarios:
   - name: publish_post_contract
     operation: PublishPost
     go_func: TestPublishPostContract
-    status: pending
     command: PublishPost
   - name: delete_post_contract
     operation: DeletePost
     go_func: TestDeletePostContract
-    status: pending
     command: DeletePost
   - name: update_post_circles_contract
     operation: UpdatePostCircles
@@ -242,8 +250,7 @@ scenarios:
     command: UpdatePostCircles
   - name: delete_comment_contract
     operation: DeleteComment
-    go_func: TestDeleteCommentContract
-    status: pending
+    go_func: TestDeleteComment
     command: DeleteComment
   - name: get_reaction_state_contract
     operation: GetReactionState
@@ -252,8 +259,7 @@ scenarios:
     command: GetReactionState
   - name: favorite_post_contract
     operation: FavoritePost
-    go_func: TestFavoritePostContract
-    status: pending
+    go_func: TestFavoritePost
     command: FavoritePost
   - name: unfavorite_post_contract
     operation: UnfavoritePost
@@ -262,8 +268,7 @@ scenarios:
     command: UnfavoritePost
   - name: get_counters_contract
     operation: GetCounters
-    go_func: TestGetCountersContract
-    status: pending
+    go_func: TestGetCounters
     command: GetCounters
   - name: repost_to_circle_contract
     operation: RepostToCircle
@@ -320,15 +325,37 @@ scenarios:
     go_func: TestGetRecommendationContract
     status: pending
     command: GetRecommendation
+  - name: update_post_settings_contract
+    operation: UpdatePostSettings
+    go_func: TestUpdatePostSettingsContract
+    command: UpdatePostSettings
+  - name: promote_post_to_work_contract
+    operation: PromotePostToWork
+    go_func: TestPromotePostToWorkContract
+    command: PromotePostToWork
+  - name: promote_post_preserves_threads_contract
+    operation: PromotePostToWork
+    go_func: TestPromotePostKeepsCountersAndCommentThread
+    command: PromotePostToWork(retain postId/comments/reactions)
   - name: list_user_posts_contract
     operation: ListUserPosts
-    go_func: TestListUserPostsContract
-    status: pending
+    go_func: TestListUserPosts
     command: ListUserPosts
+  - name: list_user_posts_by_identity
+    operation: ListUserPosts
+    go_func: TestListUserPostsByIdentity
+    command: ListUserPosts(identity=work,type=article)
+  - name: circle_visible_view_access_contract
+    operation: GetPost
+    go_func: TestCircleVisiblePostAllowsCircleMemberViewer
+    command: GetPost/ListUserPosts(circle_visible member access)
+  - name: assistant_access_revoked_after_settings_change
+    operation: UpdatePostSettings
+    go_func: TestAssistantAccessRevokedAfterSettingsChange
+    command: UpdatePostSettings(assistantUsePolicy=exclude or visibility=private)
   - name: like_comment_contract
     operation: LikeComment
-    go_func: TestLikeCommentContract
-    status: pending
+    go_func: TestLikeComment
     command: LikeComment
   - name: unlike_comment_contract
     operation: UnlikeComment
@@ -337,8 +364,7 @@ scenarios:
     command: UnlikeComment
   - name: list_comments_by_author_contract
     operation: ListCommentsByAuthor
-    go_func: TestListCommentsByAuthorContract
-    status: pending
+    go_func: TestListCommentsByAuthor
     command: ListCommentsByAuthor
   - name: list_comments_for_post_author_contract
     operation: ListCommentsForPostAuthor
@@ -347,6 +373,5 @@ scenarios:
     command: ListCommentsForPostAuthor
   - name: get_app_config_contract
     operation: GetAppConfig
-    go_func: TestGetAppConfigContract
-    status: pending
+    go_func: TestGetAppConfig
     command: GetAppConfig

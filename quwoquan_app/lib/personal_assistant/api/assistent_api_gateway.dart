@@ -531,18 +531,13 @@ class AssistentApiGateway {
           request: request,
           statusCode: HttpStatus.ok,
           data: <String, dynamic>{
+            ...runRes.toJson(),
             'runId': runRes.runId ?? requestId,
             'traceId': runRes.traceId ?? requestId,
-            'finalText': runRes.finalText,
-            'degraded': runRes.degraded,
-            'errorCode': runRes.errorCode,
             'provider': providerId,
             'slo': _sloMonitor
                 .snapshotForProvider(providerId: providerId)
                 .toJson(),
-            'traces': runRes.traces
-                .map((e) => e.toJson())
-                .toList(growable: false),
           },
         );
         return;
@@ -598,8 +593,9 @@ class AssistentApiGateway {
           request.response.write('data: ${jsonEncode(trace.toJson())}\n\n');
         }
         request.response.write('event: final\n');
+        final finalPayload = runRes.toJson()..remove('traces');
         request.response.write(
-          'data: ${jsonEncode(<String, dynamic>{"runId": runRes.runId, "traceId": runRes.traceId, "finalText": runRes.finalText, "degraded": runRes.degraded, "errorCode": runRes.errorCode})}\n\n',
+          'data: ${jsonEncode(finalPayload)}\n\n',
         );
         await request.response.close();
         return;

@@ -25,6 +25,15 @@
   - 端侧/云侧/Python 三侧日志字段映射表（Canonical）
   - `AppLogType` 到统一 `logType/level/component/target` 映射
   - 关联键（correlationId/traceId/requestId）与跨栈查询模板
+- `assistant-rebuild-roadmap-v1.md`
+  - 小趣助手“脱胎换骨”重构的 5 个串行里程碑路标
+  - 每个里程碑的目标、边界、交付与验收标准
+- `assistant-rebuild-design-context-v1.md`
+  - 当前系统诊断、目标架构、关键约束与上下文恢复清单
+  - 从现有代码热点到目标模块的迁移映射
+- `assistant-rebuild-session-prompts-v1.md`
+  - 5 个新会话专用启动提示词
+  - 每个里程碑的 strict scope、验证要求与结束回写要求
 
 ## 已纳入的历史文档范围（已查阅并汇总）
 
@@ -61,5 +70,9 @@
 
 - 架构评审先读：`personal-assistant-fullstack-standard.md`
 - 背景与演进参考：`world-class-personal-assistant-design.md`
+- 本轮“脱胎换骨”重构先读：
+  - `assistant-rebuild-roadmap-v1.md`
+  - `assistant-rebuild-design-context-v1.md`
+  - `assistant-rebuild-session-prompts-v1.md`
 - 落地开发时，按“历史基线 -> 当前差距 -> 目标协议 -> 任务分解”顺序执行
 - 新增设计文档请优先追加到本目录，并在此文件更新索引

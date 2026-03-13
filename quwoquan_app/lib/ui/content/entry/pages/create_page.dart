@@ -12,16 +12,19 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
+import 'package:quwoquan_app/components/media/camera/camera_capture_page.dart';
 import 'package:quwoquan_app/components/media/picker/create_media_picker_page.dart';
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
+import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/publish_circle_select_page.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/publish_location_selector_page.dart';
 import 'package:quwoquan_app/ui/content/entry/services/publish_settings_services.dart';
-import 'package:quwoquan_app/ui/content/entry/widgets/create_entry_sheet.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 
 /// 创作页
@@ -29,9 +32,10 @@ import 'package:quwoquan_app/l10n/l10n.dart';
 /// 1:1 复制自 趣我圈2026/src CreatePage.tsx
 /// 四 Tab moment|photo|video|article、草稿箱、退出确认、10 秒自动保存、hasContent 判断
 class CreatePage extends ConsumerStatefulWidget {
-  const CreatePage({super.key, this.initialType});
+  const CreatePage({super.key, this.initialAction, this.initialTabKey});
 
-  final CreateEntryType? initialType;
+  final EditorStartAction? initialAction;
+  final String? initialTabKey;
 
   @override
   ConsumerState<CreatePage> createState() => _CreatePageState();
@@ -41,13 +45,6 @@ class _CreatePageState extends ConsumerState<CreatePage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   static const List<String> _tabIds = ['moment', 'photo', 'video', 'article'];
-  static const List<String> _tabLabels = ['微趣', '美图', '视频', '文章'];
-  static const List<String> _tabTitles = [
-    UITextConstants.postMoment,
-    UITextConstants.postPhoto,
-    UITextConstants.postVideo,
-    UITextConstants.postArticle,
-  ];
 
   Map<String, dynamic> _currentData = _emptyData();
   String? _currentDraftId;
@@ -85,13 +82,19 @@ class _CreatePageState extends ConsumerState<CreatePage>
   final PageController _photoPageController = PageController();
   final CreateLocationService _locationService = CreateLocationService();
   final CreateCircleService _circleService = const CreateCircleService();
+  bool _didApplyInitialAction = false;
 
   static Map<String, dynamic> _emptyData() {
     return {
       'moment': {
         'content': '',
         'images': <String>[],
+        'videoPath': '',
+        'videoThumbnail': '',
+        'durationMs': 0,
+        'contentIdentity': CreateContentIdentity.moment.value,
         'visibility': 'public',
+        'assistantUsePolicy': 'inherit',
         'circleIds': <String>[],
         'circleNames': <String>[],
         'locationName': '',
@@ -101,7 +104,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
         'title': '',
         'description': '',
         'images': <String>[],
+        'contentIdentity': CreateContentIdentity.work.value,
         'visibility': 'public',
+        'assistantUsePolicy': 'inherit',
         'circleIds': <String>[],
         'circleNames': <String>[],
         'locationName': '',
@@ -114,7 +119,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
         'thumbnail': '',
         'durationMs': 0,
         'storyboardImages': <String>[],
+        'contentIdentity': CreateContentIdentity.work.value,
         'visibility': 'public',
+        'assistantUsePolicy': 'inherit',
         'circleIds': <String>[],
         'circleNames': <String>[],
         'locationName': '',
@@ -124,7 +131,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
         'title': '',
         'content': '',
         'covers': <String>[],
+        'contentIdentity': CreateContentIdentity.work.value,
         'visibility': 'public',
+        'assistantUsePolicy': 'inherit',
         'circleIds': <String>[],
         'circleNames': <String>[],
         'locationName': '',
@@ -133,7 +142,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
     };
   }
 
-  final List<Map<String, dynamic>> _savedDrafts = [];
+  final List<CreateDraft> _savedDrafts = [];
 
   void _recordCreateVisit(String tabId) {
     ref
@@ -150,7 +159,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
               as String? ??
           '',
     );
-    final initialIndex = _tabIndexFromType(widget.initialType);
+    final initialIndex = _resolveInitialTabIndex();
     _tabController = TabController(
       length: _tabIds.length,
       vsync: this,
@@ -158,7 +167,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
     );
     _loadDrafts();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _recordCreateVisit(_tabIds[_tabController.index]);
+      if (!mounted) return;
+      _recordCreateVisit(_tabIds[_tabController.index]);
+      unawaited(_applyInitialActionIfNeeded());
     });
     _tabController.addListener(() {
       if (_tabController.indexIsChanging) return;
@@ -301,52 +312,22 @@ class _CreatePageState extends ConsumerState<CreatePage>
 
   /// 发表微趣：发布到云侧内容服务，成功后退出编辑态并提示
   Future<void> _publishMoment() async {
-    final content = _momentContentController.text;
-    _currentData = Map.from(_currentData);
-    (_currentData['moment'] as Map<String, dynamic>)['content'] = content;
-    final payload = _buildPostPayload('moment');
-    if (payload == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(context.l10n.loadFailed)));
-      }
-      return;
-    }
-    try {
-      final dataService = ref.read(dataServiceProvider);
-      await dataService.createDataItem(endpoint: '/posts', data: payload);
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(context.l10n.loadFailed)));
-      }
-      return;
-    }
-    if (_currentDraftId != null) {
-      final nextDrafts = _savedDrafts
-          .where((e) => e['id'] != _currentDraftId)
-          .toList();
-      setState(() {
-        _savedDrafts
-          ..clear()
-          ..addAll(nextDrafts);
-        _currentDraftId = null;
-      });
-      _persistDrafts(nextDrafts, null);
-    }
-    _exitMomentEditingMode();
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(UITextConstants.momentPublished)));
-      _doClose();
-    }
+    await _publishTab('moment', exitMomentEditing: true);
   }
 
   Future<void> _publishCurrentTab() async {
     final tab = _tabIds[_tabController.index];
+    await _publishTab(tab);
+  }
+
+  Future<void> _publishTab(String tab, {bool exitMomentEditing = false}) async {
+    if (tab == 'moment') {
+      _currentData = Map.from(_currentData);
+      (_currentData['moment'] as Map<String, dynamic>)['content'] =
+          _momentContentController.text;
+    }
+    final confirmed = await _ensurePublishIdentityConfirmed(tab);
+    if (!confirmed) return;
     final payload = _buildPostPayload(tab);
     if (payload == null) {
       if (mounted) {
@@ -357,11 +338,19 @@ class _CreatePageState extends ConsumerState<CreatePage>
       return;
     }
     try {
-      final dataService = ref.read(dataServiceProvider);
-      await dataService.createDataItem(endpoint: '/posts', data: payload);
+      final repository = ref.read(contentRepositoryProvider);
+      final created = await repository.createPost(payload: payload);
+      final postId = _extractPostId(created);
+      if (postId.isEmpty) {
+        throw StateError('missing post id');
+      }
+      await repository.publishPost(
+        postId: postId,
+        payload: _buildPublishPayloadFields(tab),
+      );
       if (_currentDraftId != null) {
         final nextDrafts = _savedDrafts
-            .where((e) => e['id'] != _currentDraftId)
+            .where((e) => e.id != _currentDraftId)
             .toList();
         setState(() {
           _savedDrafts
@@ -370,6 +359,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
           _currentDraftId = null;
         });
         await _persistDrafts(nextDrafts, null);
+      }
+      if (exitMomentEditing) {
+        _exitMomentEditingMode();
       }
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -384,15 +376,25 @@ class _CreatePageState extends ConsumerState<CreatePage>
     }
   }
 
+  String _extractPostId(Map<String, dynamic> payload) {
+    return (payload['_id'] ?? payload['postId'] ?? payload['id'] ?? '')
+        .toString()
+        .trim();
+  }
+
   Map<String, dynamic>? _buildPostPayload(String tab) {
     final publishFields = _buildPublishPayloadFields(tab);
+    final contentIdentity = _identityForTab(tab).value;
     switch (tab) {
       case 'moment':
         final d = _currentData['moment'] as Map<String, dynamic>? ?? {};
         return <String, dynamic>{
           'contentType': 'micro',
+          'contentIdentity': contentIdentity,
           'body': (d['content'] as String? ?? '').trim(),
           'mediaUrls': List<String>.from(d['images'] as List? ?? <String>[]),
+          'videoUrl': (d['videoPath'] as String? ?? '').trim(),
+          'coverUrl': (d['videoThumbnail'] as String? ?? '').trim(),
           'title': '',
           'tags': <String>[],
           ...publishFields,
@@ -401,6 +403,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
         final d = _currentData['photo'] as Map<String, dynamic>? ?? {};
         return <String, dynamic>{
           'contentType': 'image',
+          'contentIdentity': contentIdentity,
           'title': (d['title'] as String? ?? '').trim(),
           'body': (d['description'] as String? ?? '').trim(),
           'mediaUrls': List<String>.from(d['images'] as List? ?? <String>[]),
@@ -413,6 +416,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
         final mediaUrls = <String>[if (videoPath.isNotEmpty) videoPath];
         return <String, dynamic>{
           'contentType': 'video',
+          'contentIdentity': contentIdentity,
           'title': (d['title'] as String? ?? '').trim(),
           'body': (d['description'] as String? ?? '').trim(),
           'videoUrl': videoPath,
@@ -426,6 +430,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
         final covers = List<String>.from(d['covers'] as List? ?? <String>[]);
         return <String, dynamic>{
           'contentType': 'article',
+          'contentIdentity': contentIdentity,
           'title': (d['title'] as String? ?? '').trim(),
           'body': (d['content'] as String? ?? '').trim(),
           'coverUrl': covers.isNotEmpty ? covers.first : '',
@@ -442,10 +447,18 @@ class _CreatePageState extends ConsumerState<CreatePage>
     final data =
         _currentData[tab] as Map<String, dynamic>? ?? <String, dynamic>{};
     if (!data.containsKey('visibility')) data['visibility'] = 'public';
+    if (!data.containsKey('assistantUsePolicy')) {
+      data['assistantUsePolicy'] = 'inherit';
+    }
     if (!data.containsKey('circleIds')) data['circleIds'] = <String>[];
     if (!data.containsKey('circleNames')) data['circleNames'] = <String>[];
     if (!data.containsKey('locationName')) data['locationName'] = '';
     if (!data.containsKey('location')) data['location'] = <String, dynamic>{};
+    if (!data.containsKey('contentIdentity')) {
+      data['contentIdentity'] = tab == 'moment'
+          ? CreateContentIdentity.moment.value
+          : CreateContentIdentity.work.value;
+    }
     return data;
   }
 
@@ -470,19 +483,32 @@ class _CreatePageState extends ConsumerState<CreatePage>
     return PublishSettings.fromMap(_tabData(tab)).toPayloadFields();
   }
 
-  int _tabIndexFromType(CreateEntryType? type) {
-    if (type == null) return 0;
-    switch (type) {
-      case CreateEntryType.weiquPhoto:
-      case CreateEntryType.weiquText:
-      case CreateEntryType.weiquVideo:
-        return 0;
-      case CreateEntryType.zuopinImage:
+  CreateContentIdentity _identityForTab(String tab) {
+    return tab == 'moment'
+        ? CreateContentIdentity.moment
+        : CreateContentIdentity.work;
+  }
+
+  int _resolveInitialTabIndex() {
+    if (_isValidTabKey(widget.initialTabKey)) {
+      return _tabIds.indexOf(widget.initialTabKey!);
+    }
+    return _tabIndexFromAction(widget.initialAction);
+  }
+
+  bool _isValidTabKey(String? tabKey) {
+    if (tabKey == null) return false;
+    return _tabIds.contains(tabKey);
+  }
+
+  int _tabIndexFromAction(EditorStartAction? action) {
+    switch (action) {
+      case EditorStartAction.gallery:
         return 1;
-      case CreateEntryType.zuopinVideo:
-        return 2;
-      case CreateEntryType.zuopinArticle:
-        return 3;
+      case EditorStartAction.capture:
+      case EditorStartAction.write:
+      case null:
+        return 0;
     }
   }
 
@@ -490,7 +516,8 @@ class _CreatePageState extends ConsumerState<CreatePage>
   bool get _canPublishMoment {
     final d = _currentData['moment'] as Map<String, dynamic>? ?? {};
     return (d['content'] as String? ?? '').trim().isNotEmpty ||
-        (d['images'] as List?)?.isNotEmpty == true;
+        (d['images'] as List?)?.isNotEmpty == true ||
+        (d['videoPath'] as String? ?? '').trim().isNotEmpty;
   }
 
   bool _hasContent() {
@@ -499,7 +526,8 @@ class _CreatePageState extends ConsumerState<CreatePage>
     switch (tab) {
       case 'moment':
         return (d['content'] as String? ?? '').isNotEmpty ||
-            (d['images'] as List?)?.isNotEmpty == true;
+            (d['images'] as List?)?.isNotEmpty == true ||
+            (d['videoPath'] as String? ?? '').isNotEmpty;
       case 'photo':
         return (d['title'] as String? ?? '').isNotEmpty ||
             (d['images'] as List?)?.isNotEmpty == true;
@@ -527,7 +555,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
       if (decoded is List) {
         final drafts = decoded
             .whereType<Map>()
-            .map((e) => Map<String, dynamic>.from(e))
+            .map(
+              (e) => CreateDraft.fromStorageMap(Map<String, dynamic>.from(e)),
+            )
             .toList();
         if (!mounted) return;
         setState(() {
@@ -544,11 +574,14 @@ class _CreatePageState extends ConsumerState<CreatePage>
   }
 
   Future<void> _persistDrafts(
-    List<Map<String, dynamic>> drafts,
+    List<CreateDraft> drafts,
     String? currentId,
   ) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_draftsStorageKey, jsonEncode(drafts));
+    await prefs.setString(
+      _draftsStorageKey,
+      jsonEncode(drafts.map((draft) => draft.toStorageMap()).toList()),
+    );
     if (currentId == null) {
       await prefs.remove(_currentDraftIdKey);
     } else {
@@ -558,30 +591,30 @@ class _CreatePageState extends ConsumerState<CreatePage>
 
   void _saveDraft() {
     final tab = _tabIds[_tabController.index];
-    final dataToSave = _currentData[tab];
+    final dataToSave = Map<String, dynamic>.from(
+      _currentData[tab] as Map<String, dynamic>? ?? const <String, dynamic>{},
+    );
     final now = DateTime.now().millisecondsSinceEpoch;
-    final nextDrafts = List<Map<String, dynamic>>.from(_savedDrafts);
+    final nextDrafts = List<CreateDraft>.from(_savedDrafts);
     String? nextId = _currentDraftId;
+    final draft = CreateDraft(
+      id: nextId ?? now.toString(),
+      tabKey: tab,
+      updatedAtMs: now,
+      identity: _identityForTab(tab),
+      data: dataToSave,
+    );
     if (nextId != null) {
-      final idx = nextDrafts.indexWhere((e) => e['id'] == nextId);
+      final idx = nextDrafts.indexWhere((e) => e.id == nextId);
       if (idx >= 0) {
-        nextDrafts[idx] = {
-          ...nextDrafts[idx],
-          'updatedAt': now,
-          'data': dataToSave,
-        };
+        nextDrafts[idx] = draft;
       } else {
         nextId = null;
       }
     }
     if (nextId == null) {
-      nextId = now.toString();
-      nextDrafts.insert(0, {
-        'id': nextId,
-        'type': tab,
-        'updatedAt': now,
-        'data': dataToSave,
-      });
+      nextId = draft.id;
+      nextDrafts.insert(0, draft);
     }
     setState(() {
       _savedDrafts
@@ -601,10 +634,15 @@ class _CreatePageState extends ConsumerState<CreatePage>
   }
 
   void _doClose() {
-    if (context.canPop()) {
-      context.pop();
+    final navigator = Navigator.maybeOf(context);
+    if (navigator != null && navigator.canPop()) {
+      navigator.pop();
     } else {
-      context.go(AppRoutePaths.home);
+      try {
+        context.go(AppRoutePaths.home);
+      } catch (_) {
+        // Widget tests may mount CreatePage without a GoRouter.
+      }
     }
   }
 
@@ -617,7 +655,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
   void _handleDiscardAndExit() {
     if (_currentDraftId != null) {
       final nextDrafts = _savedDrafts
-          .where((e) => e['id'] != _currentDraftId)
+          .where((e) => e.id != _currentDraftId)
           .toList();
       setState(() {
         _savedDrafts
@@ -631,16 +669,16 @@ class _CreatePageState extends ConsumerState<CreatePage>
     _doClose();
   }
 
-  void _handleRestoreDraft(Map<String, dynamic> draft) {
-    final tab = draft['type'] as String? ?? 'moment';
+  void _handleRestoreDraft(CreateDraft draft) {
+    final tab = draft.tabKey;
     final idx = _tabIds.indexOf(tab);
     if (idx >= 0) _tabController.animateTo(idx);
-    final restored = (draft['data'] as Map<String, dynamic>?) ?? {};
+    final restored = Map<String, dynamic>.from(draft.data);
     setState(() {
       final newData = _emptyData();
       newData[tab] = restored;
       _currentData = newData;
-      _currentDraftId = draft['id'] as String?;
+      _currentDraftId = draft.id;
       _showDraftsList = false;
       _isMomentEditingMode = false;
       _showEmojiPanel = false;
@@ -660,7 +698,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
   }
 
   void _handleDeleteDraft(String id) {
-    final nextDrafts = _savedDrafts.where((e) => e['id'] != id).toList();
+    final nextDrafts = _savedDrafts.where((e) => e.id != id).toList();
     final nextId = _currentDraftId == id ? null : _currentDraftId;
     setState(() {
       _savedDrafts
@@ -671,12 +709,521 @@ class _CreatePageState extends ConsumerState<CreatePage>
     _persistDrafts(nextDrafts, nextId);
   }
 
+  String get _currentTabId => _tabIds[_tabController.index];
+
+  CreateContentIdentity get _currentIdentity => _identityForTab(_currentTabId);
+
+  bool get _isUnifiedCreateEnabled =>
+      ref.read(contentFeatureFlagProvider('enable_unified_create_editor'));
+
+  String get _currentEditorTitle {
+    switch (_currentTabId) {
+      case 'moment':
+        return UITextConstants.createIdentityMoment;
+      case 'photo':
+        return '${UITextConstants.createIdentityWork}·${UITextConstants.createWorkFormatImage}';
+      case 'video':
+        return '${UITextConstants.createIdentityWork}·${UITextConstants.createWorkFormatVideo}';
+      case 'article':
+        return '${UITextConstants.createIdentityWork}·${UITextConstants.createWorkFormatNote}';
+      default:
+        return UITextConstants.createIdentityMoment;
+    }
+  }
+
+  Future<void> _applyInitialActionIfNeeded() async {
+    if (_didApplyInitialAction) return;
+    _didApplyInitialAction = true;
+    switch (widget.initialAction) {
+      case EditorStartAction.gallery:
+        await _applyGalleryStartAction();
+        return;
+      case EditorStartAction.capture:
+        await _applyCaptureStartAction();
+        return;
+      case EditorStartAction.write:
+        _switchToTabKey('moment');
+        _enterMomentEditingMode();
+        return;
+      case null:
+        if (_isValidTabKey(widget.initialTabKey)) {
+          _switchToTabKey(widget.initialTabKey!);
+        }
+        return;
+    }
+  }
+
+  Future<void> _applyGalleryStartAction() async {
+    final currentImages = List<String>.from(
+      _tabData('moment')['images'] as List? ?? const <String>[],
+    );
+    final paths = await _pickImages(maxCount: 9, initialPaths: currentImages);
+    if (!mounted || paths.isEmpty) return;
+    _applyMomentImages(paths, enterEditing: true);
+  }
+
+  Future<void> _applyCaptureStartAction() async {
+    final result = await Navigator.of(context).push<CameraCaptureResult>(
+      MaterialPageRoute<CameraCaptureResult>(
+        fullscreenDialog: true,
+        builder: (_) =>
+            const CameraCapturePage(initialMode: MediaPickerEntryMode.image),
+      ),
+    );
+    if (!mounted || result == null) return;
+    if (result.type == CreateMediaType.video) {
+      await _applyMomentVideoFromPath(result.path, enterEditing: true);
+      return;
+    }
+    final currentImages = List<String>.from(
+      _tabData('moment')['images'] as List? ?? const <String>[],
+    );
+    _applyMomentImages(<String>[
+      ...currentImages,
+      result.path,
+    ], enterEditing: true);
+  }
+
+  void _applyMomentImages(List<String> images, {bool enterEditing = false}) {
+    final limitedImages = images.take(9).toList(growable: false);
+    setState(() {
+      _currentData = Map<String, dynamic>.from(_currentData);
+      final moment = Map<String, dynamic>.from(_tabData('moment'));
+      moment['images'] = limitedImages;
+      moment['videoPath'] = '';
+      moment['videoThumbnail'] = '';
+      moment['durationMs'] = 0;
+      moment['contentIdentity'] = CreateContentIdentity.moment.value;
+      _currentData['moment'] = moment;
+    });
+    _switchToTabKey('moment');
+    if (!enterEditing) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _enterMomentEditingMode();
+    });
+  }
+
+  Future<void> _applyMomentVideoFromPath(
+    String path, {
+    bool enterEditing = false,
+  }) async {
+    final duration = await _getVideoDuration(path);
+    final thumb = await _generateVideoThumbnail(path);
+    if (!mounted) return;
+    setState(() {
+      _currentData = Map<String, dynamic>.from(_currentData);
+      final moment = Map<String, dynamic>.from(_tabData('moment'));
+      moment['images'] = <String>[];
+      moment['videoPath'] = path;
+      moment['videoThumbnail'] = thumb ?? '';
+      moment['durationMs'] = duration?.inMilliseconds ?? 0;
+      moment['contentIdentity'] = CreateContentIdentity.moment.value;
+      _currentData['moment'] = moment;
+    });
+    _switchToTabKey('moment');
+    if (!enterEditing) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _enterMomentEditingMode();
+    });
+  }
+
+  void _switchToTabKey(String tabKey) {
+    final nextIndex = _tabIds.indexOf(tabKey);
+    if (nextIndex < 0 || nextIndex == _tabController.index) return;
+    _tabController.animateTo(nextIndex);
+  }
+
+  void _switchIdentity(CreateContentIdentity identity) {
+    final currentTab = _currentTabId;
+    if (_currentIdentity == identity) return;
+    if (currentTab == 'moment') {
+      _currentData = Map<String, dynamic>.from(_currentData);
+      (_currentData['moment'] as Map<String, dynamic>)['content'] =
+          _momentContentController.text;
+    }
+    if (identity == CreateContentIdentity.moment) {
+      _seedMomentFromWorkTab(currentTab);
+      _switchToTabKey('moment');
+      return;
+    }
+    final targetTab = currentTab == 'moment'
+        ? _preferredWorkTabForMoment()
+        : currentTab;
+    if (currentTab == 'moment') {
+      _seedWorkTabFromMoment(targetTab);
+    }
+    _switchToTabKey(targetTab);
+  }
+
+  void _switchWorkFormat(String tabKey) {
+    if (tabKey == _currentTabId || tabKey == 'moment') return;
+    final currentTab = _currentTabId;
+    if (currentTab == 'moment') {
+      _currentData = Map<String, dynamic>.from(_currentData);
+      (_currentData['moment'] as Map<String, dynamic>)['content'] =
+          _momentContentController.text;
+      _seedWorkTabFromMoment(tabKey);
+    } else {
+      _seedWorkTabFromWorkTab(currentTab, tabKey);
+    }
+    _switchToTabKey(tabKey);
+  }
+
+  String _preferredWorkTabForMoment() {
+    final moment = _tabData('moment');
+    if ((moment['videoPath'] as String? ?? '').trim().isNotEmpty) {
+      return 'video';
+    }
+    if ((moment['images'] as List?)?.isNotEmpty == true) {
+      return 'photo';
+    }
+    return 'article';
+  }
+
+  void _seedMomentFromWorkTab(String sourceTab) {
+    if (sourceTab == 'moment') return;
+    setState(() {
+      _currentData = Map<String, dynamic>.from(_currentData);
+      final source = Map<String, dynamic>.from(_tabData(sourceTab));
+      final moment = Map<String, dynamic>.from(_tabData('moment'));
+      _copySharedPublishFields(source, moment);
+      switch (sourceTab) {
+        case 'photo':
+          moment['content'] = (source['description'] ?? '').toString();
+          moment['images'] = List<String>.from(
+            source['images'] as List? ?? const <String>[],
+          );
+          moment['videoPath'] = '';
+          moment['videoThumbnail'] = '';
+          moment['durationMs'] = 0;
+          break;
+        case 'video':
+          moment['content'] = (source['description'] ?? '').toString();
+          moment['images'] = <String>[];
+          moment['videoPath'] = (source['videoPath'] ?? '').toString();
+          moment['videoThumbnail'] = (source['thumbnail'] ?? '').toString();
+          moment['durationMs'] = (source['durationMs'] as num?)?.toInt() ?? 0;
+          break;
+        case 'article':
+          moment['content'] = (source['content'] ?? '').toString();
+          moment['images'] = List<String>.from(
+            source['covers'] as List? ?? const <String>[],
+          );
+          moment['videoPath'] = '';
+          moment['videoThumbnail'] = '';
+          moment['durationMs'] = 0;
+          break;
+      }
+      moment['contentIdentity'] = CreateContentIdentity.moment.value;
+      _currentData['moment'] = moment;
+    });
+    _momentContentController.text =
+        (_tabData('moment')['content'] as String? ?? '').trim();
+  }
+
+  void _seedWorkTabFromMoment(String targetTab) {
+    setState(() {
+      _currentData = Map<String, dynamic>.from(_currentData);
+      final moment = Map<String, dynamic>.from(_tabData('moment'));
+      final target = Map<String, dynamic>.from(_tabData(targetTab));
+      _copySharedPublishFields(moment, target);
+      switch (targetTab) {
+        case 'photo':
+          target['description'] = (moment['content'] ?? '').toString();
+          target['images'] = List<String>.from(
+            moment['images'] as List? ?? const <String>[],
+          );
+          break;
+        case 'video':
+          target['description'] = (moment['content'] ?? '').toString();
+          target['videoPath'] = (moment['videoPath'] ?? '').toString();
+          target['thumbnail'] = (moment['videoThumbnail'] ?? '').toString();
+          target['durationMs'] = (moment['durationMs'] as num?)?.toInt() ?? 0;
+          break;
+        case 'article':
+          target['content'] = (moment['content'] ?? '').toString();
+          target['covers'] = List<String>.from(
+            moment['images'] as List? ?? const <String>[],
+          ).take(3).toList();
+          break;
+      }
+      target['contentIdentity'] = CreateContentIdentity.work.value;
+      _currentData[targetTab] = target;
+    });
+  }
+
+  void _seedWorkTabFromWorkTab(String sourceTab, String targetTab) {
+    if (sourceTab == targetTab) return;
+    setState(() {
+      _currentData = Map<String, dynamic>.from(_currentData);
+      final source = Map<String, dynamic>.from(_tabData(sourceTab));
+      final target = Map<String, dynamic>.from(_tabData(targetTab));
+      _copySharedPublishFields(source, target);
+      target['title'] = (source['title'] ?? '').toString();
+      switch (targetTab) {
+        case 'photo':
+          target['description'] =
+              (source['description'] ?? source['content'] ?? '').toString();
+          target['images'] = List<String>.from(
+            (source['images'] ?? source['covers']) as List? ?? const <String>[],
+          );
+          break;
+        case 'video':
+          target['description'] =
+              (source['description'] ?? source['content'] ?? '').toString();
+          target['videoPath'] = (source['videoPath'] ?? '').toString();
+          target['thumbnail'] =
+              (source['thumbnail'] ?? source['coverUrl'] ?? '').toString();
+          target['durationMs'] = (source['durationMs'] as num?)?.toInt() ?? 0;
+          break;
+        case 'article':
+          target['content'] = (source['description'] ?? source['content'] ?? '')
+              .toString();
+          target['covers'] = List<String>.from(
+            (source['images'] ?? source['covers']) as List? ?? const <String>[],
+          ).take(3).toList();
+          break;
+      }
+      target['contentIdentity'] = CreateContentIdentity.work.value;
+      _currentData[targetTab] = target;
+    });
+  }
+
+  void _copySharedPublishFields(
+    Map<String, dynamic> source,
+    Map<String, dynamic> target,
+  ) {
+    target['visibility'] = (source['visibility'] ?? 'public').toString();
+    target['assistantUsePolicy'] = (source['assistantUsePolicy'] ?? 'inherit')
+        .toString();
+    target['locationName'] = (source['locationName'] ?? '').toString();
+    target['location'] = Map<String, dynamic>.from(
+      source['location'] as Map? ?? const <String, dynamic>{},
+    );
+    target['circleIds'] = List<String>.from(
+      source['circleIds'] as List? ?? const <String>[],
+    );
+    target['circleNames'] = List<String>.from(
+      source['circleNames'] as List? ?? const <String>[],
+    );
+  }
+
+  IdentitySuggestion? _identitySuggestionForTab(String tab) {
+    final data = _tabData(tab);
+    if (tab == 'moment') {
+      final imageCount = (data['images'] as List?)?.length ?? 0;
+      final hasVideo = (data['videoPath'] as String? ?? '').trim().isNotEmpty;
+      final bodyLength = (data['content'] as String? ?? '').trim().length;
+      if (hasVideo || imageCount >= 3 || bodyLength >= 120) {
+        return const IdentitySuggestion(
+          identity: CreateContentIdentity.work,
+          reason: UITextConstants.createSuggestionToWork,
+        );
+      }
+      return null;
+    }
+    final title = (data['title'] as String? ?? '').trim();
+    final body = (data['description'] ?? data['content'] ?? '')
+        .toString()
+        .trim();
+    final hasStrongPackaging = title.isNotEmpty || body.length >= 120;
+    if (!hasStrongPackaging) {
+      return const IdentitySuggestion(
+        identity: CreateContentIdentity.moment,
+        reason: UITextConstants.createSuggestionToMoment,
+      );
+    }
+    return null;
+  }
+
+  Future<bool> _ensurePublishIdentityConfirmed(String tab) async {
+    if (!_isUnifiedCreateEnabled) {
+      return true;
+    }
+    final suggestion = _identitySuggestionForTab(tab);
+    if (suggestion == null || suggestion.identity == _identityForTab(tab)) {
+      return true;
+    }
+    final action = await showCupertinoDialog<String>(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: Text(suggestion.reason),
+        content: Padding(
+          padding: EdgeInsets.only(top: AppSpacing.sm),
+          child: Text(
+            suggestion.identity == CreateContentIdentity.work
+                ? '补充标题、封面或摘要后，会更适合作为作品沉淀。'
+                : '当前内容较轻，直接作为点滴发布会更自然。',
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(
+              context,
+            ).pop(UITextConstants.createSuggestionKeepCurrent),
+            child: Text(UITextConstants.createSuggestionKeepCurrent),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(
+              context,
+            ).pop(UITextConstants.createSuggestionSwitch),
+            child: Text(
+              suggestion.identity == CreateContentIdentity.work
+                  ? UITextConstants.createSwitchToWork
+                  : UITextConstants.createSwitchToMoment,
+            ),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return false;
+    if (action == UITextConstants.createSuggestionKeepCurrent) {
+      return true;
+    }
+    if (action == UITextConstants.createSuggestionSwitch) {
+      _switchIdentity(suggestion.identity);
+    }
+    return false;
+  }
+
+  Widget _buildUnifiedEditorShell(
+    bool isDark,
+    Color blockSurface,
+    Color fgColor,
+    Color fgSecondary,
+  ) {
+    return ListenableBuilder(
+      listenable: _tabController,
+      builder: (context, _) {
+        final suggestion = _identitySuggestionForTab(_currentTabId);
+        return Container(
+          width: double.infinity,
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.containerMd,
+            AppSpacing.sm,
+            AppSpacing.containerMd,
+            AppSpacing.containerSm,
+          ),
+          decoration: BoxDecoration(
+            color: blockSurface,
+            border: Border(
+              bottom: BorderSide(
+                color: SettingsSemanticConstants.dividerColor(isDark),
+              ),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CupertinoSlidingSegmentedControl<CreateContentIdentity>(
+                groupValue: _currentIdentity,
+                children: <CreateContentIdentity, Widget>{
+                  CreateContentIdentity.moment: Padding(
+                    key: TestKeys.createIdentityMoment,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.containerMd,
+                      vertical: AppSpacing.intraGroupSm,
+                    ),
+                    child: Text(UITextConstants.createIdentityMoment),
+                  ),
+                  CreateContentIdentity.work: Padding(
+                    key: TestKeys.createIdentityWork,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.containerMd,
+                      vertical: AppSpacing.intraGroupSm,
+                    ),
+                    child: Text(UITextConstants.createIdentityWork),
+                  ),
+                },
+                onValueChanged: (value) {
+                  if (value != null) _switchIdentity(value);
+                },
+              ),
+              if (_currentIdentity == CreateContentIdentity.work) ...[
+                SizedBox(height: AppSpacing.interGroupSm),
+                Wrap(
+                  spacing: AppSpacing.intraGroupSm,
+                  children: [
+                    _buildFormatChip(
+                      'photo',
+                      UITextConstants.createWorkFormatImage,
+                    ),
+                    _buildFormatChip(
+                      'video',
+                      UITextConstants.createWorkFormatVideo,
+                    ),
+                    _buildFormatChip(
+                      'article',
+                      UITextConstants.createWorkFormatNote,
+                    ),
+                  ],
+                ),
+              ],
+              if (suggestion != null) ...[
+                SizedBox(height: AppSpacing.interGroupSm),
+                Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(AppSpacing.containerSm),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryColor.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(
+                      AppSpacing.smallBorderRadius,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          suggestion.reason,
+                          style: TextStyle(
+                            color: fgColor,
+                            fontSize: AppTypography.sm,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => _switchIdentity(suggestion.identity),
+                        child: Text(
+                          suggestion.identity == CreateContentIdentity.work
+                              ? UITextConstants.createSwitchToWork
+                              : UITextConstants.createSwitchToMoment,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFormatChip(String tabKey, String label) {
+    final selected = _currentTabId == tabKey;
+    final chipKey = switch (tabKey) {
+      'photo' => TestKeys.createWorkFormatImage,
+      'video' => TestKeys.createWorkFormatVideo,
+      'article' => TestKeys.createWorkFormatNote,
+      _ => null,
+    };
+    return ChoiceChip(
+      key: chipKey,
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => _switchWorkFormat(tabKey),
+    );
+  }
+
   /// 发表按钮：AppBar 内紧凑样式（高度小、上下间距小）。无内容时 [enabled]==false 为浅色不可点。
   Widget _buildPublishButton({
     required bool isDark,
     required VoidCallback onPressed,
     String? label,
     bool enabled = true,
+    Key? buttonKey,
   }) {
     final text = label ?? UITextConstants.publish;
     final bg = enabled
@@ -693,6 +1240,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
           SettingsSemanticConstants.actionButtonBorderRadius,
         ),
         child: InkWell(
+          key: buttonKey,
           onTap: enabled ? onPressed : null,
           borderRadius: BorderRadius.circular(
             SettingsSemanticConstants.actionButtonBorderRadius,
@@ -877,6 +1425,34 @@ class _CreatePageState extends ConsumerState<CreatePage>
     });
   }
 
+  Future<void> _handlePickMomentVideo() async {
+    final path = await _pickVideo();
+    if (path == null || !mounted) return;
+    await _applyMomentVideoFromPath(path, enterEditing: true);
+  }
+
+  void _clearMomentVideo() {
+    setState(() {
+      _currentData = Map<String, dynamic>.from(_currentData);
+      final moment = Map<String, dynamic>.from(_tabData('moment'));
+      moment['videoPath'] = '';
+      moment['videoThumbnail'] = '';
+      moment['durationMs'] = 0;
+      _currentData['moment'] = moment;
+    });
+  }
+
+  String _formatDurationMs(int durationMs) {
+    final duration = Duration(milliseconds: durationMs);
+    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+    final hours = duration.inHours;
+    if (hours > 0) {
+      return '$hours:$minutes:$seconds';
+    }
+    return '$minutes:$seconds';
+  }
+
   /// 打开图片编辑页（重建后三段式编辑器），返回编辑后的路径（String）或多图时 {index, path}（Map）
   Future<Object?> _openEditImage(
     String source,
@@ -984,12 +1560,14 @@ class _CreatePageState extends ConsumerState<CreatePage>
     return Stack(
       children: [
         Scaffold(
+          key: TestKeys.createPage,
           backgroundColor: pageBg,
           appBar: AppBar(
             backgroundColor: blockSurface,
             elevation: 0,
             scrolledUnderElevation: 0,
             leading: IconButton(
+              key: TestKeys.createCloseButton,
               icon: const Icon(Icons.close),
               onPressed: _onCloseRequest,
             ),
@@ -997,7 +1575,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
               listenable: _tabController,
               builder: (context, _) {
                 return Text(
-                  _tabTitles[_tabController.index],
+                  _currentEditorTitle,
                   style: TextStyle(
                     color: fgColor,
                     fontSize:
@@ -1011,18 +1589,18 @@ class _CreatePageState extends ConsumerState<CreatePage>
             bottom: PreferredSize(
               preferredSize: const Size.fromHeight(1),
               child: Container(
-                height: 1,
+                height: AppSpacing.one,
                 color: SettingsSemanticConstants.dividerColor(isDark),
               ),
             ),
             actions: [
-              if (_isMomentEditingMode)
+              if (_isMomentEditingMode && _canPublishMoment)
                 _buildPublishButton(
                   isDark: isDark,
                   onPressed: () {
                     _publishMoment();
                   },
-                  enabled: _canPublishMoment,
+                  buttonKey: TestKeys.createPublishButton,
                 )
               else if (hasContent)
                 _buildPublishButton(
@@ -1033,9 +1611,11 @@ class _CreatePageState extends ConsumerState<CreatePage>
                   label: _tabController.index == 0
                       ? UITextConstants.publish
                       : UITextConstants.publishAction,
+                  buttonKey: TestKeys.createPublishButton,
                 )
               else
                 TextButton.icon(
+                  key: TestKeys.createDraftsButton,
                   onPressed: () => setState(() => _showDraftsList = true),
                   icon: Icon(
                     Icons.inventory_2_outlined,
@@ -1054,12 +1634,19 @@ class _CreatePageState extends ConsumerState<CreatePage>
           ),
           body: Column(
             children: [
+              if (_isUnifiedCreateEnabled &&
+                  !_isMomentEditingMode &&
+                  !_isPhotoEditingMode)
+                _buildUnifiedEditorShell(
+                  isDark,
+                  blockSurface,
+                  fgColor,
+                  fgSecondary,
+                ),
               Expanded(
                 child: TabBarView(
                   controller: _tabController,
-                  physics: _isPhotoEditingMode
-                      ? const NeverScrollableScrollPhysics()
-                      : null,
+                  physics: const NeverScrollableScrollPhysics(),
                   children: _tabIds.asMap().entries.map((e) {
                     return _buildEditorPlaceholder(
                       context,
@@ -1154,40 +1741,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
               else if (_isPhotoEditingMode)
                 const SizedBox.shrink()
               else
-                Container(
-                  decoration: BoxDecoration(
-                    color: blockSurface,
-                    border: Border(
-                      top: BorderSide(
-                        color: SettingsSemanticConstants.dividerColor(isDark),
-                      ),
-                    ),
-                  ),
-                  child: SafeArea(
-                    top: false,
-                    child: TabBar(
-                      controller: _tabController,
-                      indicator: const BoxDecoration(),
-                      indicatorSize: TabBarIndicatorSize.tab,
-                      dividerHeight: 0,
-                      labelColor: fgColor,
-                      unselectedLabelColor: fgSecondary,
-                      labelStyle: TextStyle(
-                        fontSize: SettingsSemanticConstants
-                            .createToolbarTitleFontSize,
-                        fontWeight: FontWeight.w600,
-                        color: fgColor,
-                      ),
-                      unselectedLabelStyle: TextStyle(
-                        fontSize: SettingsSemanticConstants
-                            .createToolbarTitleFontSize,
-                        fontWeight: FontWeight.normal,
-                        color: fgSecondary,
-                      ),
-                      tabs: _tabLabels.map((l) => Tab(text: l)).toList(),
-                    ),
-                  ),
-                ),
+                const SizedBox.shrink(),
             ],
           ),
         ),
@@ -1242,7 +1796,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
             vertical: SettingsSemanticConstants.sectionVerticalPadding - 4,
           ),
           child: Divider(
-            height: 1,
+            height: AppSpacing.one,
             thickness: SettingsSemanticConstants.dividerThickness,
             color: SettingsSemanticConstants.createInlineDividerColor(isDark),
           ),
@@ -1401,12 +1955,17 @@ class _CreatePageState extends ConsumerState<CreatePage>
     FocusNode? addImageFocusNode,
   }) {
     final images = List<String>.from(data['images'] as List? ?? []);
+    final videoPath = (data['videoPath'] as String? ?? '').trim();
+    final videoThumbnail = (data['videoThumbnail'] as String? ?? '').trim();
+    final durationMs = (data['durationMs'] as num?)?.toInt() ?? 0;
+    final hasVideo = videoPath.isNotEmpty;
     return [
       // 1. 文本输入区 + 字数在输入区内显示（非工具栏底）
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           TextFormField(
+            key: TestKeys.createMomentInput,
             controller: _momentContentController,
             focusNode: focusNode,
             decoration: InputDecoration(
@@ -1457,105 +2016,113 @@ class _CreatePageState extends ConsumerState<CreatePage>
       ),
       // 文字与图片区间隔两行（一空行一待输入）
       SizedBox(height: AppSpacing.interGroupXl),
-      // 2. 媒体区：可拖动排序、添加格焦点时边框渐深
-      LayoutBuilder(
-        builder: (context, constraints) {
-          final gap = AppSpacing.interGroupXs;
-          final cellSize = (constraints.maxWidth - gap * 2) / 3;
-          final totalCells = images.length + 1;
-          final rowCount = (totalCells / 3).ceil();
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: List.generate(rowCount, (row) {
-              return Padding(
-                padding: EdgeInsets.only(bottom: row < rowCount - 1 ? gap : 0),
-                child: Row(
-                  children: List.generate(3, (col) {
-                    final index = row * 3 + col;
-                    if (index >= totalCells) {
-                      return SizedBox(width: cellSize, height: cellSize);
-                    }
-                    if (index == images.length) {
-                      return Padding(
-                        padding: EdgeInsets.only(right: col < 2 ? gap : 0),
-                        child: GestureDetector(
-                          onTap: () async {
-                            addImageFocusNode?.requestFocus();
-                            onEnterEditing?.call();
-                            final paths = await _pickImages(
-                              maxCount: 9,
-                              initialPaths: images,
-                            );
-                            if (paths.isEmpty) return;
-                            final oldLength = images.length;
-                            setState(() {
-                              _currentData = Map.from(_currentData);
-                              (_currentData['moment'] as Map)['images'] = paths;
-                            });
-                            if (!mounted) return;
-                            final merged = List<String>.from(
-                              (_currentData['moment'] as Map)['images']
-                                      as List? ??
-                                  [],
-                            );
-                            if (merged.isEmpty) return;
-                            final targetIndex = oldLength.clamp(
-                              0,
-                              merged.length - 1,
-                            );
-                            final result = await _openEditImage(
-                              'moment',
-                              merged[targetIndex],
-                              targetIndex,
-                              total: merged.length,
-                              allPaths: merged,
-                            );
-                            if (!mounted) return;
-                            _applyEditedImageToTab(
-                              tabKey: 'moment',
-                              fallbackIndex: targetIndex,
-                              result: result,
-                            );
-                          },
-                          child: _buildDashedAddTile(
-                            isDark: isDark,
-                            width: cellSize,
-                            height: cellSize,
-                            borderRadius: SettingsSemanticConstants
-                                .createAddTileBorderRadius,
-                            child: Icon(
-                              Icons.add,
-                              size: AppSpacing.iconLarge + AppSpacing.iconSmall,
-                              color:
-                                  SettingsSemanticConstants.createAddTileIconColor(
-                                    isDark,
-                                  ),
+      // 2. 媒体区：图片点滴使用九宫格；视频点滴使用单视频卡片
+      if (hasVideo)
+        _buildMomentVideoCard(
+          isDark: isDark,
+          fgSecondary: fgSecondary,
+          thumbnailPath: videoThumbnail,
+          durationMs: durationMs,
+        )
+      else
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final gap = AppSpacing.interGroupXs;
+            final cellSize = (constraints.maxWidth - gap * 2) / 3;
+            final totalCells = images.length + 1;
+            final rowCount = (totalCells / 3).ceil();
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(rowCount, (row) {
+                return Padding(
+                  padding: EdgeInsets.only(
+                    bottom: row < rowCount - 1 ? gap : 0,
+                  ),
+                  child: Row(
+                    children: List.generate(3, (col) {
+                      final index = row * 3 + col;
+                      if (index >= totalCells) {
+                        return SizedBox(width: cellSize, height: cellSize);
+                      }
+                      if (index == images.length) {
+                        return Padding(
+                          padding: EdgeInsets.only(right: col < 2 ? gap : 0),
+                          child: GestureDetector(
+                            onTap: () async {
+                              addImageFocusNode?.requestFocus();
+                              onEnterEditing?.call();
+                              final paths = await _pickImages(
+                                maxCount: 9,
+                                initialPaths: images,
+                              );
+                              if (paths.isEmpty) return;
+                              final oldLength = images.length;
+                              _applyMomentImages(paths);
+                              if (!mounted) return;
+                              final merged = List<String>.from(
+                                (_currentData['moment'] as Map)['images']
+                                        as List? ??
+                                    [],
+                              );
+                              if (merged.isEmpty) return;
+                              final targetIndex = oldLength.clamp(
+                                0,
+                                merged.length - 1,
+                              );
+                              final result = await _openEditImage(
+                                'moment',
+                                merged[targetIndex],
+                                targetIndex,
+                                total: merged.length,
+                                allPaths: merged,
+                              );
+                              if (!mounted) return;
+                              _applyEditedImageToTab(
+                                tabKey: 'moment',
+                                fallbackIndex: targetIndex,
+                                result: result,
+                              );
+                            },
+                            child: _buildDashedAddTile(
+                              isDark: isDark,
+                              width: cellSize,
+                              height: cellSize,
+                              borderRadius: SettingsSemanticConstants
+                                  .createAddTileBorderRadius,
+                              child: Icon(
+                                Icons.add,
+                                size:
+                                    AppSpacing.iconLarge + AppSpacing.iconSmall,
+                                color:
+                                    SettingsSemanticConstants.createAddTileIconColor(
+                                      isDark,
+                                    ),
+                              ),
                             ),
                           ),
+                        );
+                      }
+                      final path = images[index];
+                      return Padding(
+                        padding: EdgeInsets.only(right: col < 2 ? gap : 0),
+                        child: _buildMomentDraggableImageCell(
+                          key: ValueKey(path),
+                          path: path,
+                          index: index,
+                          cellSize: cellSize,
+                          images: images,
+                          fgSecondary: fgSecondary,
+                          onEnterEditing: onEnterEditing,
                         ),
                       );
-                    }
-                    final path = images[index];
-                    return Padding(
-                      padding: EdgeInsets.only(right: col < 2 ? gap : 0),
-                      child: _buildMomentDraggableImageCell(
-                        key: ValueKey(path),
-                        path: path,
-                        index: index,
-                        cellSize: cellSize,
-                        images: images,
-                        fgSecondary: fgSecondary,
-                        onEnterEditing: onEnterEditing,
-                      ),
-                    );
-                  }),
-                ),
-              );
-            }),
-          );
-        },
-      ),
-      if (images.isNotEmpty)
+                    }),
+                  ),
+                );
+              }),
+            );
+          },
+        ),
+      if (images.isNotEmpty && !hasVideo)
         Padding(
           padding: EdgeInsets.only(top: AppSpacing.interGroupXs),
           child: Text(
@@ -1576,11 +2143,114 @@ class _CreatePageState extends ConsumerState<CreatePage>
     ];
   }
 
+  Widget _buildMomentVideoCard({
+    required bool isDark,
+    required Color fgSecondary,
+    required String thumbnailPath,
+    required int durationMs,
+  }) {
+    return AspectRatio(
+      aspectRatio: 4 / 3,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: thumbnailPath.isNotEmpty
+                  ? _photoImage(thumbnailPath, fgSecondary)
+                  : _buildVideoPlaceholder(fgSecondary),
+            ),
+            Center(
+              child: Container(
+                width: AppSpacing.bottomNavHeight + AppSpacing.sm,
+                height: AppSpacing.bottomNavHeight + AppSpacing.sm,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.92),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.play_arrow,
+                  size: AppSpacing.iconLarge + AppSpacing.xs,
+                  color: Colors.black87,
+                ),
+              ),
+            ),
+            Positioned(
+              left: AppSpacing.containerSm,
+              bottom: AppSpacing.containerSm,
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.intraGroupMd,
+                  vertical: AppSpacing.intraGroupXs,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(
+                    AppSpacing.smallBorderRadius,
+                  ),
+                ),
+                child: Text(
+                  _formatDurationMs(durationMs),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: AppTypography.sm,
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: AppSpacing.containerSm,
+              right: AppSpacing.containerSm,
+              child: Row(
+                children: [
+                  TextButton(
+                    onPressed: _handlePickMomentVideo,
+                    child: const Text(
+                      '换视频',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _clearMomentVideo,
+                    child: const Text(
+                      '移除',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Positioned(
+              left: AppSpacing.containerSm,
+              top: AppSpacing.containerSm,
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.intraGroupMd,
+                  vertical: AppSpacing.intraGroupXs,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.black38,
+                  borderRadius: BorderRadius.circular(
+                    AppSpacing.smallBorderRadius,
+                  ),
+                ),
+                child: const Text(
+                  '点滴视频',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _createOptionDivider(bool isDark) {
     return Padding(
       padding: EdgeInsets.symmetric(vertical: AppSpacing.xs / 2),
       child: Divider(
-        height: 1,
+        height: AppSpacing.one,
         thickness: SettingsSemanticConstants.dividerThickness,
         color: SettingsSemanticConstants.dividerColor(isDark),
       ),
@@ -1596,6 +2266,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
     final l10n = context.l10n;
     final locationText = _locationDisplay(tabKey, l10n);
     final isPublic = _isPublic(tabKey);
+    final allowAssistantUse =
+        (_tabData(tabKey)['assistantUsePolicy']?.toString() ?? 'inherit') !=
+        'exclude';
     final circlesText = _circlesDisplay(tabKey, l10n);
     final blue = AppColors.primaryColor;
     final isLocationSelected = locationText != l10n.locationHidden;
@@ -1614,6 +2287,58 @@ class _CreatePageState extends ConsumerState<CreatePage>
           isDark: isDark,
           onTap: () => _selectLocation(tabKey),
         ),
+        _createOptionDivider(isDark),
+        _momentListTile(
+          icon: CupertinoIcons.sparkles,
+          label: UITextConstants.createAssistantUseLabel,
+          trailing: allowAssistantUse ? '允许' : '已排除',
+          trailingColor: allowAssistantUse
+              ? blue
+              : SettingsSemanticConstants.createSettingItemValueColor(isDark),
+          fgColor: fgColor,
+          fgSecondary: fgSecondary,
+          isDark: isDark,
+          showChevron: false,
+          trailingWidget: CupertinoSwitch(
+            value: allowAssistantUse,
+            activeTrackColor: blue,
+            onChanged: (next) {
+              setState(() {
+                final nextData = Map<String, dynamic>.from(_tabData(tabKey));
+                nextData['assistantUsePolicy'] = next ? 'inherit' : 'exclude';
+                _currentData = Map<String, dynamic>.from(_currentData)
+                  ..[tabKey] = nextData;
+              });
+            },
+          ),
+          onTap: () {
+            setState(() {
+              final nextData = Map<String, dynamic>.from(_tabData(tabKey));
+              nextData['assistantUsePolicy'] = allowAssistantUse
+                  ? 'exclude'
+                  : 'inherit';
+              _currentData = Map<String, dynamic>.from(_currentData)
+                ..[tabKey] = nextData;
+            });
+          },
+        ),
+        if (!allowAssistantUse)
+          Padding(
+            padding: EdgeInsets.only(
+              top: AppSpacing.intraGroupXs,
+              bottom: AppSpacing.intraGroupSm,
+            ),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                UITextConstants.createAssistantUseHint,
+                style: TextStyle(
+                  color: fgSecondary,
+                  fontSize: AppTypography.sm,
+                ),
+              ),
+            ),
+          ),
         _createOptionDivider(isDark),
         _momentListTile(
           icon: CupertinoIcons.globe,
@@ -1694,8 +2419,8 @@ class _CreatePageState extends ConsumerState<CreatePage>
   }
 
   Future<void> _selectCircles(String tabKey) async {
-    final dataService = ref.read(dataServiceProvider);
-    final joinedCircles = await _circleService.listCircles(dataService);
+    final circleRepository = ref.read(circleRepositoryProvider);
+    final joinedCircles = await _circleService.listCircles(circleRepository);
     if (!mounted) return;
     final selectedIds = List<String>.from(
       _tabData(tabKey)['circleIds'] as List? ?? const <String>[],
@@ -1782,7 +2507,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
                         mainAxisSize: MainAxisSize.min,
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          ...? (trailingWidget != null ? [trailingWidget] : null),
+                          ...?(trailingWidget != null
+                              ? [trailingWidget]
+                              : null),
                           if (trailing != null)
                             Flexible(
                               child: Text(
@@ -2099,6 +2826,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
       mainAxisSize: MainAxisSize.min,
       children: [
         TextFormField(
+          key: TestKeys.createPhotoTitleInput,
           initialValue: data['title'] as String? ?? '',
           onTap: _enterPhotoEditingMode,
           decoration: InputDecoration(
@@ -2126,6 +2854,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
         Padding(
           padding: EdgeInsets.only(top: 8),
           child: TextFormField(
+            key: TestKeys.createPhotoBodyInput,
             initialValue: data['description'] as String? ?? '',
             onTap: _enterPhotoEditingMode,
             decoration: InputDecoration(
@@ -2864,6 +3593,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
       mainAxisSize: MainAxisSize.min,
       children: [
         TextFormField(
+          key: TestKeys.createVideoTitleInput,
           initialValue: data['title'] as String? ?? '',
           decoration: InputDecoration(
             hintText: UITextConstants.videoTitlePlaceholder,
@@ -2887,6 +3617,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
         Padding(
           padding: EdgeInsets.only(top: 8),
           child: TextFormField(
+            key: TestKeys.createVideoBodyInput,
             initialValue: data['description'] as String? ?? '',
             decoration: InputDecoration(
               hintText: UITextConstants.videoDescPlaceholder,
@@ -2984,7 +3715,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
     if (covers.isEmpty) {
       coverPreview = _buildDashedAddTile(
         isDark: isDark,
-        height: 120,
+        height: AppSpacing.oneHundred + AppSpacing.twenty,
         borderRadius: AppSpacing.largeBorderRadius,
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -3078,6 +3809,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
         mainAxisSize: MainAxisSize.min,
         children: [
           TextFormField(
+            key: TestKeys.createArticleTitleInput,
             initialValue: data['title'] as String? ?? '',
             decoration: InputDecoration(
               hintText: UITextConstants.articleTitlePlaceholder,
@@ -3101,6 +3833,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
           Padding(
             padding: EdgeInsets.only(top: 8),
             child: TextFormField(
+              key: TestKeys.createArticleBodyInput,
               initialValue: data['content'] as String? ?? '',
               decoration: InputDecoration(
                 hintText: UITextConstants.createArticleBodyHint,
@@ -3206,6 +3939,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
                     children: [
                       Expanded(
                         child: TextButton(
+                          key: TestKeys.createDiscardAndExitButton,
                           onPressed: _handleDiscardAndExit,
                           style: TextButton.styleFrom(
                             foregroundColor: fgSecondary,
@@ -3216,6 +3950,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
                       SizedBox(width: AppSpacing.interGroupSm),
                       Expanded(
                         child: FilledButton(
+                          key: TestKeys.createSaveAndExitButton,
                           onPressed: _handleSaveAndExit,
                           style: FilledButton.styleFrom(
                             backgroundColor: AppColors.primaryColor,
@@ -3236,9 +3971,8 @@ class _CreatePageState extends ConsumerState<CreatePage>
   }
 
   Widget _buildDraftsList(bool isDark, Color fgColor, Color fgSecondary) {
-    final sorted = List<Map<String, dynamic>>.from(
-      _savedDrafts,
-    )..sort((a, b) => (b['updatedAt'] as int).compareTo(a['updatedAt'] as int));
+    final sorted = List<CreateDraft>.from(_savedDrafts)
+      ..sort((a, b) => b.updatedAtMs.compareTo(a.updatedAtMs));
     return Material(
       color: Colors.black54,
       child: Center(
@@ -3303,20 +4037,11 @@ class _CreatePageState extends ConsumerState<CreatePage>
                         itemCount: sorted.length,
                         itemBuilder: (context, i) {
                           final d = sorted[i];
-                          final type = d['type'] as String? ?? 'moment';
-                          final title = type == 'moment'
-                              ? UITextConstants.draftMoment
-                              : type == 'photo'
-                              ? UITextConstants.draftPhoto
-                              : type == 'video'
-                              ? UITextConstants.draftVideo
-                              : UITextConstants.draftArticle;
-                          final data = d['data'] as Map<String, dynamic>? ?? {};
-                          final desc =
-                              (data['content'] ?? data['title'] ?? '')
-                                  as String;
+                          final type = d.tabKey;
+                          final title = type == 'moment' ? '点滴草稿' : '作品草稿';
+                          final desc = d.previewText;
                           final date = DateTime.fromMillisecondsSinceEpoch(
-                            d['updatedAt'] as int,
+                            d.updatedAtMs,
                           );
                           final dateStr =
                               '${date.month}/${date.day} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
@@ -3350,8 +4075,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
                                     size: AppSpacing.iconMedium,
                                     color: fgSecondary,
                                   ),
-                                  onPressed: () =>
-                                      _handleDeleteDraft(d['id'] as String),
+                                  onPressed: () => _handleDeleteDraft(d.id),
                                 ),
                               ],
                             ),

@@ -14,6 +14,17 @@ void main() {
       expect(posts, isNotEmpty);
     });
 
+    test('listDiscoveryFeed 支持按 identity/type 过滤', () async {
+      final works = await repo.listDiscoveryFeed(
+        category: 'work',
+        identity: 'work',
+        type: 'article',
+      );
+      expect(works, isNotEmpty);
+      expect(works.every((post) => post.identity == 'work'), isTrue);
+      expect(works.every((post) => post.displayFormat == 'note'), isTrue);
+    });
+
     test('listDiscoveryFeedPage 返回带游标的分页结果', () async {
       final page = await repo.listDiscoveryFeedPage(category: 'all');
       expect(page.items, isNotEmpty);
@@ -27,11 +38,62 @@ void main() {
     });
 
     test('createPost 返回创建结果', () async {
-      final result = await repo.createPost(payload: {
-        'type': 'moment',
-        'body': 'test moment',
-      });
+      final result = await repo.createPost(
+        payload: {'type': 'moment', 'body': 'test moment'},
+      );
       expect(result, isA<Map<String, dynamic>>());
+    });
+
+    test('publishPost / updatePostSettings / promotePostToWork 返回结果', () async {
+      final published = await repo.publishPost(
+        postId: 'test_post',
+        payload: {'visibility': 'public'},
+      );
+      final settings = await repo.updatePostSettings(
+        postId: 'test_post',
+        payload: {'assistantUsePolicy': 'exclude'},
+      );
+      final promoted = await repo.promotePostToWork(
+        postId: 'test_post',
+        payload: {'contentType': 'image', 'title': '整理后的作品'},
+      );
+
+      expect(published, isA<Map<String, dynamic>>());
+      expect(settings, isA<Map<String, dynamic>>());
+      expect(promoted, isA<Map<String, dynamic>>());
+    });
+
+    test('getAppConfig 返回 feature flags 与 gray release 结构', () async {
+      final config = await repo.getAppConfig();
+      final content = config['content'] as Map<String, dynamic>?;
+      expect(content, isNotNull);
+      final featureFlags = content?['feature_flags'] as Map<String, dynamic>?;
+      final grayRelease = content?['gray_release'] as Map<String, dynamic>?;
+
+      expect(featureFlags, isNotNull);
+      expect(
+        featureFlags?.keys,
+        containsAll(<String>[
+          'enable_create_action_entry',
+          'enable_unified_create_editor',
+          'enable_identity_based_surfaces',
+          'enable_identity_share_template',
+          'enable_assistant_content_identity_index',
+        ]),
+      );
+      expect(grayRelease, isNotNull);
+      expect(grayRelease?['experiment_bucket'], isA<String>());
+      expect(grayRelease?['current_stage'], isA<String>());
+      expect(grayRelease?['canary_matrix'], isA<List<dynamic>>());
+    });
+
+    test('listUserPosts 支持按 identity 过滤', () async {
+      final page = await repo.listUserPosts(
+        userId: 'nature_photographer',
+        identity: 'work',
+      );
+      expect(page.items, isNotEmpty);
+      expect(page.items.every((post) => post.identity == 'work'), isTrue);
     });
 
     test('likePost / unlikePost 不崩溃', () async {
@@ -56,10 +118,7 @@ void main() {
     });
 
     test('createComment 返回新评论', () async {
-      final comment = await repo.createComment(
-        postId: 'test',
-        content: '测试评论',
-      );
+      final comment = await repo.createComment(postId: 'test', content: '测试评论');
       expect(comment, isA<Map<String, dynamic>>());
     });
 
@@ -76,16 +135,24 @@ void main() {
       expect(counters, isA<Map<String, dynamic>>());
     });
 
-    test('接口包含全部 15 个 service.yaml API 方法', () {
+    test('接口包含 identity create-flow 关键 API 方法', () {
       final methods = <String>[
-        'listDiscoveryFeedPage', 'listDiscoveryFeed',
-        'listDiscoveryFeedPageLegacy',
-        'getPost', 'createPost',
-        'likePost', 'unlikePost', 'favoritePost', 'unfavoritePost',
-        'getReactionState', 'listComments', 'createComment', 'deleteComment',
-        'reportBehaviors', 'getCounters',
+        'createPost',
+        'publishPost',
+        'updatePostSettings',
+        'promotePostToWork',
+        'updatePost',
+        'deletePost',
       ];
-      expect(methods.length, 15);
+      expect(
+        methods,
+        containsAll(<String>[
+          'createPost',
+          'publishPost',
+          'updatePostSettings',
+          'promotePostToWork',
+        ]),
+      );
     });
   });
 

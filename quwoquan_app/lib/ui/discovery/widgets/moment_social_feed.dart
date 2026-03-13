@@ -14,6 +14,9 @@ import 'package:quwoquan_app/components/more_actions_popup/configs/media_post_co
 import 'package:quwoquan_app/components/more_actions_popup/more_action_popup.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
+import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
+import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
+import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_state.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
@@ -34,20 +37,30 @@ class MomentSocialFeed extends ConsumerWidget {
   });
 
   final bool isDark;
-  final void Function(String userId,
-      {String? avatarUrl,
-      String? displayName,
-      String? backgroundUrl}) onUserTap;
+  final void Function(
+    String userId, {
+    String? avatarUrl,
+    String? displayName,
+    String? backgroundUrl,
+  })
+  onUserTap;
+
   /// 点击图片/视频时打开侵入式浏览器；若仅需埋点可传 (post, i) => _trackBehavior('click', post)
-  final void Function(PostBaseDto post, int index, {List<PostBaseDto>? feedPosts})? onPostTap;
+  final void Function(
+    PostBaseDto post,
+    int index, {
+    List<PostBaseDto>? feedPosts,
+  })?
+  onPostTap;
   final void Function(dynamic post)? onMoreTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final discoveryState = ref.watch(discoveryStateProvider);
     final feedAsync = ref.watch(discoveryFeedProvider('moment'));
-    final fallbackRaw =
-        ref.watch(appContentRepositoryProvider).discoveryMomentData;
+    final fallbackRaw = ref
+        .watch(appContentRepositoryProvider)
+        .discoveryMomentData;
     final feedMap = ref.watch(discoveryFeedMapProvider);
 
     if (!feedMap.containsKey('moment')) {
@@ -56,7 +69,8 @@ class MomentSocialFeed extends ConsumerWidget {
       });
     }
 
-    final dtos = feedAsync.value?.items ??
+    final dtos =
+        feedAsync.value?.items ??
         fallbackRaw.map(postBaseDtoFromMap).toList(growable: false);
     final moments = dtos.whereType<MomentPostDto>().toList(growable: false);
     final hasError = feedAsync.value?.error != null;
@@ -94,13 +108,16 @@ class MomentSocialFeed extends ConsumerWidget {
     }
 
     final horizontal = AppSpacing.feedContentHorizontal(context);
-    final dividerColor =
-        AppColorsFunctional.getColor(isDark, ColorType.backgroundTertiary);
+    final dividerColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundTertiary,
+    );
 
     return ListView.builder(
       padding: EdgeInsets.only(
         top: AppSpacing.containerSm,
-        bottom: MediaQuery.of(context).padding.bottom +
+        bottom:
+            MediaQuery.of(context).padding.bottom +
             AppSpacing.bottomNavHeight +
             AppSpacing.interGroupLg,
       ),
@@ -139,27 +156,30 @@ class MomentSocialFeed extends ConsumerWidget {
                 onImageTap: (imgIndex) =>
                     onPostTap?.call(dto, imgIndex, feedPosts: moments),
                 onCommentTap: () {
-                  CommentViewer.showModal(
-                    context: context,
-                    postId: dto.id,
-                  );
+                  CommentViewer.showModal(context: context, postId: dto.id);
                 },
-                onShareTap: () {
-                  ref.read(discoveryStateProvider).incrementShares(dto.id);
-                  ref.read(contentBehaviorTrackerProvider).trackShare(dto.id);
-                  _showShare(context);
-                },
+                onShareTap: () => _showShare(
+                  context,
+                  ref,
+                  dto,
+                  enableIdentityTemplate: ref.read(
+                    contentFeatureFlagProvider(
+                      'enable_identity_share_template',
+                    ),
+                  ),
+                ),
                 onLikeTap: () {
-                  ref.read(discoveryStateProvider).toggleLike(
-                    dto.id,
-                    baseLikesCount: dto.likeCount,
-                  );
+                  ref
+                      .read(discoveryStateProvider)
+                      .toggleLike(dto.id, baseLikesCount: dto.likeCount);
                 },
                 onBookmarkTap: () {
-                  ref.read(discoveryStateProvider).toggleSave(
-                    dto.id,
-                    baseBookmarksCount: dto.favoriteCount,
-                  );
+                  ref
+                      .read(discoveryStateProvider)
+                      .toggleSave(
+                        dto.id,
+                        baseBookmarksCount: dto.favoriteCount,
+                      );
                 },
                 onMoreTap: () {
                   if (onMoreTap != null) {
@@ -169,27 +189,57 @@ class MomentSocialFeed extends ConsumerWidget {
                       context: context,
                       config: MediaPostMoreActionConfig(
                         post: dto,
+                        onCopyLink: () => _copyLink(
+                          context,
+                          ref,
+                          dto,
+                          enableIdentityTemplate: ref.read(
+                            contentFeatureFlagProvider(
+                              'enable_identity_share_template',
+                            ),
+                          ),
+                        ),
+                        onShare: () => _showShare(
+                          context,
+                          ref,
+                          dto,
+                          enableIdentityTemplate: ref.read(
+                            contentFeatureFlagProvider(
+                              'enable_identity_share_template',
+                            ),
+                          ),
+                        ),
                         onNotInterested: () {
-                          ref.read(contentBehaviorTrackerProvider).trackDislike(dto.id);
+                          ref
+                              .read(contentBehaviorTrackerProvider)
+                              .trackDislike(dto.id);
                         },
                         onBlockUser: () {
-                          ref.read(blockRepositoryProvider).blockUser(dto.authorId);
+                          ref
+                              .read(blockRepositoryProvider)
+                              .blockUser(dto.authorId);
                         },
                         onBlockWords: () async {
                           final keyword = _extractKeyword(dto.body);
                           if (keyword.isEmpty) return;
-                          await ref.read(keywordBlockRepositoryProvider).addBlockedKeyword(keyword);
+                          await ref
+                              .read(keywordBlockRepositoryProvider)
+                              .addBlockedKeyword(keyword);
                         },
                         onReport: () {
-                          ref.read(behaviorRepositoryProvider).reportSingle(
-                            contentId: dto.id,
-                            action: 'report',
-                          );
-                          ref.read(reportRepositoryProvider).createReport(
-                            targetId: dto.id,
-                            targetType: 'post',
-                            reason: 'inappropriate',
-                          );
+                          ref
+                              .read(behaviorRepositoryProvider)
+                              .reportSingle(
+                                contentId: dto.id,
+                                action: 'report',
+                              );
+                          ref
+                              .read(reportRepositoryProvider)
+                              .createReport(
+                                targetId: dto.id,
+                                targetType: 'post',
+                                reason: 'inappropriate',
+                              );
                         },
                       ),
                     );
@@ -198,35 +248,93 @@ class MomentSocialFeed extends ConsumerWidget {
               ),
             ),
             if (index < moments.length - 1)
-              Container(
-                height: AppSpacing.sm,
-                color: dividerColor,
-              ),
+              Container(height: AppSpacing.sm, color: dividerColor),
           ],
         );
       },
     );
   }
 
-  void _showShare(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: EdgeInsets.all(AppSpacing.containerMd),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.link),
-                title: Text(UITextConstants.copyLink),
-                onTap: () => Navigator.pop(ctx),
-              ),
-            ],
-          ),
-        ),
+  void _showShare(
+    BuildContext context,
+    WidgetRef ref,
+    MomentPostDto post, {
+    required bool enableIdentityTemplate,
+  }) {
+    final template = _buildShareTemplate(
+      ref: ref,
+      post: post,
+      enableIdentityTemplate: enableIdentityTemplate,
+    );
+    ContentShareSheet.show(
+      context,
+      template: template,
+      onActionCompleted: (result) async {
+        _recordShare(ref, post.id, result.actionId);
+      },
+    );
+  }
+
+  Future<void> _copyLink(
+    BuildContext context,
+    WidgetRef ref,
+    MomentPostDto post, {
+    required bool enableIdentityTemplate,
+  }) async {
+    final result = await const DefaultContentShareActionHandler().execute(
+      context,
+      _buildShareTemplate(
+        ref: ref,
+        post: post,
+        enableIdentityTemplate: enableIdentityTemplate,
+      ),
+      const ContentShareAction(
+        id: 'copy_link',
+        label: UITextConstants.copyLink,
       ),
     );
+    if (result.success) {
+      _recordShare(ref, post.id, result.actionId);
+    }
+  }
+
+  ContentShareTemplate _buildShareTemplate({
+    required WidgetRef ref,
+    required MomentPostDto post,
+    required bool enableIdentityTemplate,
+  }) {
+    final raw = ref
+        .read(appContentRepositoryProvider)
+        .discoveryMomentData
+        .cast<Map<String, dynamic>?>()
+        .firstWhere(
+          (item) =>
+              item?['postId']?.toString() == post.id ||
+              item?['id']?.toString() == post.id,
+          orElse: () => null,
+        );
+    final visibility = raw?['visibility']?.toString() ?? 'public';
+    final tags =
+        (raw?['tags'] as List?)
+            ?.map((item) => item.toString().trim())
+            .where((item) => item.isNotEmpty)
+            .toList(growable: false) ??
+        const <String>[];
+    final circleName = raw?['circleName']?.toString().trim() ?? '';
+    return ContentShareTemplateBuilder.build(
+      post: post,
+      enableIdentityTemplate: enableIdentityTemplate,
+      visibility: visibility,
+      tags: tags,
+      circleNames: circleName.isEmpty ? const <String>[] : <String>[circleName],
+    );
+  }
+
+  void _recordShare(WidgetRef ref, String postId, String actionId) {
+    ref.read(discoveryStateProvider).incrementShares(postId);
+    ref
+        .read(contentBehaviorTrackerProvider)
+        .trackShare(postId, tags: <String>[actionId]);
   }
 
   String _extractKeyword(String text) {
@@ -304,11 +412,18 @@ class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
   Widget build(BuildContext context) {
     final item = widget.item;
     final isDark = widget.isDark;
-    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final muted =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
-    final bg =
-        AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
+    final fg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final muted = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final bg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
 
     return Container(
       padding: EdgeInsets.symmetric(vertical: AppSpacing.containerMd),
@@ -355,8 +470,11 @@ class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
                 ),
               ),
               IconButton(
-                icon: Icon(Icons.more_horiz,
-                    size: AppSpacing.iconMedium, color: muted),
+                icon: Icon(
+                  Icons.more_horiz,
+                  size: AppSpacing.iconMedium,
+                  color: muted,
+                ),
                 onPressed: widget.onMoreTap,
                 style: IconButton.styleFrom(
                   minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
@@ -380,10 +498,7 @@ class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
           // 图片区域（自适应宫格）
           if (item.hasImages) ...[
             SizedBox(height: AppSpacing.interGroupSm),
-            _MomentImageGrid(
-              urls: item.imageUrls,
-              onTap: widget.onImageTap,
-            ),
+            _MomentImageGrid(urls: item.imageUrls, onTap: widget.onImageTap),
           ],
 
           // 视频卡片
@@ -458,49 +573,54 @@ class _ExpandableText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
+    final fg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
     final textStyle = TextStyle(
       fontSize: AppTypography.lg,
       color: fg,
       height: AppTypography.lineHeightRelaxed,
     );
 
-    return LayoutBuilder(builder: (context, constraints) {
-      final tp = TextPainter(
-        text: TextSpan(text: text, style: textStyle),
-        maxLines: maxLines,
-        textDirection: TextDirection.ltr,
-      )..layout(maxWidth: constraints.maxWidth);
-      final isOverflow = tp.didExceedMaxLines;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tp = TextPainter(
+          text: TextSpan(text: text, style: textStyle),
+          maxLines: maxLines,
+          textDirection: TextDirection.ltr,
+        )..layout(maxWidth: constraints.maxWidth);
+        final isOverflow = tp.didExceedMaxLines;
 
-      if (!isOverflow) {
-        return Text(text, style: textStyle);
-      }
+        if (!isOverflow) {
+          return Text(text, style: textStyle);
+        }
 
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            text,
-            style: textStyle,
-            maxLines: expanded ? null : maxLines,
-            overflow: expanded ? null : TextOverflow.ellipsis,
-          ),
-          SizedBox(height: AppSpacing.intraGroupXs),
-          GestureDetector(
-            onTap: onToggle,
-            child: Text(
-              expanded ? '收起' : '展开',
-              style: TextStyle(
-                fontSize: AppTypography.sm,
-                color: AppColors.primaryColor,
-                fontWeight: AppTypography.medium,
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              text,
+              style: textStyle,
+              maxLines: expanded ? null : maxLines,
+              overflow: expanded ? null : TextOverflow.ellipsis,
+            ),
+            SizedBox(height: AppSpacing.intraGroupXs),
+            GestureDetector(
+              onTap: onToggle,
+              child: Text(
+                expanded ? '收起' : '展开',
+                style: TextStyle(
+                  fontSize: AppTypography.sm,
+                  color: AppColors.primaryColor,
+                  fontWeight: AppTypography.medium,
+                ),
               ),
             ),
-          ),
-        ],
-      );
-    });
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -509,10 +629,7 @@ class _ExpandableText extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _MomentImageGrid extends StatelessWidget {
-  const _MomentImageGrid({
-    required this.urls,
-    required this.onTap,
-  });
+  const _MomentImageGrid({required this.urls, required this.onTap});
 
   final List<String> urls;
   final void Function(int index) onTap;
@@ -530,10 +647,7 @@ class _MomentImageGrid extends StatelessWidget {
       onTap: () => onTap(index),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-        child: AspectRatio(
-          aspectRatio: 4 / 3,
-          child: _img(url),
-        ),
+        child: AspectRatio(aspectRatio: 4 / 3, child: _img(url)),
       ),
     );
   }
@@ -591,8 +705,9 @@ class _MomentImageGrid extends StatelessWidget {
                   child: GestureDetector(
                     onTap: () => onTap(idx),
                     child: ClipRRect(
-                      borderRadius:
-                          BorderRadius.circular(AppSpacing.smallBorderRadius),
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.smallBorderRadius,
+                      ),
                       child: AspectRatio(
                         aspectRatio: 1,
                         child: idx < urls.length
@@ -618,7 +733,8 @@ class _MomentImageGrid extends StatelessWidget {
       imageUrl: url,
       fit: BoxFit.cover,
       placeholder: (context, url) => Container(color: Colors.grey.shade200),
-      errorWidget: (context, url, err) => Container(color: Colors.grey.shade200),
+      errorWidget: (context, url, err) =>
+          Container(color: Colors.grey.shade200),
     );
   }
 }
@@ -683,7 +799,8 @@ class _MomentVideoCard extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: Colors.black.withValues(alpha: 0.6),
                       borderRadius: BorderRadius.circular(
-                          AppSpacing.smallBorderRadius),
+                        AppSpacing.smallBorderRadius,
+                      ),
                     ),
                     child: Text(
                       _formatDuration(dto.durationMs!),
@@ -750,27 +867,31 @@ class _ActionRow extends StatelessWidget {
     if (n < 10000) return '$n';
     if (n >= 100000) return '10万+';
     final tenK = (n / 10000 * 10).floor() / 10;
-    return (tenK * 10).round() % 10 == 0
-        ? '${tenK.truncate()}万+'
-        : '$tenK万+';
+    return (tenK * 10).round() % 10 == 0 ? '${tenK.truncate()}万+' : '$tenK万+';
   }
 
   @override
   Widget build(BuildContext context) {
-    final muted =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    final muted = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
     final likeColor = isLiked ? AppColors.worksLike : muted;
     final bookmarkColor = isBookmarked ? AppColors.warning : muted;
 
     final likeScale = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1.0, end: 1.25)
-            .chain(CurveTween(curve: Curves.easeOut)),
+        tween: Tween<double>(
+          begin: 1.0,
+          end: 1.25,
+        ).chain(CurveTween(curve: Curves.easeOut)),
         weight: 50,
       ),
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1.25, end: 1.0)
-            .chain(CurveTween(curve: Curves.easeIn)),
+        tween: Tween<double>(
+          begin: 1.25,
+          end: 1.0,
+        ).chain(CurveTween(curve: Curves.easeIn)),
         weight: 50,
       ),
     ]).animate(likeCtrl);
@@ -847,10 +968,7 @@ class _ActionRow extends StatelessWidget {
           SizedBox(width: AppSpacing.intraGroupXs),
           Text(
             label,
-            style: TextStyle(
-              fontSize: AppTypography.sm,
-              color: muted,
-            ),
+            style: TextStyle(fontSize: AppTypography.sm, color: muted),
           ),
         ],
       ),

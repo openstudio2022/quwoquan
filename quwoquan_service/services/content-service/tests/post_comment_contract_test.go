@@ -7,6 +7,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"quwoquan_service/services/content-service/internal/application"
+	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 )
 
 func TestCommentWithNotification(t *testing.T) {
@@ -294,6 +297,86 @@ func TestGetAppConfig(t *testing.T) {
 	maxLen, _ := comment["max_length"].(float64)
 	if maxLen != 500 {
 		t.Errorf("expected max_length=500, got %v", maxLen)
+	}
+	featureFlags, _ := content["feature_flags"].(map[string]any)
+	if featureFlags == nil {
+		t.Fatal("missing 'content.feature_flags' in app config")
+	}
+	for _, key := range []string{
+		"enable_create_action_entry",
+		"enable_unified_create_editor",
+		"enable_identity_based_surfaces",
+		"enable_identity_share_template",
+		"enable_assistant_content_identity_index",
+	} {
+		if featureFlags[key] != true {
+			t.Fatalf("expected feature flag %s=true, got %v", key, featureFlags[key])
+		}
+	}
+	grayRelease, _ := content["gray_release"].(map[string]any)
+	if grayRelease == nil {
+		t.Fatal("missing 'content.gray_release' in app config")
+	}
+	if grayRelease["current_stage"] != "100%" {
+		t.Fatalf("expected current_stage=100%%, got %v", grayRelease["current_stage"])
+	}
+}
+
+func TestGetAppConfigRuntimeOverrides(t *testing.T) {
+	service := application.NewPostService(
+		persistence.NewPostStore(nil),
+		application.WithStoryRuntimeConfig(application.StoryRuntimeConfig{
+			FeatureFlags: map[string]bool{
+				"enable_identity_share_template":          false,
+				"enable_assistant_content_identity_index": false,
+			},
+			ExperimentBucket: "rollout_20",
+			CurrentStage:     "20%",
+			CanaryMatrix: []application.StoryCanaryStage{
+				{Stage: "5%", RolloutPercent: 5},
+				{Stage: "20%", RolloutPercent: 20},
+			},
+		}),
+	)
+
+	resp := service.GetAppConfig()
+	content, _ := resp["content"].(map[string]any)
+	if content == nil {
+		t.Fatal("missing content config")
+	}
+	featureFlags, _ := content["feature_flags"].(map[string]any)
+	if featureFlags == nil {
+		t.Fatal("missing feature flags")
+	}
+	if featureFlags["enable_identity_share_template"] != false {
+		t.Fatalf(
+			"expected enable_identity_share_template=false, got %v",
+			featureFlags["enable_identity_share_template"],
+		)
+	}
+	if featureFlags["enable_create_action_entry"] != true {
+		t.Fatalf(
+			"expected unspecified kill switch fallback to true, got %v",
+			featureFlags["enable_create_action_entry"],
+		)
+	}
+
+	grayRelease, _ := content["gray_release"].(map[string]any)
+	if grayRelease == nil {
+		t.Fatal("missing gray release config")
+	}
+	if grayRelease["experiment_bucket"] != "rollout_20" {
+		t.Fatalf(
+			"expected experiment_bucket=rollout_20, got %v",
+			grayRelease["experiment_bucket"],
+		)
+	}
+	if grayRelease["current_stage"] != "20%" {
+		t.Fatalf("expected current_stage=20%%, got %v", grayRelease["current_stage"])
+	}
+	canaryMatrix, _ := grayRelease["canary_matrix"].([]map[string]any)
+	if len(canaryMatrix) != 2 {
+		t.Fatalf("expected 2 canary stages, got %d", len(canaryMatrix))
 	}
 }
 

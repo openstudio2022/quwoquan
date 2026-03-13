@@ -1,226 +1,84 @@
 ---
-description: 端云一体化开发主线（唯一 master rule）— 开发流程 + 自动卡点 + 约束总纲
+description: 端云一体开发主线：阶段 Gate、商用准入与交付约束
 alwaysApply: true
 ---
 
-# 端云一体化开发主线（SDD：Spec-Driven Development）
+# 端云一体开发主线
 
-> **本规则是所有开发活动的唯一入口约束**。主线文档：`specs/00_MASTER_DEVELOPMENT_FLOW.md`。
+唯一主线见 `specs/00_MASTER_DEVELOPMENT_FLOW.md`。默认流程：`explore → prd → design → dev → commit → deploy`。
 
-## SDD 开发流水线（阶段 × 自动卡点）
+## 总原则
 
-```
-explore → prd(G0) → design(G1) → dev(G2/G3 + auto-archive) → commit(G4) → deploy(G5)
-```
+- `spec-first`：先 `spec.md + acceptance.yaml`，再 `design.md`，最后实现。
+- `metadata-first`：契约、字段、错误码、`path / operation / surface / route / decoder context` 先改 metadata，再 codegen，再改业务逻辑。
+- `commercial-ready-before-dev`：凡是用户可见、可灰度、可分享、可被小趣消费的能力，`/prd` 与 `/design` 必须先冻结 `SLO/KPI`、权限边界、数据生命周期、迁移灰度与回滚。
+- `benchmark-driven`：对标必须写明借鉴、不借鉴、适用边界、当前差距、收敛计划。
+- `single-source`：`tree_index.yaml`、`spec.md`、`design.md`、`tasks.md`、`acceptance.yaml`、metadata 各自是唯一真相源。
+- 缺 benchmark、真实网络条件、容量假设、权限边界、生命周期合同或回滚条件时，直接 `GATE_BLOCK`。
 
-每个阶段进入时 AI Agent **自动执行阶段准入自检（Phase Gate）**，每个阶段结束时**自动执行卡点**，无需人为触发。
+## `/explore`
 
-**总原则补充**：
-- **ATDD 先行**：先定义 `acceptance.yaml`，再做设计与实现。
-- **TDD 强制**：进入 `/dev`、`/deliver`、`/try` 后，默认执行 `Red → Green → Refactor`，先写失败测试，再写最小实现，再重构。
-- **元数据唯一源**：凡涉及 API path、operation、decoder context、surface、route、path template，必须先定义 metadata，再 codegen，再消费生成产物；禁止代码维护第二份规则表。
-- **NFR 前置**：凡涉及实时性、弱网、并发、性能、容量、弹性、灰度生产的需求，必须在 `/prd` 与 `/design` 明确规格与验收，不得拖到 `/deploy` 临时兜底。
-- **对标落表**：对标一流体验不是建议项，必须形成“借鉴点 / 不借鉴点 / 适用边界 / 当前差距 / 收敛计划”。
-- **多重防护网**：需求防漏（PRD）→ 方案防偏（Design）→ 测试防回归（T1~T4）→ 门禁防带病提交（G2/G3/G4）→ 灰度防生产事故（G5）。
+- 映射 `L1/L2/L3`，识别业务对象、metadata、扩展场景。
+- 识别 benchmark、NFR、权限边界、数据生命周期、迁移和发布风险。
+- 初步任务顺序固定为：`metadata -> codegen -> 业务逻辑 -> 测试`。
+- 不写代码，不创建第四/第五层树节点。
 
-**原型快速通道**（跳过特性树分解，所有编码约束完整遵从）：
-```
-try → land → commit → deploy
-```
+## `/prd`（G0）
 
----
+进入前必须确认：
 
-## explore 阶段（ask/plan 模式自动激活）
+- 目标用户、核心问题、范围边界、Out of Scope 清晰。
+- `A1~An` 可量化并映射 `T1~T4`。
+- 对标输入与不可打折交互基线明确。
+- `SLO/KPI`、弱网、并发、性能、容量目标明确。
+- 若涉及小趣、权限、可见性或删除撤销：冻结权限边界、保留策略与撤销时效。
+- 若涉及创作、编辑、升级、删除或分享：冻结数据生命周期合同。
+- 若与已有 Story 重叠：冻结覆盖矩阵与优先级。
+- 若可灰度上线：冻结迁移方案、feature flag、观测指标与回滚条件。
+- 若涉及 `path / operation / surface / route / decoder context`：明确 metadata 唯一真相源。
 
-进入 ask/plan 模式时，AI Agent 必须：
-1. 将需求映射到特性树节点（`specs/feature-tree/`）
-2. 确认涉及的业务对象（查 `contracts/metadata/`）
-3. 确认涉及的扩展场景（S01~S25）
-4. 生成的任务拆解必须遵循：**metadata → codegen → 业务逻辑 → 测试**
-5. 特性树节点仅使用四类文档：**spec.md、design.md、tasks.md、acceptance.yaml**；禁止在节点下生成 analysis-*.md、README、独立规划书等，详见 `specs/feature-tree/00_FEATURE_TREE_STANDARD.md`。
-6. 若涉及部署拓扑，必须同步设计 `deploy/shared/process_domain_mapping.yaml`（`environments -> process -> domains`）
-7. 识别是否为**实时性 / 弱网 / 高并发 / 高增长**特性；若是，必须显式输出时延目标、一致性模型、弱网降级、容量假设与弹性策略
-8. 识别四层测试金字塔职责：`T1` 防契约漂移，`T2` 防交互回归，`T3` 防端云联调断裂，`T4` 防真实设备/系统能力失效
-9. 识别角色分工：产品负责全量需求与体验目标，架构负责方案与弹性，开发负责 TDD 落地，测试负责多层证据，发布负责灰度与回滚
-10. 若缺少对标输入、真实网络条件、容量目标或灰度要求，必须输出 `GATE_BLOCK`
-11. 若需求涉及 Repository、Router、请求头或埋点上下文，必须显式识别 `service.yaml` 与 `ui_config.yaml/ui_surfaces.yaml` 的 metadata 承载边界
+产出：
 
-禁止跳过 explore 直接编码（/try 除外）。禁止不经 metadata 直接创建 struct/DTO。
+- `spec.md`
+- `acceptance.yaml`
+- 商用基线：`SLO/KPI`、权限边界、生命周期、覆盖矩阵、迁移灰度回滚
 
----
+## `/design`（G1）
 
-## prd 阶段（PRD Gate → G0）
+进入前必须确认：
 
-**PRD Gate 自检**（进入前必须通过）：
-- P1: 能用一句话描述目标用户 + 核心问题？
-- P2: 特性树 L4 路径已确定？
-- P3: 业务对象已识别（已存在/需新建）？
-- P4: 至少 3 条可量化验收标准？
-- P5: 范围边界（out-of-scope）已明确？
-- P6: 是否已提供对标输入，或明确说明无需对标？
-- P7: 是否已定义四层测试金字塔 `T1~T4` 的验收责任？
-- P8: 是否已定义实时性 / 弱网 / 并发 / 容量 / 弹性等非功能目标？
-- P9: 是否已定义对标对象、体验目标与不打折的交互基线？
-- P10: 是否已定义灰度发布、观测指标与回滚条件？
-- P11: 若涉及 operation / surface / route，是否已明确各标识由哪份 metadata 作为唯一真相源？
+- `spec.md` 与 `acceptance.yaml` 已稳定。
+- 至少有 2 个方案可比较，且权衡清晰。
+- 选定方案覆盖 metadata/codegen、字段或模型演进、数据迁移/回填、必要时双读双写、feature flag、观测、SLO 验证与回滚。
+- 若涉及小趣或私密内容，权限、撤销、保留模型已冻结。
+- `T1~T4` 证据矩阵已形成，`tasks.md` 顺序遵循 `metadata -> codegen -> 业务逻辑 -> 测试`。
 
-未通过 → GATE_BLOCK，停止执行。
+自动执行：
 
-**产出物**：`spec.md` + `acceptance.yaml` 草稿（A1~An，status=pending）+ 非功能验收基线（实时性 / 弱网 / 并发 / 弹性 / 灰度）。
-
----
-
-## design 阶段（Design Gate → G1）
-
-**Design Gate 自检**（进入前必须通过）：
-- D1: spec.md 已存在且稳定？
-- D2: acceptance.yaml A1~An 已定义？
-- D3: 设计约束已识别（DDD 分层、metadata 范围）？
-- D4: ≥2 个方案可供比较？
-- D5: 无未解决的阻塞依赖？
-- D6: 是否完成 `T1~T4` 证据矩阵与 `A1~An` 映射？
-- D7: 若涉实时性，是否定义一致性模型、顺序性、幂等、重试、重连与弱网降级？
-- D8: 是否定义并发、容量、弹性、限流、降级、回滚与观测策略？
-- D9: 是否完成对标体验吸收结论，并明确当前差距与收敛路径？
-- D10: 若涉及 operation / surface / route，是否给出 metadata 分层与 codegen 汇聚方案，并移除代码 override 表？
-
-**自动运行 G1**（完成后）：
 ```bash
-make verify-metadata → make codegen → make codegen-app
+make -C quwoquan_service verify-metadata
+make codegen
+make codegen-app
 ```
-失败 → 停止 + 输出修复建议。
 
-**产出物**：`design.md` + `tasks.md` + metadata YAML 基线 + codegen 产物 + 测试证据矩阵 + 灰度发布设计。
+产出：
 
----
+- `design.md`
+- `tasks.md`
+- metadata / codegen 基线
+- 测试证据矩阵
+- 灰度发布设计
 
-## dev 阶段（Dev Gate → G2/G3 + 自动归档）
+## `/dev` 及以后
 
-**Dev Gate 自检**（进入前必须通过）：
-- V1: design.md 已存在且关键决策已冻结？
-- V2: codegen 已通过？
-- V3: tasks.md 任务列表清晰、有序？
-- V4: acceptance.yaml An 有明确判定方式？
-- V5: 当前 task 是否已绑定至少一个先行失败测试（TDD Red）？
-- V6: 若为实时性/高风险交互，是否已绑定弱网、并发、恢复或真机场景？
-- V7: 若涉及 operation / surface / route，当前 task 是否仅消费 metadata 生成产物，而非新写字符串常量？
+- `/dev` 只在设计冻结、codegen 通过、Red 测试就绪后进入。
+- 每完成一个 task 运行：
 
-每完成一个 task **自动运行 G2**，并遵循 **Red → Green → Refactor**：
 ```bash
-make build → make test-contract
+make -C quwoquan_service build
+make -C quwoquan_service test-contract
 ```
 
-全部 task 完成后，`/dev` **必须自动完成以下收口动作**：
-```bash
-make gate-full
-```
-
-并满足：
-- 四层自验证 `T1~T4` 证据齐全
-- 非功能验收（实时性 / 弱网 / 并发 / 弹性 / 体验）齐全
-- 已达到 **gray-release ready**：灰度步进、SLO、观测、回滚条件已写入
-- 自动回写归档状态（`acceptance.yaml.archived=true` + `tree_index.status=completed`）
-
-约束（实时强制）：
-- Go: DDD 层级单向依赖，domain 禁止 import application/adapters/infrastructure
-- Go: 仅 infrastructure + tests 可 import 数据库驱动
-- Go: 必须使用 runtime/errors、runtime/config、runtime/messaging、runtime/http
-- Go: codegen 文件 `DO NOT EDIT` 禁止手改
-- Dart: 禁止硬编码视觉字面量，必须用 AppTypography/AppSpacing/AppColors
-- Dart: 禁止相对路径 import
-- Dart: Feature 禁止直接 import 其他 Feature 内部
-- Dart UI：全局遵循 iOS 语义规范 v1（见 `specs/ux/page-layout-semantics.md`）
-- Dart UI：`CupertinoPageScaffold` 场景禁止混用 Material 交互组件
-- Dart 路由/请求上下文：禁止硬编码业务 path、`pageId`、`surfaceId`、`operationId`、decoder context；必须消费 metadata codegen 常量
-- 实时性特性：必须定义并验证时延目标、顺序一致性、重试策略、断线恢复与幂等
-- 弱网特性：必须验证高延迟、抖动、短断网、重试/回退、可恢复提示与最终一致性
-- 高增长特性：必须验证容量假设、热点退化、限流/降级、扩容余量与可观测性
-
----
-
-## verify 阶段（G3，独立复核/兼容入口）
-
-**自动运行 G3**：
-```
-make gate-full
-```
-包含：metadata 一致性 + 结构约束 + codegen hash + 端侧语义 + 特性树 + 契约测试 + 非功能验收完整性 + 发布前证据。
-
-`/verify`：特性级漂移检测（spec↔实现漂移 D1-D4）+ G3。标准流程中可由 `/dev` 自动吞并；单独执行时作为复核/补救入口。
-`/audit`：代码库级结构健康度检查（DDD、metadata、语义）。
-
----
-
-## commit 阶段（G4）
-
-**自动运行 G4**：读取 `/dev` 已自动完成的归档结果 → **提交前必须执行 L1+L2 门禁**（`make gate`）并通过 → 按变更范围智能审计 → 通过 → commit → push → merge。
-
-**语义统一**：
-- 仓库根流程以 `/commit` 作为**唯一 submit 语义命令**
-- 历史 `submit-with-gate`、`submit-with-audit` 仅视为兼容入口，不得与根流程规则冲突
-
-**AI 编程助手门禁要求**：执行 `/commit` 或 `/deliver` 时，**必须自动执行 L1+L2**，不得跳过。L1=端侧 `flutter test test/cloud/ test/components/ test/ui/`；L2=云侧 `make gate`（含契约测试）。
-
----
-
-## try 阶段（原型模式）
-
-**豁免**：不要求创建特性树节点（spec/design/tasks/acceptance）。
-
-**完整遵从**：所有其他核心约束——DDD 分层、metadata-first、runtime 统一、Dart 编码规范、错误码规范、codegen 保护、最小 TDD 闭环、关键 NFR 验证——**一条不豁免**。
-
-若原型涉及实时性或体验方向验证，至少必须覆盖以下其一：
-- 弱网/高延迟模拟
-- 乐观更新与回滚
-- 断线重连与状态恢复
-- 高并发或容量假设验证
-- 对标交互差异验证
-
-验证成功后执行 `/land` 将原型成果基线化。
-
-> 说明：标准交付流中无需单独执行 `/archive`；只有原型链路 `/try → /land` 仍保留基线化/归档语义。
-
----
-
-## 核心原则
-
-- **spec-first**：需求规格（spec + acceptance）先于设计，设计先于实现
-- **acceptance-first**：先定义 `A1~An` 与 `T1~T4`，再做设计与编码
-- **test-first**：实现前先写失败测试，禁止“代码完成后补测试”
-- **metadata-first**：任何新实体/字段/事件 → 先更新 YAML → verify → codegen → 手写逻辑
-- **contracts-first**：先冻结接口契约，再实现
-- **DDD 分层**：domain ← application ← adapters ← infrastructure（单向）
-- **runtime 统一**：横切能力全部由 runtime 提供，领域服务禁止自实现
-- **nfr-first**：实时性、弱网、并发、性能、容量、弹性、灰度要求必须在 PRD/Design 写清
-- **benchmark-driven**：对标一流体验必须沉淀为可验证目标，不能只写“参考某产品”
-- **真实数据库测试**：契约测试用 embedded-postgres/testcontainers-mongodb/miniredis
-- **codegen 保护**：DO NOT EDIT 文件通过 hash 比对守护
-- **部署拓扑解耦**：部署进程是运维抽象；对外 API 仍按领域服务暴露，禁止受部署态影响
-- **拓扑一致性**：integration 与 prod 的 process-domain 映射必须一致
-
-## 规则集
-
-| 规则 | 守护 |
-|------|------|
-| `01-arch-constraints` | DDD 导入 + 数据库隔离 + runtime 统一 + codegen 保护 + 25 扩展场景 |
-| `02-dart-coding` | 设计系统 + 编码标准 + 状态管理 |
-| `03-testing` | 端云契约测试标准 |
-
-## SDD 命令集
-
-| 命令 | 阶段 | 自动卡点 | 说明 |
-|------|------|---------|------|
-| `/explore` | 探索 | G0 准入自检 | 思考、不写代码 |
-| `/prd` | PRD | PRD Gate | 需求规格 + acceptance 草稿 |
-| `/design` | 设计 | Design Gate + G1 | 设计决策 + metadata + codegen |
-| `/dev` | 实施 | Dev Gate + G2/G3 | 逐 task 实施 + 四层自验证 + 自动归档 |
-| `/archive` | 兼容 | G3（gate-full） | 非标准流程，仅用于手动补归档/修复 |
-| `/commit` | 提交 | G4（L1+L2 + 审计） | 读取 `/dev` 自动归档结果后提交入库 |
-| `/deploy` | 部署 | G5（integration → prod） | 集成验证 + 灰度发布 |
-| `/deliver` | 全链路 | Deliver Gate + G2~G4 | dev + archive + commit 一气呵成 |
-| `/verify` | 质量 | G3（gate-full） | 特性级漂移检测 |
-| `/audit` | 质量 | 随时 | 代码库级结构审计 |
-| `/try` | 原型 | G2（每次主要变更后） | 快速验证，豁免特性树分解 |
-| `/land` | 原型落地 | G3（gate-full） | try 验证成功后基线化 |
-| `/extend` | 增量扩展 | G1（verify + codegen） | 实施阶段新增字段/事件/端点 |
-| `/prune` | 维护 | 随时 | 清理过期特性树节点 |
+- 全部完成后运行 `make gate-full`。
+- `/commit` 前必须运行端侧测试与 `make gate`。
+- `/deploy` 前必须完成 `T3/T4`、SLO 卡点、观测确认与回滚演练。

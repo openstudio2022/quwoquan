@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/personal_assistant/engine/agent_loop.dart';
 import 'package:quwoquan_app/personal_assistant/engine/llm_provider.dart';
 import 'package:quwoquan_app/personal_assistant/engine/react_runtime.dart';
@@ -316,19 +317,18 @@ void main() {
         reason: '至少两个 toolResult（web_search + web_fetch）',
       );
 
-      // Timeline should show multi-tool phases
+      // Process journal should cover multi-tool phases
       final structured = response.structuredResponse;
-      final timeline =
-          (structured['uiPhaseTimelineV1'] as List?)
-              ?.whereType<Map>()
-              .map((p) => p.cast<String, dynamic>())
-              .toList() ??
-          [];
-      final phaseTypes = timeline
-          .map((p) => (p['phaseType'] as String?) ?? '')
-          .toList();
-      expect(phaseTypes.contains('understanding'), isTrue);
-      expect(phaseTypes.last, equals('answering'));
+      final processJournal = ((structured['processJournalV1'] as List?) ??
+              ((structured['runArtifactsV1'] as Map?)?['processJournal'] as List?) ??
+              const <dynamic>[])
+          .whereType<Map>()
+          .map((item) => ProcessJournalEvent.fromJson(item.cast<String, dynamic>()))
+          .toList(growable: false);
+      final stages = processJournal.map((item) => item.stage).toSet();
+      expect(stages.contains('understanding'), isTrue);
+      expect(stages.contains('answering'), isTrue);
+      expect(structured.containsKey('uiPhaseTimelineV1'), isFalse);
 
       // Final answer should contain weather info
       final combined =

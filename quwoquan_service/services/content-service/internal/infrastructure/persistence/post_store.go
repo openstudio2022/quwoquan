@@ -58,6 +58,20 @@ func (s *PostStore) FindByID(_ context.Context, id string) (*postmodel.Post, boo
 	return &cp, true
 }
 
+func (s *PostStore) ListAll(_ context.Context) []postmodel.Post {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	all := make([]postmodel.Post, 0, len(s.posts))
+	for _, post := range s.posts {
+		cp := post
+		all = append(all, cp)
+	}
+	sort.Slice(all, func(i, j int) bool {
+		return all[i].CreatedAt.After(all[j].CreatedAt)
+	})
+	return all
+}
+
 func (s *PostStore) ListPublished(_ context.Context, limit int, cursor string) []postmodel.Post {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

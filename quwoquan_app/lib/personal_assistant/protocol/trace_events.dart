@@ -1,3 +1,5 @@
+import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
+
 enum AssistantTraceEventType {
   lifecycleStart,
   lifecycleEnd,
@@ -70,6 +72,7 @@ class AssistantTraceEvent {
     this.runId,
     this.traceId,
     this.toolCallId,
+    this.visibility = TraceVisibility.userVisible,
   });
 
   final AssistantTraceEventType type;
@@ -79,6 +82,29 @@ class AssistantTraceEvent {
   final String? runId;
   final String? traceId;
   final String? toolCallId;
+  final TraceVisibility visibility;
+
+  AssistantTraceEvent copyWith({
+    AssistantTraceEventType? type,
+    String? message,
+    DateTime? timestamp,
+    Map<String, dynamic>? data,
+    String? runId,
+    String? traceId,
+    String? toolCallId,
+    TraceVisibility? visibility,
+  }) {
+    return AssistantTraceEvent(
+      type: type ?? this.type,
+      message: message ?? this.message,
+      timestamp: timestamp ?? this.timestamp,
+      data: data ?? this.data,
+      runId: runId ?? this.runId,
+      traceId: traceId ?? this.traceId,
+      toolCallId: toolCallId ?? this.toolCallId,
+      visibility: visibility ?? this.visibility,
+    );
+  }
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
@@ -89,6 +115,7 @@ class AssistantTraceEvent {
       'runId': runId,
       'traceId': traceId,
       'toolCallId': toolCallId,
+      'visibility': visibility.wireName,
     };
   }
 
@@ -105,6 +132,9 @@ class AssistantTraceEvent {
       runId: json['runId'] as String?,
       traceId: json['traceId'] as String?,
       toolCallId: json['toolCallId'] as String?,
+      visibility: parseTraceVisibility(
+        (json['visibility'] as String?)?.trim() ?? '',
+      ),
     );
   }
 }

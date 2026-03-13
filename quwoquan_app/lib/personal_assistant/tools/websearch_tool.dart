@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/personal_assistant/retrieval/retrieval_broker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:quwoquan_app/personal_assistant/observability/logging/app_log_models.dart';
 import 'package:quwoquan_app/personal_assistant/observability/logging/app_log_service.dart';
@@ -27,6 +28,7 @@ class WebSearchTool implements AssistantTool {
     String? openclawToken,
     AssistantSearchProvider? defaultProvider,
     SearchResultCache? searchCache,
+    RetrievalBroker? broker,
   }) : _braveApiKey =
            braveApiKey ??
            const String.fromEnvironment('PERSONAL_ASSISTANT_BRAVE_API_KEY'),
@@ -45,7 +47,8 @@ class WebSearchTool implements AssistantTool {
            openclawToken ??
            const String.fromEnvironment('PERSONAL_ASSISTANT_OPENCLAW_TOKEN'),
        _defaultProvider = defaultProvider ?? AssistantSearchProvider.duckduckgo,
-       _searchCache = searchCache ?? SearchResultCache();
+       _searchCache = searchCache ?? SearchResultCache(),
+       _broker = broker;
 
   final String _braveApiKey;
   final String _perplexityApiKey;
@@ -54,6 +57,7 @@ class WebSearchTool implements AssistantTool {
   final String _openclawToken;
   final AssistantSearchProvider _defaultProvider;
   final SearchResultCache _searchCache;
+  final RetrievalBroker? _broker;
   static const Duration _networkTimeout = Duration(seconds: 8);
 
   /// Access to the search cache for external reset (e.g. new session).
@@ -67,8 +71,15 @@ class WebSearchTool implements AssistantTool {
 
   @override
   Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
-    // queryVariants: LLM 可传入多个差异化查询词，工具并发执行后合并结果。
-    // 若存在 queryVariants，先用主 query 执行，再并发执行 variants，合并 references。
+    final broker = _broker;
+    if (broker != null) {
+      final result = await broker.search(
+        RetrievalSearchRequest.fromToolArguments(arguments),
+      );
+      return result.toToolResult();
+    }
+    final rawQuery = (arguments['query'] as String?)?.trim() ?? '';
+    final queryTasks = _normalizeQueryTasks(arguments['queryTasks']);
     final variants =
         (arguments['queryVariants'] as List?)
             ?.whereType<String>()
@@ -76,15 +87,30 @@ class WebSearchTool implements AssistantTool {
             .where((v) => v.isNotEmpty)
             .toList(growable: false) ??
         const <String>[];
-    if (variants.length >= 2) {
-      return _executeMultiQuery(arguments, variants);
+    if (queryTasks.length >= 2) {
+      return _executeMultiQuery(arguments, queryTasks);
     }
-    final rawQuery = (arguments['query'] as String?)?.trim() ?? '';
+    if (queryTasks.isEmpty && variants.isNotEmpty) {
+      final variantTasks = _queryTasksFromSeeds(rawQuery, variants);
+      if (variantTasks.length >= 2) {
+        return _executeMultiQuery(arguments, variantTasks);
+      }
+    }
+    final singleTaskQuery = queryTasks.length == 1
+        ? ((queryTasks.first['query'] as String?)?.trim() ?? '')
+        : '';
     final queryNorm = arguments['queryNormalization'];
-    final normalizedQuery = queryNorm is Map
+    final normalizedQuery = singleTaskQuery.isNotEmpty
+        ? singleTaskQuery
+        : queryNorm is Map
         ? ((queryNorm['normalizedQuery'] as String?)?.trim() ?? rawQuery)
         : rawQuery;
     final query = normalizedQuery.isNotEmpty ? normalizedQuery : rawQuery;
+    final queryTask = _resolveSingleQueryTask(
+      arguments: arguments,
+      normalizedQuery: query,
+      normalizedTasks: queryTasks,
+    );
     final domainId =
         ((arguments['domainId'] as String?)?.trim().isNotEmpty == true
             ? (arguments['domainId'] as String).trim()
@@ -105,10 +131,37 @@ class WebSearchTool implements AssistantTool {
     // Check search cache before hitting the network
     final cached = _searchCache.get(query);
     if (cached != null) {
+      final cachedData = <String, dynamic>{...cached};
+      final cachedRefs =
+          (cachedData['references'] as List?)
+                  ?.whereType<Map>()
+                  .map((item) => item.cast<String, dynamic>())
+                  .toList(growable: false) ??
+              const <Map<String, dynamic>>[];
+      if (cachedRefs.isNotEmpty) {
+        cachedData['references'] = _decorateReferences(
+          references: cachedRefs,
+          query: query,
+          authorityDomains:
+              (cachedData['authorityDomains'] as List?)
+                      ?.whereType<String>()
+                      .toList(growable: false) ??
+                  const <String>[],
+          timeConstraint: _SearchTimeConstraint(
+            scope: 'cached',
+            start: DateTime.now(),
+            end: DateTime.now(),
+            freshnessHoursMax:
+                (cachedData['freshnessHours'] as num?)?.toInt() ?? 72,
+          ),
+          queryTask: queryTask,
+          retrievedAt: DateTime.now().toIso8601String(),
+        );
+      }
       return AssistantToolResult(
         success: true,
-        message: cached['message'] as String? ?? '检索结果（缓存）',
-        data: <String, dynamic>{...cached, 'cacheHit': true},
+        message: cachedData['message'] as String? ?? '检索结果（缓存）',
+        data: <String, dynamic>{...cachedData, 'cacheHit': true},
       );
     }
 
@@ -184,8 +237,16 @@ class WebSearchTool implements AssistantTool {
         provider: provider,
         decoded: decoded,
       );
-      final evidenceStats = _buildEvidenceStats(
+      final enrichedReferences = _decorateReferences(
         references: references,
+        query: query,
+        authorityDomains: authorityDomains,
+        timeConstraint: timeConstraint,
+        queryTask: queryTask,
+        retrievedAt: DateTime.now().toIso8601String(),
+      );
+      final evidenceStats = _buildEvidenceStats(
+        references: enrichedReferences,
         authorityDomains: authorityDomains,
         timeConstraint: timeConstraint,
       );
@@ -229,10 +290,14 @@ class WebSearchTool implements AssistantTool {
           data: <String, dynamic>{
             'provider': provider.name,
             'summary': summary,
-            'references': references,
+            'references': enrichedReferences,
             'timeConstraint': timeConstraint.toJson(),
             'authorityDomains': authorityDomains,
             if (domainId.isNotEmpty) 'domainId': domainId,
+            if (_stringValue(queryTask['id']).isNotEmpty)
+              'queryTaskId': _stringValue(queryTask['id']),
+            if (_stringValue(queryTask['dimension']).isNotEmpty)
+              'dimension': _stringValue(queryTask['dimension']),
             ...evidenceStats,
             'raw': decoded,
             'diagnostics': runtimeConfig.toDiagnostics(
@@ -244,10 +309,14 @@ class WebSearchTool implements AssistantTool {
       final resultData = <String, dynamic>{
         'provider': provider.name,
         'summary': summary,
-        'references': references,
+        'references': enrichedReferences,
         'timeConstraint': timeConstraint.toJson(),
         'authorityDomains': authorityDomains,
         if (domainId.isNotEmpty) 'domainId': domainId,
+        if (_stringValue(queryTask['id']).isNotEmpty)
+          'queryTaskId': _stringValue(queryTask['id']),
+        if (_stringValue(queryTask['dimension']).isNotEmpty)
+          'dimension': _stringValue(queryTask['dimension']),
         ...evidenceStats,
         'raw': decoded,
         'diagnostics': runtimeConfig.toDiagnostics(
@@ -262,6 +331,7 @@ class WebSearchTool implements AssistantTool {
         data: resultData,
       );
     } catch (error) {
+      final classifiedError = _classifySearchError(error);
       final fallback = await _tryFallbackSearch(
         primaryProvider: provider,
         query: scopedQuery,
@@ -276,8 +346,16 @@ class WebSearchTool implements AssistantTool {
           provider: fallbackProvider,
           decoded: fallback.raw,
         );
-        final evidenceStats = _buildEvidenceStats(
+        final enrichedFallbackReferences = _decorateReferences(
           references: fallbackReferences,
+          query: query,
+          authorityDomains: authorityDomains,
+          timeConstraint: timeConstraint,
+          queryTask: queryTask,
+          retrievedAt: DateTime.now().toIso8601String(),
+        );
+        final evidenceStats = _buildEvidenceStats(
+          references: enrichedFallbackReferences,
           authorityDomains: authorityDomains,
           timeConstraint: timeConstraint,
         );
@@ -326,10 +404,14 @@ class WebSearchTool implements AssistantTool {
             data: <String, dynamic>{
               'provider': fallback.providerLabel,
               'summary': fallback.summary,
-              'references': fallbackReferences,
+              'references': enrichedFallbackReferences,
               'timeConstraint': timeConstraint.toJson(),
               'authorityDomains': authorityDomains,
               if (domainId.isNotEmpty) 'domainId': domainId,
+              if (_stringValue(queryTask['id']).isNotEmpty)
+                'queryTaskId': _stringValue(queryTask['id']),
+              if (_stringValue(queryTask['dimension']).isNotEmpty)
+                'dimension': _stringValue(queryTask['dimension']),
               ...evidenceStats,
               'raw': fallback.raw,
               'fallbackFrom': provider.name,
@@ -346,10 +428,14 @@ class WebSearchTool implements AssistantTool {
           data: <String, dynamic>{
             'provider': fallback.providerLabel,
             'summary': fallback.summary,
-            'references': fallbackReferences,
+            'references': enrichedFallbackReferences,
             'timeConstraint': timeConstraint.toJson(),
             'authorityDomains': authorityDomains,
             if (domainId.isNotEmpty) 'domainId': domainId,
+            if (_stringValue(queryTask['id']).isNotEmpty)
+              'queryTaskId': _stringValue(queryTask['id']),
+            if (_stringValue(queryTask['dimension']).isNotEmpty)
+              'dimension': _stringValue(queryTask['dimension']),
             ...evidenceStats,
             'raw': fallback.raw,
             'fallbackFrom': provider.name,
@@ -383,14 +469,16 @@ class WebSearchTool implements AssistantTool {
       );
       return AssistantToolResult(
         success: false,
-        message: 'Web search error: $error',
+        message: classifiedError.message,
         data: <String, dynamic>{
           'provider': provider.name,
+          'retryable': classifiedError.retryable,
+          'rawError': error.toString(),
           'diagnostics': runtimeConfig.toDiagnostics(
             selectedProvider: provider.name,
           ),
         },
-        errorCode: AssistantErrorCode.networkUnavailable,
+        errorCode: classifiedError.errorCode,
         degraded: true,
       );
     }
@@ -1261,6 +1349,49 @@ class WebSearchTool implements AssistantTool {
     }
   }
 
+  _ClassifiedSearchError _classifySearchError(Object error) {
+    final text = error.toString();
+    final normalized = text.toLowerCase();
+    if (normalized.contains('(401)') ||
+        normalized.contains('(403)') ||
+        normalized.contains('unauthorized')) {
+      return const _ClassifiedSearchError(
+        errorCode: AssistantErrorCode.unauthorized,
+        message: '搜索服务鉴权失败，请检查配置。',
+        retryable: false,
+      );
+    }
+    if (normalized.contains('(429)') || normalized.contains('rate limit')) {
+      return const _ClassifiedSearchError(
+        errorCode: AssistantErrorCode.rateLimited,
+        message: '搜索服务当前限流，请稍后重试。',
+        retryable: true,
+      );
+    }
+    if (normalized.contains('timeout') ||
+        normalized.contains('timed out') ||
+        normalized.contains('socket') ||
+        normalized.contains('connection') ||
+        normalized.contains('network') ||
+        normalized.contains('(500)') ||
+        normalized.contains('(502)') ||
+        normalized.contains('(503)') ||
+        normalized.contains('(504)') ||
+        normalized.contains('unavailable') ||
+        normalized.contains('暂时不可用')) {
+      return const _ClassifiedSearchError(
+        errorCode: AssistantErrorCode.networkUnavailable,
+        message: '搜索服务暂时不可用，已尝试自动恢复。',
+        retryable: true,
+      );
+    }
+    return const _ClassifiedSearchError(
+      errorCode: AssistantErrorCode.executionFailed,
+      message: '搜索失败，请稍后重试。',
+      retryable: false,
+    );
+  }
+
   Future<dynamic> _searchBrave({
     required String query,
     required int count,
@@ -1746,18 +1877,31 @@ class WebSearchTool implements AssistantTool {
   /// Executes multiple queries concurrently and merges references.
   Future<AssistantToolResult> _executeMultiQuery(
     Map<String, dynamic> arguments,
-    List<String> queryVariants,
+    List<Map<String, dynamic>> queryTasks,
   ) async {
-    final mainQuery = (arguments['query'] as String?)?.trim() ?? '';
-    final allQueries = <String>{
-      if (mainQuery.isNotEmpty) mainQuery,
-      ...queryVariants,
-    }.toList(growable: false);
-    final futures = allQueries
-        .map((q) {
+    final allTasks = _normalizeQueryTasks(queryTasks);
+    final allQueries = allTasks
+        .map((task) => (task['query'] as String?)?.trim() ?? '')
+        .where((query) => query.isNotEmpty)
+        .toList(growable: false);
+    final labels = allTasks
+        .map((task) => (task['label'] as String?)?.trim() ?? '')
+        .where((label) => label.isNotEmpty)
+        .toList(growable: false);
+    final dimensions = allTasks
+        .map((task) => (task['dimension'] as String?)?.trim() ?? '')
+        .where((dimension) => dimension.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    final futures = allTasks
+        .map((task) {
           final singleArgs = Map<String, dynamic>.from(arguments)
-            ..['query'] = q
-            ..remove('queryVariants');
+            ..['query'] = (task['query'] as String?)?.trim() ?? ''
+            ..['queryTaskId'] = (task['id'] as String?)?.trim() ?? ''
+            ..['queryTaskLabel'] = (task['label'] as String?)?.trim() ?? ''
+            ..['dimension'] = (task['dimension'] as String?)?.trim() ?? ''
+            ..remove('queryVariants')
+            ..remove('queryTasks');
           return execute(singleArgs);
         })
         .toList(growable: false);
@@ -1799,18 +1943,256 @@ class WebSearchTool implements AssistantTool {
     return AssistantToolResult(
       success: true,
       message:
-          '多路检索完成（${allQueries.length} 条查询），找到 ${mergedRefs.length} 条参考资料。',
+          '并行检索完成（${labels.isNotEmpty ? labels.length : allQueries.length} 个方向），找到 ${mergedRefs.length} 条参考资料。',
       data: <String, dynamic>{
         'provider': bestProvider,
         'summary': bestSummary,
         'references': mergedRefs.take(10).toList(growable: false),
         'qualityScore': bestQuality,
         'queryCount': allQueries.length,
+        'queryLabels': labels,
+        'coveredDimensions': dimensions.isNotEmpty ? dimensions : labels,
+        'queryTasks': allTasks,
         'referenceCount': mergedRefs.length,
+        'totalReferences': mergedRefs.length,
         'message': '多路检索完成。',
       },
     );
   }
+
+  List<Map<String, dynamic>> _normalizeQueryTasks(Object? raw) {
+    final tasks =
+        (raw is List
+                ? raw
+                      .whereType<Map>()
+                      .map((item) => item.cast<String, dynamic>())
+                : const Iterable<Map<String, dynamic>>.empty())
+            .toList(growable: false);
+    final normalized = <Map<String, dynamic>>[];
+    final seen = <String>{};
+    for (final task in tasks) {
+      final query = (task['query'] as String?)?.trim() ?? '';
+      if (query.isEmpty || !seen.add(query)) continue;
+      normalized.add(<String, dynamic>{
+        'id': (task['id'] as String?)?.trim().isNotEmpty == true
+            ? (task['id'] as String).trim()
+            : _normalizeQueryTaskId(
+                query,
+                preferred: (task['dimension'] as String?)?.trim().isNotEmpty == true
+                    ? (task['dimension'] as String).trim()
+                    : (task['label'] as String?)?.trim() ?? '',
+              ),
+        'query': query,
+        'label': (task['label'] as String?)?.trim().isNotEmpty == true
+            ? (task['label'] as String).trim()
+            : query,
+        if ((task['dimension'] as String?)?.trim().isNotEmpty == true)
+          'dimension': (task['dimension'] as String).trim(),
+      });
+    }
+    return normalized;
+  }
+
+  List<Map<String, dynamic>> _queryTasksFromSeeds(
+    String mainQuery,
+    List<String> variants,
+  ) {
+    final tasks = <Map<String, dynamic>>[];
+    final seen = <String>{};
+
+    void addTask(String query) {
+      final normalized = query.trim();
+      if (normalized.isEmpty || !seen.add(normalized)) return;
+      tasks.add(<String, dynamic>{'query': normalized, 'label': normalized});
+    }
+
+    if (mainQuery.isNotEmpty) {
+      addTask(mainQuery);
+    }
+    for (final variant in variants) {
+      addTask(variant);
+    }
+    return tasks;
+  }
+
+  Map<String, dynamic> _resolveSingleQueryTask({
+    required Map<String, dynamic> arguments,
+    required String normalizedQuery,
+    required List<Map<String, dynamic>> normalizedTasks,
+  }) {
+    if (normalizedTasks.length == 1) {
+      return normalizedTasks.first;
+    }
+    final explicitId = (arguments['queryTaskId'] as String?)?.trim() ?? '';
+    final explicitLabel = (arguments['queryTaskLabel'] as String?)?.trim() ?? '';
+    final explicitDimension = (arguments['dimension'] as String?)?.trim() ?? '';
+    return <String, dynamic>{
+      'id': explicitId.isNotEmpty
+          ? explicitId
+          : _normalizeQueryTaskId(
+              normalizedQuery,
+              preferred: explicitDimension.isNotEmpty
+                  ? explicitDimension
+                  : explicitLabel,
+            ),
+      'label': explicitLabel.isNotEmpty ? explicitLabel : normalizedQuery,
+      if (explicitDimension.isNotEmpty) 'dimension': explicitDimension,
+    };
+  }
+
+  List<Map<String, dynamic>> _decorateReferences({
+    required List<Map<String, dynamic>> references,
+    required String query,
+    required List<String> authorityDomains,
+    required _SearchTimeConstraint timeConstraint,
+    required Map<String, dynamic> queryTask,
+    required String retrievedAt,
+  }) {
+    return references
+        .map((ref) {
+          final url = (ref['url'] as String?)?.trim() ?? '';
+          final host = Uri.tryParse(url)?.host.toLowerCase().trim() ?? '';
+          final source = (ref['source'] as String?)?.trim().isNotEmpty == true
+              ? (ref['source'] as String).trim()
+              : host;
+          final sourceTier = (ref['sourceTier'] as String?)?.trim().isNotEmpty == true
+              ? (ref['sourceTier'] as String).trim()
+              : _resolveSourceTier(
+                  host: host,
+                  authorityDomains: authorityDomains,
+                );
+          final freshnessHours =
+              _intValue(ref['freshnessHours']) ??
+              _estimateReferenceFreshnessHours(
+                ref,
+                timeConstraint: timeConstraint,
+              );
+          final authorityScore =
+              (ref['authorityScore'] as num?)?.toDouble() ??
+              _estimateAuthorityScore(
+                sourceTier: sourceTier,
+                host: host,
+                authorityDomains: authorityDomains,
+              );
+          final relevanceScore =
+              (ref['relevanceScore'] as num?)?.toDouble() ??
+              _estimateReferenceRelevance(query: query, reference: ref);
+          return <String, dynamic>{
+            ...ref,
+            'source': source,
+            'sourceHost': host,
+            'sourceTier': sourceTier,
+            'freshnessHours': freshnessHours,
+            'authorityScore': authorityScore,
+            'relevanceScore': relevanceScore,
+            'queryTaskId': _stringValue(queryTask['id']),
+            'queryTaskLabel': _stringValue(queryTask['label']),
+            'dimension': _stringValue(queryTask['dimension']).isNotEmpty
+                ? _stringValue(queryTask['dimension'])
+                : _stringValue(queryTask['label']),
+            'retrievedAt': (ref['retrievedAt'] as String?)?.trim().isNotEmpty == true
+                ? (ref['retrievedAt'] as String).trim()
+                : retrievedAt,
+          };
+        })
+        .where((item) => (item['url'] as String?)?.trim().isNotEmpty == true)
+        .toList(growable: false);
+  }
+
+  String _resolveSourceTier({
+    required String host,
+    required List<String> authorityDomains,
+  }) {
+    if (host.isEmpty) return 'web';
+    for (final authority in authorityDomains) {
+      if (host == authority || host.endsWith('.$authority')) {
+        return 'authority';
+      }
+    }
+    if (host.endsWith('.gov.cn') ||
+        host.endsWith('.edu.cn') ||
+        host.endsWith('.org.cn')) {
+      return 'trusted';
+    }
+    return 'web';
+  }
+
+  double _estimateAuthorityScore({
+    required String sourceTier,
+    required String host,
+    required List<String> authorityDomains,
+  }) {
+    switch (sourceTier) {
+      case 'authority':
+        return 1.0;
+      case 'trusted':
+        return 0.82;
+      default:
+        for (final authority in authorityDomains) {
+          if (host == authority || host.endsWith('.$authority')) return 1.0;
+        }
+        return 0.45;
+    }
+  }
+
+  int _estimateReferenceFreshnessHours(
+    Map<String, dynamic> reference, {
+    required _SearchTimeConstraint timeConstraint,
+  }) {
+    final now = DateTime.now();
+    final observedAt = (reference['observedAt'] as String?)?.trim() ?? '';
+    final publishedAt = (reference['publishedAt'] as String?)?.trim() ?? '';
+    DateTime? timestamp;
+    if (observedAt.isNotEmpty) {
+      timestamp = DateTime.tryParse(observedAt);
+    }
+    timestamp ??= DateTime.tryParse(publishedAt);
+    timestamp ??= _parseDateFromText(
+      (reference['snippet'] as String?)?.trim() ?? '',
+    );
+    if (timestamp == null) {
+      return timeConstraint.isRealtimeLike ? 9999 : timeConstraint.freshnessHoursMax;
+    }
+    return now.difference(timestamp.toLocal()).inHours.clamp(0, 24 * 3650);
+  }
+
+  double _estimateReferenceRelevance({
+    required String query,
+    required Map<String, dynamic> reference,
+  }) {
+    final tokens = query
+        .toLowerCase()
+        .split(RegExp(r'[\s,，。；;:/]+'))
+        .map((item) => item.trim())
+        .where((item) => item.length >= 2)
+        .toSet();
+    if (tokens.isEmpty) return 0.6;
+    final haystack = (
+      '${reference['title'] ?? ''} ${reference['snippet'] ?? ''} ${reference['url'] ?? ''}'
+    ).toLowerCase();
+    var hits = 0;
+    for (final token in tokens) {
+      if (haystack.contains(token)) hits += 1;
+    }
+    return (hits / tokens.length).clamp(0.2, 1.0).toDouble();
+  }
+
+  String _normalizeQueryTaskId(String query, {String preferred = ''}) {
+    final base = preferred.trim().isNotEmpty ? preferred.trim() : query.trim();
+    final normalized = base
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^\w\u4e00-\u9fa5]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'^_|_$'), '');
+    return normalized.isNotEmpty ? normalized : 'query_task';
+  }
+
+  int? _intValue(Object? value) {
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '');
+  }
+
+  String _stringValue(Object? value) => value?.toString().trim() ?? '';
 
   Future<_BackupSearchResult?> _tryFallbackSearch({
     required AssistantSearchProvider primaryProvider,
@@ -2056,4 +2438,16 @@ class _CalendarPoint {
   final int? year;
   final int? month;
   final int? day;
+}
+
+class _ClassifiedSearchError {
+  const _ClassifiedSearchError({
+    required this.errorCode,
+    required this.message,
+    required this.retryable,
+  });
+
+  final AssistantErrorCode errorCode;
+  final String message;
+  final bool retryable;
 }

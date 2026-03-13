@@ -45,8 +45,14 @@ class ToolExecutionGuard {
 
   final ToolLoopDetector _loopDetector;
   final Map<String, ToolPermission> _permissions;
+  final Map<String, _RecentToolFailure> _recentFailures =
+      <String, _RecentToolFailure>{};
+  static const Duration _repeatFailureCooldown = Duration(seconds: 20);
 
-  void reset() => _loopDetector.reset();
+  void reset() {
+    _loopDetector.reset();
+    _recentFailures.clear();
+  }
 
   GuardResult checkBeforeExecution(
     String toolName,
@@ -55,6 +61,19 @@ class ToolExecutionGuard {
     final loopResult = _loopDetector.check(toolName, args, null);
     if (loopResult.blocked) {
       return GuardResult.blocked(loopResult.reason);
+    }
+
+    final signature = _toolSignature(toolName, args);
+    final recentFailure = _recentFailures[signature];
+    if (recentFailure != null &&
+        recentFailure.failureCount >= 2 &&
+        DateTime.now().difference(recentFailure.lastFailureAt) <
+            _repeatFailureCooldown) {
+      return GuardResult.blocked(
+        recentFailure.message.trim().isNotEmpty
+            ? '同一工具刚刚连续失败，已暂停重复尝试：${recentFailure.message}'
+            : '同一工具刚刚连续失败，已暂停重复尝试，请稍后再试或调整条件。',
+      );
     }
 
     final perm = _permissions[toolName];
@@ -70,6 +89,40 @@ class ToolExecutionGuard {
     final resultHash = ToolLoopDetector.hashResult(resultContent);
     _loopDetector.check(toolName, args, resultHash);
   }
+
+  void recordExecutionResult(
+    String toolName,
+    Map<String, dynamic> args, {
+    required bool success,
+    required String message,
+    required String errorCode,
+  }) {
+    final signature = _toolSignature(toolName, args);
+    if (success) {
+      _recentFailures.remove(signature);
+      if (message.trim().isNotEmpty) {
+        recordResult(toolName, args, message);
+      }
+      return;
+    }
+    final now = DateTime.now();
+    final existing = _recentFailures[signature];
+    final withinCooldown =
+        existing != null &&
+        now.difference(existing.lastFailureAt) < _repeatFailureCooldown;
+    _recentFailures[signature] = _RecentToolFailure(
+      failureCount: withinCooldown ? existing.failureCount + 1 : 1,
+      lastFailureAt: now,
+      message: message,
+      errorCode: errorCode,
+    );
+  }
+
+  String _toolSignature(String toolName, Map<String, dynamic> args) {
+    final normalized = Map<String, dynamic>.from(args)
+      ..removeWhere((key, _) => key.startsWith('__'));
+    return '$toolName::${ToolLoopDetector.hashResult(normalized.toString())}';
+  }
 }
 
 class ToolPermission {
@@ -80,4 +133,18 @@ class ToolPermission {
 
   final bool requireConfirmation;
   final List<String> allowedSchemes;
+}
+
+class _RecentToolFailure {
+  const _RecentToolFailure({
+    required this.failureCount,
+    required this.lastFailureAt,
+    required this.message,
+    required this.errorCode,
+  });
+
+  final int failureCount;
+  final DateTime lastFailureAt;
+  final String message;
+  final String errorCode;
 }

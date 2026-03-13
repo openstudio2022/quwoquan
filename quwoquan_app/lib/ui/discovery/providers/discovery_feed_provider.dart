@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -38,9 +37,29 @@ class DiscoveryFeedState {
   }
 }
 
-/// 将 app tab id (photo/video) 映射为 feed API category
-String toFeedCategory(String tabId) {
-  return GeneratedPostRuntimeMetadata.appTabToFeedCategory[tabId] ?? 'images';
+typedef DiscoveryFeedQuery = ({
+  String category,
+  String? identity,
+  String? type,
+});
+
+/// 将 surface tab id 映射到统一 discovery feed 查询。
+DiscoveryFeedQuery toDiscoveryFeedQuery(String tabId) {
+  switch (tabId) {
+    case 'moment':
+      return (category: 'moment', identity: 'moment', type: null);
+    case 'work':
+    case 'works':
+      return (category: 'work', identity: 'work', type: null);
+    case 'photo':
+      return (category: 'photo', identity: 'work', type: 'image');
+    case 'video':
+      return (category: 'video', identity: 'work', type: 'video');
+    case 'article':
+      return (category: 'article', identity: 'work', type: 'article');
+    default:
+      return (category: tabId, identity: null, type: null);
+  }
 }
 
 /// 按 tabId 管理多路 feed 的 Notifier
@@ -55,13 +74,15 @@ class DiscoveryFeedMapNotifier
       return;
     }
     final repo = ref.read(contentRepositoryProvider);
-    final category = toFeedCategory(tabId);
+    final query = toDiscoveryFeedQuery(tabId);
     state = {...state, tabId: const AsyncLoading()};
     try {
       final page = await repo.listDiscoveryFeedPage(
-        category: category,
+        category: query.category,
+        identity: query.identity,
+        type: query.type,
         sort: kFeedSortRecommend,
-        limit: GeneratedPostRuntimeMetadata.feedDefaultLimit,
+        limit: 20,
         cursor: null,
       );
       final seen = page.items
@@ -99,11 +120,13 @@ class DiscoveryFeedMapNotifier
     state = {...state, tabId: AsyncData(value.copyWith(isLoading: true))};
     try {
       final repo = ref.read(contentRepositoryProvider);
-      final category = toFeedCategory(tabId);
+      final query = toDiscoveryFeedQuery(tabId);
       final page = await repo.listDiscoveryFeedPage(
-        category: category,
+        category: query.category,
+        identity: query.identity,
+        type: query.type,
         sort: kFeedSortRecommend,
-        limit: GeneratedPostRuntimeMetadata.feedDefaultLimit,
+        limit: 20,
         cursor: value.nextCursor,
       );
       final seen = value.seenItemIds.toSet();

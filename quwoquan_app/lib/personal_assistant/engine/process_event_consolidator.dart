@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/personal_assistant/contracts/explainable_flow_event.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/trace_events.dart';
 
 /// Stateful consolidator that converts raw [AssistantTraceEvent]s into
@@ -47,6 +48,7 @@ class ProcessEventConsolidator {
 
   /// Process a raw trace event and optionally emit an [ExplainableFlowEvent].
   ExplainableFlowEvent? consolidate(AssistantTraceEvent event) {
+    if (!event.visibility.isUserVisible) return null;
     switch (event.type) {
       case AssistantTraceEventType.planStarted:
         return _emitPhase(
@@ -59,24 +61,26 @@ class ProcessEventConsolidator {
         if (iteration > 1) {
           return _emitPhase(
             phaseId: _resolveAnalyzingPhase(),
-            headline: '正在深入分析已获取的信息',
+            headline: '我先把拿到的资料对一遍，看看哪些已经能直接支撑结论。',
           );
         }
-        return _updateCurrentHeadline('正在分析问题');
+        return _updateCurrentHeadline('先把问题落点理清楚，后面的资料才更容易收敛。');
 
       case AssistantTraceEventType.thinkingProgress:
         final phase = (event.data?['phase'] as String?) ?? '';
         if (phase == 'answering') {
           return _emitPhase(
             phaseId: PhaseId.answer,
-            headline: '正在整理最终回答',
+            headline: '我在组织最终回答',
           );
         }
-        final cleaned = _sanitizeForUser(event.message);
+        final cleaned = _sanitizeForUser(
+          (event.data?['reasonShort'] as String?)?.trim() ?? '',
+        );
         if (cleaned.isNotEmpty) {
           return _updateCurrentHeadline(cleaned);
         }
-        return null;
+        return _updateCurrentHeadline(_defaultProgressHeadline(phase));
 
       case AssistantTraceEventType.toolStart:
         final toolName = _extractToolName(event.data);
@@ -95,7 +99,7 @@ class ProcessEventConsolidator {
         return _handleToolResult(event);
 
       case AssistantTraceEventType.toolError:
-        return _updateCurrentHeadline('检索遇到问题，正在调整策略');
+        return _updateCurrentHeadline('这一批资料暂时没拿稳，我换个方式继续替你核。');
 
       case AssistantTraceEventType.subagentStart:
         return _handleSubagentStart(event);
@@ -110,7 +114,7 @@ class ProcessEventConsolidator {
         if (problemClass == 'realtime_info') return null;
         return _emitPhase(
           phaseId: PhaseId.expand,
-          headline: '补充更多信息来源',
+          headline: '还差一处会影响判断的信息，我再补一轮。',
         );
 
       case AssistantTraceEventType.lifecycleEnd:
@@ -119,7 +123,7 @@ class ProcessEventConsolidator {
           if (!answerGateOpen && _currentPhaseId != PhaseId.answer) {
             return _emitPhase(
               phaseId: PhaseId.answer,
-              headline: '回答完成',
+              headline: '已为你整理好',
               status: ExplainablePhaseStatus.completed,
             );
           }
@@ -216,16 +220,16 @@ class ProcessEventConsolidator {
         final refs = (event.data?['references'] as List?)?.length ?? 0;
         if (refs > 0 && refs != _lastEmittedRefCount) {
           _lastEmittedRefCount = refs;
-          return _updateCurrentHeadline('已获取 $refs 条可靠信息，开始整理');
+          return _updateCurrentHeadline('关键信息已经够用了，我开始把这 $refs 条线索收拢成你能直接参考的结论。');
         }
-        return _updateCurrentHeadline('关键信息已够用，开始整理答案');
+        return _updateCurrentHeadline('关键信息已经够用了，我开始整理答案。');
       case 'budgetexhausted':
-        return _updateCurrentHeadline('已收集到部分信息，开始整理');
+        return _updateCurrentHeadline('已经有一批能支撑判断的信息了，我先把最重要的部分整理给你。');
       case 'needmoresearch':
         if (problemClass == 'realtime_info') return null;
-        return _updateCurrentHeadline('补充更多来源以确保准确');
+        return _updateCurrentHeadline('目前主线已经有了，但还差一处关键信息，我再替你补一下。');
       case 'toolfailed':
-        return _updateCurrentHeadline('检索遇到问题，基于已有信息整理');
+        return _updateCurrentHeadline('这轮外部资料不太稳，我先基于已经确认的部分替你整理。');
       default:
         return null;
     }
@@ -259,7 +263,7 @@ class ProcessEventConsolidator {
     final updatedRefs = <FlowReference>[...last.references, ...flowRefs];
     final totalCount = updatedRefs.length;
     final updated = last.copyWith(
-      headline: '找到 $totalCount 篇相关资料',
+      headline: '这一批资料已经回来了，我先从 $totalCount 个来源里筛掉重复和噪音。',
       references: updatedRefs,
     );
     _emittedEvents[_emittedEvents.length - 1] = updated;
@@ -269,10 +273,9 @@ class ProcessEventConsolidator {
   ExplainableFlowEvent? _handleSubagentStart(AssistantTraceEvent event) {
     final data = event.data ?? const <String, dynamic>{};
     final domainId = (data['domainId'] as String?)?.trim() ?? '';
-    final goal = _sanitizeForUser((data['goal'] as String?)?.trim() ?? '');
     return _emitPhase(
       phaseId: PhaseId.subExecute,
-      headline: goal.isNotEmpty ? goal : '正在处理子任务',
+      headline: '我并行补另一部分信息，尽量一起收拢。',
       agentId: (data['subagentId'] as String?)?.trim() ?? domainId,
       parentPhaseId: PhaseId.dispatch,
     );
@@ -300,7 +303,7 @@ class ProcessEventConsolidator {
     if (_emittedEvents.isNotEmpty) {
       final last = _emittedEvents.last;
       _emittedEvents[_emittedEvents.length - 1] = last.copyWith(
-        headline: '这部分信息暂不完整，继续用已有信息整理',
+        headline: '这一部分暂时还不够完整，我先用已经确认的内容继续替你整理。',
         phaseStatus: ExplainablePhaseStatus.failed,
       );
       return _emittedEvents.last;
@@ -314,22 +317,32 @@ class ProcessEventConsolidator {
     );
     if (_isWeatherLike(goal)) {
       final city = _extractCity(goal);
-      if (city.isNotEmpty) return '确认查询$city实时天气';
-      return '确认查询实时天气';
+      if (city.isNotEmpty) {
+        return '先确认$city的实时情况，再补对出行最有用的提醒。';
+      }
+      return '先确认实时情况，再补对出行最有用的提醒。';
     }
-    if (goal.isNotEmpty && goal.length <= 20) {
-      return '分析问题：$goal';
-    }
-    return '正在分析您的问题';
+    return '先确认这次要优先解决哪一层，再决定从哪里查起。';
   }
 
   String _buildSearchStartHeadline(AssistantTraceEvent event) {
     if (_isWeatherLike(userGoalSummary)) {
       final city = _extractCity(userGoalSummary);
-      if (city.isNotEmpty) return '查询$city天气数据';
-      return '查询天气数据';
+      if (city.isNotEmpty) return '先看$city的实时情况，再补出门最相关的提醒。';
+      return '先看实时情况，再补出门最相关的提醒。';
     }
-    return '搜索相关信息';
+    return '先核对最影响结论的资料，尽量少带回无关信息。';
+  }
+
+  String _defaultProgressHeadline(String phase) {
+    switch (phase) {
+      case 'analyzing':
+        return '我在把几路信息放到一起对照，先看哪些能直接支撑结论。';
+      case 'searching':
+        return '我在核对关键资料，先把会影响判断的部分查稳。';
+      default:
+        return '我在确认问题边界，避免后面越查越散。';
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -355,6 +368,18 @@ class ProcessEventConsolidator {
       if (text.contains(f)) return '';
     }
     if (text.startsWith('{') || text.startsWith('[')) return '';
+    return text;
+  }
+
+  String _humanizeForUser(String raw) {
+    final text = _sanitizeForUser(raw);
+    if (text.isEmpty) return '';
+    if (text.contains('我先帮你把') ||
+        text.contains('收一收') ||
+        text.contains('你更像是想知道') ||
+        text.contains('我先替你')) {
+      return '';
+    }
     return text;
   }
 

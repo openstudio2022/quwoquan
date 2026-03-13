@@ -23,36 +23,50 @@ import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
 
 const _baseUrl = 'https://test-gateway.example.com';
 
-typedef _CapturedRequest = ({String method, String path});
+typedef _CapturedRequest = ({
+  String method,
+  String path,
+  Map<String, String> query,
+});
 
 MockClient _captureClient(List<_CapturedRequest> log) {
   return MockClient((request) async {
-    log.add((method: request.method, path: request.url.path));
+    log.add((
+      method: request.method,
+      path: request.url.path,
+      query: request.url.queryParameters,
+    ));
 
     final path = request.url.path;
     final isWrite =
-        request.method == 'POST' || request.method == 'PATCH' || request.method == 'DELETE';
-    final isVoid = isWrite &&
+        request.method == 'POST' ||
+        request.method == 'PATCH' ||
+        request.method == 'DELETE';
+    final isVoid =
+        isWrite &&
         !path.endsWith('/posts') &&
         !path.endsWith('/circles') &&
         !path.endsWith('/comments') &&
         !path.endsWith('/files');
 
     if (isVoid) {
-      return http.Response('{}', 200,
-          headers: {'content-type': 'application/json'});
+      return http.Response(
+        '{}',
+        200,
+        headers: {'content-type': 'application/json'},
+      );
     }
 
     final body = json.encode({
       'items': <dynamic>[],
-      'data': <String, dynamic>{
-        'id': 'mock_id',
-        'type': 'mock',
-      },
+      'data': <String, dynamic>{'id': 'mock_id', 'type': 'mock'},
       'cursor': null,
     });
-    return http.Response(body, 200,
-        headers: {'content-type': 'application/json'});
+    return http.Response(
+      body,
+      200,
+      headers: {'content-type': 'application/json'},
+    );
   });
 }
 
@@ -70,13 +84,17 @@ void main() {
     });
 
     test('listCircles → GET /v1/circles', () async {
-      try { await repo.listCircles(); } catch (_) {}
+      try {
+        await repo.listCircles();
+      } catch (_) {}
       expect(log.last.method, 'GET');
       expect(log.last.path, CircleApiMetadata.listCirclesPath);
     });
 
     test('getCircle → GET /v1/circles/{circleId}', () async {
-      try { await repo.getCircle('c1'); } catch (_) {}
+      try {
+        await repo.getCircle('c1');
+      } catch (_) {}
       expect(log.last.method, 'GET');
       expect(log.last.path, CircleApiMetadata.getCirclePath(circleId: 'c1'));
     });
@@ -96,7 +114,10 @@ void main() {
     test('archiveCircle → DELETE /v1/circles/{circleId}', () async {
       await repo.archiveCircle('c1');
       expect(log.last.method, 'DELETE');
-      expect(log.last.path, CircleApiMetadata.archiveCirclePath(circleId: 'c1'));
+      expect(
+        log.last.path,
+        CircleApiMetadata.archiveCirclePath(circleId: 'c1'),
+      );
     });
 
     test('joinCircle → POST /v1/circles/{circleId}/join', () async {
@@ -112,7 +133,9 @@ void main() {
     });
 
     test('listMembers → GET /v1/circles/{circleId}/members', () async {
-      try { await repo.listMembers('c1'); } catch (_) {}
+      try {
+        await repo.listMembers('c1');
+      } catch (_) {}
       expect(log.last.method, 'GET');
       expect(
         log.last.path,
@@ -120,20 +143,35 @@ void main() {
       );
     });
 
-    test('updateMemberRole → PATCH /v1/circles/{id}/members/{uid}/role',
-        () async {
-      await repo.updateMemberRole('c1', 'u1', 'admin');
-      expect(log.last.method, 'PATCH');
+    test(
+      'updateMemberRole → PATCH /v1/circles/{id}/members/{uid}/role',
+      () async {
+        await repo.updateMemberRole('c1', 'u1', 'admin');
+        expect(log.last.method, 'PATCH');
+        expect(
+          log.last.path,
+          CircleApiMetadata.updateMemberRolePath(circleId: 'c1', userId: 'u1'),
+        );
+      },
+    );
+
+    test('getCircleFeed → GET /v1/circles/{circleId}/feed', () async {
+      try {
+        await repo.getCircleFeed('c1');
+      } catch (_) {}
+      expect(log.last.method, 'GET');
       expect(
         log.last.path,
-        CircleApiMetadata.updateMemberRolePath(circleId: 'c1', userId: 'u1'),
+        CircleApiMetadata.getCircleFeedPath(circleId: 'c1'),
       );
     });
 
-    test('getCircleFeed → GET /v1/circles/{circleId}/feed', () async {
-      try { await repo.getCircleFeed('c1'); } catch (_) {}
-      expect(log.last.method, 'GET');
-      expect(log.last.path, CircleApiMetadata.getCircleFeedPath(circleId: 'c1'));
+    test('getCircleFeed 透传 identity/type query', () async {
+      try {
+        await repo.getCircleFeed('c1', identity: 'work', type: 'article');
+      } catch (_) {}
+      expect(log.last.query['identity'], 'work');
+      expect(log.last.query['type'], 'article');
     });
 
     test('pinPost → PATCH /v1/circles/{id}/feed/{postId}/pin', () async {
@@ -145,32 +183,45 @@ void main() {
       );
     });
 
-    test('featurePost → PATCH /v1/circles/{id}/feed/{postId}/feature',
-        () async {
-      await repo.featurePost('c1', 'p1', featured: true);
-      expect(log.last.method, 'PATCH');
-      expect(
-        log.last.path,
-        CircleApiMetadata.featureCirclePostPath(circleId: 'c1', postId: 'p1'),
-      );
-    });
+    test(
+      'featurePost → PATCH /v1/circles/{id}/feed/{postId}/feature',
+      () async {
+        await repo.featurePost('c1', 'p1', featured: true);
+        expect(log.last.method, 'PATCH');
+        expect(
+          log.last.path,
+          CircleApiMetadata.featureCirclePostPath(circleId: 'c1', postId: 'p1'),
+        );
+      },
+    );
 
     test('getCircleStats → GET /v1/circles/{circleId}/stats', () async {
       await repo.getCircleStats('c1');
       expect(log.last.method, 'GET');
-      expect(log.last.path, CircleApiMetadata.getCircleStatsPath(circleId: 'c1'));
+      expect(
+        log.last.path,
+        CircleApiMetadata.getCircleStatsPath(circleId: 'c1'),
+      );
     });
 
     test('listFiles → GET /v1/circles/{circleId}/files', () async {
-      try { await repo.listFiles('c1'); } catch (_) {}
+      try {
+        await repo.listFiles('c1');
+      } catch (_) {}
       expect(log.last.method, 'GET');
-      expect(log.last.path, CircleApiMetadata.listCircleFilesPath(circleId: 'c1'));
+      expect(
+        log.last.path,
+        CircleApiMetadata.listCircleFilesPath(circleId: 'c1'),
+      );
     });
 
     test('createFile → POST /v1/circles/{circleId}/files', () async {
       await repo.createFile('c1', {'name': 'doc.pdf'});
       expect(log.last.method, 'POST');
-      expect(log.last.path, CircleApiMetadata.createCircleFilePath(circleId: 'c1'));
+      expect(
+        log.last.path,
+        CircleApiMetadata.createCircleFilePath(circleId: 'c1'),
+      );
     });
 
     test('getFile → GET /v1/circles/{circleId}/files/{fileId}', () async {
@@ -231,6 +282,16 @@ void main() {
       expect(log.last.path, ContentApiMetadata.getFeedPath);
     });
 
+    test('listDiscoveryFeed 透传 identity/type query', () async {
+      await repo.listDiscoveryFeed(
+        category: 'work',
+        identity: 'work',
+        type: 'article',
+      );
+      expect(log.last.query['identity'], 'work');
+      expect(log.last.query['type'], 'article');
+    });
+
     test('getPost → GET /v1/content/posts/{postId}', () async {
       try {
         await repo.getPost(postId: 'p1');
@@ -246,6 +307,48 @@ void main() {
       expect(log.last.method, 'POST');
       expect(log.last.path, ContentApiMetadata.createPostPath);
     });
+
+    test('publishPost → POST /v1/content/posts/{postId}/publish', () async {
+      try {
+        await repo.publishPost(postId: 'p1', payload: {'visibility': 'public'});
+      } catch (_) {}
+      expect(log.last.method, 'POST');
+      expect(log.last.path, ContentApiMetadata.publishPostPath(postId: 'p1'));
+    });
+
+    test(
+      'updatePostSettings → PATCH /v1/content/posts/{postId}/settings',
+      () async {
+        try {
+          await repo.updatePostSettings(
+            postId: 'p1',
+            payload: {'assistantUsePolicy': 'exclude'},
+          );
+        } catch (_) {}
+        expect(log.last.method, 'PATCH');
+        expect(
+          log.last.path,
+          ContentApiMetadata.updatePostSettingsPath(postId: 'p1'),
+        );
+      },
+    );
+
+    test(
+      'promotePostToWork → POST /v1/content/posts/{postId}:promoteToWork',
+      () async {
+        try {
+          await repo.promotePostToWork(
+            postId: 'p1',
+            payload: {'contentType': 'image'},
+          );
+        } catch (_) {}
+        expect(log.last.method, 'POST');
+        expect(
+          log.last.path,
+          ContentApiMetadata.promotePostToWorkPath(postId: 'p1'),
+        );
+      },
+    );
 
     test('likePost → POST /v1/content/posts/{postId}/like', () async {
       await repo.likePost(postId: 'p1');
@@ -265,15 +368,17 @@ void main() {
       expect(log.last.path, ContentApiMetadata.favoritePostPath(postId: 'p1'));
     });
 
-    test('unfavoritePost → DELETE /v1/content/posts/{postId}/favorite',
-        () async {
-      await repo.unfavoritePost(postId: 'p1');
-      expect(log.last.method, 'DELETE');
-      expect(
-        log.last.path,
-        ContentApiMetadata.unfavoritePostPath(postId: 'p1'),
-      );
-    });
+    test(
+      'unfavoritePost → DELETE /v1/content/posts/{postId}/favorite',
+      () async {
+        await repo.unfavoritePost(postId: 'p1');
+        expect(log.last.method, 'DELETE');
+        expect(
+          log.last.path,
+          ContentApiMetadata.unfavoritePostPath(postId: 'p1'),
+        );
+      },
+    );
 
     test('listComments → GET /v1/content/posts/{postId}/comments', () async {
       await repo.listComments(postId: 'p1');
@@ -288,15 +393,16 @@ void main() {
     });
 
     test(
-        'deleteComment → DELETE /v1/content/posts/{postId}/comments/{commentId}',
-        () async {
-      await repo.deleteComment(postId: 'p1', commentId: 'c1');
-      expect(log.last.method, 'DELETE');
-      expect(
-        log.last.path,
-        ContentApiMetadata.deleteCommentPath(postId: 'p1', commentId: 'c1'),
-      );
-    });
+      'deleteComment → DELETE /v1/content/posts/{postId}/comments/{commentId}',
+      () async {
+        await repo.deleteComment(postId: 'p1', commentId: 'c1');
+        expect(log.last.method, 'DELETE');
+        expect(
+          log.last.path,
+          ContentApiMetadata.deleteCommentPath(postId: 'p1', commentId: 'c1'),
+        );
+      },
+    );
 
     test('reportBehaviors → POST /v1/content/behaviors', () async {
       await repo.reportBehaviors(events: []);
@@ -310,15 +416,17 @@ void main() {
       expect(log.last.path, ContentApiMetadata.getCountersPath(postId: 'p1'));
     });
 
-    test('getReactionState → GET /v1/content/posts/{postId}/reactions',
-        () async {
-      await repo.getReactionState(postId: 'p1');
-      expect(log.last.method, 'GET');
-      expect(
-        log.last.path,
-        ContentApiMetadata.getReactionStatePath(postId: 'p1'),
-      );
-    });
+    test(
+      'getReactionState → GET /v1/content/posts/{postId}/reactions',
+      () async {
+        await repo.getReactionState(postId: 'p1');
+        expect(log.last.method, 'GET');
+        expect(
+          log.last.path,
+          ContentApiMetadata.getReactionStatePath(postId: 'p1'),
+        );
+      },
+    );
   });
 
   group('ReportRepository Remote — service.yaml 路径对齐', () {
@@ -371,12 +479,14 @@ void main() {
       );
     });
 
-    test('getNotificationSettings → GET /v1/user/settings/notifications',
-        () async {
-      await repo.getNotificationSettings();
-      expect(log.last.method, 'GET');
-      expect(log.last.path, UserApiMetadata.getNotificationSettingsPath);
-    });
+    test(
+      'getNotificationSettings → GET /v1/user/settings/notifications',
+      () async {
+        await repo.getNotificationSettings();
+        expect(log.last.method, 'GET');
+        expect(log.last.path, UserApiMetadata.getNotificationSettingsPath);
+      },
+    );
 
     test('getPrivacySettings → GET /v1/user/settings/privacy', () async {
       await repo.getPrivacySettings();
@@ -406,7 +516,10 @@ void main() {
     test('unblockUser → DELETE /v1/user/block/{targetUserId}', () async {
       await repo.unblockUser('u1');
       expect(log.last.method, 'DELETE');
-      expect(log.last.path, UserApiMetadata.unblockUserPath(targetUserId: 'u1'));
+      expect(
+        log.last.path,
+        UserApiMetadata.unblockUserPath(targetUserId: 'u1'),
+      );
     });
   });
 
@@ -416,9 +529,7 @@ void main() {
 
     setUp(() {
       log = [];
-      repo = RemoteUserProfileRepository(
-        client: _captureClient(log),
-      );
+      repo = RemoteUserProfileRepository(client: _captureClient(log));
     });
 
     test('getUserStats → GET /v1/user/profile/{userId}/stats', () async {
