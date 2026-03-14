@@ -22,19 +22,13 @@ import 'package:quwoquan_app/cloud/services/user/relationship_capability_reposit
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
-import 'package:quwoquan_app/personal_assistant/app/assistant_engine_provider.dart';
-import 'package:quwoquan_app/personal_assistant/app/capability_gateway.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/explainable_flow_event.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/personal_assistant/engine/llm_provider.dart';
-import 'package:quwoquan_app/personal_assistant/engine/llm_response_parser.dart';
-import 'package:quwoquan_app/personal_assistant/engine/process_journal_bus.dart';
-import 'package:quwoquan_app/personal_assistant/protocol/assistant_content_filters.dart';
-import 'package:quwoquan_app/personal_assistant/protocol/run_request.dart';
-import 'package:quwoquan_app/personal_assistant/protocol/run_response.dart';
-import 'package:quwoquan_app/personal_assistant/protocol/trace_events.dart';
+import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
+import 'package:quwoquan_app/assistant/application/capability_gateway.dart';
+import 'package:quwoquan_app/assistant/capabilities/capabilities.dart';
+import 'package:quwoquan_app/assistant/domain/channel/channel.dart';
+import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
+import 'package:quwoquan_app/assistant/orchestration/orchestration.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_display_fallbacks.dart';
-import 'package:quwoquan_app/personal_assistant/retrieval/capability_catalog.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_dev_replay_page.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
@@ -46,6 +40,9 @@ import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/regenerate_options_popup.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/streaming_scroll_fab.dart';
+import 'package:quwoquan_app/personal_assistant/engine/llm_response_parser.dart';
+import 'package:quwoquan_app/personal_assistant/engine/llm_provider.dart';
+
 
 /// 聊天气泡时间分隔符 — 直接透传 ChatTimeFormatter 的完整格式
 ///
@@ -64,10 +61,12 @@ class ChatDetailPage extends ConsumerStatefulWidget {
     required this.conversationId,
     required this.onBack,
     this.assistantOpenContext,
+    this.embedded = false,
   });
 
   final String conversationId;
   final VoidCallback onBack;
+  final bool embedded;
 
   /// 从半弹窗「进入完整对话」传入时携带，用于首条欢迎与推荐（与半弹窗一致）。
   final AssistantOpenContext? assistantOpenContext;
@@ -342,19 +341,6 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       final delta = nextMaxExtent - previousMaxExtent;
       _scrollController.jumpTo(previousOffset + delta);
     });
-  }
-
-  void _scrollToBottom() {
-    if (!_scrollController.hasClients) return;
-    setState(() {
-      _userScrolledAway = false;
-      _showScrollFab = false;
-    });
-    _scrollController.animateTo(
-      _scrollController.position.maxScrollExtent,
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOut,
-    );
   }
 
   void _scrollToBottomIfOverflow() {
@@ -1043,6 +1029,25 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   }) {
     final streamed = streamedText.trim();
     final completed = completedText.trim();
+    final sanitizedCompleted = _sanitizeCompletedDisplayCandidate(
+      completed,
+      allowJsonExtraction: true,
+    );
+    final sanitizedStreamed = _sanitizeCompletedDisplayCandidate(
+      streamed,
+      allowJsonExtraction: true,
+    );
+    if (sanitizedCompleted.isNotEmpty) {
+      if (sanitizedStreamed.isEmpty) return sanitizedCompleted;
+      if (sanitizedCompleted == sanitizedStreamed) return sanitizedCompleted;
+      if (sanitizedCompleted.startsWith(sanitizedStreamed)) {
+        return sanitizedCompleted;
+      }
+      if (sanitizedCompleted.length >= sanitizedStreamed.length) {
+        return sanitizedCompleted;
+      }
+    }
+    if (sanitizedStreamed.isNotEmpty) return sanitizedStreamed;
     if (completed.isEmpty) return streamed;
     if (streamed.isEmpty) return completed;
     if (completed == streamed) return completed;
@@ -1131,6 +1136,16 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         _containsXmlToolCall(text);
   }
 
+  String _sanitizeProcessDisplayText(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) return '';
+    if (_containsInternalDisplayFragment(text)) return '';
+    if (_isInternalChunk(text)) return '';
+    if (AssistantContentFilters.isProgressPlaceholder(text)) return '';
+    if (AssistantContentFilters.isDegradedText(text)) return '';
+    return text;
+  }
+
   void _consumeProcessJournalEvent(ProcessJournalEvent event) {
     if (!mounted || !_assistantResponding) return;
     final updated = _appendStreamingProcessJournalEvent(event);
@@ -1175,7 +1190,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     final blocks = <ProcessContentBlock>[];
     for (final item in rawBlocks) {
       final rawType = (item['type'] as String?)?.trim() ?? '';
-      final text = (item['text'] as String?)?.trim() ?? '';
+      final text = _sanitizeProcessDisplayText(
+        (item['text'] as String?)?.trim() ?? '',
+      );
       final references =
           (item['references'] as List?)
               ?.whereType<Map>()
@@ -1228,9 +1245,20 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   List<Map<String, dynamic>> _normalizeUiProcessTimelineV2(List<Map> raw) {
     return raw
         .map((item) => item.cast<String, dynamic>())
-        .where(
-          (item) => ((item['summary'] as String?)?.trim().isNotEmpty ?? false),
-        )
+        .map((item) {
+          final normalized = Map<String, dynamic>.from(item);
+          normalized['summary'] = _sanitizeProcessDisplayText(
+            (normalized['summary'] as String?)?.trim() ?? '',
+          );
+          if (normalized['details'] is List) {
+            normalized['details'] = (normalized['details'] as List)
+                .map((detail) => _sanitizeProcessDisplayText(detail.toString()))
+                .where((detail) => detail.isNotEmpty)
+                .toList(growable: false);
+          }
+          return normalized;
+        })
+        .where((item) => ((item['summary'] as String?)?.trim().isNotEmpty ?? false))
         .toList(growable: false);
   }
 
@@ -1374,7 +1402,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       switch (item.type) {
         case ProcessJournalEventType.narrativeCommit:
         case ProcessJournalEventType.liveCursor:
-          final text = item.displayMessage;
+          final text = _sanitizeProcessDisplayText(item.displayMessage);
           if (text.isEmpty) continue;
           blocks.add(
             ProcessContentBlock(type: ProcessContentBlockType.text, text: text),
@@ -1391,13 +1419,18 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
               )
               .where((ref) => ref.title.isNotEmpty && ref.url.isNotEmpty)
               .toList(growable: false);
-          if (item.displayMessage.isEmpty && refs.isEmpty) continue;
+          final summary = _sanitizeProcessDisplayText(item.displayMessage);
+          if (summary.isEmpty && refs.isEmpty) continue;
           blocks.add(
             ProcessContentBlock(
               type: item.stage == 'searching'
                   ? ProcessContentBlockType.searchSummary
                   : ProcessContentBlockType.analysisSummary,
-              text: item.displayMessage,
+              text: summary.isNotEmpty
+                  ? summary
+                  : item.stage == 'searching'
+                  ? '已核对参考资料'
+                  : '已整理分析依据',
               references: refs,
             ),
           );
@@ -1470,7 +1503,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   ) {
     final blocks = <ProcessContentBlock>[];
     for (final item in timeline) {
-      final summary = (item['summary'] as String?)?.trim() ?? '';
+      final summary = _sanitizeProcessDisplayText(
+        (item['summary'] as String?)?.trim() ?? '',
+      );
       final references =
           (item['references'] as List?)
               ?.whereType<Map>()
@@ -2256,7 +2291,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           _lastViewportWidth,
         );
         try {
-          await ref.read(assistantRuntimeProvider).ensureRemoteConfigLoaded();
+          await ref.read(assistantGatewayProvider).ensureRemoteConfigLoaded();
         } catch (error) {
           if (kDebugMode) {
             debugPrint('Assistant remote config load failed, continue: $error');
@@ -2292,7 +2327,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           userId: 'current_user',
           deviceProfile: deviceProfile,
           channel: 'app',
-          capabilityCatalog: AssistentCapabilityCatalog.defaultCatalog,
+          capabilityCatalog: AssistantCapabilityCatalog.defaultCatalog,
           contextScopeHint: contextScope,
           privacyProfile: 'default',
           privacyPolicy:
@@ -2623,7 +2658,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           response: runResponse,
         );
         await ref
-            .read(assistentLearningServiceProvider)
+            .read(assistantLearningServiceProvider)
             .recordInteraction(
               runId:
                   runResponse.runId ??
@@ -2691,7 +2726,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         (hints['privacyPolicy'] as Map?)?.cast<String, dynamic>() ??
         <String, dynamic>{
           'webAccessMode': 'limited',
-          'allowedCapabilities': AssistentCapabilityCatalog.defaultCatalog,
+          'allowedCapabilities': AssistantCapabilityCatalog.defaultCatalog,
           'allowedProviders': <String>[
             'page_context',
             'conversation',
@@ -3090,7 +3125,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             .toList(growable: false) ??
         const <String>[];
     await ref
-        .read(assistentLearningServiceProvider)
+        .read(assistantLearningServiceProvider)
         .recordExplicitFeedback(
           runId: runId.isNotEmpty
               ? runId
@@ -3298,7 +3333,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                   .toList(growable: false) ??
               const <String>[]);
     await ref
-        .read(assistentLearningServiceProvider)
+        .read(assistantLearningServiceProvider)
         .recordInteraction(
           runId: (message['runId'] as String?)?.trim().isNotEmpty == true
               ? (message['runId'] as String).trim()
@@ -3415,7 +3450,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       sessionId: _assistantRuntimeSessionId,
       userId: contextScope['userId'] as String? ?? '',
       maxIterations: rewrite.mode == RewriteMode.deepThink ? 6 : 1,
-      capabilityCatalog: AssistentCapabilityCatalog.defaultCatalog,
+      capabilityCatalog: AssistantCapabilityCatalog.defaultCatalog,
       contextScopeHint: contextScope,
       rewriteInstruction: rewrite,
     );
@@ -3638,7 +3673,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   Future<void> _switchAssistantModelAndRegenerate(
     Map<String, dynamic> message,
   ) async {
-    final models = ref.read(assistantRuntimeProvider).listAvailableModels();
+    final models = ref.read(assistantGatewayProvider).listAvailableModels();
     if (models.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -3665,7 +3700,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       },
     );
     if (selected == null || selected.trim().isEmpty) return;
-    ref.read(assistantRuntimeProvider).switchModel(selected);
+    ref.read(assistantGatewayProvider).switchModel(selected);
     await _recordAssistantImplicitFeedback(
       message: message,
       modelSwitched: true,
@@ -3744,7 +3779,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         builder: (_) => AssistantDevReplayPage(
           records: List<Map<String, dynamic>>.from(_assistantReplayRecords),
           loadScoreSnapshot: () =>
-              ref.read(assistentLearningServiceProvider).latestScoreSnapshot(),
+              ref.read(assistantLearningServiceProvider).latestScoreSnapshot(),
         ),
       ),
     );
@@ -3855,6 +3890,528 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         .map((item) => (item['id'] as String?) ?? '')
         .firstWhere((id) => id.isNotEmpty, orElse: () => '');
 
+    final bodyContent = Column(
+      children: [
+        Expanded(
+          child: Stack(
+            children: [
+              Container(
+                color: chatListBg,
+                child: Builder(
+                  builder: (context) {
+                    final displayMessages = _isAssistantConversation
+                        ? _messages
+                        : ref
+                              .watch(
+                                chatMessageProvider(
+                                  widget.conversationId,
+                                ),
+                              )
+                              .messages
+                              .map(
+                                (dto) => dto.toDisplayMap(
+                                  currentUserId: 'current_user',
+                                ),
+                              )
+                              .toList();
+                    return ListView.builder(
+                      controller: _scrollController,
+                      padding: EdgeInsets.symmetric(
+                        horizontal:
+                            AppSpacing.semantic[DesignSemanticConstants
+                                .container]?[DesignSemanticConstants
+                                .sm] ??
+                            AppSpacing.containerSm,
+                        vertical: AppSpacing.md,
+                      ),
+                      itemCount: displayMessages.length,
+                      itemBuilder: (context, index) {
+                        final msg = displayMessages[index];
+                        final prevTime = index > 0
+                            ? displayMessages[index - 1]['timestamp']
+                                as String?
+                            : null;
+                        final showTime =
+                            index == 0 || msg['timestamp'] != prevTime;
+                        final timeStr = formatChatTime(
+                          msg['timestamp'] as String?,
+                        );
+                        final isAssistantMessage =
+                            _isAssistantConversation &&
+                            (msg['senderId'] ==
+                                AppConceptConstants.assistantSenderId);
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (showTime && timeStr.isNotEmpty)
+                              Padding(
+                                padding: EdgeInsets.only(
+                                  bottom:
+                                      AppSpacing
+                                          .semantic[DesignSemanticConstants
+                                          .intraGroup]?[DesignSemanticConstants
+                                          .sm] ??
+                                      AppSpacing.intraGroupSm,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    timeStr,
+                                    style: TextStyle(
+                                      fontSize:
+                                          Theme.of(context)
+                                              .textTheme
+                                              .bodySmall
+                                              ?.fontSize ??
+                                          AppSpacing.containerSm,
+                                      color: fgPrimary.withValues(
+                                        alpha: 0.5,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ChatMessageBubble(
+                              message: msg,
+                              isRight: msg['isSelf'] == true,
+                              bubbleColor: msg['isSelf'] == true
+                                  ? bubbleSelf
+                                  : bubbleOther,
+                              textColor: msg['isSelf'] == true
+                                  ? Colors.white
+                                  : fgPrimary,
+                              isSelectionMode: _isSelectionMode,
+                              isSelected: _selectedIds.contains(
+                                msg['id'],
+                              ),
+                              onLongPressStart: (details) =>
+                                  _onLongPressMessage(
+                                    msg,
+                                    details.globalPosition,
+                                  ),
+                              onTap: _isSelectionMode
+                                  ? () =>
+                                        _toggleSelect(msg['id'] as String)
+                                  : null,
+                              hideAvatarAndName: _isAssistantConversation,
+                              useFullWidth: _isAssistantConversation,
+                              renderSelfTextWithoutBubble:
+                                  _isAssistantConversation,
+                              processState:
+                                  _isAssistantConversation &&
+                                      index == _messages.length - 1 &&
+                                      isAssistantMessage &&
+                                      (_assistantResponding ||
+                                          _streamingThinkingText
+                                              .isNotEmpty)
+                                  ? _currentProcessState
+                                  : null,
+                              flowEvents:
+                                  _isAssistantConversation &&
+                                      index == _messages.length - 1 &&
+                                      isAssistantMessage &&
+                                      (_assistantResponding ||
+                                          _currentFlowEvents.isNotEmpty)
+                                  ? _currentFlowEvents
+                                  : const <ExplainableFlowEvent>[],
+                              streamingThinkingText:
+                                  _isAssistantConversation &&
+                                      index == _messages.length - 1 &&
+                                      isAssistantMessage
+                                  ? _streamingThinkingText
+                                  : '',
+                              answerGateOpen:
+                                  !_isAssistantConversation ||
+                                  !_assistantResponding ||
+                                  index != _messages.length - 1 ||
+                                  !isAssistantMessage ||
+                                  _answerGateOpen,
+                              isAssistantRunning:
+                                  _assistantResponding &&
+                                  index == _messages.length - 1 &&
+                                  isAssistantMessage,
+                              runningStatusLabel:
+                                  _isAssistantConversation &&
+                                      _assistantResponding &&
+                                      index == _messages.length - 1 &&
+                                      isAssistantMessage
+                                  ? (_assistantPhaseLabel.isNotEmpty
+                                        ? _assistantPhaseLabel
+                                        : UITextConstants
+                                              .assistantRunningHint)
+                                  : null,
+                              showFeedbackActions:
+                                  isAssistantMessage &&
+                                  !_assistantResponding &&
+                                  !_isSelectionMode &&
+                                  (msg['type'] as String? ?? 'text') ==
+                                      'text' &&
+                                  ((msg['id'] as String?) ?? '') ==
+                                      latestAssistantTextMessageId,
+                              feedbackStatus:
+                                  _assistantFeedbackStatusByMessageId[msg['id']
+                                          as String? ??
+                                      ''] ??
+                                  '',
+                              onFeedbackHelpful: isAssistantMessage
+                                  ? () => _submitAssistantFeedback(
+                                      message: msg,
+                                      explicitThumb: 'up',
+                                      reasonCodes: const <String>[],
+                                    )
+                                  : null,
+                              onFeedbackUnhelpful: isAssistantMessage
+                                  ? () =>
+                                        _showAssistantNegativeFeedbackSheet(
+                                          msg,
+                                        )
+                                  : null,
+                              onFeedbackCorrect: isAssistantMessage
+                                  ? () =>
+                                        _showAssistantCorrectionSheet(msg)
+                                  : null,
+                              onCopyAnswer: isAssistantMessage
+                                  ? () async {
+                                      final content =
+                                          (msg['content'] as String?) ??
+                                          '';
+                                      if (content.isEmpty) return;
+                                      await Clipboard.setData(
+                                        ClipboardData(text: content),
+                                      );
+                                      if (!mounted) return;
+                                      ScaffoldMessenger.of(
+                                        this.context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            UITextConstants
+                                                .copiedToClipboard,
+                                          ),
+                                        ),
+                                      );
+                                      await _recordAssistantImplicitFeedback(
+                                        message: msg,
+                                        copiedAnswer: true,
+                                      );
+                                    }
+                                  : null,
+                              onShareAnswer: isAssistantMessage
+                                  ? () async {
+                                      final content =
+                                          (msg['content'] as String?) ??
+                                          '';
+                                      if (content.isNotEmpty) {
+                                        await SharePlus.instance.share(
+                                          ShareParams(text: content),
+                                        );
+                                      }
+                                      await _recordAssistantImplicitFeedback(
+                                        message: msg,
+                                        sharedAnswer: true,
+                                      );
+                                    }
+                                  : null,
+                              onFavoriteAnswer: isAssistantMessage
+                                  ? () async {
+                                      await _recordAssistantImplicitFeedback(
+                                        message: msg,
+                                        favoritedAnswer: true,
+                                      );
+                                      if (!mounted) return;
+                                      ScaffoldMessenger.of(
+                                        this.context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            UITextConstants
+                                                .assistantBookmarked,
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  : null,
+                              onRegenerateAnswer: isAssistantMessage
+                                  ? () => _requestAssistantRewrite(
+                                      message: msg,
+                                      mode: 'regenerate',
+                                    )
+                                  : null,
+                              onRegenerateOptionSelected:
+                                  isAssistantMessage
+                                  ? (option) =>
+                                        _requestAssistantRewriteV2(
+                                          message: msg,
+                                          option: option,
+                                        )
+                                  : null,
+                              onBriefAnswer: isAssistantMessage
+                                  ? () => _requestAssistantRewrite(
+                                      message: msg,
+                                      mode: 'brief',
+                                    )
+                                  : null,
+                              onDetailedAnswer: isAssistantMessage
+                                  ? () => _requestAssistantRewrite(
+                                      message: msg,
+                                      mode: 'detailed',
+                                    )
+                                  : null,
+                              onSwitchModelAnswer: isAssistantMessage
+                                  ? () =>
+                                        _switchAssistantModelAndRegenerate(
+                                          msg,
+                                        )
+                                  : null,
+                              onActionHintTap: isAssistantMessage
+                                  ? (hint) async {
+                                      _inputController.text = hint;
+                                      await _sendMessage();
+                                    }
+                                  : null,
+                              onReferenceTap: isAssistantMessage
+                                  ? (refItem) => _onAssistantReferenceTap(
+                                      msg,
+                                      refItem,
+                                    )
+                                  : null,
+                              onAvatarTap: isAssistantMessage
+                                  ? () {
+                                      final target = VisitTarget.page(
+                                        'chat',
+                                      );
+                                      final service = ref.read(
+                                        visitRecorderServiceProvider,
+                                      );
+                                      final ctx = AssistantOpenContext(
+                                        source: AssistantSource.chat,
+                                        visitTarget: target,
+                                        experienceLevel: service
+                                            .getExperience(target),
+                                      );
+                                      AssistantHalfSheet.show(
+                                        context,
+                                        ctx,
+                                      );
+                                    }
+                                  : () {
+                                      final senderId =
+                                          msg['senderId'] as String? ??
+                                          '';
+                                      if (senderId == 'current_user') {
+                                        final currentUser = ref.read(
+                                          userDataProvider,
+                                        );
+                                        final userId =
+                                            currentUser?.username ??
+                                            currentUser?.id;
+                                        if (userId != null &&
+                                            userId.isNotEmpty) {
+                                          context.push(
+                                            AppRoutePaths.userProfile(
+                                              username: userId,
+                                            ),
+                                          );
+                                        }
+                                      } else if (senderId.isNotEmpty) {
+                                        context.push(
+                                          AppRoutePaths.userProfile(
+                                            username: senderId,
+                                          ),
+                                        );
+                                      }
+                                    },
+                              showAssistantAvatar: false,
+                            ),
+                          ],
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+              if (_isAssistantConversation &&
+                  (_showAssistantHistoryPeek ||
+                      _assistantLoadingOlderHistory))
+                Positioned(
+                  top: AppSpacing.sm,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: GestureDetector(
+                      onTap: _assistantLoadingOlderHistory
+                          ? null
+                          : _loadOlderAssistantHistory,
+                      child: AnimatedOpacity(
+                        opacity: 1,
+                        duration: const Duration(milliseconds: 180),
+                        child: Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: AppSpacing.containerSm,
+                            vertical: AppSpacing.xs,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? bgColor.withValues(alpha: 0.92)
+                                : Colors.white.withValues(alpha: 0.94),
+                            borderRadius: BorderRadius.circular(
+                              AppSpacing.fullBorderRadius,
+                            ),
+                            border: Border.all(
+                              color: borderColor.withValues(alpha: 0.18),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(
+                                  alpha: 0.04,
+                                ),
+                                blurRadius: AppSpacing.sm,
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (_assistantLoadingOlderHistory)
+                                Padding(
+                                  padding: EdgeInsets.only(
+                                    right: AppSpacing.xs,
+                                  ),
+                                  child:
+                                      const CupertinoActivityIndicator(),
+                                )
+                              else
+                                Icon(
+                                  CupertinoIcons.chevron_up,
+                                  size: AppSpacing.iconSmall,
+                                  color: fgPrimary.withValues(
+                                    alpha: 0.56,
+                                  ),
+                                ),
+                              if (!_assistantLoadingOlderHistory)
+                                SizedBox(width: AppSpacing.xs / 2),
+                              Text(
+                                UITextConstants.assistantViewHistory,
+                                style: TextStyle(
+                                  fontSize: AppTypography.sm,
+                                  color: fgPrimary.withValues(
+                                    alpha: 0.72,
+                                  ),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              if (_showScrollFab)
+                Positioned(
+                  right: AppSpacing.md,
+                  bottom: AppSpacing.md,
+                  child: StreamingScrollFab(
+                    onTap: () {
+                      _scrollController.animateTo(
+                        _scrollController.position.maxScrollExtent,
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeOut,
+                      );
+                      setState(() => _userScrolledAway = false);
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal:
+                AppSpacing.semantic[DesignSemanticConstants
+                    .container]?[DesignSemanticConstants.sm] ??
+                AppSpacing.containerSm,
+          ),
+          child: Container(
+            padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: isDark ? bgColor : AppColors.chatToolbarBackground,
+              borderRadius: BorderRadius.circular(
+                AppSpacing.largeBorderRadius,
+              ),
+            ),
+            child: SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!_isAssistantConversation &&
+                      !_isGroupChat &&
+                      _relationshipCapability?.isSameInterest != true &&
+                      _otherParticipantId != null)
+                    _buildSameInterestPromptBar(),
+                  CustomizableChatInputBar(
+                    controller: _inputController,
+                    focusNode: _inputFocusNode,
+                    hintText: _isAssistantConversation
+                        ? UITextConstants.assistantAskPlaceholder
+                        : null,
+                    maxTextLength: 5000,
+                    maxVisibleLines: 4,
+                    onPickImages: _pickChatImages,
+                    onCapturePhoto: _captureChatPhoto,
+                    onPickFiles: _pickChatFiles,
+                    onRequestMicPermission: _requestMicPermissionForChat,
+                    onStartRecord: _startVoiceRecordForChat,
+                    onStopRecord: _stopVoiceRecordForChat,
+                    onVoiceAsrTransform: _voiceAsrForChat,
+                    onSend: _submitChatInput,
+                    leftBuilder: _isAssistantConversation
+                        ? _buildAssistantLeftButton
+                        : _buildQuliaoLeftButton,
+                    rightBuilder: _isAssistantConversation
+                        ? _buildAssistantRightButtons
+                        : _buildQuliaoRightButtons,
+                    extraPanelItems: _isAssistantConversation
+                        ? const <ChatInputExtraPanelItem>[]
+                        : _buildCallPanelItems(),
+                  ),
+                  if (_showEmojiPanel && !_isAssistantConversation)
+                    UnifiedEmojiPicker(
+                      showCloseButton: true,
+                      onClose: () =>
+                          setState(() => _showEmojiPanel = false),
+                      onEmojiSelected: (char) =>
+                          setState(() => _inputController.text += char),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+
+    if (widget.embedded) {
+      return Stack(
+        children: [
+          Container(
+            color: bgColor,
+            child: bodyContent,
+          ),
+          if (_actionMenuMessage != null && _actionMenuPosition != null)
+            _MessageActionMenuOverlay(
+              message: _actionMenuMessage!,
+              position: _actionMenuPosition!,
+              onAction: _onMessageAction,
+              onClose: () => setState(() {
+                _actionMenuMessage = null;
+                _actionMenuPosition = null;
+              }),
+            ),
+        ],
+      );
+    }
+
     return Stack(
       children: [
         Scaffold(
@@ -3915,500 +4472,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
               ],
             ],
           ),
-          body: Column(
-            children: [
-              Expanded(
-                child: Stack(
-                  children: [
-                    Container(
-                      color: chatListBg,
-                      child: Builder(
-                        builder: (context) {
-                          final displayMessages = _isAssistantConversation
-                              ? _messages
-                              : ref
-                                    .watch(
-                                      chatMessageProvider(
-                                        widget.conversationId,
-                                      ),
-                                    )
-                                    .messages
-                                    .map(
-                                      (dto) => dto.toDisplayMap(
-                                        currentUserId: 'current_user',
-                                      ),
-                                    )
-                                    .toList();
-                          return ListView.builder(
-                            controller: _scrollController,
-                            padding: EdgeInsets.symmetric(
-                              horizontal:
-                                  AppSpacing.semantic[DesignSemanticConstants
-                                      .container]?[DesignSemanticConstants
-                                      .sm] ??
-                                  AppSpacing.containerSm,
-                              vertical: AppSpacing.md,
-                            ),
-                            itemCount: displayMessages.length,
-                            itemBuilder: (context, index) {
-                              final msg = displayMessages[index];
-                              final prevTime = index > 0
-                                  ? displayMessages[index - 1]['timestamp']
-                                        as String?
-                                  : null;
-                              final showTime =
-                                  index == 0 || msg['timestamp'] != prevTime;
-                              final timeStr = formatChatTime(
-                                msg['timestamp'] as String?,
-                              );
-                              final isAssistantMessage =
-                                  _isAssistantConversation &&
-                                  (msg['senderId'] ==
-                                      AppConceptConstants.assistantSenderId);
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (showTime && timeStr.isNotEmpty)
-                                    Padding(
-                                      padding: EdgeInsets.only(
-                                        bottom:
-                                            AppSpacing
-                                                .semantic[DesignSemanticConstants
-                                                .intraGroup]?[DesignSemanticConstants
-                                                .sm] ??
-                                            AppSpacing.intraGroupSm,
-                                      ),
-                                      child: Center(
-                                        child: Text(
-                                          timeStr,
-                                          style: TextStyle(
-                                            fontSize:
-                                                Theme.of(context)
-                                                    .textTheme
-                                                    .bodySmall
-                                                    ?.fontSize ??
-                                                AppSpacing.containerSm,
-                                            color: fgPrimary.withValues(
-                                              alpha: 0.5,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ChatMessageBubble(
-                                    message: msg,
-                                    isRight: msg['isSelf'] == true,
-                                    bubbleColor: msg['isSelf'] == true
-                                        ? bubbleSelf
-                                        : bubbleOther,
-                                    textColor: msg['isSelf'] == true
-                                        ? Colors.white
-                                        : fgPrimary,
-                                    isSelectionMode: _isSelectionMode,
-                                    isSelected: _selectedIds.contains(
-                                      msg['id'],
-                                    ),
-                                    onLongPressStart: (details) =>
-                                        _onLongPressMessage(
-                                          msg,
-                                          details.globalPosition,
-                                        ),
-                                    onTap: _isSelectionMode
-                                        ? () =>
-                                              _toggleSelect(msg['id'] as String)
-                                        : null,
-                                    hideAvatarAndName: _isAssistantConversation,
-                                    useFullWidth: _isAssistantConversation,
-                                    renderSelfTextWithoutBubble:
-                                        _isAssistantConversation,
-                                    processState:
-                                        _isAssistantConversation &&
-                                            index == _messages.length - 1 &&
-                                            isAssistantMessage &&
-                                            (_assistantResponding ||
-                                                _streamingThinkingText
-                                                    .isNotEmpty)
-                                        ? _currentProcessState
-                                        : null,
-                                    flowEvents:
-                                        _isAssistantConversation &&
-                                            index == _messages.length - 1 &&
-                                            isAssistantMessage &&
-                                            (_assistantResponding ||
-                                                _currentFlowEvents.isNotEmpty)
-                                        ? _currentFlowEvents
-                                        : const <ExplainableFlowEvent>[],
-                                    streamingThinkingText:
-                                        _isAssistantConversation &&
-                                            index == _messages.length - 1 &&
-                                            isAssistantMessage
-                                        ? _streamingThinkingText
-                                        : '',
-                                    answerGateOpen:
-                                        !_isAssistantConversation ||
-                                        !_assistantResponding ||
-                                        index != _messages.length - 1 ||
-                                        !isAssistantMessage ||
-                                        _answerGateOpen,
-                                    isAssistantRunning:
-                                        _assistantResponding &&
-                                        index == _messages.length - 1 &&
-                                        isAssistantMessage,
-                                    runningStatusLabel:
-                                        _isAssistantConversation &&
-                                            _assistantResponding &&
-                                            index == _messages.length - 1 &&
-                                            isAssistantMessage
-                                        ? (_assistantPhaseLabel.isNotEmpty
-                                              ? _assistantPhaseLabel
-                                              : UITextConstants
-                                                    .assistantRunningHint)
-                                        : null,
-                                    showFeedbackActions:
-                                        isAssistantMessage &&
-                                        !_assistantResponding &&
-                                        !_isSelectionMode &&
-                                        (msg['type'] as String? ?? 'text') ==
-                                            'text' &&
-                                        ((msg['id'] as String?) ?? '') ==
-                                            latestAssistantTextMessageId,
-                                    feedbackStatus:
-                                        _assistantFeedbackStatusByMessageId[msg['id']
-                                                as String? ??
-                                            ''] ??
-                                        '',
-                                    onFeedbackHelpful: isAssistantMessage
-                                        ? () => _submitAssistantFeedback(
-                                            message: msg,
-                                            explicitThumb: 'up',
-                                            reasonCodes: const <String>[],
-                                          )
-                                        : null,
-                                    onFeedbackUnhelpful: isAssistantMessage
-                                        ? () =>
-                                              _showAssistantNegativeFeedbackSheet(
-                                                msg,
-                                              )
-                                        : null,
-                                    onFeedbackCorrect: isAssistantMessage
-                                        ? () =>
-                                              _showAssistantCorrectionSheet(msg)
-                                        : null,
-                                    onCopyAnswer: isAssistantMessage
-                                        ? () async {
-                                            final content =
-                                                (msg['content'] as String?) ??
-                                                '';
-                                            if (content.isEmpty) return;
-                                            await Clipboard.setData(
-                                              ClipboardData(text: content),
-                                            );
-                                            if (!mounted) return;
-                                            ScaffoldMessenger.of(
-                                              this.context,
-                                            ).showSnackBar(
-                                              SnackBar(
-                                                content: Text(
-                                                  UITextConstants
-                                                      .copiedToClipboard,
-                                                ),
-                                              ),
-                                            );
-                                            await _recordAssistantImplicitFeedback(
-                                              message: msg,
-                                              copiedAnswer: true,
-                                            );
-                                          }
-                                        : null,
-                                    onShareAnswer: isAssistantMessage
-                                        ? () async {
-                                            final content =
-                                                (msg['content'] as String?) ??
-                                                '';
-                                            if (content.isNotEmpty) {
-                                              await SharePlus.instance.share(
-                                                ShareParams(text: content),
-                                              );
-                                            }
-                                            await _recordAssistantImplicitFeedback(
-                                              message: msg,
-                                              sharedAnswer: true,
-                                            );
-                                          }
-                                        : null,
-                                    onFavoriteAnswer: isAssistantMessage
-                                        ? () async {
-                                            await _recordAssistantImplicitFeedback(
-                                              message: msg,
-                                              favoritedAnswer: true,
-                                            );
-                                            if (!mounted) return;
-                                            ScaffoldMessenger.of(
-                                              this.context,
-                                            ).showSnackBar(
-                                              SnackBar(
-                                                content: Text(
-                                                  UITextConstants
-                                                      .assistantBookmarked,
-                                                ),
-                                              ),
-                                            );
-                                          }
-                                        : null,
-                                    onRegenerateAnswer: isAssistantMessage
-                                        ? () => _requestAssistantRewrite(
-                                            message: msg,
-                                            mode: 'regenerate',
-                                          )
-                                        : null,
-                                    onRegenerateOptionSelected:
-                                        isAssistantMessage
-                                        ? (option) =>
-                                              _requestAssistantRewriteV2(
-                                                message: msg,
-                                                option: option,
-                                              )
-                                        : null,
-                                    onBriefAnswer: isAssistantMessage
-                                        ? () => _requestAssistantRewrite(
-                                            message: msg,
-                                            mode: 'brief',
-                                          )
-                                        : null,
-                                    onDetailedAnswer: isAssistantMessage
-                                        ? () => _requestAssistantRewrite(
-                                            message: msg,
-                                            mode: 'detailed',
-                                          )
-                                        : null,
-                                    onSwitchModelAnswer: isAssistantMessage
-                                        ? () =>
-                                              _switchAssistantModelAndRegenerate(
-                                                msg,
-                                              )
-                                        : null,
-                                    onActionHintTap: isAssistantMessage
-                                        ? (hint) async {
-                                            _inputController.text = hint;
-                                            await _sendMessage();
-                                          }
-                                        : null,
-                                    onReferenceTap: isAssistantMessage
-                                        ? (refItem) => _onAssistantReferenceTap(
-                                            msg,
-                                            refItem,
-                                          )
-                                        : null,
-                                    onAvatarTap: isAssistantMessage
-                                        ? () {
-                                            final target = VisitTarget.page(
-                                              'chat',
-                                            );
-                                            final service = ref.read(
-                                              visitRecorderServiceProvider,
-                                            );
-                                            final ctx = AssistantOpenContext(
-                                              source: AssistantSource.chat,
-                                              visitTarget: target,
-                                              experienceLevel: service
-                                                  .getExperience(target),
-                                            );
-                                            AssistantHalfSheet.show(
-                                              context,
-                                              ctx,
-                                            );
-                                          }
-                                        : () {
-                                            final senderId =
-                                                msg['senderId'] as String? ??
-                                                '';
-                                            if (senderId == 'current_user') {
-                                              final currentUser = ref.read(
-                                                userDataProvider,
-                                              );
-                                              final userId =
-                                                  currentUser?.username ??
-                                                  currentUser?.id;
-                                              if (userId != null &&
-                                                  userId.isNotEmpty) {
-                                                context.push(
-                                                  AppRoutePaths.userProfile(
-                                                    username: userId,
-                                                  ),
-                                                );
-                                              }
-                                            } else if (senderId.isNotEmpty) {
-                                              context.push(
-                                                AppRoutePaths.userProfile(
-                                                  username: senderId,
-                                                ),
-                                              );
-                                            }
-                                          },
-                                    showAssistantAvatar: false,
-                                  ),
-                                ],
-                              );
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                    if (_isAssistantConversation &&
-                        (_showAssistantHistoryPeek ||
-                            _assistantLoadingOlderHistory))
-                      Positioned(
-                        top: AppSpacing.sm,
-                        left: 0,
-                        right: 0,
-                        child: Center(
-                          child: GestureDetector(
-                            onTap: _assistantLoadingOlderHistory
-                                ? null
-                                : _loadOlderAssistantHistory,
-                            child: AnimatedOpacity(
-                              opacity: 1,
-                              duration: const Duration(milliseconds: 180),
-                              child: Container(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: AppSpacing.containerSm,
-                                  vertical: AppSpacing.xs,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: isDark
-                                      ? bgColor.withValues(alpha: 0.92)
-                                      : Colors.white.withValues(alpha: 0.94),
-                                  borderRadius: BorderRadius.circular(
-                                    AppSpacing.fullBorderRadius,
-                                  ),
-                                  border: Border.all(
-                                    color: borderColor.withValues(alpha: 0.18),
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.04,
-                                      ),
-                                      blurRadius: AppSpacing.sm,
-                                    ),
-                                  ],
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (_assistantLoadingOlderHistory)
-                                      Padding(
-                                        padding: EdgeInsets.only(
-                                          right: AppSpacing.xs,
-                                        ),
-                                        child:
-                                            const CupertinoActivityIndicator(),
-                                      )
-                                    else
-                                      Icon(
-                                        CupertinoIcons.chevron_up,
-                                        size: AppSpacing.iconSmall,
-                                        color: fgPrimary.withValues(
-                                          alpha: 0.56,
-                                        ),
-                                      ),
-                                    if (!_assistantLoadingOlderHistory)
-                                      SizedBox(width: AppSpacing.xs / 2),
-                                    Text(
-                                      UITextConstants.assistantViewHistory,
-                                      style: TextStyle(
-                                        fontSize: AppTypography.sm,
-                                        color: fgPrimary.withValues(
-                                          alpha: 0.72,
-                                        ),
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    if (_showScrollFab && _assistantResponding)
-                      Positioned(
-                        bottom: 16,
-                        left: 0,
-                        right: 0,
-                        child: Center(
-                          child: StreamingScrollFab(onTap: _scrollToBottom),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal:
-                      AppSpacing.semantic[DesignSemanticConstants
-                          .container]?[DesignSemanticConstants.sm] ??
-                      AppSpacing.containerSm,
-                ),
-                child: Container(
-                  padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
-                  decoration: BoxDecoration(
-                    color: isDark ? bgColor : AppColors.chatToolbarBackground,
-                    borderRadius: BorderRadius.circular(
-                      AppSpacing.largeBorderRadius,
-                    ),
-                  ),
-                  child: SafeArea(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (!_isAssistantConversation &&
-                            !_isGroupChat &&
-                            _relationshipCapability?.isSameInterest != true &&
-                            _otherParticipantId != null)
-                          _buildSameInterestPromptBar(),
-                        CustomizableChatInputBar(
-                          controller: _inputController,
-                          focusNode: _inputFocusNode,
-                          hintText: _isAssistantConversation
-                              ? UITextConstants.assistantAskPlaceholder
-                              : null,
-                          maxTextLength: 5000,
-                          maxVisibleLines: 4,
-                          onPickImages: _pickChatImages,
-                          onCapturePhoto: _captureChatPhoto,
-                          onPickFiles: _pickChatFiles,
-                          onRequestMicPermission: _requestMicPermissionForChat,
-                          onStartRecord: _startVoiceRecordForChat,
-                          onStopRecord: _stopVoiceRecordForChat,
-                          onVoiceAsrTransform: _voiceAsrForChat,
-                          onSend: _submitChatInput,
-                          leftBuilder: _isAssistantConversation
-                              ? _buildAssistantLeftButton
-                              : _buildQuliaoLeftButton,
-                          rightBuilder: _isAssistantConversation
-                              ? _buildAssistantRightButtons
-                              : _buildQuliaoRightButtons,
-                          extraPanelItems: _isAssistantConversation
-                              ? const <ChatInputExtraPanelItem>[]
-                              : _buildCallPanelItems(),
-                        ),
-                        if (_showEmojiPanel && !_isAssistantConversation)
-                          UnifiedEmojiPicker(
-                            showCloseButton: true,
-                            onClose: () =>
-                                setState(() => _showEmojiPanel = false),
-                            onEmojiSelected: (char) =>
-                                setState(() => _inputController.text += char),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+          body: bodyContent,
         ),
         if (_actionMenuMessage != null && _actionMenuPosition != null)
           _MessageActionMenuOverlay(

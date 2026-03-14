@@ -419,16 +419,13 @@ final results = await Future.wait(
 
 | 文件 | 说明 |
 |---|---|
-| `lib/personal_assistant/engine/react_runtime.dart` | ReAct 循环主体 |
-| `lib/personal_assistant/engine/agent_loop.dart` | 编排层、记忆召回、学习存储 |
-| `lib/personal_assistant/engine/tool_execution_guard.dart` | 安全守卫 |
-| `lib/personal_assistant/engine/tool_loop_detector.dart` | 循环检测 |
-| `lib/personal_assistant/engine/tool_result_truncator.dart` | 结果截断 |
-| `lib/personal_assistant/engine/tool_result_assessor.dart` | 收敛判定 |
-| `lib/personal_assistant/engine/domain_router.dart` | Skill catalog 加载（只读，不分类）|
-| `lib/personal_assistant/tools/websearch_tool.dart` | web_search（含 HTML 解析 + 并发）|
-| `lib/personal_assistant/tools/scheduler_tool.dart` | 日历工具 |
-| `lib/personal_assistant/tools/deep_link_tool.dart` | 链接跳转工具 |
-| `lib/personal_assistant/tools/app_action_tool.dart` | 设备操作工具 |
+| `lib/assistant/application/assistant_edge_service.dart` | 当前 edge assistant 公开创建入口 |
+| `lib/assistant/runtime/assistant_runtime.dart` | 当前公开 runtime 封装 |
+| `lib/assistant/application/capability_gateway.dart` | 当前用户态事件编排入口 |
+| `lib/assistant/orchestration/process_journal_bus.dart` | 当前过程编排总线 |
+| `lib/assistant/spi/assistant_adapter_runtime.dart` | 当前渠道 Adapter SPI |
+| `lib/assistant/tools/tool_schema.dart` | 当前工具合同入口 |
 | `assets/personal_assistant/prompts/global/planner.global_plan.md` | Planner 提示词 |
 | `assets/personal_assistant/tools/catalog/tool_permissions.json` | 工具权限配置 |
+
+补充说明：更深层 ReAct / tool loop 细节当前仍通过 `lib/personal_assistant/` 兼容实现承接，但不再作为新增依赖入口。

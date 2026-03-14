@@ -5,7 +5,7 @@ import 'package:test/test.dart';
 void main() {
   test('runtime and llm provider contain no hardcoded prompt bodies', () {
     final runtimeFile = File(
-      'lib/personal_assistant/app/assistant_runtime.dart',
+      'lib/assistant/runtime/assistant_runtime.dart',
     );
     final providerFile = File(
       'lib/personal_assistant/engine/llm_provider.dart',

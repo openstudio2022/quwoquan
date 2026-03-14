@@ -58,9 +58,9 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
     "userIdentity": {"value": "", "source": "user_query|memory|unknown"}
   },
   "toolPlan": [
-    {"tool": "web_search", "arguments": {"query": "深圳 积分入户 2025 条件 材料", "freshnessHoursMax": 168}}
+    {"toolName": "web_search", "arguments": {"query": "深圳 积分入户 2025 条件 材料", "freshnessHoursMax": 168}}
   ],
-  "askUser": {"needed": false, "question": ""},
+  "askUser": {"slotId": "", "prompt": "", "required": false, "suggestions": []},
   "userMarkdown": "正在查询最新政策信息…"
 }
 ```

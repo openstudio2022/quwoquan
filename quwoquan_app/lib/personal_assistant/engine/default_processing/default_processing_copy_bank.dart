@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 
 /// Centralized copy bank for baseline default-processing output.
 ///

@@ -33,7 +33,9 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
     required this.showWorksToolbar,
     required this.onUserTap,
     required this.onAssistantTap,
-    this.onSwitchToMoment,
+    this.onSwitchToFollowing,
+    this.onSwitchToCircles,
+    this.onSwitchToMoment, // Deprecated/Fallback
     this.onRevealSystemNav,
     this.onHideSystemNav,
   });
@@ -47,6 +49,8 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
   })
   onUserTap;
   final VoidCallback onAssistantTap;
+  final VoidCallback? onSwitchToFollowing;
+  final VoidCallback? onSwitchToCircles;
   final VoidCallback? onSwitchToMoment;
   final VoidCallback? onRevealSystemNav;
   final VoidCallback? onHideSystemNav;
@@ -492,10 +496,10 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                 children: [
                   _WorksPrimaryTopBar(
                     isFilterExpanded: _isFilterExpanded,
-                    onTapClose: widget.onSwitchToMoment,
                     onTapMore: () => _showWorksMoreSheet(context),
-                    onTapMoment: widget.onSwitchToMoment,
                     onTapWorksArrow: _toggleFilterPanel,
+                    onTapFollowing: widget.onSwitchToFollowing,
+                    onTapCircles: widget.onSwitchToCircles,
                   ),
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 420),
@@ -701,14 +705,16 @@ class _WorksPrimaryTopBar extends StatelessWidget {
     required this.onTapWorksArrow,
     this.onTapClose,
     this.onTapMore,
-    this.onTapMoment,
+    this.onTapFollowing,
+    this.onTapCircles,
   });
 
   final bool isFilterExpanded;
   final VoidCallback onTapWorksArrow;
   final VoidCallback? onTapClose;
   final VoidCallback? onTapMore;
-  final VoidCallback? onTapMoment;
+  final VoidCallback? onTapFollowing;
+  final VoidCallback? onTapCircles;
 
   @override
   Widget build(BuildContext context) {
@@ -737,40 +743,20 @@ class _WorksPrimaryTopBar extends StatelessWidget {
       height: AppSpacing.tabNavigationHeight,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
-        child: Row(
+        child: Stack(
           children: [
-            SizedBox(
-              width: AppSpacing.iconButtonMinSizeSm,
-              child: IconButton(
-                onPressed: onTapClose,
-                icon: Icon(
-                  Icons.close_rounded,
-                  color: AppColors.worksBodyText,
-                  size: AppSpacing.iconMedium,
-                ),
-                style: IconButton.styleFrom(
-                  minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
-                ),
-              ),
-            ),
-            Expanded(
+            Positioned.fill(
               child: Center(
-                // No fixed width — Row sizes to its content so the tab pair
-                // centres naturally within the Expanded area on any screen width.
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Balance slot mirrors the arrow slot width so the tab
-                    // pair is optically centred: arrowXs(4) + iconSmall+2(18) = 22 px.
-                    const SizedBox(
-                      width: AppSpacing.intraGroupXs + AppSpacing.iconSmall + 2,
-                    ),
+                    // Following (Left)
                     GestureDetector(
-                      onTap: onTapMoment,
+                      onTap: onTapFollowing,
                       behavior: HitTestBehavior.opaque,
                       child: Text(
-                        UITextConstants.discoveryRailMoment,
+                        UITextConstants.homeTabFollowing,
                         style: TextStyle(
                           color: AppColors.worksBodyText.withValues(
                             alpha: 0.74,
@@ -780,8 +766,11 @@ class _WorksPrimaryTopBar extends StatelessWidget {
                         ),
                       ),
                     ),
-                    // Responsive breathing gap between the two primary tabs.
+                    
+                    // Gap
                     SizedBox(width: tabGap),
+                    
+                    // Featured (Center, with optional arrow if needed, but text is key)
                     GestureDetector(
                       onTap: onTapWorksArrow,
                       behavior: HitTestBehavior.opaque,
@@ -789,14 +778,14 @@ class _WorksPrimaryTopBar extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            UITextConstants.discoveryRailWorks,
+                            UITextConstants.homeTabFeatured,
                             style: TextStyle(
                               color: AppColors.worksTitle,
                               fontSize: tabFontSize,
                               fontWeight: AppTypography.bold,
                             ),
                           ),
-                          // Arrow slot: intraGroupXs(4) + iconSmall+2(18) = 22 px.
+                          // Keep arrow for filter toggling
                           const SizedBox(width: AppSpacing.intraGroupXs),
                           SizedBox(
                             width: AppSpacing.iconSmall + 2,
@@ -813,21 +802,49 @@ class _WorksPrimaryTopBar extends StatelessWidget {
                         ],
                       ),
                     ),
+                    
+                    // Gap
+                    SizedBox(width: tabGap),
+                    
+                    // Circles (Right)
+                    GestureDetector(
+                      onTap: onTapCircles,
+                      behavior: HitTestBehavior.opaque,
+                      child: Text(
+                        UITextConstants.homeTabCircles,
+                        style: TextStyle(
+                          color: AppColors.worksBodyText.withValues(
+                            alpha: 0.74,
+                          ),
+                          fontSize: tabFontSize,
+                          fontWeight: AppTypography.bold,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
-            SizedBox(
-              width: AppSpacing.iconButtonMinSizeSm,
-              child: IconButton(
-                onPressed: onTapMore,
-                icon: Icon(
-                  Icons.more_horiz_rounded,
-                  color: AppColors.worksBodyText,
-                  size: AppSpacing.iconMedium,
-                ),
-                style: IconButton.styleFrom(
-                  minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+            
+            // More Button (Right)
+            Positioned(
+              right: 0,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: SizedBox(
+                  width: AppSpacing.iconButtonMinSizeSm,
+                  child: IconButton(
+                    onPressed: onTapMore,
+                    icon: Icon(
+                      Icons.more_horiz_rounded,
+                      color: AppColors.worksBodyText,
+                      size: AppSpacing.iconMedium,
+                    ),
+                    style: IconButton.styleFrom(
+                      minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+                    ),
+                  ),
                 ),
               ),
             ),

@@ -10,6 +10,8 @@
 > - `PERSONAL_ASSISTANT_DESIGN_AND_CONSTRAINTS.md`
 >
 > 本文档保留为历史详细参考，不再作为第一入口。
+>
+> **迁移说明**：当前端侧助理的公开入口已收口到 `lib/assistant/{application,domain,orchestration,capabilities,infrastructure,generated}`。`lib/personal_assistant/` 仍承载内部实现与兼容 wrapper，但不再作为新增 UI / provider / gateway 的首选依赖。
 
 ---
 
@@ -199,20 +201,23 @@ L5  stack.global_policy.md      ← 全局政策追加
 
 | 职责 | 文件路径 |
 |---|---|
-| AgentLoop 总调度 | `lib/personal_assistant/engine/agent_loop.dart` |
-| ReAct 执行循环 | `lib/personal_assistant/engine/react_runtime.dart` |
-| LLM 调用与 Prompt 组装 | `lib/personal_assistant/engine/llm_provider.dart` |
-| 工具安全守卫 | `lib/personal_assistant/engine/tool_execution_guard.dart` |
-| 工具循环检测 | `lib/personal_assistant/engine/tool_loop_detector.dart` |
-| 工具结果截断 | `lib/personal_assistant/engine/tool_result_truncator.dart` |
-| 收敛判定 | `lib/personal_assistant/engine/tool_result_assessor.dart` |
-| LLM-first 域路由（只做 catalog 加载） | `lib/personal_assistant/engine/domain_router.dart` |
-| 记忆存取 | `lib/personal_assistant/memory/memory_repository.dart` |
-| 工具注册入口 | `lib/personal_assistant/app/assistant_runtime.dart` |
+| 端侧公开 Provider 入口 | `lib/assistant/application/assistant_providers.dart` |
+| 端侧公开 Gateway 入口 | `lib/assistant/application/assistant_gateway.dart` |
+| 端侧公开能力编排入口 | `lib/assistant/application/capability_gateway.dart` |
+| 端侧 edge assistant 新入口 | `lib/assistant/application/assistant_edge_service.dart` |
+| 端侧公开 runtime | `lib/assistant/runtime/assistant_runtime.dart` |
+| 端侧对外 API 网关 | `lib/assistant/api/assistant_api_gateway.dart` |
+| 当前 typed contract 入口 | `lib/assistant/contracts/assistant_turn_contract.dart` |
+| 当前 process protocol 入口 | `lib/assistant/contracts/process_protocol.dart` |
+| 当前编排事件总线 | `lib/assistant/orchestration/process_journal_bus.dart` |
+| 当前渠道 Adapter SPI | `lib/assistant/spi/assistant_adapter_runtime.dart` |
+| 当前 Provider/告警治理 | `lib/assistant/observability/assistant_observability_runtime.dart` |
 | 技能分类配置 | `assets/personal_assistant/prompts/domain_routing/domain_routing_catalog.json` |
 | Planner 提示词 | `assets/personal_assistant/prompts/global/planner.global_plan.md` |
 | 工具元数据 | `assets/personal_assistant/tools/catalog/tool_catalog.meta.json` |
 | 工具权限 | `assets/personal_assistant/tools/catalog/tool_permissions.json` |
+
+更深层 legacy implementation 仍位于 `lib/personal_assistant/`，但仅作为兼容实现参考，不再作为新增依赖入口。
 
 ---
 

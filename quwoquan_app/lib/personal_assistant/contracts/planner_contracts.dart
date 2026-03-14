@@ -4,10 +4,10 @@
 // metadata/codegen rather than expanding this file.
 
 export 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';
-export 'package:quwoquan_app/personal_assistant/runtime/generated/contracts/planner_contracts.g.dart';
+export 'package:quwoquan_app/assistant/generated/contracts/planner_contracts.g.dart';
 
 import 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';
-import 'package:quwoquan_app/personal_assistant/runtime/generated/contracts/planner_contracts.g.dart';
+import 'package:quwoquan_app/assistant/generated/contracts/planner_contracts.g.dart';
 
 class SlotFillPlan extends SlotFillPlanDto {
   const SlotFillPlan({super.entries = const <String, SlotFillEntry>{}});

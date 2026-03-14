@@ -1,8 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/personal_assistant/app/assistant_engine_provider.dart';
 
 class AssistantChatSettingsPage extends ConsumerStatefulWidget {
   const AssistantChatSettingsPage({

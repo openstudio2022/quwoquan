@@ -3,7 +3,7 @@ import 'package:quwoquan_app/personal_assistant/intent_bridge/android_intent_ada
 import 'package:quwoquan_app/personal_assistant/intent_bridge/ios_intent_adapter.dart';
 import 'package:quwoquan_app/personal_assistant/intent_bridge/method_channel_adapter.dart';
 import 'package:quwoquan_app/personal_assistant/knowledge/knowledge_qa_engine.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/personal_assistant/skills/skill_manifest.dart';
 import 'package:quwoquan_app/personal_assistant/tools/tool_registry.dart';
 import 'package:quwoquan_app/personal_assistant/tools/tool_schema.dart';

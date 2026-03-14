@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/assistant_turn_contract.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
 
 void main() {
   group('assistant turn contract roundtrip', () {

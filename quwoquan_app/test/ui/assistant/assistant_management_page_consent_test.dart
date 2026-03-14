@@ -58,7 +58,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('允许小趣使用我的创作内容'), findsOneWidget);
+      expect(find.text('允许私助使用我的创作内容'), findsOneWidget);
       expect(find.text('未允许'), findsOneWidget);
 
       await tester.tap(find.byType(Switch).at(1));

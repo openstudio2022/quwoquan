@@ -1,6 +1,6 @@
 dart_class: RecallResult
-library_path: personal_assistant/contracts/recall_result.dart
-output_path: personal_assistant/runtime/generated/contracts/recall_result.g.dart
+library_path: assistant/contracts/recall_result.dart
+output_path: assistant/generated/contracts/recall_result.g.dart
 candidate_class: RecallCandidate
 defaults:
   recallMethod: rule

@@ -1,7 +1,7 @@
-export 'package:quwoquan_app/personal_assistant/runtime/generated/contracts/intent_graph.g.dart';
+export 'package:quwoquan_app/assistant/generated/contracts/intent_graph.g.dart';
 
 import 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';
-import 'package:quwoquan_app/personal_assistant/runtime/generated/contracts/intent_graph.g.dart';
+import 'package:quwoquan_app/assistant/generated/contracts/intent_graph.g.dart';
 
 extension IntentGraphCompat on IntentGraph {
   bool get isMultiSkill =>

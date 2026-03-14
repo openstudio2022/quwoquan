@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/personal_assistant/engine/default_processing/answer_composer.dart';
 import 'package:quwoquan_app/personal_assistant/engine/default_processing/evidence_evaluator.dart';
 import 'package:quwoquan_app/personal_assistant/engine/default_processing/narrative_engine.dart';

@@ -183,9 +183,9 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
     "subtype": {"value": "", "source": "classified"}
   },
   "toolPlan": [
-    {"tool": "web_search", "arguments": {"query": "site:huaweicloud.com ECS 定价", "freshnessHoursMax": 720}}
+    {"toolName": "web_search", "arguments": {"query": "site:huaweicloud.com ECS 定价", "freshnessHoursMax": 720}}
   ],
-  "askUser": {"needed": false, "question": ""},
+  "askUser": {"slotId": "", "prompt": "", "required": false, "suggestions": []},
   "userMarkdown": "正在查询华为云官方文档…"
 }
 ```

@@ -187,8 +187,13 @@ class AssistantToolRegistry {
     required String name,
     required AssistantToolResult result,
   }) {
-    final _ = (name, result);
-    return false;
+    final policy = _resilienceManager.policyFor(name);
+    if (policy == null || result.success) {
+      return false;
+    }
+    return result.degraded &&
+        (result.errorCode == AssistantErrorCode.networkUnavailable ||
+            result.errorCode == AssistantErrorCode.rateLimited);
   }
 
   AssistantToolResult? _validateArguments({
@@ -301,7 +306,22 @@ class AssistantToolRegistry {
 
 class _ToolResilienceManager {
   final Map<String, _ToolResiliencePolicy> _policies =
-      const <String, _ToolResiliencePolicy>{};
+      <String, _ToolResiliencePolicy>{
+        'web_search': _ToolResiliencePolicy(
+          maxAttempts: 2,
+          retryDelay: Duration.zero,
+          breakerThreshold: 2,
+          breakerWindow: const Duration(minutes: 1),
+          breakerDuration: const Duration(seconds: 30),
+        ),
+        'web_fetch': _ToolResiliencePolicy(
+          maxAttempts: 2,
+          retryDelay: Duration.zero,
+          breakerThreshold: 2,
+          breakerWindow: const Duration(minutes: 1),
+          breakerDuration: const Duration(seconds: 30),
+        ),
+      };
 
   _ToolResiliencePolicy? policyFor(String toolName) => _policies[toolName];
 }

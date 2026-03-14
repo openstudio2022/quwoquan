@@ -20,10 +20,12 @@ class AppConceptConstants {
   static const String assistantSlogan = '让兴趣闪亮';
   /// 助理拟人化名称（可配置）
   static const String assistantName = '智多星';
-  /// 助理入口标签（用于我的页、设置等，可配置展示名）
-  static const String assistantLabel = '小趣';
-  /// 助理页标题：如「小趣私人助理」
-  static String get assistantDisplayTitle => '$assistantLabel私人助理';
+  /// 助理入口标签（用于底部主导航）
+  static const String assistantTabLabel = '私助';
+  /// 助理展示名（用于对话、设置等文案）
+  static const String assistantLabel = '私助';
+  /// 助理页标题
+  static const String assistantDisplayTitle = '私助';
   /// 助理管理页标题：如「小趣管理」
   static String get assistantManagementTitle => '$assistantLabel管理';
   /// 清除记忆确认说明（含助理展示名）
@@ -74,15 +76,15 @@ class AppConceptConstants {
   static const String articles = '文章';
 
   // ==================== 五大频道 ====================
-  static const String discovery = '发现';
+  static const String discovery = '首页';
   static const String circles = '圈子';
   static const String create = '创作';
-  static const String chat = '趣聊';
+  static const String chat = '趣信';
   static const String profile = '我的';
 
   // ==================== 趣聊 Tab ====================
-  static const String messages = '趣聊';
-  static const String contacts = '同好';
+  static const String messages = '消息';
+  static const String contacts = '联系人';
 
   // ==================== 创作入口 - 微趣三类 ====================
   static const String weiquPhoto = '照片';

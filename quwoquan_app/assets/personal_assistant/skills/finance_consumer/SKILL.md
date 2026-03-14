@@ -53,7 +53,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
   "slotState": {},
   "toolPlan": [
     {
-      "tool": "web_search",
+      "toolName": "web_search",
       "arguments": {
         "query": "立讯精密 002475 当前股价",
         "timeScope": "latest",
@@ -62,7 +62,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
       }
     }
   ],
-  "askUser": {"needed": false, "question": ""},
+  "askUser": {"slotId": "", "prompt": "", "required": false, "suggestions": []},
   "userMarkdown": "正在查询最新行情数据…"
 }
 ```

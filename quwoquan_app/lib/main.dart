@@ -15,10 +15,8 @@ import 'package:quwoquan_app/core/emoji/emoji_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
-import 'package:quwoquan_app/personal_assistant/app/assistant_engine_provider.dart';
-import 'package:quwoquan_app/personal_assistant/observability/logging/app_log_models.dart';
-import 'package:quwoquan_app/personal_assistant/observability/logging/app_log_service.dart';
-import 'package:quwoquan_app/personal_assistant/observability/logging/app_trace_context_store.dart';
+import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
+import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:quwoquan_app/app/navigation/app_router.dart';
 import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';
@@ -27,20 +25,30 @@ import 'package:quwoquan_app/ui/welcome/pages/welcome_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final previousFlutterErrorHandler = FlutterError.onError;
   FlutterError.onError = (FlutterErrorDetails details) {
-    FlutterError.presentError(details);
+    if (previousFlutterErrorHandler != null) {
+      previousFlutterErrorHandler(details);
+    } else {
+      FlutterError.presentError(details);
+    }
     _logAppException(
       source: 'flutter_error',
       exceptionText: details.exceptionAsString(),
       stackText: details.stack?.toString() ?? '',
     );
   };
+  final previousPlatformDispatcherHandler =
+      PlatformDispatcher.instance.onError;
   PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
     _logAppException(
       source: 'platform_dispatcher',
       exceptionText: error.toString(),
       stackText: stack.toString(),
     );
+    if (previousPlatformDispatcherHandler != null) {
+      return previousPlatformDispatcherHandler(error, stack);
+    }
     return false;
   };
 
@@ -214,7 +222,7 @@ class QuWoQuanApp extends ConsumerStatefulWidget {
 
 class _QuWoQuanAppState extends ConsumerState<QuWoQuanApp>
     with WidgetsBindingObserver {
-  bool _assistentApiStarted = false;
+  bool _assistantApiStarted = false;
 
   @override
   void initState() {
@@ -229,8 +237,8 @@ class _QuWoQuanAppState extends ConsumerState<QuWoQuanApp>
 
   @override
   void dispose() {
-    if (_assistentApiStarted) {
-      ref.read(assistentApiGatewayProvider).stop();
+    if (_assistantApiStarted) {
+      ref.read(assistantApiGatewayProvider).stop();
     }
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -294,15 +302,15 @@ class _QuWoQuanAppState extends ConsumerState<QuWoQuanApp>
 
   Future<void> _initializeApp() async {
     try {
-      await ref.read(assistantRuntimeProvider).ensureRemoteConfigLoaded();
-      final enableAssistentApi =
+      await ref.read(assistantGatewayProvider).ensureRemoteConfigLoaded();
+      final enableAssistantApi =
           (const String.fromEnvironment(
-            'PERSONAL_ASSISTENT_ENABLE_API',
+            'PERSONAL_ASSISTANT_ENABLE_API',
           )).toLowerCase() ==
           'true';
-      if (enableAssistentApi) {
-        await ref.read(assistentApiGatewayProvider).start();
-        _assistentApiStarted = true;
+      if (enableAssistantApi) {
+        await ref.read(assistantApiGatewayProvider).start();
+        _assistantApiStarted = true;
       }
       await ref.read(appearanceSettingsControllerProvider.notifier).ensureLoaded();
       ref.read(themeProvider.notifier).updateSystemBrightness(

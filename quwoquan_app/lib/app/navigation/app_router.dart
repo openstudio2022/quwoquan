@@ -31,7 +31,6 @@ import 'package:quwoquan_app/ui/user/pages/profile_stats_page.dart';
 import 'package:quwoquan_app/ui/user/pages/resonance_page.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
-import 'package:quwoquan_app/ui/assistant/pages/assistant_home_page.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_management_page.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_center_page.dart';
 import 'package:quwoquan_app/ui/rtc/pages/outgoing_call_page.dart';
@@ -46,6 +45,8 @@ String _routeFromMainTabIndex(int index) {
       return AppRoutePaths.home;
     case 1:
       return AppRoutePaths.circles;
+    case 2:
+      return AppRoutePaths.assistant;
     case 3:
       return AppRoutePaths.chat;
     case 4:
@@ -92,6 +93,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               key: state.pageKey,
               child:
                   const SizedBox.shrink(), // MyProfilePage 在 MainAppShell 中渲染
+            ),
+          ),
+          GoRoute(
+            path: AppRoutePaths.assistant,
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: const SizedBox.shrink(), // AssistantHomePage 在 MainAppShell 中渲染
             ),
           ),
         ],
@@ -267,22 +275,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             initialIndex: index,
             dataService: dataService,
             initialExtra: extra,
-          );
-        },
-      ),
-      GoRoute(
-        path: AppRoutePaths.assistant,
-        builder: (context, state) {
-          return AssistantHomePage(
-            onBack: () {
-              if (context.canPop()) {
-                context.pop();
-              } else {
-                context.go(AppRoutePaths.chat);
-              }
-            },
-            onManageClick: () =>
-                context.push(AppRoutePaths.assistantManagement),
           );
         },
       ),

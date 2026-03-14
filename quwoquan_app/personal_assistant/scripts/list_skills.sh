@@ -10,5 +10,5 @@ if [[ -n "$TOKEN" ]]; then
   AUTH_HEADER=(-H "Authorization: Bearer ${TOKEN}")
 fi
 
-curl -s "${BASE_URL}/v1/assistent/skills?channel=${CHANNEL}" "${AUTH_HEADER[@]}"
+curl -s "${BASE_URL}/v1/assistant/skills?channel=${CHANNEL}" "${AUTH_HEADER[@]}"
 echo

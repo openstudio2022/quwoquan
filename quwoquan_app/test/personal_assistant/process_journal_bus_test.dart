@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/planner_contracts.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/personal_assistant/engine/process_journal_bus.dart';
-import 'package:quwoquan_app/personal_assistant/protocol/trace_events.dart';
+import 'package:quwoquan_app/assistant/contracts/planner_contracts.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/domain/channel/channel.dart';
+import 'package:quwoquan_app/assistant/orchestration/process_journal_bus.dart';
 
 void main() {
   group('ProcessJournalBus', () {

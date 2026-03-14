@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,10 +5,11 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/app/shell/bottom_navigation.dart';
-import 'package:quwoquan_app/ui/discovery/pages/discovery_page.dart';
+import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
+import 'package:quwoquan_app/ui/assistant/pages/assistant_tab_page.dart';
 import 'package:quwoquan_app/personal_assistant/observability/logging/app_log_models.dart';
 import 'package:quwoquan_app/personal_assistant/observability/logging/app_log_service.dart';
 import 'package:quwoquan_app/personal_assistant/observability/logging/app_perf_probe.dart';
@@ -39,9 +38,6 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
   late String _currentLocation;
   late String _currentPageVisitId;
   late DateTime _currentPageEnterAt;
-  AssistantCenterVisualState _assistantVisualState =
-      AssistantCenterVisualState.silent;
-  Timer? _assistantStateTimer;
 
   @override
   void initState() {
@@ -63,10 +59,6 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.currentLocation != widget.currentLocation) {
       _currentIndex = _getIndexFromLocation(widget.currentLocation);
-      if (_isAssistantConversationRoute(oldWidget.currentLocation) &&
-          _isMainTabRoute(widget.currentLocation)) {
-        _enterAssistantListeningState();
-      }
       _logPageReturn(
         location: _currentLocation,
         pageVisitId: _currentPageVisitId,
@@ -84,7 +76,6 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
 
   @override
   void dispose() {
-    _assistantStateTimer?.cancel();
     _logPageReturn(
       location: _currentLocation,
       pageVisitId: _currentPageVisitId,
@@ -95,11 +86,13 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
 
   int _getIndexFromLocation(String location) {
     if (location == '/') {
-      return 0; // 发现
+      return 0; // 首页
     } else if (location == '/circles') {
       return 1; // 圈子
+    } else if (location == '/assistant') {
+      return 2; // 私主
     } else if (location.startsWith('/chat')) {
-      return 3; // 趣聊
+      return 3; // 趣信
     } else if (location == '/profile') {
       return 4; // 我的
     }
@@ -136,9 +129,9 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
             IndexedStack(
               index: _currentIndex,
               children: const [
-                DiscoveryPage(), // 0: 发现
+                HomePage(), // 0: 首页
                 CirclesPage(), // 1: 圈子
-                SizedBox.shrink(), // 2: 小趣入口（独立路由）
+                AssistantTabPage(), // 2: 私主
                 ChatPage(), // 3: 趣聊
                 MyProfilePage(), // 4: 我的
               ],
@@ -160,7 +153,6 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                   child: BottomNavigationWidget(
                     currentIndex: _currentIndex,
                     onTap: _handleBottomNavTap,
-                    assistantVisualState: _assistantVisualState,
                   ),
                 ),
               ),
@@ -175,16 +167,6 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       action: 'bottom_nav_tap',
       meta: <String, dynamic>{'fromIndex': _currentIndex, 'toIndex': index},
     );
-    if (index == 2) {
-      ref.read(lastMainTabBeforeAssistantProvider.notifier).set(_currentIndex);
-      _triggerAssistantWakeState();
-      context.go(
-        AppRoutePaths.chatDetail(id: AppConceptConstants.assistantConversationId),
-      );
-      return;
-    }
-
-    _setAssistantVisualState(AssistantCenterVisualState.silent);
     setState(() {
       _currentIndex = index;
     });
@@ -196,6 +178,9 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       case 1:
         context.go(AppRoutePaths.circles);
         break;
+      case 2:
+        context.go(AppRoutePaths.assistant);
+        break;
       case 3:
         context.go(AppRoutePaths.chat);
         break;
@@ -205,50 +190,14 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     }
   }
 
-  bool _isAssistantConversationRoute(String location) {
-    return location.startsWith(
-      AppRoutePaths.chatDetail(id: AppConceptConstants.assistantConversationId),
-    );
-  }
-
-  bool _isMainTabRoute(String location) {
-    return location == AppRoutePaths.home ||
-        location == AppRoutePaths.circles ||
-        location == AppRoutePaths.chat ||
-        location == AppRoutePaths.profile;
-  }
-
-  void _triggerAssistantWakeState() {
-    _assistantStateTimer?.cancel();
-    _setAssistantVisualState(AssistantCenterVisualState.wake);
-  }
-
-  void _enterAssistantListeningState() {
-    _assistantStateTimer?.cancel();
-    _setAssistantVisualState(AssistantCenterVisualState.listening);
-    _assistantStateTimer = Timer(const Duration(seconds: 3), () {
-      if (!mounted) {
-        return;
-      }
-      _setAssistantVisualState(AssistantCenterVisualState.silent);
-    });
-  }
-
-  void _setAssistantVisualState(AssistantCenterVisualState value) {
-    if (_assistantVisualState == value) {
-      return;
-    }
-    setState(() {
-      _assistantVisualState = value;
-    });
-  }
-
   String _routeNameFromLocation(String location) {
     switch (location) {
       case '/':
-        return 'discovery';
+        return 'home';
       case '/circles':
         return 'circles';
+      case '/assistant':
+        return 'assistant';
       case '/chat':
         return 'chat';
       case '/profile':

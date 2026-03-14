@@ -1,4 +1,4 @@
-export 'package:quwoquan_app/personal_assistant/runtime/generated/contracts/run_artifacts.g.dart';
+export 'package:quwoquan_app/assistant/generated/contracts/run_artifacts.g.dart';
 export 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart'
     show
         TraceVisibility,
@@ -12,7 +12,7 @@ import 'package:quwoquan_app/personal_assistant/contracts/planner_contracts.dart
 import 'package:quwoquan_app/personal_assistant/contracts/process_protocol.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';
-import 'package:quwoquan_app/personal_assistant/runtime/generated/contracts/run_artifacts.g.dart';
+import 'package:quwoquan_app/assistant/generated/contracts/run_artifacts.g.dart';
 
 String processJournalEventTypeToWire(ProcessJournalEventType type) =>
     type.wireName;

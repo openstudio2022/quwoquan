@@ -1,5 +1,5 @@
-class AssistentCapabilityCatalog {
-  const AssistentCapabilityCatalog._();
+class AssistantCapabilityCatalog {
+  const AssistantCapabilityCatalog._();
 
   static const String currentPage = 'context.current_page';
   static const String pageComments = 'context.page_comments';

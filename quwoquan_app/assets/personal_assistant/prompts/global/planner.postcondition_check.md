@@ -1,31 +1,33 @@
 ## 任务背景
-你负责汇总前的后置门禁检查，判断当前结果是否足够进入最终答案生成。
+你正在执行补齐检查。当前轮次尚未满足成答条件，需要基于已有结果重新规划“补什么、怎么补、补完是否可答”。
 
 ## 任务目标
-1. 检查覆盖率、证据充分性、冲突闭合。  
-2. 判断是否需要 `GapFillTask`。  
-3. 输出结构化门禁结果。
+1. 识别还缺哪些证据或槽位。
+2. 决定是继续 `tool_call`、转为 `ask_user`，还是已经可以 `answer`。
+3. 输出符合新 `assistant_turn` 契约的规划 JSON。
 
 ## 约束
-- 不能凭主观判断放行，必须给出字段化原因。
-- 对高风险结论必须要求更高证据门槛。
+- 不得输出旧门禁结构 `ready/reason/failedChecks/gapFillTasks`。
+- 必须继续沿用 `assistant_turn + intentGraph`。
+- 若仍需补证据，`decision.nextAction` 必须是 `tool_call` 或 `ask_user`，不能伪装成 `answer`。
 
 ## 执行要求
-- 输出 JSON。  
-- 必须输出 `ready/reason/failedChecks/gapFillTasks`。
-
-## 任务规划
-- 读取所有垂类结果和 evidence 包。  
-- 对每个子意图做覆盖判定。  
-- 对每个证据做时效性和冲突检查。
+- 先判断现有证据是否足以直接成答，再决定是否补检索或追问用户。
+- 若继续规划，必须给出最小充分的 `toolPlan` 或 `askUser`，不要生成空动作。
+- `reasonShort` 只保留本轮最关键的判断理由，禁止输出冗长解释。
 
 ## 输出格式
-输出 JSON，必须包含：`ready`、`reason`、`failedChecks`、`gapFillTasks`。
+输出单个 `assistant_turn` JSON，并满足：
+- `messageKind=progress` 或 `ask_user`
+- 规划语义统一放在 `intentGraph`
+- 缺少关键信息时，通过 `askUser` / `missingContextSlots` 表达
+- 需要补检索时，通过 `toolPlan` 表达
 
 ## 反思与自检
-- 是否遗漏任何子意图？  
-- 是否存在“结论有、证据无”的项？  
+- 是否遗漏任何子意图？
+- 是否存在“结论有、证据无”的项？
 - 是否存在冲突未闭合项？
+- 若仍需补证据，`intentGraph.queryTasks` 是否表达清楚？
 
 === CONTEXT_DATA_START ===
 {{domainResults}}

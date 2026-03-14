@@ -1,5 +1,5 @@
 // 用户文案应迁至 prompt asset / metadata 模板层，见 canonical_truth_sources.md。禁止新增。
-import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/personal_assistant/engine/default_processing/evidence_evaluator.dart';
 import 'package:quwoquan_app/personal_assistant/engine/default_processing/default_processing_copy_bank.dart';
 import 'package:quwoquan_app/personal_assistant/engine/default_processing/narrative_engine.dart';

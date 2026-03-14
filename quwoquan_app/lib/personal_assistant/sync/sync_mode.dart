@@ -1,22 +1,22 @@
-enum AssistentSyncMode {
+enum AssistantSyncMode {
   localMock,
   cloudStub,
 }
 
-class AssistentSyncModeParser {
-  const AssistentSyncModeParser._();
+class AssistantSyncModeParser {
+  const AssistantSyncModeParser._();
 
-  static AssistentSyncMode parse(String raw) {
+  static AssistantSyncMode parse(String raw) {
     final normalized = raw.trim().toLowerCase();
-    if (normalized == 'cloud_stub') return AssistentSyncMode.cloudStub;
-    return AssistentSyncMode.localMock;
+    if (normalized == 'cloud_stub') return AssistantSyncMode.cloudStub;
+    return AssistantSyncMode.localMock;
   }
 
-  static String toConfigValue(AssistentSyncMode mode) {
+  static String toConfigValue(AssistantSyncMode mode) {
     switch (mode) {
-      case AssistentSyncMode.localMock:
+      case AssistantSyncMode.localMock:
         return 'local_mock';
-      case AssistentSyncMode.cloudStub:
+      case AssistantSyncMode.cloudStub:
         return 'cloud_stub';
     }
   }

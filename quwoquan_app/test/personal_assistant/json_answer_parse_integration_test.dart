@@ -30,17 +30,24 @@ class _JsonOnlyLlmProvider implements AssistantLlmProvider {
     return const AssistantModelOutput(
       text: '''
 {
+  "contractVersion": "assistant_turn",
+  "messageKind": "answer",
+  "phaseId": "answering",
+  "actionCode": "compose_answer",
+  "reasonCode": "evidence_ready",
+  "reasonShort": "关键信息已经够用了，开始整理成答案。",
+  "decision": {"nextAction": "answer", "confidence": 0.88, "reasoning": "已有足够信息给出娱乐向建议"},
+  "userMarkdown": "## 事业运建议\\n\\n- 近期更适合稳中求进，把注意力放在可控行动上。",
   "result": {
+    "text": "近期更适合稳中求进。",
+    "summary": "事业运以稳为主",
     "interpretation": "仅供娱乐参考，近期更适合稳中求进。",
-    "actionHints": ["保持节奏", "控制预期"],
-    "uncertainty": "运势解读具有主观不确定性",
-    "disclaimer": "仅供娱乐参考，不构成专业建议",
-    "positiveGuidance": "把注意力放在可控行动上"
+    "actionHints": ["保持节奏", "控制预期"]
   },
-  "reasoningBasis": [{"claim": "建议稳健", "support": "用户目标偏长期"}],
+  "reasoningBasis": [{"claim": "建议稳健", "text": "用户目标偏长期", "confidence": 0.88}],
   "selfCheck": {"goalSatisfied": true, "constraintSatisfied": true, "safetyBoundarySatisfied": true, "failedItems": []},
-  "diagnostics": {"whyThisAnswer": "遵循娱乐边界", "riskFlags": [], "missingInfo": [], "needMoreInfo": false},
-  "modelSelfScore": {"score": 88, "reason": "覆盖目标与约束", "improvementHints": ["增加个性化细节"]},
+  "diagnostics": {"emergedTags": [], "failedChecks": [], "parseStatus": "", "notes": ["遵循娱乐边界"]},
+  "modelSelfScore": {"score": 88, "reason": "覆盖目标与约束"},
   "toolCalls": []
 }
 ''',
@@ -69,11 +76,18 @@ class _AssistantTurnProvider implements AssistantLlmProvider {
       text: '''
 {
   "contractVersion": "assistant_turn",
-  "decision": {"nextAction": "ask_user"},
+  "messageKind": "ask_user",
+  "phaseId": "clarifying",
+  "actionCode": "ask_clarification",
+  "reasonCode": "missing_slot",
+  "reasonShort": "还差一个关键信息，先确认后再继续。",
+  "decision": {"nextAction": "ask_user", "confidence": 0.92, "reasoning": "缺少城市信息"},
   "slotState": {"location": {"status": "missing"}},
-  "askUser": {"slotId": "location", "l10nKey": "assistant.weather.ask_city"},
+  "askUser": {"slotId": "location", "prompt": "请告诉我要查询的城市，例如深圳。", "required": true, "suggestions": ["深圳", "上海"]},
   "userMarkdown": "## 继续查询天气\\n- 请告诉我要查询的城市（例如：深圳）",
-  "result": {"interpretation": "需要补齐城市信息"},
+  "result": {"text": "需要补齐城市信息", "summary": "等待城市槽位", "interpretation": "需要补齐城市信息"},
+  "selfCheck": {"goalSatisfied": true, "constraintSatisfied": true, "safetyBoundarySatisfied": true, "failedItems": []},
+  "diagnostics": {"emergedTags": [], "failedChecks": [], "parseStatus": "", "notes": []},
   "toolCalls": []
 }
 ''',
@@ -108,12 +122,19 @@ class _SubagentTurnProvider implements AssistantLlmProvider {
         text: '''
 {
   "contractVersion": "assistant_turn",
+  "messageKind": "answer",
+  "phaseId": "answering",
+  "actionCode": "compose_answer",
+  "reasonCode": "evidence_ready",
+  "reasonShort": "子任务已经完成，开始整理结果。",
   "decision": {"nextAction": "answer"},
   "slotState": {},
   "askUser": {},
   "subagentPlan": [],
   "userMarkdown": "## 子代理结论\\n- 子任务已完成，并返回结构化摘要。",
-  "result": {"interpretation": "子代理已完成"},
+  "result": {"text": "子代理已完成", "summary": "子任务返回摘要", "interpretation": "子代理已完成"},
+  "selfCheck": {"goalSatisfied": true, "constraintSatisfied": true, "safetyBoundarySatisfied": true, "failedItems": []},
+  "diagnostics": {"emergedTags": [], "failedChecks": [], "parseStatus": "", "notes": []},
   "toolCalls": []
 }
 ''',
@@ -129,12 +150,19 @@ class _SubagentTurnProvider implements AssistantLlmProvider {
         text: '''
 {
   "contractVersion": "assistant_turn",
+  "messageKind": "answer",
+  "phaseId": "answering",
+  "actionCode": "compose_answer",
+  "reasonCode": "evidence_ready",
+  "reasonShort": "子任务结果已经齐了，可以汇总成答。",
   "decision": {"nextAction": "answer"},
   "slotState": {},
   "askUser": {},
   "subagentPlan": [],
   "userMarkdown": "## 主结论\\n- 已吸收子代理结果，输出最终答复。",
-  "result": {"interpretation": "最终答复已整合子任务"},
+  "result": {"text": "最终答复已整合子任务", "summary": "子任务结果已融合", "interpretation": "最终答复已整合子任务"},
+  "selfCheck": {"goalSatisfied": true, "constraintSatisfied": true, "safetyBoundarySatisfied": true, "failedItems": []},
+  "diagnostics": {"emergedTags": [], "failedChecks": [], "parseStatus": "", "notes": []},
   "toolCalls": []
 }
 ''',
@@ -144,7 +172,12 @@ class _SubagentTurnProvider implements AssistantLlmProvider {
       text: '''
 {
   "contractVersion": "assistant_turn",
-  "decision": {"nextAction": "spawn_subagent"},
+  "messageKind": "progress",
+  "phaseId": "analyzing",
+  "actionCode": "delegate_research",
+  "reasonCode": "need_parallel_evidence",
+  "reasonShort": "还差一层核验，我先并行补齐证据。",
+  "decision": {"nextAction": "tool_call"},
   "slotState": {},
   "askUser": {},
   "subagentPlan": [
@@ -160,7 +193,9 @@ class _SubagentTurnProvider implements AssistantLlmProvider {
     }
   ],
   "userMarkdown": "## 正在后台处理\\n- 我会并行启动子任务后给你最终结论。",
-  "result": {"interpretation": "需要子代理补充证据"},
+  "result": {"text": "需要子代理补充证据", "summary": "准备并行核验", "interpretation": "需要子代理补充证据"},
+  "selfCheck": {"goalSatisfied": true, "constraintSatisfied": true, "safetyBoundarySatisfied": true, "failedItems": []},
+  "diagnostics": {"emergedTags": [], "failedChecks": [], "parseStatus": "", "notes": []},
   "toolCalls": []
 }
 ''',
@@ -290,9 +325,8 @@ void main() {
     final subagentRuns =
         (structured['subagentRuns'] as List?)?.whereType<Map>().toList() ??
         const <Map>[];
-    // Subagent execution depends on model correctly returning spawn_subagent
-    // decision; when v4 contract wrapping normalizes the output, subagent
-    // plan may or may not be extracted. Assert gracefully.
+    // 新 assistant_turn 下由 subagentPlan 直接驱动子任务执行，不再依赖旧
+    // spawn_subagent 决策值。考虑到测试桩与运行时时序差异，这里仍做宽松断言。
     if (subagentRuns.isNotEmpty) {
       expect(
         (subagentRuns.first['status'] as String?) ?? '',

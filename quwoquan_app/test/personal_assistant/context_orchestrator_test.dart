@@ -1,6 +1,4 @@
-import 'package:quwoquan_app/personal_assistant/contracts/context_fill_contract.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/context_continuity_policy.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
 import 'package:quwoquan_app/personal_assistant/engine/context_orchestrator.dart';
 import 'package:test/test.dart';
 

@@ -1,7 +1,7 @@
-import 'package:quwoquan_app/personal_assistant/contracts/planner_contracts.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/query_task_contract.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/contracts/planner_contracts.dart';
+import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 
 class EvidenceEvaluationResult {
   const EvidenceEvaluationResult({

@@ -39,24 +39,25 @@ quwoquan_app/
 │       ├── {domain}/                        ← 每个技能一个目录
 │       └── *.skill.yaml                     ← 轻量技能（知识问答等）
 │
-├── lib/personal_assistant/
-│   ├── engine/
-│   │   ├── agent_loop.dart                  ← 总调度：技能解析、对话脚本、模板变量
-│   │   ├── react_runtime.dart               ← ReAct 循环
-│   │   ├── llm_provider.dart                ← Prompt Stack 组装 + LLM 调用
-│   │   ├── dialogue_state_runtime.dart      ← 对话状态机运行时（渐进式）
-│   │   └── domain_routing_catalog_runtime.dart
+├── lib/assistant/
+│   ├── application/
+│   │   └── assistant_edge_service.dart      ← 当前 edge assistant 装配入口
+│   ├── runtime/
+│   │   └── assistant_runtime.dart           ← 当前公开 runtime 封装
 │   ├── skills/
-│   │   ├── skill_loader.dart                ← 加载并解析 SKILL.md
-│   │   ├── skill_router.dart                ← 按 domain catalog 与 recall 结果路由
+│   │   ├── assistant_skill_runtime.dart     ← Skill loader + market service
 │   │   └── skill_manifest.dart              ← Manifest 数据模型
-│   └── tools/
-│       └── websearch_tool.dart              ← 读取 config/retrieval_policy.json
+│   ├── tools/
+│   │   └── tool_schema.dart                 ← 当前工具合同入口
+│   └── capabilities/
+│       └── capabilities.dart                ← 当前 capability catalog
 │
 └── personal_assistant/docs/                 ← 设计文档根目录
     ├── skill_development_standard.md        ← 开发与交付标准（主规范）
     └── skill-directory-and-progressive-disclosure-design.md  ← 本文档
 ```
+
+补充：更深层 legacy implementation 仍可能位于 `lib/personal_assistant/`，但不再作为当前推荐入口。
 
 ---
 

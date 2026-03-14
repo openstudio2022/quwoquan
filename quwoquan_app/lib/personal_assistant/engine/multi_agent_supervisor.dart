@@ -1,8 +1,8 @@
-import 'package:quwoquan_app/personal_assistant/contracts/aggregation_state.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/intent_graph.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/skill_run.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/subagent_plan.dart';
+import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
+import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/contracts/skill_run.dart';
+import 'package:quwoquan_app/assistant/contracts/subagent_plan.dart';
 import 'package:quwoquan_app/personal_assistant/engine/aggregation_gate.dart';
 import 'package:quwoquan_app/personal_assistant/engine/mode_decider.dart';
 import 'package:quwoquan_app/personal_assistant/skills/skill_manifest.dart';

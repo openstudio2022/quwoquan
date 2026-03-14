@@ -1,5 +1,5 @@
-class AssistentRetrievalRequest {
-  const AssistentRetrievalRequest({
+class AssistantRetrievalRequest {
+  const AssistantRetrievalRequest({
     required this.query,
     this.requestedCapabilities = const <String>[],
     this.contextScopeHint = const <String, dynamic>{},
@@ -29,8 +29,8 @@ class AssistentRetrievalRequest {
   final List<String> inputIssues;
 }
 
-class AssistentRetrievalItem {
-  const AssistentRetrievalItem({
+class AssistantRetrievalItem {
+  const AssistantRetrievalItem({
     required this.content,
     required this.sourceType,
     required this.sourceId,
@@ -47,11 +47,11 @@ class AssistentRetrievalItem {
   final Map<String, dynamic> metadata;
 }
 
-class AssistentRetrievalResult {
-  const AssistentRetrievalResult({
+class AssistantRetrievalResult {
+  const AssistantRetrievalResult({
     required this.success,
     required this.message,
-    this.items = const <AssistentRetrievalItem>[],
+    this.items = const <AssistantRetrievalItem>[],
     this.providersUsed = const <String>[],
     this.coverageScore = 0.0,
     this.conflictScore = 0.0,
@@ -70,7 +70,7 @@ class AssistentRetrievalResult {
 
   final bool success;
   final String message;
-  final List<AssistentRetrievalItem> items;
+  final List<AssistantRetrievalItem> items;
   final List<String> providersUsed;
   final double coverageScore;
   final double conflictScore;
@@ -101,8 +101,8 @@ class AssistentRetrievalResult {
   }
 }
 
-class AssistentRetrievalRouteDecision {
-  const AssistentRetrievalRouteDecision({
+class AssistantRetrievalRouteDecision {
+  const AssistantRetrievalRouteDecision({
     required this.providerSequence,
     required this.capabilitySequence,
     required this.maxRounds,

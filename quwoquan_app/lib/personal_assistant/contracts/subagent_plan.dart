@@ -1,4 +1,4 @@
-export 'package:quwoquan_app/personal_assistant/runtime/generated/contracts/subagent_plan.g.dart';
+export 'package:quwoquan_app/assistant/generated/contracts/subagent_plan.g.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';
 
 class SubagentPlan {

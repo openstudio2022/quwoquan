@@ -4,8 +4,8 @@ import 'dart:io';
 import 'package:quwoquan_app/personal_assistant/learning/assistant_learning_models.dart';
 import 'package:quwoquan_app/personal_assistant/storage/personal_assistant_storage_path.dart';
 
-class AssistentLearningStore {
-  AssistentLearningStore({
+class AssistantLearningStore {
+  AssistantLearningStore({
     String? storagePath,
   }) : _pathFuture = storagePath != null
             ? Future<String>.value(storagePath)
@@ -13,10 +13,10 @@ class AssistentLearningStore {
 
   final Future<String> _pathFuture;
 
-  final List<AssistentInteractionEvent> _events = <AssistentInteractionEvent>[];
-  final List<AssistentInteractionMetricScore> _scores = <AssistentInteractionMetricScore>[];
-  final List<AssistentScoreAggregate> _userDaily = <AssistentScoreAggregate>[];
-  final List<AssistentScoreAggregate> _tagDomainDaily = <AssistentScoreAggregate>[];
+  final List<AssistantInteractionEvent> _events = <AssistantInteractionEvent>[];
+  final List<AssistantInteractionMetricScore> _scores = <AssistantInteractionMetricScore>[];
+  final List<AssistantScoreAggregate> _userDaily = <AssistantScoreAggregate>[];
+  final List<AssistantScoreAggregate> _tagDomainDaily = <AssistantScoreAggregate>[];
   bool _loaded = false;
 
   Future<void> load() async {
@@ -32,7 +32,7 @@ class AssistentLearningStore {
       _events.addAll(
         eventsRaw
             .whereType<Map>()
-            .map((item) => AssistentInteractionEvent.fromJson(item.cast<String, dynamic>())),
+            .map((item) => AssistantInteractionEvent.fromJson(item.cast<String, dynamic>())),
       );
     }
     final scoresRaw = decoded['scores'];
@@ -40,7 +40,7 @@ class AssistentLearningStore {
       _scores.addAll(
         scoresRaw
             .whereType<Map>()
-            .map((item) => AssistentInteractionMetricScore.fromJson(item.cast<String, dynamic>())),
+            .map((item) => AssistantInteractionMetricScore.fromJson(item.cast<String, dynamic>())),
       );
     }
     final userRaw = decoded['userDaily'];
@@ -48,7 +48,7 @@ class AssistentLearningStore {
       _userDaily.addAll(
         userRaw
             .whereType<Map>()
-            .map((item) => AssistentScoreAggregate.fromJson(item.cast<String, dynamic>())),
+            .map((item) => AssistantScoreAggregate.fromJson(item.cast<String, dynamic>())),
       );
     }
     final tagRaw = decoded['tagDomainDaily'];
@@ -56,7 +56,7 @@ class AssistentLearningStore {
       _tagDomainDaily.addAll(
         tagRaw
             .whereType<Map>()
-            .map((item) => AssistentScoreAggregate.fromJson(item.cast<String, dynamic>())),
+            .map((item) => AssistantScoreAggregate.fromJson(item.cast<String, dynamic>())),
       );
     }
   }
@@ -74,7 +74,7 @@ class AssistentLearningStore {
     );
   }
 
-  Future<void> appendEvent(AssistentInteractionEvent event) async {
+  Future<void> appendEvent(AssistantInteractionEvent event) async {
     await load();
     _events.add(event);
     if (_events.length > 8000) {
@@ -82,7 +82,7 @@ class AssistentLearningStore {
     }
   }
 
-  Future<void> appendScores(List<AssistentInteractionMetricScore> scores) async {
+  Future<void> appendScores(List<AssistantInteractionMetricScore> scores) async {
     await load();
     _scores.addAll(scores);
     if (_scores.length > 16000) {
@@ -90,38 +90,38 @@ class AssistentLearningStore {
     }
   }
 
-  Future<void> replaceUserDaily(List<AssistentScoreAggregate> aggregates) async {
+  Future<void> replaceUserDaily(List<AssistantScoreAggregate> aggregates) async {
     await load();
     _userDaily
       ..clear()
       ..addAll(aggregates);
   }
 
-  Future<void> replaceTagDomainDaily(List<AssistentScoreAggregate> aggregates) async {
+  Future<void> replaceTagDomainDaily(List<AssistantScoreAggregate> aggregates) async {
     await load();
     _tagDomainDaily
       ..clear()
       ..addAll(aggregates);
   }
 
-  Future<List<AssistentInteractionEvent>> events() async {
+  Future<List<AssistantInteractionEvent>> events() async {
     await load();
-    return List<AssistentInteractionEvent>.from(_events);
+    return List<AssistantInteractionEvent>.from(_events);
   }
 
-  Future<List<AssistentInteractionMetricScore>> scores() async {
+  Future<List<AssistantInteractionMetricScore>> scores() async {
     await load();
-    return List<AssistentInteractionMetricScore>.from(_scores);
+    return List<AssistantInteractionMetricScore>.from(_scores);
   }
 
-  Future<List<AssistentScoreAggregate>> userDaily() async {
+  Future<List<AssistantScoreAggregate>> userDaily() async {
     await load();
-    return List<AssistentScoreAggregate>.from(_userDaily);
+    return List<AssistantScoreAggregate>.from(_userDaily);
   }
 
-  Future<List<AssistentScoreAggregate>> tagDomainDaily() async {
+  Future<List<AssistantScoreAggregate>> tagDomainDaily() async {
     await load();
-    return List<AssistentScoreAggregate>.from(_tagDomainDaily);
+    return List<AssistantScoreAggregate>.from(_tagDomainDaily);
   }
 }
 

@@ -1,14 +1,14 @@
 import 'package:quwoquan_app/personal_assistant/sync/sync_mode.dart';
 
-enum AssistentSyncResource {
+enum AssistantSyncResource {
   policy,
   interactionEvents,
   scorecards,
   memoryRecords,
 }
 
-class AssistentSyncResult {
-  const AssistentSyncResult({
+class AssistantSyncResult {
+  const AssistantSyncResult({
     required this.success,
     required this.mode,
     required this.resource,
@@ -17,8 +17,8 @@ class AssistentSyncResult {
   });
 
   final bool success;
-  final AssistentSyncMode mode;
-  final AssistentSyncResource resource;
+  final AssistantSyncMode mode;
+  final AssistantSyncResource resource;
   final String message;
   final Map<String, dynamic> payload;
 }

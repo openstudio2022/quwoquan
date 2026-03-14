@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/personal_assistant/app/trace_user_event_translator.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/planner_contracts.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/user_events.dart';
-import 'package:quwoquan_app/personal_assistant/protocol/trace_events.dart';
+import 'package:quwoquan_app/assistant/contracts/planner_contracts.dart';
+import 'package:quwoquan_app/assistant/contracts/user_events.dart';
+import 'package:quwoquan_app/assistant/domain/channel/channel.dart';
+import 'package:quwoquan_app/assistant/orchestration/trace_user_event_translator.dart';
 
 void main() {
   group('trace user event translator', () {

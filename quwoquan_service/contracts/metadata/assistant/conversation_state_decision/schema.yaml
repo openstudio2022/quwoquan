@@ -1,6 +1,6 @@
 dart_class: ConversationStateDecisionDto
-library_path: personal_assistant/contracts/conversation_state_decision.dart
-output_path: personal_assistant/runtime/generated/contracts/conversation_state_decision.g.dart
+library_path: assistant/contracts/conversation_state_decision.dart
+output_path: assistant/generated/contracts/conversation_state_decision.g.dart
 contract: conversation_state_decision
 version: v1
 kind: runtime_policy_contract

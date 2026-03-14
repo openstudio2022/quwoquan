@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/profile_update_proposal.dart';
 

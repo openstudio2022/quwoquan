@@ -4,22 +4,22 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/aggregation_state.dart';
+import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/agent_run_observability.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/assistant_turn_contract.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/conversation_state_decision.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/context_assembly_result.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/context_fill_contract.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/dialogue_round_script.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/intent_graph.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/preference_fact.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/query_task_contract.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/skill_run.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/slot_schema.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/subagent_plan.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/synthesis_readiness_result.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/recall_result.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/conversation_state_decision.dart';
+import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
+import 'package:quwoquan_app/assistant/contracts/context_fill_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/dialogue_round_script.dart';
+import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
+import 'package:quwoquan_app/assistant/contracts/preference_fact.dart';
+import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/contracts/skill_run.dart';
+import 'package:quwoquan_app/assistant/contracts/slot_schema.dart';
+import 'package:quwoquan_app/assistant/contracts/subagent_plan.dart';
+import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
+import 'package:quwoquan_app/assistant/contracts/recall_result.dart';
 import 'package:quwoquan_app/personal_assistant/engine/aggregation_gate.dart';
 import 'package:quwoquan_app/personal_assistant/engine/conversation_state_kernel.dart';
 import 'package:quwoquan_app/personal_assistant/engine/context_orchestrator.dart';
@@ -176,11 +176,11 @@ class PersonalAssistantAgentLoop {
     }
     final enableChatRecent = _hasCapability(
       request.capabilityCatalog,
-      AssistentCapabilityCatalog.chatRecent,
+      AssistantCapabilityCatalog.chatRecent,
     );
     final enableChatLongterm = _hasCapability(
       request.capabilityCatalog,
-      AssistentCapabilityCatalog.chatLongterm,
+      AssistantCapabilityCatalog.chatLongterm,
     );
     final historySummary =
         enableChatRecent && contextContinuityPolicy.allowHistorySummary
@@ -430,7 +430,7 @@ class PersonalAssistantAgentLoop {
       dataLayerBuffer.writeln();
       dataLayerBuffer.writeln('<capability_catalog>');
       dataLayerBuffer.writeln(
-        AssistentCapabilityCatalog.toPromptText(request.capabilityCatalog),
+        AssistantCapabilityCatalog.toPromptText(request.capabilityCatalog),
       );
       dataLayerBuffer.writeln('</capability_catalog>');
     }
@@ -1109,6 +1109,82 @@ class PersonalAssistantAgentLoop {
       onDelta: _buildThinkingDeltaForwarder(onTraceEvent, runId, traceId),
     );
     if (_needsSynthesisRepair(repaired.finalText)) {
+      final recoveredMarkdown = _recoverDisplayMarkdownFromInvalidSynthesis(
+        primaryText: repaired.finalText,
+        primaryTraces: repaired.traces,
+        fallbackText: currentResult.finalText,
+        fallbackTraces: currentResult.traces,
+      );
+      if (recoveredMarkdown.isNotEmpty) {
+        return ReactRuntimeResult(
+          finalText: _buildRecoveredAssistantTurnEnvelopeText(
+            recoveredMarkdown: recoveredMarkdown,
+            failureCode: 'invalid_synthesis_output',
+          ),
+          traces: <AssistantTraceEvent>[
+            ...currentResult.traces,
+            repairTrace,
+            ...repaired.traces,
+          ],
+          degraded: false,
+          failureCode: '',
+        );
+      }
+      final plainMarkdownRecovery = await _runtime.run(
+        messages: <Map<String, dynamic>>[
+          ...synthesisInput,
+          <String, dynamic>{
+            'role': 'system',
+            'content':
+                '结构化 JSON 仍然无效。现在不要输出 JSON，不要输出工具调用，不要输出 XML。'
+                '请直接返回给用户看的最终 Markdown 答案正文；'
+                '若证据不足，就明确说明不足并给出当前最稳妥的建议。',
+          },
+        ],
+        maxIterations: 1,
+        goal: latestUserQuery,
+        availableToolNamesOverride: const <String>[],
+        templateId: templateId,
+        templateVersion: templateVersion,
+        templateContext: templateContext,
+        templateVariables: templateVariables,
+        sessionId: sessionId,
+        runId: runId,
+        traceId: traceId,
+        onTraceEvent: _withTraceVisibility(
+          onTraceEvent,
+          TraceVisibility.internal,
+        ),
+        callOptions: const LlmCallOptions(
+          temperature: 0.2,
+          maxTokens: 1600,
+          forceJsonObject: false,
+          timeoutSeconds: 30,
+        ),
+        onDelta: _buildThinkingDeltaForwarder(onTraceEvent, runId, traceId),
+      );
+      final recoveredPlainMarkdown = _recoverDisplayMarkdownFromInvalidSynthesis(
+        primaryText: plainMarkdownRecovery.finalText,
+        primaryTraces: plainMarkdownRecovery.traces,
+        fallbackText: '',
+        fallbackTraces: const <AssistantTraceEvent>[],
+      );
+      if (recoveredPlainMarkdown.isNotEmpty) {
+        return ReactRuntimeResult(
+          finalText: _buildRecoveredAssistantTurnEnvelopeText(
+            recoveredMarkdown: recoveredPlainMarkdown,
+            failureCode: 'invalid_synthesis_output',
+          ),
+          traces: <AssistantTraceEvent>[
+            ...currentResult.traces,
+            repairTrace,
+            ...repaired.traces,
+            ...plainMarkdownRecovery.traces,
+          ],
+          degraded: false,
+          failureCode: '',
+        );
+      }
       final degradedEnvelope = _buildDegradedAssistantTurnEnvelopeText(
         failureCode: 'invalid_synthesis_output',
       );
@@ -1118,6 +1194,7 @@ class PersonalAssistantAgentLoop {
           ...currentResult.traces,
           repairTrace,
           ...repaired.traces,
+          ...plainMarkdownRecovery.traces,
         ],
         degraded: true,
         failureCode: 'invalid_synthesis_output',
@@ -1215,6 +1292,135 @@ class PersonalAssistantAgentLoop {
         askUser: const AssistantTurnAskUser(),
       ).toEnvelopeMap(),
     );
+  }
+
+  String _buildRecoveredAssistantTurnEnvelopeText({
+    required String recoveredMarkdown,
+    required String failureCode,
+  }) {
+    final plainText = _stripMarkdownForPlainText(recoveredMarkdown);
+    final normalizedPlain = plainText.isNotEmpty ? plainText : recoveredMarkdown;
+    return jsonEncode(
+      AssistantTurnOutput(
+        contractVersion: kAssistantTurnCurrentVersion,
+        decision: const AssistantTurnDecisionPayload(
+          nextAction: AssistantNextAction.answer,
+        ),
+        messageKind: AssistantMessageKind.answer,
+        userMarkdown: recoveredMarkdown,
+        result: AssistantTurnResult(
+          text: normalizedPlain,
+          interpretation: 'recovered_from_$failureCode',
+        ),
+        selfCheck: const AssistantTurnSelfCheck(
+          goalSatisfied: true,
+          constraintSatisfied: true,
+          safetyBoundarySatisfied: true,
+        ),
+        diagnostics: AssistantTurnDiagnostics(
+          notes: <String>[failureCode, 'recovered_from_answer_delta'],
+        ),
+        modelSelfScore: const AssistantTurnModelSelfScore(
+          score: 78,
+          reason: 'recovered_from_streamed_answer',
+        ),
+        slotState: const SlotStateSnapshot(),
+        askUser: const AssistantTurnAskUser(),
+      ).toEnvelopeMap(),
+    );
+  }
+
+  String _recoverDisplayMarkdownFromInvalidSynthesis({
+    required String primaryText,
+    required List<AssistantTraceEvent> primaryTraces,
+    required String fallbackText,
+    required List<AssistantTraceEvent> fallbackTraces,
+  }) {
+    final candidates = <String>[
+      _recoverDisplayMarkdownCandidate(primaryText),
+      _recoverDisplayMarkdownFromTraces(primaryTraces),
+      _recoverDisplayMarkdownCandidate(fallbackText),
+      _recoverDisplayMarkdownFromTraces(fallbackTraces),
+    ];
+    for (final candidate in candidates) {
+      if (candidate.isNotEmpty) {
+        return candidate;
+      }
+    }
+    return '';
+  }
+
+  String _recoverDisplayMarkdownCandidate(String rawText) {
+    final trimmed = OpenAiCompatibleLlmProvider.stripXmlToolCalls(
+      rawText,
+    ).trim();
+    if (trimmed.isEmpty) return '';
+    final parsed = LlmResponseParser.parse(trimmed);
+    if (parsed.ok) {
+      final markdown = parsed.userMarkdown.trim();
+      if (markdown.isNotEmpty &&
+          !AssistantContentFilters.isJsonEnvelope(markdown) &&
+          !AssistantContentFilters.isDegradedText(markdown) &&
+          !AssistantContentFilters.isProgressPlaceholder(markdown) &&
+          !_containsXmlToolCallMarkup(markdown)) {
+        return markdown;
+      }
+      return '';
+    }
+    if (AssistantContentFilters.isJsonEnvelope(trimmed) ||
+        AssistantContentFilters.isDegradedText(trimmed) ||
+        AssistantContentFilters.isProgressPlaceholder(trimmed) ||
+        _containsXmlToolCallMarkup(trimmed)) {
+      return '';
+    }
+    if (!_looksLikeRecoverableAnswerText(trimmed)) {
+      return '';
+    }
+    return trimmed;
+  }
+
+  String _recoverDisplayMarkdownFromTraces(List<AssistantTraceEvent> traces) {
+    final buffer = StringBuffer();
+    for (final trace in traces) {
+      if (trace.type != AssistantTraceEventType.answerDelta &&
+          trace.type != AssistantTraceEventType.streamDelta) {
+        continue;
+      }
+      final rawDelta =
+          (trace.data?['delta'] as String?)?.trim() ?? trace.message.trim();
+      final candidate = _recoverDisplayMarkdownCandidate(rawDelta);
+      if (candidate.isEmpty) continue;
+      final current = buffer.toString();
+      if (current.isEmpty) {
+        buffer.write(candidate);
+        continue;
+      }
+      if (candidate == current || current.endsWith(candidate)) {
+        continue;
+      }
+      if (candidate.startsWith(current)) {
+        buffer
+          ..clear()
+          ..write(candidate);
+        continue;
+      }
+      buffer.write(candidate);
+    }
+    return _recoverDisplayMarkdownCandidate(buffer.toString());
+  }
+
+  bool _looksLikeRecoverableAnswerText(String text) {
+    final normalized = text.trim();
+    if (normalized.isEmpty) return false;
+    if (normalized.length >= 24) return true;
+    final hasStructuredMarkdown =
+        normalized.contains('\n') ||
+        normalized.contains('- ') ||
+        normalized.contains('* ') ||
+        normalized.contains('1.');
+    if (hasStructuredMarkdown) return true;
+    final sentenceLikeHits = RegExp(r'[。！？；;.!?]').allMatches(normalized).length;
+    return sentenceLikeHits >= 2;
   }
 
   Future<List<Map<String, dynamic>>> _executeSubagentPlans({
@@ -3217,13 +3423,15 @@ class PersonalAssistantAgentLoop {
               textKey: 'summary',
             ),
       'toolPlan': turn != null
-          ? turn.toolPlan
-          : _normalizeMapList(parsed['toolPlan'], textKey: 'tool'),
+          ? turn.toolPlan.map((item) => item.toJson()).toList(growable: false)
+          : _normalizeMapList(parsed['toolPlan'], textKey: 'toolName'),
       'missingContextSlots':
           turn?.missingContextSlots ??
           _normalizeStringList(parsed['missingContextSlots']),
       'fillGuidance': turn != null
           ? turn.fillGuidance
+                .map((item) => item.toJson())
+                .toList(growable: false)
           : _normalizeMapList(parsed['fillGuidance'], textKey: 'guidance'),
       'followupPrompt': turn?.followupPrompt ?? '',
       'processSummary': turn?.processSummary ?? '',
@@ -3333,62 +3541,99 @@ class PersonalAssistantAgentLoop {
       );
       final parsed =
           LlmResponseParser.parse(result.finalText).json ?? <String, dynamic>{};
-      final primarySkill =
-          (parsed['primaryDomainId'] as String?)?.trim().isNotEmpty == true
-          ? (parsed['primaryDomainId'] as String).trim()
-          : fallbackDomainId;
-      final secondarySkills = _normalizeStringList(
-        parsed['secondaryDomains'],
-      ).where((item) => item != primarySkill).toList(growable: false);
-      final userGoal =
-          (parsed['inferredMotive'] as String?)?.trim().isNotEmpty == true
-          ? (parsed['inferredMotive'] as String).trim()
-          : latestUserQuery;
-      final problemClass = _normalizeProblemClass(
-        raw: (parsed['problemClass'] as String?)?.trim() ?? '',
-        primarySkill: primarySkill,
-        mode: (parsed['mode'] as String?)?.trim() ?? '',
-        secondarySkills: secondarySkills,
-        request: request,
-      );
-      final queryNormalization = _normalizeMap(parsed['queryNormalization']);
-      final queryTasks = _normalizeIntentQueryTasks(parsed['queryTasks']);
-      final contextSlots = _normalizeMap(parsed['contextSlots']);
+      final turn = tryParseAssistantTurnOutput(parsed);
+      IntentGraph? parsedIntentGraph = turn?.intentGraph;
+      if (parsedIntentGraph == null && parsed['intentGraph'] is Map) {
+        try {
+          parsedIntentGraph = IntentGraph.fromJson(
+            (parsed['intentGraph'] as Map).cast<String, dynamic>(),
+          );
+        } catch (_) {
+          parsedIntentGraph = null;
+        }
+      }
+      if (parsedIntentGraph != null) {
+        final primarySkill = parsedIntentGraph.primarySkill.trim().isNotEmpty
+            ? parsedIntentGraph.primarySkill.trim()
+            : fallbackDomainId;
+        final secondarySkills = parsedIntentGraph.secondarySkills
+            .map((item) => item.trim())
+            .where((item) => item.isNotEmpty && item != primarySkill)
+            .toList(growable: false);
+        final mode =
+            (parsedIntentGraph.globalConstraints['mode'] as String?)
+                ?.trim() ??
+            '';
+        final normalizedProblemClass = _normalizeProblemClass(
+          raw: parsedIntentGraph.problemClass.wireName,
+          primarySkill: primarySkill,
+          mode: mode,
+          secondarySkills: secondarySkills,
+          request: request,
+        );
+        return IntentGraph(
+          userGoal: parsedIntentGraph.userGoal.trim().isNotEmpty
+              ? parsedIntentGraph.userGoal.trim()
+              : latestUserQuery,
+          problemShape: parsedIntentGraph.problemShape == ProblemShape.unknown
+              ? (secondarySkills.isEmpty
+                    ? ProblemShape.singleSkill
+                    : ProblemShape.multiSkill)
+              : parsedIntentGraph.problemShape,
+          primarySkill: primarySkill,
+          problemClass: parseProblemClass(normalizedProblemClass),
+          inferredMotive: parsedIntentGraph.inferredMotive.trim(),
+          secondarySkills: secondarySkills,
+          targetObject: parsedIntentGraph.targetObject.trim(),
+          userJobToBeDone: parsedIntentGraph.userJobToBeDone.trim(),
+          hardConstraints: parsedIntentGraph.hardConstraints,
+          softConstraints: parsedIntentGraph.softConstraints,
+          excludedScopes: parsedIntentGraph.excludedScopes,
+          freshnessNeed: parsedIntentGraph.freshnessNeed,
+          answerShape: parsedIntentGraph.answerShape,
+          mustVerifyClaims: parsedIntentGraph.mustVerifyClaims,
+          requiresExternalEvidence: parsedIntentGraph.requiresExternalEvidence,
+          entityAnchors: parsedIntentGraph.entityAnchors,
+          negativeKeywords: parsedIntentGraph.negativeKeywords,
+          queryNormalization: parsedIntentGraph.queryNormalization,
+          queryTasks: parsedIntentGraph.queryTasks,
+          contextSlots: parsedIntentGraph.contextSlots,
+          globalConstraints: parsedIntentGraph.globalConstraints,
+          clarificationNeeded:
+              parsedIntentGraph.clarificationNeeded ||
+              (turn?.hasAskUser ?? false) ||
+              (turn?.missingContextSlots.isNotEmpty ?? false),
+          recallResult: recallResult,
+        );
+      }
       return IntentGraph(
-        userGoal: userGoal,
-        problemShape: secondarySkills.isEmpty
-            ? ProblemShape.singleSkill
-            : ProblemShape.multiSkill,
-        primarySkill: primarySkill,
-        problemClass: parseProblemClass(problemClass),
-        inferredMotive: (parsed['inferredMotive'] as String?)?.trim() ?? '',
-        secondarySkills: secondarySkills,
-        targetObject: (parsed['targetObject'] as String?)?.trim() ?? '',
-        userJobToBeDone: (parsed['userJobToBeDone'] as String?)?.trim() ?? '',
-        hardConstraints: _normalizeStringList(parsed['hardConstraints']),
-        softConstraints: _normalizeStringList(parsed['softConstraints']),
-        excludedScopes: _normalizeStringList(parsed['excludedScopes']),
-        freshnessNeed: parseFreshnessNeed(
-          (parsed['freshnessNeed'] as String?)?.trim() ?? '',
+        userGoal: latestUserQuery,
+        problemShape: ProblemShape.singleSkill,
+        primarySkill: fallbackDomainId,
+        problemClass: parseProblemClass(
+          _normalizeProblemClass(
+            raw: '',
+            primarySkill: fallbackDomainId,
+            mode: '',
+            secondarySkills: const <String>[],
+            request: request,
+          ),
         ),
-        answerShape: parseAnswerShape(
-          (parsed['answerShape'] as String?)?.trim() ?? '',
-        ),
-        mustVerifyClaims: parsed['mustVerifyClaims'] == true,
-        requiresExternalEvidence: parsed['requiresExternalEvidence'] == true,
-        entityAnchors: _normalizeStringList(parsed['entityAnchors']),
-        negativeKeywords: _normalizeStringList(parsed['negativeKeywords']),
-        queryNormalization: QueryNormalization.fromJson(queryNormalization),
-        queryTasks: queryTasks,
-        contextSlots: contextSlots,
-        globalConstraints: <String, dynamic>{
-          'mode': (parsed['mode'] as String?)?.trim() ?? '',
-          if (_normalizeMap(parsed['slotFillPlan']).isNotEmpty)
-            'slotFillPlan': _normalizeMap(parsed['slotFillPlan']),
-        },
-        clarificationNeeded:
-            _normalizeStringList(parsed['missingContextSlots']).isNotEmpty ||
-            ((parsed['slotFillAction'] as String?)?.trim() ?? '') == 'ask_user',
+        inferredMotive: '',
+        targetObject: '',
+        userJobToBeDone: '',
+        hardConstraints: const <String>[],
+        softConstraints: const <String>[],
+        excludedScopes: const <String>[],
+        freshnessNeed: FreshnessNeed.unspecified,
+        answerShape: AnswerShape.unspecified,
+        mustVerifyClaims: false,
+        requiresExternalEvidence: false,
+        entityAnchors: const <String>[],
+        negativeKeywords: const <String>[],
+        queryNormalization: const QueryNormalization(),
+        queryTasks: const <QueryTask>[],
+        contextSlots: const <String, dynamic>{},
         recallResult: recallResult,
       );
     } catch (_) {
@@ -3746,10 +3991,6 @@ class PersonalAssistantAgentLoop {
     return const <String>[];
   }
 
-  List<QueryTask> _normalizeIntentQueryTasks(dynamic value) {
-    return QueryTask.normalizeList(value);
-  }
-
   List<Map<String, dynamic>> _normalizeMapList(
     dynamic value, {
     required String textKey,
@@ -4049,18 +4290,30 @@ class PersonalAssistantAgentLoop {
 
     // 优先级 1：userMarkdown（契约标准字段，已通过 AssistantTurnOutput 类型化解析）
     final userMd = (answerPayload['userMarkdown'] as String?)?.trim() ?? '';
-    if (userMd.isNotEmpty &&
-        !AssistantContentFilters.isProgressPlaceholder(userMd)) {
+    if (_isRenderableAssistantAnswerText(userMd)) {
       return userMd;
     }
     // 优先级 2：fallback（finalText），过滤 JSON 原文和进度文本
     final fb = OpenAiCompatibleLlmProvider.stripXmlToolCalls(fallback).trim();
-    if (fb.isEmpty ||
-        AssistantContentFilters.isJsonEnvelope(fb) ||
-        AssistantContentFilters.isProgressPlaceholder(fb)) {
+    if (!_isRenderableAssistantAnswerText(fb)) {
       return '';
     }
     return fb;
+  }
+
+  bool _isRenderableAssistantAnswerText(String text) {
+    final normalized = OpenAiCompatibleLlmProvider.stripXmlToolCalls(
+      text,
+    ).trim();
+    if (normalized.isEmpty) return false;
+    if (AssistantContentFilters.isNotDisplayable(normalized)) return false;
+    if (normalized.contains('assistant_turn') ||
+        normalized.contains('contractVersion') ||
+        normalized.contains('queryTasks') ||
+        normalized.contains('tool_call')) {
+      return false;
+    }
+    return true;
   }
 
   List<String> _chunkMarkdownForStreaming(String markdown) {
@@ -4473,7 +4726,8 @@ class PersonalAssistantAgentLoop {
         ((answerPayload['result'] as Map?)?['text'] as String?)?.trim() ??
         '';
     final hasRenderableAnswer =
-        userMarkdown.isNotEmpty || resultText.isNotEmpty;
+        _isRenderableAssistantAnswerText(userMarkdown) ||
+        _isRenderableAssistantAnswerText(resultText);
     final messageKind = decision.nextActionType == AssistantNextAction.askUser
         ? AssistantMessageKind.askUser.wireName
         : (decision.nextActionType == AssistantNextAction.answer &&
@@ -4511,7 +4765,10 @@ class PersonalAssistantAgentLoop {
     required Map<String, dynamic> existingAskUser,
     required ConversationStateDecision decision,
   }) {
-    final prompt = (existingAskUser['prompt'] as String?)?.trim() ?? '';
+    final prompt = (existingAskUser['prompt'] as String?)?.trim().isNotEmpty ==
+            true
+        ? (existingAskUser['prompt'] as String).trim()
+        : decision.askUser.prompt.trim();
     final slotId = (existingAskUser['slotId'] as String?)?.trim().isNotEmpty ==
             true
         ? (existingAskUser['slotId'] as String).trim()
@@ -4522,10 +4779,13 @@ class PersonalAssistantAgentLoop {
             .map((item) => item.trim())
             .where((item) => item.isNotEmpty)
             .toList(growable: false) ??
-        const <String>[];
+        decision.askUser.suggestions;
+    final required =
+        existingAskUser['required'] == true || decision.askUser.required;
     return <String, dynamic>{
       'slotId': slotId,
       'prompt': prompt,
+      'required': required,
       'suggestions': suggestions,
     };
   }

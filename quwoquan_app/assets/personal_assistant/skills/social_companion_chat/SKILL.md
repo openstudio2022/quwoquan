@@ -45,9 +45,9 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
   "decision": {"nextAction": "tool_call|answer|ask_user|retry|abort"},
   "slotState": {},
   "toolPlan": [
-    {"tool": "local_context", "arguments": {"requestedFields": ["time", "location"]}}
+    {"toolName": "local_context", "arguments": {"requestedFields": ["time", "location"]}}
   ],
-  "askUser": {"needed": false, "question": ""},
+  "askUser": {"slotId": "", "prompt": "", "required": false, "suggestions": []},
   "userMarkdown": "哈，我在！"
 }
 ```

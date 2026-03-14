@@ -52,9 +52,9 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
     "focusArea": {"value": "overall", "source": "user_query|default"}
   },
   "toolPlan": [
-    {"tool": "web_search", "arguments": {"query": "今日黄历 节气 信息"}}
+    {"toolName": "web_search", "arguments": {"query": "今日黄历 节气 信息"}}
   ],
-  "askUser": {"needed": false, "question": ""},
+  "askUser": {"slotId": "", "prompt": "", "required": false, "suggestions": []},
   "userMarkdown": "正在为你生成今日运势…"
 }
 ```

@@ -2,17 +2,17 @@ import 'package:quwoquan_app/personal_assistant/sync/sync_adapter.dart';
 import 'package:quwoquan_app/personal_assistant/sync/sync_mode.dart';
 import 'package:quwoquan_app/personal_assistant/sync/sync_models.dart';
 
-class CloudStubSyncAdapter implements AssistentSyncAdapter {
+class CloudStubSyncAdapter implements AssistantSyncAdapter {
   const CloudStubSyncAdapter();
 
   @override
-  Future<AssistentSyncResult> pullPolicy({
+  Future<AssistantSyncResult> pullPolicy({
     required String policyVersionHint,
   }) async {
-    return AssistentSyncResult(
+    return AssistantSyncResult(
       success: true,
-      mode: AssistentSyncMode.cloudStub,
-      resource: AssistentSyncResource.policy,
+      mode: AssistantSyncMode.cloudStub,
+      resource: AssistantSyncResource.policy,
       message: 'Cloud stub policy placeholder returned.',
       payload: <String, dynamic>{
         'policyVersionHint': policyVersionHint,
@@ -25,39 +25,39 @@ class CloudStubSyncAdapter implements AssistentSyncAdapter {
   }
 
   @override
-  Future<AssistentSyncResult> pushInteractionEvents({
+  Future<AssistantSyncResult> pushInteractionEvents({
     required List<Map<String, dynamic>> events,
   }) async {
-    return AssistentSyncResult(
+    return AssistantSyncResult(
       success: true,
-      mode: AssistentSyncMode.cloudStub,
-      resource: AssistentSyncResource.interactionEvents,
+      mode: AssistantSyncMode.cloudStub,
+      resource: AssistantSyncResource.interactionEvents,
       message: 'Cloud stub accepted interaction events placeholder.',
       payload: <String, dynamic>{'count': events.length},
     );
   }
 
   @override
-  Future<AssistentSyncResult> pushScorecards({
+  Future<AssistantSyncResult> pushScorecards({
     required List<Map<String, dynamic>> scorecards,
   }) async {
-    return AssistentSyncResult(
+    return AssistantSyncResult(
       success: true,
-      mode: AssistentSyncMode.cloudStub,
-      resource: AssistentSyncResource.scorecards,
+      mode: AssistantSyncMode.cloudStub,
+      resource: AssistantSyncResource.scorecards,
       message: 'Cloud stub accepted scorecards placeholder.',
       payload: <String, dynamic>{'count': scorecards.length},
     );
   }
 
   @override
-  Future<AssistentSyncResult> syncMemoryRecords({
+  Future<AssistantSyncResult> syncMemoryRecords({
     required List<Map<String, dynamic>> memoryRecords,
   }) async {
-    return AssistentSyncResult(
+    return AssistantSyncResult(
       success: true,
-      mode: AssistentSyncMode.cloudStub,
-      resource: AssistentSyncResource.memoryRecords,
+      mode: AssistantSyncMode.cloudStub,
+      resource: AssistantSyncResource.memoryRecords,
       message: 'Cloud stub accepted memory records placeholder.',
       payload: <String, dynamic>{'count': memoryRecords.length},
     );

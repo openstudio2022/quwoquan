@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/personal_assistant/contracts/recall_result.dart';
+import 'package:quwoquan_app/assistant/contracts/recall_result.dart';
 import 'package:quwoquan_app/personal_assistant/skills/skill_manifest.dart';
 
 class PersonalAssistantSkillRouter {

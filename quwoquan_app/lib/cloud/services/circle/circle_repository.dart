@@ -29,6 +29,7 @@ String? _normalizeCircleFeedType(String? type) {
 abstract class CircleRepository {
   Future<List<Map<String, dynamic>>> listCircles({
     String? category,
+    String? subCategory,
     String? domainId,
     String? recommendFor,
     String? cursor,
@@ -123,6 +124,7 @@ class MockCircleRepository implements CircleRepository {
   @override
   Future<List<Map<String, dynamic>>> listCircles({
     String? category,
+    String? subCategory,
     String? domainId,
     String? recommendFor,
     String? cursor,
@@ -133,6 +135,11 @@ class MockCircleRepository implements CircleRepository {
     if (category != null) {
       result = result
           .where((c) => c['categoryId'] == category)
+          .toList(growable: false);
+    }
+    if (subCategory != null) {
+      result = result
+          .where((c) => c['subCategory'] == subCategory)
           .toList(growable: false);
     }
     if (domainId != null) {
@@ -347,6 +354,7 @@ class RemoteCircleRepository implements CircleRepository {
   @override
   Future<List<Map<String, dynamic>>> listCircles({
     String? category,
+    String? subCategory,
     String? domainId,
     String? recommendFor,
     String? cursor,
@@ -355,6 +363,7 @@ class RemoteCircleRepository implements CircleRepository {
   }) async {
     final query = <String, String>{'limit': '$limit'};
     if (category != null) query['category'] = category;
+    if (subCategory != null) query['subCategory'] = subCategory;
     if (domainId != null) query['domainId'] = domainId;
     if (recommendFor != null) query['recommendFor'] = recommendFor;
     if (cursor != null) query['cursor'] = cursor;

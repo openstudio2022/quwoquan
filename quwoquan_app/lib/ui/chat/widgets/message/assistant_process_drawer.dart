@@ -1,8 +1,27 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/assistant/application/capability_gateway.dart';
+import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/personal_assistant/app/capability_gateway.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/explainable_flow_event.dart';
+
+bool _containsInternalAssistantDrawerText(String text) {
+  final normalized = text.trim();
+  if (normalized.isEmpty) return false;
+  return normalized.contains('assistant_turn') ||
+      normalized.contains('contractVersion') ||
+      normalized.contains('queryTasks') ||
+      normalized.contains('machineEnvelope') ||
+      normalized.contains('runArtifacts') ||
+      normalized.contains('<tool_call>') ||
+      normalized.contains('tool_call');
+}
+
+String _sanitizeAssistantDrawerText(String text) {
+  final normalized = text.trim();
+  if (normalized.isEmpty) return '';
+  if (_containsInternalAssistantDrawerText(normalized)) return '';
+  return normalized;
+}
 
 /// Single collapsible process drawer for the assistant's reasoning pipeline.
 ///
@@ -51,10 +70,10 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
     final blocks = <ProcessContentBlock>[
       if (widget.processState.contentBlocks.isNotEmpty)
         ...widget.processState.contentBlocks
-      else if (widget.streamingThinkingText.trim().isNotEmpty)
+      else if (_sanitizeAssistantDrawerText(widget.streamingThinkingText).isNotEmpty)
         ProcessContentBlock(
           type: ProcessContentBlockType.text,
-          text: widget.streamingThinkingText.trim(),
+          text: _sanitizeAssistantDrawerText(widget.streamingThinkingText),
         )
       else if (widget.flowEvents.isNotEmpty)
         ..._flowEventsToBlocks(widget.flowEvents),
@@ -327,7 +346,7 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
   ) {
     final blocks = <ProcessContentBlock>[];
     for (final event in events) {
-      final detail = event.detail.trim();
+      final detail = _sanitizeAssistantDrawerText(event.detail);
       final refs = event.references
           .map(
             (ref) => ProcessReference(
@@ -352,11 +371,12 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
             _phaseIdToProcessStage(event.phaseId) == ProcessStage.searching
             ? ProcessContentBlockType.searchSummary
             : ProcessContentBlockType.analysisSummary;
+        final headline = _sanitizeAssistantDrawerText(event.headline);
         blocks.add(
           ProcessContentBlock(
             type: type,
-            text: event.headline.trim().isNotEmpty
-                ? event.headline.trim()
+            text: headline.isNotEmpty
+                ? headline
                 : '已核对参考资料',
             references: refs,
           ),

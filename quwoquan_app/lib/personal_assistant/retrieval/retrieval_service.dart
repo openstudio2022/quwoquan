@@ -5,22 +5,22 @@ import 'package:quwoquan_app/personal_assistant/retrieval/privacy_policy.dart';
 import 'package:quwoquan_app/personal_assistant/retrieval/retrieval_provider.dart';
 import 'package:quwoquan_app/personal_assistant/retrieval/retrieval_router.dart';
 
-class AssistentRetrievalService {
-  AssistentRetrievalService({
-    required AssistentRetrievalRouter router,
-    required List<AssistentRetrievalProvider> providers,
+class AssistantRetrievalService {
+  AssistantRetrievalService({
+    required AssistantRetrievalRouter router,
+    required List<AssistantRetrievalProvider> providers,
   }) : _router = router,
-       _providers = <String, AssistentRetrievalProvider>{
+       _providers = <String, AssistantRetrievalProvider>{
          for (final provider in providers) provider.providerId: provider,
        };
 
-  final AssistentRetrievalRouter _router;
-  final Map<String, AssistentRetrievalProvider> _providers;
+  final AssistantRetrievalRouter _router;
+  final Map<String, AssistantRetrievalProvider> _providers;
 
-  Future<AssistentRetrievalResult> retrieve(
-    AssistentRetrievalRequest request,
+  Future<AssistantRetrievalResult> retrieve(
+    AssistantRetrievalRequest request,
   ) async {
-    final policy = AssistentPrivacyPolicy.fromInputs(
+    final policy = AssistantPrivacyPolicy.fromInputs(
       privacyProfile: request.privacyProfile,
       contextScopeHint: <String, dynamic>{
         ...request.contextScopeHint,
@@ -36,7 +36,7 @@ class AssistentRetrievalService {
       },
     );
 
-    final allItems = <AssistentRetrievalItem>[];
+    final allItems = <AssistantRetrievalItem>[];
     final providersUsed = <String>[];
     final roundTraces = <Map<String, dynamic>>[];
     var degraded = false;
@@ -74,7 +74,7 @@ class AssistentRetrievalService {
               .map((q) {
                 final sanitized = policy.sanitizeQueryForWeb(q);
                 return provider.retrieve(
-                  AssistentRetrievalRequest(
+                  AssistantRetrievalRequest(
                     query: sanitized,
                     requestedCapabilities: decision.capabilitySequence,
                     contextScopeHint: request.contextScopeHint,
@@ -107,7 +107,7 @@ class AssistentRetrievalService {
               ? policy.sanitizeQueryForWeb(baseQuery)
               : baseQuery;
           final response = await provider.retrieve(
-            AssistentRetrievalRequest(
+            AssistantRetrievalRequest(
               query: queryForRound,
               requestedCapabilities: decision.capabilitySequence,
               contextScopeHint: request.contextScopeHint,
@@ -152,7 +152,7 @@ class AssistentRetrievalService {
         final refs = _buildAllReferences(deduped);
         final authScore = _authorityScore(deduped);
         final authCount = _authoritativeCount(deduped);
-        return AssistentRetrievalResult(
+        return AssistantRetrievalResult(
           success: deduped.isNotEmpty,
           message: message,
           items: deduped,
@@ -187,7 +187,7 @@ class AssistentRetrievalService {
     final deduped = _dedupeItems(allItems);
     final qScore = _computeQualityScore(deduped);
     final refs = _buildAllReferences(deduped);
-    return AssistentRetrievalResult(
+    return AssistantRetrievalResult(
       success: deduped.isNotEmpty,
       message: deduped.isEmpty ? '检索完成但信息不足。' : '检索达到轮次上限，返回当前最优结果。',
       items: deduped,
@@ -223,11 +223,11 @@ class AssistentRetrievalService {
     return '$query 最新';
   }
 
-  List<AssistentRetrievalItem> _dedupeItems(
-    List<AssistentRetrievalItem> items,
+  List<AssistantRetrievalItem> _dedupeItems(
+    List<AssistantRetrievalItem> items,
   ) {
     final seen = <String>{};
-    final result = <AssistentRetrievalItem>[];
+    final result = <AssistantRetrievalItem>[];
     for (final item in items) {
       final key = '${item.sourceType}:${item.sourceId}:${item.content}';
       if (seen.contains(key)) continue;
@@ -238,7 +238,7 @@ class AssistentRetrievalService {
   }
 
   /// Layer 3: 综合质量评分 = 权威性(0.4) + 时效性(0.35) + 覆盖量(0.25)
-  double _computeQualityScore(List<AssistentRetrievalItem> items) {
+  double _computeQualityScore(List<AssistantRetrievalItem> items) {
     if (items.isEmpty) return 0.0;
     final authScore = _authorityScore(items);
     // 时效性：若元数据中有 authorityScore 则用；否则用覆盖数量近似
@@ -248,18 +248,18 @@ class AssistentRetrievalService {
     return authScore * 0.4 + freshScore * 0.35 + coverScore * 0.25;
   }
 
-  double _coverageScore(List<AssistentRetrievalItem> items) {
+  double _coverageScore(List<AssistantRetrievalItem> items) {
     if (items.isEmpty) return 0.0;
     if (items.length >= 4) return 1.0;
     return items.length / 4.0;
   }
 
-  double _conflictScore(List<AssistentRetrievalItem> items) {
+  double _conflictScore(List<AssistantRetrievalItem> items) {
     if (items.isEmpty) return 1.0;
     return 0.0;
   }
 
-  double _authorityScore(List<AssistentRetrievalItem> items) {
+  double _authorityScore(List<AssistantRetrievalItem> items) {
     if (items.isEmpty) return 0.0;
     var score = 0.0;
     for (final item in items) {
@@ -269,7 +269,7 @@ class AssistentRetrievalService {
     return (score / items.length).clamp(0.0, 1.0);
   }
 
-  int _authoritativeCount(List<AssistentRetrievalItem> items) {
+  int _authoritativeCount(List<AssistantRetrievalItem> items) {
     return items.where((item) {
       final auth = item.metadata['authorityScore'];
       return auth is num && auth > 0;
@@ -278,7 +278,7 @@ class AssistentRetrievalService {
 
   /// 构建全量参考资料列表，权威来源标记 cited=true
   List<Map<String, dynamic>> _buildAllReferences(
-    List<AssistentRetrievalItem> items,
+    List<AssistantRetrievalItem> items,
   ) {
     return items
         .take(8)

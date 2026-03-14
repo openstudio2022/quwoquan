@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
-import 'package:quwoquan_app/personal_assistant/contracts/assistant_turn_contract.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/preference_fact.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/preference_fact.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/assistant_content_filters.dart';
 import 'package:quwoquan_app/personal_assistant/storage/personal_assistant_storage_path.dart';
 

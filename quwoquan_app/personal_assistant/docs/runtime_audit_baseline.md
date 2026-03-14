@@ -12,7 +12,7 @@
 
 已经明显收口的部分：
 
-- `assistant_turn` 主契约已集中在 `lib/personal_assistant/contracts/assistant_turn_contract.dart`
+- `assistant_turn` 主契约已通过 `lib/assistant/contracts/assistant_turn_contract.dart` 收口到 `lib/assistant/generated/contracts/assistant_turn.g.dart`
 - `ProblemClass`、`AnswerShape`、`FreshnessNeed`、`PlannerPhaseId` 等值域已有 typed enum 入口
 - 默认处理链中的一部分兜底文案已集中到 `default_processing_copy_bank.dart`
 - `skills/*.dart` 相较 `engine/app/tools` 已更接近 metadata-first 形态
@@ -54,8 +54,8 @@
 
 以下残留属于“兼容边界或 UI 防泄漏策略”，不应继续散在多处：
 
-- `lib/personal_assistant/app/capability_gateway.dart`
-- `lib/personal_assistant/app/trace_user_event_translator.dart`
+- `lib/assistant/application/capability_gateway.dart`
+- `lib/assistant/orchestration/trace_user_event_translator.dart`
 - `lib/personal_assistant/engine/process_event_consolidator.dart`
 - `lib/ui/chat/pages/chat_detail_page.dart`
 
@@ -73,17 +73,17 @@
 
 以下部分短期内可作为迁移 adapter 保留，但必须有退出路径：
 
-- `lib/personal_assistant/contracts/assistant_turn_contract.dart`
-- `lib/personal_assistant/contracts/runtime_enums.dart`
-- `lib/personal_assistant/contracts/planner_contracts.dart`
-- `lib/personal_assistant/contracts/query_task_contract.dart`
-- `lib/personal_assistant/contracts/intent_graph.dart`
-- `lib/personal_assistant/contracts/run_artifacts.dart`
+- `lib/assistant/contracts/assistant_turn_contract.dart`
+- `lib/assistant/contracts/runtime_enums.dart`
+- `lib/assistant/contracts/planner_contracts.dart`
+- `lib/assistant/contracts/query_task_contract.dart`
+- `lib/assistant/contracts/intent_graph.dart`
+- `lib/assistant/contracts/run_artifacts.dart`
 
-这些文件是当前 typed 边界，但未来目标不是继续扩写，而是逐步由：
+这些文件是当前 compatibility wrapper 边界，但未来目标不是继续扩写，而是逐步由：
 
 - `quwoquan_service/contracts/metadata/assistant/{business_object}/`
-- `quwoquan_app/lib/personal_assistant/runtime/generated/`
+- `quwoquan_app/lib/assistant/generated/`
 
 所生成的产物替换。
 
@@ -95,7 +95,7 @@
 
 集中热点：
 
-- `lib/personal_assistant/app/trace_user_event_translator.dart`
+- `lib/assistant/orchestration/trace_user_event_translator.dart`
 - `lib/personal_assistant/engine/process_event_consolidator.dart`
 - `lib/personal_assistant/tools/websearch_tool.dart`
 - `lib/personal_assistant/tools/web_fetch_tool.dart`
@@ -112,7 +112,7 @@
 集中热点：
 
 - `lib/personal_assistant/engine/react_runtime.dart`
-- `lib/personal_assistant/app/trace_user_event_translator.dart`
+- `lib/assistant/orchestration/trace_user_event_translator.dart`
 - `lib/personal_assistant/engine/process_event_consolidator.dart`
 - `lib/personal_assistant/engine/device_capability.dart`
 
@@ -163,8 +163,10 @@
 最终目录以以下原则为准：
 
 - shared metadata：`quwoquan_service/contracts/metadata/assistant/{business_object}/`
-- 端侧 generated：`quwoquan_app/lib/personal_assistant/runtime/generated/`
-- 端侧 runtime：逐步收缩为缩小版与本地隐私执行层
+- 端侧 generated：`quwoquan_app/lib/assistant/generated/`
+- 端侧 edge assistant：`quwoquan_app/lib/assistant/{application,domain,orchestration,capabilities,infrastructure}/`
+- 端侧 cloud client：`quwoquan_app/lib/cloud/services/assistant/`
+- 端侧 UI：`quwoquan_app/lib/ui/assistant/`
 - 云侧完整版：预留 `quwoquan_service/services/assistant-service/`
 
 若后续目录重构与本文件列出的热点冲突，优先以 metadata 真相源与 generated 产物替换现有手写实现。

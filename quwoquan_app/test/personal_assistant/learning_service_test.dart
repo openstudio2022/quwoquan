@@ -8,13 +8,13 @@ import 'package:quwoquan_app/personal_assistant/sync/sync_mode.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('AssistentLearningService', () {
+  group('AssistantLearningService', () {
     test('records interaction and builds user/tag-domain aggregates', () async {
       final file = File('${Directory.systemTemp.path}/learning_service_test_${DateTime.now().microsecondsSinceEpoch}.json');
-      final store = AssistentLearningStore(storagePath: file.path);
+      final store = AssistantLearningStore(storagePath: file.path);
       final adapter = LocalMockSyncAdapter();
-      final gateway = AssistentSyncGateway(adapter, AssistentSyncMode.localMock);
-      final service = AssistentLearningService(
+      final gateway = AssistantSyncGateway(adapter, AssistantSyncMode.localMock);
+      final service = AssistantLearningService(
         store: store,
         syncGateway: gateway,
       );
@@ -56,10 +56,10 @@ void main() {
       final file = File(
         '${Directory.systemTemp.path}/learning_feedback_test_${DateTime.now().microsecondsSinceEpoch}.json',
       );
-      final store = AssistentLearningStore(storagePath: file.path);
+      final store = AssistantLearningStore(storagePath: file.path);
       final adapter = LocalMockSyncAdapter();
-      final gateway = AssistentSyncGateway(adapter, AssistentSyncMode.localMock);
-      final service = AssistentLearningService(
+      final gateway = AssistantSyncGateway(adapter, AssistantSyncMode.localMock);
+      final service = AssistantLearningService(
         store: store,
         syncGateway: gateway,
       );

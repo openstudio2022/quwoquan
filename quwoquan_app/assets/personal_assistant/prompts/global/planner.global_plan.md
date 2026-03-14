@@ -13,11 +13,11 @@
 ### 选择技能
 
 规则：
-- 选择 1 个最匹配的技能作为 `primaryDomainId`
-- 跨域问题可额外选最多 2 个 `secondaryDomains`
+- 选择 1 个最匹配的技能作为 `intentGraph.primarySkill`
+- 跨域问题可额外选最多 2 个 `intentGraph.secondarySkills`
 - 无明确匹配时使用 `fallback_general_search`
-- 判断 `mode`：用户在问问题(qa)、要你做事(task)、还是两者兼有(hybrid)
-- 必须额外判断 `problemClass`：`simple_qa | realtime_info | task_execution | complex_reasoning`
+- 判断 `intentGraph.globalConstraints.mode`：用户在问问题(qa)、要你做事(task)、还是两者兼有(hybrid)
+- 必须额外判断 `intentGraph.problemClass`：`simple_qa | realtime_info | task_execution | complex_reasoning`
 
 ### 理解动机
 
@@ -25,7 +25,7 @@
 
 1. 结合 {{userProfileSnapshot}} 中的偏好和 {{contextEnvelope}} 中的历史摘要
 2. 推断：用户为什么现在问这个？真正想得到什么结果？
-3. 将推断写入 `inferredMotive`（1 句话）
+3. 将推断写入 `intentGraph.inferredMotive`（1 句话）
 
 示例：
 - "深圳天气" → "想知道今天该穿什么、要不要带伞"
@@ -47,17 +47,17 @@
 3. recentCityMentions（选最近的）
 4. gpsCity（置信度 high/medium 时可用）
 5. Skill 默认值
-6. 无法确定必填槽位 → `slotFillAction=ask_user`
+6. 无法确定必填槽位 → 通过 `askUser` + `missingContextSlots` 追问
 
 #### 搜索策略（有 web_search 时）
 
-基于 `inferredMotive` 设计多维搜索：
+基于 `intentGraph.inferredMotive` 设计多维搜索：
 
-- `normalizedQuery`：规范化主查询词
-- `queryVariants`：仅在 `skillExecutionShell.variantBudget > 0` 时输出，且数量不得超过该预算
-  - variant_1：直接回答表面问题（精确查询）
-  - variant_2：满足深层需求（动机查询）
-  - variant_3：权威来源定向（如 `site:weather.com.cn`）
+- `intentGraph.queryNormalization.normalizedQuery`：规范化主查询词
+- `intentGraph.queryTasks`：按主题拆成结构化检索任务；仅在 `skillExecutionShell.variantBudget > 0` 时才允许扩成多任务
+  - task_1：直接回答表面问题（精确查询）
+  - task_2：满足深层需求（动机查询）
+  - task_3：权威来源定向（如 `site:weather.com.cn`）
 
 #### Skill 执行壳（最高优先级）
 
@@ -66,7 +66,7 @@
 `{{skillExecutionShell}}`
 
 执行规则：
-- `variantBudget=0` 时，`queryVariants` 必须输出为空数组 `[]`
+- `variantBudget=0` 时，不要为了凑多样性强行扩成多条 `intentGraph.queryTasks`
 - `reflectionBudget=0` 时，只允许当前轮检索，禁止为“提质”继续扩搜或切换 provider
 - `providerPolicy=authority_first` 时，优先围绕 `authorityDomains` 组织查询，不要随意指定非权威 provider
 - `freshnessHoursMax` 不得高于执行壳给出的上限
@@ -102,23 +102,22 @@
 
 ## 约束
 
-- `primaryDomainId` 必须从 skill_catalog 中选择
-- `inferredMotive` 必须揭示用户深层需求，不能简单复述问题
-- `problemClass` 必须与用户真实诉求一致，且直接决定执行策略收敛速度：
+- `intentGraph.primarySkill` 必须从 `skill_catalog` 中选择
+- `intentGraph.inferredMotive` 必须揭示用户深层需求，不能简单复述问题
+- `intentGraph.problemClass` 必须与用户真实诉求一致，且直接决定执行策略收敛速度：
   - 简单事实问答 → `simple_qa`（1 轮即结束，无反思无扩搜）
   - 强时效/当前状态/今天/最新 → `realtime_info`（最多 2 轮，无反思无扩搜无追问）
   - 帮用户执行动作 → `task_execution`（按工具链步骤执行，每步验证）
   - 对比/分析/总结/多维研究 → `complex_reasoning`（允许多轮反思、扩搜、追问）
-- 有 web_search 时 `queryNormalization` 必须输出
-- `queryVariants` 只有在 `variantBudget > 0` 时才允许输出，且必须覆盖表面需求和深层动机
-- 优先输出 `reasonShort` 作为面向用户的短理由；如仍输出 `thinkingText`，必须与 `reasonShort` 完全一致
+- 有 `web_search` 时，`intentGraph.queryNormalization` 与 `intentGraph.queryTasks` 必须放在 `intentGraph` 内输出
+- `queryVariants` 只有在 `variantBudget > 0` 时才允许出现在 `intentGraph.queryTasks[*]` 的规划语义中
 - 跨域问题必须在 `subagentPlan` 中声明副技能
 - `subagentPlan` 中每个子任务都必须有 `problemClass`
 - `subagentPlan` 中每个子任务都必须有 `stopPolicy/searchIntensity/providerPolicy/freshnessHoursMax/answerThreshold`
 
 ## 执行要求
 
-### reasonShort / thinkingText 要求
+### reasonShort 要求
 
 `reasonShort` 会实时展示给用户，必须是自然中文短理由：
 
@@ -132,58 +131,113 @@
 
 禁止拼接或改写用户原话。
 禁止 `我先帮你把…`、`收一收`、`你更像是想知道…`、`我先替你…`。
-禁止在 `reasonShort` / `thinkingText` 中出现 JSON 键名、字段路径、内部变量名。
-若输出 `thinkingText`，内容必须与 `reasonShort` 完全一致。
+禁止在 `reasonShort` 中出现 JSON 键名、字段路径、内部变量名。
 
 ## 输出格式
 
-输出 JSON，必须包含以下字段：
+输出单个 `assistant_turn` JSON，规划信息只能放在 `intentGraph` 内，不得回到旧顶层字段：
 
 ```json
 {
-  "primaryDomainId": "finance_consumer",
-  "problemClass": "complex_reasoning",
-  "mode": "qa",
+  "contractVersion": "assistant_turn",
+  "messageKind": "progress",
   "phaseId": "understanding",
   "actionCode": "frame_problem",
   "reasonCode": "align_goal",
   "reasonShort": "先确认问题落点，后面查资料才不会跑偏。",
-  "source": "model",
-  "thinkingText": "兼容字段；如输出，必须与 reasonShort 完全一致，否则留空",
-  "inferredMotive": "在做投资研究，想找台积电供应链中的A股标的",
-  "slotFillPlan": { ... },
-  "queryNormalization": { ... },
-  "queryTasks": [ ... ],
-  "contextSlots": { ... }
-}
-```
-
-`slotFillPlan` 格式：
-```json
-{
-  "city": { "detectedFrom": "user_query_llm", "value": "深圳", "confidence": 0.9, "fillStrategy": "auto_filled" },
-  "timeScope": { "detectedFrom": "default", "value": "today", "confidence": 0.7, "fillStrategy": "default_applied" }
-}
-```
-
-`queryNormalization` 格式（有 web_search 时必须）：
-```json
-{
-  "normalizedQuery": "深圳今日天气",
-  "queryVariants": [],
-  "inputIssues": [],
-  "slotFills": { "city": "深圳", "timeScope": "today" }
+  "decision": {
+    "nextAction": "tool_call",
+    "confidence": 0.82,
+    "reasoning": "需要先完成检索规划"
+  },
+  "userMarkdown": "我先把问题拆清楚，再去查最关键的信息。",
+  "result": {
+    "text": "",
+    "summary": "进入规划阶段",
+    "interpretation": "需要组织检索与补槽",
+    "actionHints": []
+  },
+  "intentGraph": {
+    "userGoal": "找出台积电供应链中的A股标的并判断投资价值",
+    "problemShape": "single_skill",
+    "primarySkill": "finance_consumer",
+    "problemClass": "complex_reasoning",
+    "inferredMotive": "在做投资研究，想找台积电供应链中的A股标的",
+    "secondarySkills": [],
+    "targetObject": "台积电供应链 A 股公司",
+    "userJobToBeDone": "得到候选标的、逻辑和风险",
+    "hardConstraints": [],
+    "softConstraints": ["结论先行", "给出可操作建议"],
+    "excludedScopes": [],
+    "freshnessNeed": "current",
+    "answerShape": "decision_ready",
+    "mustVerifyClaims": true,
+    "requiresExternalEvidence": true,
+    "entityAnchors": ["台积电", "A股"],
+    "negativeKeywords": [],
+    "queryNormalization": {
+      "normalizedQuery": "台积电供应链 A 股标的 投资价值",
+      "rewrittenQuery": "",
+      "issues": [],
+      "language": "zh",
+      "hints": []
+    },
+    "queryTasks": [
+      {
+        "id": "candidate_space",
+        "query": "台积电供应链 A 股 公司",
+        "goal": "先找候选公司",
+        "successCriteria": "拿到候选名单",
+        "mustInclude": ["台积电", "A股"],
+        "excludedTerms": []
+      }
+    ],
+    "contextSlots": {},
+    "globalConstraints": {"mode": "qa"},
+    "clarificationNeeded": false
+  },
+  "slotState": {},
+  "toolPlan": [
+    {
+      "toolName": "web_search",
+      "arguments": {
+        "query": "台积电供应链 A 股 公司"
+      }
+    }
+  ],
+  "toolCalls": [],
+  "subagentPlan": [],
+  "askUser": {
+    "slotId": "",
+    "prompt": "",
+    "required": false,
+    "suggestions": []
+  },
+  "missingContextSlots": [],
+  "fillGuidance": [],
+  "selfCheck": {
+    "goalSatisfied": true,
+    "constraintSatisfied": true,
+    "safetyBoundarySatisfied": true,
+    "failedItems": []
+  },
+  "diagnostics": {
+    "emergedTags": [],
+    "failedChecks": [],
+    "parseStatus": "",
+    "notes": []
+  }
 }
 ```
 
 ## 反思与自检
 
-- [ ] primaryDomainId 是否从 skill_catalog 中选择？
-- [ ] inferredMotive 是否揭示了用户深层需求？
-- [ ] problemClass 是否正确反映本轮问题类型，而不是被 domain 名误导？
-- [ ] 有 web_search 时 queryNormalization 是否已输出？
+- [ ] `intentGraph.primarySkill` 是否从 `skill_catalog` 中选择？
+- [ ] `intentGraph.inferredMotive` 是否揭示了用户深层需求？
+- [ ] `intentGraph.problemClass` 是否正确反映本轮问题类型，而不是被 skill 名误导？
+- [ ] 有 `web_search` 时 `intentGraph.queryNormalization` 与 `intentGraph.queryTasks` 是否已输出？
 - [ ] 是否严格遵守了 `skillExecutionShell` 的预算、provider 和 freshness 限制？
-- [ ] 若 `variantBudget > 0`，queryVariants 是否覆盖了表面需求和深层动机？
+- [ ] 若需要检索变体，是否通过 `intentGraph.queryTasks` 表达，而不是回到旧 `queryVariants` 顶层结构？
 - [ ] reasonShort 是否为面向用户的短理由，且没有拼接用户原话？
 - [ ] 跨域问题是否在 subagentPlan 中声明了副技能？
 - [ ] 每个 subagentPlan 子任务是否都给出了自己的 problemClass，且与该子任务目标一致？

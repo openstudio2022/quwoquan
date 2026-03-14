@@ -62,10 +62,13 @@ PY
 echo "[gate] Step 2/3: flutter analyze"
 flutter analyze \
   lib/ui/chat/pages/chat_detail_page.dart \
-  lib/personal_assistant/app/capability_gateway.dart \
-  lib/personal_assistant/app/assistant_gateway.dart \
-  lib/personal_assistant/engine/agent_loop.dart \
-  lib/personal_assistant/engine/react_runtime.dart \
+  lib/assistant/api/assistant_api_gateway.dart \
+  lib/assistant/application/capability_gateway.dart \
+  lib/assistant/application/assistant_gateway.dart \
+  lib/assistant/application/assistant_providers.dart \
+  lib/assistant/application/assistant_edge_service.dart \
+  lib/assistant/runtime/assistant_runtime.dart \
+  lib/assistant/spi/assistant_adapter_runtime.dart \
   lib/core/constants/app_concept_constants.dart \
   lib/core/constants/ui_text_constants.dart \
   test/ui/chat/widgets/chat_detail_page_assistant_ui_regression_test.dart

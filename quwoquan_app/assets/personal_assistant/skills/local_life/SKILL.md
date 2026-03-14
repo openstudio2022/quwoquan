@@ -57,10 +57,10 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
     "budget": {"value": "", "source": "user_query|memory|unknown"}
   },
   "toolPlan": [
-    {"tool": "local_context", "arguments": {"requestedFields": ["location"]}},
-    {"tool": "web_search", "arguments": {"query": "深圳福田区 川菜馆 推荐 2025", "freshnessHoursMax": 168}}
+    {"toolName": "local_context", "arguments": {"requestedFields": ["location"]}},
+    {"toolName": "web_search", "arguments": {"query": "深圳福田区 川菜馆 推荐 2025", "freshnessHoursMax": 168}}
   ],
-  "askUser": {"needed": false, "question": ""},
+  "askUser": {"slotId": "", "prompt": "", "required": false, "suggestions": []},
   "userMarkdown": "正在查询附近信息…"
 }
 ```

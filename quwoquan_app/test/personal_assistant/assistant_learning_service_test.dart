@@ -9,23 +9,23 @@ import 'package:quwoquan_app/personal_assistant/sync/sync_models.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('AssistentLearningService', () {
+  group('AssistantLearningService', () {
     late Directory tempDir;
-    late AssistentLearningStore store;
-    late AssistentLearningService service;
+    late AssistantLearningStore store;
+    late AssistantLearningService service;
 
     setUp(() async {
       tempDir = await Directory.systemTemp.createTemp(
         'assistant_learning_service_test_',
       );
-      store = AssistentLearningStore(
+      store = AssistantLearningStore(
         storagePath: '${tempDir.path}/learning_store.json',
       );
-      service = AssistentLearningService(
+      service = AssistantLearningService(
         store: store,
-        syncGateway: AssistentSyncGateway(
+        syncGateway: AssistantSyncGateway(
           _FakeSyncAdapter(),
-          AssistentSyncMode.localMock,
+          AssistantSyncMode.localMock,
         ),
       );
     });
@@ -80,51 +80,51 @@ void main() {
   });
 }
 
-class _FakeSyncAdapter implements AssistentSyncAdapter {
+class _FakeSyncAdapter implements AssistantSyncAdapter {
   @override
-  Future<AssistentSyncResult> pullPolicy({
+  Future<AssistantSyncResult> pullPolicy({
     required String policyVersionHint,
   }) async {
-    return const AssistentSyncResult(
+    return const AssistantSyncResult(
       success: true,
-      mode: AssistentSyncMode.localMock,
-      resource: AssistentSyncResource.policy,
+      mode: AssistantSyncMode.localMock,
+      resource: AssistantSyncResource.policy,
       message: 'ok',
     );
   }
 
   @override
-  Future<AssistentSyncResult> pushInteractionEvents({
+  Future<AssistantSyncResult> pushInteractionEvents({
     required List<Map<String, dynamic>> events,
   }) async {
-    return const AssistentSyncResult(
+    return const AssistantSyncResult(
       success: true,
-      mode: AssistentSyncMode.localMock,
-      resource: AssistentSyncResource.interactionEvents,
+      mode: AssistantSyncMode.localMock,
+      resource: AssistantSyncResource.interactionEvents,
       message: 'ok',
     );
   }
 
   @override
-  Future<AssistentSyncResult> pushScorecards({
+  Future<AssistantSyncResult> pushScorecards({
     required List<Map<String, dynamic>> scorecards,
   }) async {
-    return const AssistentSyncResult(
+    return const AssistantSyncResult(
       success: true,
-      mode: AssistentSyncMode.localMock,
-      resource: AssistentSyncResource.scorecards,
+      mode: AssistantSyncMode.localMock,
+      resource: AssistantSyncResource.scorecards,
       message: 'ok',
     );
   }
 
   @override
-  Future<AssistentSyncResult> syncMemoryRecords({
+  Future<AssistantSyncResult> syncMemoryRecords({
     required List<Map<String, dynamic>> memoryRecords,
   }) async {
-    return const AssistentSyncResult(
+    return const AssistantSyncResult(
       success: true,
-      mode: AssistentSyncMode.localMock,
-      resource: AssistentSyncResource.memoryRecords,
+      mode: AssistantSyncMode.localMock,
+      resource: AssistantSyncResource.memoryRecords,
       message: 'ok',
     );
   }

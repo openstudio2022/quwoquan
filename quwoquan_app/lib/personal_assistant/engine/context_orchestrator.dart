@@ -1,7 +1,7 @@
-import 'package:quwoquan_app/personal_assistant/contracts/context_fill_contract.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/context_assembly_result.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/context_continuity_policy.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/synthesis_readiness_result.dart';
+import 'package:quwoquan_app/assistant/contracts/context_fill_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
+import 'package:quwoquan_app/assistant/contracts/context_continuity_policy.dart';
+import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
 
 class PersonalAssistantContextOrchestrator {
   const PersonalAssistantContextOrchestrator();

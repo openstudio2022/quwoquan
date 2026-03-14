@@ -1,6 +1,6 @@
 dart_class: SubagentPlan
-library_path: personal_assistant/contracts/subagent_plan.dart
-output_path: personal_assistant/runtime/generated/contracts/subagent_plan.g.dart
+library_path: assistant/contracts/subagent_plan.dart
+output_path: assistant/generated/contracts/subagent_plan.g.dart
 defaults:
   mode: qa
   timeoutMs: 12000

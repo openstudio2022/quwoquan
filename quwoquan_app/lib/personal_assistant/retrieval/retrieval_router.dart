@@ -1,15 +1,15 @@
 import 'package:quwoquan_app/personal_assistant/retrieval/privacy_policy.dart';
 import 'package:quwoquan_app/personal_assistant/retrieval/retrieval_models.dart';
 
-class AssistentRetrievalRouter {
-  const AssistentRetrievalRouter();
+class AssistantRetrievalRouter {
+  const AssistantRetrievalRouter();
 
-  AssistentRetrievalRouteDecision decide({
-    required AssistentRetrievalRequest request,
+  AssistantRetrievalRouteDecision decide({
+    required AssistantRetrievalRequest request,
     required Map<String, List<String>> providerCapabilities,
   }) {
     final capabilities = request.requestedCapabilities;
-    final policy = AssistentPrivacyPolicy.fromInputs(
+    final policy = AssistantPrivacyPolicy.fromInputs(
       privacyProfile: request.privacyProfile,
       contextScopeHint: <String, dynamic>{
         ...request.contextScopeHint,
@@ -41,7 +41,7 @@ class AssistentRetrievalRouter {
     }
 
     final maxRounds = policy.maxWebRounds <= 0 ? 0 : policy.maxWebRounds;
-    return AssistentRetrievalRouteDecision(
+    return AssistantRetrievalRouteDecision(
       providerSequence: providers,
       capabilitySequence: approvedCapabilities,
       maxRounds: maxRounds,

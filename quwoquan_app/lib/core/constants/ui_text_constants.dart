@@ -2,6 +2,19 @@ class UITextConstants {
   // ==================== 导航 ====================
   static const String home = '首页';
   static const String discovery = '发现';
+  static const String homeTabFollowing = '关注';
+  static const String homeTabFeatured = '精选';
+  static const String homeTabCircles = '圈子';
+  static const String homeCirclesMy = '我的';
+  static const String homeCirclesManage = '管理';
+  static const String homeCirclesHotTopics = '热议话题';
+  static const String homeCirclesMyCircles = '我的圈子';
+  static const String homeCirclesSuggested = '推荐加入';
+  static const String homeCirclesRecent = '最近活跃';
+  static const String homeCirclesUnread = '未读';
+  static const String homeCirclesManaged = '我管理的';
+  static const String homeCirclesRecentlyJoined = '最近加入';
+  static const String homeCirclesViewAll = '查看全部';
 
   /// 发现页 Tab（1:1 对应 DiscoveryFeed.tsx CATEGORIES）
   static const String discoveryTabMoment = '点滴';
@@ -355,6 +368,13 @@ class UITextConstants {
 
   /// 发起群聊页（图一）
   static const String startGroupChat = '发起群聊';
+  static const String addContact = '加联系';
+  static const String globalActionSheetTitle = '发起';
+  static const String globalSearchTitle = '搜索';
+  static const String createActionCamera = '从摄像';
+  static const String createActionTextShort = '写点字';
+  static const String createActionGroupChatHint = '拉人进群，立即开聊';
+  static const String createActionContactHint = '找到新联系，发起对话';
   static const String createNewGroupChat = '创建新群聊';
   static const String selectFriendsFromGroupChat = '选择群聊中的同好';
   static const String selectFriendsFromCircle = '选择圈子中的同好';

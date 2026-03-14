@@ -85,7 +85,7 @@ class _SectionChatState extends ConsumerState<SectionChat> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    UITextConstants.circleGroups,
+                    '圈聊入口',
                     style: TextStyle(
                       fontSize: AppTypography.lg,
                       fontWeight: AppTypography.semiBold,
@@ -94,7 +94,7 @@ class _SectionChatState extends ConsumerState<SectionChat> {
                   ),
                   SizedBox(height: AppSpacing.xs),
                   Text(
-                    '最近消息：欢迎新成员加入！',
+                    '最近消息与未读会话统一在趣信中查看',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(

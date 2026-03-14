@@ -1,6 +1,6 @@
-import 'package:quwoquan_app/personal_assistant/contracts/intent_graph.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/recall_result.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
+import 'package:quwoquan_app/assistant/contracts/recall_result.dart';
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 
 /// Execution mode for the current assistant turn.
 enum AgentMode {

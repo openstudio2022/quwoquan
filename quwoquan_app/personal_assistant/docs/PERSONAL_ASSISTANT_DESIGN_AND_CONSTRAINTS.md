@@ -10,7 +10,8 @@
 
 凡是涉及以下任一目录或模块，进入探索、设计、开发、测试与验收前都必须先读本文：
 
-- `quwoquan_app/lib/personal_assistant/`
+- `quwoquan_app/lib/assistant/`
+- `quwoquan_app/lib/personal_assistant/`（仅当触达兼容实现或 legacy bridge 时）
 - `quwoquan_app/assets/personal_assistant/`
 - `quwoquan_app/test/personal_assistant/`
 - `quwoquan_app/lib/ui/chat/` 中与助理链路直接耦合的页面或渲染逻辑
@@ -47,11 +48,14 @@
 ### 2.5 元数据与 codegen 约束
 
 - 助理协议真相源统一放在 `quwoquan_service/contracts/metadata/assistant/`
-- 目录划分必须按业务对象组织，优先形态为 `assistant/{business_object}/`，仅允许少量 `_shared/` 共享类型
-- 端侧协议生成产物统一放在 `quwoquan_app/lib/personal_assistant/runtime/generated/`
-- `runtime/generated/` 下所有文件必须带 `DO NOT EDIT`，禁止手写、禁止混放桥接层
-- `quwoquan_app/lib/personal_assistant/contracts/` 逐步退出 DTO / enum / serde 定义职责
+- 目录划分必须按业务对象组织，并在业务对象之上保留业务大类聚类：`assistant/{cluster}/{business_object}/`，仅允许少量 `_shared/` 共享类型
+- 端侧助理内核目录主轴不再使用 `runtime`，目标结构为 `quwoquan_app/lib/assistant/{application,domain,orchestration,capabilities,infrastructure,generated}/`
+- 端侧协议生成产物统一放在 `quwoquan_app/lib/assistant/generated/`
+- `generated/` 下所有文件必须带 `DO NOT EDIT`，禁止手写、禁止混放桥接层
+- `quwoquan_app/lib/personal_assistant/contracts/` 逐步退出 DTO / enum / serde 定义职责，不再作为当前 contract 主轴
+- `quwoquan_app/lib/personal_assistant/app/` 仅允许保留 compatibility shim，不再承接新的 provider / gateway 实现，也不再作为当前 app 入口主轴
 - 当前实施阶段只生成端侧 Dart 协议产物，并只做端侧校验；但 metadata 设计必须保持与端云一体化一致，后续可生成 Go 产物
+- 当前完整 `agentloop + react + skill + tool` 服务先在端侧实现，但目录与对象设计必须兼容未来云侧 `assistant-service` 完整承接
 
 ---
 
@@ -67,7 +71,10 @@
 | Tool 权限 | `quwoquan_app/assets/personal_assistant/tools/catalog/tool_permissions.json` |
 | Skill 域策略 | `quwoquan_app/assets/personal_assistant/skills/<domain>/` |
 | 助理协议 metadata | `quwoquan_service/contracts/metadata/assistant/` |
-| 端侧助理协议 codegen 产物 | `quwoquan_app/lib/personal_assistant/runtime/generated/` |
+| 端侧助理协议 codegen 产物 | `quwoquan_app/lib/assistant/generated/` |
+| 端侧 edge assistant 实现 | `quwoquan_app/lib/assistant/` |
+| 端侧 cloud client | `quwoquan_app/lib/cloud/services/assistant/` |
+| 端侧 UI 入口 | `quwoquan_app/lib/ui/assistant/` |
 
 Legacy 兼容层允许存在，但不得作为新功能的首选依赖。
 
@@ -88,6 +95,7 @@ Legacy 兼容层允许存在，但不得作为新功能的首选依赖。
 若需求涉及助手：
 
 - `spec.md` 必须明确是否影响 skill、tool、prompt、memory、streaming
+- `spec.md` 必须明确影响的业务大类：conversation / memory / learning / skill / tool / agent / model / channel
 - 明确哪些内容属于 asset 扩展，哪些属于 runtime 约束
 - 写清楚不可通过 runtime 硬编码实现的边界
 
@@ -97,6 +105,7 @@ Legacy 兼容层允许存在，但不得作为新功能的首选依赖。
 
 - `design.md` 必须引用本文
 - 说明本方案如何满足“无垂类特判、无字符串硬编码、模板资产化”
+- 说明本方案如何映射到 `metadata -> service -> cloud client -> ui domain` 主轴与 `domain/{cluster}/{business_object}` 结构
 - 若引入新场景，必须附对应场景级文档
 
 ### 4.4 Dev
@@ -106,6 +115,7 @@ Legacy 兼容层允许存在，但不得作为新功能的首选依赖。
 - 开发前确认读过本文第 2 节与第 3 节
 - 优先改 asset / metadata / config，其次才是 runtime
 - 若涉及协议对象、enum、contractVersion、字段名，必须先改 `quwoquan_service/contracts/metadata/assistant/`，不得先手写 Dart contract
+- 若涉及目录迁移，优先迁到 `quwoquan_app/lib/assistant/` 新结构，不再新增 `lib/personal_assistant/contracts/*`、`lib/personal_assistant/app/*` 或 `personal_assistant/runtime/*` 风格目录
 - 若不得不新增兼容逻辑，必须说明退出条件与清理路径
 
 ### 4.5 Verify
@@ -126,6 +136,7 @@ Legacy 兼容层允许存在，但不得作为新功能的首选依赖。
 助手相关 `design.md` 至少补充：
 
 - 影响层：runtime / skill / tool / prompt / UI
+- 影响的业务大类聚类：conversation / memory / learning / skill / tool / agent / model / channel
 - 真相源映射
 - 场景级文档引用
 - 回滚与兼容清理策略
@@ -137,7 +148,7 @@ Legacy 兼容层允许存在，但不得作为新功能的首选依赖。
 1. metadata / prompt / skill / tool catalog
 2. codegen 产物（当前先 Dart，后续可扩到 Go）
 3. typed contract / parser / serializer 适配层
-4. runtime orchestration
+4. application / orchestration
 5. UI 渲染与解释事件
 
 ### 5.3 测试

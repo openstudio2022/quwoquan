@@ -67,7 +67,7 @@ class SettingsPage extends ConsumerWidget {
                 ),
                 _SettingsRow(
                   icon: CupertinoIcons.lock_shield,
-                  label: '小趣读取创作内容',
+                  label: '${AppConceptConstants.assistantLabel}读取创作内容',
                   trailingText: _personalContentAccessSummary(
                     contentAccessState,
                   ),
@@ -136,11 +136,11 @@ class SettingsPage extends ConsumerWidget {
     final confirmed = await showCupertinoDialog<bool>(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('小趣读取创作内容'),
+        title: Text('${AppConceptConstants.assistantLabel}读取创作内容'),
         content: Text(
           enable
-              ? '允许后，小趣可在授权范围内读取你的点滴与作品，用于上下文记忆和长期知识引用。'
-              : '关闭后，小趣将停止使用你的创作内容，并回退到不含个人创作内容的旧检索链路。',
+              ? '允许后，${AppConceptConstants.assistantLabel}可在授权范围内读取你的点滴与作品，用于上下文记忆和长期知识引用。'
+              : '关闭后，${AppConceptConstants.assistantLabel}将停止使用你的创作内容，并回退到不含个人创作内容的旧检索链路。',
         ),
         actions: <Widget>[
           CupertinoDialogAction(

@@ -4,7 +4,7 @@ import 'package:quwoquan_app/personal_assistant/retrieval/privacy_policy.dart';
 import 'package:quwoquan_app/personal_assistant/retrieval/retrieval_models.dart';
 import 'package:quwoquan_app/personal_assistant/retrieval/retrieval_provider.dart';
 
-class PageContextRetrievalProvider implements AssistentRetrievalProvider {
+class PageContextRetrievalProvider implements AssistantRetrievalProvider {
   const PageContextRetrievalProvider(this._repository);
 
   final AppContentRepository _repository;
@@ -14,14 +14,14 @@ class PageContextRetrievalProvider implements AssistentRetrievalProvider {
 
   @override
   List<String> get capabilityIds => const <String>[
-    AssistentCapabilityCatalog.currentPage,
-    AssistentCapabilityCatalog.pageComments,
-    AssistentCapabilityCatalog.behaviorTimeline,
+    AssistantCapabilityCatalog.currentPage,
+    AssistantCapabilityCatalog.pageComments,
+    AssistantCapabilityCatalog.behaviorTimeline,
   ];
 
   @override
-  Future<AssistentRetrievalResult> retrieve(
-    AssistentRetrievalRequest request,
+  Future<AssistantRetrievalResult> retrieve(
+    AssistantRetrievalRequest request,
   ) async {
     final scope = request.contextScopeHint;
     final contentAccess =
@@ -37,7 +37,7 @@ class PageContextRetrievalProvider implements AssistentRetrievalProvider {
         ? true
         : contentIndex['enabled'] == true;
     final pageType = (scope['pageType'] as String?)?.trim() ?? 'chat';
-    final policy = AssistentPrivacyPolicy.fromInputs(
+    final policy = AssistantPrivacyPolicy.fromInputs(
       privacyProfile: request.privacyProfile,
       contextScopeHint: <String, dynamic>{
         ...scope,
@@ -46,7 +46,7 @@ class PageContextRetrievalProvider implements AssistentRetrievalProvider {
       fallbackCapabilities: request.requestedCapabilities,
     );
     if (!consentGranted) {
-      return AssistentRetrievalResult(
+      return AssistantRetrievalResult(
         success: false,
         message: '未授权读取创作内容。',
         providersUsed: const <String>['page_context'],
@@ -54,7 +54,7 @@ class PageContextRetrievalProvider implements AssistentRetrievalProvider {
       );
     }
     if (!policy.allowsPageType(pageType)) {
-      return AssistentRetrievalResult(
+      return AssistantRetrievalResult(
         success: false,
         message: '隐私策略不允许读取 $pageType 页面上下文。',
         providersUsed: const <String>['page_context'],
@@ -68,14 +68,14 @@ class PageContextRetrievalProvider implements AssistentRetrievalProvider {
       identityIndexEnabled: identityIndexEnabled,
     );
     if (items.isEmpty) {
-      return AssistentRetrievalResult(
+      return AssistantRetrievalResult(
         success: false,
         message: '当前页面暂未产出可用上下文。',
         providersUsed: const <String>['page_context'],
         degraded: false,
       );
     }
-    return AssistentRetrievalResult(
+    return AssistantRetrievalResult(
       success: true,
       message: '已提取$pageType 页面上下文。',
       items: items,
@@ -85,13 +85,13 @@ class PageContextRetrievalProvider implements AssistentRetrievalProvider {
     );
   }
 
-  List<AssistentRetrievalItem> _buildPageItems({
+  List<AssistantRetrievalItem> _buildPageItems({
     required String pageType,
     required Map<String, dynamic> scope,
     required String query,
     required bool identityIndexEnabled,
   }) {
-    final results = <AssistentRetrievalItem>[];
+    final results = <AssistantRetrievalItem>[];
     switch (pageType) {
       case 'discovery':
         final cards = <Map<String, dynamic>>[
@@ -116,7 +116,7 @@ class PageContextRetrievalProvider implements AssistentRetrievalProvider {
           final text = _firstNonEmpty('$name $desc', name);
           if (text.isEmpty) continue;
           results.add(
-            AssistentRetrievalItem(
+            AssistantRetrievalItem(
               content: text,
               sourceType: 'page.circles',
               sourceId: circle['id']?.toString() ?? 'circle_item',
@@ -138,7 +138,7 @@ class PageContextRetrievalProvider implements AssistentRetrievalProvider {
             '最近优化:${hints['optimizeAction']}',
         ].join('，');
         results.add(
-          AssistentRetrievalItem(
+          AssistantRetrievalItem(
             content: createSummary,
             sourceType: 'page.create',
             sourceId: 'create_state',
@@ -153,7 +153,7 @@ class PageContextRetrievalProvider implements AssistentRetrievalProvider {
           if (scope['tab'] != null) '当前页签:${scope['tab']}',
         ].join('，');
         results.add(
-          AssistentRetrievalItem(
+          AssistantRetrievalItem(
             content: homeSummary,
             sourceType: 'page.home',
             sourceId: 'home_state',
@@ -171,7 +171,7 @@ class PageContextRetrievalProvider implements AssistentRetrievalProvider {
           final text = (message['content'] as String?)?.trim() ?? '';
           if (text.isEmpty) continue;
           results.add(
-            AssistentRetrievalItem(
+            AssistantRetrievalItem(
               content: text,
               sourceType: 'page.chat',
               sourceId: message['id']?.toString() ?? 'chat_message',
@@ -192,7 +192,7 @@ class PageContextRetrievalProvider implements AssistentRetrievalProvider {
         const <String>[];
     if (behaviorTimeline.isNotEmpty) {
       results.add(
-        AssistentRetrievalItem(
+        AssistantRetrievalItem(
           content: '近期行为：${behaviorTimeline.join(' -> ')}',
           sourceType: 'behavior.timeline',
           sourceId: 'behavior_timeline',
@@ -218,7 +218,7 @@ class PageContextRetrievalProvider implements AssistentRetrievalProvider {
     return 0.6;
   }
 
-  AssistentRetrievalItem? _buildDiscoveryItem(
+  AssistantRetrievalItem? _buildDiscoveryItem(
     Map<String, dynamic> item,
     String query, {
     required bool identityIndexEnabled,
@@ -237,7 +237,7 @@ class PageContextRetrievalProvider implements AssistentRetrievalProvider {
         ? 'legacy_context'
         : (identity == 'moment' ? 'context_memory' : 'knowledge_index');
     final tier = _derivedContentTier(item);
-    return AssistentRetrievalItem(
+    return AssistantRetrievalItem(
       content: text,
       sourceType: !identityIndexEnabled
           ? 'page.discovery.legacy_context'

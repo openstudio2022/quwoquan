@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/personal_assistant/contracts/react_observation.dart';
+import 'package:quwoquan_app/assistant/contracts/react_observation.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/runtime_policies.dart';
 import 'package:quwoquan_app/personal_assistant/engine/react_state.dart';
 import 'package:quwoquan_app/personal_assistant/tools/tool_schema.dart';

@@ -1,9 +1,9 @@
 import 'package:quwoquan_app/personal_assistant/retrieval/retrieval_models.dart';
 
-abstract class AssistentRetrievalProvider {
+abstract class AssistantRetrievalProvider {
   String get providerId;
   List<String> get capabilityIds;
 
-  Future<AssistentRetrievalResult> retrieve(AssistentRetrievalRequest request);
+  Future<AssistantRetrievalResult> retrieve(AssistantRetrievalRequest request);
 }
 

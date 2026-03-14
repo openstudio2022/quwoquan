@@ -170,13 +170,9 @@ class LlmParseResult {
   final String raw;
   final String? failReason;
 
-  /// 从解析结果中提取 userMarkdown。
-  /// 优先级：userMarkdown > result.text
-  String get userMarkdown {
-    final explicit = explicitUserMarkdown;
-    if (explicit.isNotEmpty) return explicit;
-    return resultText;
-  }
+  /// 从解析结果中提取显式 userMarkdown。
+  /// 不再回退到 `result.text`，避免把内部结果文本误当成用户可见回答。
+  String get userMarkdown => explicitUserMarkdown;
 
   /// 仅提取显式用户轨 Markdown，不回退到 result.text。
   String get explicitUserMarkdown {
@@ -220,7 +216,7 @@ class LlmParseResult {
 /// 引擎元数据（模型不输出，由引擎注入）。
 class EngineResponseMeta {
   const EngineResponseMeta({
-    this.contractVersion = 'v4',
+    this.contractVersion = 'assistant_turn',
     this.domainId = '',
     this.stateId = '',
     this.detectedEvent = '',

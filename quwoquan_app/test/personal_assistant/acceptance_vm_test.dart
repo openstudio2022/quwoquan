@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:quwoquan_app/personal_assistant/connectors/openclaw_bridge.dart';
+import 'package:quwoquan_app/assistant/infrastructure/openclaw_bridge.dart';
 import 'package:quwoquan_app/personal_assistant/engine/agent_loop.dart';
 import 'package:quwoquan_app/personal_assistant/engine/llm_provider.dart';
 import 'package:quwoquan_app/personal_assistant/engine/react_runtime.dart';

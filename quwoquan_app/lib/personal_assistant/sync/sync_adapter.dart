@@ -1,19 +1,19 @@
 import 'package:quwoquan_app/personal_assistant/sync/sync_models.dart';
 
-abstract class AssistentSyncAdapter {
-  Future<AssistentSyncResult> pullPolicy({
+abstract class AssistantSyncAdapter {
+  Future<AssistantSyncResult> pullPolicy({
     required String policyVersionHint,
   });
 
-  Future<AssistentSyncResult> pushInteractionEvents({
+  Future<AssistantSyncResult> pushInteractionEvents({
     required List<Map<String, dynamic>> events,
   });
 
-  Future<AssistentSyncResult> pushScorecards({
+  Future<AssistantSyncResult> pushScorecards({
     required List<Map<String, dynamic>> scorecards,
   });
 
-  Future<AssistentSyncResult> syncMemoryRecords({
+  Future<AssistantSyncResult> syncMemoryRecords({
     required List<Map<String, dynamic>> memoryRecords,
   });
 }

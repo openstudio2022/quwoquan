@@ -1,8 +1,8 @@
-export 'package:quwoquan_app/personal_assistant/runtime/generated/contracts/conversation_state_decision.g.dart';
+export 'package:quwoquan_app/assistant/generated/contracts/conversation_state_decision.g.dart';
 
 import 'package:quwoquan_app/personal_assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/personal_assistant/runtime/generated/contracts/conversation_state_decision.g.dart';
+import 'package:quwoquan_app/assistant/generated/contracts/conversation_state_decision.g.dart';
 
 class ConversationStateDecision extends ConversationStateDecisionDto {
   const ConversationStateDecision({

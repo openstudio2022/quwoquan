@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:quwoquan_app/personal_assistant/contracts/dialogue_round_script.dart';
+import 'package:quwoquan_app/assistant/contracts/dialogue_round_script.dart';
 import 'package:quwoquan_app/personal_assistant/engine/domain_routing_catalog_runtime.dart';
 import 'package:quwoquan_app/personal_assistant/engine/event_detection_catalog_runtime.dart';
 

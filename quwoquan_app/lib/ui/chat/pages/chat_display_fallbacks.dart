@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/personal_assistant/protocol/run_response.dart';
+import 'package:quwoquan_app/assistant/domain/channel/channel.dart';
 
 String resolveActionLikeCompletedFallback(AssistantRunResponse response) {
   final structured = response.structuredResponse;

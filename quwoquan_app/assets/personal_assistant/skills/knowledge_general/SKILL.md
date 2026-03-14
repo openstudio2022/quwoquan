@@ -52,9 +52,9 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
     "topic": {"value": "", "source": "user_query|memory|unknown"}
   },
   "toolPlan": [
-    {"tool": "web_search", "arguments": {"query": "示例查询"}}
+    {"toolName": "web_search", "arguments": {"query": "示例查询"}}
   ],
-  "askUser": {"needed": false, "question": ""},
+  "askUser": {"slotId": "", "prompt": "", "required": false, "suggestions": []},
   "userMarkdown": "正在检索权威资料…"
 }
 ```

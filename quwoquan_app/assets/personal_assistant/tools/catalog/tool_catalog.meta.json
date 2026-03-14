@@ -561,6 +561,16 @@
         }
       }
     }
+  ],
+  "domainToolMatrix": [
+    {
+      "domainId": "weather",
+      "allowedTools": ["local_context", "web_search", "web_fetch"]
+    },
+    {
+      "domainId": "divination_fortune",
+      "allowedTools": ["web_search"]
+    }
   ]
 }
 

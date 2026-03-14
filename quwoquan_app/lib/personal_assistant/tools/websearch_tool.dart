@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
-import 'package:quwoquan_app/personal_assistant/contracts/query_task_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/personal_assistant/retrieval/retrieval_broker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:quwoquan_app/personal_assistant/observability/logging/app_log_models.dart';

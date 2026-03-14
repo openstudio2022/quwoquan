@@ -1,5 +1,5 @@
-class AssistentPrivacyPolicy {
-  const AssistentPrivacyPolicy({
+class AssistantPrivacyPolicy {
+  const AssistantPrivacyPolicy({
     required this.webAccessMode,
     required this.allowedCapabilities,
     required this.blockedCapabilities,
@@ -19,7 +19,7 @@ class AssistentPrivacyPolicy {
   final int maxWebRounds;
   final bool redactBeforeWeb;
 
-  factory AssistentPrivacyPolicy.fromInputs({
+  factory AssistantPrivacyPolicy.fromInputs({
     required String privacyProfile,
     required Map<String, dynamic> contextScopeHint,
     required List<String> fallbackCapabilities,
@@ -47,7 +47,7 @@ class AssistentPrivacyPolicy {
         ? fallbackCapabilities.toSet()
         : allowedCapabilities;
 
-    return AssistentPrivacyPolicy(
+    return AssistantPrivacyPolicy(
       webAccessMode: webAccessMode,
       allowedCapabilities: normalizedAllowedCapabilities,
       blockedCapabilities: blockedCapabilities,

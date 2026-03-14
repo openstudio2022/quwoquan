@@ -3,7 +3,7 @@ import 'package:quwoquan_app/personal_assistant/retrieval/retrieval_models.dart'
 import 'package:quwoquan_app/personal_assistant/retrieval/retrieval_provider.dart';
 import 'package:quwoquan_app/personal_assistant/tools/websearch_tool.dart';
 
-class WebRetrievalProvider implements AssistentRetrievalProvider {
+class WebRetrievalProvider implements AssistantRetrievalProvider {
   WebRetrievalProvider({WebSearchTool? tool}) : _tool = tool ?? WebSearchTool();
 
   final WebSearchTool _tool;
@@ -13,11 +13,11 @@ class WebRetrievalProvider implements AssistentRetrievalProvider {
 
   @override
   List<String> get capabilityIds => const <String>[
-        AssistentCapabilityCatalog.webSearch,
+        AssistantCapabilityCatalog.webSearch,
       ];
 
   @override
-  Future<AssistentRetrievalResult> retrieve(AssistentRetrievalRequest request) async {
+  Future<AssistantRetrievalResult> retrieve(AssistantRetrievalRequest request) async {
     final result = await _tool.execute(<String, dynamic>{
       'query': request.query,
       if (request.providerHint != null && request.providerHint!.trim().isNotEmpty)
@@ -25,7 +25,7 @@ class WebRetrievalProvider implements AssistentRetrievalProvider {
       'count': request.maxItems,
     });
     if (!result.success) {
-      return AssistentRetrievalResult(
+      return AssistantRetrievalResult(
         success: false,
         message: result.message,
         providersUsed: const <String>['web'],
@@ -39,8 +39,8 @@ class WebRetrievalProvider implements AssistentRetrievalProvider {
             .map((item) => item.cast<String, dynamic>())
             .toList(growable: false) ??
         const <Map<String, dynamic>>[];
-    final items = <AssistentRetrievalItem>[
-      AssistentRetrievalItem(
+    final items = <AssistantRetrievalItem>[
+      AssistantRetrievalItem(
         content: summary,
         sourceType: 'web',
         sourceId: 'web_search',
@@ -55,7 +55,7 @@ class WebRetrievalProvider implements AssistentRetrievalProvider {
       final url = (ref['url'] as String?)?.trim() ?? '';
       if (url.isEmpty) continue;
       items.add(
-        AssistentRetrievalItem(
+        AssistantRetrievalItem(
           content: (ref['snippet'] as String?)?.trim().isNotEmpty == true
               ? (ref['snippet'] as String).trim()
               : (ref['title'] as String?)?.trim() ?? '',
@@ -71,7 +71,7 @@ class WebRetrievalProvider implements AssistentRetrievalProvider {
         ),
       );
     }
-    return AssistentRetrievalResult(
+    return AssistantRetrievalResult(
       success: true,
       message: result.message,
       items: items,

@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:quwoquan_app/personal_assistant/contracts/assistant_turn_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/runtime_policies.dart';
 import 'package:quwoquan_app/personal_assistant/engine/llm_provider.dart';
 import 'package:quwoquan_app/personal_assistant/engine/react_planner.dart';
@@ -1308,37 +1308,26 @@ class ReactRuntime {
       if (nextAction != 'tool_call') return const <AssistantToolCall>[];
 
       final toolPlan = turn?.toolPlan ?? payload['toolPlan'];
-      if (toolPlan == null) return const <AssistantToolCall>[];
+      if (toolPlan is! List) return const <AssistantToolCall>[];
 
       final calls = <AssistantToolCall>[];
-
-      if (toolPlan is Map) {
-        // 格式一：{"toolPlan": {"web_search": {...args}}}
-        toolPlan.forEach((key, value) {
-          final toolName = (key as String?)?.trim() ?? '';
-          if (toolName.isEmpty) return;
-          final args = value is Map
-              ? value.cast<String, dynamic>()
-              : <String, dynamic>{};
-          calls.add(AssistantToolCall(name: toolName, arguments: args));
-        });
-      } else if (toolPlan is List) {
-        // 格式二：{"toolPlan": [{"tool": "web_search", ...args}]}
-        for (final item in toolPlan) {
-          if (item is! Map) continue;
-          final toolName =
-              (item['tool'] as String? ?? item['toolName'] as String?)
-                  ?.trim() ??
-              '';
-          if (toolName.isEmpty) continue;
-          final args = <String, dynamic>{};
-          item.forEach((k, v) {
-            if (k != 'tool' && k != 'toolName') {
-              args['$k'] = v;
-            }
-          });
-          calls.add(AssistantToolCall(name: toolName, arguments: args));
-        }
+      for (final item in toolPlan) {
+        if (item is! Map) continue;
+        final toolName =
+            (item['toolName'] as String? ?? item['name'] as String?)?.trim() ??
+            '';
+        if (toolName.isEmpty) continue;
+        final rawArgs = item['arguments'];
+        final args = rawArgs is Map
+            ? rawArgs.cast<String, dynamic>()
+            : <String, dynamic>{
+                for (final entry in item.entries)
+                  if (entry.key != 'toolName' &&
+                      entry.key != 'name' &&
+                      entry.key != 'toolCallId')
+                    '${entry.key}': entry.value,
+              };
+        calls.add(AssistantToolCall(name: toolName, arguments: args));
       }
 
       return calls;

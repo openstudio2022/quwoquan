@@ -55,21 +55,21 @@ void main() {
       expect(find.byType(ListView), findsWidgets);
     });
 
-    testWidgets('Tab 切换趣聊/同好', (tester) async {
+    testWidgets('Tab 切换消息/联系人', (tester) async {
       _suppressLayoutAndImageErrors();
       await tester.pumpWidget(_scopedApp());
       await tester.pumpAndSettle();
 
       expect(find.byType(ChatPage), findsOneWidget);
 
-      final contactsTab = find.text('同好');
+      final contactsTab = find.text('联系人');
       if (contactsTab.evaluate().isNotEmpty) {
         await tester.tap(contactsTab);
         await tester.pump(const Duration(seconds: 1));
       }
       expect(find.byType(ChatPage), findsOneWidget);
 
-      final messagesTab = find.text('趣聊');
+      final messagesTab = find.text('消息');
       if (messagesTab.evaluate().isNotEmpty) {
         await tester.tap(messagesTab);
         await tester.pump(const Duration(seconds: 1));
@@ -118,13 +118,13 @@ void main() {
       await tester.pumpAndSettle();
 
       for (var i = 0; i < 3; i++) {
-        final contactsTab = find.text('同好');
+        final contactsTab = find.text('联系人');
         if (contactsTab.evaluate().isNotEmpty) {
           await tester.tap(contactsTab);
           await tester.pump(const Duration(seconds: 1));
         }
 
-        final messagesTab = find.text('趣聊');
+        final messagesTab = find.text('消息');
         if (messagesTab.evaluate().isNotEmpty) {
           await tester.tap(messagesTab);
           await tester.pump(const Duration(seconds: 1));

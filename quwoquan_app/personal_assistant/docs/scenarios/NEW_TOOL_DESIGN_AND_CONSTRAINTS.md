@@ -10,10 +10,13 @@
 
 新增 tool 的主要变更应落在：
 
-- `lib/personal_assistant/tools/`
-- `lib/personal_assistant/tools/tool_registry.dart`
+- `lib/assistant/tools/tool_schema.dart`
+- `lib/assistant/capabilities/capabilities.dart`
+- `lib/assistant/application/assistant_edge_service.dart`
 - `assets/personal_assistant/tools/catalog/tool_catalog.meta.json`
 - `assets/personal_assistant/tools/catalog/tool_permissions.json`
+
+如需触达 `lib/personal_assistant/` 兼容实现，只能作为桥接层处理，且必须在设计中写明退出路径。
 
 ## 3. 设计约束
 

@@ -1,6 +1,6 @@
 dart_class: IntentGraph
-library_path: personal_assistant/contracts/intent_graph.dart
-output_path: personal_assistant/runtime/generated/contracts/intent_graph.g.dart
+library_path: assistant/contracts/intent_graph.dart
+output_path: assistant/generated/contracts/intent_graph.g.dart
 contract: intent_graph
 version: v1
 kind: planner_contract

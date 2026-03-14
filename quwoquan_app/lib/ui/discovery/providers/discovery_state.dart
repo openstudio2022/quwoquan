@@ -182,9 +182,7 @@ class DiscoveryState extends ChangeNotifier {
 
 // 发现页状态提供者：使用 ChangeNotifierProvider 订阅 notifyListeners 变更
 final discoveryStateProvider = ChangeNotifierProvider<DiscoveryState>((ref) {
-  final state = DiscoveryState();
-  ref.onDispose(() => state.dispose());
-  return state;
+  return DiscoveryState();
 });
 
 // 便捷访问器

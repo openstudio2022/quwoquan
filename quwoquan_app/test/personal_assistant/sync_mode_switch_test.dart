@@ -6,14 +6,14 @@ import 'package:test/test.dart';
 void main() {
   group('Sync mode and adapters', () {
     test('mode parser defaults to local_mock', () {
-      expect(AssistentSyncModeParser.parse(''), equals(AssistentSyncMode.localMock));
+      expect(AssistantSyncModeParser.parse(''), equals(AssistantSyncMode.localMock));
       expect(
-        AssistentSyncModeParser.parse('unknown'),
-        equals(AssistentSyncMode.localMock),
+        AssistantSyncModeParser.parse('unknown'),
+        equals(AssistantSyncMode.localMock),
       );
       expect(
-        AssistentSyncModeParser.parse('cloud_stub'),
-        equals(AssistentSyncMode.cloudStub),
+        AssistantSyncModeParser.parse('cloud_stub'),
+        equals(AssistantSyncMode.cloudStub),
       );
     });
 
@@ -39,7 +39,7 @@ void main() {
       const adapter = CloudStubSyncAdapter();
       final pulled = await adapter.pullPolicy(policyVersionHint: 'v1');
       expect(pulled.success, isTrue);
-      expect(pulled.mode, equals(AssistentSyncMode.cloudStub));
+      expect(pulled.mode, equals(AssistantSyncMode.cloudStub));
       expect(pulled.payload['snapshot'], isA<Map<String, dynamic>>());
     });
 

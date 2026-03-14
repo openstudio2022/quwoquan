@@ -2,12 +2,11 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/personal_assistant/app/assistant_gateway.dart';
-import 'package:quwoquan_app/personal_assistant/app/assistant_runtime.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/personal_assistant/engine/process_journal_bus.dart';
-import 'package:quwoquan_app/personal_assistant/protocol/run_request.dart';
-import 'package:quwoquan_app/personal_assistant/protocol/trace_events.dart';
+import 'package:quwoquan_app/assistant/application/assistant_gateway.dart';
+import 'package:quwoquan_app/assistant/domain/channel/channel.dart';
+import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
+import 'package:quwoquan_app/assistant/orchestration/orchestration.dart';
+import 'package:quwoquan_app/assistant/runtime/assistant_runtime.dart';
 
 /// Validates the v3 phase lifecycle end-to-end:
 ///   understanding → tool execution → assessment → analyzing → answering

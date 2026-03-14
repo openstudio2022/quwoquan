@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/query_task_contract.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
 
 void main() {
   group('query task contract', () {

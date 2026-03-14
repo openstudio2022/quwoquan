@@ -45,7 +45,7 @@ void main() {
     test('点滴进入 context memory，作品进入 knowledge index', () async {
       final provider = PageContextRetrievalProvider(_AssistantSignalRepo());
       final result = await provider.retrieve(
-        const AssistentRetrievalRequest(
+        const AssistantRetrievalRequest(
           query: '东京',
           contextScopeHint: <String, dynamic>{'pageType': 'discovery'},
         ),
@@ -70,7 +70,7 @@ void main() {
     test('assistantUsePolicy=exclude 的内容不会进入检索结果', () async {
       final provider = PageContextRetrievalProvider(_AssistantSignalRepo());
       final result = await provider.retrieve(
-        const AssistentRetrievalRequest(
+        const AssistantRetrievalRequest(
           query: '私有',
           contextScopeHint: <String, dynamic>{'pageType': 'discovery'},
         ),
@@ -85,7 +85,7 @@ void main() {
     test('未授权 personal_content_access 时直接拒绝页面创作内容检索', () async {
       final provider = PageContextRetrievalProvider(_AssistantSignalRepo());
       final result = await provider.retrieve(
-        const AssistentRetrievalRequest(
+        const AssistantRetrievalRequest(
           query: '东京',
           contextScopeHint: <String, dynamic>{
             'pageType': 'discovery',
@@ -102,7 +102,7 @@ void main() {
     test('identity index 关闭时回退到 legacy_context', () async {
       final provider = PageContextRetrievalProvider(_AssistantSignalRepo());
       final result = await provider.retrieve(
-        const AssistentRetrievalRequest(
+        const AssistantRetrievalRequest(
           query: '东京',
           contextScopeHint: <String, dynamic>{
             'pageType': 'discovery',

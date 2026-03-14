@@ -45,7 +45,7 @@
 
 当前已落地：
 
-- Dart: `quwoquan_app/lib/personal_assistant/runtime/generated/`
+- Dart: `quwoquan_app/lib/assistant/generated/`
 
 后续扩展时必须新增而不是迁移现有 schema：
 

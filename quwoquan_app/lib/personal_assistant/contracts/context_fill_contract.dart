@@ -1,8 +1,8 @@
 export 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';
-export 'package:quwoquan_app/personal_assistant/runtime/generated/contracts/context_fill_task.g.dart';
+export 'package:quwoquan_app/assistant/generated/contracts/context_fill_task.g.dart';
 
 import 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';
-import 'package:quwoquan_app/personal_assistant/runtime/generated/contracts/context_fill_task.g.dart';
+import 'package:quwoquan_app/assistant/generated/contracts/context_fill_task.g.dart';
 
 class ContextFillTask extends ContextFillTaskDto {
   const ContextFillTask({

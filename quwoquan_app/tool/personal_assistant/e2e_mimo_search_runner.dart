@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:quwoquan_app/personal_assistant/personal_assistant.dart';
+import 'package:quwoquan_app/assistant/application/assistant_gateway.dart';
+import 'package:quwoquan_app/assistant/domain/channel/channel.dart';
+import 'package:quwoquan_app/assistant/runtime/assistant_runtime.dart';
 
 Future<void> main() async {
   final benchmarkFile = File(
@@ -25,6 +27,7 @@ Future<void> main() async {
   final storagePath =
       '${Directory.systemTemp.path}/pa_e2e_${DateTime.now().millisecondsSinceEpoch}.json';
   final runtime = AssistantRuntime.createForTest(storagePath: storagePath);
+  final gateway = AssistantGateway(runtime);
   await runtime.ensureRemoteConfigLoaded();
   final models = runtime.listAvailableModels();
   if (models.isEmpty) {
@@ -66,7 +69,7 @@ Future<void> main() async {
       final sessionId = 'e2e-$domainId-$id';
       AssistantRunResponse? lastResponse;
       for (final turn in turns) {
-        lastResponse = await runtime.agentLoop.run(
+        lastResponse = await gateway.run(
           AssistantRunRequest(
             sessionId: sessionId,
             messages: <AssistantRunMessage>[

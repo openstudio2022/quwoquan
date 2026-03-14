@@ -1,11 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:quwoquan_app/personal_assistant/app/assistant_gateway.dart';
-import 'package:quwoquan_app/personal_assistant/app/assistant_runtime.dart';
-import 'package:quwoquan_app/personal_assistant/app/capability_gateway.dart';
-import 'package:quwoquan_app/personal_assistant/connectors/openclaw_bridge.dart';
-import 'package:quwoquan_app/personal_assistant/protocol/run_request.dart';
+import 'package:quwoquan_app/assistant/application/assistant_gateway.dart';
+import 'package:quwoquan_app/assistant/application/capability_gateway.dart';
+import 'package:quwoquan_app/assistant/domain/channel/channel.dart';
+import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
+import 'package:quwoquan_app/assistant/runtime/assistant_runtime.dart';
 
 Future<void> main() async {
   final reportDir = Directory(

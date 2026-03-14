@@ -129,7 +129,7 @@ void main() {
       expect(find.text('恢复继承 Owner 默认'), findsOneWidget);
     });
 
-    testWidgets('小趣读取创作内容行展示真实授权状态并支持关闭', (tester) async {
+    testWidgets('私助读取创作内容行展示真实授权状态并支持关闭', (tester) async {
       final assistantRepo = _AssistantRepo(true);
       await tester.pumpWidget(
         ProviderScope(
@@ -144,10 +144,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('小趣读取创作内容'), findsOneWidget);
+      expect(find.text('私助读取创作内容'), findsOneWidget);
       expect(find.text('已允许'), findsOneWidget);
 
-      await tester.tap(find.text('小趣读取创作内容'));
+      await tester.tap(find.text('私助读取创作内容'));
       await tester.pumpAndSettle();
       expect(find.text('关闭'), findsOneWidget);
 

@@ -128,20 +128,26 @@ Decide -> 进入下一轮、切换阶段或结束
 
 ### 6.1 运行时
 
-- `quwoquan_app/lib/personal_assistant/app/capability_gateway.dart`
-- `quwoquan_app/lib/personal_assistant/engine/agent_loop.dart`
-- `quwoquan_app/lib/personal_assistant/engine/react_runtime.dart`
-- `quwoquan_app/lib/personal_assistant/engine/context_orchestrator.dart`
-- `quwoquan_app/lib/personal_assistant/engine/llm_response_parser.dart`
+- `quwoquan_app/lib/assistant/application/assistant_providers.dart`
+- `quwoquan_app/lib/assistant/application/assistant_gateway.dart`
+- `quwoquan_app/lib/assistant/application/capability_gateway.dart`
+- `quwoquan_app/lib/assistant/application/assistant_edge_service.dart`
+- `quwoquan_app/lib/assistant/runtime/assistant_runtime.dart`
+- `quwoquan_app/lib/assistant/orchestration/process_journal_bus.dart`
+- `quwoquan_app/lib/assistant/contracts/assistant_turn_contract.dart`
+- `quwoquan_app/lib/assistant/contracts/process_protocol.dart`
 
 ### 6.2 Skill / Tool / Prompt
 
-- `quwoquan_app/lib/personal_assistant/skills/skill_manifest.dart`
-- `quwoquan_app/lib/personal_assistant/skills/skill_loader.dart`
-- `quwoquan_app/lib/personal_assistant/tools/tool_registry.dart`
+- `quwoquan_app/lib/assistant/skills/assistant_skill_runtime.dart`
+- `quwoquan_app/lib/assistant/skills/skill_manifest.dart`
+- `quwoquan_app/lib/assistant/tools/tool_schema.dart`
+- `quwoquan_app/lib/assistant/capabilities/capabilities.dart`
 - `quwoquan_app/assets/personal_assistant/skills/`
 - `quwoquan_app/assets/personal_assistant/tools/catalog/tool_catalog.meta.json`
 - `quwoquan_app/assets/personal_assistant/prompts/`
+
+更深层 legacy implementation 仍可能位于 `quwoquan_app/lib/personal_assistant/`，但当前开发入口统一以 `quwoquan_app/lib/assistant/` 为准。
 
 ---
 

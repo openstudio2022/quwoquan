@@ -10,7 +10,7 @@ if [[ -n "$TOKEN" ]]; then
   AUTH_HEADER=(-H "Authorization: Bearer ${TOKEN}")
 fi
 
-curl -s -X POST "${BASE_URL}/v1/assistent/runs" \
+curl -s -X POST "${BASE_URL}/v1/assistant/runs" \
   -H "Content-Type: application/json" \
   "${AUTH_HEADER[@]}" \
   -d "{

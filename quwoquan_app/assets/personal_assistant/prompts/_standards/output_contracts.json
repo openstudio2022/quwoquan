@@ -5,9 +5,13 @@
         "contractVersion",
         "decision",
         "messageKind",
+        "userMarkdown",
         "phaseId",
         "actionCode",
-        "reasonCode"
+        "reasonCode",
+        "result",
+        "selfCheck",
+        "diagnostics"
       ],
       "decisionNextActionEnum": [
         "tool_call",
@@ -22,25 +26,18 @@
         "ask_user",
         "error",
         "fallback"
-      ]
-    },
-    "domain_plan_v2026_02_18": {
-      "required": [
-        "domainId",
-        "taskPlan",
-        "contextSlots",
-        "needQuery",
-        "queryTasks",
-        "selfCheck"
-      ]
-    },
-    "domain_answer_v2026_02_18": {
-      "required": [
-        "result",
-        "evidence",
-        "reasoningBasis",
-        "selfCheck",
-        "diagnostics"
+      ],
+      "toolCallFields": [
+        "toolName",
+        "name",
+        "toolCallId",
+        "arguments"
+      ],
+      "askUserFields": [
+        "slotId",
+        "prompt",
+        "required",
+        "suggestions"
       ]
     },
     "web_query_plan_v2026_02_18": {

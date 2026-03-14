@@ -1,5 +1,5 @@
 import 'package:quwoquan_app/personal_assistant/contracts/runtime_policies.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/personal_assistant/engine/default_processing/default_processing_copy_bank.dart';
 import 'package:quwoquan_app/personal_assistant/engine/react_state.dart';
 

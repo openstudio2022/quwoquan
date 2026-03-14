@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/personal_assistant/engine/agent_loop.dart';
 import 'package:quwoquan_app/personal_assistant/engine/llm_provider.dart';
 import 'package:quwoquan_app/personal_assistant/engine/react_runtime.dart';
@@ -144,8 +144,10 @@ class _MultiToolLlm implements AssistantLlmProvider {
           'failedItems': <String>[],
         },
         'diagnostics': {
-          'whyThisAnswer': '基于搜索结果 + 气象局网页深度阅读',
-          'riskFlags': <String>[],
+          'emergedTags': <Map<String, dynamic>>[],
+          'failedChecks': <String>[],
+          'parseStatus': '',
+          'notes': <String>['基于搜索结果 + 气象局网页深度阅读'],
         },
         'modelSelfScore': {'score': 95, 'reason': '多源验证，数据可靠'},
         'toolCalls': <dynamic>[],
@@ -436,8 +438,8 @@ void main() {
 
       expect(
         catalog.containsKey('domainToolMatrix'),
-        isFalse,
-        reason: 'tool catalog 不再维护 domainToolMatrix 第二真相源',
+        isTrue,
+        reason: 'tool catalog 允许维护 domain->tool 治理矩阵，但不得维护 domain->skill 第二真相源',
       );
     });
   });

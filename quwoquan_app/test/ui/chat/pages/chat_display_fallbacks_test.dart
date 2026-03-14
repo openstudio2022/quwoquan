@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/personal_assistant/protocol/run_response.dart';
+import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_display_fallbacks.dart';
 
 void main() {

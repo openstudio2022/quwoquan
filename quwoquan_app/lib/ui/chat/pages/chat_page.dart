@@ -9,11 +9,12 @@ import 'package:quwoquan_app/components/avatar/group_avatar_grid.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 
-/// 趣聊页
+/// 趣信页
 ///
 /// 1:1 复制自 趣我圈2026/src MessagePage.tsx + MessagesList.tsx
-/// 一级 Tab 趣聊/同好；二级 Tab subTabsMap（趣聊→全部/@我/未读/密信，同好→全部/圈子/同好/趣群）；
+/// 一级 Tab 消息/联系人；二级 Tab subTabsMap（消息→全部/@我/未读/密信，联系人→全部/圈子/同好/趣群）；
 /// 滚动时二级 Tab 显隐；私人助理会话置顶，onAssistantClick→助理主页。
 class ChatPage extends ConsumerStatefulWidget {
   const ChatPage({super.key});
@@ -206,7 +207,9 @@ class _ChatPageState extends ConsumerState<ChatPage>
       TabItem(id: 'contacts', label: AppConceptConstants.contacts),
     ];
     final activeTabId = _mainTabIndex == 0 ? 'messages' : 'contacts';
+    
     return Container(
+      height: AppSpacing.tabNavigationHeight,
       decoration: BoxDecoration(
         color: bgColor,
         border: Border(
@@ -215,26 +218,34 @@ class _ChatPageState extends ConsumerState<ChatPage>
           ),
         ),
       ),
-      child: CenteredScrollableTabBar(
-        tabs: tabs,
-        activeTab: activeTabId,
-        isDark: ref.read(isDarkProvider),
-        onTabChange: (id) {
-          setState(() {
-            _mainTabIndex = id == 'messages' ? 0 : 1;
-            _subTabIndex = 0;
-          });
-        },
-        leadingActions: [
-          // 对称占位：与右侧按钮等宽，使 Tab 居中不受 trailing 影响
-          SizedBox(width: AppSpacing.iconButtonMinSizeSm * 2 + AppSpacing.intraGroupXs),
-        ],
-        trailingActions: [
-          IconButton(
-            icon: Icon(Icons.search, color: fgSecondary),
-            onPressed: () {},
-            style: IconButton.styleFrom(
-              minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+      child: Stack(
+        children: [
+          // Layer 1: Absolutely Centered Tabs
+          Positioned.fill(
+            child: CenteredScrollableTabBar(
+              tabs: tabs,
+              activeTab: activeTabId,
+              isDark: ref.read(isDarkProvider),
+              onTabChange: (id) {
+                setState(() {
+                  _mainTabIndex = id == 'messages' ? 0 : 1;
+                  _subTabIndex = 0;
+                });
+              },
+              leadingActions: const [],
+              trailingActions: const [],
+              transparentBackground: true,
+            ),
+          ),
+          // Layer 2: Trailing Actions
+          Positioned(
+            right: AppSpacing.feedContentHorizontal(context),
+            top: 0,
+            bottom: 0,
+            child: const Center(
+              child: GlobalTopActions(
+                initialSearchScope: GlobalSearchScope.messages,
+              ),
             ),
           ),
         ],
@@ -644,7 +655,11 @@ class _ChatPageState extends ConsumerState<ChatPage>
               decoration: BoxDecoration(border: Border(bottom: BorderSide(color: borderColor.withValues(alpha: 0.3)))),
               child: Row(
                 children: [
-                  RoundedSquareAvatar(size: 56, imageUrl: avatar, name: title),
+                  RoundedSquareAvatar(
+                    size: AppSpacing.largeButtonSize,
+                    imageUrl: avatar,
+                    name: title,
+                  ),
                   SizedBox(width: AppSpacing.interGroupSm),
                   Expanded(
                     child: Column(
@@ -854,7 +869,11 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
               decoration: BoxDecoration(border: Border(bottom: BorderSide(color: widget.borderColor.withValues(alpha: 0.3)))),
               child: Row(
                 children: [
-                  RoundedSquareAvatar(size: 56, imageUrl: avatar, name: title),
+                  RoundedSquareAvatar(
+                    size: AppSpacing.largeButtonSize,
+                    imageUrl: avatar,
+                    name: title,
+                  ),
                   SizedBox(width: AppSpacing.interGroupSm),
                   Expanded(
                     child: Column(

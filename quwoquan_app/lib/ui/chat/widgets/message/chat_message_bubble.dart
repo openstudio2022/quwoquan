@@ -4,17 +4,53 @@ import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:quwoquan_app/assistant/application/capability_gateway.dart';
+import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
+import 'package:quwoquan_app/assistant/orchestration/orchestration.dart';
 import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/personal_assistant/app/capability_gateway.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/explainable_flow_event.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/personal_assistant/engine/process_journal_bus.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/assistant_answer_toolbar.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/assistant_process_drawer.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/regenerate_options_popup.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/voice_message_bubble.dart';
+
+bool _containsInternalAssistantText(String text) {
+  final normalized = text.trim();
+  if (normalized.isEmpty) return false;
+  return normalized.contains('assistant_turn') ||
+      normalized.contains('contractVersion') ||
+      normalized.contains('queryTasks') ||
+      normalized.contains('machineEnvelope') ||
+      normalized.contains('runArtifacts') ||
+      normalized.contains('<tool_call>') ||
+      normalized.contains('tool_call');
+}
+
+String _sanitizeAssistantTimelineText(String text) {
+  final normalized = text.trim();
+  if (normalized.isEmpty) return '';
+  if (_containsInternalAssistantText(normalized)) return '';
+  return normalized;
+}
+
+String _resolveAssistantVisibleAnswerText({
+  required Map<String, dynamic> message,
+  required String gatedStreamAnswer,
+  required String content,
+}) {
+  final candidates = <String>[
+    gatedStreamAnswer,
+    (message['displayMarkdown'] as String?) ?? '',
+    (message['displayPlainText'] as String?) ?? '',
+    content,
+  ];
+  for (final candidate in candidates) {
+    final sanitized = _sanitizeAssistantTimelineText(candidate);
+    if (sanitized.isNotEmpty) return sanitized;
+  }
+  return '';
+}
 
 /// 聊天气泡最大宽度（语义尺寸，多屏适配由布局约束决定）
 const double chatBubbleMaxWidth = 280.0;
@@ -150,8 +186,12 @@ class ChatMessageBubble extends StatelessWidget {
         isAssistantMessage && isAssistantRunning && !answerGateOpen
         ? ''
         : streamFinalAnswer;
-    final answerText = isAssistantMessage && gatedStreamAnswer.trim().isNotEmpty
-        ? gatedStreamAnswer
+    final answerText = isAssistantMessage
+        ? _resolveAssistantVisibleAnswerText(
+            message: message,
+            gatedStreamAnswer: gatedStreamAnswer,
+            content: content,
+          )
         : content;
     final renderPlainSelfText =
         renderSelfTextWithoutBubble &&
@@ -713,7 +753,8 @@ bool _hasPersistedProcessBlocks(Map<String, dynamic> message) {
   final rawBlocks = (message['uiProcessContentBlocks'] as List?) ?? const [];
   final rawTimeline = (message['uiProcessTimelineV2'] as List?) ?? const [];
   final rawJournal =
-      ((message['runArtifacts'] as Map?)?['processJournal'] as List?) ??
+      (((message['runArtifacts'] as Map?)?['processJournal'] as List?) ??
+              (message['processJournalV1'] as List?)) ??
       const [];
   final thinkingText = (message['processThinkingText'] as String?) ?? '';
   return rawJournal.isNotEmpty ||
@@ -765,16 +806,22 @@ AssistantProcessState _rebuildProcessStateFromMessage(
               const <Map>[];
           return <String, dynamic>{
             'type': refs.isNotEmpty ? 'analysisSummary' : 'text',
-            'text': (item['summary'] as String?)?.trim() ?? '',
+            'text': _sanitizeAssistantTimelineText(
+              (item['summary'] as String?)?.trim() ?? '',
+            ),
             'references': refs,
           };
         })
+        .where((item) => ((item['text'] as String?)?.isNotEmpty ?? false))
         .toList(growable: false);
   })();
   final contentBlocks = <ProcessContentBlock>[];
   for (final raw in rawBlocks) {
     final typeName = (raw['type'] as String?) ?? 'text';
-    final text = (raw['text'] as String?) ?? '';
+    final text = _sanitizeAssistantTimelineText((raw['text'] as String?) ?? '');
+    if (text.isEmpty) {
+      continue;
+    }
     final rawRefs =
         (raw['references'] as List?)?.whereType<Map>() ?? const <Map>[];
     final refs = rawRefs
@@ -805,9 +852,12 @@ AssistantProcessState _rebuildProcessStateFromMessage(
       const <String, dynamic>{};
   final timeline = (message['uiProcessTimelineV2'] as List?) ?? const [];
   final stageLabel = timeline.isNotEmpty
-      ? (((timeline.last as Map)['summary'] as String?)?.trim().isNotEmpty ??
-                false)
-            ? ((timeline.last as Map)['summary'] as String).trim()
+      ? (_sanitizeAssistantTimelineText(
+                  (((timeline.last as Map)['summary'] as String?) ?? ''),
+                ).isNotEmpty)
+            ? _sanitizeAssistantTimelineText(
+                ((timeline.last as Map)['summary'] as String?) ?? '',
+              )
             : UITextConstants.assistantPhaseCompleted
       : UITextConstants.assistantPhaseCompleted;
   return AssistantProcessState(
@@ -823,7 +873,8 @@ List<ProcessJournalEvent> _processJournalFromMessage(
   Map<String, dynamic> message,
 ) {
   final raw =
-      (((message['runArtifacts'] as Map?)?['processJournal'] as List?)
+      ((((message['runArtifacts'] as Map?)?['processJournal'] as List?) ??
+                  (message['processJournalV1'] as List?))
               ?.whereType<Map>()
               .toList(growable: false) ??
           const <Map>[]);
@@ -859,7 +910,7 @@ List<ProcessContentBlock> _processBlocksFromJournalSnapshot(
     switch (item.type) {
       case ProcessJournalEventType.narrativeCommit:
       case ProcessJournalEventType.liveCursor:
-        final text = item.displayMessage;
+        final text = _sanitizeAssistantTimelineText(item.displayMessage);
         if (text.isEmpty) continue;
         blocks.add(
           ProcessContentBlock(type: ProcessContentBlockType.text, text: text),
@@ -876,13 +927,18 @@ List<ProcessContentBlock> _processBlocksFromJournalSnapshot(
             )
             .where((ref) => ref.title.isNotEmpty && ref.url.isNotEmpty)
             .toList(growable: false);
-        if (item.displayMessage.isEmpty && refs.isEmpty) continue;
+        final summary = _sanitizeAssistantTimelineText(item.displayMessage);
+        if (summary.isEmpty && refs.isEmpty) continue;
         blocks.add(
           ProcessContentBlock(
             type: item.stage == 'searching'
                 ? ProcessContentBlockType.searchSummary
                 : ProcessContentBlockType.analysisSummary,
-            text: item.displayMessage,
+            text: summary.isNotEmpty
+                ? summary
+                : item.stage == 'searching'
+                ? '已核对参考资料'
+                : '已整理分析依据',
             references: refs,
           ),
         );
@@ -901,11 +957,12 @@ String _stageLabelFromJournalSnapshot(List<ProcessJournalEvent> journal) {
   for (var i = snapshot.length - 1; i >= 0; i--) {
     final event = snapshot[i];
     final message = event.displayMessage;
-    if (message.isEmpty) continue;
+    final sanitized = _sanitizeAssistantTimelineText(message);
+    if (sanitized.isEmpty) continue;
     if (event.type == ProcessJournalEventType.narrativeCommit ||
         event.type == ProcessJournalEventType.liveCursor ||
         event.type == ProcessJournalEventType.sourceUpdate) {
-      return message;
+      return sanitized;
     }
   }
   return UITextConstants.assistantPhaseCompleted;
@@ -1463,10 +1520,15 @@ class _AssistantPhaseTimelineCardState
             final status = (phase['status'] as String?)?.trim() ?? '';
             final details =
                 (phase['details'] as List?)
-                    ?.map((item) => item.toString().trim())
+                    ?.map((item) => _sanitizeAssistantTimelineText(item.toString()))
                     .where((item) => item.isNotEmpty)
                     .toList(growable: false) ??
                 const <String>[];
+            final safeSummary = _sanitizeAssistantTimelineText(summary);
+            final safeTitle = _sanitizeAssistantTimelineText(title);
+            if (safeSummary.isEmpty && safeTitle.isEmpty && details.isEmpty) {
+              return const SizedBox.shrink();
+            }
             final references =
                 (phase['references'] as List?)
                     ?.whereType<Map>()
@@ -1503,7 +1565,9 @@ class _AssistantPhaseTimelineCardState
                             SizedBox(width: AppSpacing.xs),
                             Expanded(
                               child: Text(
-                                summary.isEmpty ? title : '$title：$summary',
+                                safeSummary.isEmpty
+                                    ? safeTitle
+                                    : '${safeTitle.isEmpty ? '过程阶段' : safeTitle}：$safeSummary',
                                 style: TextStyle(
                                   fontSize: AppTypography.sm,
                                   color: AppColors.primaryColor.withValues(

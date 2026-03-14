@@ -44,10 +44,10 @@ assets/personal_assistant/skills/{domain}/
 
 ### 2.4 运行时如何消费 Skill
 
-1. `SkillLoader` 读取 asset
-2. `SkillRegistry` / `DomainRouter` 暴露可选 skill
+1. `PersonalAssistantSkillLoader` 读取 asset
+2. `AssistantSkillMarketService` / `AssistantCapabilityCatalog` 暴露当前 skill 与 capability 目录
 3. Planner 输出 `primaryDomainId`
-4. `agent_loop` 根据 domain 加载 skill 指令与 dialogue 片段
+4. `AssistantEdgeService` 装配当前运行时，并按 domain 加载 skill 指令与 dialogue 片段
 5. ReAct 在阶段推进时按需注入 phase-aware 材料
 
 ### 2.5 Phase-aware 加载
@@ -84,10 +84,13 @@ Tool 是运行时可调用的能力单元，例如 `web_search`、`web_fetch`、
 
 ### 3.2 Tool 的组成
 
-- 工具实现：`lib/personal_assistant/tools/*`
-- 注册表：`lib/personal_assistant/tools/tool_registry.dart`
+- 工具合同入口：`lib/assistant/tools/tool_schema.dart`
+- 能力目录入口：`lib/assistant/capabilities/capabilities.dart`
+- 运行时装配入口：`lib/assistant/application/assistant_edge_service.dart`
 - 元数据：`assets/personal_assistant/tools/catalog/tool_catalog.meta.json`
 - 权限矩阵：`assets/personal_assistant/tools/catalog/tool_permissions.json`
+
+如需暂时落到 `lib/personal_assistant/` 兼容实现，必须显式说明桥接原因与退出路径，且不得把旧路径写成当前推荐入口。
 
 ### 3.3 Tool 运行时链路
 
@@ -105,8 +108,8 @@ Tool 是运行时可调用的能力单元，例如 `web_search`、`web_fetch`、
 
 ### 3.5 新增 Tool 的正确路径
 
-1. 实现工具类并满足合同
-2. 在运行时注册
+1. 先在 `lib/assistant/tools/`、`lib/assistant/capabilities/` 定义或扩展当前合同入口
+2. 在当前运行时装配入口注册，并在需要时补充兼容桥接
 3. 在 `tool_catalog.meta.json` 中声明描述、参数、用户交互文案
 4. 在权限配置中声明可用域和确认策略
 5. 补充 contract test、registry test 与回归测试

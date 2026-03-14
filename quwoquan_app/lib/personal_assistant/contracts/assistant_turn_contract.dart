@@ -1,11 +1,11 @@
-export 'package:quwoquan_app/personal_assistant/runtime/generated/contracts/assistant_turn.g.dart';
+export 'package:quwoquan_app/assistant/generated/contracts/assistant_turn.g.dart';
 export 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';
 
 import 'package:quwoquan_app/personal_assistant/contracts/planner_contracts.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/process_protocol.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';
-import 'package:quwoquan_app/personal_assistant/runtime/generated/contracts/assistant_turn.g.dart';
+import 'package:quwoquan_app/assistant/generated/contracts/assistant_turn.g.dart';
 
 const String kAssistantTurnCurrentVersion = 'assistant_turn';
 

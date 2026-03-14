@@ -1,5 +1,5 @@
-class AssistentInteractionEvent {
-  const AssistentInteractionEvent({
+class AssistantInteractionEvent {
+  const AssistantInteractionEvent({
     required this.eventId,
     required this.runId,
     required this.traceId,
@@ -80,8 +80,8 @@ class AssistentInteractionEvent {
     };
   }
 
-  factory AssistentInteractionEvent.fromJson(Map<String, dynamic> json) {
-    return AssistentInteractionEvent(
+  factory AssistantInteractionEvent.fromJson(Map<String, dynamic> json) {
+    return AssistantInteractionEvent(
       eventId: (json['eventId'] as String?) ?? '',
       runId: (json['runId'] as String?) ?? '',
       traceId: (json['traceId'] as String?) ?? '',
@@ -120,8 +120,8 @@ class AssistentInteractionEvent {
   }
 }
 
-class AssistentInteractionMetricScore {
-  const AssistentInteractionMetricScore({
+class AssistantInteractionMetricScore {
+  const AssistantInteractionMetricScore({
     required this.scoreId,
     required this.eventId,
     required this.userId,
@@ -154,8 +154,8 @@ class AssistentInteractionMetricScore {
     };
   }
 
-  factory AssistentInteractionMetricScore.fromJson(Map<String, dynamic> json) {
-    return AssistentInteractionMetricScore(
+  factory AssistantInteractionMetricScore.fromJson(Map<String, dynamic> json) {
+    return AssistantInteractionMetricScore(
       scoreId: (json['scoreId'] as String?) ?? '',
       eventId: (json['eventId'] as String?) ?? '',
       userId: (json['userId'] as String?) ?? '',
@@ -168,8 +168,8 @@ class AssistentInteractionMetricScore {
   }
 }
 
-class AssistentScoreAggregate {
-  const AssistentScoreAggregate({
+class AssistantScoreAggregate {
+  const AssistantScoreAggregate({
     required this.bucketDate,
     required this.scopeId,
     required this.domainId,
@@ -196,8 +196,8 @@ class AssistentScoreAggregate {
     };
   }
 
-  factory AssistentScoreAggregate.fromJson(Map<String, dynamic> json) {
-    return AssistentScoreAggregate(
+  factory AssistantScoreAggregate.fromJson(Map<String, dynamic> json) {
+    return AssistantScoreAggregate(
       bucketDate: (json['bucketDate'] as String?) ?? '',
       scopeId: (json['scopeId'] as String?) ?? '',
       domainId: (json['domainId'] as String?) ?? 'general',

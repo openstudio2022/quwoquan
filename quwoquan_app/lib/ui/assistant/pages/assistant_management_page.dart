@@ -97,7 +97,7 @@ class _AssistantManagementPageState
                     thickness: SettingsSemanticConstants.dividerThickness,
                   ),
                   _buildPermissionRow(
-                    '允许小趣使用我的创作内容',
+                    '允许${AppConceptConstants.assistantLabel}使用我的创作内容',
                     contentAccessState.granted,
                     (v) {
                       if (contentAccessState.isHydrating ||

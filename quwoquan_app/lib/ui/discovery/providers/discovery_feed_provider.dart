@@ -46,6 +46,8 @@ typedef DiscoveryFeedQuery = ({
 /// 将 surface tab id 映射到统一 discovery feed 查询。
 DiscoveryFeedQuery toDiscoveryFeedQuery(String tabId) {
   switch (tabId) {
+    case 'following':
+      return (category: 'following', identity: 'moment', type: null);
     case 'moment':
       return (category: 'moment', identity: 'moment', type: null);
     case 'work':

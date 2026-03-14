@@ -177,7 +177,9 @@ void main() {
           .map((item) => (item['content'] ?? '').toString())
           .join('\n');
       final isStream = body['stream'] == true;
-      if (joined.contains('上一次输出无效')) {
+      if (joined.contains('上一次输出未通过 assistant_turn 契约校验') ||
+          joined.contains('结构化 JSON 仍然无效') ||
+          joined.contains('上一次输出无效')) {
         return isStream
             ? _MockChatResponse.sse(_chunk(repairedJson))
             : _MockChatResponse.json(repairedJson);

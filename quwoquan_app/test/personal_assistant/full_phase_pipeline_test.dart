@@ -3,10 +3,10 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/orchestration/process_journal_bus.dart';
 import 'package:quwoquan_app/personal_assistant/engine/agent_loop.dart';
 import 'package:quwoquan_app/personal_assistant/engine/llm_provider.dart';
-import 'package:quwoquan_app/personal_assistant/engine/process_journal_bus.dart';
 import 'package:quwoquan_app/personal_assistant/engine/react_runtime.dart';
 import 'package:quwoquan_app/personal_assistant/engine/session_manager.dart';
 import 'package:quwoquan_app/personal_assistant/memory/memory_repository.dart';
@@ -15,6 +15,63 @@ import 'package:quwoquan_app/personal_assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/personal_assistant/tools/tool_registry.dart';
 import 'package:quwoquan_app/personal_assistant/tools/tool_schema.dart';
+
+Map<String, dynamic> _intentPlanningEnvelope({
+  required String primarySkill,
+  required String inferredMotive,
+  required String problemClass,
+  String mode = 'qa',
+  List<String> secondarySkills = const <String>[],
+  String normalizedQuery = '',
+}) {
+  return <String, dynamic>{
+    'contractVersion': 'assistant_turn',
+    'messageKind': 'progress',
+    'phaseId': 'understanding',
+    'actionCode': 'frame_problem',
+    'reasonCode': 'align_goal',
+    'reasonShort': '先确认问题焦点，再组织执行。',
+    'decision': <String, dynamic>{
+      'nextAction': 'answer',
+      'confidence': 0.78,
+      'reasoning': '先锁定技能、问题类型和检索意图',
+    },
+    'userMarkdown': '我先聚焦问题主线，再开始处理。',
+    'result': <String, dynamic>{
+      'text': '',
+      'summary': '进入理解阶段',
+      'interpretation': inferredMotive,
+      'actionHints': const <String>[],
+    },
+    'intentGraph': <String, dynamic>{
+      'userGoal': inferredMotive,
+      'problemShape': secondarySkills.isEmpty ? 'single_skill' : 'multi_skill',
+      'primarySkill': primarySkill,
+      'problemClass': problemClass,
+      'inferredMotive': inferredMotive,
+      'secondarySkills': secondarySkills,
+      'queryNormalization': normalizedQuery.isNotEmpty
+          ? <String, dynamic>{'normalizedQuery': normalizedQuery}
+          : const <String, dynamic>{},
+      'queryTasks': const <Map<String, dynamic>>[],
+      'contextSlots': const <String, dynamic>{},
+      'globalConstraints': <String, dynamic>{'mode': mode},
+      'clarificationNeeded': false,
+    },
+    'selfCheck': <String, dynamic>{
+      'goalSatisfied': true,
+      'constraintSatisfied': true,
+      'safetyBoundarySatisfied': true,
+      'failedItems': const <String>[],
+    },
+    'diagnostics': <String, dynamic>{
+      'emergedTags': const <Map<String, dynamic>>[],
+      'failedChecks': const <String>[],
+      'parseStatus': '',
+      'notes': const <String>[],
+    },
+  };
+}
 
 /// Mock LLM that simulates the full pipeline:
 /// - Summarization/classification calls → return simple text
@@ -57,14 +114,15 @@ class _WeatherPipelineLlm implements AssistantLlmProvider {
 
     if (isIntentStage) {
       return AssistantModelOutput(
-        text: jsonEncode(const <String, dynamic>{
-          'primaryDomainId': 'weather',
-          'secondaryDomains': <String>[],
-          'inferredMotive': '查询深圳实时天气',
-          'problemClass': 'realtime_info',
-          'mode': 'qa',
-          'queryNormalization': <String, dynamic>{'query': '深圳天气怎么样'},
-        }),
+        text: jsonEncode(
+          _intentPlanningEnvelope(
+            primarySkill: 'weather',
+            inferredMotive: '查询深圳实时天气',
+            problemClass: 'realtime_info',
+            mode: 'qa',
+            normalizedQuery: '深圳天气怎么样',
+          ),
+        ),
       );
     }
 
@@ -86,7 +144,7 @@ class _WeatherPipelineLlm implements AssistantLlmProvider {
             'decision': {'nextAction': 'tool_call'},
             'toolCalls': [
               {
-                'tool': 'web_search',
+                'toolName': 'web_search',
                 'arguments': {
                   'query': '深圳天气实况 今天 温度 湿度',
                   'queryVariants': <String>['深圳今天天气实况', '深圳当前天气', '深圳天气实时数据'],
@@ -123,9 +181,6 @@ class _WeatherPipelineLlm implements AssistantLlmProvider {
         'contractVersion': 'assistant_turn',
         'decision': {'nextAction': 'answer'},
         'messageKind': 'answer',
-        'slotFillPlan': {
-          'city': {'value': '深圳', 'source': 'user_query_llm', 'confidence': 0.98},
-        },
         'slotState': {
           'slotValues': {
             'city': {'value': '深圳', 'source': 'user_query'},
@@ -144,8 +199,10 @@ class _WeatherPipelineLlm implements AssistantLlmProvider {
           'failedItems': <String>[],
         },
         'diagnostics': {
-          'whyThisAnswer': '基于搜索结果整理天气信息',
-          'riskFlags': <String>[],
+          'emergedTags': <Map<String, dynamic>>[],
+          'failedChecks': <String>[],
+          'parseStatus': '',
+          'notes': <String>['基于搜索结果整理天气信息'],
         },
         'modelSelfScore': {'score': 92, 'reason': '准确回答天气查询'},
         'toolCalls': <dynamic>[],
@@ -255,14 +312,15 @@ class _UsageLedgerWeatherLlm implements AssistantLlmProvider {
     }
     if (isIntentStage) {
       return _withUsage(
-        text: jsonEncode(const <String, dynamic>{
-          'primaryDomainId': 'weather',
-          'secondaryDomains': <String>[],
-          'inferredMotive': '查询深圳实时天气',
-          'problemClass': 'realtime_info',
-          'mode': 'qa',
-          'queryNormalization': <String, dynamic>{'query': '深圳天气怎么样'},
-        }),
+        text: jsonEncode(
+          _intentPlanningEnvelope(
+            primarySkill: 'weather',
+            inferredMotive: '查询深圳实时天气',
+            problemClass: 'realtime_info',
+            mode: 'qa',
+            normalizedQuery: '深圳天气怎么样',
+          ),
+        ),
       );
     }
     if (isPlannerCall && !hasToolMessage) {
@@ -272,7 +330,7 @@ class _UsageLedgerWeatherLlm implements AssistantLlmProvider {
           'decision': {'nextAction': 'tool_call'},
           'toolCalls': [
             {
-              'tool': 'web_search',
+              'toolName': 'web_search',
               'arguments': {
                 'query': '深圳天气实况 今天 温度 湿度',
                 'queryVariants': <String>['深圳今天天气实况'],
@@ -306,7 +364,12 @@ class _UsageLedgerWeatherLlm implements AssistantLlmProvider {
           'safetyBoundarySatisfied': true,
           'failedItems': <String>[],
         },
-        'diagnostics': {'whyThisAnswer': '基于天气结果整理', 'riskFlags': <String>[]},
+        'diagnostics': {
+          'emergedTags': <Map<String, dynamic>>[],
+          'failedChecks': <String>[],
+          'parseStatus': '',
+          'notes': <String>['基于天气结果整理'],
+        },
         'modelSelfScore': {'score': 95, 'reason': '可直接回答'},
         'toolCalls': <dynamic>[],
       }),
@@ -358,14 +421,15 @@ class _WeatherFallbackLlm implements AssistantLlmProvider {
         templateId == 'planner.global_plan' && availableTools.isEmpty;
     if (isIntentStage) {
       return AssistantModelOutput(
-        text: jsonEncode(const <String, dynamic>{
-          'primaryDomainId': 'weather',
-          'secondaryDomains': <String>[],
-          'inferredMotive': '查询深圳实时天气',
-          'problemClass': 'realtime_info',
-          'mode': 'qa',
-          'queryNormalization': <String, dynamic>{'query': '深圳天气怎么样'},
-        }),
+        text: jsonEncode(
+          _intentPlanningEnvelope(
+            primarySkill: 'weather',
+            inferredMotive: '查询深圳实时天气',
+            problemClass: 'realtime_info',
+            mode: 'qa',
+            normalizedQuery: '深圳天气怎么样',
+          ),
+        ),
       );
     }
     final hasToolFailure = messages.any(
@@ -380,7 +444,7 @@ class _WeatherFallbackLlm implements AssistantLlmProvider {
           'decision': {'nextAction': 'tool_call'},
           'toolCalls': [
             {
-              'tool': 'web_search',
+              'toolName': 'web_search',
               'arguments': {'query': '深圳 今天 天气 实时'},
             },
           ],
@@ -398,9 +462,6 @@ class _WeatherFallbackLlm implements AssistantLlmProvider {
         'contractVersion': 'assistant_turn',
         'decision': {'nextAction': 'answer'},
         'messageKind': 'fallback',
-        'slotFillPlan': {
-          'city': {'value': '深圳', 'source': 'user_query_llm', 'confidence': 0.98},
-        },
         'slotState': {
           'slotValues': {
             'city': {'value': '深圳', 'source': 'user_query'},
@@ -436,16 +497,15 @@ class _FallbackAdaptiveLlm implements AssistantLlmProvider {
         templateId == 'planner.global_plan' && availableTools.isEmpty;
     if (isIntentStage) {
       return AssistantModelOutput(
-        text: jsonEncode(const <String, dynamic>{
-          'primaryDomainId': 'fallback_general_search',
-          'secondaryDomains': <String>[],
-          'inferredMotive': '对比分析科技新闻与 AI 行业走势',
-          'problemClass': 'complex_reasoning',
-          'mode': 'hybrid',
-          'queryNormalization': <String, dynamic>{
-            'query': '今天全球科技新闻重点和AI行业走势对比分析',
-          },
-        }),
+        text: jsonEncode(
+          _intentPlanningEnvelope(
+            primarySkill: 'fallback_general_search',
+            inferredMotive: '对比分析科技新闻与 AI 行业走势',
+            problemClass: 'complex_reasoning',
+            mode: 'hybrid',
+            normalizedQuery: '今天全球科技新闻重点和AI行业走势对比分析',
+          ),
+        ),
       );
     }
     if (isPlannerCall) {
@@ -457,7 +517,7 @@ class _FallbackAdaptiveLlm implements AssistantLlmProvider {
             'decision': <String, dynamic>{'nextAction': 'tool_call'},
             'toolCalls': <Map<String, dynamic>>[
               <String, dynamic>{
-                'tool': 'web_search',
+                'toolName': 'web_search',
                 'arguments': <String, dynamic>{
                   'query': '今天全球科技新闻重点和AI行业走势',
                   'queryVariants': <String>[
@@ -530,14 +590,15 @@ class _InvalidSynthesisNextActionLlm implements AssistantLlmProvider {
 
     if (isIntentStage) {
       return AssistantModelOutput(
-        text: jsonEncode(const <String, dynamic>{
-          'primaryDomainId': 'weather',
-          'secondaryDomains': <String>[],
-          'inferredMotive': '查询深圳实时天气',
-          'problemClass': 'realtime_info',
-          'mode': 'qa',
-          'queryNormalization': <String, dynamic>{'query': '深圳天气怎么样'},
-        }),
+        text: jsonEncode(
+          _intentPlanningEnvelope(
+            primarySkill: 'weather',
+            inferredMotive: '查询深圳实时天气',
+            problemClass: 'realtime_info',
+            mode: 'qa',
+            normalizedQuery: '深圳天气怎么样',
+          ),
+        ),
       );
     }
 
@@ -548,7 +609,7 @@ class _InvalidSynthesisNextActionLlm implements AssistantLlmProvider {
           'decision': <String, dynamic>{'nextAction': 'tool_call'},
           'toolCalls': <Map<String, dynamic>>[
             <String, dynamic>{
-              'tool': 'web_search',
+              'toolName': 'web_search',
               'arguments': <String, dynamic>{'query': '深圳 今天 天气 实时'},
             },
           ],
@@ -607,13 +668,15 @@ class _MultiSkillProblemClassLlm implements AssistantLlmProvider {
         templateId == 'planner.global_plan' && availableTools.isEmpty;
     if (isIntentStage) {
       return AssistantModelOutput(
-        text: jsonEncode(const <String, dynamic>{
-          'primaryDomainId': 'weather',
-          'secondaryDomains': <String>['fallback_general_search'],
-          'inferredMotive': '先看天气，再结合出游场景给建议',
-          'problemClass': 'complex_reasoning',
-          'mode': 'hybrid',
-        }),
+        text: jsonEncode(
+          _intentPlanningEnvelope(
+            primarySkill: 'weather',
+            inferredMotive: '先看天气，再结合出游场景给建议',
+            problemClass: 'complex_reasoning',
+            mode: 'hybrid',
+            secondarySkills: const <String>['fallback_general_search'],
+          ),
+        ),
       );
     }
 
@@ -728,13 +791,14 @@ class _JourneyReplayLlm implements AssistantLlmProvider {
     if (isIntentStage) {
       final isTripPlanning = query.contains('九寨沟');
       return AssistantModelOutput(
-        text: jsonEncode(<String, dynamic>{
-          'primaryDomainId': 'fallback_general_search',
-          'secondaryDomains': const <String>[],
-          'inferredMotive': isTripPlanning ? '想补齐旅行路线与住宿备选' : '想确认一个更聚焦的观赏时间问题',
-          'problemClass': isTripPlanning ? 'complex_reasoning' : 'simple_qa',
-          'mode': 'qa',
-        }),
+        text: jsonEncode(
+          _intentPlanningEnvelope(
+            primarySkill: 'fallback_general_search',
+            inferredMotive: isTripPlanning ? '想补齐旅行路线与住宿备选' : '想确认一个更聚焦的观赏时间问题',
+            problemClass: isTripPlanning ? 'complex_reasoning' : 'simple_qa',
+            mode: 'qa',
+          ),
+        ),
       );
     }
 
@@ -771,7 +835,7 @@ class _JourneyReplayLlm implements AssistantLlmProvider {
           'decision': const <String, dynamic>{'nextAction': 'tool_call'},
           'toolCalls': <Map<String, dynamic>>[
             <String, dynamic>{
-              'tool': 'web_search',
+              'toolName': 'web_search',
               'arguments': <String, dynamic>{
                 'query': query,
                 'queryTasks': query.contains('九寨沟')

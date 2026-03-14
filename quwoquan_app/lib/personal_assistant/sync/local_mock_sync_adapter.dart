@@ -2,7 +2,7 @@ import 'package:quwoquan_app/personal_assistant/sync/sync_adapter.dart';
 import 'package:quwoquan_app/personal_assistant/sync/sync_mode.dart';
 import 'package:quwoquan_app/personal_assistant/sync/sync_models.dart';
 
-class LocalMockSyncAdapter implements AssistentSyncAdapter {
+class LocalMockSyncAdapter implements AssistantSyncAdapter {
   LocalMockSyncAdapter({
     this.policySnapshot = const <String, dynamic>{
       'version': 'local_mock_v1',
@@ -16,13 +16,13 @@ class LocalMockSyncAdapter implements AssistentSyncAdapter {
   final List<Map<String, dynamic>> memoryRecords = <Map<String, dynamic>>[];
 
   @override
-  Future<AssistentSyncResult> pullPolicy({
+  Future<AssistantSyncResult> pullPolicy({
     required String policyVersionHint,
   }) async {
-    return AssistentSyncResult(
+    return AssistantSyncResult(
       success: true,
-      mode: AssistentSyncMode.localMock,
-      resource: AssistentSyncResource.policy,
+      mode: AssistantSyncMode.localMock,
+      resource: AssistantSyncResource.policy,
       message: 'Local mock policy loaded.',
       payload: <String, dynamic>{
         'policyVersionHint': policyVersionHint,
@@ -32,14 +32,14 @@ class LocalMockSyncAdapter implements AssistentSyncAdapter {
   }
 
   @override
-  Future<AssistentSyncResult> pushInteractionEvents({
+  Future<AssistantSyncResult> pushInteractionEvents({
     required List<Map<String, dynamic>> events,
   }) async {
     interactionEvents.addAll(events);
-    return AssistentSyncResult(
+    return AssistantSyncResult(
       success: true,
-      mode: AssistentSyncMode.localMock,
-      resource: AssistentSyncResource.interactionEvents,
+      mode: AssistantSyncMode.localMock,
+      resource: AssistantSyncResource.interactionEvents,
       message: 'Local mock interaction events accepted.',
       payload: <String, dynamic>{
         'count': events.length,
@@ -49,14 +49,14 @@ class LocalMockSyncAdapter implements AssistentSyncAdapter {
   }
 
   @override
-  Future<AssistentSyncResult> pushScorecards({
+  Future<AssistantSyncResult> pushScorecards({
     required List<Map<String, dynamic>> scorecards,
   }) async {
     this.scorecards.addAll(scorecards);
-    return AssistentSyncResult(
+    return AssistantSyncResult(
       success: true,
-      mode: AssistentSyncMode.localMock,
-      resource: AssistentSyncResource.scorecards,
+      mode: AssistantSyncMode.localMock,
+      resource: AssistantSyncResource.scorecards,
       message: 'Local mock scorecards accepted.',
       payload: <String, dynamic>{
         'count': scorecards.length,
@@ -66,14 +66,14 @@ class LocalMockSyncAdapter implements AssistentSyncAdapter {
   }
 
   @override
-  Future<AssistentSyncResult> syncMemoryRecords({
+  Future<AssistantSyncResult> syncMemoryRecords({
     required List<Map<String, dynamic>> memoryRecords,
   }) async {
     this.memoryRecords.addAll(memoryRecords);
-    return AssistentSyncResult(
+    return AssistantSyncResult(
       success: true,
-      mode: AssistentSyncMode.localMock,
-      resource: AssistentSyncResource.memoryRecords,
+      mode: AssistantSyncMode.localMock,
+      resource: AssistantSyncResource.memoryRecords,
       message: 'Local mock memory records accepted.',
       payload: <String, dynamic>{
         'count': memoryRecords.length,

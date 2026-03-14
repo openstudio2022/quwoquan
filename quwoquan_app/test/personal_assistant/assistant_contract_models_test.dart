@@ -1,12 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/aggregation_state.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/assistant_turn_contract.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/intent_graph.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/preference_fact.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/subagent_plan.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/ui_process_timeline_entry.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/user_events.dart';
+import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
+import 'package:quwoquan_app/assistant/contracts/ui_process_timeline_entry.dart';
+import 'package:quwoquan_app/assistant/contracts/user_events.dart';
+import 'package:quwoquan_app/assistant/domain/agent/agent.dart';
+import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
+import 'package:quwoquan_app/assistant/domain/memory/memory.dart';
 
 void main() {
   group('IntentGraph', () {

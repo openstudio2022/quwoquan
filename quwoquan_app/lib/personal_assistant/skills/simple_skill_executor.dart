@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/personal_assistant/knowledge/knowledge_qa_engine.dart';
 import 'package:quwoquan_app/personal_assistant/skills/skill_manifest.dart';
 import 'package:quwoquan_app/personal_assistant/tools/tool_registry.dart';

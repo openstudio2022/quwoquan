@@ -5,17 +5,17 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   test('planner contracts 通过 generated enums 提供当前 process canonical code', () {
     final plannerWrapper = File(
-      'lib/personal_assistant/contracts/planner_contracts.dart',
+      'lib/assistant/contracts/planner_contracts.dart',
     ).readAsStringSync();
     final generatedEnums = File(
-      'lib/personal_assistant/runtime/generated/enums/assistant_runtime_enums.g.dart',
+      'lib/assistant/generated/enums/assistant_runtime_enums.g.dart',
     ).readAsStringSync();
 
     expect(plannerWrapper, contains('Runtime-only protocol boundary:'));
     expect(
       plannerWrapper,
       contains(
-        "export 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';",
+          "export 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';",
       ),
     );
     expect(generatedEnums, contains('enum PlannerActionCode'));
@@ -40,7 +40,7 @@ void main() {
 
   test('process protocol 明确标注 runtime-only boundary', () {
     final content = File(
-      'lib/personal_assistant/contracts/process_protocol.dart',
+      'lib/assistant/contracts/process_protocol.dart',
     ).readAsStringSync();
 
     expect(content, contains('Runtime-only protocol boundary:'));

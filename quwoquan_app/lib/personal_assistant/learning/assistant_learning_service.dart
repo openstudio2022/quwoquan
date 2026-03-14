@@ -2,15 +2,15 @@ import 'package:quwoquan_app/personal_assistant/learning/assistant_learning_mode
 import 'package:quwoquan_app/personal_assistant/learning/assistant_learning_store.dart';
 import 'package:quwoquan_app/personal_assistant/sync/sync_gateway.dart';
 
-class AssistentLearningService {
-  AssistentLearningService({
-    required AssistentLearningStore store,
-    required AssistentSyncGateway syncGateway,
+class AssistantLearningService {
+  AssistantLearningService({
+    required AssistantLearningStore store,
+    required AssistantSyncGateway syncGateway,
   }) : _store = store,
        _syncGateway = syncGateway;
 
-  final AssistentLearningStore _store;
-  final AssistentSyncGateway _syncGateway;
+  final AssistantLearningStore _store;
+  final AssistantSyncGateway _syncGateway;
 
   static const List<String> _metrics = <String>[
     'answer_relevance',
@@ -52,7 +52,7 @@ class AssistentLearningService {
     String correctionText = '',
   }) async {
     final now = DateTime.now();
-    final event = AssistentInteractionEvent(
+    final event = AssistantInteractionEvent(
       eventId: '${now.microsecondsSinceEpoch}_$userId',
       runId: runId,
       traceId: traceId,
@@ -207,7 +207,7 @@ class AssistentLearningService {
     final userBuckets = <String, _ScoreAccumulator>{};
     final tagBuckets = <String, _ScoreAccumulator>{};
     final events = await _store.events();
-    final eventById = <String, AssistentInteractionEvent>{
+    final eventById = <String, AssistantInteractionEvent>{
       for (final event in events) event.eventId: event,
     };
     for (final score in scores) {
@@ -231,7 +231,7 @@ class AssistentLearningService {
     final userAggregates = userBuckets.entries
         .map((entry) {
           final parts = entry.key.split('|');
-          return AssistentScoreAggregate(
+          return AssistantScoreAggregate(
             bucketDate: parts[0],
             scopeId: parts[1],
             domainId: parts[2],
@@ -245,7 +245,7 @@ class AssistentLearningService {
     final tagAggregates = tagBuckets.entries
         .map((entry) {
           final parts = entry.key.split('|');
-          return AssistentScoreAggregate(
+          return AssistantScoreAggregate(
             bucketDate: parts[0],
             scopeId: parts[1],
             domainId: parts[2],
@@ -260,8 +260,8 @@ class AssistentLearningService {
     await _store.replaceTagDomainDaily(tagAggregates);
   }
 
-  List<AssistentInteractionMetricScore> _scoreEvent(
-    AssistentInteractionEvent event,
+  List<AssistantInteractionMetricScore> _scoreEvent(
+    AssistantInteractionEvent event,
   ) {
     final now = DateTime.now();
     final values = <String, double>{
@@ -280,7 +280,7 @@ class AssistentLearningService {
     };
     return _metrics
         .map(
-          (metric) => AssistentInteractionMetricScore(
+          (metric) => AssistantInteractionMetricScore(
             scoreId: '${event.eventId}_$metric',
             eventId: event.eventId,
             userId: event.userId,
@@ -357,7 +357,7 @@ class AssistentLearningService {
     return 4.0;
   }
 
-  double _scoreCorrectness(AssistentInteractionEvent event) {
+  double _scoreCorrectness(AssistantInteractionEvent event) {
     if (event.correctionText.trim().isNotEmpty) return 1.8;
     if (event.explicitThumb == 'down') return 2.0;
     if (event.explicitThumb == 'up') return 5.0;
@@ -380,7 +380,7 @@ class AssistentLearningService {
     return 3.0;
   }
 
-  double _scoreDomainFitness(AssistentInteractionEvent event) {
+  double _scoreDomainFitness(AssistantInteractionEvent event) {
     if (event.domainId == 'general') return 3.0;
     return 3.8;
   }
@@ -392,33 +392,33 @@ class AssistentLearningService {
     return 2.0;
   }
 
-  double _scoreInteractionFriction(AssistentInteractionEvent event) {
+  double _scoreInteractionFriction(AssistantInteractionEvent event) {
     if (event.interrupted) return 1.5;
     if (event.explicitReasonCodes.contains('off_topic')) return 2.2;
     return 4.0;
   }
 
-  double _scoreFollowupBurden(AssistentInteractionEvent event) {
+  double _scoreFollowupBurden(AssistantInteractionEvent event) {
     if (event.explicitReasonCodes.contains('followup_needed')) return 2.0;
     return 3.8;
   }
 
-  double _scorePersonalizationFit(AssistentInteractionEvent event) {
+  double _scorePersonalizationFit(AssistantInteractionEvent event) {
     if (event.userTags.isEmpty) return 3.0;
     return 3.9;
   }
 
-  double _scorePrivacyComfort(AssistentInteractionEvent event) {
+  double _scorePrivacyComfort(AssistantInteractionEvent event) {
     if (event.explicitReasonCodes.contains('privacy')) return 1.5;
     return 4.2;
   }
 
-  double _scoreSafetyCompliance(AssistentInteractionEvent event) {
+  double _scoreSafetyCompliance(AssistantInteractionEvent event) {
     if (event.explicitReasonCodes.contains('unsafe')) return 1.8;
     return 4.0;
   }
 
-  double _scoreTrustConfidence(AssistentInteractionEvent event) {
+  double _scoreTrustConfidence(AssistantInteractionEvent event) {
     if (event.explicitThumb == 'up') return 4.8;
     if (event.explicitThumb == 'down') return 2.0;
     return 3.5;

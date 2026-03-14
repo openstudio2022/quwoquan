@@ -27,7 +27,7 @@
 | 助理协议 metadata | `quwoquan_service/contracts/metadata/assistant/` | 在 app runtime 手写第二套 contract schema / enum / 字段名 |
 | Phase 输出契约 | `assets/personal_assistant/prompts/global/phase.output_contract.plan.md` | 在 runtime 推断或硬编码 phase 字段含义 |
 | 结构化合同定义 | `assets/personal_assistant/prompts/_standards/output_contracts.json` | 在 serializer/parser 中维护与 contract 不一致的 schema |
-| 端侧协议 codegen 产物 | `lib/personal_assistant/runtime/generated/` | 在 `lib/personal_assistant/contracts/` 继续新增手写 DTO / enum / serde |
+| 端侧协议 codegen 产物 | `lib/assistant/generated/` | 在 `lib/personal_assistant/contracts/` 中继续手写 DTO / enum / serde，或绕过 `lib/assistant/{contracts,generated}/` 另起一套协议入口 |
 
 ---
 
@@ -60,14 +60,16 @@
 | `trigger_keywords` | 兼容层 | runtime 已停止消费，该字段仅留给历史资产读取 |
 | 旧 prompt stack（非 v4 规划链） | 兼容层 | 不用于新功能 |
 | 基于 RegExp/contains 的语义分类 | 待移除 | 只保留单点兼容兜底，其余移除 |
+| `lib/personal_assistant/app/*` | 兼容层 | 仅保留桥接到 `lib/assistant/{application,runtime}/` 的 shim，不再作为新 UI / provider / gateway 入口 |
 
 ---
 
 ## 六、执行约束与代码门禁
 
 1. **冻结后**：runtime 只消费 typed contract、enum、metadata；不再用自然语言字符串做语义分类或路由。
-2. **代码门禁**：`lib/personal_assistant/engine/runtime_string_governance.dart` 声明禁止在 engine/react/skill/tool 中新增用户可见文案与语义词表。
+2. **代码门禁**：以 `test/personal_assistant/runtime_string_governance_test.dart` 与当前 `lib/assistant/*` 主入口约束为准，禁止在 engine/react/skill/tool 中新增用户可见文案与语义词表。
 3. **新增能力**：必须先更新对应真相源（metadata、prompt、tool catalog、skill config），再改 runtime；禁止反向在 runtime 中先硬编码再补资产。
-4. **generated-only**：`lib/personal_assistant/runtime/generated/` 仅允许 codegen 写入，禁止手写、禁止人工修补。
+4. **generated-only**：`lib/assistant/generated/` 仅允许 codegen 写入，禁止手写、禁止人工修补。
 5. **当前阶段**：只生成端侧 Dart 协议产物并只做端侧校验，但 metadata 设计必须保持与端云一体化一致，后续可生成 Go 产物。
 6. **门禁**：禁止在 `engine/react/skill/tool` 中新增用户可见中文文案和语义词表；允许的协议字符串只能来自 enum/schema 映射层。
+7. **结构主轴**：端侧 edge assistant 的实现入口收敛到 `lib/assistant/`，不再以 `personal_assistant/runtime` 作为未来目录主轴。

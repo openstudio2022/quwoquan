@@ -1,7 +1,7 @@
 # 运营与部署手册
 
-> **版本**：v1.1 · **日期**：2026-03-07
-> **合并自**：assistent_v1_release_runbook.md · assistent_v1_acceptance_checklist.md · assistent_gray_release_24h_template.md · deployment.md · model_integration.md
+> **版本**：v1.2 · **日期**：2026-03-15
+> **合并自**：旧版发布 Runbook · 旧版验收清单 · 旧版灰度模板 · deployment.md · model_integration.md
 
 ---
 
@@ -36,19 +36,19 @@ PERPLEXITY_API_KEY=<key>
 PERSONAL_ASSISTANT_OPENCLAW_BASE_URL=http://...
 
 # 渠道 Adapter 签名（可选）
-ASSISTENT_FEISHU_SIGN_MODE=none|token|hmac_sha256
-ASSISTENT_FEISHU_SIGN_SECRET=...
-ASSISTENT_OPENCLAW_SIGN_MODE=none|token|hmac_sha256
-ASSISTENT_OPENCLAW_SIGN_SECRET=...
+ASSISTANT_FEISHU_SIGN_MODE=none|token|hmac_sha256
+ASSISTANT_FEISHU_SIGN_SECRET=...
+ASSISTANT_OPENCLAW_SIGN_MODE=none|token|hmac_sha256
+ASSISTANT_OPENCLAW_SIGN_SECRET=...
 
 # 告警（可选）
-ASSISTENT_ALERT_WEBHOOK_URL=...
-ASSISTENT_ALERT_FEISHU_WEBHOOK=...
-ASSISTENT_ALERT_SUPPRESS_SECONDS=300
-ASSISTENT_ALERT_AUTO_DISABLE_MINUTES=10
+ASSISTANT_ALERT_WEBHOOK_URL=...
+ASSISTANT_ALERT_FEISHU_WEBHOOK=...
+ASSISTANT_ALERT_SUPPRESS_SECONDS=300
+ASSISTANT_ALERT_AUTO_DISABLE_MINUTES=10
 
 # 商业 API Gateway（可选）
-PERSONAL_ASSISTENT_ENABLE_API=true
+PERSONAL_ASSISTANT_ENABLE_API=true
 ```
 
 ### 1.3 多设备能力差异
@@ -121,8 +121,8 @@ runtime.switchModel("mimo/mimo-v2-flash")
 #    AssistantHttpGateway 监听 18181
 flutter run --dart-define=PERSONAL_ASSISTANT_GATEWAY_TOKEN=<token>
 
-# 2. 启动商业 API Gateway（可选）
-flutter run --dart-define=PERSONAL_ASSISTENT_ENABLE_API=true \
+# 2. 启动对外 API Gateway（可选）
+flutter run --dart-define=PERSONAL_ASSISTANT_ENABLE_API=true \
             --dart-define=PERSONAL_ASSISTANT_GATEWAY_TOKEN=<token>
 ```
 
@@ -134,9 +134,9 @@ flutter run --dart-define=PERSONAL_ASSISTENT_ENABLE_API=true \
 
 ### 构建与启动
 
-- [ ] App 以 `PERSONAL_ASSISTENT_ENABLE_API=true` 编译通过
-- [ ] `AssistentApiGateway` 在端口 `19191` 正常启动
-- [ ] `GET /v1/assistent/adapters` 返回至少 `feishu` 和 `openclaw`
+- [ ] App 以 `PERSONAL_ASSISTANT_ENABLE_API=true` 编译通过
+- [ ] `AssistantApiGateway` 在端口 `19191` 正常启动
+- [ ] `GET /v1/assistant/adapters` 返回至少 `feishu` 和 `openclaw`
 
 ### 安全与治理
 
@@ -146,30 +146,30 @@ flutter run --dart-define=PERSONAL_ASSISTENT_ENABLE_API=true \
 
 ### 核心 API
 
-- [ ] `GET /v1/assistent/providers` 返回 LLM/搜索 provider 元数据
-- [ ] `GET /v1/assistent/skills?channel=app` 返回受治理的 Skill 列表
-- [ ] `POST /v1/assistent/skills/invoke` 返回 `runId/traceId` 和结果 envelope
-- [ ] `POST /v1/assistent/runs` 返回 `runId/traceId/finalText/degraded/errorCode`
-- [ ] `POST /v1/assistent/runs/stream` 流式输出 trace 事件和最终 payload
-- [ ] `GET /v1/assistent/sessions` 返回已持久化会话摘要
+- [ ] `GET /v1/assistant/providers` 返回 LLM/搜索 provider 元数据
+- [ ] `GET /v1/assistant/skills?channel=app` 返回受治理的 Skill 列表
+- [ ] `POST /v1/assistant/skills/invoke` 返回 `runId/traceId` 和结果 envelope
+- [ ] `POST /v1/assistant/runs` 返回 `runId/traceId/finalText/degraded/errorCode`
+- [ ] `POST /v1/assistant/runs/stream` 流式输出 trace 事件和最终 payload
+- [ ] `GET /v1/assistant/sessions` 返回已持久化会话摘要
 
 ### 渠道 Adapter
 
-- [ ] `POST /v1/assistent/channels/feishu` 解析 webhook 并分发响应 envelope
-- [ ] `POST /v1/assistent/channels/openclaw` 解析 OpenClaw payload 并分发
+- [ ] `POST /v1/assistant/channels/feishu` 解析 webhook 并分发响应 envelope
+- [ ] `POST /v1/assistant/channels/openclaw` 解析 OpenClaw payload 并分发
 - [ ] 配置签名时 Adapter 验证能拒绝无效签名/token
 
 ### 费用与可观测性
 
-- [ ] 每次 run 创建 `AssistentCostLedger` 记录
-- [ ] `GET /v1/assistent/costs` 返回摘要和近期记录
+- [ ] 每次 run 创建 `AssistantCostLedger` 记录
+- [ ] `GET /v1/assistant/costs` 返回摘要和近期记录
 - [ ] 所有 run/invoke 响应包含 `runId` 和 `traceId`
 
 ### 端到端场景
 
 - [ ] App 文字问答流程成功返回知识类答案
-- [ ] 飞书 webhook 文字 → Assistent run → adapter dispatch 流程成功
-- [ ] OpenClaw ingress → Assistent run → dispatch 流程成功
+- [ ] 飞书 webhook 文字 → Assistant run → adapter dispatch 流程成功
+- [ ] OpenClaw ingress → Assistant run → dispatch 流程成功
 - [ ] Provider 降级路径仍能生成安全 fallback 回复
 
 ---
@@ -178,18 +178,18 @@ flutter run --dart-define=PERSONAL_ASSISTENT_ENABLE_API=true \
 
 ```bash
 # 1. 基础接口
-curl "http://127.0.0.1:19191/v1/assistent/providers"
-curl "http://127.0.0.1:19191/v1/assistent/skills?channel=app"
-curl -X POST "http://127.0.0.1:19191/v1/assistent/runs" -d '...'
-curl -N "http://127.0.0.1:19191/v1/assistent/runs/stream" -d '...'
-curl "http://127.0.0.1:19191/v1/assistent/costs"
-curl "http://127.0.0.1:19191/v1/assistent/alerts"
+curl "http://127.0.0.1:19191/v1/assistant/providers"
+curl "http://127.0.0.1:19191/v1/assistant/skills?channel=app"
+curl -X POST "http://127.0.0.1:19191/v1/assistant/runs" -d '...'
+curl -N "http://127.0.0.1:19191/v1/assistant/runs/stream" -d '...'
+curl "http://127.0.0.1:19191/v1/assistant/costs"
+curl "http://127.0.0.1:19191/v1/assistant/alerts"
 
 # 2. 一键 canary 脚本
-bash personal_assistant/scripts/assistent_canary_check.sh
+bash personal_assistant/scripts/assistant_canary_check.sh
 
 # 3. 告警路由测试
-bash personal_assistant/scripts/assistent_alert_route_test.sh
+bash personal_assistant/scripts/assistant_alert_route_test.sh
 ```
 
 ---
@@ -219,20 +219,20 @@ bash personal_assistant/scripts/assistent_alert_route_test.sh
 ### 必查接口
 
 ```bash
-GET  /v1/assistent/providers
-GET  /v1/assistent/alerts
-GET  /v1/assistent/costs
-POST /v1/assistent/runs
-POST /v1/assistent/channels/feishu
-POST /v1/assistent/channels/openclaw
+GET  /v1/assistant/providers
+GET  /v1/assistant/alerts
+GET  /v1/assistant/costs
+POST /v1/assistant/runs
+POST /v1/assistant/channels/feishu
+POST /v1/assistant/channels/openclaw
 ```
 
 ### 告警处置
 
 当 critical 触发：
-1. 检查 `GET /v1/assistent/providers` 中 `temporarilyDisabled` 状态
+1. 检查 `GET /v1/assistant/providers` 中 `temporarilyDisabled` 状态
 2. 排查 provider 侧异常（网络、配额、超时）
-3. 必要时手动恢复：`POST /v1/assistent/providers/{providerId}/recover`
+3. 必要时手动恢复：`POST /v1/assistant/providers/{providerId}/recover`
 4. 观察 10 分钟指标恢复情况
 
 ---
@@ -252,8 +252,8 @@ POST /v1/assistent/channels/openclaw
 ```bash
 # 1. 降低灰度流量到 0%
 
-# 2a. 停止商业 API Gateway
-#     停止 AssistentApiGateway，或
+# 2a. 停止对外 API Gateway
+#     停止 AssistantApiGateway，或
 
 # 2b. 回退核心 Gateway
 #     停止 AssistantHttpGateway，切回旧路由

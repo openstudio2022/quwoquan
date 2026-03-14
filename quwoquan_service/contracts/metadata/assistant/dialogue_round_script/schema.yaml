@@ -1,6 +1,6 @@
 dart_class: DialogueRoundScriptDto
-library_path: personal_assistant/contracts/dialogue_round_script.dart
-output_path: personal_assistant/runtime/generated/contracts/dialogue_round_script.g.dart
+library_path: assistant/contracts/dialogue_round_script.dart
+output_path: assistant/generated/contracts/dialogue_round_script.g.dart
 contract: dialogue_round_script
 version: v1
 kind: runtime_policy_contract

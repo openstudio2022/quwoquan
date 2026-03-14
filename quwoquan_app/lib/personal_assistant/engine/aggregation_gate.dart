@@ -1,6 +1,6 @@
-import 'package:quwoquan_app/personal_assistant/contracts/aggregation_state.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/intent_graph.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/skill_run.dart';
+import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
+import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
+import 'package:quwoquan_app/assistant/contracts/skill_run.dart';
 
 /// Stateless evaluator that builds [AggregationState] from the current
 /// set of [SkillRun]s. Extracted from the monolithic agent_loop to enable

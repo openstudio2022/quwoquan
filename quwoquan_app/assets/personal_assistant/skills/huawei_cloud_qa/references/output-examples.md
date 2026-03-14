@@ -14,7 +14,7 @@
     "subtype": {"value": "entity", "source": "classified"}
   },
   "toolPlan": [],
-  "askUser": {"needed": false, "question": ""},
+  "askUser": {"slotId": "", "prompt": "", "required": false, "suggestions": []},
   "userMarkdown": "（见下方 Markdown）"
 }
 ```

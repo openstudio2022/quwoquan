@@ -23,6 +23,7 @@ class CircleDto {
   final int storageUsedBytes;
   final int storageQuotaBytes;
   final String? domainId;
+  final String? subCategory;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -46,6 +47,7 @@ class CircleDto {
     this.storageUsedBytes = 0,
     this.storageQuotaBytes = 1073741824,
     this.domainId,
+    this.subCategory,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -57,7 +59,7 @@ class CircleDto {
       description: m['description'] as String?,
       coverUrl: (m['coverUrl'] ?? m['cover']) as String?,
       ownerId: (m['ownerId'] ?? '').toString(),
-      category: m['category'] as String?,
+      category: m['category'] ?? m['categoryId'] as String?,
       tags: (m['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
           const [],
       memberCount: (m['memberCount'] as num?)?.toInt() ?? 0,
@@ -77,6 +79,7 @@ class CircleDto {
       storageQuotaBytes:
           (m['storageQuotaBytes'] as num?)?.toInt() ?? 1073741824,
       domainId: m['domainId'] as String?,
+      subCategory: m['subCategory'] as String?,
       createdAt: _parseDateTime(m['createdAt']),
       updatedAt: _parseDateTime(m['updatedAt']),
     );
@@ -102,6 +105,7 @@ class CircleDto {
         'storageUsedBytes': storageUsedBytes,
         'storageQuotaBytes': storageQuotaBytes,
         if (domainId != null) 'domainId': domainId,
+        if (subCategory != null) 'subCategory': subCategory,
         'createdAt': createdAt.toIso8601String(),
         'updatedAt': updatedAt.toIso8601String(),
       };
@@ -132,6 +136,7 @@ class CircleDto {
     int? storageUsedBytes,
     int? storageQuotaBytes,
     String? domainId,
+    String? subCategory,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -155,6 +160,7 @@ class CircleDto {
       storageUsedBytes: storageUsedBytes ?? this.storageUsedBytes,
       storageQuotaBytes: storageQuotaBytes ?? this.storageQuotaBytes,
       domainId: domainId ?? this.domainId,
+      subCategory: subCategory ?? this.subCategory,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

@@ -11,10 +11,11 @@
 - 不得输出无证据支撑的确定性结论。
 - 若 `selfCheck` 不通过，必须返回补齐建议而非强行终答。
 - 语气必须遵守用户 `communication_style_tags`，同时遵循分域语气适配。
+- 只能输出新 `assistant_turn`，禁止继续输出旧字段或旧 diagnostics 形态。
 
 ## 执行要求
 - 输出 JSON。
-- 必须包含 `result/evidence/reasoningBasis/selfCheck/diagnostics`。
+- 必须包含 `contractVersion/messageKind/decision/userMarkdown/result/evidence/reasoningBasis/selfCheck/diagnostics`。
 - `userMarkdown` 字段必须达到业界一流水准（见下方格式规范）。
 
 ## 前置检查
@@ -23,7 +24,16 @@
 - web 证据包需满足阈值。
 
 ## 输出格式
-输出 JSON，必须包含：decision、userMarkdown、result、evidence、reasoningBasis、selfCheck、diagnostics。userMarkdown 为用户可见 Markdown，不得含任何 JSON 字段名。
+输出单个 `assistant_turn` JSON，必须包含：`contractVersion`、`messageKind`、`phaseId`、`actionCode`、`reasonCode`、`reasonShort`、`decision`、`userMarkdown`、`result`、`evidence`、`reasoningBasis`、`selfCheck`、`diagnostics`。`userMarkdown` 为用户可见 Markdown，不得含任何 JSON 字段名。
+
+### assistant_turn 关键字段要求
+- `contractVersion` 固定为 `assistant_turn`
+- `messageKind` 只能是 `answer` 或 `fallback`
+- `reasoningBasis` 必须是对象数组，不能是字符串
+- `selfCheck` 必须使用 `goalSatisfied`、`constraintSatisfied`、`safetyBoundarySatisfied`、`failedItems`
+- `diagnostics` 只允许 `emergedTags`、`failedChecks`、`parseStatus`、`notes`
+- 禁止输出 `traceId`、`turnPhase`、`source`、`references`、`thinkingText`
+- 禁止输出旧 diagnostics / 评分字段：`whyThisAnswer`、`riskFlags`、`needMoreInfo`、`improvementHints`
 
 ---
 

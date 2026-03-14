@@ -2,9 +2,9 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/personal_assistant/app/assistant_gateway.dart';
-import 'package:quwoquan_app/personal_assistant/app/assistant_runtime.dart';
-import 'package:quwoquan_app/personal_assistant/protocol/run_request.dart';
+import 'package:quwoquan_app/assistant/application/assistant_gateway.dart';
+import 'package:quwoquan_app/assistant/domain/channel/channel.dart';
+import 'package:quwoquan_app/assistant/runtime/assistant_runtime.dart';
 
 void main() {
   group('Assistant run E2E', () {

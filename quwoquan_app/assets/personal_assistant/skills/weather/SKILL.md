@@ -80,12 +80,12 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
   },
   "toolPlan": [
     {
-      "tool": "local_context",
+      "toolName": "local_context",
       "arguments": {"requestedFields": ["location", "permissions", "device"]}
     },
-    {"tool": "web_search", "arguments": {"query": "深圳天气", "freshnessHoursMax": 1}}
+    {"toolName": "web_search", "arguments": {"query": "深圳天气", "freshnessHoursMax": 1}}
   ],
-  "askUser": {"needed": false, "question": ""},
+  "askUser": {"slotId": "", "prompt": "", "required": false, "suggestions": []},
   "userMarkdown": "正在获取你所在城市并准备查询实时天气…"
 }
 ```

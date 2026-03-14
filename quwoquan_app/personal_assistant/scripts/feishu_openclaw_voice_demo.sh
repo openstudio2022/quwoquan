@@ -12,7 +12,7 @@ if [[ -n "$TOKEN" ]]; then
 fi
 
 echo "== Step1: Feishu webhook -> adapter ingress =="
-curl -s -X POST "${BASE_URL}/v1/assistent/channels/feishu" \
+curl -s -X POST "${BASE_URL}/v1/assistant/channels/feishu" \
   -H "Content-Type: application/json" \
   "${AUTH_HEADER[@]}" \
   -d "{
@@ -21,7 +21,7 @@ curl -s -X POST "${BASE_URL}/v1/assistent/channels/feishu" \
 echo
 
 echo "== Step2: OpenClaw style stream run with trace =="
-curl -N -X POST "${BASE_URL}/v1/assistent/runs/stream" \
+curl -N -X POST "${BASE_URL}/v1/assistant/runs/stream" \
   -H "Content-Type: application/json" \
   "${AUTH_HEADER[@]}" \
   -d "{
@@ -36,5 +36,5 @@ curl -N -X POST "${BASE_URL}/v1/assistent/runs/stream" \
 echo
 
 echo "== Step3: Query session history =="
-curl -s -X GET "${BASE_URL}/v1/assistent/sessions" "${AUTH_HEADER[@]}"
+curl -s -X GET "${BASE_URL}/v1/assistant/sessions" "${AUTH_HEADER[@]}"
 echo

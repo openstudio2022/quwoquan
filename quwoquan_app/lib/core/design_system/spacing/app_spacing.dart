@@ -198,7 +198,7 @@ class AppSpacing {
   static const double tabChipBaseWidthVideoImmersion = 64.0;
 
   /// 一级 Tab 芯片间距（发现、圈子统一；组内语义 intraGroup.md，同一导航组内间距）
-  static const double primaryTabChipGap = intraGroupMd;
+  static const double primaryTabChipGap = intraGroupXs;
   /// 一级 Tab 居中判定容差：允许轻微文案变化仍保持同一锚点布局，避免模式切换跳变。
   static const double primaryTabAnchorTolerance = 6.0;
   /// 发现页一级 Tab 左右锚点最小占位宽度（用于两侧动作位对称，避免视觉中轴漂移）。

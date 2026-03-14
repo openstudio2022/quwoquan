@@ -1,6 +1,6 @@
 dart_class: SynthesisReadinessResult
-library_path: personal_assistant/contracts/synthesis_readiness_result.dart
-output_path: personal_assistant/runtime/generated/contracts/synthesis_readiness_result.g.dart
+library_path: assistant/contracts/synthesis_readiness_result.dart
+output_path: assistant/generated/contracts/synthesis_readiness_result.g.dart
 contract: synthesis_readiness_result
 version: v1
 kind: runtime_context_contract

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/explainable_flow_event.dart';
+import 'package:quwoquan_app/assistant/contracts/explainable_flow_event.dart';
 import 'package:quwoquan_app/personal_assistant/engine/process_event_consolidator.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/trace_events.dart';
 

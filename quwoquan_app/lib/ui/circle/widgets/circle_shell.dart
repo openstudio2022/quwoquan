@@ -38,7 +38,7 @@ class _CircleShellState extends ConsumerState<CircleShell>
 
   List<_TabSpec> _resolvedTabs = [];
 
-  static const _defaultSections = ['works', 'interaction'];
+  static const _defaultSections = ['content', 'discussion', 'assets'];
 
   @override
   void initState() {
@@ -65,25 +65,31 @@ class _CircleShellState extends ConsumerState<CircleShell>
         .toList()
       ..sort((a, b) => a.order.compareTo(b.order));
 
-    final sectionTypes = visible.isNotEmpty
-        ? visible.map((s) => s.sectionType).toList()
-        : _defaultSections;
-
-    return sectionTypes.map((type) {
-      final custom = visible
-          .where((s) => s.sectionType == type)
-          .map((s) => s.customTitle)
-          .firstOrNull;
-      return _TabSpec(type: type, label: custom ?? _sectionLabel(type));
-    }).toList();
+    final availableTypes = visible.isNotEmpty
+        ? visible.map((s) => s.sectionType).toSet()
+        : <String>{'works', 'interaction', 'chat', 'storage'};
+    final tabs = <_TabSpec>[];
+    if (availableTypes.contains('works')) {
+      tabs.add(_TabSpec(type: 'content', label: _sectionLabel('content')));
+    }
+    if (availableTypes.contains('interaction')) {
+      tabs.add(_TabSpec(type: 'discussion', label: _sectionLabel('discussion')));
+    }
+    if (availableTypes.contains('chat') || availableTypes.contains('storage')) {
+      tabs.add(_TabSpec(type: 'assets', label: _sectionLabel('assets')));
+    }
+    return tabs.isEmpty
+        ? _defaultSections
+            .map((type) => _TabSpec(type: type, label: _sectionLabel(type)))
+            .toList(growable: false)
+        : tabs;
   }
 
   String _sectionLabel(String type) {
     return switch (type) {
-      'works' => UITextConstants.circleWorksTab,
-      'chat' => UITextConstants.circleGroups,
-      'storage' => '网盘',
-      'interaction' => UITextConstants.circleInteractionTab,
+      'content' => '内容',
+      'discussion' => '讨论',
+      'assets' => '资料',
       _ => type,
     };
   }
@@ -358,20 +364,39 @@ class _CircleShellState extends ConsumerState<CircleShell>
 
   Widget _buildSectionBody(String type, bool isDark, dynamic circleData, CircleState circleState) {
     return switch (type) {
-      'works' => SectionCreations(circleId: widget.circleId, isDark: isDark, role: circleState.role),
-      'chat' => SectionChat(
-          circleId: widget.circleId,
-          conversationId: circleData?.conversationId,
-          isDark: isDark,
-        ),
-      'storage' => SectionStorage(
+      'content' => SectionCreations(
           circleId: widget.circleId,
           isDark: isDark,
-          storageUsedBytes: circleData?.storageUsedBytes ?? 0,
-          storageQuotaBytes: circleData?.storageQuotaBytes ?? 1073741824,
+          role: circleState.role,
         ),
-      'interaction' => SectionInteraction(circleId: widget.circleId, isDark: isDark),
-      _ => SectionCreations(circleId: widget.circleId, isDark: isDark, role: circleState.role),
+      'discussion' => SectionInteraction(
+          circleId: widget.circleId,
+          isDark: isDark,
+        ),
+      'assets' => SingleChildScrollView(
+          padding: EdgeInsets.only(bottom: AppSpacing.containerLg),
+          child: Column(
+            children: [
+              SectionChat(
+                circleId: widget.circleId,
+                conversationId: circleData?.conversationId,
+                isDark: isDark,
+              ),
+              SizedBox(height: AppSpacing.interGroupSm),
+              SectionStorage(
+                circleId: widget.circleId,
+                isDark: isDark,
+                storageUsedBytes: circleData?.storageUsedBytes ?? 0,
+                storageQuotaBytes: circleData?.storageQuotaBytes ?? 1073741824,
+              ),
+            ],
+          ),
+        ),
+      _ => SectionCreations(
+          circleId: widget.circleId,
+          isDark: isDark,
+          role: circleState.role,
+        ),
     };
   }
 

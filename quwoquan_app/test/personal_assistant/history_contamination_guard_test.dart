@@ -104,12 +104,12 @@ class _TemplateAwareCaptureProvider implements AssistantLlmProvider {
       if (_plannerGlobalPlanCalls == 1) {
         return const AssistantModelOutput(
           text:
-              '{"primaryDomainId":"fallback_general_search","secondaryDomains":[],"inferredMotive":"用户想判断华为云盘古的竞争力与上云取舍","problemClass":"simple_qa","mode":"qa"}',
+              '{"contractVersion":"assistant_turn","messageKind":"progress","phaseId":"understanding","actionCode":"frame_problem","reasonCode":"align_goal","reasonShort":"先确认问题焦点，再组织回答。","decision":{"nextAction":"answer","confidence":0.76,"reasoning":"当前问题可直接围绕单一主题回答"},"userMarkdown":"我先聚焦问题主线，再给你结论。","result":{"text":"","summary":"进入理解阶段","interpretation":"锁定华为云盘古竞争力分析","actionHints":[]},"intentGraph":{"userGoal":"判断华为云盘古的竞争力与上云取舍","problemShape":"single_skill","primarySkill":"fallback_general_search","problemClass":"simple_qa","inferredMotive":"用户想判断华为云盘古的竞争力与上云取舍","secondarySkills":[],"queryNormalization":{"normalizedQuery":"华为云盘古 竞争力 上云取舍"},"queryTasks":[],"contextSlots":{},"globalConstraints":{"mode":"qa"},"clarificationNeeded":false},"selfCheck":{"goalSatisfied":true,"constraintSatisfied":true,"safetyBoundarySatisfied":true,"failedItems":[]},"diagnostics":{"emergedTags":[],"failedChecks":[],"parseStatus":"","notes":[]}}',
         );
       }
       return const AssistantModelOutput(
         text:
-            '{"contractVersion":"assistant_turn","phaseId":"answering","actionCode":"compose_answer","reasonCode":"evidence_ready","reasonShort":"关键信息已经够用了，开始整理成答案。","decision":{"nextAction":"answer"},"messageKind":"answer","userMarkdown":"## 华为云盘古分析\\n\\n- 我只围绕当前技术判断来回答。","result":{"text":"华为云盘古分析"}}',
+            '{"contractVersion":"assistant_turn","phaseId":"answering","actionCode":"compose_answer","reasonCode":"evidence_ready","reasonShort":"关键信息已经够用了，开始整理成答案。","decision":{"nextAction":"answer"},"messageKind":"answer","userMarkdown":"## 华为云盘古分析\\n\\n- 我只围绕当前技术判断来回答。","result":{"text":"华为云盘古分析","summary":"围绕当前技术判断作答","interpretation":"聚焦云盘古竞争力"},"selfCheck":{"goalSatisfied":true,"constraintSatisfied":true,"safetyBoundarySatisfied":true,"failedItems":[]},"diagnostics":{"emergedTags":[],"failedChecks":[],"parseStatus":"","notes":[]}}',
       );
     }
     if (templateId == 'planner.postcondition_check' ||
@@ -118,7 +118,7 @@ class _TemplateAwareCaptureProvider implements AssistantLlmProvider {
         templateId.contains('output_contract.answer')) {
       return const AssistantModelOutput(
         text:
-            '{"contractVersion":"assistant_turn","decision":{"nextAction":"answer"},"messageKind":"answer","userMarkdown":"## 华为云盘古分析\\n\\n- 我只围绕当前技术判断来回答。","result":{"text":"华为云盘古分析"}}',
+            '{"contractVersion":"assistant_turn","decision":{"nextAction":"answer"},"messageKind":"answer","phaseId":"answering","actionCode":"compose_answer","reasonCode":"evidence_ready","reasonShort":"关键信息已经够用了，开始整理成答案。","userMarkdown":"## 华为云盘古分析\\n\\n- 我只围绕当前技术判断来回答。","result":{"text":"华为云盘古分析","summary":"围绕当前技术判断作答","interpretation":"聚焦云盘古竞争力"},"selfCheck":{"goalSatisfied":true,"constraintSatisfied":true,"safetyBoundarySatisfied":true,"failedItems":[]},"diagnostics":{"emergedTags":[],"failedChecks":[],"parseStatus":"","notes":[]}}',
       );
     }
     return const AssistantModelOutput(text: '{"summary":"ok"}');
@@ -156,7 +156,7 @@ void main() {
       final runtime = ReactRuntime(
         llmProvider: provider = _CapturingSequenceProvider(<String>[
           '模型调用失败: HTTP 400 - Param Incorrect',
-          '{"userMarkdown":"深圳今天晴，25°C","decision":{"nextAction":"answer"}}',
+          '{"contractVersion":"assistant_turn","messageKind":"answer","phaseId":"answering","actionCode":"compose_answer","reasonCode":"evidence_ready","reasonShort":"信息已经够用了，可以直接回答。","decision":{"nextAction":"answer"},"userMarkdown":"## 深圳天气\\n\\n- 今天晴，约25°C。","result":{"text":"深圳今天晴，25°C","summary":"深圳天气晴朗","interpretation":"给出天气结论"},"selfCheck":{"goalSatisfied":true,"constraintSatisfied":true,"safetyBoundarySatisfied":true,"failedItems":[]},"diagnostics":{"emergedTags":[],"failedChecks":[],"parseStatus":"","notes":[]}}',
         ]),
         toolRegistry: AssistantToolRegistry(),
       );
@@ -343,7 +343,7 @@ void main() {
         sessionId: 'test',
         role: 'assistant',
         content:
-            '{"contractVersion":"assistant_turn","decision":{"nextAction":"answer"},"userMarkdown":"深圳今天晴，25°C。"}',
+            '{"contractVersion":"assistant_turn","messageKind":"answer","phaseId":"answering","actionCode":"compose_answer","reasonCode":"evidence_ready","reasonShort":"信息已经够用了，可以直接回答。","decision":{"nextAction":"answer"},"userMarkdown":"## 深圳天气\\n\\n- 今天晴，约25°C。","result":{"text":"深圳今天晴，25°C。","summary":"深圳天气晴朗","interpretation":"给出天气结论"},"selfCheck":{"goalSatisfied":true,"constraintSatisfied":true,"safetyBoundarySatisfied":true,"failedItems":[]},"diagnostics":{"emergedTags":[],"failedChecks":[],"parseStatus":"","notes":[]}}',
       );
 
       final summary = manager.summarizeRecent('test');
@@ -433,8 +433,8 @@ void main() {
           const AssistantRunRequest(
             sessionId: 'shared_session',
             capabilityCatalog: <String>[
-              AssistentCapabilityCatalog.chatRecent,
-              AssistentCapabilityCatalog.chatLongterm,
+              AssistantCapabilityCatalog.chatRecent,
+              AssistantCapabilityCatalog.chatLongterm,
             ],
             gpsLocation: <String, dynamic>{'city': '阿坝州'},
             messages: <AssistantRunMessage>[

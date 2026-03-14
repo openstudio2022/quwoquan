@@ -32,11 +32,13 @@ class MomentSocialFeed extends ConsumerWidget {
     super.key,
     required this.isDark,
     required this.onUserTap,
+    this.feedTabId = 'moment',
     this.onPostTap,
     this.onMoreTap,
   });
 
   final bool isDark;
+  final String feedTabId;
   final void Function(
     String userId, {
     String? avatarUrl,
@@ -57,15 +59,15 @@ class MomentSocialFeed extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final discoveryState = ref.watch(discoveryStateProvider);
-    final feedAsync = ref.watch(discoveryFeedProvider('moment'));
+    final feedAsync = ref.watch(discoveryFeedProvider(feedTabId));
     final fallbackRaw = ref
         .watch(appContentRepositoryProvider)
         .discoveryMomentData;
     final feedMap = ref.watch(discoveryFeedMapProvider);
 
-    if (!feedMap.containsKey('moment')) {
+    if (!feedMap.containsKey(feedTabId)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref.read(discoveryFeedMapProvider.notifier).load('moment');
+        ref.read(discoveryFeedMapProvider.notifier).load(feedTabId);
       });
     }
 
@@ -97,7 +99,7 @@ class MomentSocialFeed extends ConsumerWidget {
               SizedBox(height: AppSpacing.interGroupMd),
               TextButton.icon(
                 onPressed: () =>
-                    ref.read(discoveryFeedMapProvider.notifier).load('moment'),
+                    ref.read(discoveryFeedMapProvider.notifier).load(feedTabId),
                 icon: const Icon(Icons.refresh),
                 label: Text(context.l10n.retry),
               ),

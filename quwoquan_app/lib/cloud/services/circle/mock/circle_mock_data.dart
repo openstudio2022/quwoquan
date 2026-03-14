@@ -108,9 +108,12 @@ class CircleMockData {
           'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600',
       'avatar':
           'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600',
+      'desc': '少即是多，用减法看世界',
       'memberCount': 2340,
       'postCount': 128,
       'domainId': 'culture_arts',
+      'categoryId': 'humanity',
+      'subCategory': '影像',
     },
     {
       'id': 'c2',
@@ -121,9 +124,12 @@ class CircleMockData {
           'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=600',
       'avatar':
           'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=600',
+      'desc': '记录脚下的每一寸土地',
       'memberCount': 1280,
       'postCount': 56,
       'domainId': 'culture_arts',
+      'categoryId': 'travel',
+      'subCategory': '攻略',
     },
     {
       'id': 'c3',
@@ -134,16 +140,24 @@ class CircleMockData {
           'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=600',
       'avatar':
           'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=600',
+      'desc': '从豆子到杯子的风味之旅',
       'memberCount': 890,
       'postCount': 34,
       'domainId': 'culture_arts',
+      'categoryId': 'food',
+      'subCategory': '咖啡',
     },
     {
       'id': 'c-cam-1',
       'name': '上海交大·2020级校友',
+      'coverUrl':
+          'https://images.unsplash.com/photo-1562774053-701939374585?q=80&w=400',
+      'cover':
+          'https://images.unsplash.com/photo-1562774053-701939374585?q=80&w=400',
       'avatar':
           'https://images.unsplash.com/photo-1562774053-701939374585?q=80&w=400',
-      'memberCount': '1,287',
+      'desc': '思源致远，爱国荣校',
+      'memberCount': 1287,
       'categoryId': 'campus',
       'subCategory': '母校',
       'domainId': 'education',
@@ -151,9 +165,14 @@ class CircleMockData {
     {
       'id': 'c-cam-2',
       'name': '互联网校友内推圈',
+      'coverUrl':
+          'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=400',
+      'cover':
+          'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=400',
       'avatar':
           'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=400',
-      'memberCount': '6,543',
+      'desc': '大厂Offer直通车',
+      'memberCount': 6543,
       'categoryId': 'campus',
       'subCategory': '职场互助',
       'domainId': 'education',
@@ -161,9 +180,14 @@ class CircleMockData {
     {
       'id': 'c-car-1',
       'name': 'Model 3 焕新版·上海车友会',
+      'coverUrl':
+          'https://images.unsplash.com/photo-1560958089-b8a1929cea89?q=80&w=400',
+      'cover':
+          'https://images.unsplash.com/photo-1560958089-b8a1929cea89?q=80&w=400',
       'avatar':
           'https://images.unsplash.com/photo-1560958089-b8a1929cea89?q=80&w=400',
-      'memberCount': '2,100',
+      'desc': '电车生活，不止于行',
+      'memberCount': 2100,
       'categoryId': 'car',
       'subCategory': '品牌',
       'domainId': 'automotive',
@@ -171,9 +195,14 @@ class CircleMockData {
     {
       'id': 'c-car-2',
       'name': '周末自驾发现上海',
+      'coverUrl':
+          'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=400',
+      'cover':
+          'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=400',
       'avatar':
           'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=400',
-      'memberCount': '890',
+      'desc': '逃离城市喧嚣，探索隐秘角落',
+      'memberCount': 890,
       'categoryId': 'car',
       'subCategory': '自驾',
       'domainId': 'automotive',
@@ -181,9 +210,14 @@ class CircleMockData {
     {
       'id': 'c-meet-1',
       'name': '魔都搭子集合',
+      'coverUrl':
+          'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?q=80&w=400',
+      'cover':
+          'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?q=80&w=400',
       'avatar':
           'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?q=80&w=400',
-      'memberCount': '12,345',
+      'desc': '吃饭、看展、运动，万事皆可搭',
+      'memberCount': 12345,
       'categoryId': 'meet',
       'subCategory': '搭子',
       'domainId': 'social_meet',
@@ -191,9 +225,14 @@ class CircleMockData {
     {
       'id': 'c-meet-2',
       'name': '摄影师线下约拍',
+      'coverUrl':
+          'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?q=80&w=400',
+      'cover':
+          'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?q=80&w=400',
       'avatar':
           'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?q=80&w=400',
-      'memberCount': '3,456',
+      'desc': '用镜头定格美好瞬间',
+      'memberCount': 3456,
       'categoryId': 'meet',
       'subCategory': '寻友',
       'domainId': 'social_meet',
@@ -201,9 +240,14 @@ class CircleMockData {
     {
       'id': 'c-human-1',
       'name': '电影放映室',
+      'coverUrl':
+          'https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=400',
+      'cover':
+          'https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=400',
       'avatar':
           'https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=400',
-      'memberCount': '5,678',
+      'desc': '每周末一部经典老电影',
+      'memberCount': 5678,
       'categoryId': 'humanity',
       'subCategory': '影像',
       'domainId': 'culture_arts',
@@ -211,9 +255,14 @@ class CircleMockData {
     {
       'id': 'c-photo-owner',
       'name': '光影摄影社',
+      'coverUrl':
+          'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=400',
+      'cover':
+          'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=400',
       'avatar':
           'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=400',
-      'memberCount': '128',
+      'desc': '光影之间，皆是故事',
+      'memberCount': 128,
       'categoryId': 'humanity',
       'subCategory': '影像',
       'domainId': 'culture_arts',
@@ -221,9 +270,14 @@ class CircleMockData {
     {
       'id': 'c-tech-admin',
       'name': 'AI 前沿探索者',
+      'coverUrl':
+          'https://images.unsplash.com/photo-1677442135136-760c813028c4?q=80&w=400',
+      'cover':
+          'https://images.unsplash.com/photo-1677442135136-760c813028c4?q=80&w=400',
       'avatar':
           'https://images.unsplash.com/photo-1677442135136-760c813028c4?q=80&w=400',
-      'memberCount': '9,999',
+      'desc': '拥抱 AGI 时代',
+      'memberCount': 9999,
       'categoryId': 'tech',
       'subCategory': 'AI',
       'domainId': 'tech',

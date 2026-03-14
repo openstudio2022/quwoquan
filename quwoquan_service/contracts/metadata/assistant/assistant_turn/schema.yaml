@@ -1,6 +1,6 @@
 dart_class: AssistantTurnOutput
-library_path: personal_assistant/contracts/assistant_turn_contract.dart
-output_path: personal_assistant/runtime/generated/contracts/assistant_turn.g.dart
+library_path: assistant/contracts/assistant_turn_contract.dart
+output_path: assistant/generated/contracts/assistant_turn.g.dart
 contract: assistant_turn
 version: assistant_turn
 kind: output_contract

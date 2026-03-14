@@ -1,10 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:quwoquan_app/personal_assistant/app/assistant_gateway.dart';
-import 'package:quwoquan_app/personal_assistant/app/assistant_runtime.dart';
-import 'package:quwoquan_app/personal_assistant/protocol/run_request.dart';
-import 'package:quwoquan_app/personal_assistant/protocol/trace_events.dart';
+import 'package:quwoquan_app/assistant/application/assistant_gateway.dart';
+import 'package:quwoquan_app/assistant/domain/channel/channel.dart';
+import 'package:quwoquan_app/assistant/runtime/assistant_runtime.dart';
 
 Future<void> main(List<String> args) async {
   final query = args.isNotEmpty ? args.join(' ') : '深圳天气怎么样';

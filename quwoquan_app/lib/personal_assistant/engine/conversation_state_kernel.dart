@@ -1,10 +1,10 @@
-import 'package:quwoquan_app/personal_assistant/contracts/aggregation_state.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/assistant_turn_contract.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/conversation_state_decision.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/dialogue_round_script.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/planner_contracts.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/slot_schema.dart';
+import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/conversation_state_decision.dart';
+import 'package:quwoquan_app/assistant/contracts/dialogue_round_script.dart';
+import 'package:quwoquan_app/assistant/contracts/planner_contracts.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/contracts/slot_schema.dart';
 import 'package:quwoquan_app/personal_assistant/engine/default_processing/evidence_evaluator.dart';
 import 'package:quwoquan_app/personal_assistant/engine/default_processing/default_processing_copy_bank.dart';
 import 'package:quwoquan_app/personal_assistant/engine/default_processing/problem_framer.dart';

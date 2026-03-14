@@ -1,8 +1,10 @@
-import 'package:quwoquan_app/personal_assistant/app/trace_user_event_translator.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/planner_contracts.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/ui_process_timeline_entry.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/user_events.dart';
+import 'package:quwoquan_app/assistant/contracts/planner_contracts.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/contracts/ui_process_timeline_entry.dart';
+import 'package:quwoquan_app/assistant/contracts/user_events.dart';
+import 'package:quwoquan_app/assistant/orchestration/trace_user_event_translator.dart';
+import 'package:quwoquan_app/assistant/protocol/trace_events.dart'
+    as assistant_trace;
 import 'package:quwoquan_app/personal_assistant/protocol/trace_events.dart';
 
 class ProcessJournalBus {
@@ -72,7 +74,9 @@ class ProcessJournalBus {
       return emitted;
     }
 
-    final userEvent = TraceUserEventTranslator.translate(event);
+    final userEvent = TraceUserEventTranslator.translate(
+      assistant_trace.AssistantTraceEvent.fromJson(event.toJson()),
+    );
     if (userEvent != null) {
       emitted.addAll(
         consumeUserEvent(

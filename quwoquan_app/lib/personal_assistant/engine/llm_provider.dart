@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
-import 'package:quwoquan_app/personal_assistant/contracts/assistant_turn_contract.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/runtime_policies.dart';
 import 'package:quwoquan_app/personal_assistant/engine/model_config.dart';
 import 'package:quwoquan_app/personal_assistant/engine/llm_response_parser.dart';
@@ -1003,11 +1003,11 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
     await appendLayer('stack.persona');
     // §6: Tool policy + runtime constraints
     await appendLayer('stack.tool_policy');
-    // Legacy layers (kept for backward compatibility during migration)
+    // Legacy behavior layers that still add general guidance, but do not define
+    // a parallel output schema.
     await appendLayer('stack.global_system');
     await appendLayer('stack.runtime_policy');
     await appendLayer('stack.recovery_policy');
-    await appendLayer('stack.output_contract');
     return _ResolvedPromptStack(
       content: stackLayers.join('\n\n'),
       missingVariables: missing.toSet().toList(growable: false),

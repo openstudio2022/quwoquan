@@ -62,9 +62,9 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
   "decision": {"nextAction": "tool_call|answer|ask_user|retry|abort"},
   "slotState": {},
   "toolPlan": [
-    {"tool": "web_search", "arguments": {"query": "示例查询"}}
+    {"toolName": "web_search", "arguments": {"query": "示例查询"}}
   ],
-  "askUser": {"needed": false, "question": ""},
+  "askUser": {"slotId": "", "prompt": "", "required": false, "suggestions": []},
   "userMarkdown": "正在查询相关信息…"
 }
 ```

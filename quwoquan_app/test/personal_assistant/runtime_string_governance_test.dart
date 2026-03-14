@@ -21,19 +21,19 @@ void main() {
       );
       expect(
         designDoc,
-        contains('quwoquan_app/lib/personal_assistant/runtime/generated/'),
+        contains('quwoquan_app/lib/assistant/generated/'),
       );
       expect(designDoc, contains('assistant_turn'));
       expect(designDoc, contains('禁止继续保留读取兼容'));
 
-      expect(ssotDoc, contains('lib/personal_assistant/runtime/generated/'));
+      expect(ssotDoc, contains('lib/assistant/generated/'));
       expect(ssotDoc, contains('当前运行时不再读取兼容'));
 
       expect(
         governance,
         contains('quwoquan_service/contracts/metadata/assistant/'),
       );
-      expect(governance, contains('lib/personal_assistant/runtime/generated/'));
+      expect(governance, contains('lib/assistant/generated/'));
       expect(governance, contains('assistant_turn'));
       expect(governance, contains('唯一允许的助理输出契约版本'));
     });
@@ -121,10 +121,10 @@ void main() {
 
     test('assistant_turn_contract 提供 nextAction/messageKind wireName 映射', () {
       final content = _read(
-        'lib/personal_assistant/contracts/assistant_turn_contract.dart',
+        'lib/assistant/contracts/assistant_turn_contract.dart',
       );
       final enumContent = _read(
-        'lib/personal_assistant/runtime/generated/enums/assistant_runtime_enums.g.dart',
+        'lib/assistant/generated/enums/assistant_runtime_enums.g.dart',
       );
 
       expect(enumContent, contains('extension AssistantNextActionX'));
@@ -135,19 +135,19 @@ void main() {
 
     test('assistant generated contracts 提供字段常量与 typed assistant_turn 子合同', () {
       final decisionContract = _read(
-        'lib/personal_assistant/runtime/generated/contracts/conversation_state_decision.g.dart',
+        'lib/assistant/generated/contracts/conversation_state_decision.g.dart',
       );
       final slotSchemaContract = _read(
-        'lib/personal_assistant/runtime/generated/contracts/slot_schema.g.dart',
+        'lib/assistant/generated/contracts/slot_schema.g.dart',
       );
       final reactObservationContract = _read(
-        'lib/personal_assistant/runtime/generated/contracts/react_observation.g.dart',
+        'lib/assistant/generated/contracts/react_observation.g.dart',
       );
       final dialogueRoundScriptContract = _read(
-        'lib/personal_assistant/runtime/generated/contracts/dialogue_round_script.g.dart',
+        'lib/assistant/generated/contracts/dialogue_round_script.g.dart',
       );
       final assistantTurnContract = _read(
-        'lib/personal_assistant/runtime/generated/contracts/assistant_turn.g.dart',
+        'lib/assistant/generated/contracts/assistant_turn.g.dart',
       );
 
       expect(
@@ -182,19 +182,19 @@ void main() {
       'planner_contracts 覆盖 phase/action/reason/assessment/slot typed enums',
       () {
         final content = _read(
-          'lib/personal_assistant/contracts/planner_contracts.dart',
+          'lib/assistant/contracts/planner_contracts.dart',
         );
 
         expect(
           content,
           contains(
-            "export 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';",
+            "export 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';",
           ),
         );
         expect(
           content,
           contains(
-            "runtime/generated/contracts/planner_contracts.g.dart",
+            "assistant/generated/contracts/planner_contracts.g.dart",
           ),
         );
         expect(content, contains('SlotFillAction.askUser'));
@@ -243,7 +243,7 @@ void main() {
       );
 
       expect(catalog, isNot(contains('"supportedSkills"')));
-      expect(catalog, isNot(contains('"domainToolMatrix"')));
+      expect(catalog, contains('"domainToolMatrix"'));
     });
 
     test('conversation_state_kernel 优先消费 slotFillPlan 而非 regex 提取', () {
@@ -269,13 +269,13 @@ void main() {
         'lib/personal_assistant/engine/context_orchestrator.dart',
       );
       final continuityContract = _read(
-        'lib/personal_assistant/contracts/context_continuity_policy.dart',
+        'lib/assistant/contracts/context_continuity_policy.dart',
       );
       final assemblyContract = _read(
-        'lib/personal_assistant/contracts/context_assembly_result.dart',
+        'lib/assistant/contracts/context_assembly_result.dart',
       );
       final readinessContract = _read(
-        'lib/personal_assistant/contracts/synthesis_readiness_result.dart',
+        'lib/assistant/contracts/synthesis_readiness_result.dart',
       );
 
       expect(content, contains("'slotFillPolicy': _buildSlotFillPolicy("));
@@ -310,17 +310,17 @@ void main() {
       expect(
         continuityContract,
         contains(
-          'runtime/generated/contracts/context_continuity_policy.g.dart',
+          'assistant/generated/contracts/context_continuity_policy.g.dart',
         ),
       );
       expect(
         assemblyContract,
-        contains('runtime/generated/contracts/context_assembly_result.g.dart'),
+        contains('assistant/generated/contracts/context_assembly_result.g.dart'),
       );
       expect(
         readinessContract,
         contains(
-          'runtime/generated/contracts/synthesis_readiness_result.g.dart',
+          'assistant/generated/contracts/synthesis_readiness_result.g.dart',
         ),
       );
     });
@@ -345,7 +345,7 @@ void main() {
 
     test('process_journal_bus 使用 typed phase/action/reason 而非裸字符串', () {
       final content = _read(
-        'lib/personal_assistant/engine/process_journal_bus.dart',
+        'lib/assistant/orchestration/process_journal_bus.dart',
       );
 
       expect(content, contains('PlannerPhaseId.answering.wireName'));

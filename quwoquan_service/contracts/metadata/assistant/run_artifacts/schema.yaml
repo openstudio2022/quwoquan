@@ -1,6 +1,6 @@
 dart_class: RunArtifacts
-library_path: personal_assistant/contracts/run_artifacts.dart
-output_path: personal_assistant/runtime/generated/contracts/run_artifacts.g.dart
+library_path: assistant/contracts/run_artifacts.dart
+output_path: assistant/generated/contracts/run_artifacts.g.dart
 contract: run_artifacts
 version: v1
 kind: runtime_persistence_contract
