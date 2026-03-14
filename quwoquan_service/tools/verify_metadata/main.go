@@ -958,8 +958,15 @@ func (v *validator) validateObjectAt(dirName, dir string) {
 
 	aggFile := filepath.Join(dir, "aggregate.yaml")
 	entFile := filepath.Join(dir, "entity.yaml")
+	schemaFile := filepath.Join(dir, "schema.yaml")
 	hasAgg := fileExists(aggFile)
 	hasEnt := fileExists(entFile)
+	hasSchema := fileExists(schemaFile)
+
+	if hasSchema && !hasAgg && !hasEnt {
+		v.validateSchemaObject(dirName, schemaFile)
+		return
+	}
 
 	if !hasAgg && !hasEnt {
 		v.errorf("%s: neither aggregate.yaml nor entity.yaml found", dirName)
@@ -990,6 +997,28 @@ func (v *validator) validateObjectAt(dirName, dir string) {
 	v.validateServiceEntities(dir, dirName, fieldsEntities)
 
 	_ = rootName
+}
+
+func (v *validator) validateSchemaObject(dirName, schemaFile string) {
+	data, err := os.ReadFile(schemaFile)
+	if err != nil {
+		v.errorf("%s/schema.yaml: read error: %v", dirName, err)
+		return
+	}
+	var parsed struct {
+		DartClass  string `yaml:"dart_class"`
+		OutputPath string `yaml:"output_path"`
+	}
+	if err := yaml.Unmarshal(data, &parsed); err != nil {
+		v.errorf("%s/schema.yaml: parse error: %v", dirName, err)
+		return
+	}
+	if strings.TrimSpace(parsed.DartClass) == "" {
+		v.errorf("%s/schema.yaml: dart_class is required", dirName)
+	}
+	if strings.TrimSpace(parsed.OutputPath) == "" {
+		v.errorf("%s/schema.yaml: output_path is required", dirName)
+	}
 }
 
 func (v *validator) parseAggRoot(dir, dirName string) string {

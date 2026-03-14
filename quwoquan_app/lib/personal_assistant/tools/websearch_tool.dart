@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/personal_assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/personal_assistant/retrieval/retrieval_broker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:quwoquan_app/personal_assistant/observability/logging/app_log_models.dart';
@@ -134,19 +135,19 @@ class WebSearchTool implements AssistantTool {
       final cachedData = <String, dynamic>{...cached};
       final cachedRefs =
           (cachedData['references'] as List?)
-                  ?.whereType<Map>()
-                  .map((item) => item.cast<String, dynamic>())
-                  .toList(growable: false) ??
-              const <Map<String, dynamic>>[];
+              ?.whereType<Map>()
+              .map((item) => item.cast<String, dynamic>())
+              .toList(growable: false) ??
+          const <Map<String, dynamic>>[];
       if (cachedRefs.isNotEmpty) {
         cachedData['references'] = _decorateReferences(
           references: cachedRefs,
           query: query,
           authorityDomains:
               (cachedData['authorityDomains'] as List?)
-                      ?.whereType<String>()
-                      .toList(growable: false) ??
-                  const <String>[],
+                  ?.whereType<String>()
+                  .toList(growable: false) ??
+              const <String>[],
           timeConstraint: _SearchTimeConstraint(
             scope: 'cached',
             start: DateTime.now(),
@@ -507,13 +508,23 @@ class WebSearchTool implements AssistantTool {
     final authorityScore = total <= 0
         ? 0.0
         : (authoritative / total).clamp(0.0, 1.0);
-    // Layer 3 综合质量评分：权威性(0.4) + 时效性(0.35) + 覆盖量(0.25)
-    // 时效性：freshnessHours 越小越好，超过上限则线性惩罚至0
+    final relevanceScore = total <= 0
+        ? 0.0
+        : references
+                  .map(
+                    (ref) => (ref['relevanceScore'] as num?)?.toDouble() ?? 0.0,
+                  )
+                  .reduce((a, b) => a + b) /
+              total;
+    // Layer 3 综合质量评分：相关性(0.35) + 权威性(0.25) + 时效性(0.2) + 覆盖量(0.2)
     final freshScore = freshnessHours <= timeConstraint.freshnessHoursMax
         ? 1.0
         : (timeConstraint.freshnessHoursMax / freshnessHours).clamp(0.0, 1.0);
     final qualityScore =
-        (authorityScore * 0.4 + freshScore * 0.35 + coverage * 0.25)
+        (relevanceScore * 0.35 +
+                authorityScore * 0.25 +
+                freshScore * 0.2 +
+                coverage * 0.2)
             .clamp(0.0, 1.0)
             .toDouble();
     // 保留向后兼容的 confidence 字段
@@ -525,6 +536,7 @@ class WebSearchTool implements AssistantTool {
       'confidence': confidence,
       'qualityScore': qualityScore,
       'authorityScore': authorityScore,
+      'relevanceScore': relevanceScore,
       'authoritativeCount': authoritative,
       'totalReferences': total,
     };
@@ -612,6 +624,7 @@ class WebSearchTool implements AssistantTool {
     if (start != null && end != null && !end.isBefore(start)) {
       final maxHours =
           explicitFreshness ??
+          domainPolicy.defaultFreshnessHoursMax ??
           timeContract.freshnessHoursMaxByScope[scope] ??
           now.difference(start).inHours.clamp(1, 24 * 366);
       return _SearchTimeConstraint(
@@ -629,6 +642,7 @@ class WebSearchTool implements AssistantTool {
     if (calendarPointRange != null) {
       final maxHours =
           explicitFreshness ??
+          domainPolicy.defaultFreshnessHoursMax ??
           timeContract.freshnessHoursMaxByScope[calendarPointRange.scope] ??
           now
               .difference(calendarPointRange.range.start)
@@ -648,6 +662,7 @@ class WebSearchTool implements AssistantTool {
     );
     final maxHours =
         explicitFreshness ??
+        domainPolicy.defaultFreshnessHoursMax ??
         timeContract.freshnessHoursMaxByScope[scope] ??
         timeContract.defaultFreshnessHoursMax;
     return _SearchTimeConstraint(
@@ -889,6 +904,8 @@ class WebSearchTool implements AssistantTool {
       final map = decoded.cast<String, dynamic>();
       return _DomainRetrievalPolicy(
         defaultTimeScope: (map['defaultTimeScope'] as String?)?.trim() ?? '',
+        defaultFreshnessHoursMax: (map['defaultFreshnessHoursMax'] as num?)
+            ?.toInt(),
         allowedTimeScopes:
             (map['allowedTimeScopes'] as List?)
                 ?.whereType<String>()
@@ -1900,20 +1917,26 @@ class WebSearchTool implements AssistantTool {
             ..['queryTaskId'] = (task['id'] as String?)?.trim() ?? ''
             ..['queryTaskLabel'] = (task['label'] as String?)?.trim() ?? ''
             ..['dimension'] = (task['dimension'] as String?)?.trim() ?? ''
+            ..['entityAnchors'] = _stringList(task['entityAnchors'])
+            ..['negativeKeywords'] = _stringList(task['negativeKeywords'])
             ..remove('queryVariants')
             ..remove('queryTasks');
           return execute(singleArgs);
         })
         .toList(growable: false);
     final results = await Future.wait(futures, eagerError: false);
-    final mergedRefs = <Map<String, dynamic>>[];
-    final seenUrls = <String>{};
+    final mergedCandidates = <Map<String, dynamic>>[];
+    final coveredDimensions = <String>{};
     String bestSummary = '';
     double bestQuality = 0.0;
     String bestProvider = '';
     var anySuccess = false;
 
-    for (final r in results) {
+    for (var i = 0; i < results.length; i++) {
+      final r = results[i];
+      final task = i < allTasks.length
+          ? allTasks[i]
+          : const <String, dynamic>{};
       if (r.success) anySuccess = true;
       final data = r.data ?? const <String, dynamic>{};
       final refs =
@@ -1922,11 +1945,25 @@ class WebSearchTool implements AssistantTool {
               .map((e) => e.cast<String, dynamic>())
               .toList(growable: false) ??
           const <Map<String, dynamic>>[];
-      for (final ref in refs) {
-        final url = (ref['url'] as String?)?.trim() ?? '';
-        if (url.isNotEmpty && seenUrls.add(url)) {
-          mergedRefs.add(ref);
+      final filteredRefs = _applyTaskFilters(refs, task: task);
+      if (filteredRefs.isNotEmpty) {
+        final dimension =
+            (task['dimension'] as String?)?.trim() ??
+            (task['label'] as String?)?.trim() ??
+            '';
+        if (dimension.isNotEmpty) {
+          coveredDimensions.add(dimension);
         }
+      }
+      for (final ref in filteredRefs) {
+        mergedCandidates.add(<String, dynamic>{
+          ...ref,
+          'rerankScore': _multiQueryReferenceScore(
+            ref,
+            task: task,
+            requestedDimensions: dimensions,
+          ),
+        });
       }
       final quality = (data['qualityScore'] as num?)?.toDouble() ?? 0.0;
       if (quality > bestQuality) {
@@ -1940,55 +1977,190 @@ class WebSearchTool implements AssistantTool {
       return results.first;
     }
 
+    final mergedRefs = _dedupeAndSortMergedReferences(mergedCandidates);
+    final missingDimensions = dimensions
+        .where((item) => item.isNotEmpty && !coveredDimensions.contains(item))
+        .toList(growable: false);
+    final rerankedQuality = _mergedQualityScore(mergedRefs);
+    final effectiveQuality = rerankedQuality > 0
+        ? rerankedQuality
+        : bestQuality;
+    final effectiveSummary = _buildMultiQuerySummary(
+      labels: labels,
+      coveredDimensions: coveredDimensions.toList(growable: false),
+      missingDimensions: missingDimensions,
+      referenceCount: mergedRefs.length,
+      fallbackSummary: bestSummary,
+    );
+
     return AssistantToolResult(
       success: true,
       message:
           '并行检索完成（${labels.isNotEmpty ? labels.length : allQueries.length} 个方向），找到 ${mergedRefs.length} 条参考资料。',
       data: <String, dynamic>{
         'provider': bestProvider,
-        'summary': bestSummary,
+        'summary': effectiveSummary,
         'references': mergedRefs.take(10).toList(growable: false),
-        'qualityScore': bestQuality,
+        'qualityScore': effectiveQuality,
         'queryCount': allQueries.length,
         'queryLabels': labels,
-        'coveredDimensions': dimensions.isNotEmpty ? dimensions : labels,
+        'coveredDimensions': coveredDimensions.isNotEmpty
+            ? coveredDimensions.toList(growable: false)
+            : labels,
+        'missingDimensions': missingDimensions,
         'queryTasks': allTasks,
         'referenceCount': mergedRefs.length,
         'totalReferences': mergedRefs.length,
+        'rerankStats': <String, dynamic>{
+          'candidateCount': mergedCandidates.length,
+          'returnedCount': mergedRefs.length,
+        },
         'message': '多路检索完成。',
       },
     );
   }
 
+  List<Map<String, dynamic>> _applyTaskFilters(
+    List<Map<String, dynamic>> references, {
+    required Map<String, dynamic> task,
+  }) {
+    final anchors = _stringList(
+      task['entityAnchors'],
+    ).map((item) => item.toLowerCase()).toList(growable: false);
+    final negatives = _stringList(
+      task['negativeKeywords'],
+    ).map((item) => item.toLowerCase()).toList(growable: false);
+    return references
+        .where((ref) {
+          final haystack =
+              ('${ref['title'] ?? ''} ${ref['snippet'] ?? ''} ${ref['url'] ?? ''}')
+                  .toLowerCase();
+          if (anchors.isNotEmpty && !anchors.any(haystack.contains)) {
+            return false;
+          }
+          if (negatives.isNotEmpty && negatives.any(haystack.contains)) {
+            return false;
+          }
+          return true;
+        })
+        .toList(growable: false);
+  }
+
+  List<Map<String, dynamic>> _dedupeAndSortMergedReferences(
+    List<Map<String, dynamic>> references,
+  ) {
+    final byUrl = <String, Map<String, dynamic>>{};
+    for (final ref in references) {
+      final url = (ref['url'] as String?)?.trim() ?? '';
+      if (url.isEmpty) continue;
+      final existing = byUrl[url];
+      if (existing == null ||
+          ((ref['rerankScore'] as num?)?.toDouble() ?? 0.0) >
+              ((existing['rerankScore'] as num?)?.toDouble() ?? 0.0)) {
+        byUrl[url] = ref;
+      }
+    }
+    final deduped = byUrl.values.toList(growable: false);
+    deduped.sort((a, b) {
+      final rerankDelta =
+          (((b['rerankScore'] as num?)?.toDouble() ?? 0.0) * 1000).round() -
+          (((a['rerankScore'] as num?)?.toDouble() ?? 0.0) * 1000).round();
+      if (rerankDelta != 0) return rerankDelta;
+      final authorityDelta =
+          (((b['authorityScore'] as num?)?.toDouble() ?? 0.0) * 1000).round() -
+          (((a['authorityScore'] as num?)?.toDouble() ?? 0.0) * 1000).round();
+      if (authorityDelta != 0) return authorityDelta;
+      final relevanceDelta =
+          (((b['relevanceScore'] as num?)?.toDouble() ?? 0.0) * 1000).round() -
+          (((a['relevanceScore'] as num?)?.toDouble() ?? 0.0) * 1000).round();
+      if (relevanceDelta != 0) return relevanceDelta;
+      return ((a['url'] as String?) ?? '').compareTo(
+        (b['url'] as String?) ?? '',
+      );
+    });
+    return deduped;
+  }
+
+  double _multiQueryReferenceScore(
+    Map<String, dynamic> reference, {
+    required Map<String, dynamic> task,
+    required List<String> requestedDimensions,
+  }) {
+    final relevance = (reference['relevanceScore'] as num?)?.toDouble() ?? 0.0;
+    final authority = (reference['authorityScore'] as num?)?.toDouble() ?? 0.0;
+    final freshnessHours =
+        (reference['freshnessHours'] as num?)?.toDouble() ?? 0.0;
+    final freshnessScore = _freshnessScore(freshnessHours);
+    final dimension = (reference['dimension'] as String?)?.trim() ?? '';
+    final dimensionBonus =
+        requestedDimensions.isEmpty ||
+            (dimension.isNotEmpty && requestedDimensions.contains(dimension))
+        ? 1.0
+        : 0.6;
+    final anchorBonus = _stringList(task['entityAnchors']).isEmpty ? 1.0 : 1.08;
+    return (relevance * 0.5 +
+            authority * 0.22 +
+            freshnessScore * 0.18 +
+            dimensionBonus * 0.1) *
+        anchorBonus;
+  }
+
+  double _freshnessScore(double freshnessHours) {
+    if (freshnessHours <= 0) return 1.0;
+    if (freshnessHours <= 24) return 1.0;
+    if (freshnessHours <= 72) return 0.86;
+    if (freshnessHours <= 168) return 0.72;
+    if (freshnessHours <= 720) return 0.56;
+    return 0.38;
+  }
+
+  double _mergedQualityScore(List<Map<String, dynamic>> references) {
+    if (references.isEmpty) return 0.0;
+    final top = references.take(3).toList(growable: false);
+    return top
+            .map((item) => (item['rerankScore'] as num?)?.toDouble() ?? 0.0)
+            .reduce((a, b) => a + b) /
+        top.length;
+  }
+
+  String _buildMultiQuerySummary({
+    required List<String> labels,
+    required List<String> coveredDimensions,
+    required List<String> missingDimensions,
+    required int referenceCount,
+    required String fallbackSummary,
+  }) {
+    if (coveredDimensions.isNotEmpty && missingDimensions.isEmpty) {
+      final joined = coveredDimensions.join('、');
+      return '已按 $joined 这些方向交叉核对，当前收拢到 $referenceCount 条高相关资料。';
+    }
+    if (coveredDimensions.isNotEmpty && missingDimensions.isNotEmpty) {
+      return '已确认 ${coveredDimensions.join("、")}，还缺 ${missingDimensions.join("、")}，先保留最相关的 $referenceCount 条资料。';
+    }
+    if (labels.isNotEmpty) {
+      return '已按 ${labels.join("、")} 并行检索，当前保留 $referenceCount 条相关资料。';
+    }
+    return fallbackSummary;
+  }
+
   List<Map<String, dynamic>> _normalizeQueryTasks(Object? raw) {
-    final tasks =
-        (raw is List
-                ? raw
-                      .whereType<Map>()
-                      .map((item) => item.cast<String, dynamic>())
-                : const Iterable<Map<String, dynamic>>.empty())
-            .toList(growable: false);
+    final tasks = QueryTask.normalizeList(raw);
     final normalized = <Map<String, dynamic>>[];
     final seen = <String>{};
     for (final task in tasks) {
-      final query = (task['query'] as String?)?.trim() ?? '';
+      final query = task.query.trim();
       if (query.isEmpty || !seen.add(query)) continue;
-      normalized.add(<String, dynamic>{
-        'id': (task['id'] as String?)?.trim().isNotEmpty == true
-            ? (task['id'] as String).trim()
-            : _normalizeQueryTaskId(
-                query,
-                preferred: (task['dimension'] as String?)?.trim().isNotEmpty == true
-                    ? (task['dimension'] as String).trim()
-                    : (task['label'] as String?)?.trim() ?? '',
-              ),
-        'query': query,
-        'label': (task['label'] as String?)?.trim().isNotEmpty == true
-            ? (task['label'] as String).trim()
-            : query,
-        if ((task['dimension'] as String?)?.trim().isNotEmpty == true)
-          'dimension': (task['dimension'] as String).trim(),
-      });
+      final normalizedTask = Map<String, dynamic>.from(task.toJson());
+      normalizedTask['id'] = task.id.trim().isNotEmpty
+          ? task.id.trim()
+          : _normalizeQueryTaskId(
+              query,
+              preferred: task.dimensionCode.isNotEmpty
+                  ? task.dimensionCode
+                  : task.label,
+            );
+      normalizedTask['query'] = query;
+      normalized.add(normalizedTask);
     }
     return normalized;
   }
@@ -2024,7 +2196,8 @@ class WebSearchTool implements AssistantTool {
       return normalizedTasks.first;
     }
     final explicitId = (arguments['queryTaskId'] as String?)?.trim() ?? '';
-    final explicitLabel = (arguments['queryTaskLabel'] as String?)?.trim() ?? '';
+    final explicitLabel =
+        (arguments['queryTaskLabel'] as String?)?.trim() ?? '';
     final explicitDimension = (arguments['dimension'] as String?)?.trim() ?? '';
     return <String, dynamic>{
       'id': explicitId.isNotEmpty
@@ -2037,6 +2210,12 @@ class WebSearchTool implements AssistantTool {
             ),
       'label': explicitLabel.isNotEmpty ? explicitLabel : normalizedQuery,
       if (explicitDimension.isNotEmpty) 'dimension': explicitDimension,
+      if (_stringList(arguments['entityAnchors']).isNotEmpty)
+        'entityAnchors': _stringList(arguments['entityAnchors']),
+      if (_stringList(arguments['negativeKeywords']).isNotEmpty)
+        'negativeKeywords': _stringList(arguments['negativeKeywords']),
+      if ((arguments['answerShape'] as String?)?.trim().isNotEmpty == true)
+        'answerShape': (arguments['answerShape'] as String).trim(),
     };
   }
 
@@ -2055,7 +2234,8 @@ class WebSearchTool implements AssistantTool {
           final source = (ref['source'] as String?)?.trim().isNotEmpty == true
               ? (ref['source'] as String).trim()
               : host;
-          final sourceTier = (ref['sourceTier'] as String?)?.trim().isNotEmpty == true
+          final sourceTier =
+              (ref['sourceTier'] as String?)?.trim().isNotEmpty == true
               ? (ref['sourceTier'] as String).trim()
               : _resolveSourceTier(
                   host: host,
@@ -2076,7 +2256,11 @@ class WebSearchTool implements AssistantTool {
               );
           final relevanceScore =
               (ref['relevanceScore'] as num?)?.toDouble() ??
-              _estimateReferenceRelevance(query: query, reference: ref);
+              _estimateReferenceRelevance(
+                query: query,
+                reference: ref,
+                queryTask: queryTask,
+              );
           return <String, dynamic>{
             ...ref,
             'source': source,
@@ -2090,7 +2274,12 @@ class WebSearchTool implements AssistantTool {
             'dimension': _stringValue(queryTask['dimension']).isNotEmpty
                 ? _stringValue(queryTask['dimension'])
                 : _stringValue(queryTask['label']),
-            'retrievedAt': (ref['retrievedAt'] as String?)?.trim().isNotEmpty == true
+            if (_stringList(queryTask['entityAnchors']).isNotEmpty)
+              'entityAnchors': _stringList(queryTask['entityAnchors']),
+            if (_stringList(queryTask['negativeKeywords']).isNotEmpty)
+              'negativeKeywords': _stringList(queryTask['negativeKeywords']),
+            'retrievedAt':
+                (ref['retrievedAt'] as String?)?.trim().isNotEmpty == true
                 ? (ref['retrievedAt'] as String).trim()
                 : retrievedAt,
           };
@@ -2109,11 +2298,6 @@ class WebSearchTool implements AssistantTool {
         return 'authority';
       }
     }
-    if (host.endsWith('.gov.cn') ||
-        host.endsWith('.edu.cn') ||
-        host.endsWith('.org.cn')) {
-      return 'trusted';
-    }
     return 'web';
   }
 
@@ -2125,8 +2309,6 @@ class WebSearchTool implements AssistantTool {
     switch (sourceTier) {
       case 'authority':
         return 1.0;
-      case 'trusted':
-        return 0.82;
       default:
         for (final authority in authorityDomains) {
           if (host == authority || host.endsWith('.$authority')) return 1.0;
@@ -2151,7 +2333,7 @@ class WebSearchTool implements AssistantTool {
       (reference['snippet'] as String?)?.trim() ?? '',
     );
     if (timestamp == null) {
-      return timeConstraint.isRealtimeLike ? 9999 : timeConstraint.freshnessHoursMax;
+      return timeConstraint.freshnessHoursMax;
     }
     return now.difference(timestamp.toLocal()).inHours.clamp(0, 24 * 3650);
   }
@@ -2159,6 +2341,7 @@ class WebSearchTool implements AssistantTool {
   double _estimateReferenceRelevance({
     required String query,
     required Map<String, dynamic> reference,
+    required Map<String, dynamic> queryTask,
   }) {
     final tokens = query
         .toLowerCase()
@@ -2166,15 +2349,34 @@ class WebSearchTool implements AssistantTool {
         .map((item) => item.trim())
         .where((item) => item.length >= 2)
         .toSet();
-    if (tokens.isEmpty) return 0.6;
-    final haystack = (
-      '${reference['title'] ?? ''} ${reference['snippet'] ?? ''} ${reference['url'] ?? ''}'
-    ).toLowerCase();
+    final anchorTokens = _stringList(queryTask['entityAnchors'])
+        .map((item) => item.toLowerCase())
+        .where((item) => item.length >= 2)
+        .toSet();
+    final negativeTokens = _stringList(queryTask['negativeKeywords'])
+        .map((item) => item.toLowerCase())
+        .where((item) => item.length >= 2)
+        .toSet();
+    final effectiveTokens = <String>{...tokens, ...anchorTokens};
+    if (effectiveTokens.isEmpty) return 0.6;
+    final haystack =
+        ('${reference['title'] ?? ''} ${reference['snippet'] ?? ''} ${reference['url'] ?? ''}')
+            .toLowerCase();
     var hits = 0;
-    for (final token in tokens) {
+    for (final token in effectiveTokens) {
       if (haystack.contains(token)) hits += 1;
     }
-    return (hits / tokens.length).clamp(0.2, 1.0).toDouble();
+    final negativeHit = negativeTokens.any(haystack.contains);
+    final baseScore = (hits / effectiveTokens.length)
+        .clamp(0.2, 1.0)
+        .toDouble();
+    if (negativeHit) {
+      return (baseScore * 0.35).clamp(0.1, 0.7).toDouble();
+    }
+    if (anchorTokens.isNotEmpty && anchorTokens.any(haystack.contains)) {
+      return (baseScore + 0.12).clamp(0.2, 1.0).toDouble();
+    }
+    return baseScore;
   }
 
   String _normalizeQueryTaskId(String query, {String preferred = ''}) {
@@ -2193,6 +2395,16 @@ class WebSearchTool implements AssistantTool {
   }
 
   String _stringValue(Object? value) => value?.toString().trim() ?? '';
+
+  List<String> _stringList(Object? value) {
+    if (value is List) {
+      return value
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
+    }
+    return const <String>[];
+  }
 
   Future<_BackupSearchResult?> _tryFallbackSearch({
     required AssistantSearchProvider primaryProvider,
@@ -2414,12 +2626,14 @@ class _RetrievalTimeContract {
 class _DomainRetrievalPolicy {
   const _DomainRetrievalPolicy({
     this.defaultTimeScope = '',
+    this.defaultFreshnessHoursMax,
     this.allowedTimeScopes = const <String>[],
     this.authorityDomains = const <String>[],
     this.contextConstraints = const <String>[],
   });
 
   final String defaultTimeScope;
+  final int? defaultFreshnessHoursMax;
   final List<String> allowedTimeScopes;
   final List<String> authorityDomains;
   final List<String> contextConstraints;

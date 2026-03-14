@@ -4,6 +4,6 @@
   "stage": "answer",
   "domainId": "global",
   "requiredVariables": ["traceId"],
-  "outputContract": "assistant_turn_v4_answer",
+  "outputContract": "assistant_turn",
   "selfCheckRules": ["has_title", "key_values_bold", "no_json_leak", "has_followup", "evidence_sufficient"]
 }

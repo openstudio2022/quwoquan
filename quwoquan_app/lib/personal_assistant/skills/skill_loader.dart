@@ -28,6 +28,10 @@ class PersonalAssistantSkillLoader {
         if (content.isEmpty) continue;
         if (path.toLowerCase().endsWith('.md')) {
           final parsed = markdownParser.parse(content);
+          final retrievalPolicy = await _loadSiblingJson(
+            skillAssetPath: path,
+            relativePath: 'config/retrieval_policy.json',
+          );
           final map = <String, dynamic>{
             'id': (parsed.frontmatter['name'] ?? 'unknown_skill')
                 .toString()
@@ -41,7 +45,10 @@ class PersonalAssistantSkillLoader {
             'version': (parsed.frontmatter['version'] ?? '1.0.0')
                 .toString()
                 .trim(),
-            'executionTarget': 'tool_chain',
+            'executionTarget':
+                (parsed.frontmatter['execution_target'] ?? 'tool_chain')
+                    .toString()
+                    .trim(),
             'parametersSchema': const <String, dynamic>{'type': 'object'},
             'visibility': 'both',
             'category': 'domain',
@@ -52,10 +59,8 @@ class PersonalAssistantSkillLoader {
             'defaultEnabled': true,
             'domain': (parsed.frontmatter['domain'] ?? '').toString().trim(),
             'allowed_tools': _toStringList(parsed.frontmatter['allowed_tools']),
-            'trigger_keywords': _toStringList(
-              parsed.frontmatter['trigger_keywords'],
-            ),
             'frontmatter': parsed.frontmatter,
+            'retrievalPolicy': retrievalPolicy,
             'skill_markdown': parsed.body,
           };
           final manifest = PersonalAssistantSkillManifest.fromMap(map);
@@ -125,6 +130,43 @@ class PersonalAssistantSkillLoader {
           .toList(growable: false);
     }
     return const <String>[];
+  }
+
+  Future<Map<String, dynamic>> _loadSiblingJson({
+    required String skillAssetPath,
+    required String relativePath,
+  }) async {
+    final normalizedPath = skillAssetPath.replaceAll('\\', '/');
+    final slashIndex = normalizedPath.lastIndexOf('/');
+    if (slashIndex < 0) return const <String, dynamic>{};
+    final basePath = normalizedPath.substring(0, slashIndex);
+    final candidate = '$basePath/$relativePath';
+    try {
+      final content = await rootBundle.loadString(candidate);
+      final decoded = jsonDecode(content);
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+      if (decoded is Map) {
+        return decoded.cast<String, dynamic>();
+      }
+    } catch (_) {
+      final file = File(candidate);
+      if (await file.exists()) {
+        try {
+          final decoded = jsonDecode(await file.readAsString());
+          if (decoded is Map<String, dynamic>) {
+            return decoded;
+          }
+          if (decoded is Map) {
+            return decoded.cast<String, dynamic>();
+          }
+        } catch (_) {
+          return const <String, dynamic>{};
+        }
+      }
+    }
+    return const <String, dynamic>{};
   }
 
   Map<String, dynamic> _yamlMapToDartMap(YamlMap map) {

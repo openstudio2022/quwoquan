@@ -3,6 +3,8 @@
 > **版本**：v4.0 · **日期**：2026-03-07（从 v3 升级）
 > **主要变更**：LLM-first Skill 路由 · OpenClaw 安全守卫层 · 9 工具体系 · Memory Auto-recall · 学习闭环
 > **架构总览**：参见 [architecture_overview.md](architecture_overview.md)
+>
+> **收口说明**：当前主入口为 `PERSONAL_ASSISTANT_ARCHITECTURE_AND_FLOW.md`。本文档保留为 ReAct 生命周期与工具链详细规格参考。
 
 ---
 

@@ -1,5 +1,4 @@
 import 'package:quwoquan_app/personal_assistant/engine/agent_loop.dart';
-import 'package:quwoquan_app/personal_assistant/engine/default_processing/baseline_kernel.dart';
 import 'package:quwoquan_app/personal_assistant/engine/llm_provider.dart';
 import 'package:quwoquan_app/personal_assistant/engine/model_config.dart';
 import 'package:quwoquan_app/personal_assistant/engine/react_runtime.dart';
@@ -93,9 +92,7 @@ class AssistantRuntime {
           ..register(AppActionTool());
     final templateRuntime = PromptTemplateRuntime(registry: TemplateRegistry());
     final switchableProvider = SwitchableAssistantLlmProvider(
-      fallbackProvider: const HeuristicLocalLlmProvider(
-        baselineKernel: BaselineKernel(),
-      ),
+      fallbackProvider: const HeuristicLocalLlmProvider(),
       templateRuntime: templateRuntime,
       toolMetadataRegistry: toolMetadataRegistry,
       plannerTemplateVersion: '',
@@ -113,6 +110,7 @@ class AssistantRuntime {
     final runtime = ReactRuntime(
       llmProvider: switchableProvider,
       toolRegistry: toolRegistry,
+      toolMetadataRegistry: toolMetadataRegistry,
     );
     final agentLoop = PersonalAssistantAgentLoop(
       runtime,

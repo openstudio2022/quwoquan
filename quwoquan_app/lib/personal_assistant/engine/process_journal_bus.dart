@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/personal_assistant/app/trace_user_event_translator.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/planner_contracts.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/ui_process_timeline_entry.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/user_events.dart';
@@ -42,7 +43,7 @@ class ProcessJournalBus {
       if (delta.isNotEmpty) {
         emitted.addAll(
           _setStage(
-            stage: 'answering',
+            stage: PlannerPhaseId.answering.wireName,
             timestamp: event.timestamp,
             runId: event.runId ?? '',
             traceId: event.traceId ?? '',
@@ -53,10 +54,10 @@ class ProcessJournalBus {
             ProcessJournalEvent(
               eventId: 'answer_delta_${_eventCounter++}',
               type: ProcessJournalEventType.answerDelta,
-              stage: 'answering',
-              phaseId: 'answering',
-              actionCode: 'stream_answer',
-              reasonCode: 'deliver_increment',
+              stage: PlannerPhaseId.answering.wireName,
+              phaseId: PlannerPhaseId.answering.wireName,
+              actionCode: PlannerActionCode.streamAnswer.wireName,
+              reasonCode: PlannerReasonCode.deliverIncrement.wireName,
               reasonShort: delta,
               source: 'trace_stream',
               nodeId: 'answer.stream',
@@ -83,7 +84,7 @@ class ProcessJournalBus {
     }
 
     if (event.type == AssistantTraceEventType.lifecycleEnd &&
-        event.message.contains('finished')) {
+        (event.data?['lifecycleOutcome'] as String?) == 'completed') {
       emitted.addAll(
         _flushLiveCursor(
           timestamp: event.timestamp,
@@ -93,7 +94,7 @@ class ProcessJournalBus {
       );
       emitted.addAll(
         _setStage(
-          stage: 'completed',
+          stage: PlannerPhaseId.completed.wireName,
           timestamp: event.timestamp,
           runId: event.runId ?? '',
           traceId: event.traceId ?? '',
@@ -104,10 +105,10 @@ class ProcessJournalBus {
           ProcessJournalEvent(
             eventId: 'completed_${_eventCounter++}',
             type: ProcessJournalEventType.completed,
-            stage: 'completed',
-            phaseId: 'completed',
-            actionCode: 'complete_turn',
-            reasonCode: 'ready_to_answer',
+            stage: PlannerPhaseId.completed.wireName,
+            phaseId: PlannerPhaseId.completed.wireName,
+            actionCode: PlannerActionCode.completeTurn.wireName,
+            reasonCode: PlannerReasonCode.readyToAnswer.wireName,
             source: 'trace_stream',
             nodeId: 'run.completed',
             message: '',
@@ -257,7 +258,7 @@ class ProcessJournalBus {
               timestamp: timestamp,
             ),
           );
-          if (stage != 'searching') {
+          if (parsePlannerPhaseId(stage) != PlannerPhaseId.searching) {
             final committed = _appendNarrativeCommit(
               stage: stage,
               phaseId: phaseId,
@@ -300,7 +301,7 @@ class ProcessJournalBus {
             ProcessJournalEvent(
               eventId: 'answer_delta_${_eventCounter++}',
               type: ProcessJournalEventType.answerDelta,
-              stage: 'answering',
+              stage: PlannerPhaseId.answering.wireName,
               phaseId: phaseId,
               actionCode: actionCode,
               reasonCode: reasonCode,
@@ -321,90 +322,7 @@ class ProcessJournalBus {
     }
   }
 
-  static List<UserEvent> toLegacyUserEvents(List<ProcessJournalEvent> events) {
-    final displayEvents = toDisplaySnapshot(events);
-    final legacy = <UserEvent>[];
-    for (final event in displayEvents) {
-      switch (event.type) {
-        case ProcessJournalEventType.stageSet:
-          continue;
-        case ProcessJournalEventType.narrativeCommit:
-          legacy.add(
-            UserEvent(
-              type: UserEventType.processCommit,
-              scope: _scopeForStage(event.stage),
-              nodeId: event.nodeId,
-              runId: event.runId,
-              message: event.displayMessage,
-              payload: _legacyNarrativePayload(event),
-            ),
-          );
-          break;
-        case ProcessJournalEventType.liveCursor:
-          legacy.add(
-            UserEvent(
-              type: UserEventType.processReplace,
-              scope: _scopeForStage(event.stage),
-              nodeId: event.nodeId,
-              runId: event.runId,
-              message: event.displayMessage,
-              payload: <String, dynamic>{
-                ..._legacyNarrativePayload(event),
-                'streaming': true,
-              },
-            ),
-          );
-          break;
-        case ProcessJournalEventType.sourceUpdate:
-          legacy.add(
-            UserEvent(
-              type: UserEventType.processCommit,
-              scope: event.stage == 'searching'
-                  ? UserEventScope.skill
-                  : UserEventScope.aggregation,
-              nodeId: event.nodeId,
-              runId: event.runId,
-              message: event.displayMessage,
-              payload: <String, dynamic>{
-                ..._legacyNarrativePayload(event),
-                'references': event.references
-                    .map((item) => item.toJson())
-                    .toList(growable: false),
-              },
-            ),
-          );
-          break;
-        case ProcessJournalEventType.answerDelta:
-          legacy.add(
-            UserEvent(
-              type: UserEventType.answerDelta,
-              scope: UserEventScope.aggregation,
-              nodeId: event.nodeId,
-              runId: event.runId,
-              message: event.displayMessage,
-              payload: _legacyNarrativePayload(event),
-            ),
-          );
-          break;
-        case ProcessJournalEventType.completed:
-          if (event.displayMessage.isEmpty) continue;
-          legacy.add(
-            UserEvent(
-              type: UserEventType.processCommit,
-              scope: UserEventScope.aggregation,
-              nodeId: event.nodeId,
-              runId: event.runId,
-              message: event.displayMessage,
-              payload: _legacyNarrativePayload(event),
-            ),
-          );
-          break;
-      }
-    }
-    return legacy;
-  }
-
-  static List<UiProcessTimelineEntry> toLegacyTimelineEntries(
+  static List<UiProcessTimelineEntry> toTimelineEntries(
     List<ProcessJournalEvent> events,
   ) {
     final displayEvents = toDisplaySnapshot(events);
@@ -422,7 +340,7 @@ class ProcessJournalBus {
               runId: event.runId,
               eventId: event.eventId,
               summary: event.displayMessage,
-              payload: _legacyNarrativePayload(event),
+              payload: _timelinePayload(event),
             ),
           );
           break;
@@ -436,7 +354,7 @@ class ProcessJournalBus {
               eventId: event.eventId,
               summary: event.displayMessage,
               payload: <String, dynamic>{
-                ..._legacyNarrativePayload(event),
+                ..._timelinePayload(event),
                 'streaming': true,
               },
             ),
@@ -445,7 +363,8 @@ class ProcessJournalBus {
         case ProcessJournalEventType.sourceUpdate:
           entries.add(
             UiProcessTimelineEntry(
-              scope: event.stage == 'searching'
+              scope:
+                  parsePlannerPhaseId(event.stage) == PlannerPhaseId.searching
                   ? UserEventScope.skill.name
                   : UserEventScope.aggregation.name,
               type: UserEventType.processCommit.name,
@@ -453,7 +372,7 @@ class ProcessJournalBus {
               runId: event.runId,
               eventId: event.eventId,
               summary: event.displayMessage,
-              payload: _legacyNarrativePayload(event),
+              payload: _timelinePayload(event),
               references: event.references
                   .map((item) => item.toJson())
                   .toList(growable: false),
@@ -486,8 +405,9 @@ class ProcessJournalBus {
     String runId = '',
     String traceId = '',
   }) {
-    if (stage.isEmpty || stage == _currentStage)
+    if (stage.isEmpty || stage == _currentStage) {
       return const <ProcessJournalEvent>[];
+    }
     final emitted = <ProcessJournalEvent>[];
     emitted.addAll(
       _flushLiveCursor(timestamp: timestamp, runId: runId, traceId: traceId),
@@ -500,8 +420,8 @@ class ProcessJournalBus {
           type: ProcessJournalEventType.stageSet,
           stage: stage,
           phaseId: stage,
-          actionCode: 'set_stage',
-          reasonCode: 'phase_transition',
+          actionCode: PlannerActionCode.setStage.wireName,
+          reasonCode: PlannerReasonCode.alignGoal.wireName,
           source: 'journal_bus',
           nodeId: 'stage.$stage',
           message: '',
@@ -609,8 +529,7 @@ class ProcessJournalBus {
     required String nodeId,
     required String message,
   }) {
-    final expectedKey = _semanticKey(
-      type: ProcessJournalEventType.narrativeCommit,
+    final expectedKey = _displaySemanticKey(
       phaseId: phaseId,
       actionCode: actionCode,
       reasonCode: reasonCode,
@@ -622,7 +541,7 @@ class ProcessJournalBus {
           event.type != ProcessJournalEventType.sourceUpdate) {
         continue;
       }
-      if (_semanticKeyFromEvent(event) != expectedKey) continue;
+      if (_displaySemanticKeyFromEvent(event) != expectedKey) continue;
       if (_canonicalNarrative(event.displayMessage) ==
           _canonicalNarrative(message)) {
         return true;
@@ -649,8 +568,9 @@ class ProcessJournalBus {
     final deduped = <ProcessSourceReference>[];
     final seenUrls = <String>{};
     for (final ref in references) {
-      if (ref.title.isEmpty || ref.url.isEmpty || !seenUrls.add(ref.url))
+      if (ref.title.isEmpty || ref.url.isEmpty || !seenUrls.add(ref.url)) {
         continue;
+      }
       deduped.add(ref);
     }
     return _appendEvent(
@@ -694,7 +614,7 @@ class ProcessJournalBus {
         case ProcessJournalEventType.narrativeCommit:
         case ProcessJournalEventType.sourceUpdate:
           currentLiveCursor = null;
-          final semanticKey = _semanticKeyFromEvent(event);
+          final semanticKey = _projectionSemanticKey(event);
           final existingIndex = indexBySemanticKey[semanticKey];
           if (existingIndex == null) {
             indexBySemanticKey[semanticKey] = projected.length;
@@ -714,7 +634,7 @@ class ProcessJournalBus {
       }
     }
     if (currentLiveCursor != null) {
-      final semanticKey = _semanticKeyFromEvent(currentLiveCursor);
+      final semanticKey = _projectionSemanticKey(currentLiveCursor);
       final existingIndex = indexBySemanticKey[semanticKey];
       if (existingIndex == null) {
         projected.add(currentLiveCursor);
@@ -754,6 +674,37 @@ class ProcessJournalBus {
     );
   }
 
+  static String _displaySemanticKey({
+    required String phaseId,
+    required String actionCode,
+    required String reasonCode,
+    required String nodeId,
+  }) {
+    return <String>[phaseId, actionCode, reasonCode, nodeId].join('::');
+  }
+
+  static String _displaySemanticKeyFromEvent(ProcessJournalEvent event) {
+    return _displaySemanticKey(
+      phaseId: event.phaseId.isNotEmpty ? event.phaseId : event.stage,
+      actionCode: event.actionCode,
+      reasonCode: event.reasonCode,
+      nodeId: event.nodeId,
+    );
+  }
+
+  static String _projectionSemanticKey(ProcessJournalEvent event) {
+    switch (event.type) {
+      case ProcessJournalEventType.narrativeCommit:
+      case ProcessJournalEventType.liveCursor:
+      case ProcessJournalEventType.sourceUpdate:
+        return _displaySemanticKeyFromEvent(event);
+      case ProcessJournalEventType.stageSet:
+      case ProcessJournalEventType.answerDelta:
+      case ProcessJournalEventType.completed:
+        return _semanticKeyFromEvent(event);
+    }
+  }
+
   static String _canonicalNarrative(String text) {
     return text
         .replaceAll(RegExp(r'\s+'), ' ')
@@ -765,23 +716,65 @@ class ProcessJournalBus {
     ProcessJournalEvent existing,
     ProcessJournalEvent incoming,
   ) {
-    if (incoming.references.length > existing.references.length)
-      return incoming;
-    if (incoming.displayMessage.length >= existing.displayMessage.length) {
-      return incoming;
+    final mergedReferences = _mergeReferences(
+      existing.references,
+      incoming.references,
+    );
+    final preferredDisplayMessage = _preferDisplayMessage(
+      existing.displayMessage,
+      incoming.displayMessage,
+    );
+    final preferredEvent =
+        incoming.references.length > existing.references.length
+        ? incoming
+        : incoming.displayMessage.length >= existing.displayMessage.length
+        ? incoming
+        : existing;
+    return preferredEvent.copyWith(
+      reasonShort: preferredDisplayMessage,
+      message: preferredDisplayMessage,
+      references: mergedReferences,
+    );
+  }
+
+  static List<ProcessSourceReference> _mergeReferences(
+    List<ProcessSourceReference> primary,
+    List<ProcessSourceReference> secondary,
+  ) {
+    if (primary.isEmpty) return secondary;
+    if (secondary.isEmpty) return primary;
+    final merged = <ProcessSourceReference>[];
+    final seenUrls = <String>{};
+    for (final ref in <ProcessSourceReference>[...primary, ...secondary]) {
+      if (ref.title.isEmpty || ref.url.isEmpty || !seenUrls.add(ref.url)) {
+        continue;
+      }
+      merged.add(ref);
     }
-    return existing;
+    return merged;
+  }
+
+  static String _preferDisplayMessage(String existing, String incoming) {
+    final existingNormalized = existing.trim();
+    final incomingNormalized = incoming.trim();
+    if (incomingNormalized.isEmpty) return existingNormalized;
+    if (existingNormalized.isEmpty) return incomingNormalized;
+    return incomingNormalized.length >= existingNormalized.length
+        ? incomingNormalized
+        : existingNormalized;
   }
 
   static UserEventScope _scopeForStage(String stage) {
-    switch (stage) {
-      case 'searching':
+    final phaseType = parsePlannerPhaseId(stage);
+    switch (phaseType) {
+      case PlannerPhaseId.searching:
         return UserEventScope.skill;
-      case 'analyzing':
-      case 'answering':
-      case 'completed':
+      case PlannerPhaseId.analyzing:
+      case PlannerPhaseId.answering:
+      case PlannerPhaseId.completed:
         return UserEventScope.aggregation;
-      case 'understanding':
+      case PlannerPhaseId.understanding:
+        return UserEventScope.root;
       default:
         return UserEventScope.root;
     }
@@ -792,19 +785,21 @@ class ProcessJournalBus {
     if (raw.isNotEmpty) return raw;
     switch (event.scope) {
       case UserEventScope.root:
-        return 'understanding';
+        return PlannerPhaseId.understanding.wireName;
       case UserEventScope.skill:
-        return 'searching';
+        return PlannerPhaseId.searching.wireName;
       case UserEventScope.aggregation:
         return event.type == UserEventType.answerDelta
-            ? 'answering'
-            : 'analyzing';
+            ? PlannerPhaseId.answering.wireName
+            : PlannerPhaseId.analyzing.wireName;
       case UserEventScope.unknown:
-        return _currentStage.isEmpty ? 'understanding' : _currentStage;
+        return _currentStage.isEmpty
+            ? PlannerPhaseId.understanding.wireName
+            : _currentStage;
     }
   }
 
-  static Map<String, dynamic> _legacyNarrativePayload(
+  static Map<String, dynamic> _timelinePayload(
     ProcessJournalEvent event,
   ) {
     return <String, dynamic>{

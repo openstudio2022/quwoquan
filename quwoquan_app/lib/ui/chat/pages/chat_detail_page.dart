@@ -1,5 +1,3 @@
-// ignore_for_file: unused_import, unnecessary_underscores
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -14,24 +12,20 @@ import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/input/customizable_chat_input_bar.dart';
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/personal_assistant/app/assistant_engine_provider.dart';
 import 'package:quwoquan_app/personal_assistant/app/capability_gateway.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/explainable_flow_event.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/user_events.dart';
 import 'package:quwoquan_app/personal_assistant/engine/llm_provider.dart';
 import 'package:quwoquan_app/personal_assistant/engine/llm_response_parser.dart';
 import 'package:quwoquan_app/personal_assistant/engine/process_journal_bus.dart';
@@ -39,14 +33,13 @@ import 'package:quwoquan_app/personal_assistant/protocol/assistant_content_filte
 import 'package:quwoquan_app/personal_assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/trace_events.dart';
+import 'package:quwoquan_app/ui/chat/pages/chat_display_fallbacks.dart';
 import 'package:quwoquan_app/personal_assistant/retrieval/capability_catalog.dart';
-import 'package:quwoquan_app/ui/assistant/config/assistant_prompt_config.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_dev_replay_page.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_chat_settings_page.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
-import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_manager.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
@@ -111,8 +104,6 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   final Map<String, String> _assistantFeedbackStatusByMessageId =
       <String, String>{};
   double _lastViewportWidth = 390;
-  int _assistantSearchingCount = 0;
-  int _assistantReferenceCount = 0;
 
   /// 当前轮过程状态机展示文案（等待/深度搜索中/深度思考中），由 trace 事件驱动
   String _assistantPhaseLabel = '';
@@ -124,20 +115,16 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   AssistantProcessState _currentProcessState = const AssistantProcessState();
 
   /// v6: Explainable flow events for the unified process drawer.
-  List<ExplainableFlowEvent> _currentFlowEvents = <ExplainableFlowEvent>[];
+  final List<ExplainableFlowEvent> _currentFlowEvents =
+      <ExplainableFlowEvent>[];
   bool _answerGateOpen = true;
 
   /// v7: Accumulated model thinking text for the process drawer body.
   String _streamingThinkingText = '';
-  int _streamingThinkingRefCount = 0;
 
   /// Accumulated structured content blocks for the process drawer.
   List<ProcessContentBlock> _processContentBlocks = <ProcessContentBlock>[];
 
-  /// Accumulated search references across all tool calls in a single run.
-  List<ProcessReference> _collectedSearchRefs = <ProcessReference>[];
-  bool _preferStructuredUserEvents = false;
-  bool _preferProcessJournalEvents = false;
   List<ProcessJournalEvent> _currentProcessJournal = <ProcessJournalEvent>[];
 
   /// Whether the user has scrolled away from the bottom during streaming.
@@ -398,8 +385,6 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   }
 
   void _startAssistantProgress() {
-    _assistantSearchingCount = 0;
-    _assistantReferenceCount = 0;
   }
 
   void _stopAssistantProgress() {}
@@ -686,108 +671,6 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     await _syncAssistantSessionInfo();
   }
 
-  void _consumeAssistantTraceEvent(AssistantTraceEvent event) {
-    if (!mounted || !_assistantResponding) return;
-    final type = event.type;
-    final data = event.data ?? const <String, dynamic>{};
-    var searchingCount = _assistantSearchingCount;
-    var referenceCount = _assistantReferenceCount;
-    String? nextPhaseLabel;
-    // streamDelta 是合成阶段 LLM 的原始输出 token，内容是 JSON 结构片段
-    // （如 `"userMarkdown": "正在查询..."` 的字段名+值），绝对不能写入
-    // streamFinalAnswer——这是导致进度文本泄露的根本原因。
-    // 精美的最终 Markdown 通过 completed 事件的 uiAnswer.markdownText 展示，
-    // 流式打字机效果通过 capability_gateway 的 chunk 事件（仅含已解析的
-    // markdownText）驱动，两者都不依赖 streamDelta。
-    if (type == AssistantTraceEventType.streamDelta) {
-      return; // 完全忽略，不写 streamFinalAnswer
-    }
-    if (type == AssistantTraceEventType.toolStart &&
-        _isSearchLikeTrace(event, data)) {
-      searchingCount += 1;
-      nextPhaseLabel = UITextConstants.assistantPhaseSearching;
-    } else if (type == AssistantTraceEventType.toolStart) {
-      nextPhaseLabel = UITextConstants.assistantPhaseSearching;
-    }
-    if (type == AssistantTraceEventType.toolResult ||
-        type == AssistantTraceEventType.assistantDelta) {
-      referenceCount = math.max(
-        referenceCount,
-        _extractReferenceCountFromTraceData(data),
-      );
-      if (type == AssistantTraceEventType.assistantDelta) {
-        final phase = (data['phase'] as String?) ?? '';
-        nextPhaseLabel = phase == 'analyzing'
-            ? UITextConstants.assistantPhaseAnalyzing
-            : UITextConstants.assistantPhaseThinking;
-      }
-      if (type == AssistantTraceEventType.toolResult &&
-          data['isAssessment'] == true) {
-        nextPhaseLabel = UITextConstants.assistantPhaseAssessing;
-      }
-    }
-    if (type == AssistantTraceEventType.replanTriggered) {
-      nextPhaseLabel = UITextConstants.assistantPhaseSearching;
-    }
-    if (type == AssistantTraceEventType.thinkingProgress) {
-      final thinkingText = _sanitizeThinkingText(event.message);
-      if (thinkingText.isNotEmpty) {
-        _replaceLastTextBlock(thinkingText);
-      }
-    }
-    final timelineChanged = _appendStreamingTimelineFromTrace(
-      event: event,
-      data: data,
-      referenceCount: referenceCount,
-    );
-    final thinkingBlockChanged =
-        type == AssistantTraceEventType.thinkingProgress;
-    final phaseChanged =
-        nextPhaseLabel != null && nextPhaseLabel != _assistantPhaseLabel;
-    final countChanged =
-        searchingCount != _assistantSearchingCount ||
-        referenceCount != _assistantReferenceCount;
-    if (!phaseChanged &&
-        !countChanged &&
-        !timelineChanged &&
-        !thinkingBlockChanged) {
-      return;
-    }
-    setState(() {
-      if (nextPhaseLabel != null) _assistantPhaseLabel = nextPhaseLabel;
-      _assistantSearchingCount = searchingCount;
-      _assistantReferenceCount = referenceCount;
-      if (nextPhaseLabel != null &&
-          nextPhaseLabel != _currentProcessState.stageLabel) {
-        final stage = _mapLabelToProcessStage(nextPhaseLabel);
-        _currentProcessState = _currentProcessState.copyWith(
-          stageLabel: _stageHeaderLabel(stage),
-          stage: stage,
-          contentBlocks: List<ProcessContentBlock>.of(_processContentBlocks),
-        );
-      } else if (thinkingBlockChanged) {
-        _currentProcessState = _currentProcessState.copyWith(
-          contentBlocks: List<ProcessContentBlock>.of(_processContentBlocks),
-        );
-      }
-    });
-  }
-
-  ProcessStage _mapLabelToProcessStage(String label) {
-    if (label == UITextConstants.assistantPhaseSearching) {
-      return ProcessStage.searching;
-    }
-    if (label == UITextConstants.assistantPhaseAnalyzing ||
-        label == UITextConstants.assistantPhaseAssessing ||
-        label == UITextConstants.assistantPhaseThinking) {
-      return ProcessStage.analyzing;
-    }
-    if (label == UITextConstants.assistantPhaseAnswering) {
-      return ProcessStage.answering;
-    }
-    return ProcessStage.understanding;
-  }
-
   String _stageHeaderLabel(ProcessStage stage) {
     switch (stage) {
       case ProcessStage.understanding:
@@ -801,20 +684,6 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       case ProcessStage.completed:
         return UITextConstants.assistantPhaseCompleted;
     }
-  }
-
-  void _syncProcessBlocksToActiveMessage() {
-    final messageId = _activeAssistantStreamingMessageId;
-    if (messageId == null || messageId.isEmpty) return;
-    final index = _messages.indexWhere(
-      (item) => (item['id'] as String?) == messageId,
-    );
-    if (index < 0) return;
-    _messages[index] = <String, dynamic>{
-      ..._messages[index],
-      'uiProcessContentBlocks': _serializeProcessBlocks(_processContentBlocks),
-      'processThinkingText': _streamingThinkingText,
-    };
   }
 
   void _resetStreamingAnswerDecoder() {
@@ -897,8 +766,92 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         codeUnit == 0x09;
   }
 
+  String _streamingAnswerDeltaFromCandidate(String candidate) {
+    final sanitizedCandidate = _sanitizeStreamingMarkdownCandidate(candidate);
+    if (sanitizedCandidate.isEmpty) {
+      return '';
+    }
+    if (sanitizedCandidate.length <= _streamingAnswerVisibleBuffer.length) {
+      return '';
+    }
+    final delta = sanitizedCandidate.substring(
+      _streamingAnswerVisibleBuffer.length,
+    );
+    _streamingAnswerVisibleBuffer = sanitizedCandidate;
+    return delta;
+  }
+
+  String _sanitizeStreamingMarkdownCandidate(String candidate) {
+    if (candidate.trim().isEmpty) {
+      return '';
+    }
+    final withoutWrapper = _stripLeadingStreamingMarkdownWrapper(candidate);
+    if (withoutWrapper == null || withoutWrapper.isEmpty) {
+      return '';
+    }
+    final trailingFenceStart = _trailingUnclosedFenceStart(withoutWrapper);
+    if (trailingFenceStart < 0) {
+      return withoutWrapper;
+    }
+    return withoutWrapper.substring(0, trailingFenceStart);
+  }
+
+  String? _stripLeadingStreamingMarkdownWrapper(String text) {
+    if (!text.startsWith('```')) {
+      return text;
+    }
+    final lineBreakIndex = _firstLineBreakIndex(text);
+    if (lineBreakIndex < 0) {
+      final prefix = text.trimRight().toLowerCase();
+      if ('```md'.startsWith(prefix) || '```markdown'.startsWith(prefix)) {
+        return null;
+      }
+      return prefix == '```' ? null : text;
+    }
+    final openingLine = text.substring(0, lineBreakIndex).trim().toLowerCase();
+    if (openingLine != '```md' && openingLine != '```markdown') {
+      return text;
+    }
+    final nextLineStart =
+        text.codeUnitAt(lineBreakIndex) == 0x0D &&
+            lineBreakIndex + 1 < text.length &&
+            text.codeUnitAt(lineBreakIndex + 1) == 0x0A
+        ? lineBreakIndex + 2
+        : lineBreakIndex + 1;
+    return nextLineStart >= text.length ? '' : text.substring(nextLineStart);
+  }
+
+  int _firstLineBreakIndex(String text) {
+    for (int i = 0; i < text.length; i++) {
+      final codeUnit = text.codeUnitAt(i);
+      if (codeUnit == 0x0A || codeUnit == 0x0D) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  int _trailingUnclosedFenceStart(String text) {
+    final fenceStarts = <int>[];
+    var offset = 0;
+    while (offset < text.length) {
+      final index = text.indexOf('```', offset);
+      if (index < 0) {
+        break;
+      }
+      fenceStarts.add(index);
+      offset = index + 3;
+    }
+    if (fenceStarts.length.isEven) {
+      return -1;
+    }
+    return fenceStarts.last;
+  }
+
   String _visibleStreamingAnswerChunk(String rawChunk) {
-    final strippedXml = _stripXmlToolCalls(rawChunk).trimRight();
+    final strippedXml = _stripXmlToolCallsPreservingWhitespace(
+      rawChunk,
+    ).trimRight();
     if (strippedXml.trim().isEmpty) return '';
     _streamingAnswerRawBuffer = '$_streamingAnswerRawBuffer$strippedXml';
     final extractedVisible = _extractLenientJsonStringField(
@@ -909,14 +862,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       if (!_streamingChunkCanDisplayAnswer(_streamingAnswerRawBuffer)) {
         return '';
       }
-      if (extractedVisible.length <= _streamingAnswerVisibleBuffer.length) {
-        return '';
-      }
-      final delta = extractedVisible.substring(
-        _streamingAnswerVisibleBuffer.length,
-      );
-      _streamingAnswerVisibleBuffer = extractedVisible;
-      return delta;
+      return _streamingAnswerDeltaFromCandidate(extractedVisible);
     }
     final normalized = strippedXml.trim();
     if (normalized.startsWith('{') ||
@@ -926,9 +872,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         _jsonSyntaxOnlyRe.hasMatch(normalized)) {
       return '';
     }
-    _streamingAnswerVisibleBuffer =
-        '$_streamingAnswerVisibleBuffer$strippedXml';
-    return strippedXml;
+    return _streamingAnswerDeltaFromCandidate(_streamingAnswerRawBuffer);
   }
 
   bool _streamingChunkCanDisplayAnswer(String rawBuffer) {
@@ -998,6 +942,28 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     return (answerPayload['userMarkdown'] as String?)?.trim() ?? '';
   }
 
+  String _mergeStreamingAnswerText({
+    required String previous,
+    required String incoming,
+  }) {
+    if (incoming.isEmpty) return previous;
+    if (previous.isEmpty) return incoming;
+    if (previous.endsWith(incoming) || previous.contains(incoming)) {
+      return previous;
+    }
+    if (incoming.endsWith(previous)) {
+      return incoming;
+    }
+    final maxOverlap = math.min(previous.length, incoming.length);
+    for (var overlap = maxOverlap; overlap > 0; overlap--) {
+      if (previous.substring(previous.length - overlap) ==
+          incoming.substring(0, overlap)) {
+        return '$previous${incoming.substring(overlap)}';
+      }
+    }
+    return '$previous$incoming';
+  }
+
   void _appendStreamingAnswerChunk(String chunk) {
     if (!mounted) return;
     final messageId = _activeAssistantStreamingMessageId;
@@ -1020,9 +986,16 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       if (existingIndex >= 0) {
         final prev =
             (_messages[existingIndex]['streamFinalAnswer'] as String?) ?? '';
+        final merged = _mergeStreamingAnswerText(
+          previous: prev,
+          incoming: value,
+        );
+        if (merged == prev) {
+          return;
+        }
         _messages[existingIndex] = <String, dynamic>{
           ..._messages[existingIndex],
-          'streamFinalAnswer': '$prev$value',
+          'streamFinalAnswer': merged,
         };
       } else {
         _messages.add(<String, dynamic>{
@@ -1085,209 +1058,77 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     return streamed;
   }
 
+  String _firstCompletedDisplayCandidate(Iterable<String> candidates) {
+    for (final candidate in candidates) {
+      final sanitized = _sanitizeCompletedDisplayCandidate(candidate);
+      if (sanitized.isNotEmpty) {
+        return sanitized;
+      }
+    }
+    return '';
+  }
+
+  String _sanitizeCompletedDisplayCandidate(
+    String raw, {
+    bool allowJsonExtraction = true,
+  }) {
+    var text = raw.trim();
+    if (text.isEmpty) return '';
+    if (allowJsonExtraction &&
+        (text.startsWith('{') ||
+            text.startsWith('[') ||
+            text.startsWith('```'))) {
+      final stripped = _stripJsonForDisplay(text).trim();
+      if (stripped.isNotEmpty && stripped != text) {
+        return _sanitizeCompletedDisplayCandidate(
+          stripped,
+          allowJsonExtraction: false,
+        );
+      }
+    }
+    if (_containsXmlToolCall(text)) {
+      text = _stripXmlToolCalls(text);
+      if (text.isEmpty) return '';
+    }
+    text = _stripWrappedMarkdownEnvelope(text);
+    if (text.isEmpty) return '';
+    if (_isInternalChunk(text) ||
+        _containsInternalDisplayFragment(text) ||
+        AssistantContentFilters.isProgressPlaceholder(text) ||
+        AssistantContentFilters.isDegradedText(text) ||
+        AssistantContentFilters.isJsonEnvelope(text)) {
+      return '';
+    }
+    return text;
+  }
+
+  String _stripWrappedMarkdownEnvelope(String text) {
+    final match = RegExp(
+      r'^```(?:md|markdown)\s*\r?\n([\s\S]*?)\r?\n```$',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (match == null) {
+      return text;
+    }
+    return (match.group(1) ?? '').trim();
+  }
+
+  String _actionLikeCompletedFallback(AssistantRunResponse response) {
+    return resolveActionLikeCompletedFallback(response);
+  }
+
   bool _containsInternalDisplayFragment(String value) {
     final text = value.trim();
     if (text.isEmpty) return false;
     return _jsonEnvelopeFragmentRe.hasMatch(text) ||
         _jsonKeyFragmentRe.hasMatch(text) ||
-        text.contains('assistant_turn_v4') ||
+        text.contains('assistant_turn') ||
         text.contains('contractVersion') ||
+        text.contains('toolCalls') ||
         text.contains('queryTasks') ||
+        text.contains('runArtifacts') ||
         text.contains('machineEnvelope') ||
         _containsXmlToolCall(text);
-  }
-
-  void _appendThinkingNarrativeBlock(String text, {required bool inline}) {
-    final normalized = text.trim();
-    if (normalized.isEmpty) return;
-    int lastTextIdx = -1;
-    for (int i = _processContentBlocks.length - 1; i >= 0; i--) {
-      if (_processContentBlocks[i].type == ProcessContentBlockType.text) {
-        lastTextIdx = i;
-        break;
-      }
-    }
-    if (inline && lastTextIdx >= 0) {
-      final prev = _processContentBlocks[lastTextIdx].text;
-      final merged = prev.isEmpty ? normalized : '$prev$normalized';
-      _processContentBlocks[lastTextIdx] = ProcessContentBlock(
-        type: ProcessContentBlockType.text,
-        text: merged,
-      );
-    } else {
-      if (lastTextIdx >= 0 &&
-          _processContentBlocks[lastTextIdx].text == normalized) {
-        return;
-      }
-      _processContentBlocks.add(
-        ProcessContentBlock(
-          type: ProcessContentBlockType.text,
-          text: normalized,
-        ),
-      );
-    }
-    _syncProcessBlocksToActiveMessage();
-  }
-
-  void _mergeCollectedSearchRefs(List<ProcessReference> refs) {
-    if (refs.isEmpty) return;
-    final seenUrls = _collectedSearchRefs.map((r) => r.url).toSet();
-    for (final ref in refs) {
-      if (ref.url.isEmpty || seenUrls.contains(ref.url)) continue;
-      _collectedSearchRefs.add(ref);
-      seenUrls.add(ref.url);
-    }
-  }
-
-  void _consumeUserPhaseEvent(AssistantRunStreamEvent streamEvent) {
-    if (!mounted || !_assistantResponding) return;
-    final phaseType = streamEvent.userPhaseType;
-    if (phaseType == null) return;
-    final message = streamEvent.chunkText ?? '';
-    final toolName = streamEvent.userPhaseToolName;
-    final isExtracted = streamEvent.trace?.data?['extracted'] == true;
-
-    final isThinkingType =
-        phaseType == UserPhaseEventType.understandingThinking ||
-        phaseType == UserPhaseEventType.analyzingThinking ||
-        phaseType == UserPhaseEventType.toolReasoningThinking;
-    if (isThinkingType && !isExtracted) {
-      return;
-    }
-
-    String? nextPhaseLabel;
-    late final String timelinePhaseType;
-    String detail = isExtracted
-        ? message.trim()
-        : _sanitizeTraceDetail(message);
-
-    switch (phaseType) {
-      case UserPhaseEventType.understandingStarted:
-        nextPhaseLabel = UITextConstants.assistantPhaseUnderstanding;
-        timelinePhaseType = 'understanding';
-      case UserPhaseEventType.understandingThinking:
-        nextPhaseLabel = UITextConstants.assistantPhaseUnderstanding;
-        timelinePhaseType = 'understanding';
-      case UserPhaseEventType.toolExecutionStarted:
-        nextPhaseLabel = UITextConstants.assistantPhaseSearching;
-        timelinePhaseType = toolName != null ? 'tool:$toolName' : 'searching';
-      case UserPhaseEventType.toolExecutionProgress:
-        timelinePhaseType = toolName != null ? 'tool:$toolName' : 'searching';
-      case UserPhaseEventType.toolExecutionCompleted:
-        timelinePhaseType = toolName != null ? 'tool:$toolName' : 'searching';
-      case UserPhaseEventType.toolReasoningStarted:
-      case UserPhaseEventType.toolReasoningThinking:
-        timelinePhaseType = 'understanding';
-      case UserPhaseEventType.toolAssessmentStarted:
-        nextPhaseLabel = UITextConstants.assistantPhaseAssessing;
-        timelinePhaseType = 'assessing';
-      case UserPhaseEventType.toolAssessmentResult:
-        nextPhaseLabel = UITextConstants.assistantPhaseAssessing;
-        timelinePhaseType = 'assessing';
-      case UserPhaseEventType.analyzingStarted:
-        nextPhaseLabel = UITextConstants.assistantPhaseAnalyzing;
-        timelinePhaseType = 'analyzing';
-      case UserPhaseEventType.analyzingThinking:
-        nextPhaseLabel = UITextConstants.assistantPhaseAnalyzing;
-        timelinePhaseType = 'analyzing';
-      case UserPhaseEventType.answeringStarted:
-        nextPhaseLabel = UITextConstants.assistantPhaseAnswering;
-        timelinePhaseType = 'answering';
-      case UserPhaseEventType.answeringDelta:
-        return;
-      case UserPhaseEventType.answeringCompleted:
-        nextPhaseLabel = UITextConstants.assistantPhaseAnswering;
-        timelinePhaseType = 'answering';
-      case UserPhaseEventType.loopDegraded:
-        timelinePhaseType = 'assessing';
-    }
-
-    _updateProcessContentBlocks(
-      phaseType: phaseType,
-      timelinePhaseType: timelinePhaseType,
-      detail: detail,
-      data: streamEvent.trace?.data,
-    );
-
-    final effectiveLabel = nextPhaseLabel;
-    if (effectiveLabel != null && effectiveLabel != _assistantPhaseLabel) {
-      setState(() {
-        final stage = _mapPhaseToStage(timelinePhaseType);
-        final headerLabel = _stageHeaderLabel(stage);
-        _assistantPhaseLabel = headerLabel;
-        _currentProcessState = _currentProcessState.copyWith(
-          stageLabel: headerLabel,
-          stage: stage,
-          isStreaming: phaseType == UserPhaseEventType.answeringDelta,
-          contentBlocks: List<ProcessContentBlock>.of(_processContentBlocks),
-        );
-      });
-      _autoScrollToBottomIfNeeded();
-    } else if (detail.isNotEmpty) {
-      setState(() {
-        _currentProcessState = _currentProcessState.copyWith(
-          contentBlocks: List<ProcessContentBlock>.of(_processContentBlocks),
-        );
-      });
-    }
-  }
-
-  void _consumeStructuredUserEvent(UserEvent event) {
-    if (!mounted || !_assistantResponding) return;
-    final message = _sanitizeTraceDetail(event.message);
-    if (message.isEmpty) return;
-    final appended = _appendStreamingTimelineV2FromUserEvent(event);
-    final nextStage =
-        _stageFromUserEventPayload(event.payload) ??
-        switch (event.scope) {
-          UserEventScope.root => ProcessStage.understanding,
-          UserEventScope.skill => ProcessStage.searching,
-          UserEventScope.aggregation =>
-            event.type == UserEventType.processCommit
-                ? ProcessStage.completed
-                : ProcessStage.analyzing,
-          UserEventScope.unknown => _currentProcessState.stage,
-        };
-    List<Map<String, dynamic>> mergedTimeline = const <Map<String, dynamic>>[];
-    if (appended) {
-      final activeId = _activeAssistantStreamingMessageId;
-      final messageIndex = activeId == null
-          ? -1
-          : _messages.indexWhere((item) => (item['id'] as String?) == activeId);
-      if (messageIndex >= 0) {
-        mergedTimeline = _normalizeUiProcessTimelineV2(
-          ((_messages[messageIndex]['uiProcessTimelineV2'] as List?)
-                  ?.whereType<Map>()
-                  .toList(growable: false)) ??
-              const <Map>[],
-        );
-      }
-    }
-    final blocks = mergedTimeline.isNotEmpty
-        ? _processBlocksFromTimelineV2(mergedTimeline)
-        : <ProcessContentBlock>[
-            ..._processContentBlocks,
-            ProcessContentBlock(
-              type: ProcessContentBlockType.text,
-              text: message,
-            ),
-          ];
-    setState(() {
-      _processContentBlocks = List<ProcessContentBlock>.of(blocks);
-      final headerLabel = _stageHeaderLabel(nextStage);
-      _currentProcessState = _currentProcessState.copyWith(
-        stage: nextStage,
-        stageLabel: headerLabel,
-        contentBlocks: List<ProcessContentBlock>.of(blocks),
-        isStreaming: nextStage != ProcessStage.completed,
-      );
-      if (nextStage == ProcessStage.completed) {
-        _assistantPhaseLabel = '';
-      } else {
-        _assistantPhaseLabel = headerLabel;
-      }
-    });
-    _autoScrollToBottomIfNeeded();
   }
 
   void _consumeProcessJournalEvent(ProcessJournalEvent event) {
@@ -1301,7 +1142,6 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         : _stageFromProcessJournal(journal);
     final headerLabel = _stageHeaderLabel(stage);
     setState(() {
-      _preferProcessJournalEvents = true;
       _processContentBlocks = List<ProcessContentBlock>.of(blocks);
       _currentProcessState = _currentProcessState.copyWith(
         stage: stage,
@@ -1312,115 +1152,6 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       _assistantPhaseLabel = stage == ProcessStage.completed ? '' : headerLabel;
     });
     _autoScrollToBottomIfNeeded();
-  }
-
-  /// Build structured content blocks for the process drawer.
-  void _updateProcessContentBlocks({
-    required UserPhaseEventType phaseType,
-    required String timelinePhaseType,
-    required String detail,
-    Map<String, dynamic>? data,
-  }) {
-    final isSearchTool =
-        timelinePhaseType == 'searching' ||
-        (timelinePhaseType.startsWith('tool:') &&
-            timelinePhaseType.contains('search'));
-    final isExtracted = data?['extracted'] == true;
-
-    if (phaseType == UserPhaseEventType.toolExecutionCompleted &&
-        isSearchTool) {
-      final refs = _extractReferencesFromData(data);
-      if (refs.isNotEmpty) {
-        _mergeCollectedSearchRefs(refs);
-        _replaceOrAppendBlock(
-          ProcessContentBlockType.searchSummary,
-          ProcessContentBlock(
-            type: ProcessContentBlockType.searchSummary,
-            text: '这一批已核对 ${_collectedSearchRefs.length} 个来源，我先帮你筛掉重复和噪音。',
-            references: List<ProcessReference>.of(_collectedSearchRefs),
-          ),
-        );
-      }
-    } else if (phaseType == UserPhaseEventType.analyzingStarted ||
-        phaseType == UserPhaseEventType.analyzingThinking) {
-      _replaceOrAppendBlock(
-        ProcessContentBlockType.analysisSummary,
-        ProcessContentBlock(
-          type: ProcessContentBlockType.analysisSummary,
-          text: '我正把 ${_collectedSearchRefs.length} 个来源放在一起对一遍，先收拢最影响结论的部分。',
-          references: List<ProcessReference>.of(_collectedSearchRefs),
-        ),
-      );
-    } else if (detail.isNotEmpty) {
-      if (isExtracted) {
-        _replaceLastTextBlock(detail);
-      } else {
-        _processContentBlocks.add(
-          ProcessContentBlock(type: ProcessContentBlockType.text, text: detail),
-        );
-      }
-    }
-    _syncProcessBlocksToActiveMessage();
-  }
-
-  /// Replace the last text block with extracted thinking text, removing
-  /// any accumulated fragment blocks from the same reasoning phase.
-  void _replaceLastTextBlock(String extractedText) {
-    int lastTextIdx = -1;
-    for (int i = _processContentBlocks.length - 1; i >= 0; i--) {
-      if (_processContentBlocks[i].type == ProcessContentBlockType.text) {
-        lastTextIdx = i;
-        break;
-      }
-    }
-    final block = ProcessContentBlock(
-      type: ProcessContentBlockType.text,
-      text: extractedText,
-    );
-    if (lastTextIdx >= 0) {
-      _processContentBlocks[lastTextIdx] = block;
-    } else {
-      _processContentBlocks.add(block);
-    }
-    _syncProcessBlocksToActiveMessage();
-  }
-
-  /// Replace the first block of [type] in [_processContentBlocks], or append.
-  void _replaceOrAppendBlock(
-    ProcessContentBlockType type,
-    ProcessContentBlock block,
-  ) {
-    final idx = _processContentBlocks.indexWhere((b) => b.type == type);
-    if (idx >= 0) {
-      _processContentBlocks[idx] = block;
-    } else {
-      _processContentBlocks.add(block);
-    }
-    _syncProcessBlocksToActiveMessage();
-  }
-
-  List<ProcessReference> _extractReferencesFromData(
-    Map<String, dynamic>? data,
-  ) {
-    if (data == null) return const <ProcessReference>[];
-    final rawRefs =
-        (data['references'] as List?)
-            ?.whereType<Map>()
-            .map((item) => item.cast<String, dynamic>())
-            .toList(growable: false) ??
-        const <Map<String, dynamic>>[];
-    if (rawRefs.isEmpty) return const <ProcessReference>[];
-    return rawRefs
-        .map((ref) {
-          final url = (ref['url'] as String?)?.trim() ?? '';
-          final title = (ref['title'] as String?)?.trim() ?? '';
-          final source =
-              (ref['source'] as String?)?.trim() ??
-              (Uri.tryParse(url)?.host ?? '');
-          return ProcessReference(title: title, url: url, source: source);
-        })
-        .where((r) => r.url.isNotEmpty && r.title.isNotEmpty)
-        .toList(growable: false);
   }
 
   List<ProcessContentBlock> _processBlocksFromStructuredResponse(
@@ -1508,7 +1239,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   ) {
     final journal = _journalFromStructuredResponse(structuredResponse);
     if (journal.isNotEmpty) {
-      return _legacyTimelineFromJournal(journal);
+      return _timelineFromJournal(journal);
     }
     return _normalizeUiProcessTimelineV2(
       (structuredResponse['uiProcessTimelineV2'] as List?)
@@ -1522,16 +1253,13 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     Map<String, dynamic> structuredResponse,
   ) {
     final artifacts =
-        (structuredResponse['runArtifactsV1'] as Map?)
+        (structuredResponse['runArtifacts'] as Map?)
             ?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final raw =
         (artifacts['processJournal'] as List?)?.whereType<Map>().toList(
           growable: false,
         ) ??
-        (structuredResponse['processJournalV1'] as List?)
-            ?.whereType<Map>()
-            .toList(growable: false) ??
         const <Map>[];
     return _normalizeProcessJournal(raw);
   }
@@ -1623,23 +1351,16 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     return existing;
   }
 
-  bool _isLegacyProjectionEventId(String eventId) {
-    return eventId.startsWith('live_cursor::') ||
-        eventId.startsWith('source_update::') ||
-        eventId.startsWith('stage_set::') ||
-        eventId == 'completed.final';
-  }
-
   List<ProcessJournalEvent> _displayProcessJournalSnapshot(
     List<ProcessJournalEvent> journal,
   ) {
     return ProcessJournalBus.toDisplaySnapshot(journal);
   }
 
-  List<Map<String, dynamic>> _legacyTimelineFromJournal(
+  List<Map<String, dynamic>> _timelineFromJournal(
     List<ProcessJournalEvent> journal,
   ) {
-    return ProcessJournalBus.toLegacyTimelineEntries(
+    return ProcessJournalBus.toTimelineEntries(
       journal,
     ).map((item) => item.toJson()).toList(growable: false);
   }
@@ -1718,20 +1439,24 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     );
     if (index < 0) return false;
     final currentJournal = _normalizeProcessJournal(
-      ((_messages[index]['processJournalV1'] as List?)?.whereType<Map>().toList(
-            growable: false,
-          )) ??
+      (((_messages[index]['runArtifacts'] as Map?)?['processJournal'] as List?)
+              ?.whereType<Map>()
+              .toList(growable: false)) ??
           const <Map>[],
     );
     final mergedJournal = _mergeProcessJournalEvents(
       currentJournal,
       <ProcessJournalEvent>[event],
     );
+    final updatedRunArtifacts = Map<String, dynamic>.from(
+      ((_messages[index]['runArtifacts'] as Map?)?.cast<String, dynamic>()) ??
+          const <String, dynamic>{},
+    )..['processJournal'] = mergedJournal
+        .map((item) => item.toJson())
+        .toList(growable: false);
     _messages[index] = <String, dynamic>{
       ..._messages[index],
-      'processJournalV1': mergedJournal
-          .map((item) => item.toJson())
-          .toList(growable: false),
+      'runArtifacts': updatedRunArtifacts,
       'uiProcessContentBlocks': _serializeProcessBlocks(
         _processBlocksFromJournal(mergedJournal),
       ),
@@ -1968,7 +1693,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           (message['id'] as String?) == excludeMessageId) {
         continue;
       }
-      final usageStats = (message['uiUsageStatsV1'] as Map?)
+      final usageStats =
+          ((message['uiUsageStats'] as Map?) ??
+                  (message['uiUsageStatsV1'] as Map?))
           ?.cast<String, dynamic>();
       if (usageStats == null || usageStats.isEmpty) continue;
       prevCalls += _usageInt(
@@ -2001,7 +1728,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       'runTotalTokens': currentRunTokens,
       'runMaxTokensPerCall': currentRunMaxTokens,
       'runUsageLedger': currentRunLedger,
-      'sessionUsageStatsV1': <String, dynamic>{
+      'sessionUsageStats': <String, dynamic>{
         'modelCallCount': cumulativeCalls,
         'totalTokens': cumulativeTokens,
         'maxTokensPerCall': cumulativeMaxTokens,
@@ -2016,80 +1743,6 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       'totalTokens': currentRunTokens,
       'maxTokensPerCall': currentRunMaxTokens,
     };
-  }
-
-  bool _appendStreamingTimelineV2FromUserEvent(UserEvent event) {
-    final messageId = _activeAssistantStreamingMessageId;
-    if (messageId == null || messageId.isEmpty) return false;
-    final index = _messages.indexWhere(
-      (item) => (item['id'] as String?) == messageId,
-    );
-    if (index < 0) return false;
-    final currentTimeline = _normalizeUiProcessTimelineV2(
-      ((_messages[index]['uiProcessTimelineV2'] as List?)
-              ?.whereType<Map>()
-              .toList(growable: false)) ??
-          const <Map>[],
-    );
-    final entry = <String, dynamic>{
-      'scope': event.scope.name,
-      'type': event.type.name,
-      'nodeId': event.nodeId,
-      'runId': event.runId,
-      'eventId': _streamingTimelineEventId(event),
-      'summary': event.message,
-      'payload': event.payload,
-      'references': _extractReferencesFromUserEventPayload(event.payload),
-    };
-    final merged = _mergeProcessTimelineV2(
-      currentTimeline,
-      <Map<String, dynamic>>[entry],
-    );
-    _messages[index] = <String, dynamic>{
-      ..._messages[index],
-      'uiProcessTimelineV2': merged,
-      'uiProcessContentBlocks': _serializeProcessBlocks(
-        _processBlocksFromTimelineV2(merged),
-      ),
-    };
-    return true;
-  }
-
-  String _streamingTimelineEventId(UserEvent event) {
-    final base = '${event.scope.name}::${event.nodeId}::${event.runId}';
-    if (event.type == UserEventType.processAppend) {
-      return '$base::${event.message.trim()}';
-    }
-    return '$base::${event.type.name}';
-  }
-
-  List<Map<String, dynamic>> _extractReferencesFromUserEventPayload(
-    Map<String, dynamic> payload,
-  ) {
-    return (payload['references'] as List?)
-            ?.whereType<Map>()
-            .map((item) => item.cast<String, dynamic>())
-            .where(
-              (item) =>
-                  ((item['title'] as String?) ?? '').trim().isNotEmpty &&
-                  ((item['url'] as String?) ?? '').trim().isNotEmpty,
-            )
-            .take(6)
-            .toList(growable: false) ??
-        const <Map<String, dynamic>>[];
-  }
-
-  ProcessStage _mapPhaseToStage(String timelinePhaseType) {
-    if (timelinePhaseType == 'understanding') return ProcessStage.understanding;
-    if (timelinePhaseType.startsWith('tool:') ||
-        timelinePhaseType == 'searching') {
-      return ProcessStage.searching;
-    }
-    if (timelinePhaseType == 'analyzing' || timelinePhaseType == 'assessing') {
-      return ProcessStage.analyzing;
-    }
-    if (timelinePhaseType == 'answering') return ProcessStage.answering;
-    return ProcessStage.understanding;
   }
 
   void _autoScrollToBottomIfNeeded() {
@@ -2108,458 +1761,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     });
   }
 
-  /// Directly appends a streaming delta to the active assistant message.
-  bool _appendStreamingTimelineFromTrace({
-    required AssistantTraceEvent event,
-    required Map<String, dynamic> data,
-    required int referenceCount,
-  }) {
-    final messageId = _activeAssistantStreamingMessageId;
-    if (messageId == null || messageId.isEmpty) return false;
-    final index = _messages.indexWhere(
-      (item) => (item['id'] as String?) == messageId,
-    );
-    if (index < 0) return false;
-    final currentPhases =
-        ((_messages[index]['uiPhaseTimelineV1'] as List?)
-            ?.whereType<Map>()
-            .map((item) => item.cast<String, dynamic>())
-            .toList(growable: true)) ??
-        <Map<String, dynamic>>[];
-    String? nextPhaseType;
-    String detail = '';
-    List<String> keywords = const <String>[];
-    if (event.type == AssistantTraceEventType.toolStart &&
-        _isSearchLikeTrace(event, data)) {
-      nextPhaseType = 'searching';
-      final extractedQuery = _extractSearchQueryFromTraceData(data);
-      keywords = _extractSearchKeywords(extractedQuery);
-      detail = _sanitizeTraceDetail(event.message);
-    } else if (event.type == AssistantTraceEventType.assistantDelta) {
-      final searchQueries =
-          (data['searchQueries'] as List?)
-              ?.whereType<String>()
-              .map((item) => item.trim())
-              .where((item) => item.isNotEmpty)
-              .toList(growable: false) ??
-          const <String>[];
-      if (searchQueries.isNotEmpty) {
-        nextPhaseType = 'searching';
-        keywords = searchQueries.take(6).toList(growable: false);
-        detail = '';
-      } else {
-        nextPhaseType = 'thinking';
-        // assistantDelta.message 可能是原始 JSON，不能直接展示。
-        // 提取有意义的思考摘要：若 message 不像 JSON，取前 60 字；否则留空由 summary 展示。
-        final raw = _sanitizeTraceDetail(event.message);
-        detail = raw.isNotEmpty ? raw : '';
-      }
-    } else if (event.type == AssistantTraceEventType.toolResult) {
-      if (data['isAssessment'] == true) {
-        // Merge assessment into searching phase with user-friendly message
-        nextPhaseType = 'searching';
-        final userMsg = (data['userMessage'] as String?) ?? '';
-        detail = userMsg.isNotEmpty ? userMsg : '正在验证搜索结果...';
-      } else {
-        nextPhaseType = 'searching';
-        detail = _sanitizeTraceDetail(event.message);
-        final hasRefs = (data['references'] as List?)?.isNotEmpty ?? false;
-        if (referenceCount <= 0 && detail.isEmpty && !hasRefs) return false;
-      }
-    } else if (event.type == AssistantTraceEventType.replanTriggered ||
-        (event.type == AssistantTraceEventType.lifecycleStart &&
-            event.message.toLowerCase().contains('replanning'))) {
-      // Merge replan into searching phase
-      nextPhaseType = 'searching';
-      detail = '扩大搜索范围...';
-    } else if (event.type == AssistantTraceEventType.thinkingProgress) {
-      final phase = (data['phase'] as String?) ?? 'understanding';
-      nextPhaseType = phase == 'analyzing' ? 'analyzing' : 'understanding';
-      detail = _sanitizeTraceDetail(event.message);
-    } else if (event.type == AssistantTraceEventType.subagentStart) {
-      nextPhaseType = 'subagent_running';
-      final goal = (data['goal'] as String?)?.trim() ?? '';
-      detail = goal.isNotEmpty ? '子任务：$goal' : '启动并行研究';
-    } else if (event.type == AssistantTraceEventType.subagentResult) {
-      nextPhaseType = 'subagent_done';
-      final summary = (data['summary'] as String?)?.trim() ?? '';
-      detail = summary.isNotEmpty ? summary : '子任务完成';
-    } else if (event.type == AssistantTraceEventType.subagentError) {
-      nextPhaseType = 'subagent_done';
-      detail = '子任务异常: ${(data['errorClass'] as String?) ?? 'unknown'}';
-    }
-    if (nextPhaseType == null) return false;
-    final phase = _ensureStreamingPhase(
-      phases: currentPhases,
-      phaseType: nextPhaseType,
-    );
-    final details = _mutableStringList(phase['details']);
-    phase['details'] = details;
-    if (keywords.isNotEmpty) {
-      phase['keywords'] = keywords;
-    }
-    if (detail.isNotEmpty && !details.contains(detail)) {
-      details.add(detail);
-    }
-    if (nextPhaseType == 'searching' || nextPhaseType == 'replan_searching') {
-      final refs =
-          (data['references'] as List?)
-              ?.whereType<Map>()
-              .map((item) => item.cast<String, dynamic>())
-              .toList(growable: false) ??
-          const <Map<String, dynamic>>[];
-      final phaseRefs = _mutableMapList(phase['references']);
-      phase['references'] = phaseRefs;
-      final seen = phaseRefs
-          .map((item) => (item['url'] as String?) ?? '')
-          .where((item) => item.isNotEmpty)
-          .toSet();
-      for (final ref in refs) {
-        final url = (ref['url'] as String?)?.trim() ?? '';
-        if (url.isEmpty || seen.contains(url)) continue;
-        phaseRefs.add(<String, dynamic>{
-          'title': (ref['title'] ?? '').toString(),
-          'url': url,
-          'source': (ref['source'] ?? '').toString(),
-          'provider': (ref['provider'] ?? '').toString(),
-          'snippet': (ref['snippet'] ?? '').toString(),
-        });
-        seen.add(url);
-      }
-      phase['summary'] = phaseRefs.isEmpty
-          ? '正在搜索相关资料'
-          : '已找到 ${phaseRefs.length} 篇相关资料';
-    } else if (nextPhaseType == 'thinking' || nextPhaseType == 'analyzing') {
-      phase['summary'] = '正在分析与整理信息';
-    } else if (nextPhaseType == 'understanding') {
-      phase['summary'] = '正在分析您的问题...';
-    } else if (nextPhaseType == 'assessing') {
-      phase['summary'] = detail.isNotEmpty ? detail : '正在检查信息是否充分...';
-      phase['status'] = 'completed';
-    } else if (nextPhaseType == 'subagent_running') {
-      if (detail.isNotEmpty) phase['summary'] = detail;
-    } else if (nextPhaseType == 'subagent_done') {
-      phase['status'] = 'completed';
-      if (detail.isNotEmpty) phase['summary'] = detail;
-    }
-    _markStreamingPhaseStatus(currentPhases, activeType: nextPhaseType);
-    _messages[index] = <String, dynamic>{
-      ..._messages[index],
-      'uiPhaseTimelineV1': currentPhases,
-    };
-    return true;
-  }
-
-  Map<String, dynamic> _ensureStreamingPhase({
-    required List<Map<String, dynamic>> phases,
-    required String phaseType,
-  }) {
-    final existingIndex = phases.lastIndexWhere(
-      (item) =>
-          (item['phaseType'] as String?) == phaseType &&
-          (item['status'] as String?) == 'running',
-    );
-    if (existingIndex >= 0) return phases[existingIndex];
-    final next = <String, dynamic>{
-      'phaseId': 'phase_${phaseType}_${phases.length + 1}',
-      'phaseType': phaseType,
-      'status': 'running',
-      'title': _phaseTitle(phaseType),
-      'summary': _phaseSummary(phaseType),
-      'details': <String>[],
-      'references': <Map<String, dynamic>>[],
-      'keywords': <String>[],
-    };
-    phases.add(next);
-    return next;
-  }
-
-  List<String> _mutableStringList(Object? raw) {
-    return ((raw as List?) ?? const <dynamic>[])
-        .map((item) => item.toString())
-        .toList(growable: true);
-  }
-
-  List<Map<String, dynamic>> _mutableMapList(Object? raw) {
-    return ((raw as List?) ?? const <dynamic>[])
-        .whereType<Map>()
-        .map((item) => item.cast<String, dynamic>())
-        .toList(growable: true);
-  }
-
-  void _markStreamingPhaseStatus(
-    List<Map<String, dynamic>> phases, {
-    required String activeType,
-  }) {
-    for (final phase in phases) {
-      final type = (phase['phaseType'] as String?) ?? '';
-      phase['status'] = type == activeType ? 'running' : 'completed';
-    }
-  }
-
-  String _phaseTitle(String phaseType) {
-    // v3: fixed user-facing phases
-    if (phaseType == 'understanding') {
-      return UITextConstants.assistantPhaseUnderstanding;
-    }
-    if (phaseType == 'analyzing') {
-      return UITextConstants.assistantPhaseAnalyzing;
-    }
-    if (phaseType == 'answering') {
-      return UITextConstants.assistantPhaseAnswering;
-    }
-    if (phaseType == 'assessing') {
-      return UITextConstants.assistantPhaseAssessing;
-    }
-    // v3: tool phases from metadata (tool:web_search, tool:local_context, etc.)
-    if (phaseType.startsWith('tool:')) {
-      final toolName = phaseType.substring(5).split(':').first;
-      // TODO: read from ToolMetadataRegistry.userInteractionForTool when available
-      switch (toolName) {
-        case 'web_search':
-          return '替你核对资料';
-        case 'local_context':
-          return '替你确认位置';
-        case 'media_gallery':
-          return '帮你看相册';
-        case 'intent_bridge':
-          return '替你执行操作';
-        default:
-          return toolName;
-      }
-    }
-    // Legacy compatibility
-    switch (phaseType) {
-      case 'searching':
-        return '替你核对资料';
-      case 'thinking':
-        return UITextConstants.assistantPhaseAnalyzing;
-      case 'replan_searching':
-        return '再补一处关键信息';
-      case 'subagent_running':
-        return '并行补另一部分信息';
-      case 'subagent_done':
-        return '并行部分已整理好';
-      default:
-        return '继续处理中';
-    }
-  }
-
-  String _phaseSummary(String phaseType) {
-    // v3: fixed user-facing phases
-    if (phaseType == 'understanding') {
-      return '我先帮你把问题收一收，确认最该先解决哪一层。';
-    }
-    if (phaseType == 'analyzing') {
-      return '我在对齐几路信息，先把一致和分歧分开。';
-    }
-    if (phaseType == 'answering') {
-      return '关键信息差不多齐了，我在整理成你更容易看的答案。';
-    }
-    if (phaseType == 'assessing') {
-      return '我在看现在的信息够不够稳，不够的话会继续补。';
-    }
-    // v3: tool phases
-    if (phaseType.startsWith('tool:')) {
-      final toolName = phaseType.substring(5).split(':').first;
-      switch (toolName) {
-        case 'web_search':
-          return '我在查最影响结论的资料，尽量少带回无关信息。';
-        case 'local_context':
-          return '我先确认位置相关信息，免得建议偏掉。';
-        case 'media_gallery':
-          return '我先看和当前问题直接相关的内容。';
-        case 'intent_bridge':
-          return '我正在帮你执行这一步。';
-        default:
-          return '我正在处理这一部分。';
-      }
-    }
-    // Legacy compatibility
-    switch (phaseType) {
-      case 'searching':
-      case 'replan_searching':
-        return '我在补关键资料，尽量让结论更稳。';
-      case 'thinking':
-        return '我在把信息收拢成更清晰的判断。';
-      case 'answering':
-        return '我在整理最终回答。';
-      case 'subagent_running':
-        return '我同时补另一块关键信息，尽量不让你久等。';
-      case 'subagent_done':
-        return '这部分已经补齐。';
-      default:
-        return '';
-    }
-  }
-
-  bool _isSearchLikeTrace(
-    AssistantTraceEvent event,
-    Map<String, dynamic> data,
-  ) {
-    final toolNames = <String>[
-      (data['tool'] ?? '').toString(),
-      (data['toolName'] ?? '').toString(),
-      (data['name'] ?? '').toString(),
-    ].map((item) => item.trim().toLowerCase()).where((item) => item.isNotEmpty);
-    for (final tool in toolNames) {
-      if (tool == 'web_search' ||
-          tool == 'knowledge_search' ||
-          tool == 'search' ||
-          tool == 'retrieval') {
-        return true;
-      }
-    }
-    final tokens = <String>[
-      event.message,
-      (data['tool'] ?? '').toString(),
-      (data['toolName'] ?? '').toString(),
-      (data['name'] ?? '').toString(),
-      (data['description'] ?? '').toString(),
-    ].map((item) => item.toLowerCase()).join(' ');
-    return tokens.contains('search') ||
-        tokens.contains('retrieval') ||
-        tokens.contains('web');
-  }
-
-  String _extractSearchQueryFromTraceData(Map<String, dynamic> data) {
-    final direct = (data['query'] as String?)?.trim() ?? '';
-    if (direct.isNotEmpty) return direct;
-    final keyword = (data['keyword'] as String?)?.trim() ?? '';
-    if (keyword.isNotEmpty) return keyword;
-    final args =
-        (data['arguments'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final argsQuery = (args['query'] as String?)?.trim() ?? '';
-    if (argsQuery.isNotEmpty) return argsQuery;
-    final argsKeyword = (args['keyword'] as String?)?.trim() ?? '';
-    if (argsKeyword.isNotEmpty) return argsKeyword;
-    final keywords =
-        (data['keywords'] as List?)
-            ?.whereType<String>()
-            .map((item) => item.trim())
-            .where((item) => item.isNotEmpty)
-            .toList(growable: false) ??
-        const <String>[];
-    if (keywords.isNotEmpty) return keywords.join(' ');
-    return '';
-  }
-
-  List<String> _extractSearchKeywords(String query) {
-    final normalized = query.trim();
-    if (normalized.isEmpty) return const <String>[];
-    return normalized
-        .split(RegExp(r'[\s,，。；;]+'))
-        .where((item) => item.trim().isNotEmpty)
-        .map((item) => item.trim())
-        .take(6)
-        .toList(growable: false);
-  }
-
-  String _sanitizeTraceDetail(String raw) {
-    String text = raw.trim();
-    if (text.isEmpty) return '';
-    if (_isInternalChunk(text)) return '';
-    if (_jsonKeyFragmentRe.hasMatch(text)) return '';
-    if (_jsonSyntaxOnlyRe.hasMatch(text)) return '';
-    if (text.startsWith('calling ') && text.length < 40) return '';
-    if (text.contains('工具执行遇到问题') || text.contains('toolFailed')) return '';
-    if (_internalErrorRe.hasMatch(text)) return '';
-    if (_containsXmlToolCall(text)) {
-      text = _stripXmlToolCalls(text);
-      if (text.isEmpty) return '';
-    }
-    if (text.length <= 80) return text;
-    return '${text.substring(0, 80)}...';
-  }
-
   static final _jsonEnvelopeFragmentRe = RegExp(
-    r'"?(contractVersion|turnPhase|thinkingText|assistant_turn_|traceId"?\s*:|'
+    r'"?(contractVersion|turnPhase|thinkingText|assistant_turn|traceId"?\s*:|'
     r'"decision"|"toolPlan"|"nextAction"|"userMarkdown")',
-  );
-
-  String _sanitizeThinkingText(String raw) {
-    String text = raw.trim();
-    if (text.isEmpty) return '';
-    if (text == '正在思考...' || text == '正在深入分析...') return '';
-    if (_isInternalChunk(text)) return '';
-    if (text.startsWith('{')) return '';
-    if (_jsonEnvelopeFragmentRe.hasMatch(text)) return '';
-    return text;
-  }
-
-  void _captureThinkingTextFromTrace(AssistantTraceEvent event) {
-    if (!mounted || !_assistantResponding || _preferStructuredUserEvents)
-      return;
-    final type = event.type;
-
-    if (type == AssistantTraceEventType.thinkingProgress) {
-      final cleaned = _sanitizeThinkingText(event.message);
-      if (cleaned.isEmpty) return;
-      final data = event.data ?? const <String, dynamic>{};
-      final isStreamingDelta = data['streaming'] == true;
-      final phase = (data['phase'] as String?) ?? 'understanding';
-      final nextStage = switch (phase) {
-        'analyzing' => ProcessStage.analyzing,
-        'answering' => ProcessStage.answering,
-        _ => ProcessStage.understanding,
-      };
-      setState(() {
-        if (isStreamingDelta) {
-          _streamingThinkingText = '$_streamingThinkingText$cleaned';
-        } else if (_streamingThinkingText.isNotEmpty) {
-          _streamingThinkingText = '$_streamingThinkingText\n\n$cleaned';
-        } else {
-          _streamingThinkingText = cleaned;
-        }
-        _appendThinkingNarrativeBlock(cleaned, inline: isStreamingDelta);
-        _currentProcessState = _currentProcessState.copyWith(
-          stage: nextStage,
-          stageLabel: _stageHeaderLabel(nextStage),
-          isStreaming: true,
-          contentBlocks: List<ProcessContentBlock>.of(_processContentBlocks),
-        );
-      });
-      _autoScrollToBottomIfNeeded();
-      return;
-    }
-
-    if (type == AssistantTraceEventType.toolResult) {
-      final data = event.data ?? const <String, dynamic>{};
-      if (data['isAssessment'] == true) return;
-      final refs = (data['references'] as List?) ?? const <dynamic>[];
-      if (refs.isNotEmpty && refs.length != _streamingThinkingRefCount) {
-        _streamingThinkingRefCount = refs.length;
-        final processRefs = _extractReferencesFromData(data);
-        setState(() {
-          _mergeCollectedSearchRefs(processRefs);
-          _replaceOrAppendBlock(
-            ProcessContentBlockType.searchSummary,
-            ProcessContentBlock(
-              type: ProcessContentBlockType.searchSummary,
-              text: '这一批已核对 ${_collectedSearchRefs.length} 个来源，我先帮你筛掉重复和噪音。',
-              references: List<ProcessReference>.of(_collectedSearchRefs),
-            ),
-          );
-          _currentProcessState = _currentProcessState.copyWith(
-            stage: ProcessStage.searching,
-            stageLabel: _stageHeaderLabel(ProcessStage.searching),
-            isStreaming: true,
-            contentBlocks: List<ProcessContentBlock>.of(_processContentBlocks),
-          );
-        });
-        _autoScrollToBottomIfNeeded();
-      }
-      return;
-    }
-  }
-
-  static final _internalErrorRe = RegExp(
-    r'模板渲染失败|模板缺失|template.*not.?found|'
-    r'模型调用失败|模型调用异常|HTTP [45]\d\d|'
-    r'agent loop (started|finished)|llm request iteration|'
-    r'model_answered_without_tools|'
-    r'第 \d+ 轮推理|正在思考\.\.\.',
   );
 
   static final _jsonKeyFragmentRe = RegExp(
@@ -2568,7 +1772,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     r'selfCheck|diagnostics|reasoningBasis|turnPhase|traceId|'
     r'queryTasks|contextSlots|subagentPlan|evidence|result|'
     r'confidence|reasoning|answerEligibility|missingCriticalSlots|'
-    r'assistant_turn_v4|provider|freshnessHoursMax|timeScope|queryVariants|'
+    r'assistant_turn|provider|freshnessHoursMax|timeScope|queryVariants|'
     r'plan|answer|ask_user|tool_call)"?\s*:?',
   );
   static final _jsonSyntaxOnlyRe = RegExp(r'^[\s"{}:\[\],\\.]+$');
@@ -2586,20 +1790,11 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
 
   bool _containsXmlToolCall(String text) => _xmlToolCallOpenRe.hasMatch(text);
 
-  String _stripXmlToolCalls(String text) =>
-      text.replaceAll(_xmlToolCallTagRe, '').trim();
+  String _stripXmlToolCallsPreservingWhitespace(String text) =>
+      text.replaceAll(_xmlToolCallTagRe, '');
 
-  int _extractReferenceCountFromTraceData(Map<String, dynamic> data) {
-    final references = data['references'];
-    if (references is List) return references.length;
-    final items = data['items'];
-    if (items is List) return items.length;
-    final countRaw =
-        data['count'] ?? data['referenceCount'] ?? data['resultCount'];
-    if (countRaw is int) return countRaw;
-    if (countRaw is String) return int.tryParse(countRaw.trim()) ?? 0;
-    return 0;
-  }
+  String _stripXmlToolCalls(String text) =>
+      _stripXmlToolCallsPreservingWhitespace(text).trim();
 
   String get _conversationTitle {
     if (widget.conversationId == AppConceptConstants.assistantConversationId) {
@@ -3025,19 +2220,13 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         _activeAssistantStreamingMessageId = streamingAssistantMessageId;
         _answerGateOpen = false;
         _assistantResponding = true;
-        _preferStructuredUserEvents = false;
-        _preferProcessJournalEvents = true;
         _assistantPhaseLabel = UITextConstants.assistantPhaseUnderstanding;
-        _assistantSearchingCount = 0;
-        _assistantReferenceCount = 0;
         _currentProcessState = const AssistantProcessState(
           stageLabel: UITextConstants.assistantPhaseUnderstanding,
         );
         _streamingThinkingText = '';
-        _streamingThinkingRefCount = 0;
         _processContentBlocks = <ProcessContentBlock>[];
         _currentProcessJournal = <ProcessJournalEvent>[];
-        _collectedSearchRefs = <ProcessReference>[];
         _userScrolledAway = false;
         _showScrollFab = false;
         _messages.add(<String, dynamic>{
@@ -3056,7 +2245,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           'displayMarkdown': '',
           'displayPlainText': '',
           'machineEnvelope': '',
-          'processJournalV1': <Map<String, dynamic>>[],
+          'runArtifacts': <String, dynamic>{
+            'processJournal': <Map<String, dynamic>>[],
+          },
         });
       });
       _startAssistantProgress();
@@ -3221,9 +2412,10 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             (runResponse.structuredResponse['uiAnswer'] as Map?)
                 ?.cast<String, dynamic>() ??
             const <String, dynamic>{};
-        final uiUsageStatsV1 = _buildConversationCumulativeUsageStats(
+        final uiUsageStats = _buildConversationCumulativeUsageStats(
           runUsageStats:
-              (runResponse.structuredResponse['uiUsageStatsV1'] as Map?)
+              ((runResponse.structuredResponse['uiUsageStats'] as Map?) ??
+                      (runResponse.structuredResponse['uiUsageStatsV1'] as Map?))
                   ?.cast<String, dynamic>() ??
               const <String, dynamic>{},
           excludeMessageId: streamingAssistantMessageId,
@@ -3232,7 +2424,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           runResponse.structuredResponse,
         );
         final uiProcessTimelineV2 = structuredJournal.isNotEmpty
-            ? _legacyTimelineFromJournal(structuredJournal)
+            ? _timelineFromJournal(structuredJournal)
             : _timelineV2FromStructuredResponse(runResponse.structuredResponse);
         final streamedTimelineV2 = (() {
           if (streamingAssistantMessageId == null) {
@@ -3258,7 +2450,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           );
           if (existingIndex < 0) return const <ProcessJournalEvent>[];
           return _normalizeProcessJournal(
-            ((_messages[existingIndex]['processJournalV1'] as List?)
+            (((_messages[existingIndex]['runArtifacts'] as Map?)?['processJournal']
+                        as List?)
                     ?.whereType<Map>()
                     .toList(growable: false)) ??
                 const <Map>[],
@@ -3269,7 +2462,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           structuredJournal,
         );
         final mergedTimelineV2 = mergedJournal.isNotEmpty
-            ? _legacyTimelineFromJournal(mergedJournal)
+            ? _timelineFromJournal(mergedJournal)
             : _mergeProcessTimelineV2(streamedTimelineV2, uiProcessTimelineV2);
         final structuredProcessBlocks = _processBlocksFromStructuredResponse(
           runResponse.structuredResponse,
@@ -3318,9 +2511,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                 'runId': runResponse.runId ?? '',
                 'traceId': runResponse.traceId ?? '',
                 'sourceQuery': text,
-                'displayMarkdown': runResponse.displayMarkdownV1,
+                'displayMarkdown': runResponse.displayMarkdown,
                 'displayPlainText': displayPlainText,
-                'machineEnvelope': runResponse.machineEnvelopeV1,
+                'machineEnvelope': runResponse.machineEnvelope,
                 'degraded': runResponse.degraded,
                 'qualityMetrics':
                     (runResponse.structuredResponse['qualityMetrics'] as Map?)
@@ -3330,18 +2523,15 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                     (((runResponse.structuredResponse['qualityMetrics'] as Map?)
                         ?.cast<String, dynamic>())?['heuristicFallbackUsed']) ==
                     true,
-                'runArtifactsV1':
-                    runResponse.runArtifactsV1?.toJson() ??
+                'runArtifacts':
+                    runResponse.runArtifacts?.toJson() ??
                     const <String, dynamic>{},
                 'domainId': (dialogueRuntime['domainId'] ?? '').toString(),
                 'dialogueState': dialogueRuntime,
                 'uiReferences': uiReferences,
                 'uiActions': uiActions,
                 'uiAnswer': uiAnswer,
-                'uiUsageStatsV1': uiUsageStatsV1,
-                'processJournalV1': mergedJournal
-                    .map((item) => item.toJson())
-                    .toList(growable: false),
+                'uiUsageStats': uiUsageStats,
                 'streamFinalAnswer': effectiveDisplayText,
                 'streaming': false,
                 'uiProcessContentBlocks': _serializeProcessBlocks(
@@ -3365,9 +2555,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
               'runId': runResponse.runId ?? '',
               'traceId': runResponse.traceId ?? '',
               'sourceQuery': text,
-              'displayMarkdown': runResponse.displayMarkdownV1,
+              'displayMarkdown': runResponse.displayMarkdown,
               'displayPlainText': displayPlainText,
-              'machineEnvelope': runResponse.machineEnvelopeV1,
+              'machineEnvelope': runResponse.machineEnvelope,
               'degraded': runResponse.degraded,
               'qualityMetrics':
                   (runResponse.structuredResponse['qualityMetrics'] as Map?)
@@ -3377,18 +2567,15 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                   (((runResponse.structuredResponse['qualityMetrics'] as Map?)
                       ?.cast<String, dynamic>())?['heuristicFallbackUsed']) ==
                   true,
-              'runArtifactsV1':
-                  runResponse.runArtifactsV1?.toJson() ??
+              'runArtifacts':
+                  runResponse.runArtifacts?.toJson() ??
                   const <String, dynamic>{},
               'domainId': (dialogueRuntime['domainId'] ?? '').toString(),
               'dialogueState': dialogueRuntime,
               'uiReferences': uiReferences,
               'uiActions': uiActions,
               'uiAnswer': uiAnswer,
-              'uiUsageStatsV1': uiUsageStatsV1,
-              'processJournalV1': mergedJournal
-                  .map((item) => item.toJson())
-                  .toList(growable: false),
+              'uiUsageStats': uiUsageStats,
               'uiProcessContentBlocks': _serializeProcessBlocks(
                 effectiveProcessBlocks,
               ),
@@ -3396,8 +2583,6 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             });
           }
           _assistantResponding = false;
-          _preferStructuredUserEvents = false;
-          _preferProcessJournalEvents = false;
           _assistantPhaseLabel = '';
           _activeAssistantStreamingMessageId = null;
           _answerGateOpen = true;
@@ -3405,7 +2590,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             stage: ProcessStage.completed,
             stageLabel: UITextConstants.assistantPhaseCompleted,
             contentBlocks: List<ProcessContentBlock>.of(effectiveProcessBlocks),
-            usageStats: uiUsageStatsV1,
+            usageStats: uiUsageStats,
             elapsedMs: elapsedMs,
           );
           if (effectiveSessionId.isNotEmpty) {
@@ -3467,7 +2652,6 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         setState(() {
           _ensureMessagesGrowable();
           _assistantResponding = false;
-          _preferStructuredUserEvents = false;
           _assistantPhaseLabel = '';
           _activeAssistantStreamingMessageId = null;
           if (streamingAssistantMessageId != null) {
@@ -3566,8 +2750,6 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         const <String>[];
     final latestDialogueState = _latestAssistantDialogueState();
     final latestRunArtifacts = _latestAssistantRunArtifacts();
-    final latestSlotState = latestRunArtifacts?.slotState;
-    final latestDomainPolicyBundle = latestRunArtifacts?.domainPolicyBundle;
     return <String, dynamic>{
       'pageType': _assistantSourceToPageType(openContext?.source),
       'sessionId': _effectiveAssistantSessionId,
@@ -3579,9 +2761,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         'behaviorTimeline': hints['behaviorTimeline'],
       if (userTags.isNotEmpty) 'userTags': userTags,
       if (latestDialogueState.isNotEmpty) 'dialogueState': latestDialogueState,
-      if (latestSlotState != null) 'slotState': latestSlotState.toJson(),
-      if (latestDomainPolicyBundle != null)
-        'domainPolicyBundle': latestDomainPolicyBundle.toJson(),
+      if (latestRunArtifacts != null) 'runArtifacts': latestRunArtifacts.toJson(),
       if (latestDialogueState['suggestedNextStateId'] is String &&
           (latestDialogueState['suggestedNextStateId'] as String)
               .trim()
@@ -3670,10 +2850,10 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           AppConceptConstants.assistantSenderId) {
         continue;
       }
-      final raw = (message['runArtifactsV1'] as Map?)?.cast<String, dynamic>();
+      final raw = (message['runArtifacts'] as Map?)?.cast<String, dynamic>();
       if (raw == null || raw.isEmpty) continue;
       try {
-        return RunArtifacts.fromJson(raw);
+        return parseRunArtifacts(raw);
       } catch (_) {
         continue;
       }
@@ -3682,89 +2862,49 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   }
 
   String _resolveAssistantDisplayText(AssistantRunResponse response) {
-    final structured = response.structuredResponse;
-
-    final artifactMarkdown = response.displayMarkdownV1;
-    if (artifactMarkdown.isNotEmpty &&
-        !AssistantContentFilters.isProgressPlaceholder(artifactMarkdown)) {
-      return artifactMarkdown;
-    }
-    final artifactPlain = response.displayPlainTextV1;
-    if (artifactPlain.isNotEmpty &&
-        !AssistantContentFilters.isProgressPlaceholder(artifactPlain)) {
-      return artifactPlain;
-    }
-
-    // Gate 1: uiAnswer.markdownText — 引擎层已保证是纯文本
-    final uiAnswer =
-        (structured['uiAnswer'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final markdownText = (uiAnswer['markdownText'] as String?)?.trim() ?? '';
-    if (markdownText.isNotEmpty &&
-        !AssistantContentFilters.isProgressPlaceholder(markdownText)) {
-      return markdownText;
-    }
-
-    // Gate 2: answerPayload.userMarkdown
-    final answerPayload =
-        (structured['answerPayload'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final userMd = (answerPayload['userMarkdown'] as String?)?.trim() ?? '';
-    if (userMd.isNotEmpty &&
-        !_isInternalChunk(userMd) &&
-        !AssistantContentFilters.isProgressPlaceholder(userMd)) {
-      return userMd;
-    }
-
-    // Gate 3: LlmResponseParser 从 finalText 中提取 userMarkdown
-    final parsed = LlmResponseParser.parse(response.finalText);
-    if (parsed.ok) {
-      final um = parsed.userMarkdown;
-      if (um.isNotEmpty &&
-          !_isInternalChunk(um) &&
-          !AssistantContentFilters.isProgressPlaceholder(um)) {
-        return um;
+    try {
+      final structured = response.structuredResponse;
+      final uiAnswer =
+          (structured['uiAnswer'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      final answerPayload =
+          (structured['answerPayload'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      final parsed = LlmResponseParser.parse(response.finalText);
+      final resultMap =
+          (answerPayload['result'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      final rawFinal = OpenAiCompatibleLlmProvider.stripXmlToolCalls(
+        response.finalText,
+      ).trim();
+      final displayText = _firstCompletedDisplayCandidate(<String>[
+        response.displayMarkdown,
+        response.displayPlainText,
+        (uiAnswer['markdownText'] as String?) ?? '',
+        (answerPayload['userMarkdown'] as String?) ?? '',
+        parsed.ok ? parsed.explicitUserMarkdown : '',
+        (resultMap['text'] as String?) ?? '',
+        rawFinal,
+      ]);
+      if (displayText.isNotEmpty) {
+        return displayText;
       }
-    }
+    } catch (_) {}
 
-    // Gate 4: result.text 兜底
-    final resultMap =
-        (answerPayload['result'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final resultText = (resultMap['text'] as String?)?.trim() ?? '';
-    if (resultText.isNotEmpty &&
-        !_isInternalChunk(resultText) &&
-        !AssistantContentFilters.isProgressPlaceholder(resultText)) {
-      return resultText;
-    }
-
-    // Gate 5: degraded 场景 — 从 finalText 中剥离 JSON，提取可读内容
-    final rawFinal = OpenAiCompatibleLlmProvider.stripXmlToolCalls(
-      response.finalText,
-    ).trim();
-    // 优先尝试从任何 JSON 结构体中提取可读内容（不仅限于已知签名的信封格式）
-    if (rawFinal.startsWith('{') || rawFinal.startsWith('[')) {
-      final stripped = _stripJsonForDisplay(rawFinal);
-      if (stripped.isNotEmpty) return stripped;
-      // 是 JSON 但无法提取可读内容 → 返回降级提示而非裸 JSON
-      return '助手未生成有效回答，请重试。';
-    }
-    if (rawFinal.isNotEmpty &&
-        !AssistantContentFilters.isJsonEnvelope(rawFinal)) {
-      return rawFinal;
-    }
-    if (rawFinal.isNotEmpty) {
-      final stripped = _stripJsonForDisplay(rawFinal);
-      if (stripped.isNotEmpty) return stripped;
+    final actionFallback = _actionLikeCompletedFallback(response);
+    if (actionFallback.isNotEmpty) {
+      return actionFallback;
     }
 
     return '助手未生成有效回答，请重试。';
   }
 
   String _resolveAssistantDisplayPlainText(AssistantRunResponse response) {
-    final artifactPlain = response.displayPlainTextV1;
-    if (artifactPlain.isNotEmpty &&
-        !AssistantContentFilters.isProgressPlaceholder(artifactPlain)) {
+    final artifactPlain = _sanitizeCompletedDisplayCandidate(
+      response.displayPlainText,
+      allowJsonExtraction: false,
+    );
+    if (artifactPlain.isNotEmpty) {
       return artifactPlain;
     }
     return _resolveAssistantDisplayText(response);
@@ -3776,33 +2916,28 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       final dynamic raw = const JsonDecoder().convert(jsonText);
       if (raw is! Map) return '';
       final decoded = raw.cast<String, dynamic>();
+      final payload = decoded;
 
-      // Priority 1: uiAnswer.markdownText
-      final uiAns = (decoded['uiAnswer'] as Map?)?.cast<String, dynamic>();
-      final uiMd = (uiAns?['markdownText'] as String?)?.trim() ?? '';
-      if (uiMd.isNotEmpty && uiMd.length > 5 && !uiMd.startsWith('{')) {
-        return uiMd;
-      }
-
-      // Priority 2: userMarkdown (legacy top-level)
-      final um = (decoded['userMarkdown'] as String?)?.trim() ?? '';
-      if (um.isNotEmpty && um.length > 5 && !um.startsWith('{')) return um;
-
-      // Priority 3: answerPayload.userMarkdown
-      final answerPayload = (decoded['answerPayload'] as Map?)
-          ?.cast<String, dynamic>();
-      final apUm = (answerPayload?['userMarkdown'] as String?)?.trim() ?? '';
-      if (apUm.isNotEmpty && apUm.length > 5 && !apUm.startsWith('{')) {
-        return apUm;
-      }
-
-      // Priority 4: result.text (under answerPayload or top-level)
-      final result =
-          (decoded['result'] as Map?) ?? (answerPayload?['result'] as Map?);
-      final text = (result?['text'] as String?)?.trim() ?? '';
-      if (text.isNotEmpty && text.length > 5 && !text.startsWith('{')) {
-        return text;
-      }
+      final uiAns =
+          ((payload['uiAnswer'] as Map?) ?? (decoded['uiAnswer'] as Map?))
+              ?.cast<String, dynamic>();
+      final answerPayload =
+          ((payload['answerPayload'] as Map?) ??
+                  (decoded['answerPayload'] as Map?))
+              ?.cast<String, dynamic>();
+      final topResult =
+          (payload['result'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      final nestedResult =
+          (answerPayload?['result'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      return _firstCompletedDisplayCandidate(<String>[
+        (uiAns?['markdownText'] as String?) ?? '',
+        (payload['userMarkdown'] as String?) ?? '',
+        (answerPayload?['userMarkdown'] as String?) ?? '',
+        (topResult['text'] as String?) ?? '',
+        (nestedResult['text'] as String?) ?? '',
+      ]);
     } catch (_) {}
     return '';
   }
@@ -3862,20 +2997,18 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       'query': query,
       'answer': _resolveAssistantDisplayText(response),
       'displayPlainText': _resolveAssistantDisplayPlainText(response),
-      'machineEnvelope': response.machineEnvelopeV1,
-      'runArtifactsV1':
-          response.runArtifactsV1?.toJson() ?? const <String, dynamic>{},
+      'machineEnvelope': response.machineEnvelope,
+      'runArtifacts': response.runArtifacts?.toJson() ?? const <String, dynamic>{},
       'createdAt': DateTime.now().toIso8601String(),
-      'processJournalV1': _journalFromStructuredResponse(
-        structured,
-      ).map((item) => item.toJson()).toList(growable: false),
       'uiReferences':
           (structured['uiReferences'] as List?)?.whereType<Map>().toList(
             growable: false,
           ) ??
           const <Map>[],
-      'uiUsageStatsV1':
-          (structured['uiUsageStatsV1'] as Map?)?.cast<String, dynamic>() ??
+      'uiUsageStats':
+          ((structured['uiUsageStats'] as Map?) ??
+                  (structured['uiUsageStatsV1'] as Map?))
+              ?.cast<String, dynamic>() ??
           const <String, dynamic>{},
       ...replayPayload,
     };
@@ -4295,8 +3428,6 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       _activeAssistantStreamingMessageId = streamingAssistantMessageId;
       _answerGateOpen = false;
       _assistantResponding = true;
-      _preferStructuredUserEvents = false;
-      _preferProcessJournalEvents = true;
       _assistantPhaseLabel = UITextConstants.assistantPhaseAnswering;
       _currentProcessState = AssistantProcessState(
         stage: ProcessStage.answering,
@@ -4305,7 +3436,6 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       );
       _currentProcessJournal = <ProcessJournalEvent>[];
       _processContentBlocks = <ProcessContentBlock>[];
-      _collectedSearchRefs = <ProcessReference>[];
       _messages.add(<String, dynamic>{
         'id': streamingAssistantMessageId!,
         'conversationId': widget.conversationId,
@@ -4323,7 +3453,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         'displayMarkdown': '',
         'displayPlainText': '',
         'machineEnvelope': '',
-        'processJournalV1': <Map<String, dynamic>>[],
+        'runArtifacts': <String, dynamic>{
+          'processJournal': <Map<String, dynamic>>[],
+        },
       });
     });
     _autoScrollToBottomIfNeeded();
@@ -4372,22 +3504,24 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         );
         final uiUsageStats = _buildConversationCumulativeUsageStats(
           runUsageStats:
-              (finalResponse.structuredResponse['uiUsageStatsV1'] as Map?)
+              ((finalResponse.structuredResponse['uiUsageStats'] as Map?) ??
+                      (finalResponse.structuredResponse['uiUsageStatsV1'] as Map?))
                   ?.cast<String, dynamic>() ??
               const <String, dynamic>{},
           excludeMessageId: streamingAssistantMessageId,
         );
+        final streamedRunArtifacts =
+            (_messages.firstWhere(
+                  (item) => (item['id'] as String?) == streamingAssistantMessageId,
+                  orElse: () => const <String, dynamic>{},
+                )['runArtifacts'] as Map?)
+                ?.cast<String, dynamic>();
         final streamedJournal = _normalizeProcessJournal(
-          (_messages.firstWhere(
-                        (item) =>
-                            (item['id'] as String?) ==
-                            streamingAssistantMessageId,
-                        orElse: () => const <String, dynamic>{},
-                      )['processJournalV1']
-                      as List?)
+          (streamedRunArtifacts?['processJournal'] as List?)
                   ?.whereType<Map>()
+                  .map((item) => item.cast<String, dynamic>())
                   .toList(growable: false) ??
-              const <Map>[],
+              const <Map<String, dynamic>>[],
         );
         final effectiveJournal = _mergeProcessJournalEvents(
           streamedJournal,
@@ -4433,9 +3567,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
               'streamFinalAnswer': effectiveFinalText,
               'streaming': false,
               'sourceQuery': query,
-              'displayMarkdown': finalResponse.displayMarkdownV1,
+              'displayMarkdown': finalResponse.displayMarkdown,
               'displayPlainText': displayPlainText,
-              'machineEnvelope': finalResponse.machineEnvelopeV1,
+              'machineEnvelope': finalResponse.machineEnvelope,
               'degraded': finalResponse.degraded,
               'qualityMetrics':
                   (finalResponse.structuredResponse['qualityMetrics'] as Map?)
@@ -4445,17 +3579,18 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                   (((finalResponse.structuredResponse['qualityMetrics'] as Map?)
                       ?.cast<String, dynamic>())?['heuristicFallbackUsed']) ==
                   true,
-              'runArtifactsV1':
-                  finalResponse.runArtifactsV1?.toJson() ??
-                  const <String, dynamic>{},
+              'runArtifacts': <String, dynamic>{
+                ...(finalResponse.runArtifacts?.toJson() ??
+                    const <String, dynamic>{}),
+                'processJournal': effectiveJournal
+                    .map((item) => item.toJson())
+                    .toList(growable: false),
+              },
               'uiAnswer': uiAnswer,
-              'processJournalV1': effectiveJournal
-                  .map((item) => item.toJson())
-                  .toList(growable: false),
               'uiProcessContentBlocks': _serializeProcessBlocks(
                 effectiveProcessBlocks,
               ),
-              'uiUsageStatsV1': uiUsageStats,
+              'uiUsageStats': uiUsageStats,
             };
           }
           _currentProcessState = AssistantProcessState(
@@ -4473,8 +3608,6 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       if (mounted) {
         setState(() {
           _assistantResponding = false;
-          _preferStructuredUserEvents = false;
-          _preferProcessJournalEvents = false;
           _assistantPhaseLabel = '';
           _activeAssistantStreamingMessageId = null;
           _currentProcessState = AssistantProcessState(

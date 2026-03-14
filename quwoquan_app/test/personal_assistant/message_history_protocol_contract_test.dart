@@ -27,7 +27,7 @@ const _degradedPrefixes = <String>[
 ];
 
 // ─── JSON envelope keys ───────────────────────────────────────────────────────
-const _jsonEnvelopeKeys = <String>['assistant_turn_v2', 'contractVersion'];
+const _jsonEnvelopeKeys = <String>['contractVersion'];
 
 /// 写入 sessions.json 并用 SessionManager.load() 加载
 Future<AssistantSessionManager> _loadFrom(
@@ -182,10 +182,85 @@ void main() {
     expect(messages[1]['content'], equals('你好！有什么可以帮你的？'));
   });
 
+  test('Rule-4b: load() keeps canonical assistant_turn summary displayable', () async {
+    final canonicalTurn = jsonEncode(<String, dynamic>{
+      'contractVersion': 'assistant_turn',
+      'decision': const <String, dynamic>{'nextAction': 'answer'},
+      'messageKind': 'answer',
+      'userMarkdown': '这是可见回答',
+      'result': const <String, dynamic>{'text': '这是可见回答'},
+    });
+    final sm = await _loadFrom(tempDir, {
+      'version': 'v2',
+      'activeSessionId': 'assistant',
+      'sessions': {
+        'assistant': [
+          {'role': 'user', 'content': '给我一个结论'},
+          {'role': 'assistant', 'content': canonicalTurn},
+        ],
+      },
+      'metadata': {},
+    });
+
+    final messages = sm.getOrCreateSession('assistant');
+    expect(messages[1]['content'], equals('这是可见回答'));
+    expect(
+      sm.summarizeRecent('assistant'),
+      contains('这是可见回答'),
+      reason: 'canonical assistant_turn 历史应仍能输出用户可读摘要',
+    );
+  });
+
+  test('Rule-4c: save→load preserves assistant and skill-private sessions separately', () async {
+    final file = File('${tempDir.path}/sessions.json');
+    final sm = AssistantSessionManager(storagePath: file.path);
+
+    sm.appendMessage(sessionId: 'assistant', role: 'user', content: '主会话问题');
+    sm.appendMessage(
+      sessionId: 'assistant',
+      role: 'assistant',
+      content: '主会话回答',
+    );
+    sm.appendMessage(
+      sessionId: 'skill:weather',
+      role: 'user',
+      content: '深圳明天会下雨吗',
+    );
+    sm.appendMessage(
+      sessionId: 'skill:weather',
+      role: 'assistant',
+      content: '明天有阵雨，出门记得带伞。',
+    );
+    sm.switchAssistantSession('skill:weather');
+    await sm.save();
+
+    final sm2 = AssistantSessionManager(storagePath: file.path);
+    await sm2.load();
+
+    expect(sm2.activeSessionId, equals('skill:weather'));
+    expect(sm2.getOrCreateSession('assistant').length, equals(2));
+    expect(sm2.getOrCreateSession('skill:weather').length, equals(2));
+    expect(
+      sm2.summarizeRecent('assistant'),
+      contains('主会话回答'),
+      reason: 'assistant 主会话摘要应保持自己的历史，不得被 skill 私人会话污染',
+    );
+    expect(
+      sm2.summarizeRecent('assistant'),
+      isNot(contains('带伞')),
+      reason: 'assistant 主会话摘要不得混入 skill 私人会话内容',
+    );
+    expect(
+      sm2.summarizeRecent('skill:weather'),
+      contains('带伞'),
+      reason: 'skill 私人会话应保持独立回放和摘要内容',
+    );
+  });
+
   // ── 规则 5：summarizeRecent() 不得输出 JSON envelope 原文 ────────────────
   test('Rule-5: summarizeRecent() must not output JSON envelope keys', () async {
     final jsonEnvelope =
-        '{"assistant_turn_v2":{"decision":{"nextAction":"answer"},"userMarkdown":"天气很好"}}';
+        '{"contractVersion":"assistant_turn","decision":{"nextAction":"answer"},"messageKind":"answer","userMarkdown":"天气很好"}';
     final sm = await _loadFrom(tempDir, {
       'version': 'v2',
       'activeSessionId': 'assistant',

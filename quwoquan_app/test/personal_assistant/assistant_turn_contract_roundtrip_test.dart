@@ -1,0 +1,73 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/assistant_turn_contract.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
+
+void main() {
+  group('assistant turn contract roundtrip', () {
+    test('typed getters expose canonical process protocol', () {
+      final output = AssistantTurnOutput(
+        contractVersion: kAssistantTurnCurrentVersion,
+        decision: const AssistantTurnDecisionPayload(
+          nextAction: AssistantNextAction.answer,
+          confidence: 0.92,
+        ),
+        messageKind: AssistantMessageKind.answer,
+        userMarkdown: '## 已整理',
+        result: const AssistantTurnResult(
+          text: '直接答案',
+          interpretation: '摘要结论',
+        ),
+        slotState: const SlotStateSnapshot(
+          domainId: 'weather',
+          slotValues: <String, SlotValueSnapshot>{
+            'city': SlotValueSnapshot(
+              slotId: 'city',
+              value: '深圳',
+              source: 'user_query',
+            ),
+          },
+        ),
+        askUser: const AssistantTurnAskUser(
+          slotId: 'city',
+          prompt: '请告诉我城市',
+        ),
+        phaseId: PlannerPhaseId.answering,
+        actionCode: PlannerActionCode.composeAnswer,
+        reasonCode: PlannerReasonCode.evidenceReady,
+      );
+
+      expect(output.nextActionType, AssistantNextAction.answer);
+      expect(output.messageKindType, AssistantMessageKind.answer);
+      expect(output.phaseIdType, PlannerPhaseId.answering);
+      expect(output.actionCodeType, PlannerActionCode.composeAnswer);
+      expect(output.reasonCodeType, PlannerReasonCode.evidenceReady);
+      expect(output.resultText, '直接答案');
+      expect(output.interpretation, '摘要结论');
+      expect(output.hasRenderableAnswer, isTrue);
+      expect(output.askUserPrompt, '请告诉我城市');
+      expect(output.askUserSlotId, 'city');
+      expect(output.slotStateSnapshot.slotValues['city']?.value, '深圳');
+      expect(output.processProtocolCode.toJson(), <String, dynamic>{
+        'stage': PlannerPhaseId.answering.wireName,
+        'phaseId': PlannerPhaseId.answering.wireName,
+        'actionCode': PlannerActionCode.composeAnswer.wireName,
+        'reasonCode': PlannerReasonCode.evidenceReady.wireName,
+      });
+    });
+
+    test('missingContextSlots uses canonical field only', () {
+      final parsed = tryParseAssistantTurnOutput(<String, dynamic>{
+        'contractVersion': kAssistantTurnCurrentVersion,
+        'decision': <String, dynamic>{
+          'nextAction': AssistantNextAction.askUser.wireName,
+        },
+        'messageKind': AssistantMessageKind.askUser.wireName,
+        'userMarkdown': '请补充城市',
+        'missingContextSlots': <String>['city'],
+      });
+
+      expect(parsed, isNotNull);
+      expect(parsed!.missingContextSlots, <String>['city']);
+    });
+  });
+}

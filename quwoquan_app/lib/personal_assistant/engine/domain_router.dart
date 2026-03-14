@@ -114,7 +114,6 @@ class AssistantDomainRouter {
               'executionTarget': 'tool_chain',
               'parametersSchema': const <String, dynamic>{},
               'domainId': rule.domainId,
-              'trigger_keywords': rule.intentKeywords,
               'frontmatter': <String, dynamic>{'mode': rule.mode},
             }))
         .toList(growable: false);

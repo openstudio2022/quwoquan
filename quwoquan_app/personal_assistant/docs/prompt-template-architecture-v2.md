@@ -1,5 +1,7 @@
 # 提示词模板架构 v2 —— 全局统一与最优设计
 
+> **收口说明**：当前 Prompt 相关必读入口为 `PERSONAL_ASSISTANT_ARCHITECTURE_AND_FLOW.md` 与 `PERSONAL_ASSISTANT_DESIGN_AND_CONSTRAINTS.md`。本文档保留为 Prompt 细节设计参考。
+
 > 基于现有引擎实现 + 业界一流实践（Anthropic System Prompt 设计、OpenAI Assistants API、Microsoft Copilot Stack）的完整分析与重构方案。
 
 ---
@@ -341,7 +343,7 @@ v2 方案：**预检（pre-check）嵌入 §3 task + 自检证据链嵌入 §4 o
 - `slotFillPlan`：{slot: {from, value, confidence}}
 - `queryTasks`：[{tool, query, depends}]
 - `queryNormalization`（有 web_search 时）：{normalized, variants, inputIssues}
-- `missingSlots`：[{slot, reason, options}]（有缺失时）
+- `askUser` / `missingContextSlots`：追问目标槽位与缺失上下文（有缺失时）
 - `selfCheck`：{passed, checks[{rule, ok, evidence}]}
 
 selfCheck 必须验证：
@@ -663,7 +665,7 @@ JSON 结构中的字段必须分清两类：
     "inputIssues": []
   },
 
-  "missingSlots": [],
+  "missingContextSlots": [],
   "result": null,
   "evidence": [],
   "reasoningBasis": [],
@@ -687,7 +689,7 @@ JSON 结构中的字段必须分清两类：
 | `slotFillPlan` | 必须 | — | — | — | `{slot: {from, value, confidence}}` |
 | `queryTasks` | 必须 | — | — | — | `[{tool, query, depends}]` |
 | `queryNormalization` | 有 web_search 时 | — | — | — | `{normalized, variants, inputIssues}` |
-| `missingSlots` | — | — | 必须 | — | `[{slot, reason, options}]` |
+| `askUser` / `missingContextSlots` | — | — | 必须 | — | `{slotId, prompt}` + `string[]` |
 | `result` | — | 必须 | — | — | string（综合结论） |
 | `evidence` | — | 必须 | — | — | `[{source, text, quality}]` |
 | `reasoningBasis` | — | 必须 | — | — | `[{text, source, confidence}]` |

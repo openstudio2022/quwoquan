@@ -1,0 +1,105 @@
+dart_class: RunArtifacts
+library_path: personal_assistant/contracts/run_artifacts.dart
+output_path: personal_assistant/runtime/generated/contracts/run_artifacts.g.dart
+contract: run_artifacts
+version: v1
+kind: runtime_persistence_contract
+imports:
+  - package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart
+fields:
+  - { name: machineEnvelope, type: string, default: '' }
+  - { name: displayMarkdown, type: string, default: '' }
+  - { name: displayPlainText, type: string, default: '' }
+  - { name: processJournal, type: list<object>, ref: process_journal_event, default: [] }
+  - { name: liveCursor, type: object, ref: process_journal_event }
+  - { name: evidenceLedger, type: list<object>, ref: evidence_ledger_entry, default: [] }
+  - { name: answerEvidenceBindings, type: list<object>, ref: answer_evidence_binding, default: [] }
+  - { name: slotState, type: object, ref: slot_state, default: {} }
+  - { name: answerDecision, type: map, default: {} }
+  - { name: diagnostics, type: map, default: {} }
+  - { name: domainPolicyBundle, type: object, ref: policy_bundle }
+subcontracts:
+  process_source_reference:
+    class_name: ProcessSourceReference
+    fields:
+      - { name: title, type: string, required: true }
+      - { name: url, type: string, required: true }
+      - { name: source, type: string, default: '' }
+  process_journal_event:
+    class_name: ProcessJournalEvent
+    fields:
+      - { name: eventId, type: string, required: true }
+      - { name: type, type: enum, enum_ref: ProcessJournalEventType, required: true }
+      - { name: stage, type: string, required: true }
+      - { name: phaseId, type: string, default: '' }
+      - { name: actionCode, type: string, default: '' }
+      - { name: reasonCode, type: string, default: '' }
+      - { name: reasonShort, type: string, default: '' }
+      - { name: source, type: string, default: '' }
+      - { name: nodeId, type: string, default: '' }
+      - { name: message, type: string, default: '' }
+      - { name: runId, type: string, default: '' }
+      - { name: traceId, type: string, default: '' }
+      - { name: references, type: list<object>, ref: process_source_reference, default: [] }
+      - { name: payload, type: map, default: {} }
+      - { name: timestamp, type: datetime }
+  evidence_ledger_entry:
+    class_name: EvidenceLedgerEntry
+    fields:
+      - { name: evidenceId, type: string, required: true }
+      - { name: domainId, type: string, default: '' }
+      - { name: dimension, type: string, default: '' }
+      - { name: dimensionLabel, type: string, default: '' }
+      - { name: queryTaskId, type: string, default: '' }
+      - { name: title, type: string, default: '' }
+      - { name: url, type: string, default: '' }
+      - { name: sourceHost, type: string, default: '' }
+      - { name: sourceTier, type: string, default: '' }
+      - { name: freshnessHours, type: int, default: 0 }
+      - { name: authorityScore, type: double, default: 0.0 }
+      - { name: relevanceScore, type: double, default: 0.0 }
+      - { name: slotContributions, type: map, default: {} }
+      - { name: snippet, type: string, default: '' }
+      - { name: retrievedAt, type: string, default: '' }
+  answer_evidence_binding:
+    class_name: AnswerEvidenceBinding
+    fields:
+      - { name: bindingId, type: string, required: true }
+      - { name: label, type: string, default: '' }
+      - { name: claim, type: string, default: '' }
+      - { name: evidenceId, type: string, default: '' }
+      - { name: url, type: string, default: '' }
+      - { name: title, type: string, default: '' }
+      - { name: source, type: string, default: '' }
+      - { name: snippet, type: string, default: '' }
+  slot_value:
+    class_name: SlotValueSnapshot
+    fields:
+      - { name: slotId, type: string, required: true }
+      - { name: status, type: enum, enum_ref: SlotValueStatus, default: inferred }
+      - { name: value, type: any }
+      - { name: source, type: string, default: '' }
+      - { name: confidence, type: double, default: 0.0 }
+      - { name: updatedAt, type: string, default: '' }
+      - { name: note, type: string, default: '' }
+      - { name: candidates, type: list<string>, default: [] }
+      - { name: evidenceIds, type: list<string>, default: [] }
+  slot_state:
+    class_name: SlotStateSnapshot
+    fields:
+      - { name: domainId, type: string, default: '' }
+      - { name: slots, type: map, default: {} }
+      - { name: slotValues, type: map<object>, ref: slot_value, default: {} }
+      - { name: missingSlots, type: list<string>, default: [] }
+      - { name: updatedAt, type: string, default: '' }
+  policy_bundle:
+    class_name: DomainPolicyBundle
+    fields:
+      - { name: domainId, type: string, default: '' }
+      - { name: executionPolicy, type: map, default: {} }
+      - { name: slotSchema, type: map, default: {} }
+      - { name: dialoguePolicy, type: map, default: {} }
+      - { name: authorityPolicy, type: map, default: {} }
+      - { name: retrievalPolicy, type: map, default: {} }
+      - { name: answerPolicy, type: map, default: {} }
+      - { name: narrativePolicy, type: map, default: {} }

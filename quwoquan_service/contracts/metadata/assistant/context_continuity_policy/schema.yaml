@@ -1,0 +1,16 @@
+dart_class: ContextContinuityPolicy
+library_path: personal_assistant/contracts/context_continuity_policy.dart
+output_path: personal_assistant/runtime/generated/contracts/context_continuity_policy.g.dart
+contract: context_continuity_policy
+version: v1
+kind: runtime_context_contract
+fields:
+  - { name: queryIntent, type: string, default: '' }
+  - { name: problemClass, type: string, default: '' }
+  - { name: continuityMode, type: enum, enum_ref: ContextContinuityMode, default: unknown }
+  - { name: explicitContinuation, type: bool, default: false }
+  - { name: topicOverlap, type: double, default: 0.0 }
+  - { name: allowHistorySummary, type: bool, default: false }
+  - { name: allowLongtermMemory, type: bool, default: false }
+  - { name: allowLocationHints, type: bool, default: false }
+  - { name: referenceQueries, type: list<string>, default: [] }

@@ -4,6 +4,6 @@
   "stage": "plan",
   "domainId": "global",
   "requiredVariables": ["traceId"],
-  "outputContract": "assistant_turn_v4_plan",
+  "outputContract": "assistant_turn",
   "selfCheckRules": ["slot_complete", "query_normalized", "safety_boundary"]
 }

@@ -2,9 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:quwoquan_app/personal_assistant/app/assistant_gateway.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/user_events.dart';
 import 'package:quwoquan_app/personal_assistant/engine/process_journal_bus.dart';
-import 'package:quwoquan_app/personal_assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/run_request.dart';
 
 class AssistantHttpGateway {
@@ -229,12 +227,8 @@ class AssistantHttpGateway {
           runRequest,
           onTraceEvent: (trace) {
             final journalEvents = journalBus.consumeTrace(trace);
-            final legacyEvents = ProcessJournalBus.toLegacyUserEvents(journalEvents);
-            for (final event in legacyEvents) {
-              final eventName = event.type == UserEventType.answerDelta
-                  ? 'answer_delta'
-                  : 'user_event';
-              request.response.write('event: $eventName\n');
+            for (final event in journalEvents) {
+              request.response.write('event: process_journal_event\n');
               request.response.write('data: ${jsonEncode(event.toJson())}\n\n');
             }
           },

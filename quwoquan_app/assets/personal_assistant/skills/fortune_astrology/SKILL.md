@@ -10,7 +10,7 @@ searchPolicy:
   qualityThreshold: 0
   strategy: none
 requires: {}
-output_contract: assistant_turn_v2
+output_contract: assistant_turn
 tool_observation_contract: tool_observation_v1
 reference_docs: references/domain-knowledge.md references/output-examples.md
 script_guides: references/tool-call-guidance.md

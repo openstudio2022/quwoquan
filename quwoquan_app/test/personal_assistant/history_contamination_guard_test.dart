@@ -7,6 +7,7 @@ import 'package:quwoquan_app/personal_assistant/engine/react_runtime.dart';
 import 'package:quwoquan_app/personal_assistant/engine/session_manager.dart';
 import 'package:quwoquan_app/personal_assistant/memory/memory_repository.dart';
 import 'package:quwoquan_app/personal_assistant/memory/vector_store.dart';
+import 'package:quwoquan_app/personal_assistant/retrieval/capability_catalog.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/personal_assistant/tools/tool_registry.dart';
 import 'package:test/test.dart';
@@ -59,6 +60,68 @@ class _CapturingSequenceProvider implements AssistantLlmProvider {
     final out = _answers[_idx < _answers.length ? _idx : _answers.length - 1];
     _idx += 1;
     return AssistantModelOutput(text: out);
+  }
+}
+
+class _CapturedLlmCall {
+  const _CapturedLlmCall({required this.templateId, required this.messages});
+
+  final String templateId;
+  final List<Map<String, dynamic>> messages;
+}
+
+class _TemplateAwareCaptureProvider implements AssistantLlmProvider {
+  final List<_CapturedLlmCall> capturedCalls = <_CapturedLlmCall>[];
+  int _plannerGlobalPlanCalls = 0;
+
+  @override
+  Future<AssistantModelOutput> reason({
+    required List<Map<String, dynamic>> messages,
+    required List<String> availableTools,
+    Map<String, dynamic> templateContext = const <String, dynamic>{},
+    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    String templateId = 'planner.global_plan',
+    String templateVersion = '',
+    String sessionId = '',
+    String runId = '',
+    String traceId = '',
+    LlmCallOptions? callOptions,
+    void Function(String delta)? onDelta,
+  }) async {
+    capturedCalls.add(
+      _CapturedLlmCall(
+        templateId: templateId,
+        messages: messages
+            .map((item) => <String, dynamic>{...item})
+            .toList(growable: false),
+      ),
+    );
+    if (templateId == 'summarize_session') {
+      return const AssistantModelOutput(text: '上一轮主要在讨论九寨沟方向备选方案。');
+    }
+    if (templateId == 'planner.global_plan') {
+      _plannerGlobalPlanCalls += 1;
+      if (_plannerGlobalPlanCalls == 1) {
+        return const AssistantModelOutput(
+          text:
+              '{"primaryDomainId":"fallback_general_search","secondaryDomains":[],"inferredMotive":"用户想判断华为云盘古的竞争力与上云取舍","problemClass":"simple_qa","mode":"qa"}',
+        );
+      }
+      return const AssistantModelOutput(
+        text:
+            '{"contractVersion":"assistant_turn","phaseId":"answering","actionCode":"compose_answer","reasonCode":"evidence_ready","reasonShort":"关键信息已经够用了，开始整理成答案。","decision":{"nextAction":"answer"},"messageKind":"answer","userMarkdown":"## 华为云盘古分析\\n\\n- 我只围绕当前技术判断来回答。","result":{"text":"华为云盘古分析"}}',
+      );
+    }
+    if (templateId == 'planner.postcondition_check' ||
+        templateId.contains('synthesizer') ||
+        templateId.contains('final_answer') ||
+        templateId.contains('output_contract.answer')) {
+      return const AssistantModelOutput(
+        text:
+            '{"contractVersion":"assistant_turn","decision":{"nextAction":"answer"},"messageKind":"answer","userMarkdown":"## 华为云盘古分析\\n\\n- 我只围绕当前技术判断来回答。","result":{"text":"华为云盘古分析"}}',
+      );
+    }
+    return const AssistantModelOutput(text: '{"summary":"ok"}');
   }
 }
 
@@ -270,7 +333,7 @@ void main() {
   // ══════════════════════════════════════════════════════════════════════════
   // 测试 3：summarizeRecent 不输出 JSON 原文
   // ══════════════════════════════════════════════════════════════════════════
-  group('G3 — summarizeRecent 不得输出 JSON 格式的 assistant_turn_v2 原文', () {
+  group('G3 — summarizeRecent 不得输出 JSON 格式的 assistant_turn 原文', () {
     test('session 含 JSON envelope 时，summarizeRecent 输出纯文本', () {
       final manager = AssistantSessionManager(
         storagePath: '${tempDir.path}/sessions.json',
@@ -280,7 +343,7 @@ void main() {
         sessionId: 'test',
         role: 'assistant',
         content:
-            '{"contractVersion":"assistant_turn_v2","decision":{"nextAction":"answer"},"userMarkdown":"深圳今天晴，25°C。"}',
+            '{"contractVersion":"assistant_turn","decision":{"nextAction":"answer"},"userMarkdown":"深圳今天晴，25°C。"}',
       );
 
       final summary = manager.summarizeRecent('test');
@@ -291,7 +354,7 @@ void main() {
       );
       expect(
         summary,
-        isNot(contains('assistant_turn_v2')),
+        isNot(contains('assistant_turn')),
         reason: 'summarizeRecent 不得输出 JSON 原文',
       );
     });
@@ -320,5 +383,92 @@ void main() {
         reason: 'summarizeRecent 不得输出 HTTP 400 错误信息',
       );
     });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 测试 4：新问题不得继承旧旅行上下文
+  // ══════════════════════════════════════════════════════════════════════════
+  group('G4 — 新问题不得继承旧旅行上下文', () {
+    test(
+      '技术问题不会把 session history / long-term recall / gps 提前注入 planner',
+      () async {
+        final provider = _TemplateAwareCaptureProvider();
+        final runtime = ReactRuntime(
+          llmProvider: provider,
+          toolRegistry: AssistantToolRegistry(),
+        );
+        final sessionManager = AssistantSessionManager(
+          storagePath: '${tempDir.path}/g4_sessions.json',
+        );
+        final memoryRepository = AssistantMemoryRepository(
+          _InMemoryVectorStore(),
+        );
+        await sessionManager.load();
+        sessionManager.appendMessage(
+          sessionId: 'shared_session',
+          role: 'user',
+          content: '如果把九寨沟方向考虑进去，多给我几个备选方案',
+        );
+        sessionManager.appendMessage(
+          sessionId: 'shared_session',
+          role: 'assistant',
+          content: '九寨沟方向备选方案：沟口、川主寺、松潘古城',
+        );
+        sessionManager.updateSessionTopicSummary(
+          sessionId: 'shared_session',
+          latestUserQuery: '如果把九寨沟方向考虑进去，多给我几个备选方案',
+          latestAssistantReply: '九寨沟方向备选方案：沟口、川主寺、松潘古城',
+        );
+        await memoryRepository.rememberText(
+          id: 'travel_memory',
+          text: '九寨沟方向备选方案：沟口、川主寺、松潘古城',
+        );
+
+        final loop = PersonalAssistantAgentLoop(
+          runtime,
+          sessionManager: sessionManager,
+          memoryRepository: memoryRepository,
+        );
+        await loop.run(
+          const AssistantRunRequest(
+            sessionId: 'shared_session',
+            capabilityCatalog: <String>[
+              AssistentCapabilityCatalog.chatRecent,
+              AssistentCapabilityCatalog.chatLongterm,
+            ],
+            gpsLocation: <String, dynamic>{'city': '阿坝州'},
+            messages: <AssistantRunMessage>[
+              AssistantRunMessage(
+                role: 'user',
+                content:
+                    '华为云盘古是否落后了，华为在AI竞争中是否落伍了，要在华为云上开租电商系统使用华为AI相比阿里字节有啥优势',
+              ),
+            ],
+          ),
+        );
+
+        final plannerTranscript = provider.capturedCalls
+            .where((call) => call.templateId == 'planner.global_plan')
+            .expand((call) => call.messages)
+            .map((item) => (item['content'] ?? '').toString())
+            .join('\n');
+        expect(plannerTranscript, isNotEmpty);
+        for (final forbidden in const <String>[
+          '<session_history>',
+          '<memory_recall>',
+          '"historySummarySnippet"',
+          '"recentCityMentions"',
+          '"gpsCity"',
+          '九寨沟方向备选方案',
+          '阿坝州',
+        ]) {
+          expect(
+            plannerTranscript.contains(forbidden),
+            isFalse,
+            reason: '技术问题的 planner 输入不应继承旧旅行上下文: $forbidden',
+          );
+        }
+      },
+    );
   });
 }

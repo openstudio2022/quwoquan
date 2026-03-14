@@ -60,7 +60,7 @@ Widget _scopedApp({ChatRepository? mock}) {
           ),
           GoRoute(
             path: '/chat/:id/add-members',
-            builder: (_, _s) => const Scaffold(body: SizedBox()),
+            builder: (_, state) => const Scaffold(body: SizedBox()),
           ),
         ],
       ),

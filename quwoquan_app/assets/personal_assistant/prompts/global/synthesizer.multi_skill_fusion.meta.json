@@ -11,7 +11,7 @@
     "webEvidencePacks",
     "userProfileSnapshot"
   ],
-  "outputContract": "assistant_turn_v2",
+  "outputContract": "assistant_turn",
   "selfCheckRules": [
     "constraint_satisfied",
     "coverage_satisfied",

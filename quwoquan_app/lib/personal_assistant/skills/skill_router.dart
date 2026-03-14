@@ -9,12 +9,11 @@ class PersonalAssistantSkillRouter {
     List<PersonalAssistantSkillManifest> skills,
   ) {
     final normalized = _normalizeForMatch(userText);
-    final matchedByTrigger = _matchByTriggerKeywords(normalized, skills);
-    if (matchedByTrigger != null) return matchedByTrigger;
     for (final skill in skills) {
-      final skillName = _normalizeForMatch(skill.name);
+      final domainId = _normalizeForMatch(skill.domainId);
       final skillId = _normalizeForMatch(skill.id);
-      if (normalized.contains(skillName) || normalized.contains(skillId)) {
+      if ((domainId.isNotEmpty && normalized == domainId) ||
+          (skillId.isNotEmpty && normalized == skillId)) {
         return skill;
       }
     }
@@ -40,33 +39,13 @@ class PersonalAssistantSkillRouter {
     required String domainId,
     required List<PersonalAssistantSkillManifest> skills,
   }) {
-    final normalized = _normalizeForMatch(userText);
     final inDomain = skills
         .where((skill) => skill.domainId.trim() == domainId.trim())
         .toList(growable: false);
     if (inDomain.isNotEmpty) {
-      final byTrigger = _matchByTriggerKeywords(normalized, inDomain);
-      if (byTrigger != null) return byTrigger;
       return inDomain.first;
     }
     return resolveSkill(userText, skills);
-  }
-
-  PersonalAssistantSkillManifest? _matchByTriggerKeywords(
-    String normalizedUserText,
-    List<PersonalAssistantSkillManifest> skills,
-  ) {
-    for (final skill in skills) {
-      if (skill.triggerKeywords.isEmpty) continue;
-      for (final keyword in skill.triggerKeywords) {
-        final token = _normalizeForMatch(keyword);
-        if (token.isEmpty) continue;
-        if (normalizedUserText.contains(token)) {
-          return skill;
-        }
-      }
-    }
-    return null;
   }
 
   String _normalizeForMatch(String raw) {

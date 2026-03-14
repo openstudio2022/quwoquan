@@ -7,7 +7,7 @@
 必须输出标准 JSON 信封：
 ```json
 {
-  "contractVersion": "assistant_turn_v4",
+  "contractVersion": "assistant_turn",
   "traceId": "{{traceId}}",
   "turnPhase": "plan",
   "phaseId": "understanding",

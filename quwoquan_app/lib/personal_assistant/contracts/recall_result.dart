@@ -1,3 +1,4 @@
+export 'package:quwoquan_app/personal_assistant/runtime/generated/contracts/recall_result.g.dart';
 /// Result of the non-LLM recall layer that pre-filters the skill catalog
 /// before feeding it to the planner prompt.
 class RecallResult {

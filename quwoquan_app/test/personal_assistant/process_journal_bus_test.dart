@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/planner_contracts.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/personal_assistant/engine/process_journal_bus.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/trace_events.dart';
@@ -62,12 +63,13 @@ void main() {
       );
       bus.consumeTrace(
         AssistantTraceEvent(
-          type: AssistantTraceEventType.toolStart,
-          message: 'calling web_search',
+          type: AssistantTraceEventType.searchQueryGenerated,
+          message: '生成检索计划',
           timestamp: DateTime.now(),
           data: const <String, dynamic>{
             'toolName': 'web_search',
             'query': '深圳天气',
+            'problemClass': 'realtime_info',
           },
         ),
       );
@@ -96,9 +98,9 @@ void main() {
       expect(rawLiveCursorCount, equals(2), reason: '原始账应保留两次直播替换历史');
       expect(displayLiveCursorCount, 0, reason: '切阶段后展示快照不应再保留 live cursor');
       expect(narratives, contains('我在确认问题边界，避免后面越查越散。'));
-      expect(firstNarrative.phaseId, equals('understanding'));
-      expect(firstNarrative.actionCode, equals('align_evidence'));
-      expect(firstNarrative.reasonCode, equals('confirm_focus'));
+      expect(firstNarrative.phaseIdType, PlannerPhaseId.understanding);
+      expect(firstNarrative.actionCodeType, PlannerActionCode.assessEvidence);
+      expect(firstNarrative.reasonCodeType, PlannerReasonCode.confirmFocus);
       expect(firstNarrative.displayMessage, isNot(contains('我先帮你把')));
       expect(firstNarrative.displayMessage, isNot(contains('收一收')));
     });
@@ -109,7 +111,7 @@ void main() {
 
       bus.consumeTrace(
         AssistantTraceEvent(
-          type: AssistantTraceEventType.toolResult,
+          type: AssistantTraceEventType.searchCompleted,
           message: '第一批资料已返回',
           timestamp: now,
           data: const <String, dynamic>{
@@ -126,7 +128,7 @@ void main() {
       );
       bus.consumeTrace(
         AssistantTraceEvent(
-          type: AssistantTraceEventType.toolResult,
+          type: AssistantTraceEventType.searchCompleted,
           message: '第二批资料已返回',
           timestamp: now.add(const Duration(seconds: 1)),
           data: const <String, dynamic>{
@@ -156,6 +158,45 @@ void main() {
         sourceUpdates.last.references.single.url,
         contains('example.com'),
       );
+    });
+
+    test('displaySnapshot 会折叠 narrative 与 sourceUpdate 的同文案重复', () {
+      final snapshot = ProcessJournalBus.toDisplaySnapshot(
+        const <ProcessJournalEvent>[
+          ProcessJournalEvent(
+            eventId: 'narrative_1',
+            type: ProcessJournalEventType.narrativeCommit,
+            stage: 'understanding',
+            phaseId: 'understanding',
+            actionCode: 'frame_problem',
+            reasonCode: 'align_goal',
+            reasonShort: '先确认 Cursor 相关范围，再决定查哪些维度。',
+            nodeId: 'root.intent.plan',
+          ),
+          ProcessJournalEvent(
+            eventId: 'source_update_1',
+            type: ProcessJournalEventType.sourceUpdate,
+            stage: 'understanding',
+            phaseId: 'understanding',
+            actionCode: 'frame_problem',
+            reasonCode: 'align_goal',
+            reasonShort: '先确认 Cursor 相关范围，再决定查哪些维度。',
+            nodeId: 'root.intent.plan',
+            references: <ProcessSourceReference>[
+              ProcessSourceReference(
+                title: 'Cursor 文档',
+                url: 'https://cursor.com/docs',
+                source: 'cursor.com',
+              ),
+            ],
+          ),
+        ],
+      );
+
+      expect(snapshot, hasLength(1));
+      expect(snapshot.single.type, ProcessJournalEventType.sourceUpdate);
+      expect(snapshot.single.displayMessage, '先确认 Cursor 相关范围，再决定查哪些维度。');
+      expect(snapshot.single.references, hasLength(1));
     });
   });
 }

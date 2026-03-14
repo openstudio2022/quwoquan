@@ -43,15 +43,17 @@ void main() {
       final skill = weather.first;
       expect(skill.domainId, equals('weather'));
       expect(skill.allowedTools, contains('web_search'));
+      expect(skill.retrievalPolicy['domainId'], equals('weather'));
       expect(skill.executionShell.problemClass, equals('realtime_info'));
       expect(skill.executionShell.variantBudget, equals(0));
       expect(skill.executionShell.reflectionBudget, equals(0));
       expect(skill.executionShell.providerPolicy, equals('authority_first'));
       expect(skill.executionShell.authorityDomains, contains('weather.com.cn'));
+      expect(skill.executionShell.freshnessHoursMax, equals(1));
       expect(
         skill.skillInstructionMarkdown,
         allOf(
-          contains('assistant_turn_v2'),
+          contains('assistant_turn'),
           contains('tool_observation_v1'),
           contains('双轨输出契约'),
         ),
@@ -95,5 +97,18 @@ void main() {
       );
       expect(matched?.id, equals('fortune-daily'));
     });
+
+    test(
+      'knowledge skill opt-in metadata controls QA tool-chain profile',
+      () async {
+        final loader = const PersonalAssistantSkillLoader();
+        final skills = await loader.loadBundledSkills();
+        final knowledge = skills
+            .where((s) => s.id == 'knowledge_general')
+            .toList();
+        expect(knowledge, isNotEmpty);
+        expect(knowledge.first.toolChainProfile, equals('knowledge_qa'));
+      },
+    );
   });
 }

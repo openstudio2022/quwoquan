@@ -137,9 +137,9 @@ void main() {
       final contractVersion =
           (structured['contractVersion'] as String?)?.trim() ?? '';
       expect(
-        contractVersion.startsWith('assistant_turn_v'),
-        isTrue,
-        reason: '应输出 assistant_turn_v* 合约版本，实际: $contractVersion',
+        contractVersion,
+        equals('assistant_turn'),
+        reason: '应输出 assistant_turn 合约版本，实际: $contractVersion',
       );
     });
   });

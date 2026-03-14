@@ -1,0 +1,31 @@
+dart_class: SlotFillPlanDto
+library_path: personal_assistant/contracts/planner_contracts.dart
+output_path: personal_assistant/runtime/generated/contracts/planner_contracts.g.dart
+contract: planner_contracts
+version: v1
+kind: runtime_protocol_contract
+fields:
+  - name: entries
+    type: map<object>
+    ref: slot_fill_entry
+    default: {}
+subcontracts:
+  slot_fill_entry:
+    class_name: SlotFillEntry
+    fields:
+      - name: slotId
+        type: string
+        required: true
+      - name: value
+        type: any
+      - name: source
+        type: enum
+        enum_ref: SlotSource
+        default: ''
+      - name: action
+        type: enum
+        enum_ref: SlotFillAction
+        default: ''
+      - name: confidence
+        type: double
+        default: 0.0

@@ -1,0 +1,43 @@
+dart_class: RecallResult
+library_path: personal_assistant/contracts/recall_result.dart
+output_path: personal_assistant/runtime/generated/contracts/recall_result.g.dart
+candidate_class: RecallCandidate
+defaults:
+  recallMethod: rule
+  totalCandidates: 0
+fields:
+  - name: topK
+    dart_type: List<RecallCandidate>
+    json_key: topK
+    default: const <RecallCandidate>[]
+  - name: recallMethod
+    dart_type: String
+    json_key: recallMethod
+    default: rule
+  - name: totalCandidates
+    dart_type: int
+    json_key: totalCandidates
+    default: 0
+  - name: scores
+    dart_type: Map<String, double>
+    json_key: scores
+    default: const <String, double>{}
+candidate_fields:
+  - name: domainId
+    dart_type: String
+    json_key: domainId
+  - name: description
+    dart_type: String
+    json_key: description
+  - name: mode
+    dart_type: String
+    json_key: mode
+    default: qa
+  - name: score
+    dart_type: double
+    json_key: score
+    default: 0.0
+  - name: matchReason
+    dart_type: String
+    json_key: matchReason
+    default: ''

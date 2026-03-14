@@ -26,11 +26,11 @@ Widget _scopedApp({ChatRepository? mock}) {
           ),
           GoRoute(
             path: '/chat/:id/transfer-ownership',
-            builder: (_, _s) => const Scaffold(body: SizedBox()),
+            builder: (_, state) => const Scaffold(body: SizedBox()),
           ),
           GoRoute(
             path: '/chat/:id/admins',
-            builder: (_, _s) => const Scaffold(body: SizedBox()),
+            builder: (_, state) => const Scaffold(body: SizedBox()),
           ),
         ],
       ),

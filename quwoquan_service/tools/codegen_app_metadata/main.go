@@ -475,6 +475,9 @@ func main() {
 			renderAppRoutePathsDart(appRoutes.Routes),
 		)
 	}
+	if err := generateAssistantRuntimeArtifacts(metadataDir, appDir); err != nil {
+		exitErr(err)
+	}
 }
 
 // ── readers ───────────────────────────────────────────────────────────────────

@@ -6,16 +6,29 @@
 ## 输出格式（JSON）
 ```json
 {
-  "contractVersion": "assistant_turn_v4",
+  "contractVersion": "assistant_turn",
   "traceId": "{{traceId}}",
   "turnPhase": "ask_user",
+  "phaseId": "clarifying",
+  "actionCode": "ask_clarification",
+  "reasonCode": "missing_slot",
+  "reasonShort": "还差一个关键信息，先确认后再继续。",
+  "source": "model",
+  "references": [],
+  "thinkingText": "兼容字段；如输出，必须与 reasonShort 完全一致，否则留空",
+  "messageKind": "ask_user",
   "decision": {
     "nextAction": "ask_user",
     "confidence": 0.0-1.0,
     "reasoning": "一句话说明为什么需要追问"
   },
   "userMarkdown": "面向用户的追问（自然、简洁）",
-  "missingSlots": ["需要补全的槽位名"],
+  "askUser": {
+    "slotId": "需要补全的槽位名",
+    "prompt": "面向用户的单轮追问"
+  },
+  "followupPrompt": "面向用户的单轮追问",
+  "missingContextSlots": ["需要补全的槽位名"],
   "selfCheck": {
     "checks": [
       {"rule": "question_clear", "passed": true, "evidence": "追问包含明确选项"},

@@ -1,39 +1,13 @@
 import 'package:quwoquan_app/personal_assistant/contracts/aggregation_state.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/assistant_turn_contract.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/conversation_state_decision.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/dialogue_round_script.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/planner_contracts.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/slot_schema.dart';
 import 'package:quwoquan_app/personal_assistant/engine/default_processing/evidence_evaluator.dart';
+import 'package:quwoquan_app/personal_assistant/engine/default_processing/default_processing_copy_bank.dart';
 import 'package:quwoquan_app/personal_assistant/engine/default_processing/problem_framer.dart';
-import 'package:quwoquan_app/personal_assistant/engine/dialogue_state_runtime.dart';
-
-class ConversationStateDecision {
-  const ConversationStateDecision({
-    required this.nextAction,
-    required this.finalAnswerMode,
-    required this.answerEligibility,
-    required this.slotState,
-    required this.missingCriticalSlots,
-    required this.askUser,
-    required this.qualityGates,
-    required this.finalAnswerReady,
-  });
-
-  final String nextAction;
-  final String finalAnswerMode;
-  final String answerEligibility;
-  final SlotStateSnapshot slotState;
-  final List<String> missingCriticalSlots;
-  final Map<String, dynamic> askUser;
-  final Map<String, dynamic> qualityGates;
-  final bool finalAnswerReady;
-
-  Map<String, dynamic> toDecisionMap() => <String, dynamic>{
-    'nextAction': nextAction,
-    'finalAnswerMode': finalAnswerMode,
-    'answerEligibility': answerEligibility,
-    'missingCriticalSlots': missingCriticalSlots,
-    'qualityGates': qualityGates,
-    'finalAnswerReady': finalAnswerReady,
-  };
-}
 
 class ConversationStateKernel {
   const ConversationStateKernel({
@@ -42,41 +16,32 @@ class ConversationStateKernel {
 
   final DefaultProblemFramer problemFramer;
 
-  Map<String, dynamic> defaultSlotSchema({
-    required String query,
+  SlotSchema defaultSlotSchema({
     required String domainId,
     required String problemClass,
     required DialogueRoundScript dialogueRoundScript,
   }) {
-    final frame = problemFramer.frame(query);
     final requiredSlots = <String>[
       ...dialogueRoundScript.requiredFieldsForNextState,
     ];
+    final problemClassKind = parseProblemClass(problemClass);
     final optionalSlots = <String>[];
-    if (domainId == 'weather') {
-      if (!requiredSlots.contains('city')) requiredSlots.add('city');
-      optionalSlots.addAll(const <String>['date', 'weatherMetric']);
-    } else if (frame.queryIntent == 'stayPlanning' ||
-        (problemClass == 'complex_reasoning' &&
-            frame.queryIntent != 'travelAlternativeOptions')) {
-      if (!requiredSlots.contains('destination')) {
-        requiredSlots.add('destination');
-      }
-      optionalSlots.addAll(const <String>['budget', 'days', 'companionType']);
-    } else if (frame.queryIntent == 'travelAlternativeOptions') {
-      optionalSlots.addAll(const <String>[
-        'destination',
-        'days',
-        'companionType',
-      ]);
+    if (problemClassKind == ProblemClass.realtimeInfo) {
+      optionalSlots.addAll(const <String>['timeScope', 'date']);
     }
-    return <String, dynamic>{
-      'requiredSlots': requiredSlots.toList(growable: false),
-      'optionalSlots': optionalSlots.toList(growable: false),
-      'carryOver': true,
-      'stateId': dialogueRoundScript.currentStateId,
-      'nextStateId': dialogueRoundScript.suggestedNextStateId,
-    };
+    if (problemClassKind == ProblemClass.complexReasoning) {
+      optionalSlots.addAll(const <String>['budget', 'constraints', 'audience']);
+    }
+    return SlotSchema(
+      requiredSlots: requiredSlots.toList(growable: false),
+      optionalSlots: optionalSlots
+          .where((slotId) => !requiredSlots.contains(slotId))
+          .toSet()
+          .toList(growable: false),
+      carryOver: true,
+      stateId: dialogueRoundScript.currentStateId,
+      nextStateId: dialogueRoundScript.suggestedNextStateId,
+    );
   }
 
   ConversationStateDecision evaluate({
@@ -88,41 +53,81 @@ class ConversationStateKernel {
     required Map<String, dynamic> answerPayload,
     required SlotStateSnapshot previousSlotState,
     required EvidenceEvaluationResult evidenceEvaluation,
-    required Map<String, dynamic> slotSchema,
+    required SlotSchema slotSchema,
   }) {
     final frame = problemFramer.frame(query);
-    final requiredSlots =
-        (slotSchema['requiredSlots'] as List?)
-            ?.map((item) => item.toString().trim())
-            .where((item) => item.isNotEmpty)
-            .toList(growable: false) ??
-        const <String>[];
+    final parsedTurn = tryParseAssistantTurnOutput(answerPayload);
+    final requiredSlots = slotSchema.requiredSlots;
     final mergedSlots = <String, SlotValueSnapshot>{
       ...previousSlotState.slotValues,
     };
-    final querySlots = _extractSlotsFromQuery(
-      query: query,
-      domainId: domainId,
-      problemClass: problemClass,
+    final slotFillPlan = SlotFillPlan.fromJson(
+      (answerPayload['slotFillPlan'] as Map?)?.cast<String, dynamic>(),
     );
-    for (final entry in querySlots.entries) {
-      _mergeSlot(
-        mergedSlots,
-        SlotValueSnapshot(
-          slotId: entry.key,
-          status: SlotValueStatus.inferred,
-          value: entry.value,
-          source: 'query',
-          confidence: 0.72,
-        ),
-      );
-    }
-    final payloadSlots =
-        (answerPayload['slotState'] as Map?)?.cast<String, dynamic>() ??
+    final contextSlots =
+        (answerPayload['contextSlots'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
+    final plannerSlots = <String, dynamic>{
+      ...contextSlots,
+      ...slotFillPlan.toFilledSlots(),
+    };
+    if (plannerSlots.isNotEmpty) {
+      for (final entry in plannerSlots.entries) {
+        final slotId = entry.key.trim();
+        if (slotId.isEmpty) continue;
+        final sfEntry = slotFillPlan.entries[slotId];
+        _mergeSlot(
+          mergedSlots,
+          SlotValueSnapshot(
+            slotId: slotId,
+            status: SlotValueStatus.inferred,
+            value: entry.value,
+            source:
+                sfEntry?.source.wireName ?? SlotSource.userQueryLlm.wireName,
+            confidence: sfEntry?.confidence ?? 0.85,
+          ),
+        );
+      }
+    }
+    for (final entry
+        in parsedTurn?.slotStateSnapshot.slotValues.entries ??
+            const Iterable<MapEntry<String, SlotValueSnapshot>>.empty()) {
+      final slotId = entry.key.trim();
+      if (slotId.isEmpty) continue;
+      final snapshot = entry.value.slotId.trim().isNotEmpty
+          ? entry.value
+          : SlotValueSnapshot(
+              slotId: slotId,
+              status: entry.value.status,
+              value: entry.value.value,
+              source: entry.value.source,
+              confidence: entry.value.confidence,
+              candidates: entry.value.candidates,
+              evidenceIds: entry.value.evidenceIds,
+            );
+      _mergeSlot(mergedSlots, snapshot);
+    }
+    final rawPayloadSlots = parsedTurn == null
+        ? ((answerPayload['slotState'] as Map?)?.cast<String, dynamic>() ??
+              const <String, dynamic>{})
+        : const <String, dynamic>{};
+    final payloadSlots =
+        (rawPayloadSlots['slotValues'] as Map?)?.cast<String, dynamic>() ??
+        rawPayloadSlots;
     for (final entry in payloadSlots.entries) {
       final normalized = _normalizePayloadSlot(entry.key, entry.value);
       _mergeSlot(mergedSlots, normalized);
+    }
+    final unnamedSlot = mergedSlots[''];
+    if (unnamedSlot != null) {
+      final fallbackSlotId = requiredSlots.firstWhere(
+        (item) => item.trim().isNotEmpty && !mergedSlots.containsKey(item.trim()),
+        orElse: () => frame.city.trim().isNotEmpty ? 'city' : '',
+      );
+      if (fallbackSlotId.isNotEmpty) {
+        mergedSlots.remove('');
+        mergedSlots[fallbackSlotId] = unnamedSlot.copyWith(slotId: fallbackSlotId);
+      }
     }
     final missingHints = <String>{
       ...((answerPayload['missingContextSlots'] as List?)
@@ -146,90 +151,105 @@ class ConversationStateKernel {
         );
       }
     }
-    final legacySlots = <String, dynamic>{};
-    for (final entry in mergedSlots.entries) {
-      if (_hasUsableValue(entry.value)) {
-        legacySlots[entry.key] = entry.value.value;
-      }
-    }
     final missingCriticalSlots = requiredSlots
         .where((slotId) => !_hasUsableValue(mergedSlots[slotId]))
         .toList(growable: false);
+    final turnDecision = AssistantTurnDecision.fromAnswerPayload(answerPayload);
+    final rawAskUser =
+        (answerPayload['askUser'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final explicitAskUserPayload = AssistantTurnAskUser.fromJson(rawAskUser);
     final explicitAskUser =
-        (((answerPayload['decision'] as Map?)?['nextAction'] as String?)
-                    ?.trim() ??
-                '') ==
-            'ask_user' ||
-        ((answerPayload['messageKind'] as String?)?.trim() ?? '') ==
-            'ask_user' ||
-        ((answerPayload['askUser'] as Map?)?.isNotEmpty ?? false);
-    final evidenceStatus = evidenceEvaluation.status.trim().isNotEmpty
-        ? evidenceEvaluation.status.trim()
-        : (evidenceEvaluation.passed ? 'full' : 'retry');
-    late final String nextAction;
-    late final String finalAnswerMode;
+        turnDecision.nextAction == AssistantNextAction.askUser ||
+        turnDecision.messageKind == AssistantMessageKind.askUser ||
+        (parsedTurn?.hasAskUser ?? false) ||
+        explicitAskUserPayload.slotId.trim().isNotEmpty ||
+        explicitAskUserPayload.prompt.trim().isNotEmpty ||
+        explicitAskUserPayload.suggestions.isNotEmpty;
+    final evidenceStatusType =
+        evidenceEvaluation.status != EvidenceStatus.unknown
+        ? evidenceEvaluation.status
+        : (evidenceEvaluation.passed
+              ? EvidenceStatus.full
+              : EvidenceStatus.retry);
+    late final AssistantNextAction nextActionType;
+    late final FinalAnswerMode finalAnswerModeType;
     if (missingCriticalSlots.isNotEmpty || explicitAskUser) {
-      nextAction = 'ask_user';
-      finalAnswerMode = 'clarify';
-    } else if (evidenceStatus == 'full' || evidenceStatus == 'not_required') {
-      nextAction = 'answer';
-      finalAnswerMode = 'full';
-    } else if (evidenceStatus == 'bounded') {
-      nextAction = 'answer';
-      finalAnswerMode = 'bounded_answer';
+      nextActionType = AssistantNextAction.askUser;
+      finalAnswerModeType = FinalAnswerMode.clarify;
+    } else if (evidenceStatusType == EvidenceStatus.full ||
+        evidenceStatusType == EvidenceStatus.notRequired) {
+      nextActionType = AssistantNextAction.answer;
+      finalAnswerModeType = FinalAnswerMode.full;
+    } else if (evidenceStatusType == EvidenceStatus.bounded) {
+      nextActionType = AssistantNextAction.answer;
+      finalAnswerModeType = FinalAnswerMode.boundedAnswer;
     } else if (!evidenceEvaluation.passed) {
       if (evidenceEvaluation.entries.isNotEmpty ||
           aggregationState.canGivePartialAnswer) {
-        nextAction = 'answer';
-        finalAnswerMode = 'bounded_answer';
+        nextActionType = AssistantNextAction.answer;
+        finalAnswerModeType = FinalAnswerMode.boundedAnswer;
       } else if (aggregationState.needExpansion ||
-          problemClass == 'complex_reasoning' ||
-          problemClass == 'evidence_lookup' ||
-          frame.queryIntent == 'travelAlternativeOptions' ||
-          frame.queryIntent == 'wildlifeBestTime') {
-        nextAction = 'retry';
-        finalAnswerMode = 'retry';
+          parseProblemClass(problemClass) == ProblemClass.complexReasoning ||
+          parseProblemClass(problemClass) == ProblemClass.evidenceLookup ||
+          frame.problemClassKind == ProblemClass.taskExecution ||
+          frame.answerShapeKind == AnswerShape.comparison ||
+          frame.answerShapeKind == AnswerShape.options) {
+        nextActionType = AssistantNextAction.retry;
+        finalAnswerModeType = FinalAnswerMode.retry;
       } else {
-        nextAction = 'answer';
-        finalAnswerMode = 'bounded_answer';
+        nextActionType = AssistantNextAction.answer;
+        finalAnswerModeType = FinalAnswerMode.boundedAnswer;
       }
     } else if (aggregationState.needExpansion &&
         !aggregationState.finalAnswerReady) {
-      nextAction = 'retry';
-      finalAnswerMode = 'retry';
+      nextActionType = AssistantNextAction.retry;
+      finalAnswerModeType = FinalAnswerMode.retry;
     } else {
-      nextAction = 'answer';
-      finalAnswerMode = 'full';
+      nextActionType = AssistantNextAction.answer;
+      finalAnswerModeType = FinalAnswerMode.full;
     }
-    final askUser =
-        (answerPayload['askUser'] as Map?)?.cast<String, dynamic>() ??
-        <String, dynamic>{
+    final askUserMap =
+        (parsedTurn?.hasAskUser ?? false)
+        ? parsedTurn!.askUserData
+        : (explicitAskUserPayload.slotId.trim().isNotEmpty ||
+                  explicitAskUserPayload.prompt.trim().isNotEmpty ||
+                  explicitAskUserPayload.suggestions.isNotEmpty)
+              ? rawAskUser
+              : <String, dynamic>{
           if (missingCriticalSlots.isNotEmpty)
-            'slotId': missingCriticalSlots.first,
+            AssistantTurnAskUserFields.slotId: missingCriticalSlots.first,
           if (missingCriticalSlots.isNotEmpty)
-            'prompt': _defaultAskUserPrompt(
+            AssistantTurnAskUserFields.prompt: _defaultAskUserPrompt(
               slotId: missingCriticalSlots.first,
-              domainId: domainId,
             ),
         };
+    final askUser = AssistantTurnAskUser.fromJson(askUserMap);
     final finalAnswerReady =
-        nextAction == 'answer' &&
-        (finalAnswerMode == 'full' || finalAnswerMode == 'bounded_answer');
-    final qualityGates = <String, dynamic>{
-      'structureSafe': true,
-      'taskSafe': missingCriticalSlots.isEmpty || nextAction == 'ask_user',
-      'evidenceSafe': evidenceEvaluation.passed || evidenceStatus == 'bounded',
-      'renderSafe': finalAnswerMode != 'retry',
-    };
+        nextActionType == AssistantNextAction.answer &&
+        (finalAnswerModeType == FinalAnswerMode.full ||
+            finalAnswerModeType == FinalAnswerMode.boundedAnswer);
+    final qualityGates = QualityGatesDto(
+      structureSafe: true,
+      taskSafe:
+          missingCriticalSlots.isEmpty ||
+          nextActionType == AssistantNextAction.askUser,
+      evidenceSafe:
+          evidenceEvaluation.passed ||
+          evidenceStatusType == EvidenceStatus.bounded,
+      renderSafe: finalAnswerModeType != FinalAnswerMode.retry,
+    );
     return ConversationStateDecision(
-      nextAction: nextAction,
-      finalAnswerMode: finalAnswerMode,
+      nextAction: nextActionType,
+      finalAnswerMode: finalAnswerModeType,
       answerEligibility: finalAnswerReady
-          ? 'eligible'
-          : (nextAction == 'ask_user' ? 'clarify' : 'blocked'),
+          ? AnswerEligibility.eligible
+          : (nextActionType == AssistantNextAction.askUser
+                ? AnswerEligibility.clarify
+                : AnswerEligibility.blocked),
       slotState: SlotStateSnapshot(
         domainId: domainId,
-        slots: legacySlots,
+        slots: const <String, dynamic>{},
         slotValues: mergedSlots,
         missingSlots: missingCriticalSlots,
         updatedAt: DateTime.now().toIso8601String(),
@@ -241,55 +261,14 @@ class ConversationStateKernel {
     );
   }
 
-  Map<String, dynamic> _extractSlotsFromQuery({
-    required String query,
-    required String domainId,
-    required String problemClass,
-  }) {
-    final slots = <String, dynamic>{};
-    final city = problemFramer.extractCity(query);
-    if (city.isNotEmpty) {
-      slots[domainId == 'weather' ? 'city' : 'destination'] = city;
-    }
-    final budget = _extractBudget(query);
-    if (budget.isNotEmpty) slots['budget'] = budget;
-    final days = _extractDays(query);
-    if (days.isNotEmpty) slots['days'] = days;
-    final companion = _extractCompanionType(query);
-    if (companion.isNotEmpty) slots['companionType'] = companion;
-    if (problemClass == 'realtime_info' && city.isEmpty) {
-      slots.remove('destination');
-    }
-    return slots;
-  }
-
-  String _extractBudget(String query) {
-    final match = RegExp(
-      r'预算\s*([0-9]+(?:\.[0-9]+)?\s*(?:元|块|w|万)?)',
-    ).firstMatch(query);
-    return (match?.group(1) ?? '').trim();
-  }
-
-  String _extractDays(String query) {
-    final dayNight = RegExp(r'([0-9]+天[0-9]+晚)').firstMatch(query);
-    if (dayNight != null) return (dayNight.group(1) ?? '').trim();
-    final daysOnly = RegExp(r'([0-9]+天)').firstMatch(query);
-    return (daysOnly?.group(1) ?? '').trim();
-  }
-
-  String _extractCompanionType(String query) {
-    const labels = <String>['亲子', '情侣', '商务', '朋友', '家庭', '独自', '一个人'];
-    for (final label in labels) {
-      if (query.contains(label)) return label;
-    }
-    return '';
-  }
-
   SlotValueSnapshot _normalizePayloadSlot(String slotId, Object? raw) {
     if (raw is Map) {
       final typed = raw.cast<String, dynamic>();
       if (typed['status'] != null || typed['value'] != null) {
-        return SlotValueSnapshot.fromJson(slotId, typed).copyWith(
+        return SlotValueSnapshot.fromJson(<String, dynamic>{
+          'slotId': slotId,
+          ...typed,
+        }).copyWith(
           source: (typed['source'] as String?)?.trim().isNotEmpty == true
               ? (typed['source'] as String).trim()
               : 'model',
@@ -372,25 +351,7 @@ class ConversationStateKernel {
         slot.status != SlotValueStatus.conflicted;
   }
 
-  String _defaultAskUserPrompt({
-    required String slotId,
-    required String domainId,
-  }) {
-    switch (slotId) {
-      case 'city':
-        return '告诉我要查的城市，比如“深圳”。';
-      case 'destination':
-        return '告诉我你准备去哪座城市或区域，我再继续帮你收敛。';
-      case 'budget':
-        return '再告诉我预算范围，我就能把建议压得更准。';
-      case 'days':
-        return '告诉我计划玩几天几晚，我可以直接按天数来排。';
-      case 'companionType':
-        return '再补一句同行类型，比如亲子、情侣或朋友出行。';
-      default:
-        return domainId == 'weather'
-            ? '补一句你想查询的城市，我就继续。'
-            : '再补一句最关键的条件，我就继续帮你收敛。';
-    }
+  String _defaultAskUserPrompt({required String slotId}) {
+    return DefaultProcessingCopyBank.conversationKernelAskPrompt(slotId);
   }
 }

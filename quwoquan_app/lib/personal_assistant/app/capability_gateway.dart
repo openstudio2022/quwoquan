@@ -7,7 +7,6 @@ import 'package:quwoquan_app/personal_assistant/contracts/assistant_turn_contrac
 import 'package:quwoquan_app/personal_assistant/contracts/explainable_flow_event.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/user_events.dart';
-import 'package:quwoquan_app/personal_assistant/engine/llm_response_parser.dart';
 import 'package:quwoquan_app/personal_assistant/engine/process_journal_bus.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/assistant_content_filters.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/run_request.dart';
@@ -330,20 +329,10 @@ class CapabilityGateway {
 
   bool _isRemoteResponseCommercialReady(AssistantRunResponse response) {
     if (response.degraded) return false;
-    final structured = response.structuredResponse;
-    final dialogueRuntime =
-        (structured['dialogueRuntime'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final domainId = (dialogueRuntime['domainId'] as String?)?.trim() ?? '';
-    final uiAnswer =
-        (structured['uiAnswer'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final markdown = (uiAnswer['markdownText'] as String?)?.trim() ?? '';
-    final hasRawTraceLikePrefix = RegExp(
-      r'^\s*\[(page|memory|tool|trace)\.',
-      caseSensitive: false,
-    ).hasMatch(response.finalText);
-    return domainId.isNotEmpty && markdown.isNotEmpty && !hasRawTraceLikePrefix;
+    if (response.displayMarkdown.trim().isNotEmpty) return true;
+    if (response.displayPlainText.trim().isNotEmpty) return true;
+    if (response.structuredResponse.isNotEmpty) return true;
+    return response.finalText.trim().isNotEmpty;
   }
 
   Future<AssistantRunResponse> run({
@@ -541,24 +530,8 @@ class CapabilityGateway {
           _emitCanonicalTraceEvent(event, controller);
         },
       );
-      final chunkText = _resolveChunkDisplayText(response);
-      if (chunkText.isNotEmpty && !controller.isClosed && !hasLiveAnswerDelta) {
-        for (final chunk in _chunkText(chunkText)) {
-          if (chunk.trim().isEmpty) continue;
-          controller.add(AssistantRunStreamEvent.answerDelta(chunk));
-          controller.add(
-            AssistantRunStreamEvent.processJournal(
-              ProcessJournalEvent(
-                eventId:
-                    'answer_delta_fallback_${DateTime.now().microsecondsSinceEpoch}',
-                type: ProcessJournalEventType.answerDelta,
-                stage: 'answering',
-                nodeId: 'answer.stream',
-                message: chunk,
-              ),
-            ),
-          );
-        }
+      if (!hasLiveAnswerDelta) {
+        _resolveChunkDisplayText(response);
       }
       return response;
     } catch (error) {
@@ -628,6 +601,23 @@ class CapabilityGateway {
     );
   }
 
+  bool _isUnsafeChunkDisplayCandidate(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) {
+      return true;
+    }
+    if (AssistantContentFilters.isNotDisplayable(text)) {
+      return true;
+    }
+    return text.contains('assistant_turn') ||
+        text.contains('contractVersion') ||
+        text.contains('queryTasks') ||
+        text.contains('machineEnvelope') ||
+        text.contains('<tool_call>') ||
+        text.contains('</tool_call>') ||
+        text.contains('tool_call');
+  }
+
   String _resolveChunkDisplayText(AssistantRunResponse response) {
     final structured = response.structuredResponse;
 
@@ -646,14 +636,12 @@ class CapabilityGateway {
     if (decision.messageKind == AssistantMessageKind.progress) return '';
 
     // Gate 2: completed artifact 的展示账是最终真相源
-    final artifactMarkdown = response.displayMarkdownV1;
-    if (artifactMarkdown.isNotEmpty &&
-        !AssistantContentFilters.isNotDisplayable(artifactMarkdown)) {
+    final artifactMarkdown = response.displayMarkdown;
+    if (!_isUnsafeChunkDisplayCandidate(artifactMarkdown)) {
       return artifactMarkdown;
     }
-    final artifactPlain = response.displayPlainTextV1;
-    if (artifactPlain.isNotEmpty &&
-        !AssistantContentFilters.isNotDisplayable(artifactPlain)) {
+    final artifactPlain = response.displayPlainText;
+    if (!_isUnsafeChunkDisplayCandidate(artifactPlain)) {
       return artifactPlain;
     }
 
@@ -662,54 +650,11 @@ class CapabilityGateway {
         (structured['uiAnswer'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final markdownText = (uiAnswer['markdownText'] as String?)?.trim() ?? '';
-    if (markdownText.isNotEmpty &&
-        !AssistantContentFilters.isNotDisplayable(markdownText)) {
+    if (!_isUnsafeChunkDisplayCandidate(markdownText)) {
       return markdownText;
     }
 
-    // Gate 4: 从 finalText 用 LlmResponseParser 提取 userMarkdown
-    final parsed = LlmResponseParser.parse(response.finalText);
-    if (parsed.ok) {
-      final um = parsed.userMarkdown;
-      if (um.isNotEmpty && !AssistantContentFilters.isNotDisplayable(um)) {
-        return um;
-      }
-    }
-
-    // Gate 5: answerPayload.userMarkdown
-    final userMd = (answerPayload['userMarkdown'] as String?)?.trim() ?? '';
-    if (userMd.isNotEmpty &&
-        !AssistantContentFilters.isNotDisplayable(userMd)) {
-      return userMd;
-    }
     return '';
-  }
-
-  List<String> _chunkText(String text) {
-    final normalized = text.trim();
-    if (normalized.isEmpty) return const <String>[];
-    final pieces = <String>[];
-    final buffer = StringBuffer();
-    for (final rune in normalized.runes) {
-      final ch = String.fromCharCode(rune);
-      buffer.write(ch);
-      final shouldSplit =
-          ch == '\n' ||
-          ch == '。' ||
-          ch == '！' ||
-          ch == '？' ||
-          ch == '；' ||
-          ch == ';' ||
-          ch == '.' ||
-          buffer.length >= 24;
-      if (!shouldSplit) continue;
-      pieces.add(buffer.toString());
-      buffer.clear();
-    }
-    if (buffer.isNotEmpty) {
-      pieces.add(buffer.toString());
-    }
-    return pieces;
   }
 
   Future<AssistantRunResponse?> _safeRemoteRun(
@@ -746,6 +691,13 @@ class CapabilityGateway {
       if (event.type == OpenClawRemoteStreamEventType.userEvent &&
           event.userEvent != null) {
         _emitCanonicalUserEvent(event.userEvent!, controller);
+        continue;
+      }
+      if (event.type == OpenClawRemoteStreamEventType.processJournalEvent &&
+          event.processJournalEvent != null) {
+        controller.add(
+          AssistantRunStreamEvent.processJournal(event.processJournalEvent!),
+        );
         continue;
       }
       if (event.type == OpenClawRemoteStreamEventType.chunk &&

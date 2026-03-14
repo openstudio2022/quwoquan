@@ -38,12 +38,12 @@ PromptTemplateRuntime _buildTemplateRuntime() {
         'planner.global_plan@v1': const PromptTemplate(
           templateId: 'planner.global_plan',
           templateVersion: 'v1',
-          content: '你是测试助手。必须直接输出 assistant_turn_v2 JSON。',
+          content: '你是测试助手。必须直接输出 assistant_turn JSON。',
         ),
         'synthesizer.final_answer@v1': const PromptTemplate(
           templateId: 'synthesizer.final_answer',
           templateVersion: 'v1',
-          content: '你是测试助手。必须直接输出 assistant_turn_v2 JSON。',
+          content: '你是测试助手。必须直接输出 assistant_turn JSON。',
         ),
       },
     ),
@@ -104,7 +104,7 @@ String _assistantTurnJson({
   List<Map<String, dynamic>> evidence = const <Map<String, dynamic>>[],
 }) {
   return jsonEncode(<String, dynamic>{
-    'contractVersion': 'assistant_turn_v4',
+    'contractVersion': 'assistant_turn',
     'decision': <String, dynamic>{'nextAction': 'answer'},
     'messageKind': 'answer',
     'userMarkdown': markdown,
@@ -284,7 +284,7 @@ void main() {
     final evidenceBindings =
         (uiAnswer['evidenceBindings'] as List?)?.whereType<Map>().toList() ??
         const <Map>[];
-    final runArtifacts = response.runArtifactsV1;
+    final runArtifacts = response.runArtifacts;
 
     expect(markdown, contains('[来源1](https://example.com/weather)'));
     expect(evidenceLinks, isNotEmpty);

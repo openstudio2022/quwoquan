@@ -148,12 +148,11 @@ class ChatMessageBubble extends StatelessWidget {
         AppConceptConstants.assistantSenderId;
     final gatedStreamAnswer =
         isAssistantMessage && isAssistantRunning && !answerGateOpen
-            ? ''
-            : streamFinalAnswer;
-    final answerText =
-        isAssistantMessage && gatedStreamAnswer.trim().isNotEmpty
-            ? gatedStreamAnswer
-            : content;
+        ? ''
+        : streamFinalAnswer;
+    final answerText = isAssistantMessage && gatedStreamAnswer.trim().isNotEmpty
+        ? gatedStreamAnswer
+        : content;
     final renderPlainSelfText =
         renderSelfTextWithoutBubble &&
         isRight &&
@@ -345,7 +344,8 @@ class ChatMessageBubble extends StatelessWidget {
             ?.trim() ??
         '';
     final usageStats =
-        (message['uiUsageStatsV1'] as Map?)?.cast<String, dynamic>() ??
+        ((message['uiUsageStats'] as Map?) ?? (message['uiUsageStatsV1'] as Map?))
+                ?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final actionHints =
         ((((message['uiAnswer'] as Map?)?['actionHints']) as List?)
@@ -490,10 +490,7 @@ class ChatMessageBubble extends StatelessWidget {
                             messageStatus: messageStatus,
                             textColor: textColor,
                           ),
-                        Flexible(
-                          fit: FlexFit.loose,
-                          child: contentWidget,
-                        ),
+                        Flexible(fit: FlexFit.loose, child: contentWidget),
                       ],
                     ),
                   if (followupPrompt.isNotEmpty || actionHints.isNotEmpty) ...[
@@ -715,7 +712,9 @@ class ChatMessageBubble extends StatelessWidget {
 bool _hasPersistedProcessBlocks(Map<String, dynamic> message) {
   final rawBlocks = (message['uiProcessContentBlocks'] as List?) ?? const [];
   final rawTimeline = (message['uiProcessTimelineV2'] as List?) ?? const [];
-  final rawJournal = (message['processJournalV1'] as List?) ?? const [];
+  final rawJournal =
+      ((message['runArtifacts'] as Map?)?['processJournal'] as List?) ??
+      const [];
   final thinkingText = (message['processThinkingText'] as String?) ?? '';
   return rawJournal.isNotEmpty ||
       rawBlocks.isNotEmpty ||
@@ -729,7 +728,8 @@ AssistantProcessState _rebuildProcessStateFromMessage(
   final persistedJournal = _processJournalFromMessage(message);
   if (persistedJournal.isNotEmpty) {
     final usageStats =
-        (message['uiUsageStatsV1'] as Map?)?.cast<String, dynamic>() ??
+        ((message['uiUsageStats'] as Map?) ?? (message['uiUsageStatsV1'] as Map?))
+                ?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final contentBlocks = _processBlocksFromJournalSnapshot(persistedJournal);
     return AssistantProcessState(
@@ -800,7 +800,8 @@ AssistantProcessState _rebuildProcessStateFromMessage(
     );
   }
   final usageStats =
-      (message['uiUsageStatsV1'] as Map?)?.cast<String, dynamic>() ??
+      ((message['uiUsageStats'] as Map?) ?? (message['uiUsageStatsV1'] as Map?))
+              ?.cast<String, dynamic>() ??
       const <String, dynamic>{};
   final timeline = (message['uiProcessTimelineV2'] as List?) ?? const [];
   final stageLabel = timeline.isNotEmpty
@@ -818,11 +819,11 @@ AssistantProcessState _rebuildProcessStateFromMessage(
   );
 }
 
-List<ProcessJournalEvent> _processJournalFromMessage(Map<String, dynamic> message) {
-  final raw = (message['processJournalV1'] as List?)?.whereType<Map>().toList(
-        growable: false,
-      ) ??
-      (((message['runArtifactsV1'] as Map?)?['processJournal'] as List?)
+List<ProcessJournalEvent> _processJournalFromMessage(
+  Map<String, dynamic> message,
+) {
+  final raw =
+      (((message['runArtifacts'] as Map?)?['processJournal'] as List?)
               ?.whereType<Map>()
               .toList(growable: false) ??
           const <Map>[]);
@@ -1305,17 +1306,20 @@ class _MarkdownSegment {
   factory _MarkdownSegment.text(String content) =>
       _MarkdownSegment._(content: content, isCard: false);
 
+  factory _MarkdownSegment.hidden() =>
+      const _MarkdownSegment._(content: '', isCard: false);
+
   factory _MarkdownSegment.card({
     required String cardType,
     required String payload,
   }) {
     final type = cardType.trim().toLowerCase();
     if (!_supportedCardTypes.contains(type)) {
-      return _MarkdownSegment.text('```card:$cardType\n$payload\n```');
+      return _MarkdownSegment.hidden();
     }
     final decoded = _tryDecode(payload);
     if (decoded == null || decoded.isEmpty) {
-      return _MarkdownSegment.text('```card:$cardType\n$payload\n```');
+      return _MarkdownSegment.hidden();
     }
     return _MarkdownSegment._(
       content: payload,
@@ -1329,22 +1333,33 @@ class _MarkdownSegment {
     if (!raw.contains('```card:')) {
       return <_MarkdownSegment>[_MarkdownSegment.text(raw)];
     }
+    final sanitizedRaw = _stripDanglingCardFence(raw);
     final regex = RegExp(r'```card:([a-zA-Z0-9_-]+)\n([\s\S]*?)```');
     final segments = <_MarkdownSegment>[];
     var index = 0;
-    for (final match in regex.allMatches(raw)) {
+    for (final match in regex.allMatches(sanitizedRaw)) {
       if (match.start > index) {
-        segments.add(_MarkdownSegment.text(raw.substring(index, match.start)));
+        segments.add(
+          _MarkdownSegment.text(sanitizedRaw.substring(index, match.start)),
+        );
       }
       final type = (match.group(1) ?? '').trim();
       final payload = (match.group(2) ?? '').trim();
       segments.add(_MarkdownSegment.card(cardType: type, payload: payload));
       index = match.end;
     }
-    if (index < raw.length) {
-      segments.add(_MarkdownSegment.text(raw.substring(index)));
+    if (index < sanitizedRaw.length) {
+      segments.add(_MarkdownSegment.text(sanitizedRaw.substring(index)));
     }
     return segments.where((seg) => seg.content.trim().isNotEmpty).toList();
+  }
+
+  static String _stripDanglingCardFence(String raw) {
+    final start = raw.indexOf('```card:');
+    if (start < 0) return raw;
+    final end = raw.indexOf('```', start + 8);
+    if (end >= 0) return raw;
+    return raw.substring(0, start).trimRight();
   }
 
   String toCardMarkdown() {
@@ -1619,20 +1634,20 @@ class _AssistantPhaseTimelineCardState
   String _usageLabel(Map<String, dynamic> usage) {
     final runCalls =
         ((usage['runModelCallCount'] as num?)?.toInt() ??
-            (usage['modelCallCount'] as num?)?.toInt() ??
-            0);
+        (usage['modelCallCount'] as num?)?.toInt() ??
+        0);
     final runTotal =
         ((usage['runTotalTokens'] as num?)?.toInt() ??
-            (usage['totalTokens'] as num?)?.toInt() ??
-            0);
+        (usage['totalTokens'] as num?)?.toInt() ??
+        0);
     final calls =
         ((usage['cumulativeModelCallCount'] as num?)?.toInt() ?? runCalls);
     final total =
         ((usage['cumulativeTotalTokens'] as num?)?.toInt() ?? runTotal);
     final max =
         ((usage['cumulativeMaxTokensPerCall'] as num?)?.toInt() ??
-            (usage['maxTokensPerCall'] as num?)?.toInt() ??
-            0);
+        (usage['maxTokensPerCall'] as num?)?.toInt() ??
+        0);
     final parts = <String>[];
     if (runCalls > 0) {
       parts.add('本轮模型调用 $runCalls 次');

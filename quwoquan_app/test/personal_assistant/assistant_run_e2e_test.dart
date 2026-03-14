@@ -42,14 +42,13 @@ void main() {
         isFalse,
         reason: '小艺私人助手对话中不应展示「未配置可用模型」，应走本地启发式或远程模型',
       );
-      expect(response.machineEnvelopeV1, equals(response.finalText));
-      expect(response.displayMarkdownV1.trim(), isNotEmpty);
-      expect(response.displayPlainTextV1.trim(), isNotEmpty);
-      expect(response.displayMarkdownV1.contains('contractVersion'), isFalse);
-      final processJournal = ((response.structuredResponse['processJournalV1'] as List?) ??
-              ((response.structuredResponse['runArtifactsV1'] as Map?)?['processJournal']
-                  as List?) ??
-              const <dynamic>[])
+      expect(response.machineEnvelope, equals(response.finalText));
+      expect(response.displayMarkdown.trim(), isNotEmpty);
+      expect(response.displayPlainText.trim(), isNotEmpty);
+      expect(response.displayMarkdown.contains('contractVersion'), isFalse);
+      final processJournal = ((((response.structuredResponse['runArtifacts']
+                      as Map?)?['processJournal'] as List?) ??
+                  const <dynamic>[]))
           .whereType<Map>()
           .map((item) => item.cast<String, dynamic>())
           .toList(growable: false);
@@ -93,15 +92,15 @@ void main() {
         isFalse,
         reason: '复杂规划问题也不应回退到未配置模型文案',
       );
-      expect(response.machineEnvelopeV1, equals(response.finalText));
-      expect(response.displayMarkdownV1.trim(), isNotEmpty);
-      expect(response.displayPlainTextV1.trim(), isNotEmpty);
-      expect(response.displayMarkdownV1.contains('contractVersion'), isFalse);
+      expect(response.machineEnvelope, equals(response.finalText));
+      expect(response.displayMarkdown.trim(), isNotEmpty);
+      expect(response.displayPlainText.trim(), isNotEmpty);
+      expect(response.displayMarkdown.contains('contractVersion'), isFalse);
 
       final structured = response.structuredResponse;
-      final processJournal = ((structured['processJournalV1'] as List?) ??
-              ((structured['runArtifactsV1'] as Map?)?['processJournal'] as List?) ??
-              const <dynamic>[])
+      final processJournal =
+          ((((structured['runArtifacts'] as Map?)?['processJournal'] as List?) ??
+                  const <dynamic>[]))
           .whereType<Map>()
           .map((item) => item.cast<String, dynamic>())
           .toList(growable: false);

@@ -187,37 +187,8 @@ class AssistantToolRegistry {
     required String name,
     required AssistantToolResult result,
   }) {
-    if (result.success) return false;
-    if (name != 'web_search' && name != 'web_fetch') return false;
-    switch (result.errorCode) {
-      case AssistantErrorCode.networkUnavailable:
-      case AssistantErrorCode.rateLimited:
-        return true;
-      case AssistantErrorCode.invalidArguments:
-      case AssistantErrorCode.toolNotFound:
-      case AssistantErrorCode.skillNotFound:
-      case AssistantErrorCode.unsupportedTarget:
-      case AssistantErrorCode.permissionDenied:
-      case AssistantErrorCode.unauthorized:
-      case AssistantErrorCode.none:
-        return false;
-      case AssistantErrorCode.executionFailed:
-        final payload = <Object?>[result.message, result.data].join(' ').toLowerCase();
-        return payload.contains('timeout') ||
-            payload.contains('timed out') ||
-            payload.contains('network') ||
-            payload.contains('socket') ||
-            payload.contains('connection') ||
-            payload.contains('temporarily') ||
-            payload.contains('unavailable') ||
-            payload.contains('429') ||
-            payload.contains('500') ||
-            payload.contains('502') ||
-            payload.contains('503') ||
-            payload.contains('504') ||
-            payload.contains('超时') ||
-            payload.contains('网络');
-    }
+    final _ = (name, result);
+    return false;
   }
 
   AssistantToolResult? _validateArguments({
@@ -330,22 +301,7 @@ class AssistantToolRegistry {
 
 class _ToolResilienceManager {
   final Map<String, _ToolResiliencePolicy> _policies =
-      <String, _ToolResiliencePolicy>{
-        'web_search': _ToolResiliencePolicy(
-          maxAttempts: 2,
-          retryDelay: const Duration(milliseconds: 350),
-          breakerThreshold: 3,
-          breakerWindow: const Duration(seconds: 45),
-          breakerDuration: const Duration(seconds: 20),
-        ),
-        'web_fetch': _ToolResiliencePolicy(
-          maxAttempts: 2,
-          retryDelay: const Duration(milliseconds: 250),
-          breakerThreshold: 2,
-          breakerWindow: const Duration(seconds: 30),
-          breakerDuration: const Duration(seconds: 15),
-        ),
-      };
+      const <String, _ToolResiliencePolicy>{};
 
   _ToolResiliencePolicy? policyFor(String toolName) => _policies[toolName];
 }

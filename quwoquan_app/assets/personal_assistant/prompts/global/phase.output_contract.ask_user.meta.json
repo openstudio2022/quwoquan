@@ -4,6 +4,6 @@
   "stage": "ask_user",
   "domainId": "global",
   "requiredVariables": ["traceId"],
-  "outputContract": "assistant_turn_v4_ask_user",
+  "outputContract": "assistant_turn",
   "selfCheckRules": ["question_clear", "max_one_question"]
 }

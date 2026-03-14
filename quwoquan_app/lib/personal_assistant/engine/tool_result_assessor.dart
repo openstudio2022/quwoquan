@@ -1,4 +1,6 @@
 import 'package:quwoquan_app/personal_assistant/contracts/runtime_policies.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/personal_assistant/engine/default_processing/default_processing_copy_bank.dart';
 import 'package:quwoquan_app/personal_assistant/engine/react_state.dart';
 
 enum ToolAssessmentType {
@@ -45,7 +47,7 @@ class ToolResultAssessor {
   String problemClass = '';
 
   bool get _isFastConvergence =>
-      problemClass == 'realtime_info' || problemClass == 'simple_qa';
+      parseProblemClass(problemClass).isFastConvergence;
 
   void reset() {
     _consecutiveFailures = 0;
@@ -60,9 +62,11 @@ class ToolResultAssessor {
     required ReactPolicy policy,
   }) {
     if (state.shouldStopByBudget || state.shouldStopByIteration) {
-      return const ToolAssessmentResult(
+      return ToolAssessmentResult(
         type: ToolAssessmentType.budgetExhausted,
-        userMessage: '已经有一批能支撑判断的信息了，我先把最重要的结论整理给你。',
+        userMessage: DefaultProcessingCopyBank.toolAssessMessage(
+          ToolAssessMessageKey.budgetExhausted,
+        ),
         shouldContinueLoop: false,
       );
     }
@@ -75,23 +79,29 @@ class ToolResultAssessor {
         final pattern = (lastObservation['loopPattern'] as String?) ?? '';
         return ToolAssessmentResult(
           type: ToolAssessmentType.needDifferentTool,
-          userMessage: '这几次拿到的新信息不多，我不想让你白等，先基于已确认的内容回答。',
+          userMessage: DefaultProcessingCopyBank.toolAssessMessage(
+            ToolAssessMessageKey.loopDetected,
+          ),
           shouldContinueLoop: pattern != 'global_circuit_breaker' &&
               _consecutiveFailures < _maxConsecutiveFailures,
         );
       }
 
       if (_consecutiveFailures >= _maxConsecutiveFailures) {
-        return const ToolAssessmentResult(
+        return ToolAssessmentResult(
           type: ToolAssessmentType.toolFailed,
-          userMessage: '这轮搜索不太稳定，我先把已经确认的部分整理给你。',
+          userMessage: DefaultProcessingCopyBank.toolAssessMessage(
+            ToolAssessMessageKey.toolFailedStop,
+          ),
           shouldContinueLoop: false,
         );
       }
 
-      return const ToolAssessmentResult(
+      return ToolAssessmentResult(
         type: ToolAssessmentType.toolFailed,
-        userMessage: '这一批资料不够稳，我换个来源再试一下。',
+        userMessage: DefaultProcessingCopyBank.toolAssessMessage(
+          ToolAssessMessageKey.toolFailedRetry,
+        ),
         shouldContinueLoop: true,
       );
     }
@@ -102,9 +112,10 @@ class ToolResultAssessor {
         (lastObservation['data'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final queryCount = _positiveInt(resultData['queryCount']);
-    final referenceCount =
-        _positiveInt(resultData['referenceCount']) ??
-        ((resultData['references'] as List?)?.length ?? 0);
+    final explicitReferenceCount = _positiveInt(resultData['referenceCount']);
+    final referenceCount = explicitReferenceCount > 0
+        ? explicitReferenceCount
+        : ((resultData['references'] as List?)?.length ?? 0);
     final qualityScore =
         resultData['qualityScore'] as num? ?? 0.0;
     if (qualityScore < policy.reflectionQualityScoreMin) {
@@ -114,7 +125,9 @@ class ToolResultAssessor {
       if (batchCoverageLooksUsable) {
         return ToolAssessmentResult(
           type: ToolAssessmentType.sufficient,
-          userMessage: '这批方向已经有可用信息了，我先帮你收拢重复和差异。',
+          userMessage: DefaultProcessingCopyBank.toolAssessMessage(
+            ToolAssessMessageKey.batchUsable,
+          ),
           shouldContinueLoop: false,
         );
       }
@@ -125,16 +138,24 @@ class ToolResultAssessor {
         return ToolAssessmentResult(
           type: ToolAssessmentType.sufficient,
           userMessage: _isFastConvergence
-              ? '关键信息已经够用了，我开始直接整理回答。'
-              : '我先不继续拖时间了，基于已经确认的信息整理给你。',
+              ? DefaultProcessingCopyBank.toolAssessMessage(
+                  ToolAssessMessageKey.fastConverged,
+                )
+              : DefaultProcessingCopyBank.toolAssessMessage(
+                  ToolAssessMessageKey.slowConverged,
+                ),
           shouldContinueLoop: false,
         );
       }
       return ToolAssessmentResult(
         type: ToolAssessmentType.needMoreSearch,
         userMessage: queryCount >= 2
-            ? '现在主线已经有了，但还差一处会影响判断的空缺，我再替你补查那一块。'
-            : '这轮结果还差一点落点，我换更具体的问法再查一次。',
+            ? DefaultProcessingCopyBank.toolAssessMessage(
+                ToolAssessMessageKey.needMoreSearchMulti,
+              )
+            : DefaultProcessingCopyBank.toolAssessMessage(
+                ToolAssessMessageKey.needMoreSearchSingle,
+              ),
         shouldContinueLoop: true,
         rewriteQuery: true,
       );
@@ -143,17 +164,23 @@ class ToolResultAssessor {
 
     if (shouldReplan) {
       if (_isFastConvergence) {
-        return const ToolAssessmentResult(
+        return ToolAssessmentResult(
           type: ToolAssessmentType.sufficient,
-          userMessage: '关键信息已经够了，我直接整理给你。',
+          userMessage: DefaultProcessingCopyBank.toolAssessMessage(
+            ToolAssessMessageKey.replanFast,
+          ),
           shouldContinueLoop: false,
         );
       }
       return ToolAssessmentResult(
         type: ToolAssessmentType.needMoreSearch,
         userMessage: queryCount >= 2
-            ? '目前大方向已经有了，但还缺一处会影响结论的信息，我再补一轮。'
-            : '还差一块关键信息能让结论更稳，我继续补一下。',
+            ? DefaultProcessingCopyBank.toolAssessMessage(
+                ToolAssessMessageKey.replanMulti,
+              )
+            : DefaultProcessingCopyBank.toolAssessMessage(
+                ToolAssessMessageKey.replanSingle,
+              ),
         shouldContinueLoop: true,
       );
     }
@@ -161,10 +188,17 @@ class ToolResultAssessor {
     return ToolAssessmentResult(
       type: ToolAssessmentType.sufficient,
       userMessage: referenceCount > 0 && queryCount >= 2
-          ? '关键信息已经够用了，我开始把$queryCount个方向里的重复和差异收拢成结论。'
+          ? DefaultProcessingCopyBank.toolAssessMessage(
+              ToolAssessMessageKey.finalMulti,
+              queryCount: queryCount,
+            )
           : referenceCount > 0
-          ? '关键依据已经基本对齐了，我开始按你更容易看的顺序整理答案。'
-          : '关键信息已经够用了，我开始整理答案。',
+          ? DefaultProcessingCopyBank.toolAssessMessage(
+              ToolAssessMessageKey.finalRefs,
+            )
+          : DefaultProcessingCopyBank.toolAssessMessage(
+              ToolAssessMessageKey.finalDefault,
+            ),
       shouldContinueLoop: false,
     );
   }

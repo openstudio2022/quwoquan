@@ -6,7 +6,7 @@
   "requiredVariables": [
     "availableTools"
   ],
-  "outputContract": "assistant_turn_v2",
+  "outputContract": "assistant_turn",
   "selfCheckRules": [
     "tool_budget",
     "slot_first"

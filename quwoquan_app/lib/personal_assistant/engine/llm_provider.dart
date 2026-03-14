@@ -2,8 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/personal_assistant/contracts/assistant_turn_contract.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/runtime_policies.dart';
-import 'package:quwoquan_app/personal_assistant/engine/default_processing/baseline_kernel.dart';
 import 'package:quwoquan_app/personal_assistant/engine/model_config.dart';
 import 'package:quwoquan_app/personal_assistant/engine/llm_response_parser.dart';
 import 'package:quwoquan_app/personal_assistant/engine/stream_json_field_extractor.dart';
@@ -31,12 +32,15 @@ class AssistantModelOutput {
   final bool degraded;
   final String modelPath;
   final String failureCode;
+
   /// 当模型走 native function calling 时，保存 assistant message 原文（含 tool_calls 字段），
   /// 用于下一轮 LLM 请求时正确构建 OpenAI 协议的消息历史。
   final Map<String, dynamic>? rawAssistantToolCallsMessage;
+
   /// Model-provided reasoning / thinking content (from dedicated fields like
   /// `reasoning`, `reasoning_content`, or `<think>` tags).
   final String reasoningText;
+
   /// Per-request usage ledger entries emitted by the model provider.
   final List<Map<String, dynamic>> usageEntries;
 
@@ -105,17 +109,17 @@ class LlmCallOptions {
 
   /// Synthesis / structured-answer stage defaults.
   const LlmCallOptions.synthesis()
-      : temperature = 0.2,
-        maxTokens = 4096,
-        forceJsonObject = true,
-        timeoutSeconds = 45;
+    : temperature = 0.2,
+      maxTokens = 4096,
+      forceJsonObject = true,
+      timeoutSeconds = 45;
 
   /// Default planning / ReAct stage defaults (mirrors legacy hard-coded values).
   const LlmCallOptions.planning()
-      : temperature = 0.3,
-        maxTokens = null,
-        forceJsonObject = false,
-        timeoutSeconds = 30;
+    : temperature = 0.3,
+      maxTokens = null,
+      forceJsonObject = false,
+      timeoutSeconds = 30;
 
   final double? temperature;
   final int? maxTokens;
@@ -172,8 +176,6 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
   Future<void>? _reactPolicyLoading;
   final JsonFieldStreamExtractor _reasonShortJsonExtractor =
       JsonFieldStreamExtractor('reasonShort');
-  final JsonFieldStreamExtractor _thinkingJsonExtractor =
-      JsonFieldStreamExtractor('thinkingText');
   final JsonFieldStreamExtractor _answerJsonExtractor =
       JsonFieldStreamExtractor('userMarkdown');
 
@@ -316,9 +318,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       if (callOptions.forceJsonObject && _profile.supportsJsonMode)
         'response_format': const <String, dynamic>{'type': 'json_object'},
     };
-    final timeoutDuration = Duration(
-      seconds: callOptions.timeoutSeconds ?? 30,
-    );
+    final timeoutDuration = Duration(seconds: callOptions.timeoutSeconds ?? 30);
     try {
       final startAt = DateTime.now();
       final response = await http
@@ -425,9 +425,9 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
   }
 
   /// Streaming variant of [_requestCompletion].  Streams deltas via [onDelta]
-  /// while accumulating the full response.  Supports both text and tool_calls
-  /// in streamed chunks.  Also extracts `thinkingText` from `<think>` tags or
-  /// JSON `thinkingText` field and emits those via [onDelta].
+  /// while accumulating the full response. Supports both text and tool_calls
+  /// in streamed chunks. Also extracts canonical process reasoning from
+  /// `<think>` tags or JSON `reasonShort` and emits those via [onDelta].
   Future<AssistantModelOutput> _requestCompletionStreaming({
     required List<Map<String, dynamic>> requestMessages,
     required List<Map<String, dynamic>> toolSchemas,
@@ -492,7 +492,6 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       _inXmlToolBlock = false;
       _thinkingPhaseEnded = false;
       _reasonShortJsonExtractor.reset();
-      _thinkingJsonExtractor.reset();
 
       final contentBuffer = StringBuffer();
       final reasoningBuffer = StringBuffer();
@@ -500,8 +499,9 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       final profile = _profile;
       Object? usageRaw;
 
-      await for (final line
-          in streamedResponse.stream.transform(const _SseLineTransformer())) {
+      await for (final line in streamedResponse.stream.transform(
+        const _SseLineTransformer(),
+      )) {
         if (!line.startsWith('data:')) continue;
         final data = line.substring(5).trim();
         if (data == '[DONE]') break;
@@ -551,11 +551,6 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
                   thinkingDelta = _reasonShortJsonExtractor.consume(textDelta);
                   if (thinkingDelta.isEmpty &&
                       !_reasonShortJsonExtractor.hasMatchedField) {
-                    thinkingDelta = _thinkingJsonExtractor.consume(textDelta);
-                  }
-                  if (thinkingDelta.isEmpty &&
-                      !_reasonShortJsonExtractor.hasMatchedField &&
-                      !_thinkingJsonExtractor.hasMatchedField) {
                     thinkingDelta = _extractStreamingThinking(textDelta);
                   }
                   break;
@@ -609,11 +604,9 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
             argsMap = <String, dynamic>{'raw': argsStr};
           }
         }
-        toolCalls.add(AssistantToolCall(
-          name: accum.name,
-          arguments: argsMap,
-          id: accum.id,
-        ));
+        toolCalls.add(
+          AssistantToolCall(name: accum.name, arguments: argsMap, id: accum.id),
+        );
       }
 
       if (toolCalls.isNotEmpty) {
@@ -621,14 +614,16 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
           'role': 'assistant',
           'content': fullText.isEmpty ? null : fullText,
           'tool_calls': toolCalls
-              .map((tc) => <String, dynamic>{
-                    'id': tc.id,
-                    'type': 'function',
-                    'function': <String, dynamic>{
-                      'name': tc.name,
-                      'arguments': jsonEncode(tc.arguments),
-                    },
-                  })
+              .map(
+                (tc) => <String, dynamic>{
+                  'id': tc.id,
+                  'type': 'function',
+                  'function': <String, dynamic>{
+                    'name': tc.name,
+                    'arguments': jsonEncode(tc.arguments),
+                  },
+                },
+              )
               .toList(),
         };
       }
@@ -741,7 +736,8 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
         final closeFnIdx = remaining.indexOf('</function>');
         final close = _minPositive(closeIdx, closeFnIdx);
         if (close >= 0) {
-          final tag = closeIdx >= 0 && (closeFnIdx < 0 || closeIdx <= closeFnIdx)
+          final tag =
+              closeIdx >= 0 && (closeFnIdx < 0 || closeIdx <= closeFnIdx)
               ? '</tool_call>'
               : '</function>';
           remaining = remaining.substring(close + tag.length);
@@ -766,7 +762,8 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
         final funcIdx = _findXmlFunctionTag(remaining);
         final xmlStart = _minPositive(toolCallIdx, funcIdx);
 
-        if (thinkMatch != null && (xmlStart < 0 || thinkMatch.start < xmlStart)) {
+        if (thinkMatch != null &&
+            (xmlStart < 0 || thinkMatch.start < xmlStart)) {
           final before = remaining.substring(0, thinkMatch.start).trim();
           if (before.isNotEmpty && !_looksLikeJsonEnvelope(before)) {
             buf.write(before);
@@ -868,17 +865,18 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       final request = http.Request('POST', Uri.parse(endpoint));
       request.headers.addAll(requestHeaders);
       request.body = jsonEncode(requestBody);
-      final streamedResponse = await request
-          .send()
-          .timeout(const Duration(seconds: 60));
+      final streamedResponse = await request.send().timeout(
+        const Duration(seconds: 60),
+      );
       if (streamedResponse.statusCode >= 400) {
         return '';
       }
       final buffer = StringBuffer();
       _answerJsonExtractor.reset();
       var emittedVisibleText = '';
-      await for (final chunk in streamedResponse.stream
-          .transform(const _SseLineTransformer())) {
+      await for (final chunk in streamedResponse.stream.transform(
+        const _SseLineTransformer(),
+      )) {
         final delta = _parseSseDelta(chunk);
         if (delta != null && delta.isNotEmpty) {
           buffer.write(delta);
@@ -895,10 +893,9 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
         }
       }
       final rawOutput = buffer.toString();
-      final fallbackVisible =
-          _answerJsonExtractor.decodedValue.isNotEmpty
-              ? _answerJsonExtractor.decodedValue
-              : LlmResponseParser.extractUserMarkdown(rawOutput) ?? '';
+      final fallbackVisible = _answerJsonExtractor.decodedValue.isNotEmpty
+          ? _answerJsonExtractor.decodedValue
+          : LlmResponseParser.extractUserMarkdown(rawOutput) ?? '';
       if (fallbackVisible.isNotEmpty &&
           fallbackVisible.length > emittedVisibleText.length) {
         onDelta(fallbackVisible.substring(emittedVisibleText.length));
@@ -1114,11 +1111,12 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
     final profile = ModelCapabilityProfile.forModelRef(modelRef);
     final reasoning = profile.supportsReasoningField
         ? ((message[profile.reasoningFieldName.isNotEmpty
-                    ? profile.reasoningFieldName
-                    : 'reasoning'] as String?) ??
-                (message['reasoning_content'] as String?) ??
-                '')
-            .trim()
+                          ? profile.reasoningFieldName
+                          : 'reasoning']
+                      as String?) ??
+                  (message['reasoning_content'] as String?) ??
+                  '')
+              .trim()
         : '';
     final toolCallsRaw = message['tool_calls'];
     final toolCalls = <AssistantToolCall>[];
@@ -1145,7 +1143,9 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
         } else if (argsRaw is Map) {
           argsMap = argsRaw.cast<String, dynamic>();
         }
-        toolCalls.add(AssistantToolCall(name: name, arguments: argsMap, id: callId));
+        toolCalls.add(
+          AssistantToolCall(name: name, arguments: argsMap, id: callId),
+        );
       }
       if (toolCalls.isNotEmpty) {
         // 保存完整 assistant message（含 tool_calls），供下一轮构建 OpenAI 协议历史使用
@@ -1232,8 +1232,9 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
     required bool streaming,
     required int latencyMs,
   }) {
-    final usage =
-        usageRaw is Map ? usageRaw.cast<String, dynamic>() : const <String, dynamic>{};
+    final usage = usageRaw is Map
+        ? usageRaw.cast<String, dynamic>()
+        : const <String, dynamic>{};
     var inputTokens = _usageInt(
       usage['prompt_tokens'] ?? usage['input_tokens'] ?? usage['promptTokens'],
     );
@@ -1245,7 +1246,9 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
     var totalTokens = _usageInt(usage['total_tokens'] ?? usage['totalTokens']);
     var source = 'provider';
 
-    final estimatedInput = _estimateTokenCount(_flattenMessages(requestMessages));
+    final estimatedInput = _estimateTokenCount(
+      _flattenMessages(requestMessages),
+    );
     final estimatedOutput = _estimateTokenCount(responseText);
     if (inputTokens <= 0 && outputTokens <= 0 && totalTokens <= 0) {
       inputTokens = estimatedInput;
@@ -1579,7 +1582,9 @@ class SwitchableAssistantLlmProvider implements AssistantLlmProvider {
       }
 
       AssistantModelOutput lastRemoteFailure = remoteResult.copyWith(
-        modelPath: remoteResult.modelPath.isEmpty ? ref : remoteResult.modelPath,
+        modelPath: remoteResult.modelPath.isEmpty
+            ? ref
+            : remoteResult.modelPath,
       );
 
       final retryableRemoteFailure =
@@ -1679,18 +1684,13 @@ class SwitchableAssistantLlmProvider implements AssistantLlmProvider {
     }
     return remoteResult;
   }
-
 }
 
 /// Fallback-only local provider:
 /// - Do NOT perform domain inference or tool planning.
 /// - Return a stable degraded response so upper runtime can continue safely.
 class HeuristicLocalLlmProvider implements AssistantLlmProvider {
-  const HeuristicLocalLlmProvider({
-    this.baselineKernel = const BaselineKernel(),
-  });
-
-  final BaselineKernel baselineKernel;
+  const HeuristicLocalLlmProvider();
 
   @override
   Future<AssistantModelOutput> reason({
@@ -1707,146 +1707,40 @@ class HeuristicLocalLlmProvider implements AssistantLlmProvider {
     void Function(String delta)? onDelta,
   }) async {
     final query = _latestUserQuery(messages);
-    final lowerTemplate = templateId.trim().toLowerCase();
-    final toolObservations = _extractToolObservations(messages);
-    final isIntentStage =
-        (lowerTemplate == 'planner.global_plan' ||
-            lowerTemplate == 'planner.postcondition_check') &&
-        availableTools.isEmpty;
-    final isSynthesisStage =
-        lowerTemplate.contains('synthesizer') ||
-        lowerTemplate.contains('final_answer');
-    final hasToolObservations = toolObservations.isNotEmpty;
-
-    if (isIntentStage) {
-      return AssistantModelOutput(
-        degraded: false,
-        modelPath: 'fallback_local',
-        text: jsonEncode(baselineKernel.buildIntentPayload(query)),
-      );
-    }
-
-    if (!hasToolObservations && availableTools.isNotEmpty) {
-      final plan = baselineKernel.buildRetrievalPlan(query, availableTools);
-      if (plan != null) {
-        if (plan.reasoning.isNotEmpty) onDelta?.call(plan.reasoning);
-        return AssistantModelOutput(
-          degraded: false,
-          modelPath: 'fallback_local',
-          reasoningText: plan.reasoning,
-          text: jsonEncode(<String, dynamic>{
-            'contractVersion': 'assistant_turn_v4',
-            'decision': const <String, dynamic>{'nextAction': 'tool_call'},
-            'toolCalls': plan.calls
-                .map(
-                  (item) => <String, dynamic>{
-                    'tool': item.name,
-                    'arguments': item.arguments,
-                  },
-                )
-                .toList(growable: false),
-            if (plan.reasoning.isNotEmpty) 'thinkingText': plan.reasoning,
-          }),
-          toolCalls: plan.calls,
-        );
-      }
-    }
-
-    if (isSynthesisStage || hasToolObservations) {
-      final answer = baselineKernel.composeHeuristicAnswer(
-        query: query,
-        observations: toolObservations
-            .map(
-              (item) => <String, dynamic>{
-                'toolName': item.toolName,
-                'summary': item.summary,
-                'references': item.references,
-              },
-            )
-            .toList(growable: false),
-      );
-      _emitChunks(onDelta, answer.markdown);
-      return AssistantModelOutput(
-        degraded: false,
-        modelPath: 'fallback_local',
-        reasoningText: answer.reasoning,
-        text: jsonEncode(<String, dynamic>{
-          'contractVersion': 'assistant_turn_v4',
-          'decision': const <String, dynamic>{'nextAction': 'answer'},
-          'messageKind': 'answer',
-          'userMarkdown': answer.markdown,
-          'result': <String, dynamic>{
-            'text': answer.plainText,
-            'interpretation': answer.interpretation,
-          },
-          'evidence': answer.evidence,
-          'reasoningBasis': const <dynamic>[],
-          'selfCheck': const <String, dynamic>{
-            'goalSatisfied': true,
-            'constraintSatisfied': true,
-            'safetyBoundarySatisfied': true,
-            'failedItems': <dynamic>[],
-          },
-          'diagnostics': <String, dynamic>{
-            'heuristicFallbackUsed': true,
-            'fallbackMode': 'local_rule_based',
-            'whyThisAnswer': answer.reasoning,
-          },
-          'modelSelfScore': const <String, dynamic>{
-            'score': 68,
-            'reason': 'fallback_local_rule_based',
-          },
-          'toolCalls': const <dynamic>[],
-          'slotState': const <String, dynamic>{},
-          'askUser': const <String, dynamic>{},
-          'subagentPlan': const <dynamic>[],
-        }),
-      );
-    }
-
+    final userFacingText = query.isNotEmpty
+        ? '当前未能稳定连接模型服务，无法可靠完成这一轮推理与工具规划。请稍后重试，或补充更明确的目标后再试。'
+        : '当前未能稳定连接模型服务，无法可靠完成这一轮推理与工具规划。请稍后重试。';
+    onDelta?.call(userFacingText);
     return AssistantModelOutput(
       degraded: true,
       modelPath: 'fallback_local',
       failureCode: AssistantFailureCode.heuristicFallback,
-      text: '我这边暂时没法稳定连到模型服务。你可以直接告诉我更明确的查询目标，比如城市、时间或想比较的条件，我会继续尽量帮你整理。',
-    );
-  }
-
-  List<_HeuristicToolObservation> _extractToolObservations(
-    List<Map<String, dynamic>> messages,
-  ) {
-    final observations = <_HeuristicToolObservation>[];
-    for (final message in messages) {
-      if ((message['role'] as String?)?.trim() != 'tool') continue;
-      final content = (message['content'] as String?)?.trim() ?? '';
-      if (content.isEmpty) continue;
-      try {
-        final decoded = jsonDecode(content);
-        if (decoded is! Map) continue;
-        final typed = decoded.cast<String, dynamic>();
-        final data =
-            (typed['data'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
-        final refs = (data['references'] as List?)
-                ?.whereType<Map>()
-                .map((item) => item.cast<String, dynamic>())
-                .toList(growable: false) ??
-            const <Map<String, dynamic>>[];
-        observations.add(
-          _HeuristicToolObservation(
-            toolName: (typed['toolName'] as String?)?.trim() ?? '',
-            summary:
-                (data['summary'] as String?)?.trim() ??
-                (typed['message'] as String?)?.trim() ??
-                '',
-            references: refs,
+      text: jsonEncode(
+        AssistantTurnOutput(
+          contractVersion: kAssistantTurnCurrentVersion,
+          decision: const AssistantTurnDecisionPayload(
+            nextAction: AssistantNextAction.abort,
           ),
-        );
-      } catch (_) {
-        continue;
-      }
-    }
-    return observations;
+          messageKind: AssistantMessageKind.fallback,
+          userMarkdown: userFacingText,
+          result: AssistantTurnResult(text: userFacingText),
+          diagnostics: const AssistantTurnDiagnostics(
+            notes: <String>[
+              'heuristic_fallback_disabled',
+              'fallback_mode:fail_closed',
+            ],
+          ),
+          modelSelfScore: const AssistantTurnModelSelfScore(
+            score: 0,
+            reason: 'heuristic_fallback_disabled',
+          ),
+          toolCalls: const <AssistantTurnToolCall>[],
+          slotState: const SlotStateSnapshot(),
+          askUser: const AssistantTurnAskUser(),
+          subagentPlan: const [],
+        ).toEnvelopeMap(),
+      ),
+    );
   }
 
   String _latestUserQuery(List<Map<String, dynamic>> messages) {
@@ -1858,29 +1752,6 @@ class HeuristicLocalLlmProvider implements AssistantLlmProvider {
     }
     return '';
   }
-
-  void _emitChunks(void Function(String delta)? onDelta, String markdown) {
-    if (onDelta == null || markdown.trim().isEmpty) return;
-    const chunkSize = 18;
-    for (var index = 0; index < markdown.length; index += chunkSize) {
-      final end = (index + chunkSize) > markdown.length
-          ? markdown.length
-          : index + chunkSize;
-      onDelta(markdown.substring(index, end));
-    }
-  }
-}
-
-class _HeuristicToolObservation {
-  const _HeuristicToolObservation({
-    required this.toolName,
-    required this.summary,
-    required this.references,
-  });
-
-  final String toolName;
-  final String summary;
-  final List<Map<String, dynamic>> references;
 }
 
 class _StreamingToolCallAccum {
@@ -1892,8 +1763,7 @@ class _StreamingToolCallAccum {
 /// Transforms raw SSE byte stream into individual event lines.
 /// Uses proper UTF-8 decoding to handle multi-byte characters (CJK, emoji).
 /// Handles \n, \r\n, and \r line endings.
-class _SseLineTransformer
-    extends StreamTransformerBase<List<int>, String> {
+class _SseLineTransformer extends StreamTransformerBase<List<int>, String> {
   const _SseLineTransformer();
 
   @override
@@ -1912,7 +1782,10 @@ class _SseLineTransformer
       );
       byteBuffer.removeRange(0, decodable);
       lineBuffer.write(decoded);
-      final raw = lineBuffer.toString().replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+      final raw = lineBuffer
+          .toString()
+          .replaceAll('\r\n', '\n')
+          .replaceAll('\r', '\n');
       final lastNewline = raw.lastIndexOf('\n');
       if (lastNewline < 0) continue;
       final complete = raw.substring(0, lastNewline + 1);

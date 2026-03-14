@@ -142,12 +142,52 @@ class ToolMetadataRegistry {
   List<String> requiredOutputPathsByToolName(String toolName) {
     final matched = _toolByName(toolName);
     if (matched.isEmpty) return const <String>[];
-    return (matched['requiredOutputPaths'] as List?)
-            ?.whereType<String>()
-            .map((item) => item.trim())
-            .where((item) => item.isNotEmpty)
+    return _requiredStringList(matched['requiredOutputPaths']);
+  }
+
+  String toolKindByName(String toolName) {
+    final matched = _toolByName(toolName);
+    if (matched.isEmpty) return '';
+    final routing =
+        (matched['routing'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    return (routing['toolKind'] as String?)?.trim() ?? '';
+  }
+
+  bool supportsQueryTasks(String toolName) {
+    final matched = _toolByName(toolName);
+    if (matched.isEmpty) return false;
+    final routing =
+        (matched['routing'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    return routing['supportsQueryTasks'] == true;
+  }
+
+  bool isRetrievalLikeTool(String toolName) {
+    return toolKindByName(toolName) == 'retrieval';
+  }
+
+  bool contributesUiReferences(
+    String toolName, {
+    required bool allowLocationContext,
+  }) {
+    final matched = _toolByName(toolName);
+    if (matched.isEmpty) return false;
+    final uiContribution =
+        (matched['uiContribution'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    if (uiContribution['references'] == true) return true;
+    return allowLocationContext && uiContribution['locationContext'] == true;
+  }
+
+  List<Map<String, dynamic>> slotOutputsByToolName(String toolName) {
+    final matched = _toolByName(toolName);
+    if (matched.isEmpty) return const <Map<String, dynamic>>[];
+    return (matched['slotOutputs'] as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
             .toList(growable: false) ??
-        const <String>[];
+        const <Map<String, dynamic>>[];
   }
 
   /// Returns the full [userInteraction] block for [toolName], or null.
@@ -207,5 +247,15 @@ class ToolMetadataRegistry {
     if (matched is Map<String, dynamic>) return matched;
     return matched.cast<String, dynamic>();
   }
+
+  List<String> _requiredStringList(Object? raw) {
+    return (raw as List?)
+            ?.whereType<String>()
+            .map((item) => item.trim())
+            .where((item) => item.isNotEmpty)
+            .toList(growable: false) ??
+        const <String>[];
+  }
+
 }
 

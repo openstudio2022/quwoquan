@@ -11,10 +11,14 @@
         "需要实时信息",
         "需要公开来源证据"
       ],
-      "supportedSkills": [
-        "retrieval.web",
-        "evidence.freshness_check"
-      ],
+      "routing": {
+        "toolKind": "retrieval",
+        "supportsQueryTasks": true
+      },
+      "uiContribution": {
+        "references": true,
+        "locationContext": false
+      },
       "userInteraction": {
         "phaseTitle": "搜索资料",
         "phaseIcon": "search",
@@ -98,8 +102,20 @@
         "需要设备态信息",
         "需要城市或位置信息"
       ],
-      "supportedSkills": [
-        "device.context"
+      "routing": {
+        "toolKind": "context",
+        "supportsQueryTasks": false
+      },
+      "uiContribution": {
+        "references": false,
+        "locationContext": true
+      },
+      "slotOutputs": [
+        {
+          "slotId": "city",
+          "path": "city",
+          "source": "tool_data"
+        }
       ],
       "userInteraction": {
         "phaseTitle": "获取位置",
@@ -165,9 +181,14 @@
       "whenToUse": [
         "用户请求相册或媒体处理"
       ],
-      "supportedSkills": [
-        "media.asset_access"
-      ],
+      "routing": {
+        "toolKind": "media",
+        "supportsQueryTasks": false
+      },
+      "uiContribution": {
+        "references": false,
+        "locationContext": false
+      },
       "userInteraction": {
         "phaseTitle": "浏览相册",
         "phaseIcon": "photo",
@@ -208,9 +229,14 @@
       "whenToUse": [
         "需要跨应用打开或系统动作"
       ],
-      "supportedSkills": [
-        "device.intent_bridge"
-      ],
+      "routing": {
+        "toolKind": "action",
+        "supportsQueryTasks": false
+      },
+      "uiContribution": {
+        "references": false,
+        "locationContext": false
+      },
       "userInteraction": {
         "phaseTitle": "执行操作",
         "phaseIcon": "launch",
@@ -254,10 +280,14 @@
         "需要深入阅读某个搜索结果页面",
         "需要抓取特定 URL 的详细内容"
       ],
-      "supportedSkills": [
-        "retrieval.deep_read",
-        "evidence.source_verify"
-      ],
+      "routing": {
+        "toolKind": "retrieval",
+        "supportsQueryTasks": false
+      },
+      "uiContribution": {
+        "references": false,
+        "locationContext": false
+      },
       "userInteraction": {
         "phaseTitle": "阅读网页",
         "phaseIcon": "article",
@@ -305,10 +335,14 @@
         "需要用户个人上下文来个性化回答",
         "涉及用户习惯、喜好或历史记录"
       ],
-      "supportedSkills": [
-        "memory.recall",
-        "context.personalization"
-      ],
+      "routing": {
+        "toolKind": "retrieval",
+        "supportsQueryTasks": false
+      },
+      "uiContribution": {
+        "references": false,
+        "locationContext": false
+      },
       "userInteraction": {
         "phaseTitle": "回忆相关信息",
         "phaseIcon": "memory",
@@ -357,10 +391,14 @@
         "用户询问接下来的安排",
         "涉及时间管理和日程规划"
       ],
-      "supportedSkills": [
-        "calendar.event_crud",
-        "task.reminder_management"
-      ],
+      "routing": {
+        "toolKind": "action",
+        "supportsQueryTasks": false
+      },
+      "uiContribution": {
+        "references": false,
+        "locationContext": false
+      },
       "userInteraction": {
         "phaseTitle": "日程管理",
         "phaseIcon": "calendar",
@@ -418,10 +456,14 @@
         "需要打开App内特定页面",
         "需要跳转到外部App或网页"
       ],
-      "supportedSkills": [
-        "navigation.internal",
-        "navigation.external"
-      ],
+      "routing": {
+        "toolKind": "action",
+        "supportsQueryTasks": false
+      },
+      "uiContribution": {
+        "references": false,
+        "locationContext": false
+      },
       "userInteraction": {
         "phaseTitle": "页面跳转",
         "phaseIcon": "link",
@@ -465,13 +507,14 @@
         "用户需要导航到某个地址",
         "用户想复制内容"
       ],
-      "supportedSkills": [
-        "device.call",
-        "device.sms",
-        "device.email",
-        "device.navigate",
-        "device.clipboard"
-      ],
+      "routing": {
+        "toolKind": "action",
+        "supportsQueryTasks": false
+      },
+      "uiContribution": {
+        "references": false,
+        "locationContext": false
+      },
       "userInteraction": {
         "phaseTitle": "执行操作",
         "phaseIcon": "action",
@@ -517,104 +560,6 @@
           "required": ["action"]
         }
       }
-    }
-  ],
-  "domainToolMatrix": [
-    {
-      "domainId": "weather",
-      "allowedTools": ["local_context", "web_search", "web_fetch", "memory_search", "scheduler"],
-      "preferredTools": ["local_context", "web_search"],
-      "skillHints": ["weather.city_resolution", "weather.realtime_search"]
-    },
-    {
-      "domainId": "travel_transport",
-      "allowedTools": ["web_search", "local_context", "deep_link", "app_action"],
-      "preferredTools": ["web_search", "local_context"],
-      "skillHints": ["transport.route_lookup", "transport.realtime_traffic"]
-    },
-    {
-      "domainId": "travel_planning",
-      "allowedTools": ["web_search", "web_fetch", "local_context", "scheduler", "deep_link"],
-      "preferredTools": ["web_search"],
-      "skillHints": ["travel.itinerary_plan", "travel.poi_research"]
-    },
-    {
-      "domainId": "local_life",
-      "allowedTools": ["web_search", "local_context", "deep_link", "app_action"],
-      "preferredTools": ["local_context", "web_search"],
-      "skillHints": ["local.poi_search", "local.service_lookup"]
-    },
-    {
-      "domainId": "calendar_task",
-      "allowedTools": ["scheduler", "intent_bridge", "local_context", "deep_link"],
-      "preferredTools": ["scheduler"],
-      "skillHints": ["calendar.schedule_create", "task.reminder_setup"]
-    },
-    {
-      "domainId": "knowledge_general",
-      "allowedTools": ["web_search", "web_fetch", "memory_search", "app_action"],
-      "preferredTools": ["web_search", "web_fetch"],
-      "skillHints": ["knowledge.explain", "knowledge.reference_trace"]
-    },
-    {
-      "domainId": "finance_consumer",
-      "allowedTools": ["web_search", "web_fetch", "memory_search"],
-      "preferredTools": ["web_search"],
-      "skillHints": ["finance.budget_advice", "finance.risk_notice"]
-    },
-    {
-      "domainId": "health_wellness",
-      "allowedTools": ["web_search", "web_fetch", "local_context", "memory_search"],
-      "preferredTools": ["web_search"],
-      "skillHints": ["health.wellness_advice", "health.boundary_notice"]
-    },
-    {
-      "domainId": "education_learning",
-      "allowedTools": ["web_search", "web_fetch", "memory_search", "app_action"],
-      "preferredTools": ["web_search"],
-      "skillHints": ["learning.plan", "learning.resource_lookup"]
-    },
-    {
-      "domainId": "work_productivity",
-      "allowedTools": ["web_search", "scheduler", "app_action", "deep_link"],
-      "preferredTools": ["web_search", "scheduler"],
-      "skillHints": ["work.task_breakdown", "career.interview_support"]
-    },
-    {
-      "domainId": "shopping_decision",
-      "allowedTools": ["web_search", "web_fetch", "deep_link", "app_action"],
-      "preferredTools": ["web_search"],
-      "skillHints": ["shopping.compare", "shopping.recommendation"]
-    },
-    {
-      "domainId": "policy_public_service",
-      "allowedTools": ["web_search", "web_fetch", "local_context", "deep_link"],
-      "preferredTools": ["web_search", "local_context"],
-      "skillHints": ["policy.lookup", "gov.service_process"]
-    },
-    {
-      "domainId": "emotion_companion",
-      "allowedTools": ["web_search", "memory_search", "local_context"],
-      "preferredTools": ["memory_search"],
-      "skillHints": ["emotion.support", "emotion.safe_boundary"]
-    },
-    {
-      "domainId": "fortune_astrology",
-      "allowedTools": ["web_search", "local_context", "memory_search"],
-      "preferredTools": ["web_search"],
-      "skillHints": ["fortune.interpretation", "astrology.chart_read", "fortune.safety_boundary"]
-    },
-    {
-      "domainId": "divination_fortune",
-      "allowedTools": ["web_search", "local_context", "memory_search"],
-      "preferredTools": ["web_search"],
-      "skillHints": ["fortune.interpretation", "fortune.daily_read", "fortune.safety_boundary"]
-    },
-    {
-      "domainId": "fallback_general_search",
-      "allowedTools": ["web_search", "web_fetch", "local_context", "memory_search", "deep_link", "app_action"],
-      "preferredTools": ["web_search"],
-      "skillHints": ["fallback.general_query", "fallback.context_hint"]
     }
   ]
 }

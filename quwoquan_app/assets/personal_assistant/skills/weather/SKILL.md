@@ -18,12 +18,10 @@ execution_shell:
   reflectionBudget: 0
   providerPolicy: authority_first
   preferredProviders: [web]
-  authorityDomains: [weather.com.cn, cma.cn]
-  freshnessHoursMax: 1
 requires:
   tools: [web_search, web_fetch, memory_search]
   permissions: [location]
-output_contract: assistant_turn_v2
+output_contract: assistant_turn
 tool_observation_contract: tool_observation_v1
 reference_docs: references/domain-knowledge.md references/output-examples.md
 script_guides: references/tool-call-guidance.md
@@ -65,7 +63,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 
 ## 双轨输出契约
 若 nextAction 为 tool_call，必须同时返回：
-1. 机器轨 JSON：包含 decision、toolPlan、slotState（格式遵循 `assistant_turn_v2`）
+1. 机器轨 JSON：包含 decision、toolPlan、slotState（格式遵循 `assistant_turn`）
 2. 用户轨 Markdown：简短说明"正在获取城市并查询天气"
 
 工具观测结果格式遵循 `tool_observation_v1` 契约：包含 toolName、statusCode、rawResponse 字段。
@@ -75,7 +73,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 ### 结构化 JSON 契约（必填字段）
 ```json
 {
-  "contractVersion": "assistant_turn_v2",
+  "contractVersion": "assistant_turn",
   "decision": {"nextAction": "tool_call|answer|ask_user|retry|abort"},
   "slotState": {
     "city": {"value": "", "source": "user_query|memory|local_context|unknown"}

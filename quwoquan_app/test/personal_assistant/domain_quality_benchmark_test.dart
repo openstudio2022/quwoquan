@@ -83,7 +83,7 @@ double _evaluateSkillDomain({
     '## 轮次状态定义',
   ];
   if (requiredSections.every(raw.contains)) score += 0.4;
-  if (raw.contains('assistant_turn_v2')) score += 0.15;
+  if (raw.contains('assistant_turn')) score += 0.15;
   if (raw.contains('tool_observation_v1')) score += 0.15;
   if (raw.contains('dialogue/state_transition_contract.json')) score += 0.1;
   if (_highRiskDomains.contains(domainId)) {

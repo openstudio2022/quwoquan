@@ -25,16 +25,16 @@ void main() {
       domainId: 'fallback_general_search',
     );
 
-    test('可识别带空格的拼音天气问法', () {
+    test('仅在显式 domainId 或 skillId 命中时解析技能', () {
       final resolved = router.resolveSkill(
-        'Shenzhen tian qi',
+        'weather',
         <PersonalAssistantSkillManifest>[weatherSkill, fallbackSkill],
       );
 
       expect(resolved?.domainId, equals('weather'));
     });
 
-    test('域内匹配时优先使用归一化 trigger keyword', () {
+    test('域内解析直接返回同域技能，不再依赖 trigger keyword', () {
       final resolved = router.resolveSkillForDomain(
         userText: 'what is the weather in shenzhen',
         domainId: 'weather',

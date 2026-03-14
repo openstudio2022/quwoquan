@@ -1,0 +1,15 @@
+dart_class: ContextAssemblyResult
+library_path: personal_assistant/contracts/context_assembly_result.dart
+output_path: personal_assistant/runtime/generated/contracts/context_assembly_result.g.dart
+contract: context_assembly_result
+version: v1
+kind: runtime_context_contract
+imports:
+  - package:quwoquan_app/personal_assistant/contracts/context_fill_contract.dart
+fields:
+  - { name: contextEnvelope, type: map, default: {} }
+  - { name: fillTasks, type: list<object>, ref: ContextFillTask, default: [] }
+  - { name: canEnterDomain, type: bool, default: true }
+  - { name: summaryText, type: string, default: '' }
+  - { name: hasRealtimeNeed, type: bool, default: false }
+  - { name: hasLongtermNeed, type: bool, default: false }

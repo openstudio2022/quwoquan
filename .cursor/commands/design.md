@@ -20,6 +20,7 @@ description: 设计基线（面向 L3_story，落实商用方案与任务）
 - 若涉及小趣或私密内容，权限、撤销、保留模型已冻结
 - `T1~T4` 证据矩阵已形成
 - `tasks.md` 顺序明确，且遵循 `metadata -> codegen -> 业务逻辑 -> 测试`
+- 若涉及助手链路：已阅读 `quwoquan_app/personal_assistant/docs/PERSONAL_ASSISTANT_DESIGN_AND_CONSTRAINTS.md`，并已识别对应的 Skill / Tool / Phase / 垂类场景文档
 
 ## 执行对象
 
@@ -47,6 +48,13 @@ description: 设计基线（面向 L3_story，落实商用方案与任务）
 - TDD / ATDD 策略
 - `Task` 与 `T1~T4` 证据矩阵映射
 - 未来演进
+
+若涉及助手，还必须包含：
+
+- 对三类核心文档的引用与符合性说明
+- 本次变更的真相源映射
+- 是否引入 runtime 兼容逻辑，以及退出条件
+- 无垂类特判、无字符串硬编码、模板资产化的落实方式
 
 ## `tasks.md` 要求
 

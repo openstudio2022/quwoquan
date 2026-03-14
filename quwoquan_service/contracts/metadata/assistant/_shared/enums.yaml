@@ -1,0 +1,486 @@
+enums:
+  - name: ProblemClass
+    values:
+      - name: general
+        wire: general
+      - name: simpleQa
+        wire: simple_qa
+        fast_convergence: true
+      - name: complexReasoning
+        wire: complex_reasoning
+      - name: evidenceLookup
+        wire: evidence_lookup
+      - name: realtimeInfo
+        wire: realtime_info
+        fast_convergence: true
+      - name: taskExecution
+        wire: task_execution
+
+  - name: QueryIntent
+    values:
+      - name: unspecified
+        wire: ''
+      - name: generalLookup
+        wire: general_lookup
+      - name: taskExecution
+        wire: task_execution
+      - name: realtimeLookup
+        wire: realtime_lookup
+      - name: comparisonAnalysis
+        wire: comparison_analysis
+      - name: optionsExploration
+        wire: options_exploration
+      - name: decisionSupport
+        wire: decision_support
+
+  - name: AnswerShape
+    values:
+      - name: unspecified
+        wire: ''
+      - name: directAnswer
+        wire: direct_answer
+      - name: comparison
+        wire: comparison
+      - name: options
+        wire: options
+      - name: decisionReady
+        wire: decision_ready
+      - name: actionPlan
+        wire: action_plan
+
+  - name: FreshnessNeed
+    values:
+      - name: unspecified
+        wire: ''
+      - name: stable
+        wire: stable
+      - name: recent
+        wire: recent
+      - name: realtime
+        wire: realtime
+
+  - name: SkillMode
+    values:
+      - name: qa
+        wire: qa
+      - name: task
+        wire: task
+      - name: hybrid
+        wire: hybrid
+
+  - name: ProviderPolicy
+    values:
+      - name: inherit
+        wire: ''
+      - name: modelChoice
+        wire: model_choice
+      - name: authorityFirst
+        wire: authority_first
+      - name: preferredOnly
+        wire: preferred_only
+
+  - name: SearchIntensity
+    values:
+      - name: low
+        wire: low
+      - name: medium
+        wire: medium
+      - name: high
+        wire: high
+
+  - name: StopPolicy
+    values:
+      - name: balanced
+        wire: balanced
+      - name: fastExit
+        wire: strict
+        aliases: [fast_exit]
+      - name: exhaustive
+        wire: explore
+        aliases: [exhaustive]
+
+  - name: FinalAnswerMode
+    values:
+      - name: full
+        wire: full
+      - name: boundedAnswer
+        wire: bounded_answer
+      - name: clarify
+        wire: clarify
+      - name: retry
+        wire: retry
+      - name: blocked
+        wire: blocked
+
+  - name: AnswerEligibility
+    values:
+      - name: eligible
+        wire: eligible
+      - name: clarify
+        wire: clarify
+      - name: blocked
+        wire: blocked
+      - name: unknown
+        wire: unknown
+
+  - name: ProblemShape
+    values:
+      - name: singleSkill
+        wire: single_skill
+      - name: multiSkill
+        wire: multi_skill
+      - name: unknown
+        wire: ''
+
+  - name: EvidenceSourceTier
+    values:
+      - name: authority
+        wire: authority
+      - name: page
+        wire: page
+      - name: web
+        wire: web
+      - name: unknown
+        wire: ''
+
+  - name: SkillExecutionTarget
+    values:
+      - name: toolChain
+        wire: tool_chain
+      - name: nativeApi
+        wire: native_api
+      - name: iosIntent
+        wire: ios_intent
+      - name: androidIntent
+        wire: android_intent
+      - name: unknown
+        wire: ''
+
+  - name: AssistantNextAction
+    values:
+      - name: toolCall
+        wire: tool_call
+      - name: answer
+        wire: answer
+      - name: askUser
+        wire: ask_user
+      - name: retry
+        wire: retry
+      - name: abort
+        wire: abort
+      - name: unknown
+        wire: ''
+
+  - name: AssistantMessageKind
+    values:
+      - name: progress
+        wire: progress
+      - name: answer
+        wire: answer
+      - name: askUser
+        wire: ask_user
+      - name: error
+        wire: error
+      - name: fallback
+        wire: fallback
+      - name: unknown
+        wire: ''
+
+  - name: TraceVisibility
+    values:
+      - name: userVisible
+        wire: user_visible
+        aliases: [userVisible]
+      - name: system
+        wire: system
+      - name: internal
+        wire: internal
+
+  - name: ProcessJournalEventType
+    values:
+      - name: stageSet
+        wire: stage_set
+      - name: narrativeCommit
+        wire: narrative_commit
+      - name: liveCursor
+        wire: live_cursor
+      - name: sourceUpdate
+        wire: source_update
+      - name: answerDelta
+        wire: answer_delta
+      - name: completed
+        wire: completed
+
+  - name: SlotValueStatus
+    values:
+      - name: missing
+        wire: missing
+      - name: inferred
+        wire: inferred
+      - name: confirmed
+        wire: confirmed
+      - name: stale
+        wire: stale
+      - name: conflicted
+        wire: conflicted
+
+  - name: SlotFillAction
+    values:
+      - name: autoFilled
+        wire: auto_filled
+      - name: defaultApplied
+        wire: default_applied
+      - name: askUser
+        wire: ask_user
+      - name: inferred
+        wire: inferred
+      - name: carriedOver
+        wire: carried_over
+      - name: unknown
+        wire: ''
+
+  - name: SlotSource
+    values:
+      - name: userQueryLlm
+        wire: user_query_llm
+      - name: userQueryRegex
+        wire: user_query_regex
+      - name: toolData
+        wire: tool_data
+      - name: toolMessage
+        wire: tool_message
+      - name: gps
+        wire: gps
+      - name: sessionHistory
+        wire: session_history
+      - name: defaultValue
+        wire: default
+        aliases: [default_value]
+      - name: unknown
+        wire: ''
+
+  - name: PlannerPhaseId
+    values:
+      - name: understanding
+        wire: understanding
+      - name: classifying
+        wire: classifying
+      - name: planning
+        wire: planning
+      - name: executing
+        wire: executing
+      - name: searching
+        wire: searching
+      - name: assessing
+        wire: assessing
+      - name: analyzing
+        wire: analyzing
+      - name: aggregating
+        wire: aggregating
+      - name: answering
+        wire: answering
+      - name: clarifying
+        wire: clarifying
+      - name: expanding
+        wire: expanding
+      - name: dispatching
+        wire: dispatching
+      - name: merging
+        wire: merging
+      - name: completed
+        wire: completed
+      - name: unknown
+        wire: ''
+
+  - name: PlannerActionCode
+    values:
+      - name: frameProblem
+        wire: frame_problem
+      - name: classifyDomain
+        wire: classify_domain
+      - name: buildPlan
+        wire: build_plan
+      - name: executeSearch
+        wire: execute_search
+      - name: startRetrieval
+        wire: start_retrieval
+      - name: reviewSources
+        wire: review_sources
+      - name: recoverRetrieval
+        wire: recover_retrieval
+      - name: parallelProbe
+        wire: parallel_probe
+      - name: mergeParallelResult
+        wire: merge_parallel_result
+      - name: fallbackWithExistingEvidence
+        wire: fallback_with_existing_evidence
+      - name: assessEvidence
+        wire: assess_evidence
+      - name: composeAnswer
+        wire: compose_answer
+      - name: askClarification
+        wire: ask_clarification
+      - name: expandSearch
+        wire: expand_search
+      - name: dispatchSubagents
+        wire: dispatch_subagents
+      - name: mergeResults
+        wire: merge_results
+      - name: completeTurn
+        wire: complete_turn
+      - name: streamAnswer
+        wire: stream_answer
+      - name: setStage
+        wire: set_stage
+      - name: unknown
+        wire: ''
+
+  - name: PlannerReasonCode
+    values:
+      - name: alignGoal
+        wire: align_goal
+      - name: confirmRealtimeScope
+        wire: confirm_realtime_scope
+      - name: confirmFocus
+        wire: confirm_focus
+      - name: checkConsistency
+        wire: check_consistency
+      - name: prepareDelivery
+        wire: prepare_delivery
+      - name: evidenceReady
+        wire: evidence_ready
+      - name: evidenceInsufficient
+        wire: evidence_insufficient
+      - name: needMoreSearch
+        wire: need_more_search
+      - name: needMoreEvidence
+        wire: need_more_evidence
+      - name: budgetExhausted
+        wire: budget_exhausted
+      - name: budgetBoundary
+        wire: budget_boundary
+      - name: missingSlot
+        wire: missing_slot
+      - name: readyToAnswer
+        wire: ready_to_answer
+      - name: deliverIncrement
+        wire: deliver_increment
+      - name: toolFailed
+        wire: tool_failed
+      - name: targetedProbe
+        wire: targeted_probe
+      - name: crossCheckSources
+        wire: cross_check_sources
+      - name: validateSource
+        wire: validate_source
+      - name: sourceUnstable
+        wire: source_unstable
+      - name: reduceWaitTime
+        wire: reduce_wait_time
+      - name: evidenceBack
+        wire: evidence_back
+      - name: parallelBranchFailed
+        wire: parallel_branch_failed
+      - name: assessmentUpdate
+        wire: assessment_update
+      - name: unknownReason
+        wire: ''
+
+  - name: AssessmentType
+    values:
+      - name: sufficient
+        wire: sufficient
+      - name: needMoreSearch
+        wire: need_more_search
+        aliases: [needMoreSearch]
+      - name: budgetExhausted
+        wire: budget_exhausted
+        aliases: [budgetExhausted]
+      - name: toolFailed
+        wire: tool_failed
+        aliases: [toolFailed]
+      - name: unknown
+        wire: ''
+
+  - name: QueryNormalizationIssue
+    values:
+      - name: pinyinInput
+        wire: pinyin_input
+      - name: noTimeSpecified
+        wire: no_time_specified
+      - name: noLocation
+        wire: no_location
+      - name: ambiguousIntent
+        wire: ambiguous_intent
+      - name: nonStandardLanguage
+        wire: non_standard_language
+      - name: unknown
+        wire: ''
+
+  - name: EvidenceStatus
+    values:
+      - name: full
+        wire: full
+      - name: bounded
+        wire: bounded
+      - name: notRequired
+        wire: not_required
+      - name: retry
+        wire: retry
+      - name: unknown
+        wire: ''
+
+  - name: ContextFillType
+    values:
+      - name: contextFill
+        wire: context_fill
+      - name: gapFill
+        wire: gap_fill
+      - name: unknown
+        wire: ''
+
+  - name: ContextTargetSlot
+    values:
+      - name: longtermMemory
+        wire: longterm_memory
+      - name: realtimeEvidence
+        wire: realtime_evidence
+      - name: answerSufficiency
+        wire: answer_sufficiency
+      - name: gpsOrCityLocation
+        wire: gps_or_city_location
+      - name: unknown
+        wire: ''
+
+  - name: ContextScopeExpansionPolicy
+    values:
+      - name: none
+        wire: ''
+        aliases: ['']
+      - name: expandTimeWindow
+        wire: expand_time_window
+      - name: expandScopeAndRequery
+        wire: expand_scope_and_requery
+      - name: expandProviderAndTimeWindow
+        wire: expand_provider_and_time_window
+      - name: unknown
+        wire: ''
+
+  - name: ContextRetryPolicy
+    values:
+      - name: singleRetry
+        wire: single_retry
+        aliases: ['']
+      - name: unknown
+        wire: ''
+
+  - name: ContextContinuityMode
+    values:
+      - name: explicitFollowUp
+        wire: explicit_follow_up
+      - name: sameTopic
+        wire: same_topic
+      - name: freshTopic
+        wire: fresh_topic
+      - name: unknown
+        wire: ''

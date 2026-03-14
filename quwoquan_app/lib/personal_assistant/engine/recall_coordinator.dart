@@ -99,13 +99,9 @@ class RecallCoordinator {
     }
 
     final normalized = userText.toLowerCase().trim();
-    for (final kw in skill.triggerKeywords) {
-      final token = kw.toLowerCase().trim();
-      if (token.isEmpty) continue;
-      if (normalized.contains(token)) {
-        score += 0.3;
-        break;
-      }
+    final domainId = skill.domainId.toLowerCase().trim();
+    if (domainId.isNotEmpty && normalized.contains(domainId)) {
+      score += 0.2;
     }
 
     final desc = skill.description.toLowerCase();

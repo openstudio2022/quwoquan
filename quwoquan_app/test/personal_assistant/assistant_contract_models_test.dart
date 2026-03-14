@@ -21,7 +21,7 @@ void main() {
       });
 
       expect(graph.primarySkill, 'weather');
-      expect(graph.problemClass, 'complex_reasoning');
+      expect(graph.problemClass, ProblemClass.complexReasoning);
       expect(graph.secondarySkills, <String>['travel']);
       expect(graph.isMultiSkill, isTrue);
     });
@@ -36,7 +36,7 @@ void main() {
       });
 
       expect(graph.clarificationNeeded, isTrue);
-      expect(graph.problemClass, 'task_execution');
+      expect(graph.problemClass, ProblemClass.taskExecution);
     });
   });
 
@@ -106,7 +106,13 @@ void main() {
         ],
         'slotState': <String, dynamic>{
           'domainId': 'weather',
-          'slots': <String, dynamic>{'city': '深圳'},
+          'slotValues': <String, dynamic>{
+            'city': <String, dynamic>{
+              'slotId': 'city',
+              'status': 'confirmed',
+              'value': '深圳',
+            },
+          },
           'missingSlots': <String>[],
         },
         'answerDecision': <String, dynamic>{'nextAction': 'answer'},
@@ -115,7 +121,10 @@ void main() {
       });
 
       expect(artifacts.processJournal.length, 2);
-      expect(artifacts.processJournal.last.type, ProcessJournalEventType.sourceUpdate);
+      expect(
+        artifacts.processJournal.last.type,
+        ProcessJournalEventType.sourceUpdate,
+      );
       expect(artifacts.slotState.domainId, equals('weather'));
       expect(artifacts.answerDecision['nextAction'], equals('answer'));
       expect(artifacts.domainPolicyBundle?.domainId, equals('weather'));
@@ -172,7 +181,7 @@ void main() {
 
   group('AssistantTurnOutput', () {
     test('解析并序列化统一主线字段', () {
-      final turn = AssistantTurnOutput.tryParse(const <String, dynamic>{
+      final turn = tryParseAssistantTurnOutput(const <String, dynamic>{
         'contractVersion': kAssistantTurnCurrentVersion,
         'decision': <String, dynamic>{'nextAction': 'answer'},
         'messageKind': 'answer',
@@ -234,7 +243,7 @@ void main() {
 
       expect(turn, isNotNull);
       expect(turn!.intentGraph?.primarySkill, 'weather');
-      expect(turn.intentGraph?.problemClass, 'complex_reasoning');
+      expect(turn.intentGraph?.problemClass, ProblemClass.complexReasoning);
       expect(turn.skillRuns.single.domainId, 'weather');
       expect(turn.aggregationState?.canGivePartialAnswer, isTrue);
       expect(turn.userEvents.single.scope, UserEventScope.root);

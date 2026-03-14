@@ -149,9 +149,9 @@ void main() {
         }
 
         expect(
-          raw.contains('assistant_turn_v2'),
+          raw.contains('assistant_turn'),
           isTrue,
-          reason: '$normalizedPath 缺少 assistant_turn_v2',
+          reason: '$normalizedPath 缺少 assistant_turn',
         );
         expect(
           raw.contains('tool_observation_v1'),

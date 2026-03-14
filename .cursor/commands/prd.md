@@ -24,6 +24,7 @@ description: 需求规格基线（面向 L3_story，先冻结商用要求）
 - 若与已有 Story 重叠：已冻结覆盖矩阵与优先级
 - 若可灰度上线：已冻结迁移方案、feature flag、观测指标与回滚条件
 - 若涉及 `path / operation / surface / route / decoder context`：已明确 metadata 唯一真相源
+- 若涉及助手链路：已阅读 `quwoquan_app/personal_assistant/docs/PERSONAL_ASSISTANT_DESIGN_AND_CONSTRAINTS.md`，并明确本次需求不会通过 runtime 垂类特判或字符串硬编码落地
 
 任一未满足：
 
@@ -58,6 +59,12 @@ GATE_BLOCK（PRD 准入未满足）
 - 非功能目标
 - 迁移、灰度与回滚要求
 - 验收重点
+
+若涉及助手，还必须补充：
+
+- 影响层：runtime / skill / tool / prompt / UI
+- 对应真相源与场景级设计文档
+- 明确哪些能力必须落在 asset / metadata / config，而不是 runtime
 
 ## `acceptance.yaml` 要求
 

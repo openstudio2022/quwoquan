@@ -1,3 +1,6 @@
+export 'package:quwoquan_app/personal_assistant/runtime/generated/contracts/subagent_plan.g.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';
+
 class SubagentPlan {
   const SubagentPlan({
     required this.subagentId,
@@ -32,6 +35,18 @@ class SubagentPlan {
   final int freshnessHoursMax;
   final double answerThreshold;
   final List<String> dependencies;
+
+  ProblemClass get problemClassType => parseProblemClass(problemClass);
+
+  SkillMode get modeType => parseSkillMode(mode);
+
+  StopPolicy get stopPolicyType => parseStopPolicy(stopPolicy);
+
+  SearchIntensity get searchIntensityType =>
+      parseSearchIntensity(searchIntensity);
+
+  ProviderPolicy get providerPolicyType =>
+      parseProviderPolicy(providerPolicy);
 
   Map<String, dynamic> toJson() => <String, dynamic>{
     'subagentId': subagentId,

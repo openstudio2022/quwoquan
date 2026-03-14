@@ -3,6 +3,12 @@
 > **版本**：v1.1 · **日期**：2026-03-07（更新活跃技能列表）
 > **范围**：`assets/personal_assistant/skills/*` 目录规范、运行时加载策略、槽位国际化、开发就绪度评估  
 > **从属**：`personal_assistant/docs/skill_development_standard.md` 的配套实施细则
+>
+> **收口说明**：当前 Skill / Tool 扩展请优先阅读：
+> - `PERSONAL_ASSISTANT_SKILL_AND_TOOL_EXTENSIBILITY.md`
+> - `PERSONAL_ASSISTANT_DESIGN_AND_CONSTRAINTS.md`
+>
+> 本文档保留为详细参考，不再作为第一入口。
 
 ---
 
@@ -22,7 +28,7 @@ quwoquan_app/
 │   │   │   ├── stack.global_system.md       ← L1 全局身份与安全
 │   │   │   ├── stack.runtime_policy.md      ← L2 本轮预算/权限/工具
 │   │   │   ├── stack.recovery_policy.md     ← L3 失败恢复策略
-│   │   │   ├── stack.output_contract.md     ← L4 输出契约（assistant_turn_v2）
+│   │   │   ├── stack.output_contract.md     ← L4 输出契约（assistant_turn）
 │   │   │   ├── stack.global_policy.md       ← L5 全局政策叠加
 │   │   │   ├── planner.global_plan.md       ← Planner 主模板
 │   │   │   └── synthesizer.*.md             ← Synthesizer 模板族
@@ -42,7 +48,7 @@ quwoquan_app/
 │   │   └── domain_routing_catalog_runtime.dart
 │   ├── skills/
 │   │   ├── skill_loader.dart                ← 加载并解析 SKILL.md
-│   │   ├── skill_router.dart                ← 按 domain/trigger_keywords 路由
+│   │   ├── skill_router.dart                ← 按 domain catalog 与 recall 结果路由
 │   │   └── skill_manifest.dart              ← Manifest 数据模型
 │   └── tools/
 │       └── websearch_tool.dart              ← 读取 config/retrieval_policy.json

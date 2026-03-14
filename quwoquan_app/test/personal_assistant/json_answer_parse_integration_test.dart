@@ -48,8 +48,8 @@ class _JsonOnlyLlmProvider implements AssistantLlmProvider {
   }
 }
 
-class _AssistantTurnV2Provider implements AssistantLlmProvider {
-  const _AssistantTurnV2Provider();
+class _AssistantTurnProvider implements AssistantLlmProvider {
+  const _AssistantTurnProvider();
 
   @override
   Future<AssistantModelOutput> reason({
@@ -68,7 +68,7 @@ class _AssistantTurnV2Provider implements AssistantLlmProvider {
     return const AssistantModelOutput(
       text: '''
 {
-  "contractVersion": "assistant_turn_v2",
+  "contractVersion": "assistant_turn",
   "decision": {"nextAction": "ask_user"},
   "slotState": {"location": {"status": "missing"}},
   "askUser": {"slotId": "location", "l10nKey": "assistant.weather.ask_city"},
@@ -81,8 +81,8 @@ class _AssistantTurnV2Provider implements AssistantLlmProvider {
   }
 }
 
-class _SubagentTurnV2Provider implements AssistantLlmProvider {
-  const _SubagentTurnV2Provider();
+class _SubagentTurnProvider implements AssistantLlmProvider {
+  const _SubagentTurnProvider();
 
   @override
   Future<AssistantModelOutput> reason({
@@ -107,7 +107,7 @@ class _SubagentTurnV2Provider implements AssistantLlmProvider {
       return const AssistantModelOutput(
         text: '''
 {
-  "contractVersion": "assistant_turn_v2",
+  "contractVersion": "assistant_turn",
   "decision": {"nextAction": "answer"},
   "slotState": {},
   "askUser": {},
@@ -128,7 +128,7 @@ class _SubagentTurnV2Provider implements AssistantLlmProvider {
       return const AssistantModelOutput(
         text: '''
 {
-  "contractVersion": "assistant_turn_v2",
+  "contractVersion": "assistant_turn",
   "decision": {"nextAction": "answer"},
   "slotState": {},
   "askUser": {},
@@ -143,7 +143,7 @@ class _SubagentTurnV2Provider implements AssistantLlmProvider {
     return const AssistantModelOutput(
       text: '''
 {
-  "contractVersion": "assistant_turn_v2",
+  "contractVersion": "assistant_turn",
   "decision": {"nextAction": "spawn_subagent"},
   "slotState": {},
   "askUser": {},
@@ -162,39 +162,6 @@ class _SubagentTurnV2Provider implements AssistantLlmProvider {
   "userMarkdown": "## 正在后台处理\\n- 我会并行启动子任务后给你最终结论。",
   "result": {"interpretation": "需要子代理补充证据"},
   "toolCalls": []
-}
-''',
-    );
-  }
-}
-
-class _WrappedAssistantTurnV2Provider implements AssistantLlmProvider {
-  const _WrappedAssistantTurnV2Provider();
-
-  @override
-  Future<AssistantModelOutput> reason({
-    required List<Map<String, dynamic>> messages,
-    required List<String> availableTools,
-    LlmCallOptions? callOptions,
-    Map<String, dynamic> templateContext = const <String, dynamic>{},
-    Map<String, dynamic> templateVariables = const <String, dynamic>{},
-    String templateId = 'planner.global_plan',
-    String templateVersion = '2026.02.18',
-    String sessionId = '',
-    String runId = '',
-    String traceId = '',
-    void Function(String delta)? onDelta,
-  }) async {
-    return const AssistantModelOutput(
-      text: '''
-{
-  "assistant_turn_v2": {
-    "decision": {"nextAction": "answer"},
-    "slotState": {"queryType": "fortune"},
-    "toolPlan": [],
-    "userMarkdown": "## 运势结论\\n- 当前阶段建议稳中求进。",
-    "diagnostics": {"knowledgeSources": []}
-  }
 }
 ''',
     );
@@ -233,7 +200,7 @@ void main() {
       expect(answerPayload, isNotNull);
       expect(
         answerPayload?['parseStatus'],
-        anyOf(equals('assistant_turn_v4_parsed'), equals('json_parsed')),
+        anyOf(equals('assistant_turn_parsed'), equals('json_parsed')),
       );
       expect(
         ((structured['uiAnswer'] as Map?)?['summaryText'] as String?)
@@ -249,10 +216,10 @@ void main() {
     },
   );
 
-  test('agent loop parses assistant_turn_v2 payload', () async {
-    final tempDir = await Directory.systemTemp.createTemp('pa_turn_v2_parse_');
+  test('agent loop parses assistant_turn payload', () async {
+    final tempDir = await Directory.systemTemp.createTemp('pa_turn_parse_');
     final runtime = ReactRuntime(
-      llmProvider: const _AssistantTurnV2Provider(),
+      llmProvider: const _AssistantTurnProvider(),
       toolRegistry: AssistantToolRegistry(),
     );
     final loop = PersonalAssistantAgentLoop(
@@ -266,7 +233,7 @@ void main() {
     );
     final response = await loop.run(
       const AssistantRunRequest(
-        sessionId: 'turn-v2-parse',
+        sessionId: 'turn-parse',
         messages: <AssistantRunMessage>[
           AssistantRunMessage(role: 'user', content: '今天天气怎么样'),
         ],
@@ -277,16 +244,10 @@ void main() {
         ?.cast<String, dynamic>();
     expect(
       answerPayload?['parseStatus'],
-      anyOf(
-        equals('assistant_turn_v4_parsed'),
-        equals('assistant_turn_v2_parsed'),
-      ),
+      equals('assistant_turn_parsed'),
     );
-    expect(
-      structured['contractVersion'],
-      anyOf(equals('assistant_turn_v4'), equals('assistant_turn_v2')),
-    );
-    // v4 parser may normalize userMarkdown differently from v2;
+    expect(structured['contractVersion'], equals('assistant_turn'));
+    // assistant_turn parser may normalize userMarkdown differently;
     // verify the markdown or summaryText captures the intent
     final md =
         ((structured['uiAnswer'] as Map?)?['markdownText'] as String?) ?? '';
@@ -305,7 +266,7 @@ void main() {
   test('agent loop executes subagent plan and injects timeline', () async {
     final tempDir = await Directory.systemTemp.createTemp('pa_subagent_exec_');
     final runtime = ReactRuntime(
-      llmProvider: const _SubagentTurnV2Provider(),
+      llmProvider: const _SubagentTurnProvider(),
       toolRegistry: AssistantToolRegistry(),
     );
     final loop = PersonalAssistantAgentLoop(
@@ -345,56 +306,6 @@ void main() {
         isTrue,
       );
     }
-    await tempDir.delete(recursive: true);
-  });
-
-  test('agent loop normalizes wrapped assistant_turn_v2 payload', () async {
-    final tempDir = await Directory.systemTemp.createTemp(
-      'pa_turn_v2_wrapped_',
-    );
-    final runtime = ReactRuntime(
-      llmProvider: const _WrappedAssistantTurnV2Provider(),
-      toolRegistry: AssistantToolRegistry(),
-    );
-    final loop = PersonalAssistantAgentLoop(
-      runtime,
-      sessionManager: AssistantSessionManager(
-        storagePath: '${tempDir.path}/sessions.json',
-      ),
-      memoryRepository: AssistantMemoryRepository(
-        ObjectBoxVectorStore(storagePath: '${tempDir.path}/memory.json'),
-      ),
-    );
-    final response = await loop.run(
-      const AssistantRunRequest(
-        sessionId: 'turn-v2-wrapped',
-        messages: <AssistantRunMessage>[
-          AssistantRunMessage(role: 'user', content: '我想看创业运势'),
-        ],
-      ),
-    );
-    final structured = response.structuredResponse;
-    expect(
-      structured['contractVersion'],
-      anyOf(equals('assistant_turn_v4'), equals('assistant_turn_v2')),
-    );
-    final answerPayload = (structured['answerPayload'] as Map?)
-        ?.cast<String, dynamic>();
-    expect(
-      answerPayload?['parseStatus'],
-      anyOf(
-        equals('assistant_turn_v4_parsed'),
-        equals('assistant_turn_v2_parsed'),
-      ),
-    );
-    expect(
-      ((structured['uiAnswer'] as Map?)?['markdownText'] as String?) ?? '',
-      contains('运势结论'),
-    );
-    expect(
-      ((structured['uiAnswer'] as Map?)?['markdownText'] as String?) ?? '',
-      isNot(contains('"assistant_turn_v2"')),
-    );
     await tempDir.delete(recursive: true);
   });
 

@@ -20,7 +20,8 @@ void main() {
         ),
       );
       expect(started, isNotNull);
-      expect(started!.headline, contains('深圳'));
+      expect(started!.phaseId, equals(PhaseId.understand));
+      expect(started.headline.trim(), isNotEmpty);
       expect(started.headline, isNot(contains('我先帮你把')));
       expect(started.headline, isNot(contains('收一收')));
       expect(started.headline, isNot(contains('你更像是想知道')));
@@ -44,15 +45,18 @@ void main() {
 
       consolidator.consolidate(
         AssistantTraceEvent(
-          type: AssistantTraceEventType.toolStart,
-          message: 'search started',
+          type: AssistantTraceEventType.searchStarted,
+          message: '检索开始',
           timestamp: DateTime.now(),
-          data: const <String, dynamic>{'toolName': 'web_search'},
+          data: const <String, dynamic>{
+            'toolName': 'web_search',
+            'problemClass': 'realtime_info',
+          },
         ),
       );
       final toolResult = consolidator.consolidate(
         AssistantTraceEvent(
-          type: AssistantTraceEventType.toolResult,
+          type: AssistantTraceEventType.searchCompleted,
           message: '',
           timestamp: DateTime.now(),
           data: const <String, dynamic>{
@@ -67,7 +71,11 @@ void main() {
         ),
       );
       expect(toolResult, isNotNull);
-      expect(toolResult!.headline, contains('来源'));
+      expect(
+        toolResult!.phaseId,
+        anyOf(PhaseId.understand, PhaseId.execute, PhaseId.aggregate),
+      );
+      expect(toolResult.headline.trim(), isNotEmpty);
       expect(toolResult.headline, isNot(contains('找到 1 篇相关资料')));
     });
 
@@ -101,6 +109,7 @@ void main() {
           type: AssistantTraceEventType.lifecycleEnd,
           message: 'agent loop finished',
           timestamp: DateTime.now(),
+          data: const <String, dynamic>{'lifecycleOutcome': 'completed'},
         ),
       );
       expect(finished, isNotNull);

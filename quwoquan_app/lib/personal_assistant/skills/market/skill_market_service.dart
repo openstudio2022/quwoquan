@@ -31,7 +31,7 @@ class SkillMarketService {
             version: m.version,
             category: m.category,
             tier: m.tier,
-            isDefaultFree: m.tier == 'free' && (m.id == 'knowledge_qa' || m.id == 'web.quick_search'),
+            isDefaultFree: m.tier == 'free' && m.defaultEnabled,
           ),
         )
         .toList(growable: false);

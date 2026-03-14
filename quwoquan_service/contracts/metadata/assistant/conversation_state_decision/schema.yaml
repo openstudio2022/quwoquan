@@ -1,0 +1,26 @@
+dart_class: ConversationStateDecisionDto
+library_path: personal_assistant/contracts/conversation_state_decision.dart
+output_path: personal_assistant/runtime/generated/contracts/conversation_state_decision.g.dart
+contract: conversation_state_decision
+version: v1
+kind: runtime_policy_contract
+imports:
+  - package:quwoquan_app/personal_assistant/contracts/assistant_turn_contract.dart
+  - package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart
+fields:
+  - { name: nextAction, type: enum, enum_ref: AssistantNextAction, required: true }
+  - { name: finalAnswerMode, type: enum, enum_ref: FinalAnswerMode, required: true }
+  - { name: answerEligibility, type: enum, enum_ref: AnswerEligibility, required: true }
+  - { name: slotState, type: object, ref: SlotStateSnapshot, default: {} }
+  - { name: missingCriticalSlots, type: list<string>, default: [] }
+  - { name: askUser, type: object, ref: AssistantTurnAskUser, default: {} }
+  - { name: qualityGates, type: object, ref: quality_gates, default: {} }
+  - { name: finalAnswerReady, type: bool, default: false }
+subcontracts:
+  quality_gates:
+    class_name: QualityGatesDto
+    fields:
+      - { name: structureSafe, type: bool, default: false }
+      - { name: taskSafe, type: bool, default: false }
+      - { name: evidenceSafe, type: bool, default: false }
+      - { name: renderSafe, type: bool, default: false }

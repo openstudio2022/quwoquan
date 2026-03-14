@@ -15,10 +15,7 @@ class LlmResponseParser {
     r'<think>[\s\S]*?</think>',
     multiLine: true,
   );
-  static final _thinkTagPattern = RegExp(
-    r'</?think>',
-    multiLine: true,
-  );
+  static final _thinkTagPattern = RegExp(r'</?think>', multiLine: true);
 
   /// 从 LLM raw text 中提取 JSON 并解析为 [LlmParseResult]。
   ///
@@ -71,8 +68,12 @@ class LlmResponseParser {
       final decoded = _tryDecodeMap(block);
       if (decoded == null) continue;
       best ??= decoded;
-      if (decoded.containsKey('decision')) return LlmParseResult.parsed(json: decoded, raw: rawText);
-      if (decoded.containsKey('userMarkdown')) return LlmParseResult.parsed(json: decoded, raw: rawText);
+      if (decoded.containsKey('decision')) {
+        return LlmParseResult.parsed(json: decoded, raw: rawText);
+      }
+      if (decoded.containsKey('userMarkdown')) {
+        return LlmParseResult.parsed(json: decoded, raw: rawText);
+      }
     }
     if (best != null) {
       return LlmParseResult.parsed(json: best, raw: rawText);
@@ -85,13 +86,12 @@ class LlmResponseParser {
   static String? extractUserMarkdown(String rawText) {
     final result = parse(rawText);
     if (!result.ok) return null;
-    final um = (result.json!['userMarkdown'] as String?)?.trim();
-    if (um != null && um.isNotEmpty) return um;
+    final um = result.explicitUserMarkdown;
+    if (um.isNotEmpty) return um;
     return null;
   }
 
-  /// 兼容 v2/v3/v4 及包裹格式：返回原始解码 Map，不做拆包。
-  /// 拆包（`assistant_turn_v2` key 解嵌套）是调用方的职责。
+  /// 识别 canonical assistant_turn JSON：返回原始解码 Map，不做兼容拆包。
   static Map<String, dynamic>? _tryDecodeAsModelOutput(String text) {
     final decoded = _tryDecodeMap(text);
     if (decoded == null) return null;
@@ -99,9 +99,7 @@ class LlmResponseParser {
     if (decoded.containsKey('decision')) return decoded;
 
     final version = (decoded['contractVersion'] as String?)?.trim() ?? '';
-    if (version.startsWith('assistant_turn_')) return decoded;
-
-    if (decoded.containsKey('assistant_turn_v2')) return decoded;
+    if (version == 'assistant_turn') return decoded;
 
     if (decoded.containsKey('userMarkdown')) return decoded;
 
@@ -160,14 +158,12 @@ class LlmParseResult {
   factory LlmParseResult.parsed({
     required Map<String, dynamic> json,
     required String raw,
-  }) =>
-      LlmParseResult._(ok: true, json: json, raw: raw);
+  }) => LlmParseResult._(ok: true, json: json, raw: raw);
 
   factory LlmParseResult.unparsed({
     required String raw,
     required String reason,
-  }) =>
-      LlmParseResult._(ok: false, raw: raw, failReason: reason);
+  }) => LlmParseResult._(ok: false, raw: raw, failReason: reason);
 
   final bool ok;
   final Map<String, dynamic>? json;
@@ -175,15 +171,26 @@ class LlmParseResult {
   final String? failReason;
 
   /// 从解析结果中提取 userMarkdown。
-  /// 自动处理包裹格式（`{ "assistant_turn_v2": { ... } }`）。
-  /// 优先级：userMarkdown > userFacingMarkdown > result.text
+  /// 优先级：userMarkdown > result.text
   String get userMarkdown {
+    final explicit = explicitUserMarkdown;
+    if (explicit.isNotEmpty) return explicit;
+    return resultText;
+  }
+
+  /// 仅提取显式用户轨 Markdown，不回退到 result.text。
+  String get explicitUserMarkdown {
     if (!ok || json == null) return '';
-    final payload = _unwrapPayload(json!);
+    final payload = json!;
     final um = (payload['userMarkdown'] as String?)?.trim() ?? '';
     if (um.isNotEmpty) return um;
-    final ufm = (payload['userFacingMarkdown'] as String?)?.trim() ?? '';
-    if (ufm.isNotEmpty) return ufm;
+    return '';
+  }
+
+  /// 兼容 canonical result.text / result 字符串。
+  String get resultText {
+    if (!ok || json == null) return '';
+    final payload = json!;
     final result = payload['result'];
     if (result is Map) {
       return (result['text'] as String?)?.trim() ?? '';
@@ -195,19 +202,12 @@ class LlmParseResult {
   /// 从解析结果中提取 decision.nextAction
   String get nextAction {
     if (!ok || json == null) return '';
-    final payload = _unwrapPayload(json!);
+    final payload = json!;
     final decision = payload['decision'];
     if (decision is Map) {
       return (decision['nextAction'] as String?)?.trim() ?? '';
     }
     return '';
-  }
-
-  /// 解嵌套：兼容 `{ "assistant_turn_v2": { ... } }` 包裹格式
-  static Map<String, dynamic> _unwrapPayload(Map<String, dynamic> json) {
-    final wrapped = json['assistant_turn_v2'];
-    if (wrapped is Map) return wrapped.cast<String, dynamic>();
-    return json;
   }
 
   /// 是否为非最终答案（tool_call / ask_user 等中间态）

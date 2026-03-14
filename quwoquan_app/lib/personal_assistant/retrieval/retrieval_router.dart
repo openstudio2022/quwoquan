@@ -1,4 +1,3 @@
-import 'package:quwoquan_app/personal_assistant/retrieval/capability_catalog.dart';
 import 'package:quwoquan_app/personal_assistant/retrieval/privacy_policy.dart';
 import 'package:quwoquan_app/personal_assistant/retrieval/retrieval_models.dart';
 
@@ -9,9 +8,7 @@ class AssistentRetrievalRouter {
     required AssistentRetrievalRequest request,
     required Map<String, List<String>> providerCapabilities,
   }) {
-    final capabilities = request.requestedCapabilities.isNotEmpty
-        ? request.requestedCapabilities
-        : _inferCapabilitiesFromQuery(request.query);
+    final capabilities = request.requestedCapabilities;
     final policy = AssistentPrivacyPolicy.fromInputs(
       privacyProfile: request.privacyProfile,
       contextScopeHint: <String, dynamic>{
@@ -34,18 +31,16 @@ class AssistentRetrievalRouter {
       }
     }
 
-    if (providers.isEmpty && policy.allowsProvider('web') && providerCapabilities.containsKey('web')) {
-      providers.add('web');
-    }
     if (providers.isEmpty &&
-        policy.allowsProvider('conversation') &&
-        providerCapabilities.containsKey('conversation')) {
-      providers.add('conversation');
+        request.providerHint != null &&
+        request.providerHint!.trim().isNotEmpty) {
+      final hinted = request.providerHint!.trim();
+      if (providerCapabilities.containsKey(hinted) && policy.allowsProvider(hinted)) {
+        providers.add(hinted);
+      }
     }
 
-    final maxRounds = _inferNeedsRealtime(request.query)
-        ? (policy.webAccessMode == 'allow' ? 3 : 2)
-        : 2;
+    final maxRounds = policy.maxWebRounds <= 0 ? 0 : policy.maxWebRounds;
     return AssistentRetrievalRouteDecision(
       providerSequence: providers,
       capabilitySequence: approvedCapabilities,
@@ -55,36 +50,9 @@ class AssistentRetrievalRouter {
         'requestedCapabilities': capabilities,
         'approvedCapabilities': approvedCapabilities,
         'maxWebRounds': policy.maxWebRounds,
+        'providerHint': request.providerHint?.trim() ?? '',
       },
     );
-  }
-
-  List<String> _inferCapabilitiesFromQuery(String query) {
-    final lowered = query.toLowerCase();
-    final capabilities = <String>[
-      AssistentCapabilityCatalog.currentPage,
-      AssistentCapabilityCatalog.chatRecent,
-      AssistentCapabilityCatalog.chatLongterm,
-    ];
-    if (_inferNeedsRealtime(lowered)) {
-      capabilities.add(AssistentCapabilityCatalog.webSearch);
-    }
-    if (lowered.contains('评论')) {
-      capabilities.add(AssistentCapabilityCatalog.pageComments);
-    }
-    if (lowered.contains('上次') || lowered.contains('历史') || lowered.contains('之前')) {
-      capabilities.add(AssistentCapabilityCatalog.behaviorTimeline);
-    }
-    return capabilities;
-  }
-
-  bool _inferNeedsRealtime(String query) {
-    final lowered = query.toLowerCase();
-    return lowered.contains('天气') ||
-        lowered.contains('新闻') ||
-        lowered.contains('实时') ||
-        lowered.contains('最新') ||
-        lowered.contains('行情');
   }
 }
 

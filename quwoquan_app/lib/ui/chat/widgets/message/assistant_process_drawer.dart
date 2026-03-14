@@ -48,21 +48,48 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
       widget.flowEvents.isNotEmpty;
 
   List<ProcessContentBlock> get _effectiveBlocks {
-    if (widget.processState.contentBlocks.isNotEmpty) {
-      return widget.processState.contentBlocks;
-    }
-    if (widget.streamingThinkingText.trim().isNotEmpty) {
-      return <ProcessContentBlock>[
+    final blocks = <ProcessContentBlock>[
+      if (widget.processState.contentBlocks.isNotEmpty)
+        ...widget.processState.contentBlocks
+      else if (widget.streamingThinkingText.trim().isNotEmpty)
         ProcessContentBlock(
           type: ProcessContentBlockType.text,
           text: widget.streamingThinkingText.trim(),
-        ),
-      ];
+        )
+      else if (widget.flowEvents.isNotEmpty)
+        ..._flowEventsToBlocks(widget.flowEvents),
+    ];
+    return _dedupeBlocksAgainstHeader(blocks);
+  }
+
+  List<ProcessContentBlock> _dedupeBlocksAgainstHeader(
+    List<ProcessContentBlock> blocks,
+  ) {
+    if (blocks.isEmpty) return const <ProcessContentBlock>[];
+    final header = _normalizeBlockText(_stageToHeaderLabel(_effectiveStage));
+    final deduped = <ProcessContentBlock>[];
+    final seenSignatures = <String>{};
+    for (final block in blocks) {
+      final normalizedText = _normalizeBlockText(block.text);
+      if (normalizedText.isEmpty) continue;
+      if (normalizedText == header) {
+        continue;
+      }
+      final signature =
+          '${block.type.name}::$normalizedText::${block.references.length}';
+      if (!seenSignatures.add(signature)) {
+        continue;
+      }
+      deduped.add(block);
     }
-    if (widget.flowEvents.isNotEmpty) {
-      return _flowEventsToBlocks(widget.flowEvents);
-    }
-    return const <ProcessContentBlock>[];
+    return deduped;
+  }
+
+  String _normalizeBlockText(String raw) {
+    return raw
+        .trim()
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .replaceAll(RegExp(r'[。！，、,.!]+$'), '');
   }
 
   ProcessStage get _effectiveStage {

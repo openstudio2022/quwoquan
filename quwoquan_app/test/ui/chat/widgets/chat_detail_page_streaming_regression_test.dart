@@ -83,11 +83,27 @@ void main() {
     );
     await tester.pump();
 
+    gateway.emit(AssistantRunStreamEvent.answerDelta('```md'));
+    await tester.pump();
+    expect(
+      _latestAssistantBubble(tester).message['streamFinalAnswer'],
+      isEmpty,
+      reason: '未闭合 markdown 包装不应先把 md/fence 残片写进气泡',
+    );
+
+    gateway.emit(AssistantRunStreamEvent.answerDelta('\n九寨沟方向'));
+    await tester.pump();
+    expect(
+      _latestAssistantBubble(tester).message['streamFinalAnswer'],
+      '九寨沟方向',
+    );
+
     gateway.emit(AssistantRunStreamEvent.answerDelta('九寨沟方向'));
     await tester.pump();
     expect(
       _latestAssistantBubble(tester).message['streamFinalAnswer'],
       '九寨沟方向',
+      reason: '重复到达的 answer chunk 不应再次把同一段正文追加一遍',
     );
 
     gateway.emit(
@@ -121,6 +137,26 @@ void main() {
       '九寨沟方向备选方案',
     );
 
+    gateway.emit(AssistantRunStreamEvent.answerDelta('方向备选方案'));
+    await tester.pump();
+    expect(
+      _latestAssistantBubble(tester).message['streamFinalAnswer'],
+      '九寨沟方向备选方案',
+      reason: '重叠 chunk 不应把相同尾段重复拼接到正文里',
+    );
+
+    gateway.emit(
+      AssistantRunStreamEvent.answerDelta(
+        '\n```card:compare\n{"title":"路线对比"}',
+      ),
+    );
+    await tester.pump();
+    expect(
+      _latestAssistantBubble(tester).message['streamFinalAnswer'],
+      '九寨沟方向备选方案\n',
+      reason: '未闭合 card fence 不应提前把 payload 写进 streamFinalAnswer',
+    );
+
     gateway.emit(
       AssistantRunStreamEvent.completed(
         AssistantRunResponse(
@@ -131,22 +167,24 @@ void main() {
               'markdownText':
                   '## 九寨沟方向备选方案\n\n1. **九寨沟 + 黄龙**\n   适合：第一次走经典主线。\n2. **川主寺中转**\n   适合：更看重交通节奏。',
             },
+            'runArtifacts': const <String, dynamic>{
+              'processJournal': <Map<String, dynamic>>[
+                <String, dynamic>{
+                  'eventId': 'structured.plan.1',
+                  'type': 'narrative_commit',
+                  'stage': 'understanding',
+                  'phaseId': 'understanding',
+                  'actionCode': 'frame_problem',
+                  'reasonCode': 'align_goal',
+                  'reasonShort': '先把九寨沟方向的候选路线和适用条件分开核对。',
+                  'nodeId': 'root.intent.plan',
+                },
+              ],
+            },
             'qualityMetrics': const <String, dynamic>{
               'heuristicFallbackUsed': false,
             },
-            'processJournalV1': const <Map<String, dynamic>>[
-              <String, dynamic>{
-                'eventId': 'structured.plan.1',
-                'type': 'narrative_commit',
-                'stage': 'understanding',
-                'phaseId': 'understanding',
-                'actionCode': 'frame_problem',
-                'reasonCode': 'align_goal',
-                'reasonShort': '先把九寨沟方向的候选路线和适用条件分开核对。',
-                'nodeId': 'root.intent.plan',
-              },
-            ],
-            'uiUsageStatsV1': const <String, dynamic>{
+            'uiUsageStats': const <String, dynamic>{
               'runModelCallCount': 3,
               'runTotalTokens': 880,
             },
@@ -167,9 +205,10 @@ void main() {
     expect(completedBubble.message['id'], streamingMessageId);
     expect(finalAnswer, contains('九寨沟方向备选方案'));
     final mergedJournal =
-        (completedBubble.message['processJournalV1'] as List?)
+        (((completedBubble.message['runArtifacts'] as Map?)?['processJournal']
+                    as List?)
             ?.whereType<Map>()
-            .toList(growable: false) ??
+            .toList(growable: false)) ??
         const <Map>[];
     expect(
       mergedJournal
@@ -201,7 +240,9 @@ class _ControlledCapabilityGateway extends CapabilityGateway {
 
   void emit(AssistantRunStreamEvent event) => _controller.add(event);
 
-  Future<void> waitUntilSubscribed() => _subscribed.future;
+  Future<void> waitUntilSubscribed({
+    Duration timeout = const Duration(seconds: 10),
+  }) => _subscribed.future.timeout(timeout);
 
   @override
   Stream<AssistantRunStreamEvent> runStream({
@@ -215,7 +256,10 @@ class _ControlledCapabilityGateway extends CapabilityGateway {
   }
 
   Future<void> dispose() async {
-    await _controller.close();
+    if (_controller.isClosed) {
+      return;
+    }
+    unawaited(_controller.close());
   }
 }
 

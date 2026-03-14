@@ -18,22 +18,23 @@ for f in _shared/types.yaml _shared/tag_taxonomy.yaml _shared/redis_keyspace.yam
   ruby -ryaml -e "YAML.load_file('$p')" || { echo "[verify] FAIL: invalid YAML $p"; exit 1; }
 done
 
-# 2) Each aggregate/entity directory must have the 5 required files
-REQUIRED_FILES="aggregate.yaml entity.yaml fields.yaml events.yaml storage.yaml service.yaml"
-# We accept dirs that have either aggregate.yaml OR entity.yaml, plus the other 4
-AGGREGATE_OR_ENTITY="aggregate.yaml entity.yaml"
-OTHER_REQUIRED="fields.yaml events.yaml storage.yaml service.yaml"
-
 _verify_entity_dir() {
   local dir="$1"
   local name="$2"
-  local has_agg=0 has_entity=0
+  local has_agg=0 has_entity=0 has_schema=0
 
   [[ -f "${dir}/aggregate.yaml" ]] && has_agg=1
   [[ -f "${dir}/entity.yaml" ]] && has_entity=1
+  [[ -f "${dir}/schema.yaml" ]] && has_schema=1
+
+  if (( has_schema == 1 && has_agg + has_entity == 0 )); then
+    ruby -ryaml -e "data = YAML.load_file('${dir}/schema.yaml'); abort('missing dart_class') if data['dart_class'].to_s.strip.empty?; abort('missing output_path') if data['output_path'].to_s.strip.empty?" \
+      || { echo "[verify] FAIL: invalid schema metadata ${dir}/schema.yaml"; exit 1; }
+    return
+  fi
 
   if (( has_agg + has_entity != 1 )); then
-    echo "[verify] FAIL: $name must have exactly one of aggregate.yaml or entity.yaml"
+    echo "[verify] FAIL: $name must have exactly one of aggregate.yaml or entity.yaml, or provide schema.yaml for shared contract objects"
     exit 1
   fi
 
@@ -56,7 +57,7 @@ for dir in "$BASE"/*; do
   [[ -f "$dir" ]] && continue
 
   # Domain container: no aggregate.yaml/entity.yaml at this level → recurse one level
-  if [[ ! -f "${dir}/aggregate.yaml" ]] && [[ ! -f "${dir}/entity.yaml" ]]; then
+  if [[ ! -f "${dir}/aggregate.yaml" ]] && [[ ! -f "${dir}/entity.yaml" ]] && [[ ! -f "${dir}/schema.yaml" ]]; then
     for sub in "${dir}"/*; do
       [[ -d "$sub" ]] || continue
       subname="$(basename "$sub")"

@@ -1,3 +1,4 @@
+import 'package:quwoquan_app/personal_assistant/contracts/react_observation.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/runtime_policies.dart';
 import 'package:quwoquan_app/personal_assistant/engine/react_state.dart';
 import 'package:quwoquan_app/personal_assistant/tools/tool_schema.dart';
@@ -46,33 +47,22 @@ class ReactReflector {
   }) {
     if (state.shouldStopByBudget || state.shouldStopByIteration) return false;
     if (!lastStepSuccess) return true;
-    final status = (lastObservation['status'] as String?)?.trim() ?? '';
-    final retryable = lastObservation['retryable'] == true;
-    final errorClass = (lastObservation['errorClass'] as String?)?.trim() ?? '';
-    if (policy.replanStatuses.contains(status)) {
+    final observation = ReactObservation.fromObservationMap(lastObservation);
+    if (policy.replanStatuses.contains(observation.status)) {
       return true;
     }
-    if (retryable &&
-        policy.replanRetryableErrorClasses.contains(errorClass)) {
+    if (observation.retryable &&
+        policy.replanRetryableErrorClasses.contains(observation.errorClass)) {
       return true;
     }
-    final data =
-        (lastObservation['data'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final coverage = _asDouble(data['coverage'] ?? data['coverageScore']);
-    final confidence = _asDouble(data['confidence'] ?? data['confidenceScore']);
-    final freshnessHours = _asDouble(data['freshnessHours']);
-    if ((coverage > 0 && coverage < policy.replanCoverageMin) ||
-        (confidence > 0 && confidence < policy.replanConfidenceMin) ||
-        (freshnessHours > policy.replanFreshnessHoursMax)) {
+    if ((observation.coverage > 0 &&
+            observation.coverage < policy.replanCoverageMin) ||
+        (observation.confidence > 0 &&
+            observation.confidence < policy.replanConfidenceMin) ||
+        (observation.freshnessHours > policy.replanFreshnessHoursMax)) {
       return true;
     }
     return false;
-  }
-
-  double _asDouble(Object? value) {
-    if (value is num) return value.toDouble();
-    return double.tryParse((value ?? '').toString()) ?? 0;
   }
 }
 

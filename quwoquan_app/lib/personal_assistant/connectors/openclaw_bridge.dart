@@ -2,12 +2,20 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/personal_assistant/app/assistant_gateway.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/user_events.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/run_response.dart';
 
-enum OpenClawRemoteStreamEventType { chunk, trace, userEvent, completed, failed }
+enum OpenClawRemoteStreamEventType {
+  chunk,
+  trace,
+  userEvent,
+  processJournalEvent,
+  completed,
+  failed,
+}
 
 class OpenClawRemoteStreamEvent {
   const OpenClawRemoteStreamEvent._({
@@ -15,6 +23,7 @@ class OpenClawRemoteStreamEvent {
     this.chunkText,
     this.trace,
     this.userEvent,
+    this.processJournalEvent,
     this.response,
     this.errorMessage,
   });
@@ -37,6 +46,13 @@ class OpenClawRemoteStreamEvent {
         userEvent: userEvent,
       );
 
+  factory OpenClawRemoteStreamEvent.processJournal(
+    ProcessJournalEvent processJournalEvent,
+  ) => OpenClawRemoteStreamEvent._(
+    type: OpenClawRemoteStreamEventType.processJournalEvent,
+    processJournalEvent: processJournalEvent,
+  );
+
   factory OpenClawRemoteStreamEvent.completed(AssistantRunResponse response) =>
       OpenClawRemoteStreamEvent._(
         type: OpenClawRemoteStreamEventType.completed,
@@ -53,6 +69,7 @@ class OpenClawRemoteStreamEvent {
   final String? chunkText;
   final AssistantTraceEvent? trace;
   final UserEvent? userEvent;
+  final ProcessJournalEvent? processJournalEvent;
   final AssistantRunResponse? response;
   final String? errorMessage;
 }
@@ -322,6 +339,12 @@ class OpenClawBridge {
         return OpenClawRemoteStreamEvent.chunk(chunk);
       }
       return null;
+    }
+    if (eventName == 'process_journal_event') {
+      if (decoded == null) return null;
+      return OpenClawRemoteStreamEvent.processJournal(
+        parseProcessJournalEvent(decoded),
+      );
     }
     if (eventName == 'chunk' || eventName == 'delta' || eventName == 'token') {
       if (decoded != null) {

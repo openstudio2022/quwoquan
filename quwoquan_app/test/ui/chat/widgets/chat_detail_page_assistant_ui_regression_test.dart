@@ -163,6 +163,39 @@ void main() {
     expect(tappedRef!['url'], 'https://example.com/data');
   });
 
+  testWidgets('助理过程抽屉不会把头部阶段标题在正文里重复显示', (tester) async {
+    final message = _assistantMessage(
+      id: 'assistant_msg_process_header_duplicate',
+      content: '这是最终回答',
+      extra: {
+        'uiProcessContentBlocks': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'type': 'text',
+            'text': UITextConstants.assistantPhaseCompleted,
+            'references': const <Map<String, dynamic>>[],
+          },
+          <String, dynamic>{
+            'type': 'text',
+            'text': '已把结果整理成可直接查看的回答。',
+            'references': const <Map<String, dynamic>>[],
+          },
+        ],
+      },
+    );
+    await tester.pumpWidget(_bubbleHarness(message));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    await tester.tap(find.textContaining(UITextConstants.assistantPhaseCompleted));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(
+      find.textContaining(UITextConstants.assistantPhaseCompleted),
+      findsOneWidget,
+      reason: '阶段头部应保留，但同名正文块应被折叠掉，避免重复一行',
+    );
+    expect(find.textContaining('已把结果整理成可直接查看的回答。'), findsOneWidget);
+  });
+
   testWidgets('助理过程抽屉可从 uiProcessTimelineV2 恢复', (tester) async {
     final message = _assistantMessage(
       id: 'assistant_msg_timeline_v2',
@@ -300,7 +333,7 @@ void main() {
             'reasonShort': '先确认问题落点，后面的资料才更容易收敛。',
             'source': 'trace_translator',
             'nodeId': 'root.intent.plan',
-            'message': '{"contractVersion":"assistant_turn_v4","queryTasks":[1]}',
+            'message': '{"contractVersion":"assistant_turn","queryTasks":[1]}',
             'references': const <Map<String, dynamic>>[],
             'payload': const <String, dynamic>{
               'stage': 'understanding',
@@ -398,6 +431,7 @@ void main() {
     await tester.pumpWidget(_bubbleHarness(message));
     await tester.pump(const Duration(seconds: 1));
 
-    expect(find.textContaining('not-json-payload'), findsWidgets);
+    expect(find.byType(ChatMessageBubble), findsOneWidget);
+    expect(find.textContaining('```card:compare'), findsNothing);
   });
 }

@@ -1,3 +1,4 @@
+import 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/personal_assistant/knowledge/knowledge_qa_engine.dart';
 import 'package:quwoquan_app/personal_assistant/skills/skill_manifest.dart';
 import 'package:quwoquan_app/personal_assistant/tools/tool_registry.dart';
@@ -7,7 +8,7 @@ import 'package:quwoquan_app/personal_assistant/tools/tool_schema.dart';
 /// It executes tool-chain skills without depending on Flutter platform channels.
 class SimpleSkillExecutor {
   SimpleSkillExecutor(this._toolRegistry)
-      : _knowledgeQaEngine = KnowledgeQaEngine(toolRegistry: _toolRegistry);
+    : _knowledgeQaEngine = KnowledgeQaEngine(toolRegistry: _toolRegistry);
 
   final AssistantToolRegistry _toolRegistry;
   final KnowledgeQaEngine _knowledgeQaEngine;
@@ -25,32 +26,42 @@ class SimpleSkillExecutor {
         degraded: true,
       );
     }
-    if (skill.executionTarget != 'tool_chain') {
+    if (skill.executionTargetType != SkillExecutionTarget.toolChain) {
       return AssistantToolResult(
         success: false,
-        message: 'Unsupported execution target in VM acceptance: ${skill.executionTarget}',
+        message:
+            'Unsupported execution target in VM acceptance: ${skill.executionTarget}',
         errorCode: AssistantErrorCode.unsupportedTarget,
         degraded: true,
       );
     }
-    if (skill.id == 'web.quick_search' || skill.id == 'knowledge_qa') {
-      final toolArgs = Map<String, dynamic>.from(arguments['toolArgs'] as Map? ?? arguments);
+    if (_usesKnowledgeQaPipeline(skill, arguments)) {
+      final toolArgs = Map<String, dynamic>.from(
+        arguments['toolArgs'] as Map? ?? arguments,
+      );
       final query = (toolArgs['query'] as String?)?.trim() ?? '';
       if (query.isEmpty) {
         return const AssistantToolResult(
           success: false,
-          message: 'knowledge_qa query is required',
+          message: '缺少知识问答所需的 query 参数',
           errorCode: AssistantErrorCode.invalidArguments,
           degraded: true,
         );
       }
+      final retrievalToolName =
+          (arguments['toolName'] as String?)?.trim().isNotEmpty == true
+          ? (arguments['toolName'] as String).trim()
+          : (skill.allowedTools.isNotEmpty ? skill.allowedTools.first : '');
       final report = await _knowledgeQaEngine.run(
         query: query,
+        domainId: skill.domainId,
+        retrievalToolName: retrievalToolName,
         primaryProvider: toolArgs['provider'] as String?,
-        backupProviders: (toolArgs['backupProviders'] as List?)
+        backupProviders:
+            (toolArgs['backupProviders'] as List?)
                 ?.map((e) => e.toString())
                 .toList(growable: false) ??
-            const <String>['brave', 'openclaw_proxy'],
+            const <String>[],
         maxEvidence: (toolArgs['maxEvidence'] as int?) ?? 6,
       );
       return AssistantToolResult(
@@ -58,24 +69,62 @@ class SimpleSkillExecutor {
         message: report.answer,
         data: report.toJson(),
         degraded: report.degraded,
-        errorCode: report.degraded ? AssistantErrorCode.executionFailed : AssistantErrorCode.none,
+        errorCode: report.degraded
+            ? AssistantErrorCode.executionFailed
+            : AssistantErrorCode.none,
       );
     }
     final rawSteps = arguments['steps'] as List?;
     if (rawSteps != null && rawSteps.isNotEmpty) {
       for (final step in rawSteps.whereType<Map>()) {
         final map = step.cast<String, dynamic>();
-        final name = (map['toolName'] as String?) ?? 'web_search';
+        final name =
+            (map['toolName'] as String?) ??
+            (skill.allowedTools.isNotEmpty ? skill.allowedTools.first : '');
+        if (name.trim().isEmpty) {
+          return const AssistantToolResult(
+            success: false,
+            message: 'tool-chain step 缺少 toolName 且 skill 未声明 allowedTools',
+            errorCode: AssistantErrorCode.invalidArguments,
+            degraded: true,
+          );
+        }
         final args = Map<String, dynamic>.from(
           map['toolArgs'] as Map? ?? const <String, dynamic>{},
         );
         final result = await _toolRegistry.execute(name, args);
         if (!result.success) return result;
       }
-      return const AssistantToolResult(success: true, message: 'Tool-chain success');
+      return const AssistantToolResult(
+        success: true,
+        message: 'Tool-chain success',
+      );
     }
-    final toolName = (arguments['toolName'] as String?) ?? 'web_search';
-    final toolArgs = Map<String, dynamic>.from(arguments['toolArgs'] as Map? ?? arguments);
+    final toolName =
+        (arguments['toolName'] as String?) ??
+        (skill.allowedTools.isNotEmpty ? skill.allowedTools.first : '');
+    if (toolName.trim().isEmpty) {
+      return const AssistantToolResult(
+        success: false,
+        message: 'skill 缺少显式 toolName 且未声明 allowedTools',
+        errorCode: AssistantErrorCode.invalidArguments,
+        degraded: true,
+      );
+    }
+    final toolArgs = Map<String, dynamic>.from(
+      arguments['toolArgs'] as Map? ?? arguments,
+    );
     return _toolRegistry.execute(toolName, toolArgs);
+  }
+
+  bool _usesKnowledgeQaPipeline(
+    PersonalAssistantSkillManifest skill,
+    Map<String, dynamic> arguments,
+  ) {
+    final toolArgs = Map<String, dynamic>.from(
+      arguments['toolArgs'] as Map? ?? arguments,
+    );
+    final hasQuery = (toolArgs['query'] as String?)?.trim().isNotEmpty == true;
+    return hasQuery && skill.toolChainProfile.trim() == 'knowledge_qa';
   }
 }

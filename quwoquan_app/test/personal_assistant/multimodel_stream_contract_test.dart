@@ -5,9 +5,9 @@ import 'package:test/test.dart';
 void main() {
   group('JsonFieldStreamExtractor', () {
     test('extracts target field incrementally across chunks', () {
-      final extractor = JsonFieldStreamExtractor('thinkingText');
+      final extractor = JsonFieldStreamExtractor('reasonShort');
 
-      final first = extractor.consume('{"thinkingText":"正在');
+      final first = extractor.consume('{"reasonShort":"正在');
       final second = extractor.consume('思考\\n第一');
       final third = extractor.consume('步"}');
 
@@ -21,7 +21,7 @@ void main() {
     test('keeps waiting until target field appears', () {
       final extractor = JsonFieldStreamExtractor('userMarkdown');
 
-      final delta = extractor.consume('{"thinkingText":"先分析问题"}');
+      final delta = extractor.consume('{"reasonShort":"先分析问题"}');
 
       expect(delta, isEmpty);
       expect(extractor.hasMatchedField, isFalse);

@@ -95,42 +95,6 @@ class AssistantSessionManager {
             .toList(growable: true);
       }
     }
-    // 迁移历史消息到当前契约版本（见 02-dart-coding §5.3）
-    _migrateSessionsToCurrentContractVersion();
-  }
-
-  /// 将 session 中 assistant 消息的 contractVersion 从遗留版本升级到当前版本。
-  ///
-  /// 规则：读取 content 字符串，若 JSON 中 contractVersion 为遗留值（v2/v3），
-  /// 更新为 [kAssistantTurnCurrentVersion] 后写回。加载完成后立即执行，保证内存中
-  /// 的数据始终是当前版本，下次 save() 时自动持久化升级后的数据。
-  void _migrateSessionsToCurrentContractVersion() {
-    for (final messages in _sessions.values) {
-      for (int i = 0; i < messages.length; i++) {
-        final content = (messages[i]['content'] as String?) ?? '';
-        if (content.trimLeft().isEmpty || content.trimLeft()[0] != '{') {
-          continue;
-        }
-        try {
-          final decoded = jsonDecode(content);
-          if (decoded is! Map) continue;
-          final version = (decoded['contractVersion'] as String?)?.trim() ?? '';
-          // v2/v3 均需升级；v2 包裹格式不会存入 session（session 只存纯文本），无需处理
-          if (version == kAssistantTurnLegacyVersion ||
-              version == kAssistantTurnV2WrapKey) {
-            final upgraded = Map<String, dynamic>.from(
-              decoded.cast<String, dynamic>(),
-            );
-            upgraded['contractVersion'] = kAssistantTurnCurrentVersion;
-            final updated = Map<String, dynamic>.from(messages[i]);
-            updated['content'] = jsonEncode(upgraded);
-            messages[i] = updated;
-          }
-        } catch (_) {
-          // JSON 解析失败：跳过，保留原始内容
-        }
-      }
-    }
   }
 
   Future<void> save() async {
@@ -180,16 +144,12 @@ class AssistantSessionManager {
   }
 
   /// 将 assistant 回复内容净化为可读摘要文本：
-  /// - 若是 JSON（assistant_turn_v2），提取 userMarkdown 或 result.text
+  /// - 若是 canonical assistant_turn JSON，提取 userMarkdown 或 result.text
   /// - 若是降级文本，跳过
   String _sanitizeForSummary(String raw) {
     if (raw.isEmpty) return '';
     final stripped = _stripXmlToolCalls(raw).trim();
     if (stripped.isEmpty) return '';
-    if (_containsInternalHistoryText(stripped)) return '';
-    // 跳过降级/错误文本（统一使用 AssistantContentFilters，不在此处维护独立词表）
-    if (AssistantContentFilters.isDegradedText(stripped)) return '';
-    if (AssistantContentFilters.isProgressPlaceholder(stripped)) return '';
     // 尝试提取 JSON 里的 userMarkdown
     if (stripped.trimLeft().startsWith('{')) {
       try {
@@ -226,6 +186,10 @@ class AssistantSessionManager {
         }
       } catch (_) {}
     }
+    if (_containsInternalHistoryText(stripped)) return '';
+    // 跳过降级/错误文本（统一使用 AssistantContentFilters，不在此处维护独立词表）
+    if (AssistantContentFilters.isDegradedText(stripped)) return '';
+    if (AssistantContentFilters.isProgressPlaceholder(stripped)) return '';
     return stripped;
   }
 
@@ -261,24 +225,10 @@ class AssistantSessionManager {
   }
 
   String resolveAssistantSessionForQuery(String latestUserQuery) {
+    latestUserQuery.trim();
     final current = ensureAssistantActiveSession();
-    final query = latestUserQuery.trim();
-    if (query.length < 6) return current;
-    final currentMeta = _sessionMeta[current] ?? const <String, dynamic>{};
-    final profile = [
-      (currentMeta['topicTitle'] ?? '').toString(),
-      (currentMeta['topicSummary'] ?? '').toString(),
-      (currentMeta['lastUserQuery'] ?? '').toString(),
-    ].join(' ');
-    final similarity = _textSimilarity(query, profile);
-    if (similarity >= 0.26 || !_isSessionMature(current)) {
-      _activeSessionId = current;
-      return current;
-    }
-    final nextId = _createAssistantSessionId();
-    _activeSessionId = nextId;
-    getOrCreateSession(nextId);
-    return nextId;
+    _activeSessionId = current;
+    return current;
   }
 
   String ensureAssistantActiveSession() {
@@ -423,16 +373,11 @@ class AssistantSessionManager {
     if (raw.trimLeft().isEmpty || !raw.trimLeft().startsWith('{')) return null;
     final decoded = _jsonDecodeFirst(raw);
     if (decoded is! Map) return null;
-    return AssistantTurnOutput.tryParse(decoded.cast<String, dynamic>());
+    return tryParseAssistantTurnOutput(decoded.cast<String, dynamic>());
   }
 
   String _createAssistantSessionId() {
     return 'assistant_${DateTime.now().millisecondsSinceEpoch}';
-  }
-
-  bool _isSessionMature(String sessionId) {
-    final size = _sessions[sessionId]?.length ?? 0;
-    return size >= 4;
   }
 
   String _buildTopicTitle(String userQuery) {
@@ -455,33 +400,6 @@ class AssistantSessionManager {
     return '$query\n$shortAnswer'.trim();
   }
 
-  double _textSimilarity(String a, String b) {
-    final setA = _tokenize(a);
-    final setB = _tokenize(b);
-    if (setA.isEmpty || setB.isEmpty) return 0;
-    final intersection = setA.intersection(setB).length;
-    final union = setA.union(setB).length;
-    if (union == 0) return 0;
-    return intersection / union;
-  }
-
-  Set<String> _tokenize(String text) {
-    final lower = text.toLowerCase().trim();
-    if (lower.isEmpty) return <String>{};
-    final asciiTokens = lower
-        .split(RegExp(r'[^a-z0-9\u4e00-\u9fff]+'))
-        .where((item) => item.trim().isNotEmpty)
-        .toSet();
-    final chars = lower.runes
-        .map((r) => String.fromCharCode(r))
-        .where((ch) => RegExp(r'[a-z0-9\u4e00-\u9fff]').hasMatch(ch))
-        .toList(growable: false);
-    for (var i = 0; i < chars.length - 1; i++) {
-      asciiTokens.add('${chars[i]}${chars[i + 1]}');
-    }
-    return asciiTokens;
-  }
-
   /// 判断一条消息是否是降级/错误/JSON原文内容，加载时需过滤，避免污染后续 LLM 历史。
   bool _isDegradedAssistantMessage(Map<String, dynamic> m) {
     final role = m['role']?.toString() ?? '';
@@ -494,9 +412,11 @@ class AssistantSessionManager {
     for (final candidate in candidates) {
       final raw = _stripXmlToolCalls(candidate).trim();
       if (raw.isEmpty) continue;
-      // 加载阶段必须基于原始展示文本判断是否降级，
-      // 不能先走 _sanitizeForSummary()，否则降级文本会被净化为空串，
-      // 反而绕过历史过滤。
+      if (_sanitizeForSummary(raw).isNotEmpty) {
+        continue;
+      }
+      // 若原始 JSON / envelope 能提取出稳定的用户可见文本，则视为可保留；
+      // 否则再按内部协议片段或降级文本过滤，避免历史污染。
       if (AssistantContentFilters.isNotDisplayable(raw) ||
           _containsInternalHistoryText(raw)) {
         return true;
@@ -532,12 +452,12 @@ class AssistantSessionManager {
         _containsXmlToolCall(machineEnvelope)) {
       normalized['machineEnvelope'] = '';
     }
-    final runArtifacts = (normalized['runArtifactsV1'] as Map?)
+    final runArtifacts = (normalized['runArtifacts'] as Map?)
         ?.cast<String, dynamic>();
     if (runArtifacts != null && runArtifacts.isNotEmpty) {
       final sanitizedArtifacts = Map<String, dynamic>.from(runArtifacts)
         ..remove('machineEnvelope');
-      normalized['runArtifactsV1'] = sanitizedArtifacts;
+      normalized['runArtifacts'] = sanitizedArtifacts;
     }
     return normalized;
   }
@@ -574,7 +494,7 @@ class AssistantSessionManager {
     if (text.trim().isEmpty) return false;
     const fragments = <String>[
       'contractVersion',
-      'assistant_turn_v4',
+      'assistant_turn',
       'turnPhase',
       'queryTasks',
       'tool_call',

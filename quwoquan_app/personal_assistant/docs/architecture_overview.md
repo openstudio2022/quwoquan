@@ -3,6 +3,13 @@
 > **版本**：v2.0 · **日期**：2026-03-07
 > **受众**：小趣 App 开发团队
 > **从属**：`specs/00_MASTER_DEVELOPMENT_FLOW.md` 端云一体化主线
+>
+> **核心文档收口**：当前助手增量开发请优先阅读以下三份核心文档：
+> - `PERSONAL_ASSISTANT_ARCHITECTURE_AND_FLOW.md`
+> - `PERSONAL_ASSISTANT_SKILL_AND_TOOL_EXTENSIBILITY.md`
+> - `PERSONAL_ASSISTANT_DESIGN_AND_CONSTRAINTS.md`
+>
+> 本文档保留为历史详细参考，不再作为第一入口。
 
 ---
 
@@ -146,7 +153,7 @@ LLM 每次调用的 system prompt 由以下层叠加组装（`llm_provider._reso
 L1  stack.global_system.md      ← 身份、安全红线（固定层，几乎不变）
 L2  stack.runtime_policy.md     ← 本轮预算/工具权限/执行约束（半固定）
 L3  stack.recovery_policy.md    ← 失败恢复与降级策略
-L4  stack.output_contract.md    ← 输出格式契约（assistant_turn_v2）
+L4  stack.output_contract.md    ← 输出格式契约（assistant_turn）
 L5  stack.global_policy.md      ← 全局政策追加
 
 阶段模板（动态层，每轮变化）：
@@ -211,6 +218,11 @@ L5  stack.global_policy.md      ← 全局政策追加
 
 ## 八、相关文档
 
+- [小趣私人助理：框架、流程与原理](PERSONAL_ASSISTANT_ARCHITECTURE_AND_FLOW.md) — 当前架构主入口
+- [小趣私人助理：Skill 与 Tool 可扩展机制](PERSONAL_ASSISTANT_SKILL_AND_TOOL_EXTENSIBILITY.md) — 当前扩展入口
+- [小趣私人助理：设计与开发约束](PERSONAL_ASSISTANT_DESIGN_AND_CONSTRAINTS.md) — 当前必读约束入口
+- [**真相源冻结声明**](canonical_truth_sources.md) — 唯一真相源 SSOT、Legacy 兼容层、执行约束（开发必读）
+- [Runtime 残留审计基线](runtime_audit_baseline.md) — 当前字符串治理后的热点清单与迁移基线
 - [ReAct + 工具生命周期规格 v4](react-agent-tool-lifecycle-spec-v4.md) — ReAct 循环详细规格、工具 Hook 链
 - [API 与集成指南](api_and_integration.md) — 外部 API 端点、Adapter SPI、OpenClaw/Feishu 接入
 - [运营与部署手册](operations_and_deployment.md) — 环境配置、模型接入、发布流程、灰度回滚

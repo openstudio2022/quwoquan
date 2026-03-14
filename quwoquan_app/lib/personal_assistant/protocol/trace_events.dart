@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';
 
 enum AssistantTraceEventType {
   lifecycleStart,
@@ -13,6 +13,7 @@ enum AssistantTraceEventType {
   subagentStart,
   subagentResult,
   subagentError,
+
   /// Real-time streaming token delta from synthesis LLM (SSE).
   streamDelta,
 

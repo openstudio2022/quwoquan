@@ -1,0 +1,205 @@
+dart_class: AssistantTurnOutput
+library_path: personal_assistant/contracts/assistant_turn_contract.dart
+output_path: personal_assistant/runtime/generated/contracts/assistant_turn.g.dart
+contract: assistant_turn
+version: assistant_turn
+kind: output_contract
+imports:
+  - package:quwoquan_app/personal_assistant/contracts/aggregation_state.dart
+  - package:quwoquan_app/personal_assistant/contracts/skill_run.dart
+  - package:quwoquan_app/personal_assistant/contracts/ui_process_timeline_entry.dart
+  - package:quwoquan_app/personal_assistant/contracts/user_events.dart
+  - package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart
+fields:
+  - name: contractVersion
+    type: string
+    required: true
+  - name: decision
+    type: object
+    ref: decision
+    default: {}
+  - name: messageKind
+    type: enum
+    enum_ref: AssistantMessageKind
+    required: true
+  - name: userMarkdown
+    type: string
+    required: true
+  - name: result
+    type: object
+    ref: result
+    default: {}
+  - name: evidence
+    type: list<object>
+    ref: evidence_item
+    default: []
+  - name: reasoningBasis
+    type: list<object>
+    ref: reasoning_basis_item
+    default: []
+  - name: selfCheck
+    type: object
+    ref: self_check
+    default: {}
+  - name: diagnostics
+    type: object
+    ref: diagnostics
+    default: {}
+  - name: modelSelfScore
+    type: object
+    ref: model_self_score
+    default: {}
+  - name: askUser
+    type: object
+    ref: ask_user
+    default: {}
+  - name: toolCalls
+    type: list<object>
+    ref: tool_call
+    default: []
+  - name: slotState
+    type: object
+    ref: SlotStateSnapshot
+    default: {}
+  - name: subagentPlan
+    type: list<object>
+    ref: SubagentPlan
+    default: []
+  - name: intentGraph
+    type: object
+    ref: IntentGraph
+  - name: skillRuns
+    type: list<object>
+    ref: SkillRun
+    default: []
+  - name: aggregationState
+    type: object
+    ref: AggregationState
+  - name: userEvents
+    type: list<object>
+    ref: UserEvent
+    default: []
+  - name: uiProcessTimelineV2
+    type: list<object>
+    ref: UiProcessTimelineEntry
+    default: []
+  - name: toolPlan
+    type: list<object>
+    ref: tool_call
+    default: []
+  - name: missingContextSlots
+    type: list<string>
+    default: []
+  - name: fillGuidance
+    type: list<object>
+    ref: fill_guidance_item
+    default: []
+  - name: followupPrompt
+    type: string
+    default: ''
+  - name: processSummary
+    type: string
+    default: ''
+  - name: processReferenceCount
+    type: int
+    default: 0
+  - name: phaseId
+    type: enum
+    enum_ref: PlannerPhaseId
+    default: ''
+  - name: actionCode
+    type: enum
+    enum_ref: PlannerActionCode
+    default: ''
+  - name: reasonCode
+    type: enum
+    enum_ref: PlannerReasonCode
+    default: ''
+  - name: reasonShort
+    type: string
+    default: ''
+  - name: narrativeSource
+    type: string
+    default: ''
+  - name: narrativeReferences
+    type: list<object>
+    ref: ProcessSourceReference
+    default: []
+  - name: sessionPreferenceFacts
+    type: list<object>
+    ref: PreferenceFact
+    default: []
+  - name: longTermPreferenceFacts
+    type: list<object>
+    ref: PreferenceFact
+    default: []
+subcontracts:
+  decision:
+    class_name: AssistantTurnDecisionPayload
+    fields:
+      - { name: nextAction, type: enum, enum_ref: AssistantNextAction, default: '' }
+      - { name: confidence, type: double, default: 0.0 }
+      - { name: reasoning, type: string, default: '' }
+  result:
+    class_name: AssistantTurnResult
+    fields:
+      - { name: text, type: string, default: '' }
+      - { name: summary, type: string, default: '' }
+      - { name: interpretation, type: string, default: '' }
+      - { name: actionHints, type: list<string>, default: [] }
+  ask_user:
+    class_name: AssistantTurnAskUser
+    fields:
+      - { name: slotId, type: string, default: '' }
+      - { name: prompt, type: string, default: '' }
+      - { name: required, type: bool, default: false }
+      - { name: suggestions, type: list<string>, default: [] }
+  tool_call:
+    class_name: AssistantTurnToolCall
+    fields:
+      - { name: toolName, type: string, default: '' }
+      - { name: name, type: string, default: '' }
+      - { name: toolCallId, type: string, default: '' }
+      - { name: arguments, type: map, default: {} }
+  evidence_item:
+    class_name: AssistantTurnEvidenceItem
+    fields:
+      - { name: text, type: string, default: '' }
+      - { name: claim, type: string, default: '' }
+      - { name: url, type: string, default: '' }
+      - { name: title, type: string, default: '' }
+      - { name: source, type: string, default: '' }
+      - { name: snippet, type: string, default: '' }
+      - { name: evidenceId, type: string, default: '' }
+  reasoning_basis_item:
+    class_name: AssistantTurnReasoningBasisItem
+    fields:
+      - { name: text, type: string, default: '' }
+      - { name: claim, type: string, default: '' }
+      - { name: evidenceId, type: string, default: '' }
+      - { name: confidence, type: double, default: 0.0 }
+  diagnostics:
+    class_name: AssistantTurnDiagnostics
+    fields:
+      - { name: emergedTags, type: list<map>, default: [] }
+      - { name: failedChecks, type: list<string>, default: [] }
+      - { name: parseStatus, type: string, default: '' }
+      - { name: notes, type: list<string>, default: [] }
+  self_check:
+    class_name: AssistantTurnSelfCheck
+    fields:
+      - { name: goalSatisfied, type: bool, default: false }
+      - { name: constraintSatisfied, type: bool, default: false }
+      - { name: safetyBoundarySatisfied, type: bool, default: false }
+      - { name: failedItems, type: list<string>, default: [] }
+  model_self_score:
+    class_name: AssistantTurnModelSelfScore
+    fields:
+      - { name: score, type: double, default: 0.0 }
+      - { name: reason, type: string, default: '' }
+  fill_guidance_item:
+    class_name: AssistantTurnFillGuidanceItem
+    fields:
+      - { name: slotId, type: string, default: '' }
+      - { name: reason, type: string, default: '' }
+      - { name: guidance, type: string, default: '' }

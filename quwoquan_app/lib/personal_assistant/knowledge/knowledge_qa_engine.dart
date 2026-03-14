@@ -3,20 +3,33 @@ import 'package:quwoquan_app/personal_assistant/tools/tool_registry.dart';
 import 'package:quwoquan_app/personal_assistant/tools/tool_schema.dart';
 
 class KnowledgeQaEngine {
-  const KnowledgeQaEngine({
-    required AssistantToolRegistry toolRegistry,
-  }) : _toolRegistry = toolRegistry;
+  const KnowledgeQaEngine({required AssistantToolRegistry toolRegistry})
+    : _toolRegistry = toolRegistry;
 
   final AssistantToolRegistry _toolRegistry;
 
   Future<KnowledgeQaReport> run({
     required String query,
+    String domainId = '',
     String? primaryProvider,
-    List<String> backupProviders = const <String>['brave', 'openclaw_proxy'],
+    String retrievalToolName = '',
+    List<String> backupProviders = const <String>[],
     int maxEvidence = 6,
   }) async {
+    final resolvedToolName = _resolveRetrievalToolName(retrievalToolName);
+    if (resolvedToolName.isEmpty) {
+      return const KnowledgeQaReport(
+        answer: '当前未配置可用的检索工具，无法完成知识问答。',
+        conclusion: '当前未配置可用的检索工具，无法完成知识问答。',
+        evidences: <KnowledgeQaEvidence>[],
+        uncertainty: '缺少显式检索工具配置。',
+        providersTried: <String>[],
+        degraded: true,
+      );
+    }
     final plan = _buildPlan(
       query: query,
+      domainId: domainId,
       primaryProvider: primaryProvider,
       backupProviders: backupProviders,
       maxEvidence: maxEvidence,
@@ -25,13 +38,19 @@ class KnowledgeQaEngine {
     final evidences = <KnowledgeQaEvidence>[];
     var degraded = false;
 
-    final primary = await _search(plan.primaryProvider, plan.query, plan.maxEvidence);
-    providersTried.add(plan.primaryProvider);
+    final primary = await _search(
+      resolvedToolName,
+      plan.primaryProvider,
+      plan.query,
+      plan.maxEvidence,
+    );
+    providersTried.add(
+      plan.primaryProvider.trim().isEmpty ? 'default' : plan.primaryProvider,
+    );
     if (primary.success) {
-      evidences.addAll(_extractEvidence(
-        provider: plan.primaryProvider,
-        payload: primary.data,
-      ));
+      evidences.addAll(
+        _extractEvidence(provider: plan.primaryProvider, payload: primary.data),
+      );
       degraded = degraded || primary.degraded;
     } else {
       degraded = true;
@@ -40,29 +59,33 @@ class KnowledgeQaEngine {
     final shouldSupplement = evidences.length < 2;
     if (shouldSupplement) {
       for (final provider in plan.backupProviders) {
-        final backup = await _search(provider, plan.query, plan.maxEvidence);
+        final backup = await _search(
+          resolvedToolName,
+          provider,
+          plan.query,
+          plan.maxEvidence,
+        );
         providersTried.add(provider);
         if (backup.success) {
-          evidences.addAll(_extractEvidence(
-            provider: provider,
-            payload: backup.data,
-          ));
+          evidences.addAll(
+            _extractEvidence(payload: backup.data, provider: provider),
+          );
         } else {
           degraded = true;
         }
       }
     }
 
-    final deduped = _dedupeEvidence(evidences).take(maxEvidence).toList(growable: false);
+    final deduped = _dedupeEvidence(
+      evidences,
+    ).take(maxEvidence).toList(growable: false);
     final uncertainty = _buildUncertainty(
-      domain: plan.domain,
       evidenceCount: deduped.length,
       providersTried: providersTried,
       degraded: degraded,
     );
     final conclusion = _buildConclusion(
       query: plan.query,
-      domain: plan.domain,
       evidences: deduped,
     );
     final answer = _buildStructuredAnswer(
@@ -83,139 +106,77 @@ class KnowledgeQaEngine {
 
   KnowledgeQaPlan _buildPlan({
     required String query,
+    required String domainId,
     required String? primaryProvider,
     required List<String> backupProviders,
     required int maxEvidence,
   }) {
-    final domain = _classifyDomain(query);
-    final provider = (primaryProvider?.trim().isNotEmpty ?? false)
-        ? primaryProvider!.trim()
-        : _defaultProviderByDomain(domain);
+    final provider = (primaryProvider?.trim() ?? '');
+    final normalizedBackups = <String>{
+      for (final item in backupProviders)
+        if (item.trim().isNotEmpty && item.trim() != provider) item.trim(),
+    }.toList(growable: false);
     return KnowledgeQaPlan(
       query: query.trim(),
-      domain: domain,
+      domainId: domainId.trim(),
       primaryProvider: provider,
-      backupProviders: backupProviders,
+      backupProviders: normalizedBackups,
       maxEvidence: maxEvidence,
     );
   }
 
-  KnowledgeQaDomain _classifyDomain(String query) {
-    final text = query.toLowerCase();
-    if (text.contains('财经') || text.contains('股票') || text.contains('基金') || text.contains('finance')) {
-      return KnowledgeQaDomain.finance;
+  Future<AssistantToolResult> _search(
+    String toolName,
+    String provider,
+    String query,
+    int count,
+  ) {
+    final args = <String, dynamic>{'query': query, 'count': count};
+    if (provider.trim().isNotEmpty) {
+      args['provider'] = provider.trim();
     }
-    if (text.contains('天气') || text.contains('降雨') || text.contains('温度') || text.contains('weather')) {
-      return KnowledgeQaDomain.weather;
-    }
-    if (text.contains('出行') || text.contains('行程') || text.contains('机票') || text.contains('旅行') || text.contains('travel')) {
-      return KnowledgeQaDomain.travel;
-    }
-    if (text.contains('情感') || text.contains('关系') || text.contains('焦虑') || text.contains('emotion')) {
-      return KnowledgeQaDomain.emotion;
-    }
-    if (text.contains('健康') || text.contains('疾病') || text.contains('用药') || text.contains('health')) {
-      return KnowledgeQaDomain.health;
-    }
-    if (text.contains('易经') || text.contains('卜卦') || text.contains('divination')) {
-      return KnowledgeQaDomain.divination;
-    }
-    return KnowledgeQaDomain.general;
-  }
-
-  String _defaultProviderByDomain(KnowledgeQaDomain domain) {
-    switch (domain) {
-      case KnowledgeQaDomain.weather:
-      case KnowledgeQaDomain.travel:
-        return 'brave';
-      case KnowledgeQaDomain.finance:
-      case KnowledgeQaDomain.health:
-      case KnowledgeQaDomain.emotion:
-      case KnowledgeQaDomain.divination:
-      case KnowledgeQaDomain.general:
-        return 'perplexity';
-    }
-  }
-
-  Future<AssistantToolResult> _search(String provider, String query, int count) {
-    return _toolRegistry.execute(
-      'web_search',
-      <String, dynamic>{
-        'provider': provider,
-        'query': query,
-        'count': count,
-      },
-    );
+    return _toolRegistry.execute(toolName, args);
   }
 
   List<KnowledgeQaEvidence> _extractEvidence({
-    required String provider,
     required Map<String, dynamic>? payload,
+    required String provider,
   }) {
     if (payload == null) return const <KnowledgeQaEvidence>[];
-    final raw = payload['raw'];
-    if (raw is! Map) return const <KnowledgeQaEvidence>[];
-    final map = raw.cast<String, dynamic>();
     final evidence = <KnowledgeQaEvidence>[];
-
-    // Brave shape: web.results[]
-    final web = map['web'];
-    if (web is Map) {
-      final results = web['results'];
-      if (results is List) {
-        for (final item in results.whereType<Map>()) {
-          evidence.add(
-            KnowledgeQaEvidence(
-              provider: provider,
-              title: item['title']?.toString() ?? '',
-              snippet: item['description']?.toString() ?? item['snippet']?.toString() ?? '',
-              url: item['url']?.toString() ?? '',
-            ),
-          );
-        }
-      }
+    final results =
+        (payload['references'] as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false) ??
+        (payload['results'] as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[];
+    for (final item in results) {
+      evidence.add(
+        KnowledgeQaEvidence(
+          provider: provider,
+          title: item['title']?.toString() ?? '',
+          snippet:
+              item['summary']?.toString() ??
+              item['content']?.toString() ??
+              item['snippet']?.toString() ??
+              '',
+          url: item['url']?.toString() ?? '',
+        ),
+      );
     }
 
-    // Perplexity shape: choices[].message.content
-    final choices = map['choices'];
-    if (choices is List) {
-      for (final item in choices.whereType<Map>()) {
-        final message = item['message'];
-        if (message is Map) {
-          final content = message['content']?.toString() ?? '';
-          if (content.isNotEmpty) {
-            evidence.add(
-              KnowledgeQaEvidence(
-                provider: provider,
-                title: 'Perplexity synthesis',
-                snippet: content,
-                url: '',
-              ),
-            );
-          }
-        }
-      }
-    }
-
-    // Generic common shape: results[]
-    final results = map['results'];
-    if (results is List) {
-      for (final item in results.whereType<Map>()) {
-        evidence.add(
-          KnowledgeQaEvidence(
-            provider: provider,
-            title: item['title']?.toString() ?? '',
-            snippet: item['content']?.toString() ?? item['snippet']?.toString() ?? '',
-            url: item['url']?.toString() ?? '',
-          ),
-        );
-      }
-    }
-
-    return evidence.where((e) => e.title.isNotEmpty || e.snippet.isNotEmpty).toList(growable: false);
+    return evidence
+        .where((e) => e.title.isNotEmpty || e.snippet.isNotEmpty)
+        .toList(growable: false);
   }
 
-  List<KnowledgeQaEvidence> _dedupeEvidence(List<KnowledgeQaEvidence> evidences) {
+  List<KnowledgeQaEvidence> _dedupeEvidence(
+    List<KnowledgeQaEvidence> evidences,
+  ) {
     final result = <KnowledgeQaEvidence>[];
     final seen = <String>{};
     for (final evidence in evidences) {
@@ -229,19 +190,16 @@ class KnowledgeQaEngine {
 
   String _buildConclusion({
     required String query,
-    required KnowledgeQaDomain domain,
     required List<KnowledgeQaEvidence> evidences,
   }) {
     if (evidences.isEmpty) {
       return '当前未检索到足够可信的信息，建议补充问题范围后再查询。';
     }
     final top = evidences.first;
-    final domainLabel = _domainLabel(domain);
-    return '$domainLabel问题「$query」的当前结论：${top.snippet.isEmpty ? top.title : top.snippet}';
+    return '针对「$query」的当前结论：${top.snippet.isEmpty ? top.title : top.snippet}';
   }
 
   String _buildUncertainty({
-    required KnowledgeQaDomain domain,
     required int evidenceCount,
     required List<String> providersTried,
     required bool degraded,
@@ -249,9 +207,6 @@ class KnowledgeQaEngine {
     final base = '已使用 ${providersTried.join('/')} 检索，证据条数 $evidenceCount。';
     if (degraded || evidenceCount < 2) {
       return '$base 交叉验证不足，请谨慎参考并建议二次确认。';
-    }
-    if (domain == KnowledgeQaDomain.health || domain == KnowledgeQaDomain.finance) {
-      return '$base 属于高风险领域，建议以专业机构信息为准。';
     }
     return '$base 信息一致性良好。';
   }
@@ -263,28 +218,23 @@ class KnowledgeQaEngine {
   }) {
     final evidenceLines = evidences
         .take(3)
-        .map((e) => '- [${e.provider}] ${e.title.isEmpty ? '摘要' : e.title}${e.url.isEmpty ? '' : ' (${e.url})'}')
+        .map(
+          (e) =>
+              '- [${e.provider}] ${e.title.isEmpty ? '摘要' : e.title}${e.url.isEmpty ? '' : ' (${e.url})'}',
+        )
         .join('\n');
     return '结论：$conclusion\n\n依据：\n$evidenceLines\n\n不确定性：$uncertainty';
   }
 
-  String _domainLabel(KnowledgeQaDomain domain) {
-    switch (domain) {
-      case KnowledgeQaDomain.finance:
-        return '财经';
-      case KnowledgeQaDomain.weather:
-        return '天气';
-      case KnowledgeQaDomain.travel:
-        return '出行';
-      case KnowledgeQaDomain.emotion:
-        return '情感';
-      case KnowledgeQaDomain.health:
-        return '健康';
-      case KnowledgeQaDomain.divination:
-        return '易经';
-      case KnowledgeQaDomain.general:
-        return '通用';
+  String _resolveRetrievalToolName(String explicitToolName) {
+    final trimmed = explicitToolName.trim();
+    if (trimmed.isNotEmpty) {
+      return trimmed;
     }
+    final tools = _toolRegistry.listTools();
+    if (tools.length == 1) {
+      return tools.single.name;
+    }
+    return '';
   }
 }
-

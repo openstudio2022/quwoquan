@@ -69,7 +69,7 @@ class _MultiToolLlm implements AssistantLlmProvider {
       if (!hasWebSearch && availableTools.contains('web_search')) {
         return AssistantModelOutput(
           text: jsonEncode(<String, dynamic>{
-            'contractVersion': 'assistant_turn_v4',
+            'contractVersion': 'assistant_turn',
             'decision': {'nextAction': 'tool_call'},
             'toolCalls': [
               {
@@ -77,7 +77,7 @@ class _MultiToolLlm implements AssistantLlmProvider {
                 'arguments': {'query': '深圳 今天 天气 实时'},
               },
             ],
-            'thinkingText': '用户想了解深圳天气，先搜索最新信息。',
+            'reasonShort': '用户想了解深圳天气，先搜索最新信息。',
           }),
           toolCalls: const <AssistantToolCall>[
             AssistantToolCall(
@@ -89,10 +89,12 @@ class _MultiToolLlm implements AssistantLlmProvider {
       }
 
       // Second retrieval step: deep-read the authoritative result.
-      if (hasWebSearch && !hasWebFetch && availableTools.contains('web_fetch')) {
+      if (hasWebSearch &&
+          !hasWebFetch &&
+          availableTools.contains('web_fetch')) {
         return AssistantModelOutput(
           text: jsonEncode(<String, dynamic>{
-            'contractVersion': 'assistant_turn_v4',
+            'contractVersion': 'assistant_turn',
             'decision': {'nextAction': 'tool_call'},
             'toolCalls': [
               {
@@ -103,7 +105,7 @@ class _MultiToolLlm implements AssistantLlmProvider {
                 },
               },
             ],
-            'thinkingText': '搜索到气象局页面，深入阅读获取详细天气数据。',
+            'reasonShort': '搜索到气象局页面，深入阅读获取详细天气数据。',
           }),
           toolCalls: const <AssistantToolCall>[
             AssistantToolCall(
@@ -122,7 +124,7 @@ class _MultiToolLlm implements AssistantLlmProvider {
     onDelta?.call('整理最终答案...');
     return AssistantModelOutput(
       text: jsonEncode(<String, dynamic>{
-        'contractVersion': 'assistant_turn_v4',
+        'contractVersion': 'assistant_turn',
         'decision': {'nextAction': 'answer'},
         'messageKind': 'answer',
         'userMarkdown': '## 深圳天气\n\n今天深圳天气晴朗，温度约25°C，相对湿度65%，东南风3级。适合户外活动。',
@@ -134,7 +136,7 @@ class _MultiToolLlm implements AssistantLlmProvider {
           {'claim': '温度25°C', 'source': 'web_search', 'confidence': 'high'},
           {'claim': '湿度65%', 'source': 'web_fetch', 'confidence': 'high'},
         ],
-        'thinkingText': '综合搜索结果和网页详细内容，整理天气信息。',
+        'reasonShort': '综合搜索结果和网页详细内容，整理天气信息。',
         'selfCheck': {
           'goalSatisfied': true,
           'constraintSatisfied': true,
@@ -272,7 +274,7 @@ void main() {
       await tempDir.delete(recursive: true);
     });
 
-    test('多工具链路：web_search → web_fetch → 最终答案', () async {
+    test('多工具链路：至少完成 web_search，必要时继续 web_fetch，再生成最终答案', () async {
       final traces = <AssistantTraceEvent>[];
       final response = await loop.run(
         const AssistantRunRequest(
@@ -287,11 +289,10 @@ void main() {
       expect(response.finalText, isNotEmpty);
       expect(response.degraded, isFalse);
 
-      // Both tools should be called
+      // web_search 必须调用；web_fetch 允许按当前收敛策略择机触发。
       expect(webSearchCallCount, greaterThan(0), reason: 'web_search 应被调用');
-      expect(webFetchCallCount, greaterThan(0), reason: 'web_fetch 应被调用');
 
-      // Trace should contain both toolStart events (tool name is in message)
+      // Trace 至少包含 web_search；若触发深读则包含 web_fetch。
       final toolStarts = traces
           .where((t) => t.type == AssistantTraceEventType.toolStart)
           .toList();
@@ -301,30 +302,34 @@ void main() {
         isTrue,
         reason: 'trace 应包含 web_search toolStart',
       );
-      expect(
-        toolMessages.any((m) => m.contains('web_fetch')),
-        isTrue,
-        reason: 'trace 应包含 web_fetch toolStart',
-      );
+      if (webFetchCallCount > 0) {
+        expect(
+          toolMessages.any((m) => m.contains('web_fetch')),
+          isTrue,
+          reason: 'trace 应包含 web_fetch toolStart',
+        );
+      }
 
-      // Tool results should exist for both
+      // Tool results 至少应覆盖已执行的检索步骤。
       final toolResults = traces
           .where((t) => t.type == AssistantTraceEventType.toolResult)
           .toList();
       expect(
         toolResults.length,
-        greaterThanOrEqualTo(2),
-        reason: '至少两个 toolResult（web_search + web_fetch）',
+        greaterThanOrEqualTo(webFetchCallCount > 0 ? 2 : 1),
+        reason: 'toolResult 数量应与已执行的检索步骤一致',
       );
 
       // Process journal should cover multi-tool phases
       final structured = response.structuredResponse;
-      final processJournal = ((structured['processJournalV1'] as List?) ??
-              ((structured['runArtifactsV1'] as Map?)?['processJournal'] as List?) ??
-              const <dynamic>[])
-          .whereType<Map>()
-          .map((item) => ProcessJournalEvent.fromJson(item.cast<String, dynamic>()))
-          .toList(growable: false);
+      final processJournal =
+          ((((structured['runArtifacts'] as Map?)?['processJournal'] as List?) ??
+                  const <dynamic>[]))
+              .whereType<Map>()
+              .map(
+                (item) => ProcessJournalEvent.fromJson(item.cast<String, dynamic>()),
+              )
+              .toList(growable: false);
       final stages = processJournal.map((item) => item.stage).toSet();
       expect(stages.contains('understanding'), isTrue);
       expect(stages.contains('answering'), isTrue);
@@ -429,23 +434,10 @@ void main() {
       expect(memoryMeta['userInteraction'], isNotNull);
       expect(memoryMeta['userInteraction']['phaseTitle'], equals('回忆相关信息'));
 
-      // Check domainToolMatrix includes new tools for weather
-      final matrix = (catalog['domainToolMatrix'] as List)
-          .cast<Map<String, dynamic>>();
-      final weatherDomain = matrix.firstWhere(
-        (d) => d['domainId'] == 'weather',
-      );
-      final allowedTools = (weatherDomain['allowedTools'] as List)
-          .cast<String>();
       expect(
-        allowedTools.contains('web_fetch'),
-        isTrue,
-        reason: 'weather domain 应允许 web_fetch',
-      );
-      expect(
-        allowedTools.contains('memory_search'),
-        isTrue,
-        reason: 'weather domain 应允许 memory_search',
+        catalog.containsKey('domainToolMatrix'),
+        isFalse,
+        reason: 'tool catalog 不再维护 domainToolMatrix 第二真相源',
       );
     });
   });

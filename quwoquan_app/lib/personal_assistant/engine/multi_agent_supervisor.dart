@@ -1,5 +1,6 @@
 import 'package:quwoquan_app/personal_assistant/contracts/aggregation_state.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/intent_graph.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/skill_run.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/subagent_plan.dart';
 import 'package:quwoquan_app/personal_assistant/engine/aggregation_gate.dart';
@@ -102,16 +103,15 @@ class MultiAgentSupervisor {
         .clamp(1, 8);
 
     final budgets = subagentPlans.map((plan) {
-      final isFast = plan.problemClass == 'realtime_info' ||
-          plan.problemClass == 'simple_qa';
+      final problemClass = parseProblemClass(plan.problemClass);
+      final isFast = problemClass.isFastConvergence;
       return SubagentBudget(
         subagentId: plan.subagentId,
         domainId: plan.domainId,
         maxIterations: isFast ? 2 : 4,
         toolBudget: isFast ? 1 : budgetPerAgent,
         reflectionBudget: isFast ? 0 : 1,
-        freshnessHoursMax:
-            plan.problemClass == 'realtime_info' ? 1 : 72,
+        freshnessHoursMax: problemClass == ProblemClass.realtimeInfo ? 1 : 72,
       );
     }).toList(growable: false);
 

@@ -1,0 +1,13 @@
+dart_class: ReactObservationDto
+library_path: personal_assistant/contracts/react_observation.dart
+output_path: personal_assistant/runtime/generated/contracts/react_observation.g.dart
+contract: react_observation
+version: v1
+kind: runtime_policy_contract
+fields:
+  - { name: status, type: string, default: '' }
+  - { name: retryable, type: bool, default: false }
+  - { name: errorClass, type: string, default: '' }
+  - { name: coverage, type: double, default: 0.0 }
+  - { name: confidence, type: double, default: 0.0 }
+  - { name: freshnessHours, type: double, default: 0.0 }

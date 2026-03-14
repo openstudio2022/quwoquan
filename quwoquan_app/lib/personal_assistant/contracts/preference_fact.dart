@@ -1,3 +1,4 @@
+export 'package:quwoquan_app/personal_assistant/runtime/generated/contracts/preference_fact.g.dart';
 class PreferenceFact {
   const PreferenceFact({
     required this.factId,

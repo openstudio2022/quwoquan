@@ -1,0 +1,23 @@
+dart_class: DialogueRoundScriptDto
+library_path: personal_assistant/contracts/dialogue_round_script.dart
+output_path: personal_assistant/runtime/generated/contracts/dialogue_round_script.g.dart
+contract: dialogue_round_script
+version: v1
+kind: runtime_policy_contract
+fields:
+  - { name: domainId, type: string, default: '' }
+  - { name: enabled, type: bool, default: false }
+  - { name: currentStateId, type: string, default: '' }
+  - { name: detectedEvent, type: string, default: '' }
+  - { name: suggestedNextStateId, type: string, default: '' }
+  - { name: nextStateCandidates, type: list<string>, default: [] }
+  - { name: requiredFieldsForNextState, type: list<string>, default: [] }
+  - { name: totalSubTotalRequired, type: bool, default: false }
+  - { name: optionalEnrichment, type: bool, default: false }
+  - { name: maxQuestionsPerTurn, type: int, default: 0 }
+  - { name: hardFailCodes, type: list<string>, default: [] }
+  - { name: passCriteriaRound, type: map, default: {} }
+  - { name: statePromptExcerpt, type: string, default: '' }
+  - { name: stateMachineExcerpt, type: string, default: '' }
+  - { name: routingCatalogVersion, type: string, default: '' }
+  - { name: eventCatalogVersion, type: string, default: '' }

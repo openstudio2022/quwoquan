@@ -39,24 +39,23 @@ void main() {
       }
     });
 
-    test('pre-gate blocks when context missing', () async {
+    test('pre-gate 不再通过历史关键词启发式直接阻断', () async {
       final response = await agentLoop.run(
         const AssistantRunRequest(
           sessionId: 'dual-pre',
           messages: <AssistantRunMessage>[
-            // 含"历史"关键词触发 hasLongtermNeed，无记忆时 canEnterDomain = false
             AssistantRunMessage(role: 'user', content: '上次我们聊的历史记录是什么'),
           ],
         ),
       );
-      expect(response.errorCode, equals('missing_context'));
+      expect(response.errorCode, isNot(equals('missing_context')));
       expect(
         (response.structuredResponse['domainPrecheck'] as Map?)?['canEnterDomain'],
-        isFalse,
+        isTrue,
       );
     });
 
-    test('post-gate triggers gap fill retry when evidence insufficient', () async {
+    test('post-gate 不再在通用兜底意图上伪造实时证据重试', () async {
       final response = await agentLoop.run(
         const AssistantRunRequest(
           sessionId: 'dual-post',
@@ -73,7 +72,7 @@ void main() {
               trace.type == AssistantTraceEventType.lifecycleStart &&
               trace.message.contains('synthesis readiness failed'),
         ),
-        isTrue,
+        isFalse,
       );
     });
   });

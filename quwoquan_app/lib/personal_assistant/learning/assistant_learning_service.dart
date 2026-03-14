@@ -6,8 +6,8 @@ class AssistentLearningService {
   AssistentLearningService({
     required AssistentLearningStore store,
     required AssistentSyncGateway syncGateway,
-  })  : _store = store,
-        _syncGateway = syncGateway;
+  }) : _store = store,
+       _syncGateway = syncGateway;
 
   final AssistentLearningStore _store;
   final AssistentSyncGateway _syncGateway;
@@ -37,6 +37,7 @@ class AssistentLearningService {
     required String answerText,
     required List<String> userTags,
     required int durationMs,
+    String domainId = '',
     String explicitThumb = 'none',
     List<String> explicitReasonCodes = const <String>[],
     bool copiedAnswer = false,
@@ -58,7 +59,11 @@ class AssistentLearningService {
       userId: userId,
       sessionId: sessionId,
       pageType: pageType,
-      domainId: _inferDomain(queryText),
+      domainId: _resolveDomainId(
+        explicitDomainId: domainId,
+        pageType: pageType,
+        userTags: userTags,
+      ),
       queryText: queryText,
       answerText: answerText,
       userTags: userTags,
@@ -82,7 +87,9 @@ class AssistentLearningService {
     await _store.appendScores(scores);
     await _rebuildDailyAggregates();
     await _store.save();
-    await _syncGateway.pushInteractionEvents(events: <Map<String, dynamic>>[event.toJson()]);
+    await _syncGateway.pushInteractionEvents(
+      events: <Map<String, dynamic>>[event.toJson()],
+    );
     await _syncGateway.pushScorecards(
       scorecards: scores.map((item) => item.toJson()).toList(growable: false),
     );
@@ -99,6 +106,7 @@ class AssistentLearningService {
     required List<String> userTags,
     required String explicitThumb,
     required List<String> explicitReasonCodes,
+    String domainId = '',
     String correctionText = '',
     String feedbackTargetMessageId = '',
   }) async {
@@ -112,6 +120,7 @@ class AssistentLearningService {
       answerText: answerText,
       userTags: userTags,
       durationMs: 0,
+      domainId: domainId,
       explicitThumb: explicitThumb,
       explicitReasonCodes: explicitReasonCodes,
       feedbackTargetMessageId: feedbackTargetMessageId,
@@ -124,8 +133,12 @@ class AssistentLearningService {
     final tagDomainDaily = await _store.tagDomainDaily();
     final feedbackStats = await _buildFeedbackStats();
     return <String, dynamic>{
-      'userDaily': userDaily.map((item) => item.toJson()).toList(growable: false),
-      'tagDomainDaily': tagDomainDaily.map((item) => item.toJson()).toList(growable: false),
+      'userDaily': userDaily
+          .map((item) => item.toJson())
+          .toList(growable: false),
+      'tagDomainDaily': tagDomainDaily
+          .map((item) => item.toJson())
+          .toList(growable: false),
       'feedbackStats': feedbackStats,
     };
   }
@@ -145,7 +158,8 @@ class AssistentLearningService {
     var referenceOpenedCount = 0;
 
     for (final event in events) {
-      final hasExplicit = event.explicitThumb != 'none' ||
+      final hasExplicit =
+          event.explicitThumb != 'none' ||
           event.explicitReasonCodes.isNotEmpty ||
           event.correctionText.trim().isNotEmpty;
       if (!hasExplicit) continue;
@@ -198,46 +212,57 @@ class AssistentLearningService {
     };
     for (final score in scores) {
       final dateKey = _dateKey(score.createdAt);
-      final userKey = '$dateKey|${score.userId}|${score.domainId}|${score.metricId}';
-      userBuckets.putIfAbsent(userKey, _ScoreAccumulator.new).add(score.scoreValue);
+      final userKey =
+          '$dateKey|${score.userId}|${score.domainId}|${score.metricId}';
+      userBuckets
+          .putIfAbsent(userKey, _ScoreAccumulator.new)
+          .add(score.scoreValue);
 
       final event = eventById[score.eventId];
       final tags = event?.userTags ?? const <String>[];
       for (final tag in tags) {
         final tagKey = '$dateKey|$tag|${score.domainId}|${score.metricId}';
-        tagBuckets.putIfAbsent(tagKey, _ScoreAccumulator.new).add(score.scoreValue);
+        tagBuckets
+            .putIfAbsent(tagKey, _ScoreAccumulator.new)
+            .add(score.scoreValue);
       }
     }
 
-    final userAggregates = userBuckets.entries.map((entry) {
-      final parts = entry.key.split('|');
-      return AssistentScoreAggregate(
-        bucketDate: parts[0],
-        scopeId: parts[1],
-        domainId: parts[2],
-        metricId: parts[3],
-        scoreAvg: entry.value.avg,
-        sampleCount: entry.value.count,
-      );
-    }).toList(growable: false);
+    final userAggregates = userBuckets.entries
+        .map((entry) {
+          final parts = entry.key.split('|');
+          return AssistentScoreAggregate(
+            bucketDate: parts[0],
+            scopeId: parts[1],
+            domainId: parts[2],
+            metricId: parts[3],
+            scoreAvg: entry.value.avg,
+            sampleCount: entry.value.count,
+          );
+        })
+        .toList(growable: false);
 
-    final tagAggregates = tagBuckets.entries.map((entry) {
-      final parts = entry.key.split('|');
-      return AssistentScoreAggregate(
-        bucketDate: parts[0],
-        scopeId: parts[1],
-        domainId: parts[2],
-        metricId: parts[3],
-        scoreAvg: entry.value.avg,
-        sampleCount: entry.value.count,
-      );
-    }).toList(growable: false);
+    final tagAggregates = tagBuckets.entries
+        .map((entry) {
+          final parts = entry.key.split('|');
+          return AssistentScoreAggregate(
+            bucketDate: parts[0],
+            scopeId: parts[1],
+            domainId: parts[2],
+            metricId: parts[3],
+            scoreAvg: entry.value.avg,
+            sampleCount: entry.value.count,
+          );
+        })
+        .toList(growable: false);
 
     await _store.replaceUserDaily(userAggregates);
     await _store.replaceTagDomainDaily(tagAggregates);
   }
 
-  List<AssistentInteractionMetricScore> _scoreEvent(AssistentInteractionEvent event) {
+  List<AssistentInteractionMetricScore> _scoreEvent(
+    AssistentInteractionEvent event,
+  ) {
     final now = DateTime.now();
     final values = <String, double>{
       'answer_relevance': _scoreRelevance(event.answerText),
@@ -269,24 +294,52 @@ class AssistentLearningService {
         .toList(growable: false);
   }
 
-  String _inferDomain(String query) {
-    final lowered = query.toLowerCase();
-    if (lowered.contains('天气') || lowered.contains('降雨') || lowered.contains('温度')) {
-      return 'weather';
+  String _resolveDomainId({
+    required String explicitDomainId,
+    required String pageType,
+    required List<String> userTags,
+  }) {
+    final explicit = _normalizeDomainToken(explicitDomainId);
+    if (explicit.isNotEmpty) return explicit;
+    for (final tag in userTags) {
+      final normalized = tag.trim();
+      if (normalized.isEmpty) continue;
+      for (final prefix in const <String>[
+        'domain:',
+        'domain=',
+        'skill:',
+        'skill=',
+      ]) {
+        if (!normalized.startsWith(prefix)) continue;
+        final token = _normalizeDomainToken(
+          normalized.substring(prefix.length),
+        );
+        if (token.isNotEmpty) return token;
+      }
     }
-    if (lowered.contains('出行') || lowered.contains('机票') || lowered.contains('路线')) {
-      return 'travel';
-    }
-    if (lowered.contains('创作') || lowered.contains('文案') || lowered.contains('剪辑')) {
-      return 'create_opt';
-    }
-    if (lowered.contains('圈子') || lowered.contains('社区')) {
-      return 'circles';
-    }
-    if (lowered.contains('聊天') || lowered.contains('历史')) {
-      return 'chat_memory';
+    final pageDomain = _normalizeDomainToken(pageType);
+    if (pageDomain.isNotEmpty &&
+        !const <String>{
+          'chat',
+          'assistant',
+          'conversation',
+          'message',
+          'general',
+        }.contains(pageDomain)) {
+      return pageDomain;
     }
     return 'general';
+  }
+
+  String _normalizeDomainToken(String raw) {
+    final normalized = raw
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9_/\-]+'), '_')
+        .replaceAll(RegExp(r'[/\-]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'^_|_$'), '');
+    return normalized;
   }
 
   String _dateKey(DateTime time) {
@@ -384,4 +437,3 @@ class _ScoreAccumulator {
   int get count => _count;
   double get avg => _count == 0 ? 0.0 : _sum / _count;
 }
-

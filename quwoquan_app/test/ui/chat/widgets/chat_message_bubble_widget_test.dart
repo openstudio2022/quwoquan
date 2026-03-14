@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
 
 Widget _wrapBubble({
@@ -70,6 +71,56 @@ void main() {
 
       expect(find.byType(ChatMessageBubble), findsOneWidget);
     });
+
+    testWidgets('完整 card fence 渲染为用户可见内容而不是源码残片', (tester) async {
+      final message = <String, dynamic>{
+        'type': 'text',
+        'content':
+            '## 华为云盘古分析\n\n```card:compare\n{"title":"差异化优势","vendor":"华为云"}\n```',
+        'senderId': AppConceptConstants.assistantSenderId,
+      };
+      await tester.pumpWidget(_wrapBubble(message: message));
+      await tester.pump();
+
+      expect(
+        find.textContaining('差异化优势', findRichText: true),
+        findsAtLeastNWidgets(1),
+      );
+      expect(
+        find.textContaining('华为云', findRichText: true),
+        findsAtLeastNWidgets(1),
+      );
+      expect(
+        find.textContaining('card:compare', findRichText: true),
+        findsNothing,
+      );
+      expect(find.textContaining('```', findRichText: true), findsNothing);
+    });
+
+    testWidgets('非法 card fence 不会把 markdown 源码泄漏到界面', (tester) async {
+      final message = <String, dynamic>{
+        'type': 'text',
+        'content':
+            '## 查询结论\n\n```card:unknown\n{"title":"内部协议","vendor":"Cursor"}\n```\n\n最终结论仍然保留。',
+        'senderId': AppConceptConstants.assistantSenderId,
+      };
+      await tester.pumpWidget(_wrapBubble(message: message));
+      await tester.pump();
+
+      expect(
+        find.textContaining('最终结论仍然保留。', findRichText: true),
+        findsAtLeastNWidgets(1),
+      );
+      expect(
+        find.textContaining('card:unknown', findRichText: true),
+        findsNothing,
+      );
+      expect(
+        find.textContaining('内部协议', findRichText: true),
+        findsNothing,
+      );
+      expect(find.textContaining('```', findRichText: true), findsNothing);
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────
@@ -83,11 +134,13 @@ void main() {
         'content': '长按测试消息',
         'senderId': 'user_001',
       };
-      await tester.pumpWidget(_wrapBubble(
-        message: message,
-        isRight: true,
-        onLongPressStart: (_) => longPressed = true,
-      ));
+      await tester.pumpWidget(
+        _wrapBubble(
+          message: message,
+          isRight: true,
+          onLongPressStart: (_) => longPressed = true,
+        ),
+      );
       await tester.pump();
 
       final bubble = tester.widget<ChatMessageBubble>(
@@ -106,11 +159,13 @@ void main() {
         'content': '点击测试消息',
         'senderId': 'user_001',
       };
-      await tester.pumpWidget(_wrapBubble(
-        message: message,
-        isRight: true,
-        onTap: () => tapped = true,
-      ));
+      await tester.pumpWidget(
+        _wrapBubble(
+          message: message,
+          isRight: true,
+          onTap: () => tapped = true,
+        ),
+      );
       await tester.pump();
 
       final bubble = tester.widget<ChatMessageBubble>(
@@ -140,10 +195,7 @@ void main() {
     });
 
     testWidgets('null content 安全渲染', (tester) async {
-      final message = <String, dynamic>{
-        'type': 'text',
-        'senderId': 'user_001',
-      };
+      final message = <String, dynamic>{'type': 'text', 'senderId': 'user_001'};
       await tester.pumpWidget(_wrapBubble(message: message));
       await tester.pump();
 

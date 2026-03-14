@@ -24,11 +24,13 @@ const _phaseHints = <String>[
 ];
 
 const _forbiddenFragments = <String>[
-  'assistant_turn_v4',
+  'assistant_turn',
   'contractVersion',
   'queryTasks',
   '<tool_call>',
   'tool_call',
+  '```md',
+  '```card:',
   'machineEnvelope',
   'runArtifactsV1',
   'historySummarySnippet',
@@ -44,11 +46,13 @@ const _forbiddenFragments = <String>[
 ];
 
 void main() {
-  final binding =
-      IntegrationTestWidgetsFlutterBinding.ensureInitialized()
-          as IntegrationTestWidgetsFlutterBinding;
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('真实两轮助理问答界面联调', (tester) async {
+    final originalOnError = FlutterError.onError;
+    addTearDown(() {
+      FlutterError.onError = originalOnError;
+    });
     app.main();
 
     await _waitForMainEntry(tester);
@@ -60,14 +64,14 @@ void main() {
       query: _firstQuery,
     );
     _expectReplayResult(firstResult);
-    print('FIRST_RESULT: ${firstResult.toJson()}');
+    debugPrint('FIRST_RESULT: ${firstResult.toJson()}');
 
     final secondResult = await _sendQueryAndWaitForAnswer(
       tester,
       query: _secondQuery,
     );
     _expectReplayResult(secondResult);
-    print('SECOND_RESULT: ${secondResult.toJson()}');
+    debugPrint('SECOND_RESULT: ${secondResult.toJson()}');
 
     binding.reportData = <String, dynamic>{
       'firstQuery': firstResult.toJson(),

@@ -1,0 +1,12 @@
+dart_class: SlotSchemaDto
+library_path: personal_assistant/contracts/slot_schema.dart
+output_path: personal_assistant/runtime/generated/contracts/slot_schema.g.dart
+contract: slot_schema
+version: v1
+kind: runtime_policy_contract
+fields:
+  - { name: requiredSlots, type: list<string>, default: [] }
+  - { name: optionalSlots, type: list<string>, default: [] }
+  - { name: carryOver, type: bool, default: false }
+  - { name: stateId, type: string, default: '' }
+  - { name: nextStateId, type: string, default: '' }

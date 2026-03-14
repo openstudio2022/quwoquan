@@ -12,7 +12,7 @@ searchPolicy:
 requires:
   tools: [web_search]
   permissions: [location]
-output_contract: assistant_turn_v2
+output_contract: assistant_turn
 tool_observation_contract: tool_observation_v1
 reference_docs: references/domain-knowledge.md references/output-examples.md
 script_guides: references/tool-call-guidance.md
@@ -49,7 +49,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 ### 结构化 JSON 契约（必填字段）
 ```json
 {
-  "contractVersion": "assistant_turn_v2",
+  "contractVersion": "assistant_turn",
   "decision": {"nextAction": "tool_call|answer|ask_user|retry|abort"},
   "slotState": {
     "origin": {"value": "", "source": "user_query|local_context|memory|unknown"},

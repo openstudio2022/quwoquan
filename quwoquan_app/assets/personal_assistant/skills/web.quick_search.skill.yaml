@@ -5,6 +5,7 @@ version: 1.0.0
 executionTarget: tool_chain
 visibility: both
 category: knowledge
+toolChainProfile: knowledge_qa
 tier: free
 defaultEnabled: true
 channelScopes:

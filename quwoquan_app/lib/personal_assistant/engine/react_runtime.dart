@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:quwoquan_app/personal_assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/runtime_policies.dart';
 import 'package:quwoquan_app/personal_assistant/engine/llm_provider.dart';
 import 'package:quwoquan_app/personal_assistant/engine/react_planner.dart';
@@ -8,7 +9,6 @@ import 'package:quwoquan_app/personal_assistant/engine/react_state.dart';
 import 'package:quwoquan_app/personal_assistant/engine/tool_execution_guard.dart';
 import 'package:quwoquan_app/personal_assistant/engine/tool_result_assessor.dart';
 import 'package:quwoquan_app/personal_assistant/engine/tool_result_truncator.dart';
-import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/personal_assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/personal_assistant/tools/metadata/tool_metadata_registry.dart';
 import 'package:quwoquan_app/personal_assistant/tools/tool_registry.dart';
@@ -374,6 +374,31 @@ class ReactRuntime {
         rawToolCalls,
         shell: executionShell,
       );
+      for (final call in effectiveToolCalls) {
+        if (!_isRetrievalLikeTool(call.name)) continue;
+        final plannedTasks = _coerceSearchTasks(call.arguments['queryTasks']);
+        if (plannedTasks.isEmpty) continue;
+        pushTrace(
+          AssistantTraceEvent(
+            type: AssistantTraceEventType.searchQueryGenerated,
+            message: '生成检索计划',
+            timestamp: DateTime.now(),
+            runId: runId,
+            traceId: traceId,
+            toolCallId: call.id,
+            data: <String, dynamic>{
+              'toolName': call.name,
+              'problemClass': executionShell.problemClass,
+              'query': (call.arguments['query'] as String?)?.trim() ?? '',
+              'queryTasks': plannedTasks,
+              if (call.arguments['queryNormalization'] is Map)
+                'queryNormalization':
+                    (call.arguments['queryNormalization'] as Map)
+                        .cast<String, dynamic>(),
+            },
+          ),
+        );
+      }
       // Track consecutive empty iterations for deadlock detection
       final isEmptyOutput =
           output.text.trim().isEmpty && effectiveToolCalls.isEmpty;
@@ -395,6 +420,7 @@ class ReactRuntime {
             data: <String, dynamic>{
               'consecutiveEmptyIterations': state.consecutiveEmptyIterations,
               'userMessage': '这轮补不到更稳的信息了，我先把已经确认的内容整理给你。',
+              'lifecycleOutcome': 'degraded',
             },
           ),
         );
@@ -412,6 +438,7 @@ class ReactRuntime {
               timestamp: DateTime.now(),
               runId: runId,
               traceId: traceId,
+            data: const <String, dynamic>{'lifecycleOutcome': 'degraded'},
             ),
           );
           return ReactRuntimeResult(
@@ -545,9 +572,13 @@ class ReactRuntime {
           );
         }
         state.usedTools += 1;
-        if (step.toolName.contains('search')) {
+        final retrievalLike = _isRetrievalLikeTool(step.toolName);
+        if (retrievalLike) {
           final query =
-              (step.arguments['query'] ?? step.arguments['keyword'] ?? '')
+              (step.arguments['query'] ??
+                      step.arguments['keyword'] ??
+                      step.arguments['url'] ??
+                      '')
                   .toString();
           pushTrace(
             AssistantTraceEvent(
@@ -557,8 +588,11 @@ class ReactRuntime {
               runId: runId,
               traceId: traceId,
               toolCallId: step.id,
-              visibility: TraceVisibility.system,
-              data: <String, dynamic>{'tool': step.toolName, 'query': query},
+              data: <String, dynamic>{
+                'toolName': step.toolName,
+                'query': query,
+                'problemClass': executionShell.problemClass,
+              },
             ),
           );
         }
@@ -572,6 +606,7 @@ class ReactRuntime {
             toolCallId: step.id,
             data: <String, dynamic>{
               'stepId': step.id,
+              'toolName': step.toolName,
               'description': step.description,
               ...step.arguments,
               '__sessionId': sessionId,
@@ -617,6 +652,8 @@ class ReactRuntime {
         final traceData = <String, dynamic>{
           ...?result.data,
           'toolName': step.toolName,
+          'problemClass': executionShell.problemClass,
+          'retrievalLike': retrievalLike,
           if (!isOk && shouldSuppressToolErrorForUser) 'suppressed': true,
         };
         pushTrace(
@@ -632,7 +669,7 @@ class ReactRuntime {
             data: traceData.isEmpty ? null : traceData,
           ),
         );
-        if (step.toolName.contains('search') && isOk) {
+        if (retrievalLike && isOk) {
           final refs = (result.data?['references'] as List?)?.length ?? 0;
           pushTrace(
             AssistantTraceEvent(
@@ -642,10 +679,11 @@ class ReactRuntime {
               runId: runId,
               traceId: traceId,
               toolCallId: step.id,
-              visibility: TraceVisibility.system,
               data: <String, dynamic>{
-                'tool': step.toolName,
+                'toolName': step.toolName,
                 'referenceCount': refs,
+                'references': (result.data?['references'] as List?) ?? const <dynamic>[],
+                'problemClass': executionShell.problemClass,
                 'qualityScore':
                     (result.data?['qualityScore'] as num?)?.toDouble() ?? 0.0,
               },
@@ -680,8 +718,8 @@ class ReactRuntime {
             'content':
                 '工具调用失败上下文（供下一轮决策，不直接展示给用户）：\n'
                 '${jsonEncode(failureContext)}\n'
-                '请结合历史对话决定下一步：'
-                '若是天气问题且缺少城市，请追问城市；若城市已知，优先给出可执行的降级建议并说明可重试。',
+                '请结合历史对话决定下一步：若缺少关键槽位则优先 ask_user；'
+                '若关键槽位已齐但外部能力失败，则给出基于现有信息的稳妥降级答复，并说明是否值得重试。',
           });
         }
         // Layer 3 反思循环：当 web_search 质量评分不足时，注入反思提示驱动 LLM 重写查询
@@ -829,6 +867,7 @@ class ReactRuntime {
         timestamp: DateTime.now(),
         runId: runId,
         traceId: traceId,
+        data: const <String, dynamic>{'lifecycleOutcome': 'completed'},
       ),
     );
     // 检查 traces 中是否存在降级标记（工具预算耗尽后末次 LLM 也降级的场景）。
@@ -937,8 +976,7 @@ class ReactRuntime {
     final out = <String>[];
     final seen = <String>{};
     for (final call in toolCalls) {
-      final name = call.name.trim().toLowerCase();
-      if (!(name.contains('search') || name.contains('retrieval'))) {
+      if (!_isRetrievalLikeTool(call.name)) {
         continue;
       }
       final args = call.arguments;
@@ -960,6 +998,11 @@ class ReactRuntime {
     return out;
   }
 
+  bool _isRetrievalLikeTool(String toolName) {
+    final registry = _toolMetadataRegistry;
+    return registry?.isRetrievalLikeTool(toolName) ?? false;
+  }
+
   _RuntimeExecutionShell _resolveExecutionShell(
     Map<String, dynamic> templateVariables,
   ) {
@@ -975,10 +1018,11 @@ class ReactRuntime {
     required _RuntimeExecutionShell shell,
   }) {
     if (toolCalls.isEmpty) return toolCalls;
+    final metadata = _toolMetadataRegistry;
     return toolCalls
         .map((call) {
           final args = _flattenToolArguments(call.arguments);
-          if (call.name != 'web_search') {
+          if (!(metadata?.supportsQueryTasks(call.name) ?? false)) {
             return AssistantToolCall(
               name: call.name,
               arguments: args,
@@ -998,18 +1042,18 @@ class ReactRuntime {
             }
           } else if (queryTasks.length == 1) {
             args['query'] = queryTasks.first['query'];
+            args['queryTasks'] = queryTasks;
             args.remove('queryVariants');
-            args.remove('queryTasks');
           } else {
             args.remove('queryVariants');
             args.remove('queryTasks');
           }
-          if (shell.providerPolicy == 'authority_first') {
+          if (shell.providerPolicyType == ProviderPolicy.authorityFirst) {
             args.remove('provider');
             if (shell.authorityDomains.isNotEmpty) {
               args['authorityDomains'] = shell.authorityDomains;
             }
-          } else if (shell.providerPolicy == 'preferred_only' &&
+          } else if (shell.providerPolicyType == ProviderPolicy.preferredOnly &&
               shell.preferredProviders.isNotEmpty) {
             args['provider'] = shell.preferredProviders.first;
           }
@@ -1053,10 +1097,34 @@ class ReactRuntime {
     required _RuntimeExecutionShell shell,
   }) {
     final taskBudget = shell.variantBudget <= 0 ? 1 : shell.variantBudget;
+    final queryNormalization =
+        (args['queryNormalization'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final commonTaskMetadata = <String, dynamic>{
+      if (_RuntimeExecutionShell._stringList(
+        queryNormalization['entityAnchors'],
+      ).isNotEmpty)
+        'entityAnchors': _RuntimeExecutionShell._stringList(
+          queryNormalization['entityAnchors'],
+        ),
+      if (_RuntimeExecutionShell._stringList(
+        queryNormalization['negativeKeywords'],
+      ).isNotEmpty)
+        'negativeKeywords': _RuntimeExecutionShell._stringList(
+          queryNormalization['negativeKeywords'],
+        ),
+      if ((queryNormalization['answerShape'] as String?)?.trim().isNotEmpty ==
+          true)
+        'answerShape': (queryNormalization['answerShape'] as String).trim(),
+      if ((queryNormalization['freshnessNeed'] as String?)?.trim().isNotEmpty ==
+          true)
+        'freshnessNeed': (queryNormalization['freshnessNeed'] as String).trim(),
+    };
     final existingTasks = _coerceSearchTasks(args['queryTasks']);
     if (existingTasks.isNotEmpty) {
       return _normalizeSearchTasks(
         existingTasks,
+        commonMetadata: commonTaskMetadata,
       ).take(taskBudget).toList(growable: false);
     }
 
@@ -1071,32 +1139,22 @@ class ReactRuntime {
     final tasks = <Map<String, dynamic>>[];
     final seen = <String>{};
 
-    void addTask(String query, {String label = ''}) {
+    void addTask(String query, {String label = '', String dimension = ''}) {
       final normalizedQuery = query.trim().replaceAll(RegExp(r'\s+'), ' ');
       if (normalizedQuery.isEmpty || !seen.add(normalizedQuery)) return;
       tasks.add(<String, dynamic>{
         'query': normalizedQuery,
         'label': label.isNotEmpty ? label : _compactTaskLabel(normalizedQuery),
+        if (dimension.isNotEmpty) 'dimension': dimension,
+        ...commonTaskMetadata,
       });
     }
 
-    final heuristicTasks = queryVariants.isEmpty && taskBudget > 1
-        ? _splitCompositeSearchQuery(directQuery, maxTasks: taskBudget)
-        : const <Map<String, dynamic>>[];
-    if (heuristicTasks.length >= 2) {
-      for (final task in heuristicTasks) {
-        addTask(
-          (task['query'] as String?)?.trim() ?? '',
-          label: (task['label'] as String?)?.trim() ?? '',
-        );
-      }
-    } else {
-      if (directQuery.isNotEmpty) {
-        addTask(directQuery);
-      }
-      for (final variant in queryVariants) {
-        addTask(variant);
-      }
+    if (directQuery.isNotEmpty) {
+      addTask(directQuery);
+    }
+    for (final variant in queryVariants) {
+      addTask(variant);
     }
 
     if (tasks.isEmpty) return const <Map<String, dynamic>>[];
@@ -1129,82 +1187,43 @@ class ReactRuntime {
   }
 
   List<Map<String, dynamic>> _normalizeSearchTasks(
-    List<Map<String, dynamic>> tasks,
-  ) {
+    List<Map<String, dynamic>> tasks, {
+    Map<String, dynamic> commonMetadata = const <String, dynamic>{},
+  }) {
     final normalized = <Map<String, dynamic>>[];
     final seen = <String>{};
     for (final task in tasks) {
       final query = (task['query'] as String?)?.trim() ?? '';
       if (query.isEmpty || !seen.add(query)) continue;
       normalized.add(<String, dynamic>{
+        ...commonMetadata,
+        if ((task['id'] as String?)?.trim().isNotEmpty == true)
+          'id': (task['id'] as String).trim(),
         'query': query,
         'label': (task['label'] as String?)?.trim().isNotEmpty == true
             ? (task['label'] as String).trim()
             : _compactTaskLabel(query),
         if ((task['dimension'] as String?)?.trim().isNotEmpty == true)
           'dimension': (task['dimension'] as String).trim(),
+        if (_RuntimeExecutionShell._stringList(
+          task['entityAnchors'],
+        ).isNotEmpty)
+          'entityAnchors': _RuntimeExecutionShell._stringList(
+            task['entityAnchors'],
+          ),
+        if (_RuntimeExecutionShell._stringList(
+          task['negativeKeywords'],
+        ).isNotEmpty)
+          'negativeKeywords': _RuntimeExecutionShell._stringList(
+            task['negativeKeywords'],
+          ),
+        if ((task['answerShape'] as String?)?.trim().isNotEmpty == true)
+          'answerShape': (task['answerShape'] as String).trim(),
+        if ((task['freshnessNeed'] as String?)?.trim().isNotEmpty == true)
+          'freshnessNeed': (task['freshnessNeed'] as String).trim(),
       });
     }
     return normalized;
-  }
-
-  List<Map<String, dynamic>> _splitCompositeSearchQuery(
-    String query, {
-    required int maxTasks,
-  }) {
-    final normalized = query.trim();
-    if (normalized.isEmpty) return const <Map<String, dynamic>>[];
-    final pieces = normalized
-        .split(RegExp(r'[、，,/\|；;]+'))
-        .map((item) => item.trim())
-        .where((item) => item.isNotEmpty)
-        .toList(growable: false);
-    if (pieces.length < 2 || pieces.length > 8) {
-      return const <Map<String, dynamic>>[];
-    }
-    final topic = _extractSearchTopic(normalized);
-    final tasks = <Map<String, dynamic>>[];
-    for (final piece in pieces) {
-      if (piece.length > 18 ||
-          piece == topic ||
-          piece.contains('住宿') ||
-          piece.contains('酒店')) {
-        continue;
-      }
-      final taskQuery = topic.isEmpty ? piece : '$piece $topic';
-      tasks.add(<String, dynamic>{
-        'query': taskQuery,
-        'label': piece,
-        'dimension': piece,
-      });
-      if (tasks.length >= maxTasks) break;
-    }
-    return tasks.length >= 2 ? tasks : const <Map<String, dynamic>>[];
-  }
-
-  String _extractSearchTopic(String query) {
-    const topicTokens = <String>[
-      '住宿',
-      '酒店',
-      '民宿',
-      '客栈',
-      '旅馆',
-      '天气',
-      '温度',
-      '交通',
-      '路况',
-      '门票',
-      '景点',
-      '攻略',
-      '餐厅',
-      '美食',
-      '预算',
-      '行程',
-    ];
-    for (final token in topicTokens) {
-      if (query.contains(token)) return token;
-    }
-    return '';
   }
 
   String _compactTaskLabel(String query) {
@@ -1213,27 +1232,52 @@ class ReactRuntime {
     return '${normalized.substring(0, 18)}...';
   }
 
+  /// Extracts slot updates from tool output. This is a legitimate runtime
+  /// responsibility (consuming structured tool data), not a model bypass.
+  /// Slot extraction must come from tool metadata + structured payload only.
   Map<String, dynamic> _extractSlotDelta({
     required String toolName,
     required String message,
     required Map<String, dynamic> data,
   }) {
-    if (toolName != 'local_context') return const <String, dynamic>{};
-    final cityFromData = (data['city'] as String?)?.trim() ?? '';
-    if (cityFromData.isNotEmpty) {
-      return <String, dynamic>{'city': cityFromData, 'source': 'tool_data'};
+    final metadata = _toolMetadataRegistry;
+    if (metadata == null) return const <String, dynamic>{};
+    final slotOutputs = metadata.slotOutputsByToolName(toolName);
+    if (slotOutputs.isEmpty) return const <String, dynamic>{};
+    final delta = <String, dynamic>{};
+    for (final slotOutput in slotOutputs) {
+      final slotId = (slotOutput['slotId'] as String?)?.trim() ?? '';
+      final path = (slotOutput['path'] as String?)?.trim() ?? '';
+      if (slotId.isEmpty || path.isEmpty) continue;
+      final value = _resolveStructuredPath(data, path);
+      if (value is String) {
+        final trimmed = value.trim();
+        if (trimmed.isEmpty) continue;
+        delta[slotId] = trimmed;
+      } else if (value != null) {
+        delta[slotId] = value;
+      }
+      final source = (slotOutput['source'] as String?)?.trim() ?? '';
+      if (source.isNotEmpty && delta.containsKey(slotId)) {
+        delta['source'] = source;
+      }
     }
-    final cityMatch = RegExp(
-      r'city=([\u4e00-\u9fa5A-Za-z]{2,16})',
-    ).firstMatch(message);
-    final cityFromMessage = (cityMatch?.group(1) ?? '').trim();
-    if (cityFromMessage.isNotEmpty) {
-      return <String, dynamic>{
-        'city': cityFromMessage,
-        'source': 'tool_message',
-      };
+    return delta;
+  }
+
+  Object? _resolveStructuredPath(Map<String, dynamic> data, String path) {
+    if (path.isEmpty) return null;
+    Object? current = data;
+    for (final segment in path.split('.')) {
+      if (current is Map<String, dynamic>) {
+        current = current[segment];
+      } else if (current is Map) {
+        current = current[segment];
+      } else {
+        return null;
+      }
     }
-    return const <String, dynamic>{};
+    return current;
   }
 
   /// 从模型输出的 JSON 正文里解析 toolPlan / nextAction='tool_call' 字段，
@@ -1253,16 +1297,17 @@ class ReactRuntime {
       if (start < 0) return const <AssistantToolCall>[];
       final decoded = jsonDecode(stripped.substring(start));
       if (decoded is! Map) return const <AssistantToolCall>[];
+      final payload = decoded.cast<String, dynamic>();
+      final turn = tryParseAssistantTurnOutput(payload);
 
       // 只在 nextAction='tool_call' 时才解析
-      final decision = decoded['decision'];
-      String nextAction = '';
-      if (decision is Map) {
-        nextAction = (decision['nextAction'] as String?)?.trim() ?? '';
-      }
+      final nextAction =
+          turn?.nextAction ??
+          (((payload['decision'] as Map?)?['nextAction'] as String?)?.trim() ??
+              '');
       if (nextAction != 'tool_call') return const <AssistantToolCall>[];
 
-      final toolPlan = decoded['toolPlan'];
+      final toolPlan = turn?.toolPlan ?? payload['toolPlan'];
       if (toolPlan == null) return const <AssistantToolCall>[];
 
       final calls = <AssistantToolCall>[];
@@ -1370,11 +1415,14 @@ class ReactRuntime {
     try {
       final decoded = jsonDecode(text);
       if (decoded is Map) {
-        final rs = (decoded['reasonShort'] as String?)?.trim() ?? '';
+        final payload = decoded.cast<String, dynamic>();
+        final turn = tryParseAssistantTurnOutput(payload);
+        final rs = turn?.reasonShort.trim() ?? '';
         if (rs.isNotEmpty) return rs;
-        final tt = (decoded['thinkingText'] as String?)?.trim() ?? '';
-        if (tt.isNotEmpty) return tt;
-        final um = (decoded['userMarkdown'] as String?)?.trim() ?? '';
+        final um =
+            turn?.userMarkdown.trim() ??
+            (payload['userMarkdown'] as String?)?.trim() ??
+            '';
         if (um.isNotEmpty && !um.startsWith('{') && um.length > 20) {
           return um;
         }
@@ -1383,8 +1431,8 @@ class ReactRuntime {
     return '';
   }
 
-  /// Extract user-visible thinking from the LLM output, combining multiple
-  /// sources: JSON thinkingText, reasoningText, and cleaned raw output.
+  /// Extract user-visible reasoning from the LLM output, combining canonical
+  /// `reasonShort`, reasoning text, and cleaned raw output.
   String _extractBestThinking(String outputText, String reasoningText) {
     final fromJson = _extractThinkingTextFromJson(outputText);
     if (fromJson.isNotEmpty) return fromJson;
@@ -1422,6 +1470,7 @@ class _RuntimeExecutionShell {
     required this.toolBudget,
     required this.variantBudget,
     required this.reflectionBudget,
+    required this.problemClass,
     required this.providerPolicy,
     required this.preferredProviders,
     required this.authorityDomains,
@@ -1431,20 +1480,24 @@ class _RuntimeExecutionShell {
   final int toolBudget;
   final int variantBudget;
   final int reflectionBudget;
+  final String problemClass;
   final String providerPolicy;
   final List<String> preferredProviders;
   final List<String> authorityDomains;
   final int freshnessHoursMax;
+
+  ProviderPolicy get providerPolicyType => parseProviderPolicy(providerPolicy);
 
   factory _RuntimeExecutionShell.fromMap(Map<String, dynamic> map) {
     return _RuntimeExecutionShell(
       toolBudget: _positiveInt(map['toolBudget'], fallback: 12),
       variantBudget: _nonNegativeInt(map['variantBudget'], fallback: 2),
       reflectionBudget: _nonNegativeInt(map['reflectionBudget'], fallback: 2),
+      problemClass: (map['problemClass'] as String?)?.trim() ?? '',
       providerPolicy:
           (map['providerPolicy'] as String?)?.trim().isNotEmpty == true
           ? (map['providerPolicy'] as String).trim()
-          : 'model_choice',
+          : ProviderPolicy.inherit.wireName,
       preferredProviders: _stringList(map['preferredProviders']),
       authorityDomains: _stringList(map['authorityDomains']),
       freshnessHoursMax: _positiveInt(map['freshnessHoursMax'], fallback: 72),

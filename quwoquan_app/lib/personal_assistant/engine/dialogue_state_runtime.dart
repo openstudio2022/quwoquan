@@ -2,67 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:quwoquan_app/personal_assistant/contracts/dialogue_round_script.dart';
 import 'package:quwoquan_app/personal_assistant/engine/domain_routing_catalog_runtime.dart';
 import 'package:quwoquan_app/personal_assistant/engine/event_detection_catalog_runtime.dart';
-
-class DialogueRoundScript {
-  const DialogueRoundScript({
-    required this.domainId,
-    required this.enabled,
-    required this.currentStateId,
-    required this.detectedEvent,
-    required this.suggestedNextStateId,
-    required this.nextStateCandidates,
-    required this.requiredFieldsForNextState,
-    required this.totalSubTotalRequired,
-    required this.optionalEnrichment,
-    required this.maxQuestionsPerTurn,
-    required this.hardFailCodes,
-    required this.passCriteriaRound,
-    required this.statePromptExcerpt,
-    required this.stateMachineExcerpt,
-    required this.routingCatalogVersion,
-    required this.eventCatalogVersion,
-  });
-
-  final String domainId;
-  final bool enabled;
-  final String currentStateId;
-  final String detectedEvent;
-  final String suggestedNextStateId;
-  final List<String> nextStateCandidates;
-  final List<String> requiredFieldsForNextState;
-  final bool totalSubTotalRequired;
-  final bool optionalEnrichment;
-  final int maxQuestionsPerTurn;
-  final List<String> hardFailCodes;
-  final Map<String, dynamic> passCriteriaRound;
-  final String statePromptExcerpt;
-  final String stateMachineExcerpt;
-  final String routingCatalogVersion;
-  final String eventCatalogVersion;
-
-  Map<String, dynamic> toJson() {
-    return <String, dynamic>{
-      'domainId': domainId,
-      'enabled': enabled,
-      'currentStateId': currentStateId,
-      'detectedEvent': detectedEvent,
-      'suggestedNextStateId': suggestedNextStateId,
-      'nextStateCandidates': nextStateCandidates,
-      'requiredFieldsForNextState': requiredFieldsForNextState,
-      'totalSubTotalRequired': totalSubTotalRequired,
-      'optionalEnrichment': optionalEnrichment,
-      'maxQuestionsPerTurn': maxQuestionsPerTurn,
-      'hardFailCodes': hardFailCodes,
-      'passCriteriaRound': passCriteriaRound,
-      'statePromptExcerpt': statePromptExcerpt,
-      'stateMachineExcerpt': stateMachineExcerpt,
-      'routingCatalogVersion': routingCatalogVersion,
-      'eventCatalogVersion': eventCatalogVersion,
-    };
-  }
-}
 
 class _DomainDialogueAssets {
   const _DomainDialogueAssets({

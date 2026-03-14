@@ -1,5 +1,6 @@
 import 'package:quwoquan_app/personal_assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/recall_result.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';
 
 /// Execution mode for the current assistant turn.
 enum AgentMode {
@@ -63,7 +64,7 @@ class ModeDecider {
       );
     }
 
-    if (intentGraph.problemClass == 'complex_reasoning' &&
+    if (intentGraph.problemClassType == ProblemClass.complexReasoning &&
         intentGraph.secondarySkills.isNotEmpty) {
       return ModeDecision(
         mode: AgentMode.multiAgent,

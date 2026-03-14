@@ -23,22 +23,22 @@ class AssistantRunResponse {
   final Map<String, dynamic> structuredResponse;
   final ProfileUpdateProposal? profileUpdateProposal;
 
-  RunArtifacts? get runArtifactsV1 {
-    final raw =
-        (structuredResponse['runArtifactsV1'] as Map?)?.cast<String, dynamic>();
+  RunArtifacts? get runArtifacts {
+    final raw = (structuredResponse['runArtifacts'] as Map?)
+        ?.cast<String, dynamic>();
     if (raw == null) return null;
-    return RunArtifacts.fromJson(raw);
+    return parseRunArtifacts(raw);
   }
 
-  String get machineEnvelopeV1 {
-    final raw = runArtifactsV1?.machineEnvelope.trim() ?? '';
+  String get machineEnvelope {
+    final raw = runArtifacts?.machineEnvelope.trim() ?? '';
     return raw.isNotEmpty ? raw : finalText;
   }
 
-  String get displayMarkdownV1 => runArtifactsV1?.displayMarkdown.trim() ?? '';
+  String get displayMarkdown => runArtifacts?.displayMarkdown.trim() ?? '';
 
-  String get displayPlainTextV1 =>
-      runArtifactsV1?.displayPlainText.trim() ?? '';
+  String get displayPlainText =>
+      runArtifacts?.displayPlainText.trim() ?? '';
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{

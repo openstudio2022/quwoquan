@@ -9,7 +9,7 @@
 ///   2. errorCode 必须是已知枚举值（AssistantErrorCode.*）
 ///   3. traces 中必须存在 type == toolError 且 message 包含根因信息（非固定文案）
 ///   4. finalText 不得是空字符串（用户必须看到某种提示）
-///   5. finalText 不得含 JSON envelope key（assistant_turn_v2 / contractVersion）
+///   5. finalText 不得含 JSON envelope key（assistant_turn / contractVersion）
 library;
 
 import 'package:quwoquan_app/personal_assistant/protocol/run_response.dart';
@@ -32,7 +32,7 @@ const _knownErrorCodes = <String>{
 
 // ─── 非法 finalText 关键词（JSON envelope 泄漏）──────────────────────────────
 const _forbiddenInFinalText = <String>[
-  'assistant_turn_v2',
+  'assistant_turn',
   'contractVersion',
   '"nextAction"',
   '"decision":{',
@@ -186,7 +186,7 @@ void main() {
       'invalid degraded response — JSON envelope in finalText is detectable',
       () {
         const jsonLeakingFinalText =
-            '{"assistant_turn_v2":{"decision":{"nextAction":"answer"}}}';
+            '{"assistant_turn":{"decision":{"nextAction":"answer"}}}';
         final leakingResponse = AssistantRunResponse(
           finalText: jsonLeakingFinalText,
           degraded: true,

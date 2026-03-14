@@ -1,13 +1,3 @@
-enum KnowledgeQaDomain {
-  general,
-  finance,
-  weather,
-  travel,
-  emotion,
-  health,
-  divination,
-}
-
 class KnowledgeQaEvidence {
   const KnowledgeQaEvidence({
     required this.provider,
@@ -34,14 +24,14 @@ class KnowledgeQaEvidence {
 class KnowledgeQaPlan {
   const KnowledgeQaPlan({
     required this.query,
-    required this.domain,
+    required this.domainId,
     required this.primaryProvider,
     required this.backupProviders,
     required this.maxEvidence,
   });
 
   final String query;
-  final KnowledgeQaDomain domain;
+  final String domainId;
   final String primaryProvider;
   final List<String> backupProviders;
   final int maxEvidence;
@@ -75,4 +65,3 @@ class KnowledgeQaReport {
     };
   }
 }
-

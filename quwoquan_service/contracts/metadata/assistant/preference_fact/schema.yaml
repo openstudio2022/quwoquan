@@ -1,0 +1,28 @@
+dart_class: PreferenceFact
+library_path: personal_assistant/contracts/preference_fact.dart
+output_path: personal_assistant/runtime/generated/contracts/preference_fact.g.dart
+fields:
+  - name: factId
+    dart_type: String
+    json_key: factId
+  - name: scope
+    dart_type: String
+    json_key: scope
+  - name: key
+    dart_type: String
+    json_key: key
+  - name: value
+    dart_type: String
+    json_key: value
+  - name: source
+    dart_type: String
+    json_key: source
+    default: ''
+  - name: createdAt
+    dart_type: String
+    json_key: createdAt
+    default: ''
+  - name: revoked
+    dart_type: bool
+    json_key: revoked
+    default: false

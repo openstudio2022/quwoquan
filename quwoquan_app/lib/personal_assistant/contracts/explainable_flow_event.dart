@@ -1,3 +1,5 @@
+import 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';
+
 // Unified UI-facing flow event protocol.
 //
 // All process-drawer rendering, answer-gate decisions, and timeline
@@ -217,16 +219,17 @@ abstract class PhaseVisibility {
     String problemClass, {
     bool multiAgent = false,
   }) {
-    switch (problemClass) {
-      case 'realtime_info':
+    switch (parseProblemClass(problemClass)) {
+      case ProblemClass.realtimeInfo:
         return realtimeInfo;
-      case 'simple_qa':
+      case ProblemClass.simpleQa:
         return simpleQa;
-      case 'task_execution':
+      case ProblemClass.taskExecution:
         return taskExecution;
-      case 'complex_reasoning':
+      case ProblemClass.complexReasoning:
         return multiAgent ? complexReasoningMulti : complexReasoningSingle;
-      default:
+      case ProblemClass.general:
+      case ProblemClass.evidenceLookup:
         return simpleQa;
     }
   }

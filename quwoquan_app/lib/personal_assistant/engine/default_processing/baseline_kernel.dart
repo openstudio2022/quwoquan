@@ -20,17 +20,24 @@ class BaselineKernel {
   final NarrativeEngine narrativeEngine;
   final AnswerComposer answerComposer;
 
-  ProblemFrame frame(String query) => problemFramer.frame(query);
+  ProblemFrame frame(
+    String query, {
+    Map<String, dynamic> intentPayload = const <String, dynamic>{},
+  }) => problemFramer.frame(query, intentPayload: intentPayload);
 
-  Map<String, dynamic> buildIntentPayload(String query) {
-    return frame(query).toIntentPayload();
+  Map<String, dynamic> buildIntentPayload(
+    String query, {
+    Map<String, dynamic> intentPayload = const <String, dynamic>{},
+  }) {
+    return frame(query, intentPayload: intentPayload).toIntentPayload();
   }
 
   BaselineRetrievalPlan? buildRetrievalPlan(
     String query,
-    List<String> availableTools,
-  ) {
-    final problemFrame = frame(query);
+    List<String> availableTools, {
+    Map<String, dynamic> intentPayload = const <String, dynamic>{},
+  }) {
+    final problemFrame = frame(query, intentPayload: intentPayload);
     return retrievalPlanner.plan(
       frame: problemFrame,
       availableTools: availableTools,
@@ -72,9 +79,10 @@ class BaselineKernel {
   BaselineComposedAnswer composeHeuristicAnswer({
     required String query,
     required List<Map<String, dynamic>> observations,
+    Map<String, dynamic> intentPayload = const <String, dynamic>{},
   }) {
     return answerComposer.composeHeuristicAnswer(
-      frame: frame(query),
+      frame: frame(query, intentPayload: intentPayload),
       observations: observations,
     );
   }
@@ -86,9 +94,10 @@ class BaselineKernel {
     required String decisionMode,
     required List<String> missingCriticalSlots,
     required List<Map<String, dynamic>> toolErrors,
+    Map<String, dynamic> intentPayload = const <String, dynamic>{},
   }) {
     return answerComposer.composeFallbackAnswer(
-      frame: frame(query),
+      frame: frame(query, intentPayload: intentPayload),
       slotState: slotState,
       evidenceEvaluation: evidenceEvaluation,
       decisionMode: decisionMode,

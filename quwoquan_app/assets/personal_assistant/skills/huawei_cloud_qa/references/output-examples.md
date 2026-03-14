@@ -5,7 +5,7 @@
 ### 机器轨
 ```json
 {
-  "contractVersion": "assistant_turn_v2",
+  "contractVersion": "assistant_turn",
   "decision": {"nextAction": "answer"},
   "slotState": {
     "product": {"value": "盘古大模型", "source": "user_query"},

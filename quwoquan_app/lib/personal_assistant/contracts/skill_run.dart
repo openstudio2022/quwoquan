@@ -1,3 +1,5 @@
+import 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';
+
 class SkillRun {
   const SkillRun({
     required this.runId,
@@ -22,6 +24,8 @@ class SkillRun {
   final String stopReason;
   final List<Map<String, dynamic>> references;
   final String resultSummary;
+
+  ProblemClass get problemClassType => parseProblemClass(problemClass);
 
   Map<String, dynamic> toJson() => <String, dynamic>{
     'runId': runId,

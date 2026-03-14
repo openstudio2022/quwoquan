@@ -1,4 +1,7 @@
+import 'package:quwoquan_app/personal_assistant/contracts/planner_contracts.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';
 
 class EvidenceEvaluationResult {
   const EvidenceEvaluationResult({
@@ -7,7 +10,7 @@ class EvidenceEvaluationResult {
     this.authorityScore = 0,
     this.relevanceScore = 0,
     this.freshnessHours = 0,
-    this.status = 'retry',
+    this.status = EvidenceStatus.retry,
     this.passed = false,
     this.authoritySatisfied = false,
     this.freshnessSatisfied = false,
@@ -24,7 +27,7 @@ class EvidenceEvaluationResult {
   final double authorityScore;
   final double relevanceScore;
   final int freshnessHours;
-  final String status;
+  final EvidenceStatus status;
   final bool passed;
   final bool authoritySatisfied;
   final bool freshnessSatisfied;
@@ -40,7 +43,7 @@ class EvidenceEvaluationResult {
     'authorityScore': authorityScore,
     'relevanceScore': relevanceScore,
     'freshnessHours': freshnessHours,
-    'status': status,
+    'status': status.wireName,
     'passed': passed,
     'authoritySatisfied': authoritySatisfied,
     'freshnessSatisfied': freshnessSatisfied,
@@ -96,13 +99,13 @@ class DefaultEvidenceEvaluator {
         final host = _hostOf(url);
         final sourceTier =
             (ref['sourceTier'] as String?)?.trim().isNotEmpty == true
-            ? (ref['sourceTier'] as String).trim()
+            ? parseEvidenceSourceTier((ref['sourceTier'] as String).trim())
             : _resolveSourceTier(
                 host: host,
                 authorityDomains: authorityDomains,
               );
         final queryTaskId = _stringValue(ref['queryTaskId']);
-        final dimension = _stringValue(ref['dimension']);
+        final dimension = parseQueryTaskDimension(_stringValue(ref['dimension']));
         final slotContributions = _buildSlotContributions(
           slotState: slotState,
           title: title,
@@ -118,12 +121,13 @@ class DefaultEvidenceEvaluator {
               url: url,
             ),
             domainId: domainId,
-            dimension: dimension,
+            dimension: dimension.wireName,
+            dimensionLabel: dimension.displayLabel,
             queryTaskId: queryTaskId,
             title: title.isNotEmpty ? title : host,
             url: url,
             sourceHost: host,
-            sourceTier: sourceTier,
+            sourceTier: sourceTier.wireName,
             freshnessHours:
                 _intValue(ref['freshnessHours']) ??
                 _intValue(data['freshnessHours']) ??
@@ -189,7 +193,7 @@ class DefaultEvidenceEvaluator {
             : ledger
                   .map((item) => item.freshnessHours)
                   .reduce((a, b) => a < b ? a : b),
-        status: 'not_required',
+        status: EvidenceStatus.notRequired,
         passed: true,
         authoritySatisfied: true,
         freshnessSatisfied: true,
@@ -206,7 +210,7 @@ class DefaultEvidenceEvaluator {
     }
     if (ledger.isEmpty) {
       return EvidenceEvaluationResult(
-        status: 'retry',
+        status: EvidenceStatus.retry,
         passed: false,
         authoritySatisfied: false,
         freshnessSatisfied: false,
@@ -242,7 +246,8 @@ class DefaultEvidenceEvaluator {
         !authorityRequired ||
         ledger.any(
           (item) =>
-              item.sourceTier == 'authority' || item.authorityScore >= 0.8,
+              item.sourceTierType == EvidenceSourceTier.authority ||
+              item.authorityScore >= 0.8,
         );
     final freshnessSatisfied = freshnessHoursMax <= 0
         ? true
@@ -259,10 +264,10 @@ class DefaultEvidenceEvaluator {
         ledger.isNotEmpty &&
         (coveredDimensions.isNotEmpty || coverageScore >= 0.35);
     final status = passed
-        ? 'full'
+        ? EvidenceStatus.full
         : canGiveBoundedAnswer
-        ? 'bounded'
-        : 'retry';
+        ? EvidenceStatus.bounded
+        : EvidenceStatus.retry;
     return EvidenceEvaluationResult(
       entries: ledger,
       coverageScore: coverageScore,
@@ -278,9 +283,9 @@ class DefaultEvidenceEvaluator {
       coveredQueryTaskIds: coveredQueryTaskIds,
       blockingDimensions: effectiveBlockingDimensions,
       missingDimensions: missingDimensions,
-      summary: status == 'full'
+      summary: status == EvidenceStatus.full
           ? '已收拢 ${ledger.length} 条证据，关键维度已经覆盖。'
-          : status == 'bounded'
+          : status == EvidenceStatus.bounded
           ? '已收拢 ${ledger.length} 条证据，可以先回答已确认部分。'
           : '证据还不够稳，需要继续补一轮。',
     );
@@ -307,7 +312,9 @@ class DefaultEvidenceEvaluator {
         'snippet': _snippetOfFetchContent(data['content']),
         'source': (data['source'] as String?)?.trim() ?? '',
         'sourceHost': _hostOf(url),
-        'sourceTier': toolName == 'web_fetch' ? 'page' : '',
+        'sourceTier': toolName == 'web_fetch'
+            ? EvidenceSourceTier.page.wireName
+            : '',
         'retrievedAt': retrievedAt,
         'queryTaskId': _stringValue(data['queryTaskId']),
         'dimension': _stringValue(data['dimension']),
@@ -332,35 +339,28 @@ class DefaultEvidenceEvaluator {
     return '$domainId::$scope::$url';
   }
 
-  String _resolveSourceTier({
+  EvidenceSourceTier _resolveSourceTier({
     required String host,
     required List<String> authorityDomains,
   }) {
-    if (host.isEmpty) return 'web';
+    if (host.isEmpty) return EvidenceSourceTier.web;
     for (final authority in authorityDomains) {
       if (host == authority || host.endsWith('.$authority')) {
-        return 'authority';
+        return EvidenceSourceTier.authority;
       }
     }
-    if (host.endsWith('.gov.cn') ||
-        host.endsWith('.edu.cn') ||
-        host.endsWith('.org.cn')) {
-      return 'trusted';
-    }
-    return 'web';
+    return EvidenceSourceTier.web;
   }
 
   double _estimateAuthorityScore({
-    required String sourceTier,
+    required EvidenceSourceTier sourceTier,
     required String host,
     required List<String> authorityDomains,
   }) {
     switch (sourceTier) {
-      case 'authority':
+      case EvidenceSourceTier.authority:
         return 1.0;
-      case 'trusted':
-        return 0.82;
-      case 'page':
+      case EvidenceSourceTier.page:
         return 0.68;
       default:
         for (final authority in authorityDomains) {

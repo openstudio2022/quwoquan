@@ -1,0 +1,61 @@
+dart_class: SubagentPlan
+library_path: personal_assistant/contracts/subagent_plan.dart
+output_path: personal_assistant/runtime/generated/contracts/subagent_plan.g.dart
+defaults:
+  mode: qa
+  timeoutMs: 12000
+  maxIterations: 2
+  toolBudget: 2
+  stopPolicy: balanced
+  searchIntensity: medium
+  providerPolicy: ''
+  freshnessHoursMax: 0
+  answerThreshold: 0.0
+fields:
+  - name: subagentId
+    dart_type: String
+    json_key: subagentId
+  - name: domainId
+    dart_type: String
+    json_key: domainId
+  - name: problemClass
+    dart_type: String
+    json_key: problemClass
+  - name: goal
+    dart_type: String
+    json_key: goal
+  - name: mode
+    dart_type: String
+    json_key: mode
+  - name: timeoutMs
+    dart_type: int
+    json_key: timeoutMs
+  - name: maxIterations
+    dart_type: int
+    json_key: maxIterations
+  - name: toolBudget
+    dart_type: int
+    json_key: toolBudget
+  - name: toolWhitelist
+    dart_type: List<String>
+    json_key: toolWhitelist
+    default: const <String>[]
+  - name: stopPolicy
+    dart_type: String
+    json_key: stopPolicy
+  - name: searchIntensity
+    dart_type: String
+    json_key: searchIntensity
+  - name: providerPolicy
+    dart_type: String
+    json_key: providerPolicy
+  - name: freshnessHoursMax
+    dart_type: int
+    json_key: freshnessHoursMax
+  - name: answerThreshold
+    dart_type: double
+    json_key: answerThreshold
+  - name: dependencies
+    dart_type: List<String>
+    json_key: dependencies
+    default: const <String>[]

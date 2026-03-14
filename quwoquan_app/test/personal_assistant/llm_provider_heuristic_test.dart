@@ -5,7 +5,7 @@ void main() {
   group('HeuristicLocalLlmProvider fallback contract', () {
     const provider = HeuristicLocalLlmProvider();
 
-    test('weather query plans a minimal web search when tools are available', () async {
+    test('weather query fail-closes instead of planning local tool calls', () async {
       final output = await provider.reason(
         messages: const <Map<String, String>>[
           <String, String>{'role': 'user', 'content': '深圳天气怎么样'},
@@ -18,13 +18,10 @@ void main() {
         ],
       );
 
-      expect(output.degraded, isFalse);
-      expect(output.hasToolCalls, isTrue);
-      expect(output.toolCalls.first.name, equals('web_search'));
-      expect(
-        output.toolCalls.first.arguments['query'].toString(),
-        contains('天气'),
-      );
+      expect(output.degraded, isTrue);
+      expect(output.hasToolCalls, isFalse);
+      expect(output.failureCode, equals(AssistantFailureCode.heuristicFallback));
+      expect(output.text, contains('"nextAction":"abort"'));
     });
 
     test('without usable context it still returns a safe user-facing fallback', () async {
@@ -37,12 +34,12 @@ void main() {
       );
 
       expect(output.degraded, isTrue);
-      expect(output.text, contains('我这边暂时没法稳定连到模型服务'));
+      expect(output.text, contains('当前未能稳定连接模型服务'));
       expect(output.text, isNot(contains('调用系统')));
       expect(output.text, isNot(contains('设备上下文')));
     });
 
-    test('builds structured answer from tool observations during synthesis', () async {
+    test('synthesis stage also fail-closes instead of fabricating structured answer', () async {
       final output = await provider.reason(
         messages: const <Map<String, dynamic>>[
           <String, dynamic>{'role': 'user', 'content': '深圳天气怎么样'},
@@ -56,15 +53,15 @@ void main() {
         templateId: 'synthesizer.final_answer',
       );
 
-      expect(output.degraded, isFalse);
-      expect(output.text, contains('"nextAction":"answer"'));
-      expect(output.text, contains('深圳今天多云'));
-      expect(output.text, contains('https://example.com/weather'));
+      expect(output.degraded, isTrue);
+      expect(output.hasToolCalls, isFalse);
+      expect(output.text, contains('"nextAction":"abort"'));
+      expect(output.text, isNot(contains('https://example.com/weather')));
     });
   });
 
   group('SwitchableAssistantLlmProvider model availability contract', () {
-    test('falls back to local heuristic planner when no remote model registered', () async {
+    test('falls back to fail-closed degraded envelope when no remote model registered', () async {
       final provider = SwitchableAssistantLlmProvider(
         fallbackProvider: const HeuristicLocalLlmProvider(),
       );
@@ -75,10 +72,10 @@ void main() {
         availableTools: const <String>['web_search'],
       );
 
-      expect(output.degraded, isFalse);
+      expect(output.degraded, isTrue);
       expect(output.modelPath, contains('fallback_local'));
-      expect(output.hasToolCalls, isTrue);
-      expect(output.toolCalls.first.name, equals('web_search'));
+      expect(output.hasToolCalls, isFalse);
+      expect(output.text, contains('"nextAction":"abort"'));
     });
   });
 }

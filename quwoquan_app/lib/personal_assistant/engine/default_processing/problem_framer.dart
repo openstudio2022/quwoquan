@@ -1,3 +1,5 @@
+import 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';
+
 class ProblemFrame {
   const ProblemFrame({
     required this.query,
@@ -9,6 +11,16 @@ class ProblemFrame {
     this.mode = 'qa',
     this.city = '',
     this.secondaryDomains = const <String>[],
+    this.targetObject = '',
+    this.userJobToBeDone = '',
+    this.hardConstraints = const <String>[],
+    this.softConstraints = const <String>[],
+    this.excludedScopes = const <String>[],
+    this.freshnessNeed = '',
+    this.answerShape = '',
+    this.requiresExternalEvidence = false,
+    this.entityAnchors = const <String>[],
+    this.negativeKeywords = const <String>[],
   });
 
   final String query;
@@ -20,6 +32,22 @@ class ProblemFrame {
   final String mode;
   final String city;
   final List<String> secondaryDomains;
+  final String targetObject;
+  final String userJobToBeDone;
+  final List<String> hardConstraints;
+  final List<String> softConstraints;
+  final List<String> excludedScopes;
+  final String freshnessNeed;
+  final String answerShape;
+  final bool requiresExternalEvidence;
+  final List<String> entityAnchors;
+  final List<String> negativeKeywords;
+
+  ProblemClass get problemClassKind => parseProblemClass(problemClass);
+  QueryIntent get queryIntentKind => parseQueryIntent(queryIntent);
+  SkillMode get modeKind => parseSkillMode(mode);
+  AnswerShape get answerShapeKind => parseAnswerShape(answerShape);
+  FreshnessNeed get freshnessNeedKind => parseFreshnessNeed(freshnessNeed);
 
   Map<String, dynamic> toIntentPayload() => <String, dynamic>{
     'primaryDomainId': primaryDomainId,
@@ -28,133 +56,125 @@ class ProblemFrame {
     'problemClass': problemClass,
     'queryIntent': queryIntent,
     'mode': mode,
+    'targetObject': targetObject,
+    'userJobToBeDone': userJobToBeDone,
+    'hardConstraints': hardConstraints,
+    'softConstraints': softConstraints,
+    'excludedScopes': excludedScopes,
+    'freshnessNeed': freshnessNeed,
+    'answerShape': answerShape,
+    'requiresExternalEvidence': requiresExternalEvidence,
+    'entityAnchors': entityAnchors,
+    'negativeKeywords': negativeKeywords,
     'queryNormalization': <String, dynamic>{
+      'normalizedQuery': normalizedQuery,
       'query': normalizedQuery,
+      'entityAnchors': entityAnchors,
+      'negativeKeywords': negativeKeywords,
+      'answerShape': answerShape,
+      'freshnessNeed': freshnessNeed,
       if (city.isNotEmpty) 'city': city,
     },
   };
 }
 
+/// DEPRECATED: RegExp/contains 语义推断应迁出 runtime，由 planner 输出 typed problemClass/queryIntent。
+/// 见 [canonical_truth_sources.md]。
 class DefaultProblemFramer {
   const DefaultProblemFramer();
 
-  ProblemFrame frame(String query) {
-    final normalized = query.trim();
-    final queryIntent = inferQueryIntent(normalized);
-    final problemClass = inferProblemClassForIntent(queryIntent);
-    final primaryDomainId = queryIntent == 'weather_now'
-        ? 'weather'
+  ProblemFrame frame(
+    String query, {
+    Map<String, dynamic> intentPayload = const <String, dynamic>{},
+  }) {
+    final normalized = _normalizeQuery(query);
+    final queryNormalization =
+        (intentPayload['queryNormalization'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final queryIntent = _stringValue(intentPayload['queryIntent']);
+    final problemClass =
+        _stringValue(intentPayload['problemClass']).isNotEmpty
+        ? _stringValue(intentPayload['problemClass'])
+        : ProblemClass.general.wireName;
+    final primaryDomainId =
+        _stringValue(intentPayload['primaryDomainId']).isNotEmpty
+        ? _stringValue(intentPayload['primaryDomainId'])
         : 'fallback_general_search';
+    final targetObject =
+        _stringValue(intentPayload['targetObject']).isNotEmpty
+        ? _stringValue(intentPayload['targetObject'])
+        : _inferTargetObject(normalized);
+    final answerShape = _stringValue(intentPayload['answerShape']);
+    final excludedScopes = _stringList(intentPayload['excludedScopes']).isNotEmpty
+        ? _stringList(intentPayload['excludedScopes'])
+        : _extractExcludedScopes(normalized);
+    final requiresExternalEvidence = intentPayload['requiresExternalEvidence'] == true;
+    final location = extractCity(normalized);
+    final entityAnchors = _extractEntityAnchors(
+      normalized,
+      targetObject: targetObject,
+      location: location,
+    );
+    final negativeKeywords = _stringList(intentPayload['negativeKeywords']).isNotEmpty
+        ? _stringList(intentPayload['negativeKeywords'])
+        : excludedScopes.toList(growable: false);
+    final hardConstraints = _stringList(intentPayload['hardConstraints']);
+    final softConstraints = _stringList(intentPayload['softConstraints']);
+    final freshnessNeed = _stringValue(intentPayload['freshnessNeed']);
     return ProblemFrame(
       query: query,
       normalizedQuery: normalized,
       primaryDomainId: primaryDomainId,
       problemClass: problemClass,
       queryIntent: queryIntent,
-      inferredMotive: _inferMotive(normalized, queryIntent),
-      city: extractCity(normalized),
+      inferredMotive: _stringValue(intentPayload['inferredMotive']),
+      mode: _stringValue(intentPayload['mode']).isNotEmpty
+          ? _stringValue(intentPayload['mode'])
+          : SkillMode.qa.wireName,
+      city: _stringValue(queryNormalization['city']).isNotEmpty
+          ? _stringValue(queryNormalization['city'])
+          : location,
+      secondaryDomains: _stringList(intentPayload['secondaryDomains']),
+      targetObject: targetObject,
+      userJobToBeDone: _stringValue(intentPayload['userJobToBeDone']),
+      hardConstraints: hardConstraints,
+      softConstraints: softConstraints,
+      excludedScopes: excludedScopes,
+      freshnessNeed: freshnessNeed,
+      answerShape: answerShape,
+      requiresExternalEvidence: requiresExternalEvidence,
+      entityAnchors: _stringList(intentPayload['entityAnchors']).isNotEmpty
+          ? _stringList(intentPayload['entityAnchors'])
+          : entityAnchors,
+      negativeKeywords: negativeKeywords,
     );
-  }
-
-  String inferProblemClass(String query) {
-    return inferProblemClassForIntent(inferQueryIntent(query));
-  }
-
-  String inferQueryIntent(String query) {
-    if (query.isEmpty) return 'general_lookup';
-    if (isWeatherLike(query)) return 'weather_now';
-    if (isTravelAlternativeLike(query)) return 'travelAlternativeOptions';
-    if (isWildlifeBestTimeLike(query)) return 'wildlifeBestTime';
-    if (isStayLike(query)) return 'stayPlanning';
-    return 'general_lookup';
-  }
-
-  String inferProblemClassForIntent(String queryIntent) {
-    switch (queryIntent) {
-      case 'weather_now':
-        return 'realtime_info';
-      case 'travelAlternativeOptions':
-      case 'stayPlanning':
-        return 'complex_reasoning';
-      case 'wildlifeBestTime':
-        return 'evidence_lookup';
-      default:
-        return 'simple_qa';
-    }
-  }
-
-  bool isTravelAlternativeLike(String text) {
-    if (text.isEmpty) return false;
-    final hasAlternativeSignal = RegExp(
-      r'(备选|备选方案|几个方案|多给我几个|替代|候选|方向考虑|方向算上|方向考虑进去)',
-      caseSensitive: false,
-    ).hasMatch(text);
-    final hasTravelSignal = RegExp(
-      r'(九寨沟|路线|行程|方向|玩法|方案)',
-      caseSensitive: false,
-    ).hasMatch(text);
-    return hasAlternativeSignal && hasTravelSignal;
-  }
-
-  bool isWildlifeBestTimeLike(String text) {
-    if (text.isEmpty) return false;
-    final hasTimeSignal = RegExp(
-      r'(最佳时间|什么时候|几月|季节|时段)',
-      caseSensitive: false,
-    ).hasMatch(text);
-    final hasWildlifeSignal = RegExp(
-      r'(土拨鼠|观赏|拍摄|野生动物)',
-      caseSensitive: false,
-    ).hasMatch(text);
-    return hasTimeSignal && hasWildlifeSignal;
-  }
-
-  bool isWeatherLike(String text) {
-    if (text.isEmpty) return false;
-    return RegExp(
-      r'(天气|气温|降雨|风力|体感|预报|weather|forecast|temperature|humidity|rain)',
-      caseSensitive: false,
-    ).hasMatch(text);
-  }
-
-  bool isStayLike(String text) {
-    if (text.isEmpty) return false;
-    return RegExp(
-      r'(住宿|酒店|民宿|住哪|住哪里|行程|攻略|预算|性价比)',
-      caseSensitive: false,
-    ).hasMatch(text);
   }
 
   String extractCity(String text) {
     if (text.isEmpty) return '';
-    final scopedMatch = RegExp(
-      r'([\u4e00-\u9fa5]{2,8}?)(?:天气|气温|降雨|风力|体感|预报|住宿|酒店|民宿|行程|攻略|预算|方向|备选|方案|观赏|拍摄|最佳时间)',
-    ).firstMatch(text);
-    if (scopedMatch != null) {
-      return _normalizeCityCandidate(scopedMatch.group(1));
+    final placeLikeMatches = RegExp(
+      r'([\u4e00-\u9fffA-Za-z]{2,20}(?:市|区|县|镇|乡|村|街道|公园|景区|机场|车站|大厦|广场|口岸|山|湖|河|沟|湾|岛|草原))',
+    ).allMatches(text);
+    for (final match in placeLikeMatches) {
+      final normalized = _normalizeLocationCandidate(match.group(1));
+      if (normalized.isNotEmpty) return normalized;
     }
-    final suffixMatch = RegExp(
-      r'([\u4e00-\u9fa5]{2,8}(?:市|区|县))',
+    final connectorMatch = RegExp(
+      r'(?:在|去|到|从|围绕|关于|针对)\s*([\u4e00-\u9fffA-Za-z]{2,16})',
     ).firstMatch(text);
-    if (suffixMatch != null) {
-      return _normalizeCityCandidate(suffixMatch.group(1));
-    }
-    final scenicMatch = RegExp(
-      r'([\u4e00-\u9fa5]{2,8}(?:沟|山|湖|草原|景区|国家公园))',
-    ).firstMatch(text);
-    if (scenicMatch != null) {
-      return _normalizeCityCandidate(scenicMatch.group(1));
+    if (connectorMatch != null) {
+      return _normalizeLocationCandidate(connectorMatch.group(1));
     }
     return '';
   }
 
-  String _normalizeCityCandidate(String? raw) {
+  String _normalizeLocationCandidate(String? raw) {
     final candidate = (raw ?? '')
         .trim()
-        .replaceFirst(RegExp(r'^(如果把|如果将|把|将|往|向|到)'), '')
-        .replaceFirst(RegExp(r'(呢|呀|啊|吗|吧)$'), '')
+        .replaceFirst(RegExp(r'^(如果把|如果将|把|将|往|向|到|在|去|从|围绕|关于|针对)'), '')
+        .replaceFirst(RegExp(r'(呢|呀|啊|吗|吧|吗？|\?)$'), '')
         .trim();
-    if (candidate.length < 2 || candidate.length > 8) return '';
+    if (candidate.length < 2 || candidate.length > 20) return '';
     const blocked = <String>{
       '今天',
       '明天',
@@ -166,19 +186,11 @@ class DefaultProblemFramer {
       '那里',
       '这个',
       '那个',
-      '天气',
-      '行程',
-      '住宿',
-      '酒店',
-      '民宿',
-      '预算',
-      '备选',
+      '问题',
       '方案',
-      '方向',
-      '观赏',
-      '拍摄',
-      '最佳时间',
-      '土拨鼠',
+      '情况',
+      '东西',
+      '资料',
     };
     if (blocked.contains(candidate)) return '';
     if (RegExp(r'^(今天|明天|后天|这周|下周|周末|最近|当前|现在)').hasMatch(candidate)) {
@@ -187,19 +199,94 @@ class DefaultProblemFramer {
     return candidate;
   }
 
-  String _inferMotive(String normalized, String queryIntent) {
-    if (normalized.isEmpty) return '用户希望获得帮助';
-    switch (queryIntent) {
-      case 'travelAlternativeOptions':
-        return '用户希望比较九寨沟方向的多个备选方案，并知道各自更适合什么情况';
-      case 'wildlifeBestTime':
-        return '用户希望知道土拨鼠更容易观赏到的季节、时段和天气条件';
-      case 'weather_now':
-        return '用户希望拿到可直接用于判断出行的实时天气信息';
-      case 'stayPlanning':
-        return '用户希望把住宿与行程选择收敛成可执行建议';
-      default:
-        return '用户希望了解：$normalized';
+  String _inferTargetObject(String normalized) {
+    final quoted = RegExp(r'''["“'「]([^"”'」]{2,40})["”'」]''').firstMatch(
+      normalized,
+    );
+    if (quoted != null) {
+      final value = (quoted.group(1) ?? '').trim();
+      if (value.isNotEmpty) return value;
     }
+    final englishBrand = RegExp(r'\b([A-Za-z][A-Za-z0-9._-]{1,40})\b').firstMatch(
+      normalized,
+    );
+    if (englishBrand != null) {
+      return (englishBrand.group(1) ?? '').trim();
+    }
+    final stripped = normalized
+        .replaceAll(
+          RegExp(
+            r'(帮我|请问|想问|想了解|想知道|能不能|是否|如果把|如果将|多给我|给我|关于|围绕|针对)',
+          ),
+          ' ',
+        )
+        .replaceAll(RegExp(r'[，。！？,.!?]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    return stripped.isNotEmpty ? stripped : normalized;
+  }
+
+  List<String> _extractEntityAnchors(
+    String normalized, {
+    required String targetObject,
+    required String location,
+  }) {
+    final anchors = <String>{};
+    if (location.isNotEmpty) {
+      anchors.add(location);
+    }
+    if (targetObject.isNotEmpty && targetObject != normalized) {
+      anchors.add(targetObject);
+    }
+    final quotedMatches = RegExp(r'''["“'「]([^"”'」]{2,40})["”'」]''')
+        .allMatches(normalized)
+        .map((match) => (match.group(1) ?? '').trim())
+        .where((item) => item.isNotEmpty);
+    anchors.addAll(quotedMatches);
+    final englishMatches = RegExp(r'\b([A-Za-z][A-Za-z0-9._-]{1,40})\b')
+        .allMatches(normalized)
+        .map((match) => (match.group(1) ?? '').trim())
+        .where((item) => item.isNotEmpty);
+    anchors.addAll(englishMatches);
+    if (anchors.isEmpty && targetObject.isNotEmpty) {
+      anchors.add(targetObject);
+    }
+    return anchors.toList(growable: false);
+  }
+
+  List<String> _extractExcludedScopes(String normalized) {
+    final excluded = <String>{};
+    final matches = <RegExpMatch>[
+      ...RegExp(r'(?:不要|排除|去掉|不想要|别给我)\s*([^，。；;、]+)')
+          .allMatches(normalized),
+      ...RegExp(r'(?:而不是|不是)\s*([^，。；;、]+)').allMatches(normalized),
+    ];
+    for (final match in matches) {
+      final raw = (match.group(1) ?? '').trim();
+      if (raw.isEmpty) continue;
+      final parts = raw
+          .split(RegExp(r'[、,，/和或]'))
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty && item.length <= 20);
+      excluded.addAll(parts);
+    }
+    return excluded.toList(growable: false);
+  }
+
+  String _stringValue(Object? raw) => raw?.toString().trim() ?? '';
+
+  List<String> _stringList(Object? raw) {
+    return (raw as List?)
+            ?.map((item) => item.toString().trim())
+            .where((item) => item.isNotEmpty)
+            .toList(growable: false) ??
+        const <String>[];
+  }
+
+  String _normalizeQuery(String query) {
+    return query
+        .trim()
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .replaceAll(RegExp(r'[“”]'), '"');
   }
 }

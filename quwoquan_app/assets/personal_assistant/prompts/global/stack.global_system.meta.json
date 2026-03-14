@@ -6,7 +6,7 @@
   "requiredVariables": [
     "userQuery"
   ],
-  "outputContract": "assistant_turn_v2",
+  "outputContract": "assistant_turn",
   "selfCheckRules": [
     "privacy_boundary",
     "no_fabrication"

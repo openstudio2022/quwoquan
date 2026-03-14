@@ -74,7 +74,7 @@ func publishPostWithAuthor(
 	t.Helper()
 	req := httptest.NewRequest(
 		http.MethodPost,
-		"/v1/content/posts/"+postID+":publish",
+		"/v1/content/posts/"+postID+"/publish",
 		strings.NewReader(payload),
 	)
 	req.Header.Set("Content-Type", "application/json")

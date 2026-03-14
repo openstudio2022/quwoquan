@@ -18,15 +18,13 @@ class _MockWebSearchTool implements AssistantTool {
         success: true,
         message: 'ok',
         data: <String, dynamic>{
-          'raw': <String, dynamic>{
-            'choices': <Map<String, dynamic>>[
-              <String, dynamic>{
-                'message': <String, dynamic>{
-                  'content': '杭州周末有降雨概率，建议携带雨具并避开晚高峰。',
-                },
-              },
-            ],
-          },
+          'references': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'title': '综合天气摘要',
+              'summary': '杭州周末有降雨概率，建议携带雨具并避开晚高峰。',
+              'url': '',
+            },
+          ],
         },
       );
     }
@@ -35,17 +33,13 @@ class _MockWebSearchTool implements AssistantTool {
         success: true,
         message: 'ok',
         data: <String, dynamic>{
-          'raw': <String, dynamic>{
-            'web': <String, dynamic>{
-              'results': <Map<String, dynamic>>[
-                <String, dynamic>{
-                  'title': '杭州天气预报',
-                  'description': '本周末多云转小雨，温度 10~16 度。',
-                  'url': 'https://example.com/weather',
-                },
-              ],
+          'references': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'title': '杭州天气预报',
+              'snippet': '本周末多云转小雨，温度 10~16 度。',
+              'url': 'https://example.com/weather',
             },
-          },
+          ],
         },
       );
     }
@@ -71,6 +65,7 @@ void main() {
     test('builds structured answer with evidences and uncertainty', () async {
       final report = await engine.run(
         query: '请给出杭州周末天气与出行建议',
+        domainId: 'weather',
         primaryProvider: 'perplexity',
         backupProviders: const <String>['brave'],
         maxEvidence: 4,
@@ -82,6 +77,12 @@ void main() {
       expect(report.evidences, isNotEmpty);
       expect(report.providersTried, contains('perplexity'));
     });
+
+    test('does not classify domain from query text anymore', () async {
+      final report = await engine.run(query: '财经和天气都帮我看看', maxEvidence: 2);
+
+      expect(report.providersTried, contains('default'));
+      expect(report.conclusion, contains('针对「财经和天气都帮我看看」'));
+    });
   });
 }
-

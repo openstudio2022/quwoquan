@@ -1,3 +1,5 @@
+import 'package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart';
+
 class SkillExecutionShell {
   const SkillExecutionShell({
     this.problemClass = 'general',
@@ -5,7 +7,7 @@ class SkillExecutionShell {
     this.toolBudget = 12,
     this.variantBudget = 2,
     this.reflectionBudget = 2,
-    this.providerPolicy = 'model_choice',
+    this.providerPolicy = '',
     this.preferredProviders = const <String>[],
     this.authorityDomains = const <String>[],
     this.freshnessHoursMax = 72,
@@ -20,6 +22,10 @@ class SkillExecutionShell {
   final List<String> preferredProviders;
   final List<String> authorityDomains;
   final int freshnessHoursMax;
+
+  ProblemClass get problemClassType => parseProblemClass(problemClass);
+
+  ProviderPolicy get providerPolicyType => parseProviderPolicy(providerPolicy);
 
   SkillExecutionShell copyWith({
     String? problemClass,
@@ -49,6 +55,7 @@ class SkillExecutionShell {
     Map<String, dynamic> map, {
     required Map<String, dynamic> frontmatter,
     required String domainId,
+    required Map<String, dynamic> retrievalPolicy,
   }) {
     final shellMap =
         (map['execution_shell'] as Map?)?.cast<String, dynamic>() ??
@@ -60,28 +67,18 @@ class SkillExecutionShell {
         (frontmatter['searchPolicy'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final mode = (frontmatter['mode'] as String?)?.trim() ?? '';
+    final modeType = parseSkillMode(mode);
     final derivedProblemClass =
         (frontmatter['problem_class'] as String?)?.trim().isNotEmpty == true
         ? (frontmatter['problem_class'] as String).trim()
-        : _deriveProblemClass(domainId: domainId, mode: mode);
-    final defaultVariantBudget = derivedProblemClass == 'realtime_info'
+        : _deriveProblemClass(modeType);
+    final derivedProblemClassType = parseProblemClass(derivedProblemClass);
+    final defaultVariantBudget = derivedProblemClassType.isFastConvergence
         ? 0
-        : (mode == 'task' ? 0 : 2);
-    final defaultReflectionBudget = derivedProblemClass == 'realtime_info'
+        : (modeType == SkillMode.task ? 0 : 2);
+    final defaultReflectionBudget = derivedProblemClassType.isFastConvergence
         ? 0
         : ((searchPolicy['maxReflection'] as num?)?.toInt() ?? 2);
-    final defaultProviderPolicy = derivedProblemClass == 'realtime_info'
-        ? 'authority_first'
-        : 'model_choice';
-    final defaultFreshnessHours = derivedProblemClass == 'realtime_info'
-        ? 1
-        : 72;
-    final defaultAuthorityDomains = derivedProblemClass == 'realtime_info'
-        ? const <String>['weather.com.cn', 'cma.cn']
-        : const <String>[];
-    final defaultPreferredProviders = derivedProblemClass == 'realtime_info'
-        ? const <String>['web']
-        : const <String>[];
     return SkillExecutionShell(
       problemClass:
           (shellMap['problemClass'] as String?)?.trim().isNotEmpty == true
@@ -89,11 +86,11 @@ class SkillExecutionShell {
           : derivedProblemClass,
       maxIterations: _positiveInt(
         shellMap['maxIterations'],
-        fallback: derivedProblemClass == 'realtime_info' ? 2 : 6,
+        fallback: derivedProblemClassType.isFastConvergence ? 2 : 6,
       ),
       toolBudget: _positiveInt(
         shellMap['toolBudget'],
-        fallback: derivedProblemClass == 'realtime_info' ? 1 : 12,
+        fallback: derivedProblemClassType.isFastConvergence ? 1 : 12,
       ),
       variantBudget: _nonNegativeInt(
         shellMap['variantBudget'],
@@ -106,18 +103,24 @@ class SkillExecutionShell {
       providerPolicy:
           (shellMap['providerPolicy'] as String?)?.trim().isNotEmpty == true
           ? (shellMap['providerPolicy'] as String).trim()
-          : defaultProviderPolicy,
+          : ProviderPolicy.inherit.wireName,
       preferredProviders: _stringList(
         shellMap['preferredProviders'],
-        fallback: defaultPreferredProviders,
+        fallback: const <String>[],
       ),
       authorityDomains: _stringList(
         shellMap['authorityDomains'],
-        fallback: defaultAuthorityDomains,
+        fallback: _stringList(
+          retrievalPolicy['authorityDomains'],
+          fallback: const <String>[],
+        ),
       ),
       freshnessHoursMax: _positiveInt(
         shellMap['freshnessHoursMax'],
-        fallback: defaultFreshnessHours,
+        fallback: _positiveInt(
+          retrievalPolicy['defaultFreshnessHoursMax'],
+          fallback: 72,
+        ),
       ),
     );
   }
@@ -134,14 +137,15 @@ class SkillExecutionShell {
     'freshnessHoursMax': freshnessHoursMax,
   };
 
-  static String _deriveProblemClass({
-    required String domainId,
-    required String mode,
-  }) {
-    if (domainId.trim() == 'weather') return 'realtime_info';
-    if (mode.trim() == 'task') return 'task_execution';
-    if (mode.trim() == 'hybrid') return 'complex_reasoning';
-    return 'simple_qa';
+  static String _deriveProblemClass(SkillMode mode) {
+    switch (mode) {
+      case SkillMode.task:
+        return ProblemClass.taskExecution.wireName;
+      case SkillMode.hybrid:
+        return ProblemClass.complexReasoning.wireName;
+      case SkillMode.qa:
+        return ProblemClass.simpleQa.wireName;
+    }
   }
 
   static int _positiveInt(Object? value, {required int fallback}) {
@@ -199,8 +203,10 @@ class PersonalAssistantSkillManifest {
     this.allowedTools = const <String>[],
     this.triggerKeywords = const <String>[],
     this.domainId = '',
+    this.toolChainProfile = '',
     this.skillInstructionMarkdown = '',
     this.frontmatter = const <String, dynamic>{},
+    this.retrievalPolicy = const <String, dynamic>{},
     this.executionShell = const SkillExecutionShell(),
   });
 
@@ -222,18 +228,33 @@ class PersonalAssistantSkillManifest {
   final List<String> allowedTools;
   final List<String> triggerKeywords;
   final String domainId;
+  final String toolChainProfile;
   final String skillInstructionMarkdown;
   final Map<String, dynamic> frontmatter;
+  final Map<String, dynamic> retrievalPolicy;
   final SkillExecutionShell executionShell;
+
+  SkillExecutionTarget get executionTargetType =>
+      parseSkillExecutionTarget(executionTarget);
 
   factory PersonalAssistantSkillManifest.fromMap(Map<String, dynamic> map) {
     final frontmatter = Map<String, dynamic>.from(
       map['frontmatter'] as Map? ?? const <String, dynamic>{},
     );
+    final retrievalPolicy = Map<String, dynamic>.from(
+      map['retrievalPolicy'] as Map? ??
+          frontmatter['retrievalPolicy'] as Map? ??
+          const <String, dynamic>{},
+    );
     final domainId =
         (map['domainId'] as String?)?.trim() ??
         (map['domain'] as String?)?.trim() ??
         '';
+    final requiresMap = Map<String, dynamic>.from(
+      map['requires'] as Map? ??
+          frontmatter['requires'] as Map? ??
+          const <String, dynamic>{},
+    );
     return PersonalAssistantSkillManifest(
       id: (map['id'] as String?)?.trim() ?? '',
       name: (map['name'] as String?)?.trim() ?? '',
@@ -269,32 +290,28 @@ class PersonalAssistantSkillManifest {
               .toList(growable: false) ??
           const <String>[],
       defaultEnabled: map['defaultEnabled'] == true,
-      allowedTools:
-          (map['allowedTools'] as List?)
-              ?.map((e) => e.toString())
-              .toList(growable: false) ??
-          (map['allowed_tools'] as List?)
-              ?.map((e) => e.toString())
-              .toList(growable: false) ??
-          const <String>[],
-      triggerKeywords:
-          (map['triggerKeywords'] as List?)
-              ?.map((e) => e.toString())
-              .toList(growable: false) ??
-          (map['trigger_keywords'] as List?)
-              ?.map((e) => e.toString())
-              .toList(growable: false) ??
-          const <String>[],
+      allowedTools: _stringList(
+        map['allowedTools'] ?? map['allowed_tools'] ?? requiresMap['tools'],
+      ),
+      triggerKeywords: const <String>[],
       domainId: domainId,
+      toolChainProfile:
+          (map['toolChainProfile'] as String?)?.trim() ??
+          (map['tool_chain_profile'] as String?)?.trim() ??
+          (frontmatter['toolChainProfile'] as String?)?.trim() ??
+          (frontmatter['tool_chain_profile'] as String?)?.trim() ??
+          '',
       skillInstructionMarkdown:
           (map['skillInstructionMarkdown'] as String?)?.trim() ??
           (map['skill_markdown'] as String?)?.trim() ??
           '',
       frontmatter: frontmatter,
+      retrievalPolicy: retrievalPolicy,
       executionShell: SkillExecutionShell.fromMap(
         map,
         frontmatter: frontmatter,
         domainId: domainId,
+        retrievalPolicy: retrievalPolicy,
       ),
     );
   }
@@ -305,13 +322,7 @@ class PersonalAssistantSkillManifest {
     if (name.trim().isEmpty) errors.add('name is required');
     if (description.trim().isEmpty) errors.add('description is required');
     if (version.trim().isEmpty) errors.add('version is required');
-    const allowedTargets = <String>{
-      'ios_intent',
-      'android_intent',
-      'native_api',
-      'tool_chain',
-    };
-    if (!allowedTargets.contains(executionTarget)) {
+    if (executionTargetType == SkillExecutionTarget.unknown) {
       errors.add('executionTarget is invalid: $executionTarget');
     }
     final paramType = parametersSchema['type'];
@@ -322,6 +333,23 @@ class PersonalAssistantSkillManifest {
       errors.add('tier must be free/pro');
     }
     return errors;
+  }
+
+  static List<String> _stringList(Object? raw) {
+    if (raw is List) {
+      return raw
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
+    }
+    if (raw is String && raw.trim().isNotEmpty) {
+      return raw
+          .split(RegExp(r'[\s,]+'))
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
+    }
+    return const <String>[];
   }
 }
 
