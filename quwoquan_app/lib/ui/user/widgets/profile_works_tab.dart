@@ -60,66 +60,69 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
         )
         .toList(growable: false);
 
-    return Column(
-      children: [
-        _buildIdentityFilters(notifier, state, fg, fgSecondary),
-        if (state.activeSubTab == CreationSubTab.work) ...[
-          SizedBox(height: AppSpacing.sm),
-          _buildWorkFormatFilters(notifier, state, fg, fgSecondary),
-        ],
-        Expanded(
-          child: filtered.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.photo_library_outlined,
-                        size: AppSpacing.xl * 2,
-                        color: fgSecondary,
-                      ),
-                      SizedBox(height: AppSpacing.md),
-                      Text(
-                        _emptyStateTitle(
-                          state.activeSubTab,
-                          state.activeWorkFormat,
-                        ),
-                        style: TextStyle(
-                          fontSize: AppTypography.md,
+    return Material(
+      color: Colors.transparent,
+      child: Column(
+        children: [
+          _buildIdentityFilters(notifier, state, fg, fgSecondary),
+          if (state.activeSubTab == CreationSubTab.work) ...[
+            SizedBox(height: AppSpacing.sm),
+            _buildWorkFormatFilters(notifier, state, fg, fgSecondary),
+          ],
+          Expanded(
+            child: filtered.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.photo_library_outlined,
+                          size: AppSpacing.xl * 2,
                           color: fgSecondary,
+                        ),
+                        SizedBox(height: AppSpacing.md),
+                        Text(
+                          _emptyStateTitle(
+                            state.activeSubTab,
+                            state.activeWorkFormat,
+                          ),
+                          style: TextStyle(
+                            fontSize: AppTypography.md,
+                            color: fgSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : CustomScrollView(
+                    slivers: [
+                      SliverPadding(
+                        padding: EdgeInsets.fromLTRB(
+                          AppSpacing.feedContentHorizontal(context),
+                          AppSpacing.containerMd,
+                          AppSpacing.feedContentHorizontal(context),
+                          AppSpacing.interGroupLg,
+                        ),
+                        sliver: SliverMasonryGrid.count(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: AppSpacing.interGroupSm,
+                          crossAxisSpacing: AppSpacing.interGroupSm,
+                          childCount: filtered.length,
+                          itemBuilder: (context, index) {
+                            final post = filtered[index];
+                            return _WorksPostCard(
+                              post: post,
+                              isDark: widget.isDark,
+                              onTap: () => _onPostTap(context, post),
+                            );
+                          },
                         ),
                       ),
                     ],
                   ),
-                )
-              : CustomScrollView(
-                  slivers: [
-                    SliverPadding(
-                      padding: EdgeInsets.fromLTRB(
-                        AppSpacing.feedContentHorizontal(context),
-                        AppSpacing.containerMd,
-                        AppSpacing.feedContentHorizontal(context),
-                        AppSpacing.interGroupLg,
-                      ),
-                      sliver: SliverMasonryGrid.count(
-                        crossAxisCount: 2,
-                        mainAxisSpacing: AppSpacing.interGroupSm,
-                        crossAxisSpacing: AppSpacing.interGroupSm,
-                        childCount: filtered.length,
-                        itemBuilder: (context, index) {
-                          final post = filtered[index];
-                          return _WorksPostCard(
-                            post: post,
-                            isDark: widget.isDark,
-                            onTap: () => _onPostTap(context, post),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-        ),
-      ],
+          ),
+        ],
+      ),
     );
   }
 

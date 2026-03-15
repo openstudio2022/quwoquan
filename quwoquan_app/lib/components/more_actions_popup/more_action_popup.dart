@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -19,10 +20,8 @@ class MoreActionPopup extends StatelessWidget {
     bool isScrollControlled = true,
   }) async {
     if (config is MediaPostMoreActionConfig) {
-      await showModalBottomSheet(
+      await showCupertinoModalPopup(
         context: context,
-        backgroundColor: Colors.transparent,
-        isScrollControlled: isScrollControlled,
         builder: (context) => _MediaPostMoreActionSheet(config: config),
       );
     }
@@ -83,55 +82,55 @@ class _MediaPostMoreActionSheetState
     return [
       _ScrollAction(
         id: 'reward',
-        icon: Icons.card_giftcard,
+        icon: CupertinoIcons.gift,
         label: AppStrings.reward,
         onTap: widget.config.onReward,
       ),
       _ScrollAction(
         id: 'save',
-        icon: Icons.download, // 使用 download 而不是 bookmark_outline
+        icon: CupertinoIcons.arrow_down_to_line,
         label: AppStrings.save,
         onTap: widget.config.onSave,
       ),
       _ScrollAction(
         id: 'message',
-        icon: Icons.message_outlined,
+        icon: CupertinoIcons.chat_bubble,
         label: AppStrings.message,
         onTap: widget.config.onMessage,
       ),
       _ScrollAction(
         id: 'copyLink',
-        icon: Icons.link,
+        icon: CupertinoIcons.link,
         label: AppStrings.copyLink,
         onTap: widget.config.onCopyLink,
       ),
       _ScrollAction(
         id: 'share',
-        icon: Icons.ios_share_outlined,
+        icon: CupertinoIcons.share,
         label: UITextConstants.share,
         onTap: widget.config.onShare,
       ),
       _ScrollAction(
         id: 'viewOriginal',
-        icon: Icons.image_outlined,
+        icon: CupertinoIcons.photo,
         label: AppStrings.viewOriginal,
         onTap: widget.config.onViewOriginal,
       ),
       _ScrollAction(
         id: 'fontSettings',
-        icon: Icons.font_download,
+        icon: CupertinoIcons.textformat,
         label: AppStrings.fontSettings,
         onTap: widget.config.onFontSettings,
       ),
       _ScrollAction(
         id: 'darkMode',
-        icon: isDark ? Icons.light_mode : Icons.dark_mode,
+        icon: isDark ? CupertinoIcons.sun_max : CupertinoIcons.moon,
         label: isDark ? AppStrings.lightMode : AppStrings.darkMode,
         onTap: widget.config.onThemeToggle,
       ),
       _ScrollAction(
         id: 'feedback',
-        icon: Icons.edit, // 使用 edit 而不是 feedback
+        icon: CupertinoIcons.pencil,
         label: AppStrings.feedback,
         onTap: widget.config.onFeedback,
       ),
@@ -142,28 +141,28 @@ class _MediaPostMoreActionSheetState
     return [
       _BottomAction(
         id: 'notInterested',
-        icon: Icons.visibility_off_outlined,
+        icon: CupertinoIcons.eye_slash,
         label: AppStrings.notInterested,
         description: AppStrings.notInterestedDescription,
         onTap: widget.config.onNotInterested,
       ),
       _BottomAction(
         id: 'blockUser',
-        icon: Icons.person_off_outlined,
+        icon: CupertinoIcons.person_badge_minus,
         label: AppStrings.blockUser,
         description: AppStrings.blockUserDescription,
         onTap: widget.config.onBlockUser,
       ),
       _BottomAction(
         id: 'blockWords',
-        icon: Icons.filter_alt_outlined,
+        icon: CupertinoIcons.slider_horizontal_3,
         label: AppStrings.blockWords,
         description: AppStrings.blockWordsDescription,
         onTap: widget.config.onBlockWords,
       ),
       _BottomAction(
         id: 'report',
-        icon: Icons.flag_outlined,
+        icon: CupertinoIcons.flag,
         label: AppStrings.report,
         description: AppStrings.reportDescription,
         onTap: widget.config.onReport,
@@ -215,18 +214,18 @@ class _MediaPostMoreActionSheetState
                     ),
                   ),
                 ),
-                IconButton(
-                  icon: Icon(
-                    Icons.close,
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minSize: AppSpacing.minInteractiveSize,
+                  onPressed: () => Navigator.pop(context),
+                  child: Icon(
+                    CupertinoIcons.xmark,
                     size: AppSpacing.twenty.sp,
                     color: AppColorsFunctional.getColor(
                       isDark,
                       ColorType.foregroundPrimary,
                     ),
                   ),
-                  onPressed: () => Navigator.pop(context),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
                 ),
               ],
             ),
@@ -306,15 +305,13 @@ class _MediaPostMoreActionSheetState
 
           // 分隔线
           if (scrollActions.isNotEmpty && bottomActions.isNotEmpty) ...[
-            Divider(
-              height: AppSpacing.one,
-              thickness: 1,
+            Container(
+              height: 0.5,
               color: AppColorsFunctional.getColor(
                 isDark,
                 ColorType.foregroundTertiary,
               ).withValues(alpha: 0.3),
-              indent: AppSpacing.md.w,
-              endIndent: AppSpacing.md.w,
+              margin: EdgeInsets.symmetric(horizontal: AppSpacing.md.w),
             ),
             SizedBox(height: AppSpacing.md.h),
           ],
@@ -338,7 +335,7 @@ class _MediaPostMoreActionSheetState
                   final action = entry.value;
                   return Column(
                     children: [
-                      InkWell(
+                      GestureDetector(
                         onTap: () {
                           Navigator.pop(context);
                           action.onTap?.call();
@@ -390,15 +387,13 @@ class _MediaPostMoreActionSheetState
                       ),
                       // 分隔线 (除了最后一个选项)
                       if (index < bottomActions.length - 1)
-                        Divider(
-                          height: AppSpacing.one,
-                          thickness: 1,
+                        Container(
+                          height: 0.5,
                           color: AppColorsFunctional.getColor(
                             isDark,
                             ColorType.foregroundTertiary,
                           ).withValues(alpha: 0.2),
-                          indent: AppSpacing.md.w,
-                          endIndent: AppSpacing.md.w,
+                          margin: EdgeInsets.symmetric(horizontal: AppSpacing.md.w),
                         ),
                     ],
                   );

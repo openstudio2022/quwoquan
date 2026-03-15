@@ -1,9 +1,10 @@
-// ignore_for_file: unnecessary_underscores
+// ignore_for_file: unnecessary_underscores, deprecated_member_use
 
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 /// 圈子成员/群聊/粉丝/获赞列表页（1:1 对应 AuthorStatsList 的 members/groups/fans/likes 圈子维度）
@@ -171,16 +172,16 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
       ColorType.backgroundTertiary,
     );
 
-    return Scaffold(
+    return AppScaffold(
       backgroundColor: bg,
-      appBar: AppBar(
+      navigationBar: AppNavigationBar(
         backgroundColor: bg,
-        foregroundColor: fg,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
+          child: const Icon(CupertinoIcons.back),
           onPressed: () => context.pop(),
         ),
-        title: Text(
+        middle: Text(
           CircleStatsPage._title(_type),
           style: TextStyle(
             color: fg,
@@ -189,26 +190,20 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
           ),
         ),
       ),
-      body: Column(
+      child: Column(
         children: [
           Padding(
             padding: EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.largeBorderRadius),
-            child: TextField(
+            child: CupertinoSearchTextField(
               onChanged: (v) => setState(() => _searchQuery = v),
-              decoration: InputDecoration(
-                hintText: CircleStatsPage._searchHint(_type),
-                hintStyle: TextStyle(color: fgSecondary, fontSize: AppTypography.base),
-                prefixIcon: Icon(Icons.search, size: AppSpacing.iconSmall + AppSpacing.xs, color: fgSecondary),
-                filled: true,
-                fillColor: inputBg,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: AppSpacing.largeBorderRadius,
-                ),
+              placeholder: CircleStatsPage._searchHint(_type),
+              placeholderStyle: TextStyle(color: fgSecondary, fontSize: AppTypography.base),
+              prefixIcon: Icon(CupertinoIcons.search, size: AppSpacing.iconSmall + AppSpacing.xs, color: fgSecondary),
+              backgroundColor: inputBg,
+              borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+              padding: EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: 10, // Approx vertical padding for search field
               ),
               style: TextStyle(color: fg, fontSize: AppTypography.base),
             ),
@@ -244,7 +239,7 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
       padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
       itemCount: list.length,
       separatorBuilder: (_, __) =>
-          Divider(height: 1, color: borderColor.withValues(alpha: 0.3)),
+          Divider(height: AppSpacing.one, color: borderColor.withValues(alpha: 0.3)),
       itemBuilder: (context, i) {
         final u = list[i];
         final name = u['name'] as String? ?? '';
@@ -253,8 +248,9 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
         final fansCount = u['fansCount'] as String? ?? '0';
         final likesCount = u['likesCount'] as String? ?? '0';
         final isFollowed = u['isFollowed'] as bool? ?? false;
-        return InkWell(
-          onTap: () {},
+        return CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () {},
           child: Padding(
             padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
             child: Row(
@@ -266,7 +262,7 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
                       : null,
                   onBackgroundImageError: (_, __) {},
                   child: avatar.isEmpty
-                      ? Icon(Icons.person, color: fgSecondary)
+                      ? Icon(CupertinoIcons.person, color: fgSecondary)
                       : null,
                 ),
                 SizedBox(width: AppSpacing.largeBorderRadius),
@@ -299,7 +295,16 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
                   ),
                 ),
                 SizedBox(width: AppSpacing.largeBorderRadius),
-                TextButton(
+                CupertinoButton(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                    vertical: AppSpacing.sm,
+                  ),
+                  color: isFollowed
+                      ? borderColor.withValues(alpha: 0.3)
+                      : AppColors.primaryColor.withValues(alpha: 0.12),
+                  minimumSize: Size(AppSpacing.largeButtonSize + AppSpacing.lg, AppSpacing.xl),
+                  borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
                   onPressed: () {
                     setState(() {
                       final idx = _users.indexWhere((e) => e['id'] == u['id']);
@@ -312,22 +317,6 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
                       }
                     });
                   },
-                  style: TextButton.styleFrom(
-                    backgroundColor: isFollowed
-                        ? borderColor.withValues(alpha: 0.3)
-                        : AppColors.primaryColor.withValues(alpha: 0.12),
-                    foregroundColor: isFollowed
-                        ? fgSecondary
-                        : AppColors.primaryColor,
-                    padding: EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md,
-                      vertical: AppSpacing.sm,
-                    ),
-                    minimumSize: Size(AppSpacing.largeButtonSize + AppSpacing.lg, AppSpacing.xl),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
-                    ),
-                  ),
                   child: Text(
                     isFollowed
                         ? UITextConstants.following
@@ -335,6 +324,9 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
                     style: TextStyle(
                       fontSize: AppTypography.xsPlus,
                       fontWeight: AppTypography.extraBold,
+                      color: isFollowed
+                          ? fgSecondary
+                          : AppColors.primaryColor,
                     ),
                   ),
                 ),
@@ -360,13 +352,14 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
       padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
       itemCount: list.length,
       separatorBuilder: (_, __) =>
-          Divider(height: 1, color: borderColor.withValues(alpha: 0.3)),
+          Divider(height: AppSpacing.one, color: borderColor.withValues(alpha: 0.3)),
       itemBuilder: (context, i) {
         final g = list[i];
         final name = g['name'] as String? ?? '';
         final count = g['memberCount'] as String? ?? '0';
-        return InkWell(
-          onTap: () {},
+        return CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () {},
           child: Padding(
             padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
             child: Row(
@@ -378,7 +371,7 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
                     color: borderColor.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
                   ),
-                  child: Icon(Icons.group, color: fgSecondary, size: AppSpacing.iconMedium + AppSpacing.xs),
+                  child: Icon(CupertinoIcons.group, color: fgSecondary, size: AppSpacing.iconMedium + AppSpacing.xs),
                 ),
                 SizedBox(width: AppSpacing.largeBorderRadius),
                 Expanded(
@@ -439,7 +432,7 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
       padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
       itemCount: list.length,
       separatorBuilder: (_, __) =>
-          Divider(height: 1, color: borderColor.withValues(alpha: 0.3)),
+          Divider(height: AppSpacing.one, color: borderColor.withValues(alpha: 0.3)),
       itemBuilder: (context, i) {
         final item = list[i];
         final userName = item['userName'] as String? ?? '';
@@ -447,8 +440,9 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
         final content = item['content'] as String? ?? '';
         final targetTitle = item['targetTitle'] as String? ?? '';
         final time = item['time'] as String? ?? '';
-        return InkWell(
-          onTap: () {},
+        return CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () {},
           child: Padding(
             padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
             child: Row(
@@ -461,7 +455,7 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
                       : null,
                   onBackgroundImageError: (_, __) {},
                   child: userAvatar.isEmpty
-                      ? Icon(Icons.person, color: fgSecondary)
+                      ? Icon(CupertinoIcons.person, color: fgSecondary)
                       : null,
                 ),
                 SizedBox(width: AppSpacing.largeBorderRadius),

@@ -2,7 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 
 /// 私人助理管理页
 ///
@@ -35,25 +41,25 @@ class _AssistantManagementPageState
     final dividerClr = SettingsSemanticConstants.dividerColor(isDark);
     final blockBorder = SettingsSemanticConstants.blockBorderColor(isDark);
 
-    return Scaffold(
+    return AppScaffold(
       backgroundColor: pageBg,
-      appBar: AppBar(
+      navigationBar: AppNavigationBar(
         backgroundColor: blockBg,
-        leading: IconButton(
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
           onPressed: widget.onBack,
-          icon: Icon(Icons.arrow_back, color: fgPrimary),
+          child: Icon(CupertinoIcons.back, color: fgPrimary),
         ),
-        title: Text(
+        middle: Text(
           AppConceptConstants.assistantManagementTitle,
           style: TextStyle(
-            fontSize: AppTypography.xxl,
+            fontSize: AppTypography.xl,
             fontWeight: FontWeight.w700,
             color: fgPrimary,
           ),
         ),
-        centerTitle: false,
       ),
-      body: SingleChildScrollView(
+      child: SingleChildScrollView(
         padding: EdgeInsets.symmetric(
           horizontal: SettingsSemanticConstants.blockHorizontalPadding,
           vertical: SettingsSemanticConstants.blockSpacing,
@@ -153,12 +159,7 @@ class _AssistantManagementPageState
               ),
               child: InkWell(
                 onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('一键清除记忆（确认逻辑待接入）'),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
+                  AppToast.show(context, '一键清除记忆（确认逻辑待接入）');
                 },
                 borderRadius: BorderRadius.circular(
                   SettingsSemanticConstants.blockBorderRadius,
@@ -409,11 +410,11 @@ class _AssistantManagementPageState
               ],
             ),
           ),
-          Switch(
+          CupertinoSwitch(
             value: value,
             onChanged: enabled ? onChanged : null,
-            activeTrackColor: AppColors.primaryColor.withValues(alpha: 0.5),
-            activeThumbColor: AppColors.primaryColor,
+            activeColor: SettingsSemanticConstants.switchActiveTrackColor,
+            trackColor: SettingsSemanticConstants.switchInactiveTrackColor(isDark),
           ),
         ],
       ),

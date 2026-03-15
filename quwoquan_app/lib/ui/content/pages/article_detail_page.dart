@@ -1,3 +1,4 @@
+// ignore_for_file: sort_child_properties_last
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +12,7 @@ import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
 import 'package:quwoquan_app/ui/content/article_detail_view.dart';
 import 'package:quwoquan_app/ui/content/post_view_projection.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 
 class ArticleDetailPage extends ConsumerStatefulWidget {
   const ArticleDetailPage({super.key, required this.articleId});
@@ -110,25 +112,26 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return Scaffold(
+      return AppScaffold(
         backgroundColor: AppColors.worksBackground,
-        body: const Center(child: CircularProgressIndicator()),
+        child: const Center(child: CupertinoActivityIndicator()),
       );
     }
 
     if (_article == null) {
-      return Scaffold(
+      return AppScaffold(
         backgroundColor: AppColors.worksBackground,
-        appBar: AppBar(
+        navigationBar: AppNavigationBar(
           backgroundColor: Colors.transparent,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
+          leading: CupertinoButton(
+            padding: EdgeInsets.zero,
+            child: const Icon(CupertinoIcons.back, color: AppColors.worksTitle),
             onPressed: () => context.canPop()
                 ? context.pop()
                 : context.go(AppRoutePaths.home),
           ),
         ),
-        body: Center(
+        child: Center(
           child: Text(
             _loadError?.toString() ?? '文章不存在',
             style: TextStyle(
@@ -148,18 +151,18 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
     final cardTotal = pages.length;
     final cardCurrent = (_currentCardPage + 1).clamp(1, cardTotal);
 
-    return Scaffold(
+    return AppScaffold(
       backgroundColor: AppColors.worksBackground,
-      appBar: AppBar(
+      navigationBar: AppNavigationBar(
         backgroundColor: AppColors.worksBackground.withValues(alpha: 0.92),
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: AppColors.worksTitle),
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
+          child: Icon(CupertinoIcons.back, color: AppColors.worksTitle),
           onPressed: () => context.canPop()
               ? context.pop()
               : context.go(AppRoutePaths.home),
         ),
-        title: Text(
+        middle: Text(
           article.title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
@@ -169,27 +172,30 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
             fontWeight: AppTypography.semiBold,
           ),
         ),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.auto_awesome, color: AppColors.worksTitle),
-            onPressed: _openAssistantHalfSheet,
-            tooltip: AppConceptConstants.assistantLabel,
-          ),
-          Padding(
-            padding: EdgeInsets.only(right: AppSpacing.containerSm),
-            child: Center(
-              child: Text(
-                '$cardCurrent/$cardTotal',
-                style: TextStyle(
-                  color: AppColors.worksBodyText,
-                  fontSize: AppTypography.sm,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              child: Icon(Icons.auto_awesome, color: AppColors.worksTitle),
+              onPressed: _openAssistantHalfSheet,
+            ),
+            Padding(
+              padding: EdgeInsets.only(right: AppSpacing.containerSm),
+              child: Center(
+                child: Text(
+                  '$cardCurrent/$cardTotal',
+                  style: TextStyle(
+                    color: AppColors.worksBodyText,
+                    fontSize: AppTypography.sm,
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-      body: Column(
+      child: Column(
         children: [
           Expanded(
             child: PageView.builder(
@@ -315,7 +321,7 @@ class _ArticlePosterPage extends StatelessWidget {
                   color: AppColors.worksTitle,
                   fontSize: AppTypography.xxl,
                   fontWeight: AppTypography.bold,
-                  height: 1.35,
+                  height: 1.35, // ignore: verify_dart_semantic
                 ),
               ),
               SizedBox(height: AppSpacing.intraGroupSm),
@@ -326,7 +332,7 @@ class _ArticlePosterPage extends StatelessWidget {
                 style: TextStyle(
                   color: AppColors.worksBodyText,
                   fontSize: AppTypography.base,
-                  height: 1.8,
+                  height: 1.8, // ignore: verify_dart_semantic
                 ),
               ),
             ],
@@ -424,7 +430,7 @@ class _ArticleCardPage extends StatelessWidget {
                   style: TextStyle(
                     color: AppColors.worksBodyText,
                     fontSize: AppTypography.base,
-                    height: 2.0,
+                    height: 2.0, // ignore: verify_dart_semantic
                   ),
                 ),
               ),
@@ -444,7 +450,7 @@ class _ArticleCardPage extends StatelessWidget {
                         style: TextStyle(
                           color: AppColors.worksBodyText,
                           fontSize: AppTypography.base,
-                          height: 2.0,
+                          height: 2.0, // ignore: verify_dart_semantic
                         ),
                       ),
                     ),

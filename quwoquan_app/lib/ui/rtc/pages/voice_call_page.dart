@@ -10,6 +10,7 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/services/active_call_service.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_timer_provider.dart';
@@ -95,9 +96,9 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
           }
         }
       },
-      child: Scaffold(
+      child: AppScaffold(
         backgroundColor: Colors.transparent,
-        body: GestureDetector(
+        child: GestureDetector(
           onTap: _toggleControls,
           behavior: HitTestBehavior.opaque,
           child: Container(
@@ -136,23 +137,28 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
                         _TopActionButton(
                           icon: CupertinoIcons.person_2,
                           onTap: () {
-                            showModalBottomSheet<void>(
+                            showCupertinoModalPopup<void>(
                               context: context,
-                              backgroundColor: Colors.transparent,
-                              builder: (_) => ParticipantListSheet(
-                                maxParticipants:
-                                    session.session?.maxParticipants ?? 32,
-                                onInviteMore: () {
-                                  Navigator.of(context).pop();
-                                  context.push(
-                                    AppRoutePaths.rtcPickParticipants,
-                                    extra: <String, dynamic>{
-                                      'callId': widget.callId,
-                                      'maxParticipants':
-                                          session.session?.maxParticipants ?? 32,
-                                    },
-                                  );
-                                },
+                              builder: (_) => Container(
+                                decoration: BoxDecoration(
+                                  color: CupertinoColors.systemBackground.resolveFrom(context),
+                                  borderRadius: BorderRadius.vertical(top: Radius.circular(AppSpacing.borderRadius)),
+                                ),
+                                child: ParticipantListSheet(
+                                  maxParticipants:
+                                      session.session?.maxParticipants ?? 32,
+                                  onInviteMore: () {
+                                    Navigator.of(context).pop();
+                                    context.push(
+                                      AppRoutePaths.rtcPickParticipants,
+                                      extra: <String, dynamic>{
+                                        'callId': widget.callId,
+                                        'maxParticipants':
+                                            session.session?.maxParticipants ?? 32,
+                                      },
+                                    );
+                                  },
+                                ),
                               ),
                             );
                           },

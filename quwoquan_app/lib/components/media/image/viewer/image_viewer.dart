@@ -10,7 +10,14 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 
-import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/core/design_system/icons/app_custom_icons.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/design_system/spacing/spacing_extensions.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/media_viewer_toolbar.dart';
 
 /// 图片浏览器组件 - 基于原型代码实现
@@ -275,10 +282,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
         scrollPhysics: const BouncingScrollPhysics(),
         backgroundDecoration: const BoxDecoration(color: AppColors.black),
         loadingBuilder: (context, event) => Center(
-          child: CircularProgressIndicator(
-            color: AppColors.primaryColor,
-            value: event == null ? null : event.cumulativeBytesLoaded / event.expectedTotalBytes!,
-          ),
+          child: CupertinoActivityIndicator(),
         ),
       ),
     );
@@ -762,41 +766,38 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
     if (!mounted) return;
     
     final isDark = ref.watch(isDarkProvider);
-    showModalBottomSheet(
+    showCupertinoModalPopup(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
       builder: (context) => Container(
         decoration: BoxDecoration(
           color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(20.r),
-            topRight: Radius.circular(20.r),
-          ),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20.r)),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // 拖拽指示器
-            Container(
-              width: 40.w,
-              height: 4.h,
-              margin: EdgeInsets.only(top: 12.h, bottom: 20.h),
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.dark.foregroundTertiary : AppColors.light.foregroundTertiary,
-                borderRadius: BorderRadius.circular(2.r),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 拖拽指示器
+              Container(
+                width: 40.w,
+                height: 4.h,
+                margin: EdgeInsets.only(top: 12.h, bottom: 20.h),
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.dark.foregroundTertiary : AppColors.light.foregroundTertiary,
+                  borderRadius: BorderRadius.circular(2.r),
+                ),
               ),
-            ),
-            
-            // 功能列表
-            _buildMoreOptionItem(Icons.card_giftcard, '打赏', isDark, () => _handleReward()),
-            _buildMoreOptionItem(Icons.download, '保存', isDark, () => _handleSave()),
-            _buildMoreOptionItem(Icons.message_outlined, '私信', isDark, () => _handleMessage()),
-            _buildMoreOptionItem(Icons.link, UITextConstants.copyLink, isDark, () => _handleCopyLink()),
-            _buildMoreOptionItem(Icons.image_outlined, '查看原图', isDark, () => _handleViewOriginal()),
-            
-            SizedBox(height: 20.h),
-          ],
+              
+              // 功能列表
+              _buildMoreOptionItem(CupertinoIcons.gift, '打赏', isDark, () => _handleReward()),
+              _buildMoreOptionItem(CupertinoIcons.arrow_down_to_line, '保存', isDark, () => _handleSave()),
+              _buildMoreOptionItem(CupertinoIcons.chat_bubble, '私信', isDark, () => _handleMessage()),
+              _buildMoreOptionItem(CupertinoIcons.link, UITextConstants.copyLink, isDark, () => _handleCopyLink()),
+              _buildMoreOptionItem(CupertinoIcons.photo, '查看原图', isDark, () => _handleViewOriginal()),
+              
+              SizedBox(height: 20.h),
+            ],
+          ),
         ),
       ),
     );
@@ -804,7 +805,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
 
   /// 构建更多选项项目
   Widget _buildMoreOptionItem(IconData icon, String title, bool isDark, VoidCallback onTap) {
-    return ListTile(
+    return CupertinoListTile(
       leading: Icon(
         icon,
         color: isDark ? AppColors.dark.foregroundPrimary : AppColors.light.foregroundPrimary,
@@ -815,7 +816,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
         style: TextStyle(
           color: isDark ? AppColors.dark.foregroundPrimary : AppColors.light.foregroundPrimary,
           fontSize: AppTypography.lg,
-          fontWeight: AppTypography.medium,
+          fontWeight: FontWeight.w500, // Cupertino typography typically uses w500 or w600
         ),
       ),
       onTap: () {
@@ -884,17 +885,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
   }
 
   void _showToast(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        duration: const Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-        margin: EdgeInsets.all(16.w),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8.r),
-        ),
-      ),
-    );
+    AppToast.show(context, message);
   }
 
   /// 格式化时间

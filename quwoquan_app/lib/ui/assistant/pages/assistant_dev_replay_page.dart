@@ -1,7 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 
 class AssistantDevReplayPage extends StatefulWidget {
   const AssistantDevReplayPage({
@@ -29,9 +31,9 @@ class _AssistantDevReplayPageState extends State<AssistantDevReplayPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
+    return AppScaffold(
+      navigationBar: AppNavigationBar(
+        middle: Text(
           UITextConstants.assistantDevReplayTitle,
           style: TextStyle(
             fontSize: AppTypography.lg,
@@ -39,124 +41,126 @@ class _AssistantDevReplayPageState extends State<AssistantDevReplayPage> {
           ),
         ),
       ),
-      body: ListView(
-        padding: EdgeInsets.all(
-          AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.md] ??
-              AppSpacing.containerMd,
-        ),
-        children: [
-          Text(
-            UITextConstants.assistantDevReplayRun,
-            style: theme.textTheme.titleMedium,
+      child: SafeArea(
+        child: ListView(
+          padding: EdgeInsets.all(
+            AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.md] ??
+                AppSpacing.containerMd,
           ),
-          SizedBox(height: AppSpacing.sm),
-          if (widget.records.isEmpty)
+          children: [
             Text(
-              UITextConstants.assistantNoReplayData,
-              style: theme.textTheme.bodyMedium,
-            )
-          else
-            ...widget.records.map((record) {
-              final query = (record['query'] as String?) ?? '';
-              final answer = (record['answer'] as String?) ?? '';
-              final runId = (record['runId'] as String?) ?? '';
-              final createdAt = (record['createdAt'] as String?) ?? '';
-              final queryPlan = (record['queryPlan'] as Map?)?.cast<String, dynamic>() ??
-                  const <String, dynamic>{};
-              final policyDecision = (record['policyDecision'] as Map?)?.cast<String, dynamic>() ??
-                  const <String, dynamic>{};
-              final roundTraces = (record['roundTraces'] as List?)
-                      ?.whereType<Map>()
-                      .map((item) => item.cast<String, dynamic>())
-                      .toList(growable: false) ??
-                  const <Map<String, dynamic>>[];
-              final webSearchDiagnostics =
-                  (record['webSearchDiagnostics'] as Map?)
-                          ?.cast<String, dynamic>() ??
-                      const <String, dynamic>{};
-              return Card(
-                margin: EdgeInsets.only(bottom: AppSpacing.sm),
-                child: Padding(
-                  padding: EdgeInsets.all(AppSpacing.containerSm),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(runId, style: theme.textTheme.labelMedium),
-                      SizedBox(height: AppSpacing.xs),
-                      Text(
-                        '${UITextConstants.assistantDevReplayQuery}：$query',
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                      SizedBox(height: AppSpacing.xs),
-                      Text(
-                        '${UITextConstants.assistantDevReplayAnswer}：$answer',
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                      if (createdAt.isNotEmpty) ...[
+              UITextConstants.assistantDevReplayRun,
+              style: theme.textTheme.titleMedium,
+            ),
+            SizedBox(height: AppSpacing.sm),
+            if (widget.records.isEmpty)
+              Text(
+                UITextConstants.assistantNoReplayData,
+                style: theme.textTheme.bodyMedium,
+              )
+            else
+              ...widget.records.map((record) {
+                final query = (record['query'] as String?) ?? '';
+                final answer = (record['answer'] as String?) ?? '';
+                final runId = (record['runId'] as String?) ?? '';
+                final createdAt = (record['createdAt'] as String?) ?? '';
+                final queryPlan = (record['queryPlan'] as Map?)?.cast<String, dynamic>() ??
+                    const <String, dynamic>{};
+                final policyDecision = (record['policyDecision'] as Map?)?.cast<String, dynamic>() ??
+                    const <String, dynamic>{};
+                final roundTraces = (record['roundTraces'] as List?)
+                        ?.whereType<Map>()
+                        .map((item) => item.cast<String, dynamic>())
+                        .toList(growable: false) ??
+                    const <Map<String, dynamic>>[];
+                final webSearchDiagnostics =
+                    (record['webSearchDiagnostics'] as Map?)
+                            ?.cast<String, dynamic>() ??
+                        const <String, dynamic>{};
+                return Card(
+                  margin: EdgeInsets.only(bottom: AppSpacing.sm),
+                  child: Padding(
+                    padding: EdgeInsets.all(AppSpacing.containerSm),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(runId, style: theme.textTheme.labelMedium),
                         SizedBox(height: AppSpacing.xs),
-                        Text(createdAt, style: theme.textTheme.labelSmall),
-                      ],
-                      SizedBox(height: AppSpacing.sm),
-                      _JsonSection(
-                        title: UITextConstants.assistantDevReplayPlan,
-                        data: queryPlan,
-                      ),
-                      SizedBox(height: AppSpacing.xs),
-                      _JsonSection(
-                        title: UITextConstants.assistantDevReplayPolicy,
-                        data: policyDecision,
-                      ),
-                      SizedBox(height: AppSpacing.xs),
-                      _JsonSection(
-                        title: UITextConstants.assistantDevReplayRounds,
-                        data: <String, dynamic>{'items': roundTraces},
-                      ),
-                      if (webSearchDiagnostics.isNotEmpty) ...[
+                        Text(
+                          '${UITextConstants.assistantDevReplayQuery}：$query',
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                        SizedBox(height: AppSpacing.xs),
+                        Text(
+                          '${UITextConstants.assistantDevReplayAnswer}：$answer',
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                        if (createdAt.isNotEmpty) ...[
+                          SizedBox(height: AppSpacing.xs),
+                          Text(createdAt, style: theme.textTheme.labelSmall),
+                        ],
+                        SizedBox(height: AppSpacing.sm),
+                        _JsonSection(
+                          title: UITextConstants.assistantDevReplayPlan,
+                          data: queryPlan,
+                        ),
                         SizedBox(height: AppSpacing.xs),
                         _JsonSection(
-                          title: 'Web Search Diagnostics',
-                          data: webSearchDiagnostics,
+                          title: UITextConstants.assistantDevReplayPolicy,
+                          data: policyDecision,
                         ),
+                        SizedBox(height: AppSpacing.xs),
+                        _JsonSection(
+                          title: UITextConstants.assistantDevReplayRounds,
+                          data: <String, dynamic>{'items': roundTraces},
+                        ),
+                        if (webSearchDiagnostics.isNotEmpty) ...[
+                          SizedBox(height: AppSpacing.xs),
+                          _JsonSection(
+                            title: 'Web Search Diagnostics',
+                            data: webSearchDiagnostics,
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
-                ),
-              );
-            }),
-          SizedBox(height: AppSpacing.md),
-          Text(
-            UITextConstants.assistantDevReplayScore,
-            style: theme.textTheme.titleMedium,
-          ),
-          SizedBox(height: AppSpacing.sm),
-          FutureBuilder<Map<String, dynamic>>(
-            future: _snapshotFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState != ConnectionState.done) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              final data = snapshot.data ?? const <String, dynamic>{};
-              return _JsonSection(
-                title: UITextConstants.assistantDevReplayScore,
-                data: data,
-              );
-            },
-          ),
-          SizedBox(height: AppSpacing.sm),
-          FutureBuilder<Map<String, dynamic>>(
-            future: _snapshotFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState != ConnectionState.done) {
-                return const SizedBox.shrink();
-              }
-              final data = snapshot.data ?? const <String, dynamic>{};
-              final feedbackStats = (data['feedbackStats'] as Map?)
-                      ?.cast<String, dynamic>() ??
-                  const <String, dynamic>{};
-              return _FeedbackStatsSection(stats: feedbackStats);
-            },
-          ),
-        ],
+                );
+              }),
+            SizedBox(height: AppSpacing.md),
+            Text(
+              UITextConstants.assistantDevReplayScore,
+              style: theme.textTheme.titleMedium,
+            ),
+            SizedBox(height: AppSpacing.sm),
+            FutureBuilder<Map<String, dynamic>>(
+              future: _snapshotFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const Center(child: CupertinoActivityIndicator());
+                }
+                final data = snapshot.data ?? const <String, dynamic>{};
+                return _JsonSection(
+                  title: UITextConstants.assistantDevReplayScore,
+                  data: data,
+                );
+              },
+            ),
+            SizedBox(height: AppSpacing.sm),
+            FutureBuilder<Map<String, dynamic>>(
+              future: _snapshotFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const SizedBox.shrink();
+                }
+                final data = snapshot.data ?? const <String, dynamic>{};
+                final feedbackStats = (data['feedbackStats'] as Map?)
+                        ?.cast<String, dynamic>() ??
+                    const <String, dynamic>{};
+                return _FeedbackStatsSection(stats: feedbackStats);
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -308,4 +312,3 @@ class _DistributionBlock extends StatelessWidget {
     );
   }
 }
-

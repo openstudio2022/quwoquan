@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
 
@@ -205,7 +206,7 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
                     ? CameraPreview(controller)
                     : Center(
                         child: _error == null
-                            ? CircularProgressIndicator(color: AppColors.primaryColor)
+                            ? CupertinoActivityIndicator()
                             : Text(
                                 _error!,
                                 style: TextStyle(color: subtle, fontSize: AppTypography.base),

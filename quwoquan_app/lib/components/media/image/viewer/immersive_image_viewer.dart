@@ -1,21 +1,19 @@
-// ignore_for_file: unused_field, prefer_final_fields, unused_element
-
 import 'dart:async';
+
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:photo_view/photo_view.dart';
-
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+
 import 'package:quwoquan_app/components/more_actions_popup/configs/media_post_config.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer.dart';
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 import 'package:quwoquan_app/components/more_actions_popup/more_action_popup.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagement_bar.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/media_viewer_toolbar.dart';
-import 'package:quwoquan_app/components/media/shared/viewer/media_assistant_panel.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/media_caption_widgets.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 
@@ -106,21 +104,16 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
   final Map<int, PageController> _innerControllers = {};
   late AnimationController _fadeController;
   late AnimationController _controlsController;
-  final TextEditingController _assistantInputController = TextEditingController();
-  final ScrollController _assistantScrollController = ScrollController();
-  final FocusNode _assistantInputFocusNode = FocusNode();
   
   int _currentEntryIndex = 0;
   int _currentPostIndex = 0;
   int _currentImageIndex = 0;
   List<_ViewerImageEntry> _mediaEntries = const <_ViewerImageEntry>[];
-  bool _showControls = true;
   
   // 本地状态
   bool _isLiked = false;
   bool _isSaved = false;
   bool _isFollowing = false;
-  bool _isAuthorSelected = false; // 作者选中状态
   int _likesCount = 0;
   int _savesCount = 0;
   int _commentsCount = 0;
@@ -171,9 +164,6 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
     _innerControllers.clear();
     _fadeController.dispose();
     _controlsController.dispose();
-    _assistantInputController.dispose();
-    _assistantScrollController.dispose();
-    _assistantInputFocusNode.dispose();
     _followButtonTimer?.cancel();
     _restoreSystemUiMode();
     super.dispose();
@@ -490,86 +480,6 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
     if (currentPost != null) {
       widget.onShareClick?.call(currentPost);
     }
-  }
-
-  void _handleAssistantClick() {
-    final currentPost = _currentPost;
-    _showAssistantPanel(currentPost);
-  }
-
-  void _showAssistantPanel(PostSummaryView? post) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final suggestions = _buildAssistantSuggestions(post);
-    final contextId = post?.id.isNotEmpty == true ? post!.id : 'media-viewer';
-    AssistantChatStore.normalizeMessages();
-    final summaryText = AssistantChatStore.buildSummary(
-      contextId: contextId,
-      title: _getPostTitle(post),
-      caption: _getPostCaption(post),
-    );
-    final summaryCards = AssistantChatStore.buildSummaryCards();
-    AssistantChatStore.ensureSummaryForContext(
-      contextId: contextId,
-      summaryText: summaryText,
-      cards: summaryCards,
-    );
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return MediaAssistantPanel(
-          isDark: isDark,
-          titleText:
-              '${AppConceptConstants.assistantLabel}${UITextConstants.assistantPanelTitleSuffix}',
-          messages: AssistantChatStore.messages,
-          scrollController: _assistantScrollController,
-          inputController: _assistantInputController,
-          inputFocusNode: _assistantInputFocusNode,
-          suggestions: suggestions,
-          onClose: () => Navigator.pop(context),
-          onSend: _handleAssistantSend,
-          onSuggestionTap: (text) {
-            _assistantInputController.text = text;
-            _assistantInputFocusNode.requestFocus();
-          },
-          onAssistantAvatarTap: widget.onAssistantClick,
-        );
-      },
-    );
-  }
-
-  List<String> _buildAssistantSuggestions(PostSummaryView? post) {
-    final suggestions = <String>[
-      UITextConstants.assistantAskAboutSummary,
-      UITextConstants.assistantAskAboutRecommendations,
-      UITextConstants.assistantAskAboutComments,
-    ];
-    final content = _getPostCaption(post);
-    if (content.isNotEmpty) {
-      suggestions.insert(1, UITextConstants.assistantAskAboutOutfit);
-    }
-    suggestions.add(UITextConstants.assistantAskAboutLocation);
-    return suggestions;
-  }
-
-  void _handleAssistantSend() {
-    final text = _assistantInputController.text.trim();
-    if (text.isEmpty) return;
-    AssistantChatStore.addUserMessage(text);
-    AssistantChatStore.addAssistantMessage(
-      '${UITextConstants.assistantAutoResponsePrefix}$text',
-    );
-    _assistantInputController.clear();
-    _assistantInputFocusNode.unfocus();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_assistantScrollController.hasClients) return;
-      _assistantScrollController.animateTo(
-        _assistantScrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOut,
-      );
-    });
   }
 
   void _handleAuthorTap() {

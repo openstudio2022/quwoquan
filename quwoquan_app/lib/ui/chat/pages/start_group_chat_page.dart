@@ -3,7 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
+import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
 
 /// 发起群聊页（图一：创建新群聊 + 相关同好）
 class StartGroupChatPage extends ConsumerStatefulWidget {
@@ -73,11 +81,8 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   }
 
   void _openSelectGroupChatSheet() {
-    final messenger = ScaffoldMessenger.of(context);
-    showModalBottomSheet<void>(
+    showCupertinoModalPopup<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (context) => _SelectGroupChatSheet(
         groups: _groupConversations
             .map((c) => c.cast<String, String>())
@@ -97,9 +102,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                 )
                 .toList(),
             onConfirm: (selected) {
-              messenger.showSnackBar(
-                SnackBar(content: Text('已选 ${selected.length} 人（开发中）')),
-              );
+              AppToast.show(context, '已选 ${selected.length} 人（开发中）');
             },
           );
         },
@@ -109,11 +112,8 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   }
 
   void _openSelectCircleSheet() {
-    final messenger = ScaffoldMessenger.of(context);
-    showModalBottomSheet<void>(
+    showCupertinoModalPopup<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (context) => _SelectCircleSheet(
         circles: _mockCircles,
         onSelectCircle: (circle) {
@@ -131,9 +131,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                 )
                 .toList(),
             onConfirm: (selected) {
-              messenger.showSnackBar(
-                SnackBar(content: Text('已选 ${selected.length} 人（开发中）')),
-              );
+              AppToast.show(context, '已选 ${selected.length} 人（开发中）');
             },
           );
         },
@@ -147,10 +145,8 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     required List<Map<String, String>> members,
     required void Function(List<Map<String, String>>) onConfirm,
   }) {
-    showModalBottomSheet<void>(
+    showCupertinoModalPopup<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (context) => _MemberSelectSheet(
         title: title,
         members: members,
@@ -306,16 +302,16 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
       }
     }
 
-    return Scaffold(
+    return AppScaffold(
       backgroundColor: bgColor,
-      appBar: AppBar(
+      navigationBar: AppNavigationBar(
         backgroundColor: bgColor,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
+          child: const Icon(CupertinoIcons.back),
           onPressed: widget.onBack,
         ),
-        title: Text(
+        middle: Text(
           UITextConstants.startGroupChat,
           style: TextStyle(
             color: fgPrimary,
@@ -335,30 +331,10 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                   AppSpacing.containerMd,
               vertical: AppSpacing.sm,
             ),
-            child: TextField(
+            child: CupertinoSearchTextField(
               controller: _searchController,
-              decoration: InputDecoration(
-                hintText: UITextConstants.search,
-                prefixIcon: Icon(
-                  Icons.search,
-                  size: AppSpacing.iconMedium,
-                  color: fgPrimary.withValues(alpha: 0.5),
-                ),
-                filled: true,
-                fillColor: isDark
-                    ? Colors.white.withValues(alpha: 0.08)
-                    : Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(
-                    AppSpacing.borderRadius * 2,
-                  ),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: AppSpacing.sm,
-                ),
-              ),
+              placeholder: UITextConstants.search,
+              style: TextStyle(color: fgPrimary),
             ),
           ),
           Expanded(
@@ -430,26 +406,18 @@ class _SectionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return CupertinoListTile(
       onTap: onTap,
-      child: Padding(
-        padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                label,
-                style: TextStyle(fontSize: AppTypography.lg, color: fgPrimary),
-              ),
-            ),
-            Icon(
-              CupertinoIcons.chevron_forward,
-              size: AppSpacing.iconMedium,
-              color: fgPrimary.withValues(alpha: 0.5),
-            ),
-          ],
-        ),
+      title: Text(
+        label,
+        style: TextStyle(fontSize: AppTypography.lg, color: fgPrimary),
       ),
+      trailing: Icon(
+        CupertinoIcons.chevron_forward,
+        size: AppSpacing.iconMedium,
+        color: fgPrimary.withValues(alpha: 0.5),
+      ),
+      padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
     );
   }
 }
@@ -475,7 +443,8 @@ class _RelatedFriendRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Padding(
         padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
@@ -547,19 +516,16 @@ class _SelectionIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
-      iconSize: AppSpacing.iconMedium,
+    return CupertinoButton(
+      minSize: AppSpacing.minInteractiveSize,
       padding: EdgeInsets.zero,
-      constraints: BoxConstraints(
-        minWidth: AppSpacing.minInteractiveSize,
-        minHeight: AppSpacing.minInteractiveSize,
-      ),
       onPressed: onTap,
-      icon: Icon(
+      child: Icon(
         selected
             ? CupertinoIcons.check_mark_circled_solid
             : CupertinoIcons.circle,
         color: selected ? AppColors.primaryColor : CupertinoColors.systemGrey2,
+        size: AppSpacing.iconMedium,
       ),
     );
   }
@@ -597,8 +563,9 @@ class _SelectGroupChatSheet extends StatelessWidget {
             padding: EdgeInsets.all(AppSpacing.sm),
             child: Row(
               children: [
-                IconButton(
-                  icon: Icon(Icons.keyboard_arrow_down, color: fgPrimary),
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  child: Icon(CupertinoIcons.chevron_down, color: fgPrimary),
                   onPressed: onClose,
                 ),
                 Expanded(
@@ -618,25 +585,9 @@ class _SelectGroupChatSheet extends StatelessWidget {
           ),
           Padding(
             padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
-            child: TextField(
-              decoration: InputDecoration(
-                hintText: UITextConstants.searchGroupChatHint,
-                prefixIcon: Icon(
-                  Icons.search,
-                  size: AppSpacing.iconMedium,
-                  color: fgPrimary.withValues(alpha: 0.5),
-                ),
-                filled: true,
-                fillColor: fgPrimary.withValues(alpha: 0.08),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.containerSm,
-                  vertical: AppSpacing.sm,
-                ),
-              ),
+            child: CupertinoSearchTextField(
+              placeholder: UITextConstants.searchGroupChatHint,
+              style: TextStyle(color: fgPrimary),
             ),
           ),
           SizedBox(height: AppSpacing.sm),
@@ -645,7 +596,7 @@ class _SelectGroupChatSheet extends StatelessWidget {
               itemCount: groups.length,
               itemBuilder: (context, index) {
                 final g = groups[index];
-                return ListTile(
+                return CupertinoListTile(
                   leading: CircleAvatar(
                     radius: AppSpacing.avatarUserXs,
                     backgroundColor: AppColors.primaryColor.withValues(
@@ -718,8 +669,9 @@ class _SelectCircleSheet extends StatelessWidget {
             padding: EdgeInsets.all(AppSpacing.sm),
             child: Row(
               children: [
-                IconButton(
-                  icon: Icon(Icons.keyboard_arrow_down, color: fgPrimary),
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  child: Icon(CupertinoIcons.chevron_down, color: fgPrimary),
                   onPressed: onClose,
                 ),
                 Expanded(
@@ -739,25 +691,9 @@ class _SelectCircleSheet extends StatelessWidget {
           ),
           Padding(
             padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
-            child: TextField(
-              decoration: InputDecoration(
-                hintText: UITextConstants.searchCircleHint,
-                prefixIcon: Icon(
-                  Icons.search,
-                  size: AppSpacing.iconMedium,
-                  color: fgPrimary.withValues(alpha: 0.5),
-                ),
-                filled: true,
-                fillColor: fgPrimary.withValues(alpha: 0.08),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.containerSm,
-                  vertical: AppSpacing.sm,
-                ),
-              ),
+            child: CupertinoSearchTextField(
+              placeholder: UITextConstants.searchCircleHint,
+              style: TextStyle(color: fgPrimary),
             ),
           ),
           SizedBox(height: AppSpacing.sm),
@@ -766,7 +702,7 @@ class _SelectCircleSheet extends StatelessWidget {
               itemCount: circles.length,
               itemBuilder: (context, index) {
                 final c = circles[index];
-                return ListTile(
+                return CupertinoListTile(
                   leading: CircleAvatar(
                     radius: AppSpacing.avatarUserXs,
                     backgroundColor: AppColors.secondaryColor.withValues(
@@ -856,19 +792,21 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
       ),
       child: Column(
         children: [
-          AppBar(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            leading: IconButton(
-              icon: Icon(Icons.arrow_back, color: fgPrimary),
-              onPressed: widget.onBack,
-            ),
-            title: Text(
-              widget.title,
-              style: TextStyle(
-                fontSize: AppTypography.xl,
-                fontWeight: FontWeight.w600,
-                color: fgPrimary,
+          SizedBox(
+            height: AppSpacing.toolbarHeight,
+            child: NavigationToolbar(
+              leading: CupertinoButton(
+                padding: EdgeInsets.zero,
+                child: Icon(CupertinoIcons.back, color: fgPrimary),
+                onPressed: widget.onBack,
+              ),
+              middle: Text(
+                widget.title,
+                style: TextStyle(
+                  fontSize: AppTypography.xl,
+                  fontWeight: FontWeight.w600,
+                  color: fgPrimary,
+                ),
               ),
             ),
           ),
@@ -878,7 +816,8 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
               itemBuilder: (context, index) {
                 final m = widget.members[index];
                 final selected = _selected.contains(index);
-                return InkWell(
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
                   onTap: () {
                     setState(() {
                       if (selected) {
@@ -932,7 +871,8 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
             padding: EdgeInsets.all(AppSpacing.md),
             child: Row(
               children: [
-                InkWell(
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
                   onTap: _toggleAll,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -952,54 +892,40 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
                   ),
                 ),
                 const Spacer(),
-                Material(
-                  color: _selected.isEmpty
-                      ? SettingsSemanticConstants.actionButtonDisabledBackground(
-                          isDark,
-                        )
-                      : SettingsSemanticConstants.actionButtonPrimaryBackground,
+                CupertinoButton(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: SettingsSemanticConstants
+                        .actionButtonPaddingHorizontal,
+                    vertical: SettingsSemanticConstants
+                        .actionButtonPaddingVertical,
+                  ),
+                  minSize: SettingsSemanticConstants.actionButtonHeightMedium,
+                  color: SettingsSemanticConstants.actionButtonPrimaryBackground,
+                  disabledColor: SettingsSemanticConstants
+                      .actionButtonDisabledBackground(isDark),
                   borderRadius: BorderRadius.circular(
                     SettingsSemanticConstants.actionButtonBorderRadius,
                   ),
-                  child: InkWell(
-                    onTap: _selected.isEmpty
-                        ? null
-                        : () {
-                            final list = _selected
-                                .map((i) => widget.members[i])
-                                .toList();
-                            Navigator.of(context).pop();
-                            widget.onConfirm(list);
-                          },
-                    borderRadius: BorderRadius.circular(
-                      SettingsSemanticConstants.actionButtonBorderRadius,
-                    ),
-                    child: SizedBox(
-                      height:
-                          SettingsSemanticConstants.actionButtonHeightMedium,
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: SettingsSemanticConstants
-                              .actionButtonPaddingHorizontal,
-                          vertical: SettingsSemanticConstants
-                              .actionButtonPaddingVertical,
-                        ),
-                        child: Center(
-                          child: Text(
-                            UITextConstants.selectAction,
-                            style: TextStyle(
-                              fontSize: AppTypography.lg,
-                              fontWeight: FontWeight.w500,
-                              color: _selected.isEmpty
-                                  ? SettingsSemanticConstants.actionButtonDisabledForeground(
-                                      isDark,
-                                    )
-                                  : SettingsSemanticConstants
-                                        .actionButtonPrimaryForeground,
-                            ),
-                          ),
-                        ),
-                      ),
+                  onPressed: _selected.isEmpty
+                      ? null
+                      : () {
+                          final list = _selected
+                              .map((i) => widget.members[i])
+                              .toList();
+                          Navigator.of(context).pop();
+                          widget.onConfirm(list);
+                        },
+                  child: Text(
+                    UITextConstants.selectAction,
+                    style: TextStyle(
+                      fontSize: AppTypography.lg,
+                      fontWeight: FontWeight.w500,
+                      color: _selected.isEmpty
+                          ? SettingsSemanticConstants.actionButtonDisabledForeground(
+                              isDark,
+                            )
+                          : SettingsSemanticConstants
+                                .actionButtonPrimaryForeground,
                     ),
                   ),
                 ),

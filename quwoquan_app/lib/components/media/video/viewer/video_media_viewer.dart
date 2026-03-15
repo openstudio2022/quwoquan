@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
 
 /// 视频媒体查看器
@@ -143,11 +144,11 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
                       color: AppColors.overlayDark,
                       borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
                     ),
-                    child: Icon(
-                      Icons.arrow_back_ios,
-                      color: AppColors.white,
-                      size: AppSpacing.smallButtonSize,
-                    ),
+                  child: Icon(
+                    CupertinoIcons.back,
+                    color: AppColors.white,
+                    size: AppSpacing.smallButtonSize,
+                  ),
                   ),
                 ),
                 
@@ -230,7 +231,7 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
                               : null,
                           child: currentPost['avatar']?.isEmpty != false
                               ? Icon(
-                                  Icons.person,
+                                  CupertinoIcons.person_fill,
                                   color: isDark ? AppColors.dark.foregroundTertiary : AppColors.light.foregroundTertiary,
                                   size: AppSpacing.iconMedium.sp,
                                 )
@@ -346,7 +347,7 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
                     
                     // 更多按钮
                     _buildActionButton(
-                      icon: Icons.more_horiz,
+                      icon: CupertinoIcons.ellipsis,
                       onTap: () => widget.onMoreClick?.call(currentPost),
                     ),
                   ],
@@ -424,9 +425,9 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
 
     final isDark = ref.watch(isDarkProvider);
     
-    return Scaffold(
+    return AppScaffold(
       backgroundColor: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
-      body: Stack(
+      child: Stack(
         children: [
           // 视频播放器
           PageView.builder(

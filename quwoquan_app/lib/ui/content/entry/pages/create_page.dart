@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -25,6 +27,7 @@ import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dar
 import 'package:quwoquan_app/ui/content/entry/pages/publish_circle_select_page.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/publish_location_selector_page.dart';
 import 'package:quwoquan_app/ui/content/entry/services/publish_settings_services.dart';
+import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 
 /// 创作页
@@ -41,15 +44,15 @@ class CreatePage extends ConsumerStatefulWidget {
   ConsumerState<CreatePage> createState() => _CreatePageState();
 }
 
-class _CreatePageState extends ConsumerState<CreatePage>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _CreatePageState extends ConsumerState<CreatePage> {
+  late PageController _pageController;
+  int _currentIndex = 0;
   static const List<String> _tabIds = ['moment', 'photo', 'video', 'article'];
 
-  Map<String, dynamic> _currentData = _emptyData();
+  Map<String, dynamic> get _currentData => ref.read(createEditorProvider).data;
   String? _currentDraftId;
-  bool _showDraftsList = false;
-  bool _showExitConfirm = false;
+  // _showDraftsList removed
+  // _showExitConfirm removed
   Timer? _autoSaveTimer;
   static const String _draftsStorageKey = 'create_drafts_list';
   static const String _currentDraftIdKey = 'create_current_draft_id';
@@ -84,64 +87,6 @@ class _CreatePageState extends ConsumerState<CreatePage>
   final CreateCircleService _circleService = const CreateCircleService();
   bool _didApplyInitialAction = false;
 
-  static Map<String, dynamic> _emptyData() {
-    return {
-      'moment': {
-        'content': '',
-        'images': <String>[],
-        'videoPath': '',
-        'videoThumbnail': '',
-        'durationMs': 0,
-        'contentIdentity': CreateContentIdentity.moment.value,
-        'visibility': 'public',
-        'assistantUsePolicy': 'inherit',
-        'circleIds': <String>[],
-        'circleNames': <String>[],
-        'locationName': '',
-        'location': <String, dynamic>{},
-      },
-      'photo': {
-        'title': '',
-        'description': '',
-        'images': <String>[],
-        'contentIdentity': CreateContentIdentity.work.value,
-        'visibility': 'public',
-        'assistantUsePolicy': 'inherit',
-        'circleIds': <String>[],
-        'circleNames': <String>[],
-        'locationName': '',
-        'location': <String, dynamic>{},
-      },
-      'video': {
-        'title': '',
-        'description': '',
-        'videoPath': '',
-        'thumbnail': '',
-        'durationMs': 0,
-        'storyboardImages': <String>[],
-        'contentIdentity': CreateContentIdentity.work.value,
-        'visibility': 'public',
-        'assistantUsePolicy': 'inherit',
-        'circleIds': <String>[],
-        'circleNames': <String>[],
-        'locationName': '',
-        'location': <String, dynamic>{},
-      },
-      'article': {
-        'title': '',
-        'content': '',
-        'covers': <String>[],
-        'contentIdentity': CreateContentIdentity.work.value,
-        'visibility': 'public',
-        'assistantUsePolicy': 'inherit',
-        'circleIds': <String>[],
-        'circleNames': <String>[],
-        'locationName': '',
-        'location': <String, dynamic>{},
-      },
-    };
-  }
-
   final List<CreateDraft> _savedDrafts = [];
 
   void _recordCreateVisit(String tabId) {
@@ -160,23 +105,13 @@ class _CreatePageState extends ConsumerState<CreatePage>
           '',
     );
     final initialIndex = _resolveInitialTabIndex();
-    _tabController = TabController(
-      length: _tabIds.length,
-      vsync: this,
-      initialIndex: initialIndex,
-    );
+    _currentIndex = initialIndex;
+    _pageController = PageController(initialPage: initialIndex);
     _loadDrafts();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _recordCreateVisit(_tabIds[_tabController.index]);
+      _recordCreateVisit(_tabIds[_currentIndex]);
       unawaited(_applyInitialActionIfNeeded());
-    });
-    _tabController.addListener(() {
-      if (_tabController.indexIsChanging) return;
-      if (_tabController.index != 1 && _isPhotoEditingMode) {
-        setState(() => _isPhotoEditingMode = false);
-      }
-      _recordCreateVisit(_tabIds[_tabController.index]);
     });
     _autoSaveTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       if (_hasContent()) _saveDraft();
@@ -190,12 +125,12 @@ class _CreatePageState extends ConsumerState<CreatePage>
     _momentAddImageFocusNode.dispose();
     _momentContentController.dispose();
     _photoPageController.dispose();
-    _tabController.dispose();
+    _pageController.dispose();
     super.dispose();
   }
 
   void _enterMomentEditingMode() {
-    if (_tabController.index != 0) return;
+    if (_currentIndex != 0) return;
     _momentAddImageFocusNode.unfocus();
     setState(() {
       _isMomentEditingMode = true;
@@ -214,12 +149,11 @@ class _CreatePageState extends ConsumerState<CreatePage>
     _momentFocusNode.unfocus();
     // 同步内容回 _currentData
     final content = _momentContentController.text;
-    _currentData = Map.from(_currentData);
-    (_currentData['moment'] as Map<String, dynamic>)['content'] = content;
+    ref.read(createEditorProvider.notifier).updateField('moment', 'content', content);
   }
 
   void _enterPhotoEditingMode() {
-    if (_tabController.index != 1) return;
+    if (_currentIndex != 1) return;
     if (_isPhotoEditingMode) return;
     final photoData = _currentData['photo'] as Map<String, dynamic>? ?? {};
     final images = List<String>.from(photoData['images'] as List? ?? []);
@@ -237,61 +171,62 @@ class _CreatePageState extends ConsumerState<CreatePage>
   }
 
   Future<void> _showArticleCoverOptions(bool isDark) async {
-    final bg = SettingsSemanticConstants.blockBackground(isDark);
     final fg = SettingsSemanticConstants.labelColor(isDark);
     final secondary = SettingsSemanticConstants.secondaryColor(isDark);
-    final selection = await showModalBottomSheet<int>(
+    final selection = await showCupertinoModalPopup<int>(
       context: context,
-      backgroundColor: bg,
       builder: (context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                title: Text(
-                  UITextConstants.articleCoverOptionNone,
-                  style: TextStyle(color: fg),
-                ),
-                subtitle: Text(
-                  UITextConstants.articleCoverOptionNoneDesc,
-                  style: TextStyle(color: secondary),
-                ),
-                onTap: () => Navigator.of(context).pop(0),
+        return CupertinoActionSheet(
+          actions: [
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.of(context).pop(0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    UITextConstants.articleCoverOptionNone,
+                    style: TextStyle(color: fg),
+                  ),
+                  Text(
+                    UITextConstants.articleCoverOptionNoneDesc,
+                    style: TextStyle(color: secondary, fontSize: AppTypography.xs),
+                  ),
+                ],
               ),
-              ListTile(
-                title: Text(
-                  UITextConstants.articleCoverOptionOne,
-                  style: TextStyle(color: fg),
-                ),
-                onTap: () => Navigator.of(context).pop(1),
+            ),
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.of(context).pop(1),
+              child: Text(
+                UITextConstants.articleCoverOptionOne,
+                style: TextStyle(color: fg),
               ),
-              ListTile(
-                title: Text(
-                  UITextConstants.articleCoverOptionTwo,
-                  style: TextStyle(color: fg),
-                ),
-                onTap: () => Navigator.of(context).pop(2),
+            ),
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.of(context).pop(2),
+              child: Text(
+                UITextConstants.articleCoverOptionTwo,
+                style: TextStyle(color: fg),
               ),
-              ListTile(
-                title: Text(
-                  UITextConstants.articleCoverOptionThree,
-                  style: TextStyle(color: fg),
-                ),
-                onTap: () => Navigator.of(context).pop(3),
+            ),
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.of(context).pop(3),
+              child: Text(
+                UITextConstants.articleCoverOptionThree,
+                style: TextStyle(color: fg),
               ),
-            ],
+            ),
+          ],
+          cancelButton: CupertinoActionSheetAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(UITextConstants.cancel),
           ),
         );
       },
     );
     if (!mounted || selection == null) return;
     if (selection == 0) {
-      setState(() {
-        _currentData = Map.from(_currentData);
-        (_currentData['article'] as Map<String, dynamic>)['covers'] =
-            <String>[];
-      });
+      ref.read(createEditorProvider.notifier).updateField('article', 'covers', <String>[]);
       return;
     }
     final currentCovers = List<String>.from(
@@ -304,10 +239,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
       initialPaths: currentCovers,
     );
     if (!mounted) return;
-    setState(() {
-      _currentData = Map.from(_currentData);
-      (_currentData['article'] as Map<String, dynamic>)['covers'] = paths;
-    });
+    ref.read(createEditorProvider.notifier).updateField('article', 'covers', paths);
   }
 
   /// 发表微趣：发布到云侧内容服务，成功后退出编辑态并提示
@@ -316,24 +248,20 @@ class _CreatePageState extends ConsumerState<CreatePage>
   }
 
   Future<void> _publishCurrentTab() async {
-    final tab = _tabIds[_tabController.index];
+    final tab = _tabIds[_currentIndex];
     await _publishTab(tab);
   }
 
   Future<void> _publishTab(String tab, {bool exitMomentEditing = false}) async {
     if (tab == 'moment') {
-      _currentData = Map.from(_currentData);
-      (_currentData['moment'] as Map<String, dynamic>)['content'] =
-          _momentContentController.text;
+      ref.read(createEditorProvider.notifier).updateField('moment', 'content', _momentContentController.text);
     }
     final confirmed = await _ensurePublishIdentityConfirmed(tab);
     if (!confirmed) return;
     final payload = _buildPostPayload(tab);
     if (payload == null) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(context.l10n.loadFailed)));
+        AppToast.show(context, context.l10n.loadFailed);
       }
       return;
     }
@@ -364,15 +292,11 @@ class _CreatePageState extends ConsumerState<CreatePage>
         _exitMomentEditingMode();
       }
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(UITextConstants.momentPublished)));
+      AppToast.show(context, UITextConstants.momentPublished);
       _doClose();
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(context.l10n.loadFailed)));
+      AppToast.show(context, context.l10n.loadFailed);
     }
   }
 
@@ -521,7 +445,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
   }
 
   bool _hasContent() {
-    final tab = _tabIds[_tabController.index];
+    final tab = _tabIds[_currentIndex];
     final d = _currentData[tab] as Map<String, dynamic>? ?? {};
     switch (tab) {
       case 'moment':
@@ -590,7 +514,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
   }
 
   void _saveDraft() {
-    final tab = _tabIds[_tabController.index];
+    final tab = _tabIds[_currentIndex];
     final dataToSave = Map<String, dynamic>.from(
       _currentData[tab] as Map<String, dynamic>? ?? const <String, dynamic>{},
     );
@@ -627,7 +551,35 @@ class _CreatePageState extends ConsumerState<CreatePage>
 
   void _onCloseRequest() {
     if (_hasContent()) {
-      setState(() => _showExitConfirm = true);
+      showCupertinoDialog(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          title: Text(UITextConstants.createExitConfirmTitle),
+          content: Text(UITextConstants.createExitConfirmDesc),
+          actions: [
+            CupertinoDialogAction(
+              isDestructiveAction: true,
+              onPressed: () {
+                Navigator.pop(context);
+                _handleDiscardAndExit();
+              },
+              child: Text(UITextConstants.discard),
+            ),
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              onPressed: () {
+                Navigator.pop(context);
+                _handleSaveAndExit();
+              },
+              child: Text(UITextConstants.saveDraft),
+            ),
+            CupertinoDialogAction(
+              onPressed: () => Navigator.pop(context),
+              child: Text(UITextConstants.cancel),
+            ),
+          ],
+        ),
+      );
     } else {
       _doClose();
     }
@@ -648,7 +600,6 @@ class _CreatePageState extends ConsumerState<CreatePage>
 
   void _handleSaveAndExit() {
     _saveDraft();
-    setState(() => _showExitConfirm = false);
     _doClose();
   }
 
@@ -665,21 +616,21 @@ class _CreatePageState extends ConsumerState<CreatePage>
       });
       _persistDrafts(nextDrafts, null);
     }
-    setState(() => _showExitConfirm = false);
     _doClose();
   }
 
   void _handleRestoreDraft(CreateDraft draft) {
     final tab = draft.tabKey;
     final idx = _tabIds.indexOf(tab);
-    if (idx >= 0) _tabController.animateTo(idx);
-    final restored = Map<String, dynamic>.from(draft.data);
+    if (idx >= 0) {
+      _pageController.jumpToPage(idx);
+      _currentIndex = idx;
+    }
+    
+    ref.read(createEditorProvider.notifier).restoreFromDraft(draft);
+
     setState(() {
-      final newData = _emptyData();
-      newData[tab] = restored;
-      _currentData = newData;
       _currentDraftId = draft.id;
-      _showDraftsList = false;
       _isMomentEditingMode = false;
       _showEmojiPanel = false;
       _isPhotoEditingMode = false;
@@ -709,7 +660,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
     _persistDrafts(nextDrafts, nextId);
   }
 
-  String get _currentTabId => _tabIds[_tabController.index];
+  String get _currentTabId => _tabIds[_currentIndex];
 
   CreateContentIdentity get _currentIdentity => _identityForTab(_currentTabId);
 
@@ -786,16 +737,14 @@ class _CreatePageState extends ConsumerState<CreatePage>
 
   void _applyMomentImages(List<String> images, {bool enterEditing = false}) {
     final limitedImages = images.take(9).toList(growable: false);
-    setState(() {
-      _currentData = Map<String, dynamic>.from(_currentData);
-      final moment = Map<String, dynamic>.from(_tabData('moment'));
-      moment['images'] = limitedImages;
-      moment['videoPath'] = '';
-      moment['videoThumbnail'] = '';
-      moment['durationMs'] = 0;
-      moment['contentIdentity'] = CreateContentIdentity.moment.value;
-      _currentData['moment'] = moment;
-    });
+    final currentMoment = ref.read(createEditorProvider).data['moment'] as Map<String, dynamic>? ?? {};
+    final moment = Map<String, dynamic>.from(currentMoment);
+    moment['images'] = limitedImages;
+    moment['videoPath'] = '';
+    moment['videoThumbnail'] = '';
+    moment['durationMs'] = 0;
+    moment['contentIdentity'] = CreateContentIdentity.moment.value;
+    ref.read(createEditorProvider.notifier).updateTabData('moment', moment);
     _switchToTabKey('moment');
     if (!enterEditing) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -810,16 +759,14 @@ class _CreatePageState extends ConsumerState<CreatePage>
     final duration = await _getVideoDuration(path);
     final thumb = await _generateVideoThumbnail(path);
     if (!mounted) return;
-    setState(() {
-      _currentData = Map<String, dynamic>.from(_currentData);
-      final moment = Map<String, dynamic>.from(_tabData('moment'));
+      final currentMoment = ref.read(createEditorProvider).data['moment'] as Map<String, dynamic>? ?? {};
+      final moment = Map<String, dynamic>.from(currentMoment);
       moment['images'] = <String>[];
       moment['videoPath'] = path;
       moment['videoThumbnail'] = thumb ?? '';
       moment['durationMs'] = duration?.inMilliseconds ?? 0;
       moment['contentIdentity'] = CreateContentIdentity.moment.value;
-      _currentData['moment'] = moment;
-    });
+      ref.read(createEditorProvider.notifier).updateTabData('moment', moment);
     _switchToTabKey('moment');
     if (!enterEditing) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -829,17 +776,19 @@ class _CreatePageState extends ConsumerState<CreatePage>
 
   void _switchToTabKey(String tabKey) {
     final nextIndex = _tabIds.indexOf(tabKey);
-    if (nextIndex < 0 || nextIndex == _tabController.index) return;
-    _tabController.animateTo(nextIndex);
+    if (nextIndex < 0 || nextIndex == _currentIndex) return;
+    _pageController.animateToPage(
+      nextIndex,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
   }
 
   void _switchIdentity(CreateContentIdentity identity) {
     final currentTab = _currentTabId;
     if (_currentIdentity == identity) return;
     if (currentTab == 'moment') {
-      _currentData = Map<String, dynamic>.from(_currentData);
-      (_currentData['moment'] as Map<String, dynamic>)['content'] =
-          _momentContentController.text;
+      ref.read(createEditorProvider.notifier).updateField('moment', 'content', _momentContentController.text);
     }
     if (identity == CreateContentIdentity.moment) {
       _seedMomentFromWorkTab(currentTab);
@@ -859,9 +808,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
     if (tabKey == _currentTabId || tabKey == 'moment') return;
     final currentTab = _currentTabId;
     if (currentTab == 'moment') {
-      _currentData = Map<String, dynamic>.from(_currentData);
-      (_currentData['moment'] as Map<String, dynamic>)['content'] =
-          _momentContentController.text;
+      ref.read(createEditorProvider.notifier).updateField('moment', 'content', _momentContentController.text);
       _seedWorkTabFromMoment(tabKey);
     } else {
       _seedWorkTabFromWorkTab(currentTab, tabKey);
@@ -882,111 +829,106 @@ class _CreatePageState extends ConsumerState<CreatePage>
 
   void _seedMomentFromWorkTab(String sourceTab) {
     if (sourceTab == 'moment') return;
-    setState(() {
-      _currentData = Map<String, dynamic>.from(_currentData);
-      final source = Map<String, dynamic>.from(_tabData(sourceTab));
-      final moment = Map<String, dynamic>.from(_tabData('moment'));
-      _copySharedPublishFields(source, moment);
-      switch (sourceTab) {
-        case 'photo':
-          moment['content'] = (source['description'] ?? '').toString();
-          moment['images'] = List<String>.from(
-            source['images'] as List? ?? const <String>[],
-          );
-          moment['videoPath'] = '';
-          moment['videoThumbnail'] = '';
-          moment['durationMs'] = 0;
-          break;
-        case 'video':
-          moment['content'] = (source['description'] ?? '').toString();
-          moment['images'] = <String>[];
-          moment['videoPath'] = (source['videoPath'] ?? '').toString();
-          moment['videoThumbnail'] = (source['thumbnail'] ?? '').toString();
-          moment['durationMs'] = (source['durationMs'] as num?)?.toInt() ?? 0;
-          break;
-        case 'article':
-          moment['content'] = (source['content'] ?? '').toString();
-          moment['images'] = List<String>.from(
-            source['covers'] as List? ?? const <String>[],
-          );
-          moment['videoPath'] = '';
-          moment['videoThumbnail'] = '';
-          moment['durationMs'] = 0;
-          break;
-      }
-      moment['contentIdentity'] = CreateContentIdentity.moment.value;
-      _currentData['moment'] = moment;
-    });
+    final data = ref.read(createEditorProvider).data;
+    final source = Map<String, dynamic>.from(data[sourceTab] as Map? ?? {});
+    final moment = Map<String, dynamic>.from(data['moment'] as Map? ?? {});
+    _copySharedPublishFields(source, moment);
+    switch (sourceTab) {
+      case 'photo':
+        moment['content'] = (source['description'] ?? '').toString();
+        moment['images'] = List<String>.from(
+          source['images'] as List? ?? const <String>[],
+        );
+        moment['videoPath'] = '';
+        moment['videoThumbnail'] = '';
+        moment['durationMs'] = 0;
+        break;
+      case 'video':
+        moment['content'] = (source['description'] ?? '').toString();
+        moment['images'] = <String>[];
+        moment['videoPath'] = (source['videoPath'] ?? '').toString();
+        moment['videoThumbnail'] = (source['thumbnail'] ?? '').toString();
+        moment['durationMs'] = (source['durationMs'] as num?)?.toInt() ?? 0;
+        break;
+      case 'article':
+        moment['content'] = (source['content'] ?? '').toString();
+        moment['images'] = List<String>.from(
+          source['covers'] as List? ?? const <String>[],
+        );
+        moment['videoPath'] = '';
+        moment['videoThumbnail'] = '';
+        moment['durationMs'] = 0;
+        break;
+    }
+    moment['contentIdentity'] = CreateContentIdentity.moment.value;
+    ref.read(createEditorProvider.notifier).updateTabData('moment', moment);
+    
     _momentContentController.text =
-        (_tabData('moment')['content'] as String? ?? '').trim();
+        (moment['content'] as String? ?? '').trim();
   }
 
   void _seedWorkTabFromMoment(String targetTab) {
-    setState(() {
-      _currentData = Map<String, dynamic>.from(_currentData);
-      final moment = Map<String, dynamic>.from(_tabData('moment'));
-      final target = Map<String, dynamic>.from(_tabData(targetTab));
-      _copySharedPublishFields(moment, target);
-      switch (targetTab) {
-        case 'photo':
-          target['description'] = (moment['content'] ?? '').toString();
-          target['images'] = List<String>.from(
-            moment['images'] as List? ?? const <String>[],
-          );
-          break;
-        case 'video':
-          target['description'] = (moment['content'] ?? '').toString();
-          target['videoPath'] = (moment['videoPath'] ?? '').toString();
-          target['thumbnail'] = (moment['videoThumbnail'] ?? '').toString();
-          target['durationMs'] = (moment['durationMs'] as num?)?.toInt() ?? 0;
-          break;
-        case 'article':
-          target['content'] = (moment['content'] ?? '').toString();
-          target['covers'] = List<String>.from(
-            moment['images'] as List? ?? const <String>[],
-          ).take(3).toList();
-          break;
-      }
-      target['contentIdentity'] = CreateContentIdentity.work.value;
-      _currentData[targetTab] = target;
-    });
+    final data = ref.read(createEditorProvider).data;
+    final moment = Map<String, dynamic>.from(data['moment'] as Map? ?? {});
+    final target = Map<String, dynamic>.from(data[targetTab] as Map? ?? {});
+    _copySharedPublishFields(moment, target);
+    switch (targetTab) {
+      case 'photo':
+        target['description'] = (moment['content'] ?? '').toString();
+        target['images'] = List<String>.from(
+          moment['images'] as List? ?? const <String>[],
+        );
+        break;
+      case 'video':
+        target['description'] = (moment['content'] ?? '').toString();
+        target['videoPath'] = (moment['videoPath'] ?? '').toString();
+        target['thumbnail'] = (moment['videoThumbnail'] ?? '').toString();
+        target['durationMs'] = (moment['durationMs'] as num?)?.toInt() ?? 0;
+        break;
+      case 'article':
+        target['content'] = (moment['content'] ?? '').toString();
+        target['covers'] = List<String>.from(
+          moment['images'] as List? ?? const <String>[],
+        ).take(3).toList();
+        break;
+    }
+    target['contentIdentity'] = CreateContentIdentity.work.value;
+    ref.read(createEditorProvider.notifier).updateTabData(targetTab, target);
   }
 
   void _seedWorkTabFromWorkTab(String sourceTab, String targetTab) {
     if (sourceTab == targetTab) return;
-    setState(() {
-      _currentData = Map<String, dynamic>.from(_currentData);
-      final source = Map<String, dynamic>.from(_tabData(sourceTab));
-      final target = Map<String, dynamic>.from(_tabData(targetTab));
-      _copySharedPublishFields(source, target);
-      target['title'] = (source['title'] ?? '').toString();
-      switch (targetTab) {
-        case 'photo':
-          target['description'] =
-              (source['description'] ?? source['content'] ?? '').toString();
-          target['images'] = List<String>.from(
-            (source['images'] ?? source['covers']) as List? ?? const <String>[],
-          );
-          break;
-        case 'video':
-          target['description'] =
-              (source['description'] ?? source['content'] ?? '').toString();
-          target['videoPath'] = (source['videoPath'] ?? '').toString();
-          target['thumbnail'] =
-              (source['thumbnail'] ?? source['coverUrl'] ?? '').toString();
-          target['durationMs'] = (source['durationMs'] as num?)?.toInt() ?? 0;
-          break;
-        case 'article':
-          target['content'] = (source['description'] ?? source['content'] ?? '')
-              .toString();
-          target['covers'] = List<String>.from(
-            (source['images'] ?? source['covers']) as List? ?? const <String>[],
-          ).take(3).toList();
-          break;
-      }
-      target['contentIdentity'] = CreateContentIdentity.work.value;
-      _currentData[targetTab] = target;
-    });
+    final data = ref.read(createEditorProvider).data;
+    final source = Map<String, dynamic>.from(data[sourceTab] as Map? ?? {});
+    final target = Map<String, dynamic>.from(data[targetTab] as Map? ?? {});
+    _copySharedPublishFields(source, target);
+    target['title'] = (source['title'] ?? '').toString();
+    switch (targetTab) {
+      case 'photo':
+        target['description'] =
+            (source['description'] ?? source['content'] ?? '').toString();
+        target['images'] = List<String>.from(
+          (source['images'] ?? source['covers']) as List? ?? const <String>[],
+        );
+        break;
+      case 'video':
+        target['description'] =
+            (source['description'] ?? source['content'] ?? '').toString();
+        target['videoPath'] = (source['videoPath'] ?? '').toString();
+        target['thumbnail'] =
+            (source['thumbnail'] ?? source['coverUrl'] ?? '').toString();
+        target['durationMs'] = (source['durationMs'] as num?)?.toInt() ?? 0;
+        break;
+      case 'article':
+        target['content'] = (source['description'] ?? source['content'] ?? '')
+            .toString();
+        target['covers'] = List<String>.from(
+          (source['images'] ?? source['covers']) as List? ?? const <String>[],
+        ).take(3).toList();
+        break;
+    }
+    target['contentIdentity'] = CreateContentIdentity.work.value;
+    ref.read(createEditorProvider.notifier).updateTabData(targetTab, target);
   }
 
   void _copySharedPublishFields(
@@ -1093,11 +1035,8 @@ class _CreatePageState extends ConsumerState<CreatePage>
     Color fgColor,
     Color fgSecondary,
   ) {
-    return ListenableBuilder(
-      listenable: _tabController,
-      builder: (context, _) {
-        final suggestion = _identitySuggestionForTab(_currentTabId);
-        return Container(
+    final suggestion = _identitySuggestionForTab(_currentTabId);
+    return Container(
           width: double.infinity,
           padding: EdgeInsets.fromLTRB(
             AppSpacing.containerMd,
@@ -1182,7 +1121,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
                           ),
                         ),
                       ),
-                      TextButton(
+                      CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        minSize: AppSpacing.minInteractiveSize,
                         onPressed: () => _switchIdentity(suggestion.identity),
                         child: Text(
                           suggestion.identity == CreateContentIdentity.work
@@ -1197,8 +1138,6 @@ class _CreatePageState extends ConsumerState<CreatePage>
             ],
           ),
         );
-      },
-    );
   }
 
   Widget _buildFormatChip(String tabKey, String label) {
@@ -1209,11 +1148,32 @@ class _CreatePageState extends ConsumerState<CreatePage>
       'article' => TestKeys.createWorkFormatNote,
       _ => null,
     };
-    return ChoiceChip(
+    final isDark = ref.watch(isDarkProvider);
+    final activeColor = AppColors.primaryColor;
+    final inactiveColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundSecondary,
+    );
+
+    return GestureDetector(
       key: chipKey,
-      label: Text(label),
-      selected: selected,
-      onSelected: (_) => _switchWorkFormat(tabKey),
+      onTap: () => _switchWorkFormat(tabKey),
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? activeColor : inactiveColor,
+          borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected
+                ? CupertinoColors.white
+                : SettingsSemanticConstants.labelColor(isDark),
+            fontSize: AppTypography.sm,
+          ),
+        ),
+      ),
     );
   }
 
@@ -1234,38 +1194,27 @@ class _CreatePageState extends ConsumerState<CreatePage>
         : SettingsSemanticConstants.actionButtonDisabledForeground(isDark);
     return Padding(
       padding: EdgeInsets.only(right: AppSpacing.sm),
-      child: Material(
+      child: CupertinoButton(
+        key: buttonKey,
+        padding: EdgeInsets.symmetric(
+          horizontal: SettingsSemanticConstants
+              .actionButtonPaddingHorizontalInToolbar,
+          vertical: SettingsSemanticConstants
+              .actionButtonPaddingVerticalInToolbar,
+        ),
         color: bg,
+        minSize: SettingsSemanticConstants.actionButtonHeightInToolbar,
         borderRadius: BorderRadius.circular(
           SettingsSemanticConstants.actionButtonBorderRadius,
         ),
-        child: InkWell(
-          key: buttonKey,
-          onTap: enabled ? onPressed : null,
-          borderRadius: BorderRadius.circular(
-            SettingsSemanticConstants.actionButtonBorderRadius,
-          ),
-          child: SizedBox(
-            height: SettingsSemanticConstants.actionButtonHeightInToolbar,
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: SettingsSemanticConstants
-                    .actionButtonPaddingHorizontalInToolbar,
-                vertical: SettingsSemanticConstants
-                    .actionButtonPaddingVerticalInToolbar,
-              ),
-              child: Center(
-                child: Text(
-                  text,
-                  style: TextStyle(
-                    fontSize:
-                        SettingsSemanticConstants.actionButtonTextSizeInToolbar,
-                    fontWeight: FontWeight.w600,
-                    color: fg,
-                  ),
-                ),
-              ),
-            ),
+        onPressed: enabled ? onPressed : null,
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize:
+                SettingsSemanticConstants.actionButtonTextSizeInToolbar,
+            fontWeight: FontWeight.w600,
+            color: fg,
           ),
         ),
       ),
@@ -1332,17 +1281,11 @@ class _CreatePageState extends ConsumerState<CreatePage>
         .map((item) => item.path)
         .toList();
     if (imagePaths.isEmpty) return;
-    setState(() {
-      _currentData = Map.from(_currentData);
-      final video = Map<String, dynamic>.from(
-        _currentData['video'] as Map<String, dynamic>? ?? <String, dynamic>{},
-      );
+      final currentVideo = ref.read(createEditorProvider).data['video'] as Map<String, dynamic>? ?? {};
+      final video = Map<String, dynamic>.from(currentVideo);
       video['storyboardImages'] = imagePaths;
-      _currentData['video'] = video;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(UITextConstants.mediaPickerOneTapMovieQueued)),
-    );
+      ref.read(createEditorProvider.notifier).updateTabData('video', video);
+    AppToast.show(context, UITextConstants.mediaPickerOneTapMovieQueued);
   }
 
   /// 打开创作媒体选择器并返回视频路径（发视频使用）
@@ -1408,21 +1351,18 @@ class _CreatePageState extends ConsumerState<CreatePage>
     final duration = await _getVideoDuration(path);
     if (!mounted) return;
     if (duration != null && duration > const Duration(hours: 1)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(UITextConstants.videoDurationTooLong)),
-      );
+      AppToast.show(context, UITextConstants.videoDurationTooLong);
       return;
     }
     final thumb = await _generateVideoThumbnail(path);
     if (!mounted) return;
-    setState(() {
-      _currentData = Map.from(_currentData);
-      (_currentData['video'] as Map)['videoPath'] = path;
-      (_currentData['video'] as Map)['thumbnail'] = thumb ?? '';
-      (_currentData['video'] as Map)['durationMs'] =
-          duration?.inMilliseconds ?? 0;
-      (_currentData['video'] as Map)['storyboardImages'] = <String>[];
-    });
+      final currentVideo = ref.read(createEditorProvider).data['video'] as Map<String, dynamic>? ?? {};
+      final video = Map<String, dynamic>.from(currentVideo);
+      video['videoPath'] = path;
+      video['thumbnail'] = thumb ?? '';
+      video['durationMs'] = duration?.inMilliseconds ?? 0;
+      video['storyboardImages'] = <String>[];
+      ref.read(createEditorProvider.notifier).updateTabData('video', video);
   }
 
   Future<void> _handlePickMomentVideo() async {
@@ -1432,14 +1372,12 @@ class _CreatePageState extends ConsumerState<CreatePage>
   }
 
   void _clearMomentVideo() {
-    setState(() {
-      _currentData = Map<String, dynamic>.from(_currentData);
-      final moment = Map<String, dynamic>.from(_tabData('moment'));
+      final currentMoment = ref.read(createEditorProvider).data['moment'] as Map<String, dynamic>? ?? {};
+      final moment = Map<String, dynamic>.from(currentMoment);
       moment['videoPath'] = '';
       moment['videoThumbnail'] = '';
       moment['durationMs'] = 0;
-      _currentData['moment'] = moment;
-    });
+      ref.read(createEditorProvider.notifier).updateTabData('moment', moment);
   }
 
   String _formatDurationMs(int durationMs) {
@@ -1510,21 +1448,17 @@ class _CreatePageState extends ConsumerState<CreatePage>
   }) {
     final parsed = _parseEditImageResult(result, fallbackIndex);
     if (parsed == null) return;
-    setState(() {
-      _currentData = Map.from(_currentData);
-      final tab = Map<String, dynamic>.from(
-        _currentData[tabKey] as Map<String, dynamic>? ?? {},
-      );
-      final list = List<String>.from(tab['images'] as List? ?? []);
-      if (list.isEmpty) return;
-      final safeIndex = parsed.index.clamp(0, list.length - 1);
-      list[safeIndex] = parsed.path;
-      tab['images'] = list;
-      if (tabKey == 'photo') {
-        tab['_photoCurrentIndex'] = safeIndex;
-      }
-      _currentData[tabKey] = tab;
-    });
+    final data = ref.read(createEditorProvider).data;
+    final tab = Map<String, dynamic>.from(data[tabKey] as Map? ?? {});
+    final list = List<String>.from(tab['images'] as List? ?? []);
+    if (list.isEmpty) return;
+    final safeIndex = parsed.index.clamp(0, list.length - 1);
+    list[safeIndex] = parsed.path;
+    tab['images'] = list;
+    if (tabKey == 'photo') {
+      tab['_photoCurrentIndex'] = safeIndex;
+    }
+    ref.read(createEditorProvider.notifier).updateTabData(tabKey, tab);
   }
 
   Future<void> _openPhotoImageEditorAt(int index) async {
@@ -1548,6 +1482,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(createEditorProvider);
     final isDark = ref.watch(isDarkProvider);
     final pageBg = SettingsSemanticConstants.createPageBackground(isDark);
     final blockSurface = SettingsSemanticConstants.createPageBlockBackground(
@@ -1559,20 +1494,19 @@ class _CreatePageState extends ConsumerState<CreatePage>
 
     return Stack(
       children: [
-        Scaffold(
+        AppScaffold(
           key: TestKeys.createPage,
           backgroundColor: pageBg,
-          appBar: AppBar(
+          navigationBar: AppNavigationBar(
             backgroundColor: blockSurface,
-            elevation: 0,
-            scrolledUnderElevation: 0,
-            leading: IconButton(
+            leading: CupertinoButton(
               key: TestKeys.createCloseButton,
-              icon: const Icon(Icons.close),
+              padding: EdgeInsets.zero,
+              child: const Icon(CupertinoIcons.clear),
               onPressed: _onCloseRequest,
             ),
-            title: ListenableBuilder(
-              listenable: _tabController,
+            middle: ListenableBuilder(
+              listenable: _pageController,
               builder: (context, _) {
                 return Text(
                   _currentEditorTitle,
@@ -1585,168 +1519,179 @@ class _CreatePageState extends ConsumerState<CreatePage>
                 );
               },
             ),
-            centerTitle: true,
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(1),
-              child: Container(
-                height: AppSpacing.one,
+            border: Border(
+              bottom: BorderSide(
                 color: SettingsSemanticConstants.dividerColor(isDark),
+                width: AppSpacing.one,
               ),
             ),
-            actions: [
-              if (_isMomentEditingMode && _canPublishMoment)
-                _buildPublishButton(
-                  isDark: isDark,
-                  onPressed: () {
-                    _publishMoment();
-                  },
-                  buttonKey: TestKeys.createPublishButton,
-                )
-              else if (hasContent)
-                _buildPublishButton(
-                  isDark: isDark,
-                  onPressed: () {
-                    _publishCurrentTab();
-                  },
-                  label: _tabController.index == 0
-                      ? UITextConstants.publish
-                      : UITextConstants.publishAction,
-                  buttonKey: TestKeys.createPublishButton,
-                )
-              else
-                TextButton.icon(
-                  key: TestKeys.createDraftsButton,
-                  onPressed: () => setState(() => _showDraftsList = true),
-                  icon: Icon(
-                    Icons.inventory_2_outlined,
-                    size: AppSpacing.iconMedium,
-                    color: fgSecondary,
-                  ),
-                  label: Text(
-                    UITextConstants.drafts,
-                    style: TextStyle(
-                      fontSize: AppTypography.base,
-                      color: fgSecondary,
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (_isMomentEditingMode && _canPublishMoment)
+                  _buildPublishButton(
+                    isDark: isDark,
+                    onPressed: () {
+                      _publishMoment();
+                    },
+                    buttonKey: TestKeys.createPublishButton,
+                  )
+                else if (hasContent)
+                  _buildPublishButton(
+                    isDark: isDark,
+                    onPressed: () {
+                      _publishCurrentTab();
+                    },
+                    label: _currentIndex == 0
+                        ? UITextConstants.publish
+                        : UITextConstants.publishAction,
+                    buttonKey: TestKeys.createPublishButton,
+                  )
+                else
+                  CupertinoButton(
+                    key: TestKeys.createDraftsButton,
+                    padding: EdgeInsets.zero,
+                    onPressed: _showDraftsModal,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.inventory_2_outlined,
+                          size: AppSpacing.iconMedium,
+                          color: fgSecondary,
+                        ),
+                        SizedBox(width: AppSpacing.intraGroupXs),
+                        Text(
+                          UITextConstants.drafts,
+                          style: TextStyle(
+                            fontSize: AppTypography.base,
+                            color: fgSecondary,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
-          body: Column(
-            children: [
-              if (_isUnifiedCreateEnabled &&
-                  !_isMomentEditingMode &&
-                  !_isPhotoEditingMode)
-                _buildUnifiedEditorShell(
-                  isDark,
-                  blockSurface,
-                  fgColor,
-                  fgSecondary,
+          child: Material(
+            type: MaterialType.transparency,
+            child: Column(
+              children: [
+                if (_isUnifiedCreateEnabled &&
+                    !_isMomentEditingMode &&
+                    !_isPhotoEditingMode)
+                  _buildUnifiedEditorShell(
+                    isDark,
+                    blockSurface,
+                    fgColor,
+                    fgSecondary,
+                  ),
+                Expanded(
+                  child: PageView(
+                    controller: _pageController,
+                    physics: const BouncingScrollPhysics(),
+                    onPageChanged: (index) {
+                      setState(() {
+                        _currentIndex = index;
+                      });
+                      _recordCreateVisit(_tabIds[index]);
+                    },
+                    children: _tabIds.asMap().entries.map((e) {
+                      return _buildEditorPlaceholder(
+                        context,
+                        e.key,
+                        isDark,
+                        fgColor,
+                        fgSecondary,
+                      );
+                    }).toList(),
+                  ),
                 ),
-              Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: _tabIds.asMap().entries.map((e) {
-                    return _buildEditorPlaceholder(
-                      context,
-                      e.key,
-                      isDark,
-                      fgColor,
-                      fgSecondary,
-                    );
-                  }).toList(),
-                ),
-              ),
-              if (_isMomentEditingMode)
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _showEmojiPanel = !_showEmojiPanel;
-                          if (_showEmojiPanel) {
-                            _momentFocusNode.unfocus();
-                          } else {
-                            _momentFocusNode.requestFocus();
-                          }
-                        });
-                      },
-                      child: Container(
-                        height:
-                            SettingsSemanticConstants.toolbarHeightOverKeyboard,
-                        width: double.infinity,
-                        padding: EdgeInsets.symmetric(
-                          horizontal:
-                              SettingsSemanticConstants.blockHorizontalPadding,
-                          vertical:
-                              (SettingsSemanticConstants
-                                      .toolbarHeightOverKeyboard -
-                                  SettingsSemanticConstants
-                                      .createToolbarIconSize) /
-                              2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: blockSurface,
-                          border: Border(
-                            top: BorderSide(
-                              color: SettingsSemanticConstants.dividerColor(
-                                isDark,
+                if (_isMomentEditingMode)
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _showEmojiPanel = !_showEmojiPanel;
+                            if (_showEmojiPanel) {
+                              _momentFocusNode.unfocus();
+                            } else {
+                              _momentFocusNode.requestFocus();
+                            }
+                          });
+                        },
+                        child: Container(
+                          height:
+                              SettingsSemanticConstants.toolbarHeightOverKeyboard,
+                          width: double.infinity,
+                          padding: EdgeInsets.symmetric(
+                            horizontal:
+                                SettingsSemanticConstants.blockHorizontalPadding,
+                            vertical:
+                                (SettingsSemanticConstants
+                                        .toolbarHeightOverKeyboard -
+                                    SettingsSemanticConstants
+                                        .createToolbarIconSize) /
+                                2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: blockSurface,
+                            border: Border(
+                              top: BorderSide(
+                                color: SettingsSemanticConstants.dividerColor(
+                                  isDark,
+                                ),
+                              ),
+                            ),
+                          ),
+                          child: SafeArea(
+                            top: false,
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Icon(
+                                _showEmojiPanel
+                                    ? Icons.keyboard_outlined
+                                    : Icons.emoji_emotions_outlined,
+                                color: fgColor,
+                                size: SettingsSemanticConstants
+                                    .createToolbarIconSize,
                               ),
                             ),
                           ),
                         ),
-                        child: SafeArea(
-                          top: false,
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: Icon(
-                              _showEmojiPanel
-                                  ? Icons.keyboard_outlined
-                                  : Icons.emoji_emotions_outlined,
-                              color: fgColor,
-                              size: SettingsSemanticConstants
-                                  .createToolbarIconSize,
-                            ),
-                          ),
+                      ),
+                      if (_showEmojiPanel)
+                        UnifiedEmojiPicker(
+                          onEmojiSelected: (char) {
+                            final t = _momentContentController;
+                            final pos = t.selection.baseOffset.clamp(
+                              0,
+                              t.text.length,
+                            );
+                            t.text =
+                                t.text.substring(0, pos) +
+                                char +
+                                t.text.substring(pos);
+                            t.selection = TextSelection.collapsed(
+                              offset: pos + char.length,
+                            );
+                            ref.read(createEditorProvider.notifier).updateField('moment', 'content', t.text);
+                          },
                         ),
-                      ),
-                    ),
-                    if (_showEmojiPanel)
-                      UnifiedEmojiPicker(
-                        onEmojiSelected: (char) {
-                          final t = _momentContentController;
-                          final pos = t.selection.baseOffset.clamp(
-                            0,
-                            t.text.length,
-                          );
-                          t.text =
-                              t.text.substring(0, pos) +
-                              char +
-                              t.text.substring(pos);
-                          t.selection = TextSelection.collapsed(
-                            offset: pos + char.length,
-                          );
-                          setState(() {
-                            _currentData = Map.from(_currentData);
-                            (_currentData['moment']
-                                    as Map<String, dynamic>)['content'] =
-                                t.text;
-                          });
-                        },
-                      ),
-                  ],
-                )
-              else if (_isPhotoEditingMode)
-                const SizedBox.shrink()
-              else
-                const SizedBox.shrink(),
-            ],
+                    ],
+                  )
+                else if (_isPhotoEditingMode)
+                  const SizedBox.shrink()
+                else
+                  const SizedBox.shrink(),
+              ],
+            ),
           ),
         ),
-        if (_showExitConfirm) _buildExitConfirm(isDark, fgColor, fgSecondary),
-        if (_showDraftsList) _buildDraftsList(isDark, fgColor, fgSecondary),
       ],
     );
   }
@@ -1964,21 +1909,17 @@ class _CreatePageState extends ConsumerState<CreatePage>
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TextFormField(
+          CupertinoTextField(
             key: TestKeys.createMomentInput,
             controller: _momentContentController,
             focusNode: focusNode,
-            decoration: InputDecoration(
-              hintText: UITextConstants.momentPlaceholder,
-              hintStyle: TextStyle(
-                color: SettingsSemanticConstants.createInputHintColor(isDark),
-                fontSize: SettingsSemanticConstants.createInputMomentFontSize,
-              ),
-              border: InputBorder.none,
-              filled: false,
-              contentPadding: EdgeInsets.zero,
-              counterText: '',
+            placeholder: UITextConstants.momentPlaceholder,
+            placeholderStyle: TextStyle(
+              color: SettingsSemanticConstants.createInputHintColor(isDark),
+              fontSize: SettingsSemanticConstants.createInputMomentFontSize,
             ),
+            decoration: null,
+            padding: EdgeInsets.zero,
             style: TextStyle(
               color: fgColor,
               fontSize: SettingsSemanticConstants.createInputMomentFontSize,
@@ -1987,10 +1928,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
             minLines: 2,
             maxLength: _kMomentMaxLength,
             onTap: onEnterEditing,
-            onChanged: (v) => setState(() {
-              _currentData = Map.from(_currentData);
-              (_currentData['moment'] as Map<String, dynamic>)['content'] = v;
-            }),
+            onChanged: (v) => ref.read(createEditorProvider.notifier).updateField('moment', 'content', v),
             contextMenuBuilder: (context, editableTextState) {
               final items = editableTextState.contextMenuButtonItems.where((
                 item,
@@ -2301,25 +2239,13 @@ class _CreatePageState extends ConsumerState<CreatePage>
           showChevron: false,
           trailingWidget: CupertinoSwitch(
             value: allowAssistantUse,
-            activeTrackColor: blue,
+            activeColor: blue,
             onChanged: (next) {
-              setState(() {
-                final nextData = Map<String, dynamic>.from(_tabData(tabKey));
-                nextData['assistantUsePolicy'] = next ? 'inherit' : 'exclude';
-                _currentData = Map<String, dynamic>.from(_currentData)
-                  ..[tabKey] = nextData;
-              });
+              ref.read(createEditorProvider.notifier).updateField(tabKey, 'assistantUsePolicy', next ? 'inherit' : 'exclude');
             },
           ),
           onTap: () {
-            setState(() {
-              final nextData = Map<String, dynamic>.from(_tabData(tabKey));
-              nextData['assistantUsePolicy'] = allowAssistantUse
-                  ? 'exclude'
-                  : 'inherit';
-              _currentData = Map<String, dynamic>.from(_currentData)
-                ..[tabKey] = nextData;
-            });
+            ref.read(createEditorProvider.notifier).updateField(tabKey, 'assistantUsePolicy', allowAssistantUse ? 'exclude' : 'inherit');
           },
         ),
         if (!allowAssistantUse)
@@ -2349,32 +2275,26 @@ class _CreatePageState extends ConsumerState<CreatePage>
           showChevron: false,
           trailingWidget: CupertinoSwitch(
             value: isPublic,
-            activeTrackColor: blue,
+            activeColor: blue,
             onChanged: (next) {
-              setState(() {
-                final nextData = Map<String, dynamic>.from(_tabData(tabKey));
-                nextData['visibility'] = next ? 'public' : 'private';
-                if (!next) {
-                  nextData['circleIds'] = <String>[];
-                  nextData['circleNames'] = <String>[];
-                }
-                _currentData = Map<String, dynamic>.from(_currentData)
-                  ..[tabKey] = nextData;
-              });
-            },
-          ),
-          onTap: () {
-            setState(() {
-              final nextPublic = !_isPublic(tabKey);
-              final nextData = Map<String, dynamic>.from(_tabData(tabKey));
-              nextData['visibility'] = nextPublic ? 'public' : 'private';
-              if (!nextPublic) {
+              final nextData = Map<String, dynamic>.from(ref.read(createEditorProvider).data[tabKey] as Map? ?? {});
+              nextData['visibility'] = next ? 'public' : 'private';
+              if (!next) {
                 nextData['circleIds'] = <String>[];
                 nextData['circleNames'] = <String>[];
               }
-              _currentData = Map<String, dynamic>.from(_currentData)
-                ..[tabKey] = nextData;
-            });
+              ref.read(createEditorProvider.notifier).updateTabData(tabKey, nextData);
+            },
+          ),
+          onTap: () {
+            final nextPublic = !_isPublic(tabKey);
+            final nextData = Map<String, dynamic>.from(ref.read(createEditorProvider).data[tabKey] as Map? ?? {});
+            nextData['visibility'] = nextPublic ? 'public' : 'private';
+            if (!nextPublic) {
+              nextData['circleIds'] = <String>[];
+              nextData['circleNames'] = <String>[];
+            }
+            ref.read(createEditorProvider.notifier).updateTabData(tabKey, nextData);
           },
         ),
         if (isPublic) ...[
@@ -2404,8 +2324,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
       ),
     );
     if (!mounted || result == null) return;
-    setState(() {
-      final nextData = Map<String, dynamic>.from(_tabData(tabKey));
+      final nextData = Map<String, dynamic>.from(ref.read(createEditorProvider).data[tabKey] as Map? ?? {});
       if (result.name.isEmpty) {
         nextData['locationName'] = '';
         nextData['location'] = <String, dynamic>{};
@@ -2413,9 +2332,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
         nextData['locationName'] = result.name;
         nextData['location'] = result.toLocationMap();
       }
-      _currentData = Map<String, dynamic>.from(_currentData)
-        ..[tabKey] = nextData;
-    });
+      ref.read(createEditorProvider.notifier).updateTabData(tabKey, nextData);
   }
 
   Future<void> _selectCircles(String tabKey) async {
@@ -2451,13 +2368,10 @@ class _CreatePageState extends ConsumerState<CreatePage>
       ),
     );
     if (!mounted || result == null) return;
-    setState(() {
-      final nextData = Map<String, dynamic>.from(_tabData(tabKey));
+      final nextData = Map<String, dynamic>.from(ref.read(createEditorProvider).data[tabKey] as Map? ?? {});
       nextData['circleIds'] = result.keys.toList();
       nextData['circleNames'] = result.values.toList();
-      _currentData = Map<String, dynamic>.from(_currentData)
-        ..[tabKey] = nextData;
-    });
+      ref.read(createEditorProvider.notifier).updateTabData(tabKey, nextData);
   }
 
   Widget _momentListTile({
@@ -2472,9 +2386,10 @@ class _CreatePageState extends ConsumerState<CreatePage>
     bool showChevron = true,
     required VoidCallback onTap,
   }) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      onPressed: onTap,
+      child: Container(
         padding: EdgeInsets.symmetric(
           horizontal: SettingsSemanticConstants.blockHorizontalPadding,
           vertical: SettingsSemanticConstants.sectionVerticalPadding,
@@ -2588,11 +2503,8 @@ class _CreatePageState extends ConsumerState<CreatePage>
         onAcceptWithDetails: (details) {
           final from = details.data;
           if (from == index) return;
-          setState(() {
-            _currentData = Map.from(_currentData);
-            final list = List<String>.from(
-              (_currentData['moment'] as Map)['images'] as List? ?? [],
-            );
+            final currentMoment = ref.read(createEditorProvider).data['moment'] as Map<String, dynamic>? ?? {};
+            final list = List<String>.from(currentMoment['images'] as List? ?? []);
             if (from < 0 ||
                 from >= list.length ||
                 index < 0 ||
@@ -2602,8 +2514,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
             final a = list[from];
             list[from] = list[index];
             list[index] = a;
-            (_currentData['moment'] as Map)['images'] = list;
-          });
+            ref.read(createEditorProvider.notifier).updateField('moment', 'images', list);
         },
         builder: (context, candidateData, rejectedData) {
           final isDragTarget = candidateData.isNotEmpty;
@@ -2639,15 +2550,12 @@ class _CreatePageState extends ConsumerState<CreatePage>
                 child: _momentImageCell(
                   path,
                   onRemove: () {
-                    setState(() {
-                      _currentData = Map.from(_currentData);
-                      final list = List<String>.from(
-                        (_currentData['moment'] as Map)['images'] as List? ??
-                            [],
-                      );
+                    final currentMoment = ref.read(createEditorProvider).data['moment'] as Map<String, dynamic>? ?? {};
+                    final list = List<String>.from(currentMoment['images'] as List? ?? []);
+                    if (index >= 0 && index < list.length) {
                       list.removeAt(index);
-                      (_currentData['moment'] as Map)['images'] = list;
-                    });
+                      ref.read(createEditorProvider.notifier).updateField('moment', 'images', list);
+                    }
                   },
                 ),
               ),
@@ -2752,10 +2660,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
                         );
                         if (paths.isEmpty) return;
                         final oldLength = images.length;
-                        setState(() {
-                          _currentData = Map.from(_currentData);
-                          (_currentData['photo'] as Map)['images'] = paths;
-                        });
+                        ref.read(createEditorProvider.notifier).updateField('photo', 'images', paths);
                         if (!mounted) return;
                         final list = List<String>.from(
                           (_currentData['photo'] as Map)['images'] as List? ??
@@ -2825,47 +2730,40 @@ class _CreatePageState extends ConsumerState<CreatePage>
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        TextFormField(
+        _RestorableCupertinoTextField(
           key: TestKeys.createPhotoTitleInput,
           initialValue: data['title'] as String? ?? '',
           onTap: _enterPhotoEditingMode,
-          decoration: InputDecoration(
-            hintText: UITextConstants.photoTitleHint,
-            hintStyle: TextStyle(
-              color: SettingsSemanticConstants.createInputHintColor(isDark),
-              fontSize: SettingsSemanticConstants.createInputTitleFontSize,
-            ),
-            border: InputBorder.none,
-            contentPadding: EdgeInsets.zero,
+          placeholder: UITextConstants.photoTitleHint,
+          placeholderStyle: TextStyle(
+            color: SettingsSemanticConstants.createInputHintColor(isDark),
+            fontSize: SettingsSemanticConstants.createInputTitleFontSize,
           ),
+          decoration: null,
+          padding: EdgeInsets.zero,
           style: TextStyle(
             color: fgColor,
             fontSize: SettingsSemanticConstants.createInputTitleFontSize,
-            fontWeight: FontWeight.bold,
           ),
+          fontWeight: FontWeight.bold,
           onChanged: (v) {
             _enterPhotoEditingMode();
-            setState(() {
-              _currentData = Map.from(_currentData);
-              (_currentData['photo'] as Map<String, dynamic>)['title'] = v;
-            });
+            ref.read(createEditorProvider.notifier).updateField('photo', 'title', v);
           },
         ),
         Padding(
           padding: EdgeInsets.only(top: 8),
-          child: TextFormField(
+          child: _RestorableCupertinoTextField(
             key: TestKeys.createPhotoBodyInput,
             initialValue: data['description'] as String? ?? '',
             onTap: _enterPhotoEditingMode,
-            decoration: InputDecoration(
-              hintText: UITextConstants.photoBodyHint,
-              hintStyle: TextStyle(
-                color: SettingsSemanticConstants.createInputHintColor(isDark),
-                fontSize: SettingsSemanticConstants.createInputBodyFontSize,
-              ),
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.zero,
+            placeholder: UITextConstants.photoBodyHint,
+            placeholderStyle: TextStyle(
+              color: SettingsSemanticConstants.createInputHintColor(isDark),
+              fontSize: SettingsSemanticConstants.createInputBodyFontSize,
             ),
+            decoration: null,
+            padding: EdgeInsets.zero,
             style: TextStyle(
               color: fgColor,
               fontSize: SettingsSemanticConstants.createInputBodyFontSize,
@@ -2873,11 +2771,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
             maxLines: 2,
             onChanged: (v) {
               _enterPhotoEditingMode();
-              setState(() {
-                _currentData = Map.from(_currentData);
-                (_currentData['photo'] as Map<String, dynamic>)['description'] =
-                    v;
-              });
+              ref.read(createEditorProvider.notifier).updateField('photo', 'description', v);
             },
           ),
         ),
@@ -2916,10 +2810,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
             controller: _photoPageController,
             itemCount: images.length,
             onPageChanged: (index) {
-              setState(() {
-                _currentData = Map.from(_currentData);
-                (_currentData['photo'] as Map)['_photoCurrentIndex'] = index;
-              });
+              ref.read(createEditorProvider.notifier).updateField('photo', '_photoCurrentIndex', index);
             },
             itemBuilder: (context, index) {
               return GestureDetector(
@@ -2962,17 +2853,23 @@ class _CreatePageState extends ConsumerState<CreatePage>
             child: GestureDetector(
               onTap: () {
                 setState(() {
-                  _currentData = Map.from(_currentData);
+                  final photoData = Map<String, dynamic>.from(
+                    (_currentData['photo'] as Map?) ?? <String, dynamic>{},
+                  );
                   final list = List<String>.from(
-                    (_currentData['photo'] as Map)['images'] as List? ?? [],
+                    photoData['images'] as List? ?? [],
                   );
                   list.removeAt(currentIndex);
-                  (_currentData['photo'] as Map)['images'] = list;
+                  photoData['images'] = list;
                   int next = (data['_photoCurrentIndex'] as int? ?? 0);
                   if (next >= list.length) {
                     next = list.isNotEmpty ? list.length - 1 : 0;
                   }
-                  (_currentData['photo'] as Map)['_photoCurrentIndex'] = next;
+                  photoData['_photoCurrentIndex'] = next;
+                  ref.read(createEditorProvider.notifier).updateTabData(
+                    'photo',
+                    photoData,
+                  );
                 });
               },
               child: CircleAvatar(
@@ -3034,17 +2931,23 @@ class _CreatePageState extends ConsumerState<CreatePage>
           child: GestureDetector(
             onTap: () {
               setState(() {
-                _currentData = Map.from(_currentData);
+                final photoData = Map<String, dynamic>.from(
+                  (_currentData['photo'] as Map?) ?? <String, dynamic>{},
+                );
                 final list = List<String>.from(
-                  (_currentData['photo'] as Map)['images'] as List? ?? [],
+                  photoData['images'] as List? ?? [],
                 );
                 list.removeAt(currentIndex);
-                (_currentData['photo'] as Map)['images'] = list;
+                photoData['images'] = list;
                 int next = (data['_photoCurrentIndex'] as int? ?? 0);
                 if (next >= list.length) {
                   next = list.isNotEmpty ? list.length - 1 : 0;
                 }
-                (_currentData['photo'] as Map)['_photoCurrentIndex'] = next;
+                photoData['_photoCurrentIndex'] = next;
+                ref.read(createEditorProvider.notifier).updateTabData(
+                  'photo',
+                  photoData,
+                );
               });
             },
             child: CircleAvatar(
@@ -3149,9 +3052,11 @@ class _CreatePageState extends ConsumerState<CreatePage>
                 final from = details.data;
                 if (from == index) return;
                 setState(() {
-                  _currentData = Map.from(_currentData);
+                  final photoData = Map<String, dynamic>.from(
+                    (_currentData['photo'] as Map?) ?? <String, dynamic>{},
+                  );
                   final list = List<String>.from(
-                    (_currentData['photo'] as Map)['images'] as List? ?? [],
+                    photoData['images'] as List? ?? [],
                   );
                   if (from < 0 ||
                       from >= list.length ||
@@ -3162,14 +3067,17 @@ class _CreatePageState extends ConsumerState<CreatePage>
                   final a = list[from];
                   list[from] = list[index];
                   list[index] = a;
-                  (_currentData['photo'] as Map)['images'] = list;
+                  photoData['images'] = list;
                   final cur = (data['_photoCurrentIndex'] as int? ?? 0);
                   if (cur == from) {
-                    (_currentData['photo'] as Map)['_photoCurrentIndex'] =
-                        index;
+                    photoData['_photoCurrentIndex'] = index;
                   } else if (cur == index) {
-                    (_currentData['photo'] as Map)['_photoCurrentIndex'] = from;
+                    photoData['_photoCurrentIndex'] = from;
                   }
+                  ref.read(createEditorProvider.notifier).updateTabData(
+                    'photo',
+                    photoData,
+                  );
                 });
               },
               builder: (context, candidateData, rejectedData) {
@@ -3195,23 +3103,17 @@ class _CreatePageState extends ConsumerState<CreatePage>
                             : AppSpacing.toolPanelItemBorderWidthUnselected,
                       ),
                     ),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: () => setState(() {
-                          _currentData = Map.from(_currentData);
-                          (_currentData['photo'] as Map)['_photoCurrentIndex'] =
-                              index;
-                        }),
+                    child: CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: () => ref.read(createEditorProvider.notifier).updateField('photo', '_photoCurrentIndex', index),
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.smallBorderRadius + AppSpacing.xs / 2,
+                      ),
+                      child: ClipRRect(
                         borderRadius: BorderRadius.circular(
                           AppSpacing.smallBorderRadius + AppSpacing.xs / 2,
                         ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(
-                            AppSpacing.smallBorderRadius + AppSpacing.xs / 2,
-                          ),
-                          child: _photoImage(path, fgSecondary),
-                        ),
+                        child: _photoImage(path, fgSecondary),
                       ),
                     ),
                   ),
@@ -3235,10 +3137,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
                 );
                 if (paths.isEmpty) return;
                 final oldLength = images.length;
-                setState(() {
-                  _currentData = Map.from(_currentData);
-                  (_currentData['photo'] as Map)['images'] = paths;
-                });
+                ref.read(createEditorProvider.notifier).updateField('photo', 'images', paths);
                 if (!mounted) return;
                 final merged = List<String>.from(
                   (_currentData['photo'] as Map)['images'] as List? ?? [],
@@ -3592,52 +3491,41 @@ class _CreatePageState extends ConsumerState<CreatePage>
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        TextFormField(
+        _RestorableCupertinoTextField(
           key: TestKeys.createVideoTitleInput,
           initialValue: data['title'] as String? ?? '',
-          decoration: InputDecoration(
-            hintText: UITextConstants.videoTitlePlaceholder,
-            hintStyle: TextStyle(
-              color: SettingsSemanticConstants.createInputHintColor(isDark),
-              fontSize: SettingsSemanticConstants.createInputTitleFontSize,
-            ),
-            border: InputBorder.none,
-            contentPadding: EdgeInsets.zero,
+          placeholder: UITextConstants.videoTitlePlaceholder,
+          placeholderStyle: TextStyle(
+            color: SettingsSemanticConstants.createInputHintColor(isDark),
+            fontSize: SettingsSemanticConstants.createInputTitleFontSize,
           ),
+          decoration: null,
+          padding: EdgeInsets.zero,
           style: TextStyle(
             color: fgColor,
             fontSize: SettingsSemanticConstants.createInputTitleFontSize,
-            fontWeight: FontWeight.bold,
           ),
-          onChanged: (v) => setState(() {
-            _currentData = Map.from(_currentData);
-            (_currentData['video'] as Map<String, dynamic>)['title'] = v;
-          }),
+          fontWeight: FontWeight.bold,
+          onChanged: (v) => ref.read(createEditorProvider.notifier).updateField('video', 'title', v),
         ),
         Padding(
           padding: EdgeInsets.only(top: 8),
-          child: TextFormField(
+          child: _RestorableCupertinoTextField(
             key: TestKeys.createVideoBodyInput,
             initialValue: data['description'] as String? ?? '',
-            decoration: InputDecoration(
-              hintText: UITextConstants.videoDescPlaceholder,
-              hintStyle: TextStyle(
-                color: SettingsSemanticConstants.createInputHintColor(isDark),
-                fontSize: SettingsSemanticConstants.createInputBodyFontSize,
-              ),
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.zero,
+            placeholder: UITextConstants.videoDescPlaceholder,
+            placeholderStyle: TextStyle(
+              color: SettingsSemanticConstants.createInputHintColor(isDark),
+              fontSize: SettingsSemanticConstants.createInputBodyFontSize,
             ),
+            decoration: null,
+            padding: EdgeInsets.zero,
             style: TextStyle(
               color: fgColor,
               fontSize: SettingsSemanticConstants.createInputBodyFontSize,
             ),
             maxLines: 2,
-            onChanged: (v) => setState(() {
-              _currentData = Map.from(_currentData);
-              (_currentData['video'] as Map<String, dynamic>)['description'] =
-                  v;
-            }),
+            onChanged: (v) => ref.read(createEditorProvider.notifier).updateField('video', 'description', v),
           ),
         ),
       ],
@@ -3808,54 +3696,43 @@ class _CreatePageState extends ConsumerState<CreatePage>
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          TextFormField(
+          _RestorableCupertinoTextField(
             key: TestKeys.createArticleTitleInput,
             initialValue: data['title'] as String? ?? '',
-            decoration: InputDecoration(
-              hintText: UITextConstants.articleTitlePlaceholder,
-              hintStyle: TextStyle(
-                color: SettingsSemanticConstants.createInputHintColor(isDark),
-                fontSize: SettingsSemanticConstants.createInputTitleFontSize,
-              ),
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.zero,
+            placeholder: UITextConstants.articleTitlePlaceholder,
+            placeholderStyle: TextStyle(
+              color: SettingsSemanticConstants.createInputHintColor(isDark),
+              fontSize: SettingsSemanticConstants.createInputTitleFontSize,
             ),
+            decoration: null,
+            padding: EdgeInsets.zero,
             style: TextStyle(
               color: fgColor,
               fontSize: SettingsSemanticConstants.createInputTitleFontSize,
-              fontWeight: FontWeight.bold,
             ),
-            onChanged: (v) => setState(() {
-              _currentData = Map.from(_currentData);
-              (_currentData['article'] as Map<String, dynamic>)['title'] = v;
-            }),
+            fontWeight: FontWeight.bold,
+            onChanged: (v) => ref.read(createEditorProvider.notifier).updateField('article', 'title', v),
           ),
           Padding(
             padding: EdgeInsets.only(top: 8),
-            child: TextFormField(
+            child: _RestorableCupertinoTextField(
               key: TestKeys.createArticleBodyInput,
               initialValue: data['content'] as String? ?? '',
-              decoration: InputDecoration(
-                hintText: UITextConstants.createArticleBodyHint,
-                hintStyle: TextStyle(
-                  color: SettingsSemanticConstants.createInputHintColor(isDark),
-                  fontSize:
-                      SettingsSemanticConstants.createInputArticleBodyFontSize,
-                ),
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.zero,
+              placeholder: UITextConstants.createArticleBodyHint,
+              placeholderStyle: TextStyle(
+                color: SettingsSemanticConstants.createInputHintColor(isDark),
+                fontSize:
+                    SettingsSemanticConstants.createInputArticleBodyFontSize,
               ),
+              decoration: null,
+              padding: EdgeInsets.zero,
               style: TextStyle(
                 color: fgColor,
                 fontSize:
                     SettingsSemanticConstants.createInputArticleBodyFontSize,
               ),
               maxLines: 8,
-              onChanged: (v) => setState(() {
-                _currentData = Map.from(_currentData);
-                (_currentData['article'] as Map<String, dynamic>)['content'] =
-                    v;
-              }),
+              onChanged: (v) => ref.read(createEditorProvider.notifier).updateField('article', 'content', v),
             ),
           ),
         ],
@@ -3869,225 +3746,174 @@ class _CreatePageState extends ConsumerState<CreatePage>
     ];
   }
 
-  Widget _buildExitConfirm(bool isDark, Color fgColor, Color fgSecondary) {
-    return GestureDetector(
-      onTap: () => setState(() => _showExitConfirm = false),
-      behavior: HitTestBehavior.opaque,
-      child: Material(
-        color: Colors.black54,
-        child: Center(
-          child: GestureDetector(
-            onTap: () {},
-            child: Container(
-              margin: EdgeInsets.all(AppSpacing.interGroupXl),
-              padding: EdgeInsets.all(AppSpacing.interGroupLg),
+  Future<void> _showDraftsModal() async {
+    final isDark = ref.read(isDarkProvider);
+    final fgColor = SettingsSemanticConstants.labelColor(isDark);
+    final fgSecondary = SettingsSemanticConstants.secondaryColor(isDark);
+    final bg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
+
+    await showCupertinoModalPopup(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final sorted = List<CreateDraft>.from(_savedDrafts)
+              ..sort((a, b) => b.updatedAtMs.compareTo(a.updatedAtMs));
+            
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.7,
               decoration: BoxDecoration(
-                color: AppColorsFunctional.getColor(
-                  isDark,
-                  ColorType.backgroundPrimary,
-                ),
-                borderRadius: BorderRadius.circular(
-                  AppSpacing.largeBorderRadius,
+                color: bg,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(AppSpacing.largeBorderRadius),
                 ),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Text(
-                        UITextConstants.saveDraftConfirm,
-                        style: TextStyle(
-                          fontSize: AppTypography.xl,
-                          fontWeight: FontWeight.w600,
-                          color: fgColor,
+                  Padding(
+                    padding: EdgeInsets.all(AppSpacing.containerMd),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '${UITextConstants.draftCount} (${_savedDrafts.length})',
+                          style: TextStyle(
+                            fontSize: AppTypography.xl,
+                            fontWeight: FontWeight.bold,
+                            color: fgColor,
+                          ),
                         ),
-                      ),
-                      Positioned(
-                        right: 0,
-                        top: 0,
-                        child: IconButton(
-                          icon: Icon(
-                            Icons.close,
+                        CupertinoButton(
+                          padding: EdgeInsets.zero,
+                          minSize: AppSpacing.minInteractiveSize,
+                          onPressed: () => Navigator.pop(context),
+                          child: Icon(
+                            CupertinoIcons.clear_circled_solid,
                             color: fgSecondary,
-                            size: AppSpacing.iconMedium,
-                          ),
-                          onPressed: () =>
-                              setState(() => _showExitConfirm = false),
-                          style: IconButton.styleFrom(
-                            minimumSize: Size.square(
-                              AppSpacing.iconButtonMinSizeSm,
-                            ),
-                            padding: EdgeInsets.zero,
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: AppSpacing.interGroupXs),
-                  Text(
-                    UITextConstants.saveDraftHint,
-                    style: TextStyle(
-                      fontSize: AppTypography.base,
-                      color: fgSecondary,
+                      ],
                     ),
-                    textAlign: TextAlign.center,
                   ),
-                  SizedBox(height: AppSpacing.interGroupLg),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextButton(
-                          key: TestKeys.createDiscardAndExitButton,
-                          onPressed: _handleDiscardAndExit,
-                          style: TextButton.styleFrom(
-                            foregroundColor: fgSecondary,
-                          ),
-                          child: Text(UITextConstants.discardAndExit),
-                        ),
-                      ),
-                      SizedBox(width: AppSpacing.interGroupSm),
-                      Expanded(
-                        child: FilledButton(
-                          key: TestKeys.createSaveAndExitButton,
-                          onPressed: _handleSaveAndExit,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: AppColors.primaryColor,
-                            foregroundColor: Colors.white,
-                          ),
-                          child: Text(UITextConstants.saveAndExit),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDraftsList(bool isDark, Color fgColor, Color fgSecondary) {
-    final sorted = List<CreateDraft>.from(_savedDrafts)
-      ..sort((a, b) => b.updatedAtMs.compareTo(a.updatedAtMs));
-    return Material(
-      color: Colors.black54,
-      child: Center(
-        child: Container(
-          margin: EdgeInsets.all(AppSpacing.interGroupLg),
-          constraints: BoxConstraints(maxWidth: 400, maxHeight: 400),
-          decoration: BoxDecoration(
-            color: AppColorsFunctional.getColor(
-              isDark,
-              ColorType.backgroundPrimary,
-            ),
-            borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: EdgeInsets.all(AppSpacing.containerMd),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      '${UITextConstants.draftCount} (${_savedDrafts.length})',
-                      style: TextStyle(
-                        fontSize: AppTypography.xl,
-                        fontWeight: FontWeight.bold,
-                        color: fgColor,
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () => setState(() => _showDraftsList = false),
-                      icon: Icon(Icons.close, color: fgSecondary),
-                    ),
-                  ],
-                ),
-              ),
-              Flexible(
-                child: sorted.isEmpty
-                    ? Padding(
-                        padding: EdgeInsets.all(AppSpacing.interGroupXl),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.inventory_2_outlined,
-                              size: AppSpacing.iconLarge,
-                              color: fgSecondary.withValues(alpha: 0.5),
-                            ),
-                            SizedBox(height: AppSpacing.interGroupXs),
-                            Text(
-                              UITextConstants.noDraft,
-                              style: TextStyle(color: fgSecondary),
-                            ),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        shrinkWrap: true,
-                        padding: EdgeInsets.symmetric(
-                          horizontal: AppSpacing.containerMd,
-                        ),
-                        itemCount: sorted.length,
-                        itemBuilder: (context, i) {
-                          final d = sorted[i];
-                          final type = d.tabKey;
-                          final title = type == 'moment' ? '点滴草稿' : '作品草稿';
-                          final desc = d.previewText;
-                          final date = DateTime.fromMillisecondsSinceEpoch(
-                            d.updatedAtMs,
-                          );
-                          final dateStr =
-                              '${date.month}/${date.day} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
-                          return ListTile(
-                            title: Text(
-                              title,
-                              style: TextStyle(fontWeight: FontWeight.w700),
-                            ),
-                            subtitle: Text(
-                              desc.isEmpty ? UITextConstants.unlabeled : desc,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: AppTypography.sm,
-                                color: fgSecondary,
-                              ),
-                            ),
-                            trailing: Row(
+                  Flexible(
+                    child: sorted.isEmpty
+                        ? Center(
+                            child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(
-                                  dateStr,
-                                  style: TextStyle(
-                                    fontSize: AppTypography.xs,
-                                    color: fgSecondary,
-                                  ),
+                                Icon(
+                                  Icons.inventory_2_outlined,
+                                  size: AppSpacing.iconLarge,
+                                  color: fgSecondary.withValues(alpha: 0.5),
                                 ),
-                                IconButton(
-                                  icon: Icon(
-                                    Icons.delete_outline,
-                                    size: AppSpacing.iconMedium,
-                                    color: fgSecondary,
-                                  ),
-                                  onPressed: () => _handleDeleteDraft(d.id),
+                                SizedBox(height: AppSpacing.interGroupXs),
+                                Text(
+                                  UITextConstants.noDraft,
+                                  style: TextStyle(color: fgSecondary),
                                 ),
                               ],
                             ),
-                            onTap: () => _handleRestoreDraft(d),
-                          );
-                        },
-                      ),
+                          )
+                        : ListView.separated(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: AppSpacing.containerMd,
+                            ),
+                            itemCount: sorted.length,
+                            separatorBuilder: (c, i) => Divider(
+                              height: AppSpacing.one,
+                              color: SettingsSemanticConstants.dividerColor(isDark),
+                            ),
+                            itemBuilder: (context, i) {
+                              final d = sorted[i];
+                              final type = d.tabKey;
+                              final title = type == 'moment' ? '点滴草稿' : '作品草稿';
+                              final desc = d.previewText;
+                              final date = DateTime.fromMillisecondsSinceEpoch(
+                                d.updatedAtMs,
+                              );
+                              final dateStr =
+                                  '${date.month}/${date.day} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+                              
+                              return GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () {
+                                  Navigator.pop(context);
+                                  _handleRestoreDraft(d);
+                                },
+                                child: Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 12),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              title,
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w700,
+                                                color: fgColor,
+                                              ),
+                                            ),
+                                            SizedBox(height: AppSpacing.intraGroupXs),
+                                            Text(
+                                              desc.isEmpty
+                                                  ? UITextConstants.unlabeled
+                                                  : desc,
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: AppTypography.sm,
+                                                color: fgSecondary,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      SizedBox(width: AppSpacing.interGroupXs),
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        children: [
+                                          Text(
+                                            dateStr,
+                                            style: TextStyle(
+                                              fontSize: AppTypography.xs,
+                                              color: fgSecondary,
+                                            ),
+                                          ),
+                                          CupertinoButton(
+                                            padding: EdgeInsets.zero,
+                                            minSize: AppSpacing.minInteractiveSize,
+                                            child: Icon(
+                                              CupertinoIcons.delete,
+                                              size: AppSpacing.iconMedium,
+                                              color: fgSecondary,
+                                            ),
+                                            onPressed: () {
+                                              _handleDeleteDraft(d.id);
+                                              setModalState(() {});
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                  SizedBox(height: MediaQuery.of(context).padding.bottom),
+                ],
               ),
-            ],
-          ),
-        ),
-      ),
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -4134,5 +3960,82 @@ class _DashedBorderPainter extends CustomPainter {
         oldDelegate.dashLength != dashLength ||
         oldDelegate.dashGap != dashGap ||
         oldDelegate.radius != radius;
+  }
+}
+
+class _RestorableCupertinoTextField extends StatefulWidget {
+  final String? initialValue;
+  final ValueChanged<String>? onChanged;
+  final String? placeholder;
+  final TextStyle? placeholderStyle;
+  final TextStyle? style;
+  final int? maxLines;
+  final VoidCallback? onTap;
+  final BoxDecoration? decoration;
+  final EdgeInsetsGeometry padding;
+  final FontWeight? fontWeight;
+
+  const _RestorableCupertinoTextField({
+    Key? key,
+    this.initialValue,
+    this.onChanged,
+    this.placeholder,
+    this.placeholderStyle,
+    this.style,
+    this.maxLines = 1,
+    this.onTap,
+    this.decoration,
+    this.padding = const EdgeInsets.all(AppSpacing.intraGroupSm),
+    this.fontWeight,
+  }) : super(key: key);
+
+  @override
+  _RestorableCupertinoTextFieldState createState() => _RestorableCupertinoTextFieldState();
+}
+
+class _RestorableCupertinoTextFieldState extends State<_RestorableCupertinoTextField> {
+  late TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(_RestorableCupertinoTextField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialValue != null &&
+        widget.initialValue != oldWidget.initialValue &&
+        widget.initialValue != _controller.text) {
+      _controller.text = widget.initialValue!;
+      _controller.selection = TextSelection.collapsed(offset: _controller.text.length);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Merge fontWeight into style if provided
+    final effectiveStyle = widget.style?.copyWith(
+      fontWeight: widget.fontWeight ?? widget.style?.fontWeight,
+    ) ?? TextStyle(fontWeight: widget.fontWeight);
+
+    return CupertinoTextField(
+      controller: _controller,
+      onChanged: widget.onChanged,
+      placeholder: widget.placeholder,
+      placeholderStyle: widget.placeholderStyle,
+      style: effectiveStyle,
+      maxLines: widget.maxLines,
+      onTap: widget.onTap,
+      decoration: widget.decoration,
+      padding: widget.padding,
+    );
   }
 }

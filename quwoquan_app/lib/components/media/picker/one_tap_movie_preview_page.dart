@@ -1,8 +1,12 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
 
 class OneTapMoviePreviewPage extends StatefulWidget {
@@ -97,21 +101,25 @@ class _OneTapMoviePreviewPageState extends State<OneTapMoviePreviewPage> {
         : (_position.inMilliseconds / _totalDuration.inMilliseconds)
             .clamp(0.0, 1.0);
     final current = _images.isEmpty ? null : _images[_currentImageIndex];
-    return Scaffold(
+    return AppScaffold(
       backgroundColor: bg,
-      body: SafeArea(
+      child: SafeArea(
         child: Column(
           children: [
             SizedBox(
               height: AppSpacing.toolbarHeight,
               child: Row(
                 children: [
-                  IconButton(
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    minSize: AppSpacing.minInteractiveSize,
                     onPressed: () => Navigator.of(context).pop(false),
-                    icon: Icon(Icons.arrow_back_ios_new, color: fg),
+                    child: Icon(CupertinoIcons.back, color: fg),
                   ),
                   const Spacer(),
-                  TextButton(
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    minSize: AppSpacing.minInteractiveSize,
                     onPressed: _images.isEmpty
                         ? null
                         : () => Navigator.of(context).pop(true),
@@ -176,7 +184,7 @@ class _OneTapMoviePreviewPageState extends State<OneTapMoviePreviewPage> {
                   GestureDetector(
                     onTap: _togglePlay,
                     child: Icon(
-                      _playing ? Icons.pause : Icons.play_arrow,
+                      _playing ? CupertinoIcons.pause : CupertinoIcons.play_arrow,
                       color: Colors.white,
                       size: AppSpacing.iconMedium,
                     ),
@@ -190,17 +198,11 @@ class _OneTapMoviePreviewPageState extends State<OneTapMoviePreviewPage> {
                     ),
                   ),
                   Expanded(
-                    child: SliderTheme(
-                      data: SliderTheme.of(context).copyWith(
-                        activeTrackColor: Colors.white,
-                        inactiveTrackColor: Colors.white30,
-                        thumbColor: Colors.white,
-                        trackHeight: AppSpacing.intraGroupXs / 2,
-                      ),
-                      child: Slider(
-                        value: progress,
-                        onChanged: (value) => _seek(value),
-                      ),
+                    child: CupertinoSlider(
+                      value: progress,
+                      onChanged: (value) => _seek(value),
+                      activeColor: Colors.white,
+                      thumbColor: Colors.white,
                     ),
                   ),
                   Text(

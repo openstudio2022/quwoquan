@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -116,7 +117,7 @@ class _ContentShareSheetState extends State<ContentShareSheet> {
                       ? const SizedBox(
                           width: AppSpacing.eighteen,
                           height: AppSpacing.eighteen,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: CupertinoActivityIndicator(),
                         )
                       : null,
                   onTap: _busyActionId != null

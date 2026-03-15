@@ -408,7 +408,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     Color fgSecondary,
   ) {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator.adaptive());
+      return const Center(child: CupertinoActivityIndicator());
     }
     if (_error != null) {
       return _buildErrorCard(fgSecondary);

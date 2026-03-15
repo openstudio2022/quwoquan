@@ -1,6 +1,7 @@
 // ignore_for_file: deprecated_member_use, overridden_fields
 
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
@@ -531,20 +532,7 @@ Widget _buildImageLoadingPlaceholder(BuildContext context, bool isDark, [double?
           SizedBox(
             width: AppSpacing.iconMedium,
             height: AppSpacing.iconMedium,
-            child: progress != null 
-              ? CircularProgressIndicator(
-                  value: progress,
-                  strokeWidth: 1.5,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary),
-                  ),
-                )
-              : CircularProgressIndicator(
-                  strokeWidth: 1.5,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary),
-                  ),
-                ),
+            child: const CupertinoActivityIndicator(),
           ),
           SizedBox(height: AppSpacing.xs),
           Text(

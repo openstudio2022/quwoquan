@@ -1,9 +1,11 @@
-// ignore_for_file: unnecessary_underscores
+// ignore_for_file: unnecessary_underscores, deprecated_member_use
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 
 /// 我的交集页（1:1 对应 ResonanceDashboard.tsx）
 /// 路由：/profile/resonance
@@ -14,9 +16,9 @@ class ResonancePage extends ConsumerStatefulWidget {
   ConsumerState<ResonancePage> createState() => _ResonancePageState();
 }
 
-class _ResonancePageState extends ConsumerState<ResonancePage>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _ResonancePageState extends ConsumerState<ResonancePage> {
+  late PageController _pageController;
+  int _currentIndex = 0;
 
   /// 1:1 ResonanceDashboard 推荐趣友
   static const List<Map<String, dynamic>> _resonantFriends = [
@@ -49,12 +51,12 @@ class _ResonancePageState extends ConsumerState<ResonancePage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _pageController = PageController();
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _pageController.dispose();
     super.dispose();
   }
 
@@ -66,41 +68,65 @@ class _ResonancePageState extends ConsumerState<ResonancePage>
     final fgSecondary =
         AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
 
-    return Scaffold(
+    return AppScaffold(
       backgroundColor: bg,
-      appBar: AppBar(
+      navigationBar: AppNavigationBar(
         backgroundColor: bg,
-        foregroundColor: fg,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
+          child: const Icon(CupertinoIcons.back),
           onPressed: () => context.pop(),
         ),
-        title: Text(
+        middle: Text(
           UITextConstants.myResonance,
           style: TextStyle(
             color: fg,
-            fontSize: 18,
+            fontSize: AppTypography.xl,
             fontWeight: FontWeight.w700,
           ),
         ),
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: fg,
-          unselectedLabelColor: fgSecondary,
-          indicatorColor: AppColors.primaryColor,
-          tabs: const [
-            Tab(text: '推荐'),
-            Tab(text: '交集'),
-            Tab(text: '趣友'),
-          ],
-        ),
       ),
-      body: TabBarView(
-        controller: _tabController,
+      child: Column(
         children: [
-          _buildRecommendTab(fg, fgSecondary),
-          _buildIntersectionTab(fg, fgSecondary),
-          _buildQuyouTab(fg, fgSecondary),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: CupertinoSlidingSegmentedControl<int>(
+              groupValue: _currentIndex,
+              children: const {
+                0: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20),
+                    child: Text('推荐')),
+                1: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20),
+                    child: Text('交集')),
+                2: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20),
+                    child: Text('趣友')),
+              },
+              onValueChanged: (index) {
+                if (index != null) {
+                  setState(() => _currentIndex = index);
+                  _pageController.animateToPage(
+                    index,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                  );
+                }
+              },
+            ),
+          ),
+          Expanded(
+            child: PageView(
+              controller: _pageController,
+              physics: const BouncingScrollPhysics(),
+              onPageChanged: (index) => setState(() => _currentIndex = index),
+              children: [
+                _buildRecommendTab(fg, fgSecondary),
+                _buildIntersectionTab(fg, fgSecondary),
+                _buildQuyouTab(fg, fgSecondary),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -115,12 +141,12 @@ class _ResonancePageState extends ConsumerState<ResonancePage>
         Text(
           '与你有交集的趣友',
           style: TextStyle(
-            fontSize: 16,
+            fontSize: AppTypography.lg,
             fontWeight: FontWeight.w800,
             color: fg,
           ),
         ),
-        SizedBox(height: 12),
+        SizedBox(height: AppSpacing.intraGroupLg),
         ..._resonantFriends.map((u) {
           return Padding(
             padding: const EdgeInsets.only(bottom: 16),
@@ -131,7 +157,7 @@ class _ResonancePageState extends ConsumerState<ResonancePage>
                   backgroundImage: NetworkImage(u['avatar'] as String),
                   onBackgroundImageError: (_, __) {},
                 ),
-                SizedBox(width: 12),
+                SizedBox(width: AppSpacing.intraGroupLg),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -139,16 +165,16 @@ class _ResonancePageState extends ConsumerState<ResonancePage>
                       Text(
                         u['name'] as String,
                         style: TextStyle(
-                          fontSize: 15,
+                          fontSize: AppTypography.lg,
                           fontWeight: FontWeight.w800,
                           color: fg,
                         ),
                       ),
-                      SizedBox(height: 4),
+                      SizedBox(height: AppSpacing.intraGroupXs),
                       Text(
                         u['bio'] as String,
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: AppTypography.sm,
                           color: fgSecondary,
                         ),
                         maxLines: 1,
@@ -161,26 +187,33 @@ class _ResonancePageState extends ConsumerState<ResonancePage>
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: AppColors.primaryColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
                   ),
                   child: Text(
                     '${u['points']} 个交集',
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: AppTypography.xsPlus,
                       fontWeight: FontWeight.w700,
                       color: AppColors.primaryColor,
                     ),
                   ),
                 ),
-                SizedBox(width: 8),
-                TextButton(
+                SizedBox(width: AppSpacing.sm),
+                CupertinoButton(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  color: AppColors.primaryColor.withValues(alpha: 0.12),
+                  minSize: 0,
+                  borderRadius: BorderRadius.circular(AppSpacing.eighteen),
                   onPressed: () {},
-                  style: TextButton.styleFrom(
-                    backgroundColor: AppColors.primaryColor.withValues(alpha: 0.12),
-                    foregroundColor: AppColors.primaryColor,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Text(
+                    UITextConstants.follow,
+                    style: TextStyle(
+                      color: AppColors.primaryColor,
+                      fontSize: AppTypography.base,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                  child: Text(UITextConstants.follow),
                 ),
               ],
             ),
@@ -195,11 +228,11 @@ class _ResonancePageState extends ConsumerState<ResonancePage>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.people_outline, size: 64, color: fgSecondary),
-          SizedBox(height: 16),
+          Icon(CupertinoIcons.person_2, size: AppSpacing.largeAvatarSize, color: fgSecondary),
+          SizedBox(height: AppSpacing.md),
           Text(
             '交集维度：圈子、作者、生活',
-            style: TextStyle(color: fgSecondary, fontSize: 14),
+            style: TextStyle(color: fgSecondary, fontSize: AppTypography.base),
           ),
         ],
       ),
@@ -210,7 +243,7 @@ class _ResonancePageState extends ConsumerState<ResonancePage>
     return Center(
       child: Text(
         '趣友列表',
-        style: TextStyle(color: fgSecondary, fontSize: 14),
+        style: TextStyle(color: fgSecondary, fontSize: AppTypography.base),
       ),
     );
   }

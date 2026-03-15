@@ -2,7 +2,12 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 
 /// 群管理页 — 群主/管理员专属管理入口
 class GroupManagePage extends ConsumerStatefulWidget {
@@ -64,17 +69,16 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
     final secondaryColor = SettingsSemanticConstants.secondaryColor(isDark);
     final dividerColor = SettingsSemanticConstants.dividerColor(isDark);
 
-    return Scaffold(
+    return AppScaffold(
       backgroundColor: pageBg,
-      appBar: AppBar(
+      navigationBar: AppNavigationBar(
         backgroundColor: blockSurface,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: const Icon(CupertinoIcons.back),
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
+          child: const Icon(CupertinoIcons.back),
           onPressed: () => context.pop(),
         ),
-        title: Text(
+        middle: Text(
           UITextConstants.groupManagement,
           style: TextStyle(
             color: fgPrimary,
@@ -82,10 +86,7 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: AppSpacing.one, color: dividerColor),
-        ),
+        border: Border(bottom: BorderSide(color: dividerColor, width: AppSpacing.one)),
       ),
       body: ListView(
         children: [
@@ -260,19 +261,11 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
                 style: TextStyle(fontSize: AppTypography.lg, color: fgPrimary),
               ),
             ),
-            Transform.scale(
-              scale: 0.82,
-              alignment: Alignment.centerRight,
-              child: Switch(
-                value: value,
-                onChanged: onChanged,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                activeTrackColor: SettingsSemanticConstants.switchActiveTrackColor,
-                activeThumbColor: SettingsSemanticConstants.switchActiveThumbColor,
-                inactiveTrackColor:
-                    SettingsSemanticConstants.switchInactiveTrackColor(isDark),
-                thumbColor: WidgetStateProperty.all(Colors.white),
-              ),
+            CupertinoSwitch(
+              value: value,
+              onChanged: onChanged,
+              activeColor: SettingsSemanticConstants.switchActiveTrackColor,
+              trackColor: SettingsSemanticConstants.switchInactiveTrackColor(isDark),
             ),
           ],
         ),

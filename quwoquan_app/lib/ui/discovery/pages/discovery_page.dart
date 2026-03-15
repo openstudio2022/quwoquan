@@ -397,7 +397,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       });
     }
     if (feedAsync.isLoading && videos.isEmpty && !hasError) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: CupertinoActivityIndicator());
     }
     if (hasError && videos.isEmpty) {
       return _buildFeedErrorPlaceholder(context, tabId);
@@ -562,7 +562,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       });
     }
     if (feedAsync.isLoading && moments.isEmpty && !hasError) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: CupertinoActivityIndicator());
     }
     if (hasError && moments.isEmpty) {
       return _buildFeedErrorPlaceholder(context, tabId);
@@ -639,7 +639,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       });
     }
     if (feedAsync.isLoading && articles.isEmpty && !hasError) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: CupertinoActivityIndicator());
     }
     if (hasError && articles.isEmpty) {
       return _buildFeedErrorPlaceholder(context, tabId);
@@ -765,7 +765,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       });
     }
     if (feedAsync.isLoading && photos.isEmpty && !hasError) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: CupertinoActivityIndicator());
     }
     if (hasError && photos.isEmpty) {
       return _buildFeedErrorPlaceholder(context, tabId);
@@ -1497,10 +1497,7 @@ class _DiscoveryItemCard extends StatelessWidget {
                           child: SizedBox(
                             width: AppSpacing.largeButtonSize,
                             height: AppSpacing.largeButtonSize,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.grey.shade600,
-                            ),
+                            child: CupertinoActivityIndicator(),
                           ),
                         ),
                       ),

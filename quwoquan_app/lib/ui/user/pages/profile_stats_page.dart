@@ -1,9 +1,12 @@
+// ignore_for_file: unnecessary_import, unnecessary_underscores, curly_braces_in_flow_control_structures, unused_catch_stack, deprecated_member_use
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 /// 圈子/关注/粉丝列表页。根据 type 调用 Repository 获取数据，移除硬编码。
@@ -88,7 +91,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
           _error = null;
         });
       }
-    } catch (e, st) {
+    } catch (e) {
       if (mounted) setState(() {
         _circles = null;
         _users = null;
@@ -147,60 +150,58 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
         searchHint = UITextConstants.searchFansHint;
     }
 
-    return Scaffold(
+    return AppScaffold(
       backgroundColor: bg,
-      appBar: AppBar(
+      navigationBar: AppNavigationBar(
         backgroundColor: bg,
-        foregroundColor: fg,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
+          child: const Icon(CupertinoIcons.back),
           onPressed: () => context.pop(),
         ),
-        title: Text(
+        middle: Text(
           ProfileStatsPage._title(_type),
           style: TextStyle(
             color: fg,
-            fontSize: 18,
+            fontSize: AppTypography.xl,
             fontWeight: FontWeight.w700,
           ),
         ),
       ),
-      body: Column(
+      child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: TextField(
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.intraGroupLg,
+            ),
+            child: CupertinoSearchTextField(
               onChanged: (v) => setState(() => _searchQuery = v),
-              decoration: InputDecoration(
-                hintText: searchHint,
-                hintStyle: TextStyle(color: fgSecondary, fontSize: 14),
-                prefixIcon: Icon(Icons.search, size: 20, color: fgSecondary),
-                filled: true,
-                fillColor: inputBg,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
+              placeholder: searchHint,
+              placeholderStyle: TextStyle(
+                color: fgSecondary,
+                fontSize: AppTypography.base,
               ),
-              style: TextStyle(color: fg, fontSize: 14),
+              style: TextStyle(color: fg, fontSize: AppTypography.base),
+              backgroundColor: inputBg,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+              prefixIcon: Icon(
+                CupertinoIcons.search,
+                size: 20,
+                color: fgSecondary,
+              ),
             ),
           ),
           Expanded(
             child: _loading
                 ? Center(
-                    child: CircularProgressIndicator(
-                      color: AppColors.primaryColor,
-                    ),
+                    child: CupertinoActivityIndicator(),
                   )
                 : _error != null
                     ? Center(
                         child: Text(
                           '加载失败',
-                          style: TextStyle(color: fgSecondary, fontSize: 14),
+                          style: TextStyle(color: fgSecondary, fontSize: AppTypography.base),
                         ),
                       )
                     : _type == 'circles'
@@ -222,7 +223,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
       return Center(
         child: Text(
           UITextConstants.noData,
-          style: TextStyle(color: fgSecondary, fontSize: 14),
+          style: TextStyle(color: fgSecondary, fontSize: AppTypography.base),
         ),
       );
     }
@@ -230,7 +231,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       itemCount: list.length,
       separatorBuilder: (_, __) => Divider(
-        height: 1,
+        height: AppSpacing.one,
         color: borderColor.withValues(alpha: 0.3),
       ),
       itemBuilder: (context, i) {
@@ -239,8 +240,9 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
         final name = c['name'] as String? ?? '';
         final coverUrl = c['coverUrl'] as String? ?? '';
         final postCount = c['postCount'] as int? ?? 0;
-        return InkWell(
-          onTap: () {
+        return CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () {
             if (id.isNotEmpty) {
               context.push(AppRoutePaths.circleDetail(id: id));
             }
@@ -255,10 +257,10 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
                       coverUrl.isNotEmpty ? NetworkImage(coverUrl) : null,
                   onBackgroundImageError: (_, __) {},
                   child: coverUrl.isEmpty
-                      ? Icon(Icons.group, color: fgSecondary)
+                      ? Icon(CupertinoIcons.group, color: fgSecondary)
                       : null,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpacing.intraGroupLg),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -266,18 +268,18 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
                       Text(
                         name,
                         style: TextStyle(
-                          fontSize: 15,
+                          fontSize: AppTypography.lg,
                           fontWeight: FontWeight.w800,
                           color: fg,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: AppSpacing.intraGroupXs),
                       Text(
                         '$postCount 创作',
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: AppTypography.xsPlus,
                           fontWeight: FontWeight.w700,
                           color: fgSecondary,
                         ),
@@ -303,7 +305,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
       return Center(
         child: Text(
           '暂无数据',
-          style: TextStyle(color: fgSecondary, fontSize: 14),
+          style: TextStyle(color: fgSecondary, fontSize: AppTypography.base),
         ),
       );
     }
@@ -311,7 +313,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       itemCount: list.length,
       separatorBuilder: (_, __) => Divider(
-        height: 1,
+        height: AppSpacing.one,
         color: borderColor.withValues(alpha: 0.3),
       ),
       itemBuilder: (context, i) {
@@ -320,8 +322,9 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
         final nickname = u['nickname'] as String? ?? '';
         final avatarUrl = u['avatarUrl'] as String? ?? '';
         final isFollowing = u['isFollowing'] as bool? ?? false;
-        return InkWell(
-          onTap: () {
+        return CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () {
             if (userId.isNotEmpty) {
               context.push(
                 AppRoutePaths.userProfile(username: userId),
@@ -342,10 +345,10 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
                       avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
                   onBackgroundImageError: (_, __) {},
                   child: avatarUrl.isEmpty
-                      ? Icon(Icons.person, color: fgSecondary)
+                      ? Icon(CupertinoIcons.person, color: fgSecondary)
                       : null,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpacing.intraGroupLg),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -353,7 +356,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
                       Text(
                         nickname,
                         style: TextStyle(
-                          fontSize: 15,
+                          fontSize: AppTypography.lg,
                           fontWeight: FontWeight.w800,
                           color: fg,
                         ),
@@ -363,31 +366,26 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
                     ],
                   ),
                 ),
-                const SizedBox(width: 12),
-                TextButton(
-                  onPressed: () {},
-                  style: TextButton.styleFrom(
-                    backgroundColor: isFollowing
-                        ? borderColor.withValues(alpha: 0.3)
-                        : AppColors.primaryColor.withValues(alpha: 0.12),
-                    foregroundColor:
-                        isFollowing ? fgSecondary : AppColors.primaryColor,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    minimumSize: const Size(72, 32),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
+                const SizedBox(width: AppSpacing.intraGroupLg),
+                CupertinoButton(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
                   ),
+                  color: isFollowing
+                      ? borderColor.withValues(alpha: 0.3)
+                      : AppColors.primaryColor.withValues(alpha: 0.12),
+                  minimumSize: const Size(72, 32),
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+                  onPressed: () {},
                   child: Text(
                     isFollowing
                         ? UITextConstants.following
                         : UITextConstants.follow,
-                    style: const TextStyle(
-                      fontSize: 11,
+                    style: TextStyle(
+                      fontSize: AppTypography.xsPlus,
                       fontWeight: FontWeight.w800,
+                      color: isFollowing ? fgSecondary : AppColors.primaryColor,
                     ),
                   ),
                 ),

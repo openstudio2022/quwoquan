@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_models.dart';
 import 'package:quwoquan_app/components/media/image/editor/icons/image_editor_semantic_icon.dart';
@@ -1236,12 +1237,7 @@ class ImageEditorOperationPanel extends StatelessWidget {
         child: SizedBox(
           width: AppSpacing.iconSmall,
           height: AppSpacing.iconSmall,
-          child: CircularProgressIndicator(
-            strokeWidth: 1.6,
-            valueColor: AlwaysStoppedAnimation<Color>(
-              foregroundSecondary.withValues(alpha: 0.85),
-            ),
-          ),
+          child: CupertinoActivityIndicator(),
         ),
       );
     }

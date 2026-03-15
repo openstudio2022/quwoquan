@@ -1,11 +1,17 @@
 import 'dart:math';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
@@ -41,7 +47,7 @@ class ProfileShell extends ConsumerStatefulWidget {
 
 class _ProfileShellState extends ConsumerState<ProfileShell>
     with TickerProviderStateMixin {
-  late TabController _mainTabController;
+  late PageController _pageController;
   late AnimationController _pullBackController;
   int _activeTabIndex = 0;
   double _pullOffset = 0;
@@ -49,13 +55,10 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
   bool _isPulling = false;
   bool _isHeaderCollapsed = false;
 
-  static const _tabLabels = ['创作', '圈子', '互动'];
-
   @override
   void initState() {
     super.initState();
-    _mainTabController = TabController(length: 3, vsync: this);
-    _mainTabController.addListener(_onTabChanged);
+    _pageController = PageController(initialPage: 0);
     _pullBackController = AnimationController(
       duration: const Duration(milliseconds: 250),
       vsync: this,
@@ -64,8 +67,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
 
   @override
   void dispose() {
-    _mainTabController.removeListener(_onTabChanged);
-    _mainTabController.dispose();
+    _pageController.dispose();
     _pullBackController.dispose();
     super.dispose();
   }
@@ -75,9 +77,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
   void _showGreetDialog(BuildContext context) {
     // TODO(D2): 打招呼对话框（自定义内容 + GreetingRepository.sendGreeting）
     // 当前阶段使用 Snackbar 占位，待 greeting_repository 后端就绪后替换
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('打招呼功能即将上线')));
+    AppToast.show(context, '打招呼功能即将上线');
   }
 
   Future<void> _startCall(BuildContext context, String callType) async {
@@ -95,14 +95,6 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
   }
 
   // — Tab management —
-
-  void _onTabChanged() {
-    if (_mainTabController.indexIsChanging) return;
-    final newIndex = _mainTabController.index;
-    if (newIndex != _activeTabIndex) {
-      setState(() => _activeTabIndex = newIndex);
-    }
-  }
 
   void _onTabTap(int index) {
     setState(() => _activeTabIndex = index);
@@ -179,11 +171,6 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
       isDark,
       ColorType.foregroundPrimary,
     );
-    final fgSecondary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundSecondary,
-    );
-    final primary = AppColors.primaryColor;
 
     final avatarUrl = widget.initialAvatarUrl ?? userData?.avatar;
     final displayName =
@@ -202,9 +189,9 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
             ? (isDark ? Brightness.dark : Brightness.light)
             : Brightness.dark,
       ),
-      child: Scaffold(
+      child: AppScaffold(
         backgroundColor: bg,
-        body: NotificationListener<ScrollNotification>(
+        child: NotificationListener<ScrollNotification>(
           onNotification: _handleScrollNotification,
           child: NestedScrollView(
             headerSliverBuilder: (context, innerBoxIsScrolled) {
@@ -225,8 +212,9 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
                   backgroundColor: bg,
                   foregroundColor: fg,
                   leading: widget.mode == ProfileMode.other
-                      ? IconButton(
-                          icon: const Icon(Icons.arrow_back),
+                      ? CupertinoButton(
+                          padding: EdgeInsets.zero,
+                          child: const Icon(CupertinoIcons.back),
                           onPressed: widget.onBack ?? () => context.pop(),
                         )
                       : null,
@@ -257,13 +245,15 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
                   ),
                   actions: [
                     if (widget.mode == ProfileMode.mine)
-                      IconButton(
-                        icon: const Icon(Icons.settings_outlined),
+                      CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        child: const Icon(CupertinoIcons.settings),
                         onPressed: () => context.push(AppRoutePaths.settings),
                       )
                     else
-                      IconButton(
-                        icon: const Icon(Icons.more_horiz),
+                      CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        child: const Icon(CupertinoIcons.ellipsis),
                         onPressed: () => _showMoreOptions(context, isDark),
                       ),
                   ],
@@ -370,24 +360,26 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
                   delegate: _TabBarDelegate(
                     child: Container(
                       color: bg,
-                      child: TabBar(
-                        controller: _mainTabController,
-                        labelColor: fg,
-                        unselectedLabelColor: fgSecondary,
-                        labelStyle: TextStyle(
-                          fontSize: AppTypography.lg,
-                          fontWeight: AppTypography.semiBold,
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Center(
+                        child: CupertinoSlidingSegmentedControl<int>(
+                          groupValue: _activeTabIndex,
+                          children: const {
+                            0: Padding(padding: EdgeInsets.symmetric(horizontal: 20), child: Text('创作')),
+                            1: Padding(padding: EdgeInsets.symmetric(horizontal: 20), child: Text('圈子')),
+                            2: Padding(padding: EdgeInsets.symmetric(horizontal: 20), child: Text('互动')),
+                          },
+                          onValueChanged: (index) {
+                            if (index != null) {
+                              _onTabTap(index);
+                              _pageController.animateToPage(
+                                index,
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeInOut,
+                              );
+                            }
+                          },
                         ),
-                        unselectedLabelStyle: TextStyle(
-                          fontSize: AppTypography.lg,
-                          fontWeight: AppTypography.normal,
-                        ),
-                        indicatorColor: primary,
-                        indicatorSize: TabBarIndicatorSize.label,
-                        tabs: _tabLabels
-                            .map((l) => Tab(child: Text(l)))
-                            .toList(),
-                        onTap: _onTabTap,
                       ),
                     ),
                     height: AppSpacing.tabNavigationHeight,
@@ -403,8 +395,10 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
   }
 
   Widget _buildTabBody(BuildContext context, bool isDark) {
-    final tabView = TabBarView(
-      controller: _mainTabController,
+    final tabView = PageView(
+      controller: _pageController,
+      physics: const BouncingScrollPhysics(),
+      onPageChanged: (index) => setState(() => _activeTabIndex = index),
       children: [
         ProfileWorksTab(
           mode: widget.mode,
@@ -436,54 +430,27 @@ class _ProfileShellState extends ConsumerState<ProfileShell>
   }
 
   void _showMoreOptions(BuildContext context, bool isDark) {
-    final fg = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundPrimary,
-    );
-    final bg = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.backgroundPrimary,
-    );
-
-    showModalBottomSheet<void>(
+    showCupertinoModalPopup<void>(
       context: context,
-      backgroundColor: bg,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppSpacing.largeBorderRadius),
-        ),
-      ),
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(height: AppSpacing.sm),
-            Container(
-              width: AppSpacing.xl,
-              height: AppSpacing.intraGroupXs,
-              decoration: BoxDecoration(
-                color: fg.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(
-                  AppSpacing.smallBorderRadius,
-                ),
-              ),
-            ),
-            ListTile(
-              leading: Icon(Icons.block, color: fg),
-              title: Text('拉黑', style: TextStyle(color: fg)),
-              onTap: () => Navigator.pop(context),
-            ),
-            ListTile(
-              leading: Icon(Icons.flag_outlined, color: fg),
-              title: Text('举报', style: TextStyle(color: fg)),
-              onTap: () => Navigator.pop(context),
-            ),
-            ListTile(
-              leading: Icon(Icons.share_outlined, color: fg),
-              title: Text('分享', style: TextStyle(color: fg)),
-              onTap: () => Navigator.pop(context),
-            ),
-          ],
+      builder: (context) => CupertinoActionSheet(
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('拉黑'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('举报'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('分享'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          isDefaultAction: true,
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
         ),
       ),
     );

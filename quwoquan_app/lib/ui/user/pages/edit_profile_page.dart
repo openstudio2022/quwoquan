@@ -1,6 +1,7 @@
 // ignore_for_file: unnecessary_underscores
 
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -107,10 +108,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                 ? SizedBox(
                     width: 20,
                     height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: AppColors.primaryColor,
-                    ),
+                    child: CupertinoActivityIndicator(),
                   )
                 : Text(
                     UITextConstants.confirm,

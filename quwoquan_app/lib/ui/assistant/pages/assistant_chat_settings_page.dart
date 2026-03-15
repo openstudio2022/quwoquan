@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 
 class AssistantChatSettingsPage extends ConsumerStatefulWidget {
   const AssistantChatSettingsPage({
@@ -48,9 +49,9 @@ class _AssistantChatSettingsPageState
         ? UITextConstants.assistantModelSelectorEmpty
         : _shortModelName(currentModel);
 
-    return CupertinoPageScaffold(
+    return AppScaffold(
       backgroundColor: pageBg,
-      navigationBar: CupertinoNavigationBar(
+      navigationBar: AppNavigationBar(
         middle: Text(
           UITextConstants.settings,
           style: TextStyle(
@@ -354,9 +355,9 @@ class _AssistantConversationHistoryPage extends ConsumerWidget {
     final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
     final fgSecondary = SettingsSemanticConstants.secondaryColor(isDark);
 
-    return CupertinoPageScaffold(
+    return AppScaffold(
       backgroundColor: pageBg,
-      navigationBar: CupertinoNavigationBar(
+      navigationBar: AppNavigationBar(
         middle: Text(
           UITextConstants.assistantSettingsConversationHistory,
           style: TextStyle(
@@ -509,6 +510,7 @@ class _SessionTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
       ),
       child: CupertinoButton(
+        pressedOpacity: 0.6,
         padding: EdgeInsets.symmetric(
           horizontal: AppSpacing.containerMd,
           vertical: AppSpacing.containerSm,

@@ -466,9 +466,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
               itemBuilder: (context, index) {
                 if (posts.isEmpty) {
                   return Center(
-                    child: CircularProgressIndicator(
-                      color: AppColors.worksAccent,
-                    ),
+                    child: CupertinoActivityIndicator(),
                   );
                 }
                 return _buildPostCanvas(posts[index]);

@@ -2,11 +2,14 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:quwoquan_app/components/media/camera/camera_capture_page.dart';
 import 'package:quwoquan_app/components/media/picker/one_tap_movie_preview_page.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/media_picker_service.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
 
 class CreateMediaPickerPage extends StatefulWidget {
@@ -165,18 +168,14 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
     }
     if (_selectedItems.length >= widget.maxSelection) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(UITextConstants.mediaPickerOverLimit)),
-      );
+      AppToast.show(context, UITextConstants.mediaPickerOverLimit);
       return;
     }
     final item = await _service.assetToMediaItem(entity);
     if (item == null || !mounted) return;
     if (widget.entryMode == MediaPickerEntryMode.video && !item.isVideo) return;
     if (widget.entryMode == MediaPickerEntryMode.image && item.isVideo) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(UITextConstants.mediaPickerImageOnly)),
-      );
+      AppToast.show(context, UITextConstants.mediaPickerImageOnly);
       return;
     }
     setState(() {
@@ -193,9 +192,7 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
     );
     if (!mounted || result == null) return;
     if (_selectedItems.length >= widget.maxSelection) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(UITextConstants.mediaPickerOverLimit)),
-      );
+      AppToast.show(context, UITextConstants.mediaPickerOverLimit);
       return;
     }
     final item = _service.fileToMediaItem(
@@ -211,37 +208,46 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
 
   Future<void> _selectAlbum() async {
     if (_albums.isEmpty) return;
-    final picked = await showModalBottomSheet<AssetPathEntity>(
+    final picked = await showCupertinoModalPopup<AssetPathEntity>(
       context: context,
       builder: (context) {
-        return SafeArea(
-          child: ListView.separated(
-            itemCount: _albums.length,
-            separatorBuilder: (_, _) => Divider(
-              height: AppSpacing.intraGroupXs / 2,
-              color: AppColorsFunctional.getColor(
-                Theme.of(context).brightness == Brightness.dark,
-                ColorType.borderSecondary,
-              ),
-            ),
-            itemBuilder: (context, index) {
-              final album = _albums[index];
-              final selected = album.id == _selectedAlbum?.id;
-              return ListTile(
-                onTap: () => Navigator.of(context).pop(album),
-                title: Text(
-                  album.name,
-                  style: TextStyle(
-                    color: selected ? AppColors.primaryColor : null,
-                    fontSize: AppTypography.lg,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  ),
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        return Container(
+          decoration: BoxDecoration(
+            color: CupertinoColors.systemGroupedBackground.resolveFrom(context),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(AppSpacing.borderRadius)),
+          ),
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.6),
+          child: SafeArea(
+            child: ListView.separated(
+              itemCount: _albums.length,
+              separatorBuilder: (_, _) => Container(
+                height: 0.5,
+                color: AppColorsFunctional.getColor(
+                  isDark,
+                  ColorType.borderSecondary,
                 ),
-                trailing: selected
-                    ? Icon(Icons.check, color: AppColors.primaryColor)
-                    : null,
-              );
-            },
+                margin: EdgeInsets.only(left: AppSpacing.containerMd),
+              ),
+              itemBuilder: (context, index) {
+                final album = _albums[index];
+                final selected = album.id == _selectedAlbum?.id;
+                return CupertinoListTile(
+                  onTap: () => Navigator.of(context).pop(album),
+                  title: Text(
+                    album.name,
+                    style: TextStyle(
+                      color: selected ? AppColors.primaryColor : CupertinoColors.label.resolveFrom(context),
+                      fontSize: AppTypography.lg,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    ),
+                  ),
+                  trailing: selected
+                      ? Icon(CupertinoIcons.checkmark, color: AppColors.primaryColor)
+                      : null,
+                );
+              },
+            ),
           ),
         );
       },
@@ -279,24 +285,25 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
     final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
     final sub = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
     if (_loading) {
-      return Scaffold(
+      return AppScaffold(
         backgroundColor: bg,
-        body: Center(
-          child: CircularProgressIndicator(color: AppColors.primaryColor),
+        child: Center(
+          child: CupertinoActivityIndicator(),
         ),
       );
     }
     if (!_hasPermission) {
-      return Scaffold(
+      return AppScaffold(
         backgroundColor: bg,
-        appBar: AppBar(
+        navigationBar: AppNavigationBar(
           backgroundColor: bg,
-          leading: IconButton(
+          leading: CupertinoButton(
+            padding: EdgeInsets.zero,
             onPressed: () => Navigator.of(context).pop(),
-            icon: Icon(Icons.close, color: fg),
+            child: Icon(CupertinoIcons.xmark, color: fg),
           ),
         ),
-        body: Center(
+        child: Center(
           child: Padding(
             padding: EdgeInsets.all(AppSpacing.containerLg),
             child: Text(
@@ -309,9 +316,9 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
       );
     }
     final list = _assets.where(_matchesCategory).toList();
-    return Scaffold(
+    return AppScaffold(
       backgroundColor: bg,
-      body: SafeArea(
+      child: SafeArea(
         child: Column(
           children: [
             _buildTopBar(fg, sub),
@@ -333,9 +340,11 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
       height: AppSpacing.toolbarHeight,
       child: Row(
         children: [
-          IconButton(
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            minSize: AppSpacing.minInteractiveSize,
             onPressed: () => Navigator.of(context).pop(),
-            icon: Icon(Icons.close, color: fg),
+            child: Icon(CupertinoIcons.xmark, color: fg),
           ),
           Expanded(
             child: Center(
@@ -653,25 +662,35 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
       child: Row(
         children: [
           Expanded(
-            child: OutlinedButton.icon(
+            child: CupertinoButton(
+              padding: EdgeInsets.zero,
               onPressed: canNext
                   ? _openOneTapMoviePreview
                   : null,
-              icon: Icon(Icons.movie_creation_outlined, size: AppSpacing.iconMedium),
-              label: Text(
-                UITextConstants.mediaPickerOneTapMovie,
-                style: TextStyle(fontSize: AppTypography.base),
-              ),
-              style: OutlinedButton.styleFrom(
-                minimumSize: Size.fromHeight(AppSpacing.buttonHeight),
-                side: BorderSide(color: AppColors.primaryColor),
-                foregroundColor: AppColors.primaryColor,
+              child: Container(
+                height: AppSpacing.buttonHeight,
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.primaryColor),
+                  borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.movie_creation_outlined, size: AppSpacing.iconMedium, color: AppColors.primaryColor),
+                    SizedBox(width: AppSpacing.intraGroupSm),
+                    Text(
+                      UITextConstants.mediaPickerOneTapMovie,
+                      style: TextStyle(fontSize: AppTypography.base, color: AppColors.primaryColor),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
           SizedBox(width: AppSpacing.interGroupSm),
           Expanded(
-            child: FilledButton(
+            child: CupertinoButton.filled(
+              padding: EdgeInsets.zero,
               onPressed: canNext
                   ? () {
                       Navigator.of(context).pop(
@@ -681,14 +700,13 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
                       );
                     }
                   : null,
-              style: FilledButton.styleFrom(
-                minimumSize: Size.fromHeight(AppSpacing.buttonHeight),
-                backgroundColor: AppColors.primaryColor,
-                foregroundColor: Colors.white,
-              ),
-              child: Text(
-                '${UITextConstants.mediaPickerNextStep}($selectionCount)',
-                style: TextStyle(fontSize: AppTypography.base, fontWeight: FontWeight.w700),
+              child: Container(
+                height: AppSpacing.buttonHeight,
+                alignment: Alignment.center,
+                child: Text(
+                  '${UITextConstants.mediaPickerNextStep}($selectionCount)',
+                  style: TextStyle(fontSize: AppTypography.base, fontWeight: FontWeight.w700, color: Colors.white),
+                ),
               ),
             ),
           ),
@@ -711,9 +729,7 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
     final selected = List<CreateMediaItem>.from(_selectedItems);
     final images = selected.where((item) => item.isImage).toList();
     if (images.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(UITextConstants.mediaPickerImageOnly)),
-      );
+      AppToast.show(context, UITextConstants.mediaPickerImageOnly);
       return;
     }
     final goNext = await Navigator.of(context).push<bool>(

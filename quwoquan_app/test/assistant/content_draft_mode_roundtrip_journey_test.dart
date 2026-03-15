@@ -2,6 +2,7 @@ library;
 
 import 'dart:convert';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -88,10 +89,13 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('作品·笔记'), findsOneWidget);
-      final articleBody = tester.widget<TextFormField>(
-        find.byKey(TestKeys.createArticleBodyInput),
+      final articleBody = tester.widget<CupertinoTextField>(
+        find.descendant(
+          of: find.byKey(TestKeys.createArticleBodyInput),
+          matching: find.byType(CupertinoTextField),
+        ),
       );
-      expect(articleBody.initialValue, '东京三日行程整理');
+      expect(articleBody.controller?.text, '东京三日行程整理');
     });
 
     testWidgets('有内容时 10 秒自动保存草稿到本地缓存', (tester) async {

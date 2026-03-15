@@ -78,7 +78,7 @@ class MomentSocialFeed extends ConsumerWidget {
     final hasError = feedAsync.value?.error != null;
 
     if (feedAsync.isLoading && moments.isEmpty && !hasError) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: CupertinoActivityIndicator());
     }
 
     if (hasError && moments.isEmpty) {

@@ -20,7 +20,8 @@ import 'package:quwoquan_app/components/input/customizable_chat_input_bar.dart';
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
-import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
 import 'package:quwoquan_app/assistant/application/capability_gateway.dart';
@@ -41,6 +42,14 @@ import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/regenerate_options_popup.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/streaming_scroll_fab.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/utils/chat_time_formatter.dart';
+import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 
 
 /// 聊天气泡时间分隔符 — 直接透传 ChatTimeFormatter 的完整格式
@@ -580,14 +589,10 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             source: 'chat',
           );
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('已发送同好邀请')));
+      AppToast.show(context, '已发送同好邀请');
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('发送失败，请稍后再试')));
+      AppToast.show(context, '发送失败，请稍后再试');
     }
   }
 
@@ -2105,9 +2110,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       return _ensureSpeechReady();
     }
     if (requested.isPermanentlyDenied && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(UITextConstants.chatVoicePermissionDenied)),
-      );
+      AppToast.show(context, UITextConstants.chatVoicePermissionDenied);
       openAppSettings();
     }
     return false;
@@ -3150,9 +3153,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     setState(() {
       _assistantFeedbackStatusByMessageId[messageId] = statusLabel;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(UITextConstants.assistantFeedbackSubmitted)),
-    );
+    AppToast.show(context, UITextConstants.assistantFeedbackSubmitted);
   }
 
   Future<void> _showAssistantNegativeFeedbackSheet(
@@ -3675,9 +3676,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     final models = ref.read(assistantGatewayProvider).listAvailableModels();
     if (models.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(UITextConstants.assistantModelUnavailable)),
-      );
+      AppToast.show(context, UITextConstants.assistantModelUnavailable);
       return;
     }
     final selected = await showModalBottomSheet<String>(
@@ -3724,16 +3723,13 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       await Clipboard.setData(ClipboardData(text: url));
     }
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          opened
-              ? url
-              : allowOpen
+    AppToast.show(
+      context,
+      opened
+          ? url
+          : allowOpen
               ? UITextConstants.assistantReferenceOpenFailed
               : UITextConstants.assistantReferenceHostBlocked,
-        ),
-      ),
     );
     await _recordAssistantImplicitFeedback(
       message: message,
@@ -3812,9 +3808,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         if (content.isNotEmpty) {
           Clipboard.setData(ClipboardData(text: content));
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(UITextConstants.copiedToClipboard)),
-            );
+            AppToast.show(context, UITextConstants.copiedToClipboard);
           }
         }
         break;
@@ -3889,7 +3883,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         .map((item) => (item['id'] as String?) ?? '')
         .firstWhere((id) => id.isNotEmpty, orElse: () => '');
 
-    final bodyContent = Column(
+    final bodyContent = Material(
+      color: Colors.transparent,
+      child: Column(
       children: [
         Expanded(
           child: Stack(
@@ -4079,15 +4075,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                                         ClipboardData(text: content),
                                       );
                                       if (!mounted) return;
-                                      ScaffoldMessenger.of(
+                                      AppToast.show(
                                         this.context,
-                                      ).showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            UITextConstants
-                                                .copiedToClipboard,
-                                          ),
-                                        ),
+                                        UITextConstants.copiedToClipboard,
                                       );
                                       await _recordAssistantImplicitFeedback(
                                         message: msg,
@@ -4118,15 +4108,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                                         favoritedAnswer: true,
                                       );
                                       if (!mounted) return;
-                                      ScaffoldMessenger.of(
+                                      AppToast.show(
                                         this.context,
-                                      ).showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            UITextConstants
-                                                .assistantBookmarked,
-                                          ),
-                                        ),
+                                        UITextConstants.assistantBookmarked,
                                       );
                                     }
                                   : null,
@@ -4388,6 +4372,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           ),
         ),
       ],
+      ),
     );
 
     if (widget.embedded) {
@@ -4413,22 +4398,19 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
 
     return Stack(
       children: [
-        Scaffold(
+        AppScaffold(
           backgroundColor: bgColor,
-          appBar: AppBar(
+          navigationBar: AppNavigationBar(
             backgroundColor: bgColor,
-            elevation: 0,
-            centerTitle: _isAssistantConversation,
-            leading: _isSelectionMode
-                ? IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: _cancelSelection,
-                  )
-                : IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: widget.onBack,
-                  ),
-            title: Text(
+            leading: CupertinoButton(
+              padding: EdgeInsets.zero,
+              child: Icon(
+                _isSelectionMode ? CupertinoIcons.xmark : CupertinoIcons.back,
+                color: fgPrimary,
+              ),
+              onPressed: _isSelectionMode ? _cancelSelection : widget.onBack,
+            ),
+            middle: Text(
               _isSelectionMode
                   ? '已选 ${_selectedIds.length} 条'
                   : _conversationTitle,
@@ -4438,38 +4420,35 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            actions: [
-              if (_isSelectionMode)
-                TextButton(
-                  onPressed: () async {
-                    final selectedMessages = _messages
-                        .where(
-                          (item) => _selectedIds.contains(
-                            (item['id'] as String?) ?? '',
-                          ),
-                        )
-                        .toList(growable: false);
-                    await _shareMessages(selectedMessages);
-                    _cancelSelection();
-                  },
-                  child: Text(UITextConstants.messageActionForward),
-                )
-              else ...[
-                if (_isAssistantConversation)
-                  IconButton(
-                    icon: const Icon(CupertinoIcons.gear),
-                    tooltip: UITextConstants.settings,
-                    onPressed: _openAssistantSettingsPage,
+            trailing: _isSelectionMode
+                ? CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: () async {
+                      final selectedMessages = _messages
+                          .where(
+                            (item) => _selectedIds.contains(
+                              (item['id'] as String?) ?? '',
+                            ),
+                          )
+                          .toList(growable: false);
+                      await _shareMessages(selectedMessages);
+                      _cancelSelection();
+                    },
+                    child: Text(UITextConstants.messageActionForward),
                   )
-                else
-                  IconButton(
-                    icon: const Icon(Icons.more_horiz),
-                    onPressed: () => context.push(
-                      AppRoutePaths.chatSettings(id: widget.conversationId),
-                    ),
-                  ),
-              ],
-            ],
+                : (_isAssistantConversation
+                    ? CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        onPressed: _openAssistantSettingsPage,
+                        child: const Icon(CupertinoIcons.gear),
+                      )
+                    : CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        onPressed: () => context.push(
+                          AppRoutePaths.chatSettings(id: widget.conversationId),
+                        ),
+                        child: const Icon(CupertinoIcons.ellipsis),
+                      )),
           ),
           body: bodyContent,
         ),

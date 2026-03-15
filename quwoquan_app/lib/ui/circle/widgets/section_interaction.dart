@@ -99,7 +99,7 @@ class _SectionInteractionState extends ConsumerState<SectionInteraction> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator.adaptive());
+      return const Center(child: CupertinoActivityIndicator());
     }
     if (_error != null) {
       return _buildErrorCard();

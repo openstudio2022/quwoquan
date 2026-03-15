@@ -6,7 +6,6 @@ import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/services/user/appearance_settings_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -584,6 +583,7 @@ class _SwitchRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => onChanged(!value),
@@ -623,7 +623,12 @@ class _SwitchRow extends StatelessWidget {
               ),
             ),
             SizedBox(width: AppSpacing.intraGroupLg),
-            CupertinoSwitch(value: value, onChanged: onChanged),
+            CupertinoSwitch(
+              value: value,
+              onChanged: onChanged,
+              activeColor: SettingsSemanticConstants.switchActiveTrackColor,
+              trackColor: SettingsSemanticConstants.switchInactiveTrackColor(isDark),
+            ),
           ],
         ),
       ),

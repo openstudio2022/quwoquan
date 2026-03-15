@@ -1,9 +1,16 @@
 // ignore_for_file: unnecessary_underscores
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 
 /// 管理分身页（1:1 对应 PersonaManagementPage.tsx）
 /// 路由：/profile/personas
@@ -61,20 +68,20 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
     final borderColor =
         AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
 
-    return Scaffold(
+    return AppScaffold(
       backgroundColor: bg,
-      appBar: AppBar(
+      navigationBar: AppNavigationBar(
         backgroundColor: bg,
-        foregroundColor: fg,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
+          child: const Icon(CupertinoIcons.back),
           onPressed: () => context.pop(),
         ),
-        title: Text(
+        middle: Text(
           UITextConstants.personaManage,
           style: TextStyle(
             color: fg,
-            fontSize: 18,
+            fontSize: AppTypography.lg,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -112,184 +119,236 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
             ],
           ),
           SizedBox(height: 24),
-          ..._personas.map((p) {
-            final isActive = _currentId == p['id'];
-            final isPrimary = p['isPrimary'] as bool? ?? false;
-            final likeCount = p['likeCount'] as int? ?? 0;
-            final likeStr =
-                likeCount >= 1000 ? '${(likeCount / 1000).toStringAsFixed(1)}k' : '$likeCount';
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: Material(
-                color: isActive
-                    ? AppColors.primaryColor.withValues(alpha: 0.08)
-                    : AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary),
-                borderRadius: BorderRadius.circular(24),
-                child: InkWell(
-                  onTap: () => setState(() => _currentId = p['id'] as String),
-                  borderRadius: BorderRadius.circular(24),
-                  child: Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: isActive
-                            ? AppColors.primaryColor
-                            : borderColor.withValues(alpha: 0.5),
-                        width: isActive ? 2 : 1,
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (isActive)
-                          Align(
-                            alignment: Alignment.topRight,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.primaryColor,
-                                borderRadius: BorderRadius.only(
-                                  bottomLeft: Radius.circular(16),
-                                ),
-                              ),
-                              child: Text(
-                                '当前使用',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w900,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                        if (isActive) SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Stack(
-                              clipBehavior: Clip.none,
-                              children: [
-                                CircleAvatar(
-                                  radius: 32,
-                                  backgroundImage: (p['avatar'] as String?) != null &&
-                                          (p['avatar'] as String).isNotEmpty
-                                      ? NetworkImage(p['avatar'] as String)
-                                      : null,
-                                  onBackgroundImageError: (_, __) {},
-                                  child: (p['avatar'] as String?) == null ||
-                                          (p['avatar'] as String).isEmpty
-                                      ? Icon(Icons.person, color: fgSecondary)
-                                      : null,
-                                ),
-                                if (isPrimary)
-                                  Positioned(
-                                    top: -2,
-                                    right: -2,
-                                    child: Icon(
-                                      Icons.star,
-                                      size: 14,
-                                      color: Colors.amber,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Text(
-                                        p['displayName'] as String? ?? '',
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w800,
-                                          color: fg,
-                                        ),
-                                      ),
-                                      if (p['isPrivate'] == true) ...[
-                                        SizedBox(width: 4),
-                                        Icon(
-                                          Icons.lock,
-                                          size: 14,
-                                          color: Colors.purple.shade300,
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                  SizedBox(height: 4),
-                                  Text(
-                                    '@${p['name'] ?? ''}',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: fgSecondary,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  SizedBox(height: 8),
-                                  Row(
-                                    children: [
-                                      _statChip('作品', '${p['postCount'] ?? 0}', fgSecondary),
-                                      SizedBox(width: 16),
-                                      _statChip('关注', '128', fgSecondary),
-                                      SizedBox(width: 16),
-                                      _statChip('获赞', likeStr, fgSecondary),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: 12),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            TextButton(
-                              onPressed: () {},
-                              child: Text('编辑', style: TextStyle(fontSize: 12)),
-                            ),
-                            if (!isPrimary)
-                              TextButton(
-                                onPressed: () {},
-                                child: Text(
-                                  '删除',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: AppColorsFunctional.getColor(
-                                        isDark, ColorType.foregroundSecondary),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }),
+          ..._personas.map(
+            (p) => _buildPersonaCard(
+              persona: p,
+              isDark: isDark,
+              fg: fg,
+              fgSecondary: fgSecondary,
+              borderColor: borderColor,
+            ),
+          ),
           if (_personas.length < _maxPersonas)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: OutlinedButton.icon(
+              child: CupertinoButton(
                 onPressed: () {},
-                icon: const Icon(Icons.add, size: 20),
-                label: const Text('新增分身'),
-                style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                color: Colors.transparent,
+                disabledColor: Colors.transparent,
+                child: Container(
+                  width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
+                  decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: AppColors.primaryColor),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(CupertinoIcons.add, size: 20, color: AppColors.primaryColor),
+                      SizedBox(width: 8),
+                      Text(
+                        '新增分身',
+                        style: TextStyle(
+                          color: AppColors.primaryColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPersonaCard({
+    required Map<String, dynamic> persona,
+    required bool isDark,
+    required Color fg,
+    required Color fgSecondary,
+    required Color borderColor,
+  }) {
+    final isActive = _currentId == persona['id'];
+    final isPrimary = persona['isPrimary'] as bool? ?? false;
+    final likeCount = persona['likeCount'] as int? ?? 0;
+    final likeStr = likeCount >= 1000
+        ? '${(likeCount / 1000).toStringAsFixed(1)}k'
+        : '$likeCount';
+    final avatar = persona['avatar'] as String? ?? '';
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: GestureDetector(
+        onTap: () => setState(() => _currentId = persona['id'] as String),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: isActive
+                ? AppColors.primaryColor.withValues(alpha: 0.08)
+                : AppColorsFunctional.getColor(
+                    isDark,
+                    ColorType.backgroundSecondary,
+                  ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: isActive
+                  ? AppColors.primaryColor
+                  : borderColor.withValues(alpha: 0.5),
+              width: isActive ? 2 : 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (isActive)
+                Align(
+                  alignment: Alignment.topRight,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
+                    decoration: const BoxDecoration(
+                      color: AppColors.primaryColor,
+                      borderRadius: BorderRadius.only(
+                        bottomLeft: Radius.circular(16),
+                        topRight: Radius.circular(22),
+                      ),
+                    ),
+                    child: const Text(
+                      '当前使用',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              if (isActive) const SizedBox(height: 8),
+              Row(
+                children: [
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      CircleAvatar(
+                        radius: 32,
+                        backgroundImage:
+                            avatar.isNotEmpty ? NetworkImage(avatar) : null,
+                        onBackgroundImageError: (_, __) {},
+                        child: avatar.isEmpty
+                            ? Icon(Icons.person, color: fgSecondary)
+                            : null,
+                      ),
+                      if (isPrimary)
+                        const Positioned(
+                          top: -2,
+                          right: -2,
+                          child: Icon(
+                            Icons.star,
+                            size: 14,
+                            color: Colors.amber,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              persona['displayName'] as String? ?? '',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: fg,
+                              ),
+                            ),
+                            if (persona['isPrivate'] == true) ...[
+                              const SizedBox(width: 4),
+                              Icon(
+                                Icons.lock,
+                                size: 14,
+                                color: Colors.purple.shade300,
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '@${persona['name'] ?? ''}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: fgSecondary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            _statChip(
+                              '作品',
+                              '${persona['postCount'] ?? 0}',
+                              fgSecondary,
+                            ),
+                            const SizedBox(width: 16),
+                            _statChip('关注', '128', fgSecondary),
+                            const SizedBox(width: 16),
+                            _statChip('获赞', likeStr, fgSecondary),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  CupertinoButton(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    minSize: 0,
+                    onPressed: () {},
+                    child: const Text(
+                      '编辑',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ),
+                  if (!isPrimary)
+                    CupertinoButton(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      minSize: 0,
+                      onPressed: () {},
+                      child: Text(
+                        '删除',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColorsFunctional.getColor(
+                            isDark,
+                            ColorType.foregroundSecondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

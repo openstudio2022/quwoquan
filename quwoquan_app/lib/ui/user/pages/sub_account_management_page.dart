@@ -1,6 +1,12 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 
 /// 子账号管理页面 - 对应 /profile/sub-accounts 路由
 ///
@@ -204,8 +210,8 @@ class _SubAccountManagementPageState
 
   @override
   Widget build(BuildContext context) {
-    return CupertinoPageScaffold(
-      navigationBar: CupertinoNavigationBar(
+    return AppScaffold(
+      navigationBar: AppNavigationBar(
         middle: const Text(UITextConstants.profileSubAccountManagement),
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,

@@ -58,8 +58,12 @@ class AppTheme {
           navActionTextStyle: textTheme.bodyLarge?.copyWith(
             color: AppColors.primaryColor,
           ),
-          navTitleTextStyle: textTheme.titleLarge,
-          navLargeTitleTextStyle: textTheme.headlineMedium,
+          navTitleTextStyle: textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+          navLargeTitleTextStyle: textTheme.headlineMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
           tabLabelTextStyle: textTheme.bodySmall,
           pickerTextStyle: textTheme.bodyLarge,
           dateTimePickerTextStyle: textTheme.bodyLarge,

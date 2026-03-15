@@ -50,12 +50,14 @@ class StreamingScrollFab extends StatelessWidget {
             SizedBox(
               width: size - 6,
               height: size - 6,
-              child: CircularProgressIndicator(
-                value: progress,
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(accentColor),
-                backgroundColor: accentColor.withValues(alpha: 0.15),
-              ),
+              child: progress == null
+                  ? const CupertinoActivityIndicator()
+                  : CircularProgressIndicator(
+                      value: progress,
+                      strokeWidth: 2.5,
+                      backgroundColor: accentColor.withValues(alpha: 0.15),
+                      valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+                    ),
             ),
             Icon(
               CupertinoIcons.chevron_down,

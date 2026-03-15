@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
@@ -163,7 +164,7 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
         ),
         Expanded(
           child: _loading
-              ? Center(child: CircularProgressIndicator(color: primary))
+              ? Center(child: CupertinoActivityIndicator())
               : _items == null || _items!.isEmpty
                   ? Center(
                       child: Column(

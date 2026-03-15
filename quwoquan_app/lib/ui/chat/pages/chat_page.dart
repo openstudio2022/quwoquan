@@ -1,6 +1,7 @@
 // ignore_for_file: unnecessary_underscores
 
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
@@ -8,8 +9,16 @@ import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/avatar/group_avatar_grid.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
-import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/utils/chat_time_formatter.dart';
+import 'package:quwoquan_app/core/services/app_content_repository.dart';
 
 /// 趣信页
 ///
@@ -164,9 +173,9 @@ class _ChatPageState extends ConsumerState<ChatPage>
     final borderColor =
         AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
 
-    return Scaffold(
+    return AppScaffold(
       backgroundColor: bgColor,
-      body: SafeArea(
+      child: SafeArea(
         bottom: false,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -528,7 +537,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
       return Center(
         child: Padding(
           padding: EdgeInsets.all(AppSpacing.lg),
-          child: CircularProgressIndicator(color: AppColors.primaryColor),
+          child: CupertinoActivityIndicator(),
         ),
       );
     }
@@ -1047,151 +1056,137 @@ class _ConversationTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final unread = conversation['unreadCount'] as int? ?? 0;
     final isEncrypted = showEncryptedBadge || conversation['type'] == 'encrypted';
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: borderColor.withValues(alpha: 0.3)),
+        ),
+      ),
+      child: CupertinoListTile(
+        backgroundColor: Colors.transparent,
         onTap: onTap,
-        child: Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: AppSpacing.md,
-            vertical: AppSpacing.sm + AppSpacing.xs,
-          ),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(color: borderColor.withValues(alpha: 0.3)),
-            ),
-          ),
-          child: Row(
-            children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  _buildConversationAvatar(),
-                  if (isEncrypted)
-                    Positioned(
-                      right: -2,
-                      bottom: -2,
-                      child: Container(
-                        padding: EdgeInsets.all(AppSpacing.xs),
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryColor,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Theme.of(context).scaffoldBackgroundColor,
-                            width: AppSpacing.oneHalf,
-                          ),
-                        ),
-                        child: Icon(
-                          Icons.lock,
-                          size: AppSpacing.fourteen,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              SizedBox(width: AppSpacing.interGroupSm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          conversation['title'] as String? ?? '',
-                          style: TextStyle(
-                            fontSize: AppTypography.lg,
-                            fontWeight: FontWeight.w600,
-                            color: fgPrimary,
-                          ),
-                        ),
-                        if (isSpecial) ...[
-                          SizedBox(width: AppSpacing.intraGroupSm),
-                          Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: AppSpacing.intraGroupSm,
-                              vertical: AppSpacing.xs / 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.warning.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(
-                                AppSpacing.radiusTen,
-                              ),
-                            ),
-                            child: Text(
-                              'AI',
-                              style: TextStyle(
-                                fontSize: AppTypography.xs,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.warning,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    SizedBox(height: AppSpacing.xs),
-                    Row(
-                      children: [
-                        if (isEncrypted) ...[
-                          Icon(
-                            Icons.lock,
-                            size: AppSpacing.interGroupSm,
-                            color: fgSecondary,
-                          ),
-                          SizedBox(width: AppSpacing.xs),
-                        ],
-                        Expanded(
-                          child: Text(
-                            conversation['lastMessage'] as String? ?? '',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: AppTypography.smPlus,
-                              color: fgSecondary,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    _formatConversationTime(conversation),
-                    style: TextStyle(
-                      fontSize: AppTypography.sm,
-                      color: fgSecondary,
+        leading: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            _buildConversationAvatar(),
+            if (isEncrypted)
+              Positioned(
+                right: -2,
+                bottom: -2,
+                child: Container(
+                  padding: EdgeInsets.all(AppSpacing.xs),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryColor,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Theme.of(context).scaffoldBackgroundColor,
+                      width: AppSpacing.oneHalf,
                     ),
                   ),
-                  if (unread > 0) ...[
-                    SizedBox(height: AppSpacing.xs),
-                    Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: AppSpacing.intraGroupSm,
-                        vertical: AppSpacing.xs / 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.error,
-                        borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
-                      ),
-                      child: Text(
-                        unread > 99 ? '99+' : '$unread',
-                        style: TextStyle(
-                          fontSize: AppTypography.xsPlus,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
+                  child: Icon(
+                    Icons.lock,
+                    size: AppSpacing.fourteen,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                conversation['title'] as String? ?? '',
+                style: TextStyle(
+                  fontSize: AppTypography.lg,
+                  fontWeight: FontWeight.w600,
+                  color: fgPrimary,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (isSpecial) ...[
+              SizedBox(width: AppSpacing.intraGroupSm),
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.intraGroupSm,
+                  vertical: AppSpacing.xs / 2,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(
+                    AppSpacing.radiusTen,
+                  ),
+                ),
+                child: Text(
+                  'AI',
+                  style: TextStyle(
+                    fontSize: AppTypography.xs,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.warning,
+                  ),
+                ),
               ),
             ],
-          ),
+          ],
+        ),
+        subtitle: Row(
+          children: [
+            if (isEncrypted) ...[
+              Icon(
+                Icons.lock,
+                size: AppSpacing.interGroupSm,
+                color: fgSecondary,
+              ),
+              SizedBox(width: AppSpacing.xs),
+            ],
+            Expanded(
+              child: Text(
+                conversation['lastMessage'] as String? ?? '',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: AppTypography.smPlus,
+                  color: fgSecondary,
+                ),
+              ),
+            ),
+          ],
+        ),
+        trailing: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              _formatConversationTime(conversation),
+              style: TextStyle(
+                fontSize: AppTypography.sm,
+                color: fgSecondary,
+              ),
+            ),
+            if (unread > 0) ...[
+              SizedBox(height: AppSpacing.xs),
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.intraGroupSm,
+                  vertical: AppSpacing.xs / 2,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.error,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
+                ),
+                child: Text(
+                  unread > 99 ? '99+' : '$unread',
+                  style: TextStyle(
+                    fontSize: AppTypography.xsPlus,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );

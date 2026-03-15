@@ -540,6 +540,10 @@ class UITextConstants {
   // ==================== 创作页（1:1 对应 CreatePage.tsx + MomentEditorCard.tsx） ====================
   static const String momentPlaceholder = '这一刻的想法...';
   static const String drafts = '草稿箱';
+  static const String createExitConfirmTitle = '保存草稿？';
+  static const String createExitConfirmDesc = '如果不保存，当前编辑的内容将会丢失。';
+  static const String discard = '放弃';
+  static const String saveDraft = '保存草稿';
   static const String createActionGallery = '从相册选';
   static const String createActionGalleryHint = '先挑素材，再决定发成点滴还是作品';
   static const String createActionWrite = '写点什么';

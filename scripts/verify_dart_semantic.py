@@ -45,6 +45,19 @@ PATTERNS = [
     (r"Color\(0x[0-9A-Fa-f]+\b", "应使用 AppColors.*"),
 ]
 
+# Global Semantic Bans (Phase 1: iOS Style Enforcement)
+GLOBAL_BANS = [
+    (r"\bScaffold\(", "严禁使用 Material Scaffold，应使用 AppScaffold"),
+    (r"\bAppBar\(", "严禁使用 Material AppBar，应使用 AppNavigationBar"),
+    (r"\bSnackBar\(", "严禁使用 SnackBar，应使用 AppToast.show"),
+    (r"\bScaffoldMessenger\.of\(", "严禁使用 ScaffoldMessenger，应使用 AppToast.show"),
+    (r"\bSwitch\(", "严禁使用 Material Switch，应使用 CupertinoSwitch"),
+    (r"\bCheckbox\(", "严禁使用 Material Checkbox，应使用 CupertinoCheckbox 或自定义实现"),
+    (r"\bRadio\(", "严禁使用 Material Radio，应使用 CupertinoRadio 或自定义实现"),
+    (r"\bIcons\.arrow_back\b", "iOS 语义：应使用 CupertinoIcons.back"),
+    (r"\bIcons\.chevron_right\b", "iOS 语义：应使用 CupertinoIcons.chevron_forward"),
+]
+
 # iOS 语义风格检查（增量门禁）
 IOS_STYLE_EXCLUDE_FILES = {
     "quwoquan_app/lib/ui/user/pages/author_profile_page.dart",
@@ -82,7 +95,17 @@ def scan_file(path: str, lib_root: str, repo_root: str) -> list[tuple[int, str, 
             stripped = line.strip()
             if stripped.startswith("//"):
                 continue
+            # Support inline ignore
+            if "// ignore: verify_dart_semantic" in line:
+                continue
+
             for pattern, hint in PATTERNS:
+                if re.search(pattern, line):
+                    violations.append((i, line.rstrip(), hint))
+                    break
+            
+            # Global Bans
+            for pattern, hint in GLOBAL_BANS:
                 if re.search(pattern, line):
                     violations.append((i, line.rstrip(), hint))
                     break

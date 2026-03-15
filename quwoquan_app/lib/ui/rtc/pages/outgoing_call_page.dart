@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
@@ -238,11 +239,7 @@ class _OutgoingCallPageState extends ConsumerState<OutgoingCallPage> {
                         ),
                       ),
                     ),
-                    Switch(
-                      value: _debugAutoConnect,
-                      activeThumbColor: AppColors.primaryColor,
-                      onChanged: _toggleDebugAutoConnect,
-                    ),
+                    CupertinoSwitch(value: _debugAutoConnect, onChanged: _toggleDebugAutoConnect, activeColor: SettingsSemanticConstants.switchActiveTrackColor),
                   ],
                 ),
                 Text(

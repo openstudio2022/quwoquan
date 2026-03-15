@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/media/image/viewer/immersive_image_viewer.dart';
@@ -10,6 +11,7 @@ import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/ui/content/post_view_projection.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 
 class PhotoDetailPage extends ConsumerStatefulWidget {
@@ -70,16 +72,19 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
     if (_isLoading) {
-      return Scaffold(
+      return AppScaffold(
         backgroundColor: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
-        body: const Center(child: CircularProgressIndicator()),
+        child: const Center(child: CupertinoActivityIndicator()),
       );
     }
     if (!_isOpen || _posts.isEmpty) {
-      return Scaffold(
+      return AppScaffold(
         backgroundColor: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
-        body: Center(
-          child: ElevatedButton(onPressed: () => context.pop(), child: Text(AppStrings.back)),
+        child: Center(
+          child: CupertinoButton(
+            onPressed: () => context.pop(),
+            child: Text(AppStrings.back),
+          ),
         ),
       );
     }

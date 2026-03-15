@@ -8,6 +8,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/components/media/image/editor/models/image_editor_step.dart';
 import 'package:quwoquan_app/components/media/image/editor/top_bar/image_editor_top_bar.dart';
@@ -895,9 +897,9 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
       ),
     );
 
-    return Scaffold(
+    return AppScaffold(
       backgroundColor: baseBg,
-      body: SafeArea(
+      child: SafeArea(
         top: false,
         bottom: false,
         child: Stack(
@@ -1474,14 +1476,7 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
 
   void _showLocalHint(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          duration: const Duration(milliseconds: 1400),
-        ),
-      );
+    AppToast.show(context, message, duration: const Duration(milliseconds: 1400));
   }
 
   void _toggleLocalAddMode() {

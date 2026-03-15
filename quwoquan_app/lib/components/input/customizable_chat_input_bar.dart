@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -222,7 +223,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
       widget.onToast!(text);
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    AppToast.show(context, text);
   }
 
   bool _acceptAttachmentType(ChatInputAttachmentType type) {
@@ -820,14 +821,17 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _buildAttachmentPreview(),
-        if (_attachments.isNotEmpty) SizedBox(height: AppSpacing.sm),
-        if (_isVoiceMode) _buildVoicePanel() else _buildInputRow(),
-        _buildAddPanel(),
-      ],
+    return Material(
+      color: Colors.transparent,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildAttachmentPreview(),
+          if (_attachments.isNotEmpty) SizedBox(height: AppSpacing.sm),
+          if (_isVoiceMode) _buildVoicePanel() else _buildInputRow(),
+          _buildAddPanel(),
+        ],
+      ),
     );
   }
 }

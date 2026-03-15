@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -44,15 +45,18 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('作品·笔记'), findsOneWidget);
-    final articleBody = tester.widget<TextFormField>(
-      find.byKey(TestKeys.createArticleBodyInput),
+    final articleBody = tester.widget<CupertinoTextField>(
+      find.descendant(
+        of: find.byKey(TestKeys.createArticleBodyInput),
+        matching: find.byType(CupertinoTextField),
+      ),
     );
-    expect(articleBody.initialValue, '今天的旅行记录');
+    expect(articleBody.controller?.text, '今天的旅行记录');
 
     await tester.tap(find.byKey(TestKeys.createIdentityMoment));
     await tester.pumpAndSettle();
 
-    final momentInput = tester.widget<TextFormField>(
+    final momentInput = tester.widget<CupertinoTextField>(
       find.byKey(TestKeys.createMomentInput),
     );
     expect(momentInput.controller?.text, '今天的旅行记录');
@@ -74,18 +78,24 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('作品·图片'), findsOneWidget);
 
-    final photoBody = tester.widget<TextFormField>(
-      find.byKey(TestKeys.createPhotoBodyInput),
+    final photoBody = tester.widget<CupertinoTextField>(
+      find.descendant(
+        of: find.byKey(TestKeys.createPhotoBodyInput),
+        matching: find.byType(CupertinoTextField),
+      ),
     );
-    expect(photoBody.initialValue, '准备整理成作品的内容');
+    expect(photoBody.controller?.text, '准备整理成作品的内容');
 
     await tester.tap(find.byKey(TestKeys.createWorkFormatVideo));
     await tester.pumpAndSettle();
     expect(find.text('作品·视频'), findsOneWidget);
 
-    final videoBody = tester.widget<TextFormField>(
-      find.byKey(TestKeys.createVideoBodyInput),
+    final videoBody = tester.widget<CupertinoTextField>(
+      find.descendant(
+        of: find.byKey(TestKeys.createVideoBodyInput),
+        matching: find.byType(CupertinoTextField),
+      ),
     );
-    expect(videoBody.initialValue, '准备整理成作品的内容');
+    expect(videoBody.controller?.text, '准备整理成作品的内容');
   });
 }

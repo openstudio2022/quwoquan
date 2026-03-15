@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 
 /// 私人助理主页
 ///
@@ -42,13 +43,33 @@ class _AssistantHomePageState extends ConsumerState<AssistantHomePage> {
       ColorType.foregroundSecondary,
     );
 
-    return Scaffold(
+    return AppScaffold(
       backgroundColor: bgColor,
-      body: SafeArea(
+      navigationBar: AppNavigationBar(
+        backgroundColor: bgColor,
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: widget.onBack,
+          child: Icon(CupertinoIcons.back, color: fgPrimary),
+        ),
+        middle: Text(
+          AppConceptConstants.assistantDisplayTitle,
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: fgPrimary,
+          ),
+        ),
+        trailing: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: widget.onManageClick,
+          child: Icon(CupertinoIcons.settings, size: 24, color: fgSecondary),
+        ),
+      ),
+      child: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildHeader(context, fgPrimary, fgSecondary),
             _buildTabBar(isDark, fgPrimary, fgSecondary),
             Expanded(
               child: SingleChildScrollView(
@@ -66,46 +87,11 @@ class _AssistantHomePageState extends ConsumerState<AssistantHomePage> {
     );
   }
 
-  Widget _buildHeader(
-    BuildContext context,
-    Color fgPrimary,
-    Color fgSecondary,
-  ) {
-    final secondary = AppColorsFunctional.getColor(
-      ref.watch(isDarkProvider),
-      ColorType.foregroundSecondary,
-    );
-    return Padding(
-      padding: EdgeInsets.fromLTRB(16, 24, 16, 16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          IconButton(
-            onPressed: widget.onBack,
-            icon: Icon(Icons.arrow_back, size: 24, color: fgPrimary),
-          ),
-          Text(
-            AppConceptConstants.assistantDisplayTitle,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: fgPrimary,
-            ),
-          ),
-          IconButton(
-            onPressed: widget.onManageClick,
-            icon: Icon(Icons.settings, size: 24, color: secondary),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildTabBar(bool isDark, Color fgPrimary, Color fgSecondary) {
     final tabs = ['记忆', '待办', '技能'];
     final ids = ['memory', 'tasks', 'skills'];
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 0),
+      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       child: Container(
         padding: EdgeInsets.all(4),
         decoration: BoxDecoration(
@@ -157,21 +143,15 @@ class _AssistantHomePageState extends ConsumerState<AssistantHomePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(height: 24),
-        TextField(
-          decoration: InputDecoration(
-            hintText: '搜索你的记忆...',
-            hintStyle: TextStyle(color: fgSecondary, fontSize: 14),
-            prefixIcon: Icon(Icons.search, size: 20, color: fgSecondary),
-            filled: true,
-            fillColor: Colors.white.withValues(
-              alpha: ref.watch(isDarkProvider) ? 0.08 : 0.06,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
+        SizedBox(height: 8),
+        CupertinoSearchTextField(
+          placeholder: '搜索你的记忆...',
+          style: TextStyle(color: fgPrimary),
+          placeholderStyle: TextStyle(color: fgSecondary),
+          backgroundColor: Colors.white.withValues(
+            alpha: ref.watch(isDarkProvider) ? 0.08 : 0.06,
           ),
+          borderRadius: BorderRadius.circular(12),
         ),
         SizedBox(height: 24),
         Container(
@@ -463,9 +443,19 @@ class _AssistantHomePageState extends ConsumerState<AssistantHomePage> {
                   ),
                 ),
               ),
-              TextButton(
+              CupertinoButton(
+                padding: EdgeInsets.symmetric(horizontal: 12),
+                minSize: 32,
+                color: AppColors.primaryColor.withValues(alpha: 0.1),
                 onPressed: () => context.push(AppRoutePaths.assistantSkills),
-                child: const Text('进入'),
+                child: Text(
+                  '进入',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.primaryColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ],
           ),
@@ -598,10 +588,7 @@ class _AssistantHomePageState extends ConsumerState<AssistantHomePage> {
             Padding(
               padding: EdgeInsets.only(top: 12),
               child: Center(
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: AppColors.primaryColor,
-                ),
+                child: CupertinoActivityIndicator(),
               ),
             ),
           ],

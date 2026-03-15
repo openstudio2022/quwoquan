@@ -21,6 +21,7 @@ class _FakeCircleRepository extends MockCircleRepository {
     String? cursor,
     int limit = 20,
     String? sort,
+    String? subCategory,
   }) async {
     return circles.take(limit).toList(growable: false);
   }

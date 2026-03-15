@@ -1,9 +1,12 @@
+// ignore_for_file: unnecessary_underscores, unused_local_variable
 import 'dart:math';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_header.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_stats_row.dart';
@@ -29,8 +32,9 @@ class CircleShell extends ConsumerStatefulWidget {
 
 class _CircleShellState extends ConsumerState<CircleShell>
     with TickerProviderStateMixin {
-  late TabController _tabController;
+  late PageController _pageController;
   late AnimationController _pullBackController;
+  int _activeTabIndex = 0;
   double _pullOffset = 0;
   double _rawPullOffset = 0;
   bool _isPulling = false;
@@ -44,7 +48,7 @@ class _CircleShellState extends ConsumerState<CircleShell>
   void initState() {
     super.initState();
     _resolvedTabs = _resolveTabs(null);
-    _tabController = TabController(length: _resolvedTabs.length, vsync: this);
+    _pageController = PageController();
     _pullBackController = AnimationController(
       duration: const Duration(milliseconds: 250),
       vsync: this,
@@ -53,7 +57,7 @@ class _CircleShellState extends ConsumerState<CircleShell>
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _pageController.dispose();
     _pullBackController.dispose();
     super.dispose();
   }
@@ -94,11 +98,14 @@ class _CircleShellState extends ConsumerState<CircleShell>
     };
   }
 
-  void _syncTabController(List<_TabSpec> newTabs) {
+  void _syncTabs(List<_TabSpec> newTabs) {
     if (newTabs.length != _resolvedTabs.length) {
-      _tabController.dispose();
       _resolvedTabs = newTabs;
-      _tabController = TabController(length: _resolvedTabs.length, vsync: this);
+      // Reset page? Or clamp?
+      if (_activeTabIndex >= _resolvedTabs.length) {
+        _activeTabIndex = 0;
+        if (_pageController.hasClients) _pageController.jumpToPage(0);
+      }
     } else {
       _resolvedTabs = newTabs;
     }
@@ -170,16 +177,13 @@ class _CircleShellState extends ConsumerState<CircleShell>
         !_tabsEqual(newTabs, _resolvedTabs)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          setState(() => _syncTabController(newTabs));
+          setState(() => _syncTabs(newTabs));
         }
       });
     }
 
     final bg = AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
     final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
-    final primary = AppColors.primaryColor;
-
     final avatarUrl = circleData?.coverUrl;
     final circleName = circleData?.name ?? '';
     final description = circleData?.description;
@@ -196,9 +200,9 @@ class _CircleShellState extends ConsumerState<CircleShell>
             ? (isDark ? Brightness.dark : Brightness.light)
             : Brightness.dark,
       ),
-      child: Scaffold(
+      child: AppScaffold(
         backgroundColor: bg,
-        body: NotificationListener<ScrollNotification>(
+        child: NotificationListener<ScrollNotification>(
           onNotification: _handleScrollNotification,
           child: NestedScrollView(
             headerSliverBuilder: (context, innerBoxIsScrolled) {
@@ -215,7 +219,7 @@ class _CircleShellState extends ConsumerState<CircleShell>
                   backgroundColor: bg,
                   foregroundColor: fg,
                   leading: IconButton(
-                    icon: const Icon(Icons.arrow_back),
+                    icon: const Icon(CupertinoIcons.back),
                     onPressed: widget.onBack ?? () => Navigator.of(context).pop(),
                   ),
                   title: AnimatedOpacity(
@@ -326,23 +330,33 @@ class _CircleShellState extends ConsumerState<CircleShell>
                   delegate: _TabBarDelegate(
                     child: Container(
                       color: bg,
-                      child: TabBar(
-                        controller: _tabController,
-                        labelColor: fg,
-                        unselectedLabelColor: fgSecondary,
-                        labelStyle: TextStyle(
-                          fontSize: AppTypography.lg,
-                          fontWeight: AppTypography.semiBold,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Center(
+                        child: CupertinoSlidingSegmentedControl<int>(
+                          groupValue: _activeTabIndex,
+                          children: Map.fromEntries(
+                            _resolvedTabs.asMap().entries.map(
+                                  (e) => MapEntry(
+                                    e.key,
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12),
+                                      child: Text(e.value.label),
+                                    ),
+                                  ),
+                                ),
+                          ),
+                          onValueChanged: (index) {
+                            if (index != null) {
+                              setState(() => _activeTabIndex = index);
+                              _pageController.animateToPage(
+                                index,
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeInOut,
+                              );
+                            }
+                          },
                         ),
-                        unselectedLabelStyle: TextStyle(
-                          fontSize: AppTypography.lg,
-                          fontWeight: AppTypography.normal,
-                        ),
-                        indicatorColor: primary,
-                        indicatorSize: TabBarIndicatorSize.label,
-                        tabs: _resolvedTabs
-                            .map((t) => Tab(child: Text(t.label)))
-                            .toList(),
                       ),
                     ),
                     height: AppSpacing.tabNavigationHeight,
@@ -350,8 +364,10 @@ class _CircleShellState extends ConsumerState<CircleShell>
                 ),
               ];
             },
-            body: TabBarView(
-              controller: _tabController,
+            body: PageView(
+              controller: _pageController,
+              physics: const BouncingScrollPhysics(),
+              onPageChanged: (index) => setState(() => _activeTabIndex = index),
               children: _resolvedTabs.map((tab) {
                 return _buildSectionBody(tab.type, isDark, circleData, circleState);
               }).toList(),

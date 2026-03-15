@@ -9,9 +9,8 @@ import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
 
 class _FakeShareActionHandler implements ContentShareActionHandler {
   final List<String> executed = <String>[];
-  final bool succeed;
 
-  _FakeShareActionHandler({this.succeed = true});
+  _FakeShareActionHandler();
 
   @override
   Future<ContentShareActionResult> execute(
@@ -22,8 +21,8 @@ class _FakeShareActionHandler implements ContentShareActionHandler {
     executed.add(action.id);
     return ContentShareActionResult(
       actionId: action.id,
-      success: succeed,
-      dismissed: !succeed,
+      success: true,
+      dismissed: false,
     );
   }
 }

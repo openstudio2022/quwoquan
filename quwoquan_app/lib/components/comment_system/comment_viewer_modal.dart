@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer.dart'
     show CommentInput;
 import 'package:quwoquan_app/ui/content/providers/comment_provider.dart';
+import 'package:quwoquan_app/l10n/l10n.dart';
 
 class CommentViewer {
   static Future<void> showModal({
@@ -24,10 +24,8 @@ class CommentViewer {
     Function(String)? onLoadMoreComments,
     VoidCallback? onClose,
   }) async {
-    await showModalBottomSheet(
+    await showCupertinoModalPopup(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (ctx) => _CommentSheet(
         postId: postId,
         config: config,
@@ -94,61 +92,55 @@ class _CommentSheetState extends ConsumerState<_CommentSheet> {
       });
     }
 
-    return DraggableScrollableSheet(
-      initialChildSize: 0.7,
-      minChildSize: 0.4,
-      maxChildSize: 0.95,
-      builder: (ctx, scrollController) {
-        return Container(
-          decoration: BoxDecoration(
-            color: AppColorsFunctional.getColor(
-                isDark, ColorType.backgroundPrimary),
-            borderRadius: BorderRadius.vertical(
-              top: Radius.circular(AppSpacing.largeBorderRadius),
-            ),
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColorsFunctional.getColor(
+            isDark, ColorType.backgroundPrimary),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppSpacing.largeBorderRadius),
+        ),
+      ),
+      height: MediaQuery.of(context).size.height * 0.75, // Fixed height for iOS modal
+      child: Column(
+        children: [
+          _DragHandle(isDark: isDark),
+          _Header(
+            isDark: isDark,
+            commentCount: commentState.comments.length,
+            sortMode: commentState.sortMode,
+            onSortChanged: (mode) {
+              ref
+                  .read(commentProviderFamily(widget.postId).notifier)
+                  .switchSort(mode);
+            },
+            onClose: () => Navigator.of(context).pop(),
           ),
-          child: Column(
-            children: [
-              _DragHandle(isDark: isDark),
-              _Header(
-                isDark: isDark,
-                commentCount: commentState.comments.length,
-                sortMode: commentState.sortMode,
-                onSortChanged: (mode) {
-                  ref
-                      .read(commentProviderFamily(widget.postId).notifier)
-                      .switchSort(mode);
-                },
-                onClose: () => Navigator.of(context).pop(),
-              ),
-              Expanded(
-                child: _buildCommentList(commentState, isDark, scrollController),
-              ),
-              CommentInput(
-                config: widget.config,
-                replyTo: _replyTo,
-                onSubmit: (content) async {
-                  try {
-                    final confirmed = await ref
-                        .read(commentProviderFamily(widget.postId).notifier)
-                        .addComment(
-                          content,
-                          replyToCommentId: _replyTo?.id,
-                        );
-                    if (confirmed != null) {
-                      widget.onCommentAdded?.call(confirmed.id);
-                    }
-                    if (mounted) setState(() => _replyTo = null);
-                  } catch (_) {}
-                },
-                onCancelReply: () {
-                  setState(() => _replyTo = null);
-                },
-              ),
-            ],
+          Expanded(
+            child: _buildCommentList(commentState, isDark, _scrollController),
           ),
-        );
-      },
+          CommentInput(
+            config: widget.config,
+            replyTo: _replyTo,
+            onSubmit: (content) async {
+              try {
+                final confirmed = await ref
+                    .read(commentProviderFamily(widget.postId).notifier)
+                    .addComment(
+                      content,
+                      replyToCommentId: _replyTo?.id,
+                    );
+                if (confirmed != null) {
+                  widget.onCommentAdded?.call(confirmed.id);
+                }
+                if (mounted) setState(() => _replyTo = null);
+              } catch (_) {}
+            },
+            onCancelReply: () {
+              setState(() => _replyTo = null);
+            },
+          ),
+        ],
+      ),
     );
   }
 

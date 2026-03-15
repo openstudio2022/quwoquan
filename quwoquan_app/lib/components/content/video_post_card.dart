@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
@@ -225,14 +226,7 @@ class VideoPostCard extends MediaPostCard {
             SizedBox(
               width: AppSpacing.buttonSize.w,
               height: AppSpacing.buttonSize.w,
-              child: CircularProgressIndicator(
-                strokeWidth: AppSpacing.xs.h, // 使用语义标签
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  isDark 
-                      ? AppColors.dark.foregroundTertiary 
-                      : AppColors.light.foregroundTertiary,
-                ),
-              ),
+              child: const CupertinoActivityIndicator(),
             ),
             SizedBox(height: AppSpacing.xs.h), // 使用语义标签
             Text(

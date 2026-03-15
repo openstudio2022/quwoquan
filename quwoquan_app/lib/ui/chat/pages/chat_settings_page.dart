@@ -1,11 +1,18 @@
+// ignore_for_file: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
-import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 
 /// 聊天设置/聊天信息页（1:1 图二）
@@ -110,11 +117,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                       .updateSettings({'title': newName});
                   if (mounted) {
                     setState(() => _groupName = newName);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(UITextConstants.groupNameUpdated),
-                      ),
-                    );
+                    AppToast.show(context, UITextConstants.groupNameUpdated);
                   }
                 } catch (_) {}
               }
@@ -146,17 +149,16 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
     final memberCount = members.length;
 
     final dividerColor = SettingsSemanticConstants.dividerColor(isDark);
-    return Scaffold(
+    return AppScaffold(
       backgroundColor: pageBg,
-      appBar: AppBar(
+      navigationBar: AppNavigationBar(
         backgroundColor: blockSurface,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
+          child: const Icon(CupertinoIcons.back),
           onPressed: () => context.pop(),
         ),
-        title: Text(
+        middle: Text(
           '${UITextConstants.chatInfoTitle}($memberCount)',
           style: TextStyle(
             color: fgPrimary,
@@ -164,21 +166,14 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        actions: [
-          if (memberCount > 5)
-            IconButton(
-              icon: const Icon(Icons.search),
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('${UITextConstants.search}（开发中）')),
-                );
-              },
-            ),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: AppSpacing.one, color: dividerColor),
-        ),
+        trailing: memberCount > 5 ? CupertinoButton(
+          padding: EdgeInsets.zero,
+          child: const Icon(CupertinoIcons.search),
+          onPressed: () {
+            AppToast.show(context, '${UITextConstants.search}（开发中）');
+          },
+        ) : null,
+        border: Border(bottom: BorderSide(color: dividerColor, width: AppSpacing.one)),
       ),
       body: SizedBox.expand(
         child: ListView(
@@ -454,17 +449,12 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
             _section(
               context,
               blockSurface: blockSurface,
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('${UITextConstants.exitGroupChat}（开发中）'),
-                      ),
-                    );
-                  },
-                  child: SizedBox(
+              child: CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: () {
+                  AppToast.show(context, '${UITextConstants.exitGroupChat}（开发中）');
+                },
+                child: SizedBox(
                     width: double.infinity,
                     height: AppSpacing.buttonHeight,
                     child: Center(
@@ -482,7 +472,6 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                   ),
                 ),
               ),
-            ),
           ],
         ),
       ),
@@ -535,23 +524,11 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
     required bool value,
     ValueChanged<bool>? onChanged,
   }) {
-    return Transform.scale(
-      scale: 0.82,
-      alignment: Alignment.centerRight,
-      child: Switch(
-        value: value,
-        onChanged: onChanged,
-        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        trackOutlineWidth: WidgetStateProperty.all(
-          SettingsSemanticConstants.switchTrackOutlineWidth,
-        ),
-        activeTrackColor: SettingsSemanticConstants.switchActiveTrackColor,
-        activeThumbColor: SettingsSemanticConstants.switchActiveThumbColor,
-        inactiveTrackColor: SettingsSemanticConstants.switchInactiveTrackColor(
-          isDark,
-        ),
-        thumbColor: WidgetStateProperty.all(Colors.white),
-      ),
+    return CupertinoSwitch(
+      value: value,
+      onChanged: onChanged,
+      activeTrackColor: SettingsSemanticConstants.switchActiveTrackColor,
+      inactiveTrackColor: SettingsSemanticConstants.switchInactiveTrackColor(isDark),
     );
   }
 }
@@ -686,8 +663,9 @@ class _SettingsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = fgPrimary ?? Theme.of(context).colorScheme.onSurface;
-    return InkWell(
-      onTap: onTap,
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      onPressed: onTap,
       child: ConstrainedBox(
         constraints: BoxConstraints(minHeight: AppSpacing.buttonHeight),
         child: Padding(

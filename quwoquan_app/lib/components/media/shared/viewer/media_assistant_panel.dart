@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -76,10 +77,12 @@ class MediaAssistantPanel extends StatelessWidget {
                         ),
                       ),
                     ),
-                    IconButton(
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      minSize: AppSpacing.minInteractiveSize,
                       onPressed: onClose,
-                      icon: Icon(
-                        Icons.close,
+                      child: Icon(
+                        CupertinoIcons.xmark,
                         size: AppSpacing.iconMedium,
                         color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
                       ),
@@ -447,17 +450,16 @@ class _MediaAssistantInput extends StatelessWidget {
                 ),
               ],
             ),
-            child: TextField(
+            child: CupertinoTextField(
               controller: controller,
               focusNode: focusNode,
-              decoration: InputDecoration(
-                isDense: true,
-                border: InputBorder.none,
-                hintText: UITextConstants.assistantAskPlaceholder,
-                hintStyle: TextStyle(
-                  color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),
-                  fontSize: AppTypography.sm.sp,
-                ),
+              decoration: BoxDecoration(
+                color: Colors.transparent,
+              ),
+              placeholder: UITextConstants.assistantAskPlaceholder,
+              placeholderStyle: TextStyle(
+                color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),
+                fontSize: AppTypography.sm.sp,
               ),
               style: TextStyle(
                 color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
@@ -484,13 +486,14 @@ class _MediaAssistantInput extends StatelessWidget {
               ),
             ],
           ),
-          child: InkWell(
-            onTap: onSend,
-            borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+          child: CupertinoButton(
+            padding: EdgeInsets.zero,
+            minSize: AppSpacing.minInteractiveSize,
+            onPressed: onSend,
             child: Padding(
               padding: EdgeInsets.all(context.safeGetIntraGroupSpacing(SpacingSize.xs)),
               child: Icon(
-                Icons.send,
+                CupertinoIcons.arrow_up_circle_fill,
                 color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),
                 size: AppSpacing.iconMedium,
               ),

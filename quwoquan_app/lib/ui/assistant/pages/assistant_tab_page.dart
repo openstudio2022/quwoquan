@@ -7,8 +7,8 @@ import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.d
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_center_page.dart';
-import 'package:quwoquan_app/ui/chat/pages/chat_detail_page.dart';
 
 class AssistantTabPage extends ConsumerStatefulWidget {
   const AssistantTabPage({super.key});
@@ -43,61 +43,34 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
       TabItem(id: 'skills', label: '技能'),
     ];
 
-    return Scaffold(
+    return AppScaffold(
       backgroundColor: bg,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            Container(
-              height: AppSpacing.tabNavigationHeight,
-              decoration: BoxDecoration(
-                color: bg,
-                border: Border(
-                  bottom: BorderSide(
-                    color: fgSecondary.withValues(alpha: 0.15),
-                  ),
-                ),
-              ),
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: Center(
-                      child: CenteredScrollableTabBar(
-                        tabs: tabs,
-                        activeTab: _activeTab,
-                        onTabChange: (id) => setState(() => _activeTab = id),
-                        leadingActions: const [],
-                        trailingActions: const [],
-                        transparentBackground: true,
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    right: AppSpacing.feedContentHorizontal(context),
-                    top: 0,
-                    bottom: 0,
-                    child: Center(
-                      child: IconButton(
-                        onPressed: () =>
-                            context.push(AppRoutePaths.assistantManagement),
-                        icon: Icon(
-                          CupertinoIcons.settings,
-                          size: AppSpacing.iconMedium,
-                          color: fgSecondary,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: _buildBody(),
-            ),
-          ],
+      navigationBar: AppNavigationBar(
+        backgroundColor: bg,
+        border: Border(
+          bottom: BorderSide(
+            color: fgSecondary.withValues(alpha: 0.15),
+          ),
+        ),
+        middle: CenteredScrollableTabBar(
+          tabs: tabs,
+          activeTab: _activeTab,
+          onTabChange: (id) => setState(() => _activeTab = id),
+          leadingActions: const [],
+          trailingActions: const [],
+          transparentBackground: true,
+        ),
+        trailing: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () => context.push(AppRoutePaths.assistantManagement),
+          child: Icon(
+            CupertinoIcons.settings,
+            size: AppSpacing.iconMedium,
+            color: fgSecondary,
+          ),
         ),
       ),
+      child: _buildBody(),
     );
   }
 
@@ -336,9 +309,9 @@ class _AssistantScheduleView extends ConsumerWidget {
               ),
               Row(
                 children: [
-                  Icon(CupertinoIcons.left_chevron, size: 16, color: fgSecondary),
+                  Icon(CupertinoIcons.chevron_left, size: 16, color: fgSecondary),
                   SizedBox(width: 16),
-                  Icon(CupertinoIcons.right_chevron, size: 16, color: fgSecondary),
+                  Icon(CupertinoIcons.chevron_right, size: 16, color: fgSecondary),
                 ],
               ),
             ],
@@ -395,7 +368,7 @@ class _SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     return Container(
       padding: EdgeInsets.all(AppSpacing.containerMd),
       decoration: BoxDecoration(

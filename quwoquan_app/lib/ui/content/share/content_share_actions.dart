@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
 
 class ContentShareActionResult {
@@ -43,12 +44,11 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
     ContentShareTemplate template,
     ContentShareAction action,
   ) async {
-    final messenger = ScaffoldMessenger.maybeOf(context);
     try {
       switch (action.id) {
         case 'copy_link':
           await Clipboard.setData(ClipboardData(text: template.deeplink));
-          _showSnackBar(messenger, UITextConstants.shareLinkCopied);
+          AppToast.show(context, UITextConstants.shareLinkCopied);
           return ContentShareActionResult(
             actionId: action.id,
             success: true,
@@ -65,7 +65,7 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
           if (result.status == ShareResultStatus.success) {
             return ContentShareActionResult(actionId: action.id, success: true);
           }
-          _showSnackBar(messenger, UITextConstants.shareCancelled);
+          AppToast.show(context, UITextConstants.shareCancelled);
           return ContentShareActionResult(
             actionId: action.id,
             success: false,
@@ -74,7 +74,7 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
           );
         case 'save_poster':
           final savedPath = await _savePoster(template);
-          _showSnackBar(messenger, UITextConstants.sharePosterSaved);
+          AppToast.show(context, UITextConstants.sharePosterSaved);
           return ContentShareActionResult(
             actionId: action.id,
             success: true,
@@ -82,7 +82,7 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
             savedPath: savedPath,
           );
         default:
-          _showSnackBar(messenger, UITextConstants.operationFailed);
+          AppToast.show(context, UITextConstants.operationFailed);
           return ContentShareActionResult(
             actionId: action.id,
             success: false,
@@ -90,7 +90,7 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
           );
       }
     } catch (_) {
-      _showSnackBar(messenger, UITextConstants.shareFailed);
+      AppToast.show(context, UITextConstants.shareFailed);
       return ContentShareActionResult(
         actionId: action.id,
         success: false,
@@ -256,12 +256,5 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
       ellipsis: maxLines == null ? null : '...',
     )..layout(maxWidth: maxWidth);
     painter.paint(canvas, offset);
-  }
-
-  void _showSnackBar(ScaffoldMessengerState? messenger, String message) {
-    if (messenger == null) return;
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
   }
 }

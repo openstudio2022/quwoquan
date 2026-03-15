@@ -6,7 +6,6 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/ui/circle/widgets/home_circles_category_tab.dart';
-import 'package:quwoquan_app/ui/circle/widgets/my_circles_rail.dart';
 import 'package:quwoquan_app/ui/circle/widgets/rectangular_circle_card.dart';
 
 class HomeCirclesHubPage extends ConsumerStatefulWidget {
