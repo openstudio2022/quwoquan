@@ -12,8 +12,8 @@
 ///   6. trace 序列化后 runId/traceId 跨事件一致
 library;
 
-import 'package:quwoquan_app/assistant/internal_legacy/protocol/run_response.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/protocol/trace_events.dart';
+import 'package:quwoquan_app/assistant/protocol/run_response.dart';
+import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:test/test.dart';
 
 // ─── 构造一个符合规范的完整 AssistantRunResponse ────────────────────────────

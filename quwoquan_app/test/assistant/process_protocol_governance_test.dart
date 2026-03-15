@@ -15,7 +15,7 @@ void main() {
     expect(
       plannerWrapper,
       contains(
-          "export 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';",
+        "export 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';",
       ),
     );
     expect(generatedEnums, contains('enum PlannerActionCode'));
@@ -23,18 +23,27 @@ void main() {
     expect(generatedEnums, contains('case PlannerActionCode.reviewSources'));
     expect(generatedEnums, contains('case PlannerActionCode.recoverRetrieval'));
     expect(generatedEnums, contains('case PlannerActionCode.parallelProbe'));
-    expect(generatedEnums, contains('case PlannerActionCode.mergeParallelResult'));
+    expect(
+      generatedEnums,
+      contains('case PlannerActionCode.mergeParallelResult'),
+    );
     expect(
       generatedEnums,
       contains('case PlannerActionCode.fallbackWithExistingEvidence'),
     );
     expect(generatedEnums, contains('case PlannerActionCode.setStage'));
     expect(generatedEnums, contains('enum PlannerReasonCode'));
-    expect(generatedEnums, contains('case PlannerReasonCode.confirmRealtimeScope'));
+    expect(
+      generatedEnums,
+      contains('case PlannerReasonCode.confirmRealtimeScope'),
+    );
     expect(generatedEnums, contains('case PlannerReasonCode.needMoreEvidence'));
     expect(generatedEnums, contains('case PlannerReasonCode.sourceUnstable'));
     expect(generatedEnums, contains('case PlannerReasonCode.reduceWaitTime'));
-    expect(generatedEnums, contains('case PlannerReasonCode.parallelBranchFailed'));
+    expect(
+      generatedEnums,
+      contains('case PlannerReasonCode.parallelBranchFailed'),
+    );
     expect(generatedEnums, contains('case PlannerReasonCode.assessmentUpdate'));
   });
 

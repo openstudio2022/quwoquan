@@ -5,16 +5,15 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/orchestration/process_journal_bus.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/engine/agent_loop.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/engine/llm_provider.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/engine/react_runtime.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/engine/session_manager.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/memory/memory_repository.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/memory/objectbox_store.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/protocol/run_request.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/protocol/trace_events.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/tools/tool_registry.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/tools/tool_schema.dart';
+import 'package:quwoquan_app/assistant/conversation/orchestration/agent_loop.dart';
+import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
+import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
+import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
+import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
+import 'package:quwoquan_app/assistant/protocol/run_request.dart';
+import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
+import 'package:quwoquan_app/assistant/tool/runtime/tool_registry.dart';
+import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
 
 Map<String, dynamic> _intentPlanningEnvelope({
   required String primarySkill,
@@ -602,7 +601,9 @@ class _InvalidSynthesisNextActionLlm implements AssistantLlmProvider {
       );
     }
 
-    if (isPlannerCall && !hasToolMessage && availableTools.contains('web_search')) {
+    if (isPlannerCall &&
+        !hasToolMessage &&
+        availableTools.contains('web_search')) {
       return AssistantModelOutput(
         text: jsonEncode(const <String, dynamic>{
           'contractVersion': 'assistant_turn',
@@ -1113,7 +1114,8 @@ void main() {
         (mockSearch.lastArguments['authorityDomains'] as List?) ??
             const <dynamic>[],
         isEmpty,
-        reason: 'runtime 不再按 query 场景自动注入 authorityDomains，权威约束应来自 typed plan 或 tool metadata',
+        reason:
+            'runtime 不再按 query 场景自动注入 authorityDomains，权威约束应来自 typed plan 或 tool metadata',
       );
 
       // ---- LLM 至少调用 2 轮（plan + answer/synthesis）----
@@ -1182,7 +1184,8 @@ void main() {
       // ---- 阶段时间线验证 ----
       final structured = response.structuredResponse;
       final processJournalRaw =
-          ((((structured['runArtifacts'] as Map?)?['processJournal'] as List?) ??
+          ((((structured['runArtifacts'] as Map?)?['processJournal']
+                      as List?) ??
                   const <dynamic>[]))
               .whereType<Map>()
               .map((item) => item.cast<String, dynamic>())
@@ -1445,7 +1448,8 @@ void main() {
       expect(rootIntentSummary, isNot(contains('收一收')));
       expect(rootIntentSummary, isNot(contains('你更像是想知道')));
       expect(
-        displayJournal.any((item) => item.references.isNotEmpty) || hasToolStartTrace,
+        displayJournal.any((item) => item.references.isNotEmpty) ||
+            hasToolStartTrace,
         isTrue,
         reason: '若过程区不再合成 references 事件，至少要保留真实工具执行证据',
       );
@@ -1645,12 +1649,14 @@ void main() {
       }
 
       final processJournal =
-          ((((secondResponse.structuredResponse['runArtifacts'] as Map?)
-                          ?['processJournal'] as List?) ??
+          ((((secondResponse.structuredResponse['runArtifacts']
+                          as Map?)?['processJournal']
+                      as List?) ??
                   const <dynamic>[]))
               .whereType<Map>()
               .map(
-                (item) => ProcessJournalEvent.fromJson(item.cast<String, dynamic>()),
+                (item) =>
+                    ProcessJournalEvent.fromJson(item.cast<String, dynamic>()),
               )
               .toList(growable: false);
       final displayJournal = ProcessJournalBus.toDisplaySnapshot(
@@ -1858,7 +1864,8 @@ void main() {
       final invalidSynthesisLoop = PersonalAssistantAgentLoop(
         ReactRuntime(
           llmProvider: _InvalidSynthesisNextActionLlm(),
-          toolRegistry: AssistantToolRegistry()..register(_FakeWeatherSearchTool()),
+          toolRegistry: AssistantToolRegistry()
+            ..register(_FakeWeatherSearchTool()),
         ),
         sessionManager: AssistantSessionManager(
           storagePath: '${tempDir.path}/sessions_invalid_synthesis.json',
@@ -1945,7 +1952,8 @@ void main() {
       expect(
         queryTasks.length,
         equals(0),
-        reason: 'runtime 不再根据 fallback 壳子自行扩写 queryTasks，应仅消费模型/typed plan 已提供的检索任务',
+        reason:
+            'runtime 不再根据 fallback 壳子自行扩写 queryTasks，应仅消费模型/typed plan 已提供的检索任务',
       );
       expect(
         adaptiveSearch.lastArguments.containsKey('queryVariants'),

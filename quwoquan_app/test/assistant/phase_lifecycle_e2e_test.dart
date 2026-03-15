@@ -65,7 +65,8 @@ void main() {
       // --- 阶段时间线断言 ---
       final structured = response.structuredResponse;
       final processJournalRaw =
-          ((((structured['runArtifacts'] as Map?)?['processJournal'] as List?) ??
+          ((((structured['runArtifacts'] as Map?)?['processJournal']
+                      as List?) ??
                   const <dynamic>[]))
               .whereType<Map>()
               .map((item) => item.cast<String, dynamic>())
@@ -184,11 +185,13 @@ void main() {
 
       final structured = response.structuredResponse;
       final processJournal =
-          ((((structured['runArtifacts'] as Map?)?['processJournal'] as List?) ??
+          ((((structured['runArtifacts'] as Map?)?['processJournal']
+                      as List?) ??
                   const <dynamic>[]))
               .whereType<Map>()
               .map(
-                (item) => ProcessJournalEvent.fromJson(item.cast<String, dynamic>()),
+                (item) =>
+                    ProcessJournalEvent.fromJson(item.cast<String, dynamic>()),
               )
               .toList(growable: false);
       final displayJournal = ProcessJournalBus.toDisplaySnapshot(
@@ -254,11 +257,13 @@ void main() {
 
       final structured = response.structuredResponse;
       final processJournal =
-          ((((structured['runArtifacts'] as Map?)?['processJournal'] as List?) ??
+          ((((structured['runArtifacts'] as Map?)?['processJournal']
+                      as List?) ??
                   const <dynamic>[]))
               .whereType<Map>()
               .map(
-                (item) => ProcessJournalEvent.fromJson(item.cast<String, dynamic>()),
+                (item) =>
+                    ProcessJournalEvent.fromJson(item.cast<String, dynamic>()),
               )
               .toList(growable: false);
       for (final event in ProcessJournalBus.toDisplaySnapshot(processJournal)) {

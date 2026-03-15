@@ -1,17 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:quwoquan_app/assistant/internal_legacy/engine/agent_loop.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/engine/llm_provider.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/engine/react_runtime.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/engine/session_manager.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/memory/memory_repository.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/memory/objectbox_store.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/protocol/run_request.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/template_runtime/prompt_template.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/template_runtime/template_registry.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/template_runtime/template_runtime.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/tools/tool_registry.dart';
+import 'package:quwoquan_app/assistant/conversation/orchestration/agent_loop.dart';
+import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
+import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
+import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
+import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
+import 'package:quwoquan_app/assistant/protocol/run_request.dart';
+import 'package:quwoquan_app/assistant/template_runtime/assistant_template_runtime.dart';
+import 'package:quwoquan_app/assistant/tool/runtime/tool_registry.dart';
 import 'package:test/test.dart';
 
 typedef _ChatStrategy =
@@ -72,9 +69,7 @@ Future<HttpServer> _startMockServer(_ChatStrategy strategy) async {
             },
           ],
         });
-        request.response.write(
-          'data: $encodedEvent\n\n',
-        );
+        request.response.write('data: $encodedEvent\n\n');
       }
       request.response.write('data: [DONE]\n\n');
     } else {
@@ -161,69 +156,73 @@ PersonalAssistantAgentLoop _buildLoop({
 }
 
 void main() {
-  test('repairs invalid streamed synthesis output before exposing final answer', () async {
-    final planningJson = _assistantTurnJson(
-      markdown: '## 中间结果\n- 我正在整理最终答案。',
-      interpretation: 'phase one',
-    );
-    final repairedJson = _assistantTurnJson(
-      markdown: '## 修复后的答案\n- 现在直接给出用户可见结果。',
-      interpretation: 'repaired',
-    );
-    final server = await _startMockServer((body) async {
-      final messages =
-          (body['messages'] as List?)?.whereType<Map>().toList() ?? const <Map>[];
-      final joined = messages
-          .map((item) => (item['content'] ?? '').toString())
-          .join('\n');
-      final isStream = body['stream'] == true;
-      if (joined.contains('上一次输出未通过 assistant_turn 契约校验') ||
-          joined.contains('结构化 JSON 仍然无效') ||
-          joined.contains('上一次输出无效')) {
+  test(
+    'repairs invalid streamed synthesis output before exposing final answer',
+    () async {
+      final planningJson = _assistantTurnJson(
+        markdown: '## 中间结果\n- 我正在整理最终答案。',
+        interpretation: 'phase one',
+      );
+      final repairedJson = _assistantTurnJson(
+        markdown: '## 修复后的答案\n- 现在直接给出用户可见结果。',
+        interpretation: 'repaired',
+      );
+      final server = await _startMockServer((body) async {
+        final messages =
+            (body['messages'] as List?)?.whereType<Map>().toList() ??
+            const <Map>[];
+        final joined = messages
+            .map((item) => (item['content'] ?? '').toString())
+            .join('\n');
+        final isStream = body['stream'] == true;
+        if (joined.contains('上一次输出未通过 assistant_turn 契约校验') ||
+            joined.contains('结构化 JSON 仍然无效') ||
+            joined.contains('上一次输出无效')) {
+          return isStream
+              ? _MockChatResponse.sse(_chunk(repairedJson))
+              : _MockChatResponse.json(repairedJson);
+        }
+        if (isStream && joined.contains('领域执行结果摘要')) {
+          return const _MockChatResponse.sse(<String>[
+            '<tool_call><name>web_search</name></tool_call>',
+          ]);
+        }
         return isStream
-            ? _MockChatResponse.sse(_chunk(repairedJson))
-            : _MockChatResponse.json(repairedJson);
-      }
-      if (isStream && joined.contains('领域执行结果摘要')) {
-        return const _MockChatResponse.sse(<String>[
-          '<tool_call><name>web_search</name></tool_call>',
-        ]);
-      }
-      return isStream
-          ? _MockChatResponse.sse(_chunk(planningJson))
-          : _MockChatResponse.json(planningJson);
-    });
-    addTearDown(() async {
-      await server.close(force: true);
-    });
-    final tempDir = await Directory.systemTemp.createTemp(
-      'pa_synthesis_guard_',
-    );
-    addTearDown(() async {
-      await tempDir.delete(recursive: true);
-    });
-    final loop = _buildLoop(
-      provider: _buildProvider(server),
-      tempDirPath: tempDir.path,
-    );
+            ? _MockChatResponse.sse(_chunk(planningJson))
+            : _MockChatResponse.json(planningJson);
+      });
+      addTearDown(() async {
+        await server.close(force: true);
+      });
+      final tempDir = await Directory.systemTemp.createTemp(
+        'pa_synthesis_guard_',
+      );
+      addTearDown(() async {
+        await tempDir.delete(recursive: true);
+      });
+      final loop = _buildLoop(
+        provider: _buildProvider(server),
+        tempDirPath: tempDir.path,
+      );
 
-    final response = await loop.run(
-      const AssistantRunRequest(
-        sessionId: 'repair-invalid-synthesis',
-        messages: <AssistantRunMessage>[
-          AssistantRunMessage(role: 'user', content: '请直接给我最终结论'),
-        ],
-      ),
-    );
-    final markdown =
-        ((response.structuredResponse['uiAnswer'] as Map?)?['markdownText']
-                as String?) ??
-            '';
+      final response = await loop.run(
+        const AssistantRunRequest(
+          sessionId: 'repair-invalid-synthesis',
+          messages: <AssistantRunMessage>[
+            AssistantRunMessage(role: 'user', content: '请直接给我最终结论'),
+          ],
+        ),
+      );
+      final markdown =
+          ((response.structuredResponse['uiAnswer'] as Map?)?['markdownText']
+              as String?) ??
+          '';
 
-    expect(markdown, contains('修复后的答案'));
-    expect(markdown, isNot(contains('<tool_call>')));
-    expect(markdown, isNot(contains('"toolCalls"')));
-  });
+      expect(markdown, contains('修复后的答案'));
+      expect(markdown, isNot(contains('<tool_call>')));
+      expect(markdown, isNot(contains('"toolCalls"')));
+    },
+  );
 
   test('injects inline evidence links into streamed final markdown', () async {
     final planningJson = _assistantTurnJson(
@@ -243,7 +242,8 @@ void main() {
     );
     final server = await _startMockServer((body) async {
       final messages =
-          (body['messages'] as List?)?.whereType<Map>().toList() ?? const <Map>[];
+          (body['messages'] as List?)?.whereType<Map>().toList() ??
+          const <Map>[];
       final joined = messages
           .map((item) => (item['content'] ?? '').toString())
           .join('\n');
@@ -276,7 +276,8 @@ void main() {
         ],
       ),
     );
-    final uiAnswer = (response.structuredResponse['uiAnswer'] as Map?)
+    final uiAnswer =
+        (response.structuredResponse['uiAnswer'] as Map?)
             ?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final markdown = (uiAnswer['markdownText'] as String?) ?? '';

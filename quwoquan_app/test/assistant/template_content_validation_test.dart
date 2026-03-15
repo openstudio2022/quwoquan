@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:quwoquan_app/assistant/internal_legacy/template_runtime/template_validator.dart';
+import 'package:quwoquan_app/assistant/template_runtime/assistant_template_runtime.dart';
 import 'package:test/test.dart';
 
 /// 对 manifest.json 中每个模板文件运行真实 TemplateValidator 校验。
@@ -23,12 +23,14 @@ void main() {
         (decoded['templates'] as List?)?.whereType<Map>().toList() ??
         const <Map>[];
     expect(templates, isNotEmpty, reason: 'manifest 至少包含 1 个模板');
-    templateEntries = templates.map((item) {
-      return _TemplateEntry(
-        metaPath: (item['metaPath'] as String?) ?? '',
-        contentPath: (item['contentPath'] as String?) ?? '',
-      );
-    }).toList(growable: false);
+    templateEntries = templates
+        .map((item) {
+          return _TemplateEntry(
+            metaPath: (item['metaPath'] as String?) ?? '',
+            contentPath: (item['contentPath'] as String?) ?? '',
+          );
+        })
+        .toList(growable: false);
   });
 
   group('manifest 所有模板通过 TemplateValidator 校验', () {
@@ -36,9 +38,7 @@ void main() {
       final failures = <String>[];
       for (final entry in templateEntries) {
         if (entry.metaPath.isEmpty || entry.contentPath.isEmpty) {
-          failures.add(
-            '条目缺少 metaPath 或 contentPath: $entry',
-          );
+          failures.add('条目缺少 metaPath 或 contentPath: $entry');
           continue;
         }
         final contentFile = File(entry.contentPath);
@@ -58,7 +58,10 @@ void main() {
           continue;
         }
         final content = contentFile.readAsStringSync();
-        final result = validator.validate(templateId: templateId, content: content);
+        final result = validator.validate(
+          templateId: templateId,
+          content: content,
+        );
         if (!result.isValid) {
           failures.add(
             '$templateId (${entry.contentPath}) 校验失败:\n'
@@ -102,16 +105,24 @@ void main() {
       const plannerContentPath =
           'assets/assistant/prompts/global/planner.global_plan.md';
       final content = File(plannerContentPath).readAsStringSync();
-      final startCount =
-          RegExp(r'=== CONTEXT_DATA_START ===').allMatches(content).length;
-      final endCount =
-          RegExp(r'=== CONTEXT_DATA_END ===').allMatches(content).length;
-      expect(startCount, 1,
-          reason:
-              'planner.global_plan.md 有 $startCount 个 CONTEXT_DATA_START，应为 1（无重复内容）');
-      expect(endCount, 1,
-          reason:
-              'planner.global_plan.md 有 $endCount 个 CONTEXT_DATA_END，应为 1（无重复内容）');
+      final startCount = RegExp(
+        r'=== CONTEXT_DATA_START ===',
+      ).allMatches(content).length;
+      final endCount = RegExp(
+        r'=== CONTEXT_DATA_END ===',
+      ).allMatches(content).length;
+      expect(
+        startCount,
+        1,
+        reason:
+            'planner.global_plan.md 有 $startCount 个 CONTEXT_DATA_START，应为 1（无重复内容）',
+      );
+      expect(
+        endCount,
+        1,
+        reason:
+            'planner.global_plan.md 有 $endCount 个 CONTEXT_DATA_END，应为 1（无重复内容）',
+      );
     });
   });
 }

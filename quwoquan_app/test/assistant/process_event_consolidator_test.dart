@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/assistant/contracts/explainable_flow_event.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/engine/process_event_consolidator.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/protocol/trace_events.dart';
+import 'package:quwoquan_app/assistant/conversation/explainability/process_event_consolidator.dart';
+import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 
 void main() {
   group('ProcessEventConsolidator narrative', () {

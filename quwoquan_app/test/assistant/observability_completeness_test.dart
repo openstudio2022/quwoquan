@@ -4,7 +4,9 @@ import 'package:test/test.dart';
 
 void main() {
   test('agent loop observability payload includes required fields', () {
-    final file = File('lib/assistant/internal_legacy/engine/agent_loop.dart');
+    final file = File(
+      'lib/assistant/conversation/orchestration/agent_loop.dart',
+    );
     expect(file.existsSync(), isTrue);
     final text = file.readAsStringSync();
     for (final key in const <String>[
@@ -19,8 +21,11 @@ void main() {
       'webPipeline',
       'qualityMetrics',
     ]) {
-      expect(text.contains(key), isTrue, reason: 'missing observability key: $key');
+      expect(
+        text.contains(key),
+        isTrue,
+        reason: 'missing observability key: $key',
+      );
     }
   });
 }
-

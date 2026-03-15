@@ -65,6 +65,7 @@ class RtcSignalingClient {
 
   Future<void> _doConnect() async {
     if (_disposed) return;
+    WebSocketChannel? pendingChannel;
 
     try {
       final wsUrl = CloudRuntimeConfig.gatewayBaseUrl
@@ -75,7 +76,13 @@ class RtcSignalingClient {
       final uri = Uri.parse(
         '$wsUrl${RealtimeApiMetadata.webSocketUpgradePath}?userId=$_userId',
       );
-      _channel = WebSocketChannel.connect(uri, protocols: null);
+      pendingChannel = WebSocketChannel.connect(uri, protocols: null);
+      await pendingChannel.ready;
+      if (_disposed) {
+        await pendingChannel.sink.close();
+        return;
+      }
+      _channel = pendingChannel;
 
       _channel!.stream.listen(
         _onMessage,
@@ -90,6 +97,10 @@ class RtcSignalingClient {
       // Authenticate after connection
       _send({'type': 'auth', 'userId': _userId, ...headers});
     } catch (e) {
+      try {
+        await pendingChannel?.sink.close();
+      } catch (_) {}
+      debugPrint('RtcSignaling: connect failed: $e');
       _connectionState.value = false;
       _scheduleReconnect();
     }

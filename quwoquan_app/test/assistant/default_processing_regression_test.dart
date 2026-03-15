@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
 import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/engine/conversation_state_kernel.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/engine/default_processing/evidence_evaluator.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/engine/default_processing/problem_framer.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/engine/default_processing/retrieval_planner.dart';
+import 'package:quwoquan_app/assistant/context/assembly/conversation_state_kernel.dart';
+import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
+import 'package:quwoquan_app/assistant/reasoning/planner/problem_framer.dart';
+import 'package:quwoquan_app/assistant/reasoning/planner/retrieval_planner.dart';
 
 void main() {
   group('Default processing regression', () {
@@ -72,20 +72,14 @@ void main() {
         travelPlan!.queryTasks.map((item) => item.id).toList(),
         containsAll(<String>['candidate_space', 'fit_scenarios', 'risks']),
       );
-      expect(
-        travelPlan.blockingDimensions,
-        contains('候选范围'),
-      );
+      expect(travelPlan.blockingDimensions, contains('候选范围'));
 
       expect(wildlifePlan, isNotNull);
       expect(
         wildlifePlan!.queryTasks.map((item) => item.id).toList(),
         containsAll(<String>['key_facts', 'decision_threshold']),
       );
-      expect(
-        wildlifePlan.blockingDimensions,
-        isNotEmpty,
-      );
+      expect(wildlifePlan.blockingDimensions, isNotEmpty);
     });
 
     test('证据评估可把未满配的资料判为 bounded', () {

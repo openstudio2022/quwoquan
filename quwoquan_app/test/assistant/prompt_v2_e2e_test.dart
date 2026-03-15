@@ -75,9 +75,7 @@ void main() {
     });
 
     test('新模板文件全部可从 manifest 加载', () {
-      final manifestFile = File(
-        'assets/assistant/prompts/manifest.json',
-      );
+      final manifestFile = File('assets/assistant/prompts/manifest.json');
       expect(manifestFile.existsSync(), isTrue);
 
       final decoded = jsonDecode(manifestFile.readAsStringSync()) as Map;

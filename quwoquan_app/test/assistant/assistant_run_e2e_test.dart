@@ -46,12 +46,14 @@ void main() {
       expect(response.displayMarkdown.trim(), isNotEmpty);
       expect(response.displayPlainText.trim(), isNotEmpty);
       expect(response.displayMarkdown.contains('contractVersion'), isFalse);
-      final processJournal = ((((response.structuredResponse['runArtifacts']
-                      as Map?)?['processJournal'] as List?) ??
+      final processJournal =
+          ((((response.structuredResponse['runArtifacts']
+                          as Map?)?['processJournal']
+                      as List?) ??
                   const <dynamic>[]))
-          .whereType<Map>()
-          .map((item) => item.cast<String, dynamic>())
-          .toList(growable: false);
+              .whereType<Map>()
+              .map((item) => item.cast<String, dynamic>())
+              .toList(growable: false);
       expect(processJournal, isNotEmpty, reason: '简单事实问题也应生成统一主过程日志');
     });
 
@@ -99,11 +101,12 @@ void main() {
 
       final structured = response.structuredResponse;
       final processJournal =
-          ((((structured['runArtifacts'] as Map?)?['processJournal'] as List?) ??
+          ((((structured['runArtifacts'] as Map?)?['processJournal']
+                      as List?) ??
                   const <dynamic>[]))
-          .whereType<Map>()
-          .map((item) => item.cast<String, dynamic>())
-          .toList(growable: false);
+              .whereType<Map>()
+              .map((item) => item.cast<String, dynamic>())
+              .toList(growable: false);
 
       expect(processJournal, isNotEmpty, reason: '复杂规划问题应输出统一主过程日志');
 

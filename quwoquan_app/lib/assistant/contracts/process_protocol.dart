@@ -1,4 +1,4 @@
-import 'planner_contracts.dart';
+import 'package:quwoquan_app/assistant/contracts/planner_contracts.dart';
 
 // Runtime-only protocol boundary:
 // - This wrapper is derived from planner runtime enums and is not a shared
@@ -19,11 +19,11 @@ class ProcessProtocolCode {
   final PlannerReasonCode reasonCode;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'stage': stage.wireName,
-        'phaseId': phaseId.wireName,
-        'actionCode': actionCode.wireName,
-        'reasonCode': reasonCode.wireName,
-      };
+    'stage': stage.wireName,
+    'phaseId': phaseId.wireName,
+    'actionCode': actionCode.wireName,
+    'reasonCode': reasonCode.wireName,
+  };
 
   factory ProcessProtocolCode.fromWire({
     required String stage,

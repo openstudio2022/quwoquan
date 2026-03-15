@@ -1,18 +1,18 @@
 export 'package:quwoquan_app/assistant/generated/contracts/run_artifacts.g.dart';
 export 'package:quwoquan_app/assistant/contracts/runtime_enums.dart'
     show
-        TraceVisibility,
         ProcessJournalEventType,
         SlotValueStatus,
-        parseTraceVisibility,
+        TraceVisibility,
         parseProcessJournalEventType,
-        parseSlotValueStatus;
+        parseSlotValueStatus,
+        parseTraceVisibility;
 
-import 'package:quwoquan_app/assistant/contracts/planner_contracts.dart';
-import 'package:quwoquan_app/assistant/contracts/process_protocol.dart';
 import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/run_artifacts.g.dart';
+import 'package:quwoquan_app/assistant/reasoning/contracts/planner_contracts.dart';
+import 'package:quwoquan_app/assistant/reasoning/contracts/process_protocol.dart';
 
 String processJournalEventTypeToWire(ProcessJournalEventType type) =>
     type.wireName;

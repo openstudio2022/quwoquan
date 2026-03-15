@@ -60,8 +60,9 @@ void main() {
         if (trimmed.isEmpty || trimmed.startsWith('#')) continue;
         final sep = trimmed.indexOf(':');
         if (sep <= 0) continue;
-        out[trimmed.substring(0, sep).trim()] =
-            trimmed.substring(sep + 1).trim();
+        out[trimmed.substring(0, sep).trim()] = trimmed
+            .substring(sep + 1)
+            .trim();
       }
       return out;
     }
@@ -110,7 +111,11 @@ void main() {
         }
 
         final allowedTools = parseSpaceList(frontmatter['allowed_tools'] ?? '');
-        expect(allowedTools, isNotEmpty, reason: '$normalizedPath allowed_tools 为空');
+        expect(
+          allowedTools,
+          isNotEmpty,
+          reason: '$normalizedPath allowed_tools 为空',
+        );
         for (final tool in allowedTools) {
           expect(
             allowedToolSet.contains(tool),
@@ -184,8 +189,9 @@ void main() {
             reason: '$normalizedPath 引用不存在的 script: $rel',
           );
         }
-        for (final rel
-            in parseSpaceList(frontmatter['dialogue_state_docs'] ?? '')) {
+        for (final rel in parseSpaceList(
+          frontmatter['dialogue_state_docs'] ?? '',
+        )) {
           final target = File('${dir.path}/$rel');
           expect(
             target.existsSync(),

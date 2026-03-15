@@ -8,21 +8,16 @@ void main() {
       final designDoc = _read(
         'assistant/docs/PERSONAL_ASSISTANT_DESIGN_AND_CONSTRAINTS.md',
       );
-      final ssotDoc = _read(
-        'assistant/docs/canonical_truth_sources.md',
-      );
+      final ssotDoc = _read('assistant/docs/canonical_truth_sources.md');
       final governance = _read(
-        'lib/assistant/internal_legacy/engine/runtime_string_governance.dart',
+        'lib/assistant/reasoning/runtime/runtime_string_governance.dart',
       );
 
       expect(
         designDoc,
         contains('quwoquan_service/contracts/metadata/assistant/'),
       );
-      expect(
-        designDoc,
-        contains('quwoquan_app/lib/assistant/generated/'),
-      );
+      expect(designDoc, contains('quwoquan_app/lib/assistant/generated/'));
       expect(designDoc, contains('assistant_turn'));
       expect(designDoc, contains('禁止继续保留读取兼容'));
 
@@ -40,7 +35,7 @@ void main() {
 
     test('narrative_engine 不再直接承载用户可见中文文案', () {
       final content = _read(
-        'lib/assistant/internal_legacy/engine/default_processing/narrative_engine.dart',
+        'lib/assistant/reasoning/runtime/narrative_engine.dart',
       );
 
       expect(content, contains('DefaultProcessingCopyBank'));
@@ -52,7 +47,7 @@ void main() {
 
     test('tool_result_assessor 不再直接承载用户可见中文文案', () {
       final content = _read(
-        'lib/assistant/internal_legacy/engine/tool_result_assessor.dart',
+        'lib/assistant/reasoning/runtime/tool_result_assessor.dart',
       );
 
       expect(content, contains('DefaultProcessingCopyBank'));
@@ -64,7 +59,7 @@ void main() {
 
     test('tool_result_assessor 使用 enum 而不是字符串 message key', () {
       final content = _read(
-        'lib/assistant/internal_legacy/engine/tool_result_assessor.dart',
+        'lib/assistant/reasoning/runtime/tool_result_assessor.dart',
       );
 
       expect(content, contains('ToolAssessMessageKey.'));
@@ -72,7 +67,9 @@ void main() {
     });
 
     test('agent_loop 不再使用 realtimeTokens 关键词数组做实时判断', () {
-      final content = _read('lib/assistant/internal_legacy/engine/agent_loop.dart');
+      final content = _read(
+        'lib/assistant/conversation/orchestration/agent_loop.dart',
+      );
 
       expect(content, isNot(contains('const realtimeTokens')));
       expect(content, contains('freshnessHours'));
@@ -82,7 +79,7 @@ void main() {
 
     test('answer_composer 的兜底文案由 copy bank 提供', () {
       final content = _read(
-        'lib/assistant/internal_legacy/engine/default_processing/answer_composer.dart',
+        'lib/assistant/reasoning/runtime/answer_composer.dart',
       );
 
       expect(content, contains('DefaultProcessingCopyBank'));
@@ -94,7 +91,7 @@ void main() {
 
     test('conversation_state_kernel 默认追问文案由 copy bank 提供', () {
       final content = _read(
-        'lib/assistant/internal_legacy/engine/conversation_state_kernel.dart',
+        'lib/assistant/context/assembly/conversation_state_kernel.dart',
       );
 
       expect(
@@ -108,7 +105,9 @@ void main() {
     });
 
     test('agent_loop 使用 typed nextAction/messageKind 合同而非裸字符串比较', () {
-      final content = _read('lib/assistant/internal_legacy/engine/agent_loop.dart');
+      final content = _read(
+        'lib/assistant/conversation/orchestration/agent_loop.dart',
+      );
 
       expect(content, contains('parseNextAction('));
       expect(content, contains('parseMessageKind('));
@@ -181,9 +180,7 @@ void main() {
     test(
       'planner_contracts 覆盖 phase/action/reason/assessment/slot typed enums',
       () {
-        final content = _read(
-          'lib/assistant/contracts/planner_contracts.dart',
-        );
+        final content = _read('lib/assistant/contracts/planner_contracts.dart');
 
         expect(
           content,
@@ -193,9 +190,7 @@ void main() {
         );
         expect(
           content,
-          contains(
-            "assistant/generated/contracts/planner_contracts.g.dart",
-          ),
+          contains("assistant/generated/contracts/planner_contracts.g.dart"),
         );
         expect(content, contains('SlotFillAction.askUser'));
         expect(content, contains('SlotSource.userQueryLlm'));
@@ -205,7 +200,9 @@ void main() {
     );
 
     test('agent_loop 不再使用 fallbackFrame 回填 intent graph 关键字段', () {
-      final content = _read('lib/assistant/internal_legacy/engine/agent_loop.dart');
+      final content = _read(
+        'lib/assistant/conversation/orchestration/agent_loop.dart',
+      );
 
       expect(content, isNot(contains('fallbackFrame.targetObject')));
       expect(content, isNot(contains('fallbackFrame.userJobToBeDone')));
@@ -217,13 +214,13 @@ void main() {
 
     test('skill executors 不再通过 skill.id 内建特判知识技能', () {
       final executor = _read(
-        'lib/assistant/internal_legacy/skills/skill_executor.dart',
+        'lib/assistant/skill/execution/assistant_skill_executor.dart',
       );
       final simpleExecutor = _read(
-        'lib/assistant/internal_legacy/skills/simple_skill_executor.dart',
+        'lib/assistant/skill/execution/simple_skill_executor.dart',
       );
       final market = _read(
-        'lib/assistant/internal_legacy/skills/market/skill_market_service.dart',
+        'lib/assistant/skill/market/assistant_skill_market_service.dart',
       );
 
       expect(executor, isNot(contains("skill.id == 'knowledge_qa'")));
@@ -248,7 +245,7 @@ void main() {
 
     test('conversation_state_kernel 优先消费 slotFillPlan 而非 regex 提取', () {
       final content = _read(
-        'lib/assistant/internal_legacy/engine/conversation_state_kernel.dart',
+        'lib/assistant/context/assembly/conversation_state_kernel.dart',
       );
 
       expect(content, contains('SlotFillPlan.fromJson'));
@@ -266,7 +263,7 @@ void main() {
 
     test('context_orchestrator 不再内嵌长关键词表和自然语言补槽指令', () {
       final content = _read(
-        'lib/assistant/internal_legacy/engine/context_orchestrator.dart',
+        'lib/assistant/context/assembly/context_orchestrator.dart',
       );
       final continuityContract = _read(
         'lib/assistant/contracts/context_continuity_policy.dart',
@@ -315,7 +312,9 @@ void main() {
       );
       expect(
         assemblyContract,
-        contains('assistant/generated/contracts/context_assembly_result.g.dart'),
+        contains(
+          'assistant/generated/contracts/context_assembly_result.g.dart',
+        ),
       );
       expect(
         readinessContract,
@@ -327,7 +326,7 @@ void main() {
 
     test('process_event_consolidator 使用 typed assessment 而非字符串 switch', () {
       final content = _read(
-        'lib/assistant/internal_legacy/engine/process_event_consolidator.dart',
+        'lib/assistant/conversation/explainability/process_event_consolidator.dart',
       );
 
       expect(content, contains('parseAssessmentType'));
@@ -366,7 +365,7 @@ void main() {
 
     test('retrieval_planner 使用 typed AnswerShape switch 而非字符串', () {
       final content = _read(
-        'lib/assistant/internal_legacy/engine/default_processing/retrieval_planner.dart',
+        'lib/assistant/reasoning/planner/retrieval_planner.dart',
       );
 
       expect(content, contains('frame.answerShapeKind'));
@@ -380,20 +379,22 @@ void main() {
 
     test('compatibility fallbacks 已从主链清理，不再保留旧注释入口', () {
       final kernel = _read(
-        'lib/assistant/internal_legacy/engine/conversation_state_kernel.dart',
+        'lib/assistant/context/assembly/conversation_state_kernel.dart',
       );
       expect(kernel, isNot(contains('DEPRECATED compatibility fallback')));
       expect(kernel, isNot(contains('_compatibilityExtractSlots')));
 
       final reactRuntime = _read(
-        'lib/assistant/internal_legacy/engine/react_runtime.dart',
+        'lib/assistant/reasoning/runtime/react_runtime.dart',
       );
       expect(
         reactRuntime,
         isNot(contains('DEPRECATED compatibility fallback')),
       );
 
-      final agentLoop = _read('lib/assistant/internal_legacy/engine/agent_loop.dart');
+      final agentLoop = _read(
+        'lib/assistant/conversation/orchestration/agent_loop.dart',
+      );
       expect(agentLoop, isNot(contains('DEPRECATED compatibility fallback')));
     });
   });

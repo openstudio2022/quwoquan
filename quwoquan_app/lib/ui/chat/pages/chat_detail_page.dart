@@ -4404,11 +4404,11 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             backgroundColor: bgColor,
             leading: CupertinoButton(
               padding: EdgeInsets.zero,
+              onPressed: _isSelectionMode ? _cancelSelection : widget.onBack,
               child: Icon(
                 _isSelectionMode ? CupertinoIcons.xmark : CupertinoIcons.back,
                 color: fgPrimary,
               ),
-              onPressed: _isSelectionMode ? _cancelSelection : widget.onBack,
             ),
             middle: Text(
               _isSelectionMode

@@ -22,8 +22,8 @@ void main() {
       const channel = MethodChannel('plugins.flutter.io/path_provider');
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (MethodCall call) async {
-        return Directory.systemTemp.path;
-      });
+            return Directory.systemTemp.path;
+          });
 
       runtime = AssistantRuntime.createDefault();
       gateway = AssistantGateway(runtime);
@@ -44,50 +44,60 @@ void main() {
           );
     });
 
-    test('Scenario A: feishu voice command through OpenClaw can invoke web search skill', () async {
-      final bridge = OpenClawBridge(
-        baseUrl: 'http://127.0.0.1:18189',
-        authToken: 'test-token',
-      );
+    test(
+      'Scenario A: feishu voice command through OpenClaw can invoke web search skill',
+      () async {
+        final bridge = OpenClawBridge(
+          baseUrl: 'http://127.0.0.1:18189',
+          authToken: 'test-token',
+        );
 
-      final text = await bridge.handleVoiceCommandForKnowledgeQa(
-        '帮我查一下今日财经热点和天气',
-      );
+        final text = await bridge.handleVoiceCommandForKnowledgeQa(
+          '帮我查一下今日财经热点和天气',
+        );
 
-      expect(text, isNotNull);
-      final normalized = text!.toLowerCase();
-      expect(
-        normalized,
-        anyOf(
-          contains('web search'),
-          contains('success'),
-          contains('fallback'),
-          contains('unavailable'),
-        ),
-      );
-    });
+        expect(text, isNotNull);
+        final normalized = text!.toLowerCase();
+        expect(
+          normalized,
+          anyOf(
+            contains('web search'),
+            contains('success'),
+            contains('fallback'),
+            contains('unavailable'),
+          ),
+        );
+      },
+    );
 
-    test('Scenario B: app text chat can directly ask and trigger assistant react loop', () async {
-      final response = await gateway.run(
-        const AssistantRunRequest(
-          sessionId: 'assistant',
-          userId: 'u_test',
-          deviceProfile: 'mobile',
-          messages: <AssistantRunMessage>[
-            AssistantRunMessage(role: 'user', content: '帮我搜索今日财经知识'),
-          ],
-        ),
-      );
+    test(
+      'Scenario B: app text chat can directly ask and trigger assistant react loop',
+      () async {
+        final response = await gateway.run(
+          const AssistantRunRequest(
+            sessionId: 'assistant',
+            userId: 'u_test',
+            deviceProfile: 'mobile',
+            messages: <AssistantRunMessage>[
+              AssistantRunMessage(role: 'user', content: '帮我搜索今日财经知识'),
+            ],
+          ),
+        );
 
-      expect(response.finalText.trim().isNotEmpty, isTrue);
-      expect(
-        response.traces.any((t) => t.type == AssistantTraceEventType.lifecycleStart),
-        isTrue,
-      );
-      expect(
-        response.traces.any((t) => t.type == AssistantTraceEventType.lifecycleEnd),
-        isTrue,
-      );
-    });
+        expect(response.finalText.trim().isNotEmpty, isTrue);
+        expect(
+          response.traces.any(
+            (t) => t.type == AssistantTraceEventType.lifecycleStart,
+          ),
+          isTrue,
+        );
+        expect(
+          response.traces.any(
+            (t) => t.type == AssistantTraceEventType.lifecycleEnd,
+          ),
+          isTrue,
+        );
+      },
+    );
   });
 }

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/engine/default_processing/baseline_kernel.dart';
+import 'package:quwoquan_app/assistant/reasoning/runtime/baseline_kernel.dart';
 
 void main() {
   group('BaselineKernel bootstrap', () {

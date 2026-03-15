@@ -1,1 +1,1 @@
-export 'package:quwoquan_app/assistant/internal_legacy/contracts/agent_run_observability.dart';
+export 'package:quwoquan_app/assistant/reasoning/contracts/agent_run_observability.dart';

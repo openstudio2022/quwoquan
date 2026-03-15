@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+export 'package:quwoquan_app/assistant/spi/connectors/mcp_bridge.dart';
+
 import 'package:quwoquan_app/assistant/security/assistant_security_runtime.dart';
 
 class AssistantChannelEvent {

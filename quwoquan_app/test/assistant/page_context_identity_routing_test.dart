@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/retrieval/providers/page_context_retrieval_provider.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/retrieval/retrieval_models.dart';
+import 'package:quwoquan_app/assistant/retrieval/providers/page_context_retrieval_provider.dart';
+import 'package:quwoquan_app/assistant/retrieval/contracts/retrieval_models.dart';
 
 class _AssistantSignalRepo extends MockAppContentRepository {
   @override

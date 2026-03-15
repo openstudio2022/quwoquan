@@ -1,5 +1,4 @@
-import 'package:quwoquan_app/assistant/internal_legacy/engine/model_config.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/engine/stream_json_field_extractor.dart';
+import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -36,7 +35,9 @@ void main() {
         'openrouter/deepseek/deepseek-r1',
       );
       final qwen = ModelCapabilityProfile.forModelRef('aliyun/qwen-max');
-      final defaultProfile = ModelCapabilityProfile.forModelRef('openai/gpt-4.1');
+      final defaultProfile = ModelCapabilityProfile.forModelRef(
+        'openai/gpt-4.1',
+      );
 
       expect(mimo.reasoningMode, ModelReasoningMode.nativeField);
       expect(mimo.toolCallMode, ModelToolCallMode.jsonEnvelope);
@@ -51,10 +52,7 @@ void main() {
       expect(qwen.supportsThinkTags, isTrue);
 
       expect(defaultProfile.reasoningMode, ModelReasoningMode.jsonThinkingText);
-      expect(
-        defaultProfile.toolCallMode,
-        ModelToolCallMode.nativeFunction,
-      );
+      expect(defaultProfile.toolCallMode, ModelToolCallMode.nativeFunction);
       expect(defaultProfile.supportsStreamingAnswer, isTrue);
     });
   });

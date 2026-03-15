@@ -1,6 +1,6 @@
-import 'package:quwoquan_app/assistant/internal_legacy/knowledge/knowledge_qa_engine.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/tools/tool_registry.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/tools/tool_schema.dart';
+import 'package:quwoquan_app/assistant/skills/knowledge_qa_engine.dart';
+import 'package:quwoquan_app/assistant/tool/runtime/tool_registry.dart';
+import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
 import 'package:test/test.dart';
 
 class _MockWebSearchTool implements AssistantTool {

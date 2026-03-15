@@ -5,9 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('tool catalog should define divination domain mapping', () {
-    final manifestFile = File(
-      'assets/assistant/tools/manifest.json',
-    );
+    final manifestFile = File('assets/assistant/tools/manifest.json');
     expect(manifestFile.existsSync(), isTrue);
 
     final manifest = jsonDecode(manifestFile.readAsStringSync());
@@ -30,24 +28,20 @@ void main() {
 
     final domainMatrix =
         (catalog['domainToolMatrix'] as List?) ?? const <dynamic>[];
-    final divination = domainMatrix
-        .whereType<Map>()
-        .firstWhere(
-          (item) => item['domainId']?.toString() == 'divination_fortune',
-          orElse: () => <String, dynamic>{},
-        );
+    final divination = domainMatrix.whereType<Map>().firstWhere(
+      (item) => item['domainId']?.toString() == 'divination_fortune',
+      orElse: () => <String, dynamic>{},
+    );
     expect(divination.isNotEmpty, isTrue);
     final allowed =
         (divination['allowedTools'] as List?)?.whereType<String>().toList() ??
         const <String>[];
     expect(allowed.contains('web_search'), isTrue);
 
-    final weather = domainMatrix
-        .whereType<Map>()
-        .firstWhere(
-          (item) => item['domainId']?.toString() == 'weather',
-          orElse: () => <String, dynamic>{},
-        );
+    final weather = domainMatrix.whereType<Map>().firstWhere(
+      (item) => item['domainId']?.toString() == 'weather',
+      orElse: () => <String, dynamic>{},
+    );
     expect(weather.isNotEmpty, isTrue);
     final weatherAllowed =
         (weather['allowedTools'] as List?)?.whereType<String>().toList() ??
@@ -56,4 +50,3 @@ void main() {
     expect(weatherAllowed.contains('web_search'), isTrue);
   });
 }
-

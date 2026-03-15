@@ -75,8 +75,7 @@ void main() {
           .toList(growable: false);
       expect(
         allMetaPaths.any(
-          (path) =>
-              path.startsWith('assets/assistant/prompts/domains/'),
+          (path) => path.startsWith('assets/assistant/prompts/domains/'),
         ),
         isFalse,
         reason: 'manifest should not keep legacy domain prompt templates',
@@ -118,9 +117,7 @@ void main() {
     });
 
     test('legacy prompt domain directory is removed', () {
-      final legacyDomains = Directory(
-        'assets/assistant/prompts/domains',
-      );
+      final legacyDomains = Directory('assets/assistant/prompts/domains');
       expect(legacyDomains.existsSync(), isFalse);
     });
   });

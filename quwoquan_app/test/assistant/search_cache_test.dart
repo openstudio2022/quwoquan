@@ -1,15 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/tools/search_cache.dart';
+import 'package:quwoquan_app/assistant/tool/runtime/search_cache.dart';
 
 void main() {
   group('SearchResultCache', () {
     late SearchResultCache cache;
 
     setUp(() {
-      cache = SearchResultCache(
-        ttl: const Duration(seconds: 5),
-        maxEntries: 3,
-      );
+      cache = SearchResultCache(ttl: const Duration(seconds: 5), maxEntries: 3);
     });
 
     test('stores and retrieves entries', () {

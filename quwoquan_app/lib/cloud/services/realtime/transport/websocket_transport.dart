@@ -33,10 +33,17 @@ class WebSocketTransport {
 
   Future<void> connect({List<String> topics = const []}) async {
     if (_disposed) return;
+    WebSocketChannel? pendingChannel;
     try {
       final topicParam = topics.isNotEmpty ? '&topics=${topics.join(",")}' : '';
       final uri = Uri.parse('${config.wsUrl}?userId=$userId$topicParam');
-      _channel = WebSocketChannel.connect(uri);
+      pendingChannel = WebSocketChannel.connect(uri);
+      await pendingChannel.ready;
+      if (_disposed) {
+        await pendingChannel.sink.close();
+        return;
+      }
+      _channel = pendingChannel;
 
       _channel!.stream.listen(
         _onMessage,
@@ -53,6 +60,9 @@ class WebSocketTransport {
 
       _startHeartbeat();
     } catch (e) {
+      try {
+        await pendingChannel?.sink.close();
+      } catch (_) {}
       debugPrint('WebSocketTransport: connect failed: $e');
       _connected.value = false;
       onDisconnect();

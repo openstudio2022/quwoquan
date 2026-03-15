@@ -1,19 +1,21 @@
 import 'dart:io';
 
-import 'package:quwoquan_app/assistant/internal_legacy/learning/assistant_learning_service.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/learning/assistant_learning_store.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/sync/local_mock_sync_adapter.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/sync/sync_gateway.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/sync/sync_mode.dart';
+import 'package:quwoquan_app/assistant/learning/assistant_learning_runtime.dart';
+import 'package:quwoquan_app/assistant/sync/assistant_sync.dart';
 import 'package:test/test.dart';
 
 void main() {
   group('AssistantLearningService', () {
     test('records interaction and builds user/tag-domain aggregates', () async {
-      final file = File('${Directory.systemTemp.path}/learning_service_test_${DateTime.now().microsecondsSinceEpoch}.json');
+      final file = File(
+        '${Directory.systemTemp.path}/learning_service_test_${DateTime.now().microsecondsSinceEpoch}.json',
+      );
       final store = AssistantLearningStore(storagePath: file.path);
       final adapter = LocalMockSyncAdapter();
-      final gateway = AssistantSyncGateway(adapter, AssistantSyncMode.localMock);
+      final gateway = AssistantSyncGateway(
+        adapter,
+        AssistantSyncMode.localMock,
+      );
       final service = AssistantLearningService(
         store: store,
         syncGateway: gateway,
@@ -38,7 +40,8 @@ void main() {
 
       final snapshot = await service.latestScoreSnapshot();
       final userDaily = (snapshot['userDaily'] as List?) ?? const <dynamic>[];
-      final tagDomainDaily = (snapshot['tagDomainDaily'] as List?) ?? const <dynamic>[];
+      final tagDomainDaily =
+          (snapshot['tagDomainDaily'] as List?) ?? const <dynamic>[];
 
       expect(userDaily.isNotEmpty, isTrue);
       expect(tagDomainDaily.isNotEmpty, isTrue);
@@ -58,7 +61,10 @@ void main() {
       );
       final store = AssistantLearningStore(storagePath: file.path);
       final adapter = LocalMockSyncAdapter();
-      final gateway = AssistantSyncGateway(adapter, AssistantSyncMode.localMock);
+      final gateway = AssistantSyncGateway(
+        adapter,
+        AssistantSyncMode.localMock,
+      );
       final service = AssistantLearningService(
         store: store,
         syncGateway: gateway,
@@ -85,13 +91,17 @@ void main() {
       expect(feedback['explicitThumb'], equals('down'));
 
       final snapshot = await service.latestScoreSnapshot();
-      final feedbackStats = (snapshot['feedbackStats'] as Map?) ?? const <String, dynamic>{};
+      final feedbackStats =
+          (snapshot['feedbackStats'] as Map?) ?? const <String, dynamic>{};
       final reasonDist =
-          (feedbackStats['reasonCodeDistribution'] as Map?) ?? const <String, dynamic>{};
+          (feedbackStats['reasonCodeDistribution'] as Map?) ??
+          const <String, dynamic>{};
       final domainDist =
-          (feedbackStats['domainDistribution'] as Map?) ?? const <String, dynamic>{};
+          (feedbackStats['domainDistribution'] as Map?) ??
+          const <String, dynamic>{};
       final tagDist =
-          (feedbackStats['userTagDistribution'] as Map?) ?? const <String, dynamic>{};
+          (feedbackStats['userTagDistribution'] as Map?) ??
+          const <String, dynamic>{};
       expect((feedbackStats['explicitTotal'] as int?) ?? 0, greaterThan(0));
       expect(reasonDist.isNotEmpty, isTrue);
       expect(domainDist.isNotEmpty, isTrue);
@@ -99,4 +109,3 @@ void main() {
     });
   });
 }
-

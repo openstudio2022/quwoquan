@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/assistant/internal_legacy/protocol/profile_update_proposal.dart';
+import 'package:quwoquan_app/assistant/protocol/profile_update_proposal.dart';
 import 'package:test/test.dart';
 
 void main() {

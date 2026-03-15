@@ -1,5 +1,5 @@
 import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/engine/context_orchestrator.dart';
+import 'package:quwoquan_app/assistant/context/assembly/context_orchestrator.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -59,24 +59,27 @@ void main() {
       expect(result.hasRealtimeNeed, isFalse);
     });
 
-    test('location scope remains suppressed without typed continuity grant', () {
-      final result = orchestrator.assemble(
-        query: '今天天气怎么样',
-        historySummary: '',
-        recalledTexts: const <String>[],
-        deviceProfile: 'mobile',
-        deviceModel: 'iphone',
-        deviceOs: 'ios',
-        gpsLocation: const <String, dynamic>{'city': '深圳'},
-        contextScopeHint: const <String, dynamic>{},
-        continuityPolicy: continuity('今天天气怎么样'),
-      );
+    test(
+      'location scope remains suppressed without typed continuity grant',
+      () {
+        final result = orchestrator.assemble(
+          query: '今天天气怎么样',
+          historySummary: '',
+          recalledTexts: const <String>[],
+          deviceProfile: 'mobile',
+          deviceModel: 'iphone',
+          deviceOs: 'ios',
+          gpsLocation: const <String, dynamic>{'city': '深圳'},
+          contextScopeHint: const <String, dynamic>{},
+          continuityPolicy: continuity('今天天气怎么样'),
+        );
 
-      expect(result.canEnterDomain, isTrue);
-      expect(result.fillTasks, isEmpty);
-      final gpsLocation = result.contextEnvelope['gpsLocation'] as Map?;
-      expect(gpsLocation?.containsKey('city'), isFalse);
-    });
+        expect(result.canEnterDomain, isTrue);
+        expect(result.fillTasks, isEmpty);
+        final gpsLocation = result.contextEnvelope['gpsLocation'] as Map?;
+        expect(gpsLocation?.containsKey('city'), isFalse);
+      },
+    );
 
     test('returns gap fill only when typed realtime evidence is required', () {
       final assembled = orchestrator.assemble(
@@ -106,110 +109,112 @@ void main() {
       expect(readiness.gapFillTask!.fillType, equals(ContextFillType.gapFill));
     });
 
-    test(
-      'untyped unrelated history stays suppressed by default',
-      () {
-        final policy = continuity(
-          '土拨鼠观赏最佳时间',
-          sessionHistory: const <Map<String, dynamic>>[
-            <String, dynamic>{
-              'role': 'user',
-              'content': '如果把九寨沟方向考虑进去，多给我几个备选方案',
-            },
-          ],
-        );
-        final result = orchestrator.assemble(
-          query: '土拨鼠观赏最佳时间',
-          historySummary: 'user: 如果把九寨沟方向考虑进去，多给我几个备选方案',
-          recalledTexts: const <String>['九寨沟方向备选方案：沟口、川主寺、松潘古城'],
-          deviceProfile: 'mobile',
-          deviceModel: 'iphone',
-          deviceOs: 'ios',
-          gpsLocation: const <String, dynamic>{'city': '阿坝州'},
-          contextScopeHint: const <String, dynamic>{},
-          continuityPolicy: policy,
-        );
-
-        final slotFillHints = result.contextEnvelope['slotFillHints'] as Map?;
-        expect(policy.allowHistorySummary, isFalse);
-        expect(policy.allowLongtermMemory, isFalse);
-        expect(policy.allowLocationHints, isFalse);
-        expect(slotFillHints?.containsKey('historySummarySnippet'), isFalse);
-        expect(slotFillHints?.containsKey('gpsCity'), isFalse);
-        expect(
-          result.contextEnvelope.containsKey('longtermMemorySummary'),
-          isFalse,
-        );
-      },
-    );
-
-    test(
-      'typed continuity hint keeps history continuity',
-      () {
-        final policy = continuity(
-          '那明天呢',
-          sessionHistory: const <Map<String, dynamic>>[
-            <String, dynamic>{
-              'role': 'user',
-              'content': '深圳天气怎么样',
-              'continuityPolicy': <String, dynamic>{
-                'continuityMode': 'explicit_follow_up',
-                'explicitContinuation': true,
-                'allowHistorySummary': true,
-                'allowLocationHints': true,
-              },
-            },
-          ],
-        );
-        final result = orchestrator.assemble(
-          query: '那明天呢',
-          historySummary: 'user: 深圳天气怎么样',
-          recalledTexts: const <String>[],
-          deviceProfile: 'mobile',
-          deviceModel: 'iphone',
-          deviceOs: 'ios',
-          gpsLocation: const <String, dynamic>{'city': '深圳'},
-          contextScopeHint: const <String, dynamic>{},
-          continuityPolicy: policy,
-        );
-
-        final slotFillHints = result.contextEnvelope['slotFillHints'] as Map?;
-        expect(policy.allowHistorySummary, isTrue);
-        expect(policy.allowLocationHints, isTrue);
-        expect(slotFillHints?['historySummarySnippet'], isNotEmpty);
-        expect(slotFillHints?['gpsCity'], equals('深圳'));
-      },
-    );
-
-    test('typed longterm memory requirement creates fill task when recall missing', () {
+    test('untyped unrelated history stays suppressed by default', () {
       final policy = continuity(
-        '帮我总结上个月反复聊过的健身安排',
+        '土拨鼠观赏最佳时间',
         sessionHistory: const <Map<String, dynamic>>[
           <String, dynamic>{
             'role': 'user',
-            'content': '之前的健身计划',
+            'content': '如果把九寨沟方向考虑进去，多给我几个备选方案',
+          },
+        ],
+      );
+      final result = orchestrator.assemble(
+        query: '土拨鼠观赏最佳时间',
+        historySummary: 'user: 如果把九寨沟方向考虑进去，多给我几个备选方案',
+        recalledTexts: const <String>['九寨沟方向备选方案：沟口、川主寺、松潘古城'],
+        deviceProfile: 'mobile',
+        deviceModel: 'iphone',
+        deviceOs: 'ios',
+        gpsLocation: const <String, dynamic>{'city': '阿坝州'},
+        contextScopeHint: const <String, dynamic>{},
+        continuityPolicy: policy,
+      );
+
+      final slotFillHints = result.contextEnvelope['slotFillHints'] as Map?;
+      expect(policy.allowHistorySummary, isFalse);
+      expect(policy.allowLongtermMemory, isFalse);
+      expect(policy.allowLocationHints, isFalse);
+      expect(slotFillHints?.containsKey('historySummarySnippet'), isFalse);
+      expect(slotFillHints?.containsKey('gpsCity'), isFalse);
+      expect(
+        result.contextEnvelope.containsKey('longtermMemorySummary'),
+        isFalse,
+      );
+    });
+
+    test('typed continuity hint keeps history continuity', () {
+      final policy = continuity(
+        '那明天呢',
+        sessionHistory: const <Map<String, dynamic>>[
+          <String, dynamic>{
+            'role': 'user',
+            'content': '深圳天气怎么样',
             'continuityPolicy': <String, dynamic>{
+              'continuityMode': 'explicit_follow_up',
+              'explicitContinuation': true,
               'allowHistorySummary': true,
-              'allowLongtermMemory': true,
+              'allowLocationHints': true,
             },
           },
         ],
       );
       final result = orchestrator.assemble(
-        query: '帮我总结上个月反复聊过的健身安排',
-        historySummary: 'user: 之前的健身计划',
+        query: '那明天呢',
+        historySummary: 'user: 深圳天气怎么样',
         recalledTexts: const <String>[],
         deviceProfile: 'mobile',
         deviceModel: 'iphone',
         deviceOs: 'ios',
-        gpsLocation: const <String, dynamic>{},
-        contextScopeHint: const <String, dynamic>{'requiresLongtermMemory': true},
+        gpsLocation: const <String, dynamic>{'city': '深圳'},
+        contextScopeHint: const <String, dynamic>{},
         continuityPolicy: policy,
       );
 
-      expect(policy.allowLongtermMemory, isTrue);
-      expect(result.fillTasks, isNotEmpty);
-      expect(result.fillTasks.first.targetSlot, ContextTargetSlot.longtermMemory);
+      final slotFillHints = result.contextEnvelope['slotFillHints'] as Map?;
+      expect(policy.allowHistorySummary, isTrue);
+      expect(policy.allowLocationHints, isTrue);
+      expect(slotFillHints?['historySummarySnippet'], isNotEmpty);
+      expect(slotFillHints?['gpsCity'], equals('深圳'));
     });
+
+    test(
+      'typed longterm memory requirement creates fill task when recall missing',
+      () {
+        final policy = continuity(
+          '帮我总结上个月反复聊过的健身安排',
+          sessionHistory: const <Map<String, dynamic>>[
+            <String, dynamic>{
+              'role': 'user',
+              'content': '之前的健身计划',
+              'continuityPolicy': <String, dynamic>{
+                'allowHistorySummary': true,
+                'allowLongtermMemory': true,
+              },
+            },
+          ],
+        );
+        final result = orchestrator.assemble(
+          query: '帮我总结上个月反复聊过的健身安排',
+          historySummary: 'user: 之前的健身计划',
+          recalledTexts: const <String>[],
+          deviceProfile: 'mobile',
+          deviceModel: 'iphone',
+          deviceOs: 'ios',
+          gpsLocation: const <String, dynamic>{},
+          contextScopeHint: const <String, dynamic>{
+            'requiresLongtermMemory': true,
+          },
+          continuityPolicy: policy,
+        );
+
+        expect(policy.allowLongtermMemory, isTrue);
+        expect(result.fillTasks, isNotEmpty);
+        expect(
+          result.fillTasks.first.targetSlot,
+          ContextTargetSlot.longtermMemory,
+        );
+      },
+    );
   });
 }

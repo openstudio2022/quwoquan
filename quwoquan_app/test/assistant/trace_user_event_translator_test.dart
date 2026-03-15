@@ -25,8 +25,14 @@ void main() {
       expect(translated, isNotNull);
       expect(translated!.type, UserEventType.processCommit);
       expect(translated.payload['phaseId'], PlannerPhaseId.searching.wireName);
-      expect(translated.payload['actionCode'], PlannerActionCode.startRetrieval.wireName);
-      expect(translated.payload['reasonCode'], PlannerReasonCode.reduceWaitTime.wireName);
+      expect(
+        translated.payload['actionCode'],
+        PlannerActionCode.startRetrieval.wireName,
+      );
+      expect(
+        translated.payload['reasonCode'],
+        PlannerReasonCode.reduceWaitTime.wireName,
+      );
     });
 
     test('assessment 使用 typed assessment 映射 canonical reason', () {
@@ -44,8 +50,14 @@ void main() {
       final translated = TraceUserEventTranslator.translate(event);
       expect(translated, isNotNull);
       expect(translated!.payload['phaseId'], PlannerPhaseId.analyzing.wireName);
-      expect(translated.payload['actionCode'], PlannerActionCode.assessEvidence.wireName);
-      expect(translated.payload['reasonCode'], PlannerReasonCode.sourceUnstable.wireName);
+      expect(
+        translated.payload['actionCode'],
+        PlannerActionCode.assessEvidence.wireName,
+      );
+      expect(
+        translated.payload['reasonCode'],
+        PlannerReasonCode.sourceUnstable.wireName,
+      );
     });
   });
 }

@@ -1,8 +1,8 @@
-import 'package:quwoquan_app/assistant/internal_legacy/protocol/run_request.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/protocol/profile_update_proposal.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/protocol/run_response.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/protocol/trace_events.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/tools/tool_schema.dart';
+import 'package:quwoquan_app/assistant/protocol/profile_update_proposal.dart';
+import 'package:quwoquan_app/assistant/protocol/run_request.dart';
+import 'package:quwoquan_app/assistant/protocol/run_response.dart';
+import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
+import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -95,9 +95,18 @@ void main() {
       );
       expect(decoded.traces.first.data?['k'], equals('v'));
       expect(decoded.structuredResponse['experimentBucket'], equals('control'));
-      expect((decoded.structuredResponse['uiTimeline'] as List?)?.isNotEmpty, isTrue);
-      expect((decoded.structuredResponse['uiReferences'] as List?)?.isNotEmpty, isTrue);
-      expect((decoded.structuredResponse['uiActions'] as List?)?.isNotEmpty, isTrue);
+      expect(
+        (decoded.structuredResponse['uiTimeline'] as List?)?.isNotEmpty,
+        isTrue,
+      );
+      expect(
+        (decoded.structuredResponse['uiReferences'] as List?)?.isNotEmpty,
+        isTrue,
+      );
+      expect(
+        (decoded.structuredResponse['uiActions'] as List?)?.isNotEmpty,
+        isTrue,
+      );
       expect(decoded.profileUpdateProposal?.proposalId, equals('p_1'));
     });
 

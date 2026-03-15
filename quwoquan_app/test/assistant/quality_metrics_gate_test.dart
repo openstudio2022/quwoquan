@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/assistant/internal_legacy/observability/quality/quality_metrics_gate.dart';
+import 'package:quwoquan_app/assistant/observability/quality/quality_metrics_gate.dart';
 import 'package:test/test.dart';
 
 void main() {

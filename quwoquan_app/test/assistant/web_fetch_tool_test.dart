@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/tools/tool_schema.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/tools/web_fetch_tool.dart';
+import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
+import 'package:quwoquan_app/assistant/tool/impl/web/web_fetch_tool.dart';
 
 void main() {
   group('WebFetchTool', () {
@@ -25,7 +25,9 @@ void main() {
 
     test('rejects non-http scheme', () async {
       tool = WebFetchTool();
-      final result = await tool.execute(<String, dynamic>{'url': 'ftp://example.com'});
+      final result = await tool.execute(<String, dynamic>{
+        'url': 'ftp://example.com',
+      });
       expect(result.success, false);
       expect(result.errorCode, AssistantErrorCode.invalidArguments);
     });

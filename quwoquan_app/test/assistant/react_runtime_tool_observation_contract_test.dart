@@ -1,12 +1,12 @@
 import 'dart:convert';
 
 import 'package:test/test.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/engine/llm_provider.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/engine/react_runtime.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/protocol/trace_events.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/tools/metadata/tool_metadata_registry.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/tools/tool_registry.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/tools/tool_schema.dart';
+import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
+import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
+import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
+import 'package:quwoquan_app/assistant/tool/runtime/tool_metadata_registry.dart';
+import 'package:quwoquan_app/assistant/tool/runtime/tool_registry.dart';
+import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
 
 class _SequenceProvider implements AssistantLlmProvider {
   int _callCount = 0;
@@ -144,77 +144,86 @@ class _CoverageLowSearchTool implements AssistantTool {
 }
 
 void main() {
-  test('react runtime emits structured tool_observation on validation error', () async {
-    final provider = _SequenceProvider();
-    final metadata = ToolMetadataRegistry();
-    await metadata.ensureLoaded();
-    final registry = AssistantToolRegistry(metadataRegistry: metadata);
-    final fakeTool = _FakeWebSearchTool();
-    registry.register(fakeTool);
-    final runtime = ReactRuntime(
-      llmProvider: provider,
-      toolRegistry: registry,
-    );
+  test(
+    'react runtime emits structured tool_observation on validation error',
+    () async {
+      final provider = _SequenceProvider();
+      final metadata = ToolMetadataRegistry();
+      await metadata.ensureLoaded();
+      final registry = AssistantToolRegistry(metadataRegistry: metadata);
+      final fakeTool = _FakeWebSearchTool();
+      registry.register(fakeTool);
+      final runtime = ReactRuntime(
+        llmProvider: provider,
+        toolRegistry: registry,
+      );
 
-    await runtime.run(
-      messages: <Map<String, dynamic>>[
-        const <String, dynamic>{'role': 'user', 'content': '查一下天气'},
-      ],
-      maxIterations: 2,
-      goal: '查一下天气',
-    );
+      await runtime.run(
+        messages: <Map<String, dynamic>>[
+          const <String, dynamic>{'role': 'user', 'content': '查一下天气'},
+        ],
+        maxIterations: 2,
+        goal: '查一下天气',
+      );
 
-    expect(fakeTool.executeCount, equals(0));
-    expect(provider.capturedMessages.length, greaterThanOrEqualTo(2));
-    final secondCallMessages = provider.capturedMessages[1];
-    final toolMsg = secondCallMessages.lastWhere(
-      (item) => item['role'] == 'tool',
-      orElse: () => const <String, dynamic>{'role': '', 'content': ''},
-    );
-    expect(toolMsg['role'], equals('tool'));
-    expect((toolMsg['tool_call_id'] as String?)?.isNotEmpty, isTrue);
-    final observation =
-        jsonDecode((toolMsg['content'] as String?) ?? '{}') as Map<String, dynamic>;
-    expect(observation['toolName'], equals('web_search'));
-    expect(observation['ok'], isFalse);
-    expect(observation['status'], equals('retrieval_invalid_args'));
-    expect(observation['errorClass'], equals('invalid_args'));
-    expect(observation['retryable'], isFalse);
-  });
+      expect(fakeTool.executeCount, equals(0));
+      expect(provider.capturedMessages.length, greaterThanOrEqualTo(2));
+      final secondCallMessages = provider.capturedMessages[1];
+      final toolMsg = secondCallMessages.lastWhere(
+        (item) => item['role'] == 'tool',
+        orElse: () => const <String, dynamic>{'role': '', 'content': ''},
+      );
+      expect(toolMsg['role'], equals('tool'));
+      expect((toolMsg['tool_call_id'] as String?)?.isNotEmpty, isTrue);
+      final observation =
+          jsonDecode((toolMsg['content'] as String?) ?? '{}')
+              as Map<String, dynamic>;
+      expect(observation['toolName'], equals('web_search'));
+      expect(observation['ok'], isFalse);
+      expect(observation['status'], equals('retrieval_invalid_args'));
+      expect(observation['errorClass'], equals('invalid_args'));
+      expect(observation['retryable'], isFalse);
+    },
+  );
 
-  test('fast convergence result no longer emits contradictory replan', () async {
-    final provider = _FastConvergenceProvider();
-    final metadata = ToolMetadataRegistry();
-    await metadata.ensureLoaded();
-    final registry = AssistantToolRegistry(metadataRegistry: metadata);
-    registry.register(_CoverageLowSearchTool());
-    final runtime = ReactRuntime(
-      llmProvider: provider,
-      toolRegistry: registry,
-    );
+  test(
+    'fast convergence result no longer emits contradictory replan',
+    () async {
+      final provider = _FastConvergenceProvider();
+      final metadata = ToolMetadataRegistry();
+      await metadata.ensureLoaded();
+      final registry = AssistantToolRegistry(metadataRegistry: metadata);
+      registry.register(_CoverageLowSearchTool());
+      final runtime = ReactRuntime(
+        llmProvider: provider,
+        toolRegistry: registry,
+      );
 
-    final result = await runtime.run(
-      messages: <Map<String, dynamic>>[
-        const <String, dynamic>{'role': 'user', 'content': '查深圳住宿建议'},
-      ],
-      maxIterations: 2,
-      goal: '查深圳住宿建议',
-      templateVariables: const <String, dynamic>{'problemClass': 'realtime_info'},
-    );
+      final result = await runtime.run(
+        messages: <Map<String, dynamic>>[
+          const <String, dynamic>{'role': 'user', 'content': '查深圳住宿建议'},
+        ],
+        maxIterations: 2,
+        goal: '查深圳住宿建议',
+        templateVariables: const <String, dynamic>{
+          'problemClass': 'realtime_info',
+        },
+      );
 
-    final assessment = result.traces.lastWhere(
-      (trace) =>
-          trace.type == AssistantTraceEventType.toolResult &&
-          trace.data?['isAssessment'] == true,
-      orElse: () => throw StateError('missing assessment trace'),
-    );
-    expect(assessment.data?['shouldContinueLoop'], isFalse);
-    expect(
-      result.traces.any(
-        (trace) => trace.type == AssistantTraceEventType.replanTriggered,
-      ),
-      isFalse,
-      reason: '快速收敛问题在 assessment 已判定足够时，不应再发出 replanTriggered',
-    );
-  });
+      final assessment = result.traces.lastWhere(
+        (trace) =>
+            trace.type == AssistantTraceEventType.toolResult &&
+            trace.data?['isAssessment'] == true,
+        orElse: () => throw StateError('missing assessment trace'),
+      );
+      expect(assessment.data?['shouldContinueLoop'], isFalse);
+      expect(
+        result.traces.any(
+          (trace) => trace.type == AssistantTraceEventType.replanTriggered,
+        ),
+        isFalse,
+        reason: '快速收敛问题在 assessment 已判定足够时，不应再发出 replanTriggered',
+      );
+    },
+  );
 }

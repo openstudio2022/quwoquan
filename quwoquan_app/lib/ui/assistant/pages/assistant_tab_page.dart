@@ -133,7 +133,7 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '小区私人助理',
+                              '小趣私人助理',
                               style: TextStyle(
                                 fontSize: AppTypography.base,
                                 fontWeight: AppTypography.bold,

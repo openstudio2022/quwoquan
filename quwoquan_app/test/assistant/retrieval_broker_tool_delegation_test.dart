@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/retrieval/retrieval_broker.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/tools/tool_schema.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/tools/web_fetch_tool.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/tools/websearch_tool.dart';
+import 'package:quwoquan_app/assistant/retrieval/domain/retrieval_broker.dart';
+import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
+import 'package:quwoquan_app/assistant/tool/impl/web/web_fetch_tool.dart';
+import 'package:quwoquan_app/assistant/tool/impl/web/websearch_tool.dart';
 
 class _FakeRetrievalBroker implements RetrievalBroker {
   RetrievalSearchRequest? lastSearchRequest;

@@ -1,12 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:quwoquan_app/assistant/internal_legacy/observability/logging/app_log_exporter.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/observability/logging/app_log_models.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/observability/logging/app_log_paths.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/observability/logging/app_log_policy.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/observability/logging/app_log_service.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/observability/logging/app_log_writer.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_log_exporter.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_log_models.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_log_paths.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_log_policy.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_log_service.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_log_writer.dart';
 import 'package:test/test.dart';
 
 void main() {

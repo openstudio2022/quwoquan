@@ -1,14 +1,13 @@
 import 'dart:io';
 
-import 'package:quwoquan_app/assistant/internal_legacy/engine/agent_loop.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/engine/llm_provider.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/engine/react_runtime.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/engine/session_manager.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/memory/memory_repository.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/memory/objectbox_store.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/protocol/run_request.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/protocol/profile_update_proposal.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/tools/tool_registry.dart';
+import 'package:quwoquan_app/assistant/conversation/orchestration/agent_loop.dart';
+import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
+import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
+import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
+import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
+import 'package:quwoquan_app/assistant/protocol/profile_update_proposal.dart';
+import 'package:quwoquan_app/assistant/protocol/run_request.dart';
+import 'package:quwoquan_app/assistant/tool/runtime/tool_registry.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -47,71 +46,76 @@ void main() {
       expect((snapshot['ipResidenceProfile'] as Map?)?['home'], isNotNull);
       final tags =
           (((snapshot['tonePreferences'] as Map?)?['communication_style_tags']
-                      as List?)
-                  ?.whereType<String>()
-                  .toList(growable: false)) ??
-              const <String>[];
+                  as List?)
+              ?.whereType<String>()
+              .toList(growable: false)) ??
+          const <String>[];
       expect(tags.length >= 2, isTrue);
     });
 
-    test('agent consumes profile snapshot read-only and carries learning fields', () async {
-      final tempDir = await Directory.systemTemp.createTemp('pa_learning_');
-      final runtime = ReactRuntime(
-        llmProvider: const HeuristicLocalLlmProvider(),
-        toolRegistry: AssistantToolRegistry(),
-      );
-      final agentLoop = PersonalAssistantAgentLoop(
-        runtime,
-        sessionManager: AssistantSessionManager(
-          storagePath: '${tempDir.path}/sessions.json',
-        ),
-        memoryRepository: AssistantMemoryRepository(
-          ObjectBoxVectorStore(storagePath: '${tempDir.path}/memory.json'),
-        ),
-      );
-      final proposal = ProfileUpdateProposal(
-        proposalId: 'proposal-1',
-        profileVersionRead: 'v1.0',
-        generatedAt: DateTime.now(),
-        sourceRuns: const <String>['run-x'],
-        confidence: 0.8,
-        requiresUserConfirm: true,
-        updates: const <ProfileUpdateItem>[
-          ProfileUpdateItem(
-            facet: 'interestTopics',
-            path: 'interestTopics.tech',
-            operation: 'add',
-            newValue: 'ai_agent',
-            oldValueSnapshot: <String>[],
-            reason: '用户高频提问',
-            evidenceRefs: <String>['msg#1'],
-            itemConfidence: 0.8,
-            riskLevel: 'low',
+    test(
+      'agent consumes profile snapshot read-only and carries learning fields',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp('pa_learning_');
+        final runtime = ReactRuntime(
+          llmProvider: const HeuristicLocalLlmProvider(),
+          toolRegistry: AssistantToolRegistry(),
+        );
+        final agentLoop = PersonalAssistantAgentLoop(
+          runtime,
+          sessionManager: AssistantSessionManager(
+            storagePath: '${tempDir.path}/sessions.json',
           ),
-        ],
-      );
-      final request = AssistantRunRequest(
-        sessionId: 'learning-contract',
-        messages: const <AssistantRunMessage>[
-          AssistantRunMessage(role: 'user', content: '今天帮我规划学习计划'),
-        ],
-        userProfileSnapshot: const <String, dynamic>{
-          'basicIdentity': <String, dynamic>{
-            'age': 30,
-            'gender': 'male',
+          memoryRepository: AssistantMemoryRepository(
+            ObjectBoxVectorStore(storagePath: '${tempDir.path}/memory.json'),
+          ),
+        );
+        final proposal = ProfileUpdateProposal(
+          proposalId: 'proposal-1',
+          profileVersionRead: 'v1.0',
+          generatedAt: DateTime.now(),
+          sourceRuns: const <String>['run-x'],
+          confidence: 0.8,
+          requiresUserConfirm: true,
+          updates: const <ProfileUpdateItem>[
+            ProfileUpdateItem(
+              facet: 'interestTopics',
+              path: 'interestTopics.tech',
+              operation: 'add',
+              newValue: 'ai_agent',
+              oldValueSnapshot: <String>[],
+              reason: '用户高频提问',
+              evidenceRefs: <String>['msg#1'],
+              itemConfidence: 0.8,
+              riskLevel: 'low',
+            ),
+          ],
+        );
+        final request = AssistantRunRequest(
+          sessionId: 'learning-contract',
+          messages: const <AssistantRunMessage>[
+            AssistantRunMessage(role: 'user', content: '今天帮我规划学习计划'),
+          ],
+          userProfileSnapshot: const <String, dynamic>{
+            'basicIdentity': <String, dynamic>{'age': 30, 'gender': 'male'},
           },
-        },
-        contextScopeHint: <String, dynamic>{
-          'profileUpdateProposal': proposal.toJson(),
-        },
-      );
-      final response = await agentLoop.run(request);
-      final structured = response.structuredResponse;
-      expect((structured['learningSignals'] as Map?)?['profileTagDelta'], isNotNull);
-      expect((structured['basicIdentity'] as Map?)?['age'], equals(30));
-      expect(response.profileUpdateProposal?.proposalId, equals('proposal-1'));
-      await tempDir.delete(recursive: true);
-    });
+          contextScopeHint: <String, dynamic>{
+            'profileUpdateProposal': proposal.toJson(),
+          },
+        );
+        final response = await agentLoop.run(request);
+        final structured = response.structuredResponse;
+        expect(
+          (structured['learningSignals'] as Map?)?['profileTagDelta'],
+          isNotNull,
+        );
+        expect((structured['basicIdentity'] as Map?)?['age'], equals(30));
+        expect(
+          response.profileUpdateProposal?.proposalId,
+          equals('proposal-1'),
+        );
+        await tempDir.delete(recursive: true);
+      },
+    );
   });
 }
-

@@ -99,6 +99,7 @@ Future<void> _waitForMainEntry(WidgetTester tester) async {
   await _pumpUntil(
     tester,
     condition: () =>
+        find.text(AppConceptConstants.assistantTabLabel).evaluate().isNotEmpty ||
         find.byType(PetalMark).evaluate().isNotEmpty ||
         find.text('微趣').evaluate().isNotEmpty,
     timeout: const Duration(seconds: 20),
@@ -106,20 +107,42 @@ Future<void> _waitForMainEntry(WidgetTester tester) async {
 }
 
 Future<void> _openAssistantConversation(WidgetTester tester) async {
-  final assistantEntry = find.byType(PetalMark);
+  final assistantTabEntry = find.text(AppConceptConstants.assistantTabLabel);
   await _pumpUntil(
     tester,
-    condition: () => assistantEntry.evaluate().isNotEmpty,
+    condition: () => assistantTabEntry.evaluate().isNotEmpty,
     timeout: const Duration(seconds: 20),
   );
-  final tappableEntry = find.byType(PetalMark).hitTestable();
+
+  final tappableAssistantTab = assistantTabEntry.hitTestable();
   await _pumpUntil(
     tester,
-    condition: () => tappableEntry.evaluate().isNotEmpty,
+    condition: () => tappableAssistantTab.evaluate().isNotEmpty,
     timeout: const Duration(seconds: 10),
   );
-  await tester.ensureVisible(tappableEntry.first);
-  await tester.tap(tappableEntry.first, warnIfMissed: false);
+
+  await tester.ensureVisible(tappableAssistantTab.first);
+  await tester.tap(tappableAssistantTab.first, warnIfMissed: false);
+  await tester.pump();
+
+  final recentConversationTitle = find.text('最近对话');
+  final openConversationHint = find.text('点击开始对话');
+  await _pumpUntil(
+    tester,
+    condition: () =>
+        recentConversationTitle.evaluate().isNotEmpty &&
+        openConversationHint.evaluate().isNotEmpty,
+    timeout: const Duration(seconds: 20),
+  );
+
+  final tappableConversationHint = openConversationHint.hitTestable();
+  await _pumpUntil(
+    tester,
+    condition: () => tappableConversationHint.evaluate().isNotEmpty,
+    timeout: const Duration(seconds: 10),
+  );
+  await tester.ensureVisible(tappableConversationHint.first);
+  await tester.tap(tappableConversationHint.first, warnIfMissed: false);
   await tester.pump();
 }
 

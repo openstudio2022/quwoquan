@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:quwoquan_app/assistant/internal_legacy/engine/llm_response_parser.dart';
+import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:test/test.dart';
 
 void main() {

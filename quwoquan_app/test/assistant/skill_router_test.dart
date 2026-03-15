@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/skills/skill_manifest.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/skills/skill_router.dart';
+import 'package:quwoquan_app/assistant/skill/domain/skill_manifest.dart';
+import 'package:quwoquan_app/assistant/skill/domain/skill_router.dart';
 
 void main() {
   group('PersonalAssistantSkillRouter', () {

@@ -6,19 +6,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/engine/agent_loop.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/engine/llm_provider.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/engine/react_runtime.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/engine/session_manager.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/memory/memory_repository.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/memory/objectbox_store.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/protocol/run_request.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/protocol/trace_events.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/tools/memory_search_tool.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/tools/search_cache.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/tools/tool_registry.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/tools/tool_schema.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/tools/web_fetch_tool.dart';
+import 'package:quwoquan_app/assistant/conversation/orchestration/agent_loop.dart';
+import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
+import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
+import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
+import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
+import 'package:quwoquan_app/assistant/protocol/run_request.dart';
+import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
+import 'package:quwoquan_app/assistant/tool/impl/memory/memory_search_tool.dart';
+import 'package:quwoquan_app/assistant/tool/runtime/search_cache.dart';
+import 'package:quwoquan_app/assistant/tool/runtime/tool_registry.dart';
+import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
+import 'package:quwoquan_app/assistant/tool/impl/web/web_fetch_tool.dart';
 
 // ---------------------------------------------------------------------------
 // Mock LLM: Drives multi-tool pipeline
@@ -325,11 +324,13 @@ void main() {
       // Process journal should cover multi-tool phases
       final structured = response.structuredResponse;
       final processJournal =
-          ((((structured['runArtifacts'] as Map?)?['processJournal'] as List?) ??
+          ((((structured['runArtifacts'] as Map?)?['processJournal']
+                      as List?) ??
                   const <dynamic>[]))
               .whereType<Map>()
               .map(
-                (item) => ProcessJournalEvent.fromJson(item.cast<String, dynamic>()),
+                (item) =>
+                    ProcessJournalEvent.fromJson(item.cast<String, dynamic>()),
               )
               .toList(growable: false);
       final stages = processJournal.map((item) => item.stage).toSet();

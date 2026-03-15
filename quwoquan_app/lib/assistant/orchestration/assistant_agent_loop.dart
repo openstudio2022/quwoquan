@@ -4,9 +4,9 @@ import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/tools/assistant_tool_runtime.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/engine/agent_loop.dart'
+import 'package:quwoquan_app/assistant/conversation/orchestration/agent_loop.dart'
     as legacy_agent;
-import 'package:quwoquan_app/assistant/internal_legacy/protocol/run_request.dart'
+import 'package:quwoquan_app/assistant/conversation/protocol/run_request.dart'
     as legacy_request;
 
 class AssistantAgentLoop {

@@ -119,38 +119,27 @@ const Set<String> _highRiskDomains = <String>{
 
 const Map<String, String> _migratedSkillByDomain = <String, String>{
   'weather': 'assets/assistant/skills/weather/SKILL.md',
-  'travel_transport':
-      'assets/assistant/skills/travel_transport/SKILL.md',
-  'travel_planning':
-      'assets/assistant/skills/travel_planning/SKILL.md',
+  'travel_transport': 'assets/assistant/skills/travel_transport/SKILL.md',
+  'travel_planning': 'assets/assistant/skills/travel_planning/SKILL.md',
   'local_life': 'assets/assistant/skills/local_life/SKILL.md',
   'calendar_task': 'assets/assistant/skills/calendar_task/SKILL.md',
-  'knowledge_general':
-      'assets/assistant/skills/knowledge_general/SKILL.md',
-  'finance_consumer':
-      'assets/assistant/skills/finance_consumer/SKILL.md',
-  'health_wellness':
-      'assets/assistant/skills/health_wellness/SKILL.md',
-  'education_learning':
-      'assets/assistant/skills/education_learning/SKILL.md',
-  'work_productivity':
-      'assets/assistant/skills/work_productivity/SKILL.md',
-  'shopping_decision':
-      'assets/assistant/skills/shopping_decision/SKILL.md',
+  'knowledge_general': 'assets/assistant/skills/knowledge_general/SKILL.md',
+  'finance_consumer': 'assets/assistant/skills/finance_consumer/SKILL.md',
+  'health_wellness': 'assets/assistant/skills/health_wellness/SKILL.md',
+  'education_learning': 'assets/assistant/skills/education_learning/SKILL.md',
+  'work_productivity': 'assets/assistant/skills/work_productivity/SKILL.md',
+  'shopping_decision': 'assets/assistant/skills/shopping_decision/SKILL.md',
   'policy_public_service':
       'assets/assistant/skills/policy_public_service/SKILL.md',
-  'emotion_companion':
-      'assets/assistant/skills/emotion_companion/SKILL.md',
+  'emotion_companion': 'assets/assistant/skills/emotion_companion/SKILL.md',
   'social_companion_chat':
       'assets/assistant/skills/social_companion_chat/SKILL.md',
   'relationship_matchmaking':
       'assets/assistant/skills/relationship_matchmaking/SKILL.md',
-  'divination_fortune':
-      'assets/assistant/skills/divination_fortune/SKILL.md',
+  'divination_fortune': 'assets/assistant/skills/divination_fortune/SKILL.md',
   'astrology_constellation':
       'assets/assistant/skills/astrology_constellation/SKILL.md',
-  'family_parenting':
-      'assets/assistant/skills/family_parenting/SKILL.md',
+  'family_parenting': 'assets/assistant/skills/family_parenting/SKILL.md',
   'fallback_general_search':
       'assets/assistant/skills/fallback_general_search/SKILL.md',
 };

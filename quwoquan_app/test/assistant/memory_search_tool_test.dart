@@ -1,10 +1,9 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/memory/memory_repository.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/memory/objectbox_store.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/tools/memory_search_tool.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/tools/tool_schema.dart';
+import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
+import 'package:quwoquan_app/assistant/tool/impl/memory/memory_search_tool.dart';
+import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
 
 void main() {
   group('MemorySearchTool', () {
@@ -37,9 +36,7 @@ void main() {
     });
 
     test('returns empty results when no memories exist', () async {
-      final result = await tool.execute(<String, dynamic>{
-        'query': '用户喜欢什么',
-      });
+      final result = await tool.execute(<String, dynamic>{'query': '用户喜欢什么'});
       expect(result.success, true);
       expect(result.data?['resultCount'], 0);
       expect(result.data?['results'], isEmpty);
@@ -70,10 +67,7 @@ void main() {
 
     test('respects maxResults limit', () async {
       for (var i = 0; i < 10; i++) {
-        await memoryRepo.rememberText(
-          id: 'mem-$i',
-          text: '记忆条目 $i 关于深圳天气',
-        );
+        await memoryRepo.rememberText(id: 'mem-$i', text: '记忆条目 $i 关于深圳天气');
       }
 
       final result = await tool.execute(<String, dynamic>{
@@ -86,9 +80,7 @@ void main() {
     });
 
     test('output has required fields: query, resultCount', () async {
-      final result = await tool.execute(<String, dynamic>{
-        'query': '任何查询',
-      });
+      final result = await tool.execute(<String, dynamic>{'query': '任何查询'});
       expect(result.success, true);
       expect(result.data?['query'], '任何查询');
       expect(result.data?.containsKey('resultCount'), true);

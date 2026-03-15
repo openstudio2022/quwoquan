@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/assistant/internal_legacy/template_runtime/template_validator.dart';
+import 'package:quwoquan_app/assistant/template_runtime/assistant_template_runtime.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -47,4 +47,3 @@ void main() {
     });
   });
 }
-

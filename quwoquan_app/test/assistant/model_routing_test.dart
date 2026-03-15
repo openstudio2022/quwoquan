@@ -1,11 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:quwoquan_app/assistant/internal_legacy/engine/llm_provider.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/engine/model_config.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/template_runtime/prompt_template.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/template_runtime/template_registry.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/template_runtime/template_runtime.dart';
+import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
+import 'package:quwoquan_app/assistant/template_runtime/assistant_template_runtime.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -75,63 +72,66 @@ void main() {
       expect(output.text.trim().isNotEmpty, isTrue);
     });
 
-    test('falls through to next remote model when primary model is unreachable', () async {
-      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-      addTearDown(() async {
-        await server.close(force: true);
-      });
-      server.listen((request) async {
-        expect(request.uri.path, equals('/v1/chat/completions'));
-        final body = await utf8.decoder.bind(request).join();
-        final decoded = jsonDecode(body) as Map<String, dynamic>;
-        expect(decoded['model'], equals('healthy-model'));
-        request.response
-          ..statusCode = HttpStatus.ok
-          ..headers.contentType = ContentType.json
-          ..write(
-            jsonEncode(<String, dynamic>{
-              'choices': <Map<String, dynamic>>[
-                <String, dynamic>{
-                  'message': <String, dynamic>{'content': '备选模型响应成功'},
-                },
-              ],
-            }),
-          );
-        await request.response.close();
-      });
+    test(
+      'falls through to next remote model when primary model is unreachable',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        addTearDown(() async {
+          await server.close(force: true);
+        });
+        server.listen((request) async {
+          expect(request.uri.path, equals('/v1/chat/completions'));
+          final body = await utf8.decoder.bind(request).join();
+          final decoded = jsonDecode(body) as Map<String, dynamic>;
+          expect(decoded['model'], equals('healthy-model'));
+          request.response
+            ..statusCode = HttpStatus.ok
+            ..headers.contentType = ContentType.json
+            ..write(
+              jsonEncode(<String, dynamic>{
+                'choices': <Map<String, dynamic>>[
+                  <String, dynamic>{
+                    'message': <String, dynamic>{'content': '备选模型响应成功'},
+                  },
+                ],
+              }),
+            );
+          await request.response.close();
+        });
 
-      final provider = SwitchableAssistantLlmProvider(
-        fallbackProvider: const HeuristicLocalLlmProvider(),
-        templateRuntime: buildTemplateRuntime(),
-      );
-      provider.registerRemoteModels(<AssistantModelRuntimeConfig>[
-        const AssistantModelRuntimeConfig(
-          modelRef: 'broken/primary-model',
-          providerId: 'broken',
-          modelId: 'primary-model',
-          baseUrl: 'http://127.0.0.1:9/v1',
-          apiKey: 'broken-key',
-        ),
-        AssistantModelRuntimeConfig(
-          modelRef: 'healthy/healthy-model',
-          providerId: 'healthy',
-          modelId: 'healthy-model',
-          baseUrl: 'http://127.0.0.1:${server.port}/v1',
-          apiKey: 'healthy-key',
-        ),
-      ]);
+        final provider = SwitchableAssistantLlmProvider(
+          fallbackProvider: const HeuristicLocalLlmProvider(),
+          templateRuntime: buildTemplateRuntime(),
+        );
+        provider.registerRemoteModels(<AssistantModelRuntimeConfig>[
+          const AssistantModelRuntimeConfig(
+            modelRef: 'broken/primary-model',
+            providerId: 'broken',
+            modelId: 'primary-model',
+            baseUrl: 'http://127.0.0.1:9/v1',
+            apiKey: 'broken-key',
+          ),
+          AssistantModelRuntimeConfig(
+            modelRef: 'healthy/healthy-model',
+            providerId: 'healthy',
+            modelId: 'healthy-model',
+            baseUrl: 'http://127.0.0.1:${server.port}/v1',
+            apiKey: 'healthy-key',
+          ),
+        ]);
 
-      final output = await provider.reason(
-        messages: const <Map<String, String>>[
-          <String, String>{'role': 'user', 'content': '你好'},
-        ],
-        availableTools: const <String>[],
-      );
+        final output = await provider.reason(
+          messages: const <Map<String, String>>[
+            <String, String>{'role': 'user', 'content': '你好'},
+          ],
+          availableTools: const <String>[],
+        );
 
-      expect(output.degraded, isFalse);
-      expect(output.text, equals('备选模型响应成功'));
-      expect(provider.activeModelRef, equals('healthy/healthy-model'));
-    });
+        expect(output.degraded, isFalse);
+        expect(output.text, equals('备选模型响应成功'));
+        expect(provider.activeModelRef, equals('healthy/healthy-model'));
+      },
+    );
 
     test('independent config loader does not require moltbot', () {
       final loader = const AssistantModelConfigLoader();

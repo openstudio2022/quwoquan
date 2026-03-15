@@ -9,15 +9,15 @@ import 'dart:io';
 import 'package:test/test.dart';
 
 void main() {
-  const skillsDir =
-      'assets/assistant/skills';
+  const skillsDir = 'assets/assistant/skills';
 
   final domainDirs = Directory(skillsDir)
       .listSync()
       .whereType<Directory>()
       .where(
-        (d) => File('${d.path}/dialogue/state_transition_contract.json')
-            .existsSync(),
+        (d) => File(
+          '${d.path}/dialogue/state_transition_contract.json',
+        ).existsSync(),
       )
       .toList(growable: false);
 
@@ -33,28 +33,17 @@ void main() {
 
       group('[$domainId]', () {
         test('契约文件结构合法', () {
-          final contract = jsonDecode(contractFile.readAsStringSync())
-              as Map<String, dynamic>;
-          expect(
-            contract['contractId'],
-            isNotEmpty,
-            reason: 'contractId 不得为空',
-          );
+          final contract =
+              jsonDecode(contractFile.readAsStringSync())
+                  as Map<String, dynamic>;
+          expect(contract['contractId'], isNotEmpty, reason: 'contractId 不得为空');
           expect(
             contract['domainId'],
             equals(domainId),
             reason: 'contractId 中 domainId 应与目录名一致',
           );
-          expect(
-            contract['stateIds'],
-            isA<List>(),
-            reason: 'stateIds 必须是列表',
-          );
-          expect(
-            contract['events'],
-            isA<List>(),
-            reason: 'events 必须是列表',
-          );
+          expect(contract['stateIds'], isA<List>(), reason: 'stateIds 必须是列表');
+          expect(contract['events'], isA<List>(), reason: 'events 必须是列表');
           expect(
             contract['transitions'],
             isA<List>(),
@@ -75,10 +64,12 @@ void main() {
 
         if (testCasesFile.existsSync()) {
           test('测试用例全部命中契约', () {
-            final contract = jsonDecode(contractFile.readAsStringSync())
-                as Map<String, dynamic>;
-            final testCases = jsonDecode(testCasesFile.readAsStringSync())
-                as Map<String, dynamic>;
+            final contract =
+                jsonDecode(contractFile.readAsStringSync())
+                    as Map<String, dynamic>;
+            final testCases =
+                jsonDecode(testCasesFile.readAsStringSync())
+                    as Map<String, dynamic>;
             final transitions = (contract['transitions'] as List)
                 .cast<Map<String, dynamic>>();
 
@@ -109,14 +100,12 @@ void main() {
               expect(
                 actualTo,
                 isNotNull,
-                reason:
-                    '[$domainId][$caseId] 未找到转换: $from + $event',
+                reason: '[$domainId][$caseId] 未找到转换: $from + $event',
               );
               expect(
                 actualTo,
                 equals(expectTo),
-                reason:
-                    '[$domainId][$caseId] 期望转换到 $expectTo，契约中实际为 $actualTo',
+                reason: '[$domainId][$caseId] 期望转换到 $expectTo，契约中实际为 $actualTo',
               );
             }
           });

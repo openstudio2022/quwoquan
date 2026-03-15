@@ -1,11 +1,7 @@
 import 'dart:io';
 
-import 'package:quwoquan_app/assistant/internal_legacy/learning/assistant_learning_service.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/learning/assistant_learning_store.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/sync/sync_adapter.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/sync/sync_gateway.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/sync/sync_mode.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/sync/sync_models.dart';
+import 'package:quwoquan_app/assistant/learning/assistant_learning_runtime.dart';
+import 'package:quwoquan_app/assistant/sync/assistant_sync.dart';
 import 'package:test/test.dart';
 
 void main() {

@@ -1,13 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/tools/metadata/tool_metadata_registry.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/tools/tool_registry.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/tools/tool_schema.dart';
+import 'package:quwoquan_app/assistant/tool/runtime/tool_metadata_registry.dart';
+import 'package:quwoquan_app/assistant/tool/runtime/tool_registry.dart';
+import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
 
 class _FakeTool implements AssistantTool {
-  _FakeTool({
-    required this.toolName,
-    required this.resultFactory,
-  });
+  _FakeTool({required this.toolName, required this.resultFactory});
 
   final String toolName;
   final AssistantToolResult Function(Map<String, dynamic> args) resultFactory;
@@ -73,10 +70,9 @@ void main() {
       );
       registry.register(fakeLocal);
 
-      final result = await registry.execute(
-        'local_context',
-        <String, dynamic>{'requestedFields': <String>['location']},
-      );
+      final result = await registry.execute('local_context', <String, dynamic>{
+        'requestedFields': <String>['location'],
+      });
 
       expect(result.success, isFalse);
       expect(result.errorCode, AssistantErrorCode.executionFailed);
@@ -103,54 +99,56 @@ void main() {
       );
       registry.register(fakeLocal);
 
-      final result = await registry.execute(
-        'local_context',
-        <String, dynamic>{'requestedFields': <String>['location']},
-      );
+      final result = await registry.execute('local_context', <String, dynamic>{
+        'requestedFields': <String>['location'],
+      });
 
       expect(result.success, isTrue);
       expect(fakeLocal.executeCount, equals(1));
     });
 
-    test('retries transient web_search failure once before succeeding', () async {
-      final metadata = ToolMetadataRegistry();
-      await metadata.ensureLoaded();
-      final registry = AssistantToolRegistry(metadataRegistry: metadata);
-      var attempt = 0;
-      final fakeWeb = _FakeTool(
-        toolName: 'web_search',
-        resultFactory: (_) {
-          attempt += 1;
-          if (attempt == 1) {
+    test(
+      'retries transient web_search failure once before succeeding',
+      () async {
+        final metadata = ToolMetadataRegistry();
+        await metadata.ensureLoaded();
+        final registry = AssistantToolRegistry(metadataRegistry: metadata);
+        var attempt = 0;
+        final fakeWeb = _FakeTool(
+          toolName: 'web_search',
+          resultFactory: (_) {
+            attempt += 1;
+            if (attempt == 1) {
+              return const AssistantToolResult(
+                success: false,
+                message: '搜索服务暂时不可用，已尝试自动恢复。',
+                errorCode: AssistantErrorCode.networkUnavailable,
+                degraded: true,
+              );
+            }
             return const AssistantToolResult(
-              success: false,
-              message: '搜索服务暂时不可用，已尝试自动恢复。',
-              errorCode: AssistantErrorCode.networkUnavailable,
-              degraded: true,
+              success: true,
+              message: 'ok',
+              data: <String, dynamic>{
+                'provider': 'duckduckgo',
+                'summary': 'recovered',
+                'references': <Map<String, dynamic>>[],
+              },
             );
-          }
-          return const AssistantToolResult(
-            success: true,
-            message: 'ok',
-            data: <String, dynamic>{
-              'provider': 'duckduckgo',
-              'summary': 'recovered',
-              'references': <Map<String, dynamic>>[],
-            },
-          );
-        },
-      );
-      registry.register(fakeWeb);
+          },
+        );
+        registry.register(fakeWeb);
 
-      final result = await registry.execute('web_search', <String, dynamic>{
-        'query': '深圳天气',
-      });
+        final result = await registry.execute('web_search', <String, dynamic>{
+          'query': '深圳天气',
+        });
 
-      expect(result.success, isTrue);
-      expect(fakeWeb.executeCount, equals(2));
-      expect((result.data?['retry'] as Map?)?['attempts'], equals(2));
-      expect((result.data?['retry'] as Map?)?['recovered'], isTrue);
-    });
+        expect(result.success, isTrue);
+        expect(fakeWeb.executeCount, equals(2));
+        expect((result.data?['retry'] as Map?)?['attempts'], equals(2));
+        expect((result.data?['retry'] as Map?)?['recovered'], isTrue);
+      },
+    );
 
     test('opens breaker after repeated transient web_fetch failures', () async {
       final metadata = ToolMetadataRegistry();

@@ -1,5 +1,5 @@
-import 'package:quwoquan_app/assistant/internal_legacy/skills/skill_loader.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/skills/skill_router.dart';
+import 'package:quwoquan_app/assistant/skill/domain/skill_router.dart';
+import 'package:quwoquan_app/assistant/skills/assistant_skill_runtime.dart';
 import 'package:test/test.dart';
 
 void main() {

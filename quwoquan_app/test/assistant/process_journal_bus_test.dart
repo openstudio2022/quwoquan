@@ -154,10 +154,7 @@ void main() {
         sourceUpdates.first.references.single.url,
         contains('weather.cma.cn'),
       );
-      expect(
-        sourceUpdates.last.references.single.url,
-        contains('example.com'),
-      );
+      expect(sourceUpdates.last.references.single.url, contains('example.com'));
     });
 
     test('displaySnapshot 会折叠 narrative 与 sourceUpdate 的同文案重复', () {

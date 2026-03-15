@@ -1,14 +1,13 @@
 import 'dart:io';
 
-import 'package:quwoquan_app/assistant/internal_legacy/engine/agent_loop.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/engine/llm_provider.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/engine/react_runtime.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/engine/session_manager.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/memory/memory_repository.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/memory/objectbox_store.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/protocol/run_request.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/protocol/trace_events.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/tools/tool_registry.dart';
+import 'package:quwoquan_app/assistant/conversation/orchestration/agent_loop.dart';
+import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
+import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
+import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
+import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
+import 'package:quwoquan_app/assistant/protocol/run_request.dart';
+import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
+import 'package:quwoquan_app/assistant/tool/runtime/tool_registry.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -50,7 +49,8 @@ void main() {
       );
       expect(response.errorCode, isNot(equals('missing_context')));
       expect(
-        (response.structuredResponse['domainPrecheck'] as Map?)?['canEnterDomain'],
+        (response.structuredResponse['domainPrecheck']
+            as Map?)?['canEnterDomain'],
         isTrue,
       );
     });
@@ -77,4 +77,3 @@ void main() {
     });
   });
 }
-

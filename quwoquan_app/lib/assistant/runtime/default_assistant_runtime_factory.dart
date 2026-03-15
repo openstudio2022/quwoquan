@@ -4,7 +4,8 @@ import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.da
 import 'package:quwoquan_app/assistant/intent_bridge/assistant_intent_bridge_runtime.dart';
 import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/assistant_agent_loop.dart';
-import 'package:quwoquan_app/assistant/orchestration/assistant_orchestration_runtime.dart';
+import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
+import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
 import 'package:quwoquan_app/assistant/retrieval/assistant_retrieval_runtime.dart';
 import 'package:quwoquan_app/assistant/runtime/assistant_runtime.dart';
 import 'package:quwoquan_app/assistant/skills/assistant_skill_executor.dart';
@@ -39,7 +40,7 @@ AssistantRuntime _createAssistantRuntime({
   final sessionManager = AssistantSessionManager();
   final memoryRepository = AssistantMemoryRepository(memoryStore);
   final toolMetadataRegistry = ToolMetadataRegistry();
-  final retrievalBroker = LegacyToolRetrievalBroker();
+  final retrievalBroker = ToolRetrievalBroker();
   final toolRegistry =
       AssistantToolRegistry(metadataRegistry: toolMetadataRegistry)
         ..register(WebSearchTool(broker: retrievalBroker))
@@ -101,18 +102,20 @@ AssistantRuntime _createAssistantRuntime({
     listSessionsHandler: agentLoop.listSessions,
     sessionDetailHandler: agentLoop.sessionDetail,
     switchSessionHandler: agentLoop.switchSession,
-    invokeSkillHandler: ({
-      required skill,
-      required arguments,
-      String deviceProfile = 'mobile',
-    }) {
-      return skillExecutor.execute(
-        skill: skill,
-        arguments: arguments,
-        deviceProfile: deviceProfile,
-      );
-    },
-    ensureRemoteConfigLoadedHandler: () => _ensureRemoteConfigLoaded(llmProvider),
+    invokeSkillHandler:
+        ({
+          required skill,
+          required arguments,
+          String deviceProfile = 'mobile',
+        }) {
+          return skillExecutor.execute(
+            skill: skill,
+            arguments: arguments,
+            deviceProfile: deviceProfile,
+          );
+        },
+    ensureRemoteConfigLoadedHandler: () =>
+        _ensureRemoteConfigLoaded(llmProvider),
     switchModelHandler: llmProvider.switchModel,
     listAvailableModelsHandler: () => llmProvider.availableModelRefs,
     selectedModelsHandler: () => llmProvider.selectedModelRefs,

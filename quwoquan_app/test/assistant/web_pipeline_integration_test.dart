@@ -52,4 +52,3 @@ void main() {
     expect(thresholds['freshnessHoursMax'], equals(72));
   });
 }
-

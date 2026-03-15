@@ -12,10 +12,7 @@ void main() {
         ),
         messageKind: AssistantMessageKind.answer,
         userMarkdown: '## 已整理',
-        result: const AssistantTurnResult(
-          text: '直接答案',
-          interpretation: '摘要结论',
-        ),
+        result: const AssistantTurnResult(text: '直接答案', interpretation: '摘要结论'),
         slotState: const SlotStateSnapshot(
           domainId: 'weather',
           slotValues: <String, SlotValueSnapshot>{
@@ -26,10 +23,7 @@ void main() {
             ),
           },
         ),
-        askUser: const AssistantTurnAskUser(
-          slotId: 'city',
-          prompt: '请告诉我城市',
-        ),
+        askUser: const AssistantTurnAskUser(slotId: 'city', prompt: '请告诉我城市'),
         phaseId: PlannerPhaseId.answering,
         actionCode: PlannerActionCode.composeAnswer,
         reasonCode: PlannerReasonCode.evidenceReady,

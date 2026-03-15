@@ -12,9 +12,9 @@
 ///   5. finalText 不得含 JSON envelope key（assistant_turn / contractVersion）
 library;
 
-import 'package:quwoquan_app/assistant/internal_legacy/protocol/run_response.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/protocol/trace_events.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/tools/tool_schema.dart';
+import 'package:quwoquan_app/assistant/protocol/run_response.dart';
+import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
+import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
 import 'package:test/test.dart';
 
 // ─── 已知的合法 errorCode 值（来自 AssistantErrorCode enum）─────────────────

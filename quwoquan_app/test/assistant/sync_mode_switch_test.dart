@@ -1,12 +1,13 @@
-import 'package:quwoquan_app/assistant/internal_legacy/sync/cloud_stub_sync_adapter.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/sync/local_mock_sync_adapter.dart';
-import 'package:quwoquan_app/assistant/internal_legacy/sync/sync_mode.dart';
+import 'package:quwoquan_app/assistant/sync/assistant_sync.dart';
 import 'package:test/test.dart';
 
 void main() {
   group('Sync mode and adapters', () {
     test('mode parser defaults to local_mock', () {
-      expect(AssistantSyncModeParser.parse(''), equals(AssistantSyncMode.localMock));
+      expect(
+        AssistantSyncModeParser.parse(''),
+        equals(AssistantSyncMode.localMock),
+      );
       expect(
         AssistantSyncModeParser.parse('unknown'),
         equals(AssistantSyncMode.localMock),
@@ -42,7 +43,5 @@ void main() {
       expect(pulled.mode, equals(AssistantSyncMode.cloudStub));
       expect(pulled.payload['snapshot'], isA<Map<String, dynamic>>());
     });
-
   });
 }
-
