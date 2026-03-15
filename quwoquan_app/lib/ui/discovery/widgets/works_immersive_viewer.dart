@@ -33,6 +33,7 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
     required this.showWorksToolbar,
     required this.onUserTap,
     required this.onAssistantTap,
+    this.onTapBack,
     this.onSwitchToFollowing,
     this.onSwitchToCircles,
     this.onSwitchToMoment, // Deprecated/Fallback
@@ -49,6 +50,7 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
   })
   onUserTap;
   final VoidCallback onAssistantTap;
+  final VoidCallback? onTapBack;
   final VoidCallback? onSwitchToFollowing;
   final VoidCallback? onSwitchToCircles;
   final VoidCallback? onSwitchToMoment;
@@ -494,6 +496,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                 children: [
                   _WorksPrimaryTopBar(
                     isFilterExpanded: _isFilterExpanded,
+                    onTapClose: widget.onTapBack,
                     onTapMore: () => _showWorksMoreSheet(context),
                     onTapWorksArrow: _toggleFilterPanel,
                     onTapFollowing: widget.onSwitchToFollowing,
@@ -824,6 +827,30 @@ class _WorksPrimaryTopBar extends StatelessWidget {
                       ),
                     ),
                   ],
+                ),
+              ),
+            ),
+
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: SizedBox(
+                  width: AppSpacing.iconButtonMinSizeSm,
+                  child: IconButton(
+                    onPressed: onTapClose,
+                    icon: Icon(
+                      CupertinoIcons.back,
+                      color: onTapClose == null
+                          ? AppColors.worksBodyText.withValues(alpha: 0)
+                          : AppColors.worksBodyText,
+                      size: AppSpacing.iconMedium,
+                    ),
+                    style: IconButton.styleFrom(
+                      minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+                    ),
+                  ),
                 ),
               ),
             ),

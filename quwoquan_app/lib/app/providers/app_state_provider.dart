@@ -32,3 +32,5 @@ final appStateProvider = NotifierProvider<AppStateNotifier, AppState>(() {
   return AppStateNotifier();
 });
 
+// Removed duplicate lastMainTabBeforeAssistantProvider
+

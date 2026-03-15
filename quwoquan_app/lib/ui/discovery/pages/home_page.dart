@@ -26,6 +26,7 @@ class _HomePageState extends ConsumerState<HomePage>
     with AutomaticKeepAliveClientMixin {
   static const String _defaultTab = 'circles'; // Change default to circles to avoid starting in immersive mode without nav
   String _activeTab = _defaultTab;
+  String _lastNonFeaturedTab = _defaultTab;
 
   @override
   bool get wantKeepAlive => true;
@@ -41,8 +42,20 @@ class _HomePageState extends ConsumerState<HomePage>
 
   void _handleTabChange(String id) {
     if (_activeTab == id) return;
+    if (id == 'featured' && _activeTab != 'featured') {
+      _lastNonFeaturedTab = _activeTab;
+    } else if (id != 'featured') {
+      _lastNonFeaturedTab = id;
+    }
     setState(() => _activeTab = id);
     _updateImmersiveState();
+  }
+
+  void _handleFeaturedBack() {
+    final nextTab = _lastNonFeaturedTab == 'featured'
+        ? _defaultTab
+        : _lastNonFeaturedTab;
+    _handleTabChange(nextTab);
   }
 
   void _updateImmersiveState() {
@@ -67,7 +80,8 @@ class _HomePageState extends ConsumerState<HomePage>
           showWorksToolbar: true,
           onUserTap: _openUserProfile,
           onAssistantTap: _openAssistantHalfSheet,
-          // 点击关闭/切换到圈子 (X 按钮 - 暂时保留作为后备)
+          onTapBack: _handleFeaturedBack,
+          // 兼容已有入口：直接切回常规首页态
           onSwitchToMoment: () => _handleTabChange('circles'),
           // 顶部导航回调
           onSwitchToFollowing: () => _handleTabChange('following'),

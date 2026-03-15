@@ -160,9 +160,10 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
   }
 
   void _handleBottomNavTap(int index) {
+    final previousIndex = _currentIndex;
     _logBrowseEvent(
       action: 'bottom_nav_tap',
-      meta: <String, dynamic>{'fromIndex': _currentIndex, 'toIndex': index},
+      meta: <String, dynamic>{'fromIndex': previousIndex, 'toIndex': index},
     );
     setState(() {
       _currentIndex = index;
@@ -170,18 +171,33 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
 
     switch (index) {
       case 0:
+        ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
+        ref.read(bottomNavHiddenProvider.notifier).setHidden(false);
         context.go(AppRoutePaths.home);
         break;
       case 1:
+        ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
+        ref.read(bottomNavHiddenProvider.notifier).setHidden(false);
         context.go(AppRoutePaths.circles);
         break;
       case 2:
+        if (previousIndex != 2) {
+          ref.read(
+            lastMainTabBeforeAssistantProvider.notifier,
+          ).set(previousIndex);
+        }
+        // 进入找小趣时立即隐藏底部导航，避免首帧漏出。
+        ref.read(bottomNavHiddenProvider.notifier).setHidden(true);
         context.go(AppRoutePaths.assistant);
         break;
       case 3:
+        ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
+        ref.read(bottomNavHiddenProvider.notifier).setHidden(false);
         context.go(AppRoutePaths.chat);
         break;
       case 4:
+        ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
+        ref.read(bottomNavHiddenProvider.notifier).setHidden(false);
         context.go(AppRoutePaths.profile);
         break;
     }

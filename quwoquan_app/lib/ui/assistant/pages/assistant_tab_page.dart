@@ -9,6 +9,7 @@ import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_center_page.dart';
+import 'package:quwoquan_app/ui/chat/pages/chat_detail_page.dart';
 
 class AssistantTabPage extends ConsumerStatefulWidget {
   const AssistantTabPage({super.key});
@@ -20,9 +21,151 @@ class AssistantTabPage extends ConsumerStatefulWidget {
 class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
     with AutomaticKeepAliveClientMixin {
   String _activeTab = 'dialog';
+  String? _lastInternalTab;
+  late PageController _pageController;
 
   @override
   bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController(initialPage: 1);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _activeTab != 'dialog') return;
+      ref.read(bottomNavHiddenProvider.notifier).setHidden(true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _handleTabChange(String id) {
+    if (_activeTab != id) {
+      if (_activeTab != 'dialog') {
+        _lastInternalTab = _activeTab;
+      }
+      setState(() => _activeTab = id);
+      // 只有在 dialog tab 隐藏底部导航
+      ref.read(bottomNavHiddenProvider.notifier).setHidden(id == 'dialog');
+      
+      // 同步 PageView
+      int pageIndex;
+      switch (id) {
+        case 'schedule':
+          pageIndex = 0;
+          break;
+        case 'dialog':
+          pageIndex = 1;
+          break;
+        case 'skills':
+          pageIndex = 2;
+          break;
+        default:
+          pageIndex = 1;
+      }
+      _pageController.jumpToPage(pageIndex);
+    }
+  }
+
+  void _handlePageChanged(int index) {
+    String newTab;
+    switch (index) {
+      case 0:
+        newTab = 'schedule';
+        break;
+      case 1:
+        newTab = 'dialog';
+        break;
+      case 2:
+        newTab = 'skills';
+        break;
+      default:
+        newTab = 'dialog';
+    }
+    
+    if (_activeTab != newTab) {
+      if (_activeTab != 'dialog') {
+        _lastInternalTab = _activeTab;
+      }
+      setState(() => _activeTab = newTab);
+      ref.read(bottomNavHiddenProvider.notifier).setHidden(newTab == 'dialog');
+    }
+  }
+
+  void _handleExit() {
+    // 如果有内部历史且不是 dialog，返回内部历史
+    if (_lastInternalTab != null && _lastInternalTab != 'dialog') {
+      _handleTabChange(_lastInternalTab!);
+      return;
+    }
+
+    // 否则退出 Assistant 页面
+    final lastTab = ref.read(lastMainTabBeforeAssistantProvider);
+    ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
+    
+    // 恢复底部导航
+    ref.read(bottomNavHiddenProvider.notifier).setHidden(false);
+
+    if (lastTab != null) {
+      // 映射 index 到 route
+      switch (lastTab) {
+        case 0:
+          context.go(AppRoutePaths.home);
+          break;
+        case 1:
+          context.go(AppRoutePaths.circles);
+          break;
+        case 3:
+          context.go(AppRoutePaths.chat);
+          break;
+        case 4:
+          context.go(AppRoutePaths.profile);
+          break;
+        default:
+          context.go(AppRoutePaths.home);
+      }
+    } else {
+      context.go(AppRoutePaths.home);
+    }
+  }
+
+  Widget _buildBackAction(Color color) {
+    return SizedBox(
+      width: AppSpacing.iconButtonMinSizeSm,
+      child: CupertinoButton(
+        padding: EdgeInsets.zero,
+        minSize: AppSpacing.iconButtonMinSizeSm,
+        onPressed: _activeTab == 'dialog' ? _handleExit : null,
+        child: Icon(
+          CupertinoIcons.back,
+          color: _activeTab == 'dialog'
+              ? color
+              : color.withValues(alpha: 0),
+          size: AppSpacing.iconMedium,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSettingsAction(Color color) {
+    return SizedBox(
+      width: AppSpacing.iconButtonMinSizeSm,
+      child: CupertinoButton(
+        padding: EdgeInsets.zero,
+        minSize: AppSpacing.iconButtonMinSizeSm,
+        onPressed: () => context.push(AppRoutePaths.assistantManagement),
+        child: Icon(
+          CupertinoIcons.settings,
+          size: AppSpacing.iconMedium,
+          color: color,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,8 +181,8 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
     );
 
     final tabs = const <TabItem>[
-      TabItem(id: 'dialog', label: '对话'),
       TabItem(id: 'schedule', label: '日程'),
+      TabItem(id: 'dialog', label: '找小趣'),
       TabItem(id: 'skills', label: '技能'),
     ];
 
@@ -47,6 +190,7 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
       backgroundColor: bg,
       navigationBar: AppNavigationBar(
         backgroundColor: bg,
+        automaticallyImplyLeading: false,
         border: Border(
           bottom: BorderSide(
             color: fgSecondary.withValues(alpha: 0.15),
@@ -55,134 +199,32 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
         middle: CenteredScrollableTabBar(
           tabs: tabs,
           activeTab: _activeTab,
-          onTabChange: (id) => setState(() => _activeTab = id),
-          leadingActions: const [],
-          trailingActions: const [],
+          onTabChange: _handleTabChange,
+          leadingActions: [_buildBackAction(fgSecondary)],
+          trailingActions: [_buildSettingsAction(fgSecondary)],
           transparentBackground: true,
         ),
-        trailing: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: () => context.push(AppRoutePaths.assistantManagement),
-          child: Icon(
-            CupertinoIcons.settings,
-            size: AppSpacing.iconMedium,
-            color: fgSecondary,
-          ),
-        ),
       ),
-      child: _buildBody(),
+      child: PageView(
+        controller: _pageController,
+        onPageChanged: _handlePageChanged,
+        children: [
+          const _AssistantScheduleView(),
+          ChatDetailPage(
+            conversationId: AppConceptConstants.assistantConversationId,
+            onBack: _handleExit,
+            embedded: true,
+          ),
+          AssistantSkillCenterPage(
+            onBack: () {}, // Ignored in embedded mode
+            embedded: true,
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildBody() {
-    switch (_activeTab) {
-      case 'dialog':
-        return Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                '最近对话',
-                style: TextStyle(
-                  fontSize: AppTypography.lg,
-                  fontWeight: AppTypography.bold,
-                  color: AppColorsFunctional.getColor(
-                    ref.watch(isDarkProvider),
-                    ColorType.foregroundPrimary,
-                  ),
-                ),
-              ),
-              SizedBox(height: AppSpacing.md),
-              GestureDetector(
-                onTap: () {
-                  context.push(
-                    AppRoutePaths.chatDetail(
-                      id: AppConceptConstants.assistantConversationId,
-                    ),
-                  );
-                },
-                child: Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.all(AppSpacing.containerMd),
-                  margin: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
-                  decoration: BoxDecoration(
-                    color: AppColorsFunctional.getColor(
-                      ref.watch(isDarkProvider),
-                      ColorType.backgroundSecondary,
-                    ),
-                    borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: AppSpacing.avatarUserMd,
-                        height: AppSpacing.avatarUserMd,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: AppColors.primaryColor,
-                        ),
-                        child: Icon(
-                          CupertinoIcons.sparkles,
-                          color: Colors.white,
-                          size: AppSpacing.iconMedium,
-                        ),
-                      ),
-                      SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '小趣私人助理',
-                              style: TextStyle(
-                                fontSize: AppTypography.base,
-                                fontWeight: AppTypography.bold,
-                                color: AppColorsFunctional.getColor(
-                                  ref.watch(isDarkProvider),
-                                  ColorType.foregroundPrimary,
-                                ),
-                              ),
-                            ),
-                            SizedBox(height: AppSpacing.xs),
-                            Text(
-                              '点击开始对话',
-                              style: TextStyle(
-                                fontSize: AppTypography.sm,
-                                color: AppColorsFunctional.getColor(
-                                  ref.watch(isDarkProvider),
-                                  ColorType.foregroundSecondary,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Icon(
-                        CupertinoIcons.chevron_forward,
-                        size: AppSpacing.iconSmall,
-                        color: AppColorsFunctional.getColor(
-                          ref.watch(isDarkProvider),
-                          ColorType.foregroundTertiary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      case 'schedule':
-        return const _AssistantScheduleView();
-      case 'skills':
-        return AssistantSkillCenterPage(
-          onBack: () {}, // Ignored in embedded mode
-          embedded: true,
-        );
-      default:
-        return const SizedBox.shrink();
-    }
-  }
+  // Widget _buildBody() { ... } // Removed
 }
 
 class _AssistantScheduleView extends ConsumerWidget {

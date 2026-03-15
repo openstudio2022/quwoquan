@@ -4308,69 +4308,96 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             ],
           ),
         ),
-        Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal:
-                AppSpacing.semantic[DesignSemanticConstants
-                    .container]?[DesignSemanticConstants.sm] ??
-                AppSpacing.containerSm,
-          ),
-          child: Container(
-            padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
-            decoration: BoxDecoration(
-              color: isDark ? bgColor : AppColors.chatToolbarBackground,
-              borderRadius: BorderRadius.circular(
-                AppSpacing.largeBorderRadius,
-              ),
-            ),
-            child: SafeArea(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (!_isAssistantConversation &&
-                      !_isGroupChat &&
-                      _relationshipCapability?.isSameInterest != true &&
-                      _otherParticipantId != null)
-                    _buildSameInterestPromptBar(),
-                  CustomizableChatInputBar(
-                    controller: _inputController,
-                    focusNode: _inputFocusNode,
-                    hintText: _isAssistantConversation
-                        ? UITextConstants.assistantAskPlaceholder
-                        : null,
-                    maxTextLength: 5000,
-                    maxVisibleLines: 4,
-                    onPickImages: _pickChatImages,
-                    onCapturePhoto: _captureChatPhoto,
-                    onPickFiles: _pickChatFiles,
-                    onRequestMicPermission: _requestMicPermissionForChat,
-                    onStartRecord: _startVoiceRecordForChat,
-                    onStopRecord: _stopVoiceRecordForChat,
-                    onVoiceAsrTransform: _voiceAsrForChat,
-                    onSend: _submitChatInput,
-                    leftBuilder: _isAssistantConversation
-                        ? _buildAssistantLeftButton
-                        : _buildQuliaoLeftButton,
-                    rightBuilder: _isAssistantConversation
-                        ? _buildAssistantRightButtons
-                        : _buildQuliaoRightButtons,
-                    extraPanelItems: _isAssistantConversation
-                        ? const <ChatInputExtraPanelItem>[]
-                        : _buildCallPanelItems(),
+        _isAssistantConversation
+            ? SafeArea(
+                top: false,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal:
+                        AppSpacing.semantic[DesignSemanticConstants
+                            .container]?[DesignSemanticConstants.sm] ??
+                        AppSpacing.containerSm,
+                    vertical: AppSpacing.sm,
                   ),
-                  if (_showEmojiPanel && !_isAssistantConversation)
-                    UnifiedEmojiPicker(
-                      showCloseButton: true,
-                      onClose: () =>
-                          setState(() => _showEmojiPanel = false),
-                      onEmojiSelected: (char) =>
-                          setState(() => _inputController.text += char),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CustomizableChatInputBar(
+                        controller: _inputController,
+                        focusNode: _inputFocusNode,
+                        hintText: UITextConstants.assistantAskPlaceholder,
+                        maxTextLength: 5000,
+                        maxVisibleLines: 4,
+                        onPickImages: _pickChatImages,
+                        onCapturePhoto: _captureChatPhoto,
+                        onPickFiles: _pickChatFiles,
+                        onRequestMicPermission: _requestMicPermissionForChat,
+                        onStartRecord: _startVoiceRecordForChat,
+                        onStopRecord: _stopVoiceRecordForChat,
+                        onVoiceAsrTransform: _voiceAsrForChat,
+                        onSend: _submitChatInput,
+                        leftBuilder: _buildAssistantLeftButton,
+                        rightBuilder: _buildAssistantRightButtons,
+                        extraPanelItems: const <ChatInputExtraPanelItem>[],
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            : Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal:
+                      AppSpacing.semantic[DesignSemanticConstants
+                          .container]?[DesignSemanticConstants.sm] ??
+                      AppSpacing.containerSm,
+                ),
+                child: Container(
+                  padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                  decoration: BoxDecoration(
+                    color: isDark ? bgColor : AppColors.chatToolbarBackground,
+                    borderRadius: BorderRadius.circular(
+                      AppSpacing.largeBorderRadius,
                     ),
-                ],
+                  ),
+                  child: SafeArea(
+                    top: false,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (!_isGroupChat &&
+                            _relationshipCapability?.isSameInterest != true &&
+                            _otherParticipantId != null)
+                          _buildSameInterestPromptBar(),
+                        CustomizableChatInputBar(
+                          controller: _inputController,
+                          focusNode: _inputFocusNode,
+                          maxTextLength: 5000,
+                          maxVisibleLines: 4,
+                          onPickImages: _pickChatImages,
+                          onCapturePhoto: _captureChatPhoto,
+                          onPickFiles: _pickChatFiles,
+                          onRequestMicPermission: _requestMicPermissionForChat,
+                          onStartRecord: _startVoiceRecordForChat,
+                          onStopRecord: _stopVoiceRecordForChat,
+                          onVoiceAsrTransform: _voiceAsrForChat,
+                          onSend: _submitChatInput,
+                          leftBuilder: _buildQuliaoLeftButton,
+                          rightBuilder: _buildQuliaoRightButtons,
+                          extraPanelItems: _buildCallPanelItems(),
+                        ),
+                        if (_showEmojiPanel)
+                          UnifiedEmojiPicker(
+                            showCloseButton: true,
+                            onClose: () =>
+                                setState(() => _showEmojiPanel = false),
+                            onEmojiSelected: (char) =>
+                                setState(() => _inputController.text += char),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ),
-        ),
       ],
       ),
     );

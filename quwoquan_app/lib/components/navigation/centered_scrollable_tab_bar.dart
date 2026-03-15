@@ -583,27 +583,34 @@ class _CenteredScrollableTabBarState
             minWidth: AppSpacing.minInteractiveSize,
             minHeight: AppSpacing.minInteractiveSize,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
+          child: Stack(
+            clipBehavior: Clip.none,
             children: [
-              Text(
-                tab.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: textStyle,
+              Align(
+                alignment: Alignment.center,
+                child: Text(
+                  tab.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textStyle,
+                ),
               ),
-              SizedBox(height: AppSpacing.intraGroupXs),
-              SizedBox(
-                width: underlineWidth,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  height: AppSpacing.intraGroupXs / 2,
-                  decoration: BoxDecoration(
-                    color: isExcluded ? Colors.transparent : underlineColor,
-                    borderRadius: BorderRadius.circular(
-                      AppSpacing.intraGroupXs / 4,
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: Center(
+                  child: SizedBox(
+                    width: underlineWidth,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      height: AppSpacing.intraGroupXs / 2,
+                      decoration: BoxDecoration(
+                        color: isExcluded ? Colors.transparent : underlineColor,
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.intraGroupXs / 4,
+                        ),
+                      ),
                     ),
                   ),
                 ),

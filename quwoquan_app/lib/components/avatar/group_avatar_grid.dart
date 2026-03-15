@@ -106,6 +106,7 @@ class GroupAvatarGrid extends StatelessWidget {
       if (r > 0) widgets.add(SizedBox(height: gap));
 
       final colCount = rows[r];
+      final rowWidth = colCount * cellSize + (colCount - 1) * gap;
       final rowChildren = <Widget>[];
 
       for (int c = 0; c < colCount && urlIndex < urls.length; c++) {
@@ -117,10 +118,18 @@ class GroupAvatarGrid extends StatelessWidget {
       widgets.add(
         SizedBox(
           width: totalWidth,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: rowChildren,
+          child: Center(
+            child: SizedBox(
+              width: rowWidth,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.center,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: rowChildren,
+                ),
+              ),
+            ),
           ),
         ),
       );
