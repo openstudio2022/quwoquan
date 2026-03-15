@@ -5,11 +5,11 @@ contract: assistant_turn
 version: assistant_turn
 kind: output_contract
 imports:
-  - package:quwoquan_app/personal_assistant/contracts/aggregation_state.dart
-  - package:quwoquan_app/personal_assistant/contracts/skill_run.dart
-  - package:quwoquan_app/personal_assistant/contracts/ui_process_timeline_entry.dart
-  - package:quwoquan_app/personal_assistant/contracts/user_events.dart
-  - package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart
+  - package:quwoquan_app/assistant/contracts/aggregation_state.dart
+  - package:quwoquan_app/assistant/contracts/skill_run.dart
+  - package:quwoquan_app/assistant/contracts/ui_process_timeline_entry.dart
+  - package:quwoquan_app/assistant/contracts/user_events.dart
+  - package:quwoquan_app/assistant/contracts/run_artifacts.dart
 fields:
   - name: contractVersion
     type: string

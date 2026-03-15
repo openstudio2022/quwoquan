@@ -1,10 +1,10 @@
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
+import 'package:quwoquan_app/assistant/runtime/default_assistant_runtime_factory.dart';
 import 'package:quwoquan_app/assistant/skills/assistant_skill_runtime.dart';
 import 'package:quwoquan_app/assistant/skills/skill_manifest.dart';
 import 'package:quwoquan_app/assistant/tools/tool_schema.dart';
-import 'package:quwoquan_app/assistant_runtime_legacy_bridge.dart';
 
 typedef AssistantTraceEventSink = void Function(AssistantTraceEvent event);
 typedef AssistantRunHandler =
@@ -80,11 +80,11 @@ class AssistantRuntime {
   final AssistantCurrentModelHandler _currentModelHandler;
 
   static AssistantRuntime createDefault() {
-    return createAssistantRuntimeLegacyBridge();
+    return createDefaultAssistantRuntime();
   }
 
   static AssistantRuntime createForTest({String? storagePath}) {
-    return createAssistantRuntimeLegacyBridge(storagePath: storagePath);
+    return createTestAssistantRuntime(storagePath: storagePath);
   }
 
   Future<AssistantRunResponse> run(

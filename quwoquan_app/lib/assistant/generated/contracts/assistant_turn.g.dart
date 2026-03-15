@@ -2,13 +2,13 @@
 
 // ignore_for_file: avoid_classes_with_only_static_members
 
+import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
 import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/preference_fact.dart';
-import 'package:quwoquan_app/assistant/contracts/subagent_plan.dart';
-import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/contracts/skill_run.dart';
+import 'package:quwoquan_app/assistant/contracts/subagent_plan.dart';
 import 'package:quwoquan_app/assistant/contracts/ui_process_timeline_entry.dart';
 import 'package:quwoquan_app/assistant/contracts/user_events.dart';
 

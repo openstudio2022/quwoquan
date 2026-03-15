@@ -104,10 +104,100 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
   Widget _buildBody() {
     switch (_activeTab) {
       case 'dialog':
-        return ChatDetailPage(
-          conversationId: AppConceptConstants.assistantConversationId,
-          onBack: () {}, // Ignored in embedded mode
-          embedded: true,
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                '最近对话',
+                style: TextStyle(
+                  fontSize: AppTypography.lg,
+                  fontWeight: AppTypography.bold,
+                  color: AppColorsFunctional.getColor(
+                    ref.watch(isDarkProvider),
+                    ColorType.foregroundPrimary,
+                  ),
+                ),
+              ),
+              SizedBox(height: AppSpacing.md),
+              GestureDetector(
+                onTap: () {
+                  context.push(
+                    AppRoutePaths.chatDetail(
+                      id: AppConceptConstants.assistantConversationId,
+                    ),
+                  );
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(AppSpacing.containerMd),
+                  margin: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
+                  decoration: BoxDecoration(
+                    color: AppColorsFunctional.getColor(
+                      ref.watch(isDarkProvider),
+                      ColorType.backgroundSecondary,
+                    ),
+                    borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: AppSpacing.avatarUserMd,
+                        height: AppSpacing.avatarUserMd,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppColors.primaryColor,
+                        ),
+                        child: Icon(
+                          CupertinoIcons.sparkles,
+                          color: Colors.white,
+                          size: AppSpacing.iconMedium,
+                        ),
+                      ),
+                      SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '小区私人助理',
+                              style: TextStyle(
+                                fontSize: AppTypography.base,
+                                fontWeight: AppTypography.bold,
+                                color: AppColorsFunctional.getColor(
+                                  ref.watch(isDarkProvider),
+                                  ColorType.foregroundPrimary,
+                                ),
+                              ),
+                            ),
+                            SizedBox(height: AppSpacing.xs),
+                            Text(
+                              '点击开始对话',
+                              style: TextStyle(
+                                fontSize: AppTypography.sm,
+                                color: AppColorsFunctional.getColor(
+                                  ref.watch(isDarkProvider),
+                                  ColorType.foregroundSecondary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        CupertinoIcons.chevron_forward,
+                        size: AppSpacing.iconSmall,
+                        color: AppColorsFunctional.getColor(
+                          ref.watch(isDarkProvider),
+                          ColorType.foregroundTertiary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         );
       case 'schedule':
         return const _AssistantScheduleView();

@@ -45,6 +45,7 @@ run_app() {
     python3 scripts/verify_error_code_semantic.py || exit 1
     python3 scripts/verify_cloud_services_semantic.py || exit 1
     python3 scripts/verify_route_and_context_semantic.py || exit 1
+    python3 scripts/verify_no_personal_assistant_imports.py || exit 1
     # L0 PA 降级响应契约静态分析（阻断）：
     #   - degraded:true 必须有 errorCode
     #   - finalText 不得泄漏 JSON envelope key
@@ -52,7 +53,7 @@ run_app() {
     #   - acceptance.yaml 引用的测试文件必须存在
     python3 scripts/verify_degraded_response_contract.py || exit 1
   else
-    echo "[gate] WARN: python3 not found — skipping verify_dart_semantic, verify_error_code_semantic, verify_cloud_services_semantic, verify_route_and_context_semantic, verify_degraded_response_contract"
+    echo "[gate] WARN: python3 not found — skipping verify_dart_semantic, verify_error_code_semantic, verify_cloud_services_semantic, verify_route_and_context_semantic, verify_no_personal_assistant_imports, verify_degraded_response_contract"
   fi
   # L1 content tests (L1a contract, L1b widget, L1c journey) — fast, no external deps
   # Paths follow: test/{layer}/{domain}/{entity}/{test_type}/ (see .cursor/rules/03-testing.mdc §3)

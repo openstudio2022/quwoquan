@@ -16,8 +16,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
-GATEWAY_FILE = ROOT / "quwoquan_app/lib/personal_assistant/app/capability_gateway.dart"
-AGENT_LOOP_FILE = ROOT / "quwoquan_app/lib/personal_assistant/engine/agent_loop.dart"
+GATEWAY_FILE = ROOT / "quwoquan_app/lib/assistant/application/capability_gateway.dart"
+AGENT_LOOP_FILE = ROOT / "quwoquan_app/lib/assistant/internal_legacy/engine/agent_loop.dart"
 
 
 def error(msg: str) -> None:
@@ -74,7 +74,7 @@ def check_unavailable_has_error_code(path: Path) -> list[str]:
 
 def check_degraded_true_has_error_code(path: Path) -> list[str]:
     """
-    规则 2：degraded: true 附近（±5 行）必须有 errorCode。
+    规则 2：degraded: true 附近（±5 行）必须有 errorCode 或 failureCode。
     """
     violations = []
     if not path.exists():
@@ -84,13 +84,13 @@ def check_degraded_true_has_error_code(path: Path) -> list[str]:
         if re.search(r"degraded\s*:\s*true", line):
             window = lines[max(0, i - 5) : min(len(lines), i + 5)]
             window_text = "\n".join(window)
-            has_error_code = bool(
-                re.search(r"errorCode\s*[:=]", window_text)
+            has_failure_marker = bool(
+                re.search(r"(errorCode|failureCode)\s*[:=]", window_text)
             )
-            if not has_error_code:
+            if not has_failure_marker:
                 violations.append(
                     f"{path.relative_to(ROOT)}:{i + 1}  "
-                    f"— degraded: true 缺少 errorCode 设置（±5行窗口内未找到）"
+                    f"— degraded: true 缺少 errorCode/failureCode 设置（±5行窗口内未找到）"
                 )
     return violations
 

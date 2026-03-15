@@ -728,9 +728,9 @@ class _WorksPrimaryTopBar extends StatelessWidget {
     //   expanded ≥ 600 px → xxl(20px) / gap 32px
     final tabFontSize = AppTypography.responsive(
       context,
-      compact: AppTypography.lg,
-      regular: AppTypography.xl,
-      expanded: AppTypography.xxl,
+      compact: AppTypography.base,
+      regular: AppTypography.lg,
+      expanded: AppTypography.xl,
     );
     final tabGap = AppSpacing.responsiveValue(
       context,
@@ -777,6 +777,10 @@ class _WorksPrimaryTopBar extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          // Invisible counter-weight spacer to balance the arrow
+                          SizedBox(
+                            width: AppSpacing.iconSmall + 2 + AppSpacing.intraGroupXs / 2,
+                          ),
                           Text(
                             UITextConstants.homeTabFeatured,
                             style: TextStyle(
@@ -786,7 +790,7 @@ class _WorksPrimaryTopBar extends StatelessWidget {
                             ),
                           ),
                           // Keep arrow for filter toggling
-                          const SizedBox(width: AppSpacing.intraGroupXs),
+                          const SizedBox(width: AppSpacing.intraGroupXs / 2),
                           SizedBox(
                             width: AppSpacing.iconSmall + 2,
                             child: Icon(

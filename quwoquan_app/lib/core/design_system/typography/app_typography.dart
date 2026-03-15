@@ -7,8 +7,8 @@ class AppTypography {
   static const double xsPlus = 11.0;
   static const double sm = 12.0;
   static const double smPlus = 13.0;
-  static const double md = 14.0;
   static const double base = 14.0;
+  static const double md = base; // Alias for backward compatibility
   static const double lg = 16.0;
   static const double xl = 18.0;
   static const double xxl = 20.0;

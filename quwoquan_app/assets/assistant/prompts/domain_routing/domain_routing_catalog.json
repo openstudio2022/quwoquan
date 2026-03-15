@@ -1,0 +1,147 @@
+{
+  "catalogId": "personal_assistant.domain_routing_catalog",
+  "version": "2026.03.07",
+  "fallbackDomainId": "fallback_general_search",
+  "pageTypeFallbacks": {
+    "chat": "emotion_companion",
+    "discovery": "knowledge_general",
+    "home": "knowledge_general"
+  },
+  "domains": [
+    {
+      "domainId": "weather",
+      "description": "天气查询、出行建议、穿衣推荐、空气质量、紫外线指数。可设出行提醒。",
+      "mode": "hybrid",
+      "enabled": true,
+      "priority": 100,
+      "dialoguePath": "assets/assistant/skills/weather/dialogue",
+      "intentKeywords": ["天气", "降雨", "温度", "台风", "空气质量", "tianqi", "weather", "forecast", "rain", "temperature"]
+    },
+    {
+      "domainId": "finance_consumer",
+      "description": "理财分析、基金/股票/保险对比、投资建议、贷款/预算规划、供应链分析、行业趋势。",
+      "mode": "qa",
+      "enabled": true,
+      "priority": 94,
+      "dialoguePath": "assets/assistant/skills/finance_consumer/dialogue",
+      "intentKeywords": ["理财", "基金", "保险", "信用卡", "贷款", "预算", "股票", "投资", "供应商", "供应链", "行业", "估值", "涨跌", "利率"]
+    },
+    {
+      "domainId": "travel_transport",
+      "description": "交通路线规划、地铁公交查询、打车叫车、导航。可打开导航App。",
+      "mode": "hybrid",
+      "enabled": true,
+      "priority": 99,
+      "dialoguePath": "assets/assistant/skills/travel_transport/dialogue",
+      "intentKeywords": ["地铁", "公交", "打车", "高铁", "火车", "路线"]
+    },
+    {
+      "domainId": "travel_planning",
+      "description": "旅行攻略、景点推荐、酒店机票、行程规划。",
+      "mode": "hybrid",
+      "enabled": true,
+      "priority": 98,
+      "dialoguePath": "assets/assistant/skills/travel_planning/dialogue",
+      "intentKeywords": ["旅游", "旅行", "行程", "景点", "酒店", "攻略"]
+    },
+    {
+      "domainId": "local_life",
+      "description": "餐厅美食推荐、本地服务、周边好去处、团购优惠。可导航到店。",
+      "mode": "hybrid",
+      "enabled": true,
+      "priority": 97,
+      "dialoguePath": "assets/assistant/skills/local_life/dialogue",
+      "intentKeywords": ["吃饭", "餐厅", "美食", "团购", "附近", "本地"]
+    },
+    {
+      "domainId": "calendar_task",
+      "description": "日程管理、提醒设置、待办跟踪、会议安排。纯任务执行，确认后立即操作。",
+      "mode": "task",
+      "enabled": true,
+      "priority": 96,
+      "dialoguePath": "assets/assistant/skills/calendar_task/dialogue",
+      "intentKeywords": ["日程", "待办", "提醒", "会议", "安排"]
+    },
+    {
+      "domainId": "knowledge_general",
+      "description": "百科知识、原理解释、科普、概念辨析、翻译。",
+      "mode": "qa",
+      "enabled": true,
+      "priority": 95,
+      "dialoguePath": "assets/assistant/skills/knowledge_general/dialogue",
+      "intentKeywords": ["是什么", "原理", "科普", "百科", "知识"]
+    },
+    {
+      "domainId": "health_wellness",
+      "description": "健康咨询、养生建议、运动指导、饮食营养、睡眠改善。",
+      "mode": "qa",
+      "enabled": true,
+      "priority": 93,
+      "dialoguePath": "assets/assistant/skills/health_wellness/dialogue",
+      "intentKeywords": ["健康", "症状", "饮食", "睡眠", "运动", "减肥"]
+    },
+    {
+      "domainId": "education_learning",
+      "description": "学习辅导、考试备考、课程推荐、解题思路。",
+      "mode": "qa",
+      "enabled": true,
+      "priority": 92,
+      "dialoguePath": "assets/assistant/skills/education_learning/dialogue",
+      "intentKeywords": ["学习", "考试", "课程", "刷题", "作业", "备考"]
+    },
+    {
+      "domainId": "work_productivity",
+      "description": "工作效率提升、项目管理、求职面试、职业规划、复盘汇报。可排计划。",
+      "mode": "hybrid",
+      "enabled": true,
+      "priority": 91,
+      "dialoguePath": "assets/assistant/skills/work_productivity/dialogue",
+      "intentKeywords": ["效率", "任务拆解", "项目推进", "里程碑", "复盘", "跳槽", "找工作", "求职", "面试", "简历", "职业发展", "换工作", "转行"]
+    },
+    {
+      "domainId": "shopping_decision",
+      "description": "选购对比、性价比分析、产品测评、买哪个好。可跳转购买。",
+      "mode": "hybrid",
+      "enabled": true,
+      "priority": 90,
+      "dialoguePath": "assets/assistant/skills/shopping_decision/dialogue",
+      "intentKeywords": ["买哪个", "对比", "选购", "参数", "测评"]
+    },
+    {
+      "domainId": "policy_public_service",
+      "description": "政策解读、办事流程、社保公积金、落户签证、材料清单。",
+      "mode": "qa",
+      "enabled": true,
+      "priority": 89,
+      "dialoguePath": "assets/assistant/skills/policy_public_service/dialogue",
+      "intentKeywords": ["政策", "办理", "政务", "社保", "公积金", "落户"]
+    },
+    {
+      "domainId": "emotion_companion",
+      "description": "情感陪伴、恋爱家庭咨询、心理疏导、亲子教育、闲聊解闷。温暖共情。",
+      "mode": "qa",
+      "enabled": true,
+      "priority": 88,
+      "dialoguePath": "assets/assistant/skills/emotion_companion/dialogue",
+      "intentKeywords": ["难过", "焦虑", "压力", "崩溃", "陪我聊聊", "恋爱", "婚配", "婚姻", "结婚", "分手", "相处", "关系", "育儿", "孩子", "亲子", "家庭教育", "青春期", "闲聊", "聊天", "在吗", "哈哈", "随便聊"]
+    },
+    {
+      "domainId": "fortune_astrology",
+      "description": "星座运势、占卜塔罗、八字运程、趣味解读。轻松娱乐。",
+      "mode": "qa",
+      "enabled": true,
+      "priority": 84,
+      "dialoguePath": "assets/assistant/skills/fortune_astrology/dialogue",
+      "intentKeywords": ["算命", "卜卦", "求签", "八字", "运势", "气运", "时运", "星座", "上升", "水逆", "星盘"]
+    },
+    {
+      "domainId": "fallback_general_search",
+      "description": "通用搜索兜底。当其他技能都不匹配时使用。",
+      "mode": "qa",
+      "enabled": true,
+      "priority": 1,
+      "dialoguePath": "assets/assistant/skills/fallback_general_search/dialogue",
+      "intentKeywords": []
+    }
+  ]
+}

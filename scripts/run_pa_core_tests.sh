@@ -41,11 +41,11 @@ fi
 # 覆盖：A3/A4/A8 协议契约（降级响应根因、消息历史协议、可观测字段）
 # ══════════════════════════════════════════════════════════════════════════════
 BUCKET_A_TESTS=(
-  "test/personal_assistant/degraded_response_root_cause_contract_test.dart"
-  "test/personal_assistant/message_history_protocol_contract_test.dart"
-  "test/personal_assistant/observability_root_cause_contract_test.dart"
-  "test/personal_assistant/quality_metrics_gate_test.dart"
-  "test/personal_assistant/history_contamination_guard_test.dart"
+  "test/assistant/degraded_response_root_cause_contract_test.dart"
+  "test/assistant/message_history_protocol_contract_test.dart"
+  "test/assistant/observability_root_cause_contract_test.dart"
+  "test/assistant/quality_metrics_gate_test.dart"
+  "test/assistant/history_contamination_guard_test.dart"
   "test/ui/assistant/contract/assistant_message_history_contract_test.dart"
 )
 
@@ -69,11 +69,11 @@ fi
 # 覆盖：A3/A8/A9 工具观察协议、结构化输出契约、双 gate 集成
 # ══════════════════════════════════════════════════════════════════════════════
 BUCKET_B_TESTS=(
-  "test/personal_assistant/structured_response_contract_test.dart"
-  "test/personal_assistant/react_runtime_tool_observation_contract_test.dart"
-  "test/personal_assistant/dual_gate_integration_test.dart"
-  "test/personal_assistant/agent_loop_context_gate_test.dart"
-  "test/personal_assistant/observability_completeness_test.dart"
+  "test/assistant/structured_response_contract_test.dart"
+  "test/assistant/react_runtime_tool_observation_contract_test.dart"
+  "test/assistant/dual_gate_integration_test.dart"
+  "test/assistant/agent_loop_context_gate_test.dart"
+  "test/assistant/observability_completeness_test.dart"
 )
 
 echo "[pa-core] ── Bucket B: flutter test (engine integration) ─────────────────"

@@ -5,7 +5,7 @@ contract: run_artifacts
 version: v1
 kind: runtime_persistence_contract
 imports:
-  - package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart
+  - package:quwoquan_app/assistant/contracts/runtime_enums.dart
 fields:
   - { name: machineEnvelope, type: string, default: '' }
   - { name: displayMarkdown, type: string, default: '' }

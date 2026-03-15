@@ -1,0 +1,498 @@
+{
+  "domains": [
+    {
+      "domainId": "weather",
+      "cases": [
+        {
+          "id": "weather-1",
+          "multiTurn": true,
+          "conversation": [
+            "深圳明天会下雨吗？",
+            "如果会下雨，我早上通勤要注意什么？"
+          ],
+          "mustContain": ["降雨", "时效", "地点", "建议"]
+        },
+        {
+          "id": "weather-2",
+          "multiTurn": false,
+          "conversation": ["杭州这周末适合户外徒步吗？"],
+          "mustContain": ["天气", "风险", "时间窗口"]
+        },
+        {
+          "id": "weather-3",
+          "multiTurn": false,
+          "conversation": ["北京今天空气质量怎么样？"],
+          "mustContain": ["空气质量", "来源", "建议"]
+        }
+      ]
+    },
+    {
+      "domainId": "travel_transport",
+      "cases": [
+        {
+          "id": "travel_transport-1",
+          "multiTurn": true,
+          "conversation": [
+            "我明天要从广州去深圳，怎么走最快？",
+            "如果高铁晚点，备用方案呢？"
+          ],
+          "mustContain": ["起点", "终点", "备用方案", "时刻"]
+        },
+        {
+          "id": "travel_transport-2",
+          "multiTurn": false,
+          "conversation": ["上海虹桥到浦东机场，地铁还是打车更稳妥？"],
+          "mustContain": ["对比", "时间", "成本"]
+        },
+        {
+          "id": "travel_transport-3",
+          "multiTurn": false,
+          "conversation": ["今晚深圳北到福田还有末班地铁吗？"],
+          "mustContain": ["末班", "时效", "风险提示"]
+        }
+      ]
+    },
+    {
+      "domainId": "travel_planning",
+      "cases": [
+        {
+          "id": "travel_planning-1",
+          "multiTurn": true,
+          "conversation": [
+            "帮我做一个成都3天2夜行程，预算3000。",
+            "我不想太累，行程能再松一点吗？"
+          ],
+          "mustContain": ["预算", "行程", "节奏", "住宿"]
+        },
+        {
+          "id": "travel_planning-2",
+          "multiTurn": false,
+          "conversation": ["十一去西安，景点路线怎么排不绕路？"],
+          "mustContain": ["路线", "高峰", "拥堵风险"]
+        },
+        {
+          "id": "travel_planning-3",
+          "multiTurn": false,
+          "conversation": ["情侣去三亚4天，住宿和餐饮怎么安排性价比高？"],
+          "mustContain": ["住宿", "餐饮", "性价比"]
+        }
+      ]
+    },
+    {
+      "domainId": "local_life",
+      "cases": [
+        {
+          "id": "local_life-1",
+          "multiTurn": true,
+          "conversation": [
+            "我在深圳南山，附近有安静点的咖啡店吗？",
+            "最好支持插座和长时间办公。"
+          ],
+          "mustContain": ["附近", "营业时间", "场景匹配"]
+        },
+        {
+          "id": "local_life-2",
+          "multiTurn": false,
+          "conversation": ["今晚福田有适合家庭聚餐的餐厅推荐吗？"],
+          "mustContain": ["人群", "预算", "预订建议"]
+        },
+        {
+          "id": "local_life-3",
+          "multiTurn": false,
+          "conversation": ["周末龙华哪里适合带孩子玩半天？"],
+          "mustContain": ["亲子", "时长", "交通建议"]
+        }
+      ]
+    },
+    {
+      "domainId": "calendar_task",
+      "cases": [
+        {
+          "id": "calendar_task-1",
+          "multiTurn": true,
+          "conversation": [
+            "我这周要准备发布会，帮我排一个执行计划。",
+            "周四下午我有冲突，怎么调整？"
+          ],
+          "mustContain": ["里程碑", "冲突", "重排"]
+        },
+        {
+          "id": "calendar_task-2",
+          "multiTurn": false,
+          "conversation": ["明天上午要完成三件事，怎么安排优先级？"],
+          "mustContain": ["优先级", "时间块"]
+        },
+        {
+          "id": "calendar_task-3",
+          "multiTurn": false,
+          "conversation": ["给我做个一周学习计划，每天晚上2小时。"],
+          "mustContain": ["计划", "可执行", "复盘"]
+        }
+      ]
+    },
+    {
+      "domainId": "knowledge_general",
+      "cases": [
+        {
+          "id": "knowledge_general-1",
+          "multiTurn": true,
+          "conversation": [
+            "量子计算和传统计算有什么核心区别？",
+            "能再举一个生活化类比吗？"
+          ],
+          "mustContain": ["概念", "类比", "边界"]
+        },
+        {
+          "id": "knowledge_general-2",
+          "multiTurn": false,
+          "conversation": ["为什么会有潮汐现象？"],
+          "mustContain": ["机制", "因果"]
+        },
+        {
+          "id": "knowledge_general-3",
+          "multiTurn": false,
+          "conversation": ["给我讲讲区块链和数据库的区别。"],
+          "mustContain": ["对比", "适用场景"]
+        }
+      ]
+    },
+    {
+      "domainId": "finance_consumer",
+      "cases": [
+        {
+          "id": "finance_consumer-1",
+          "multiTurn": true,
+          "conversation": [
+            "我每月工资1.5万，怎么做基础理财？",
+            "如果我风险承受低，方案要怎么改？"
+          ],
+          "mustContain": ["风险偏好", "分配", "免责声明"]
+        },
+        {
+          "id": "finance_consumer-2",
+          "multiTurn": false,
+          "conversation": ["信用卡分期和消费贷哪个成本更低？"],
+          "mustContain": ["成本", "风险", "边界"]
+        },
+        {
+          "id": "finance_consumer-3",
+          "multiTurn": false,
+          "conversation": ["我想做年度家庭预算，先从哪里开始？"],
+          "mustContain": ["预算", "执行步骤"]
+        }
+      ]
+    },
+    {
+      "domainId": "health_wellness",
+      "cases": [
+        {
+          "id": "health_wellness-1",
+          "multiTurn": true,
+          "conversation": [
+            "最近总是睡不好，怎么调整作息？",
+            "如果一周后还没改善怎么办？"
+          ],
+          "mustContain": ["作息", "风险分层", "医疗边界"]
+        },
+        {
+          "id": "health_wellness-2",
+          "multiTurn": false,
+          "conversation": ["办公室久坐腰酸，给我一套日常缓解方案。"],
+          "mustContain": ["动作建议", "频次"]
+        },
+        {
+          "id": "health_wellness-3",
+          "multiTurn": false,
+          "conversation": ["减脂期晚餐怎么吃更稳？"],
+          "mustContain": ["饮食建议", "可持续"]
+        }
+      ]
+    },
+    {
+      "domainId": "education_learning",
+      "cases": [
+        {
+          "id": "education_learning-1",
+          "multiTurn": true,
+          "conversation": [
+            "我想3个月学会Python数据分析，怎么规划？",
+            "我每周只有6小时，计划要压缩。"
+          ],
+          "mustContain": ["阶段目标", "时长", "复盘"]
+        },
+        {
+          "id": "education_learning-2",
+          "multiTurn": false,
+          "conversation": ["英语听力一直卡住，有没有突破方案？"],
+          "mustContain": ["诊断", "训练闭环"]
+        },
+        {
+          "id": "education_learning-3",
+          "multiTurn": false,
+          "conversation": ["给我一套考研数学的日计划模板。"],
+          "mustContain": ["计划", "难度梯度"]
+        }
+      ]
+    },
+    {
+      "domainId": "work_productivity",
+      "cases": [
+        {
+          "id": "work_productivity-1",
+          "multiTurn": true,
+          "conversation": [
+            "我这周要交产品方案和复盘报告，怎么排优先级？",
+            "如果临时插入紧急需求怎么应对？"
+          ],
+          "mustContain": ["优先级", "应急", "里程碑"]
+        },
+        {
+          "id": "work_productivity-2",
+          "multiTurn": false,
+          "conversation": ["帮我把一个大任务拆成可执行的小任务。"],
+          "mustContain": ["拆解", "依赖"]
+        },
+        {
+          "id": "work_productivity-3",
+          "multiTurn": false,
+          "conversation": ["我总被会议打断，怎么提升专注效率？"],
+          "mustContain": ["策略", "执行建议"]
+        }
+      ]
+    },
+    {
+      "domainId": "shopping_decision",
+      "cases": [
+        {
+          "id": "shopping_decision-1",
+          "multiTurn": true,
+          "conversation": [
+            "预算5000买手机，拍照和续航优先，怎么选？",
+            "如果我更看重系统流畅度，推荐会变吗？"
+          ],
+          "mustContain": ["对比", "取舍", "推荐理由"]
+        },
+        {
+          "id": "shopping_decision-2",
+          "multiTurn": false,
+          "conversation": ["空气净化器怎么判断值不值得买？"],
+          "mustContain": ["指标", "场景"]
+        },
+        {
+          "id": "shopping_decision-3",
+          "multiTurn": false,
+          "conversation": ["想买一台家用打印机，有哪些坑要避开？"],
+          "mustContain": ["风险", "不推荐理由"]
+        }
+      ]
+    },
+    {
+      "domainId": "policy_public_service",
+      "cases": [
+        {
+          "id": "policy_public_service-1",
+          "multiTurn": true,
+          "conversation": [
+            "深圳公租房申请条件是什么？",
+            "如果我社保年限不够，有替代路径吗？"
+          ],
+          "mustContain": ["条件", "地区", "时效", "来源"]
+        },
+        {
+          "id": "policy_public_service-2",
+          "multiTurn": false,
+          "conversation": ["灵活就业社保怎么缴，流程是什么？"],
+          "mustContain": ["流程", "材料", "时限"]
+        },
+        {
+          "id": "policy_public_service-3",
+          "multiTurn": false,
+          "conversation": ["居住证办理一般需要多久？"],
+          "mustContain": ["时长", "地区差异", "复核建议"]
+        }
+      ]
+    },
+    {
+      "domainId": "emotion_companion",
+      "cases": [
+        {
+          "id": "emotion_companion-1",
+          "multiTurn": true,
+          "conversation": [
+            "我最近一直很焦虑，感觉什么都做不好。",
+            "我昨晚几乎没睡，今天更崩溃了。"
+          ],
+          "mustContain": ["共情", "安全边界", "微行动"]
+        },
+        {
+          "id": "emotion_companion-2",
+          "multiTurn": false,
+          "conversation": ["我被同事否定后一直很难受。"],
+          "mustContain": ["接纳", "支持", "下一步"]
+        },
+        {
+          "id": "emotion_companion-3",
+          "multiTurn": false,
+          "conversation": ["我现在心情很糟，想找个人说说话。"],
+          "mustContain": ["陪伴", "引导", "风险识别"]
+        }
+      ]
+    },
+    {
+      "domainId": "social_companion_chat",
+      "cases": [
+        {
+          "id": "social_companion_chat-1",
+          "multiTurn": true,
+          "conversation": [
+            "今天下班后有点无聊，聊点轻松的吧。",
+            "那你再推荐一个更有趣的话题。"
+          ],
+          "mustContain": ["话题延续", "轻互动", "下一问"]
+        },
+        {
+          "id": "social_companion_chat-2",
+          "multiTurn": false,
+          "conversation": ["最近有什么好玩的生活小挑战？"],
+          "mustContain": ["趣味", "低门槛"]
+        },
+        {
+          "id": "social_companion_chat-3",
+          "multiTurn": false,
+          "conversation": ["我想培养一个新爱好，你有什么建议？"],
+          "mustContain": ["兴趣锚点", "可执行"]
+        }
+      ]
+    },
+    {
+      "domainId": "relationship_matchmaking",
+      "cases": [
+        {
+          "id": "relationship_matchmaking-1",
+          "multiTurn": true,
+          "conversation": [
+            "我和伴侣最近沟通总吵架，怎么办？",
+            "如果对方总是回避沟通呢？"
+          ],
+          "mustContain": ["沟通策略", "边界", "风险提示"]
+        },
+        {
+          "id": "relationship_matchmaking-2",
+          "multiTurn": false,
+          "conversation": ["相亲第一次见面怎么聊天不尴尬？"],
+          "mustContain": ["建议", "尊重", "非操控"]
+        },
+        {
+          "id": "relationship_matchmaking-3",
+          "multiTurn": false,
+          "conversation": ["异地恋如何建立稳定感？"],
+          "mustContain": ["行动计划", "频率", "预期管理"]
+        }
+      ]
+    },
+    {
+      "domainId": "divination_fortune",
+      "cases": [
+        {
+          "id": "divination_fortune-1",
+          "multiTurn": true,
+          "conversation": [
+            "帮我看看最近事业运怎么样。",
+            "那我下周面试要重点准备什么？"
+          ],
+          "mustContain": ["娱乐参考", "不确定性", "行动建议"]
+        },
+        {
+          "id": "divination_fortune-2",
+          "multiTurn": false,
+          "conversation": ["我最近财运会不会变好？"],
+          "mustContain": ["免责声明", "积极建议"]
+        },
+        {
+          "id": "divination_fortune-3",
+          "multiTurn": false,
+          "conversation": ["感情运势低迷时该怎么调整心态？"],
+          "mustContain": ["情绪支持", "非决定论"]
+        }
+      ]
+    },
+    {
+      "domainId": "astrology_constellation",
+      "cases": [
+        {
+          "id": "astrology_constellation-1",
+          "multiTurn": true,
+          "conversation": [
+            "我是天秤座，这个月工作运势如何？",
+            "那在合作沟通上要注意什么？"
+          ],
+          "mustContain": ["星座主题", "娱乐参考", "行动建议"]
+        },
+        {
+          "id": "astrology_constellation-2",
+          "multiTurn": false,
+          "conversation": ["双鱼座本周感情运有什么提示？"],
+          "mustContain": ["边界", "建议"]
+        },
+        {
+          "id": "astrology_constellation-3",
+          "multiTurn": false,
+          "conversation": ["射手座最近财务决策应该保守吗？"],
+          "mustContain": ["风险提示", "非绝对结论"]
+        }
+      ]
+    },
+    {
+      "domainId": "family_parenting",
+      "cases": [
+        {
+          "id": "family_parenting-1",
+          "multiTurn": true,
+          "conversation": [
+            "孩子最近写作业拖延严重，怎么引导？",
+            "如果一提醒就情绪爆发怎么办？"
+          ],
+          "mustContain": ["亲子沟通", "分层策略", "安全边界"]
+        },
+        {
+          "id": "family_parenting-2",
+          "multiTurn": false,
+          "conversation": ["老人和孩子作息冲突，家庭怎么协调？"],
+          "mustContain": ["协调机制", "可执行建议"]
+        },
+        {
+          "id": "family_parenting-3",
+          "multiTurn": false,
+          "conversation": ["青春期孩子不愿沟通该怎么办？"],
+          "mustContain": ["尊重", "边界", "求助建议"]
+        }
+      ]
+    },
+    {
+      "domainId": "fallback_general_search",
+      "cases": [
+        {
+          "id": "fallback_general_search-1",
+          "multiTurn": true,
+          "conversation": [
+            "帮我查一下最近AI行业最重要的三条动态。",
+            "如果离线无法核验，请告诉我边界。"
+          ],
+          "mustContain": ["在线边界", "离线边界", "证据来源"]
+        },
+        {
+          "id": "fallback_general_search-2",
+          "multiTurn": false,
+          "conversation": ["给我快速总结今天全球科技新闻重点。"],
+          "mustContain": ["来源", "时效", "不确定性"]
+        },
+        {
+          "id": "fallback_general_search-3",
+          "multiTurn": false,
+          "conversation": ["这个问题你如果查不到，也请给出下一步查询建议。"],
+          "mustContain": ["补查建议", "边界说明"]
+        }
+      ]
+    }
+  ]
+}

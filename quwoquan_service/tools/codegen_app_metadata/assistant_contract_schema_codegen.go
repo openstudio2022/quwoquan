@@ -147,9 +147,9 @@ func assistantCollectContractImports(schema *assistantContractSchema, index *ass
 		}
 	}
 	if assistantSchemaNeedsRuntimeEnums(schema) &&
-		!importsSet["package:quwoquan_app/personal_assistant/contracts/assistant_turn_contract.dart"] &&
-		!importsSet["package:quwoquan_app/personal_assistant/contracts/context_fill_contract.dart"] {
-		importsSet["package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart"] = true
+		!importsSet["package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart"] &&
+		!importsSet["package:quwoquan_app/assistant/contracts/context_fill_contract.dart"] {
+		importsSet["package:quwoquan_app/assistant/contracts/runtime_enums.dart"] = true
 	}
 	for _, field := range schema.Fields {
 		ref := strings.TrimSpace(field.Ref)

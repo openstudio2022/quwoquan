@@ -549,7 +549,12 @@ class _CenteredScrollableTabBarState
     required VoidCallback onTap,
   }) {
     final isExcluded = widget.excludeUnderlineTabIds.contains(tab.id);
-    final chipFontSize = AppTypography.primaryTabLabel;
+    final chipFontSize = AppTypography.responsive(
+      context,
+      compact: AppTypography.base,
+      regular: AppTypography.lg,
+      expanded: AppTypography.xl,
+    );
     final selectedColor = isDark ? fg : Colors.black;
     final showBlueUnderline =
         !isExcluded && !isDark && selected;
@@ -558,7 +563,7 @@ class _CenteredScrollableTabBarState
 
     final textStyle = TextStyle(
       fontSize: chipFontSize,
-      fontWeight: AppTypography.primaryTabLabelWeight,
+      fontWeight: AppTypography.bold,
       color: selected ? selectedColor : fgUnselected,
     );
     final textPainter = TextPainter(

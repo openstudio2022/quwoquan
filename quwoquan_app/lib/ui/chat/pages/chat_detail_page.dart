@@ -27,6 +27,7 @@ import 'package:quwoquan_app/assistant/application/capability_gateway.dart';
 import 'package:quwoquan_app/assistant/capabilities/capabilities.dart';
 import 'package:quwoquan_app/assistant/domain/channel/channel.dart';
 import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
+import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/orchestration.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_display_fallbacks.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
@@ -40,8 +41,6 @@ import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/regenerate_options_popup.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/streaming_scroll_fab.dart';
-import 'package:quwoquan_app/personal_assistant/engine/llm_response_parser.dart';
-import 'package:quwoquan_app/personal_assistant/engine/llm_provider.dart';
 
 
 /// 聊天气泡时间分隔符 — 直接透传 ChatTimeFormatter 的完整格式

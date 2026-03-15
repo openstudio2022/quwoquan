@@ -5,7 +5,7 @@ contract: synthesis_readiness_result
 version: v1
 kind: runtime_context_contract
 imports:
-  - package:quwoquan_app/personal_assistant/contracts/context_fill_contract.dart
+  - package:quwoquan_app/assistant/contracts/context_fill_contract.dart
 fields:
   - { name: ready, type: bool, default: false }
   - { name: reason, type: string, default: '' }

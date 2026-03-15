@@ -5,8 +5,8 @@ contract: conversation_state_decision
 version: v1
 kind: runtime_policy_contract
 imports:
-  - package:quwoquan_app/personal_assistant/contracts/assistant_turn_contract.dart
-  - package:quwoquan_app/personal_assistant/contracts/run_artifacts.dart
+  - package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart
+  - package:quwoquan_app/assistant/contracts/run_artifacts.dart
 fields:
   - { name: nextAction, type: enum, enum_ref: AssistantNextAction, required: true }
   - { name: finalAnswerMode, type: enum, enum_ref: FinalAnswerMode, required: true }

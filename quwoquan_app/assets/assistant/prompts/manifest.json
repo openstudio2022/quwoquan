@@ -1,0 +1,85 @@
+{
+  "templates": [
+    {
+      "metaPath": "assets/assistant/prompts/global/stack.identity.meta.json",
+      "contentPath": "assets/assistant/prompts/global/stack.identity.md"
+    },
+    {
+      "metaPath": "assets/assistant/prompts/global/stack.safety.meta.json",
+      "contentPath": "assets/assistant/prompts/global/stack.safety.md"
+    },
+    {
+      "metaPath": "assets/assistant/prompts/global/stack.persona.meta.json",
+      "contentPath": "assets/assistant/prompts/global/stack.persona.md"
+    },
+    {
+      "metaPath": "assets/assistant/prompts/global/stack.tool_policy.meta.json",
+      "contentPath": "assets/assistant/prompts/global/stack.tool_policy.md"
+    },
+    {
+      "metaPath": "assets/assistant/prompts/global/phase.output_contract.plan.meta.json",
+      "contentPath": "assets/assistant/prompts/global/phase.output_contract.plan.md"
+    },
+    {
+      "metaPath": "assets/assistant/prompts/global/phase.output_contract.answer.meta.json",
+      "contentPath": "assets/assistant/prompts/global/phase.output_contract.answer.md"
+    },
+    {
+      "metaPath": "assets/assistant/prompts/global/phase.output_contract.ask_user.meta.json",
+      "contentPath": "assets/assistant/prompts/global/phase.output_contract.ask_user.md"
+    },
+    {
+      "metaPath": "assets/assistant/prompts/global/stack.global_system.meta.json",
+      "contentPath": "assets/assistant/prompts/global/stack.global_system.md"
+    },
+    {
+      "metaPath": "assets/assistant/prompts/global/stack.runtime_policy.meta.json",
+      "contentPath": "assets/assistant/prompts/global/stack.runtime_policy.md"
+    },
+    {
+      "metaPath": "assets/assistant/prompts/global/stack.recovery_policy.meta.json",
+      "contentPath": "assets/assistant/prompts/global/stack.recovery_policy.md"
+    },
+    {
+      "metaPath": "assets/assistant/prompts/global/stack.output_contract.meta.json",
+      "contentPath": "assets/assistant/prompts/global/stack.output_contract.md"
+    },
+    {
+      "metaPath": "assets/assistant/prompts/global/planner.global_plan.meta.json",
+      "contentPath": "assets/assistant/prompts/global/planner.global_plan.md"
+    },
+    {
+      "metaPath": "assets/assistant/prompts/global/planner.postcondition_check.meta.json",
+      "contentPath": "assets/assistant/prompts/global/planner.postcondition_check.md"
+    },
+    {
+      "metaPath": "assets/assistant/prompts/global/synthesizer.final_answer.meta.json",
+      "contentPath": "assets/assistant/prompts/global/synthesizer.final_answer.md"
+    },
+    {
+      "metaPath": "assets/assistant/prompts/global/synthesizer.multi_skill_fusion.meta.json",
+      "contentPath": "assets/assistant/prompts/global/synthesizer.multi_skill_fusion.md"
+    },
+    {
+      "metaPath": "assets/assistant/prompts/global/summarize_session.meta.json",
+      "contentPath": "assets/assistant/prompts/global/summarize_session.md"
+    },
+    {
+      "metaPath": "assets/assistant/prompts/web/domain.web_query_plan.meta.json",
+      "contentPath": "assets/assistant/prompts/web/domain.web_query_plan.md"
+    },
+    {
+      "metaPath": "assets/assistant/prompts/web/domain.web_result_judge.meta.json",
+      "contentPath": "assets/assistant/prompts/web/domain.web_result_judge.md"
+    },
+    {
+      "metaPath": "assets/assistant/prompts/web/domain.web_key_fact_extract.meta.json",
+      "contentPath": "assets/assistant/prompts/web/domain.web_key_fact_extract.md"
+    },
+    {
+      "metaPath": "assets/assistant/prompts/web/domain.web_evidence_pack.meta.json",
+      "contentPath": "assets/assistant/prompts/web/domain.web_evidence_pack.md"
+    }
+  ]
+}
+

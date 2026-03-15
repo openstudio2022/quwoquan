@@ -59,7 +59,7 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
           "../quwoquan_app/test/ui/chat/widgets/chat_assistant_ui_widget_test.dart"
         ],
         "t3": [
-          "../quwoquan_app/test/personal_assistant/assistant_run_e2e_test.dart"
+          "../quwoquan_app/test/assistant/assistant_run_e2e_test.dart"
         ],
         "t4": []
       }

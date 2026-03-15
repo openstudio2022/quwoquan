@@ -16,7 +16,7 @@
 ///       同段逻辑的精确复制（单独抽出测试），任何修改必须同步两处。
 library;
 
-import 'package:quwoquan_app/personal_assistant/protocol/run_request.dart';
+import 'package:quwoquan_app/assistant/internal_legacy/protocol/run_request.dart';
 import 'package:test/test.dart';
 
 // ─── 精确复制 chat_detail_page.dart Line 1007-1027 的过滤和映射逻辑 ──────────

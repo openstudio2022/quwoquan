@@ -5,7 +5,7 @@ contract: intent_graph
 version: v1
 kind: planner_contract
 imports:
-  - package:quwoquan_app/personal_assistant/contracts/runtime_enums.dart
+  - package:quwoquan_app/assistant/contracts/runtime_enums.dart
 fields:
   - { name: userGoal, type: string, required: true }
   - { name: problemShape, type: enum, enum_ref: ProblemShape, required: true }

@@ -10,10 +10,7 @@ import 'package:quwoquan_app/ui/circle/pages/circles_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_tab_page.dart';
-import 'package:quwoquan_app/personal_assistant/observability/logging/app_log_models.dart';
-import 'package:quwoquan_app/personal_assistant/observability/logging/app_log_service.dart';
-import 'package:quwoquan_app/personal_assistant/observability/logging/app_perf_probe.dart';
-import 'package:quwoquan_app/personal_assistant/observability/logging/app_trace_context_store.dart';
+import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
 
 /// 主 App 壳
 ///
