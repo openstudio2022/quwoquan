@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
+import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
+import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
 import 'package:quwoquan_app/assistant/context/assembly/conversation_state_kernel.dart';
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
@@ -116,20 +118,30 @@ void main() {
 
       expect(result.status, EvidenceStatus.bounded);
       expect(result.passed, isFalse);
-      expect(result.missingDimensions, contains('最新变化'));
+      expect(
+        result.missingDimensions,
+        contains(QueryTaskDimension.latestSignal.wireName),
+      );
     });
 
     test('ConversationStateKernel 对 bounded_answer 不再阻塞成答', () {
-      final kernel = ConversationStateKernel(problemFramer: framer);
+      const kernel = ConversationStateKernel();
       final slotSchema = kernel.defaultSlotSchema(
         domainId: 'fallback_general_search',
         problemClass: 'evidence_lookup',
         dialogueRoundScript: _dialogueScript(),
       );
       final decision = kernel.evaluate(
-        query: '土拨鼠观赏最佳时间',
         domainId: 'fallback_general_search',
         problemClass: 'evidence_lookup',
+        intentGraph: const IntentGraph(
+          userGoal: '土拨鼠观赏最佳时间',
+          problemShape: ProblemShape.singleSkill,
+          primarySkill: 'fallback_general_search',
+          problemClass: ProblemClass.evidenceLookup,
+          requiresExternalEvidence: true,
+        ),
+        queryTasks: const <QueryTask>[],
         dialogueRoundScript: _dialogueScript(),
         aggregationState: const AggregationState(
           canGivePartialAnswer: true,

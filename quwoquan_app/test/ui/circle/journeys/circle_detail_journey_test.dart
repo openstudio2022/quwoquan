@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -50,18 +51,18 @@ Widget _scopedApp({CircleRepository? mock}) {
   );
 }
 
-/// CircleShell 的 TabController 热替换在测试环境中会导致 _IndicatorPainter paint 异常。
-/// 此辅助函数在 pump 过程中忽略已知的 TabBar paint 错误。
+/// CircleShell 的分页切换在测试环境中偶发触发渲染报错。
+/// 此辅助函数在 pump 过程中忽略已知的历史渲染错误。
 Future<void> _pumpIgnoringTabPaintErrors(
   WidgetTester tester, {
   int frames = 3,
 }) async {
   final original = FlutterError.onError;
   FlutterError.onError = (details) {
-    final isTabPaintError =
+    final isKnownPaintError =
         details.library == 'rendering library' &&
         details.toString().contains('_IndicatorPainter');
-    if (!isTabPaintError) {
+    if (!isKnownPaintError) {
       original?.call(details);
     }
   };
@@ -71,14 +72,14 @@ Future<void> _pumpIgnoringTabPaintErrors(
   FlutterError.onError = original;
 }
 
-/// 安全版 pumpAndSettle：忽略 TabBar 已知 paint 错误。
+/// 安全版 pumpAndSettle：忽略历史渲染错误。
 Future<void> _settleIgnoringTabPaintErrors(WidgetTester tester) async {
   final original = FlutterError.onError;
   FlutterError.onError = (details) {
-    final isTabPaintError =
+    final isKnownPaintError =
         details.library == 'rendering library' &&
         details.toString().contains('_IndicatorPainter');
-    if (!isTabPaintError) {
+    if (!isKnownPaintError) {
       original?.call(details);
     }
   };
@@ -88,6 +89,13 @@ Future<void> _settleIgnoringTabPaintErrors(WidgetTester tester) async {
     await tester.pump();
   }
   FlutterError.onError = original;
+}
+
+Finder _circleShellContentPageView() {
+  return find.byWidgetPredicate(
+    (widget) => widget is PageView && widget.physics is BouncingScrollPhysics,
+    description: 'CircleShell content PageView',
+  );
 }
 
 void main() {
@@ -112,8 +120,8 @@ void main() {
       router.push('/circle/circle_photo_01');
       await _pumpIgnoringTabPaintErrors(tester, frames: 5);
 
-      expect(find.byType(TabBar), findsOneWidget);
-      expect(find.byType(TabBarView), findsOneWidget);
+      expect(find.byType(CupertinoSlidingSegmentedControl<int>), findsOneWidget);
+      expect(_circleShellContentPageView(), findsOneWidget);
     });
 
     testWidgets('旅程 A3：从详情页返回到列表页', (tester) async {
@@ -126,7 +134,7 @@ void main() {
 
       expect(find.byType(CircleDetailPage), findsOneWidget);
 
-      await tester.tap(find.byIcon(Icons.arrow_back));
+      await tester.tap(find.byIcon(CupertinoIcons.back));
       await _settleIgnoringTabPaintErrors(tester);
 
       expect(find.byType(CirclesPage), findsOneWidget);
@@ -212,7 +220,7 @@ void main() {
       router.push('/circle/circle_photo_01');
       await _pumpIgnoringTabPaintErrors(tester, frames: 5);
 
-      expect(find.byType(TabBar), findsOneWidget);
+      expect(find.byType(CupertinoSlidingSegmentedControl<int>), findsOneWidget);
 
       await _pumpIgnoringTabPaintErrors(tester, frames: 5);
 

@@ -25,10 +25,13 @@ class DefaultRetrievalPlanner {
   BaselineRetrievalPlan? plan({
     required ProblemFrame frame,
     required List<String> availableTools,
+    List<QueryTask>? preComputedQueryTasks,
   }) {
     if (frame.normalizedQuery.isEmpty) return null;
     if (!availableTools.contains('web_search')) return null;
-    final queryTasks = _buildQueryTasks(frame);
+    final queryTasks = (preComputedQueryTasks != null && preComputedQueryTasks.isNotEmpty)
+        ? preComputedQueryTasks
+        : _buildQueryTasks(frame);
     final blockingDimensions = queryTasks
         .map((item) => item.dimension.displayLabel)
         .where((item) => item.trim().isNotEmpty)

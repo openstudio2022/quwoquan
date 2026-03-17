@@ -72,7 +72,7 @@ void main() {
 
 class _FakeAssistantGateway extends AssistantGateway {
   _FakeAssistantGateway(this._response)
-    : super(AssistantRuntime.createDefault());
+    : super(AssistantRuntime.createForTest());
 
   final AssistantRunResponse _response;
 

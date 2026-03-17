@@ -1,9 +1,9 @@
-// ignore_for_file: unused_field, unused_element, unused_local_variable, avoid_print, unnecessary_underscores, deprecated_member_use
+// ignore_for_file: unused_field, unused_element, unused_local_variable, avoid_print, unnecessary_underscores
 
 import 'dart:math';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -18,6 +18,7 @@ import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 
 /// 作者主页组件 - 基于原型代码实现
 /// 包含完整的个人资料展示、作品展示、交互功能
@@ -349,6 +350,7 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
   /// 计算最大下拉高度
   void _calculateMaxPullHeight() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       final screenHeight = MediaQuery.of(context).size.height;
       _maxPullHeight = screenHeight / 3; // 屏幕高度的1/3
     });
@@ -434,8 +436,6 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
       ),
       child: AppScaffold(
         backgroundColor: Colors.transparent,
-        // extendBodyBehindAppBar is not a property of AppScaffold/CupertinoPageScaffold, 
-        // but since we use Stack as child and transparent bg, it should be fine.
         child: Stack(
           children: [
             _buildScrollableContent(isDark),
@@ -459,7 +459,7 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
               mainAxisAlignment: MainAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
               children: [
-                CupertinoActivityIndicator(),
+                const CupertinoActivityIndicator(),
                 SizedBox(height: 16.h),
                 Text(
                   context.l10n.loading,
@@ -516,7 +516,10 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
                   onPressed: _loadUserData,
                   color: AppColors.primaryColor,
                   borderRadius: BorderRadius.circular(8.r),
-                  child: Text(context.l10n.retry, style: TextStyle(color: AppColors.white)),
+                  child: Text(
+                    context.l10n.retry,
+                    style: const TextStyle(color: AppColors.white),
+                  ),
                 ),
               ],
             ),
@@ -656,9 +659,7 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
       return Container(
         key: _profileInfoKey,
         padding: EdgeInsets.all(AppSpacing.md.w),
-        child: Center(
-          child: CupertinoActivityIndicator(),
-        ),
+        child: const Center(child: CupertinoActivityIndicator()),
       );
     }
 
@@ -1391,9 +1392,7 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
       return Container(
         key: _profileInfoKey,
         padding: EdgeInsets.all(AppSpacing.md.w),
-        child: Center(
-          child: CupertinoActivityIndicator(),
-        ),
+        child: const Center(child: CupertinoActivityIndicator()),
       );
     }
     
@@ -1484,7 +1483,7 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
         borderRadius: BorderRadius.circular(24),
         onPressed: () => setState(() => _isResonanceOpen = true),
         child: Container(
-          padding: EdgeInsets.all(AppSpacing.md.w),
+          padding: EdgeInsets.all((AppSpacing.md.w).clamp(0.0, double.infinity)),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(24),
             border: Border.all(
@@ -1527,50 +1526,63 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
                 ],
               ),
               SizedBox(width: AppSpacing.md.w),
-              Text(
-                '${context.l10n.youHave} ',
-                style: TextStyle(
-                  fontSize: 14.sp,
-                  fontWeight: FontWeight.w700,
-                  color: AppColorsFunctional.getColor(
-                    isDark,
-                    ColorType.foregroundPrimary,
-                  ),
+              Expanded(
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text(
+                            '${context.l10n.youHave} ',
+                            style: TextStyle(
+                              fontSize: 14.sp,
+                              fontWeight: FontWeight.w700,
+                              color: AppColorsFunctional.getColor(
+                                isDark,
+                                ColorType.foregroundPrimary,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            '$overlapPoints',
+                            style: TextStyle(
+                              fontSize: 18.sp,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.primaryColor,
+                            ),
+                          ),
+                          Text(
+                            ' ${context.l10n.resonanceSuffix}',
+                            style: TextStyle(
+                              fontSize: 14.sp,
+                              fontWeight: FontWeight.w700,
+                              color: AppColorsFunctional.getColor(
+                                isDark,
+                                ColorType.foregroundPrimary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(width: AppSpacing.sm.w),
+                    Text(
+                      context.l10n.resonanceDetail,
+                      style: TextStyle(
+                        fontSize: 10.sp,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.primaryColor.withValues(alpha: 0.9),
+                      ),
+                    ),
+                    SizedBox(width: AppSpacing.xs.w),
+                    Icon(
+                      CupertinoIcons.chevron_forward,
+                      size: AppSpacing.iconMedium,
+                      color: AppColors.primaryColor.withValues(alpha: 0.7),
+                    ),
+                  ],
                 ),
-              ),
-              Text(
-                '$overlapPoints',
-                style: TextStyle(
-                  fontSize: 18.sp,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.primaryColor,
-                ),
-              ),
-              Text(
-                ' ${context.l10n.resonanceSuffix}',
-                style: TextStyle(
-                  fontSize: 14.sp,
-                  fontWeight: FontWeight.w700,
-                  color: AppColorsFunctional.getColor(
-                    isDark,
-                    ColorType.foregroundPrimary,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              Text(
-                context.l10n.resonanceDetail,
-                style: TextStyle(
-                  fontSize: 10.sp,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.primaryColor.withValues(alpha: 0.9),
-                ),
-              ),
-              SizedBox(width: AppSpacing.xs.w),
-              Icon(
-                Icons.chevron_right,
-                size: AppSpacing.iconMedium,
-                color: AppColors.primaryColor.withValues(alpha: 0.7),
               ),
             ],
           ),
@@ -1587,9 +1599,7 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
         decoration: BoxDecoration(
           color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
         ),
-        child: const Center(
-          child: CupertinoActivityIndicator(),
-        ),
+        child: const Center(child: CupertinoActivityIndicator()),
       );
     }
     final borderColor = AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
@@ -1678,38 +1688,36 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
       child: Row(
         children: [
           CupertinoButton(
-            padding: EdgeInsets.zero,
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg.w,
+              vertical: 12.h,
+            ),
+            minimumSize: Size.zero,
             color: _isFollowing ? bgSecondary : AppColors.primaryColor,
             borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius),
             onPressed: _handleFollowToggle,
-            child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.lg.w,
-                  vertical: 12.h,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (!_isFollowing) ...[
+                  Icon(
+                    CupertinoIcons.add,
+                    size: AppSpacing.iconSmall,
+                    color: Colors.white,
+                  ),
+                  SizedBox(width: AppSpacing.sm.w),
+                ],
+                Text(
+                  _isFollowing ? context.l10n.following : context.l10n.follow,
+                  style: TextStyle(
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.w900,
+                    color: _isFollowing ? fgMuted : Colors.white,
+                  ),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (!_isFollowing) ...[
-                      Icon(
-                        Icons.add,
-                        size: AppSpacing.iconSmall,
-                        color: Colors.white,
-                      ),
-                      SizedBox(width: AppSpacing.sm.w),
-                    ],
-                    Text(
-                      _isFollowing ? context.l10n.following : context.l10n.follow,
-                      style: TextStyle(
-                        fontSize: 14.sp,
-                        fontWeight: FontWeight.w900,
-                        color: _isFollowing ? fgMuted : Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              ],
             ),
+          ),
           SizedBox(width: AppSpacing.md.w),
           CupertinoButton(
             padding: EdgeInsets.zero,
@@ -1717,16 +1725,19 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
             borderRadius: BorderRadius.circular(999),
             onPressed: _handleMessage,
             child: Container(
-                width: 44,
-                height: 44,
-                alignment: Alignment.center,
-                child: Icon(
-                  Icons.chat_bubble_outline,
-                  size: AppSpacing.iconMedium,
-                  color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
+              width: 44,
+              height: 44,
+              alignment: Alignment.center,
+              child: Icon(
+                CupertinoIcons.chat_bubble,
+                size: AppSpacing.iconMedium,
+                color: AppColorsFunctional.getColor(
+                  isDark,
+                  ColorType.foregroundPrimary,
                 ),
               ),
             ),
+          ),
         ],
       ),
     );
@@ -1850,9 +1861,7 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
               fit: BoxFit.cover,
               loadingBuilder: (context, child, loadingProgress) {
                 if (loadingProgress == null) return child;
-                return Center(
-                  child: CupertinoActivityIndicator(),
-                );
+                return const Center(child: CupertinoActivityIndicator());
               },
               errorBuilder: (context, error, stackTrace) {
                 return Container(
@@ -1950,10 +1959,12 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
                 padding: EdgeInsets.symmetric(vertical: 8.h),
                 color: _isFollowing
                     ? AppColorsFunctional.getColor(
-                        isDark, ColorType.foregroundTertiary)
+                        isDark,
+                        ColorType.foregroundTertiary,
+                      )
                     : AppColors.primaryColor,
                 borderRadius: BorderRadius.circular(6.r),
-                minSize: 0,
+                minimumSize: Size.zero,
                 onPressed: _handleFollowToggle,
                 child: Text(
                   _isFollowing ? context.l10n.following : context.l10n.follow,
@@ -1973,7 +1984,9 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
                     borderRadius: BorderRadius.circular(6.r),
                     border: Border.all(
                       color: AppColorsFunctional.getColor(
-                          isDark, ColorType.foregroundSecondary),
+                        isDark,
+                        ColorType.foregroundSecondary,
+                      ),
                     ),
                   ),
                   child: Text(
@@ -1981,7 +1994,9 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
                     style: TextStyle(
                       fontSize: 14.sp,
                       color: AppColorsFunctional.getColor(
-                          isDark, ColorType.foregroundPrimary),
+                        isDark,
+                        ColorType.foregroundPrimary,
+                      ),
                     ),
                   ),
                 ),
@@ -1997,14 +2012,18 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
                   borderRadius: BorderRadius.circular(6.r),
                   border: Border.all(
                     color: AppColorsFunctional.getColor(
-                        isDark, ColorType.foregroundSecondary),
+                      isDark,
+                      ColorType.foregroundSecondary,
+                    ),
                   ),
                 ),
                 child: Icon(
-                  Icons.more_horiz,
+                  CupertinoIcons.ellipsis,
                   size: 16.sp,
                   color: AppColorsFunctional.getColor(
-                      isDark, ColorType.foregroundPrimary),
+                    isDark,
+                    ColorType.foregroundPrimary,
+                  ),
                 ),
               ),
             ),
@@ -2017,7 +2036,7 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
   /// 与 TSX ResonanceSpace 一致：交集详情全屏叠层，占位实现
   Widget _buildResonanceOverlay(bool isDark) {
     return Positioned.fill(
-      child: Material(
+      child: Container(
         color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
         child: SafeArea(
           child: Column(
@@ -2029,9 +2048,10 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
                 ),
                 child: Row(
                   children: [
-                    IconButton(
-                      icon: const Icon(CupertinoIcons.back),
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
                       onPressed: () => setState(() => _isResonanceOpen = false),
+                      child: const Icon(CupertinoIcons.back),
                     ),
                     Text(
                       context.l10n.resonanceDetail,
@@ -2079,36 +2099,13 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            // 返回按钮
-            GestureDetector(
-              onTap: () {
-                widget.onBack();
-              },
-              child: Container(
-                padding: EdgeInsets.all(AppSpacing.sm.w),
-          decoration: BoxDecoration(
-                  color: AppColors.overlayMedium, // 更透明的背景
-            shape: BoxShape.circle,
-                  border: Border.all(
-                    color: AppColors.overlayLight,
-                    width: 1,
-                  ),
-          ),
-          child: Icon(
-                  Icons.chevron_left, // 使用小于符号样式的图标
-                  color: AppColors.white,
-                  size: AppSpacing.iconMedium.sp,
-                ),
-              ),
-            ),
-            
-            // 更多功能按钮
-            GestureDetector(
-              onTap: _showMoreOptions,
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: widget.onBack,
               child: Container(
                 padding: EdgeInsets.all(AppSpacing.sm.w),
                 decoration: BoxDecoration(
-                  color: AppColors.overlayMedium, // 更透明的背景
+                  color: AppColors.overlayMedium,
                   shape: BoxShape.circle,
                   border: Border.all(
                     color: AppColors.overlayLight,
@@ -2116,7 +2113,28 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
                   ),
                 ),
                 child: Icon(
-                  Icons.more_horiz,
+                  CupertinoIcons.back,
+                  color: AppColors.white,
+                  size: AppSpacing.iconMedium.sp,
+                ),
+              ),
+            ),
+            
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: _showMoreOptions,
+              child: Container(
+                padding: EdgeInsets.all(AppSpacing.sm.w),
+                decoration: BoxDecoration(
+                  color: AppColors.overlayMedium,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: AppColors.overlayLight,
+                    width: 1,
+                  ),
+                ),
+                child: Icon(
+                  CupertinoIcons.ellipsis,
                   color: AppColors.white,
                   size: AppSpacing.iconMedium.sp,
                 ),
@@ -2130,63 +2148,40 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
 
   /// 显示更多选项
   void _showMoreOptions() {
-    // 添加mounted检查，防止在widget销毁后访问ref
     if (!mounted) return;
-    
-    final isDark = ref.watch(isDarkProvider);
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(20.r),
-            topRight: Radius.circular(20.r),
-          ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40.w,
-              height: 4.h,
-              margin: EdgeInsets.only(top: 12.h, bottom: 20.h),
-              decoration: BoxDecoration(
-                color: AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary),
-                borderRadius: BorderRadius.circular(2.r),
-              ),
-            ),
-            _buildMoreOptionItem(Icons.block, context.l10n.blockUserAction, isDark, () => _handleBlockUser()),
-            _buildMoreOptionItem(Icons.flag, context.l10n.report, isDark, () => _handleReport()),
-            _buildMoreOptionItem(Icons.share, context.l10n.shareTo, isDark, () => _handleShare()),
-            SizedBox(height: 20.h),
-          ],
-        ),
-      ),
-    );
-  }
 
-  /// 构建更多选项项目
-  Widget _buildMoreOptionItem(IconData icon, String title, bool isDark, VoidCallback onTap) {
-    return ListTile(
-      leading: Icon(
-        icon,
-        color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
-        size: 20.sp,
-      ),
-      title: Text(
-        title,
-        style: TextStyle(
-          color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
-          fontSize: 16.sp,
-          fontWeight: FontWeight.w500,
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(context);
+              _handleBlockUser();
+            },
+            child: Text(context.l10n.blockUserAction),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(context);
+              _handleReport();
+            },
+            child: Text(context.l10n.report),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(context);
+              _handleShare();
+            },
+            child: Text(context.l10n.shareTo),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          isDefaultAction: true,
+          onPressed: () => Navigator.pop(context),
+          child: Text(context.l10n.cancel),
         ),
       ),
-      onTap: () {
-        Navigator.pop(context);
-        onTap();
-      },
     );
   }
 
@@ -2246,15 +2241,7 @@ class _AuthorProfileState extends ConsumerState<AuthorProfile> with TickerProvid
 
   /// 格式化数量显示
   String _formatCount(int count) {
-    if (count >= 1000000) {
-      return '${(count / 1000000).toStringAsFixed(1)}M';
-    } else if (count >= 10000) {
-      return '${(count / 10000).toStringAsFixed(1)}万';
-    } else if (count >= 1000) {
-      return '${(count / 1000).toStringAsFixed(1)}k';
-    } else {
-      return count.toString();
-    }
+    return formatCompactActionCount(count);
   }
 
   /// 构建可滚动的内容区域 - 全局Stack架构（与MyProfilePage保持一致）

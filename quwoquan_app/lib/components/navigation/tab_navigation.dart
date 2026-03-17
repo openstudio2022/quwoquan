@@ -9,8 +9,9 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 class TabItem {
   final String id;
   final String label;
+  final Key? key;
 
-  const TabItem({required this.id, required this.label});
+  const TabItem({required this.id, required this.label, this.key});
 }
 
 enum TabNavigationMode {

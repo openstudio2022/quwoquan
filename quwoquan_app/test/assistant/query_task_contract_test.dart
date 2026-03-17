@@ -23,6 +23,22 @@ void main() {
       expect(tasks.first.toJson()['dimensionLabel'], '关键取舍');
     });
 
+    test('支持 authorityDomains 与 freshnessHoursMax roundtrip', () {
+      final task = QueryTask.fromJson(<String, dynamic>{
+        'id': 'weather_now',
+        'query': '深圳天气 实时',
+        'label': '当前状态',
+        'dimension': 'current_state',
+        'authorityDomains': <String>['weather.com.cn', 'cma.cn'],
+        'freshnessHoursMax': 1,
+      });
+
+      expect(task.authorityDomains, <String>['weather.com.cn', 'cma.cn']);
+      expect(task.freshnessHoursMax, 1);
+      expect(task.toJson()['authorityDomains'], <String>['weather.com.cn', 'cma.cn']);
+      expect(task.toJson()['freshnessHoursMax'], 1);
+    });
+
     test('unknown dimension 保持安全默认值', () {
       final task = QueryTask.fromJson(<String, dynamic>{
         'query': '随便查一下',

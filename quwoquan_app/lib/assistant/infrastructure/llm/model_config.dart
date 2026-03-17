@@ -527,8 +527,10 @@ class AssistantModelConfigLoader {
     final candidates = <String>[
       '$home/.moltbot/moltbot.json',
       '$home/.moltbot/clawdbot.json',
+      '$home/.moltbot/agents/main/agent/models.json',
       '$home/.clawdbot/moltbot.json',
       '$home/.clawdbot/clawdbot.json',
+      '$home/.clawdbot/agents/main/agent/models.json',
     ];
     for (final path in candidates) {
       final file = File(path);

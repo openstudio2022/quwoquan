@@ -288,7 +288,7 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
 
       // 点击第一个候选成员
-      final memberItems = find.byType(InkWell);
+      final memberItems = find.byType(CupertinoListTile);
       expect(memberItems, findsWidgets);
       await tester.tap(memberItems.first);
       await tester.pumpAndSettle();
@@ -310,7 +310,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      await tester.tap(find.byType(InkWell).first);
+      await tester.tap(find.byType(CupertinoListTile).first);
       await tester.pumpAndSettle();
 
       await tester.tap(find.text(UITextConstants.confirm));
@@ -414,10 +414,14 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
 
       // 点选已有 1 个管理员，再选 3 个非管理员成员（共 4 个 → 触发限制）
-      final items = find.byType(InkWell);
+      const candidateNames = <String>['张华', '王芳', '赵磊'];
       // 先选前三个（如已经有一个 admin 选中，总共 4 个会触发提示）
-      for (int i = 0; i < 3 && i < items.evaluate().length; i++) {
-        await tester.tap(items.at(i));
+      for (final name in candidateNames) {
+        final candidate = find.text(name);
+        if (candidate.evaluate().isEmpty) {
+          continue;
+        }
+        await tester.tap(candidate.first);
         await tester.pump();
         // 若弹出限制对话框，关掉继续
         if (find.byType(CupertinoAlertDialog).evaluate().isNotEmpty) {
@@ -444,7 +448,7 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
 
       // 初始管理员已选中，完成按钮应可用
-      final doneBtn = find.byType(FilledButton);
+      final doneBtn = find.textContaining(UITextConstants.done);
       await tester.tap(doneBtn);
       await tester.pump(const Duration(milliseconds: 200));
 

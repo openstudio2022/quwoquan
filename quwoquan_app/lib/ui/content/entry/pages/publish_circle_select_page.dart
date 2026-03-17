@@ -66,159 +66,165 @@ class _PublishCircleSelectPageState extends State<PublishCircleSelectPage> {
               Navigator.of(context).pop<Map<String, String>?>(null),
         ),
       ),
-      child: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: CustomScrollView(
-                slivers: [
-                  if (!hasJoined) ...[
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal:
-                              SettingsSemanticConstants.blockHorizontalPadding,
-                          vertical: AppSpacing.interGroupMd,
-                        ),
-                        child: Text(
-                          l10n.noCirclesAvailable,
-                          style: TextStyle(
-                            fontSize: AppTypography.sm,
-                            color: fgSecondary,
+      child: Material(
+        type: MaterialType.transparency,
+        child: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: CustomScrollView(
+                  slivers: [
+                    if (!hasJoined) ...[
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal:
+                                SettingsSemanticConstants.blockHorizontalPadding,
+                            vertical: AppSpacing.interGroupMd,
                           ),
-                        ),
-                      ),
-                    ),
-                  ],
-                  if (hasJoined) ...[
-                    _sectionHeader(l10n.circleJoinedSection, fgSecondary),
-                    SliverToBoxAdapter(
-                      child: Container(
-                        margin: EdgeInsets.symmetric(
-                          horizontal:
-                              SettingsSemanticConstants.blockHorizontalPadding,
-                          vertical: AppSpacing.sm,
-                        ),
-                        decoration: BoxDecoration(
-                          color: blockBg,
-                          borderRadius: BorderRadius.circular(
-                            SettingsSemanticConstants.blockBorderRadius,
-                          ),
-                          border: Border.all(
-                            color: SettingsSemanticConstants.blockBorderColor(
-                              isDark,
+                          child: Text(
+                            l10n.noCirclesAvailable,
+                            style: TextStyle(
+                              fontSize: AppTypography.sm,
+                              color: fgSecondary,
                             ),
                           ),
                         ),
-                        child: Column(
-                          children: [
-                            for (
-                              var i = 0;
-                              i < widget.joinedCircles.length;
-                              i++
-                            ) ...[
-                              if (i > 0)
-                                Divider(
-                                  height: 1,
-                                  color: dividerClr,
-                                  thickness: SettingsSemanticConstants
-                                      .dividerThickness,
-                                ),
-                              _buildJoinedTile(
-                                widget.joinedCircles[i],
-                                l10n,
-                                fgPrimary,
-                                fgSecondary,
-                                blue,
-                              ),
-                            ],
-                          ],
-                        ),
                       ),
-                    ),
-                  ],
-                  if (hasRecommended) ...[
-                    _sectionHeader(l10n.circleRecommendedSection, fgSecondary),
-                    SliverToBoxAdapter(
-                      child: Container(
-                        margin: EdgeInsets.symmetric(
-                          horizontal:
-                              SettingsSemanticConstants.blockHorizontalPadding,
-                          vertical: AppSpacing.sm,
-                        ),
-                        decoration: BoxDecoration(
-                          color: blockBg,
-                          borderRadius: BorderRadius.circular(
-                            SettingsSemanticConstants.blockBorderRadius,
+                    ],
+                    if (hasJoined) ...[
+                      _sectionHeader(l10n.circleJoinedSection, fgSecondary),
+                      SliverToBoxAdapter(
+                        child: Container(
+                          margin: EdgeInsets.symmetric(
+                            horizontal:
+                                SettingsSemanticConstants.blockHorizontalPadding,
+                            vertical: AppSpacing.sm,
                           ),
-                          border: Border.all(
-                            color: SettingsSemanticConstants.blockBorderColor(
-                              isDark,
+                          decoration: BoxDecoration(
+                            color: blockBg,
+                            borderRadius: BorderRadius.circular(
+                              SettingsSemanticConstants.blockBorderRadius,
+                            ),
+                            border: Border.all(
+                              color: SettingsSemanticConstants.blockBorderColor(
+                                isDark,
+                              ),
                             ),
                           ),
-                        ),
-                        child: Column(
-                          children: [
-                            for (
-                              var i = 0;
-                              i < widget.recommendedCircles.length;
-                              i++
-                            ) ...[
-                              if (i > 0)
-                                Divider(
-                                  height: 1,
-                                  color: dividerClr,
-                                  thickness: SettingsSemanticConstants
-                                      .dividerThickness,
+                          child: Column(
+                            children: [
+                              for (
+                                var i = 0;
+                                i < widget.joinedCircles.length;
+                                i++
+                              ) ...[
+                                if (i > 0)
+                                  Divider(
+                                    height: 1,
+                                    color: dividerClr,
+                                    thickness: SettingsSemanticConstants
+                                        .dividerThickness,
+                                  ),
+                                _buildJoinedTile(
+                                  widget.joinedCircles[i],
+                                  l10n,
+                                  fgPrimary,
+                                  fgSecondary,
+                                  blue,
                                 ),
-                              _buildRecommendedTile(
-                                widget.recommendedCircles[i],
-                                l10n,
-                                fgPrimary,
-                                fgSecondary,
-                              ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
+                      ),
+                    ],
+                    if (hasRecommended) ...[
+                      _sectionHeader(
+                        l10n.circleRecommendedSection,
+                        fgSecondary,
+                      ),
+                      SliverToBoxAdapter(
+                        child: Container(
+                          margin: EdgeInsets.symmetric(
+                            horizontal:
+                                SettingsSemanticConstants.blockHorizontalPadding,
+                            vertical: AppSpacing.sm,
+                          ),
+                          decoration: BoxDecoration(
+                            color: blockBg,
+                            borderRadius: BorderRadius.circular(
+                              SettingsSemanticConstants.blockBorderRadius,
+                            ),
+                            border: Border.all(
+                              color: SettingsSemanticConstants.blockBorderColor(
+                                isDark,
+                              ),
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              for (
+                                var i = 0;
+                                i < widget.recommendedCircles.length;
+                                i++
+                              ) ...[
+                                if (i > 0)
+                                  Divider(
+                                    height: 1,
+                                    color: dividerClr,
+                                    thickness: SettingsSemanticConstants
+                                        .dividerThickness,
+                                  ),
+                                _buildRecommendedTile(
+                                  widget.recommendedCircles[i],
+                                  l10n,
+                                  fgPrimary,
+                                  fgSecondary,
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (!hasJoined && !hasRecommended)
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: _buildEmptyState(context, l10n, fgSecondary),
+                      ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: SettingsSemanticConstants.blockHorizontalPadding,
+                  vertical: AppSpacing.interGroupMd,
+                ),
+                decoration: BoxDecoration(
+                  color: SettingsSemanticConstants.pageBackground(isDark),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: CupertinoButton(
+                        onPressed: () =>
+                            Navigator.of(context).pop<Map<String, String>?>(null),
+                        child: Text(l10n.cancel),
+                      ),
+                    ),
+                    SizedBox(width: AppSpacing.interGroupMd),
+                    Expanded(
+                      child: CupertinoButton.filled(
+                        onPressed: () => Navigator.of(context).pop(_selected),
+                        child: Text(l10n.confirm),
                       ),
                     ),
                   ],
-                  if (!hasJoined && !hasRecommended)
-                    SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: _buildEmptyState(context, l10n, fgSecondary),
-                    ),
-                ],
+                ),
               ),
-            ),
-            Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: SettingsSemanticConstants.blockHorizontalPadding,
-                vertical: AppSpacing.interGroupMd,
-              ),
-              decoration: BoxDecoration(
-                color: SettingsSemanticConstants.pageBackground(isDark),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: CupertinoButton(
-                      onPressed: () =>
-                          Navigator.of(context).pop<Map<String, String>?>(null),
-                      child: Text(l10n.cancel),
-                    ),
-                  ),
-                  SizedBox(width: AppSpacing.interGroupMd),
-                  Expanded(
-                    child: CupertinoButton.filled(
-                      onPressed: () => Navigator.of(context).pop(_selected),
-                      child: Text(l10n.confirm),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -6,11 +6,14 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
+import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
+import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/ui/circle/pages/home_circles_hub_page.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/moment_social_feed.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
@@ -76,16 +79,19 @@ class _HomePageState extends ConsumerState<HomePage>
     if (_activeTab == 'featured') {
       return CupertinoPageScaffold(
         backgroundColor: Colors.black, // Immersive background
-        child: WorksImmersiveViewer(
-          showWorksToolbar: true,
-          onUserTap: _openUserProfile,
-          onAssistantTap: _openAssistantHalfSheet,
-          onTapBack: _handleFeaturedBack,
-          // 兼容已有入口：直接切回常规首页态
-          onSwitchToMoment: () => _handleTabChange('circles'),
-          // 顶部导航回调
-          onSwitchToFollowing: () => _handleTabChange('following'),
-          onSwitchToCircles: () => _handleTabChange('circles'),
+        child: Material(
+          type: MaterialType.transparency,
+          child: WorksImmersiveViewer(
+            showWorksToolbar: true,
+            onUserTap: _openUserProfile,
+            onAssistantTap: _openAssistantHalfSheet,
+            onTapBack: _handleFeaturedBack,
+            // 兼容已有入口：直接切回常规首页态
+            onSwitchToMoment: () => _handleTabChange('circles'),
+            // 顶部导航回调
+            onSwitchToFollowing: () => _handleTabChange('following'),
+            onSwitchToCircles: () => _handleTabChange('circles'),
+          ),
         ),
       );
     }
@@ -108,54 +114,59 @@ class _HomePageState extends ConsumerState<HomePage>
 
     return CupertinoPageScaffold(
       backgroundColor: bg,
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              height: AppSpacing.tabNavigationHeight,
-              decoration: BoxDecoration(
-                color: bg,
-                border: Border(
-                  bottom: BorderSide(
-                    color: fgSecondary.withValues(alpha: 0.15),
+      child: Material(
+        type: MaterialType.transparency,
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                height: AppSpacing.tabNavigationHeight,
+                decoration: BoxDecoration(
+                  color: bg,
+                  border: Border(
+                    bottom: BorderSide(
+                      color: fgSecondary.withValues(alpha: 0.15),
+                    ),
                   ),
                 ),
-              ),
-              child: Stack(
-                children: [
-                  // Layer 1: Absolutely Centered Tabs
-                  Positioned.fill(
-                    child: Center(
-                      child: CenteredScrollableTabBar(
-                        tabs: tabs,
-                        activeTab: _activeTab,
-                        onTabChange: _handleTabChange,
-                        // Remove actions from here to ensure centering
-                        leadingActions: const [],
-                        trailingActions: const [],
-                        // Ensure background is transparent so it doesn't cover actions if expanding
-                        transparentBackground: true,
+                child: Stack(
+                  children: [
+                    // Layer 1: Absolutely Centered Tabs
+                    Positioned.fill(
+                      child: Center(
+                        child: CenteredScrollableTabBar(
+                          tabs: tabs,
+                          activeTab: _activeTab,
+                          onTabChange: _handleTabChange,
+                          // Remove actions from here to ensure centering
+                          leadingActions: const [],
+                          trailingActions: const [],
+                          // Ensure background is transparent so it doesn't cover actions if expanding
+                          transparentBackground: true,
+                        ),
                       ),
                     ),
-                  ),
-                  // Layer 2: Trailing Actions
-                  Positioned(
-                    right: AppSpacing.feedContentHorizontal(context),
-                    top: 0,
-                    bottom: 0,
-                    child: const Center(
-                      child: GlobalTopActions(
-                        initialSearchScope: GlobalSearchScope.content,
+                    // Layer 2: Trailing Actions
+                    Positioned(
+                      right:
+                          AppSpacing.feedContentHorizontal(context) -
+                          AppSpacing.intraGroupXs,
+                      top: 0,
+                      bottom: 0,
+                      child: const Center(
+                        child: GlobalTopActions(
+                          initialSearchScope: GlobalSearchScope.content,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            Expanded(child: _buildBody(isDark)),
-          ],
+              Expanded(child: _buildBody(isDark)),
+            ],
+          ),
         ),
       ),
     );
@@ -168,6 +179,9 @@ class _HomePageState extends ConsumerState<HomePage>
           isDark: isDark,
           feedTabId: 'following',
           onUserTap: _openUserProfile,
+          onPostTap: (post, index, {feedPosts}) {
+            _openFeedPost(post, index, feedPosts: feedPosts);
+          },
         );
       case 'circles':
         return const HomeCirclesHubPage();
@@ -205,5 +219,43 @@ class _HomePageState extends ConsumerState<HomePage>
       experienceLevel: service.getExperience(target),
     );
     AssistantHalfSheet.show(context, ctx);
+  }
+
+  void _openFeedPost(
+    PostBaseDto post,
+    int mediaIndex, {
+    List<PostBaseDto>? feedPosts,
+  }) {
+    final postViews = feedPosts?.map(PostSummaryView.fromDto).toList();
+    final initialIndex = (feedPosts != null && feedPosts.isNotEmpty)
+        ? feedPosts
+              .indexWhere((item) => item.id == post.id)
+              .clamp(0, feedPosts.length - 1)
+        : mediaIndex;
+    final moment = post is MomentPostDto ? post : null;
+    final hasVideo =
+        moment != null &&
+        moment.videoUrl != null &&
+        moment.videoUrl!.trim().isNotEmpty;
+    if (post.displayFormat == 'video' || hasVideo) {
+      context.push(
+        '/video-viewer/$initialIndex',
+        extra: MediaViewerExtra(
+          posts: postViews ?? const <PostSummaryView>[],
+          initialIndex: initialIndex,
+          category: 'following',
+        ),
+      );
+      return;
+    }
+    context.push(
+      '/media-viewer/photo/$initialIndex',
+      extra: MediaViewerExtra(
+        posts: postViews ?? const <PostSummaryView>[],
+        initialIndex: initialIndex,
+        category: 'following',
+        initialImageIndex: mediaIndex,
+      ),
+    );
   }
 }

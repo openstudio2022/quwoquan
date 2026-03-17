@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
@@ -193,9 +192,12 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
                       ),
                     )
                   : ListView.separated(
+                      physics: const BouncingScrollPhysics(
+                        parent: AlwaysScrollableScrollPhysics(),
+                      ),
                       padding: EdgeInsets.all(AppSpacing.containerMd),
                       itemCount: _items!.length,
-                      separatorBuilder: (_, __) =>
+                      separatorBuilder: (context, index) =>
                           SizedBox(height: AppSpacing.sm),
                       itemBuilder: (context, i) {
                         final item = _items![i];
@@ -204,8 +206,9 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
                         final avatarUrl = item['avatarUrl'] as String? ?? '';
                         final targetTitle =
                             item['targetTitle'] as String? ?? '';
-                        return InkWell(
-                          onTap: () {
+                        return CupertinoButton(
+                          padding: EdgeInsets.zero,
+                          onPressed: () {
                             if (userId.isNotEmpty) {
                               context.push(
                                 AppRoutePaths.userProfile(username: userId),
@@ -225,9 +228,9 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
                                 backgroundImage: avatarUrl.isNotEmpty
                                     ? NetworkImage(avatarUrl)
                                     : null,
-                                onBackgroundImageError: (_, __) {},
+                                onBackgroundImageError: (error, stackTrace) {},
                                 child: avatarUrl.isEmpty
-                                    ? Icon(Icons.person, color: fgSecondary)
+                                    ? Icon(CupertinoIcons.person, color: fgSecondary)
                                     : null,
                               ),
                               SizedBox(width: AppSpacing.containerSm),

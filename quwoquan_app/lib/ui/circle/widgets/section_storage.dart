@@ -162,62 +162,57 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
 
     return Padding(
       padding: EdgeInsets.only(bottom: AppSpacing.sm),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () {},
-          borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-          child: Padding(
-            padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
-            child: Row(
-              children: [
-                Container(
-                  width: AppSpacing.largeButtonSize,
-                  height: AppSpacing.largeButtonSize,
-                  decoration: BoxDecoration(
-                    color: _fileIconColor(mimeType, fileType).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-                  ),
-                  child: Icon(
-                    _fileIcon(mimeType, fileType),
-                    color: _fileIconColor(mimeType, fileType),
-                    size: AppSpacing.iconMedium,
-                  ),
-                ),
-                SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
-                        style: TextStyle(
-                          fontSize: AppTypography.base,
-                          fontWeight: AppTypography.medium,
-                          color: fgPrimary,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      SizedBox(height: AppSpacing.xs),
-                      Text(
-                        fileType == 'folder' ? date : '${_formatBytes(sizeBytes)} · $date',
-                        style: TextStyle(
-                          fontSize: AppTypography.xs,
-                          color: fgSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(
-                  CupertinoIcons.chevron_forward,
-                  color: fgSecondary,
-                  size: AppSpacing.iconSmall,
-                ),
-              ],
+      child: CupertinoButton(
+        padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        minimumSize: Size.zero,
+        onPressed: () {},
+        child: Row(
+          children: [
+            Container(
+              width: AppSpacing.largeButtonSize,
+              height: AppSpacing.largeButtonSize,
+              decoration: BoxDecoration(
+                color: _fileIconColor(mimeType, fileType).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+              ),
+              child: Icon(
+                _fileIcon(mimeType, fileType),
+                color: _fileIconColor(mimeType, fileType),
+                size: AppSpacing.iconMedium,
+              ),
             ),
-          ),
+            SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: TextStyle(
+                      fontSize: AppTypography.base,
+                      fontWeight: AppTypography.medium,
+                      color: fgPrimary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  SizedBox(height: AppSpacing.xs),
+                  Text(
+                    fileType == 'folder' ? date : '${_formatBytes(sizeBytes)} · $date',
+                    style: TextStyle(
+                      fontSize: AppTypography.xs,
+                      color: fgSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              CupertinoIcons.chevron_forward,
+              color: fgSecondary,
+              size: AppSpacing.iconSmall,
+            ),
+          ],
         ),
       ),
     );

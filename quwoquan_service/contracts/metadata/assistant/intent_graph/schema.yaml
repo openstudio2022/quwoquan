@@ -30,6 +30,8 @@ fields:
   - { name: globalConstraints, type: map, default: {} }
   - { name: clarificationNeeded, type: bool, default: false }
   - { name: recallResult, type: object, ref: RecallResult }
+  - { name: authorityDomains, type: list<string>, default: [] }
+  - { name: freshnessHoursMax, type: int, default: 0 }
 subcontracts:
   query_normalization:
     class_name: QueryNormalization

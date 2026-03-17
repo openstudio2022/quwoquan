@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_models.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_service.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_run_interaction_collector.dart';
+import 'package:quwoquan_app/assistant/tool/runtime/safe_reference_normalizer.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/search_cache.dart';
 import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
 
@@ -74,10 +75,9 @@ class WebSearchTool implements AssistantTool {
   Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
     final broker = _broker;
     if (broker != null) {
-      final result = await broker.search(
-        RetrievalSearchRequest.fromToolArguments(arguments),
-      );
-      return result.toToolResult();
+      final request = RetrievalSearchRequest.fromToolArguments(arguments);
+      final result = await broker.search(request);
+      return _sanitizeBrokerSearchResult(request: request, result: result);
     }
     final rawQuery = (arguments['query'] as String?)?.trim() ?? '';
     final queryTasks = _normalizeQueryTasks(arguments['queryTasks']);
@@ -284,16 +284,16 @@ class WebSearchTool implements AssistantTool {
           authorityDomains.isNotEmpty;
       if (primaryIsLowQuality) {
         return AssistantToolResult(
-          success: false,
-          message:
-              '检索完成但信息不足：返回结果与目标领域（${authorityDomains.join('/')}）无关联，建议降级回复。',
-          errorCode: AssistantErrorCode.executionFailed,
+          success: true,
+          message: '检索完成，但权威域命中不足：已保留当前结果，后续由成答阶段决定是否继续扩检或给出 bounded answer。',
           data: <String, dynamic>{
             'provider': provider.name,
             'summary': summary,
             'references': enrichedReferences,
             'timeConstraint': timeConstraint.toJson(),
             'authorityDomains': authorityDomains,
+            'authoritySatisfied': false,
+            'retrievalInsufficient': true,
             if (domainId.isNotEmpty) 'domainId': domainId,
             if (_stringValue(queryTask['id']).isNotEmpty)
               'queryTaskId': _stringValue(queryTask['id']),
@@ -398,16 +398,16 @@ class WebSearchTool implements AssistantTool {
             authorityDomains.isNotEmpty;
         if (fallbackIsLowQuality) {
           return AssistantToolResult(
-            success: false,
-            message:
-                '检索完成但信息不足：返回结果与目标领域（${authorityDomains.join('/')}）无关联，建议降级回复。',
-            errorCode: AssistantErrorCode.executionFailed,
+            success: true,
+            message: '检索完成，但权威域命中不足：已保留当前结果，后续由成答阶段决定是否继续扩检或给出 bounded answer。',
             data: <String, dynamic>{
               'provider': fallback.providerLabel,
               'summary': fallback.summary,
               'references': enrichedFallbackReferences,
               'timeConstraint': timeConstraint.toJson(),
               'authorityDomains': authorityDomains,
+              'authoritySatisfied': false,
+              'retrievalInsufficient': true,
               if (domainId.isNotEmpty) 'domainId': domainId,
               if (_stringValue(queryTask['id']).isNotEmpty)
                 'queryTaskId': _stringValue(queryTask['id']),
@@ -483,6 +483,123 @@ class WebSearchTool implements AssistantTool {
         degraded: true,
       );
     }
+  }
+
+  Future<AssistantToolResult> _sanitizeBrokerSearchResult({
+    required RetrievalSearchRequest request,
+    required RetrievalSearchResult result,
+  }) async {
+    final toolResult = result.toToolResult();
+    final rawData = toolResult.data;
+    if (rawData == null || rawData.isEmpty) return toolResult;
+    final sanitizedData = Map<String, dynamic>.from(rawData);
+    final domainPolicy = await _loadDomainRetrievalPolicy(request.domainId);
+    final timeContract = await _loadRetrievalTimeContract();
+    final timeConstraint = _resolveTimeConstraint(
+      arguments: request.arguments,
+      domainPolicy: domainPolicy,
+      timeContract: timeContract,
+    );
+    final authorityDomains = _resolveAuthorityDomains(
+      arguments: request.arguments,
+      domainPolicy: domainPolicy,
+    );
+    final normalizedTasks = _normalizeQueryTasks(
+      request.arguments['queryTasks'],
+    );
+    final singleTaskQuery = normalizedTasks.length == 1
+        ? ((normalizedTasks.first['query'] as String?)?.trim() ?? '')
+        : '';
+    final queryNorm = request.arguments['queryNormalization'];
+    final normalizedQuery = singleTaskQuery.isNotEmpty
+        ? singleTaskQuery
+        : queryNorm is Map
+        ? ((queryNorm['normalizedQuery'] as String?)?.trim() ?? request.query)
+        : request.query;
+    final query = normalizedQuery.isNotEmpty ? normalizedQuery : request.query;
+    final queryTask = _resolveSingleQueryTask(
+      arguments: request.arguments,
+      normalizedQuery: query,
+      normalizedTasks: normalizedTasks,
+    );
+    final retrievedAt = DateTime.now().toIso8601String();
+    final referenceCandidates = _referenceCandidatesFromResultData(
+      data: sanitizedData,
+      queryTask: queryTask,
+      retrievedAt: retrievedAt,
+    );
+    if (referenceCandidates.isNotEmpty) {
+      final references = _decorateReferences(
+        references: referenceCandidates,
+        query: query,
+        authorityDomains: authorityDomains,
+        timeConstraint: timeConstraint,
+        queryTask: queryTask,
+        retrievedAt: retrievedAt,
+      );
+      if (references.isNotEmpty) {
+        sanitizedData['references'] = references;
+        sanitizedData['timeConstraint'] = timeConstraint.toJson();
+        sanitizedData['authorityDomains'] = authorityDomains;
+        if (_stringValue(queryTask['id']).isNotEmpty) {
+          sanitizedData['queryTaskId'] = _stringValue(queryTask['id']);
+        }
+        if (_stringValue(queryTask['dimension']).isNotEmpty) {
+          sanitizedData['dimension'] = _stringValue(queryTask['dimension']);
+        }
+        sanitizedData.addAll(
+          _buildEvidenceStats(
+            references: references,
+            authorityDomains: authorityDomains,
+            timeConstraint: timeConstraint,
+          ),
+        );
+      }
+    }
+    return AssistantToolResult(
+      success: toolResult.success,
+      message: toolResult.message,
+      data: sanitizedData,
+      errorCode: toolResult.errorCode,
+      degraded: toolResult.degraded,
+    );
+  }
+
+  List<Map<String, dynamic>> _referenceCandidatesFromResultData({
+    required Map<String, dynamic> data,
+    required Map<String, dynamic> queryTask,
+    required String retrievedAt,
+  }) {
+    final refs =
+        (data['references'] as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[];
+    if (refs.isNotEmpty) return refs;
+    final url = (data['url'] as String?)?.trim() ?? '';
+    if (url.isEmpty) return const <Map<String, dynamic>>[];
+    final snippet = (data['summary'] as String?)?.trim().isNotEmpty == true
+        ? (data['summary'] as String).trim()
+        : (data['snippet'] as String?)?.trim() ?? '';
+    return <Map<String, dynamic>>[
+      <String, dynamic>{
+        'title': (data['title'] as String?)?.trim() ?? url,
+        'url': url,
+        'source': (data['source'] as String?)?.trim().isNotEmpty == true
+            ? (data['source'] as String).trim()
+            : (data['sourceHost'] as String?)?.trim() ?? '',
+        'snippet': snippet,
+        'sourceTier': (data['sourceTier'] as String?)?.trim() ?? '',
+        'queryTaskId': _stringValue(data['queryTaskId']).isNotEmpty
+            ? _stringValue(data['queryTaskId'])
+            : _stringValue(queryTask['id']),
+        'dimension': _stringValue(data['dimension']).isNotEmpty
+            ? _stringValue(data['dimension'])
+            : _stringValue(queryTask['dimension']),
+        'retrievedAt': retrievedAt,
+      },
+    ];
   }
 
   Map<String, dynamic> _buildEvidenceStats({
@@ -850,8 +967,7 @@ class WebSearchTool implements AssistantTool {
   }
 
   Future<_RetrievalTimeContract> _loadRetrievalTimeContract() async {
-    const path =
-        'assets/assistant/config/retrieval_time_contract.json';
+    const path = 'assets/assistant/config/retrieval_time_contract.json';
     try {
       final content = await _loadText(path);
       final decoded = jsonDecode(content);
@@ -1761,9 +1877,7 @@ class WebSearchTool implements AssistantTool {
   Future<_WebSearchProfile> _loadSearchProfile() async {
     final candidates = <Map<String, dynamic>>[];
     try {
-      final bundledText = await rootBundle.loadString(
-        'assistant/config.json',
-      );
+      final bundledText = await rootBundle.loadString('assistant/config.json');
       final decoded = jsonDecode(bundledText);
       if (decoded is Map<String, dynamic>) {
         candidates.add(decoded);
@@ -2229,7 +2343,11 @@ class WebSearchTool implements AssistantTool {
     required Map<String, dynamic> queryTask,
     required String retrievedAt,
   }) {
-    return references
+    final normalizedRefs = references
+        .map(SafeReferenceNormalizer.normalize)
+        .whereType<Map<String, dynamic>>()
+        .toList(growable: false);
+    return normalizedRefs
         .map((ref) {
           final url = (ref['url'] as String?)?.trim() ?? '';
           final host = Uri.tryParse(url)?.host.toLowerCase().trim() ?? '';

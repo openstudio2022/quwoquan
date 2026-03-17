@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 
 /// 'full'：作品模式，含作者/关注/位置；'backOnly'：微趣模式，仅返回+更多
 typedef ToolbarMode = String;
@@ -68,33 +69,17 @@ class MediaViewerTopBar extends StatelessWidget {
               ],
             ),
           ),
-          child: Row(
+          child: Stack(
+            alignment: Alignment.center,
             children: [
-              SizedBox(
-                width: leftWidth,
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: ClipRect(
-                    child: _buildLeftGroup(context, showPositionInBar),
-                  ),
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _buildLeftGroup(context, showPositionInBar),
+                  _buildMoreButton(context),
+                ],
               ),
-              Expanded(
-                child: Center(
-                  child: showAuthorInBar
-                      ? ClipRect(child: _buildAuthorInfo(context))
-                      : const SizedBox.shrink(),
-                ),
-              ),
-              SizedBox(
-                width: rightWidth,
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: ClipRect(
-                    child: _buildMoreButton(context),
-                  ),
-                ),
-              ),
+              if (showAuthorInBar) _buildAuthorInfo(context),
             ],
           ),
         );
@@ -107,10 +92,6 @@ class MediaViewerTopBar extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         _buildBackButton(context),
-        if (showPos) ...[
-          SizedBox(width: context.safeGetIntraGroupSpacing(SpacingSize.sm)),
-          _buildPositionIndicator(context),
-        ],
       ],
     );
   }
@@ -125,7 +106,7 @@ class MediaViewerTopBar extends StatelessWidget {
         alignment: Alignment.center,
         child: Icon(
           Icons.arrow_back_ios_new,
-          color: AppColors.dark.foregroundSecondary,
+          color: AppColors.white,
           size: AppSpacing.iconMedium,
         ),
       ),
@@ -133,12 +114,19 @@ class MediaViewerTopBar extends StatelessWidget {
   }
 
   Widget _buildPositionIndicator(BuildContext context) {
-    return Text(
-      positionText,
-      style: TextStyle(
-        color: AppColors.dark.foregroundSecondary,
-        fontSize: AppTypography.sm,
-        fontWeight: AppTypography.semiBold,
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.black.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        positionText,
+        style: TextStyle(
+          color: AppColors.white,
+          fontSize: AppTypography.sm,
+          fontWeight: AppTypography.semiBold,
+        ),
       ),
     );
   }
@@ -313,7 +301,7 @@ class MediaViewerTopBar extends StatelessWidget {
         alignment: Alignment.center,
         child: Icon(
           Icons.more_horiz,
-          color: AppColors.dark.foregroundSecondary,
+          color: AppColors.white,
           size: AppSpacing.iconMedium,
         ),
       ),
@@ -325,13 +313,10 @@ class MediaViewerBottomBar extends StatelessWidget {
   final int shareCount;
   final int commentCount;
   final int likeCount;
-  final int saveCount;
   final bool isLiked;
-  final bool isSaved;
   final VoidCallback onShare;
   final VoidCallback onComment;
   final VoidCallback onLike;
-  final VoidCallback onSave;
   final VoidCallback? onAssistant;
 
   const MediaViewerBottomBar({
@@ -339,13 +324,10 @@ class MediaViewerBottomBar extends StatelessWidget {
     required this.shareCount,
     required this.commentCount,
     required this.likeCount,
-    required this.saveCount,
     required this.isLiked,
-    required this.isSaved,
     required this.onShare,
     required this.onComment,
     required this.onLike,
-    required this.onSave,
     this.onAssistant,
   });
 
@@ -389,13 +371,13 @@ class MediaViewerBottomBar extends StatelessWidget {
           Expanded(
             child: _buildActionSlot(
               context,
-              iconWidget: AppStarIcon(
+              iconWidget: Icon(
+                CupertinoIcons.arrowshape_turn_up_right,
+                color: AppColors.white,
                 size: AppSpacing.iconMedium,
-                color: isSaved ? AppColors.warning : AppColors.white,
-                filled: isSaved,
               ),
-              count: saveCount,
-              onTap: onSave,
+              count: shareCount,
+              onTap: onShare,
             ),
           ),
           Expanded(
@@ -407,19 +389,6 @@ class MediaViewerBottomBar extends StatelessWidget {
               ),
               count: commentCount,
               onTap: onComment,
-            ),
-          ),
-          const Spacer(),
-          Expanded(
-            child: _buildActionSlot(
-              context,
-              iconWidget: Icon(
-                CupertinoIcons.arrowshape_turn_up_right,
-                color: AppColors.white,
-                size: AppSpacing.iconMedium,
-              ),
-              count: 0, // 分享不显示数字
-              onTap: onShare,
             ),
           ),
         ],
@@ -473,7 +442,7 @@ class MediaViewerActionButton extends StatelessWidget {
             if (count > 0) ...[
               SizedBox(width: context.safeGetIntraGroupSpacing(SpacingSize.xs)),
               Text(
-                _formatCount(count),
+                formatCompactActionCount(count),
                 style: TextStyle(
                   color: AppColors.white,
                   fontSize: AppTypography.sm,
@@ -487,12 +456,4 @@ class MediaViewerActionButton extends StatelessWidget {
     );
   }
 
-  String _formatCount(int count) {
-    if (count >= 10000) {
-      return '${(count / 10000).toStringAsFixed(1)}万';
-    } else if (count >= 1000) {
-      return '${(count / 1000).toStringAsFixed(1)}k';
-    }
-    return count.toString();
-  }
 }

@@ -128,8 +128,8 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.other));
       await _pumpFrames(tester);
-      expect(find.widgetWithText(OutlinedButton, '关注'), findsOneWidget);
-      expect(find.widgetWithText(OutlinedButton, '私信'), findsOneWidget);
+      expect(find.text('关注'), findsAtLeastNWidgets(1));
+      expect(find.text('私信'), findsAtLeastNWidgets(1));
     });
   });
 
@@ -182,8 +182,8 @@ void main() {
         _scopedApp(mode: ProfileMode.other, themeMode: ThemeMode.dark),
       );
       await _pumpFrames(tester);
-      expect(find.widgetWithText(OutlinedButton, '关注'), findsOneWidget);
-      expect(find.widgetWithText(OutlinedButton, '私信'), findsOneWidget);
+      expect(find.text('关注'), findsAtLeastNWidgets(1));
+      expect(find.text('私信'), findsAtLeastNWidgets(1));
     });
 
     testWidgets('AnnotatedRegion 存在于渲染树', (tester) async {

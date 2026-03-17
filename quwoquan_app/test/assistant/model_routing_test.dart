@@ -138,5 +138,148 @@ void main() {
       final defaults = loader.loadDefaultSync();
       expect(defaults, isA<List<AssistantModelRuntimeConfig>>());
     });
+
+    test(
+      'retries without json mode when provider rejects response_format',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        addTearDown(() async {
+          await server.close(force: true);
+        });
+        var requestCount = 0;
+        server.listen((request) async {
+          requestCount += 1;
+          final body = await utf8.decoder.bind(request).join();
+          final decoded = jsonDecode(body) as Map<String, dynamic>;
+          if (decoded.containsKey('response_format')) {
+            request.response
+              ..statusCode = HttpStatus.badRequest
+              ..headers.contentType = ContentType.json
+              ..write(
+                jsonEncode(<String, dynamic>{
+                  'error': <String, dynamic>{
+                    'message': 'response_format is not supported',
+                  },
+                }),
+              );
+            await request.response.close();
+            return;
+          }
+          request.response
+            ..statusCode = HttpStatus.ok
+            ..headers.contentType = ContentType.json
+            ..write(
+              jsonEncode(<String, dynamic>{
+                'choices': <Map<String, dynamic>>[
+                  <String, dynamic>{
+                    'message': <String, dynamic>{'content': '兼容模式成功'},
+                  },
+                ],
+              }),
+            );
+          await request.response.close();
+        });
+
+        final provider = OpenAiCompatibleLlmProvider(
+          modelId: 'MiniMax/MiniMax-M2.5',
+          baseUrl: 'http://127.0.0.1:${server.port}/v1',
+          apiKey: 'test-key',
+          templateRuntime: buildTemplateRuntime(),
+          modelRef: 'modelscope/MiniMax/MiniMax-M2.5',
+        );
+
+        final output = await provider.reason(
+          messages: const <Map<String, String>>[
+            <String, String>{'role': 'user', 'content': '你好'},
+          ],
+          availableTools: const <String>[],
+          callOptions: const LlmCallOptions.synthesis(),
+        );
+
+        expect(output.degraded, isFalse);
+        expect(output.text, equals('兼容模式成功'));
+        expect(requestCount, equals(2));
+      },
+    );
+
+    test(
+      'streaming path retries without json mode when provider rejects response_format',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        addTearDown(() async {
+          await server.close(force: true);
+        });
+        var requestCount = 0;
+        server.listen((request) async {
+          requestCount += 1;
+          final body = await utf8.decoder.bind(request).join();
+          final decoded = jsonDecode(body) as Map<String, dynamic>;
+          if (decoded.containsKey('response_format')) {
+            request.response
+              ..statusCode = HttpStatus.badRequest
+              ..headers.contentType = ContentType.json
+              ..write(
+                jsonEncode(<String, dynamic>{
+                  'error': <String, dynamic>{
+                    'message': 'response_format is not supported',
+                  },
+                }),
+              );
+            await request.response.close();
+            return;
+          }
+          request.response
+            ..statusCode = HttpStatus.ok
+            ..headers.set('content-type', 'text/event-stream; charset=utf-8');
+          request.response.add(
+            utf8.encode(
+              'data: ${jsonEncode(<String, dynamic>{
+                'choices': <Map<String, dynamic>>[
+                  <String, dynamic>{
+                    'delta': <String, dynamic>{'content': '流式'},
+                  },
+                ],
+              })}\n\n',
+            ),
+          );
+          request.response.add(
+            utf8.encode(
+              'data: ${jsonEncode(<String, dynamic>{
+                'choices': <Map<String, dynamic>>[
+                  <String, dynamic>{
+                    'delta': <String, dynamic>{'content': '兼容成功'},
+                  },
+                ],
+              })}\n\n',
+            ),
+          );
+          request.response.add(utf8.encode('data: [DONE]\n\n'));
+          await request.response.close();
+        });
+
+        final provider = OpenAiCompatibleLlmProvider(
+          modelId: 'MiniMax/MiniMax-M2.5',
+          baseUrl: 'http://127.0.0.1:${server.port}/v1',
+          apiKey: 'test-key',
+          templateRuntime: buildTemplateRuntime(),
+          modelRef: 'modelscope/MiniMax/MiniMax-M2.5',
+        );
+        final deltas = <String>[];
+
+        final output = await provider.reason(
+          messages: const <Map<String, String>>[
+            <String, String>{'role': 'user', 'content': '你好'},
+          ],
+          availableTools: const <String>[],
+          callOptions: const LlmCallOptions.synthesis(),
+          onDelta: deltas.add,
+        );
+
+        expect(output.degraded, isFalse);
+        expect(output.text, equals('流式兼容成功'));
+        expect(deltas.join(), equals('流式兼容成功'));
+        expect(requestCount, equals(2));
+      },
+    );
   });
 }

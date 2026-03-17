@@ -8,6 +8,7 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
 import 'package:quwoquan_app/components/more_actions_popup/configs/media_post_config.dart';
@@ -140,15 +141,11 @@ class MomentSocialFeed extends ConsumerWidget {
                 item: dto,
                 isDark: isDark,
                 isLiked: discoveryState.likedPosts.contains(dto.id),
-                isBookmarked: discoveryState.savedPosts.contains(dto.id),
                 likeCount: (() {
                   final n = discoveryState.getPostLikesCount(dto.id);
                   return n > 0 ? n : dto.likeCount;
                 })(),
-                favoriteCount: (() {
-                  final n = discoveryState.getPostBookmarksCount(dto.id);
-                  return n > 0 ? n : dto.favoriteCount;
-                })(),
+                sourceCircleName: _resolveSourceCircleName(ref, dto.id),
                 onUserTap: (id) => onUserTap(
                   id,
                   avatarUrl: dto.avatarUrl,
@@ -174,14 +171,6 @@ class MomentSocialFeed extends ConsumerWidget {
                   ref
                       .read(discoveryStateProvider)
                       .toggleLike(dto.id, baseLikesCount: dto.likeCount);
-                },
-                onBookmarkTap: () {
-                  ref
-                      .read(discoveryStateProvider)
-                      .toggleSave(
-                        dto.id,
-                        baseBookmarksCount: dto.favoriteCount,
-                      );
                 },
                 onMoreTap: () {
                   if (onMoreTap != null) {
@@ -339,6 +328,20 @@ class MomentSocialFeed extends ConsumerWidget {
         .trackShare(postId, tags: <String>[actionId]);
   }
 
+  String _resolveSourceCircleName(WidgetRef ref, String postId) {
+    final raw = ref
+        .read(appContentRepositoryProvider)
+        .discoveryMomentData
+        .cast<Map<String, dynamic>?>()
+        .firstWhere(
+          (item) =>
+              item?['postId']?.toString() == postId ||
+              item?['id']?.toString() == postId,
+          orElse: () => null,
+        );
+    return raw?['circleName']?.toString().trim() ?? '';
+  }
+
   String _extractKeyword(String text) {
     final tokens = text
         .split(RegExp(r'[^\\u4e00-\\u9fa5A-Za-z0-9_]+'))
@@ -358,30 +361,26 @@ class _MomentWeiboCard extends ConsumerStatefulWidget {
     required this.item,
     required this.isDark,
     required this.isLiked,
-    required this.isBookmarked,
     required this.likeCount,
-    required this.favoriteCount,
+    required this.sourceCircleName,
     required this.onUserTap,
     required this.onImageTap,
     required this.onCommentTap,
     required this.onShareTap,
     required this.onLikeTap,
-    required this.onBookmarkTap,
     required this.onMoreTap,
   });
 
   final MomentPostDto item;
   final bool isDark;
   final bool isLiked;
-  final bool isBookmarked;
   final int likeCount;
-  final int favoriteCount;
+  final String sourceCircleName;
   final void Function(String) onUserTap;
   final void Function(int imageIndex) onImageTap;
   final VoidCallback onCommentTap;
   final VoidCallback onShareTap;
   final VoidCallback onLikeTap;
-  final VoidCallback onBookmarkTap;
   final VoidCallback onMoreTap;
 
   @override
@@ -455,14 +454,14 @@ class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
                     Text(
                       item.displayName,
                       style: TextStyle(
-                        fontSize: AppTypography.base,
-                        fontWeight: AppTypography.semiBold,
+                        fontSize: AppTypography.lg,
+                        fontWeight: AppTypography.medium,
                         color: fg,
                       ),
                     ),
                     SizedBox(height: AppSpacing.intraGroupXs / 2),
                     Text(
-                      _timeAgo(item.createdAt),
+                      _buildMetaLine(context),
                       style: TextStyle(
                         fontSize: AppTypography.sm,
                         color: muted,
@@ -519,9 +518,7 @@ class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
             item: item,
             isDark: isDark,
             isLiked: widget.isLiked,
-            isBookmarked: widget.isBookmarked,
             likeCount: widget.likeCount,
-            favoriteCount: widget.favoriteCount,
             likeCtrl: _likeCtrl,
             onLike: () {
               final wasLiked = widget.isLiked;
@@ -531,13 +528,6 @@ class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
               if (wasLiked) repo.unlike(widget.item.id);
               if (!wasLiked) repo.like(widget.item.id);
             },
-            onBookmark: () {
-              final wasBookmarked = widget.isBookmarked;
-              widget.onBookmarkTap();
-              final repo = ref.read(contentInteractionRepositoryProvider);
-              if (wasBookmarked) repo.unfavorite(widget.item.id);
-              if (!wasBookmarked) repo.favorite(widget.item.id);
-            },
             onComment: widget.onCommentTap,
             onShare: widget.onShareTap,
           ),
@@ -546,11 +536,17 @@ class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
     );
   }
 
-  static String _timeAgo(DateTime t) {
+  String _buildMetaLine(BuildContext context) {
+    final time = _timeAgo(context, widget.item.createdAt);
+    if (widget.sourceCircleName.isEmpty) return time;
+    return '$time · ${UITextConstants.sourceFromPrefix}${widget.sourceCircleName}';
+  }
+
+  static String _timeAgo(BuildContext context, DateTime t) {
     final delta = DateTime.now().difference(t).inHours;
-    if (delta < 1) return '刚刚';
-    if (delta < 24) return '$delta 小时前';
-    return '${t.month}-${t.day}';
+    if (delta < 1) return context.l10n.justNow;
+    if (delta < 24) return context.l10n.hoursAgoTemplate(delta);
+    return context.l10n.monthDayTemplate(t.month, t.day);
   }
 }
 
@@ -834,19 +830,15 @@ class _MomentVideoCard extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Action row for moment (微趣) posts.
-/// Order and icon set are identical to the works channel:
-/// 赞 · 分享 · 收藏 · 评论  — equally spaced with MainAxisAlignment.spaceBetween.
+/// 赞 / 转 / 评三列等宽，数字变化不挤压图标位置。
 class _ActionRow extends StatelessWidget {
   const _ActionRow({
     required this.item,
     required this.isDark,
     required this.isLiked,
-    required this.isBookmarked,
     required this.likeCount,
-    required this.favoriteCount,
     required this.likeCtrl,
     required this.onLike,
-    required this.onBookmark,
     required this.onComment,
     required this.onShare,
   });
@@ -854,23 +846,11 @@ class _ActionRow extends StatelessWidget {
   final MomentPostDto item;
   final bool isDark;
   final bool isLiked;
-  final bool isBookmarked;
   final int likeCount;
-  final int favoriteCount;
   final AnimationController likeCtrl;
   final VoidCallback onLike;
-  final VoidCallback onBookmark;
   final VoidCallback onComment;
   final VoidCallback onShare;
-
-  /// Mirrors _WorksImmersiveViewerState._formatCount.
-  /// < 10 000 : raw  |  10 000–99 999 : x.y万+  |  ≥ 100 000 : 10万+
-  static String _fmt(int n) {
-    if (n < 10000) return '$n';
-    if (n >= 100000) return '10万+';
-    final tenK = (n / 10000 * 10).floor() / 10;
-    return (tenK * 10).round() % 10 == 0 ? '${tenK.truncate()}万+' : '$tenK万+';
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -879,7 +859,6 @@ class _ActionRow extends StatelessWidget {
       ColorType.foregroundSecondary,
     );
     final likeColor = isLiked ? AppColors.worksLike : muted;
-    final bookmarkColor = isBookmarked ? AppColors.warning : muted;
 
     final likeScale = TweenSequence<double>([
       TweenSequenceItem(
@@ -898,57 +877,46 @@ class _ActionRow extends StatelessWidget {
       ),
     ]).animate(likeCtrl);
 
-    // All four chips are rendered identically to the works channel:
-    // icon + count text, distributed with equal spacing.
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        // 赞
-        _chip(
-          child: ScaleTransition(
-            scale: likeScale,
-            child: Icon(
-              isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
-              size: AppSpacing.iconMedium,
-              color: likeColor,
+        Expanded(
+          child: _chip(
+            child: ScaleTransition(
+              scale: likeScale,
+              child: Icon(
+                isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
+                size: AppSpacing.iconMedium,
+                color: likeColor,
+              ),
             ),
+            label: formatCompactActionCount(likeCount),
+            muted: muted,
+            onTap: onLike,
           ),
-          label: _fmt(likeCount),
-          muted: muted,
-          onTap: onLike,
         ),
-        // 分享
-        _chip(
-          child: Icon(
-            CupertinoIcons.arrowshape_turn_up_right,
-            size: AppSpacing.iconMedium,
-            color: muted,
+        Expanded(
+          child: _chip(
+            child: Icon(
+              CupertinoIcons.arrowshape_turn_up_right,
+              size: AppSpacing.iconMedium,
+              color: muted,
+            ),
+            label: formatCompactActionCount(item.shareCount),
+            muted: muted,
+            onTap: onShare,
           ),
-          label: _fmt(item.shareCount),
-          muted: muted,
-          onTap: onShare,
         ),
-        // 收藏 (star, matching the works channel)
-        _chip(
-          child: Icon(
-            isBookmarked ? CupertinoIcons.star_fill : CupertinoIcons.star,
-            size: AppSpacing.iconMedium,
-            color: bookmarkColor,
+        Expanded(
+          child: _chip(
+            child: Icon(
+              CupertinoIcons.chat_bubble,
+              size: AppSpacing.iconMedium,
+              color: muted,
+            ),
+            label: formatCompactActionCount(item.commentCount),
+            muted: muted,
+            onTap: onComment,
           ),
-          label: _fmt(favoriteCount),
-          muted: muted,
-          onTap: onBookmark,
-        ),
-        // 评论
-        _chip(
-          child: Icon(
-            CupertinoIcons.chat_bubble,
-            size: AppSpacing.iconMedium,
-            color: muted,
-          ),
-          label: _fmt(item.commentCount),
-          muted: muted,
-          onTap: onComment,
         ),
       ],
     );
@@ -963,16 +931,24 @@ class _ActionRow extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          child,
-          SizedBox(width: AppSpacing.intraGroupXs),
-          Text(
-            label,
-            style: TextStyle(fontSize: AppTypography.sm, color: muted),
+      child: SizedBox(
+        width: double.infinity,
+        child: Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              child,
+              SizedBox(width: AppSpacing.intraGroupXs),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.fade,
+                softWrap: false,
+                style: TextStyle(fontSize: AppTypography.sm, color: muted),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

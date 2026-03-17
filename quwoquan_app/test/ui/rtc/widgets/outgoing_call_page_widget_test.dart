@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -94,7 +95,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
-      await tester.tap(find.byType(Switch).first);
+      await tester.tap(find.byType(CupertinoSwitch).first);
       await tester.pump();
 
       expect(find.text('手动接通'), findsOneWidget);

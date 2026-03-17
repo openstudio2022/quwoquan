@@ -7,6 +7,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
+import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/components/more_actions_popup/configs/media_post_config.dart';
 import 'package:quwoquan_app/components/more_actions_popup/more_action_popup.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer.dart';
@@ -747,13 +748,8 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
   String _formatCount(int count) {
     if (count == 0) {
       return ''; // 若是0不显示
-    } else if (count >= 100000) {
-      return AppStrings.tenThousandPlus; // 超过10万显示"10万+"
-    } else if (count >= 10000) {
-      return '${(count / 10000).toStringAsFixed(1)}万'; // 万前带一个小数点，比如1.1万
-    } else {
-      return count.toString(); // 小于万就全部数字显示，比如9999
     }
+    return formatCompactActionCount(count);
   }
 
 

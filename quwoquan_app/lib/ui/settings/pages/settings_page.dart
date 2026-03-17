@@ -37,69 +37,72 @@ class SettingsPage extends ConsumerWidget {
           },
         ),
       ),
-      child: SafeArea(
-        bottom: false,
-        child: ListView(
-          padding: EdgeInsets.fromLTRB(
-            AppSpacing.containerMd,
-            AppSpacing.intraGroupLg,
-            AppSpacing.containerMd,
-            AppSpacing.xl,
+      child: Material(
+        type: MaterialType.transparency,
+        child: SafeArea(
+          bottom: false,
+          child: ListView(
+            padding: EdgeInsets.fromLTRB(
+              AppSpacing.containerMd,
+              AppSpacing.intraGroupLg,
+              AppSpacing.containerMd,
+              AppSpacing.xl,
+            ),
+            children: <Widget>[
+              _SettingsGroup(
+                title: '偏好',
+                children: <Widget>[
+                  _SettingsRow(
+                    icon: CupertinoIcons.paintbrush,
+                    label: '外观与字号',
+                    trailingText: _appearanceSummary(snapshot, appearanceState),
+                    onTap: () => showCupertinoModalPopup<void>(
+                      context: context,
+                      builder: (_) => const _AppearanceSettingsSheet(),
+                    ),
+                  ),
+                  _SettingsRow(
+                    icon: CupertinoIcons.bell,
+                    label: '通知',
+                    onTap: () => _showPendingNotice(context, '通知'),
+                  ),
+                  _SettingsRow(
+                    icon: CupertinoIcons.lock_shield,
+                    label: '${AppConceptConstants.assistantLabel}读取创作内容',
+                    trailingText: _personalContentAccessSummary(
+                      contentAccessState,
+                    ),
+                    onTap: () => _showPersonalContentAccessDialog(
+                      context,
+                      ref,
+                      contentAccessState,
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: AppSpacing.md),
+              _SettingsGroup(
+                title: '其他',
+                children: <Widget>[
+                  _SettingsRow(
+                    icon: CupertinoIcons.sparkles,
+                    label: AppConceptConstants.assistantLabel,
+                    onTap: () => context.push(AppRoutePaths.assistantManagement),
+                  ),
+                  _SettingsRow(
+                    icon: CupertinoIcons.lab_flask,
+                    label: '开发者',
+                    onTap: () => context.push(AppRoutePaths.settingsDeveloper),
+                  ),
+                  _SettingsRow(
+                    icon: CupertinoIcons.info,
+                    label: '关于',
+                    onTap: () => _showPendingNotice(context, '关于'),
+                  ),
+                ],
+              ),
+            ],
           ),
-          children: <Widget>[
-            _SettingsGroup(
-              title: '偏好',
-              children: <Widget>[
-                _SettingsRow(
-                  icon: CupertinoIcons.paintbrush,
-                  label: '外观与字号',
-                  trailingText: _appearanceSummary(snapshot, appearanceState),
-                  onTap: () => showCupertinoModalPopup<void>(
-                    context: context,
-                    builder: (_) => const _AppearanceSettingsSheet(),
-                  ),
-                ),
-                _SettingsRow(
-                  icon: CupertinoIcons.bell,
-                  label: '通知',
-                  onTap: () => _showPendingNotice(context, '通知'),
-                ),
-                _SettingsRow(
-                  icon: CupertinoIcons.lock_shield,
-                  label: '${AppConceptConstants.assistantLabel}读取创作内容',
-                  trailingText: _personalContentAccessSummary(
-                    contentAccessState,
-                  ),
-                  onTap: () => _showPersonalContentAccessDialog(
-                    context,
-                    ref,
-                    contentAccessState,
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: AppSpacing.md),
-            _SettingsGroup(
-              title: '其他',
-              children: <Widget>[
-                _SettingsRow(
-                  icon: CupertinoIcons.sparkles,
-                  label: AppConceptConstants.assistantLabel,
-                  onTap: () => context.push(AppRoutePaths.assistantManagement),
-                ),
-                _SettingsRow(
-                  icon: CupertinoIcons.lab_flask,
-                  label: '开发者',
-                  onTap: () => context.push(AppRoutePaths.settingsDeveloper),
-                ),
-                _SettingsRow(
-                  icon: CupertinoIcons.info,
-                  label: '关于',
-                  onTap: () => _showPendingNotice(context, '关于'),
-                ),
-              ],
-            ),
-          ],
         ),
       ),
     );

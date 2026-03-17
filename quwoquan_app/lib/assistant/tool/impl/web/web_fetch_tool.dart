@@ -1,20 +1,20 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/assistant/retrieval/domain/retrieval_broker.dart';
 import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
+import 'package:quwoquan_app/assistant/tool/runtime/safe_reference_normalizer.dart';
 
 /// Fetches a URL and extracts readable text content as markdown.
 ///
 /// Handles timeouts, content-length limits, and HTML-to-text conversion
 /// with a lightweight built-in extractor (no external dependency).
 class WebFetchTool implements AssistantTool {
-  WebFetchTool({
-    http.Client? client,
-    RetrievalBroker? broker,
-  }) : _client = client ?? http.Client(),
-       _broker = broker;
+  WebFetchTool({http.Client? client, RetrievalBroker? broker})
+    : _client = client ?? http.Client(),
+      _broker = broker;
 
   final http.Client _client;
   final RetrievalBroker? _broker;
@@ -26,16 +26,16 @@ class WebFetchTool implements AssistantTool {
   String get name => 'web_fetch';
 
   @override
-  String get description => 'Fetch URL content and convert to readable markdown.';
+  String get description =>
+      'Fetch URL content and convert to readable markdown.';
 
   @override
   Future<AssistantToolResult> execute(Map<String, dynamic> arguments) async {
     final broker = _broker;
     if (broker != null) {
-      final result = await broker.fetch(
-        RetrievalFetchRequest.fromToolArguments(arguments),
-      );
-      return result.toToolResult();
+      final request = RetrievalFetchRequest.fromToolArguments(arguments);
+      final result = await broker.fetch(request);
+      return _sanitizeBrokerFetchResult(request: request, result: result);
     }
     final url = (arguments['url'] as String?)?.trim() ?? '';
     if (url.isEmpty) {
@@ -46,8 +46,8 @@ class WebFetchTool implements AssistantTool {
       );
     }
 
-    final maxChars = (arguments['maxChars'] as int?)
-            ?.clamp(100, _absoluteMaxChars) ??
+    final maxChars =
+        (arguments['maxChars'] as int?)?.clamp(100, _absoluteMaxChars) ??
         _defaultMaxChars;
 
     try {
@@ -83,7 +83,8 @@ class WebFetchTool implements AssistantTool {
 
       final contentType = response.headers['content-type'] ?? '';
       final isHtml = contentType.contains('text/html');
-      final isText = contentType.contains('text/') ||
+      final isText =
+          contentType.contains('text/') ||
           contentType.contains('application/json') ||
           contentType.contains('application/xml');
 
@@ -96,7 +97,7 @@ class WebFetchTool implements AssistantTool {
         );
       }
 
-      final rawBody = response.body;
+      final rawBody = _decodeResponseBody(response);
       final title = isHtml ? _extractTitle(rawBody) : '';
       final bodyText = isHtml ? _htmlToPlainText(rawBody) : rawBody;
       final truncated = bodyText.length > maxChars;
@@ -105,40 +106,56 @@ class WebFetchTool implements AssistantTool {
       final sourceHost = uri.host.toLowerCase().trim();
       final queryTaskId = (arguments['queryTaskId'] as String?)?.trim() ?? '';
       final dimension = (arguments['dimension'] as String?)?.trim() ?? '';
-      final snippet = content.length <= 180 ? content : '${content.substring(0, 180)}...';
+      final snippet = content.length <= 180
+          ? content
+          : '${content.substring(0, 180)}...';
 
       if (kDebugMode) {
-        debugPrint('[WebFetchTool] OK: $url ($charCount chars, truncated=$truncated)');
+        debugPrint(
+          '[WebFetchTool] OK: $url ($charCount chars, truncated=$truncated)',
+        );
       }
 
+      final safeReference = SafeReferenceNormalizer.normalize(<String, dynamic>{
+        'title': title,
+        'url': url,
+        'source': sourceHost,
+        'snippet': snippet,
+      });
+      final canonicalUrl = (safeReference?['url'] as String?)?.trim() ?? url;
+      final canonicalTitle =
+          (safeReference?['title'] as String?)?.trim() ?? title;
+      final canonicalSource =
+          (safeReference?['source'] as String?)?.trim() ?? sourceHost;
+      final canonicalSourceHost =
+          (safeReference?['sourceHost'] as String?)?.trim() ?? sourceHost;
       return AssistantToolResult(
         success: true,
         message: '已阅读 $charCount 字内容${truncated ? "（已截断）" : ""}',
         data: <String, dynamic>{
-          'url': url,
-          'title': title,
+          'url': canonicalUrl,
+          'title': canonicalTitle,
+          'source': canonicalSource,
           'content': content,
           'summary': snippet,
           'charCount': charCount,
           'truncated': truncated,
           'contentType': contentType,
-          'sourceHost': sourceHost,
+          'sourceHost': canonicalSourceHost,
           'sourceTier': 'page',
           'queryTaskId': queryTaskId,
           'dimension': dimension,
-          'references': <Map<String, dynamic>>[
-            <String, dynamic>{
-              'title': title.isNotEmpty ? title : url,
-              'url': url,
-              'source': sourceHost,
-              'sourceHost': sourceHost,
-              'sourceTier': 'page',
-              'snippet': snippet,
-              'queryTaskId': queryTaskId,
-              'dimension': dimension,
-              'retrievedAt': DateTime.now().toIso8601String(),
-            },
-          ],
+          'references': safeReference == null
+              ? const <Map<String, dynamic>>[]
+              : <Map<String, dynamic>>[
+                  <String, dynamic>{
+                    ...safeReference,
+                    'sourceTier': 'page',
+                    'queryTaskId': queryTaskId,
+                    'dimension': dimension,
+                    'retrievedAt': DateTime.now().toIso8601String(),
+                  },
+                ],
         },
       );
     } on FormatException {
@@ -181,12 +198,175 @@ class WebFetchTool implements AssistantTool {
     }
   }
 
+  AssistantToolResult _sanitizeBrokerFetchResult({
+    required RetrievalFetchRequest request,
+    required RetrievalFetchResult result,
+  }) {
+    final toolResult = result.toToolResult();
+    final rawData = toolResult.data;
+    if (rawData == null || rawData.isEmpty) return toolResult;
+    final sanitizedData = Map<String, dynamic>.from(rawData);
+    final references = _sanitizeBrokerFetchReferences(
+      data: sanitizedData,
+      fallbackUrl: request.url,
+      queryTaskId: (request.arguments['queryTaskId'] as String?)?.trim() ?? '',
+      dimension: (request.arguments['dimension'] as String?)?.trim() ?? '',
+    );
+    if (references.isNotEmpty) {
+      final primary = references.first;
+      sanitizedData['references'] = references;
+      sanitizedData['url'] = (primary['url'] as String?)?.trim() ?? request.url;
+      sanitizedData['title'] = (primary['title'] as String?)?.trim() ?? '';
+      sanitizedData['source'] = (primary['source'] as String?)?.trim() ?? '';
+      sanitizedData['sourceHost'] =
+          (primary['sourceHost'] as String?)?.trim() ?? '';
+      sanitizedData['summary'] = (primary['snippet'] as String?)?.trim() ?? '';
+      sanitizedData['queryTaskId'] =
+          (primary['queryTaskId'] as String?)?.trim() ??
+          ((sanitizedData['queryTaskId'] as String?)?.trim() ?? '');
+      sanitizedData['dimension'] =
+          (primary['dimension'] as String?)?.trim() ??
+          ((sanitizedData['dimension'] as String?)?.trim() ?? '');
+      sanitizedData['sourceTier'] =
+          (primary['sourceTier'] as String?)?.trim().isNotEmpty == true
+          ? (primary['sourceTier'] as String).trim()
+          : ((sanitizedData['sourceTier'] as String?)?.trim().isNotEmpty == true
+                ? (sanitizedData['sourceTier'] as String).trim()
+                : 'page');
+    }
+    return AssistantToolResult(
+      success: toolResult.success,
+      message: toolResult.message,
+      data: sanitizedData,
+      errorCode: toolResult.errorCode,
+      degraded: toolResult.degraded,
+    );
+  }
+
+  List<Map<String, dynamic>> _sanitizeBrokerFetchReferences({
+    required Map<String, dynamic> data,
+    required String fallbackUrl,
+    required String queryTaskId,
+    required String dimension,
+  }) {
+    final rawRefs =
+        (data['references'] as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[];
+    final normalizedRefs = rawRefs
+        .map(
+          (item) => _normalizeFetchReference(
+            raw: item,
+            fallbackUrl: fallbackUrl,
+            fallbackTitle: (data['title'] as String?)?.trim() ?? '',
+            fallbackSource:
+                (data['source'] as String?)?.trim().isNotEmpty == true
+                ? (data['source'] as String).trim()
+                : (data['sourceHost'] as String?)?.trim() ?? '',
+            fallbackSnippet:
+                (item['snippet'] as String?)?.trim().isNotEmpty == true
+                ? (item['snippet'] as String).trim()
+                : ((data['summary'] as String?)?.trim().isNotEmpty == true
+                      ? (data['summary'] as String).trim()
+                      : _snippetOfFetchContent(data['content'])),
+            queryTaskId:
+                (item['queryTaskId'] as String?)?.trim().isNotEmpty == true
+                ? (item['queryTaskId'] as String).trim()
+                : queryTaskId,
+            dimension: (item['dimension'] as String?)?.trim().isNotEmpty == true
+                ? (item['dimension'] as String).trim()
+                : dimension,
+            sourceTier:
+                (item['sourceTier'] as String?)?.trim().isNotEmpty == true
+                ? (item['sourceTier'] as String).trim()
+                : ((data['sourceTier'] as String?)?.trim().isNotEmpty == true
+                      ? (data['sourceTier'] as String).trim()
+                      : 'page'),
+            retrievedAt:
+                (item['retrievedAt'] as String?)?.trim().isNotEmpty == true
+                ? (item['retrievedAt'] as String).trim()
+                : DateTime.now().toIso8601String(),
+          ),
+        )
+        .whereType<Map<String, dynamic>>()
+        .toList(growable: false);
+    if (normalizedRefs.isNotEmpty) return normalizedRefs;
+    final fallback = _normalizeFetchReference(
+      raw: const <String, dynamic>{},
+      fallbackUrl: (data['url'] as String?)?.trim().isNotEmpty == true
+          ? (data['url'] as String).trim()
+          : fallbackUrl,
+      fallbackTitle: (data['title'] as String?)?.trim() ?? '',
+      fallbackSource: (data['source'] as String?)?.trim().isNotEmpty == true
+          ? (data['source'] as String).trim()
+          : (data['sourceHost'] as String?)?.trim() ?? '',
+      fallbackSnippet: (data['summary'] as String?)?.trim().isNotEmpty == true
+          ? (data['summary'] as String).trim()
+          : _snippetOfFetchContent(data['content']),
+      queryTaskId: queryTaskId,
+      dimension: dimension,
+      sourceTier: (data['sourceTier'] as String?)?.trim().isNotEmpty == true
+          ? (data['sourceTier'] as String).trim()
+          : 'page',
+      retrievedAt: DateTime.now().toIso8601String(),
+    );
+    return fallback == null
+        ? const <Map<String, dynamic>>[]
+        : <Map<String, dynamic>>[fallback];
+  }
+
+  Map<String, dynamic>? _normalizeFetchReference({
+    required Map<String, dynamic> raw,
+    required String fallbackUrl,
+    required String fallbackTitle,
+    required String fallbackSource,
+    required String fallbackSnippet,
+    required String queryTaskId,
+    required String dimension,
+    required String sourceTier,
+    required String retrievedAt,
+  }) {
+    final normalized = SafeReferenceNormalizer.normalize(<String, dynamic>{
+      ...raw,
+      'url': (raw['url'] as String?)?.trim().isNotEmpty == true
+          ? (raw['url'] as String).trim()
+          : fallbackUrl,
+      'title': (raw['title'] as String?)?.trim().isNotEmpty == true
+          ? (raw['title'] as String).trim()
+          : fallbackTitle,
+      'source': (raw['source'] as String?)?.trim().isNotEmpty == true
+          ? (raw['source'] as String).trim()
+          : fallbackSource,
+      'snippet': (raw['snippet'] as String?)?.trim().isNotEmpty == true
+          ? (raw['snippet'] as String).trim()
+          : fallbackSnippet,
+    });
+    if (normalized == null) return null;
+    return <String, dynamic>{
+      ...raw,
+      ...normalized,
+      'sourceTier': sourceTier,
+      'queryTaskId': queryTaskId,
+      'dimension': dimension,
+      'retrievedAt': retrievedAt,
+    };
+  }
+
+  String _snippetOfFetchContent(Object? raw) {
+    final content = raw?.toString().trim() ?? '';
+    if (content.isEmpty) return '';
+    if (content.length <= 180) return content;
+    return '${content.substring(0, 180)}...';
+  }
+
   Map<String, String> _buildHeaders() => <String, String>{
-        'User-Agent':
-            'Mozilla/5.0 (compatible; QuwoquanBot/1.0; +https://quwoquan.com)',
-        'Accept': 'text/html,application/xhtml+xml,text/plain,application/json',
-        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-      };
+    'User-Agent':
+        'Mozilla/5.0 (compatible; QuwoquanBot/1.0; +https://quwoquan.com)',
+    'Accept': 'text/html,application/xhtml+xml,text/plain,application/json',
+    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+  };
 
   AssistantErrorCode _statusCodeToErrorCode(int statusCode) {
     if (statusCode == 401 || statusCode == 403) {
@@ -234,7 +414,10 @@ class WebFetchTool implements AssistantTool {
   static String _htmlToPlainText(String html) {
     var text = html;
     text = text.replaceAll(
-      RegExp(r'<(script|style|noscript)[^>]*>[\s\S]*?</\1>', caseSensitive: false),
+      RegExp(
+        r'<(script|style|noscript)[^>]*>[\s\S]*?</\1>',
+        caseSensitive: false,
+      ),
       '',
     );
     text = text.replaceAll(RegExp(r'<!--[\s\S]*?-->'), '');
@@ -271,5 +454,30 @@ class WebFetchTool implements AssistantTool {
       return code != null ? String.fromCharCode(code) : m.group(0)!;
     });
     return result;
+  }
+
+  String _decodeResponseBody(http.Response response) {
+    final contentType = response.headers['content-type'] ?? '';
+    final headerCharset = RegExp(
+      r'charset=([^\s;]+)',
+      caseSensitive: false,
+    ).firstMatch(contentType)?.group(1);
+    final preview = ascii.decode(
+      response.bodyBytes.take(2048).toList(growable: false),
+      allowInvalid: true,
+    );
+    final metaCharset = RegExp(
+      "<meta[^>]+charset=[\"']?([^\"'>\\s]+)",
+      caseSensitive: false,
+    ).firstMatch(preview)?.group(1);
+    final charset = (headerCharset ?? metaCharset ?? 'utf-8').toLowerCase();
+    final encoding =
+        Encoding.getByName(charset) ??
+        (charset.contains('utf') ? utf8 : latin1);
+    try {
+      return encoding.decode(response.bodyBytes);
+    } catch (_) {
+      return utf8.decode(response.bodyBytes, allowMalformed: true);
+    }
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 
 class CircleStatsRow extends StatelessWidget {
   const CircleStatsRow({
@@ -16,9 +17,7 @@ class CircleStatsRow extends StatelessWidget {
   String _formatCount(dynamic count) {
     if (count == null) return '0';
     final n = count is int ? count : int.tryParse(count.toString()) ?? 0;
-    if (n >= 10000) return '${(n / 10000).toStringAsFixed(1)}w';
-    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}k';
-    return '$n';
+    return formatCompactActionCount(n);
   }
 
   @override

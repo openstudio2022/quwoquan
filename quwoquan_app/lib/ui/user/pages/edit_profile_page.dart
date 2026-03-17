@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
 
 /// 编辑资料页（1:1 对应 EditProfilePage.tsx）
@@ -83,42 +83,41 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
     final borderColor =
         AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
+    final fillColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundTertiary,
+    );
 
-    return Scaffold(
+    return AppScaffold(
       backgroundColor: bg,
-      appBar: AppBar(
+      navigationBar: AppNavigationBar(
         backgroundColor: bg,
-        foregroundColor: fg,
-        leading: IconButton(
-          icon: const Icon(Icons.close),
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
           onPressed: () => context.pop(),
+          child: const Icon(CupertinoIcons.xmark),
         ),
-        title: Text(
+        middle: Text(
           UITextConstants.editProfile,
           style: TextStyle(
             color: fg,
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
+            fontSize: AppTypography.lg,
+            fontWeight: AppTypography.bold,
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: _isSaving ? null : _save,
-            child: _isSaving
-                ? SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CupertinoActivityIndicator(),
-                  )
-                : Text(
-                    UITextConstants.confirm,
-                    style: TextStyle(
-                      color: AppColors.primaryColor,
-                      fontWeight: FontWeight.w600,
-                    ),
+        trailing: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: _isSaving ? null : _save,
+          child: _isSaving
+              ? const CupertinoActivityIndicator()
+              : Text(
+                  UITextConstants.confirm,
+                  style: TextStyle(
+                    color: AppColors.primaryColor,
+                    fontWeight: AppTypography.semiBold,
                   ),
-          ),
-        ],
+                ),
+        ),
       ),
       body: ListView(
         padding: EdgeInsets.all(
@@ -139,12 +138,17 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                 Positioned(
                   right: 0,
                   bottom: 0,
-                  child: GestureDetector(
-                    onTap: () {},
+                  child: CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: () {},
                     child: CircleAvatar(
                       radius: 16,
                       backgroundColor: AppColors.primaryColor,
-                      child: Icon(Icons.camera_alt, size: 18, color: Colors.white),
+                      child: const Icon(
+                        CupertinoIcons.camera_fill,
+                        size: 18,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
@@ -152,138 +156,118 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
             ),
           ),
           SizedBox(height: AppSpacing.lg),
-          Text(
-            '昵称',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: fgSecondary,
-            ),
-          ),
+          _buildSectionLabel('昵称', fgSecondary),
           SizedBox(height: 4),
-          TextField(
+          CupertinoTextField(
             controller: _displayNameController,
-            style: TextStyle(color: fg, fontSize: 16),
-            decoration: InputDecoration(
-              hintText: '显示名称',
-              hintStyle: TextStyle(color: fgSecondary),
-              filled: true,
-              fillColor: AppColorsFunctional.getColor(isDark, ColorType.backgroundTertiary),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: borderColor),
-              ),
-              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            style: TextStyle(color: fg, fontSize: AppTypography.base),
+            placeholder: '显示名称',
+            placeholderStyle: TextStyle(color: fgSecondary),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: fillColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: fillColor),
             ),
           ),
           SizedBox(height: 16),
-          Text(
-            '用户名',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: fgSecondary,
-            ),
-          ),
+          _buildSectionLabel('用户名', fgSecondary),
           SizedBox(height: 4),
-          TextField(
+          CupertinoTextField(
             controller: _usernameController,
-            style: TextStyle(color: fg, fontSize: 16),
-            decoration: InputDecoration(
-              hintText: '@username',
-              hintStyle: TextStyle(color: fgSecondary),
-              filled: true,
-              fillColor: AppColorsFunctional.getColor(isDark, ColorType.backgroundTertiary),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: borderColor),
-              ),
-              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            style: TextStyle(color: fg, fontSize: AppTypography.base),
+            placeholder: '@username',
+            placeholderStyle: TextStyle(color: fgSecondary),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: fillColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: fillColor),
             ),
           ),
           SizedBox(height: 16),
           Row(
             children: [
-              Text(
-                '简介',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: fgSecondary,
-                ),
-              ),
+              _buildSectionLabel('简介', fgSecondary),
               const Spacer(),
-              GestureDetector(
-                onTap: () {
+              CupertinoButton(
+                padding: EdgeInsets.all(AppSpacing.xs),
+                minimumSize: Size.zero,
+                onPressed: () {
                   setState(() {
                     _showEmojiPanel = !_showEmojiPanel;
                     if (_showEmojiPanel) _bioFocusNode.unfocus();
                   });
                 },
-                child: Padding(
-                  padding: EdgeInsets.all(AppSpacing.xs),
-                  child: Icon(
-                    _showEmojiPanel ? Icons.keyboard_outlined : Icons.emoji_emotions_outlined,
-                    size: 22,
-                    color: fgSecondary,
-                  ),
+                child: Icon(
+                  _showEmojiPanel
+                      ? CupertinoIcons.keyboard
+                      : CupertinoIcons.smiley,
+                  size: 22,
+                  color: fgSecondary,
                 ),
               ),
             ],
           ),
           SizedBox(height: 4),
-          TextField(
+          CupertinoTextField(
             controller: _bioController,
             focusNode: _bioFocusNode,
             maxLines: 3,
-            style: TextStyle(color: fg, fontSize: 16),
-            decoration: InputDecoration(
-              hintText: '写点什么介绍自己',
-              hintStyle: TextStyle(color: fgSecondary),
-              filled: true,
-              fillColor: AppColorsFunctional.getColor(isDark, ColorType.backgroundTertiary),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: borderColor),
-              ),
-              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            style: TextStyle(color: fg, fontSize: AppTypography.base),
+            placeholder: '写点什么介绍自己',
+            placeholderStyle: TextStyle(color: fgSecondary),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: fillColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: fillColor),
             ),
           ),
           if (_showEmojiPanel)
             UnifiedEmojiPicker(
               onEmojiSelected: (char) {
-                final pos = _bioController.selection.baseOffset.clamp(0, _bioController.text.length);
-                _bioController.text = _bioController.text.substring(0, pos) + char + _bioController.text.substring(pos);
-                _bioController.selection = TextSelection.collapsed(offset: pos + char.length);
+                final pos = _bioController.selection.baseOffset.clamp(
+                  0,
+                  _bioController.text.length,
+                );
+                _bioController.text =
+                    _bioController.text.substring(0, pos) +
+                    char +
+                    _bioController.text.substring(pos);
+                _bioController.selection = TextSelection.collapsed(
+                  offset: pos + char.length,
+                );
                 setState(() {});
               },
             ),
           SizedBox(height: 16),
-          Text(
-            '网站',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: fgSecondary,
-            ),
-          ),
+          _buildSectionLabel('网站', fgSecondary),
           SizedBox(height: 4),
-          TextField(
+          CupertinoTextField(
             controller: _websiteController,
-            style: TextStyle(color: fg, fontSize: 16),
-            decoration: InputDecoration(
-              hintText: 'https://',
-              hintStyle: TextStyle(color: fgSecondary),
-              filled: true,
-              fillColor: AppColorsFunctional.getColor(isDark, ColorType.backgroundTertiary),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: borderColor),
-              ),
-              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            style: TextStyle(color: fg, fontSize: AppTypography.base),
+            placeholder: 'https://',
+            placeholderStyle: TextStyle(color: fgSecondary),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: fillColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: fillColor),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSectionLabel(String text, Color color) {
+    return Text(
+      text,
+      style: TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        color: color,
       ),
     );
   }

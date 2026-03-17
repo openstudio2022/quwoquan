@@ -102,7 +102,7 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
       });
     }
 
-    final isMoment = widget.initialExtra?.category == 'moment';
+    final isMoment = widget.initialExtra?.category == 'moment' || widget.initialExtra?.category == 'profile_moment';
     return ImmersiveImageViewer(
       isOpen: _isOpen,
       onClose: () {
@@ -115,7 +115,7 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
       initialPostIndex: _safeInitialIndex,
       layoutMode: isMoment ? 'nested' : 'flat',
       initialImageIndex: widget.initialExtra?.initialImageIndex ?? 0,
-      toolbarMode: isMoment ? 'backOnly' : 'full',
+      toolbarMode: 'backOnly',
       onUserClick: (username, {avatarUrl, displayName, backgroundUrl}) {
         context.push(
           '/user/$username',

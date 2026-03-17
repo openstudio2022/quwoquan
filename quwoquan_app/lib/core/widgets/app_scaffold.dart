@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 
 /// 统一的 iOS 风格页面骨架
@@ -31,7 +32,13 @@ class AppScaffold extends StatelessWidget {
       navigationBar: navigationBar,
       backgroundColor: backgroundColor,
       resizeToAvoidBottomInset: resizeToAvoidBottomInset,
-      child: child ?? body!,
+      // Several pages render Material-style text/actions inside a Cupertino
+      // scaffold. A transparent Material host avoids debug-mode fallback text
+      // emphasis/underline artifacts on those pages.
+      child: Material(
+        type: MaterialType.transparency,
+        child: child ?? body!,
+      ),
     );
   }
 }

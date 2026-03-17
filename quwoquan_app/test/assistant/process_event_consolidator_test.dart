@@ -79,7 +79,7 @@ void main() {
       expect(toolResult.headline, isNot(contains('找到 1 篇相关资料')));
     });
 
-    test('replan and completion keep trust-building tone', () {
+    test('needMoreSearch assessment emits single expand narrative', () {
       final consolidator = ProcessEventConsolidator(
         problemClass: 'complex_reasoning',
         userGoalSummary: '查深圳住宿建议',
@@ -95,12 +95,22 @@ void main() {
       );
       final replan = consolidator.consolidate(
         AssistantTraceEvent(
-          type: AssistantTraceEventType.replanTriggered,
+          type: AssistantTraceEventType.toolResult,
           message: '',
           timestamp: DateTime.now(),
+          data: const <String, dynamic>{
+            'isAssessment': true,
+            'assessment': <String, dynamic>{
+              'assessmentType': 'need_more_search',
+              'userMessage': '主线已经有了，但还差一处会影响判断的信息，所以再补一轮。',
+              'shouldContinueLoop': true,
+              'reasonCode': 'need_more_evidence',
+            },
+          },
         ),
       );
       expect(replan, isNotNull);
+      expect(replan!.phaseId, equals(PhaseId.expand));
       expect(replan!.headline, contains('再补'));
       expect(replan.headline, isNot(contains('我先替你')));
 

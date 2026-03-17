@@ -54,16 +54,16 @@ class _SectionChatState extends ConsumerState<SectionChat> {
 
     return Container(
       margin: EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      padding: EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: bgSecondary,
         borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
       ),
-      child: InkWell(
-        onTap: () => context.push(
+      child: CupertinoButton(
+        padding: EdgeInsets.all(AppSpacing.md),
+        minimumSize: Size.zero,
+        onPressed: () => context.push(
           AppRoutePaths.chatDetail(id: widget.conversationId!),
         ),
-        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
         child: Row(
           children: [
             Container(

@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -84,6 +85,43 @@ class _CenteredScrollableTabBarState
 
   /// 芯片步进宽度（芯片 + 间距），用于计算滚动偏移
   double get _chipStep => _chipWidth + AppSpacing.primaryTabChipGap;
+
+  double _staticChipSlotWidth(BuildContext context, TabItem tab) {
+    final width = _measureTabLabelWidth(
+      context,
+      tab.label,
+      AppTypography.primaryTabLabelWeight,
+    );
+    final horizontalInset = AppSpacing.intraGroupSm * 2;
+    final minWidth = AppSpacing.minInteractiveSize;
+    final maxWidth = _chipWidth;
+    return (width + horizontalInset).clamp(minWidth, maxWidth);
+  }
+
+  double _measureTabLabelWidth(
+    BuildContext context,
+    String label,
+    FontWeight weight,
+  ) {
+    final chipFontSize = AppTypography.responsive(
+      context,
+      compact: AppTypography.base,
+      regular: AppTypography.lg,
+      expanded: AppTypography.xl,
+    );
+    final painter = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: TextStyle(
+          fontSize: chipFontSize,
+          fontWeight: weight,
+        ),
+      ),
+      maxLines: 1,
+      textDirection: TextDirection.ltr,
+    )..layout();
+    return painter.width;
+  }
 
   double get _gradientWidth =>
       16.0 + (_visibleTabCount - 3).clamp(0, 8) * 2;
@@ -420,7 +458,25 @@ class _CenteredScrollableTabBarState
           mainAxisSize: MainAxisSize.min,
           children: [
             for (int i = 0; i < widget.tabs.length; i++)
-              _buildChipSlot(widget.tabs[i], isDark, fg, fgUnselected),
+              Padding(
+                padding: EdgeInsets.only(
+                  right: i == widget.tabs.length - 1
+                      ? 0
+                      : AppSpacing.intraGroupSm,
+                ),
+                child: SizedBox(
+                  width: _staticChipSlotWidth(context, widget.tabs[i]),
+                  child: _buildTabChip(
+                    context: context,
+                    tab: widget.tabs[i],
+                    selected: widget.tabs[i].id == widget.activeTab,
+                    isDark: isDark,
+                    fg: fg,
+                    fgUnselected: fgUnselected,
+                    onTap: () => _onTabTapped(widget.tabs[i].id),
+                  ),
+                ),
+              ),
           ],
         ),
       );
@@ -442,7 +498,9 @@ class _CenteredScrollableTabBarState
         SingleChildScrollView(
           controller: _normalController,
           scrollDirection: Axis.horizontal,
-          physics: const ClampingScrollPhysics(),
+          physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(),
+          ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -487,7 +545,9 @@ class _CenteredScrollableTabBarState
           child: SingleChildScrollView(
             controller: controller,
             scrollDirection: Axis.horizontal,
-            physics: const ClampingScrollPhysics(),
+            physics: const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(),
+            ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -507,7 +567,9 @@ class _CenteredScrollableTabBarState
       bool isDark, Color fg, Color fgUnselected) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      physics: const ClampingScrollPhysics(),
+      physics: const BouncingScrollPhysics(
+        parent: AlwaysScrollableScrollPhysics(),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -563,7 +625,9 @@ class _CenteredScrollableTabBarState
 
     final textStyle = TextStyle(
       fontSize: chipFontSize,
-      fontWeight: AppTypography.bold,
+      fontWeight: selected
+          ? AppTypography.primaryTabLabelWeight
+          : AppTypography.normal,
       color: selected ? selectedColor : fgUnselected,
     );
     final textPainter = TextPainter(
@@ -573,50 +637,50 @@ class _CenteredScrollableTabBarState
     )..layout();
     final underlineWidth = textPainter.width;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            minWidth: AppSpacing.minInteractiveSize,
-            minHeight: AppSpacing.minInteractiveSize,
-          ),
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Align(
-                alignment: Alignment.center,
-                child: Text(
-                  tab.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: textStyle,
-                ),
+    return CupertinoButton(
+      key: tab.key,
+      padding: EdgeInsets.zero,
+      minimumSize: Size.square(AppSpacing.minInteractiveSize),
+      borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+      onPressed: onTap,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minWidth: AppSpacing.minInteractiveSize,
+          minHeight: AppSpacing.minInteractiveSize,
+        ),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Align(
+              alignment: Alignment.center,
+              child: Text(
+                tab.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: textStyle,
               ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: Center(
-                  child: SizedBox(
-                    width: underlineWidth,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      height: AppSpacing.intraGroupXs / 2,
-                      decoration: BoxDecoration(
-                        color: isExcluded ? Colors.transparent : underlineColor,
-                        borderRadius: BorderRadius.circular(
-                          AppSpacing.intraGroupXs / 4,
-                        ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Center(
+                child: SizedBox(
+                  width: underlineWidth,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    height: AppSpacing.intraGroupXs / 2,
+                    decoration: BoxDecoration(
+                      color: isExcluded ? Colors.transparent : underlineColor,
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.intraGroupXs / 4,
                       ),
                     ),
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

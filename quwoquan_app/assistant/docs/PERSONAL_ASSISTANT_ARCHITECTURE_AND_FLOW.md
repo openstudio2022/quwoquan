@@ -149,6 +149,15 @@ Decide -> 进入下一轮、切换阶段或结束
 
 更深层 legacy implementation 仍可能位于 `quwoquan_app/lib/personal_assistant/`，但当前开发入口统一以 `quwoquan_app/lib/assistant/` 为准。
 
+**禁止**：不得在 `quwoquan_app/lib/assistant/conversation/orchestration/agent_loop.dart` 中增量堆新逻辑；该文件为兼容桥，未来将由 `orchestration/assistant_agent_loop.dart` 与各 phase 完全取代。
+
+### 2.3 架构升级目标（World-Class）
+
+- **等待体验**：用户在 30–60 秒长等待期间持续看到可信、用户语言、可解释的工作说明，过程流不出现长时间空白
+- **Single-pass-first**：默认一次深理解后，先产出 2–4 路互补检索 lanes，再并行执行；replan 仅作例外补救
+- **多路检索设计**：`QueryTask` 按证据维度驱动，不再只是 query 变体
+- **Process narrative**：phase 直接产出用户语言工作说明，统一到 `ProcessJournalEvent` 主链
+
 ---
 
 ## 7. 与其他核心文档的关系

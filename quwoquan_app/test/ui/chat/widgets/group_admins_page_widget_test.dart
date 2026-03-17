@@ -108,7 +108,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      final textField = find.byType(TextField);
+      final textField = find.byType(CupertinoSearchTextField);
       expect(textField, findsOneWidget);
 
       await tester.enterText(textField, '李明');
@@ -122,10 +122,10 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      final items = find.byType(InkWell);
-      expect(items, findsWidgets);
+      final member = find.text('张华');
+      expect(member, findsOneWidget);
 
-      await tester.tap(items.first);
+      await tester.tap(member);
       await tester.pump();
 
       // 页面仍存在（不崩溃）

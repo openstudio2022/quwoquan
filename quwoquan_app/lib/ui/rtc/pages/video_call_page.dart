@@ -291,23 +291,26 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
       onTap: () {
         showCupertinoModalPopup<void>(
           context: context,
-          builder: (_) => Container(
-            decoration: BoxDecoration(
-              color: CupertinoColors.systemBackground.resolveFrom(context),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(AppSpacing.borderRadius)),
-            ),
-            child: ParticipantListSheet(
-              maxParticipants: session.session?.maxParticipants ?? 32,
-              onInviteMore: () {
-                Navigator.of(context).pop();
-                context.push(
-                  AppRoutePaths.rtcPickParticipants,
-                  extra: <String, dynamic>{
-                    'callId': widget.callId,
-                    'maxParticipants': session.session?.maxParticipants ?? 32,
-                  },
-                );
-              },
+          builder: (_) => Material(
+            type: MaterialType.transparency,
+            child: Container(
+              decoration: BoxDecoration(
+                color: CupertinoColors.systemBackground.resolveFrom(context),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(AppSpacing.borderRadius)),
+              ),
+              child: ParticipantListSheet(
+                maxParticipants: session.session?.maxParticipants ?? 32,
+                onInviteMore: () {
+                  Navigator.of(context).pop();
+                  context.push(
+                    AppRoutePaths.rtcPickParticipants,
+                    extra: <String, dynamic>{
+                      'callId': widget.callId,
+                      'maxParticipants': session.session?.maxParticipants ?? 32,
+                    },
+                  );
+                },
+              ),
             ),
           ),
         );

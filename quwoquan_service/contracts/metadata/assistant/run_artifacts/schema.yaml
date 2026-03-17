@@ -53,6 +53,7 @@ subcontracts:
       - { name: queryTaskId, type: string, default: '' }
       - { name: title, type: string, default: '' }
       - { name: url, type: string, default: '' }
+      - { name: source, type: string, default: '' }
       - { name: sourceHost, type: string, default: '' }
       - { name: sourceTier, type: string, default: '' }
       - { name: freshnessHours, type: int, default: 0 }

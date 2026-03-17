@@ -137,6 +137,18 @@
 
 输出单个 `assistant_turn` JSON，规划信息只能放在 `intentGraph` 内，不得回到旧顶层字段：
 
+### 若本轮已经可以直接回答
+
+当你判断 `decision.nextAction=answer` 时，这一轮就不再是“过程播报”，而是直接进入最终成答模式。此时必须同时满足：
+
+- `messageKind` 必须是 `answer`，不能还是 `progress`
+- `phaseId/actionCode/reasonCode` 必须切到 `answering/compose_answer/evidence_ready`
+- `userMarkdown` 必须是可直接展示的最终 Markdown，不得再写“我先确认”“我先整理”“先帮你拆开看看”
+- `result/evidence/reasoningBasis` 必须按最终回答质量完整输出，不能只给空壳摘要
+- 不要再输出仅用于规划阶段的占位文案
+
+只有当你仍需继续规划、调用工具或追问时，才使用规划阶段的 `progress/ask_user` 语义。
+
 ```json
 {
   "contractVersion": "assistant_turn",

@@ -1,31 +1,10 @@
-import 'package:quwoquan_app/assistant/contracts/runtime_policies.dart';
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
+import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/conversation/explainability/default_processing_copy_bank.dart';
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/contracts/tool_assessment.dart';
+import 'package:quwoquan_app/assistant/contracts/runtime_policies.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_state.dart';
-
-enum ToolAssessmentType {
-  sufficient,
-  needMoreSearch,
-  needDifferentTool,
-  toolFailed,
-  budgetExhausted,
-}
-
-class ToolAssessmentResult {
-  const ToolAssessmentResult({
-    required this.type,
-    required this.userMessage,
-    this.shouldContinueLoop = true,
-    this.gapFill = false,
-    this.rewriteQuery = false,
-  });
-
-  final ToolAssessmentType type;
-  final String userMessage;
-  final bool shouldContinueLoop;
-  final bool gapFill;
-  final bool rewriteQuery;
-}
 
 /// Evaluates tool results post-execution to determine next action.
 /// Tracks consecutive failures to break out of futile retry loops.
@@ -46,6 +25,9 @@ class ToolResultAssessor {
   /// Set before each run to influence convergence behavior.
   String problemClass = '';
 
+  /// Unified answer boundary shared with synthesis and state kernel.
+  AnswerBoundaryPolicy boundaryPolicy = const AnswerBoundaryPolicy();
+
   bool get _isFastConvergence =>
       parseProblemClass(problemClass).isFastConvergence;
 
@@ -54,20 +36,39 @@ class ToolResultAssessor {
     _consecutiveLowQuality = 0;
   }
 
-  ToolAssessmentResult assess({
+  ToolAssessment assess({
     required ReactRunState state,
     required bool lastStepSuccess,
     required Map<String, dynamic> lastObservation,
     required bool shouldReplan,
     required ReactPolicy policy,
   }) {
+    final resultData =
+        (lastObservation['data'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final queryCount = _positiveInt(resultData['queryCount']);
+    final explicitReferenceCount = _positiveInt(resultData['referenceCount']);
+    final referenceCount = explicitReferenceCount > 0
+        ? explicitReferenceCount
+        : ((resultData['references'] as List?)?.length ?? 0);
+    final coveredDimensions = _normalizedDimensions(resultData['coveredDimensions']);
+    final missingDimensions = _normalizedDimensions(resultData['missingDimensions']);
+    final canAnswerWithCurrentEvidence =
+        boundaryPolicy.allowBoundedAnswer &&
+        (referenceCount > 0 || coveredDimensions.isNotEmpty);
     if (state.shouldStopByBudget || state.shouldStopByIteration) {
-      return ToolAssessmentResult(
-        type: ToolAssessmentType.budgetExhausted,
+      return ToolAssessment(
+        assessmentType: AssessmentType.budgetExhausted,
         userMessage: DefaultProcessingCopyBank.toolAssessMessage(
           ToolAssessMessageKey.budgetExhausted,
         ),
         shouldContinueLoop: false,
+        allowAnswerWithCurrentEvidence: canAnswerWithCurrentEvidence,
+        reasonCode: PlannerReasonCode.budgetBoundary,
+        referenceCount: referenceCount,
+        queryCount: queryCount,
+        coveredDimensions: coveredDimensions,
+        missingDimensions: missingDimensions,
       );
     }
 
@@ -77,66 +78,96 @@ class ToolResultAssessor {
       final loopDetected = lastObservation['loopDetected'] == true;
       if (loopDetected) {
         final pattern = (lastObservation['loopPattern'] as String?) ?? '';
-        return ToolAssessmentResult(
-          type: ToolAssessmentType.needDifferentTool,
+        return ToolAssessment(
+          assessmentType: AssessmentType.toolFailed,
           userMessage: DefaultProcessingCopyBank.toolAssessMessage(
             ToolAssessMessageKey.loopDetected,
           ),
           shouldContinueLoop:
               pattern != 'global_circuit_breaker' &&
               _consecutiveFailures < _maxConsecutiveFailures,
+          allowAnswerWithCurrentEvidence: canAnswerWithCurrentEvidence,
+          reasonCode: PlannerReasonCode.targetedProbe,
+          referenceCount: referenceCount,
+          queryCount: queryCount,
+          coveredDimensions: coveredDimensions,
+          missingDimensions: missingDimensions,
+        );
+      }
+
+      if (canAnswerWithCurrentEvidence) {
+        return ToolAssessment(
+          assessmentType: AssessmentType.sufficient,
+          userMessage: DefaultProcessingCopyBank.toolAssessMessage(
+            ToolAssessMessageKey.fastConverged,
+          ),
+          shouldContinueLoop: false,
+          allowAnswerWithCurrentEvidence: true,
+          reasonCode: PlannerReasonCode.deliverIncrement,
+          referenceCount: referenceCount,
+          queryCount: queryCount,
+          coveredDimensions: coveredDimensions,
+          missingDimensions: missingDimensions,
         );
       }
 
       if (_consecutiveFailures >= _maxConsecutiveFailures) {
-        return ToolAssessmentResult(
-          type: ToolAssessmentType.toolFailed,
+        return ToolAssessment(
+          assessmentType: AssessmentType.toolFailed,
           userMessage: DefaultProcessingCopyBank.toolAssessMessage(
             ToolAssessMessageKey.toolFailedStop,
           ),
           shouldContinueLoop: false,
+          reasonCode: PlannerReasonCode.sourceUnstable,
+          referenceCount: referenceCount,
+          queryCount: queryCount,
+          coveredDimensions: coveredDimensions,
+          missingDimensions: missingDimensions,
         );
       }
 
-      return ToolAssessmentResult(
-        type: ToolAssessmentType.toolFailed,
+      return ToolAssessment(
+        assessmentType: AssessmentType.toolFailed,
         userMessage: DefaultProcessingCopyBank.toolAssessMessage(
           ToolAssessMessageKey.toolFailedRetry,
         ),
         shouldContinueLoop: true,
+        reasonCode: PlannerReasonCode.sourceUnstable,
+        referenceCount: referenceCount,
+        queryCount: queryCount,
+        coveredDimensions: coveredDimensions,
+        missingDimensions: missingDimensions,
       );
     }
 
     _consecutiveFailures = 0;
 
-    final resultData =
-        (lastObservation['data'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final queryCount = _positiveInt(resultData['queryCount']);
-    final explicitReferenceCount = _positiveInt(resultData['referenceCount']);
-    final referenceCount = explicitReferenceCount > 0
-        ? explicitReferenceCount
-        : ((resultData['references'] as List?)?.length ?? 0);
     final qualityScore = resultData['qualityScore'] as num? ?? 0.0;
     if (qualityScore < policy.reflectionQualityScoreMin) {
       _consecutiveLowQuality++;
       final batchCoverageLooksUsable =
           queryCount >= 2 && referenceCount >= (queryCount * 2);
-      if (batchCoverageLooksUsable) {
-        return ToolAssessmentResult(
-          type: ToolAssessmentType.sufficient,
+      if (batchCoverageLooksUsable || canAnswerWithCurrentEvidence) {
+        return ToolAssessment(
+          assessmentType: AssessmentType.sufficient,
           userMessage: DefaultProcessingCopyBank.toolAssessMessage(
             ToolAssessMessageKey.batchUsable,
           ),
           shouldContinueLoop: false,
+          allowAnswerWithCurrentEvidence: canAnswerWithCurrentEvidence,
+          reasonCode: PlannerReasonCode.deliverIncrement,
+          referenceCount: referenceCount,
+          queryCount: queryCount,
+          coveredDimensions: coveredDimensions,
+          missingDimensions: missingDimensions,
         );
       }
       // Fast-convergence problem types accept whatever results are available
       // rather than entering additional search rounds.
       if (_isFastConvergence ||
           _consecutiveLowQuality >= _maxConsecutiveLowQuality) {
-        return ToolAssessmentResult(
-          type: ToolAssessmentType.sufficient,
+        return ToolAssessment(
+          assessmentType: AssessmentType.sufficient,
           userMessage: _isFastConvergence
               ? DefaultProcessingCopyBank.toolAssessMessage(
                   ToolAssessMessageKey.fastConverged,
@@ -145,10 +176,18 @@ class ToolResultAssessor {
                   ToolAssessMessageKey.slowConverged,
                 ),
           shouldContinueLoop: false,
+          allowAnswerWithCurrentEvidence: canAnswerWithCurrentEvidence,
+          reasonCode: _isFastConvergence
+              ? PlannerReasonCode.reduceWaitTime
+              : PlannerReasonCode.deliverIncrement,
+          referenceCount: referenceCount,
+          queryCount: queryCount,
+          coveredDimensions: coveredDimensions,
+          missingDimensions: missingDimensions,
         );
       }
-      return ToolAssessmentResult(
-        type: ToolAssessmentType.needMoreSearch,
+      return ToolAssessment(
+        assessmentType: AssessmentType.needMoreSearch,
         userMessage: queryCount >= 2
             ? DefaultProcessingCopyBank.toolAssessMessage(
                 ToolAssessMessageKey.needMoreSearchMulti,
@@ -158,22 +197,33 @@ class ToolResultAssessor {
               ),
         shouldContinueLoop: true,
         rewriteQuery: true,
+        reasonCode: PlannerReasonCode.needMoreEvidence,
+        referenceCount: referenceCount,
+        queryCount: queryCount,
+        coveredDimensions: coveredDimensions,
+        missingDimensions: missingDimensions,
       );
     }
     _consecutiveLowQuality = 0;
 
     if (shouldReplan) {
-      if (_isFastConvergence) {
-        return ToolAssessmentResult(
-          type: ToolAssessmentType.sufficient,
+      if (_isFastConvergence || canAnswerWithCurrentEvidence) {
+        return ToolAssessment(
+          assessmentType: AssessmentType.sufficient,
           userMessage: DefaultProcessingCopyBank.toolAssessMessage(
             ToolAssessMessageKey.replanFast,
           ),
           shouldContinueLoop: false,
+          allowAnswerWithCurrentEvidence: canAnswerWithCurrentEvidence,
+          reasonCode: PlannerReasonCode.deliverIncrement,
+          referenceCount: referenceCount,
+          queryCount: queryCount,
+          coveredDimensions: coveredDimensions,
+          missingDimensions: missingDimensions,
         );
       }
-      return ToolAssessmentResult(
-        type: ToolAssessmentType.needMoreSearch,
+      return ToolAssessment(
+        assessmentType: AssessmentType.needMoreSearch,
         userMessage: queryCount >= 2
             ? DefaultProcessingCopyBank.toolAssessMessage(
                 ToolAssessMessageKey.replanMulti,
@@ -182,11 +232,16 @@ class ToolResultAssessor {
                 ToolAssessMessageKey.replanSingle,
               ),
         shouldContinueLoop: true,
+        reasonCode: PlannerReasonCode.needMoreSearch,
+        referenceCount: referenceCount,
+        queryCount: queryCount,
+        coveredDimensions: coveredDimensions,
+        missingDimensions: missingDimensions,
       );
     }
 
-    return ToolAssessmentResult(
-      type: ToolAssessmentType.sufficient,
+    return ToolAssessment(
+      assessmentType: AssessmentType.sufficient,
       userMessage: referenceCount > 0 && queryCount >= 2
           ? DefaultProcessingCopyBank.toolAssessMessage(
               ToolAssessMessageKey.finalMulti,
@@ -200,6 +255,13 @@ class ToolResultAssessor {
               ToolAssessMessageKey.finalDefault,
             ),
       shouldContinueLoop: false,
+      allowAnswerWithCurrentEvidence:
+          canAnswerWithCurrentEvidence || !boundaryPolicy.evidenceRequired,
+      reasonCode: PlannerReasonCode.evidenceReady,
+      referenceCount: referenceCount,
+      queryCount: queryCount,
+      coveredDimensions: coveredDimensions,
+      missingDimensions: missingDimensions,
     );
   }
 
@@ -211,5 +273,27 @@ class ToolResultAssessor {
     final parsed = int.tryParse(value?.toString() ?? '');
     if (parsed == null || parsed <= 0) return 0;
     return parsed;
+  }
+
+  List<String> _normalizedDimensions(Object? value) {
+    if (value is! List) {
+      return const <String>[];
+    }
+    final seen = <String>{};
+    final normalized = <String>[];
+    for (final item in value) {
+      final raw = item?.toString().trim() ?? '';
+      if (raw.isEmpty) {
+        continue;
+      }
+      final dimension = parseQueryTaskDimension(raw);
+      final code = dimension != QueryTaskDimension.unknown
+          ? dimension.wireName
+          : raw;
+      if (seen.add(code)) {
+        normalized.add(code);
+      }
+    }
+    return normalized;
   }
 }

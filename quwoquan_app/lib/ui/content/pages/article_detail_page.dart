@@ -8,6 +8,7 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
+import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
 import 'package:quwoquan_app/ui/content/article_detail_view.dart';
@@ -105,8 +106,7 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
   }
 
   String _formatCount(int n) {
-    if (n >= 100000) return '10万+';
-    return '$n';
+    return formatCompactActionCount(n);
   }
 
   @override

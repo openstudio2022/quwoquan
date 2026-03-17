@@ -33,12 +33,13 @@ class ReactRunState {
   int iteration = 0;
   int usedTools = 0;
   String? stopReason;
+  bool forceAnswerOnly = false;
 
   /// Tracks consecutive iterations where the model produced no text and no
   /// tool calls.  Used as a deadlock safety valve: if this reaches the
   /// threshold the loop force-exits.
   int consecutiveEmptyIterations = 0;
 
-  bool get shouldStopByBudget => usedTools >= toolBudget;
+  bool get shouldStopByBudget => usedTools >= toolBudget && !forceAnswerOnly;
   bool get shouldStopByIteration => iteration >= maxIterations;
 }

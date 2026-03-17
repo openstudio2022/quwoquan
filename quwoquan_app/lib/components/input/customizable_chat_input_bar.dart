@@ -100,6 +100,7 @@ class CustomizableChatInputBar extends StatefulWidget {
     required this.onSend,
     this.controller,
     this.focusNode,
+    this.textFieldKey,
     this.hintText,
     this.maxTextLength = 5000,
     this.maxVisibleLines = 4,
@@ -122,6 +123,7 @@ class CustomizableChatInputBar extends StatefulWidget {
 
   final TextEditingController? controller;
   final FocusNode? focusNode;
+  final Key? textFieldKey;
   final String? hintText;
   final int maxTextLength;
   final int maxVisibleLines;
@@ -685,6 +687,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
           if (left is! SizedBox) SizedBox(width: AppSpacing.xs),
           Expanded(
             child: TextField(
+              key: widget.textFieldKey,
               controller: _controller,
               focusNode: _focusNode,
               enabled: !_isVoiceMode,

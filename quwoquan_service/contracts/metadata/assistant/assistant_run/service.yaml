@@ -121,7 +121,7 @@ contract_test:
             - "db.assistant_runs.FindOne({_id}).intentGraph → exists"
             - "db.assistant_runs.FindOne({_id}).aggregationState → exists"
             - "db.assistant_runs.FindOne({_id}).subagentPlan → appendable"
-            - "db.assistant_runs.FindOne({_id}).uiProcessTimelineV2 → exists"
+            - "db.assistant_runs.FindOne({_id}).uiProcessTimeline → exists"
             - "db.assistant_runs.FindOne({_id}).processSummary/processReferenceCount → exists"
             - "eventSpy.AssertPublished('AssistantRunStarted')"
             - "eventSpy.AssertPublished('AssistantRunCompleted', {llmTokensUsed})"

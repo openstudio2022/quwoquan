@@ -1,12 +1,17 @@
+import 'dart:async';
+
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
-import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
-import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
-import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/ui/circle/widgets/home_circles_category_tab.dart';
-import 'package:quwoquan_app/ui/circle/widgets/rectangular_circle_card.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class HomeCirclesHubPage extends ConsumerStatefulWidget {
   const HomeCirclesHubPage({super.key});
@@ -15,214 +20,536 @@ class HomeCirclesHubPage extends ConsumerStatefulWidget {
   ConsumerState<HomeCirclesHubPage> createState() => _HomeCirclesHubPageState();
 }
 
+const double _homeCircleCoverAspectRatio = 4 / 3;
+
+enum _HomeCirclesModuleTab { recommended, mine }
+
 class _HomeCirclesHubPageState extends ConsumerState<HomeCirclesHubPage> {
-  late List<MapEntry<String, Map<String, dynamic>>> _categories;
+  static const Set<String> _myCircleIds = <String>{
+    'c-photo-owner',
+    'c-tech-admin',
+    'c1',
+    'c2',
+    'c3',
+    'c-human-1',
+  };
+  static const String _channelPrefsKey = 'home_circles.selected_channels.v1';
+  static const List<String> _fixedCategoryOrder = <String>['all'];
+
+  String _activeCategoryId = 'all';
+  _HomeCirclesModuleTab _activeModuleTab = _HomeCirclesModuleTab.recommended;
+  bool _isChannelPanelOpen = false;
+  String? _draggingChannelId;
+  List<String>? _selectedCategoryIds;
 
   @override
   void initState() {
     super.initState();
-    // 'all' is handled as the first tab (Recommend), so we might want to put it first explicitly
-    // or just use the map order if 'all' is first.
-    // Let's ensure 'all' is first.
-    final allConfig = CircleMockData.categoryConfig.entries
-        .where((e) => e.key == 'all')
-        .toList();
-    final otherConfig = CircleMockData.categoryConfig.entries
-        .where((e) => e.key != 'all')
-        .toList();
-    _categories = [...allConfig, ...otherConfig];
+    unawaited(_restoreChannelSelection());
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: _categories.length,
-      child: NestedScrollView(
-        headerSliverBuilder: (context, innerBoxIsScrolled) {
-          return [
-            // Global Header: My Circles + Recommended Circles
-            const SliverToBoxAdapter(
-              child: _CirclesGlobalHeader(),
-            ),
+  List<Map<String, String>> get _allCategories {
+    final config = CircleMockData.categoryConfig;
+    final list = <Map<String, String>>[];
+    final seen = <String>{};
 
-            // Sticky TabBar (Categories)
-            SliverPersistentHeader(
-              pinned: true,
-              delegate: _StickyTabBarDelegate(
-                child: Container(
-                  color: AppColors.light.backgroundPrimary,
-                  alignment: Alignment.centerLeft,
-                  child: TabBar(
-                    isScrollable: true,
-                    tabAlignment: TabAlignment.start,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.containerMd,
-                    ),
-                    labelColor: AppColors.primaryColor,
-                    unselectedLabelColor: AppColors.light.foregroundSecondary,
-                    labelStyle: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: AppTypography.bold,
-                    ),
-                    unselectedLabelStyle: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: AppTypography.medium,
-                    ),
-                    indicatorColor: AppColors.primaryColor,
-                    indicatorSize: TabBarIndicatorSize.label,
-                    dividerColor: Colors.transparent,
-                    tabs: _categories.map((e) {
-                      return Tab(text: e.value['label'] as String);
-                    }).toList(),
-                  ),
-                ),
-              ),
-            ),
-          ];
-        },
-        body: TabBarView(
-          children: _categories.map((e) {
-            // All tabs now use the same simplified waterfall layout structure
-            return HomeCirclesCategoryTab(
-              categoryId: e.key,
-              label: e.value['label'] as String,
-              subCategories: (e.value['subCategories'] as List<dynamic>)
-                  .map((e) => e.toString())
-                  .toList(),
-            );
-          }).toList(),
-        ),
-      ),
+    void addCategory(String id, String label) {
+      if (!seen.add(id)) return;
+      list.add({'id': id, 'label': label});
+    }
+
+    addCategory('all', (config['all']?['label'] as String?) ?? '推荐');
+    for (final entry in config.entries) {
+      if (_fixedCategoryOrder.contains(entry.key)) continue;
+      addCategory(entry.key, entry.value['label']?.toString() ?? entry.key);
+    }
+    return list;
+  }
+
+  Map<String, String> get _categoryLabelMap {
+    return {for (final item in _allCategories) item['id']!: item['label']!};
+  }
+
+  List<String> get _fixedCategoryIds {
+    final allIds = _allCategories.map((entry) => entry['id']!).toSet();
+    return _fixedCategoryOrder.where(allIds.contains).toList(growable: false);
+  }
+
+  List<String> get _manageableAllCategoryIds {
+    final fixedSet = _fixedCategoryIds.toSet();
+    return _allCategories
+        .map((entry) => entry['id']!)
+        .where((id) => !fixedSet.contains(id))
+        .toList(growable: false);
+  }
+
+  List<String> get _defaultSelectedCategoryIds =>
+      _manageableAllCategoryIds.toList(growable: false);
+
+  List<String> _normalizedSelectedCategoryIds(List<String>? source) {
+    final allIds = _manageableAllCategoryIds.toSet();
+    final selected = <String>[];
+    for (final id in source ?? _defaultSelectedCategoryIds) {
+      if (allIds.contains(id) && !selected.contains(id)) {
+        selected.add(id);
+      }
+    }
+    if (selected.isEmpty) {
+      selected.addAll(_defaultSelectedCategoryIds);
+    }
+    return selected;
+  }
+
+  List<String> get _manageableSelectedCategoryIds =>
+      _normalizedSelectedCategoryIds(_selectedCategoryIds);
+
+  List<String> get _visibleCategoryIds => <String>[
+    ..._fixedCategoryIds,
+    ..._manageableSelectedCategoryIds,
+  ];
+
+  List<String> get _unselectedCategoryIds {
+    final selectedSet = _manageableSelectedCategoryIds.toSet();
+    return _manageableAllCategoryIds
+        .where((id) => !selectedSet.contains(id))
+        .toList(growable: false);
+  }
+
+  List<MapEntry<String, Map<String, dynamic>>> get _visibleCategories {
+    final config = CircleMockData.categoryConfig;
+    return _visibleCategoryIds
+        .where(config.containsKey)
+        .map((id) => MapEntry(id, config[id]!))
+        .toList(growable: false);
+  }
+
+  Future<void> _restoreChannelSelection() async {
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getStringList(_channelPrefsKey);
+    final normalized = _normalizedSelectedCategoryIds(stored);
+    if (!mounted) return;
+    setState(() {
+      _selectedCategoryIds = normalized;
+      if (!_visibleCategoryIds.contains(_activeCategoryId)) {
+        _activeCategoryId = _visibleCategoryIds.first;
+      }
+    });
+  }
+
+  Future<void> _persistChannelSelection() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_channelPrefsKey, _manageableSelectedCategoryIds);
+  }
+
+  void _applySelectedCategoryIds(
+    List<String> nextIds, {
+    required bool persist,
+  }) {
+    final normalized = _normalizedSelectedCategoryIds(nextIds);
+    setState(() {
+      _selectedCategoryIds = normalized;
+      if (!_fixedCategoryIds.contains(_activeCategoryId) &&
+          !normalized.contains(_activeCategoryId)) {
+        _activeCategoryId = _visibleCategoryIds.first;
+      }
+    });
+    if (persist) {
+      unawaited(_persistChannelSelection());
+    }
+  }
+
+  void _moveToUnselected(String id) {
+    final selected = List<String>.from(_manageableSelectedCategoryIds);
+    if (!selected.contains(id) || selected.length <= 1) return;
+    selected.remove(id);
+    _applySelectedCategoryIds(selected, persist: true);
+  }
+
+  void _moveToSelected(String id) {
+    final selected = List<String>.from(_manageableSelectedCategoryIds);
+    if (selected.contains(id)) return;
+    selected.add(id);
+    _applySelectedCategoryIds(selected, persist: true);
+  }
+
+  void _reorderSelectedBefore(String sourceId, String targetId) {
+    if (sourceId == targetId) return;
+    final selected = List<String>.from(_manageableSelectedCategoryIds);
+    final sourceIndex = selected.indexOf(sourceId);
+    final targetIndex = selected.indexOf(targetId);
+    if (sourceIndex < 0 || targetIndex < 0) return;
+    final removed = selected.removeAt(sourceIndex);
+    final nextIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+    selected.insert(nextIndex, removed);
+    _applySelectedCategoryIds(selected, persist: true);
+  }
+
+  void _toggleChannelPanel() {
+    setState(() {
+      _isChannelPanelOpen = !_isChannelPanelOpen;
+    });
+  }
+
+  bool _isMyCircleId(String circleId) => _myCircleIds.contains(circleId);
+
+  List<CircleDto> _moduleCirclesFor(
+    _HomeCirclesModuleTab tab,
+    String categoryId,
+  ) {
+    final isMineMode = tab == _HomeCirclesModuleTab.mine;
+    final modeFiltered = CircleMockData.circles
+        .where((circle) {
+          final isMineCircle = _isMyCircleId(circle['id']?.toString() ?? '');
+          return isMineMode ? isMineCircle : !isMineCircle;
+        })
+        .toList(growable: false);
+    if (categoryId == 'all') {
+      return modeFiltered
+          .take(6)
+          .map(
+            (circle) => CircleDto.fromMap({
+              ...circle,
+              'description': circle['description'] ?? circle['desc'],
+            }),
+          )
+          .toList(growable: false);
+    }
+    final categoryFiltered = modeFiltered
+        .where((circle) => circle['categoryId'] == categoryId)
+        .toList(growable: false);
+    final fallbackPool = categoryFiltered.isNotEmpty
+        ? categoryFiltered
+        : modeFiltered;
+    return fallbackPool
+        .take(6)
+        .map(
+          (circle) => CircleDto.fromMap({
+            ...circle,
+            'description': circle['description'] ?? circle['desc'],
+          }),
+        )
+        .toList(growable: false);
+  }
+
+  List<_HomeCircleStoryItem> _moduleStoriesFor(
+    _HomeCirclesModuleTab tab,
+    String categoryId,
+  ) {
+    final circleById = <String, Map<String, dynamic>>{
+      for (final circle in CircleMockData.circles)
+        circle['id']?.toString() ?? '': circle,
+    };
+    final activityItems = CircleMockData.activities.map((activity) {
+      final circleId = activity['circleId']?.toString() ?? '';
+      final sourceCircle = circleById[circleId];
+      return _HomeCircleStoryItem(
+        id: activity['id']?.toString() ?? circleId,
+        title: activity['title']?.toString() ?? '',
+        subtitle: activity['circleName']?.toString() ?? '',
+        imageUrl: activity['image']?.toString() ?? '',
+        circleId: circleId,
+        categoryId: sourceCircle?['categoryId']?.toString() ?? 'all',
+        typeLabel: UITextConstants.homeCirclesStoryTypeActivity,
+        isMine: _isMyCircleId(circleId),
+      );
+    });
+    final creationItems = CircleMockData.circles.map((circle) {
+      final circleId = circle['id']?.toString() ?? '';
+      final circleName = circle['name']?.toString() ?? '';
+      final description = circle['desc']?.toString() ?? circleName;
+      return _HomeCircleStoryItem(
+        id: 'creation_$circleId',
+        title: description,
+        subtitle: circleName,
+        imageUrl:
+            circle['coverUrl']?.toString() ??
+            circle['cover']?.toString() ??
+            circle['avatar']?.toString() ??
+            '',
+        circleId: circleId,
+        categoryId: circle['categoryId']?.toString() ?? 'all',
+        typeLabel: UITextConstants.homeCirclesStoryTypeCreation,
+        isMine: _isMyCircleId(circleId),
+      );
+    });
+    final pool = <_HomeCircleStoryItem>[...activityItems, ...creationItems];
+    final isMineMode = tab == _HomeCirclesModuleTab.mine;
+    final modeFiltered = pool.where(
+      (item) => isMineMode ? item.isMine : !item.isMine,
     );
+    final ordered = modeFiltered.toList(growable: false);
+    if (categoryId == 'all') {
+      return ordered.take(3).toList(growable: false);
+    }
+    final categoryFiltered = ordered
+        .where((item) => item.categoryId == categoryId)
+        .toList(growable: false);
+    final fallbackPool = categoryFiltered.isNotEmpty
+        ? categoryFiltered
+        : ordered;
+    return fallbackPool.take(3).toList(growable: false);
   }
-}
-
-class _CirclesGlobalHeader extends StatelessWidget {
-  const _CirclesGlobalHeader();
 
   @override
   Widget build(BuildContext context) {
-    // Mock Data for Header
-    final myCircles = CircleMockData.circles
-        .take(5)
-        .map((e) => CircleDto.fromMap(e))
-        .toList();
-    final featuredCircles = CircleMockData.circles
-        .skip(2)
-        .take(5)
-        .map((e) => CircleDto.fromMap(e))
-        .toList();
+    final isDark = ref.watch(effectiveIsDarkProvider);
+    final categories = _visibleCategories;
+    final visibleCategoryIds = _visibleCategoryIds;
+    final effectiveActiveCategoryId =
+        visibleCategoryIds.contains(_activeCategoryId)
+        ? _activeCategoryId
+        : visibleCategoryIds.first;
+    final activeCategory = categories.firstWhere(
+      (entry) => entry.key == effectiveActiveCategoryId,
+      orElse: () => categories.first,
+    );
+    if (effectiveActiveCategoryId != _activeCategoryId) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          _activeCategoryId = effectiveActiveCategoryId;
+        });
+      });
+    }
+    final circles = _moduleCirclesFor(
+      _activeModuleTab,
+      effectiveActiveCategoryId,
+    );
+    final stories = _moduleStoriesFor(
+      _activeModuleTab,
+      effectiveActiveCategoryId,
+    );
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Stack(
       children: [
-        Padding(
-          padding: const EdgeInsets.only(top: AppSpacing.interGroupSm),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.containerMd,
-                ),
-                child: const Text(
-                  '我的圈子',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: AppTypography.bold,
-                  ),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.intraGroupSm),
-              SizedBox(
-                height: 160,
-                child: ListView.separated(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.containerMd,
-                  ),
-                  scrollDirection: Axis.horizontal,
-                  itemCount: myCircles.length,
-                  separatorBuilder: (_, __) =>
-                      const SizedBox(width: AppSpacing.intraGroupMd),
-                  itemBuilder: (context, index) {
-                    return RectangularCircleCard(
-                      width: 260,
-                      aspectRatio: 16 / 9,
-                      circle: myCircles[index],
-                      onTap: () {},
-                    );
-                  },
-                ),
-              ),
-            ],
+        CustomScrollView(
+          physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(top: AppSpacing.interGroupSm),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.containerMd,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      '推荐圈子',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: AppTypography.bold,
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () {},
-                      child: Text(
-                        '更多 >',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.light.foregroundSecondary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+          slivers: [
+            SliverToBoxAdapter(
+              child: _CirclesGlobalHeader(
+                isDark: isDark,
+                activeModuleTab: _activeModuleTab,
+                circles: circles,
+                stories: stories,
+                onModuleTabChanged: (nextTab) {
+                  if (nextTab == _activeModuleTab) return;
+                  setState(() {
+                    _activeModuleTab = nextTab;
+                  });
+                },
               ),
-              const SizedBox(height: AppSpacing.intraGroupSm),
-              SizedBox(
-                height: 160, // Height for RectangularCircleCard
-                child: ListView.separated(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.containerMd,
-                  ),
-                  scrollDirection: Axis.horizontal,
-                  itemCount: featuredCircles.length,
-                  separatorBuilder: (_, __) =>
-                      const SizedBox(width: AppSpacing.intraGroupMd),
-                  itemBuilder: (context, index) {
-                    return RectangularCircleCard(
-                      width: 260,
-                      aspectRatio: 16 / 9,
-                      circle: featuredCircles[index],
-                      onTap: () {},
-                    );
+            ),
+            SliverPersistentHeader(
+              floating: true,
+              delegate: _StickyTabBarDelegate(
+                extent: AppSpacing.subTabNavigationHeight,
+                child: _HomeCirclesCategoryCapsuleBar(
+                  isDark: isDark,
+                  categories: categories,
+                  activeCategoryId: effectiveActiveCategoryId,
+                  onCategoryTap: (index) {
+                    final nextCategoryId = categories[index].key;
+                    if (nextCategoryId == effectiveActiveCategoryId) return;
+                    setState(() {
+                      _activeCategoryId = nextCategoryId;
+                    });
                   },
+                  onChannelSelectorTap: _toggleChannelPanel,
                 ),
               ),
-            ],
-          ),
+            ),
+            HomeCirclesCategoryTab(
+              key: ValueKey('home-circles-category-$effectiveActiveCategoryId'),
+              categoryId: effectiveActiveCategoryId,
+              label:
+                  activeCategory.value['label']?.toString() ??
+                  effectiveActiveCategoryId,
+              subCategories:
+                  (activeCategory.value['subCategories'] as List<dynamic>? ??
+                          const [])
+                      .map((item) => item.toString())
+                      .toList(growable: false),
+            ),
+          ],
         ),
-        const SizedBox(height: AppSpacing.interGroupSm),
+        if (_isChannelPanelOpen)
+          Positioned.fill(
+            child: _HomeCirclesChannelPanel(
+              isDark: isDark,
+              categoryLabelMap: _categoryLabelMap,
+              selectedIds: _manageableSelectedCategoryIds,
+              unselectedIds: _unselectedCategoryIds,
+              draggingChannelId: _draggingChannelId,
+              onClose: _toggleChannelPanel,
+              onMoveToSelected: _moveToSelected,
+              onMoveToUnselected: _moveToUnselected,
+              onReorderSelectedBefore: _reorderSelectedBefore,
+              onDragStarted: (id) {
+                setState(() {
+                  _draggingChannelId = id;
+                });
+              },
+              onDragEnded: () {
+                if (!mounted) return;
+                setState(() {
+                  _draggingChannelId = null;
+                });
+              },
+            ),
+          ),
       ],
     );
   }
 }
 
-class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
-  final Widget child;
+class _CirclesGlobalHeader extends StatelessWidget {
+  const _CirclesGlobalHeader({
+    required this.isDark,
+    required this.activeModuleTab,
+    required this.circles,
+    required this.stories,
+    required this.onModuleTabChanged,
+  });
 
-  const _StickyTabBarDelegate({required this.child});
+  final bool isDark;
+  final _HomeCirclesModuleTab activeModuleTab;
+  final List<CircleDto> circles;
+  final List<_HomeCircleStoryItem> stories;
+  final ValueChanged<_HomeCirclesModuleTab> onModuleTabChanged;
+
+  double _circleCardWidth(BuildContext context) {
+    return AppSpacing.responsiveValue(
+      context,
+      compact: AppSpacing.bottomNavHeight * 1.7,
+      regular: AppSpacing.bottomNavHeight * 1.9,
+      expanded: AppSpacing.bottomNavHeight * 2.1,
+    );
+  }
+
+  double _circleRailHeight(BuildContext context) {
+    final cardWidth = _circleCardWidth(context);
+    final coverHeight = cardWidth / _homeCircleCoverAspectRatio;
+    return coverHeight + AppSpacing.intraGroupSm + AppTypography.secondary;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final horizontal = AppSpacing.feedContentHorizontal(context);
+    final circleCardWidth = _circleCardWidth(context);
+
+    return Container(
+      color: bgPrimary,
+      padding: EdgeInsets.fromLTRB(
+        horizontal,
+        AppSpacing.interGroupSm,
+        horizontal,
+        AppSpacing.interGroupMd,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _HomeCirclesModuleTabs(
+                isDark: isDark,
+                activeTab: activeModuleTab,
+                onTabChanged: onModuleTabChanged,
+              ),
+              CupertinoButton(
+                onPressed: () => context.go(AppRoutePaths.circles),
+                padding: EdgeInsets.zero,
+                minimumSize: Size.zero,
+                child: Text(
+                  UITextConstants.seeMore,
+                  style: TextStyle(
+                    fontSize: AppTypography.sm,
+                    color: AppColors.primaryColor,
+                    fontWeight: AppTypography.medium,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: AppSpacing.intraGroupSm),
+          SizedBox(
+            height: _circleRailHeight(context),
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: circles.length,
+              separatorBuilder: (context, index) =>
+                  SizedBox(width: AppSpacing.intraGroupMd),
+              itemBuilder: (context, index) {
+                final circle = circles[index];
+                return _HomeCircleRailCard(
+                  circle: circle,
+                  width: circleCardWidth,
+                  isDark: isDark,
+                  onTap: () =>
+                      context.push(AppRoutePaths.circleDetail(id: circle.id)),
+                );
+              },
+            ),
+          ),
+          SizedBox(height: AppSpacing.interGroupMd),
+          if (stories.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(AppSpacing.containerMd),
+              decoration: BoxDecoration(
+                color: AppColorsFunctional.getColor(
+                  isDark,
+                  ColorType.backgroundSecondary,
+                ),
+                borderRadius: BorderRadius.circular(
+                  AppSpacing.largeBorderRadius,
+                ),
+              ),
+              child: Text(
+                UITextConstants.noData,
+                style: TextStyle(
+                  fontSize: AppTypography.base,
+                  color: fgSecondary,
+                ),
+              ),
+            )
+          else
+            Column(
+              children: [
+                for (int index = 0; index < stories.length; index++) ...[
+                  _HomeCircleStoryCard(
+                    item: stories[index],
+                    isDark: isDark,
+                    onTap: () => context.push(
+                      AppRoutePaths.circleDetail(id: stories[index].circleId),
+                    ),
+                  ),
+                  if (index < stories.length - 1)
+                    SizedBox(height: AppSpacing.intraGroupSm),
+                ],
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
+  const _StickyTabBarDelegate({required this.child, required this.extent});
+
+  final Widget child;
+  final double extent;
 
   @override
   Widget build(
@@ -234,13 +561,668 @@ class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
   }
 
   @override
-  double get maxExtent => 48;
+  double get maxExtent => extent;
 
   @override
-  double get minExtent => 48;
+  double get minExtent => extent;
 
   @override
   bool shouldRebuild(covariant _StickyTabBarDelegate oldDelegate) {
-    return oldDelegate.child != child;
+    return oldDelegate.child != child || oldDelegate.extent != extent;
+  }
+}
+
+class _HomeCirclesCategoryCapsuleBar extends StatelessWidget {
+  const _HomeCirclesCategoryCapsuleBar({
+    required this.isDark,
+    required this.categories,
+    required this.activeCategoryId,
+    required this.onCategoryTap,
+    required this.onChannelSelectorTap,
+  });
+
+  final bool isDark;
+  final List<MapEntry<String, Map<String, dynamic>>> categories;
+  final String activeCategoryId;
+  final ValueChanged<int> onCategoryTap;
+  final VoidCallback onChannelSelectorTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tabs = categories
+        .map((entry) => entry.value['label']?.toString() ?? entry.key)
+        .toList(growable: false);
+    final activeIndex = categories.indexWhere(
+      (entry) => entry.key == activeCategoryId,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+
+    return SecondaryCapsuleTabBar(
+      isDark: isDark,
+      tabs: tabs,
+      activeIndex: activeIndex < 0 ? 0 : activeIndex,
+      onTap: onCategoryTap,
+      fontSize: AppTypography.smPlus,
+      trailing: SizedBox(
+        width: AppSpacing.minInteractiveSize + AppSpacing.intraGroupMd,
+        child: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: onChannelSelectorTap,
+          child: Icon(
+            CupertinoIcons.line_horizontal_3_decrease,
+            size: AppSpacing.iconMedium,
+            color: fgSecondary,
+          ),
+        ),
+      ),
+      showTrailingDivider: true,
+    );
+  }
+}
+
+class _HomeCirclesModuleTabs extends StatelessWidget {
+  const _HomeCirclesModuleTabs({
+    required this.isDark,
+    required this.activeTab,
+    required this.onTabChanged,
+  });
+
+  final bool isDark;
+  final _HomeCirclesModuleTab activeTab;
+  final ValueChanged<_HomeCirclesModuleTab> onTabChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildPlainTab(
+          label: UITextConstants.homeCirclesRecommendTab,
+          fontSize: AppTypography.sm,
+          selected: activeTab == _HomeCirclesModuleTab.recommended,
+          onTap: () => onTabChanged(_HomeCirclesModuleTab.recommended),
+          isDark: isDark,
+          fgSecondary: fgSecondary,
+        ),
+        SizedBox(width: AppSpacing.intraGroupMd),
+        _buildPlainTab(
+          label: UITextConstants.homeCirclesMy,
+          fontSize: AppTypography.sm,
+          selected: activeTab == _HomeCirclesModuleTab.mine,
+          onTap: () => onTabChanged(_HomeCirclesModuleTab.mine),
+          isDark: isDark,
+          fgSecondary: fgSecondary,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPlainTab({
+    required String label,
+    required double fontSize,
+    required bool selected,
+    required VoidCallback onTap,
+    required bool isDark,
+    required Color fgSecondary,
+  }) {
+    return CupertinoButton(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.intraGroupXs,
+        vertical: AppSpacing.intraGroupXs,
+      ),
+      minimumSize: Size.zero,
+      onPressed: onTap,
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: fontSize,
+          fontWeight: selected ? AppTypography.semiBold : AppTypography.medium,
+          color: selected
+              ? (isDark ? Colors.white : AppColors.primaryColor)
+              : fgSecondary,
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeCircleRailCard extends StatelessWidget {
+  const _HomeCircleRailCard({
+    required this.circle,
+    required this.width,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final CircleDto circle;
+  final double width;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    return SizedBox(
+      width: width,
+      child: CupertinoButton(
+        padding: EdgeInsets.zero,
+        minimumSize: Size.zero,
+        onPressed: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+              child: AspectRatio(
+                aspectRatio: _homeCircleCoverAspectRatio,
+                child: AppCachedNetworkImage(
+                  imageUrl: circle.coverUrl ?? '',
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+            SizedBox(height: AppSpacing.intraGroupXs),
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  circle.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: AppTypography.secondary,
+                    fontWeight: AppTypography.medium,
+                    color: fgPrimary,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeCircleStoryCard extends StatelessWidget {
+  const _HomeCircleStoryCard({
+    required this.item,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final _HomeCircleStoryItem item;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  double _thumbnailWidth(BuildContext context) {
+    return AppSpacing.responsiveValue(
+      context,
+      compact: AppSpacing.bottomNavHeight * 1.45,
+      regular: AppSpacing.bottomNavHeight * 1.6,
+      expanded: AppSpacing.bottomNavHeight * 1.75,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final bgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundSecondary,
+    );
+    final thumbnailWidth = _thumbnailWidth(context);
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: bgSecondary,
+        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+      ),
+      child: CupertinoButton(
+        padding: EdgeInsets.all(AppSpacing.sm),
+        minimumSize: Size.zero,
+        onPressed: onTap,
+        child: Row(
+          children: [
+            SizedBox(
+              width: thumbnailWidth,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                child: AspectRatio(
+                  aspectRatio: _homeCircleCoverAspectRatio,
+                  child: AppCachedNetworkImage(
+                    imageUrl: item.imageUrl,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    item.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: AppTypography.base,
+                      fontWeight: AppTypography.semiBold,
+                      color: fgPrimary,
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.intraGroupXs),
+                  Text(
+                    '${item.typeLabel} · ${item.subtitle}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: AppTypography.sm,
+                      color: fgSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeCircleStoryItem {
+  const _HomeCircleStoryItem({
+    required this.id,
+    required this.title,
+    required this.subtitle,
+    required this.imageUrl,
+    required this.circleId,
+    required this.categoryId,
+    required this.typeLabel,
+    required this.isMine,
+  });
+
+  final String id;
+  final String title;
+  final String subtitle;
+  final String imageUrl;
+  final String circleId;
+  final String categoryId;
+  final String typeLabel;
+  final bool isMine;
+}
+
+class _HomeCirclesChannelPanel extends StatelessWidget {
+  const _HomeCirclesChannelPanel({
+    required this.isDark,
+    required this.categoryLabelMap,
+    required this.selectedIds,
+    required this.unselectedIds,
+    required this.draggingChannelId,
+    required this.onClose,
+    required this.onMoveToSelected,
+    required this.onMoveToUnselected,
+    required this.onReorderSelectedBefore,
+    required this.onDragStarted,
+    required this.onDragEnded,
+  });
+
+  final bool isDark;
+  final Map<String, String> categoryLabelMap;
+  final List<String> selectedIds;
+  final List<String> unselectedIds;
+  final String? draggingChannelId;
+  final VoidCallback onClose;
+  final ValueChanged<String> onMoveToSelected;
+  final ValueChanged<String> onMoveToUnselected;
+  final void Function(String sourceId, String targetId) onReorderSelectedBefore;
+  final ValueChanged<String> onDragStarted;
+  final VoidCallback onDragEnded;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onClose,
+      child: ColoredBox(
+        color: bg.withValues(alpha: 0.98),
+        child: SafeArea(
+          bottom: false,
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(),
+            ),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {},
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.feedContentHorizontal(context),
+                  AppSpacing.containerMd,
+                  AppSpacing.feedContentHorizontal(context),
+                  AppSpacing.containerMd +
+                      MediaQuery.viewPaddingOf(context).bottom +
+                      AppSpacing.bottomNavHeight,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          UITextConstants.circleMyChannels,
+                          style: TextStyle(
+                            fontSize: AppTypography.lg,
+                            fontWeight: AppTypography.semiBold,
+                            color: fgPrimary,
+                          ),
+                        ),
+                        SizedBox(width: AppSpacing.intraGroupSm),
+                        Text(
+                          UITextConstants.circleDragToSort,
+                          style: TextStyle(
+                            fontSize: AppTypography.sm,
+                            color: fgSecondary,
+                          ),
+                        ),
+                        const Spacer(),
+                        CupertinoButton(
+                          padding: EdgeInsets.zero,
+                          onPressed: onClose,
+                          child: Text(
+                            UITextConstants.done,
+                            style: TextStyle(
+                              fontSize: AppTypography.base,
+                              fontWeight: AppTypography.medium,
+                              color: AppColors.primaryColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: AppSpacing.interGroupSm),
+                    _HomeCirclesChannelGrid(
+                      isDark: isDark,
+                      categoryLabelMap: categoryLabelMap,
+                      channelIds: selectedIds,
+                      canRemove: true,
+                      draggingChannelId: draggingChannelId,
+                      onTapIcon: onMoveToUnselected,
+                      onDragStarted: onDragStarted,
+                      onDragEnded: onDragEnded,
+                      onReorderSelectedBefore: onReorderSelectedBefore,
+                    ),
+                    SizedBox(height: AppSpacing.interGroupLg),
+                    Row(
+                      children: [
+                        Text(
+                          UITextConstants.circleAllChannels,
+                          style: TextStyle(
+                            fontSize: AppTypography.lg,
+                            fontWeight: AppTypography.semiBold,
+                            color: fgPrimary,
+                          ),
+                        ),
+                        SizedBox(width: AppSpacing.intraGroupSm),
+                        Text(
+                          UITextConstants.circleTapToAdd,
+                          style: TextStyle(
+                            fontSize: AppTypography.sm,
+                            color: fgSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: AppSpacing.interGroupSm),
+                    _HomeCirclesChannelGrid(
+                      isDark: isDark,
+                      categoryLabelMap: categoryLabelMap,
+                      channelIds: unselectedIds,
+                      canRemove: false,
+                      draggingChannelId: draggingChannelId,
+                      onTapIcon: onMoveToSelected,
+                      onDragStarted: onDragStarted,
+                      onDragEnded: onDragEnded,
+                      onReorderSelectedBefore: onReorderSelectedBefore,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeCirclesChannelGrid extends StatelessWidget {
+  const _HomeCirclesChannelGrid({
+    required this.isDark,
+    required this.categoryLabelMap,
+    required this.channelIds,
+    required this.canRemove,
+    required this.draggingChannelId,
+    required this.onTapIcon,
+    required this.onDragStarted,
+    required this.onDragEnded,
+    required this.onReorderSelectedBefore,
+  });
+
+  final bool isDark;
+  final Map<String, String> categoryLabelMap;
+  final List<String> channelIds;
+  final bool canRemove;
+  final String? draggingChannelId;
+  final ValueChanged<String> onTapIcon;
+  final ValueChanged<String> onDragStarted;
+  final VoidCallback onDragEnded;
+  final void Function(String sourceId, String targetId) onReorderSelectedBefore;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = AppSpacing.intraGroupSm;
+    final panelTileHeight = AppSpacing.bottomNavHeight;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final totalSpacing = spacing * 3;
+        final tileWidth = (constraints.maxWidth - totalSpacing) / 4;
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: channelIds
+              .map((id) {
+                final label = categoryLabelMap[id] ?? id;
+                final tile = _HomeCirclesChannelTile(
+                  isDark: isDark,
+                  width: tileWidth,
+                  height: panelTileHeight,
+                  label: label,
+                  canRemove: canRemove,
+                  isDragging: draggingChannelId == id,
+                  onIconTap: () => onTapIcon(id),
+                );
+                if (!canRemove) return tile;
+                return SizedBox(
+                  width: tileWidth,
+                  height: panelTileHeight,
+                  child: DragTarget<String>(
+                    onWillAcceptWithDetails: (details) => details.data != id,
+                    onAcceptWithDetails: (details) {
+                      onReorderSelectedBefore(details.data, id);
+                    },
+                    builder: (context, candidateData, rejectedData) {
+                      return LongPressDraggable<String>(
+                        data: id,
+                        onDragStarted: () => onDragStarted(id),
+                        onDragEnd: (_) => onDragEnded(),
+                        feedback: Material(
+                          color: Colors.transparent,
+                          child: _HomeCirclesChannelTile(
+                            isDark: isDark,
+                            width: tileWidth,
+                            height: panelTileHeight,
+                            label: label,
+                            canRemove: true,
+                            isDragging: false,
+                            onIconTap: () {},
+                          ),
+                        ),
+                        childWhenDragging: Opacity(opacity: 0.2, child: tile),
+                        child: tile,
+                      );
+                    },
+                  ),
+                );
+              })
+              .toList(growable: false),
+        );
+      },
+    );
+  }
+}
+
+class _HomeCirclesChannelTile extends StatelessWidget {
+  const _HomeCirclesChannelTile({
+    required this.isDark,
+    required this.width,
+    required this.height,
+    required this.label,
+    required this.canRemove,
+    required this.isDragging,
+    required this.onIconTap,
+  });
+
+  final bool isDark;
+  final double width;
+  final double height;
+  final String label;
+  final bool canRemove;
+  final bool isDragging;
+  final VoidCallback onIconTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = canRemove
+        ? AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary)
+        : AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
+    final borderColor = canRemove
+        ? Colors.transparent
+        : AppColorsFunctional.getColor(
+            isDark,
+            ColorType.borderPrimary,
+          ).withValues(alpha: 0.5);
+    final fg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final iconBg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundTertiary,
+    );
+
+    return SizedBox(
+      width: width,
+      height: height,
+      child: Opacity(
+        opacity: isDragging ? 0.45 : 1,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: width,
+              height: height,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                border: Border.all(color: borderColor),
+              ),
+              child: Text(
+                canRemove ? label : '+ $label',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: AppTypography.base,
+                  color: fg,
+                  fontWeight: AppTypography.medium,
+                ),
+              ),
+            ),
+            if (canRemove)
+              Positioned(
+                top: -AppSpacing.intraGroupXs,
+                right: -AppSpacing.intraGroupXs,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onIconTap,
+                  child: Container(
+                    width: AppSpacing.minInteractiveSize / 2,
+                    height: AppSpacing.minInteractiveSize / 2,
+                    decoration: BoxDecoration(
+                      color: iconBg,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      CupertinoIcons.xmark,
+                      size: AppSpacing.iconSmall,
+                      color: AppColorsFunctional.getColor(
+                        isDark,
+                        ColorType.foregroundSecondary,
+                      ),
+                    ),
+                  ),
+                ),
+              )
+            else
+              Positioned.fill(
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(
+                      AppSpacing.borderRadius,
+                    ),
+                    onTap: onIconTap,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }

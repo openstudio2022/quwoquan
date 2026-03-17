@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
-import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
+import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/ui/user/pages/author_profile_page.dart';
 
 /// 他人主页入口
 ///
@@ -24,13 +24,12 @@ class OtherProfilePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return ProfileShell(
-      mode: ProfileMode.other,
-      userId: username,
+    return AuthorProfile(
+      username: username,
+      onBack: onBack ?? () => context.pop(),
       initialAvatarUrl: initialAvatarUrl,
       initialDisplayName: initialDisplayName,
-      initialBackgroundUrl: initialBackgroundImageUrl,
-      onBack: onBack,
+      initialBackgroundImageUrl: initialBackgroundImageUrl,
     );
   }
 }

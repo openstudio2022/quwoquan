@@ -162,42 +162,41 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
             _section(
               blockSurface: blockSurface,
               isDark: isDark,
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () {
-                    showCupertinoDialog<void>(
-                      context: context,
-                      builder: (_) => CupertinoAlertDialog(
-                        title: Text(UITextConstants.dissolveGroupChat),
-                        content: const Text('解散后所有成员将被移出群聊，此操作不可撤销。'),
-                        actions: [
-                          CupertinoDialogAction(
-                            child: Text(UITextConstants.cancel),
-                            onPressed: () => Navigator.pop(context),
-                          ),
-                          CupertinoDialogAction(
-                            isDestructiveAction: true,
-                            child: Text(UITextConstants.confirm),
-                            onPressed: () {
-                              Navigator.pop(context);
-                            },
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: AppSpacing.buttonHeight,
-                    child: Center(
-                      child: Text(
-                        UITextConstants.dissolveGroupChat,
-                        style: TextStyle(
-                          fontSize: AppTypography.lg,
-                          fontWeight: FontWeight.w500,
-                          color: SettingsSemanticConstants.exitActionColor(isDark),
+              child: CupertinoButton(
+                padding: EdgeInsets.zero,
+                minimumSize: Size.zero,
+                onPressed: () {
+                  showCupertinoDialog<void>(
+                    context: context,
+                    builder: (_) => CupertinoAlertDialog(
+                      title: Text(UITextConstants.dissolveGroupChat),
+                      content: const Text('解散后所有成员将被移出群聊，此操作不可撤销。'),
+                      actions: [
+                        CupertinoDialogAction(
+                          child: Text(UITextConstants.cancel),
+                          onPressed: () => Navigator.pop(context),
                         ),
+                        CupertinoDialogAction(
+                          isDestructiveAction: true,
+                          child: Text(UITextConstants.confirm),
+                          onPressed: () {
+                            Navigator.pop(context);
+                          },
+                        ),
+                      ],
+                    ),
+                  );
+                },
+                child: SizedBox(
+                  width: double.infinity,
+                  height: AppSpacing.buttonHeight,
+                  child: Center(
+                    child: Text(
+                      UITextConstants.dissolveGroupChat,
+                      style: TextStyle(
+                        fontSize: AppTypography.lg,
+                        fontWeight: FontWeight.w500,
+                        color: SettingsSemanticConstants.exitActionColor(isDark),
                       ),
                     ),
                   ),
@@ -279,8 +278,10 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
     required Color secondaryColor,
     required VoidCallback onTap,
   }) {
-    return InkWell(
-      onTap: onTap,
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      onPressed: onTap,
       child: ConstrainedBox(
         constraints: BoxConstraints(minHeight: AppSpacing.buttonHeight),
         child: Padding(

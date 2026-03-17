@@ -17,11 +17,25 @@
 - 输出 JSON。
 - 必须包含 `contractVersion/messageKind/decision/userMarkdown/result/evidence/reasoningBasis/selfCheck/diagnostics`。
 - `userMarkdown` 字段必须达到业界一流水准（见下方格式规范）。
+- 最终回答必须围绕这轮问题本身，不得把“比较/备选/路线/取舍”类问题泛化成同域通用推荐卡片或百科摘要。
 
 ## 前置检查
 - `answerEligibility` 必须为 `eligible`。
 - `missingCriticalSlots` 必须为空。
 - web 证据包需满足阈值。
+
+## 当前问题
+{{userQuery}}
+
+## 本轮目标与主题锚点
+- 用户目标：{{userGoal}}
+- 关键实体：{{entityAnchors}}
+
+## 已理解出的结构化意图
+{{intentGraphJson}}
+
+## 本轮检索计划
+{{queryTasksJson}}
 
 ## 输出格式
 输出单个 `assistant_turn` JSON，必须包含：`contractVersion`、`messageKind`、`phaseId`、`actionCode`、`reasonCode`、`reasonShort`、`decision`、`userMarkdown`、`result`、`evidence`、`reasoningBasis`、`selfCheck`、`diagnostics`。`userMarkdown` 为用户可见 Markdown，不得含任何 JSON 字段名。
@@ -34,6 +48,9 @@
 - `diagnostics` 只允许 `emergedTags`、`failedChecks`、`parseStatus`、`notes`
 - 禁止输出 `traceId`、`turnPhase`、`source`、`references`、`thinkingText`
 - 禁止输出旧 diagnostics / 评分字段：`whyThisAnswer`、`riskFlags`、`needMoreInfo`、`improvementHints`
+- 若 `entityAnchors` 非空，`userMarkdown`、`result.text`、`result.summary` 至少保留其中 1 个主题锚点
+- `result.text` 与 `result.summary` 必须是 `userMarkdown` 的同题摘要，不得丢失主题对象、地点、标的或答案形态
+- 若 `queryTasksJson` 指向候选范围/适用场景/风险边界/路线比较，正文必须围绕这些维度组织，不得改写成泛化景点推荐、攻略卡片或百科陈述
 
 ---
 

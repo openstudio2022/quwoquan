@@ -136,7 +136,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      final switches = find.byType(Switch);
+      final switches = find.byType(CupertinoSwitch);
       expect(switches, findsWidgets);
       await tester.tap(switches.first);
       await tester.pump();

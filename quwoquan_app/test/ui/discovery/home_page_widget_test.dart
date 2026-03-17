@@ -75,9 +75,9 @@ void main() {
         // 但 _buildApp 默认应该不是沉浸模式
       }
 
-      // 检查圈子聚合页的内容
-      expect(find.text('我的圈子'), findsOneWidget);
-      expect(find.text('推荐圈子'), findsOneWidget);
+      // 检查首页圈子聚合区的新文案与结构
+      expect(find.text('圈子推荐'), findsOneWidget);
+      expect(find.text('我的'), findsWidgets);
     });
 
     testWidgets('点击精选进入沉浸模式', (tester) async {

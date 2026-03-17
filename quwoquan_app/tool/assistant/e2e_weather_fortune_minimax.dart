@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/widgets.dart';
 import 'package:quwoquan_app/assistant/application/assistant_gateway.dart';
 import 'package:quwoquan_app/assistant/domain/channel/channel.dart';
 import 'package:quwoquan_app/assistant/runtime/assistant_runtime.dart';
@@ -88,6 +89,7 @@ Future<_ScenarioResult> _runScenario({
 }
 
 Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   final runtime = AssistantRuntime.createForTest();
   await runtime.ensureRemoteConfigLoaded();
   final gateway = AssistantGateway(runtime);

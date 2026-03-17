@@ -1,0 +1,41 @@
+import 'package:quwoquan_app/assistant/conversation/orchestration/agent_loop.dart'
+    as legacy_agent;
+import 'package:quwoquan_app/assistant/orchestration/phases/phase.dart';
+import 'package:quwoquan_app/assistant/orchestration/phases/finalize_runner.dart';
+import 'package:quwoquan_app/assistant/orchestration/phases/phase_types.dart';
+import 'package:quwoquan_app/assistant/protocol/run_request.dart';
+
+/// Finalize: persist session, learning, return response.
+class FinalizePhase implements Phase {
+  FinalizePhase(
+    legacy_agent.PersonalAssistantAgentLoop legacy, {
+    FinalizeRunner? runner,
+  }) : _runner = runner ?? legacy.buildFinalizeRunner();
+
+  final FinalizeRunner _runner;
+
+  @override
+  String get phaseId => 'finalize';
+
+  @override
+  Future<PhaseOutput> run(PhaseInput input) async {
+    final pendingResponse = input.state.pendingResponse;
+    if (pendingResponse == null) {
+      return PhaseOutput(state: input.state);
+    }
+    if (input.state.executionBridgeSnapshot.isEmpty) {
+      return PhaseOutput(state: input.state, response: pendingResponse);
+    }
+    final finalizedResponse = await _runner.finalize(
+      input.request is AssistantRunRequest
+          ? input.request as AssistantRunRequest
+          : AssistantRunRequest.fromJson((input.request as dynamic).toJson()),
+      executionSnapshot: input.state.executionBridgeSnapshot,
+      response: pendingResponse,
+    );
+    return PhaseOutput(
+      state: input.state,
+      response: finalizedResponse,
+    );
+  }
+}

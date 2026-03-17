@@ -58,7 +58,8 @@ class ProgressTextPolicy {
   );
 
   factory ProgressTextPolicy.fromJson(Map<String, dynamic> json) {
-    final signatures = (json['jsonEnvelopeSignatures'] as List?)
+    final signatures =
+        (json['jsonEnvelopeSignatures'] as List?)
             ?.whereType<String>()
             .map((e) => e.trim())
             .where((e) => e.isNotEmpty)
@@ -78,13 +79,15 @@ class ProgressTextPolicy {
               .toList(growable: false) ??
           const <String>[],
     ];
-    final degradedPrefixes = (json['degradedPrefixes'] as List?)
+    final degradedPrefixes =
+        (json['degradedPrefixes'] as List?)
             ?.whereType<String>()
             .map((e) => e.trim())
             .where((e) => e.isNotEmpty)
             .toList(growable: false) ??
         defaults.degradedPrefixes;
-    final degradedSubstrings = (json['degradedSubstrings'] as List?)
+    final degradedSubstrings =
+        (json['degradedSubstrings'] as List?)
             ?.whereType<String>()
             .map((e) => e.trim())
             .where((e) => e.isNotEmpty)
@@ -155,6 +158,8 @@ class ReactPolicy {
     required this.toolStatusRules,
     required this.llmRetryWithoutToolsStatusCodes,
     required this.llmRetryWithoutToolsKeywords,
+    required this.llmRetryWithoutJsonModeStatusCodes,
+    required this.llmRetryWithoutJsonModeKeywords,
   });
 
   final double replanCoverageMin;
@@ -170,6 +175,8 @@ class ReactPolicy {
   final List<ReactToolStatusRule> toolStatusRules;
   final List<int> llmRetryWithoutToolsStatusCodes;
   final List<String> llmRetryWithoutToolsKeywords;
+  final List<int> llmRetryWithoutJsonModeStatusCodes;
+  final List<String> llmRetryWithoutJsonModeKeywords;
 
   static const ReactPolicy defaults = ReactPolicy(
     replanCoverageMin: 0.7,
@@ -236,6 +243,13 @@ class ReactPolicy {
       'unsupported',
       'schema',
     ],
+    llmRetryWithoutJsonModeStatusCodes: <int>[400, 422],
+    llmRetryWithoutJsonModeKeywords: <String>[
+      'response_format',
+      'json_object',
+      'structured output',
+      'json mode',
+    ],
   );
 
   factory ReactPolicy.fromJson(Map<String, dynamic> json) {
@@ -252,68 +266,73 @@ class ReactPolicy {
       for (final entry in errorClassRaw.entries)
         entry.key: entry.value.toString().trim(),
     };
-    final suppressRules = ((json['suppressUserErrorRules'] as List?)
-                ?.whereType<Map>()
-                .map((item) => item.cast<String, dynamic>())
-                .toList(growable: false) ??
-            const <Map<String, dynamic>>[])
-        .map(
-          (item) => ReactSuppressRule(
-            toolName: (item['toolName'] as String?)?.trim() ?? '',
-            errorCodes: (item['errorCodes'] as List?)
-                    ?.whereType<String>()
-                    .map((e) => e.trim())
-                    .where((e) => e.isNotEmpty)
+    final suppressRules =
+        ((json['suppressUserErrorRules'] as List?)
+                    ?.whereType<Map>()
+                    .map((item) => item.cast<String, dynamic>())
                     .toList(growable: false) ??
-                const <String>[],
-            messageKeywords: (item['messageKeywords'] as List?)
-                    ?.whereType<String>()
-                    .map((e) => e.trim())
-                    .where((e) => e.isNotEmpty)
+                const <Map<String, dynamic>>[])
+            .map(
+              (item) => ReactSuppressRule(
+                toolName: (item['toolName'] as String?)?.trim() ?? '',
+                errorCodes:
+                    (item['errorCodes'] as List?)
+                        ?.whereType<String>()
+                        .map((e) => e.trim())
+                        .where((e) => e.isNotEmpty)
+                        .toList(growable: false) ??
+                    const <String>[],
+                messageKeywords:
+                    (item['messageKeywords'] as List?)
+                        ?.whereType<String>()
+                        .map((e) => e.trim())
+                        .where((e) => e.isNotEmpty)
+                        .toList(growable: false) ??
+                    const <String>[],
+              ),
+            )
+            .where((rule) => rule.toolName.isNotEmpty)
+            .toList(growable: false);
+    final toolStatusRules =
+        ((json['toolStatusRules'] as List?)
+                    ?.whereType<Map>()
+                    .map((item) => item.cast<String, dynamic>())
                     .toList(growable: false) ??
-                const <String>[],
-          ),
-        )
-        .where((rule) => rule.toolName.isNotEmpty)
-        .toList(growable: false);
-    final toolStatusRules = ((json['toolStatusRules'] as List?)
-                ?.whereType<Map>()
-                .map((item) => item.cast<String, dynamic>())
-                .toList(growable: false) ??
-            const <Map<String, dynamic>>[])
-        .map(
-          (item) => ReactToolStatusRule(
-            toolName: (item['toolName'] as String?)?.trim() ?? '',
-            successWithSummary:
-                (item['successWithSummary'] as String?)?.trim() ?? '',
-            successWithoutSummary:
-                (item['successWithoutSummary'] as String?)?.trim() ?? '',
-            invalidArgumentsStatus:
-                (item['invalidArgumentsStatus'] as String?)?.trim() ?? '',
-            permissionDeniedStatus:
-                (item['permissionDeniedStatus'] as String?)?.trim() ?? '',
-            errorStatus: (item['errorStatus'] as String?)?.trim() ?? '',
-          ),
-        )
-        .where((rule) => rule.toolName.isNotEmpty)
-        .toList(growable: false);
+                const <Map<String, dynamic>>[])
+            .map(
+              (item) => ReactToolStatusRule(
+                toolName: (item['toolName'] as String?)?.trim() ?? '',
+                successWithSummary:
+                    (item['successWithSummary'] as String?)?.trim() ?? '',
+                successWithoutSummary:
+                    (item['successWithoutSummary'] as String?)?.trim() ?? '',
+                invalidArgumentsStatus:
+                    (item['invalidArgumentsStatus'] as String?)?.trim() ?? '',
+                permissionDeniedStatus:
+                    (item['permissionDeniedStatus'] as String?)?.trim() ?? '',
+                errorStatus: (item['errorStatus'] as String?)?.trim() ?? '',
+              ),
+            )
+            .where((rule) => rule.toolName.isNotEmpty)
+            .toList(growable: false);
     return ReactPolicy(
       replanCoverageMin:
           (thresholds['coverageMin'] as num?)?.toDouble() ??
-              defaults.replanCoverageMin,
+          defaults.replanCoverageMin,
       replanConfidenceMin:
           (thresholds['confidenceMin'] as num?)?.toDouble() ??
-              defaults.replanConfidenceMin,
+          defaults.replanConfidenceMin,
       replanFreshnessHoursMax:
           (thresholds['freshnessHoursMax'] as num?)?.toDouble() ??
-              defaults.replanFreshnessHoursMax,
+          defaults.replanFreshnessHoursMax,
       reflectionQualityScoreMin:
           (reflectionThresholds['qualityScoreMin'] as num?)?.toDouble() ??
-              defaults.reflectionQualityScoreMin,
+          defaults.reflectionQualityScoreMin,
       reflectionMaxRounds:
           (reflectionThresholds['maxRounds'] as num?)?.toInt() ??
-              defaults.reflectionMaxRounds,
-      replanStatuses: (json['replanStatuses'] as List?)
+          defaults.reflectionMaxRounds,
+      replanStatuses:
+          (json['replanStatuses'] as List?)
               ?.whereType<String>()
               .map((e) => e.trim())
               .where((e) => e.isNotEmpty)
@@ -321,13 +340,16 @@ class ReactPolicy {
           defaults.replanStatuses,
       replanRetryableErrorClasses:
           (json['replanRetryableErrorClasses'] as List?)
-                  ?.whereType<String>()
-                  .map((e) => e.trim())
-                  .where((e) => e.isNotEmpty)
-                  .toList(growable: false) ??
-              defaults.replanRetryableErrorClasses,
-      errorClassMap: errorClassMap.isEmpty ? defaults.errorClassMap : errorClassMap,
-      retryableErrorCodes: (json['retryableErrorCodes'] as List?)
+              ?.whereType<String>()
+              .map((e) => e.trim())
+              .where((e) => e.isNotEmpty)
+              .toList(growable: false) ??
+          defaults.replanRetryableErrorClasses,
+      errorClassMap: errorClassMap.isEmpty
+          ? defaults.errorClassMap
+          : errorClassMap,
+      retryableErrorCodes:
+          (json['retryableErrorCodes'] as List?)
               ?.whereType<String>()
               .map((e) => e.trim())
               .where((e) => e.isNotEmpty)
@@ -336,21 +358,35 @@ class ReactPolicy {
       suppressUserErrorRules: suppressRules.isEmpty
           ? defaults.suppressUserErrorRules
           : suppressRules,
-      toolStatusRules:
-          toolStatusRules.isEmpty ? defaults.toolStatusRules : toolStatusRules,
+      toolStatusRules: toolStatusRules.isEmpty
+          ? defaults.toolStatusRules
+          : toolStatusRules,
       llmRetryWithoutToolsStatusCodes:
           (json['llmRetryWithoutToolsStatusCodes'] as List?)
-                  ?.whereType<num>()
-                  .map((e) => e.toInt())
-                  .toList(growable: false) ??
-              defaults.llmRetryWithoutToolsStatusCodes,
+              ?.whereType<num>()
+              .map((e) => e.toInt())
+              .toList(growable: false) ??
+          defaults.llmRetryWithoutToolsStatusCodes,
       llmRetryWithoutToolsKeywords:
           (json['llmRetryWithoutToolsKeywords'] as List?)
-                  ?.whereType<String>()
-                  .map((e) => e.trim())
-                  .where((e) => e.isNotEmpty)
-                  .toList(growable: false) ??
-              defaults.llmRetryWithoutToolsKeywords,
+              ?.whereType<String>()
+              .map((e) => e.trim())
+              .where((e) => e.isNotEmpty)
+              .toList(growable: false) ??
+          defaults.llmRetryWithoutToolsKeywords,
+      llmRetryWithoutJsonModeStatusCodes:
+          (json['llmRetryWithoutJsonModeStatusCodes'] as List?)
+              ?.whereType<num>()
+              .map((e) => e.toInt())
+              .toList(growable: false) ??
+          defaults.llmRetryWithoutJsonModeStatusCodes,
+      llmRetryWithoutJsonModeKeywords:
+          (json['llmRetryWithoutJsonModeKeywords'] as List?)
+              ?.whereType<String>()
+              .map((e) => e.trim())
+              .where((e) => e.isNotEmpty)
+              .toList(growable: false) ??
+          defaults.llmRetryWithoutJsonModeKeywords,
     );
   }
 

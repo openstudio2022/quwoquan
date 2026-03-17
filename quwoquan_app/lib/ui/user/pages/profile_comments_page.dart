@@ -18,11 +18,18 @@ class ProfileCommentsPage extends ConsumerStatefulWidget {
 class _ProfileCommentsPageState extends ConsumerState<ProfileCommentsPage>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
+  int _selectedTabIndex = 0;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (!mounted || _tabController.indexIsChanging) return;
+      setState(() {
+        _selectedTabIndex = _tabController.index;
+      });
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(sentCommentsProvider.notifier).load();
       ref.read(receivedCommentsProvider.notifier).load();
@@ -37,7 +44,7 @@ class _ProfileCommentsPageState extends ConsumerState<ProfileCommentsPage>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
 
     return CupertinoPageScaffold(
       navigationBar: CupertinoNavigationBar(
@@ -46,47 +53,61 @@ class _ProfileCommentsPageState extends ConsumerState<ProfileCommentsPage>
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
-      child: SafeArea(
-        child: Column(
-          children: [
-            _buildTabBar(isDark),
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _CommentsListView(
-                    provider: sentCommentsProvider,
-                    isDark: isDark,
-                  ),
-                  _CommentsListView(
-                    provider: receivedCommentsProvider,
-                    isDark: isDark,
-                  ),
-                ],
+      child: Material(
+        type: MaterialType.transparency,
+        child: SafeArea(
+          child: Column(
+            children: [
+              _buildTabBar(isDark),
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _CommentsListView(
+                      provider: sentCommentsProvider,
+                      isDark: isDark,
+                    ),
+                    _CommentsListView(
+                      provider: receivedCommentsProvider,
+                      isDark: isDark,
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildTabBar(bool isDark) {
-    return Material(
-      color: AppColorsFunctional.getColor(
-          isDark, ColorType.backgroundPrimary),
-      child: TabBar(
-        controller: _tabController,
-        labelColor: AppColors.primaryColor,
-        unselectedLabelColor: AppColorsFunctional.getColor(
-            isDark, ColorType.foregroundSecondary),
-        indicatorColor: AppColors.primaryColor,
-        labelStyle: TextStyle(
-            fontSize: AppTypography.sm, fontWeight: FontWeight.w600),
-        tabs: const [
-          Tab(text: UITextConstants.profileCommentsTabSent),
-          Tab(text: UITextConstants.profileCommentsTabReceived),
-        ],
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      child: Center(
+        child: CupertinoSlidingSegmentedControl<int>(
+          groupValue: _selectedTabIndex,
+          children: const {
+            0: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: Text(UITextConstants.profileCommentsTabSent),
+            ),
+            1: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: Text(UITextConstants.profileCommentsTabReceived),
+            ),
+          },
+          onValueChanged: (index) {
+            if (index == null) return;
+            setState(() {
+              _selectedTabIndex = index;
+            });
+            _tabController.animateTo(index);
+          },
+        ),
       ),
     );
   }

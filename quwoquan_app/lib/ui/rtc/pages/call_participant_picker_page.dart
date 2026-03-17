@@ -225,78 +225,80 @@ class _CallParticipantPickerPageState
           ),
         ),
       ),
-      child: SafeArea(
-        child: Column(
-          children: [
-            _buildSourceTabs(),
-            if (_source == _ParticipantSource.otherGroups)
-              _buildGroupSelector(),
-            Padding(
-              padding: EdgeInsets.all(AppSpacing.md),
-              child: CupertinoSearchTextField(
-                placeholder: '搜索联系人',
-                onChanged: (value) {
-                  setState(() => _searchQuery = value);
-                },
+      child: Material(
+        type: MaterialType.transparency,
+        child: SafeArea(
+          child: Column(
+            children: [
+              _buildSourceTabs(),
+              if (_source == _ParticipantSource.otherGroups)
+                _buildGroupSelector(),
+              Padding(
+                padding: EdgeInsets.all(AppSpacing.md),
+                child: CupertinoSearchTextField(
+                  placeholder: '搜索联系人',
+                  onChanged: (value) {
+                    setState(() => _searchQuery = value);
+                  },
+                ),
               ),
-            ),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
-              child: Row(
-                children: [
-                  Text(
-                    '最多 ${widget.maxParticipants} 人',
-                    style: TextStyle(
-                      color: AppColors.overlayMedium,
-                      fontSize: AppTypography.sm,
-                    ),
-                  ),
-                  const Spacer(),
-                  CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    onPressed: () {
-                      setState(_selectedIds.clear);
-                    },
-                    child: Text(
-                      UITextConstants.callClearSelection,
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                child: Row(
+                  children: [
+                    Text(
+                      '最多 ${widget.maxParticipants} 人',
                       style: TextStyle(
                         color: AppColors.overlayMedium,
                         fontSize: AppTypography.sm,
                       ),
                     ),
-                  ),
-                  SizedBox(width: AppSpacing.sm),
-                  CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    onPressed: () {
-                      setState(() {
-                        _selectedIds.clear();
-                        _applyDefaultSelectionIfNeeded(_contacts);
-                      });
-                    },
-                    child: Text(
-                      UITextConstants.callRestoreDefaultSelection,
-                      style: TextStyle(
-                        color: AppColors.primaryColor,
-                        fontSize: AppTypography.sm,
-                        fontWeight: AppTypography.medium,
+                    const Spacer(),
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: () {
+                        setState(_selectedIds.clear);
+                      },
+                      child: Text(
+                        UITextConstants.callClearSelection,
+                        style: TextStyle(
+                          color: AppColors.overlayMedium,
+                          fontSize: AppTypography.sm,
+                        ),
                       ),
                     ),
-                  ),
-                  SizedBox(width: AppSpacing.sm),
-                  if (_selectedIds.isNotEmpty)
-                    Text(
-                      '已选 ${_selectedIds.length}',
-                      style: TextStyle(
-                        color: AppColors.primaryColor,
-                        fontSize: AppTypography.sm,
-                        fontWeight: AppTypography.medium,
+                    SizedBox(width: AppSpacing.sm),
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: () {
+                        setState(() {
+                          _selectedIds.clear();
+                          _applyDefaultSelectionIfNeeded(_contacts);
+                        });
+                      },
+                      child: Text(
+                        UITextConstants.callRestoreDefaultSelection,
+                        style: TextStyle(
+                          color: AppColors.primaryColor,
+                          fontSize: AppTypography.sm,
+                          fontWeight: AppTypography.medium,
+                        ),
                       ),
                     ),
-                ],
+                    SizedBox(width: AppSpacing.sm),
+                    if (_selectedIds.isNotEmpty)
+                      Text(
+                        '已选 ${_selectedIds.length}',
+                        style: TextStyle(
+                          color: AppColors.primaryColor,
+                          fontSize: AppTypography.sm,
+                          fontWeight: AppTypography.medium,
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
-            SizedBox(height: AppSpacing.sm),
+              SizedBox(height: AppSpacing.sm),
             Expanded(
               child: _isLoading
                   ? const Center(child: CupertinoActivityIndicator())
@@ -341,7 +343,8 @@ class _CallParticipantPickerPageState
           ],
         ),
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildSourceTabs() {

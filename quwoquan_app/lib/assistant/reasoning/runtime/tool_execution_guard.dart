@@ -39,11 +39,16 @@ class ToolExecutionGuard {
   ToolExecutionGuard({
     ToolLoopDetector? loopDetector,
     Map<String, ToolPermission>? permissions,
+    this.permissionResolver,
   }) : _loopDetector = loopDetector ?? ToolLoopDetector(),
        _permissions = permissions ?? const <String, ToolPermission>{};
 
   final ToolLoopDetector _loopDetector;
   final Map<String, ToolPermission> _permissions;
+
+  /// Optional resolver for tool permissions (e.g. from tool_permissions.json).
+  /// When set, used before [_permissions].
+  final ToolPermission? Function(String toolName)? permissionResolver;
   final Map<String, _RecentToolFailure> _recentFailures =
       <String, _RecentToolFailure>{};
   static const Duration _repeatFailureCooldown = Duration(seconds: 20);
@@ -72,7 +77,7 @@ class ToolExecutionGuard {
       );
     }
 
-    final perm = _permissions[toolName];
+    final perm = permissionResolver?.call(toolName) ?? _permissions[toolName];
     if (perm != null && perm.requireConfirmation) {
       return GuardResult.needsConfirmation(toolName, args);
     }

@@ -177,6 +177,8 @@ void main() {
     await tester.pump();
 
     expect(copiedText, template.deeplink);
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump();
   });
 
   testWidgets('作品圈内可见分享生成受控链接并保留标签', (tester) async {

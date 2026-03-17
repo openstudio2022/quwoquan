@@ -176,233 +176,239 @@ class _MediaPostMoreActionSheetState
     final scrollActions = _buildScrollActions(isDark);
     final bottomActions = _buildBottomActions();
 
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColorsFunctional.getColor(
-          isDark,
-          ColorType.backgroundPrimary,
+    return Material(
+      type: MaterialType.transparency,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColorsFunctional.getColor(
+            isDark,
+            ColorType.backgroundPrimary,
+          ),
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20.r),
+            topRight: Radius.circular(20.r),
+          ),
         ),
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(20.r),
-          topRight: Radius.circular(20.r),
-        ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // 标题和关闭按钮
-          Padding(
-            padding: EdgeInsets.only(
-              left: AppSpacing.md.w,
-              right: AppSpacing.md.w,
-              top: AppSpacing.md.h,
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Center(
-                    child: Text(
-                      AppStrings.moreActionsTitle,
-                      style: TextStyle(
-                        fontSize: AppTypography.lg.sp,
-                        fontWeight: FontWeight.normal,
-                        color: AppColorsFunctional.getColor(
-                          isDark,
-                          ColorType.foregroundPrimary,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 标题和关闭按钮
+            Padding(
+              padding: EdgeInsets.only(
+                left: AppSpacing.md.w,
+                right: AppSpacing.md.w,
+                top: AppSpacing.md.h,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Center(
+                      child: Text(
+                        AppStrings.moreActionsTitle,
+                        style: TextStyle(
+                          fontSize: AppTypography.lg.sp,
+                          fontWeight: FontWeight.normal,
+                          color: AppColorsFunctional.getColor(
+                            isDark,
+                            ColorType.foregroundPrimary,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-                CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  minSize: AppSpacing.minInteractiveSize,
-                  onPressed: () => Navigator.pop(context),
-                  child: Icon(
-                    CupertinoIcons.xmark,
-                    size: AppSpacing.twenty.sp,
-                    color: AppColorsFunctional.getColor(
-                      isDark,
-                      ColorType.foregroundPrimary,
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    minSize: AppSpacing.minInteractiveSize,
+                    onPressed: () => Navigator.pop(context),
+                    child: Icon(
+                      CupertinoIcons.xmark,
+                      size: AppSpacing.twenty.sp,
+                      color: AppColorsFunctional.getColor(
+                        isDark,
+                        ColorType.foregroundPrimary,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-
-          SizedBox(height: AppSpacing.lg.h),
-
-          // 滚动行区域
-          if (scrollActions.isNotEmpty) ...[
             SizedBox(
-              height: AppSpacing.oneHundred.h,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: EdgeInsets.symmetric(horizontal: AppSpacing.md.w),
-                itemCount: scrollActions.length,
-                itemBuilder: (context, index) {
-                  final action = scrollActions[index];
-                  return Container(
-                    width: AppSpacing.storyHeight.w,
-                    margin: EdgeInsets.only(
-                      right: index < scrollActions.length - 1
-                          ? AppSpacing.xs.w
-                          : 0,
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
+              height: AppSpacing.lg.h,
+            ),
+
+            // 滚动行区域
+            if (scrollActions.isNotEmpty) ...[
+              SizedBox(
+                height: AppSpacing.oneHundred.h,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.md.w),
+                  itemCount: scrollActions.length,
+                  itemBuilder: (context, index) {
+                    final action = scrollActions[index];
+                    return Container(
+                      width: AppSpacing.storyHeight.w,
+                      margin: EdgeInsets.only(
+                        right: index < scrollActions.length - 1
+                            ? AppSpacing.xs.w
+                            : 0,
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // 圆形按钮
+                          GestureDetector(
+                            onTap: () {
+                              Navigator.pop(context);
+                              action.onTap?.call();
+                            },
+                            child: Container(
+                              width: AppSpacing.avatarUserLg.w,
+                              height: AppSpacing.avatarUserLg.w,
+                              decoration: BoxDecoration(
+                                color: AppColorsFunctional.getColor(
+                                  isDark,
+                                  ColorType.backgroundSecondary,
+                                ),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                action.icon,
+                                size: AppSpacing.iconMedium.sp,
+                                color: AppColorsFunctional.getColor(
+                                  isDark,
+                                  ColorType.foregroundSecondary,
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(height: AppSpacing.sm.h),
+                          // 文字标签
+                          Text(
+                            action.label,
+                            style: TextStyle(
+                              fontSize: AppTypography.sm.sp,
+                              color: AppColorsFunctional.getColor(
+                                isDark,
+                                ColorType.foregroundPrimary,
+                              ),
+                            ),
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+              SizedBox(height: AppSpacing.lg.h),
+            ],
+
+            // 分隔线
+            if (scrollActions.isNotEmpty && bottomActions.isNotEmpty) ...[
+              Container(
+                height: 0.5,
+                color: AppColorsFunctional.getColor(
+                  isDark,
+                  ColorType.foregroundTertiary,
+                ).withValues(alpha: 0.3),
+                margin: EdgeInsets.symmetric(horizontal: AppSpacing.md.w),
+              ),
+              SizedBox(height: AppSpacing.md.h),
+            ],
+
+            // 底部操作项区域
+            if (bottomActions.isNotEmpty) ...[
+              Container(
+                margin: EdgeInsets.symmetric(horizontal: AppSpacing.md.w),
+                decoration: BoxDecoration(
+                  color: AppColorsFunctional.getColor(
+                    isDark,
+                    ColorType.backgroundSecondary,
+                  ).withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(
+                    AppSpacing.largeBorderRadius.r,
+                  ),
+                ),
+                child: Column(
+                  children: bottomActions.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final action = entry.value;
+                    return Column(
                       children: [
-                        // 圆形按钮
                         GestureDetector(
                           onTap: () {
                             Navigator.pop(context);
                             action.onTap?.call();
                           },
-                          child: Container(
-                            width: AppSpacing.avatarUserLg.w,
-                            height: AppSpacing.avatarUserLg.w,
-                            decoration: BoxDecoration(
-                              color: AppColorsFunctional.getColor(
-                                isDark,
-                                ColorType.backgroundSecondary,
-                              ),
-                              shape: BoxShape.circle,
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md.w,
+                              vertical: AppSpacing.md.h,
                             ),
-                            child: Icon(
-                              action.icon,
-                              size: AppSpacing.iconMedium.sp,
-                              color: AppColorsFunctional.getColor(
-                                isDark,
-                                ColorType.foregroundSecondary,
-                              ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  action.icon,
+                                  size: AppSpacing.twenty.sp,
+                                  color: AppColorsFunctional.getColor(
+                                    isDark,
+                                    ColorType.foregroundPrimary,
+                                  ),
+                                ),
+                                SizedBox(width: AppSpacing.sm.w),
+                                Expanded(
+                                  child: Text(
+                                    action.label,
+                                    style: TextStyle(
+                                      fontSize: AppTypography.lg.sp,
+                                      fontWeight: FontWeight.normal,
+                                      color: AppColorsFunctional.getColor(
+                                        isDark,
+                                        ColorType.foregroundPrimary,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                if (action.description != null)
+                                  Text(
+                                    action.description!,
+                                    style: TextStyle(
+                                      fontSize: AppTypography.base.sp,
+                                      color: AppColorsFunctional.getColor(
+                                        isDark,
+                                        ColorType.foregroundSecondary,
+                                      ),
+                                    ),
+                                    textAlign: TextAlign.right,
+                                  ),
+                              ],
                             ),
                           ),
                         ),
-                        SizedBox(height: AppSpacing.sm.h),
-                        // 文字标签
-                        Text(
-                          action.label,
-                          style: TextStyle(
-                            fontSize: AppTypography.sm.sp,
+                        // 分隔线 (除了最后一个选项)
+                        if (index < bottomActions.length - 1)
+                          Container(
+                            height: 0.5,
                             color: AppColorsFunctional.getColor(
                               isDark,
-                              ColorType.foregroundPrimary,
+                              ColorType.foregroundTertiary,
+                            ).withValues(alpha: 0.2),
+                            margin: EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md.w,
                             ),
                           ),
-                          textAlign: TextAlign.center,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
                       ],
-                    ),
-                  );
-                },
-              ),
-            ),
-            SizedBox(height: AppSpacing.lg.h),
-          ],
-
-          // 分隔线
-          if (scrollActions.isNotEmpty && bottomActions.isNotEmpty) ...[
-            Container(
-              height: 0.5,
-              color: AppColorsFunctional.getColor(
-                isDark,
-                ColorType.foregroundTertiary,
-              ).withValues(alpha: 0.3),
-              margin: EdgeInsets.symmetric(horizontal: AppSpacing.md.w),
-            ),
-            SizedBox(height: AppSpacing.md.h),
-          ],
-
-          // 底部操作项区域
-          if (bottomActions.isNotEmpty) ...[
-            Container(
-              margin: EdgeInsets.symmetric(horizontal: AppSpacing.md.w),
-              decoration: BoxDecoration(
-                color: AppColorsFunctional.getColor(
-                  isDark,
-                  ColorType.backgroundSecondary,
-                ).withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(
-                  AppSpacing.largeBorderRadius.r,
+                    );
+                  }).toList(),
                 ),
               ),
-              child: Column(
-                children: bottomActions.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final action = entry.value;
-                  return Column(
-                    children: [
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.pop(context);
-                          action.onTap?.call();
-                        },
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: AppSpacing.md.w,
-                            vertical: AppSpacing.md.h,
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                action.icon,
-                                size: AppSpacing.twenty.sp,
-                                color: AppColorsFunctional.getColor(
-                                  isDark,
-                                  ColorType.foregroundPrimary,
-                                ),
-                              ),
-                              SizedBox(width: AppSpacing.sm.w),
-                              Expanded(
-                                child: Text(
-                                  action.label,
-                                  style: TextStyle(
-                                    fontSize: AppTypography.lg.sp,
-                                    fontWeight: FontWeight.normal,
-                                    color: AppColorsFunctional.getColor(
-                                      isDark,
-                                      ColorType.foregroundPrimary,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              if (action.description != null)
-                                Text(
-                                  action.description!,
-                                  style: TextStyle(
-                                    fontSize: AppTypography.base.sp,
-                                    color: AppColorsFunctional.getColor(
-                                      isDark,
-                                      ColorType.foregroundSecondary,
-                                    ),
-                                  ),
-                                  textAlign: TextAlign.right,
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      // 分隔线 (除了最后一个选项)
-                      if (index < bottomActions.length - 1)
-                        Container(
-                          height: 0.5,
-                          color: AppColorsFunctional.getColor(
-                            isDark,
-                            ColorType.foregroundTertiary,
-                          ).withValues(alpha: 0.2),
-                          margin: EdgeInsets.symmetric(horizontal: AppSpacing.md.w),
-                        ),
-                    ],
-                  );
-                }).toList(),
-              ),
-            ),
-            SizedBox(height: AppSpacing.lg.h),
+              SizedBox(height: AppSpacing.lg.h),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

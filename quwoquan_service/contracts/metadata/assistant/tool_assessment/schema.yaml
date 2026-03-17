@@ -1,0 +1,18 @@
+dart_class: ToolAssessmentDto
+library_path: assistant/contracts/tool_assessment.dart
+output_path: assistant/generated/contracts/tool_assessment.g.dart
+contract: tool_assessment
+version: v1
+kind: runtime_policy_contract
+fields:
+  - { name: assessmentType, type: enum, enum_ref: AssessmentType, required: true }
+  - { name: userMessage, type: string, default: '' }
+  - { name: shouldContinueLoop, type: bool, default: true }
+  - { name: gapFill, type: bool, default: false }
+  - { name: rewriteQuery, type: bool, default: false }
+  - { name: allowAnswerWithCurrentEvidence, type: bool, default: false }
+  - { name: reasonCode, type: enum, enum_ref: PlannerReasonCode, default: assessment_update }
+  - { name: referenceCount, type: int, default: 0 }
+  - { name: queryCount, type: int, default: 0 }
+  - { name: coveredDimensions, type: list<string>, default: [] }
+  - { name: missingDimensions, type: list<string>, default: [] }

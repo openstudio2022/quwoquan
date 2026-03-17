@@ -2,6 +2,7 @@ import 'package:quwoquan_app/assistant/contracts/planner_contracts.dart';
 import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/tool/runtime/safe_reference_normalizer.dart';
 
 class EvidenceEvaluationResult {
   const EvidenceEvaluationResult({
@@ -97,6 +98,7 @@ class DefaultEvidenceEvaluator {
         if (url.isEmpty || !seenUrls.add(url)) continue;
         final title = (ref['title'] as String?)?.trim() ?? '';
         final host = _hostOf(url);
+        final source = _stringValue(ref['source']);
         final sourceTier =
             (ref['sourceTier'] as String?)?.trim().isNotEmpty == true
             ? parseEvidenceSourceTier((ref['sourceTier'] as String).trim())
@@ -128,6 +130,7 @@ class DefaultEvidenceEvaluator {
             queryTaskId: queryTaskId,
             title: title.isNotEmpty ? title : host,
             url: url,
+            source: source.isNotEmpty ? source : host,
             sourceHost: host,
             sourceTier: sourceTier.wireName,
             freshnessHours:
@@ -175,6 +178,9 @@ class DefaultEvidenceEvaluator {
     List<String> requiredDimensions = const <String>[],
     List<String> blockingDimensions = const <String>[],
   }) {
+    final normalizedBlockingDimensions = _normalizeDimensions(
+      blockingDimensions.isNotEmpty ? blockingDimensions : requiredDimensions,
+    );
     if (!evidenceRequired) {
       return EvidenceEvaluationResult(
         entries: ledger,
@@ -200,13 +206,19 @@ class DefaultEvidenceEvaluator {
         authoritySatisfied: true,
         freshnessSatisfied: true,
         evidenceRequired: false,
-        coveredDimensions: _nonEmptyUnique(
-          ledger.map((item) => item.dimension).toList(growable: false),
+        coveredDimensions: _normalizeDimensions(
+          ledger
+              .map(
+                (item) => item.dimension.trim().isNotEmpty
+                    ? item.dimension
+                    : item.dimensionLabel,
+              )
+              .toList(growable: false),
         ),
         coveredQueryTaskIds: _nonEmptyUnique(
           ledger.map((item) => item.queryTaskId).toList(growable: false),
         ),
-        blockingDimensions: _nonEmptyUnique(blockingDimensions),
+        blockingDimensions: normalizedBlockingDimensions,
         summary: '当前问题不强制依赖外部证据账。',
       );
     }
@@ -217,7 +229,7 @@ class DefaultEvidenceEvaluator {
         authoritySatisfied: false,
         freshnessSatisfied: false,
         evidenceRequired: true,
-        blockingDimensions: _nonEmptyUnique(blockingDimensions),
+        blockingDimensions: normalizedBlockingDimensions,
         summary: '还没有拿到可用证据。',
       );
     }
@@ -231,15 +243,19 @@ class DefaultEvidenceEvaluator {
     final freshnessHours = ledger
         .map((item) => item.freshnessHours)
         .reduce((a, b) => a < b ? a : b);
-    final coveredDimensions = _nonEmptyUnique(
-      ledger.map((item) => item.dimension).toList(growable: false),
+    final coveredDimensions = _normalizeDimensions(
+      ledger
+          .map(
+            (item) => item.dimension.trim().isNotEmpty
+                ? item.dimension
+                : item.dimensionLabel,
+          )
+          .toList(growable: false),
     );
     final coveredQueryTaskIds = _nonEmptyUnique(
       ledger.map((item) => item.queryTaskId).toList(growable: false),
     );
-    final effectiveBlockingDimensions = _nonEmptyUnique(
-      blockingDimensions.isNotEmpty ? blockingDimensions : requiredDimensions,
-    );
+    final effectiveBlockingDimensions = normalizedBlockingDimensions;
     final missingDimensions = effectiveBlockingDimensions
         .map((item) => item.trim())
         .where((item) => item.isNotEmpty && !coveredDimensions.contains(item))
@@ -304,24 +320,67 @@ class DefaultEvidenceEvaluator {
             .map((item) => item.cast<String, dynamic>())
             .toList(growable: false) ??
         const <Map<String, dynamic>>[];
-    if (refs.isNotEmpty) return refs;
+    if (refs.isNotEmpty) {
+      return refs
+          .map((item) => _normalizeReference(item, retrievedAt: retrievedAt))
+          .whereType<Map<String, dynamic>>()
+          .toList(growable: false);
+    }
     final url = (data['url'] as String?)?.trim() ?? '';
     if (url.isEmpty) return const <Map<String, dynamic>>[];
-    return <Map<String, dynamic>>[
-      <String, dynamic>{
-        'title': (data['title'] as String?)?.trim() ?? url,
-        'url': url,
-        'snippet': _snippetOfFetchContent(data['content']),
-        'source': (data['source'] as String?)?.trim() ?? '',
-        'sourceHost': _hostOf(url),
-        'sourceTier': toolName == 'web_fetch'
-            ? EvidenceSourceTier.page.wireName
-            : '',
-        'retrievedAt': retrievedAt,
-        'queryTaskId': _stringValue(data['queryTaskId']),
-        'dimension': _stringValue(data['dimension']),
-      },
-    ];
+    final fallback = _normalizeReference(<String, dynamic>{
+      'title': (data['title'] as String?)?.trim() ?? url,
+      'url': url,
+      'snippet': (data['summary'] as String?)?.trim().isNotEmpty == true
+          ? (data['summary'] as String).trim()
+          : _snippetOfFetchContent(data['content']),
+      'source': (data['source'] as String?)?.trim().isNotEmpty == true
+          ? (data['source'] as String).trim()
+          : (data['sourceHost'] as String?)?.trim() ?? '',
+      'sourceHost': (data['sourceHost'] as String?)?.trim() ?? '',
+      'sourceTier': toolName == 'web_fetch'
+          ? EvidenceSourceTier.page.wireName
+          : '',
+      'retrievedAt': retrievedAt,
+      'queryTaskId': _stringValue(data['queryTaskId']),
+      'dimension': _stringValue(data['dimension']),
+      if (data['freshnessHours'] != null)
+        'freshnessHours': data['freshnessHours'],
+      if (data['authorityScore'] != null)
+        'authorityScore': data['authorityScore'],
+      if (data['relevanceScore'] != null)
+        'relevanceScore': data['relevanceScore'],
+    }, retrievedAt: retrievedAt);
+    return fallback == null
+        ? const <Map<String, dynamic>>[]
+        : <Map<String, dynamic>>[fallback];
+  }
+
+  Map<String, dynamic>? _normalizeReference(
+    Map<String, dynamic> raw, {
+    required String retrievedAt,
+  }) {
+    final normalized = SafeReferenceNormalizer.normalize(<String, dynamic>{
+      ...raw,
+      'source': _stringValue(raw['source']).isNotEmpty
+          ? _stringValue(raw['source'])
+          : _stringValue(raw['sourceHost']),
+      'snippet': _stringValue(raw['snippet']).isNotEmpty
+          ? _stringValue(raw['snippet'])
+          : _snippetOfFetchContent(raw['content']),
+    });
+    if (normalized == null) return null;
+    final url = _stringValue(normalized['url']);
+    return <String, dynamic>{
+      ...raw,
+      ...normalized,
+      'sourceHost': _stringValue(normalized['sourceHost']).isNotEmpty
+          ? _stringValue(normalized['sourceHost'])
+          : _hostOf(url),
+      'retrievedAt': _stringValue(raw['retrievedAt']).isNotEmpty
+          ? _stringValue(raw['retrievedAt'])
+          : retrievedAt,
+    };
   }
 
   String _snippetOfFetchContent(Object? raw) {
@@ -400,6 +459,21 @@ class DefaultEvidenceEvaluator {
       out.add(value);
     }
     return out;
+  }
+
+  static List<String> _normalizeDimensions(List<String> values) {
+    return _nonEmptyUnique(
+      values
+          .map((raw) {
+            final normalized = raw.trim();
+            if (normalized.isEmpty) return '';
+            final parsed = parseQueryTaskDimension(normalized);
+            return parsed != QueryTaskDimension.unknown
+                ? parsed.wireName
+                : normalized;
+          })
+          .toList(growable: false),
+    );
   }
 
   static String _stringValue(Object? value) => value?.toString().trim() ?? '';

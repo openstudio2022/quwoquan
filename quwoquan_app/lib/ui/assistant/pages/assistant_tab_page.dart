@@ -5,8 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
-import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_center_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_detail_page.dart';
@@ -22,7 +22,6 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
     with AutomaticKeepAliveClientMixin {
   String _activeTab = 'dialog';
   String? _lastInternalTab;
-  late PageController _pageController;
 
   @override
   bool get wantKeepAlive => true;
@@ -30,16 +29,15 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
   @override
   void initState() {
     super.initState();
-    _pageController = PageController(initialPage: 1);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _activeTab != 'dialog') return;
+      ref.read(assistantInternalTabProvider.notifier).set(_activeTab);
       ref.read(bottomNavHiddenProvider.notifier).setHidden(true);
     });
   }
 
   @override
   void dispose() {
-    _pageController.dispose();
     super.dispose();
   }
 
@@ -49,50 +47,9 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
         _lastInternalTab = _activeTab;
       }
       setState(() => _activeTab = id);
-      // 只有在 dialog tab 隐藏底部导航
+      ref.read(assistantInternalTabProvider.notifier).set(id);
+      // 仅「找小趣」走沉浸式体验，其余 tab 保持系统底部导航可见。
       ref.read(bottomNavHiddenProvider.notifier).setHidden(id == 'dialog');
-      
-      // 同步 PageView
-      int pageIndex;
-      switch (id) {
-        case 'schedule':
-          pageIndex = 0;
-          break;
-        case 'dialog':
-          pageIndex = 1;
-          break;
-        case 'skills':
-          pageIndex = 2;
-          break;
-        default:
-          pageIndex = 1;
-      }
-      _pageController.jumpToPage(pageIndex);
-    }
-  }
-
-  void _handlePageChanged(int index) {
-    String newTab;
-    switch (index) {
-      case 0:
-        newTab = 'schedule';
-        break;
-      case 1:
-        newTab = 'dialog';
-        break;
-      case 2:
-        newTab = 'skills';
-        break;
-      default:
-        newTab = 'dialog';
-    }
-    
-    if (_activeTab != newTab) {
-      if (_activeTab != 'dialog') {
-        _lastInternalTab = _activeTab;
-      }
-      setState(() => _activeTab = newTab);
-      ref.read(bottomNavHiddenProvider.notifier).setHidden(newTab == 'dialog');
     }
   }
 
@@ -106,7 +63,7 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
     // 否则退出 Assistant 页面
     final lastTab = ref.read(lastMainTabBeforeAssistantProvider);
     ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
-    
+
     // 恢复底部导航
     ref.read(bottomNavHiddenProvider.notifier).setHidden(false);
 
@@ -117,12 +74,12 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
           context.go(AppRoutePaths.home);
           break;
         case 1:
-          context.go(AppRoutePaths.circles);
+          context.go(AppRoutePaths.assistant);
           break;
-        case 3:
+        case 2:
           context.go(AppRoutePaths.chat);
           break;
-        case 4:
+        case 3:
           context.go(AppRoutePaths.profile);
           break;
         default:
@@ -138,13 +95,11 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
       width: AppSpacing.iconButtonMinSizeSm,
       child: CupertinoButton(
         padding: EdgeInsets.zero,
-        minSize: AppSpacing.iconButtonMinSizeSm,
+        minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
         onPressed: _activeTab == 'dialog' ? _handleExit : null,
         child: Icon(
           CupertinoIcons.back,
-          color: _activeTab == 'dialog'
-              ? color
-              : color.withValues(alpha: 0),
+          color: _activeTab == 'dialog' ? color : color.withValues(alpha: 0),
           size: AppSpacing.iconMedium,
         ),
       ),
@@ -156,7 +111,7 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
       width: AppSpacing.iconButtonMinSizeSm,
       child: CupertinoButton(
         padding: EdgeInsets.zero,
-        minSize: AppSpacing.iconButtonMinSizeSm,
+        minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
         onPressed: () => context.push(AppRoutePaths.assistantManagement),
         child: Icon(
           CupertinoIcons.settings,
@@ -165,6 +120,37 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
         ),
       ),
     );
+  }
+
+  double _embeddedBottomInset(BuildContext context) {
+    return AppSpacing.bottomNavHeight +
+        AppSpacing.xs +
+        MediaQuery.viewPaddingOf(context).bottom;
+  }
+
+  Widget _buildBody(double embeddedBottomInset) {
+    switch (_activeTab) {
+      case 'schedule':
+        return _AssistantScheduleView(bottomInset: embeddedBottomInset);
+      case 'skills':
+        return Padding(
+          padding: EdgeInsets.only(bottom: embeddedBottomInset),
+          child: AssistantSkillCenterPage(
+            onBack: () {}, // Ignored in embedded mode
+            embedded: true,
+          ),
+        );
+      case 'dialog':
+      default:
+        return KeyedSubtree(
+          key: TestKeys.assistantDialogPage,
+          child: ChatDetailPage(
+            conversationId: AppConceptConstants.assistantConversationId,
+            onBack: _handleExit,
+            embedded: true,
+          ),
+        );
+    }
   }
 
   @override
@@ -179,22 +165,34 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
       isDark,
       ColorType.foregroundSecondary,
     );
+    final embeddedBottomInset = _embeddedBottomInset(context);
 
     final tabs = const <TabItem>[
-      TabItem(id: 'schedule', label: '日程'),
-      TabItem(id: 'dialog', label: '找小趣'),
-      TabItem(id: 'skills', label: '技能'),
+      TabItem(
+        id: 'schedule',
+        label: UITextConstants.assistantTabSchedule,
+        key: TestKeys.assistantScheduleTab,
+      ),
+      TabItem(
+        id: 'dialog',
+        label: UITextConstants.assistantEntryFind,
+        key: TestKeys.assistantDialogTab,
+      ),
+      TabItem(
+        id: 'skills',
+        label: UITextConstants.assistantTabSkills,
+        key: TestKeys.assistantSkillsTab,
+      ),
     ];
 
     return AppScaffold(
+      key: TestKeys.assistantTabPage,
       backgroundColor: bg,
       navigationBar: AppNavigationBar(
         backgroundColor: bg,
         automaticallyImplyLeading: false,
         border: Border(
-          bottom: BorderSide(
-            color: fgSecondary.withValues(alpha: 0.15),
-          ),
+          bottom: BorderSide(color: fgSecondary.withValues(alpha: 0.15)),
         ),
         middle: CenteredScrollableTabBar(
           tabs: tabs,
@@ -205,22 +203,7 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
           transparentBackground: true,
         ),
       ),
-      child: PageView(
-        controller: _pageController,
-        onPageChanged: _handlePageChanged,
-        children: [
-          const _AssistantScheduleView(),
-          ChatDetailPage(
-            conversationId: AppConceptConstants.assistantConversationId,
-            onBack: _handleExit,
-            embedded: true,
-          ),
-          AssistantSkillCenterPage(
-            onBack: () {}, // Ignored in embedded mode
-            embedded: true,
-          ),
-        ],
-      ),
+      child: _buildBody(embeddedBottomInset),
     );
   }
 
@@ -228,7 +211,9 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
 }
 
 class _AssistantScheduleView extends ConsumerWidget {
-  const _AssistantScheduleView();
+  const _AssistantScheduleView({required this.bottomInset});
+
+  final double bottomInset;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -250,7 +235,12 @@ class _AssistantScheduleView extends ConsumerWidget {
     return Container(
       color: bg,
       child: ListView(
-        padding: EdgeInsets.all(AppSpacing.containerMd),
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.containerMd,
+          AppSpacing.containerMd,
+          AppSpacing.containerMd,
+          AppSpacing.containerMd + bottomInset,
+        ),
         children: [
           _buildCalendarWidget(isDark, fg, fgSecondary),
           SizedBox(height: AppSpacing.interGroupMd),
@@ -326,15 +316,19 @@ class _AssistantScheduleView extends ConsumerWidget {
         color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.white,
         borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
         border: Border.all(
-          color: isDark ? Colors.transparent : Colors.black.withValues(alpha: 0.05),
+          color: isDark
+              ? Colors.transparent
+              : Colors.black.withValues(alpha: 0.05),
         ),
-        boxShadow: isDark ? [] : [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        boxShadow: isDark
+            ? []
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
       ),
       child: Column(
         children: [
@@ -351,9 +345,17 @@ class _AssistantScheduleView extends ConsumerWidget {
               ),
               Row(
                 children: [
-                  Icon(CupertinoIcons.chevron_left, size: 16, color: fgSecondary),
+                  Icon(
+                    CupertinoIcons.chevron_left,
+                    size: 16,
+                    color: fgSecondary,
+                  ),
                   SizedBox(width: 16),
-                  Icon(CupertinoIcons.chevron_right, size: 16, color: fgSecondary),
+                  Icon(
+                    CupertinoIcons.chevron_right,
+                    size: 16,
+                    color: fgSecondary,
+                  ),
                 ],
               ),
             ],
@@ -362,13 +364,15 @@ class _AssistantScheduleView extends ConsumerWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: ['日', '一', '二', '三', '四', '五', '六']
-                .map((d) => Text(
-                      d,
-                      style: TextStyle(
-                        fontSize: AppTypography.sm,
-                        color: fgSecondary,
-                      ),
-                    ))
+                .map(
+                  (d) => Text(
+                    d,
+                    style: TextStyle(
+                      fontSize: AppTypography.sm,
+                      color: fgSecondary,
+                    ),
+                  ),
+                )
                 .toList(),
           ),
           SizedBox(height: AppSpacing.sm),
@@ -417,15 +421,19 @@ class _SectionCard extends StatelessWidget {
         color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.white,
         borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
         border: Border.all(
-          color: isDark ? Colors.transparent : Colors.black.withValues(alpha: 0.05),
+          color: isDark
+              ? Colors.transparent
+              : Colors.black.withValues(alpha: 0.05),
         ),
-        boxShadow: isDark ? [] : [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        boxShadow: isDark
+            ? []
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
       ),
       child: child,
     );

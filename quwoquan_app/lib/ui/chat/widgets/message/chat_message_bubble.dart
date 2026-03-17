@@ -7,11 +7,13 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:quwoquan_app/assistant/application/capability_gateway.dart';
 import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
 import 'package:quwoquan_app/assistant/orchestration/orchestration.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/assistant_answer_toolbar.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/assistant_process_drawer.dart';
+import 'package:quwoquan_app/ui/chat/widgets/message/assistant_process_projection.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/regenerate_options_popup.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/voice_message_bubble.dart';
 
@@ -28,7 +30,8 @@ bool _containsInternalAssistantText(String text) {
 }
 
 String _sanitizeAssistantTimelineText(String text) {
-  final normalized = text.trim();
+  final normalized =
+      AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(text);
   if (normalized.isEmpty) return '';
   if (_containsInternalAssistantText(normalized)) return '';
   return normalized;
@@ -198,6 +201,9 @@ class ChatMessageBubble extends StatelessWidget {
         isRight &&
         !isAssistantMessage &&
         type == 'text';
+    final effectiveFlowEvents = flowEvents.isNotEmpty
+        ? flowEvents
+        : buildExplainableFlowFromMessage(message);
 
     Widget contentWidget;
     if (type == 'task_card') {
@@ -379,13 +385,20 @@ class ChatMessageBubble extends StatelessWidget {
         isAssistantMessage &&
         phaseTimeline.isNotEmpty &&
         answerText.trim().isEmpty;
+    final showStreamingAnswerPhaseHint =
+        isAssistantMessage &&
+        isAssistantRunning &&
+        !hideAnswerBubbleWhileStreamingProcess &&
+        answerText.trim().isNotEmpty &&
+        (runningStatusLabel?.trim().isNotEmpty ?? false);
     final followupPrompt =
         (((message['uiAnswer'] as Map?)?['followupPrompt']) as String?)
             ?.trim() ??
         '';
     final usageStats =
-        ((message['uiUsageStats'] as Map?) ?? (message['uiUsageStatsV1'] as Map?))
-                ?.cast<String, dynamic>() ??
+        ((message['uiUsageStats'] as Map?) ??
+                (message['uiUsageStatsV1'] as Map?))
+            ?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final actionHints =
         ((((message['uiAnswer'] as Map?)?['actionHints']) as List?)
@@ -466,12 +479,15 @@ class ChatMessageBubble extends StatelessWidget {
                         ),
                       ),
                     ),
-                  if (isAssistantMessage && processState != null)
+                  if (isAssistantMessage &&
+                      (processState != null || effectiveFlowEvents.isNotEmpty))
                     AssistantProcessDrawer(
-                      processState: processState!,
+                      processState:
+                          processState ??
+                          _rebuildProcessStateFromMessage(message),
                       isRunning: isAssistantRunning,
                       initiallyExpanded: isAssistantRunning,
-                      flowEvents: flowEvents,
+                      flowEvents: effectiveFlowEvents,
                       streamingThinkingText: streamingThinkingText,
                       onReferenceUrlTap: onReferenceTap != null
                           ? (url) =>
@@ -532,6 +548,14 @@ class ChatMessageBubble extends StatelessWidget {
                           ),
                         Flexible(fit: FlexFit.loose, child: contentWidget),
                       ],
+                    ),
+                  if (showStreamingAnswerPhaseHint)
+                    Padding(
+                      padding: EdgeInsets.only(top: AppSpacing.xs),
+                      child: _RunningStatusRow(
+                        label: runningStatusLabel!,
+                        textColor: textColor,
+                      ),
                     ),
                   if (followupPrompt.isNotEmpty || actionHints.isNotEmpty) ...[
                     SizedBox(height: AppSpacing.xs),
@@ -751,13 +775,18 @@ class ChatMessageBubble extends StatelessWidget {
 
 bool _hasPersistedProcessBlocks(Map<String, dynamic> message) {
   final rawBlocks = (message['uiProcessContentBlocks'] as List?) ?? const [];
-  final rawTimeline = (message['uiProcessTimelineV2'] as List?) ?? const [];
+  final rawTimeline =
+      (message['uiProcessTimeline'] as List?) ??
+      (message['uiProcessTimelineV2'] as List?) ??
+      const [];
+  final rawFlow = (message['uiExplainableFlow'] as List?) ?? const [];
   final rawJournal =
       (((message['runArtifacts'] as Map?)?['processJournal'] as List?) ??
-              (message['processJournalV1'] as List?)) ??
+          (message['processJournalV1'] as List?)) ??
       const [];
   final thinkingText = (message['processThinkingText'] as String?) ?? '';
   return rawJournal.isNotEmpty ||
+      rawFlow.isNotEmpty ||
       rawBlocks.isNotEmpty ||
       rawTimeline.isNotEmpty ||
       thinkingText.isNotEmpty;
@@ -769,8 +798,9 @@ AssistantProcessState _rebuildProcessStateFromMessage(
   final persistedJournal = _processJournalFromMessage(message);
   if (persistedJournal.isNotEmpty) {
     final usageStats =
-        ((message['uiUsageStats'] as Map?) ?? (message['uiUsageStatsV1'] as Map?))
-                ?.cast<String, dynamic>() ??
+        ((message['uiUsageStats'] as Map?) ??
+                (message['uiUsageStatsV1'] as Map?))
+            ?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final contentBlocks = _processBlocksFromJournalSnapshot(persistedJournal);
     return AssistantProcessState(
@@ -789,9 +819,10 @@ AssistantProcessState _rebuildProcessStateFromMessage(
         const <Map>[];
     if (persisted.isNotEmpty) return persisted;
     final timeline =
-        (message['uiProcessTimelineV2'] as List?)?.whereType<Map>().toList(
-          growable: false,
-        ) ??
+        ((message['uiProcessTimeline'] as List?) ??
+                (message['uiProcessTimelineV2'] as List?))
+            ?.whereType<Map>()
+            .toList(growable: false) ??
         const <Map>[];
     return timeline
         .map((item) => item.cast<String, dynamic>())
@@ -848,13 +879,16 @@ AssistantProcessState _rebuildProcessStateFromMessage(
   }
   final usageStats =
       ((message['uiUsageStats'] as Map?) ?? (message['uiUsageStatsV1'] as Map?))
-              ?.cast<String, dynamic>() ??
+          ?.cast<String, dynamic>() ??
       const <String, dynamic>{};
-  final timeline = (message['uiProcessTimelineV2'] as List?) ?? const [];
+  final timeline =
+      (message['uiProcessTimeline'] as List?) ??
+      (message['uiProcessTimelineV2'] as List?) ??
+      const [];
   final stageLabel = timeline.isNotEmpty
       ? (_sanitizeAssistantTimelineText(
-                  (((timeline.last as Map)['summary'] as String?) ?? ''),
-                ).isNotEmpty)
+              (((timeline.last as Map)['summary'] as String?) ?? ''),
+            ).isNotEmpty)
             ? _sanitizeAssistantTimelineText(
                 ((timeline.last as Map)['summary'] as String?) ?? '',
               )
@@ -874,10 +908,10 @@ List<ProcessJournalEvent> _processJournalFromMessage(
 ) {
   final raw =
       ((((message['runArtifacts'] as Map?)?['processJournal'] as List?) ??
-                  (message['processJournalV1'] as List?))
-              ?.whereType<Map>()
-              .toList(growable: false) ??
-          const <Map>[]);
+              (message['processJournalV1'] as List?))
+          ?.whereType<Map>()
+          .toList(growable: false) ??
+      const <Map>[]);
   final normalized = <ProcessJournalEvent>[];
   final indexById = <String, int>{};
   for (final item in raw) {
@@ -1520,7 +1554,9 @@ class _AssistantPhaseTimelineCardState
             final status = (phase['status'] as String?)?.trim() ?? '';
             final details =
                 (phase['details'] as List?)
-                    ?.map((item) => _sanitizeAssistantTimelineText(item.toString()))
+                    ?.map(
+                      (item) => _sanitizeAssistantTimelineText(item.toString()),
+                    )
                     .where((item) => item.isNotEmpty)
                     .toList(growable: false) ??
                 const <String>[];

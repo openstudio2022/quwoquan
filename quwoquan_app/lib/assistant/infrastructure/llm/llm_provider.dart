@@ -218,12 +218,13 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       ...messages,
     ];
     final toolSchemas = _buildToolSchemas(availableTools);
+    final enableTools = toolSchemas.isNotEmpty;
 
     if (onDelta != null) {
-      return _requestCompletionStreaming(
+      return _requestCompletionStreamingWithCompatFallback(
         requestMessages: requestMessages,
         toolSchemas: toolSchemas,
-        enableTools: toolSchemas.isNotEmpty,
+        enableTools: enableTools,
         resolvedPrompt: resolvedPrompt,
         callOptions: opts,
         sessionId: sessionId,
@@ -233,37 +234,211 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       );
     }
 
-    final withTools = await _requestCompletion(
+    return _requestCompletionWithCompatFallback(
       requestMessages: requestMessages,
       toolSchemas: toolSchemas,
-      enableTools: toolSchemas.isNotEmpty,
+      enableTools: enableTools,
       resolvedPrompt: resolvedPrompt,
       callOptions: opts,
       sessionId: sessionId,
       runId: runId,
       traceId: traceId,
     );
-    if (!withTools.degraded) return withTools;
-    if (toolSchemas.isEmpty) return withTools;
-    if (!_shouldRetryWithoutTools(withTools.text)) return withTools;
-    final plain = await _requestCompletion(
-      requestMessages: requestMessages,
-      toolSchemas: const <Map<String, dynamic>>[],
-      enableTools: false,
-      resolvedPrompt: resolvedPrompt,
-      callOptions: opts,
-      sessionId: sessionId,
-      runId: runId,
-      traceId: traceId,
-    );
-    final mergedUsage = <Map<String, dynamic>>[
-      ...withTools.usageEntries,
-      ...plain.usageEntries,
-    ];
-    if (!plain.degraded) {
-      return plain.copyWith(usageEntries: mergedUsage);
+  }
+
+  Future<AssistantModelOutput> _requestCompletionWithCompatFallback({
+    required List<Map<String, dynamic>> requestMessages,
+    required List<Map<String, dynamic>> toolSchemas,
+    required bool enableTools,
+    required _ResolvedPromptStack resolvedPrompt,
+    required String sessionId,
+    required String runId,
+    required String traceId,
+    required LlmCallOptions callOptions,
+  }) async {
+    final usageLedger = <Map<String, dynamic>>[];
+    final attemptedVariants = <String>{};
+    AssistantModelOutput? lastResult;
+
+    Future<AssistantModelOutput?> runVariant({
+      required bool variantEnableTools,
+      required bool variantForceJsonObject,
+    }) async {
+      final variantKey = _compatVariantKey(
+        enableTools: variantEnableTools,
+        forceJsonObject: variantForceJsonObject,
+      );
+      if (!attemptedVariants.add(variantKey)) return null;
+      final retry = await _requestCompletion(
+        requestMessages: requestMessages,
+        toolSchemas: variantEnableTools
+            ? toolSchemas
+            : const <Map<String, dynamic>>[],
+        enableTools: variantEnableTools,
+        resolvedPrompt: resolvedPrompt,
+        callOptions: _copyCallOptions(
+          callOptions,
+          forceJsonObject: variantForceJsonObject,
+        ),
+        sessionId: sessionId,
+        runId: runId,
+        traceId: traceId,
+      );
+      usageLedger.addAll(retry.usageEntries);
+      final merged = retry.copyWith(
+        usageEntries: List<Map<String, dynamic>>.from(usageLedger),
+      );
+      lastResult = merged;
+      if (!merged.degraded ||
+          merged.failureCode == AssistantFailureCode.templateMissing) {
+        return merged;
+      }
+      return null;
     }
-    return withTools.copyWith(usageEntries: mergedUsage);
+
+    final initial = await runVariant(
+      variantEnableTools: enableTools,
+      variantForceJsonObject: callOptions.forceJsonObject,
+    );
+    if (initial != null) return initial;
+    final baseResult = lastResult!;
+    final shouldRetryWithoutJsonMode =
+        callOptions.forceJsonObject &&
+        _profile.supportsJsonMode &&
+        _shouldRetryWithoutJsonMode(baseResult.text);
+    final shouldRetryWithoutTools =
+        enableTools && _shouldRetryWithoutTools(baseResult.text);
+
+    if (shouldRetryWithoutJsonMode) {
+      final retried = await runVariant(
+        variantEnableTools: enableTools,
+        variantForceJsonObject: false,
+      );
+      if (retried != null) return retried;
+    }
+    if (shouldRetryWithoutTools) {
+      final retried = await runVariant(
+        variantEnableTools: false,
+        variantForceJsonObject: callOptions.forceJsonObject,
+      );
+      if (retried != null) return retried;
+    }
+    if (shouldRetryWithoutJsonMode && shouldRetryWithoutTools) {
+      final retried = await runVariant(
+        variantEnableTools: false,
+        variantForceJsonObject: false,
+      );
+      if (retried != null) return retried;
+    }
+    return lastResult!;
+  }
+
+  Future<AssistantModelOutput> _requestCompletionStreamingWithCompatFallback({
+    required List<Map<String, dynamic>> requestMessages,
+    required List<Map<String, dynamic>> toolSchemas,
+    required bool enableTools,
+    required _ResolvedPromptStack resolvedPrompt,
+    required String sessionId,
+    required String runId,
+    required String traceId,
+    required LlmCallOptions callOptions,
+    required void Function(String delta) onDelta,
+  }) async {
+    final usageLedger = <Map<String, dynamic>>[];
+    final attemptedVariants = <String>{};
+    AssistantModelOutput? lastResult;
+
+    Future<AssistantModelOutput?> runVariant({
+      required bool variantEnableTools,
+      required bool variantForceJsonObject,
+    }) async {
+      final variantKey = _compatVariantKey(
+        enableTools: variantEnableTools,
+        forceJsonObject: variantForceJsonObject,
+      );
+      if (!attemptedVariants.add(variantKey)) return null;
+      final retry = await _requestCompletionStreaming(
+        requestMessages: requestMessages,
+        toolSchemas: variantEnableTools
+            ? toolSchemas
+            : const <Map<String, dynamic>>[],
+        enableTools: variantEnableTools,
+        resolvedPrompt: resolvedPrompt,
+        callOptions: _copyCallOptions(
+          callOptions,
+          forceJsonObject: variantForceJsonObject,
+        ),
+        sessionId: sessionId,
+        runId: runId,
+        traceId: traceId,
+        onDelta: onDelta,
+      );
+      usageLedger.addAll(retry.usageEntries);
+      final merged = retry.copyWith(
+        usageEntries: List<Map<String, dynamic>>.from(usageLedger),
+      );
+      lastResult = merged;
+      if (!merged.degraded ||
+          merged.failureCode == AssistantFailureCode.templateMissing) {
+        return merged;
+      }
+      return null;
+    }
+
+    final initial = await runVariant(
+      variantEnableTools: enableTools,
+      variantForceJsonObject: callOptions.forceJsonObject,
+    );
+    if (initial != null) return initial;
+    final baseResult = lastResult!;
+    final shouldRetryWithoutJsonMode =
+        callOptions.forceJsonObject &&
+        _profile.supportsJsonMode &&
+        _shouldRetryWithoutJsonMode(baseResult.text);
+    final shouldRetryWithoutTools =
+        enableTools && _shouldRetryWithoutTools(baseResult.text);
+
+    if (shouldRetryWithoutJsonMode) {
+      final retried = await runVariant(
+        variantEnableTools: enableTools,
+        variantForceJsonObject: false,
+      );
+      if (retried != null) return retried;
+    }
+    if (shouldRetryWithoutTools) {
+      final retried = await runVariant(
+        variantEnableTools: false,
+        variantForceJsonObject: callOptions.forceJsonObject,
+      );
+      if (retried != null) return retried;
+    }
+    if (shouldRetryWithoutJsonMode && shouldRetryWithoutTools) {
+      final retried = await runVariant(
+        variantEnableTools: false,
+        variantForceJsonObject: false,
+      );
+      if (retried != null) return retried;
+    }
+    return lastResult!;
+  }
+
+  LlmCallOptions _copyCallOptions(
+    LlmCallOptions source, {
+    required bool forceJsonObject,
+  }) {
+    return LlmCallOptions(
+      temperature: source.temperature,
+      maxTokens: source.maxTokens,
+      forceJsonObject: forceJsonObject,
+      timeoutSeconds: source.timeoutSeconds,
+    );
+  }
+
+  String _compatVariantKey({
+    required bool enableTools,
+    required bool forceJsonObject,
+  }) {
+    return 'tools=${enableTools ? 1 : 0}|json=${forceJsonObject ? 1 : 0}';
   }
 
   String _normalizeBaseUrl(String value) {
@@ -467,6 +642,8 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       final streamedResponse = await request.send().timeout(timeoutDuration);
       final elapsedMs = DateTime.now().difference(startAt).inMilliseconds;
       if (streamedResponse.statusCode >= 400) {
+        final rawBody = await streamedResponse.stream.bytesToString();
+        final serverMessage = _extractErrorMessage(rawBody);
         await _logLlmInteraction(
           sessionId: sessionId,
           runId: runId,
@@ -476,13 +653,25 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
             'provider': 'openai_compatible',
             'model': modelId,
             'template': resolvedPrompt.templateLog,
+            'request': <String, dynamic>{
+              'url': endpoint,
+              'method': 'POST',
+              'headers': requestHeaders,
+              'body': requestBody,
+            },
+            'response': <String, dynamic>{
+              'statusCode': streamedResponse.statusCode,
+              'body': rawBody,
+            },
             'latencyMs': elapsedMs,
-            'error': 'HTTP ${streamedResponse.statusCode}',
+            'error':
+                'HTTP ${streamedResponse.statusCode}${serverMessage.isEmpty ? '' : ' - $serverMessage'}',
           },
           hasError: true,
         );
         return AssistantModelOutput(
-          text: '模型调用失败: HTTP ${streamedResponse.statusCode}',
+          text:
+              '模型调用失败: HTTP ${streamedResponse.statusCode}${serverMessage.isEmpty ? '' : ' - $serverMessage'}',
           degraded: true,
           failureCode: AssistantFailureCode.modelHttp,
         );
@@ -1201,6 +1390,23 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
     // 兜底：外部 API 有时返回 200 但 body 含工具相关错误。
     final lowered = errorText.toLowerCase();
     for (final keyword in _reactPolicy.llmRetryWithoutToolsKeywords) {
+      final token = keyword.trim().toLowerCase();
+      if (token.isNotEmpty && lowered.contains(token)) return true;
+    }
+    return false;
+  }
+
+  bool _shouldRetryWithoutJsonMode(String errorText) {
+    final statusMatch = RegExp(r'HTTP (\d{3})').firstMatch(errorText);
+    if (statusMatch != null) {
+      final code = int.tryParse(statusMatch.group(1) ?? '') ?? 0;
+      if (_reactPolicy.llmRetryWithoutJsonModeStatusCodes.contains(code)) {
+        return true;
+      }
+      return false;
+    }
+    final lowered = errorText.toLowerCase();
+    for (final keyword in _reactPolicy.llmRetryWithoutJsonModeKeywords) {
       final token = keyword.trim().toLowerCase();
       if (token.isNotEmpty && lowered.contains(token)) return true;
     }

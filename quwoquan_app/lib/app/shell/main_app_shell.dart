@@ -96,15 +96,35 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     return 0;
   }
 
+  int _getBottomNavIndexFromLocation(String location) {
+    if (location == '/') {
+      return 0;
+    } else if (location == '/assistant') {
+      return 1;
+    } else if (location.startsWith('/chat')) {
+      return 2;
+    } else if (location == '/profile') {
+      return 3;
+    }
+    return -1;
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeDark = ref.watch(isDarkProvider);
     final forceDark = ref.watch(videoForceDarkProvider).forceDark;
     final isDark = themeDark || forceDark;
+    final assistantInternalTab = ref.watch(assistantInternalTabProvider);
     final shellBackground = forceDark
         ? AppColors.worksBackground
         : AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
-    final bottomNavHidden = ref.watch(bottomNavHiddenProvider).hidden;
+    final assistantImmersive =
+        widget.currentLocation == AppRoutePaths.assistant &&
+        assistantInternalTab == 'dialog';
+    final bottomNavHidden =
+        ref.watch(bottomNavHiddenProvider).hidden ||
+        assistantImmersive ||
+        widget.currentLocation == AppRoutePaths.circles;
 
     final statusBarStyle = SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -118,38 +138,39 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: statusBarStyle,
-      child: Scaffold(
-        backgroundColor: shellBackground,
-        body: Stack(
+      child: ColoredBox(
+        color: shellBackground,
+        child: Stack(
           children: [
-            // 主内容区域 - 使用 IndexedStack 保持各频道状态
             IndexedStack(
               index: _currentIndex,
               children: const [
-                HomePage(), // 0: 首页
-                CirclesPage(), // 1: 圈子
-                AssistantTabPage(), // 2: 私主
-                ChatPage(), // 3: 趣聊
-                MyProfilePage(), // 4: 我的
+                HomePage(),
+                CirclesPage(),
+                AssistantTabPage(),
+                ChatPage(),
+                MyProfilePage(),
               ],
             ),
-            // 底部导航（视频全屏沉浸时隐藏）
             if (!bottomNavHidden)
               Positioned(
                 left: 0,
                 right: 0,
                 bottom: 0,
-                // Use viewPadding.bottom (physical safe-area, never consumed by
-                // parent Scaffold) so the background fill always reaches the
-                // very bottom of the screen regardless of nested Scaffold state.
-                child: Container(
-                  color: shellBackground,
-                  padding: EdgeInsets.only(
-                    bottom: MediaQuery.viewPaddingOf(context).bottom,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: shellBackground.withValues(alpha: 0.94),
                   ),
-                  child: BottomNavigationWidget(
-                    currentIndex: _currentIndex,
-                    onTap: _handleBottomNavTap,
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      bottom: MediaQuery.viewPaddingOf(context).bottom,
+                    ),
+                    child: BottomNavigationWidget(
+                      currentIndex: _getBottomNavIndexFromLocation(
+                        _currentLocation,
+                      ),
+                      onTap: _handleBottomNavTap,
+                    ),
                   ),
                 ),
               ),
@@ -176,26 +197,23 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         context.go(AppRoutePaths.home);
         break;
       case 1:
-        ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
-        ref.read(bottomNavHiddenProvider.notifier).setHidden(false);
-        context.go(AppRoutePaths.circles);
-        break;
-      case 2:
         if (previousIndex != 2) {
-          ref.read(
-            lastMainTabBeforeAssistantProvider.notifier,
-          ).set(previousIndex);
+          ref
+              .read(lastMainTabBeforeAssistantProvider.notifier)
+              .set(_getBottomNavIndexFromLocation(_currentLocation));
         }
-        // 进入找小趣时立即隐藏底部导航，避免首帧漏出。
-        ref.read(bottomNavHiddenProvider.notifier).setHidden(true);
+        // 助理入口根据当前内部 tab 决定是否走沉浸式，避免把日程/技能误判为全屏。
+        ref
+            .read(bottomNavHiddenProvider.notifier)
+            .setHidden(ref.read(assistantInternalTabProvider) == 'dialog');
         context.go(AppRoutePaths.assistant);
         break;
-      case 3:
+      case 2:
         ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
         ref.read(bottomNavHiddenProvider.notifier).setHidden(false);
         context.go(AppRoutePaths.chat);
         break;
-      case 4:
+      case 3:
         ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
         ref.read(bottomNavHiddenProvider.notifier).setHidden(false);
         context.go(AppRoutePaths.profile);

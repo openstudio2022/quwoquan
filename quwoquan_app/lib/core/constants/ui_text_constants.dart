@@ -6,6 +6,7 @@ class UITextConstants {
   static const String homeTabFeatured = '精选';
   static const String homeTabCircles = '圈子';
   static const String homeCirclesMy = '我的';
+  static const String homeCirclesRecommendTab = '圈子推荐';
   static const String homeCirclesManage = '管理';
   static const String homeCirclesHotTopics = '热议话题';
   static const String homeCirclesMyCircles = '我的圈子';
@@ -15,6 +16,9 @@ class UITextConstants {
   static const String homeCirclesManaged = '我管理的';
   static const String homeCirclesRecentlyJoined = '最近加入';
   static const String homeCirclesViewAll = '查看全部';
+  static const String homeCirclesFeedSection = '来自圈子';
+  static const String homeCirclesStoryTypeActivity = '活动';
+  static const String homeCirclesStoryTypeCreation = '创作';
 
   /// 发现页 Tab（1:1 对应 DiscoveryFeed.tsx CATEGORIES）
   static const String discoveryTabMoment = '点滴';
@@ -84,6 +88,8 @@ class UITextConstants {
   static const String assistantFeedbackReduceProactive = '已减少主动提醒';
   static const String assistantFeedbackOptimizeRecommendation = '收到，将优化推荐';
   static const String assistantFeedbackAddedToLater = '已加入稍后处理';
+  static const String assistantTabSchedule = '日程';
+  static const String assistantTabSkills = '技能';
   static const String assistantEntryFind = '找小趣';
   static const String assistantEntryAskLegacy = '问小趣';
 
@@ -103,6 +109,7 @@ class UITextConstants {
   static const String share = '分享';
   static const String follow = '关注';
   static const String comment = '评论';
+  static const String sourceFromPrefix = '来自 ';
 
   // ==================== 欢迎页 ====================
   static const String welcomeTitle = '趣我圈';
@@ -483,6 +490,23 @@ class UITextConstants {
   static const String assistantProcessModelCallCountTemplate = '模型调用 %s 次';
   static const String assistantProcessTokensTemplate = '%s tokens';
   static const String assistantProcessElapsedTemplate = '耗时 %s 秒';
+  static const String assistantProcessStatusActive = '进行中';
+  static const String assistantProcessStatusCompleted = '已完成';
+  static const String assistantProcessStatusSkipped = '已跳过';
+  static const String assistantProcessStatusFailed = '待补稳';
+  static const String assistantProcessReferenceCountTemplate = '已核对 %s 个来源';
+  static const String assistantProcessStepProgressTemplate = '已完成 %s/%s 步';
+  static const String assistantProcessStageUnderstand = '理解问题';
+  static const String assistantProcessStageSearch = '核对资料';
+  static const String assistantProcessStageAnalyze = '整理判断';
+  static const String assistantProcessStageAnswer = '组织回答';
+
+  /// 长等待（>6 秒）时的 reassurance 文案，符合 world-class 等待体验
+  static const String assistantProcessLongWaitReassurance = '正在深入处理，请稍候…';
+  static const String assistantProcessHandoffReassurance =
+      '我在切换更合适的处理路径，优先保证结论稳定。';
+  static const String assistantProcessRecoveryReassurance =
+      '中途有一部分信息需要重试，我已自动恢复并继续收敛。';
   static const String assistantBookmarked = '已收藏';
   static const String assistantDevReplayTitle = '助理开发态回放';
   static const String assistantDevReplayOpen = '回放';

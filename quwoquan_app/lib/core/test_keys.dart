@@ -18,6 +18,8 @@ class TestKeys {
     'discovery_create_button',
   );
   static const createPage = ValueKey<String>('create_page');
+  static const assistantTabPage = ValueKey<String>('assistant_tab_page');
+  static const assistantDialogPage = ValueKey<String>('assistant_dialog_page');
 
   // ── Feed / Grid ──────────────────────────────────────────────────────
   static const photoFeedGrid = ValueKey<String>('photo_feed_grid');
@@ -45,6 +47,18 @@ class TestKeys {
   static const commentInputBar = ValueKey<String>('comment_input_bar');
   static const submitCommentButton = ValueKey<String>('submit_comment_button');
   static const commentTextField = ValueKey<String>('comment_text_field');
+  static const assistantChatInputField = ValueKey<String>(
+    'assistant_chat_input_field',
+  );
+  static const assistantSendButton = ValueKey<String>('assistant_send_button');
+  static const assistantProcessHeader = ValueKey<String>(
+    'assistant_process_header',
+  );
+
+  // ── Assistant Internal Tabs ─────────────────────────────────────────
+  static const assistantScheduleTab = ValueKey<String>('assistant_schedule_tab');
+  static const assistantDialogTab = ValueKey<String>('assistant_dialog_tab');
+  static const assistantSkillsTab = ValueKey<String>('assistant_skills_tab');
 
   // ── Author / Profile ────────────────────────────────────────────────
   static const authorAvatar = ValueKey<String>('author_avatar');

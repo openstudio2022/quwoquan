@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
@@ -21,70 +21,73 @@ class BottomNavigationWidget extends ConsumerWidget {
         ? AppColors.worksBackground
         : AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
 
-    final items = [
-      {'label': AppConceptConstants.discovery, 'isCenter': false},
-      {'label': AppConceptConstants.circles, 'isCenter': false},
-      {'label': AppConceptConstants.assistantTabLabel, 'isCenter': false},
-      {'label': AppConceptConstants.chat, 'isCenter': false},
-      {'label': AppConceptConstants.profile, 'isCenter': false},
+    final activeColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final inactiveColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.tabUnselected,
+    );
+    final labels = <String>[
+      AppConceptConstants.discovery,
+      AppConceptConstants.assistantTabLabel,
+      AppConceptConstants.chat,
+      AppConceptConstants.profile,
     ];
 
-    return Container(
-      height: AppSpacing.bottomNavHeight,
+    return DecoratedBox(
       decoration: BoxDecoration(
-        color: navBackground,
+        color: navBackground.withValues(alpha: 0.94),
+        border: Border(
+          top: BorderSide(
+            color: inactiveColor.withValues(alpha: 0.16),
+            width: 0.5,
+          ),
+        ),
       ),
-      child: Row(
-        children: items.asMap().entries.map((entry) {
-          final index = entry.key;
-          final item = entry.value;
-          final isSelected = index == this.currentIndex;
-
-          return Expanded(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => this.onTap(index),
-              child: Container(
-                alignment: Alignment.center,
-                padding: EdgeInsets.symmetric(
-                  horizontal: context.safeGetContainerSpacing(SpacingSize.sm),
-                  vertical: context.safeGetIntraGroupSpacing(SpacingSize.sm),
+      child: SizedBox(
+        height: AppSpacing.bottomNavHeight + AppSpacing.xs,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: List<Widget>.generate(labels.length, (index) {
+            final selected = (currentIndex < 0 ? 0 : currentIndex) == index;
+            final fontSize = AppTypography.responsive(
+              context,
+              compact: selected ? AppTypography.lg : AppTypography.base,
+              regular: selected
+                  ? AppTypography.bottomNavLabelSelected
+                  : AppTypography.bottomNavLabelUnselected,
+              expanded: selected ? AppTypography.xxl : AppTypography.xl,
+            );
+            return Expanded(
+              child: CupertinoButton(
+                padding: EdgeInsets.zero,
+                minimumSize: const Size.fromHeight(
+                  AppSpacing.bottomNavHeight + AppSpacing.xs,
                 ),
-                constraints: BoxConstraints(
-                  minHeight: AppSpacing.minInteractiveSize,
-                ),
-                child: _buildTextLabel(
-                  label: item['label'] as String,
-                  isSelected: isSelected,
-                  isDark: isDark,
+                onPressed: () => onTap(index),
+                child: Center(
+                  child: AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOut,
+                    style: TextStyle(
+                      fontSize: fontSize,
+                      fontWeight: AppTypography.bottomNavLabelWeight,
+                      color: selected ? activeColor : inactiveColor,
+                      height: 1,
+                    ),
+                    child: Text(
+                      labels[index],
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ),
               ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildTextLabel({
-    required String label,
-    required bool isSelected,
-    required bool isDark,
-  }) {
-    final color = isSelected
-        ? (isDark
-            ? AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary)
-            : Colors.black)
-        : AppColorsFunctional.getColor(isDark, ColorType.tabUnselected);
-    return Center(
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: (isSelected
-                  ? AppTypography.bottomNavLabelSelected
-                  : AppTypography.bottomNavLabelUnselected),
-          fontWeight: AppTypography.bottomNavLabelWeight,
-          color: color,
+            );
+          }),
         ),
       ),
     );

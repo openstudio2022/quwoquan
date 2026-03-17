@@ -2,8 +2,12 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
+import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
 
@@ -71,7 +75,7 @@ class ProfileMomentsTab extends ConsumerWidget {
               padding: EdgeInsets.symmetric(
                 horizontal: AppSpacing.feedContentHorizontal(context),
               ),
-              child: _ProfileMomentCard(item: dto, isDark: isDark),
+              child: _ProfileMomentCard(item: dto, isDark: isDark, userId: userId),
             ),
             if (index < moments.length - 1)
               Container(height: AppSpacing.sm, color: dividerColor),
@@ -82,20 +86,22 @@ class ProfileMomentsTab extends ConsumerWidget {
   }
 }
 
-class _ProfileMomentCard extends StatefulWidget {
+class _ProfileMomentCard extends ConsumerStatefulWidget {
   const _ProfileMomentCard({
     required this.item,
     required this.isDark,
+    required this.userId,
   });
 
   final MomentPostDto item;
   final bool isDark;
+  final String userId;
 
   @override
-  State<_ProfileMomentCard> createState() => _ProfileMomentCardState();
+  ConsumerState<_ProfileMomentCard> createState() => _ProfileMomentCardState();
 }
 
-class _ProfileMomentCardState extends State<_ProfileMomentCard> {
+class _ProfileMomentCardState extends ConsumerState<_ProfileMomentCard> {
   static const int _maxLines = 5;
   bool _isExpanded = false;
 
@@ -109,6 +115,7 @@ class _ProfileMomentCardState extends State<_ProfileMomentCard> {
         AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
     final bg =
         AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
+    final userId = widget.userId;
 
     return Container(
       padding: EdgeInsets.symmetric(vertical: AppSpacing.containerMd),
@@ -164,13 +171,48 @@ class _ProfileMomentCardState extends State<_ProfileMomentCard> {
           ],
           if (item.imageUrls.isNotEmpty) ...[
             SizedBox(height: AppSpacing.interGroupSm),
-            _MomentImageGrid(urls: item.imageUrls),
+            GestureDetector(
+              onTap: () {
+                final state = ref.read(profileNotifierProvider(userId)).state;
+                final moments = state.creations.whereType<MomentPostDto>().toList();
+                final initialIndex = moments.indexWhere((p) => p.id == item.id).clamp(0, moments.length - 1);
+                final postViews = moments.map(PostSummaryView.fromDto).toList();
+                
+                context.push(
+                  '/media-viewer/photo/$initialIndex',
+                  extra: MediaViewerExtra(
+                    posts: postViews,
+                    initialIndex: initialIndex,
+                    category: 'moment',
+                    initialImageIndex: 0,
+                  ),
+                );
+              },
+              child: AbsorbPointer(child: _MomentImageGrid(urls: item.imageUrls)),
+            ),
           ],
           if (item.videoUrl != null &&
               item.videoUrl!.isNotEmpty &&
               item.imageUrls.isEmpty) ...[
             SizedBox(height: AppSpacing.interGroupSm),
-            _MomentVideoCard(dto: item, isDark: isDark),
+            GestureDetector(
+              onTap: () {
+                final state = ref.read(profileNotifierProvider(userId)).state;
+                final moments = state.creations.whereType<MomentPostDto>().toList();
+                final initialIndex = moments.indexWhere((p) => p.id == item.id).clamp(0, moments.length - 1);
+                final postViews = moments.map(PostSummaryView.fromDto).toList();
+                
+                context.push(
+                  '/video-viewer/$initialIndex',
+                  extra: MediaViewerExtra(
+                    posts: postViews,
+                    initialIndex: initialIndex,
+                    category: 'moment',
+                  ),
+                );
+              },
+              child: AbsorbPointer(child: _MomentVideoCard(dto: item, isDark: isDark)),
+            ),
           ],
           SizedBox(height: AppSpacing.interGroupSm),
           _ActionRow(item: item, isDark: isDark),
@@ -434,12 +476,7 @@ class _ActionRow extends StatelessWidget {
   final bool isDark;
 
   static String _fmt(int n) {
-    if (n < 10000) return '$n';
-    if (n >= 100000) return '10万+';
-    final tenK = (n / 10000 * 10).floor() / 10;
-    return (tenK * 10).round() % 10 == 0
-        ? '${tenK.truncate()}万+'
-        : '$tenK万+';
+    return formatCompactActionCount(n);
   }
 
   @override

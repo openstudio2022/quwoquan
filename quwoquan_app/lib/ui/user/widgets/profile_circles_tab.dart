@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -44,7 +45,8 @@ class ProfileCirclesTab extends ConsumerWidget {
             ),
             if (mode == ProfileMode.mine) ...[
               SizedBox(height: AppSpacing.md),
-              TextButton(
+              CupertinoButton(
+                padding: EdgeInsets.zero,
                 onPressed: () => context.go(AppRoutePaths.circles),
                 child: Text(
                   '去发现圈子',
@@ -62,9 +64,12 @@ class ProfileCirclesTab extends ConsumerWidget {
     }
 
     return ListView.separated(
+      physics: const BouncingScrollPhysics(
+        parent: AlwaysScrollableScrollPhysics(),
+      ),
       padding: EdgeInsets.all(AppSpacing.containerMd),
       itemCount: state.circles.length,
-      separatorBuilder: (_, _) => SizedBox(height: AppSpacing.sm),
+      separatorBuilder: (context, index) => SizedBox(height: AppSpacing.sm),
       itemBuilder: (context, index) {
         final circle = state.circles[index];
         final postCount = circle['postCount'] as int? ?? 0;

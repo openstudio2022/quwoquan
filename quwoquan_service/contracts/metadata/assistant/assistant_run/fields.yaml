@@ -295,7 +295,7 @@ entities:
         ops_exposure: read
         description: 统一过程区来源计数字段（V1 兼容升级路径）
 
-      - name: uiProcessTimelineV2
+      - name: uiProcessTimeline
         type: "[]object"
         constraints: [NULLABLE]
         classification: PUBLIC

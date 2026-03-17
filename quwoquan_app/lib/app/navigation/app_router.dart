@@ -44,12 +44,10 @@ String _routeFromMainTabIndex(int index) {
     case 0:
       return AppRoutePaths.home;
     case 1:
-      return AppRoutePaths.circles;
-    case 2:
       return AppRoutePaths.assistant;
-    case 3:
+    case 2:
       return AppRoutePaths.chat;
-    case 4:
+    case 3:
       return AppRoutePaths.profile;
     default:
       return AppRoutePaths.chat;
@@ -99,7 +97,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: AppRoutePaths.assistant,
             pageBuilder: (context, state) => NoTransitionPage(
               key: state.pageKey,
-              child: const SizedBox.shrink(), // AssistantHomePage 在 MainAppShell 中渲染
+              child:
+                  const SizedBox.shrink(), // AssistantHomePage 在 MainAppShell 中渲染
             ),
           ),
         ],
@@ -207,13 +206,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               (username == currentUser.id ||
                   (currentUser.username != null &&
                       username == currentUser.username));
-          final onBack = () {
+          void onBack() {
             if (context.canPop()) {
               context.pop();
             } else {
               context.go(AppRoutePaths.home);
             }
-          };
+          }
+
           if (isSelf) {
             return MyProfilePage(onBack: onBack);
           }

@@ -2,6 +2,7 @@ import 'package:quwoquan_app/assistant/contracts/planner_contracts.dart';
 import 'package:quwoquan_app/assistant/contracts/user_events.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/contracts/tool_assessment.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 
 class TraceUserEventTranslator {
@@ -99,14 +100,20 @@ class TraceUserEventTranslator {
         );
       case AssistantTraceEventType.toolResult:
         if (data['isAssessment'] == true) {
+          final assessment = _toolAssessmentFromData(data);
           final userMessage = _buildAssessmentMessage(data);
           if (userMessage.isEmpty) return null;
+          final phaseId =
+              assessment.assessmentType == AssessmentType.needMoreSearch &&
+                  assessment.shouldContinueLoop
+              ? PlannerPhaseId.expanding
+              : PlannerPhaseId.analyzing;
           return _buildEvent(
             type: UserEventType.processAppend,
             scope: UserEventScope.aggregation,
             nodeId: 'aggregation.assessment',
             runId: event.runId ?? '',
-            phaseId: PlannerPhaseId.analyzing,
+            phaseId: phaseId,
             actionCode: PlannerActionCode.assessEvidence,
             reasonCode: _assessmentReasonCode(data),
             reasonShort: userMessage,
@@ -195,6 +202,26 @@ class TraceUserEventTranslator {
           reasonCode: PlannerReasonCode.parallelBranchFailed,
           reasonShort: '并行补充的这一支还不够稳，我继续用已经确认的部分往下收敛。',
         );
+      case AssistantTraceEventType.lifecycleStart:
+        if (data['phaseNarrative'] == true) {
+          final narrative = (data['narrative'] as String?)?.trim() ??
+              event.message.trim();
+          if (narrative.isEmpty) return null;
+          final phase = _plannerPhaseForNarrative(
+            (data['phaseId'] as String?)?.trim() ?? '',
+          );
+          return _buildEvent(
+            type: UserEventType.processCommit,
+            scope: UserEventScope.root,
+            nodeId: 'root.phase.${data['phaseId'] ?? 'bootstrap'}',
+            runId: event.runId ?? '',
+            phaseId: phase,
+            actionCode: _plannerActionForNarrativePhase(phase),
+            reasonCode: _plannerReasonForNarrativePhase(phase),
+            reasonShort: narrative,
+          );
+        }
+        return null;
       case AssistantTraceEventType.lifecycleEnd:
         final userMessage = _buildLifecycleEndMessage(data);
         if (userMessage.isEmpty) return null;
@@ -244,6 +271,60 @@ class TraceUserEventTranslator {
 
   static String _toolName(Map<String, dynamic> data) {
     return (data['toolName'] ?? data['tool'] ?? '').toString().trim();
+  }
+
+  static PlannerPhaseId _plannerPhaseForNarrative(String phaseId) {
+    switch (phaseId) {
+      case 'bootstrap':
+      case 'understand':
+        return PlannerPhaseId.understanding;
+      case 'retrieval_design':
+        return PlannerPhaseId.planning;
+      case 'execution':
+        return PlannerPhaseId.executing;
+      case 'synthesis':
+        return PlannerPhaseId.answering;
+      case 'finalize':
+        return PlannerPhaseId.completed;
+      default:
+        return PlannerPhaseId.understanding;
+    }
+  }
+
+  static PlannerActionCode _plannerActionForNarrativePhase(
+    PlannerPhaseId phase,
+  ) {
+    switch (phase) {
+      case PlannerPhaseId.planning:
+        return PlannerActionCode.startRetrieval;
+      case PlannerPhaseId.executing:
+        return PlannerActionCode.startRetrieval;
+      case PlannerPhaseId.answering:
+        return PlannerActionCode.composeAnswer;
+      case PlannerPhaseId.completed:
+        return PlannerActionCode.completeTurn;
+      case PlannerPhaseId.understanding:
+      default:
+        return PlannerActionCode.frameProblem;
+    }
+  }
+
+  static PlannerReasonCode _plannerReasonForNarrativePhase(
+    PlannerPhaseId phase,
+  ) {
+    switch (phase) {
+      case PlannerPhaseId.planning:
+        return PlannerReasonCode.targetedProbe;
+      case PlannerPhaseId.executing:
+        return PlannerReasonCode.reduceWaitTime;
+      case PlannerPhaseId.answering:
+        return PlannerReasonCode.prepareDelivery;
+      case PlannerPhaseId.completed:
+        return PlannerReasonCode.readyToAnswer;
+      case PlannerPhaseId.understanding:
+      default:
+        return PlannerReasonCode.alignGoal;
+    }
   }
 
   static String _summarizeSubtask(Map<String, dynamic> data) {
@@ -335,25 +416,23 @@ class TraceUserEventTranslator {
   }
 
   static String _buildAssessmentMessage(Map<String, dynamic> data) {
-    final assessmentType = parseAssessmentType(
-      (data['assessmentType'] as String?)?.trim() ?? '',
-    );
-    final shouldContinue = data['shouldContinueLoop'] == true;
-    final refs =
-        _toPositiveInt(data['referenceCount']) ??
-        (data['references'] as List?)?.length ??
-        0;
-    final queryCount = _toPositiveInt(data['queryCount']) ?? 0;
-    switch (assessmentType) {
+    final assessment = _toolAssessmentFromData(data);
+    final explicit = _sanitizeMessage(assessment.userMessage);
+    if (explicit.isNotEmpty && !_looksTemplated(explicit)) {
+      return explicit;
+    }
+    final refs = assessment.referenceCount;
+    final queryCount = assessment.queryCount;
+    switch (assessment.assessmentType) {
       case AssessmentType.needMoreSearch:
-        if (!shouldContinue) {
+        if (!assessment.shouldContinueLoop) {
           return '我不再继续兜圈子了，直接基于已经确认的部分给你一个可用版本。';
         }
         return queryCount >= 2
             ? '主线已经有了，但还差一处会影响判断的信息，所以再补一轮。'
             : '还差一处会影响判断的信息，所以换个更具体的方向再补一轮。';
       case AssessmentType.toolFailed:
-        return shouldContinue
+        return assessment.shouldContinueLoop
             ? '这一批外部资料不够稳，我换个来源继续。'
             : '这次没有拿到更稳的补充，所以只保留已经确认的部分。';
       case AssessmentType.budgetExhausted:
@@ -488,9 +567,11 @@ class TraceUserEventTranslator {
   }
 
   static PlannerReasonCode _assessmentReasonCode(Map<String, dynamic> data) {
-    switch (
-      parseAssessmentType((data['assessmentType'] as String?)?.trim() ?? '')
-    ) {
+    final assessment = _toolAssessmentFromData(data);
+    if (assessment.reasonCode != PlannerReasonCode.unknownReason) {
+      return assessment.reasonCode;
+    }
+    switch (assessment.assessmentType) {
       case AssessmentType.needMoreSearch:
         return PlannerReasonCode.needMoreEvidence;
       case AssessmentType.toolFailed:
@@ -502,6 +583,22 @@ class TraceUserEventTranslator {
       default:
         return PlannerReasonCode.assessmentUpdate;
     }
+  }
+
+  static ToolAssessment _toolAssessmentFromData(Map<String, dynamic> data) {
+    final raw =
+        (data['assessment'] as Map?)?.cast<String, dynamic>() ??
+        <String, dynamic>{
+          'assessmentType': (data['assessmentType'] as String?)?.trim() ?? '',
+          'userMessage': (data['userMessage'] as String?)?.trim() ?? '',
+          'shouldContinueLoop': data['shouldContinueLoop'] == true,
+          'reasonCode': (data['reasonCode'] as String?)?.trim() ?? '',
+          'referenceCount': _toPositiveInt(data['referenceCount']) ?? 0,
+          'queryCount': _toPositiveInt(data['queryCount']) ?? 0,
+          'coveredDimensions': data['coveredDimensions'],
+          'missingDimensions': data['missingDimensions'],
+        };
+    return ToolAssessment.fromJson(raw);
   }
 
   static int? _toPositiveInt(Object? value) {

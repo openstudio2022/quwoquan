@@ -1,3 +1,4 @@
+import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/answer_composer.dart';
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
@@ -38,10 +39,26 @@ class BaselineKernel {
     Map<String, dynamic> intentPayload = const <String, dynamic>{},
   }) {
     final problemFrame = frame(query, intentPayload: intentPayload);
+    final preComputed = _parseQueryTasksFromIntent(intentPayload);
     return retrievalPlanner.plan(
       frame: problemFrame,
       availableTools: availableTools,
+      preComputedQueryTasks: preComputed,
     );
+  }
+
+  static List<QueryTask>? _parseQueryTasksFromIntent(Map<String, dynamic> payload) {
+    final raw = payload['queryTasks'];
+    if (raw is! List || raw.isEmpty) return null;
+    final tasks = <QueryTask>[];
+    for (final item in raw) {
+      if (item is Map) {
+        try {
+          tasks.add(QueryTask.fromJson(Map<String, dynamic>.from(item.cast<String, dynamic>())));
+        } catch (_) {}
+      }
+    }
+    return tasks.isEmpty ? null : tasks;
   }
 
   List<EvidenceLedgerEntry> buildEvidenceLedger({

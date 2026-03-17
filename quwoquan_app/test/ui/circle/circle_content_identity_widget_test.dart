@@ -50,7 +50,7 @@ void main() {
     expect(find.text('微趣'), findsNothing);
     expect(find.text('笔记'), findsNothing);
 
-    await tester.tap(find.widgetWithText(ChoiceChip, '作品'));
+    await tester.tap(find.text('作品'));
     await tester.pumpAndSettle();
 
     expect(find.text('图片'), findsOneWidget);
@@ -73,11 +73,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(ChoiceChip, '作品'));
+    await tester.tap(find.text('作品'));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('列表视图'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ChoiceChip, '笔记'));
+    await tester.tap(find.text('笔记').first);
     await tester.pumpAndSettle();
 
     expect(find.text('笔记'), findsAtLeastNWidgets(2));

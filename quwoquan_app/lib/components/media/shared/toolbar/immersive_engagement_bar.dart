@@ -6,6 +6,7 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 
 class ImmersiveEngagementBar extends StatelessWidget {
   const ImmersiveEngagementBar({
@@ -15,21 +16,17 @@ class ImmersiveEngagementBar extends StatelessWidget {
     required this.circleName,
     required this.likeCount,
     required this.shareCount,
-    required this.favoriteCount,
     required this.commentCount,
     required this.isLiked,
-    required this.isSaved,
     required this.isFollowing,
     required this.onUserTap,
     required this.onCircleTap,
     required this.onFollowTap,
     required this.onLikeTap,
-    required this.onFavoriteTap,
     this.onCommentTap,
     this.onShareTap,
     this.onRevealSystemNav,
     this.showFollowButton = true,
-    this.formatCount,
   });
 
   final String avatarUrl;
@@ -37,10 +34,8 @@ class ImmersiveEngagementBar extends StatelessWidget {
   final String circleName;
   final int likeCount;
   final int shareCount;
-  final int favoriteCount;
   final int commentCount;
   final bool isLiked;
-  final bool isSaved;
   final bool isFollowing;
   final bool showFollowButton;
 
@@ -48,33 +43,24 @@ class ImmersiveEngagementBar extends StatelessWidget {
   final VoidCallback onCircleTap;
   final VoidCallback onFollowTap;
   final VoidCallback onLikeTap;
-  final VoidCallback onFavoriteTap;
   final VoidCallback? onCommentTap;
   final VoidCallback? onShareTap;
   final VoidCallback? onRevealSystemNav;
-  final String Function(int n)? formatCount;
 
   static const double _kFollowBtnWidth = AppSpacing.followButtonWidthCompact;
 
-  static double _cellWidth(BuildContext ctx) => AppSpacing.responsiveValue(
-        ctx,
-        compact: 42.0,
-        regular: 46.0,
-        expanded: 54.0,
-      );
-
   static double _actionGap(BuildContext ctx) => AppSpacing.responsiveValue(
         ctx,
-        compact: AppSpacing.intraGroupXs / 2,
-        regular: AppSpacing.intraGroupXs,
-        expanded: AppSpacing.intraGroupSm,
+        compact: AppSpacing.intraGroupXl,
+        regular: AppSpacing.interGroupLg,
+        expanded: AppSpacing.interGroupXl,
       );
 
-  static double _dividerGap(BuildContext ctx) => AppSpacing.responsiveValue(
+  static double _interGroupGap(BuildContext ctx) => AppSpacing.responsiveValue(
         ctx,
-        compact: AppSpacing.intraGroupXs,
-        regular: AppSpacing.intraGroupSm,
-        expanded: AppSpacing.intraGroupMd,
+        compact: AppSpacing.interGroupXl,
+        regular: AppSpacing.interGroupXl,
+        expanded: AppSpacing.interGroupXl,
       );
 
   static double _nameVisibleWidth(BuildContext context, int charCount, TextStyle style) {
@@ -87,22 +73,13 @@ class ImmersiveEngagementBar extends StatelessWidget {
     return painter.width;
   }
 
-  String _defaultFormatCount(int n) {
-    if (n < 10000) return '$n';
-    if (n >= 100000) return '10万+';
-    final tenK = (n / 10000 * 10).floor() / 10;
-    return (tenK * 10).round() % 10 == 0 ? '${tenK.truncate()}万+' : '$tenK万+';
-  }
-
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
-    final cellWidth = _cellWidth(context);
     final actionGap = _actionGap(context);
-    final divider = _dividerGap(context);
+    final interGroupGap = _interGroupGap(context);
     const compressText = true;
     final textDisplayName = displayName.isEmpty ? UITextConstants.unknownUser : displayName;
-    final countFormatter = formatCount ?? _defaultFormatCount;
 
     return GestureDetector(
       onVerticalDragUpdate: (details) {
@@ -133,16 +110,19 @@ class ImmersiveEngagementBar extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: AppSpacing.intraGroupSm),
-                Expanded(
+                Flexible(
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      _nameColumn(
-                        context: context,
-                        displayName: textDisplayName,
-                        compressText: compressText,
-                        clip: true,
-                        fixedMaxChars: 4,
+                      Flexible(
+                        child: _nameColumn(
+                          context: context,
+                          displayName: textDisplayName,
+                          compressText: compressText,
+                          clip: true,
+                          fixedMaxChars: 4,
+                        ),
                       ),
                       Padding(
                         padding: const EdgeInsets.only(left: AppSpacing.intraGroupSm),
@@ -189,7 +169,8 @@ class ImmersiveEngagementBar extends StatelessWidget {
                     ],
                   ),
                 ),
-                SizedBox(width: divider),
+                SizedBox(width: interGroupGap),
+                Spacer(),
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -199,9 +180,8 @@ class ImmersiveEngagementBar extends StatelessWidget {
                         color: isLiked ? AppColors.worksLike : AppColors.worksTitle,
                         size: AppSpacing.iconMedium,
                       ),
-                      label: countFormatter(likeCount),
+                      label: formatCompactActionCount(likeCount),
                       onTap: onLikeTap,
-                      cellWidth: cellWidth,
                     ),
                     SizedBox(width: actionGap),
                     _action(
@@ -210,20 +190,8 @@ class ImmersiveEngagementBar extends StatelessWidget {
                         color: AppColors.worksTitle,
                         size: AppSpacing.iconMedium,
                       ),
-                      label: countFormatter(shareCount),
+                      label: formatCompactActionCount(shareCount),
                       onTap: onShareTap,
-                      cellWidth: cellWidth,
-                    ),
-                    SizedBox(width: actionGap),
-                    _action(
-                      icon: Icon(
-                        isSaved ? CupertinoIcons.star_fill : CupertinoIcons.star,
-                        color: isSaved ? AppColors.worksSave : AppColors.worksTitle,
-                        size: AppSpacing.iconMedium,
-                      ),
-                      label: countFormatter(favoriteCount),
-                      onTap: onFavoriteTap,
-                      cellWidth: cellWidth,
                     ),
                     SizedBox(width: actionGap),
                     _action(
@@ -232,9 +200,8 @@ class ImmersiveEngagementBar extends StatelessWidget {
                         color: AppColors.worksTitle,
                         size: AppSpacing.iconMedium,
                       ),
-                      label: countFormatter(commentCount),
+                      label: formatCompactActionCount(commentCount),
                       onTap: onCommentTap,
-                      cellWidth: cellWidth,
                     ),
                   ],
                 ),
@@ -295,14 +262,13 @@ class ImmersiveEngagementBar extends StatelessWidget {
   Widget _action({
     required Widget icon,
     required String label,
-    required double cellWidth,
     VoidCallback? onTap,
   }) {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: cellWidth,
+      child: Container(
+        constraints: const BoxConstraints(minWidth: AppSpacing.minInteractiveSize),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

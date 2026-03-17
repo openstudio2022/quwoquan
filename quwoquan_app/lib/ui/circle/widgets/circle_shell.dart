@@ -213,116 +213,41 @@ class _CircleShellState extends ConsumerState<CircleShell>
               }
 
               return [
-                SliverAppBar(
-                  expandedHeight: 380,
-                  pinned: true,
-                  backgroundColor: bg,
-                  foregroundColor: fg,
-                  leading: IconButton(
-                    icon: const Icon(CupertinoIcons.back),
+                CupertinoSliverNavigationBar(
+                  largeTitle: Text(circleName.isEmpty ? '圈子' : circleName),
+                  automaticallyImplyLeading: false,
+                  backgroundColor: bg.withValues(alpha: 0.94),
+                  border: Border(
+                    bottom: BorderSide(
+                      color: fg.withValues(alpha: 0.08),
+                      width: 0.5,
+                    ),
+                  ),
+                  leading: CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.square(AppSpacing.minInteractiveSize),
                     onPressed: widget.onBack ?? () => Navigator.of(context).pop(),
+                    child: const Icon(CupertinoIcons.back),
                   ),
-                  title: AnimatedOpacity(
-                    opacity: innerBoxIsScrolled ? 1.0 : 0.0,
-                    duration: const Duration(milliseconds: 200),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (avatarUrl != null && avatarUrl.isNotEmpty)
-                          CircleAvatar(
-                            radius: AppSpacing.intraGroupLg,
-                            backgroundImage: NetworkImage(avatarUrl),
-                            onBackgroundImageError: (e, s) {},
-                          ),
-                        SizedBox(width: AppSpacing.sm),
-                        Text(
-                          circleName,
-                          style: TextStyle(
-                            fontSize: AppTypography.lg,
-                            fontWeight: AppTypography.semiBold,
-                            color: fg,
-                          ),
-                        ),
-                      ],
-                    ),
+                  trailing: CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.square(AppSpacing.minInteractiveSize),
+                    onPressed: () {},
+                    child: const Icon(CupertinoIcons.ellipsis),
                   ),
-                  actions: [
-                    IconButton(
-                      icon: const Icon(Icons.more_horiz),
-                      onPressed: () {},
-                    ),
-                  ],
-                  flexibleSpace: FlexibleSpaceBar(
-                    background: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        if (coverUrl != null && coverUrl.isNotEmpty)
-                          Transform.scale(
-                            scale: 1 + (_pullOffset / (MediaQuery.of(context).size.height * 0.25 + 1) / 2),
-                            child: Image.network(
-                              coverUrl,
-                              fit: BoxFit.cover,
-                              errorBuilder: (c, e, s) => Container(color: bg),
-                            ),
-                          ),
-                        Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.transparent,
-                                bg.withValues(alpha: 0.4),
-                                bg.withValues(alpha: 0.85),
-                                bg,
-                              ],
-                              stops: const [0.0, 0.35, 0.6, 0.75],
-                            ),
-                          ),
-                        ),
-                        SafeArea(
-                          bottom: false,
-                          child: Padding(
-                            padding: EdgeInsets.only(
-                              top: kToolbarHeight,
-                              left: AppSpacing.containerMd,
-                              right: AppSpacing.containerMd,
-                              bottom: AppSpacing.sm,
-                            ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                CircleHeader(
-                                  isDark: isDark,
-                                  avatarUrl: avatarUrl,
-                                  name: circleName,
-                                  description: description,
-                                  tags: tags,
-                                ),
-                                SizedBox(height: AppSpacing.md),
-                                CircleStatsRow(
-                                  isDark: isDark,
-                                  stats: circleState.stats,
-                                  onStatTap: (type) {},
-                                ),
-                                SizedBox(height: AppSpacing.sm),
-                                CircleActionBar(
-                                  isDark: isDark,
-                                  role: circleState.role,
-                                  joinStatus: circleState.joinStatus,
-                                  isFollowed: circleState.isFollowed,
-                                  onEditCircle: () {},
-                                  onManageCenter: () {},
-                                  onFollow: notifier.toggleFollow,
-                                  onJoinCircle: notifier.joinCircle,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                ),
+                SliverToBoxAdapter(
+                  child: _buildCircleSummary(
+                    context: context,
+                    isDark: isDark,
+                    bg: bg,
+                    circleState: circleState,
+                    avatarUrl: avatarUrl,
+                    circleName: circleName,
+                    description: description,
+                    tags: tags,
+                    coverUrl: coverUrl,
+                    notifier: notifier,
                   ),
                 ),
                 SliverPersistentHeader(
@@ -373,6 +298,124 @@ class _CircleShellState extends ConsumerState<CircleShell>
               }).toList(),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCircleSummary({
+    required BuildContext context,
+    required bool isDark,
+    required Color bg,
+    required CircleState circleState,
+    required String? avatarUrl,
+    required String circleName,
+    required String? description,
+    required List<String> tags,
+    required String? coverUrl,
+    required CircleStateNotifier notifier,
+  }) {
+    final coverHeight = max(220.0, MediaQuery.sizeOf(context).height * 0.24);
+    final radius = BorderRadius.circular(AppSpacing.largeBorderRadius);
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.containerMd,
+        AppSpacing.containerSm,
+        AppSpacing.containerMd,
+        AppSpacing.containerSm,
+      ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: radius,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.06),
+              blurRadius: 24,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.only(
+                topLeft: radius.topLeft,
+                topRight: radius.topRight,
+              ),
+              child: SizedBox(
+                height: coverHeight,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (coverUrl != null && coverUrl.isNotEmpty)
+                      Image.network(
+                        coverUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) =>
+                            ColoredBox(color: bg),
+                      )
+                    else
+                      ColoredBox(
+                        color: AppColors.primaryColor.withValues(alpha: 0.12),
+                      ),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            bg.withValues(alpha: 0.18),
+                            bg.withValues(alpha: 0.88),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.containerMd,
+                CircleHeader.avatarIntrusion + AppSpacing.sm,
+                AppSpacing.containerMd,
+                AppSpacing.containerMd,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  CircleHeader(
+                    isDark: isDark,
+                    avatarUrl: avatarUrl,
+                    name: circleName,
+                    description: description,
+                    tags: tags,
+                  ),
+                  SizedBox(height: AppSpacing.md),
+                  CircleStatsRow(
+                    isDark: isDark,
+                    stats: circleState.stats,
+                    onStatTap: (type) {},
+                  ),
+                  SizedBox(height: AppSpacing.sm),
+                  CircleActionBar(
+                    isDark: isDark,
+                    role: circleState.role,
+                    joinStatus: circleState.joinStatus,
+                    isFollowed: circleState.isFollowed,
+                    onEditCircle: () {},
+                    onManageCenter: () {},
+                    onFollow: notifier.toggleFollow,
+                    onJoinCircle: notifier.joinCircle,
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

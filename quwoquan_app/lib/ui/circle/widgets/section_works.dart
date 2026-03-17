@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 /// 圈子作品板块：显示圈内发布的内容 feed
+@Deprecated('遗留圈子作品板块，统一改用 SectionCreations。')
 class SectionWorks extends StatefulWidget {
   const SectionWorks({
     super.key,

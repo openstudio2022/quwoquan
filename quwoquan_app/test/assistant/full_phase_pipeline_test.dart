@@ -22,6 +22,8 @@ Map<String, dynamic> _intentPlanningEnvelope({
   String mode = 'qa',
   List<String> secondarySkills = const <String>[],
   String normalizedQuery = '',
+  List<String> entityAnchors = const <String>[],
+  List<Map<String, dynamic>> queryTasks = const <Map<String, dynamic>>[],
 }) {
   return <String, dynamic>{
     'contractVersion': 'assistant_turn',
@@ -49,10 +51,11 @@ Map<String, dynamic> _intentPlanningEnvelope({
       'problemClass': problemClass,
       'inferredMotive': inferredMotive,
       'secondarySkills': secondarySkills,
+      'entityAnchors': entityAnchors,
       'queryNormalization': normalizedQuery.isNotEmpty
           ? <String, dynamic>{'normalizedQuery': normalizedQuery}
           : const <String, dynamic>{},
-      'queryTasks': const <Map<String, dynamic>>[],
+      'queryTasks': queryTasks,
       'contextSlots': const <String, dynamic>{},
       'globalConstraints': <String, dynamic>{'mode': mode},
       'clarificationNeeded': false,
@@ -205,6 +208,123 @@ class _WeatherPipelineLlm implements AssistantLlmProvider {
         },
         'modelSelfScore': {'score': 92, 'reason': '准确回答天气查询'},
         'toolCalls': <dynamic>[],
+      }),
+    );
+  }
+}
+
+class _RootLevelIntentWeatherPipelineLlm implements AssistantLlmProvider {
+  int planCallCount = 0;
+
+  @override
+  Future<AssistantModelOutput> reason({
+    required List<Map<String, dynamic>> messages,
+    required List<String> availableTools,
+    Map<String, dynamic> templateContext = const <String, dynamic>{},
+    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    String templateId = 'planner.global_plan',
+    String templateVersion = '',
+    String sessionId = '',
+    String runId = '',
+    String traceId = '',
+    LlmCallOptions? callOptions,
+    void Function(String delta)? onDelta,
+  }) async {
+    final isPlannerCall =
+        templateId == 'planner.global_plan' ||
+        templateId == 'planner.postcondition_check';
+    final isSynthesisCall =
+        templateId.contains('synthesizer') ||
+        templateId.contains('final_answer');
+    final isIntentStage =
+        templateId == 'planner.global_plan' && availableTools.isEmpty;
+
+    if (!isPlannerCall && !isSynthesisCall) {
+      return const AssistantModelOutput(text: '{"summary": "用户在询问深圳的天气情况。"}');
+    }
+
+    if (isIntentStage) {
+      return AssistantModelOutput(
+        text: jsonEncode(<String, dynamic>{
+          'userGoal': '查询深圳实时天气',
+          'problemShape': 'single_skill',
+          'primarySkill': 'weather',
+          'problemClass': 'realtime_info',
+          'inferredMotive': '查询深圳实时天气',
+          'requiresExternalEvidence': true,
+          'queryNormalization': <String, dynamic>{'normalizedQuery': '深圳天气怎么样'},
+          'queryTasks': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'id': 'latest_signal',
+              'dimension': 'latest_signal',
+              'label': '最新天气',
+              'query': '深圳 今日 最新天气 实况',
+              'authorityDomains': <String>['weather.cma.cn'],
+              'freshnessHoursMax': 1,
+            },
+          ],
+          'authorityDomains': <String>['weather.cma.cn'],
+          'freshnessHoursMax': 1,
+          'globalConstraints': <String, dynamic>{'mode': 'qa'},
+        }),
+      );
+    }
+
+    if (isPlannerCall) {
+      planCallCount += 1;
+      if (planCallCount == 1 && availableTools.contains('web_search')) {
+        return AssistantModelOutput(
+          text: jsonEncode(<String, dynamic>{
+            'contractVersion': 'assistant_turn',
+            'decision': {'nextAction': 'tool_call'},
+            'toolCalls': [
+              {
+                'toolName': 'web_search',
+                'arguments': {
+                  'query': '深圳天气 实况 今日',
+                  'freshnessHoursMax': 1,
+                  'authorityDomains': <String>['weather.cma.cn'],
+                },
+              },
+            ],
+          }),
+          toolCalls: const <AssistantToolCall>[
+            AssistantToolCall(
+              name: 'web_search',
+              arguments: <String, dynamic>{
+                'query': '深圳天气 实况 今日',
+                'freshnessHoursMax': 1,
+                'authorityDomains': <String>['weather.cma.cn'],
+              },
+            ),
+          ],
+        );
+      }
+    }
+
+    return AssistantModelOutput(
+      text: jsonEncode(<String, dynamic>{
+        'contractVersion': 'assistant_turn',
+        'decision': {'nextAction': 'answer'},
+        'messageKind': 'answer',
+        'userMarkdown': '深圳今天以晴到多云为主，适合安排外出。',
+        'result': <String, dynamic>{
+          'text': '深圳今天以晴到多云为主，适合安排外出。',
+          'summary': '深圳天气适合外出',
+          'interpretation': '深圳当前天气概况',
+        },
+        'selfCheck': <String, dynamic>{
+          'goalSatisfied': true,
+          'constraintSatisfied': true,
+          'safetyBoundarySatisfied': true,
+          'failedItems': <String>[],
+        },
+        'diagnostics': <String, dynamic>{
+          'emergedTags': <Map<String, dynamic>>[],
+          'failedChecks': <String>[],
+          'parseStatus': '',
+          'notes': <String>['root_level_intent_graph_recovered'],
+        },
       }),
     );
   }
@@ -645,6 +765,8 @@ class _InvalidSynthesisNextActionLlm implements AssistantLlmProvider {
 }
 
 class _MultiSkillProblemClassLlm implements AssistantLlmProvider {
+  Map<String, dynamic>? lastFusionTemplateVariables;
+
   @override
   Future<AssistantModelOutput> reason({
     required List<Map<String, dynamic>> messages,
@@ -672,16 +794,30 @@ class _MultiSkillProblemClassLlm implements AssistantLlmProvider {
         text: jsonEncode(
           _intentPlanningEnvelope(
             primarySkill: 'weather',
-            inferredMotive: '先看天气，再结合出游场景给建议',
+            inferredMotive: '先看深圳天气，再结合深圳出游场景给建议',
             problemClass: 'complex_reasoning',
             mode: 'hybrid',
             secondarySkills: const <String>['fallback_general_search'],
+            entityAnchors: const <String>['深圳'],
+            queryTasks: const <Map<String, dynamic>>[
+              <String, dynamic>{
+                'id': 'fit_scenarios',
+                'label': '出游场景',
+                'dimension': 'fit_scenarios',
+                'query': '深圳 轻松出游 场景 室内备选',
+                'entityAnchors': <String>['深圳'],
+              },
+            ],
           ),
         ),
       );
     }
 
     if (isSynthesisCall) {
+      if (templateId == 'synthesizer.multi_skill_fusion' ||
+          templateVariables['subagentRuns'] != null) {
+        lastFusionTemplateVariables = templateVariables;
+      }
       return AssistantModelOutput(
         text: jsonEncode(const <String, dynamic>{
           'contractVersion': 'assistant_turn',
@@ -725,7 +861,173 @@ class _MultiSkillProblemClassLlm implements AssistantLlmProvider {
             'domainId': 'fallback_general_search',
             'problemClass': 'complex_reasoning',
             'mode': 'qa',
-            'goal': '结合深圳今天天气，为用户补充出游安排与备选方案',
+            'goal': '结合深圳今天天气，为用户补充轻松步行的出游安排',
+            'maxIterations': 4,
+            'toolBudget': 2,
+          },
+          <String, dynamic>{
+            'subagentId': 'travel_planner_2',
+            'domainId': 'fallback_general_search',
+            'problemClass': 'complex_reasoning',
+            'mode': 'qa',
+            'goal': '结合深圳今天天气，为用户补充室内备选与避雨安排',
+            'maxIterations': 4,
+            'toolBudget': 2,
+          },
+        ],
+      }),
+    );
+  }
+}
+
+class _MultiSkillFusionAnchorRepairLlm implements AssistantLlmProvider {
+  Map<String, dynamic>? lastFusionTemplateVariables;
+  int fusionCallCount = 0;
+  bool fusionRepairTriggered = false;
+
+  @override
+  Future<AssistantModelOutput> reason({
+    required List<Map<String, dynamic>> messages,
+    required List<String> availableTools,
+    Map<String, dynamic> templateContext = const <String, dynamic>{},
+    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    String templateId = 'planner.global_plan',
+    String templateVersion = '',
+    String sessionId = '',
+    String runId = '',
+    String traceId = '',
+    LlmCallOptions? callOptions,
+    void Function(String delta)? onDelta,
+  }) async {
+    final isPlannerCall =
+        templateId == 'planner.global_plan' ||
+        templateId == 'planner.postcondition_check';
+    final isIntentStage =
+        templateId == 'planner.global_plan' && availableTools.isEmpty;
+    final joined = messages
+        .map((item) => (item['content'] ?? '').toString())
+        .join('\n');
+
+    if (isIntentStage) {
+      return AssistantModelOutput(
+        text: jsonEncode(
+          _intentPlanningEnvelope(
+            primarySkill: 'weather',
+            inferredMotive: '先看深圳天气，再融合轻松出游建议',
+            problemClass: 'complex_reasoning',
+            mode: 'hybrid',
+            secondarySkills: const <String>['fallback_general_search'],
+            normalizedQuery: '深圳 天气 轻松旅游建议',
+            entityAnchors: const <String>['深圳'],
+            queryTasks: const <Map<String, dynamic>>[
+              <String, dynamic>{
+                'id': 'fit_scenarios',
+                'label': '出游场景',
+                'dimension': 'fit_scenarios',
+                'query': '深圳 轻松出游 室内备选 步行路线',
+                'entityAnchors': <String>['深圳'],
+              },
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (templateId == 'synthesizer.multi_skill_fusion') {
+      fusionCallCount += 1;
+      lastFusionTemplateVariables = templateVariables;
+      if (joined.contains('missing_topic_anchor') ||
+          joined.contains('主题锚点') ||
+          joined.contains('最终成答契约校验')) {
+        fusionRepairTriggered = true;
+        return AssistantModelOutput(
+          text: jsonEncode(const <String, dynamic>{
+            'contractVersion': 'assistant_turn',
+            'decision': <String, dynamic>{'nextAction': 'answer'},
+            'messageKind': 'answer',
+            'userMarkdown':
+                '## 深圳天气与轻松出游建议\n\n- 深圳今天天气适合出门。\n- 深圳出游优先轻松步行路线，并保留室内备选。',
+            'result': <String, dynamic>{
+              'text': '深圳今天天气适合出门，深圳轻松出游可优先步行路线并保留室内备选。',
+              'summary': '深圳天气适合轻松出游',
+            },
+          }),
+        );
+      }
+      return AssistantModelOutput(
+        text: jsonEncode(const <String, dynamic>{
+          'contractVersion': 'assistant_turn',
+          'decision': <String, dynamic>{'nextAction': 'answer'},
+          'messageKind': 'answer',
+          'userMarkdown':
+              '## 天气与轻松出游建议\n\n- 今天天气适合出门。\n- 建议优先安排轻松城市漫步，并保留室内备选。',
+          'result': <String, dynamic>{
+            'text': '今天天气适合出门，轻松出游可优先城市漫步并保留室内备选。',
+            'summary': '天气适合轻松出游',
+          },
+        }),
+      );
+    }
+
+    if (templateId.contains('synthesizer') ||
+        templateId.contains('final_answer')) {
+      return AssistantModelOutput(
+        text: jsonEncode(const <String, dynamic>{
+          'contractVersion': 'assistant_turn',
+          'decision': <String, dynamic>{'nextAction': 'answer'},
+          'messageKind': 'answer',
+          'userMarkdown': '## 深圳天气初步结论\n\n- 深圳今天天气适合出门。',
+          'result': <String, dynamic>{
+            'text': '深圳今天天气适合出门。',
+            'summary': '深圳天气适合出门',
+          },
+        }),
+      );
+    }
+
+    if (!isPlannerCall) {
+      return const AssistantModelOutput(text: '{"summary":"用户想融合天气和出游建议。"}');
+    }
+
+    final domainId = (templateVariables['domainId'] as String?)?.trim() ?? '';
+    if (domainId == 'fallback_general_search') {
+      return AssistantModelOutput(
+        text: jsonEncode(const <String, dynamic>{
+          'contractVersion': 'assistant_turn',
+          'decision': <String, dynamic>{'nextAction': 'answer'},
+          'messageKind': 'answer',
+          'userMarkdown': '## 深圳轻松出游建议\n\n- 可优先城市漫步。\n- 同时保留室内备选点。',
+          'result': <String, dynamic>{
+            'text': '深圳轻松出游可优先城市漫步，并保留室内备选点。',
+            'summary': '深圳轻松出游建议',
+          },
+        }),
+      );
+    }
+
+    return AssistantModelOutput(
+      text: jsonEncode(const <String, dynamic>{
+        'contractVersion': 'assistant_turn',
+        'decision': <String, dynamic>{'nextAction': 'answer'},
+        'messageKind': 'answer',
+        'userMarkdown': '## 深圳天气\n\n- 今天深圳天气温和，适合出门。',
+        'result': <String, dynamic>{'text': '今天深圳天气温和，适合出门。'},
+        'subagentPlan': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'subagentId': 'travel_planner_1',
+            'domainId': 'fallback_general_search',
+            'problemClass': 'complex_reasoning',
+            'mode': 'qa',
+            'goal': '结合深圳今天天气，为用户补充轻松步行的出游安排',
+            'maxIterations': 4,
+            'toolBudget': 2,
+          },
+          <String, dynamic>{
+            'subagentId': 'travel_planner_2',
+            'domainId': 'fallback_general_search',
+            'problemClass': 'complex_reasoning',
+            'mode': 'qa',
+            'goal': '结合深圳今天天气，为用户补充室内备选与避雨安排',
             'maxIterations': 4,
             'toolBudget': 2,
           },
@@ -1299,9 +1601,32 @@ void main() {
         reason: '证据账应收拢权威天气来源',
       );
       expect(
+        artifacts.evidenceLedger.any((entry) => entry.source.contains('气象局')),
+        isTrue,
+        reason: '证据账应保留 canonical source 展示名',
+      );
+      expect(
+        artifacts.answerEvidenceBindings,
+        isNotEmpty,
+        reason: 'M3 应把答案引用绑定写入 runArtifacts',
+      );
+      expect(
+        artifacts.answerEvidenceBindings.any(
+          (binding) =>
+              binding.source.contains('气象局') || binding.source.contains('天气网'),
+        ),
+        isTrue,
+        reason: '答案引用绑定应沿用 canonical source',
+      );
+      expect(
         artifacts.slotState.slotValueOf('city')?.value,
         equals('深圳'),
         reason: 'M4 应把关键槽位状态写入 runArtifacts',
+      );
+      expect(
+        artifacts.slotState.slotValueOf('city')?.evidenceIds,
+        isNotEmpty,
+        reason: 'M5 应将槽位与证据账绑定，避免 replay 只有值没有 grounding',
       );
       expect(
         artifacts.domainPolicyBundle?.domainId,
@@ -1393,6 +1718,11 @@ void main() {
         reason: 'legacy uiProcessTimelineV2 不应再作为新结果输出',
       );
       expect(
+        structured.containsKey('uiProcessTimeline'),
+        isTrue,
+        reason: '正式过程时间线应以 uiProcessTimeline 输出',
+      );
+      expect(
         structured.containsKey('uiPhaseTimelineV1'),
         isFalse,
         reason: 'legacy uiPhaseTimelineV1 不应再作为新结果输出',
@@ -1453,6 +1783,57 @@ void main() {
         isTrue,
         reason: '若过程区不再合成 references 事件，至少要保留真实工具执行证据',
       );
+    });
+
+    test('root-level typed intent graph 在完整链路中可直接恢复并续传', () async {
+      final rootSearch = _FakeWeatherSearchTool();
+      final rootToolRegistry = AssistantToolRegistry()..register(rootSearch);
+      final rootLoop = PersonalAssistantAgentLoop(
+        ReactRuntime(
+          llmProvider: _RootLevelIntentWeatherPipelineLlm(),
+          toolRegistry: rootToolRegistry,
+        ),
+        sessionManager: AssistantSessionManager(
+          storagePath: '${tempDir.path}/sessions_root_level_intent.json',
+        ),
+        memoryRepository: AssistantMemoryRepository(
+          ObjectBoxVectorStore(
+            storagePath: '${tempDir.path}/memory_root_level_intent.json',
+          ),
+        ),
+      );
+
+      final response = await rootLoop.run(
+        const AssistantRunRequest(
+          sessionId: 'pipeline_root_level_intent',
+          messages: <AssistantRunMessage>[
+            AssistantRunMessage(role: 'user', content: '深圳天气怎么样'),
+          ],
+        ),
+      );
+
+      expect(response.degraded, isFalse);
+      expect(rootSearch.executeCount, greaterThan(0));
+      final structured = response.structuredResponse;
+      final intentGraph =
+          (structured['intentGraph'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      expect(intentGraph['primarySkill'], equals('weather'));
+      expect(intentGraph['problemClass'], equals('realtime_info'));
+      expect(intentGraph['freshnessHoursMax'], equals(1));
+      expect(
+        (intentGraph['authorityDomains'] as List?) ?? const <dynamic>[],
+        contains('weather.cma.cn'),
+      );
+      final queryTasks =
+          (intentGraph['queryTasks'] as List?)
+              ?.whereType<Map>()
+              .map((item) => item.cast<String, dynamic>())
+              .toList(growable: false) ??
+          const <Map<String, dynamic>>[];
+      expect(queryTasks, hasLength(1));
+      expect(queryTasks.first['id'], equals('latest_signal'));
+      expect(queryTasks.first['query'], contains('深圳'));
     });
 
     test('上一轮 slotState 与 domainPolicyBundle 会续转到下一轮', () async {
@@ -1965,11 +2346,9 @@ void main() {
     test('多 skill 分发时每个 subagent 都带独立 problemClass 并各自收敛', () async {
       final multiToolRegistry = AssistantToolRegistry()
         ..register(_FakeWeatherSearchTool());
+      final multiLlm = _MultiSkillProblemClassLlm();
       final multiLoop = PersonalAssistantAgentLoop(
-        ReactRuntime(
-          llmProvider: _MultiSkillProblemClassLlm(),
-          toolRegistry: multiToolRegistry,
-        ),
+        ReactRuntime(llmProvider: multiLlm, toolRegistry: multiToolRegistry),
         sessionManager: AssistantSessionManager(
           storagePath: '${tempDir.path}/sessions_multiskill_problem_class.json',
         ),
@@ -2007,8 +2386,10 @@ void main() {
           const <Map<String, dynamic>>[];
       expect(subagentPlan, isNotEmpty);
       expect(
-        subagentPlan.first['problemClass'],
-        equals('complex_reasoning'),
+        subagentPlan.every(
+          (item) => item['problemClass'] == 'complex_reasoning',
+        ),
+        isTrue,
         reason: '子任务计划必须显式携带自己的 problemClass',
       );
 
@@ -2018,7 +2399,7 @@ void main() {
               .map((item) => item.cast<String, dynamic>())
               .toList(growable: false) ??
           const <Map<String, dynamic>>[];
-      expect(skillRuns.length, equals(2));
+      expect(skillRuns.length, greaterThanOrEqualTo(3));
 
       final weatherRun = skillRuns.firstWhere(
         (item) => item['domainId'] == 'weather',
@@ -2038,6 +2419,68 @@ void main() {
       expect(travelShell['toolBudget'], equals(2));
       expect(travelShell['variantBudget'], equals(1));
       expect(travelShell['reflectionBudget'], equals(1));
+
+      final fusionVars = multiLlm.lastFusionTemplateVariables;
+      expect(fusionVars, isNotNull);
+      expect(fusionVars!['userGoal'], contains('深圳'));
+      expect(fusionVars['entityAnchors'], contains('深圳'));
+      expect((fusionVars['intentGraphJson'] as String?) ?? '', contains('深圳'));
+      expect(
+        (fusionVars['queryTasksJson'] as String?) ?? '',
+        contains('fit_scenarios'),
+      );
+      expect((fusionVars['queryTasksJson'] as String?) ?? '', contains('深圳'));
+    });
+
+    test('multi skill fusion 丢失主题锚点时会走统一 repair 收口', () async {
+      final multiToolRegistry = AssistantToolRegistry()
+        ..register(_FakeWeatherSearchTool());
+      final fusionRepairLlm = _MultiSkillFusionAnchorRepairLlm();
+      final multiLoop = PersonalAssistantAgentLoop(
+        ReactRuntime(
+          llmProvider: fusionRepairLlm,
+          toolRegistry: multiToolRegistry,
+        ),
+        sessionManager: AssistantSessionManager(
+          storagePath: '${tempDir.path}/sessions_multiskill_anchor_repair.json',
+        ),
+        memoryRepository: AssistantMemoryRepository(
+          ObjectBoxVectorStore(
+            storagePath: '${tempDir.path}/memory_multiskill_anchor_repair.json',
+          ),
+        ),
+      );
+
+      final response = await multiLoop.run(
+        const AssistantRunRequest(
+          sessionId: 'pipeline_multiskill_anchor_repair',
+          messages: <AssistantRunMessage>[
+            AssistantRunMessage(
+              role: 'user',
+              content: '深圳今天天气如何，顺便给我一个轻松点的旅游建议',
+            ),
+          ],
+        ),
+      );
+
+      final structured = response.structuredResponse;
+      final uiAnswer =
+          (structured['uiAnswer'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      final markdown = (uiAnswer['markdownText'] as String?)?.trim() ?? '';
+
+      expect(fusionRepairLlm.fusionCallCount, greaterThanOrEqualTo(2));
+      expect(
+        fusionRepairLlm.fusionRepairTriggered,
+        isTrue,
+        reason: 'fusion 若把主题锚点答丢，必须走统一 repair，而不是静默放过',
+      );
+      expect(markdown, contains('深圳'));
+      expect(response.displayPlainText, contains('深圳'));
+      expect(response.degraded, isFalse);
+      final fusionVars = fusionRepairLlm.lastFusionTemplateVariables;
+      expect(fusionVars, isNotNull);
+      expect(fusionVars!['entityAnchors'], contains('深圳'));
     });
   });
 }

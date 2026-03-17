@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -98,7 +99,7 @@ void main() {
       expect(find.text(UITextConstants.editProfile), findsOneWidget);
 
       await tester.enterText(
-        find.byType(TextField).first,
+        find.byType(CupertinoTextField).first,
         newNickname,
       );
       await _pumpFrames(tester);

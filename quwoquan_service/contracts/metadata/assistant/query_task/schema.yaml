@@ -74,3 +74,11 @@ fields:
     dart_type: List<String>
     json_key: negativeKeywords
     default: const <String>[]
+  - name: authorityDomains
+    dart_type: List<String>
+    json_key: authorityDomains
+    default: const <String>[]
+  - name: freshnessHoursMax
+    dart_type: int
+    json_key: freshnessHoursMax
+    default: 0

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +8,7 @@ import 'package:quwoquan_app/cloud/services/user/relationship_capability_reposit
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
+import 'package:quwoquan_app/ui/user/widgets/profile_action_bar.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 
 /// 在 UI 测试中使 capability 保持 null（legacy 关注/私信 布局）
@@ -44,6 +46,20 @@ void _setPhoneSize(WidgetTester tester) {
   tester.view.devicePixelRatio = 3.0;
 }
 
+Finder _profileSegment(String label) {
+  return find.descendant(
+    of: find.byType(CupertinoSlidingSegmentedControl<int>),
+    matching: find.text(label),
+  );
+}
+
+Finder _profileActionLabel(String label) {
+  return find.descendant(
+    of: find.byType(ProfileActionBar),
+    matching: find.text(label),
+  );
+}
+
 void main() {
   setUp(() {
     HttpOverrides.global = _NoNetworkHttpOverrides();
@@ -67,7 +83,7 @@ void main() {
 
       await tester.pumpWidget(_scopedApp());
       await _pumpFrames(tester);
-      await tester.tap(find.widgetWithText(Tab, '圈子'));
+      await tester.tap(_profileSegment('圈子'));
       await _pumpFrames(tester, count: 20);
       expect(find.text('极简摄影俱乐部'), findsOneWidget);
     });
@@ -103,8 +119,8 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.other));
       await _pumpFrames(tester);
-      expect(find.widgetWithText(OutlinedButton, '关注'), findsOneWidget);
-      expect(find.widgetWithText(OutlinedButton, '私信'), findsOneWidget);
+      expect(_profileActionLabel('关注'), findsOneWidget);
+      expect(_profileActionLabel('私信'), findsOneWidget);
     });
 
     testWidgets('旅程 D3：mine 模式渲染「资料编辑」「分身管理」', (tester) async {
@@ -138,7 +154,7 @@ void main() {
 
       await tester.pumpWidget(_scopedApp());
       await _pumpFrames(tester);
-      await tester.tap(find.widgetWithText(Tab, '圈子'));
+      await tester.tap(_profileSegment('圈子'));
       await _pumpFrames(tester, count: 20);
       expect(find.text('极简摄影俱乐部'), findsOneWidget);
     });
@@ -176,11 +192,11 @@ void main() {
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.other));
       await _pumpFrames(tester);
 
-      final followBtn = find.widgetWithText(OutlinedButton, '关注');
+      final followBtn = _profileActionLabel('关注').first;
       expect(followBtn, findsOneWidget);
       await tester.tap(followBtn);
       await _pumpFrames(tester);
-      expect(find.widgetWithText(OutlinedButton, '已关注'), findsOneWidget);
+      expect(_profileActionLabel('已关注'), findsOneWidget);
     });
 
     testWidgets('旅程 F2：创作 Tab 展示用户创作内容', (tester) async {
@@ -228,8 +244,8 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester);
-      expect(find.byIcon(Icons.settings_outlined), findsOneWidget);
-      expect(find.byIcon(Icons.more_horiz), findsNothing);
+      expect(find.byIcon(CupertinoIcons.settings), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.ellipsis), findsNothing);
     });
 
     testWidgets('旅程 C2：other 模式显示 more 按钮', (tester) async {
@@ -239,8 +255,8 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.other));
       await _pumpFrames(tester);
-      expect(find.byIcon(Icons.more_horiz), findsOneWidget);
-      expect(find.byIcon(Icons.settings_outlined), findsNothing);
+      expect(find.byIcon(CupertinoIcons.ellipsis), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.settings), findsNothing);
     });
   });
 }

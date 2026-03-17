@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
@@ -116,22 +117,35 @@ class _ActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       height: AppSpacing.minInteractiveSize,
-      child: OutlinedButton.icon(
+      child: CupertinoButton(
+        padding: EdgeInsets.zero,
+        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+        color: filled ? AppColors.primaryColor : null,
         onPressed: onTap,
-        icon: Icon(icon, size: AppSpacing.iconSmall, color: fg),
-        label: Text(
-          label,
-          style: TextStyle(
-            fontSize: AppTypography.md,
-            fontWeight: AppTypography.semiBold,
-            color: fg,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+            border: filled
+                ? null
+                : Border.all(color: border.withValues(alpha: 0.5)),
           ),
-        ),
-        style: OutlinedButton.styleFrom(
-          backgroundColor: filled ? AppColors.primaryColor : null,
-          side: BorderSide(color: border.withValues(alpha: 0.5)),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+          child: Center(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: AppSpacing.iconSmall, color: fg),
+                SizedBox(width: AppSpacing.xs),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: AppTypography.md,
+                    fontWeight: AppTypography.semiBold,
+                    color: fg,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

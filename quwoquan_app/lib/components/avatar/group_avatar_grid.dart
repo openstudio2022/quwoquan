@@ -25,49 +25,75 @@ class GroupAvatarGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final radius = borderRadius ?? AppSpacing.borderRadius;
-    final gap = innerGap ?? AppSpacing.one;
-    final validUrls = avatarUrls.where((u) => u.isNotEmpty).toList();
-    final count = math.min(validUrls.length, 9);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final resolvedSize = _resolveRenderSize(constraints);
+        final radius = math.min(
+          borderRadius ?? AppSpacing.borderRadius,
+          resolvedSize / 2,
+        );
+        final gap = innerGap ?? AppSpacing.one;
+        final validUrls = avatarUrls.where((u) => u.isNotEmpty).toList();
+        final count = math.min(validUrls.length, 9);
 
-    if (count == 0) {
-      return _buildSingleFallback(radius);
-    }
+        if (count == 0) {
+          return _buildSingleFallback(resolvedSize, radius);
+        }
 
-    if (count == 1) {
-      return _buildSingleAvatar(validUrls[0], radius);
-    }
+        if (count == 1) {
+          return _buildSingleAvatar(validUrls[0], resolvedSize, radius);
+        }
 
-    final rows = _getLayout(count);
-    final maxCols = rows.fold<int>(0, math.max);
-    final maxRows = rows.length;
+        final rows = _getLayout(count);
+        final maxCols = rows.fold<int>(0, math.max);
+        final maxRows = rows.length;
 
-    final bool fillSquare = count <= 4;
-    final double innerSize = fillSquare ? size : size * 0.88;
-    final cellSizeByWidth = (innerSize - gap * (maxCols - 1)) / maxCols;
-    final cellSizeByHeight = (innerSize - gap * (maxRows - 1)) / maxRows;
-    final cellSize = math.min(cellSizeByWidth, cellSizeByHeight);
-    final totalHeight = maxRows * cellSize + (maxRows - 1) * gap;
+        final bool fillSquare = count <= 4;
+        final double innerSize = fillSquare ? resolvedSize : resolvedSize * 0.88;
+        final cellSizeByWidth = (innerSize - gap * (maxCols - 1)) / maxCols;
+        final cellSizeByHeight = (innerSize - gap * (maxRows - 1)) / maxRows;
+        final cellSize = math.min(cellSizeByWidth, cellSizeByHeight);
+        final totalHeight = maxRows * cellSize + (maxRows - 1) * gap;
 
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: backgroundColor ?? AppColors.light.backgroundSecondary,
-        borderRadius: BorderRadius.circular(radius),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Center(
-        child: SizedBox(
-          height: totalHeight,
-          width: innerSize,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: _buildRows(validUrls, rows, cellSize, gap, innerSize),
+        return SizedBox(
+          width: resolvedSize,
+          height: resolvedSize,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: backgroundColor ?? AppColors.light.backgroundSecondary,
+              borderRadius: BorderRadius.circular(radius),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(radius),
+              child: Center(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: SizedBox(
+                    height: totalHeight,
+                    width: innerSize,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: _buildRows(validUrls, rows, cellSize, gap, innerSize),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
+  }
+
+  double _resolveRenderSize(BoxConstraints constraints) {
+    final width = constraints.hasBoundedWidth
+        ? math.min(size, constraints.maxWidth)
+        : size;
+    final height = constraints.hasBoundedHeight
+        ? math.min(size, constraints.maxHeight)
+        : size;
+    final resolved = math.min(width, height);
+    return resolved.isFinite && resolved > 0 ? resolved : size;
   }
 
   /// 返回每行的列数
@@ -160,32 +186,35 @@ class GroupAvatarGrid extends StatelessWidget {
     );
   }
 
-  Widget _buildSingleFallback(double radius) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: AppColors.light.backgroundTertiary,
-        borderRadius: BorderRadius.circular(radius),
-      ),
-      alignment: Alignment.center,
-      child: Icon(
-        Icons.group,
-        size: size * 0.5,
-        color: AppColors.light.foregroundSecondary,
+  Widget _buildSingleFallback(double resolvedSize, double radius) {
+    return SizedBox(
+      width: resolvedSize,
+      height: resolvedSize,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: AppColors.light.backgroundTertiary,
+          borderRadius: BorderRadius.circular(radius),
+        ),
+        child: Center(
+          child: Icon(
+            Icons.group,
+            size: resolvedSize * 0.5,
+            color: AppColors.light.foregroundSecondary,
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildSingleAvatar(String url, double radius) {
+  Widget _buildSingleAvatar(String url, double resolvedSize, double radius) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: Image.network(
         url,
-        width: size,
-        height: size,
+        width: resolvedSize,
+        height: resolvedSize,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, _) => _buildSingleFallback(radius),
+        errorBuilder: (_, __, _) => _buildSingleFallback(resolvedSize, radius),
       ),
     );
   }

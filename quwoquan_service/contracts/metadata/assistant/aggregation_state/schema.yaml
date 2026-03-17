@@ -1,0 +1,35 @@
+dart_class: AggregationStateDto
+library_path: assistant/contracts/aggregation_state.dart
+output_path: assistant/generated/contracts/aggregation_state.g.dart
+contract: aggregation_state
+version: v1
+kind: runtime_policy_contract
+fields:
+  - { name: allSkillsReady, type: bool, default: false }
+  - { name: blockingSkills, type: list<string>, default: [] }
+  - { name: blockedBy, type: map<object>, ref: blocking_skill_state, default: {} }
+  - { name: canGivePartialAnswer, type: bool, default: false }
+  - { name: needExpansion, type: bool, default: false }
+  - { name: expansionPlan, type: object, ref: aggregation_expansion_plan, default: {} }
+  - { name: finalAnswerReady, type: bool, default: false }
+  - { name: finalAnswerMode, type: enum, enum_ref: FinalAnswerMode, default: blocked }
+  - { name: clarificationNeeded, type: bool, default: false }
+  - { name: answerOwner, type: string, default: '' }
+  - { name: clarificationSource, type: string, default: '' }
+  - { name: dependencies, type: map<object>, ref: dependency_chain, default: {} }
+subcontracts:
+  blocking_skill_state:
+    class_name: AggregationBlockingSkillStateDto
+    fields:
+      - { name: stopReason, type: enum, enum_ref: FinalAnswerMode, default: blocked }
+      - { name: answerReady, type: bool, default: false }
+  aggregation_expansion_plan:
+    class_name: AggregationExpansionPlanDto
+    fields:
+      - { name: targetSkills, type: list<string>, default: [] }
+      - { name: policy, type: enum, enum_ref: ContextScopeExpansionPolicy, default: expand_scope_and_requery }
+      - { name: reasonCode, type: enum, enum_ref: PlannerReasonCode, default: need_more_evidence }
+  dependency_chain:
+    class_name: AggregationDependencyChainDto
+    fields:
+      - { name: runIds, type: list<string>, default: [] }

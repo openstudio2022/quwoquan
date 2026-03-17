@@ -1,10 +1,23 @@
+import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/context_fill_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
 import 'package:quwoquan_app/assistant/contracts/context_continuity_policy.dart';
+import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
+import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
+import 'package:quwoquan_app/assistant/context/assembly/answer_boundary_resolver.dart';
+import 'package:quwoquan_app/assistant/context/assembly/continuity_resolver.dart';
+import 'package:quwoquan_app/assistant/context/assembly/context_gap_planner.dart';
+import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 
 class PersonalAssistantContextOrchestrator {
   const PersonalAssistantContextOrchestrator();
+
+  static const _continuityResolver = ContinuityResolver();
+  static const _gapPlanner = ContextGapPlanner();
+  static const _answerBoundaryResolver = AnswerBoundaryResolver();
 
   ContextContinuityPolicy buildContinuityPolicy({
     required String query,
@@ -67,6 +80,10 @@ class PersonalAssistantContextOrchestrator {
     final historySnippet = continuityPolicy.allowHistorySummary
         ? _truncateHistorySummary(historySummary)
         : '';
+    final continuityOverrideSlots =
+        (contextScopeHint['continuityOverrideSlots'] as Map?)
+            ?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
     final hasPreciseLocation = allowGpsSignals && lat != null && lng != null;
     final hasCoarseLocation = allowGpsSignals && cityFromContext.isNotEmpty;
 
@@ -110,6 +127,9 @@ class PersonalAssistantContextOrchestrator {
     }
     if (historySnippet.isNotEmpty) {
       slotFillHints['historySummarySnippet'] = historySnippet;
+    }
+    if (continuityOverrideSlots.isNotEmpty) {
+      slotFillHints['continuityOverrideSlots'] = continuityOverrideSlots;
     }
     final gpsLocationEnvelope = <String, dynamic>{
       'locationPrecision': allowGpsSignals ? precision : '',
@@ -160,6 +180,8 @@ class PersonalAssistantContextOrchestrator {
         'requiresRealtimeEvidence': hasRealtimeNeed,
         'requiresLongtermMemory': hasLongtermNeed,
       },
+      if (continuityOverrideSlots.isNotEmpty)
+        'continuityOverrideSlots': continuityOverrideSlots,
       'deviceProfile': <String, dynamic>{
         'deviceProfile': deviceProfile,
         'deviceModel': deviceModel,
@@ -171,6 +193,57 @@ class PersonalAssistantContextOrchestrator {
       // LLM 槽位补全信号聚合：仅保留结构化上下文，不再注入规则提取结果。
       'slotFillHints': slotFillHints,
     };
+    RunArtifacts? runArtifacts;
+    final runArtifactsRaw = contextScopeHint['runArtifacts'];
+    if (runArtifactsRaw is Map) {
+      runArtifacts = parseRunArtifacts(
+        (runArtifactsRaw as Map).cast<String, dynamic>(),
+      );
+    }
+
+    if (runArtifacts != null) {
+      final resolved = _continuityResolver.resolve(
+        query: query,
+        sessionHistory: const [],
+        basePolicy: continuityPolicy,
+        previousRunArtifacts: runArtifacts,
+      );
+      if (resolved.slotsToCarry.isNotEmpty) {
+        final carried = <String, dynamic>{};
+        for (final e in resolved.slotsToCarry.entries) {
+          carried[e.key] = e.value.toJson();
+        }
+        slotFillHints['carriedSlotsFromPreviousRun'] = carried;
+      }
+
+      final preliminary = ContextAssemblyResult(
+        contextEnvelope: contextEnvelope,
+        fillTasks: fillTasks,
+        canEnterDomain: missingSlots.isEmpty,
+        summaryText: '',
+        hasRealtimeNeed: hasRealtimeNeed,
+        hasLongtermNeed: hasLongtermNeed,
+      );
+      final gapTasks = _gapPlanner.planGaps(
+        resolvedContinuity: resolved,
+        contextAssembly: preliminary,
+        query: query,
+        runArtifacts: runArtifacts,
+        recalledTexts: recalledTexts,
+      );
+      for (final t in gapTasks) {
+        if (!fillTasks.any(
+          (f) => f.targetSlot == t.targetSlot && f.reason == t.reason,
+        )) {
+          fillTasks.add(t);
+        }
+      }
+      if (slotFillHints.containsKey('carriedSlotsFromPreviousRun')) {
+        contextEnvelope['carriedSlotsFromPreviousRun'] =
+            slotFillHints['carriedSlotsFromPreviousRun'];
+      }
+    }
+
     final summaryText =
         'ContextAssembly:\n'
         '- realtimeNeed: $hasRealtimeNeed\n'
@@ -193,24 +266,151 @@ class PersonalAssistantContextOrchestrator {
     required bool hasToolResult,
     required String problemClass,
     required ContextAssemblyResult contextAssembly,
+    required IntentGraph intentGraph,
+    required List<QueryTask> queryTasks,
+    AnswerBoundaryPolicy? boundaryPolicy,
+    EvidenceEvaluationResult? evidenceEvaluation,
   }) {
-    final _ = (query, finalText, problemClass);
-    final requiresRealtimeEvidence = contextAssembly.hasRealtimeNeed;
-    if (requiresRealtimeEvidence && !hasToolResult) {
-      return const SynthesisReadinessResult(
+    final _ = (finalText, problemClass);
+    final policy =
+        boundaryPolicy ??
+        _answerBoundaryResolver.resolve(
+          intentGraph: intentGraph,
+          contextAssembly: contextAssembly,
+          retrievalPolicy: const <String, dynamic>{},
+          queryTasks: queryTasks,
+        );
+    final generatedQueryConditions = queryTasks
+        .map((task) => task.query.trim())
+        .where((item) => item.isNotEmpty)
+        .take(3)
+        .toList(growable: false);
+    if (policy.requireToolResultBeforeSynthesis && !hasToolResult) {
+      return SynthesisReadinessResult(
         ready: false,
-        reason: '实时问题未形成有效检索证据',
-        gapFillTask: ContextFillTask(
-          fillType: ContextFillType.gapFill,
-          targetSlot: ContextTargetSlot.realtimeEvidence,
-          reason: '需要新增检索任务补齐实时证据。',
-          generatedQueryConditions: <String>['改写查询', '扩大检索范围'],
-          scopeExpansionPolicy:
-              ContextScopeExpansionPolicy.expandScopeAndRequery,
+        reason: policy.summary.isNotEmpty ? policy.summary : '外部证据尚未形成。',
+        gapFillTask: _buildEvidenceGapFillTask(
+          query: query,
+          generatedQueryConditions: generatedQueryConditions,
+          policy: policy,
         ),
       );
     }
+    final evaluation = evidenceEvaluation;
+    if (policy.evidenceRequired) {
+      final hasUsableEvidence = evaluation != null &&
+          evaluation.entries.isNotEmpty &&
+          (evaluation.passed ||
+              evaluation.status == EvidenceStatus.bounded ||
+              !evaluation.evidenceRequired);
+      if (!hasUsableEvidence) {
+        final reason = (evaluation?.summary.trim().isNotEmpty ?? false)
+            ? evaluation!.summary.trim()
+            : (policy.summary.isNotEmpty ? policy.summary : '外部证据尚未形成。');
+        return SynthesisReadinessResult(
+          ready: false,
+          reason: reason,
+          gapFillTask: _buildEvidenceGapFillTask(
+            query: query,
+            generatedQueryConditions: generatedQueryConditions,
+            policy: policy,
+          ),
+        );
+      }
+    }
     return const SynthesisReadinessResult(ready: true, reason: 'ok');
+  }
+
+  SlotStateSnapshot bindEvidenceToSlots({
+    required SlotStateSnapshot slotState,
+    required List<EvidenceLedgerEntry> evidenceLedger,
+  }) {
+    if (slotState.slotValues.isEmpty || evidenceLedger.isEmpty) {
+      return slotState;
+    }
+    final evidenceIdsBySlot = <String, List<String>>{};
+    for (final entry in evidenceLedger) {
+      final evidenceId = entry.evidenceId.trim();
+      if (evidenceId.isEmpty) continue;
+      for (final contribution in entry.slotContributions.entries) {
+        final slotId = contribution.key.trim();
+        final ids = evidenceIdsBySlot.putIfAbsent(slotId, () => <String>[]);
+        if (!ids.contains(evidenceId)) {
+          ids.add(evidenceId);
+        }
+      }
+    }
+    if (evidenceIdsBySlot.isEmpty) return slotState;
+    var changed = false;
+    final updatedSlotValues = <String, SlotValueSnapshot>{};
+    for (final entry in slotState.slotValues.entries) {
+      final fallbackSlotId = entry.key.trim();
+      final snapshot = entry.value;
+      final slotId = snapshot.slotId.trim().isNotEmpty
+          ? snapshot.slotId.trim()
+          : fallbackSlotId;
+      final mergedEvidenceIds = _mergeEvidenceIds(
+        snapshot.evidenceIds,
+        <String>[
+          ...(evidenceIdsBySlot[slotId] ?? const <String>[]),
+          if (fallbackSlotId.isNotEmpty && fallbackSlotId != slotId)
+            ...(evidenceIdsBySlot[fallbackSlotId] ?? const <String>[]),
+        ],
+      );
+      final normalizedSnapshot =
+          slotId != snapshot.slotId.trim() ||
+              !_sameStringList(snapshot.evidenceIds, mergedEvidenceIds)
+          ? snapshot.copyWith(slotId: slotId, evidenceIds: mergedEvidenceIds)
+          : snapshot;
+      changed = changed || !identical(normalizedSnapshot, snapshot);
+      updatedSlotValues[entry.key] = normalizedSnapshot;
+    }
+    if (!changed) return slotState;
+    return SlotStateSnapshot(
+      domainId: slotState.domainId,
+      slots: slotState.slots,
+      slotValues: updatedSlotValues,
+      missingSlots: slotState.missingSlots,
+      updatedAt: slotState.updatedAt,
+    );
+  }
+
+  ContextFillTask _buildEvidenceGapFillTask({
+    required String query,
+    required List<String> generatedQueryConditions,
+    required AnswerBoundaryPolicy policy,
+  }) {
+    return ContextFillTask(
+      fillType: ContextFillType.gapFill,
+      targetSlot: ContextTargetSlot.realtimeEvidence,
+      reason: '需要先完成至少一轮证据检索，再进入最终成答。',
+      generatedQueryConditions: generatedQueryConditions.isNotEmpty
+          ? generatedQueryConditions
+          : <String>[query],
+      scopeExpansionPolicy: policy.expansionPolicy,
+    );
+  }
+
+  List<String> _mergeEvidenceIds(
+    List<String> existing,
+    List<String> incoming,
+  ) {
+    final merged = <String>[];
+    final seen = <String>{};
+    for (final raw in <String>[...existing, ...incoming]) {
+      final value = raw.trim();
+      if (value.isEmpty || !seen.add(value)) continue;
+      merged.add(value);
+    }
+    return merged;
+  }
+
+  bool _sameStringList(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   String _strValue(Object? raw) => raw?.toString().trim() ?? '';

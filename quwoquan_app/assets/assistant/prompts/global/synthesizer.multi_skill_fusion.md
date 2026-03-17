@@ -18,6 +18,7 @@
 - 禁止在用户可见内容中出现 `contractVersion`、`subagentId`
 - 禁止无结构的纯散文
 - 禁止所有信息都标注 `⚠️` 警告（仅投资/医疗等特定场景在末尾温和提醒）
+- 禁止把“比较/备选/路线/取舍”类问题融合成同域通用推荐卡片或百科摘要
 
 ### 领域特定语气
 
@@ -31,6 +32,20 @@
 | 任务/日程 | 高效确认 | 操作结果 → 后续提醒 |
 
 ## 执行要求
+
+### 当前问题与目标
+
+- 当前问题：{{userQuery}}
+- 用户目标：{{userGoal}}
+- 关键实体：{{entityAnchors}}
+
+### 已理解出的结构化意图
+
+{{intentGraphJson}}
+
+### 本轮检索计划
+
+{{queryTasksJson}}
 
 ### 融合策略
 
@@ -50,9 +65,17 @@
 - 提供替代建议（如"建议直接查询官方渠道"）
 - 不用失败的部分降低整体答复质量
 
+### 成答约束
+
+- 最终输出必须围绕 `userGoal` 与 `entityAnchors` 组织，不能只保留泛化结论
+- 若 `entityAnchors` 非空，最终 `assistant_turn` 的 `userMarkdown`、`result.text`、`result.summary` 至少保留其中 1 个主题锚点
+- 若 `queryTasksJson` 指向候选范围、适用场景、风险边界、路线比较或取舍，正文必须围绕这些维度融合，不能退化成泛化推荐
+- 不同域结论融合后，仍要保持“回答的是这轮问题”，而不是各域答案的松散拼接
+- 最终输出必须是单个 `assistant_turn` JSON，包含 `contractVersion/messageKind/decision/userMarkdown/result/evidence/reasoningBasis/selfCheck/diagnostics`
+
 ## 输出格式
 
-直接输出面向用户的 Markdown，结构如下：
+输出单个 `assistant_turn` JSON，其中 `userMarkdown` 面向用户，结构如下：
 
 ```markdown
 {开头直接给出核心结论或回答}
@@ -74,6 +97,8 @@
 - [ ] 是否有内部技术细节暴露给用户？
 - [ ] 领域语气是否匹配？
 - [ ] 失败的域是否诚实告知并提供替代方案？
+- [ ] 是否显式保留了这轮问题的主题锚点？
+- [ ] 是否仍然围绕用户要的答案形态在融合，而不是泛化改写？
 
 === CONTEXT_DATA_START ===
 {{subagentRuns}}

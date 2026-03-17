@@ -1,5 +1,9 @@
 import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
+import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
+import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/context/assembly/context_orchestrator.dart';
+import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -102,11 +106,163 @@ void main() {
         hasToolResult: false,
         problemClass: ProblemClass.realtimeInfo.wireName,
         contextAssembly: assembled,
+        intentGraph: const IntentGraph(
+          userGoal: '杭州今天天气',
+          problemShape: ProblemShape.singleSkill,
+          primarySkill: 'weather',
+          problemClass: ProblemClass.realtimeInfo,
+          requiresExternalEvidence: true,
+          mustVerifyClaims: true,
+        ),
+        queryTasks: const <QueryTask>[
+          QueryTask(
+            id: 'current_state',
+            query: '杭州今天天气 当前状态',
+            label: '当前状态',
+            dimension: QueryTaskDimension.currentState,
+          ),
+        ],
       );
 
       expect(readiness.ready, isFalse);
       expect(readiness.gapFillTask, isNotNull);
       expect(readiness.gapFillTask!.fillType, equals(ContextFillType.gapFill));
+    });
+
+    test('tool result 已返回但证据仍为 retry 时继续拦 synthesis', () {
+      final assembled = orchestrator.assemble(
+        query: '杭州今天天气',
+        historySummary: '',
+        recalledTexts: const <String>[],
+        deviceProfile: 'mobile',
+        deviceModel: 'iphone',
+        deviceOs: 'ios',
+        gpsLocation: const <String, dynamic>{'city': '杭州'},
+        contextScopeHint: const <String, dynamic>{
+          'requiresRealtimeEvidence': true,
+          'problemClass': 'realtime_info',
+        },
+        continuityPolicy: continuity('杭州今天天气'),
+      );
+      final readiness = orchestrator.checkSynthesisReadiness(
+        query: '杭州今天天气',
+        finalText: '这是一个看起来已经能回答的草稿',
+        hasToolResult: true,
+        problemClass: ProblemClass.realtimeInfo.wireName,
+        contextAssembly: assembled,
+        intentGraph: const IntentGraph(
+          userGoal: '杭州今天天气',
+          problemShape: ProblemShape.singleSkill,
+          primarySkill: 'weather',
+          problemClass: ProblemClass.realtimeInfo,
+          requiresExternalEvidence: true,
+          mustVerifyClaims: true,
+        ),
+        queryTasks: const <QueryTask>[
+          QueryTask(
+            id: 'current_state',
+            query: '杭州今天天气 当前状态',
+            label: '当前状态',
+            dimension: QueryTaskDimension.currentState,
+          ),
+        ],
+        evidenceEvaluation: const EvidenceEvaluationResult(
+          status: EvidenceStatus.retry,
+          passed: false,
+          evidenceRequired: true,
+          summary: '证据还不够稳，需要继续补一轮。',
+        ),
+      );
+
+      expect(readiness.ready, isFalse);
+      expect(readiness.reason, contains('证据还不够稳'));
+      expect(readiness.gapFillTask, isNotNull);
+    });
+
+    test('bounded 证据可放行 synthesis readiness', () {
+      final assembled = orchestrator.assemble(
+        query: '杭州今天天气',
+        historySummary: '',
+        recalledTexts: const <String>[],
+        deviceProfile: 'mobile',
+        deviceModel: 'iphone',
+        deviceOs: 'ios',
+        gpsLocation: const <String, dynamic>{'city': '杭州'},
+        contextScopeHint: const <String, dynamic>{
+          'requiresRealtimeEvidence': true,
+          'problemClass': 'realtime_info',
+        },
+        continuityPolicy: continuity('杭州今天天气'),
+      );
+      final readiness = orchestrator.checkSynthesisReadiness(
+        query: '杭州今天天气',
+        finalText: '可先回答已确认部分',
+        hasToolResult: true,
+        problemClass: ProblemClass.realtimeInfo.wireName,
+        contextAssembly: assembled,
+        intentGraph: const IntentGraph(
+          userGoal: '杭州今天天气',
+          problemShape: ProblemShape.singleSkill,
+          primarySkill: 'weather',
+          problemClass: ProblemClass.realtimeInfo,
+          requiresExternalEvidence: true,
+          mustVerifyClaims: true,
+        ),
+        queryTasks: const <QueryTask>[
+          QueryTask(
+            id: 'current_state',
+            query: '杭州今天天气 当前状态',
+            label: '当前状态',
+            dimension: QueryTaskDimension.currentState,
+          ),
+        ],
+        evidenceEvaluation: const EvidenceEvaluationResult(
+          status: EvidenceStatus.bounded,
+          passed: false,
+          evidenceRequired: true,
+          entries: <EvidenceLedgerEntry>[
+            EvidenceLedgerEntry(
+              evidenceId: 'weather::current::https://weather.cma.cn/hangzhou',
+              title: '杭州天气实况',
+              url: 'https://weather.cma.cn/hangzhou',
+            ),
+          ],
+          summary: '已收拢 1 条证据，可以先回答已确认部分。',
+        ),
+      );
+
+      expect(readiness.ready, isTrue);
+    });
+
+    test('bindEvidenceToSlots 会把证据账回写到 slot evidenceIds', () {
+      const slotState = SlotStateSnapshot(
+        domainId: 'weather',
+        slotValues: <String, SlotValueSnapshot>{
+          'city': SlotValueSnapshot(
+            slotId: 'city',
+            value: '深圳',
+            source: 'user_query',
+          ),
+        },
+      );
+      const ledger = <EvidenceLedgerEntry>[
+        EvidenceLedgerEntry(
+          evidenceId: 'weather::current::https://weather.cma.cn/shenzhen',
+          title: '深圳天气预报 - 中国气象局',
+          url: 'https://weather.cma.cn/shenzhen',
+          slotContributions: <String, dynamic>{'city': '深圳'},
+        ),
+      ];
+
+      final bound = orchestrator.bindEvidenceToSlots(
+        slotState: slotState,
+        evidenceLedger: ledger,
+      );
+
+      expect(
+        bound.slotValueOf('city')?.evidenceIds,
+        contains('weather::current::https://weather.cma.cn/shenzhen'),
+      );
     });
 
     test('untyped unrelated history stays suppressed by default', () {

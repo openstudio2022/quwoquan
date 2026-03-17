@@ -173,6 +173,36 @@ func generateAssistantRuntimeArtifacts(metadataDir, appDir string) error {
 		return err
 	}
 
+	aggregationStateSchema, err := readAssistantContractSchema(filepath.Join(baseDir, "aggregation_state", "schema.yaml"))
+	if err == nil {
+		writeFile(
+			filepath.Join(appDir, "lib", aggregationStateSchema.OutputPath),
+			renderAssistantSchemaDrivenContract(aggregationStateSchema, contractIndex, "assistant/aggregation_state/schema.yaml"),
+		)
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	answerBoundaryPolicySchema, err := readAssistantContractSchema(filepath.Join(baseDir, "answer_boundary_policy", "schema.yaml"))
+	if err == nil {
+		writeFile(
+			filepath.Join(appDir, "lib", answerBoundaryPolicySchema.OutputPath),
+			renderAssistantSchemaDrivenContract(answerBoundaryPolicySchema, contractIndex, "assistant/answer_boundary_policy/schema.yaml"),
+		)
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	toolAssessmentSchema, err := readAssistantContractSchema(filepath.Join(baseDir, "tool_assessment", "schema.yaml"))
+	if err == nil {
+		writeFile(
+			filepath.Join(appDir, "lib", toolAssessmentSchema.OutputPath),
+			renderAssistantSchemaDrivenContract(toolAssessmentSchema, contractIndex, "assistant/tool_assessment/schema.yaml"),
+		)
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
 	slotSchema, err := readAssistantContractSchema(filepath.Join(baseDir, "slot_schema", "schema.yaml"))
 	if err == nil {
 		writeFile(
@@ -434,6 +464,8 @@ func renderQueryTaskDart(schema *assistantQueryTaskSchema) string {
 	b.WriteString(fmt.Sprintf("    this.dimension = %s.unknown,\n", schema.DimensionEnum.Name))
 	b.WriteString("    this.entityAnchors = const <String>[],\n")
 	b.WriteString("    this.negativeKeywords = const <String>[],\n")
+	b.WriteString("    this.authorityDomains = const <String>[],\n")
+	b.WriteString("    this.freshnessHoursMax = 0,\n")
 	b.WriteString("    this.answerShape = AnswerShape.unspecified,\n")
 	b.WriteString("    this.freshnessNeed = FreshnessNeed.unspecified,\n")
 	b.WriteString("  });\n\n")
@@ -443,6 +475,8 @@ func renderQueryTaskDart(schema *assistantQueryTaskSchema) string {
 	b.WriteString(fmt.Sprintf("  final %s dimension;\n", schema.DimensionEnum.Name))
 	b.WriteString("  final List<String> entityAnchors;\n")
 	b.WriteString("  final List<String> negativeKeywords;\n")
+	b.WriteString("  final List<String> authorityDomains;\n")
+	b.WriteString("  final int freshnessHoursMax;\n")
 	b.WriteString("  final AnswerShape answerShape;\n")
 	b.WriteString("  final FreshnessNeed freshnessNeed;\n\n")
 	b.WriteString("  String get effectiveLabel =>\n      label.trim().isNotEmpty ? label.trim() : dimension.displayLabel;\n\n")
@@ -456,6 +490,8 @@ func renderQueryTaskDart(schema *assistantQueryTaskSchema) string {
 	b.WriteString("        if (dimension.displayLabel.isNotEmpty) 'dimensionLabel': dimension.displayLabel,\n")
 	b.WriteString("        if (entityAnchors.isNotEmpty) 'entityAnchors': entityAnchors,\n")
 	b.WriteString("        if (negativeKeywords.isNotEmpty) 'negativeKeywords': negativeKeywords,\n")
+	b.WriteString("        if (authorityDomains.isNotEmpty) 'authorityDomains': authorityDomains,\n")
+	b.WriteString("        if (freshnessHoursMax > 0) 'freshnessHoursMax': freshnessHoursMax,\n")
 	b.WriteString("        if (answerShape != AnswerShape.unspecified)\n")
 	b.WriteString("          'answerShape': answerShape.wireName,\n")
 	b.WriteString("        if (freshnessNeed != FreshnessNeed.unspecified)\n")
@@ -481,6 +517,8 @@ func renderQueryTaskDart(schema *assistantQueryTaskSchema) string {
 	b.WriteString("      dimension: dimension,\n")
 	b.WriteString("      entityAnchors: _stringList(json['entityAnchors']),\n")
 	b.WriteString("      negativeKeywords: _stringList(json['negativeKeywords']),\n")
+	b.WriteString("      authorityDomains: _stringList(json['authorityDomains']),\n")
+	b.WriteString("      freshnessHoursMax: (json['freshnessHoursMax'] as num?)?.toInt() ?? 0,\n")
 	b.WriteString("      answerShape: parseAnswerShape((json['answerShape'] as String?)?.trim() ?? ''),\n")
 	b.WriteString("      freshnessNeed: parseFreshnessNeed(\n")
 	b.WriteString("        (json['freshnessNeed'] as String?)?.trim() ?? '',\n")
@@ -491,6 +529,7 @@ func renderQueryTaskDart(schema *assistantQueryTaskSchema) string {
 	b.WriteString("    String? id,\n    String? query,\n    String? label,\n")
 	b.WriteString(fmt.Sprintf("    %s? dimension,\n", schema.DimensionEnum.Name))
 	b.WriteString("    List<String>? entityAnchors,\n    List<String>? negativeKeywords,\n")
+	b.WriteString("    List<String>? authorityDomains,\n    int? freshnessHoursMax,\n")
 	b.WriteString("    AnswerShape? answerShape,\n    FreshnessNeed? freshnessNeed,\n")
 	b.WriteString("  }) {\n")
 	b.WriteString("    return QueryTask(\n")
@@ -498,6 +537,8 @@ func renderQueryTaskDart(schema *assistantQueryTaskSchema) string {
 	b.WriteString("      dimension: dimension ?? this.dimension,\n")
 	b.WriteString("      entityAnchors: entityAnchors ?? this.entityAnchors,\n")
 	b.WriteString("      negativeKeywords: negativeKeywords ?? this.negativeKeywords,\n")
+	b.WriteString("      authorityDomains: authorityDomains ?? this.authorityDomains,\n")
+	b.WriteString("      freshnessHoursMax: freshnessHoursMax ?? this.freshnessHoursMax,\n")
 	b.WriteString("      answerShape: answerShape ?? this.answerShape,\n")
 	b.WriteString("      freshnessNeed: freshnessNeed ?? this.freshnessNeed,\n")
 	b.WriteString("    );\n")

@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -205,7 +206,7 @@ void main() {
       await tester.pump();
 
       expect(find.byType(CircleActionBar), findsOneWidget);
-      expect(find.byType(OutlinedButton), findsWidgets);
+      expect(find.byType(CupertinoButton), findsWidgets);
     });
 
     testWidgets('未知 joinStatus 安全渲染', (tester) async {

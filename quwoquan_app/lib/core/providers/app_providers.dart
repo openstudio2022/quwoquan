@@ -135,7 +135,7 @@ class AppearanceSnapshot {
   });
 }
 
-/// 从小趣对话返回时恢复的 tab 索引（0=发现 1=圈子 3=趣聊 4=我的）
+/// 从小趣对话返回时恢复的 tab 索引（0=发现 1=小趣 2=趣聊 3=我的）。
 /// 由底部栏 C 位进入小趣时写入，返回时读取并跳转
 final lastMainTabBeforeAssistantProvider =
     NotifierProvider<LastMainTabBeforeAssistantNotifier, int?>(
@@ -147,6 +147,20 @@ class LastMainTabBeforeAssistantNotifier extends Notifier<int?> {
   int? build() => null;
 
   void set(int? value) => state = value;
+}
+
+/// 助理页内部当前一级 tab（`schedule` / `dialog` / `skills`）。
+/// 由主壳读取，用于决定助理路由下底部导航是否应当隐藏。
+final assistantInternalTabProvider =
+    NotifierProvider<AssistantInternalTabNotifier, String>(
+      AssistantInternalTabNotifier.new,
+    );
+
+class AssistantInternalTabNotifier extends Notifier<String> {
+  @override
+  String build() => 'dialog';
+
+  void set(String value) => state = value;
 }
 
 /// 用户数据Provider — 通过 UserProfileRepository 加载档案

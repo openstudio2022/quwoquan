@@ -1,0 +1,18 @@
+dart_class: AnswerBoundaryPolicyDto
+library_path: assistant/contracts/answer_boundary_policy.dart
+output_path: assistant/generated/contracts/answer_boundary_policy.g.dart
+contract: answer_boundary_policy
+version: v1
+kind: runtime_policy_contract
+fields:
+  - { name: evidenceRequired, type: bool, default: false }
+  - { name: authorityRequired, type: bool, default: false }
+  - { name: requireToolResultBeforeSynthesis, type: bool, default: false }
+  - { name: allowBoundedAnswer, type: bool, default: true }
+  - { name: freshnessHoursMax, type: int, default: 72 }
+  - { name: authorityDomains, type: list<string>, default: [] }
+  - { name: requiredDimensions, type: list<string>, default: [] }
+  - { name: blockingDimensions, type: list<string>, default: [] }
+  - { name: expansionPolicy, type: enum, enum_ref: ContextScopeExpansionPolicy, default: expand_scope_and_requery }
+  - { name: insufficiencyReason, type: enum, enum_ref: PlannerReasonCode, default: need_more_evidence }
+  - { name: summary, type: string, default: '' }

@@ -73,6 +73,8 @@
 | 助理协议 metadata | `quwoquan_service/contracts/metadata/assistant/` |
 | 端侧助理协议 codegen 产物 | `quwoquan_app/lib/assistant/generated/` |
 | 端侧 edge assistant 实现 | `quwoquan_app/lib/assistant/` |
+| 编排主入口（禁止旧 monolith 增量） | `orchestration/assistant_agent_loop.dart` 为真实 owner；`conversation/orchestration/agent_loop.dart` 仅作兼容桥，禁止继续堆逻辑 |
+| 主编排入口 | `quwoquan_app/lib/assistant/orchestration/assistant_agent_loop.dart` |
 | 端侧 cloud client | `quwoquan_app/lib/cloud/services/assistant/` |
 | 端侧 UI 入口 | `quwoquan_app/lib/ui/assistant/` |
 

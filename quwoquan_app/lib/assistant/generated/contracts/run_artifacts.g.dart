@@ -70,6 +70,7 @@ class EvidenceLedgerEntry {
     this.queryTaskId = "",
     this.title = "",
     this.url = "",
+    this.source = "",
     this.sourceHost = "",
     this.sourceTier = "",
     this.freshnessHours = 0,
@@ -87,6 +88,7 @@ class EvidenceLedgerEntry {
   final String queryTaskId;
   final String title;
   final String url;
+  final String source;
   final String sourceHost;
   final String sourceTier;
   final int freshnessHours;
@@ -104,6 +106,7 @@ class EvidenceLedgerEntry {
         'queryTaskId': queryTaskId,
         'title': title,
         'url': url,
+        'source': source,
         'sourceHost': sourceHost,
         'sourceTier': sourceTier,
         'freshnessHours': freshnessHours,
@@ -123,6 +126,7 @@ class EvidenceLedgerEntry {
       queryTaskId: (json['queryTaskId'] as String?)?.trim() ?? "",
       title: (json['title'] as String?)?.trim() ?? "",
       url: (json['url'] as String?)?.trim() ?? "",
+      source: (json['source'] as String?)?.trim() ?? "",
       sourceHost: (json['sourceHost'] as String?)?.trim() ?? "",
       sourceTier: (json['sourceTier'] as String?)?.trim() ?? "",
       freshnessHours: (json['freshnessHours'] as num?)?.toInt() ?? 0,
@@ -143,6 +147,7 @@ class EvidenceLedgerEntryFields {
   static const String queryTaskId = 'queryTaskId';
   static const String title = 'title';
   static const String url = 'url';
+  static const String source = 'source';
   static const String sourceHost = 'sourceHost';
   static const String sourceTier = 'sourceTier';
   static const String freshnessHours = 'freshnessHours';

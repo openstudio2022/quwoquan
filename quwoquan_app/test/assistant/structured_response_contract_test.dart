@@ -63,6 +63,9 @@ void main() {
       expect(quality.containsKey('decisionParseSuccess'), isTrue);
       expect(quality.containsKey('renderFallback'), isTrue);
       expect(quality.containsKey('heuristicFallbackUsed'), isTrue);
+      expect(quality.containsKey('evidenceSufficient'), isTrue);
+      expect(quality.containsKey('freshnessSatisfied'), isTrue);
+      expect(quality.containsKey('criticalSlotsResolved'), isTrue);
     });
   });
 }

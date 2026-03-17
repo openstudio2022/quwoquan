@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -20,6 +19,7 @@ import 'package:quwoquan_app/components/input/customizable_chat_input_bar.dart';
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
+import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
@@ -30,6 +30,7 @@ import 'package:quwoquan_app/assistant/domain/channel/channel.dart';
 import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/orchestration.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_display_fallbacks.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_dev_replay_page.dart';
@@ -40,6 +41,7 @@ import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart'
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_manager.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
+import 'package:quwoquan_app/ui/chat/widgets/message/assistant_process_projection.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/regenerate_options_popup.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/streaming_scroll_fab.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
@@ -50,7 +52,6 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/utils/chat_time_formatter.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
-
 
 /// 聊天气泡时间分隔符 — 直接透传 ChatTimeFormatter 的完整格式
 ///
@@ -111,12 +112,16 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   final Map<String, String> _assistantFeedbackStatusByMessageId =
       <String, String>{};
   double _lastViewportWidth = 390;
+  Timer? _assistantProgressTimer;
+  DateTime? _assistantProgressStartedAt;
 
   /// 当前轮过程状态机展示文案（等待/深度搜索中/深度思考中），由 trace 事件驱动
   String _assistantPhaseLabel = '';
   String? _activeAssistantStreamingMessageId;
   String _streamingAnswerRawBuffer = '';
   String _streamingAnswerVisibleBuffer = '';
+  String _streamingXmlToolResidue = '';
+  bool _streamingInsideXmlToolBlock = false;
 
   /// v4: Unified process state for the single-drawer UI.
   AssistantProcessState _currentProcessState = const AssistantProcessState();
@@ -369,6 +374,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
 
   @override
   void dispose() {
+    _assistantProgressTimer?.cancel();
     _scrollController.removeListener(_onScrollChanged);
     _inputController.removeListener(_onInputChanged);
     _speechToText.cancel();
@@ -379,9 +385,37 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   }
 
   void _startAssistantProgress() {
+    _assistantProgressTimer?.cancel();
+    _assistantProgressStartedAt = DateTime.now();
+    _assistantProgressTimer = Timer.periodic(
+      const Duration(milliseconds: 500),
+      (_) {
+        if (!mounted || !_assistantResponding) return;
+        final startedAt = _assistantProgressStartedAt;
+        if (startedAt == null) return;
+        final elapsedMs = DateTime.now().difference(startedAt).inMilliseconds;
+        setState(() {
+          _currentProcessState = _currentProcessState.copyWith(
+            elapsedMs: elapsedMs,
+          );
+        });
+      },
+    );
   }
 
-  void _stopAssistantProgress() {}
+  void _stopAssistantProgress() {
+    _assistantProgressTimer?.cancel();
+    _assistantProgressTimer = null;
+    final startedAt = _assistantProgressStartedAt;
+    _assistantProgressStartedAt = null;
+    if (!mounted || startedAt == null) return;
+    final elapsedMs = DateTime.now().difference(startedAt).inMilliseconds;
+    setState(() {
+      _currentProcessState = _currentProcessState.copyWith(
+        elapsedMs: elapsedMs,
+      );
+    });
+  }
 
   /// 保证 _messages 为可扩容列表，避免定长列表导致 add/addAll 抛 UnsupportedError。
   void _ensureMessagesGrowable() {
@@ -676,9 +710,15 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     }
   }
 
+  bool _shouldOpenAnswerGateForStage(ProcessStage stage) {
+    return stage == ProcessStage.answering || stage == ProcessStage.completed;
+  }
+
   void _resetStreamingAnswerDecoder() {
     _streamingAnswerRawBuffer = '';
     _streamingAnswerVisibleBuffer = '';
+    _streamingXmlToolResidue = '';
+    _streamingInsideXmlToolBlock = false;
   }
 
   String _extractLenientJsonStringField(String raw, String fieldName) {
@@ -838,10 +878,108 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     return fenceStarts.last;
   }
 
+  int _firstXmlToolTokenStart(String text, List<String> tokens) {
+    final lower = text.toLowerCase();
+    var best = -1;
+    for (final token in tokens) {
+      final idx = lower.indexOf(token);
+      if (idx < 0) continue;
+      if (best < 0 || idx < best) {
+        best = idx;
+      }
+    }
+    return best;
+  }
+
+  String? _xmlToolTokenAt(String text, int start, List<String> tokens) {
+    if (start < 0) return null;
+    final lower = text.toLowerCase();
+    for (final token in tokens) {
+      if (lower.startsWith(token, start)) {
+        return token;
+      }
+    }
+    return null;
+  }
+
+  int _trailingPartialXmlToolStart(String text) {
+    final lower = text.toLowerCase();
+    final lastLt = lower.lastIndexOf('<');
+    if (lastLt < 0) return -1;
+    final tail = lower.substring(lastLt);
+    if (tail.contains('>')) return -1;
+    for (final token in _xmlToolStreamingTokens) {
+      if (token.startsWith(tail) || tail.startsWith(token)) {
+        return lastLt;
+      }
+    }
+    return -1;
+  }
+
+  String _stripStreamingXmlToolArtifacts(String chunk) {
+    var remaining = '$_streamingXmlToolResidue$chunk';
+    _streamingXmlToolResidue = '';
+    if (remaining.isEmpty) return '';
+    final visible = StringBuffer();
+    while (remaining.isNotEmpty) {
+      if (_streamingInsideXmlToolBlock) {
+        final closeStart = _firstXmlToolTokenStart(
+          remaining,
+          _xmlToolStreamingCloseTokens,
+        );
+        if (closeStart < 0) {
+          _streamingXmlToolResidue = remaining;
+          return visible.toString();
+        }
+        final closeEnd = remaining.indexOf('>', closeStart);
+        if (closeEnd < 0) {
+          _streamingXmlToolResidue = remaining.substring(closeStart);
+          return visible.toString();
+        }
+        remaining = remaining.substring(closeEnd + 1);
+        _streamingInsideXmlToolBlock = false;
+        continue;
+      }
+      final tagStart = _firstXmlToolTokenStart(
+        remaining,
+        _xmlToolStreamingTokens,
+      );
+      if (tagStart < 0) {
+        final partialStart = _trailingPartialXmlToolStart(remaining);
+        if (partialStart >= 0) {
+          visible.write(remaining.substring(0, partialStart));
+          _streamingXmlToolResidue = remaining.substring(partialStart);
+        } else {
+          visible.write(remaining);
+        }
+        return visible.toString();
+      }
+      if (tagStart > 0) {
+        visible.write(remaining.substring(0, tagStart));
+      }
+      final token = _xmlToolTokenAt(
+        remaining,
+        tagStart,
+        _xmlToolStreamingTokens,
+      );
+      final tagEnd = remaining.indexOf('>', tagStart);
+      if (tagEnd < 0) {
+        _streamingXmlToolResidue = remaining.substring(tagStart);
+        if (token != null && _xmlToolStreamingOpenTokens.contains(token)) {
+          _streamingInsideXmlToolBlock = true;
+        }
+        return visible.toString();
+      }
+      remaining = remaining.substring(tagEnd + 1);
+      if (token != null && _xmlToolStreamingOpenTokens.contains(token)) {
+        _streamingInsideXmlToolBlock = true;
+      }
+    }
+    return visible.toString();
+  }
+
   String _visibleStreamingAnswerChunk(String rawChunk) {
-    final strippedXml = _stripXmlToolCallsPreservingWhitespace(
-      rawChunk,
-    ).trimRight();
+    final strippedXml = _stripStreamingXmlToolArtifacts(rawChunk).trimRight();
     if (strippedXml.trim().isEmpty) return '';
     _streamingAnswerRawBuffer = '$_streamingAnswerRawBuffer$strippedXml';
     final extractedVisible = _extractLenientJsonStringField(
@@ -972,7 +1110,6 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       final existingIndex = _messages.indexWhere(
         (item) => (item['id'] as String?) == messageId,
       );
-      _answerGateOpen = true;
       if (existingIndex >= 0) {
         final prev =
             (_messages[existingIndex]['streamFinalAnswer'] as String?) ?? '';
@@ -1081,25 +1218,11 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     String raw, {
     bool allowJsonExtraction = true,
   }) {
-    var text = raw.trim();
-    if (text.isEmpty) return '';
-    if (allowJsonExtraction &&
-        (text.startsWith('{') ||
-            text.startsWith('[') ||
-            text.startsWith('```'))) {
-      final stripped = _stripJsonForDisplay(text).trim();
-      if (stripped.isNotEmpty && stripped != text) {
-        return _sanitizeCompletedDisplayCandidate(
-          stripped,
-          allowJsonExtraction: false,
+    final text =
+        AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
+          raw,
+          allowJsonExtraction: allowJsonExtraction,
         );
-      }
-    }
-    if (_containsXmlToolCall(text)) {
-      text = _stripXmlToolCalls(text);
-      if (text.isEmpty) return '';
-    }
-    text = _stripWrappedMarkdownEnvelope(text);
     if (text.isEmpty) return '';
     if (_isInternalChunk(text) ||
         _containsInternalDisplayFragment(text) ||
@@ -1109,17 +1232,6 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       return '';
     }
     return text;
-  }
-
-  String _stripWrappedMarkdownEnvelope(String text) {
-    final match = RegExp(
-      r'^```(?:md|markdown)\s*\r?\n([\s\S]*?)\r?\n```$',
-      caseSensitive: false,
-    ).firstMatch(text);
-    if (match == null) {
-      return text;
-    }
-    return (match.group(1) ?? '').trim();
   }
 
   String _actionLikeCompletedFallback(AssistantRunResponse response) {
@@ -1150,6 +1262,12 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     return text;
   }
 
+  List<ExplainableFlowEvent> _flowEventsFromMessage(
+    Map<String, dynamic> message,
+  ) {
+    return buildExplainableFlowFromMessage(message);
+  }
+
   void _consumeProcessJournalEvent(ProcessJournalEvent event) {
     if (!mounted || !_assistantResponding) return;
     final updated = _appendStreamingProcessJournalEvent(event);
@@ -1169,8 +1287,83 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         isStreaming: stage != ProcessStage.completed,
       );
       _assistantPhaseLabel = stage == ProcessStage.completed ? '' : headerLabel;
+      if (_shouldOpenAnswerGateForStage(stage)) {
+        _answerGateOpen = true;
+      }
     });
     _autoScrollToBottomIfNeeded();
+  }
+
+  void _consumeExplainableFlowEvent(ExplainableFlowEvent event) {
+    if (!mounted || !_assistantResponding) return;
+    final existingIndex = _currentFlowEvents.indexWhere(
+      (item) =>
+          item.phaseOrder == event.phaseOrder &&
+          item.agentId == event.agentId &&
+          item.phaseId == event.phaseId,
+    );
+    if (existingIndex >= 0) {
+      _currentFlowEvents[existingIndex] = event;
+    } else {
+      _currentFlowEvents.add(event);
+      _currentFlowEvents.sort((a, b) => a.phaseOrder.compareTo(b.phaseOrder));
+    }
+    final activeMessageId = _activeAssistantStreamingMessageId;
+    if (activeMessageId != null && activeMessageId.isNotEmpty) {
+      final messageIndex = _messages.indexWhere(
+        (item) => (item['id'] as String?) == activeMessageId,
+      );
+      if (messageIndex >= 0) {
+        _messages[messageIndex] = <String, dynamic>{
+          ..._messages[messageIndex],
+          'uiExplainableFlow': _currentFlowEvents
+              .map((item) => item.toJson())
+              .toList(growable: false),
+        };
+      }
+    }
+    final stage = _stageFromFlowEvents(_currentFlowEvents);
+    final stageLabel = _stageHeaderLabel(stage);
+    setState(() {
+      _currentProcessState = _currentProcessState.copyWith(
+        stage: stage,
+        stageLabel: stageLabel,
+        isStreaming: stage != ProcessStage.completed,
+      );
+      _assistantPhaseLabel = stage == ProcessStage.completed ? '' : stageLabel;
+      if (_shouldOpenAnswerGateForStage(stage) ||
+          ((event.phaseId == PhaseId.aggregate ||
+                  event.phaseId == PhaseId.merge) &&
+              event.phaseStatus == ExplainablePhaseStatus.completed)) {
+        _answerGateOpen = true;
+      }
+    });
+    _autoScrollToBottomIfNeeded();
+  }
+
+  ProcessStage _stageFromFlowEvents(List<ExplainableFlowEvent> events) {
+    if (events.isEmpty) return ProcessStage.understanding;
+    final latest = events.last;
+    switch (latest.phaseId) {
+      case PhaseId.understand:
+      case PhaseId.classify:
+      case PhaseId.plan:
+        return ProcessStage.understanding;
+      case PhaseId.execute:
+      case PhaseId.subExecute:
+      case PhaseId.dispatch:
+      case PhaseId.expand:
+        return ProcessStage.searching;
+      case PhaseId.aggregate:
+      case PhaseId.merge:
+        return ProcessStage.analyzing;
+      case PhaseId.answer:
+        return ProcessStage.answering;
+      default:
+        return latest.phaseStatus == ExplainablePhaseStatus.completed
+            ? ProcessStage.completed
+            : ProcessStage.understanding;
+    }
   }
 
   List<ProcessContentBlock> _processBlocksFromStructuredResponse(
@@ -1262,7 +1455,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           }
           return normalized;
         })
-        .where((item) => ((item['summary'] as String?)?.trim().isNotEmpty ?? false))
+        .where(
+          (item) => ((item['summary'] as String?)?.trim().isNotEmpty ?? false),
+        )
         .toList(growable: false);
   }
 
@@ -1274,7 +1469,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       return _timelineFromJournal(journal);
     }
     return _normalizeUiProcessTimelineV2(
-      (structuredResponse['uiProcessTimelineV2'] as List?)
+      ((structuredResponse['uiProcessTimeline'] as List?) ??
+                  (structuredResponse['uiProcessTimelineV2'] as List?))
               ?.whereType<Map>()
               .toList(growable: false) ??
           const <Map>[],
@@ -1285,8 +1481,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     Map<String, dynamic> structuredResponse,
   ) {
     final artifacts =
-        (structuredResponse['runArtifacts'] as Map?)
-            ?.cast<String, dynamic>() ??
+        (structuredResponse['runArtifacts'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final raw =
         (artifacts['processJournal'] as List?)?.whereType<Map>().toList(
@@ -1485,12 +1680,15 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       currentJournal,
       <ProcessJournalEvent>[event],
     );
-    final updatedRunArtifacts = Map<String, dynamic>.from(
-      ((_messages[index]['runArtifacts'] as Map?)?.cast<String, dynamic>()) ??
-          const <String, dynamic>{},
-    )..['processJournal'] = mergedJournal
-        .map((item) => item.toJson())
-        .toList(growable: false);
+    final updatedRunArtifacts =
+        Map<String, dynamic>.from(
+            ((_messages[index]['runArtifacts'] as Map?)
+                    ?.cast<String, dynamic>()) ??
+                const <String, dynamic>{},
+          )
+          ..['processJournal'] = mergedJournal
+              .map((item) => item.toJson())
+              .toList(growable: false);
     _messages[index] = <String, dynamic>{
       ..._messages[index],
       'runArtifacts': updatedRunArtifacts,
@@ -1735,7 +1933,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       final usageStats =
           ((message['uiUsageStats'] as Map?) ??
                   (message['uiUsageStatsV1'] as Map?))
-          ?.cast<String, dynamic>();
+              ?.cast<String, dynamic>();
       if (usageStats == null || usageStats.isEmpty) continue;
       prevCalls += _usageInt(
         usageStats['runModelCallCount'] ?? usageStats['modelCallCount'],
@@ -1826,6 +2024,24 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     r'</?parameter[^>]*>',
   );
   static final RegExp _xmlToolCallOpenRe = RegExp(r'<tool_call>|<function=');
+  static const List<String> _xmlToolStreamingOpenTokens = <String>[
+    '<tool_call',
+    '<function=',
+    '<parameter=',
+  ];
+  static const List<String> _xmlToolStreamingCloseTokens = <String>[
+    '</tool_call',
+    '</function',
+    '</parameter',
+  ];
+  static const List<String> _xmlToolStreamingTokens = <String>[
+    '<tool_call',
+    '<function=',
+    '<parameter=',
+    '</tool_call',
+    '</function',
+    '</parameter',
+  ];
 
   bool _containsXmlToolCall(String text) => _xmlToolCallOpenRe.hasMatch(text);
 
@@ -1870,8 +2086,10 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     required VoidCallback onPressed,
     required Color fgPrimary,
     Color? backgroundColor,
+    Key? buttonKey,
   }) {
     return GestureDetector(
+      key: buttonKey,
       onTap: onPressed,
       child: Container(
         width: AppSpacing.buttonSize,
@@ -1925,6 +2143,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           fgPrimary: Colors.white,
           backgroundColor: AppColors.primaryColor,
           onPressed: actions.send,
+          buttonKey: TestKeys.assistantSendButton,
         ),
       ];
     }
@@ -2264,6 +2483,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         _streamingThinkingText = '';
         _processContentBlocks = <ProcessContentBlock>[];
         _currentProcessJournal = <ProcessJournalEvent>[];
+        _currentFlowEvents.clear();
         _userScrolledAway = false;
         _showScrollFab = false;
         _messages.add(<String, dynamic>{
@@ -2285,6 +2505,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           'runArtifacts': <String, dynamic>{
             'processJournal': <Map<String, dynamic>>[],
           },
+          'uiExplainableFlow': const <Map<String, dynamic>>[],
         });
       });
       _startAssistantProgress();
@@ -2384,10 +2605,15 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                   _consumeProcessJournalEvent(journalEvent);
                 }
                 continue;
+              case AssistantRunStreamEventType.explainableFlowEvent:
+                final flowEvent = streamEvent.explainableEvent;
+                if (flowEvent != null) {
+                  _consumeExplainableFlowEvent(flowEvent);
+                }
+                continue;
               case AssistantRunStreamEventType.phaseTimeline:
               case AssistantRunStreamEventType.userPhaseEvent:
               case AssistantRunStreamEventType.userEvent:
-              case AssistantRunStreamEventType.explainableFlowEvent:
               case AssistantRunStreamEventType.processUpdate:
                 continue;
             }
@@ -2415,6 +2641,15 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         final runResponse = response;
         final displayText = _resolveAssistantDisplayText(runResponse);
         final displayPlainText = _resolveAssistantDisplayPlainText(runResponse);
+        final displayMarkdown =
+            AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
+              runResponse.displayMarkdown.trim().isNotEmpty
+                  ? runResponse.displayMarkdown
+                  : displayText,
+              allowJsonExtraction: runResponse.displayMarkdown
+                  .trim()
+                  .isNotEmpty,
+            );
         _resetStreamingAnswerDecoder();
         final effectiveSessionId =
             (runResponse.structuredResponse['effectiveSessionId'] as String?)
@@ -2452,7 +2687,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         final uiUsageStats = _buildConversationCumulativeUsageStats(
           runUsageStats:
               ((runResponse.structuredResponse['uiUsageStats'] as Map?) ??
-                      (runResponse.structuredResponse['uiUsageStatsV1'] as Map?))
+                      (runResponse.structuredResponse['uiUsageStatsV1']
+                          as Map?))
                   ?.cast<String, dynamic>() ??
               const <String, dynamic>{},
           excludeMessageId: streamingAssistantMessageId,
@@ -2460,7 +2696,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         final structuredJournal = _journalFromStructuredResponse(
           runResponse.structuredResponse,
         );
-        final uiProcessTimelineV2 = structuredJournal.isNotEmpty
+        final uiProcessTimeline = structuredJournal.isNotEmpty
             ? _timelineFromJournal(structuredJournal)
             : _timelineV2FromStructuredResponse(runResponse.structuredResponse);
         final streamedTimelineV2 = (() {
@@ -2472,7 +2708,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           );
           if (existingIndex < 0) return const <Map<String, dynamic>>[];
           return _normalizeUiProcessTimelineV2(
-            ((_messages[existingIndex]['uiProcessTimelineV2'] as List?)
+            (((_messages[existingIndex]['uiProcessTimeline'] as List?) ??
+                        (_messages[existingIndex]['uiProcessTimelineV2']
+                            as List?))
                     ?.whereType<Map>()
                     .toList(growable: false)) ??
                 const <Map>[],
@@ -2487,7 +2725,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           );
           if (existingIndex < 0) return const <ProcessJournalEvent>[];
           return _normalizeProcessJournal(
-            (((_messages[existingIndex]['runArtifacts'] as Map?)?['processJournal']
+            (((_messages[existingIndex]['runArtifacts']
+                            as Map?)?['processJournal']
                         as List?)
                     ?.whereType<Map>()
                     .toList(growable: false)) ??
@@ -2500,7 +2739,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         );
         final mergedTimelineV2 = mergedJournal.isNotEmpty
             ? _timelineFromJournal(mergedJournal)
-            : _mergeProcessTimelineV2(streamedTimelineV2, uiProcessTimelineV2);
+            : _mergeProcessTimelineV2(streamedTimelineV2, uiProcessTimeline);
         final structuredProcessBlocks = _processBlocksFromStructuredResponse(
           runResponse.structuredResponse,
         );
@@ -2548,9 +2787,18 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                 'runId': runResponse.runId ?? '',
                 'traceId': runResponse.traceId ?? '',
                 'sourceQuery': text,
-                'displayMarkdown': runResponse.displayMarkdown,
+                'displayMarkdown': displayMarkdown,
                 'displayPlainText': displayPlainText,
                 'machineEnvelope': runResponse.machineEnvelope,
+                'templateVersionUsed':
+                    (runResponse.structuredResponse['templateVersionUsed']
+                        as String?) ??
+                    '',
+                'phaseOneRoutingDiagnostics':
+                    (runResponse.structuredResponse['phaseOneRoutingDiagnostics']
+                            as Map?)
+                        ?.cast<String, dynamic>() ??
+                    const <String, dynamic>{},
                 'degraded': runResponse.degraded,
                 'qualityMetrics':
                     (runResponse.structuredResponse['qualityMetrics'] as Map?)
@@ -2574,6 +2822,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                 'uiProcessContentBlocks': _serializeProcessBlocks(
                   effectiveProcessBlocks,
                 ),
+                'uiExplainableFlow': _currentFlowEvents
+                    .map((item) => item.toJson())
+                    .toList(growable: false),
                 'processThinkingText': _streamingThinkingText,
               };
             }
@@ -2592,9 +2843,18 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
               'runId': runResponse.runId ?? '',
               'traceId': runResponse.traceId ?? '',
               'sourceQuery': text,
-              'displayMarkdown': runResponse.displayMarkdown,
+              'displayMarkdown': displayMarkdown,
               'displayPlainText': displayPlainText,
               'machineEnvelope': runResponse.machineEnvelope,
+              'templateVersionUsed':
+                  (runResponse.structuredResponse['templateVersionUsed']
+                      as String?) ??
+                  '',
+              'phaseOneRoutingDiagnostics':
+                  (runResponse.structuredResponse['phaseOneRoutingDiagnostics']
+                          as Map?)
+                      ?.cast<String, dynamic>() ??
+                  const <String, dynamic>{},
               'degraded': runResponse.degraded,
               'qualityMetrics':
                   (runResponse.structuredResponse['qualityMetrics'] as Map?)
@@ -2616,6 +2876,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
               'uiProcessContentBlocks': _serializeProcessBlocks(
                 effectiveProcessBlocks,
               ),
+              'uiExplainableFlow': _currentFlowEvents
+                  .map((item) => item.toJson())
+                  .toList(growable: false),
               'processThinkingText': _streamingThinkingText,
             });
           }
@@ -2798,7 +3061,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         'behaviorTimeline': hints['behaviorTimeline'],
       if (userTags.isNotEmpty) 'userTags': userTags,
       if (latestDialogueState.isNotEmpty) 'dialogueState': latestDialogueState,
-      if (latestRunArtifacts != null) 'runArtifacts': latestRunArtifacts.toJson(),
+      if (latestRunArtifacts != null)
+        'runArtifacts': latestRunArtifacts.toJson(),
       if (latestDialogueState['suggestedNextStateId'] is String &&
           (latestDialogueState['suggestedNextStateId'] as String)
               .trim()
@@ -2839,32 +3103,19 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   }
 
   String _sanitizeAssistantHistoryContent(String raw) {
-    final strippedXml = OpenAiCompatibleLlmProvider.stripXmlToolCalls(
-      raw,
-    ).trim();
-    if (strippedXml.isEmpty) return '';
-    if (_containsXmlToolCall(raw)) return '';
-    if (_isInternalChunk(strippedXml)) return '';
-    if (AssistantContentFilters.isDegradedText(strippedXml)) return '';
-    if (AssistantContentFilters.isProgressPlaceholder(strippedXml)) return '';
-    if (strippedXml.contains('tool_call') ||
-        strippedXml.contains('queryTasks') ||
-        strippedXml.contains('queryVariants') ||
-        strippedXml.contains('正在调用工具')) {
+    final sanitized =
+        AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(raw);
+    if (sanitized.isEmpty) return '';
+    if (_isInternalChunk(sanitized)) return '';
+    if (AssistantContentFilters.isDegradedText(sanitized)) return '';
+    if (AssistantContentFilters.isProgressPlaceholder(sanitized)) return '';
+    if (sanitized.contains('tool_call') ||
+        sanitized.contains('queryTasks') ||
+        sanitized.contains('queryVariants') ||
+        sanitized.contains('正在调用工具')) {
       return '';
     }
-    if (strippedXml.startsWith('{') ||
-        strippedXml.startsWith('[') ||
-        strippedXml.startsWith('```')) {
-      final display = _stripJsonForDisplay(strippedXml).trim();
-      if (display.isEmpty ||
-          _isInternalChunk(display) ||
-          AssistantContentFilters.isProgressPlaceholder(display)) {
-        return '';
-      }
-      return display;
-    }
-    return strippedXml;
+    return sanitized;
   }
 
   Map<String, dynamic> _latestAssistantDialogueState() {
@@ -2937,46 +3188,21 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   }
 
   String _resolveAssistantDisplayPlainText(AssistantRunResponse response) {
-    final artifactPlain = _sanitizeCompletedDisplayCandidate(
-      response.displayPlainText,
-      allowJsonExtraction: false,
-    );
+    final artifactPlain =
+        AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(
+          response.displayPlainText,
+          allowJsonExtraction: false,
+        );
     if (artifactPlain.isNotEmpty) {
       return artifactPlain;
     }
-    return _resolveAssistantDisplayText(response);
-  }
-
-  /// Attempt to extract displayable text from a JSON-formatted LLM output.
-  String _stripJsonForDisplay(String jsonText) {
-    try {
-      final dynamic raw = const JsonDecoder().convert(jsonText);
-      if (raw is! Map) return '';
-      final decoded = raw.cast<String, dynamic>();
-      final payload = decoded;
-
-      final uiAns =
-          ((payload['uiAnswer'] as Map?) ?? (decoded['uiAnswer'] as Map?))
-              ?.cast<String, dynamic>();
-      final answerPayload =
-          ((payload['answerPayload'] as Map?) ??
-                  (decoded['answerPayload'] as Map?))
-              ?.cast<String, dynamic>();
-      final topResult =
-          (payload['result'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
-      final nestedResult =
-          (answerPayload?['result'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
-      return _firstCompletedDisplayCandidate(<String>[
-        (uiAns?['markdownText'] as String?) ?? '',
-        (payload['userMarkdown'] as String?) ?? '',
-        (answerPayload?['userMarkdown'] as String?) ?? '',
-        (topResult['text'] as String?) ?? '',
-        (nestedResult['text'] as String?) ?? '',
-      ]);
-    } catch (_) {}
-    return '';
+    final displayText = _resolveAssistantDisplayText(response);
+    final normalizedDisplay =
+        AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(
+          displayText,
+          allowJsonExtraction: false,
+        );
+    return normalizedDisplay.isNotEmpty ? normalizedDisplay : displayText;
   }
 
   /// 判断文本是否为内部 JSON 信封 / think 标签残留 / XML tool-call / 结构化协议字段，
@@ -3035,7 +3261,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       'answer': _resolveAssistantDisplayText(response),
       'displayPlainText': _resolveAssistantDisplayPlainText(response),
       'machineEnvelope': response.machineEnvelope,
-      'runArtifacts': response.runArtifacts?.toJson() ?? const <String, dynamic>{},
+      'runArtifacts':
+          response.runArtifacts?.toJson() ?? const <String, dynamic>{},
       'createdAt': DateTime.now().toIso8601String(),
       'uiReferences':
           (structured['uiReferences'] as List?)?.whereType<Map>().toList(
@@ -3471,6 +3698,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       );
       _currentProcessJournal = <ProcessJournalEvent>[];
       _processContentBlocks = <ProcessContentBlock>[];
+      _currentFlowEvents.clear();
       _messages.add(<String, dynamic>{
         'id': streamingAssistantMessageId!,
         'conversationId': widget.conversationId,
@@ -3491,8 +3719,10 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         'runArtifacts': <String, dynamic>{
           'processJournal': <Map<String, dynamic>>[],
         },
+        'uiExplainableFlow': const <Map<String, dynamic>>[],
       });
     });
+    _startAssistantProgress();
     _autoScrollToBottomIfNeeded();
     try {
       AssistantRunResponse? response;
@@ -3509,6 +3739,12 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             final journalEvent = streamEvent.processJournalEvent;
             if (journalEvent != null) {
               _consumeProcessJournalEvent(journalEvent);
+            }
+            continue;
+          case AssistantRunStreamEventType.explainableFlowEvent:
+            final flowEvent = streamEvent.explainableEvent;
+            if (flowEvent != null) {
+              _consumeExplainableFlowEvent(flowEvent);
             }
             continue;
           case AssistantRunStreamEventType.chunk:
@@ -3540,16 +3776,20 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         final uiUsageStats = _buildConversationCumulativeUsageStats(
           runUsageStats:
               ((finalResponse.structuredResponse['uiUsageStats'] as Map?) ??
-                      (finalResponse.structuredResponse['uiUsageStatsV1'] as Map?))
+                      (finalResponse.structuredResponse['uiUsageStatsV1']
+                          as Map?))
                   ?.cast<String, dynamic>() ??
               const <String, dynamic>{},
           excludeMessageId: streamingAssistantMessageId,
         );
         final streamedRunArtifacts =
             (_messages.firstWhere(
-                  (item) => (item['id'] as String?) == streamingAssistantMessageId,
-                  orElse: () => const <String, dynamic>{},
-                )['runArtifacts'] as Map?)
+                      (item) =>
+                          (item['id'] as String?) ==
+                          streamingAssistantMessageId,
+                      orElse: () => const <String, dynamic>{},
+                    )['runArtifacts']
+                    as Map?)
                 ?.cast<String, dynamic>();
         final streamedJournal = _normalizeProcessJournal(
           (streamedRunArtifacts?['processJournal'] as List?)
@@ -3571,6 +3811,15 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         final displayPlainText = _resolveAssistantDisplayPlainText(
           finalResponse,
         );
+        final displayMarkdown =
+            AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
+              finalResponse.displayMarkdown.trim().isNotEmpty
+                  ? finalResponse.displayMarkdown
+                  : finalText,
+              allowJsonExtraction: finalResponse.displayMarkdown
+                  .trim()
+                  .isNotEmpty,
+            );
         _resetStreamingAnswerDecoder();
         setState(() {
           if (effectiveJournal.isNotEmpty) {
@@ -3602,9 +3851,19 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
               'streamFinalAnswer': effectiveFinalText,
               'streaming': false,
               'sourceQuery': query,
-              'displayMarkdown': finalResponse.displayMarkdown,
+              'displayMarkdown': displayMarkdown,
               'displayPlainText': displayPlainText,
               'machineEnvelope': finalResponse.machineEnvelope,
+              'templateVersionUsed':
+                  (finalResponse.structuredResponse['templateVersionUsed']
+                      as String?) ??
+                  '',
+              'phaseOneRoutingDiagnostics':
+                  (finalResponse
+                              .structuredResponse['phaseOneRoutingDiagnostics']
+                          as Map?)
+                      ?.cast<String, dynamic>() ??
+                  const <String, dynamic>{},
               'degraded': finalResponse.degraded,
               'qualityMetrics':
                   (finalResponse.structuredResponse['qualityMetrics'] as Map?)
@@ -3625,6 +3884,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
               'uiProcessContentBlocks': _serializeProcessBlocks(
                 effectiveProcessBlocks,
               ),
+              'uiExplainableFlow': _currentFlowEvents
+                  .map((item) => item.toJson())
+                  .toList(growable: false),
               'uiUsageStats': uiUsageStats,
             };
           }
@@ -3652,6 +3914,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           );
         });
       }
+      _stopAssistantProgress();
     }
   }
 
@@ -3728,8 +3991,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       opened
           ? url
           : allowOpen
-              ? UITextConstants.assistantReferenceOpenFailed
-              : UITextConstants.assistantReferenceHostBlocked,
+          ? UITextConstants.assistantReferenceOpenFailed
+          : UITextConstants.assistantReferenceHostBlocked,
     );
     await _recordAssistantImplicitFeedback(
       message: message,
@@ -3886,491 +4149,415 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     final bodyContent = Material(
       color: Colors.transparent,
       child: Column(
-      children: [
-        Expanded(
-          child: Stack(
-            children: [
-              Container(
-                color: chatListBg,
-                child: Builder(
-                  builder: (context) {
-                    final displayMessages = _isAssistantConversation
-                        ? _messages
-                        : ref
-                              .watch(
-                                chatMessageProvider(
-                                  widget.conversationId,
-                                ),
-                              )
-                              .messages
-                              .map(
-                                (dto) => dto.toDisplayMap(
-                                  currentUserId: 'current_user',
-                                ),
-                              )
-                              .toList();
-                    return ListView.builder(
-                      controller: _scrollController,
-                      padding: EdgeInsets.symmetric(
-                        horizontal:
-                            AppSpacing.semantic[DesignSemanticConstants
-                                .container]?[DesignSemanticConstants
-                                .sm] ??
-                            AppSpacing.containerSm,
-                        vertical: AppSpacing.md,
-                      ),
-                      itemCount: displayMessages.length,
-                      itemBuilder: (context, index) {
-                        final msg = displayMessages[index];
-                        final prevTime = index > 0
-                            ? displayMessages[index - 1]['timestamp']
-                                as String?
-                            : null;
-                        final showTime =
-                            index == 0 || msg['timestamp'] != prevTime;
-                        final timeStr = formatChatTime(
-                          msg['timestamp'] as String?,
-                        );
-                        final isAssistantMessage =
-                            _isAssistantConversation &&
-                            (msg['senderId'] ==
-                                AppConceptConstants.assistantSenderId);
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (showTime && timeStr.isNotEmpty)
-                              Padding(
-                                padding: EdgeInsets.only(
-                                  bottom:
-                                      AppSpacing
-                                          .semantic[DesignSemanticConstants
-                                          .intraGroup]?[DesignSemanticConstants
-                                          .sm] ??
-                                      AppSpacing.intraGroupSm,
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    timeStr,
-                                    style: TextStyle(
-                                      fontSize:
-                                          Theme.of(context)
-                                              .textTheme
-                                              .bodySmall
-                                              ?.fontSize ??
-                                          AppSpacing.containerSm,
-                                      color: fgPrimary.withValues(
-                                        alpha: 0.5,
+        children: [
+          Expanded(
+            child: Stack(
+              children: [
+                Container(
+                  color: chatListBg,
+                  child: Builder(
+                    builder: (context) {
+                      final displayMessages = _isAssistantConversation
+                          ? _messages
+                          : ref
+                                .watch(
+                                  chatMessageProvider(widget.conversationId),
+                                )
+                                .messages
+                                .map(
+                                  (dto) => dto.toDisplayMap(
+                                    currentUserId: 'current_user',
+                                  ),
+                                )
+                                .toList();
+                      return ListView.builder(
+                        controller: _scrollController,
+                        padding: EdgeInsets.symmetric(
+                          horizontal:
+                              AppSpacing.semantic[DesignSemanticConstants
+                                  .container]?[DesignSemanticConstants.sm] ??
+                              AppSpacing.containerSm,
+                          vertical: AppSpacing.md,
+                        ),
+                        itemCount: displayMessages.length,
+                        itemBuilder: (context, index) {
+                          final msg = displayMessages[index];
+                          final prevTime = index > 0
+                              ? displayMessages[index - 1]['timestamp']
+                                    as String?
+                              : null;
+                          final showTime =
+                              index == 0 || msg['timestamp'] != prevTime;
+                          final timeStr = formatChatTime(
+                            msg['timestamp'] as String?,
+                          );
+                          final isAssistantMessage =
+                              _isAssistantConversation &&
+                              (msg['senderId'] ==
+                                  AppConceptConstants.assistantSenderId);
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (showTime && timeStr.isNotEmpty)
+                                Padding(
+                                  padding: EdgeInsets.only(
+                                    bottom:
+                                        AppSpacing
+                                            .semantic[DesignSemanticConstants
+                                            .intraGroup]?[DesignSemanticConstants
+                                            .sm] ??
+                                        AppSpacing.intraGroupSm,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      timeStr,
+                                      style: TextStyle(
+                                        fontSize:
+                                            Theme.of(
+                                              context,
+                                            ).textTheme.bodySmall?.fontSize ??
+                                            AppSpacing.containerSm,
+                                        color: fgPrimary.withValues(alpha: 0.5),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            ChatMessageBubble(
-                              message: msg,
-                              isRight: msg['isSelf'] == true,
-                              bubbleColor: msg['isSelf'] == true
-                                  ? bubbleSelf
-                                  : bubbleOther,
-                              textColor: msg['isSelf'] == true
-                                  ? Colors.white
-                                  : fgPrimary,
-                              isSelectionMode: _isSelectionMode,
-                              isSelected: _selectedIds.contains(
-                                msg['id'],
-                              ),
-                              onLongPressStart: (details) =>
-                                  _onLongPressMessage(
-                                    msg,
-                                    details.globalPosition,
-                                  ),
-                              onTap: _isSelectionMode
-                                  ? () =>
-                                        _toggleSelect(msg['id'] as String)
-                                  : null,
-                              hideAvatarAndName: _isAssistantConversation,
-                              useFullWidth: _isAssistantConversation,
-                              renderSelfTextWithoutBubble:
-                                  _isAssistantConversation,
-                              processState:
-                                  _isAssistantConversation &&
-                                      index == _messages.length - 1 &&
-                                      isAssistantMessage &&
-                                      (_assistantResponding ||
-                                          _streamingThinkingText
-                                              .isNotEmpty)
-                                  ? _currentProcessState
-                                  : null,
-                              flowEvents:
-                                  _isAssistantConversation &&
-                                      index == _messages.length - 1 &&
-                                      isAssistantMessage &&
-                                      (_assistantResponding ||
-                                          _currentFlowEvents.isNotEmpty)
-                                  ? _currentFlowEvents
-                                  : const <ExplainableFlowEvent>[],
-                              streamingThinkingText:
-                                  _isAssistantConversation &&
-                                      index == _messages.length - 1 &&
-                                      isAssistantMessage
-                                  ? _streamingThinkingText
-                                  : '',
-                              answerGateOpen:
-                                  !_isAssistantConversation ||
-                                  !_assistantResponding ||
-                                  index != _messages.length - 1 ||
-                                  !isAssistantMessage ||
-                                  _answerGateOpen,
-                              isAssistantRunning:
-                                  _assistantResponding &&
-                                  index == _messages.length - 1 &&
-                                  isAssistantMessage,
-                              runningStatusLabel:
-                                  _isAssistantConversation &&
-                                      _assistantResponding &&
-                                      index == _messages.length - 1 &&
-                                      isAssistantMessage
-                                  ? (_assistantPhaseLabel.isNotEmpty
-                                        ? _assistantPhaseLabel
-                                        : UITextConstants
-                                              .assistantRunningHint)
-                                  : null,
-                              showFeedbackActions:
-                                  isAssistantMessage &&
-                                  !_assistantResponding &&
-                                  !_isSelectionMode &&
-                                  (msg['type'] as String? ?? 'text') ==
-                                      'text' &&
-                                  ((msg['id'] as String?) ?? '') ==
-                                      latestAssistantTextMessageId,
-                              feedbackStatus:
-                                  _assistantFeedbackStatusByMessageId[msg['id']
-                                          as String? ??
-                                      ''] ??
-                                  '',
-                              onFeedbackHelpful: isAssistantMessage
-                                  ? () => _submitAssistantFeedback(
-                                      message: msg,
-                                      explicitThumb: 'up',
-                                      reasonCodes: const <String>[],
-                                    )
-                                  : null,
-                              onFeedbackUnhelpful: isAssistantMessage
-                                  ? () =>
-                                        _showAssistantNegativeFeedbackSheet(
-                                          msg,
-                                        )
-                                  : null,
-                              onFeedbackCorrect: isAssistantMessage
-                                  ? () =>
-                                        _showAssistantCorrectionSheet(msg)
-                                  : null,
-                              onCopyAnswer: isAssistantMessage
-                                  ? () async {
-                                      final content =
-                                          (msg['content'] as String?) ??
-                                          '';
-                                      if (content.isEmpty) return;
-                                      await Clipboard.setData(
-                                        ClipboardData(text: content),
-                                      );
-                                      if (!mounted) return;
-                                      AppToast.show(
-                                        this.context,
-                                        UITextConstants.copiedToClipboard,
-                                      );
-                                      await _recordAssistantImplicitFeedback(
+                              ChatMessageBubble(
+                                message: msg,
+                                isRight: msg['isSelf'] == true,
+                                bubbleColor: msg['isSelf'] == true
+                                    ? bubbleSelf
+                                    : bubbleOther,
+                                textColor: msg['isSelf'] == true
+                                    ? Colors.white
+                                    : fgPrimary,
+                                isSelectionMode: _isSelectionMode,
+                                isSelected: _selectedIds.contains(msg['id']),
+                                onLongPressStart: (details) =>
+                                    _onLongPressMessage(
+                                      msg,
+                                      details.globalPosition,
+                                    ),
+                                onTap: _isSelectionMode
+                                    ? () => _toggleSelect(msg['id'] as String)
+                                    : null,
+                                hideAvatarAndName: _isAssistantConversation,
+                                useFullWidth: _isAssistantConversation,
+                                renderSelfTextWithoutBubble:
+                                    _isAssistantConversation,
+                                processState:
+                                    _isAssistantConversation &&
+                                        index == _messages.length - 1 &&
+                                        isAssistantMessage &&
+                                        _assistantResponding
+                                    ? _currentProcessState
+                                    : null,
+                                flowEvents:
+                                    _isAssistantConversation &&
+                                        isAssistantMessage
+                                    ? (index == _messages.length - 1 &&
+                                              _assistantResponding
+                                          ? _currentFlowEvents
+                                          : _flowEventsFromMessage(msg))
+                                    : const <ExplainableFlowEvent>[],
+                                streamingThinkingText:
+                                    _isAssistantConversation &&
+                                        index == _messages.length - 1 &&
+                                        isAssistantMessage &&
+                                        _assistantResponding
+                                    ? _streamingThinkingText
+                                    : '',
+                                answerGateOpen:
+                                    !_isAssistantConversation ||
+                                    !_assistantResponding ||
+                                    index != _messages.length - 1 ||
+                                    !isAssistantMessage ||
+                                    _answerGateOpen,
+                                isAssistantRunning:
+                                    _assistantResponding &&
+                                    index == _messages.length - 1 &&
+                                    isAssistantMessage,
+                                runningStatusLabel:
+                                    _isAssistantConversation &&
+                                        _assistantResponding &&
+                                        index == _messages.length - 1 &&
+                                        isAssistantMessage
+                                    ? (_assistantPhaseLabel.isNotEmpty
+                                          ? _assistantPhaseLabel
+                                          : UITextConstants
+                                                .assistantRunningHint)
+                                    : null,
+                                showFeedbackActions:
+                                    isAssistantMessage &&
+                                    !_assistantResponding &&
+                                    !_isSelectionMode &&
+                                    (msg['type'] as String? ?? 'text') ==
+                                        'text' &&
+                                    ((msg['id'] as String?) ?? '') ==
+                                        latestAssistantTextMessageId,
+                                feedbackStatus:
+                                    _assistantFeedbackStatusByMessageId[msg['id']
+                                            as String? ??
+                                        ''] ??
+                                    '',
+                                onFeedbackHelpful: isAssistantMessage
+                                    ? () => _submitAssistantFeedback(
                                         message: msg,
-                                        copiedAnswer: true,
-                                      );
-                                    }
-                                  : null,
-                              onShareAnswer: isAssistantMessage
-                                  ? () async {
-                                      final content =
-                                          (msg['content'] as String?) ??
-                                          '';
-                                      if (content.isNotEmpty) {
-                                        await SharePlus.instance.share(
-                                          ShareParams(text: content),
+                                        explicitThumb: 'up',
+                                        reasonCodes: const <String>[],
+                                      )
+                                    : null,
+                                onFeedbackUnhelpful: isAssistantMessage
+                                    ? () => _showAssistantNegativeFeedbackSheet(
+                                        msg,
+                                      )
+                                    : null,
+                                onFeedbackCorrect: isAssistantMessage
+                                    ? () => _showAssistantCorrectionSheet(msg)
+                                    : null,
+                                onCopyAnswer: isAssistantMessage
+                                    ? () async {
+                                        final content =
+                                            (msg['content'] as String?) ?? '';
+                                        if (content.isEmpty) return;
+                                        await Clipboard.setData(
+                                          ClipboardData(text: content),
+                                        );
+                                        if (!mounted) return;
+                                        AppToast.show(
+                                          this.context,
+                                          UITextConstants.copiedToClipboard,
+                                        );
+                                        await _recordAssistantImplicitFeedback(
+                                          message: msg,
+                                          copiedAnswer: true,
                                         );
                                       }
-                                      await _recordAssistantImplicitFeedback(
-                                        message: msg,
-                                        sharedAnswer: true,
-                                      );
-                                    }
-                                  : null,
-                              onFavoriteAnswer: isAssistantMessage
-                                  ? () async {
-                                      await _recordAssistantImplicitFeedback(
-                                        message: msg,
-                                        favoritedAnswer: true,
-                                      );
-                                      if (!mounted) return;
-                                      AppToast.show(
-                                        this.context,
-                                        UITextConstants.assistantBookmarked,
-                                      );
-                                    }
-                                  : null,
-                              onRegenerateAnswer: isAssistantMessage
-                                  ? () => _requestAssistantRewrite(
-                                      message: msg,
-                                      mode: 'regenerate',
-                                    )
-                                  : null,
-                              onRegenerateOptionSelected:
-                                  isAssistantMessage
-                                  ? (option) =>
-                                        _requestAssistantRewriteV2(
+                                    : null,
+                                onShareAnswer: isAssistantMessage
+                                    ? () async {
+                                        final content =
+                                            (msg['content'] as String?) ?? '';
+                                        if (content.isNotEmpty) {
+                                          await SharePlus.instance.share(
+                                            ShareParams(text: content),
+                                          );
+                                        }
+                                        await _recordAssistantImplicitFeedback(
                                           message: msg,
-                                          option: option,
-                                        )
-                                  : null,
-                              onBriefAnswer: isAssistantMessage
-                                  ? () => _requestAssistantRewrite(
-                                      message: msg,
-                                      mode: 'brief',
-                                    )
-                                  : null,
-                              onDetailedAnswer: isAssistantMessage
-                                  ? () => _requestAssistantRewrite(
-                                      message: msg,
-                                      mode: 'detailed',
-                                    )
-                                  : null,
-                              onSwitchModelAnswer: isAssistantMessage
-                                  ? () =>
-                                        _switchAssistantModelAndRegenerate(
-                                          msg,
-                                        )
-                                  : null,
-                              onActionHintTap: isAssistantMessage
-                                  ? (hint) async {
-                                      _inputController.text = hint;
-                                      await _sendMessage();
-                                    }
-                                  : null,
-                              onReferenceTap: isAssistantMessage
-                                  ? (refItem) => _onAssistantReferenceTap(
-                                      msg,
-                                      refItem,
-                                    )
-                                  : null,
-                              onAvatarTap: isAssistantMessage
-                                  ? () {
-                                      final target = VisitTarget.page(
-                                        'chat',
-                                      );
-                                      final service = ref.read(
-                                        visitRecorderServiceProvider,
-                                      );
-                                      final ctx = AssistantOpenContext(
-                                        source: AssistantSource.chat,
-                                        visitTarget: target,
-                                        experienceLevel: service
-                                            .getExperience(target),
-                                      );
-                                      AssistantHalfSheet.show(
-                                        context,
-                                        ctx,
-                                      );
-                                    }
-                                  : () {
-                                      final senderId =
-                                          msg['senderId'] as String? ??
-                                          '';
-                                      if (senderId == 'current_user') {
-                                        final currentUser = ref.read(
-                                          userDataProvider,
+                                          sharedAnswer: true,
                                         );
-                                        final userId =
-                                            currentUser?.username ??
-                                            currentUser?.id;
-                                        if (userId != null &&
-                                            userId.isNotEmpty) {
+                                      }
+                                    : null,
+                                onFavoriteAnswer: isAssistantMessage
+                                    ? () async {
+                                        await _recordAssistantImplicitFeedback(
+                                          message: msg,
+                                          favoritedAnswer: true,
+                                        );
+                                        if (!mounted) return;
+                                        AppToast.show(
+                                          this.context,
+                                          UITextConstants.assistantBookmarked,
+                                        );
+                                      }
+                                    : null,
+                                onRegenerateAnswer: isAssistantMessage
+                                    ? () => _requestAssistantRewrite(
+                                        message: msg,
+                                        mode: 'regenerate',
+                                      )
+                                    : null,
+                                onRegenerateOptionSelected: isAssistantMessage
+                                    ? (option) => _requestAssistantRewriteV2(
+                                        message: msg,
+                                        option: option,
+                                      )
+                                    : null,
+                                onBriefAnswer: isAssistantMessage
+                                    ? () => _requestAssistantRewrite(
+                                        message: msg,
+                                        mode: 'brief',
+                                      )
+                                    : null,
+                                onDetailedAnswer: isAssistantMessage
+                                    ? () => _requestAssistantRewrite(
+                                        message: msg,
+                                        mode: 'detailed',
+                                      )
+                                    : null,
+                                onSwitchModelAnswer: isAssistantMessage
+                                    ? () => _switchAssistantModelAndRegenerate(
+                                        msg,
+                                      )
+                                    : null,
+                                onActionHintTap: isAssistantMessage
+                                    ? (hint) async {
+                                        _inputController.text = hint;
+                                        await _sendMessage();
+                                      }
+                                    : null,
+                                onReferenceTap: isAssistantMessage
+                                    ? (refItem) =>
+                                          _onAssistantReferenceTap(msg, refItem)
+                                    : null,
+                                onAvatarTap: isAssistantMessage
+                                    ? () {
+                                        final target = VisitTarget.page('chat');
+                                        final service = ref.read(
+                                          visitRecorderServiceProvider,
+                                        );
+                                        final ctx = AssistantOpenContext(
+                                          source: AssistantSource.chat,
+                                          visitTarget: target,
+                                          experienceLevel: service
+                                              .getExperience(target),
+                                        );
+                                        AssistantHalfSheet.show(context, ctx);
+                                      }
+                                    : () {
+                                        final senderId =
+                                            msg['senderId'] as String? ?? '';
+                                        if (senderId == 'current_user') {
+                                          final currentUser = ref.read(
+                                            userDataProvider,
+                                          );
+                                          final userId =
+                                              currentUser?.username ??
+                                              currentUser?.id;
+                                          if (userId != null &&
+                                              userId.isNotEmpty) {
+                                            context.push(
+                                              AppRoutePaths.userProfile(
+                                                username: userId,
+                                              ),
+                                            );
+                                          }
+                                        } else if (senderId.isNotEmpty) {
                                           context.push(
                                             AppRoutePaths.userProfile(
-                                              username: userId,
+                                              username: senderId,
                                             ),
                                           );
                                         }
-                                      } else if (senderId.isNotEmpty) {
-                                        context.push(
-                                          AppRoutePaths.userProfile(
-                                            username: senderId,
-                                          ),
-                                        );
-                                      }
-                                    },
-                              showAssistantAvatar: false,
-                            ),
-                          ],
-                        );
-                      },
-                    );
-                  },
+                                      },
+                                showAssistantAvatar: false,
+                              ),
+                            ],
+                          );
+                        },
+                      );
+                    },
+                  ),
                 ),
-              ),
-              if (_isAssistantConversation &&
-                  (_showAssistantHistoryPeek ||
-                      _assistantLoadingOlderHistory))
-                Positioned(
-                  top: AppSpacing.sm,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: GestureDetector(
-                      onTap: _assistantLoadingOlderHistory
-                          ? null
-                          : _loadOlderAssistantHistory,
-                      child: AnimatedOpacity(
-                        opacity: 1,
-                        duration: const Duration(milliseconds: 180),
-                        child: Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: AppSpacing.containerSm,
-                            vertical: AppSpacing.xs,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? bgColor.withValues(alpha: 0.92)
-                                : Colors.white.withValues(alpha: 0.94),
-                            borderRadius: BorderRadius.circular(
-                              AppSpacing.fullBorderRadius,
+                if (_isAssistantConversation &&
+                    (_showAssistantHistoryPeek ||
+                        _assistantLoadingOlderHistory))
+                  Positioned(
+                    top: AppSpacing.sm,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: GestureDetector(
+                        onTap: _assistantLoadingOlderHistory
+                            ? null
+                            : _loadOlderAssistantHistory,
+                        child: AnimatedOpacity(
+                          opacity: 1,
+                          duration: const Duration(milliseconds: 180),
+                          child: Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: AppSpacing.containerSm,
+                              vertical: AppSpacing.xs,
                             ),
-                            border: Border.all(
-                              color: borderColor.withValues(alpha: 0.18),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? bgColor.withValues(alpha: 0.92)
+                                  : Colors.white.withValues(alpha: 0.94),
+                              borderRadius: BorderRadius.circular(
+                                AppSpacing.fullBorderRadius,
+                              ),
+                              border: Border.all(
+                                color: borderColor.withValues(alpha: 0.18),
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.04),
+                                  blurRadius: AppSpacing.sm,
+                                ),
+                              ],
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(
-                                  alpha: 0.04,
-                                ),
-                                blurRadius: AppSpacing.sm,
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (_assistantLoadingOlderHistory)
-                                Padding(
-                                  padding: EdgeInsets.only(
-                                    right: AppSpacing.xs,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (_assistantLoadingOlderHistory)
+                                  Padding(
+                                    padding: EdgeInsets.only(
+                                      right: AppSpacing.xs,
+                                    ),
+                                    child: const CupertinoActivityIndicator(),
+                                  )
+                                else
+                                  Icon(
+                                    CupertinoIcons.chevron_up,
+                                    size: AppSpacing.iconSmall,
+                                    color: fgPrimary.withValues(alpha: 0.56),
                                   ),
-                                  child:
-                                      const CupertinoActivityIndicator(),
-                                )
-                              else
-                                Icon(
-                                  CupertinoIcons.chevron_up,
-                                  size: AppSpacing.iconSmall,
-                                  color: fgPrimary.withValues(
-                                    alpha: 0.56,
+                                if (!_assistantLoadingOlderHistory)
+                                  SizedBox(width: AppSpacing.xs / 2),
+                                Text(
+                                  UITextConstants.assistantViewHistory,
+                                  style: TextStyle(
+                                    fontSize: AppTypography.sm,
+                                    color: fgPrimary.withValues(alpha: 0.72),
+                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
-                              if (!_assistantLoadingOlderHistory)
-                                SizedBox(width: AppSpacing.xs / 2),
-                              Text(
-                                UITextConstants.assistantViewHistory,
-                                style: TextStyle(
-                                  fontSize: AppTypography.sm,
-                                  color: fgPrimary.withValues(
-                                    alpha: 0.72,
-                                  ),
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              if (_showScrollFab)
-                Positioned(
-                  right: AppSpacing.md,
-                  bottom: AppSpacing.md,
-                  child: StreamingScrollFab(
-                    onTap: () {
-                      _scrollController.animateTo(
-                        _scrollController.position.maxScrollExtent,
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeOut,
-                      );
-                      setState(() => _userScrolledAway = false);
-                    },
-                  ),
-                ),
-            ],
-          ),
-        ),
-        _isAssistantConversation
-            ? SafeArea(
-                top: false,
-                child: Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal:
-                        AppSpacing.semantic[DesignSemanticConstants
-                            .container]?[DesignSemanticConstants.sm] ??
-                        AppSpacing.containerSm,
-                    vertical: AppSpacing.sm,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      CustomizableChatInputBar(
-                        controller: _inputController,
-                        focusNode: _inputFocusNode,
-                        hintText: UITextConstants.assistantAskPlaceholder,
-                        maxTextLength: 5000,
-                        maxVisibleLines: 4,
-                        onPickImages: _pickChatImages,
-                        onCapturePhoto: _captureChatPhoto,
-                        onPickFiles: _pickChatFiles,
-                        onRequestMicPermission: _requestMicPermissionForChat,
-                        onStartRecord: _startVoiceRecordForChat,
-                        onStopRecord: _stopVoiceRecordForChat,
-                        onVoiceAsrTransform: _voiceAsrForChat,
-                        onSend: _submitChatInput,
-                        leftBuilder: _buildAssistantLeftButton,
-                        rightBuilder: _buildAssistantRightButtons,
-                        extraPanelItems: const <ChatInputExtraPanelItem>[],
-                      ),
-                    ],
-                  ),
-                ),
-              )
-            : Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal:
-                      AppSpacing.semantic[DesignSemanticConstants
-                          .container]?[DesignSemanticConstants.sm] ??
-                      AppSpacing.containerSm,
-                ),
-                child: Container(
-                  padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
-                  decoration: BoxDecoration(
-                    color: isDark ? bgColor : AppColors.chatToolbarBackground,
-                    borderRadius: BorderRadius.circular(
-                      AppSpacing.largeBorderRadius,
+                if (_showScrollFab)
+                  Positioned(
+                    right: AppSpacing.md,
+                    bottom: AppSpacing.md,
+                    child: StreamingScrollFab(
+                      onTap: () {
+                        _scrollController.animateTo(
+                          _scrollController.position.maxScrollExtent,
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeOut,
+                        );
+                        setState(() => _userScrolledAway = false);
+                      },
                     ),
                   ),
-                  child: SafeArea(
-                    top: false,
+              ],
+            ),
+          ),
+          _isAssistantConversation
+              ? SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal:
+                          AppSpacing.semantic[DesignSemanticConstants
+                              .container]?[DesignSemanticConstants.sm] ??
+                          AppSpacing.containerSm,
+                      vertical: AppSpacing.sm,
+                    ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (!_isGroupChat &&
-                            _relationshipCapability?.isSameInterest != true &&
-                            _otherParticipantId != null)
-                          _buildSameInterestPromptBar(),
                         CustomizableChatInputBar(
                           controller: _inputController,
                           focusNode: _inputFocusNode,
+                          textFieldKey: TestKeys.assistantChatInputField,
+                          hintText: UITextConstants.assistantAskPlaceholder,
                           maxTextLength: 5000,
                           maxVisibleLines: 4,
                           onPickImages: _pickChatImages,
@@ -4381,34 +4568,77 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                           onStopRecord: _stopVoiceRecordForChat,
                           onVoiceAsrTransform: _voiceAsrForChat,
                           onSend: _submitChatInput,
-                          leftBuilder: _buildQuliaoLeftButton,
-                          rightBuilder: _buildQuliaoRightButtons,
-                          extraPanelItems: _buildCallPanelItems(),
+                          leftBuilder: _buildAssistantLeftButton,
+                          rightBuilder: _buildAssistantRightButtons,
+                          extraPanelItems: const <ChatInputExtraPanelItem>[],
                         ),
-                        if (_showEmojiPanel)
-                          UnifiedEmojiPicker(
-                            showCloseButton: true,
-                            onClose: () =>
-                                setState(() => _showEmojiPanel = false),
-                            onEmojiSelected: (char) =>
-                                setState(() => _inputController.text += char),
-                          ),
                       ],
                     ),
                   ),
+                )
+              : Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal:
+                        AppSpacing.semantic[DesignSemanticConstants
+                            .container]?[DesignSemanticConstants.sm] ??
+                        AppSpacing.containerSm,
+                  ),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                    decoration: BoxDecoration(
+                      color: isDark ? bgColor : AppColors.chatToolbarBackground,
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.largeBorderRadius,
+                      ),
+                    ),
+                    child: SafeArea(
+                      top: false,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (!_isGroupChat &&
+                              _relationshipCapability?.isSameInterest != true &&
+                              _otherParticipantId != null)
+                            _buildSameInterestPromptBar(),
+                          CustomizableChatInputBar(
+                            controller: _inputController,
+                            focusNode: _inputFocusNode,
+                            maxTextLength: 5000,
+                            maxVisibleLines: 4,
+                            onPickImages: _pickChatImages,
+                            onCapturePhoto: _captureChatPhoto,
+                            onPickFiles: _pickChatFiles,
+                            onRequestMicPermission:
+                                _requestMicPermissionForChat,
+                            onStartRecord: _startVoiceRecordForChat,
+                            onStopRecord: _stopVoiceRecordForChat,
+                            onVoiceAsrTransform: _voiceAsrForChat,
+                            onSend: _submitChatInput,
+                            leftBuilder: _buildQuliaoLeftButton,
+                            rightBuilder: _buildQuliaoRightButtons,
+                            extraPanelItems: _buildCallPanelItems(),
+                          ),
+                          if (_showEmojiPanel)
+                            UnifiedEmojiPicker(
+                              showCloseButton: true,
+                              onClose: () =>
+                                  setState(() => _showEmojiPanel = false),
+                              onEmojiSelected: (char) =>
+                                  setState(() => _inputController.text += char),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-      ],
+        ],
       ),
     );
 
     if (widget.embedded) {
       return Stack(
         children: [
-          Container(
-            color: bgColor,
-            child: bodyContent,
-          ),
+          Container(color: bgColor, child: bodyContent),
           if (_actionMenuMessage != null && _actionMenuPosition != null)
             _MessageActionMenuOverlay(
               message: _actionMenuMessage!,
@@ -4464,18 +4694,20 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                     child: Text(UITextConstants.messageActionForward),
                   )
                 : (_isAssistantConversation
-                    ? CupertinoButton(
-                        padding: EdgeInsets.zero,
-                        onPressed: _openAssistantSettingsPage,
-                        child: const Icon(CupertinoIcons.gear),
-                      )
-                    : CupertinoButton(
-                        padding: EdgeInsets.zero,
-                        onPressed: () => context.push(
-                          AppRoutePaths.chatSettings(id: widget.conversationId),
-                        ),
-                        child: const Icon(CupertinoIcons.ellipsis),
-                      )),
+                      ? CupertinoButton(
+                          padding: EdgeInsets.zero,
+                          onPressed: _openAssistantSettingsPage,
+                          child: const Icon(CupertinoIcons.gear),
+                        )
+                      : CupertinoButton(
+                          padding: EdgeInsets.zero,
+                          onPressed: () => context.push(
+                            AppRoutePaths.chatSettings(
+                              id: widget.conversationId,
+                            ),
+                          ),
+                          child: const Icon(CupertinoIcons.ellipsis),
+                        )),
           ),
           body: bodyContent,
         ),

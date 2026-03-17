@@ -2,19 +2,16 @@ import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/conversation_state_decision.dart';
 import 'package:quwoquan_app/assistant/contracts/dialogue_round_script.dart';
+import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/planner_contracts.dart';
+import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/slot_schema.dart';
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
 import 'package:quwoquan_app/assistant/conversation/explainability/default_processing_copy_bank.dart';
-import 'package:quwoquan_app/assistant/reasoning/planner/problem_framer.dart';
 
 class ConversationStateKernel {
-  const ConversationStateKernel({
-    this.problemFramer = const DefaultProblemFramer(),
-  });
-
-  final DefaultProblemFramer problemFramer;
+  const ConversationStateKernel();
 
   SlotSchema defaultSlotSchema({
     required String domainId,
@@ -45,9 +42,10 @@ class ConversationStateKernel {
   }
 
   ConversationStateDecision evaluate({
-    required String query,
     required String domainId,
     required String problemClass,
+    required IntentGraph intentGraph,
+    required List<QueryTask> queryTasks,
     required DialogueRoundScript dialogueRoundScript,
     required AggregationState aggregationState,
     required Map<String, dynamic> answerPayload,
@@ -55,7 +53,6 @@ class ConversationStateKernel {
     required EvidenceEvaluationResult evidenceEvaluation,
     required SlotSchema slotSchema,
   }) {
-    final frame = problemFramer.frame(query);
     final parsedTurn = tryParseAssistantTurnOutput(answerPayload);
     final requiredSlots = slotSchema.requiredSlots;
     final mergedSlots = <String, SlotValueSnapshot>{
@@ -123,7 +120,7 @@ class ConversationStateKernel {
       final fallbackSlotId = requiredSlots.firstWhere(
         (item) =>
             item.trim().isNotEmpty && !mergedSlots.containsKey(item.trim()),
-        orElse: () => frame.city.trim().isNotEmpty ? 'city' : '',
+        orElse: () => '',
       );
       if (fallbackSlotId.isNotEmpty) {
         mergedSlots.remove('');
@@ -175,6 +172,11 @@ class ConversationStateKernel {
         : (evidenceEvaluation.passed
               ? EvidenceStatus.full
               : EvidenceStatus.retry);
+    final requiresEvidenceContinuation =
+        evidenceEvaluation.evidenceRequired ||
+        queryTasks.isNotEmpty ||
+        intentGraph.requiresExternalEvidence ||
+        intentGraph.mustVerifyClaims;
     late final AssistantNextAction nextActionType;
     late final FinalAnswerMode finalAnswerModeType;
     if (missingCriticalSlots.isNotEmpty || explicitAskUser) {
@@ -189,15 +191,12 @@ class ConversationStateKernel {
       finalAnswerModeType = FinalAnswerMode.boundedAnswer;
     } else if (!evidenceEvaluation.passed) {
       if (evidenceEvaluation.entries.isNotEmpty ||
-          aggregationState.canGivePartialAnswer) {
+          aggregationState.canGivePartialAnswer ||
+          evidenceStatusType == EvidenceStatus.bounded) {
         nextActionType = AssistantNextAction.answer;
         finalAnswerModeType = FinalAnswerMode.boundedAnswer;
       } else if (aggregationState.needExpansion ||
-          parseProblemClass(problemClass) == ProblemClass.complexReasoning ||
-          parseProblemClass(problemClass) == ProblemClass.evidenceLookup ||
-          frame.problemClassKind == ProblemClass.taskExecution ||
-          frame.answerShapeKind == AnswerShape.comparison ||
-          frame.answerShapeKind == AnswerShape.options) {
+          requiresEvidenceContinuation) {
         nextActionType = AssistantNextAction.retry;
         finalAnswerModeType = FinalAnswerMode.retry;
       } else {

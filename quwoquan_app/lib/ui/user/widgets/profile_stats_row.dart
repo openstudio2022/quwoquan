@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 
 class ProfileStatsRow extends StatelessWidget {
   const ProfileStatsRow({
@@ -16,9 +17,7 @@ class ProfileStatsRow extends StatelessWidget {
   String _formatCount(dynamic count) {
     if (count == null) return '0';
     final n = count is int ? count : int.tryParse(count.toString()) ?? 0;
-    if (n >= 10000) return '${(n / 10000).toStringAsFixed(1)}w';
-    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}k';
-    return '$n';
+    return formatCompactActionCount(n);
   }
 
   @override
@@ -39,23 +38,23 @@ class ProfileStatsRow extends StatelessWidget {
           onTap: onStatTap != null ? () => onStatTap!(item.type) : null,
           behavior: HitTestBehavior.opaque,
           child: Padding(
-            padding: EdgeInsets.symmetric(vertical: AppSpacing.intraGroupSm),
+            padding: EdgeInsets.symmetric(vertical: AppSpacing.intraGroupXs),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   item.value,
                   style: TextStyle(
-                    fontSize: AppTypography.xl,
+                    fontSize: AppTypography.lg,
                     fontWeight: AppTypography.bold,
                     color: fg,
                   ),
                 ),
-                SizedBox(height: AppSpacing.intraGroupXs),
+                SizedBox(height: AppSpacing.intraGroupXs / 2),
                 Text(
                   item.label,
                   style: TextStyle(
-                    fontSize: AppTypography.sm,
+                    fontSize: AppTypography.xs,
                     fontWeight: AppTypography.medium,
                     color: fgSecondary,
                   ),

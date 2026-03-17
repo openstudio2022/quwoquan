@@ -8,6 +8,7 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/avatar/group_avatar_grid.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
+import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
@@ -80,12 +81,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
   }
 
   /// 与 MessagePage subTabsMap 一致
-  static const List<String> _messageSubTabs = [
-    '全部',
-    '@我',
-    '未读',
-    '密信',
-  ];
+  static const List<String> _messageSubTabs = ['全部', '@我', '未读', '密信'];
   static const List<String> _contactsSubTabs = [
     UITextConstants.contactsTabAll,
     UITextConstants.contactsTabCircles,
@@ -95,7 +91,8 @@ class _ChatPageState extends ConsumerState<ChatPage>
 
   /// 密信解锁状态（仅密信 Tab 使用）
   bool _secretUnlocked = false;
-  final TextEditingController _secretPasswordController = TextEditingController();
+  final TextEditingController _secretPasswordController =
+      TextEditingController();
   String _secretAuthError = '';
   bool _secretShowPassword = false;
 
@@ -137,8 +134,9 @@ class _ChatPageState extends ConsumerState<ChatPage>
       }
     } catch (_) {
       if (_conversations == null || _conversations!.isEmpty) {
-        final fallback =
-            ref.read(appContentRepositoryProvider).chatMockConversations;
+        final fallback = ref
+            .read(appContentRepositoryProvider)
+            .chatMockConversations;
         if (mounted) {
           setState(() {
             _conversations = fallback;
@@ -164,14 +162,22 @@ class _ChatPageState extends ConsumerState<ChatPage>
   Widget build(BuildContext context) {
     super.build(context);
     final isDark = ref.watch(isDarkProvider);
-    final bgColor =
-        AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
-    final fgPrimary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
-    final borderColor =
-        AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
+    final bgColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final borderColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.borderPrimary,
+    );
 
     return AppScaffold(
       backgroundColor: bgColor,
@@ -187,7 +193,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
               child: AnimatedOpacity(
                 opacity: _hideSecondaryTab ? 0 : 1,
                 duration: const Duration(milliseconds: 200),
-                child: _buildSubTabs(fgPrimary, fgSecondary, borderColor),
+                child: _buildSubTabs(context, borderColor),
               ),
             ),
             Expanded(
@@ -197,10 +203,26 @@ class _ChatPageState extends ConsumerState<ChatPage>
                   return false;
                 },
                 child: _mainTabIndex == 0
-                    ? (_messageSubTabs[_subTabIndex] == UITextConstants.secretMessage
-                        ? _buildSecretMessageContent(context, fgPrimary, fgSecondary, borderColor)
-                        : _buildMessagesContent(context, fgPrimary, fgSecondary, borderColor))
-                    : _buildContactsContent(context, fgPrimary, fgSecondary, borderColor),
+                    ? (_messageSubTabs[_subTabIndex] ==
+                              UITextConstants.secretMessage
+                          ? _buildSecretMessageContent(
+                              context,
+                              fgPrimary,
+                              fgSecondary,
+                              borderColor,
+                            )
+                          : _buildMessagesContent(
+                              context,
+                              fgPrimary,
+                              fgSecondary,
+                              borderColor,
+                            ))
+                    : _buildContactsContent(
+                        context,
+                        fgPrimary,
+                        fgSecondary,
+                        borderColor,
+                      ),
               ),
             ),
           ],
@@ -209,21 +231,28 @@ class _ChatPageState extends ConsumerState<ChatPage>
     );
   }
 
-  Widget _buildMainTabs(BuildContext context, Color bgColor, Color fgPrimary,
-      Color fgSecondary) {
+  Widget _buildMainTabs(
+    BuildContext context,
+    Color bgColor,
+    Color fgPrimary,
+    Color fgSecondary,
+  ) {
     final tabs = <TabItem>[
       TabItem(id: 'messages', label: AppConceptConstants.messages),
       TabItem(id: 'contacts', label: AppConceptConstants.contacts),
     ];
     final activeTabId = _mainTabIndex == 0 ? 'messages' : 'contacts';
-    
+
     return Container(
       height: AppSpacing.tabNavigationHeight,
       decoration: BoxDecoration(
         color: bgColor,
         border: Border(
           bottom: BorderSide(
-            color: AppColorsFunctional.getColor(ref.read(isDarkProvider), ColorType.borderPrimary),
+            color: AppColorsFunctional.getColor(
+              ref.read(isDarkProvider),
+              ColorType.borderPrimary,
+            ),
           ),
         ),
       ),
@@ -248,7 +277,9 @@ class _ChatPageState extends ConsumerState<ChatPage>
           ),
           // Layer 2: Trailing Actions
           Positioned(
-            right: AppSpacing.feedContentHorizontal(context),
+            right:
+                AppSpacing.feedContentHorizontal(context) -
+                AppSpacing.intraGroupXs,
             top: 0,
             bottom: 0,
             child: const Center(
@@ -262,51 +293,16 @@ class _ChatPageState extends ConsumerState<ChatPage>
     );
   }
 
-  Widget _buildSubTabs(
-      Color fgPrimary, Color fgSecondary, Color borderColor) {
+  Widget _buildSubTabs(BuildContext context, Color borderColor) {
     final subTabs = _mainTabIndex == 0 ? _messageSubTabs : _contactsSubTabs;
-    return Container(
-      padding: EdgeInsets.symmetric(vertical: 12, horizontal: AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColorsFunctional.getColor(
-            ref.read(isDarkProvider), ColorType.backgroundPrimary),
-        border: Border(bottom: BorderSide(color: borderColor.withValues(alpha: 0.2))),
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: List.generate(subTabs.length, (i) {
-            final isActive = i == _subTabIndex;
-            return Padding(
-              padding: EdgeInsets.only(right: 10),
-              child: GestureDetector(
-                onTap: () => setState(() => _subTabIndex = i),
-                child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: isActive
-                        ? AppColors.primaryColor
-                        : (ref.read(isDarkProvider)
-                            ? Colors.white.withValues(alpha: 0.08)
-                            : Colors.black.withValues(alpha: 0.04)),
-                    borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius),
-                    border: isActive
-                        ? null
-                        : Border.all(color: Colors.transparent),
-                  ),
-                  child: Text(
-                    subTabs[i],
-                    style: TextStyle(
-                      fontSize: AppTypography.smPlus,
-                      fontWeight: FontWeight.w700,
-                      color: isActive ? Colors.white : fgSecondary,
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }),
-        ),
+    return SecondaryCapsuleTabBar(
+      isDark: ref.read(isDarkProvider),
+      tabs: subTabs,
+      activeIndex: _subTabIndex,
+      onTap: (index) => setState(() => _subTabIndex = index),
+      horizontalPadding: AppSpacing.feedContentHorizontal(context),
+      border: Border(
+        bottom: BorderSide(color: borderColor.withValues(alpha: 0.2)),
       ),
     );
   }
@@ -320,14 +316,21 @@ class _ChatPageState extends ConsumerState<ChatPage>
     if (!_secretUnlocked) {
       return _buildSecretLockScreen(context, fgPrimary, fgSecondary);
     }
-    final encrypted = ref.read(appContentRepositoryProvider).chatEncryptedConversations;
+    final encrypted = ref
+        .read(appContentRepositoryProvider)
+        .chatEncryptedConversations;
     return Column(
       children: [
         Container(
-          padding: EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 12),
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: 12,
+          ),
           decoration: BoxDecoration(
             color: AppColors.primaryColor.withValues(alpha: 0.08),
-            border: Border(bottom: BorderSide(color: borderColor.withValues(alpha: 0.2))),
+            border: Border(
+              bottom: BorderSide(color: borderColor.withValues(alpha: 0.2)),
+            ),
           ),
           child: Row(
             children: [
@@ -359,7 +362,9 @@ class _ChatPageState extends ConsumerState<ChatPage>
                   ],
                 ),
               ),
-              TextButton(
+              CupertinoButton(
+                padding: EdgeInsets.zero,
+                minimumSize: Size.zero,
                 onPressed: _secretLock,
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -370,7 +375,13 @@ class _ChatPageState extends ConsumerState<ChatPage>
                       color: AppColors.primaryColor,
                     ),
                     SizedBox(width: AppSpacing.xs),
-                    Text(UITextConstants.secretLockButton, style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.primaryColor)),
+                    Text(
+                      UITextConstants.secretLockButton,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primaryColor,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -421,105 +432,147 @@ class _ChatPageState extends ConsumerState<ChatPage>
     );
   }
 
-  Widget _buildSecretLockScreen(BuildContext context, Color fgPrimary, Color fgSecondary) {
+  Widget _buildSecretLockScreen(
+    BuildContext context,
+    Color fgPrimary,
+    Color fgSecondary,
+  ) {
     final isDark = ref.read(isDarkProvider);
-    final bg = AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(AppSpacing.xl),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          SizedBox(height: AppSpacing.forty),
-          Container(
-            width: AppSpacing.oneHundred,
-            height: AppSpacing.oneHundred,
-            decoration: BoxDecoration(
-              color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.grey.shade200,
-              shape: BoxShape.circle,
+    final bg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: bg,
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            isDark
+                ? Colors.white.withValues(alpha: 0.04)
+                : Colors.black.withValues(alpha: 0.03),
+            bg,
+          ],
+          stops: const [0.0, 0.5],
+        ),
+      ),
+      child: SingleChildScrollView(
+        padding: EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(height: AppSpacing.forty * 1.5),
+            Icon(
+              CupertinoIcons.lock_fill,
+              size: 56,
+              color: fgSecondary.withValues(alpha: 0.5),
             ),
-            child: Icon(
-              Icons.lock,
-              size: AppSpacing.largeButtonSize,
-              color: fgSecondary,
+            SizedBox(height: AppSpacing.lg),
+            Text(
+              UITextConstants.secretLockedTitle,
+              style: TextStyle(
+                fontSize: AppTypography.lg,
+                fontWeight: AppTypography.semiBold,
+                color: fgPrimary,
+              ),
             ),
-          ),
-          SizedBox(height: AppSpacing.lg),
-          Text(
-            UITextConstants.secretLockedTitle,
-            style: TextStyle(
-              fontSize: AppTypography.xxxl,
-              fontWeight: FontWeight.w900,
-              color: fgPrimary,
+            SizedBox(height: AppSpacing.xs),
+            Text(
+              '输入密码以查看对话',
+              style: TextStyle(fontSize: AppTypography.sm, color: fgSecondary),
             ),
-          ),
-          SizedBox(height: AppSpacing.xl),
-          SizedBox(
-            width: AppSpacing.threeHundredTwenty,
-            child: Column(
-              children: [
-                TextField(
-                  controller: _secretPasswordController,
-                  obscureText: !_secretShowPassword,
-                  onChanged: (_) => setState(() => _secretAuthError = ''),
-                  onSubmitted: (_) => _secretUnlock(),
-                  decoration: InputDecoration(
-                    hintText: UITextConstants.secretPasswordHint,
-                    hintStyle: TextStyle(color: fgSecondary),
-                    filled: true,
-                    fillColor: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.grey.shade100,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
-                      borderSide: BorderSide.none,
+            SizedBox(height: AppSpacing.xl * 1.5),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+              child: Column(
+                children: [
+                  CupertinoTextField(
+                    controller: _secretPasswordController,
+                    obscureText: !_secretShowPassword,
+                    onChanged: (_) => setState(() => _secretAuthError = ''),
+                    onSubmitted: (_) => _secretUnlock(),
+                    placeholder: UITextConstants.secretPasswordHint,
+                    placeholderStyle: TextStyle(
+                      color: fgSecondary.withValues(alpha: 0.6),
+                      fontSize: AppTypography.base,
                     ),
-                    suffixIcon: IconButton(
-                      icon: Icon(_secretShowPassword ? Icons.visibility_off : Icons.visibility, color: fgSecondary),
-                      onPressed: () => setState(() => _secretShowPassword = !_secretShowPassword),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.lg,
+                      vertical: AppSpacing.md,
                     ),
-                  ),
-                  style: TextStyle(color: fgPrimary),
-                ),
-                if (_secretAuthError.isNotEmpty) ...[
-                  SizedBox(height: AppSpacing.interGroupSm),
-                  Text(
-                    _secretAuthError,
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.06)
+                          : Colors.black.withValues(alpha: 0.04),
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.fullBorderRadius,
+                      ),
+                    ),
+                    suffix: CupertinoButton(
+                      padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                      minimumSize: const Size(
+                        AppSpacing.minInteractiveSize,
+                        AppSpacing.minInteractiveSize,
+                      ),
+                      onPressed: () => setState(
+                        () => _secretShowPassword = !_secretShowPassword,
+                      ),
+                      child: Icon(
+                        _secretShowPassword
+                            ? CupertinoIcons.eye_slash_fill
+                            : CupertinoIcons.eye_fill,
+                        color: fgSecondary.withValues(alpha: 0.6),
+                        size: AppSpacing.iconMedium,
+                      ),
+                    ),
                     style: TextStyle(
-                      fontSize: AppTypography.sm,
-                      color: AppColors.error,
+                      color: fgPrimary,
+                      fontSize: AppTypography.base,
                     ),
                   ),
-                ],
-                SizedBox(height: AppSpacing.twenty),
-                SizedBox(
-                  width: double.infinity,
-                  height: AppSpacing.bottomNavHeight,
-                  child: FilledButton(
-                    onPressed: () {
-                      if (_secretPasswordController.text.trim().isEmpty) return;
-                      _secretUnlock();
-                    },
-                    style: FilledButton.styleFrom(
-                      backgroundColor: fgPrimary,
-                      foregroundColor: bg,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(
-                          AppSpacing.radiusTwentyEight,
+                  if (_secretAuthError.isNotEmpty) ...[
+                    SizedBox(height: AppSpacing.md),
+                    Text(
+                      _secretAuthError,
+                      style: TextStyle(
+                        fontSize: AppTypography.sm,
+                        color: AppColors.error,
+                      ),
+                    ),
+                  ],
+                  SizedBox(height: AppSpacing.xl),
+                  SizedBox(
+                    width: double.infinity,
+                    height: AppSpacing.buttonHeight,
+                    child: CupertinoButton(
+                      onPressed: () {
+                        if (_secretPasswordController.text.trim().isEmpty) {
+                          return;
+                        }
+                        _secretUnlock();
+                      },
+                      padding: EdgeInsets.zero,
+                      color: AppColors.primaryColor,
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.fullBorderRadius,
+                      ),
+                      child: Text(
+                        UITextConstants.secretUnlockButton,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: AppTypography.semiBold,
+                          fontSize: AppTypography.base,
                         ),
                       ),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.lock_open),
-                        SizedBox(width: AppSpacing.sm),
-                        Text(UITextConstants.secretUnlockButton),
-                      ],
-                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -567,16 +620,14 @@ class _ChatPageState extends ConsumerState<ChatPage>
     }
 
     {
-
       return ListView(
         controller: _scrollController,
         children: [
           ...convs.map(
             (c) => _ConversationTile(
               conversation: c,
-              onTap: () => context.push(
-                AppRoutePaths.chatDetail(id: '${c['id']}'),
-              ),
+              onTap: () =>
+                  context.push(AppRoutePaths.chatDetail(id: '${c['id']}')),
               fgPrimary: fgPrimary,
               fgSecondary: fgSecondary,
               borderColor: borderColor,
@@ -605,7 +656,12 @@ class _ChatPageState extends ConsumerState<ChatPage>
     return list;
   }
 
-  Widget _buildContactsContent(BuildContext context, Color fgPrimary, Color fgSecondary, Color borderColor) {
+  Widget _buildContactsContent(
+    BuildContext context,
+    Color fgPrimary,
+    Color fgSecondary,
+    Color borderColor,
+  ) {
     final sub = _contactsSubTabs[_subTabIndex];
     final repository = ref.read(appContentRepositoryProvider);
     List<Map<String, dynamic>> list;
@@ -640,7 +696,8 @@ class _ChatPageState extends ConsumerState<ChatPage>
       );
     }
     // 全部、同好：带右侧字母索引（1:1 ContactsList.tsx）
-    if (sub == UITextConstants.contactsTabAll || sub == UITextConstants.contactsTabSameInterest) {
+    if (sub == UITextConstants.contactsTabAll ||
+        sub == UITextConstants.contactsTabSameInterest) {
       return _ContactsListWithIndex(
         items: list,
         fgPrimary: fgPrimary,
@@ -652,16 +709,28 @@ class _ChatPageState extends ConsumerState<ChatPage>
       itemCount: list.length,
       itemBuilder: (context, i) {
         final item = list[i];
-        final title = (item['displayName'] ?? item['name'] ?? item['title']) as String? ?? '';
+        final title =
+            (item['displayName'] ?? item['name'] ?? item['title']) as String? ??
+            '';
         final avatar = item['avatar'] as String? ?? '';
-        final subtitle = (item['bio'] ?? item['metFrom'] ?? item['lastInteraction']) as String? ?? '';
+        final subtitle =
+            (item['bio'] ?? item['metFrom'] ?? item['lastInteraction'])
+                as String? ??
+            '';
         return Material(
           color: Colors.transparent,
           child: InkWell(
             onTap: () {},
             child: Container(
-              padding: EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 12),
-              decoration: BoxDecoration(border: Border(bottom: BorderSide(color: borderColor.withValues(alpha: 0.3)))),
+              padding: EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: 12,
+              ),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: borderColor.withValues(alpha: 0.3)),
+                ),
+              ),
               child: Row(
                 children: [
                   RoundedSquareAvatar(
@@ -728,16 +797,82 @@ String _getInitial(String name) {
   final first = name[0].toUpperCase();
   if (RegExp(r'[A-Z]').hasMatch(first)) return first;
   const map = {
-    '赵': 'Z', '钱': 'Q', '孙': 'S', '李': 'L', '周': 'Z', '吴': 'W', '郑': 'Z', '王': 'W',
-    '冯': 'F', '陈': 'C', '卫': 'W', '蒋': 'J', '沈': 'S', '韩': 'H', '杨': 'Y',
-    '朱': 'Z', '秦': 'Q', '许': 'X', '何': 'H', '吕': 'L', '施': 'S', '张': 'Z',
-    '孔': 'K', '曹': 'C', '严': 'Y', '华': 'H', '金': 'J', '魏': 'W', '陶': 'T', '姜': 'J',
-    '谢': 'X', '邹': 'Z', '柏': 'B', '窦': 'D', '章': 'Z', '云': 'Y', '苏': 'S', '潘': 'P',
-    '葛': 'G', '奚': 'X', '范': 'F', '彭': 'P', '郎': 'L', '鲁': 'L', '韦': 'W', '马': 'M',
-    '苗': 'M', '方': 'F', '俞': 'Y', '任': 'R', '袁': 'Y', '柳': 'L', '史': 'S', '唐': 'T',
-    '罗': 'L', '毕': 'B', '郝': 'H', '安': 'A', '常': 'C', '乐': 'L', '于': 'Y', '时': 'S',
-    '傅': 'F', '齐': 'Q', '康': 'K', '伍': 'W', '余': 'Y', '顾': 'G', '孟': 'M', '平': 'P',
-    '黄': 'H', '书': 'S', '小': 'X', '大': 'D', '老': 'L', '阿': 'A',
+    '赵': 'Z',
+    '钱': 'Q',
+    '孙': 'S',
+    '李': 'L',
+    '周': 'Z',
+    '吴': 'W',
+    '郑': 'Z',
+    '王': 'W',
+    '冯': 'F',
+    '陈': 'C',
+    '卫': 'W',
+    '蒋': 'J',
+    '沈': 'S',
+    '韩': 'H',
+    '杨': 'Y',
+    '朱': 'Z',
+    '秦': 'Q',
+    '许': 'X',
+    '何': 'H',
+    '吕': 'L',
+    '施': 'S',
+    '张': 'Z',
+    '孔': 'K',
+    '曹': 'C',
+    '严': 'Y',
+    '华': 'H',
+    '金': 'J',
+    '魏': 'W',
+    '陶': 'T',
+    '姜': 'J',
+    '谢': 'X',
+    '邹': 'Z',
+    '柏': 'B',
+    '窦': 'D',
+    '章': 'Z',
+    '云': 'Y',
+    '苏': 'S',
+    '潘': 'P',
+    '葛': 'G',
+    '奚': 'X',
+    '范': 'F',
+    '彭': 'P',
+    '郎': 'L',
+    '鲁': 'L',
+    '韦': 'W',
+    '马': 'M',
+    '苗': 'M',
+    '方': 'F',
+    '俞': 'Y',
+    '任': 'R',
+    '袁': 'Y',
+    '柳': 'L',
+    '史': 'S',
+    '唐': 'T',
+    '罗': 'L',
+    '毕': 'B',
+    '郝': 'H',
+    '安': 'A',
+    '常': 'C',
+    '乐': 'L',
+    '于': 'Y',
+    '时': 'S',
+    '傅': 'F',
+    '齐': 'Q',
+    '康': 'K',
+    '伍': 'W',
+    '余': 'Y',
+    '顾': 'G',
+    '孟': 'M',
+    '平': 'P',
+    '黄': 'H',
+    '书': 'S',
+    '小': 'X',
+    '大': 'D',
+    '老': 'L',
+    '阿': 'A',
   };
   return map[name[0]] ?? 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[name.codeUnitAt(0) % 26];
 }
@@ -784,7 +919,9 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
     final items = widget.items;
     final withInitial = <Map<String, dynamic>>[];
     for (final item in items) {
-      final name = (item['displayName'] ?? item['name'] ?? item['title']) as String? ?? '';
+      final name =
+          (item['displayName'] ?? item['name'] ?? item['title']) as String? ??
+          '';
       withInitial.add({
         ...item,
         'initial': _getInitial(name),
@@ -827,19 +964,24 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
         pos += _kSectionHeaderHeight;
         final key = _sectionKeys['★'];
         if (key != null) {
-          listChildren.add(Container(
-            key: key,
-            padding: EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 4),
-            color: widget.borderColor.withValues(alpha: 0.15),
-            child: Text(
-              UITextConstants.starredFriends,
-              style: TextStyle(
-                fontSize: AppTypography.sm,
-                fontWeight: FontWeight.w600,
-                color: widget.fgSecondary,
+          listChildren.add(
+            Container(
+              key: key,
+              padding: EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: 4,
+              ),
+              color: widget.borderColor.withValues(alpha: 0.15),
+              child: Text(
+                UITextConstants.starredFriends,
+                style: TextStyle(
+                  fontSize: AppTypography.sm,
+                  fontWeight: FontWeight.w600,
+                  color: widget.fgSecondary,
+                ),
               ),
             ),
-          ));
+          );
         }
       }
       if (!starred && isFirstOfInitial) {
@@ -847,19 +989,24 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
         pos += _kSectionHeaderHeight;
         final key = _sectionKeys[initial];
         if (key != null) {
-          listChildren.add(Container(
-            key: key,
-            padding: EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 4),
-            color: widget.borderColor.withValues(alpha: 0.15),
-            child: Text(
-              initial,
-              style: TextStyle(
-                fontSize: AppTypography.sm,
-                fontWeight: FontWeight.w600,
-                color: widget.fgSecondary,
+          listChildren.add(
+            Container(
+              key: key,
+              padding: EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: 4,
+              ),
+              color: widget.borderColor.withValues(alpha: 0.15),
+              child: Text(
+                initial,
+                style: TextStyle(
+                  fontSize: AppTypography.sm,
+                  fontWeight: FontWeight.w600,
+                  color: widget.fgSecondary,
+                ),
               ),
             ),
-          ));
+          );
         }
       }
       lastInitial = initial;
@@ -867,15 +1014,27 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
       pos += _kContactRowHeight;
       final title = item['displayName'] as String? ?? '';
       final avatar = item['avatar'] as String? ?? '';
-      final subtitle = (item['bio'] ?? item['metFrom'] ?? item['lastInteraction']) as String? ?? '';
+      final subtitle =
+          (item['bio'] ?? item['metFrom'] ?? item['lastInteraction'])
+              as String? ??
+          '';
       listChildren.add(
         Material(
           color: Colors.transparent,
           child: InkWell(
             onTap: () {},
             child: Container(
-              padding: EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 12),
-              decoration: BoxDecoration(border: Border(bottom: BorderSide(color: widget.borderColor.withValues(alpha: 0.3)))),
+              padding: EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: 12,
+              ),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: widget.borderColor.withValues(alpha: 0.3),
+                  ),
+                ),
+              ),
               child: Row(
                 children: [
                   RoundedSquareAvatar(
@@ -935,7 +1094,9 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
       children: [
         NotificationListener<ScrollNotification>(
           onNotification: (ScrollNotification n) {
-            if (n is ScrollUpdateNotification || n is ScrollEndNotification) _onScroll();
+            if (n is ScrollUpdateNotification || n is ScrollEndNotification) {
+              _onScroll();
+            }
             return false;
           },
           child: ListView(
@@ -959,14 +1120,21 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
                     final offset = _sectionOffsets[letter];
                     if (offset != null && _scrollController.hasClients) {
                       _scrollController.animateTo(
-                        offset.clamp(0.0, _scrollController.position.maxScrollExtent),
+                        offset.clamp(
+                          0.0,
+                          _scrollController.position.maxScrollExtent,
+                        ),
                         duration: const Duration(milliseconds: 250),
                         curve: Curves.easeOut,
                       );
                     } else {
                       final key = _sectionKeys[letter];
                       if (key?.currentContext != null) {
-                        Scrollable.ensureVisible(key!.currentContext!, duration: const Duration(milliseconds: 250), alignment: 0);
+                        Scrollable.ensureVisible(
+                          key!.currentContext!,
+                          duration: const Duration(milliseconds: 250),
+                          alignment: 0,
+                        );
                       }
                     }
                   },
@@ -976,7 +1144,9 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
                     alignment: Alignment.center,
                     margin: EdgeInsets.symmetric(vertical: 1),
                     decoration: BoxDecoration(
-                      color: isActive ? AppColors.primaryColor : Colors.transparent,
+                      color: isActive
+                          ? AppColors.primaryColor
+                          : Colors.transparent,
                       shape: BoxShape.circle,
                     ),
                     child: Text(
@@ -1020,9 +1190,10 @@ class _ConversationTile extends StatelessWidget {
   static const double _avatarSize = 56;
 
   String _formatConversationTime(Map<String, dynamic> conv) {
-    final isoStr = conv['lastMessageAt'] as String?
-        ?? conv['lastMessageTime'] as String?
-        ?? conv['updatedAt'] as String?;
+    final isoStr =
+        conv['lastMessageAt'] as String? ??
+        conv['lastMessageTime'] as String? ??
+        conv['updatedAt'] as String?;
     final dt = ChatTimeFormatter.tryParseServerTime(isoStr);
     if (dt == null) return '';
     return ChatTimeFormatter.format(dt);
@@ -1033,21 +1204,20 @@ class _ConversationTile extends StatelessWidget {
     final isGroup = type == 'group';
 
     if (isGroup) {
-      final memberAvatars = (conversation['memberAvatars'] as List<dynamic>?)
+      final memberAvatars =
+          (conversation['memberAvatars'] as List<dynamic>?)
               ?.map((e) => e.toString())
               .toList() ??
           <String>[];
-      return GroupAvatarGrid(
-        size: _avatarSize,
-        avatarUrls: memberAvatars,
-      );
+      return GroupAvatarGrid(size: _avatarSize, avatarUrls: memberAvatars);
     }
 
     return RoundedSquareAvatar(
       size: _avatarSize,
-      imageUrl: conversation['avatar'] as String?
-          ?? conversation['avatarUrl'] as String?
-          ?? '',
+      imageUrl:
+          conversation['avatar'] as String? ??
+          conversation['avatarUrl'] as String? ??
+          '',
       name: conversation['title'] as String? ?? '',
     );
   }
@@ -1055,7 +1225,8 @@ class _ConversationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final unread = conversation['unreadCount'] as int? ?? 0;
-    final isEncrypted = showEncryptedBadge || conversation['type'] == 'encrypted';
+    final isEncrypted =
+        showEncryptedBadge || conversation['type'] == 'encrypted';
     return Container(
       decoration: BoxDecoration(
         border: Border(
@@ -1115,9 +1286,7 @@ class _ConversationTile extends StatelessWidget {
                 ),
                 decoration: BoxDecoration(
                   color: AppColors.warning.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(
-                    AppSpacing.radiusTen,
-                  ),
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
                 ),
                 child: Text(
                   'AI',
@@ -1160,10 +1329,7 @@ class _ConversationTile extends StatelessWidget {
           children: [
             Text(
               _formatConversationTime(conversation),
-              style: TextStyle(
-                fontSize: AppTypography.sm,
-                color: fgSecondary,
-              ),
+              style: TextStyle(fontSize: AppTypography.sm, color: fgSecondary),
             ),
             if (unread > 0) ...[
               SizedBox(height: AppSpacing.xs),

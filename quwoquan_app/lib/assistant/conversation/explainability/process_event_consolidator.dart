@@ -2,6 +2,8 @@ import 'package:quwoquan_app/assistant/contracts/explainable_flow_event.dart';
 import 'package:quwoquan_app/assistant/contracts/planner_contracts.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/contracts/tool_assessment.dart';
+import 'package:quwoquan_app/assistant/contracts/user_events.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 
 /// Stateful consolidator that converts raw [AssistantTraceEvent]s into
@@ -136,6 +138,55 @@ class ProcessEventConsolidator {
     }
   }
 
+  ExplainableFlowEvent? consolidateUserEvent(UserEvent event) {
+    final payload = event.payload;
+    final phaseId = _plannerPhaseToFlowPhase(
+      parsePlannerPhaseId((payload['phaseId'] as String?)?.trim() ?? ''),
+    );
+    final headline = _sanitizeForUser(
+      (payload['reasonShort'] as String?)?.trim().isNotEmpty == true
+          ? (payload['reasonShort'] as String).trim()
+          : event.message,
+    );
+    if (headline.isEmpty) return null;
+    final references =
+        (payload['references'] as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .map(
+              (item) => FlowReference(
+                title: (item['title'] as String?)?.trim() ?? '',
+                url: (item['url'] as String?)?.trim() ?? '',
+                source: (item['source'] as String?)?.trim() ?? '',
+              ),
+            )
+            .where((item) => item.title.isNotEmpty && item.url.isNotEmpty)
+            .toList(growable: false) ??
+        const <FlowReference>[];
+    if (event.type == UserEventType.processReplace ||
+        event.type == UserEventType.processAppend) {
+      final updated = _updateCurrentHeadline(headline);
+      if (updated != null && references.isNotEmpty) {
+        final merged = _mergeReferences(updated.references, references);
+        final withRefs = updated.copyWith(references: merged);
+        _emittedEvents[_emittedEvents.length - 1] = withRefs;
+        return withRefs;
+      }
+      return updated;
+    }
+    final status =
+        parsePlannerPhaseId((payload['phaseId'] as String?)?.trim() ?? '') ==
+            PlannerPhaseId.completed
+        ? ExplainablePhaseStatus.completed
+        : ExplainablePhaseStatus.active;
+    return _emitPhase(
+      phaseId: phaseId,
+      headline: headline,
+      references: references,
+      status: status,
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // Internal helpers
   // ---------------------------------------------------------------------------
@@ -206,32 +257,77 @@ class ProcessEventConsolidator {
     return updated;
   }
 
+  List<FlowReference> _mergeReferences(
+    List<FlowReference> existing,
+    List<FlowReference> incoming,
+  ) {
+    final seen = <String>{for (final item in existing) item.url};
+    final merged = <FlowReference>[...existing];
+    for (final item in incoming) {
+      if (item.url.isEmpty || !seen.add(item.url)) continue;
+      merged.add(item);
+    }
+    return merged;
+  }
+
   ExplainableFlowEvent? _handleAssessment(AssistantTraceEvent event) {
-    final assessmentRaw =
-        (event.data?['assessmentType'] as String?)?.trim() ?? '';
-    final assessment = parseAssessmentType(assessmentRaw);
-    switch (assessment) {
+    final assessment = _toolAssessmentFromEvent(event);
+    switch (assessment.assessmentType) {
       case AssessmentType.sufficient:
-        final refs = (event.data?['references'] as List?)?.length ?? 0;
+        final explicitHeadline = _sanitizeForUser(assessment.userMessage);
+        final refs = assessment.referenceCount;
         if (refs > 0 && refs != _lastEmittedRefCount) {
           _lastEmittedRefCount = refs;
           return _updateCurrentHeadline(
-            '关键信息已经够用了，我开始把这 $refs 条线索收拢成你能直接参考的结论。',
+            explicitHeadline.isNotEmpty
+                ? explicitHeadline
+                : '关键信息已经够用了，我开始把这 $refs 条线索收拢成你能直接参考的结论。',
           );
         }
-        return _updateCurrentHeadline('关键信息已经够用了，我开始整理答案。');
+        return _updateCurrentHeadline(
+          explicitHeadline.isNotEmpty ? explicitHeadline : '关键信息已经够用了，我开始整理答案。',
+        );
       case AssessmentType.budgetExhausted:
-        return _updateCurrentHeadline('已经有一批能支撑判断的信息了，我先把最重要的部分整理给你。');
+        return _updateCurrentHeadline(
+          _sanitizeForUser(assessment.userMessage).isNotEmpty
+              ? _sanitizeForUser(assessment.userMessage)
+              : '已经有一批能支撑判断的信息了，我先把最重要的部分整理给你。',
+        );
       case AssessmentType.needMoreSearch:
         if (parseProblemClass(problemClass) == ProblemClass.realtimeInfo) {
           return null;
         }
-        return _updateCurrentHeadline('目前主线已经有了，但还差一处关键信息，我再替你补一下。');
+        final headline = _sanitizeForUser(assessment.userMessage).isNotEmpty
+            ? _sanitizeForUser(assessment.userMessage)
+            : '目前主线已经有了，但还差一处关键信息，我再替你补一下。';
+        return assessment.shouldContinueLoop
+            ? _emitPhase(phaseId: PhaseId.expand, headline: headline)
+            : _updateCurrentHeadline(headline);
       case AssessmentType.toolFailed:
-        return _updateCurrentHeadline('这轮外部资料不太稳，我先基于已经确认的部分替你整理。');
+        return _updateCurrentHeadline(
+          _sanitizeForUser(assessment.userMessage).isNotEmpty
+              ? _sanitizeForUser(assessment.userMessage)
+              : '这轮外部资料不太稳，我先基于已经确认的部分替你整理。',
+        );
       case AssessmentType.unknown:
         return null;
     }
+  }
+
+  ToolAssessment _toolAssessmentFromEvent(AssistantTraceEvent event) {
+    final raw =
+        (event.data?['assessment'] as Map?)?.cast<String, dynamic>() ??
+        <String, dynamic>{
+          'assessmentType': (event.data?['assessmentType'] as String?)?.trim() ?? '',
+          'userMessage': (event.data?['userMessage'] as String?)?.trim() ?? event.message,
+          'shouldContinueLoop': event.data?['shouldContinueLoop'] == true,
+          'reasonCode': (event.data?['reasonCode'] as String?)?.trim() ?? '',
+          'referenceCount': (event.data?['referenceCount'] as num?)?.toInt() ?? 0,
+          'queryCount': (event.data?['queryCount'] as num?)?.toInt() ?? 0,
+          'coveredDimensions': event.data?['coveredDimensions'],
+          'missingDimensions': event.data?['missingDimensions'],
+        };
+    return ToolAssessment.fromJson(raw);
   }
 
   ExplainableFlowEvent? _handleToolResult(AssistantTraceEvent event) {
@@ -340,6 +436,24 @@ class ProcessEventConsolidator {
         return '我在核对关键资料，先把会影响判断的部分查稳。';
       default:
         return '我在确认问题边界，避免后面越查越散。';
+    }
+  }
+
+  String _plannerPhaseToFlowPhase(PlannerPhaseId phase) {
+    switch (phase) {
+      case PlannerPhaseId.searching:
+      case PlannerPhaseId.executing:
+        return PhaseId.execute;
+      case PlannerPhaseId.analyzing:
+        return PhaseId.aggregate;
+      case PlannerPhaseId.answering:
+      case PlannerPhaseId.completed:
+        return PhaseId.answer;
+      case PlannerPhaseId.planning:
+        return PhaseId.plan;
+      case PlannerPhaseId.understanding:
+      default:
+        return PhaseId.understand;
     }
   }
 

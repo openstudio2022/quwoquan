@@ -8,6 +8,7 @@ import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/ui/circle/widgets/my_circles_rail.dart';
 import 'package:quwoquan_app/ui/circle/widgets/rectangular_circle_card.dart';
 
+@Deprecated('遗留首页圈子推荐实现，统一改用 HomeCirclesHubPage。')
 class HomeCirclesRecommendTab extends ConsumerStatefulWidget {
   const HomeCirclesRecommendTab({super.key});
 

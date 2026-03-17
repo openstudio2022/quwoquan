@@ -80,6 +80,8 @@ class IntentGraph {
     this.globalConstraints = const <String, dynamic>{},
     this.clarificationNeeded = false,
     this.recallResult,
+    this.authorityDomains = const <String>[],
+    this.freshnessHoursMax = 0,
   });
 
   final String userGoal;
@@ -105,6 +107,8 @@ class IntentGraph {
   final Map<String, dynamic> globalConstraints;
   final bool clarificationNeeded;
   final RecallResult? recallResult;
+  final List<String> authorityDomains;
+  final int freshnessHoursMax;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'userGoal': userGoal,
@@ -130,6 +134,8 @@ class IntentGraph {
         'globalConstraints': globalConstraints,
         'clarificationNeeded': clarificationNeeded,
         'recallResult': recallResult?.toJson(),
+        'authorityDomains': authorityDomains,
+        'freshnessHoursMax': freshnessHoursMax,
       };
 
   factory IntentGraph.fromJson(Map<String, dynamic> json) {
@@ -157,6 +163,8 @@ class IntentGraph {
       globalConstraints: (json['globalConstraints'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
       clarificationNeeded: json['clarificationNeeded'] == true,
       recallResult: json['recallResult'] is Map ? RecallResult.fromJson((json['recallResult'] as Map).cast<String, dynamic>()) : null,
+      authorityDomains: _assistantStringList(json['authorityDomains']),
+      freshnessHoursMax: (json['freshnessHoursMax'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -192,4 +200,6 @@ class IntentGraphFields {
   static const String globalConstraints = 'globalConstraints';
   static const String clarificationNeeded = 'clarificationNeeded';
   static const String recallResult = 'recallResult';
+  static const String authorityDomains = 'authorityDomains';
+  static const String freshnessHoursMax = 'freshnessHoursMax';
 }

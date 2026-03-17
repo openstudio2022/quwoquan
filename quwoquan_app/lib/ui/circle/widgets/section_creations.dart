@@ -131,6 +131,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   ) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
       padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
       child: Row(
         children: _identityFilters
@@ -139,26 +140,15 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
               final selected = notifier.state.activeSubTab == tab;
               return Padding(
                 padding: EdgeInsets.only(right: AppSpacing.sm),
-                child: ChoiceChip(
-                  label: Text(
-                    UITextConstants.contentLabelForKey(filter.labelKey),
-                  ),
+                child: _CupertinoFilterChip(
+                  label: UITextConstants.contentLabelForKey(filter.labelKey),
                   selected: selected,
-                  onSelected: (_) {
+                  fg: fg,
+                  fgSecondary: fgSecondary,
+                  onPressed: () {
                     notifier.setSubTab(tab);
                     _loadFeed();
                   },
-                  labelStyle: TextStyle(
-                    color: selected ? fg : fgSecondary,
-                    fontWeight: AppTypography.semiBold,
-                  ),
-                  selectedColor: AppColors.primaryColor.withValues(alpha: 0.14),
-                  backgroundColor: Colors.transparent,
-                  side: BorderSide(
-                    color: selected
-                        ? AppColors.primaryColor.withValues(alpha: 0.45)
-                        : fgSecondary.withValues(alpha: 0.2),
-                  ),
                 ),
               );
             })
@@ -174,6 +164,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   ) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
       padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
       child: Row(
         children: _workFormatFilters
@@ -182,26 +173,15 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
               final selected = notifier.state.activeWorkFormat == format;
               return Padding(
                 padding: EdgeInsets.only(right: AppSpacing.sm),
-                child: ChoiceChip(
-                  label: Text(
-                    UITextConstants.contentLabelForKey(filter.labelKey),
-                  ),
+                child: _CupertinoFilterChip(
+                  label: UITextConstants.contentLabelForKey(filter.labelKey),
                   selected: selected,
-                  onSelected: (_) {
+                  fg: fg,
+                  fgSecondary: fgSecondary,
+                  onPressed: () {
                     notifier.setWorkFormat(format);
                     _loadFeed();
                   },
-                  labelStyle: TextStyle(
-                    color: selected ? fg : fgSecondary,
-                    fontWeight: AppTypography.semiBold,
-                  ),
-                  selectedColor: AppColors.primaryColor.withValues(alpha: 0.14),
-                  backgroundColor: Colors.transparent,
-                  side: BorderSide(
-                    color: selected
-                        ? AppColors.primaryColor.withValues(alpha: 0.45)
-                        : fgSecondary.withValues(alpha: 0.2),
-                  ),
                 ),
               );
             })
@@ -591,20 +571,23 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
 
   Widget _buildEmpty(Color fgSecondary) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.photo_library_outlined,
-            size: AppSpacing.xl * 2,
-            color: fgSecondary,
-          ),
-          SizedBox(height: AppSpacing.md),
-          Text(
-            UITextConstants.circleNoCreations,
-            style: TextStyle(fontSize: AppTypography.md, color: fgSecondary),
-          ),
-        ],
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.photo_library_outlined,
+              size: AppSpacing.xl * 2,
+              color: fgSecondary,
+            ),
+            SizedBox(height: AppSpacing.md),
+            Text(
+              UITextConstants.circleNoCreations,
+              style: TextStyle(fontSize: AppTypography.md, color: fgSecondary),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -636,6 +619,56 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CupertinoFilterChip extends StatelessWidget {
+  const _CupertinoFilterChip({
+    required this.label,
+    required this.selected,
+    required this.fg,
+    required this.fgSecondary,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool selected;
+  final Color fg;
+  final Color fgSecondary;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      onPressed: onPressed,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primaryColor.withValues(alpha: 0.12) : null,
+          borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+          border: Border.all(
+            color: selected
+                ? AppColors.primaryColor.withValues(alpha: 0.45)
+                : fgSecondary.withValues(alpha: 0.2),
+          ),
+        ),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.containerSm,
+            vertical: AppSpacing.intraGroupSm,
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected ? fg : fgSecondary,
+              fontWeight: AppTypography.semiBold,
+              fontSize: AppTypography.sm,
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -28,6 +28,25 @@ class ModeDecision {
   final double budgetMultiplier;
 
   bool get isMultiAgent => mode == AgentMode.multiAgent;
+
+  factory ModeDecision.fromJson(Map<String, dynamic> json) {
+    final rawMode = (json['mode'] as String?)?.trim() ?? '';
+    return ModeDecision(
+      mode: rawMode == 'multiAgent' || rawMode == 'multi_agent'
+          ? AgentMode.multiAgent
+          : AgentMode.singleAgent,
+      reason: (json['reason'] as String?)?.trim() ?? 'default_single',
+      subagentCount: (json['subagentCount'] as num?)?.toInt() ?? 1,
+      budgetMultiplier: (json['budgetMultiplier'] as num?)?.toDouble() ?? 1.0,
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'mode': mode.name,
+    'reason': reason,
+    'subagentCount': subagentCount,
+    'budgetMultiplier': budgetMultiplier,
+  };
 }
 
 /// Decides whether to use single-agent or multi-agent orchestration based on
@@ -45,6 +64,21 @@ class ModeDecider {
     required IntentGraph intentGraph,
     RecallResult? recallResult,
   }) {
+    final orchestrationMode =
+        (intentGraph.globalConstraints['orchestrationMode'] as String?)
+            ?.trim() ??
+        (intentGraph.globalConstraints['agentMode'] as String?)?.trim() ??
+        '';
+    if (orchestrationMode == 'multi_agent' ||
+        orchestrationMode == 'multiAgent') {
+      final count = 1 + intentGraph.secondarySkills.length;
+      return ModeDecision(
+        mode: AgentMode.multiAgent,
+        reason: 'model_requested_multi_agent',
+        subagentCount: count <= 1 ? 2 : count,
+        budgetMultiplier: 0.8,
+      );
+    }
     if (intentGraph.isFastConvergence) {
       return const ModeDecision(
         mode: AgentMode.singleAgent,

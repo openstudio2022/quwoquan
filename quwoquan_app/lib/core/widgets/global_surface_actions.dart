@@ -32,10 +32,14 @@ class GlobalTopActions extends StatelessWidget {
               context,
               initialScope: initialSearchScope,
             ),
+            iconAlignment: Alignment.centerRight,
+            visualShiftX: AppSpacing.intraGroupXs / 2,
           ),
         _TopActionIcon(
           icon: CupertinoIcons.add,
           onTap: () => GlobalQuickActionSheet.show(context),
+          iconAlignment: Alignment.centerRight,
+          visualShiftX: AppSpacing.intraGroupXs,
         ),
       ],
     );
@@ -46,23 +50,37 @@ class _TopActionIcon extends StatelessWidget {
   const _TopActionIcon({
     required this.icon,
     required this.onTap,
+    this.iconAlignment = Alignment.center,
+    this.visualShiftX = 0,
   });
 
   final IconData icon;
   final VoidCallback onTap;
+  final Alignment iconAlignment;
+  final double visualShiftX;
 
   @override
   Widget build(BuildContext context) {
     return CupertinoButton(
-      padding: EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+      padding: EdgeInsets.zero,
       minSize: AppSpacing.minInteractiveSize,
       onPressed: onTap,
-      child: Icon(
-        icon,
-        size: AppSpacing.iconMedium,
-        color: AppColorsFunctional.getColor(
-          Theme.of(context).brightness == Brightness.dark,
-          ColorType.foregroundPrimary,
+      child: SizedBox(
+        width: AppSpacing.minInteractiveSize,
+        height: AppSpacing.minInteractiveSize,
+        child: Align(
+          alignment: iconAlignment,
+          child: Transform.translate(
+            offset: Offset(visualShiftX, 0),
+            child: Icon(
+              icon,
+              size: AppSpacing.iconMedium,
+              color: AppColorsFunctional.getColor(
+                Theme.of(context).brightness == Brightness.dark,
+                ColorType.foregroundPrimary,
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -90,81 +108,84 @@ class _QuickActionSheet extends StatelessWidget {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final backgroundColor = SettingsSemanticConstants.pageBackground(isDark);
     
-    return Container(
-      margin: EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            AppSpacing.containerMd,
-            AppSpacing.containerSm,
-            AppSpacing.containerMd,
-            AppSpacing.containerLg,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                UITextConstants.globalActionSheetTitle,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: AppTypography.lg,
-                  fontWeight: AppTypography.semiBold,
-                  color: CupertinoColors.label.resolveFrom(context),
+    return Material(
+      type: MaterialType.transparency,
+      child: Container(
+        margin: EdgeInsets.all(AppSpacing.sm),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              AppSpacing.containerMd,
+              AppSpacing.containerSm,
+              AppSpacing.containerMd,
+              AppSpacing.containerLg,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  UITextConstants.globalActionSheetTitle,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: AppTypography.lg,
+                    fontWeight: AppTypography.semiBold,
+                    color: CupertinoColors.label.resolveFrom(context),
+                  ),
                 ),
-              ),
-              SizedBox(height: AppSpacing.interGroupMd),
-              _ActionTile(
-                icon: CupertinoIcons.photo_on_rectangle,
-                title: UITextConstants.createActionGallery,
-                subtitle: UITextConstants.createActionGalleryHint,
-                onTap: () => _openCreateAction(
-                  context,
-                  EditorStartAction.gallery,
+                SizedBox(height: AppSpacing.interGroupMd),
+                _ActionTile(
+                  icon: CupertinoIcons.photo_on_rectangle,
+                  title: UITextConstants.createActionGallery,
+                  subtitle: UITextConstants.createActionGalleryHint,
+                  onTap: () => _openCreateAction(
+                    context,
+                    EditorStartAction.gallery,
+                  ),
                 ),
-              ),
-              _ActionTile(
-                icon: CupertinoIcons.camera,
-                title: UITextConstants.createActionCamera,
-                subtitle: UITextConstants.createActionCaptureHint,
-                onTap: () => _openCreateAction(
-                  context,
-                  EditorStartAction.capture,
+                _ActionTile(
+                  icon: CupertinoIcons.camera,
+                  title: UITextConstants.createActionCamera,
+                  subtitle: UITextConstants.createActionCaptureHint,
+                  onTap: () => _openCreateAction(
+                    context,
+                    EditorStartAction.capture,
+                  ),
                 ),
-              ),
-              _ActionTile(
-                icon: CupertinoIcons.pencil,
-                title: UITextConstants.createActionTextShort,
-                subtitle: UITextConstants.createActionWriteHint,
-                onTap: () => _openCreateAction(
-                  context,
-                  EditorStartAction.write,
+                _ActionTile(
+                  icon: CupertinoIcons.pencil,
+                  title: UITextConstants.createActionTextShort,
+                  subtitle: UITextConstants.createActionWriteHint,
+                  onTap: () => _openCreateAction(
+                    context,
+                    EditorStartAction.write,
+                  ),
                 ),
-              ),
-              SizedBox(height: AppSpacing.interGroupXs),
-              _ActionTile(
-                icon: CupertinoIcons.person_3,
-                title: UITextConstants.startGroupChat,
-                subtitle: UITextConstants.createActionGroupChatHint,
-                onTap: () => _openStartGroupChat(context),
-              ),
-              _ActionTile(
-                icon: CupertinoIcons.person_add,
-                title: UITextConstants.addContact,
-                subtitle: UITextConstants.createActionContactHint,
-                onTap: () => _openAddContact(context),
-              ),
-              SizedBox(height: AppSpacing.md),
-              CupertinoButton(
-                child: const Text(UITextConstants.cancel),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ],
+                SizedBox(height: AppSpacing.interGroupXs),
+                _ActionTile(
+                  icon: CupertinoIcons.person_3,
+                  title: UITextConstants.startGroupChat,
+                  subtitle: UITextConstants.createActionGroupChatHint,
+                  onTap: () => _openStartGroupChat(context),
+                ),
+                _ActionTile(
+                  icon: CupertinoIcons.person_add,
+                  title: UITextConstants.addContact,
+                  subtitle: UITextConstants.createActionContactHint,
+                  onTap: () => _openAddContact(context),
+                ),
+                SizedBox(height: AppSpacing.md),
+                CupertinoButton(
+                  child: const Text(UITextConstants.cancel),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -253,104 +274,117 @@ class _AddContactSheet extends ConsumerWidget {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final backgroundColor = SettingsSemanticConstants.pageBackground(isDark);
 
-    return Container(
-      margin: EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-      ),
-      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            AppSpacing.containerMd,
-            AppSpacing.containerSm,
-            AppSpacing.containerMd,
-            AppSpacing.containerLg,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                UITextConstants.addContact,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: AppTypography.lg,
-                  fontWeight: AppTypography.semiBold,
-                  color: CupertinoColors.label.resolveFrom(context),
-                ),
-              ),
-              SizedBox(height: AppSpacing.interGroupMd),
-              Expanded(
-                child: CupertinoScrollbar(
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: contacts.length.clamp(0, 8),
-                    separatorBuilder: (_, __) => Container(
-                      margin: EdgeInsets.only(left: AppSpacing.largeAvatarSize + AppSpacing.md),
-                      height: SettingsSemanticConstants.dividerThickness,
-                      color: SettingsSemanticConstants.dividerColor(isDark),
-                    ),
-                    itemBuilder: (context, index) {
-                      final item = contacts[index];
-                      final displayName =
-                          item['displayName']?.toString() ??
-                          item['title']?.toString() ??
-                          '';
-                      final username = item['userId']?.toString() ?? '';
-                      return CupertinoListTile(
-                        leading: Container(
-                          width: AppSpacing.avatarUserMd,
-                          height: AppSpacing.avatarUserMd,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            image: DecorationImage(
-                              image: NetworkImage(
-                                item['avatarUrl']?.toString() ?? '',
-                              ),
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                        ),
-                        title: Text(
-                          displayName,
-                          style: TextStyle(color: CupertinoColors.label.resolveFrom(context)),
-                        ),
-                        subtitle: Text(
-                          username,
-                          style: TextStyle(color: CupertinoColors.secondaryLabel.resolveFrom(context)),
-                        ),
-                        trailing: CupertinoButton(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: AppSpacing.sm,
-                            vertical: AppSpacing.xs,
-                          ),
-                          color: AppColors.primaryColor.withValues(alpha: 0.12),
-                          onPressed: () {
-                            Navigator.of(context).pop();
-                            AppToast.show(context, '已将 $displayName 加入联系候选');
-                          },
-                          child: Text(
-                            UITextConstants.addContact,
-                            style: TextStyle(
-                              fontSize: AppTypography.sm,
-                              color: AppColors.primaryColor,
-                            ),
-                          ),
-                        ),
-                      );
-                    },
+    return Material(
+      type: MaterialType.transparency,
+      child: Container(
+        margin: EdgeInsets.all(AppSpacing.sm),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+        ),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.7,
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              AppSpacing.containerMd,
+              AppSpacing.containerSm,
+              AppSpacing.containerMd,
+              AppSpacing.containerLg,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  UITextConstants.addContact,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: AppTypography.lg,
+                    fontWeight: AppTypography.semiBold,
+                    color: CupertinoColors.label.resolveFrom(context),
                   ),
                 ),
-              ),
-              SizedBox(height: AppSpacing.md),
-              CupertinoButton(
-                child: const Text(UITextConstants.cancel),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ],
+                SizedBox(height: AppSpacing.interGroupMd),
+                Expanded(
+                  child: CupertinoScrollbar(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: contacts.length.clamp(0, 8),
+                      separatorBuilder: (_, __) => Container(
+                        margin: EdgeInsets.only(
+                          left: AppSpacing.largeAvatarSize + AppSpacing.md,
+                        ),
+                        height: SettingsSemanticConstants.dividerThickness,
+                        color: SettingsSemanticConstants.dividerColor(isDark),
+                      ),
+                      itemBuilder: (context, index) {
+                        final item = contacts[index];
+                        final displayName =
+                            item['displayName']?.toString() ??
+                            item['title']?.toString() ??
+                            '';
+                        final username = item['userId']?.toString() ?? '';
+                        return CupertinoListTile(
+                          leading: Container(
+                            width: AppSpacing.avatarUserMd,
+                            height: AppSpacing.avatarUserMd,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              image: DecorationImage(
+                                image: NetworkImage(
+                                  item['avatarUrl']?.toString() ?? '',
+                                ),
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                          title: Text(
+                            displayName,
+                            style: TextStyle(
+                              color: CupertinoColors.label.resolveFrom(context),
+                            ),
+                          ),
+                          subtitle: Text(
+                            username,
+                            style: TextStyle(
+                              color: CupertinoColors.secondaryLabel.resolveFrom(
+                                context,
+                              ),
+                            ),
+                          ),
+                          trailing: CupertinoButton(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: AppSpacing.sm,
+                              vertical: AppSpacing.xs,
+                            ),
+                            color: AppColors.primaryColor.withValues(alpha: 0.12),
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              AppToast.show(context, '已将 $displayName 加入联系候选');
+                            },
+                            child: Text(
+                              UITextConstants.addContact,
+                              style: TextStyle(
+                                fontSize: AppTypography.sm,
+                                color: AppColors.primaryColor,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                SizedBox(height: AppSpacing.md),
+                CupertinoButton(
+                  child: const Text(UITextConstants.cancel),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -432,23 +466,27 @@ class _GlobalSearchPanelState extends ConsumerState<_GlobalSearchPanel> {
     final contactResults = filterList(contactPool, ['displayName', 'userId']);
     final messageResults = filterList(messagePool, ['title', 'lastMessage']);
 
-    return Container(
-      margin: EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-      ),
-      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.9),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            AppSpacing.containerMd,
-            AppSpacing.containerSm,
-            AppSpacing.containerMd,
-            AppSpacing.containerLg,
-          ),
-          child: Column(
+    return Material(
+      type: MaterialType.transparency,
+      child: Container(
+        margin: EdgeInsets.all(AppSpacing.sm),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+        ),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.9,
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              AppSpacing.containerMd,
+              AppSpacing.containerSm,
+              AppSpacing.containerMd,
+              AppSpacing.containerLg,
+            ),
+            child: Column(
             children: [
               Row(
                 children: [
@@ -544,6 +582,7 @@ class _GlobalSearchPanelState extends ConsumerState<_GlobalSearchPanel> {
                 ),
               ),
             ],
+            ),
           ),
         ),
       ),

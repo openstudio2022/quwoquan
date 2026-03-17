@@ -113,7 +113,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      final memberItems = find.byType(InkWell);
+      final memberItems = find.byType(CupertinoListTile);
       expect(memberItems, findsWidgets);
 
       await tester.tap(memberItems.first);
@@ -142,7 +142,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      await tester.tap(find.byType(InkWell).first);
+      await tester.tap(find.byType(CupertinoListTile).first);
       await tester.pumpAndSettle();
 
       await tester.tap(find.text(UITextConstants.cancel));

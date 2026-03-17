@@ -125,6 +125,26 @@ class SkillExecutionShell {
     );
   }
 
+  factory SkillExecutionShell.fromJson(Map<String, dynamic> json) {
+    return SkillExecutionShell(
+      problemClass: (json['problemClass'] as String?)?.trim() ?? 'general',
+      maxIterations: _positiveInt(json['maxIterations'], fallback: 6),
+      toolBudget: _positiveInt(json['toolBudget'], fallback: 12),
+      variantBudget: _nonNegativeInt(json['variantBudget'], fallback: 2),
+      reflectionBudget: _nonNegativeInt(json['reflectionBudget'], fallback: 2),
+      providerPolicy: (json['providerPolicy'] as String?)?.trim() ?? '',
+      preferredProviders: _stringList(
+        json['preferredProviders'],
+        fallback: const <String>[],
+      ),
+      authorityDomains: _stringList(
+        json['authorityDomains'],
+        fallback: const <String>[],
+      ),
+      freshnessHoursMax: _positiveInt(json['freshnessHoursMax'], fallback: 72),
+    );
+  }
+
   Map<String, dynamic> toJson() => <String, dynamic>{
     'problemClass': problemClass,
     'maxIterations': maxIterations,

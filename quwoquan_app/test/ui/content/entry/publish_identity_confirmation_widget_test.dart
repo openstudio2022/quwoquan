@@ -110,6 +110,8 @@ void main() {
     expect(repository.createCallCount, 1);
     expect(repository.publishCallCount, 1);
     expect(repository.lastCreatePayload?['contentIdentity'], 'moment');
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump();
     expect(find.text('打开创作'), findsOneWidget);
   });
 
@@ -136,9 +138,12 @@ void main() {
     expect(repository.publishCallCount, 0);
     expect(find.text('作品·笔记'), findsOneWidget);
 
-    final articleBody = tester.widget<TextFormField>(
-      find.byKey(TestKeys.createArticleBodyInput),
+    final articleBody = tester.widget<CupertinoTextField>(
+      find.descendant(
+        of: find.byKey(TestKeys.createArticleBodyInput),
+        matching: find.byType(CupertinoTextField),
+      ),
     );
-    expect(articleBody.initialValue, longText);
+    expect(articleBody.controller?.text, longText);
   });
 }

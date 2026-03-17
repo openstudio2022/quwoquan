@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/assistant/application/capability_gateway.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
+import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
 
 Widget _wrapBubble({
@@ -9,6 +12,10 @@ Widget _wrapBubble({
   VoidCallback? onTap,
   void Function(LongPressStartDetails)? onLongPressStart,
   bool showFeedbackActions = false,
+  AssistantProcessState? processState,
+  bool answerGateOpen = true,
+  bool isAssistantRunning = false,
+  String? runningStatusLabel,
 }) {
   return MaterialApp(
     home: Scaffold(
@@ -23,6 +30,10 @@ Widget _wrapBubble({
           onLongPressStart: onLongPressStart ?? (_) {},
           onTap: onTap,
           showFeedbackActions: showFeedbackActions,
+          processState: processState,
+          answerGateOpen: answerGateOpen,
+          isAssistantRunning: isAssistantRunning,
+          runningStatusLabel: runningStatusLabel,
         ),
       ),
     ),
@@ -115,11 +126,118 @@ void main() {
         find.textContaining('card:unknown', findRichText: true),
         findsNothing,
       );
+      expect(find.textContaining('内部协议', findRichText: true), findsNothing);
+      expect(find.textContaining('```', findRichText: true), findsNothing);
+    });
+
+    testWidgets('assistant 结构碎片前缀会在最终渲染前被清掉', (tester) async {
+      const dirtyMarkdown =
+          '[{"id":"route_recommendation","query":"九寨沟 4天 路线","dimension":"route"}]'
+          '## 4天路线建议\n\n- 只有 4 天时更推荐西线。';
+      final message = <String, dynamic>{
+        'type': 'text',
+        'content': dirtyMarkdown,
+        'displayMarkdown': dirtyMarkdown,
+        'displayPlainText':
+            '[{"id":"route_recommendation","query":"九寨沟 4天 路线","dimension":"route"}]'
+            '只有 4 天时更推荐西线。',
+        'senderId': AppConceptConstants.assistantSenderId,
+      };
+      await tester.pumpWidget(_wrapBubble(message: message));
+      await tester.pump();
+
       expect(
-        find.textContaining('内部协议', findRichText: true),
+        find.textContaining('4天路线建议', findRichText: true),
+        findsAtLeastNWidgets(1),
+      );
+      expect(
+        find.textContaining('route_recommendation', findRichText: true),
         findsNothing,
       );
-      expect(find.textContaining('```', findRichText: true), findsNothing);
+    });
+
+    testWidgets('assistant 历史消息会从 uiExplainableFlow 恢复过程视图', (tester) async {
+      final message = <String, dynamic>{
+        'type': 'text',
+        'content': '路线建议已经整理好了。',
+        'senderId': AppConceptConstants.assistantSenderId,
+        'uiExplainableFlow': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'phaseId': 'understand',
+            'phaseOrder': 0,
+            'phaseStatus': 'completed',
+            'headline': '我先把问题主线立住',
+            'detail': '',
+            'references': const <Map<String, dynamic>>[],
+          },
+          <String, dynamic>{
+            'phaseId': 'execute',
+            'phaseOrder': 1,
+            'phaseStatus': 'completed',
+            'headline': '我在核对最新资料',
+            'detail': '先把会影响路线判断的限制条件收拢。',
+            'references': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'title': '九寨沟景区公告',
+                'url': 'https://example.com/jiuzhaigou',
+                'source': '官方',
+              },
+            ],
+          },
+        ],
+      };
+      await tester.pumpWidget(_wrapBubble(message: message));
+      await tester.pump();
+
+      expect(
+        find.text(UITextConstants.assistantPhaseCompleted),
+        findsOneWidget,
+      );
+      expect(find.text('已完成 2/2 步'), findsOneWidget);
+
+      await tester.tap(find.byKey(TestKeys.assistantProcessHeader));
+      await tester.pump();
+
+      expect(find.text('先把会影响路线判断的限制条件收拢。'), findsOneWidget);
+      expect(find.text('已核对 1 个来源'), findsOneWidget);
+      expect(
+        find.text(UITextConstants.assistantProcessStageUnderstand),
+        findsOneWidget,
+      );
+      expect(
+        find.text(UITextConstants.assistantProcessStageSearch),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('assistant 流式答案出现后仍保留用户可理解的阶段提示', (tester) async {
+      final message = <String, dynamic>{
+        'type': 'text',
+        'content': '',
+        'streamFinalAnswer': '九寨沟方向备选方案已经整理出来了。',
+        'senderId': AppConceptConstants.assistantSenderId,
+      };
+      await tester.pumpWidget(
+        _wrapBubble(
+          message: message,
+          processState: const AssistantProcessState(
+            stage: ProcessStage.understanding,
+            stageLabel: UITextConstants.assistantPhaseUnderstanding,
+            isStreaming: true,
+          ),
+          answerGateOpen: true,
+          isAssistantRunning: true,
+          runningStatusLabel: UITextConstants.assistantPhaseAnswering,
+        ),
+      );
+      await tester.pump();
+
+      expect(find.textContaining('九寨沟方向备选方案'), findsAtLeastNWidgets(1));
+      expect(
+        find.text(UITextConstants.assistantPhaseAnswering),
+        findsOneWidget,
+        reason: '答案开始显示后，仍应在答案附近保留当前阶段提示',
+      );
     });
   });
 

@@ -11,6 +11,8 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
+import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
+import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 
 /// 创作 Tab：统一承载 `全部 / 点滴 / 作品`。
 class ProfileWorksTab extends ConsumerStatefulWidget {
@@ -60,69 +62,69 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
         )
         .toList(growable: false);
 
-    return Material(
-      color: Colors.transparent,
-      child: Column(
-        children: [
-          _buildIdentityFilters(notifier, state, fg, fgSecondary),
-          if (state.activeSubTab == CreationSubTab.work) ...[
-            SizedBox(height: AppSpacing.sm),
-            _buildWorkFormatFilters(notifier, state, fg, fgSecondary),
-          ],
-          Expanded(
-            child: filtered.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.photo_library_outlined,
-                          size: AppSpacing.xl * 2,
+    return Column(
+      children: [
+        _buildIdentityFilters(notifier, state, fg, fgSecondary),
+        if (state.activeSubTab == CreationSubTab.work) ...[
+          SizedBox(height: AppSpacing.sm),
+          _buildWorkFormatFilters(notifier, state, fg, fgSecondary),
+        ],
+        Expanded(
+          child: filtered.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        CupertinoIcons.photo_on_rectangle,
+                        size: AppSpacing.xl * 2,
+                        color: fgSecondary,
+                      ),
+                      SizedBox(height: AppSpacing.md),
+                      Text(
+                        _emptyStateTitle(
+                          state.activeSubTab,
+                          state.activeWorkFormat,
+                        ),
+                        style: TextStyle(
+                          fontSize: AppTypography.md,
                           color: fgSecondary,
-                        ),
-                        SizedBox(height: AppSpacing.md),
-                        Text(
-                          _emptyStateTitle(
-                            state.activeSubTab,
-                            state.activeWorkFormat,
-                          ),
-                          style: TextStyle(
-                            fontSize: AppTypography.md,
-                            color: fgSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : CustomScrollView(
-                    slivers: [
-                      SliverPadding(
-                        padding: EdgeInsets.fromLTRB(
-                          AppSpacing.feedContentHorizontal(context),
-                          AppSpacing.containerMd,
-                          AppSpacing.feedContentHorizontal(context),
-                          AppSpacing.interGroupLg,
-                        ),
-                        sliver: SliverMasonryGrid.count(
-                          crossAxisCount: 2,
-                          mainAxisSpacing: AppSpacing.interGroupSm,
-                          crossAxisSpacing: AppSpacing.interGroupSm,
-                          childCount: filtered.length,
-                          itemBuilder: (context, index) {
-                            final post = filtered[index];
-                            return _WorksPostCard(
-                              post: post,
-                              isDark: widget.isDark,
-                              onTap: () => _onPostTap(context, post),
-                            );
-                          },
                         ),
                       ),
                     ],
                   ),
-          ),
-        ],
-      ),
+                )
+              : CustomScrollView(
+                  physics: const BouncingScrollPhysics(
+                    parent: AlwaysScrollableScrollPhysics(),
+                  ),
+                  slivers: [
+                    SliverPadding(
+                      padding: EdgeInsets.fromLTRB(
+                        AppSpacing.feedContentHorizontal(context),
+                        AppSpacing.containerMd,
+                        AppSpacing.feedContentHorizontal(context),
+                        AppSpacing.interGroupLg,
+                      ),
+                      sliver: SliverMasonryGrid.count(
+                        crossAxisCount: 2,
+                        mainAxisSpacing: AppSpacing.interGroupSm,
+                        crossAxisSpacing: AppSpacing.interGroupSm,
+                        childCount: filtered.length,
+                        itemBuilder: (context, index) {
+                          final post = filtered[index];
+                          return _WorksPostCard(
+                            post: post,
+                            isDark: widget.isDark,
+                            onTap: () => _onPostTap(context, post),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ],
     );
   }
 
@@ -134,6 +136,7 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
   ) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
       padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
       child: Row(
         children: _identityFilters
@@ -141,23 +144,12 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
               final tab = _creationSubTabForId(filter.id);
               return Padding(
                 padding: EdgeInsets.only(right: AppSpacing.sm),
-                child: ChoiceChip(
-                  label: Text(
-                    UITextConstants.contentLabelForKey(filter.labelKey),
-                  ),
+                child: _FilterChipButton(
+                  label: UITextConstants.contentLabelForKey(filter.labelKey),
                   selected: state.activeSubTab == tab,
-                  onSelected: (_) => notifier.setSubTab(tab),
-                  labelStyle: TextStyle(
-                    color: state.activeSubTab == tab ? fg : fgSecondary,
-                    fontWeight: AppTypography.semiBold,
-                  ),
-                  selectedColor: AppColors.primaryColor.withValues(alpha: 0.14),
-                  backgroundColor: Colors.transparent,
-                  side: BorderSide(
-                    color: state.activeSubTab == tab
-                        ? AppColors.primaryColor.withValues(alpha: 0.45)
-                        : fgSecondary.withValues(alpha: 0.2),
-                  ),
+                  foregroundColor: fg,
+                  secondaryColor: fgSecondary,
+                  onPressed: () => notifier.setSubTab(tab),
                 ),
               );
             })
@@ -174,6 +166,7 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
   ) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
       padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
       child: Row(
         children: _workFormatFilters
@@ -181,23 +174,12 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
               final format = _creationWorkFormatForId(filter.id);
               return Padding(
                 padding: EdgeInsets.only(right: AppSpacing.sm),
-                child: ChoiceChip(
-                  label: Text(
-                    UITextConstants.contentLabelForKey(filter.labelKey),
-                  ),
+                child: _FilterChipButton(
+                  label: UITextConstants.contentLabelForKey(filter.labelKey),
                   selected: state.activeWorkFormat == format,
-                  onSelected: (_) => notifier.setWorkFormat(format),
-                  labelStyle: TextStyle(
-                    color: state.activeWorkFormat == format ? fg : fgSecondary,
-                    fontWeight: AppTypography.semiBold,
-                  ),
-                  selectedColor: AppColors.primaryColor.withValues(alpha: 0.14),
-                  backgroundColor: Colors.transparent,
-                  side: BorderSide(
-                    color: state.activeWorkFormat == format
-                        ? AppColors.primaryColor.withValues(alpha: 0.45)
-                        : fgSecondary.withValues(alpha: 0.2),
-                  ),
+                  foregroundColor: fg,
+                  secondaryColor: fgSecondary,
+                  onPressed: () => notifier.setWorkFormat(format),
                 ),
               );
             })
@@ -291,11 +273,99 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
       context.push(AppRoutePaths.articleDetail(id: post.id));
       return;
     }
+    
+    final state = ref.read(profileNotifierProvider(widget.userId)).state;
+    final filtered = state.creations
+        .where(
+          (p) =>
+              _matchesIdentityFilter(p, state.activeSubTab) &&
+              _matchesWorkFormat(
+                p,
+                state.activeSubTab,
+                state.activeWorkFormat,
+              ),
+        )
+        .toList(growable: false);
+        
+    final initialIndex = filtered.indexWhere((p) => p.id == post.id).clamp(0, filtered.length - 1);
+    final postViews = filtered.map(PostSummaryView.fromDto).toList();
+    final isMoment = post.identity == 'moment';
+
     if (post.displayFormat == 'video') {
-      context.push(AppRoutePaths.videoViewer(index: '0'));
+      context.push(
+        '/video-viewer/$initialIndex',
+        extra: MediaViewerExtra(
+          posts: postViews,
+          initialIndex: initialIndex,
+          category: isMoment ? 'profile_moment' : 'profile',
+        ),
+      );
       return;
     }
-    context.push(AppRoutePaths.mediaViewer(category: 'photo', index: '0'));
+    
+    context.push(
+      '/media-viewer/photo/$initialIndex',
+      extra: MediaViewerExtra(
+        posts: postViews,
+        initialIndex: initialIndex,
+        category: isMoment ? 'profile_moment' : 'profile',
+        initialImageIndex: 0,
+      ),
+    );
+  }
+}
+
+class _FilterChipButton extends StatelessWidget {
+  const _FilterChipButton({
+    required this.label,
+    required this.selected,
+    required this.foregroundColor,
+    required this.secondaryColor,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool selected;
+  final Color foregroundColor;
+  final Color secondaryColor;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoButton(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.containerSm,
+        vertical: AppSpacing.intraGroupSm,
+      ),
+      minimumSize: Size.zero,
+      borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+      color: selected ? AppColors.primaryColor.withValues(alpha: 0.12) : null,
+      onPressed: onPressed,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: selected
+                ? AppColors.primaryColor.withValues(alpha: 0.45)
+                : secondaryColor.withValues(alpha: 0.2),
+          ),
+          borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+        ),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.containerSm,
+            vertical: AppSpacing.intraGroupSm,
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected ? foregroundColor : secondaryColor,
+              fontWeight: AppTypography.semiBold,
+              fontSize: AppTypography.sm,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

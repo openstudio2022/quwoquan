@@ -42,6 +42,13 @@ Widget _wrap(Widget child) => MaterialApp(
   ),
 );
 
+Finder _actionBarText(String label) {
+  return find.descendant(
+    of: find.byType(ProfileActionBar),
+    matching: find.text(label),
+  );
+}
+
 void main() {
   // ── 渲染契约 ─────────────────────────────────────────────────────────────────
 
@@ -247,7 +254,11 @@ void main() {
         ),
       ));
       await tester.pump();
-      expect(find.byType(OutlinedButton), findsWidgets);
+      expect(_actionBarText(UITextConstants.follow), findsAtLeastNWidgets(1));
+      expect(
+        _actionBarText(UITextConstants.profileDirectMessage),
+        findsOneWidget,
+      );
     });
 
     testWidgets('未知 relationTier 不崩溃（fallback 到 legacy）', (tester) async {

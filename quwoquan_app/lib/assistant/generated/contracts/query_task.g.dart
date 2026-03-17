@@ -135,6 +135,8 @@ class QueryTask {
     this.dimension = QueryTaskDimension.unknown,
     this.entityAnchors = const <String>[],
     this.negativeKeywords = const <String>[],
+    this.authorityDomains = const <String>[],
+    this.freshnessHoursMax = 0,
     this.answerShape = AnswerShape.unspecified,
     this.freshnessNeed = FreshnessNeed.unspecified,
   });
@@ -145,6 +147,8 @@ class QueryTask {
   final QueryTaskDimension dimension;
   final List<String> entityAnchors;
   final List<String> negativeKeywords;
+  final List<String> authorityDomains;
+  final int freshnessHoursMax;
   final AnswerShape answerShape;
   final FreshnessNeed freshnessNeed;
 
@@ -163,6 +167,8 @@ class QueryTask {
         if (dimension.displayLabel.isNotEmpty) 'dimensionLabel': dimension.displayLabel,
         if (entityAnchors.isNotEmpty) 'entityAnchors': entityAnchors,
         if (negativeKeywords.isNotEmpty) 'negativeKeywords': negativeKeywords,
+        if (authorityDomains.isNotEmpty) 'authorityDomains': authorityDomains,
+        if (freshnessHoursMax > 0) 'freshnessHoursMax': freshnessHoursMax,
         if (answerShape != AnswerShape.unspecified)
           'answerShape': answerShape.wireName,
         if (freshnessNeed != FreshnessNeed.unspecified)
@@ -189,6 +195,8 @@ class QueryTask {
       dimension: dimension,
       entityAnchors: _stringList(json['entityAnchors']),
       negativeKeywords: _stringList(json['negativeKeywords']),
+      authorityDomains: _stringList(json['authorityDomains']),
+      freshnessHoursMax: (json['freshnessHoursMax'] as num?)?.toInt() ?? 0,
       answerShape: parseAnswerShape((json['answerShape'] as String?)?.trim() ?? ''),
       freshnessNeed: parseFreshnessNeed(
         (json['freshnessNeed'] as String?)?.trim() ?? '',
@@ -203,6 +211,8 @@ class QueryTask {
     QueryTaskDimension? dimension,
     List<String>? entityAnchors,
     List<String>? negativeKeywords,
+    List<String>? authorityDomains,
+    int? freshnessHoursMax,
     AnswerShape? answerShape,
     FreshnessNeed? freshnessNeed,
   }) {
@@ -213,6 +223,8 @@ class QueryTask {
       dimension: dimension ?? this.dimension,
       entityAnchors: entityAnchors ?? this.entityAnchors,
       negativeKeywords: negativeKeywords ?? this.negativeKeywords,
+      authorityDomains: authorityDomains ?? this.authorityDomains,
+      freshnessHoursMax: freshnessHoursMax ?? this.freshnessHoursMax,
       answerShape: answerShape ?? this.answerShape,
       freshnessNeed: freshnessNeed ?? this.freshnessNeed,
     );

@@ -43,13 +43,24 @@ void main() {
       });
       tool = WebFetchTool(client: mockClient);
       final result = await tool.execute(<String, dynamic>{
-        'url': 'https://example.com/page',
+        'url': 'https://example.com/page?utm_source=newsletter',
       });
       expect(result.success, true);
       expect(result.data?['title'], 'Test Page');
       expect(result.data?['content'], contains('Hello world'));
       expect(result.data?['content'], isNot(contains('var x=1')));
       expect(result.data?['url'], 'https://example.com/page');
+      expect(result.data?['source'], 'example.com');
+      final references =
+          (result.data?['references'] as List?)
+              ?.whereType<Map>()
+              .map((item) => item.cast<String, dynamic>())
+              .toList(growable: false) ??
+          const <Map<String, dynamic>>[];
+      expect(references, isNotEmpty);
+      expect(references.first['url'], 'https://example.com/page');
+      expect(references.first['source'], 'example.com');
+      expect(references.first['sourceHost'], 'example.com');
       expect(result.data?['charCount'], isA<int>());
     });
 

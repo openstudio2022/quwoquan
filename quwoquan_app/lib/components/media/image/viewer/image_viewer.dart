@@ -17,6 +17,7 @@ import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/spacing/spacing_extensions.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/media_viewer_toolbar.dart';
 
@@ -239,13 +240,10 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
                         shareCount: _sharesCount,
                         commentCount: _commentsCount,
                         likeCount: _likesCount,
-                        saveCount: _savesCount,
                         isLiked: _isLiked,
-                        isSaved: _isSaved,
                         onShare: _handleShare,
                         onComment: _handleComment,
                         onLike: _handleLike,
-                        onSave: _handleSave,
                         onAssistant: null,
                       ),
                     ),
@@ -768,35 +766,38 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
     final isDark = ref.watch(isDarkProvider);
     showCupertinoModalPopup(
       context: context,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20.r)),
-        ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // 拖拽指示器
-              Container(
-                width: 40.w,
-                height: 4.h,
-                margin: EdgeInsets.only(top: 12.h, bottom: 20.h),
-                decoration: BoxDecoration(
-                  color: isDark ? AppColors.dark.foregroundTertiary : AppColors.light.foregroundTertiary,
-                  borderRadius: BorderRadius.circular(2.r),
+      builder: (context) => Material(
+        type: MaterialType.transparency,
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20.r)),
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 拖拽指示器
+                Container(
+                  width: 40.w,
+                  height: 4.h,
+                  margin: EdgeInsets.only(top: 12.h, bottom: 20.h),
+                  decoration: BoxDecoration(
+                    color: isDark ? AppColors.dark.foregroundTertiary : AppColors.light.foregroundTertiary,
+                    borderRadius: BorderRadius.circular(2.r),
+                  ),
                 ),
-              ),
-              
-              // 功能列表
-              _buildMoreOptionItem(CupertinoIcons.gift, '打赏', isDark, () => _handleReward()),
-              _buildMoreOptionItem(CupertinoIcons.arrow_down_to_line, '保存', isDark, () => _handleSave()),
-              _buildMoreOptionItem(CupertinoIcons.chat_bubble, '私信', isDark, () => _handleMessage()),
-              _buildMoreOptionItem(CupertinoIcons.link, UITextConstants.copyLink, isDark, () => _handleCopyLink()),
-              _buildMoreOptionItem(CupertinoIcons.photo, '查看原图', isDark, () => _handleViewOriginal()),
-              
-              SizedBox(height: 20.h),
-            ],
+                
+                // 功能列表
+                _buildMoreOptionItem(CupertinoIcons.gift, '打赏', isDark, () => _handleReward()),
+                _buildMoreOptionItem(CupertinoIcons.arrow_down_to_line, '保存', isDark, () => _handleSave()),
+                _buildMoreOptionItem(CupertinoIcons.chat_bubble, '私信', isDark, () => _handleMessage()),
+                _buildMoreOptionItem(CupertinoIcons.link, UITextConstants.copyLink, isDark, () => _handleCopyLink()),
+                _buildMoreOptionItem(CupertinoIcons.photo, '查看原图', isDark, () => _handleViewOriginal()),
+                
+                SizedBox(height: 20.h),
+              ],
+            ),
           ),
         ),
       ),
@@ -915,14 +916,6 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
 
   /// 格式化数量显示
   String _formatCount(int count) {
-    if (count >= 1000000) {
-      return '${(count / 1000000).toStringAsFixed(1)}M';
-    } else if (count >= 10000) {
-      return '${(count / 10000).toStringAsFixed(1)}万';
-    } else if (count >= 1000) {
-      return '${(count / 1000).toStringAsFixed(1)}k';
-    } else {
-      return count.toString();
-    }
+    return formatCompactActionCount(count);
   }
 }

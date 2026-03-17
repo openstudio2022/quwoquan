@@ -1,5 +1,6 @@
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
 import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/contracts/skill_run.dart';
 
 /// Stateless evaluator that builds [AggregationState] from the current
@@ -13,18 +14,21 @@ class AggregationGate {
     required List<SkillRun> skillRuns,
     required Map<String, dynamic> answerPayload,
   }) {
-    final dependencyMap = <String, List<String>>{
+    final dependencyMap = <String, AggregationDependencyChainDto>{
       for (final run in skillRuns)
-        run.runId: _normalizeStringList(
-          (run.shell['dependencies'] as List?) ?? const <String>[],
+        run.runId: AggregationDependencyChainDto(
+          runIds: _normalizeStringList(
+            (run.shell['dependencies'] as List?) ?? const <String>[],
+          ),
         ),
     };
-    final blockedBy = <String, String>{
+    final blockedBy = <String, AggregationBlockingSkillStateDto>{
       for (final run in skillRuns)
         if (!run.answerReady && run.domainId.isNotEmpty)
-          run.domainId: run.stopReason.isNotEmpty
-              ? run.stopReason
-              : 'not_ready',
+          run.domainId: AggregationBlockingSkillStateDto(
+            stopReason: _resolveStopReason(run.stopReason),
+            answerReady: run.answerReady,
+          ),
     };
     final blockingSkills = blockedBy.keys.toList(growable: false);
     final allSkillsReady = skillRuns.isNotEmpty && blockingSkills.isEmpty;
@@ -58,22 +62,42 @@ class AggregationGate {
       canGivePartialAnswer: canGivePartialAnswer,
       needExpansion: needExpansion,
       expansionPlan: needExpansion
-          ? <String, dynamic>{
-              'targetSkills': blockingSkills,
-              'strategy': 'broaden_or_retry',
-            }
-          : const <String, dynamic>{},
+          ? AggregationExpansionPlanDto(
+              targetSkills: blockingSkills,
+              policy: ContextScopeExpansionPolicy.expandScopeAndRequery,
+              reasonCode: PlannerReasonCode.needMoreEvidence,
+            )
+          : const AggregationExpansionPlanDto(
+              policy: ContextScopeExpansionPolicy.none,
+            ),
       finalAnswerReady: allSkillsReady || canGivePartialAnswer,
       finalAnswerMode: allSkillsReady
-          ? 'full'
+          ? FinalAnswerMode.full
           : (canGivePartialAnswer
-                ? 'partial'
-                : (clarificationNeeded ? 'clarify' : 'expansion')),
+                ? FinalAnswerMode.boundedAnswer
+                : (clarificationNeeded
+                      ? FinalAnswerMode.clarify
+                      : FinalAnswerMode.retry)),
       clarificationNeeded: clarificationNeeded,
       answerOwner: answerOwner,
       clarificationSource: clarificationSource,
       dependencies: dependencyMap,
     );
+  }
+
+  static FinalAnswerMode _resolveStopReason(String raw) {
+    switch (raw.trim()) {
+      case 'full':
+        return FinalAnswerMode.full;
+      case 'bounded_answer':
+        return FinalAnswerMode.boundedAnswer;
+      case 'clarify':
+        return FinalAnswerMode.clarify;
+      case 'retry':
+        return FinalAnswerMode.retry;
+      default:
+        return FinalAnswerMode.blocked;
+    }
   }
 
   static List<String> _normalizeStringList(Object? value) {

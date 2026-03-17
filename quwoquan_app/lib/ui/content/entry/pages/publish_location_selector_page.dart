@@ -129,9 +129,11 @@ class _PublishLocationSelectorPageState
           },
         ),
       ),
-      child: SafeArea(
-        child: _loading
-            ? Center(
+      child: Material(
+        type: MaterialType.transparency,
+        child: SafeArea(
+          child: _loading
+              ? Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -149,18 +151,19 @@ class _PublishLocationSelectorPageState
                   ],
                 ),
               )
-            : _error != null
-            ? Center(child: _buildErrorCard(l10n, isDark))
-            : ListView(
-                children: [
-                  CupertinoListTile(
-                    title: Text(l10n.locationHidden),
-                    onTap: () =>
-                        Navigator.of(context).pop(CreateLocationOption.hidden),
-                  ),
-                  for (final item in _items) _buildLocationTile(item),
-                ],
-              ),
+              : _error != null
+              ? Center(child: _buildErrorCard(l10n, isDark))
+              : ListView(
+                  children: [
+                    CupertinoListTile(
+                      title: Text(l10n.locationHidden),
+                      onTap: () =>
+                          Navigator.of(context).pop(CreateLocationOption.hidden),
+                    ),
+                    for (final item in _items) _buildLocationTile(item),
+                  ],
+                ),
+        ),
       ),
     );
   }
@@ -332,48 +335,51 @@ class _PublishLocationSearchPageState extends State<PublishLocationSearchPage> {
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
-      child: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: EdgeInsets.all(AppSpacing.interGroupMd),
-              child: CupertinoSearchTextField(
-                controller: _controller,
-                autofocus: true,
-                onChanged: _onQueryChanged,
-                placeholder: l10n.locationSearchHint,
+      child: Material(
+        type: MaterialType.transparency,
+        child: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: EdgeInsets.all(AppSpacing.interGroupMd),
+                child: CupertinoSearchTextField(
+                  controller: _controller,
+                  autofocus: true,
+                  onChanged: _onQueryChanged,
+                  placeholder: l10n.locationSearchHint,
+                ),
               ),
-            ),
-            Expanded(
-              child: _loading
-                  ? const Center(child: CupertinoActivityIndicator())
-                  : _error != null
-                  ? Center(child: _buildErrorCard(l10n, isDark))
-                  : _items.isEmpty
-                  ? Center(
-                      child: Text(
-                        l10n.locationSearchEmpty,
-                        style: TextStyle(
-                          color: CupertinoColors.systemGrey,
-                          fontSize: AppTypography.body,
+              Expanded(
+                child: _loading
+                    ? const Center(child: CupertinoActivityIndicator())
+                    : _error != null
+                    ? Center(child: _buildErrorCard(l10n, isDark))
+                    : _items.isEmpty
+                    ? Center(
+                        child: Text(
+                          l10n.locationSearchEmpty,
+                          style: TextStyle(
+                            color: CupertinoColors.systemGrey,
+                            fontSize: AppTypography.body,
+                          ),
                         ),
+                      )
+                    : ListView.builder(
+                        itemCount: _items.length,
+                        itemBuilder: (context, index) {
+                          final item = _items[index];
+                          return CupertinoListTile(
+                            title: Text(item.name),
+                            subtitle: item.address.trim().isEmpty
+                                ? null
+                                : Text(item.address.trim()),
+                            onTap: () => Navigator.of(context).pop(item),
+                          );
+                        },
                       ),
-                    )
-                  : ListView.builder(
-                      itemCount: _items.length,
-                      itemBuilder: (context, index) {
-                        final item = _items[index];
-                        return CupertinoListTile(
-                          title: Text(item.name),
-                          subtitle: item.address.trim().isEmpty
-                              ? null
-                              : Text(item.address.trim()),
-                          onTap: () => Navigator.of(context).pop(item),
-                        );
-                      },
-                    ),
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );

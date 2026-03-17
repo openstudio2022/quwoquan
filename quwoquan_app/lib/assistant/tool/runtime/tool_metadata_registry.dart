@@ -3,13 +3,29 @@ import 'dart:io';
 
 import 'package:flutter/services.dart' show rootBundle;
 
+/// Permission config for a tool, sourced from [tool_permissions.json].
+class ToolPermissionConfig {
+  const ToolPermissionConfig({
+    required this.requireConfirmation,
+    this.allowedSchemes = const <String>[],
+  });
+
+  final bool requireConfirmation;
+  final List<String> allowedSchemes;
+}
+
 class ToolMetadataRegistry {
   ToolMetadataRegistry({
     this.manifestAssetPath = 'assets/assistant/tools/manifest.json',
+    this.permissionsAssetPath =
+        'assets/assistant/tools/catalog/tool_permissions.json',
   });
 
   final String manifestAssetPath;
+  final String permissionsAssetPath;
   Map<String, dynamic> _catalog = const <String, dynamic>{};
+  Map<String, ToolPermissionConfig> _permissions =
+      const <String, ToolPermissionConfig>{};
   Future<void>? _loadingFuture;
   bool _loaded = false;
 
@@ -21,33 +37,69 @@ class ToolMetadataRegistry {
 
   Future<void> _load() async {
     try {
-      final manifestRaw = await _loadText(manifestAssetPath);
-      final manifestDecoded = jsonDecode(manifestRaw);
-      if (manifestDecoded is! Map) {
-        _catalog = const <String, dynamic>{};
-        _loaded = true;
-        return;
-      }
-      final catalogPath =
-          (manifestDecoded['catalogPath'] as String?)?.trim() ?? '';
-      if (catalogPath.isEmpty) {
-        _catalog = const <String, dynamic>{};
-        _loaded = true;
-        return;
-      }
-      final catalogRaw = await _loadText(catalogPath);
-      final catalogDecoded = jsonDecode(catalogRaw);
-      if (catalogDecoded is! Map) {
-        _catalog = const <String, dynamic>{};
-        _loaded = true;
-        return;
-      }
-      _catalog = catalogDecoded.cast<String, dynamic>();
+      await _loadCatalog();
+      await _loadPermissions();
       _loaded = true;
     } catch (_) {
       _catalog = const <String, dynamic>{};
+      _permissions = const <String, ToolPermissionConfig>{};
       _loaded = true;
+    }
+  }
+
+  Future<void> _loadCatalog() async {
+    final manifestRaw = await _loadText(manifestAssetPath);
+    final manifestDecoded = jsonDecode(manifestRaw);
+    if (manifestDecoded is! Map) {
+      _catalog = const <String, dynamic>{};
       return;
+    }
+    final catalogPath =
+        (manifestDecoded['catalogPath'] as String?)?.trim() ?? '';
+    if (catalogPath.isEmpty) {
+      _catalog = const <String, dynamic>{};
+      return;
+    }
+    final catalogRaw = await _loadText(catalogPath);
+    final catalogDecoded = jsonDecode(catalogRaw);
+    if (catalogDecoded is! Map) {
+      _catalog = const <String, dynamic>{};
+      return;
+    }
+    _catalog = catalogDecoded.cast<String, dynamic>();
+  }
+
+  Future<void> _loadPermissions() async {
+    try {
+      final raw = await _loadText(permissionsAssetPath);
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return;
+      final perms = decoded['permissions'];
+      if (perms is! Map) return;
+      final out = <String, ToolPermissionConfig>{};
+      for (final entry in perms.entries) {
+        final name = (entry.key as String).trim();
+        if (name.isEmpty) continue;
+        final val = entry.value;
+        if (val is! Map) continue;
+        final requireConfirmation =
+            val['requireConfirmation'] == true;
+        final allowedRaw = val['allowedActions'] ?? val['allowedSchemes'];
+        final allowed = allowedRaw is List
+            ? allowedRaw
+                .whereType<String>()
+                .map((s) => s.trim())
+                .where((s) => s.isNotEmpty)
+                .toList(growable: false)
+            : const <String>[];
+        out[name] = ToolPermissionConfig(
+          requireConfirmation: requireConfirmation,
+          allowedSchemes: allowed,
+        );
+      }
+      _permissions = out;
+    } catch (_) {
+      _permissions = const <String, ToolPermissionConfig>{};
     }
   }
 
@@ -207,6 +259,11 @@ class ToolMetadataRegistry {
     if (reasoning is! Map) return null;
     return (reasoning['promptHint'] as String?)?.trim();
   }
+
+  /// Returns permission config for [toolName] from tool_permissions.json.
+  /// Call after [ensureLoaded]. Returns null if not configured.
+  ToolPermissionConfig? permissionForTool(String toolName) =>
+      _permissions[toolName];
 
   /// Resolves a template string containing `{{key}}` placeholders against
   /// the supplied [variables] map.  Unknown placeholders are left as-is.

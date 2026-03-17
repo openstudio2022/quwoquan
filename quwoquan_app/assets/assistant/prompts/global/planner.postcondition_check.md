@@ -18,10 +18,20 @@
 
 ## 输出格式
 输出单个 `assistant_turn` JSON，并满足：
-- `messageKind=progress` 或 `ask_user`
+- 若仍需继续补证据，`messageKind` 只能是 `progress` 或 `ask_user`
+- 若当前证据已经足以直接回答，必须切换为最终 answer 语义，不能继续停留在 `progress`
 - 规划语义统一放在 `intentGraph`
 - 缺少关键信息时，通过 `askUser` / `missingContextSlots` 表达
 - 需要补检索时，通过 `toolPlan` 表达
+
+### 若补齐后已经可以直接回答
+
+当你判断 `decision.nextAction=answer` 时，说明补齐检查已经完成，这一轮必须直接进入最终成答模式，而不是继续输出过程播报。此时必须同时满足：
+
+- `messageKind` 必须是 `answer`
+- `phaseId/actionCode/reasonCode` 必须切到 `answering/compose_answer/evidence_ready`
+- `userMarkdown/result/evidence/reasoningBasis` 必须直接满足最终展示要求
+- 不得再写“我先补一条”“我继续查”“我先确认一下”这类过程态占位话术
 
 ## 反思与自检
 - 是否遗漏任何子意图？

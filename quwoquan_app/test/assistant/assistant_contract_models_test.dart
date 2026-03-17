@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/contracts/ui_process_timeline_entry.dart';
 import 'package:quwoquan_app/assistant/contracts/user_events.dart';
 import 'package:quwoquan_app/assistant/domain/agent/agent.dart';
@@ -24,6 +25,25 @@ void main() {
       expect(graph.isMultiSkill, isTrue);
     });
 
+    test('支持 authorityDomains 与 freshnessHoursMax 解析', () {
+      final graph = IntentGraph.fromJson(const <String, dynamic>{
+        'userGoal': '查深圳天气',
+        'problemShape': 'single_skill',
+        'primarySkill': 'weather',
+        'problemClass': 'realtime_info',
+        'authorityDomains': <String>['weather.com.cn', 'cma.cn'],
+        'freshnessHoursMax': 1,
+      });
+
+      expect(graph.authorityDomains, <String>['weather.com.cn', 'cma.cn']);
+      expect(graph.freshnessHoursMax, 1);
+      expect(graph.toJson()['authorityDomains'], <String>[
+        'weather.com.cn',
+        'cma.cn',
+      ]);
+      expect(graph.toJson()['freshnessHoursMax'], 1);
+    });
+
     test('支持需澄清场景', () {
       final graph = IntentGraph.fromJson(const <String, dynamic>{
         'userGoal': '帮我安排一下',
@@ -43,21 +63,32 @@ void main() {
       final state = AggregationState.fromJson(const <String, dynamic>{
         'allSkillsReady': false,
         'blockingSkills': <String>['travel'],
-        'blockedBy': <String, dynamic>{'travel': 'timeout'},
+        'blockedBy': <String, dynamic>{
+          'travel': <String, dynamic>{'stopReason': 'retry', 'answerReady': false},
+        },
         'canGivePartialAnswer': true,
         'needExpansion': true,
-        'expansionPlan': <String, dynamic>{'target': 'travel'},
+        'expansionPlan': <String, dynamic>{
+          'targetSkills': <String>['travel'],
+          'policy': 'expand_scope_and_requery',
+        },
         'answerOwner': 'skill_weather_1',
         'dependencies': <String, dynamic>{
-          'skill_weather_1': <String>[],
-          'travel_planner_1': <String>['skill_weather_1'],
+          'skill_weather_1': <String, dynamic>{'runIds': <String>[]},
+          'travel_planner_1': <String, dynamic>{
+            'runIds': <String>['skill_weather_1'],
+          },
         },
       });
 
       expect(state.needExpansion, isTrue);
       expect(state.canGivePartialAnswer, isTrue);
       expect(state.blockingSkills, <String>['travel']);
-      expect(state.blockedBy['travel'], equals('timeout'));
+      expect(state.blockedBy['travel']?.stopReason, equals(FinalAnswerMode.retry));
+      expect(
+        state.expansionPlan.policy,
+        equals(ContextScopeExpansionPolicy.expandScopeAndRequery),
+      );
       expect(state.answerOwner, equals('skill_weather_1'));
     });
   });
@@ -222,7 +253,7 @@ void main() {
             'searchIntensity': 'medium',
           },
         ],
-        'uiProcessTimelineV2': <Map<String, dynamic>>[
+        'uiProcessTimeline': <Map<String, dynamic>>[
           <String, dynamic>{
             'scope': 'root',
             'summary': '已拆分为 2 个任务',
@@ -249,7 +280,7 @@ void main() {
         turn.subagentPlan.single.problemClass,
         equals('complex_reasoning'),
       );
-      expect(turn.uiProcessTimelineV2.single.scope, 'root');
+      expect(turn.uiProcessTimeline.single.scope, 'root');
       expect(turn.sessionPreferenceFacts.single.key, equals('feedbackHint'));
 
       final envelope = turn.toEnvelopeMap();

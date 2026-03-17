@@ -49,6 +49,7 @@
 | 垂类特判与干预 | `assets/assistant/skills/<domain>/` 下 SKILL.md、config、scripts | 在 agent_loop、react_runtime、context_orchestrator、websearch_tool、tool_registry 中按 domainId 或关键词做 if/switch |
 | retrieval policy | 对应 skill 的 `config/retrieval_policy.json`、`retrieval_policy.json` | 在 runtime 中硬编码 providerPolicy、freshnessHoursMax、authorityDomains |
 | tool 权限 / domainToolMatrix | `tool_catalog.meta.json` 的 `domainToolMatrix` | 在 tool_registry 中按 domain 硬编码权限或 preferred tools |
+| tool 执行权限（requireConfirmation、allowedActions） | `assets/assistant/tools/catalog/tool_permissions.json` | 在 ToolExecutionGuard、ReactRuntime 中硬编码 requireConfirmation |
 
 ---
 
@@ -61,13 +62,14 @@
 | 旧 prompt stack（非 v4 规划链） | 兼容层 | 不用于新功能 |
 | 基于 RegExp/contains 的语义分类 | 待移除 | 只保留单点兼容兜底，其余移除 |
 | `lib/personal_assistant/app/*` | 兼容层 | 仅保留桥接到 `lib/assistant/{application,runtime}/` 的 shim，不再作为新 UI / provider / gateway 入口 |
+| `lib/assistant/conversation/orchestration/agent_loop.dart` | 兼容桥 / 待抽空 | 禁止新增逻辑；编排主逻辑应迁移到 `orchestration/assistant_agent_loop.dart` 与 `orchestration/phases/` |
 
 ---
 
 ## 六、执行约束与代码门禁
 
 1. **冻结后**：runtime 只消费 typed contract、enum、metadata；不再用自然语言字符串做语义分类或路由。
-2. **代码门禁**：以 `test/personal_assistant/runtime_string_governance_test.dart` 与当前 `lib/assistant/*` 主入口约束为准，禁止在 engine/react/skill/tool 中新增用户可见文案与语义词表。
+2. **代码门禁**：以 `test/assistant/runtime_string_governance_test.dart` 与当前 `lib/assistant/*` 主入口约束为准，禁止在 engine/react/skill/tool 中新增用户可见文案与语义词表。
 3. **新增能力**：必须先更新对应真相源（metadata、prompt、tool catalog、skill config），再改 runtime；禁止反向在 runtime 中先硬编码再补资产。
 4. **generated-only**：`lib/assistant/generated/` 仅允许 codegen 写入，禁止手写、禁止人工修补。
 5. **当前阶段**：只生成端侧 Dart 协议产物并只做端侧校验，但 metadata 设计必须保持与端云一体化一致，后续可生成 Go 产物。

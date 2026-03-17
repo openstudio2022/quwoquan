@@ -1,13 +1,16 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/assistant/infrastructure/openclaw_bridge.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/explainable_flow_event.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/user_events.dart';
+import 'package:quwoquan_app/assistant/conversation/explainability/process_event_consolidator.dart';
 import 'package:quwoquan_app/assistant/orchestration/process_journal_bus.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
@@ -302,6 +305,7 @@ class CapabilityGateway {
   final bool Function() _isAssistantContentIdentityIndexEnabled;
 
   ProcessJournalBus? _journalBus;
+  ProcessEventConsolidator? _flowConsolidator;
 
   bool _isRemoteResponseCommercialReady(AssistantRunResponse response) {
     if (response.degraded) return false;
@@ -385,10 +389,15 @@ class CapabilityGateway {
         } else {
           controller.add(AssistantRunStreamEvent.completed(local));
         }
-      } catch (error) {
+      } catch (error, stackTrace) {
         controller.add(
           AssistantRunStreamEvent.completed(
-            _buildGatewayErrorResponse(request, error, 'runstream_outer'),
+            _buildGatewayErrorResponse(
+              request,
+              error,
+              'runstream_outer',
+              stackTrace: stackTrace,
+            ),
           ),
         );
       } finally {
@@ -475,8 +484,13 @@ class CapabilityGateway {
   ) async {
     try {
       return await _assistantGateway.run(request);
-    } catch (error) {
-      return _buildGatewayErrorResponse(request, error, 'safe_local_run');
+    } catch (error, stackTrace) {
+      return _buildGatewayErrorResponse(
+        request,
+        error,
+        'safe_local_run',
+        stackTrace: stackTrace,
+      );
     }
   }
 
@@ -485,9 +499,7 @@ class CapabilityGateway {
     StreamController<AssistantRunStreamEvent> controller,
   ) async {
     try {
-      _journalBus = ProcessJournalBus(
-        userGoalSummary: _extractUserMessage(request),
-      );
+      _initializeStreamingExplainers(request);
       var hasLiveAnswerDelta = false;
       final response = await _assistantGateway.runWithTraceStream(
         request,
@@ -504,11 +516,12 @@ class CapabilityGateway {
         _resolveChunkDisplayText(response);
       }
       return response;
-    } catch (error) {
+    } catch (error, stackTrace) {
       final fallback = _buildGatewayErrorResponse(
         request,
         error,
         'local_with_stream',
+        stackTrace: stackTrace,
       );
       for (final trace in fallback.traces) {
         _emitCanonicalTraceEvent(trace, controller);
@@ -522,9 +535,7 @@ class CapabilityGateway {
     StreamController<AssistantRunStreamEvent> controller,
   ) async {
     try {
-      _journalBus = ProcessJournalBus(
-        userGoalSummary: _extractUserMessage(request),
-      );
+      _initializeStreamingExplainers(request);
       final response = await _assistantGateway.runWithTraceStream(
         request,
         onTraceEvent: (event) {
@@ -532,11 +543,12 @@ class CapabilityGateway {
         },
       );
       return response;
-    } catch (error) {
+    } catch (error, stackTrace) {
       final fallback = _buildGatewayErrorResponse(
         request,
         error,
         'local_with_stream_silent',
+        stackTrace: stackTrace,
       );
       for (final trace in fallback.traces) {
         _emitCanonicalTraceEvent(trace, controller);
@@ -548,8 +560,15 @@ class CapabilityGateway {
   AssistantRunResponse _buildGatewayErrorResponse(
     AssistantRunRequest request,
     Object error,
-    String source,
-  ) {
+    String source, {
+    StackTrace? stackTrace,
+  }) {
+    if (kDebugMode) {
+      debugPrint('gateway_error[$source]: ${error.runtimeType}: $error');
+      if (stackTrace != null) {
+        debugPrint(stackTrace.toString());
+      }
+    }
     return AssistantRunResponse(
       finalText: '助手服务出现异常，请重试。（$source）',
       degraded: true,
@@ -563,6 +582,8 @@ class CapabilityGateway {
           data: <String, dynamic>{
             'source': source,
             'errorType': error.runtimeType.toString(),
+            'errorMessage': error.toString(),
+            if (stackTrace != null) 'stackTrace': stackTrace.toString(),
           },
         ),
       ],
@@ -570,7 +591,8 @@ class CapabilityGateway {
   }
 
   bool _isUnsafeChunkDisplayCandidate(String raw) {
-    final text = raw.trim();
+    final text =
+        AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(raw);
     if (text.isEmpty) {
       return true;
     }
@@ -602,11 +624,17 @@ class CapabilityGateway {
     }
     if (decision.messageKind == AssistantMessageKind.progress) return '';
 
-    final artifactMarkdown = response.displayMarkdown;
+    final artifactMarkdown =
+        AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
+          response.displayMarkdown,
+        );
     if (!_isUnsafeChunkDisplayCandidate(artifactMarkdown)) {
       return artifactMarkdown;
     }
-    final artifactPlain = response.displayPlainText;
+    final artifactPlain =
+        AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(
+          response.displayPlainText,
+        );
     if (!_isUnsafeChunkDisplayCandidate(artifactPlain)) {
       return artifactPlain;
     }
@@ -614,7 +642,10 @@ class CapabilityGateway {
     final uiAnswer =
         (structured['uiAnswer'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
-    final markdownText = (uiAnswer['markdownText'] as String?)?.trim() ?? '';
+    final markdownText =
+        AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
+          (uiAnswer['markdownText'] as String?)?.trim() ?? '',
+        );
     if (!_isUnsafeChunkDisplayCandidate(markdownText)) {
       return markdownText;
     }
@@ -636,9 +667,7 @@ class CapabilityGateway {
     AssistantRunRequest request,
     StreamController<AssistantRunStreamEvent> controller,
   ) async {
-    _journalBus = ProcessJournalBus(
-      userGoalSummary: _extractUserMessage(request),
-    );
+    _initializeStreamingExplainers(request);
     AssistantRunResponse? completed;
     var completedSeen = false;
     await for (final event in _openClawBridge.runRemoteStream(request)) {
@@ -714,6 +743,17 @@ class CapabilityGateway {
     }
   }
 
+  void _emitExplainableFlowEvent(
+    AssistantTraceEvent event,
+    StreamController<AssistantRunStreamEvent> controller,
+  ) {
+    final consolidator = _flowConsolidator;
+    if (consolidator == null || controller.isClosed) return;
+    final flowEvent = consolidator.consolidate(event);
+    if (flowEvent == null) return;
+    controller.add(AssistantRunStreamEvent.explainableFlow(flowEvent));
+  }
+
   void _emitCanonicalTraceEvent(
     AssistantTraceEvent event,
     StreamController<AssistantRunStreamEvent> controller,
@@ -724,6 +764,7 @@ class CapabilityGateway {
       controller.add(AssistantRunStreamEvent.answerDelta(delta));
     }
     _emitProcessJournalEvent(event, controller);
+    _emitExplainableFlowEvent(event, controller);
   }
 
   void _emitCanonicalUserEvent(
@@ -736,10 +777,15 @@ class CapabilityGateway {
       controller.add(AssistantRunStreamEvent.answerDelta(event.message));
     }
     final journalEvents = _journalBus?.consumeUserEvent(event);
-    if (journalEvents == null) return;
-    for (final item in journalEvents) {
-      if (controller.isClosed) return;
-      controller.add(AssistantRunStreamEvent.processJournal(item));
+    final flowEvent = _flowConsolidator?.consolidateUserEvent(event);
+    if (flowEvent != null) {
+      controller.add(AssistantRunStreamEvent.explainableFlow(flowEvent));
+    }
+    if (journalEvents != null) {
+      for (final item in journalEvents) {
+        if (controller.isClosed) return;
+        controller.add(AssistantRunStreamEvent.processJournal(item));
+      }
     }
   }
 
@@ -749,6 +795,20 @@ class CapabilityGateway {
       return '';
     }
     return ((event.data?['delta'] as String?) ?? event.message).trim();
+  }
+
+  void _initializeStreamingExplainers(AssistantRunRequest request) {
+    final problemClass =
+        (request.contextScopeHint['problemClass'] as String?)?.trim() ?? '';
+    final mode = (request.contextScopeHint['mode'] as String?)?.trim() ?? '';
+    final multiAgent = mode == 'multi_agent' || mode == 'multiAgent';
+    final userGoalSummary = _extractUserMessage(request);
+    _journalBus = ProcessJournalBus(userGoalSummary: userGoalSummary);
+    _flowConsolidator = ProcessEventConsolidator(
+      userGoalSummary: userGoalSummary,
+      problemClass: problemClass,
+      multiAgent: multiAgent,
+    );
   }
 
   Future<AssistantToolResult> invokeSkill({

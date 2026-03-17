@@ -6,6 +6,26 @@ import 'package:quwoquan_app/assistant/orchestration/trace_user_event_translator
 
 void main() {
   group('trace user event translator', () {
+    test('phase narrative lifecycleStart 转成用户态 process event', () {
+      final event = AssistantTraceEvent(
+        type: AssistantTraceEventType.lifecycleStart,
+        message: '我先把问题主线理清，再决定怎么查。',
+        timestamp: DateTime.now(),
+        runId: 'run_1',
+        data: const <String, dynamic>{
+          'phaseNarrative': true,
+          'phaseId': 'understand',
+          'narrative': '我先把问题主线理清，再决定怎么查。',
+        },
+      );
+
+      final translated = TraceUserEventTranslator.translate(event);
+      expect(translated, isNotNull);
+      expect(translated!.type, UserEventType.processCommit);
+      expect(translated.payload['reasonShort'], '我先把问题主线理清，再决定怎么查。');
+      expect(translated.payload['phaseId'], PlannerPhaseId.understanding.wireName);
+    });
+
     test('searchQueryGenerated 使用 canonical process code', () {
       final event = AssistantTraceEvent(
         type: AssistantTraceEventType.searchQueryGenerated,

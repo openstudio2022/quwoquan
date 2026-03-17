@@ -172,8 +172,12 @@ Widget _wrapWithAppAppearance({
     child: MediaQuery(
       data: MediaQuery.of(context).copyWith(
         textScaler: TextScaler.linear(snapshot.textScaleFactor),
-        boldText: snapshot.boldText,
-        highContrast: snapshot.highContrast,
+        // `boldText/highContrast` recently started being synced back from the
+        // platform. On several Cupertino-style pages this triggers unexpected
+        // emphasized/underlined text rendering on real devices, so keep these
+        // flags neutral until those pages are adapted for the accessibility mode.
+        boldText: false,
+        highContrast: false,
       ),
       child: child,
     ),

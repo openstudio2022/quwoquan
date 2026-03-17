@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_policies.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
@@ -54,6 +55,17 @@ class ReactRuntime {
              allowedSchemes: ['tel', 'sms', 'mailto', 'maps'],
            ),
          },
+         permissionResolver: toolMetadataRegistry != null
+             ? (name) {
+                 final c = toolMetadataRegistry.permissionForTool(name);
+                 return c != null
+                     ? ToolPermission(
+                         requireConfirmation: c.requireConfirmation,
+                         allowedSchemes: c.allowedSchemes,
+                       )
+                     : null;
+               }
+             : null,
        ),
        _resultTruncator = const ToolResultTruncator();
 
@@ -167,6 +179,7 @@ class ReactRuntime {
     _assessor.reset();
     _assessor.problemClass =
         (templateVariables['problemClass'] as String?)?.trim() ?? '';
+    _assessor.boundaryPolicy = _resolveAnswerBoundaryPolicy(templateVariables);
     _executionGuard.reset();
     final goalText = goal.isEmpty
         ? (messages.lastWhere(
@@ -215,8 +228,9 @@ class ReactRuntime {
     var finalText = '';
     while (!state.shouldStopByIteration && !state.shouldStopByBudget) {
       state.iteration += 1;
-      final availableToolNames =
-          availableToolNamesOverride ?? listAvailableToolNames();
+      final availableToolNames = state.forceAnswerOnly
+          ? const <String>[]
+          : (availableToolNamesOverride ?? listAvailableToolNames());
       pushTrace(
         AssistantTraceEvent(
           type: AssistantTraceEventType.thinkingStarted,
@@ -306,10 +320,10 @@ class ReactRuntime {
       );
       final currentDomainId =
           (templateVariables['domainId'] as String?)?.trim() ?? '';
-      final contextEnvelope =
-          (templateVariables['contextEnvelope'] as Map?)
-              ?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
+      final contextEnvelope = _templateMapVariable(
+        templateVariables,
+        'contextEnvelope',
+      );
       pushTrace(
         AssistantTraceEvent(
           type: AssistantTraceEventType.assistantDelta,
@@ -696,8 +710,7 @@ class ReactRuntime {
           result: result,
         );
         // Truncate tool result to prevent context window overflow
-        final rawContent = jsonEncode(toolObservation);
-        final truncatedContent = _resultTruncator.truncate(rawContent);
+        final truncatedContent = _resultTruncator.truncateJson(toolObservation);
         // OpenAI 协议要求：tool message 必须有 tool_call_id，对应 assistant message 里的 tool_calls[].id
         final effectiveCallId = step.toolCallId.isNotEmpty
             ? step.toolCallId
@@ -811,19 +824,20 @@ class ReactRuntime {
             runId: runId,
             traceId: traceId,
             data: <String, dynamic>{
-              'assessmentType': assessment.type.name,
+              'assessment': assessment.toJson(),
+              'assessmentType': assessment.assessmentType.wireName,
               'userMessage': assessment.userMessage,
               'shouldContinueLoop': assessment.shouldContinueLoop,
               'isAssessment': true,
-              'referenceCount':
-                  ((result.data?['referenceCount'] as num?)?.toInt() ??
-                  ((result.data?['references'] as List?)?.length ?? 0)),
-              if (result.data?['queryCount'] != null)
-                'queryCount': result.data?['queryCount'],
+              'allowAnswerWithCurrentEvidence':
+                  assessment.allowAnswerWithCurrentEvidence,
+              'reasonCode': assessment.reasonCode.wireName,
+              'referenceCount': assessment.referenceCount,
+              'queryCount': assessment.queryCount,
               if (result.data?['queryLabels'] is List)
                 'queryLabels': result.data?['queryLabels'],
-              if (result.data?['coveredDimensions'] is List)
-                'coveredDimensions': result.data?['coveredDimensions'],
+              'coveredDimensions': assessment.coveredDimensions,
+              'missingDimensions': assessment.missingDimensions,
             },
           ),
         );
@@ -837,9 +851,23 @@ class ReactRuntime {
               timestamp: DateTime.now(),
               runId: runId,
               traceId: traceId,
-              data: <String, dynamic>{'reason': assessment.type.name},
+              visibility: TraceVisibility.internal,
+              data: <String, dynamic>{
+                'reason': assessment.reasonCode.wireName,
+                'assessment': assessment.toJson(),
+              },
             ),
           );
+          break;
+        }
+        if (!assessment.shouldContinueLoop) {
+          state.forceAnswerOnly = true;
+          messages.add(<String, String>{
+            'role': 'system',
+            'content': assessment.allowAnswerWithCurrentEvidence
+                ? '当前已经拿到足够支持回答的证据。不要继续调用任何工具，直接基于已有证据输出最终 answer；如果仍有不确定点，请用 bounded answer 明确说明边界。'
+                : '当前步骤已经足够进入成答。不要继续调用任何工具，直接输出最终 answer。',
+          });
           break;
         }
       }
@@ -904,6 +932,23 @@ class ReactRuntime {
       }
     }
     return false;
+  }
+
+  AnswerBoundaryPolicy _resolveAnswerBoundaryPolicy(
+    Map<String, dynamic> templateVariables,
+  ) {
+    final raw =
+        (templateVariables['answerBoundaryPolicy'] as Map?)
+            ?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    if (raw.isEmpty) {
+      return const AnswerBoundaryPolicy();
+    }
+    try {
+      return AnswerBoundaryPolicy.fromJson(raw);
+    } catch (_) {
+      return const AnswerBoundaryPolicy();
+    }
   }
 
   Map<String, dynamic> _buildToolFailureContext({
@@ -1007,11 +1052,31 @@ class ReactRuntime {
   _RuntimeExecutionShell _resolveExecutionShell(
     Map<String, dynamic> templateVariables,
   ) {
-    final raw =
-        (templateVariables['skillExecutionShell'] as Map?)
-            ?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+    final raw = _templateMapVariable(templateVariables, 'skillExecutionShell');
     return _RuntimeExecutionShell.fromMap(raw);
+  }
+
+  Map<String, dynamic> _templateMapVariable(
+    Map<String, dynamic> templateVariables,
+    String key,
+  ) {
+    final raw = templateVariables[key];
+    if (raw is Map) {
+      return raw.cast<String, dynamic>();
+    }
+    if (raw is String) {
+      final text = raw.trim();
+      if (text.isEmpty) return const <String, dynamic>{};
+      try {
+        final decoded = jsonDecode(text);
+        if (decoded is Map) {
+          return decoded.cast<String, dynamic>();
+        }
+      } catch (_) {
+        return const <String, dynamic>{};
+      }
+    }
+    return const <String, dynamic>{};
   }
 
   List<AssistantToolCall> _sanitizeToolCalls(
@@ -1031,9 +1096,8 @@ class ReactRuntime {
             );
           }
           final queryTasks = _buildSearchQueryTasks(args: args, shell: shell);
-          if (queryTasks.length >= 2) {
+          if (queryTasks.isNotEmpty) {
             args['queryTasks'] = queryTasks;
-            args.remove('queryVariants');
             final count = _RuntimeExecutionShell._positiveInt(
               args['count'],
               fallback: 5,
@@ -1041,12 +1105,7 @@ class ReactRuntime {
             if (count > 4) {
               args['count'] = 4;
             }
-          } else if (queryTasks.length == 1) {
-            args['query'] = queryTasks.first['query'];
-            args['queryTasks'] = queryTasks;
-            args.remove('queryVariants');
           } else {
-            args.remove('queryVariants');
             args.remove('queryTasks');
           }
           if (shell.providerPolicyType == ProviderPolicy.authorityFirst) {
@@ -1097,7 +1156,6 @@ class ReactRuntime {
     required Map<String, dynamic> args,
     required _RuntimeExecutionShell shell,
   }) {
-    final taskBudget = shell.variantBudget <= 0 ? 1 : shell.variantBudget;
     final queryNormalization =
         (args['queryNormalization'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
@@ -1123,44 +1181,20 @@ class ReactRuntime {
     };
     final existingTasks = _coerceSearchTasks(args['queryTasks']);
     if (existingTasks.isNotEmpty) {
+      final taskBudget = shell.variantBudget <= 0 ? 1 : shell.variantBudget;
       return _normalizeSearchTasks(
         existingTasks,
         commonMetadata: commonTaskMetadata,
       ).take(taskBudget).toList(growable: false);
     }
-
-    final directQuery = (args['query'] as String?)?.trim() ?? '';
-    final queryVariants =
-        (args['queryVariants'] as List?)
-            ?.map((item) => item.toString().trim())
-            .where((item) => item.isNotEmpty)
-            .toList(growable: false) ??
-        const <String>[];
-
-    final tasks = <Map<String, dynamic>>[];
-    final seen = <String>{};
-
-    void addTask(String query, {String label = '', String dimension = ''}) {
-      final normalizedQuery = query.trim().replaceAll(RegExp(r'\s+'), ' ');
-      if (normalizedQuery.isEmpty || !seen.add(normalizedQuery)) return;
-      tasks.add(<String, dynamic>{
-        'query': normalizedQuery,
-        'label': label.isNotEmpty ? label : _compactTaskLabel(normalizedQuery),
-        if (dimension.isNotEmpty) 'dimension': dimension,
-        ...commonTaskMetadata,
-      });
+    if (shell.preComputedQueryTasks.isNotEmpty) {
+      final taskBudget = shell.variantBudget <= 0 ? 1 : shell.variantBudget;
+      return _normalizeSearchTasks(
+        shell.preComputedQueryTasks,
+        commonMetadata: commonTaskMetadata,
+      ).take(taskBudget).toList(growable: false);
     }
-
-    if (directQuery.isNotEmpty) {
-      addTask(directQuery);
-    }
-    for (final variant in queryVariants) {
-      addTask(variant);
-    }
-
-    if (tasks.isEmpty) return const <Map<String, dynamic>>[];
-    final limit = queryVariants.isNotEmpty ? taskBudget + 1 : taskBudget;
-    return tasks.take(limit).toList(growable: false);
+    return const <Map<String, dynamic>>[];
   }
 
   List<Map<String, dynamic>> _coerceSearchTasks(Object? raw) {
@@ -1179,12 +1213,10 @@ class ReactRuntime {
       try {
         return _coerceSearchTasks(jsonDecode(text));
       } catch (_) {
-        // Fall through to a single query task.
+        return const <Map<String, dynamic>>[];
       }
     }
-    return <Map<String, dynamic>>[
-      <String, dynamic>{'query': text, 'label': _compactTaskLabel(text)},
-    ];
+    return const <Map<String, dynamic>>[];
   }
 
   List<Map<String, dynamic>> _normalizeSearchTasks(
@@ -1465,6 +1497,7 @@ class _RuntimeExecutionShell {
     required this.preferredProviders,
     required this.authorityDomains,
     required this.freshnessHoursMax,
+    this.preComputedQueryTasks = const [],
   });
 
   final int toolBudget;
@@ -1475,10 +1508,18 @@ class _RuntimeExecutionShell {
   final List<String> preferredProviders;
   final List<String> authorityDomains;
   final int freshnessHoursMax;
+  final List<Map<String, dynamic>> preComputedQueryTasks;
 
   ProviderPolicy get providerPolicyType => parseProviderPolicy(providerPolicy);
 
   factory _RuntimeExecutionShell.fromMap(Map<String, dynamic> map) {
+    final rawTasks = map['preComputedQueryTasks'];
+    final tasks = rawTasks is List
+        ? rawTasks
+              .whereType<Map>()
+              .map((item) => item.cast<String, dynamic>())
+              .toList(growable: false)
+        : const <Map<String, dynamic>>[];
     return _RuntimeExecutionShell(
       toolBudget: _positiveInt(map['toolBudget'], fallback: 12),
       variantBudget: _nonNegativeInt(map['variantBudget'], fallback: 2),
@@ -1491,6 +1532,7 @@ class _RuntimeExecutionShell {
       preferredProviders: _stringList(map['preferredProviders']),
       authorityDomains: _stringList(map['authorityDomains']),
       freshnessHoursMax: _positiveInt(map['freshnessHoursMax'], fallback: 72),
+      preComputedQueryTasks: tasks,
     );
   }
 

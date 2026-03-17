@@ -18,13 +18,14 @@ import 'package:quwoquan_app/components/more_actions_popup/configs/media_post_co
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
+import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
@@ -252,6 +253,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
         Expanded(
           child: PageView(
             controller: _primaryPageController,
+            physics: const BouncingScrollPhysics(),
             onPageChanged: (index) {
               final id = _primaryTabIds[index];
               if (id != _activeType) {
@@ -276,10 +278,10 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
         ? Colors.black
         : AppColorsFunctional.getColor(themeDark, ColorType.backgroundPrimary);
 
-    return Scaffold(
+    return AppScaffold(
       key: TestKeys.discoveryPage,
       backgroundColor: Colors.transparent,
-      body: Stack(
+      child: Stack(
         fit: StackFit.expand,
         children: [
           AnimatedContainer(
@@ -589,6 +591,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
                 item: dto,
                 isDark: isDark,
                 isFirst: isFirst,
+                sourceCircleName: _sourceCircleNameForPost(dto),
                 onUserTap: (id) {
                   context.push(
                     AppRoutePaths.userProfile(username: id),
@@ -989,6 +992,20 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     );
   }
 
+  String _sourceCircleNameForPost(PostBaseDto post) {
+    final raw = ref
+        .read(appContentRepositoryProvider)
+        .discoveryMomentData
+        .cast<Map<String, dynamic>?>()
+        .firstWhere(
+          (item) =>
+              item?['postId']?.toString() == post.id ||
+              item?['id']?.toString() == post.id,
+          orElse: () => null,
+        );
+    return raw?['circleName']?.toString().trim() ?? '';
+  }
+
   void _trackShareAction(String postId, String actionId) {
     ref
         .read(behaviorRepositoryProvider)
@@ -1016,6 +1033,7 @@ class _MomentPostCard extends StatefulWidget {
   final MomentPostDto item;
   final bool isDark;
   final bool isFirst;
+  final String sourceCircleName;
   final void Function(String) onUserTap;
   final void Function(PostBaseDto, int) onPostTap;
   final void Function(dynamic)? onCommentTap;
@@ -1027,6 +1045,7 @@ class _MomentPostCard extends StatefulWidget {
     required this.item,
     required this.isDark,
     this.isFirst = false,
+    this.sourceCircleName = '',
     required this.onUserTap,
     required this.onPostTap,
     this.onCommentTap,
@@ -1042,7 +1061,6 @@ class _MomentPostCard extends StatefulWidget {
 class _MomentPostCardState extends State<_MomentPostCard>
     with SingleTickerProviderStateMixin {
   bool _isLiked = false;
-  bool _isBookmarked = false;
   late AnimationController _likeAnimationController;
 
   @override
@@ -1078,7 +1096,6 @@ class _MomentPostCardState extends State<_MomentPostCard>
       ColorType.backgroundQuoted,
     );
     final likeColor = _isLiked ? AppColors.error : muted;
-    final bookmarkColor = _isBookmarked ? AppColors.warning : muted;
 
     final borderRadius = isFirst
         ? BorderRadius.only(
@@ -1116,14 +1133,14 @@ class _MomentPostCardState extends State<_MomentPostCard>
                     Text(
                       item.displayName,
                       style: TextStyle(
-                        fontSize: AppTypography.base,
+                        fontSize: AppTypography.lg,
                         fontWeight: AppTypography.medium,
                         color: fg,
                       ),
                     ),
                     SizedBox(height: AppSpacing.intraGroupXs / 2),
                     Text(
-                      _toTimeAgo(item.createdAt, context.l10n),
+                      _buildMomentMeta(context, item.createdAt),
                       style: TextStyle(
                         fontSize: AppTypography.sm,
                         color: muted,
@@ -1179,53 +1196,43 @@ class _MomentPostCardState extends State<_MomentPostCard>
             ),
           ],
           SizedBox(height: AppSpacing.interGroupSm),
-          // Action row — same icon set and order as the works channel:
-          // like · share · save · comment, distributed with equal spacing.
+          // Action row — like · share · comment, fixed to three aligned columns.
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              GestureDetector(
-                onTap: () {
-                  setState(() => _isLiked = !_isLiked);
-                  _likeAnimationController.forward(from: 0);
-                  _likeAnimationController.reverse();
-                  if (_isLiked) widget.onBehavior?.call('like', item);
-                },
-                child: _actionChip(
-                  _isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
-                  _formatCount(item.likeCount + (_isLiked ? 1 : 0)),
-                  isDark,
-                  iconColor: likeColor,
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() => _isLiked = !_isLiked);
+                    _likeAnimationController.forward(from: 0);
+                    _likeAnimationController.reverse();
+                    if (_isLiked) widget.onBehavior?.call('like', item);
+                  },
+                  child: _actionChip(
+                    _isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
+                    formatCompactActionCount(item.likeCount + (_isLiked ? 1 : 0)),
+                    isDark,
+                    iconColor: likeColor,
+                  ),
                 ),
               ),
-              GestureDetector(
-                onTap: () => widget.onShareTap?.call(item),
-                child: _actionChip(
-                  CupertinoIcons.arrowshape_turn_up_right,
-                  _formatCount(item.shareCount),
-                  isDark,
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => widget.onShareTap?.call(item),
+                  child: _actionChip(
+                    CupertinoIcons.arrowshape_turn_up_right,
+                    formatCompactActionCount(item.shareCount),
+                    isDark,
+                  ),
                 ),
               ),
-              GestureDetector(
-                onTap: () {
-                  setState(() => _isBookmarked = !_isBookmarked);
-                  if (_isBookmarked) widget.onBehavior?.call('favorite', item);
-                },
-                child: _actionChip(
-                  _isBookmarked
-                      ? CupertinoIcons.star_fill
-                      : CupertinoIcons.star,
-                  _formatCount(item.favoriteCount + (_isBookmarked ? 1 : 0)),
-                  isDark,
-                  iconColor: bookmarkColor,
-                ),
-              ),
-              GestureDetector(
-                onTap: () => widget.onCommentTap?.call(item),
-                child: _actionChip(
-                  CupertinoIcons.chat_bubble,
-                  _formatCount(item.commentCount),
-                  isDark,
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => widget.onCommentTap?.call(item),
+                  child: _actionChip(
+                    CupertinoIcons.chat_bubble,
+                    formatCompactActionCount(item.commentCount),
+                    isDark,
+                  ),
                 ),
               ),
             ],
@@ -1235,13 +1242,10 @@ class _MomentPostCardState extends State<_MomentPostCard>
     );
   }
 
-  /// Mirrors the same logic as _WorksImmersiveViewerState._formatCount.
-  /// < 10 000 : raw number  |  10 000–99 999 : x.y万+  |  ≥ 100 000 : 10万+
-  String _formatCount(int n) {
-    if (n < 10000) return '$n';
-    if (n >= 100000) return '10万+';
-    final tenK = (n / 10000 * 10).floor() / 10;
-    return (tenK * 10).round() % 10 == 0 ? '${tenK.truncate()}万+' : '$tenK万+';
+  String _buildMomentMeta(BuildContext context, DateTime createdAt) {
+    final time = _toTimeAgo(createdAt, context.l10n);
+    if (widget.sourceCircleName.isEmpty) return time;
+    return '$time · ${UITextConstants.sourceFromPrefix}${widget.sourceCircleName}';
   }
 
   Widget _actionChip(
@@ -1254,16 +1258,24 @@ class _MomentPostCardState extends State<_MomentPostCard>
       isDark,
       ColorType.foregroundSecondary,
     );
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: AppSpacing.iconMedium, color: iconColor ?? muted),
-        SizedBox(width: AppSpacing.intraGroupXs),
-        Text(
-          count,
-          style: TextStyle(fontSize: AppTypography.sm, color: muted),
+    return SizedBox(
+      width: double.infinity,
+      child: Center(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: AppSpacing.iconMedium, color: iconColor ?? muted),
+            SizedBox(width: AppSpacing.intraGroupXs),
+            Text(
+              count,
+              maxLines: 1,
+              overflow: TextOverflow.fade,
+              softWrap: false,
+              style: TextStyle(fontSize: AppTypography.sm, color: muted),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
@@ -2080,8 +2092,9 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                     final tab = ContentUIConfig.discoveryTabs
                         .cast<DiscoveryTabConfig?>()
                         .firstWhere((t) => t!.id == id, orElse: () => null);
-                    if (tab?.layout != 'full_width_vertical_pager')
+                    if (tab?.layout != 'full_width_vertical_pager') {
                       widget.onTabChange(id);
+                    }
                   },
                   onHorizontalDragEnd: _onPrimaryDragEnd,
                   trailingActions: [

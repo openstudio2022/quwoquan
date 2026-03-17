@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -61,7 +62,7 @@ void main() {
       expect(find.text('允许私助使用我的创作内容'), findsOneWidget);
       expect(find.text('未允许'), findsOneWidget);
 
-      await tester.tap(find.byType(Switch).at(1));
+      await tester.tap(find.byType(CupertinoSwitch).at(1));
       await tester.pumpAndSettle();
 
       final container = ProviderScope.containerOf(

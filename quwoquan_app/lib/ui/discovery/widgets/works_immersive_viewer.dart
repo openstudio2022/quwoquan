@@ -308,18 +308,6 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     });
   }
 
-  String _formatCount(int n) {
-    if (n < 10000) return '$n';
-    if (n >= 100000) return '10万+';
-    // 10 000 ≤ n < 100 000: show as x.y万+ floored to one decimal.
-    // e.g. 32 999 → 3.2万+  |  10 001 → 1万+  |  15 000 → 1.5万+
-    final tenK = (n / 10000 * 10).floor() / 10;
-    final s = (tenK * 10).round() % 10 == 0
-        ? '${tenK.truncate()}万+'
-        : '$tenK万+';
-    return s;
-  }
-
   Map<String, dynamic>? _rawPostById(String postId) {
     final repo = ref.watch(appContentRepositoryProvider);
     final all = <Map<String, dynamic>>[
@@ -554,12 +542,8 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                 shareCount:
                     currentPost.shareCount +
                     (_shareCountDelta[currentPost.id] ?? 0),
-                favoriteCount:
-                    currentPost.favoriteCount +
-                    (_savedPosts.contains(currentPost.id) ? 1 : 0),
                 commentCount: currentPost.commentCount,
                 isLiked: _likedPosts.contains(currentPost.id),
-                isSaved: _savedPosts.contains(currentPost.id),
                 isFollowing: _followingUsers.contains(currentPost.authorId),
                 showFollowButton: _showFollowButton,
                 onUserTap: () => widget.onUserTap(
@@ -573,7 +557,6 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                 ),
                 onFollowTap: () => _onFollow(currentPost),
                 onLikeTap: () => _onLike(currentPost),
-                onFavoriteTap: () => _onFavorite(currentPost),
                 onCommentTap: () => _openCommentFor(context, currentPost.id),
                 onShareTap: () => _sharePost(
                   context,
@@ -585,7 +568,6 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                   ),
                 ),
                 onRevealSystemNav: widget.onRevealSystemNav,
-                formatCount: _formatCount,
               ),
             ),
         ],

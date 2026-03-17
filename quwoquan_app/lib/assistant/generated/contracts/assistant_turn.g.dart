@@ -432,7 +432,7 @@ class AssistantTurnOutput {
     this.skillRuns = const <SkillRun>[],
     this.aggregationState,
     this.userEvents = const <UserEvent>[],
-    this.uiProcessTimelineV2 = const <UiProcessTimelineEntry>[],
+    this.uiProcessTimeline = const <UiProcessTimelineEntry>[],
     this.toolPlan = const <AssistantTurnToolCall>[],
     this.missingContextSlots = const <String>[],
     this.fillGuidance = const <AssistantTurnFillGuidanceItem>[],
@@ -467,7 +467,7 @@ class AssistantTurnOutput {
   final List<SkillRun> skillRuns;
   final AggregationState? aggregationState;
   final List<UserEvent> userEvents;
-  final List<UiProcessTimelineEntry> uiProcessTimelineV2;
+  final List<UiProcessTimelineEntry> uiProcessTimeline;
   final List<AssistantTurnToolCall> toolPlan;
   final List<String> missingContextSlots;
   final List<AssistantTurnFillGuidanceItem> fillGuidance;
@@ -502,7 +502,7 @@ class AssistantTurnOutput {
         'skillRuns': skillRuns.map((item) => item.toJson()).toList(growable: false),
         'aggregationState': aggregationState?.toJson(),
         'userEvents': userEvents.map((item) => item.toJson()).toList(growable: false),
-        'uiProcessTimelineV2': uiProcessTimelineV2.map((item) => item.toJson()).toList(growable: false),
+        'uiProcessTimeline': uiProcessTimeline.map((item) => item.toJson()).toList(growable: false),
         'toolPlan': toolPlan.map((item) => item.toJson()).toList(growable: false),
         'missingContextSlots': missingContextSlots,
         'fillGuidance': fillGuidance.map((item) => item.toJson()).toList(growable: false),
@@ -539,7 +539,7 @@ class AssistantTurnOutput {
       skillRuns: (json['skillRuns'] as List?)?.whereType<Map>().map((item) => SkillRun.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <SkillRun>[],
       aggregationState: json['aggregationState'] is Map ? AggregationState.fromJson((json['aggregationState'] as Map).cast<String, dynamic>()) : null,
       userEvents: (json['userEvents'] as List?)?.whereType<Map>().map((item) => UserEvent.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <UserEvent>[],
-      uiProcessTimelineV2: (json['uiProcessTimelineV2'] as List?)?.whereType<Map>().map((item) => UiProcessTimelineEntry.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <UiProcessTimelineEntry>[],
+      uiProcessTimeline: (json['uiProcessTimeline'] as List?)?.whereType<Map>().map((item) => UiProcessTimelineEntry.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <UiProcessTimelineEntry>[],
       toolPlan: (json['toolPlan'] as List?)?.whereType<Map>().map((item) => AssistantTurnToolCall.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantTurnToolCall>[],
       missingContextSlots: _assistantStringList(json['missingContextSlots']),
       fillGuidance: (json['fillGuidance'] as List?)?.whereType<Map>().map((item) => AssistantTurnFillGuidanceItem.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantTurnFillGuidanceItem>[],
@@ -584,7 +584,7 @@ class AssistantTurnOutputFields {
   static const String skillRuns = 'skillRuns';
   static const String aggregationState = 'aggregationState';
   static const String userEvents = 'userEvents';
-  static const String uiProcessTimelineV2 = 'uiProcessTimelineV2';
+  static const String uiProcessTimeline = 'uiProcessTimeline';
   static const String toolPlan = 'toolPlan';
   static const String missingContextSlots = 'missingContextSlots';
   static const String fillGuidance = 'fillGuidance';

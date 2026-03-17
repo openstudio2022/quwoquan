@@ -63,5 +63,12 @@
     "function calling",
     "unsupported",
     "schema"
+  ],
+  "llmRetryWithoutJsonModeStatusCodes": [400, 422],
+  "llmRetryWithoutJsonModeKeywords": [
+    "response_format",
+    "json_object",
+    "structured output",
+    "json mode"
   ]
 }

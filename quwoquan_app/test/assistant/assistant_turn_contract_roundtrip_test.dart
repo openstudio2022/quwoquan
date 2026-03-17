@@ -62,5 +62,48 @@ void main() {
       expect(parsed, isNotNull);
       expect(parsed!.missingContextSlots, <String>['city']);
     });
+
+    test('missing messageKind can be inferred for answer turn', () {
+      final parsed = tryParseAssistantTurnOutput(<String, dynamic>{
+        'contractVersion': kAssistantTurnCurrentVersion,
+        'decision': <String, dynamic>{
+          'nextAction': AssistantNextAction.answer.wireName,
+        },
+        'phaseId': PlannerPhaseId.answering.wireName,
+        'actionCode': PlannerActionCode.composeAnswer.wireName,
+        'reasonCode': PlannerReasonCode.evidenceReady.wireName,
+        'userMarkdown': '## 已整理\n\n这是最终回答。',
+        'result': const <String, dynamic>{
+          'text': '这是最终回答。',
+          'summary': '最终回答摘要',
+        },
+      });
+
+      expect(parsed, isNotNull);
+      expect(parsed!.messageKindType, AssistantMessageKind.answer);
+      expect(parsed.nextActionType, AssistantNextAction.answer);
+    });
+
+    test('answer-phase turn with stale progress messageKind is normalized', () {
+      final parsed = tryParseAssistantTurnOutput(<String, dynamic>{
+        'contractVersion': kAssistantTurnCurrentVersion,
+        'decision': <String, dynamic>{
+          'nextAction': AssistantNextAction.answer.wireName,
+        },
+        'messageKind': AssistantMessageKind.progress.wireName,
+        'phaseId': PlannerPhaseId.answering.wireName,
+        'actionCode': PlannerActionCode.composeAnswer.wireName,
+        'reasonCode': PlannerReasonCode.evidenceReady.wireName,
+        'userMarkdown': '## 已整理\n\n这是最终回答。',
+        'result': const <String, dynamic>{
+          'text': '这是最终回答。',
+          'summary': '最终回答摘要',
+        },
+      });
+
+      expect(parsed, isNotNull);
+      expect(parsed!.messageKindType, AssistantMessageKind.answer);
+      expect(parsed.nextActionType, AssistantNextAction.answer);
+    });
   });
 }

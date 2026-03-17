@@ -1,11 +1,17 @@
 {
   "templateId": "synthesizer.multi_skill_fusion",
-  "version": "2026.03.03",
+  "version": "2026.03.16",
   "stage": "answer",
   "domainId": "global",
   "requiredVariables": [
     "userQuery",
+    "userGoal",
+    "intentGraphJson",
+    "entityAnchors",
+    "queryTasksJson",
     "subagentRuns",
+    "skillRuns",
+    "aggregationState",
     "domainResults",
     "contextSlots",
     "webEvidencePacks",

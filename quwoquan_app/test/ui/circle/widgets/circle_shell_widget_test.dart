@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -58,26 +59,26 @@ void main() {
       expect(find.byType(CircleShell), findsOneWidget);
     });
 
-    testWidgets('包含 Scaffold 结构', (tester) async {
+    testWidgets('包含 CupertinoPageScaffold 结构', (tester) async {
       await tester.pumpWidget(_scopedApp());
       await _pumpIgnoringTabPaintErrors(tester);
 
-      expect(find.byType(Scaffold), findsWidgets);
+      expect(find.byType(CupertinoPageScaffold), findsOneWidget);
     });
 
-    testWidgets('SliverAppBar 包含返回和更多操作按钮', (tester) async {
+    testWidgets('Cupertino 导航栏包含返回和更多操作按钮', (tester) async {
       await tester.pumpWidget(_scopedApp());
       await _pumpIgnoringTabPaintErrors(tester);
 
-      expect(find.byIcon(Icons.arrow_back), findsOneWidget);
-      expect(find.byIcon(Icons.more_horiz), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.back), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.ellipsis), findsOneWidget);
     });
 
-    testWidgets('TabBar 存在于 Widget 树中', (tester) async {
+    testWidgets('分段控件存在于 Widget 树中', (tester) async {
       await tester.pumpWidget(_scopedApp());
       await _pumpIgnoringTabPaintErrors(tester);
 
-      expect(find.byType(TabBar), findsOneWidget);
+      expect(find.byType(CupertinoSlidingSegmentedControl<int>), findsOneWidget);
       expect(find.text('内容'), findsOneWidget);
     });
   });
@@ -114,7 +115,7 @@ void main() {
       await tester.pumpWidget(app);
       await _pumpIgnoringTabPaintErrors(tester);
 
-      await tester.tap(find.byIcon(Icons.arrow_back));
+      await tester.tap(find.byIcon(CupertinoIcons.back));
       await _pumpIgnoringTabPaintErrors(tester, frames: 1);
 
       expect(backCalled, isTrue);

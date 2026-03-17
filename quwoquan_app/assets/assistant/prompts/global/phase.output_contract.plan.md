@@ -83,6 +83,8 @@
 - 若 `decision.nextAction=ask_user`，`messageKind` 必须是 `ask_user`，且 `askUser.prompt` 与 `userMarkdown` 必须清晰可展示
 - 若 `decision.nextAction=tool_call`，`messageKind` 必须是 `progress`
 - 若 `decision.nextAction=answer`，`messageKind` 必须是 `answer`
+- 若 `decision.nextAction=answer`，`phaseId/actionCode/reasonCode` 必须切换为 `answering/compose_answer/evidence_ready`
+- 若 `decision.nextAction=answer`，`userMarkdown/result/evidence/reasoningBasis` 必须直接满足最终展示要求，禁止再写“我先整理”“我先确认”等过程态占位话术
 - `reasonShort` 必须是一句短理由，不能复述用户原话，不能出现 JSON 键名
 
 ## 输出前自检

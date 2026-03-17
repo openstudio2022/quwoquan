@@ -13,6 +13,7 @@ import 'package:quwoquan_app/assistant/runtime/assistant_runtime.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_detail_page.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
@@ -82,6 +83,25 @@ void main() {
     );
     await tester.pump();
 
+    gateway.emit(
+      AssistantRunStreamEvent.explainableFlow(
+        const ExplainableFlowEvent(
+          phaseId: PhaseId.execute,
+          phaseOrder: 1,
+          phaseStatus: ExplainablePhaseStatus.active,
+          headline: '我在核对九寨沟方向的最新约束',
+          references: <FlowReference>[
+            FlowReference(
+              title: '九寨沟景区公告',
+              url: 'https://example.com/jiuzhaigou',
+              source: '官方',
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.pump();
+
     gateway.emit(AssistantRunStreamEvent.answerDelta('```md'));
     await tester.pump();
     expect(
@@ -95,6 +115,11 @@ void main() {
     expect(
       _latestAssistantBubble(tester).message['streamFinalAnswer'],
       '九寨沟方向',
+    );
+    expect(
+      find.text('九寨沟方向'),
+      findsNothing,
+      reason: '进入 answering 阶段前，不应先把最终答案正文暴露到界面',
     );
 
     gateway.emit(AssistantRunStreamEvent.answerDelta('九寨沟方向'));
@@ -125,6 +150,16 @@ void main() {
       '九寨沟方向',
       reason: 'process journal 中的 answerDelta 不应再次把正文追加一遍',
     );
+    expect(
+      find.text('九寨沟方向'),
+      findsAtLeastNWidgets(1),
+      reason: '进入 answering 阶段后，缓冲的答案正文应开始对用户可见',
+    );
+    expect(
+      find.text(UITextConstants.assistantPhaseAnswering),
+      findsAtLeastNWidgets(1),
+      reason: '开始展示答案后，界面仍应保留用户可理解的阶段提示',
+    );
 
     final streamingMessageId =
         _latestAssistantBubble(tester).message['id'] as String? ?? '';
@@ -154,6 +189,48 @@ void main() {
       _latestAssistantBubble(tester).message['streamFinalAnswer'],
       '九寨沟方向备选方案\n',
       reason: '未闭合 card fence 不应提前把 payload 写进 streamFinalAnswer',
+    );
+
+    gateway.emit(AssistantRunStreamEvent.answerDelta('<function=web_'));
+    await tester.pump();
+    expect(
+      _latestAssistantBubble(tester).message['streamFinalAnswer'],
+      '九寨沟方向备选方案\n',
+      reason: '拆包的 function 开头不应污染 streamFinalAnswer',
+    );
+
+    gateway.emit(
+      AssistantRunStreamEvent.answerDelta(
+        'search><parameter=query>九寨沟若尔盖黄龙串联路线 方案',
+      ),
+    );
+    await tester.pump();
+    expect(
+      _latestAssistantBubble(tester).message['streamFinalAnswer'],
+      '九寨沟方向备选方案\n',
+      reason: 'function 参数正文不应在流式阶段落入用户答案',
+    );
+
+    gateway.emit(
+      AssistantRunStreamEvent.answerDelta(
+        '</parameter><parameter=queryTasks>[{"id":"plan_options"}]',
+      ),
+    );
+    await tester.pump();
+    expect(
+      _latestAssistantBubble(tester).message['streamFinalAnswer'],
+      '九寨沟方向备选方案\n',
+      reason: 'queryTasks 这类内部协议字段不应通过拆包追加进正文',
+    );
+
+    gateway.emit(
+      AssistantRunStreamEvent.answerDelta('</parameter></function>'),
+    );
+    await tester.pump();
+    expect(
+      _latestAssistantBubble(tester).message['streamFinalAnswer'],
+      '九寨沟方向备选方案\n',
+      reason: 'function 关闭标签不应残留到 streamFinalAnswer',
     );
 
     gateway.emit(
@@ -191,6 +268,7 @@ void main() {
         ),
       ),
     );
+    unawaited(gateway.dispose());
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
 
@@ -205,7 +283,7 @@ void main() {
     expect(finalAnswer, contains('九寨沟方向备选方案'));
     final mergedJournal =
         (((completedBubble.message['runArtifacts'] as Map?)?['processJournal']
-                    as List?)
+                as List?)
             ?.whereType<Map>()
             .toList(growable: false)) ??
         const <Map>[];
@@ -220,6 +298,13 @@ void main() {
       1,
       reason: 'completed 合并后不应把同一语义的过程事件重复写两遍',
     );
+    final flowEvents =
+        ((completedBubble.message['uiExplainableFlow'] as List?)
+            ?.whereType<Map>()
+            .toList(growable: false)) ??
+        const <Map>[];
+    expect(flowEvents, isNotEmpty);
+    expect(flowEvents.first['headline'], '我在核对九寨沟方向的最新约束');
   });
 }
 

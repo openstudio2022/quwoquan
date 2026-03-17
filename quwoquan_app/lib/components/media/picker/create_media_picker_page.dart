@@ -212,41 +212,44 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
       context: context,
       builder: (context) {
         final isDark = Theme.of(context).brightness == Brightness.dark;
-        return Container(
-          decoration: BoxDecoration(
-            color: CupertinoColors.systemGroupedBackground.resolveFrom(context),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(AppSpacing.borderRadius)),
-          ),
-          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.6),
-          child: SafeArea(
-            child: ListView.separated(
-              itemCount: _albums.length,
-              separatorBuilder: (_, _) => Container(
-                height: 0.5,
-                color: AppColorsFunctional.getColor(
-                  isDark,
-                  ColorType.borderSecondary,
-                ),
-                margin: EdgeInsets.only(left: AppSpacing.containerMd),
-              ),
-              itemBuilder: (context, index) {
-                final album = _albums[index];
-                final selected = album.id == _selectedAlbum?.id;
-                return CupertinoListTile(
-                  onTap: () => Navigator.of(context).pop(album),
-                  title: Text(
-                    album.name,
-                    style: TextStyle(
-                      color: selected ? AppColors.primaryColor : CupertinoColors.label.resolveFrom(context),
-                      fontSize: AppTypography.lg,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    ),
+        return Material(
+          type: MaterialType.transparency,
+          child: Container(
+            decoration: BoxDecoration(
+              color: CupertinoColors.systemGroupedBackground.resolveFrom(context),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(AppSpacing.borderRadius)),
+            ),
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.6),
+            child: SafeArea(
+              child: ListView.separated(
+                itemCount: _albums.length,
+                separatorBuilder: (_, _) => Container(
+                  height: 0.5,
+                  color: AppColorsFunctional.getColor(
+                    isDark,
+                    ColorType.borderSecondary,
                   ),
-                  trailing: selected
-                      ? Icon(CupertinoIcons.checkmark, color: AppColors.primaryColor)
-                      : null,
-                );
-              },
+                  margin: EdgeInsets.only(left: AppSpacing.containerMd),
+                ),
+                itemBuilder: (context, index) {
+                  final album = _albums[index];
+                  final selected = album.id == _selectedAlbum?.id;
+                  return CupertinoListTile(
+                    onTap: () => Navigator.of(context).pop(album),
+                    title: Text(
+                      album.name,
+                      style: TextStyle(
+                        color: selected ? AppColors.primaryColor : CupertinoColors.label.resolveFrom(context),
+                        fontSize: AppTypography.lg,
+                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                    ),
+                    trailing: selected
+                        ? Icon(CupertinoIcons.checkmark, color: AppColors.primaryColor)
+                        : null,
+                  );
+                },
+              ),
             ),
           ),
         );
