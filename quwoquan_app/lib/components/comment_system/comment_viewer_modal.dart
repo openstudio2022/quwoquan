@@ -257,12 +257,12 @@ class _DragHandle extends StatelessWidget {
       padding: EdgeInsets.only(top: AppSpacing.sm, bottom: AppSpacing.xs),
       alignment: Alignment.center,
       child: Container(
-        width: 36,
-        height: 4,
+        width: AppSpacing.thirtySix,
+        height: AppSpacing.xs,
         decoration: BoxDecoration(
           color: AppColorsFunctional.getColor(
               isDark, ColorType.foregroundTertiary),
-          borderRadius: BorderRadius.circular(2),
+          borderRadius: BorderRadius.circular(AppSpacing.two),
         ),
       ),
     );
@@ -453,7 +453,7 @@ class _CommentItem extends StatelessWidget {
                             child: Text(
                               UITextConstants.commentAuthorBadge,
                               style: TextStyle(
-                                fontSize: 10,
+                                fontSize: AppTypography.xs,
                                 color: AppColors.primaryColor,
                               ),
                             ),

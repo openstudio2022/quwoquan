@@ -93,7 +93,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     return Column(
       children: [
         _buildIdentityFilterRow(notifier, fg, fgSecondary),
-        if (notifier.state.activeSubTab == CreationSubTab.work) ...[
+        if (_isWorkLikeSubTab(notifier.state.activeSubTab)) ...[
           SizedBox(height: AppSpacing.sm),
           _buildWorkFormatFilterRow(notifier, fg, fgSecondary),
         ],
@@ -110,15 +110,37 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   bool get _isAdminOrOwner =>
       widget.role == CircleRole.owner || widget.role == CircleRole.admin;
 
+  bool _isWorkLikeSubTab(CreationSubTab tab) {
+    switch (tab) {
+      case CreationSubTab.work:
+      case CreationSubTab.image:
+      case CreationSubTab.video:
+      case CreationSubTab.article:
+        return true;
+      case CreationSubTab.all:
+      case CreationSubTab.moment:
+      case CreationSubTab.micro:
+        return false;
+    }
+  }
+
   ({String? identity, String? type}) _feedQueryForState(CircleState state) {
     switch (state.activeSubTab) {
       case CreationSubTab.moment:
         return (identity: 'moment', type: null);
+      case CreationSubTab.micro:
+        return (identity: 'moment', type: 'micro');
       case CreationSubTab.work:
         return (
           identity: 'work',
           type: _contentTypeForWorkFormat(state.activeWorkFormat),
         );
+      case CreationSubTab.image:
+        return (identity: 'work', type: 'image');
+      case CreationSubTab.video:
+        return (identity: 'work', type: 'video');
+      case CreationSubTab.article:
+        return (identity: 'work', type: 'article');
       case CreationSubTab.all:
         return (identity: null, type: null);
     }
@@ -231,8 +253,16 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     switch (tab) {
       case CreationSubTab.moment:
         return _itemIdentity(item) == 'moment';
+      case CreationSubTab.micro:
+        return _itemIdentity(item) == 'moment' && _itemDisplayFormat(item) == 'micro';
       case CreationSubTab.work:
         return _itemIdentity(item) == 'work';
+      case CreationSubTab.image:
+        return _itemIdentity(item) == 'work' && _itemDisplayFormat(item) == 'image';
+      case CreationSubTab.video:
+        return _itemIdentity(item) == 'work' && _itemDisplayFormat(item) == 'video';
+      case CreationSubTab.article:
+        return _itemIdentity(item) == 'work' && _itemDisplayFormat(item) == 'note';
       case CreationSubTab.all:
         return true;
     }
@@ -243,8 +273,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     CreationSubTab activeSubTab,
     CreationWorkFormat format,
   ) {
-    if (activeSubTab != CreationSubTab.work ||
-        format == CreationWorkFormat.all) {
+    if (!_isWorkLikeSubTab(activeSubTab) || format == CreationWorkFormat.all) {
       return true;
     }
     switch (format) {

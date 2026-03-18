@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 
@@ -6,12 +7,12 @@ class ProfileStatsRow extends StatelessWidget {
   const ProfileStatsRow({
     super.key,
     required this.isDark,
-    required this.stats,
+    required this.profile,
     this.onStatTap,
   });
 
   final bool isDark;
-  final Map<String, dynamic> stats;
+  final ProfileSubjectViewData? profile;
   final void Function(String type)? onStatTap;
 
   String _formatCount(dynamic count) {
@@ -24,11 +25,12 @@ class ProfileStatsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
     final fgSecondary = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    final subject = profile;
 
     final items = [
-      _StatItem(value: _formatCount(stats['circleCount']), label: UITextConstants.contactsTabCircles, type: 'circles'),
-      _StatItem(value: _formatCount(stats['followingCount']), label: UITextConstants.follow, type: 'following'),
-      _StatItem(value: _formatCount(stats['followerCount']), label: UITextConstants.circleFans, type: 'fans'),
+      _StatItem(value: _formatCount(subject?.circleCount), label: UITextConstants.contactsTabCircles, type: 'circles'),
+      _StatItem(value: _formatCount(subject?.followingCount), label: UITextConstants.follow, type: 'following'),
+      _StatItem(value: _formatCount(subject?.followerCount), label: UITextConstants.circleFans, type: 'fans'),
     ];
 
     return Row(

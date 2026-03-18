@@ -4,7 +4,6 @@ export 'package:quwoquan_app/assistant/contracts/context_continuity_policy.dart'
 export 'package:quwoquan_app/assistant/contracts/context_fill_contract.dart';
 export 'package:quwoquan_app/assistant/contracts/conversation_state_decision.dart';
 export 'package:quwoquan_app/assistant/contracts/dialogue_round_script.dart';
-export 'package:quwoquan_app/assistant/contracts/explainable_flow_event.dart';
 export 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 export 'package:quwoquan_app/assistant/contracts/planner_contracts.dart';
 export 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';

@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/assistant/conversation/orchestration/agent_loop.dart';
+import 'package:quwoquan_app/assistant/orchestration/local_phase_execution_owner.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
 import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
@@ -184,7 +184,7 @@ bool _hasExecutedTool(List<Map<String, dynamic>> messages, String toolName) {
 
 void main() {
   group('Phase 8 — 新工具端到端测试', () {
-    late PersonalAssistantAgentLoop loop;
+    late LocalPhaseExecutionOwner loop;
     late _MultiToolLlm mockLlm;
     late AssistantMemoryRepository memoryRepo;
     late SearchResultCache searchCache;
@@ -262,7 +262,7 @@ void main() {
         llmProvider: mockLlm,
         toolRegistry: toolRegistry,
       );
-      loop = PersonalAssistantAgentLoop(
+      loop = LocalPhaseExecutionOwner(
         runtime,
         sessionManager: AssistantSessionManager(
           storagePath: '${tempDir.path}/sessions.json',
@@ -321,27 +321,18 @@ void main() {
         reason: 'toolResult 数量应与已执行的检索步骤一致',
       );
 
-      // Process journal should cover multi-tool phases
-      final structured = response.structuredResponse;
-      final processJournal =
-          ((((structured['runArtifacts'] as Map?)?['processJournal']
-                      as List?) ??
-                  const <dynamic>[]))
-              .whereType<Map>()
-              .map(
-                (item) =>
-                    ProcessJournalEvent.fromJson(item.cast<String, dynamic>()),
-              )
-              .toList(growable: false);
-      final stages = processJournal.map((item) => item.stage).toSet();
-      expect(stages.contains('understanding'), isTrue);
-      expect(stages.contains('answering'), isTrue);
-      expect(structured.containsKey('uiPhaseTimelineV1'), isFalse);
+      // Journey should cover multi-tool phases
+      final journey = response.runArtifacts?.journey;
+      expect(journey, isNotNull);
+      final stages = journey!.stages.map((item) => item.stageId.name).toSet();
+      expect(stages.contains('analyze'), isTrue);
+      expect(stages.contains('search') || stages.contains('verify'), isTrue);
+      expect(stages.contains('answer'), isTrue);
 
       // Final answer should contain weather info
       final combined =
           '${response.finalText} '
-          '${(structured['uiAnswer'] as Map?)?['markdownText'] ?? ""}';
+          '${response.displayMarkdown}';
       expect(
         combined.contains('天气') ||
             combined.contains('深圳') ||

@@ -70,7 +70,7 @@ assets/assistant/skills/{domain}/
 
 ### 2.7 Skill 扩展禁止事项
 
-- 禁止把垂类知识写进 `agent_loop`、`react_runtime`、`context_orchestrator`
+- 禁止把垂类知识写进 `assistant_agent_loop`、`local_phase_execution_owner`、`react_runtime`、`context_orchestrator`
 - 禁止以 `contains()` / `RegExp` 形式在 runtime 判定某个 domain
 - 禁止让 skill 与域模板维护两套冲突策略
 

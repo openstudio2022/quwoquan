@@ -1,4 +1,5 @@
 import 'package:test/test.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 
 void main() {
@@ -17,6 +18,23 @@ void main() {
       expect(conversations, isNotEmpty);
     });
 
+    test('listInbox 返回强类型收件箱列表', () async {
+      final inbox = await repo.listInbox();
+      expect(inbox, isNotEmpty);
+      expect(inbox.first, isA<ChatInboxDto>());
+      expect(inbox.first.id, isNotEmpty);
+    });
+
+    test('listInbox 包含 unread / mention / 头像拼图字段', () async {
+      final inbox = await repo.listInbox();
+      expect(inbox, isNotEmpty);
+      final first = inbox.first;
+      expect(first.title, isNotEmpty);
+      expect(first.unreadCount, greaterThanOrEqualTo(0));
+      expect(first.mentionUnreadCount, greaterThanOrEqualTo(0));
+      expect(first.avatarCompositeUrls, isA<List<String>>());
+    });
+
     test('listConversations 包含必要字段', () async {
       final conversations = await repo.listConversations();
       expect(conversations, isNotEmpty);
@@ -28,10 +46,7 @@ void main() {
     });
 
     test('createConversation 返回包含 _id 的会话', () async {
-      final conv = await repo.createConversation(
-        type: 'group',
-        title: '测试群聊',
-      );
+      final conv = await repo.createConversation(type: 'group', title: '测试群聊');
       expect(conv['_id'], isNotNull);
       expect(conv['type'], 'group');
       expect(conv['status'], 'active');
@@ -112,20 +127,14 @@ void main() {
 
     test('addMembers 不抛出异常', () async {
       await expectLater(
-        repo.addMembers(
-          conversationId: 'conv_002',
-          userIds: ['user_new_001'],
-        ),
+        repo.addMembers(conversationId: 'conv_002', userIds: ['user_new_001']),
         completes,
       );
     });
 
     test('removeMember 不抛出异常', () async {
       await expectLater(
-        repo.removeMember(
-          conversationId: 'conv_002',
-          userId: 'user_new_001',
-        ),
+        repo.removeMember(conversationId: 'conv_002', userId: 'user_new_001'),
         completes,
       );
     });
@@ -134,10 +143,7 @@ void main() {
 
     test('inviteAssistant 不抛出异常', () async {
       await expectLater(
-        repo.inviteAssistant(
-          conversationId: 'conv_002',
-          skillId: 'general',
-        ),
+        repo.inviteAssistant(conversationId: 'conv_002', skillId: 'general'),
         completes,
       );
     });
@@ -196,8 +202,11 @@ void main() {
         'lastMessageTime',
       ];
       for (final field in requiredFields) {
-        expect(conv.containsKey(field), isTrue,
-            reason: 'missing field: $field');
+        expect(
+          conv.containsKey(field),
+          isTrue,
+          reason: 'missing field: $field',
+        );
       }
     });
 
@@ -234,8 +243,9 @@ void main() {
       expect(contacts, isList);
     });
 
-    test('接口包含全部 17 个 API 方法', () {
+    test('接口包含全部 18 个 API 方法', () {
       final methods = <String>[
+        'listInbox',
         'listConversations',
         'createConversation',
         'getConversation',
@@ -254,7 +264,7 @@ void main() {
         'listContacts',
         'searchContacts',
       ];
-      expect(methods.length, 17);
+      expect(methods.length, 18);
     });
   });
 }

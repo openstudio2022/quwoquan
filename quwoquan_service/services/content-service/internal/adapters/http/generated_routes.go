@@ -67,6 +67,10 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleNotImplemented(w, r, operation)
 	case "ListCommentsForPostAuthor":
 		h.handleNotImplemented(w, r, operation)
+	case "ListProfileInteractionActivitiesReceived":
+		h.handleNotImplemented(w, r, operation)
+	case "ListProfileInteractionActivitiesSent":
+		h.handleNotImplemented(w, r, operation)
 	case "ListUserPosts":
 		h.handleNotImplemented(w, r, operation)
 	case "PromotePostToWork":
@@ -133,6 +137,8 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/repost", operation: "RepostToCircle"},
 	{method: "PATCH", pathTemplate: "/v1/content/posts/{postId}/settings", operation: "UpdatePostSettings"},
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}:promoteToWork", operation: "PromotePostToWork"},
+	{method: "GET", pathTemplate: "/v1/content/profile-subjects/{profileSubjectId}/interactions/received", operation: "ListProfileInteractionActivitiesReceived"},
+	{method: "GET", pathTemplate: "/v1/content/profile-subjects/{profileSubjectId}/interactions/sent", operation: "ListProfileInteractionActivitiesSent"},
 	{method: "POST", pathTemplate: "/v1/content/recommend", operation: "GetRecommendation"},
 	{method: "GET", pathTemplate: "/v1/content/users/me/comments", operation: "ListCommentsByAuthor"},
 	{method: "GET", pathTemplate: "/v1/content/users/me/received-comments", operation: "ListCommentsForPostAuthor"},

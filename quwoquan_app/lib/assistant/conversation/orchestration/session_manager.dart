@@ -2,9 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/preference_fact.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
+import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/memory/storage/assistant_storage_path.dart';
 
 class AssistantSessionManager {
@@ -30,6 +32,9 @@ class AssistantSessionManager {
   }
 
   Future<void> load() async {
+    _sessions.clear();
+    _sessionMeta.clear();
+    _activeSessionId = '';
     await AssistantContentFilters.ensureLoaded();
     final path = await _pathFuture;
     final file = File(path);
@@ -49,51 +54,56 @@ class AssistantSessionManager {
     try {
       raw = jsonDecode(rawText);
     } on FormatException {
+      await _wipePersistedHistoryFile(file);
       return;
     }
-    if (raw is! Map) return;
-    if (raw['sessions'] is Map) {
-      final rawSessions = (raw['sessions'] as Map).entries;
-      for (final entry in rawSessions) {
-        final key = entry.key.toString();
-        final value = entry.value;
-        if (value is! List) continue;
-        _sessions[key] = value
+    if (raw is! Map) {
+      await _wipePersistedHistoryFile(file);
+      return;
+    }
+    if ((raw['version'] ?? '').toString().trim() != assistantHistoryStorageVersion) {
+      await _wipePersistedHistoryFile(file);
+      return;
+    }
+    final rawSessions = raw['sessions'];
+    if (rawSessions is! Map) {
+      await _wipePersistedHistoryFile(file);
+      return;
+    }
+    final rawMetadata = (raw['metadata'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    var mutated = false;
+    for (final entry in rawSessions.entries) {
+      final key = entry.key.toString();
+      final value = entry.value;
+      if (value is! List) {
+        mutated = true;
+        continue;
+      }
+      final normalized = _normalizeLoadedSessionMessages(
+        value
             .whereType<Map>()
-            .map(
-              (m) => _normalizeLoadedMessage(
-                m.map((k, v) => MapEntry(k.toString(), v)),
-              ),
-            )
-            .where((m) => !_isDegradedAssistantMessage(m))
-            .toList(growable: true);
+            .map((item) => item.map((k, v) => MapEntry(k.toString(), v)))
+            .toList(growable: false),
+      );
+      if (normalized == null || normalized.isEmpty) {
+        mutated = true;
+        continue;
       }
-      final metadata = raw['metadata'];
-      if (metadata is Map) {
-        for (final entry in metadata.entries) {
-          final key = entry.key.toString();
-          final value = entry.value;
-          if (value is! Map) continue;
-          _sessionMeta[key] = value.cast<String, dynamic>();
-        }
+      _sessions[key] = normalized.toList(growable: true);
+      final meta = rawMetadata[key];
+      if (meta is Map) {
+        _sessionMeta[key] = meta.cast<String, dynamic>();
       }
-      _activeSessionId = (raw['activeSessionId'] ?? '').toString();
-    } else {
-      // 向后兼容 v1: 根对象直接是 sessionId -> message[].
-      for (final entry in raw.entries) {
-        final key = entry.key.toString();
-        final value = entry.value;
-        if (value is! List) continue;
-        _sessions[key] = value
-            .whereType<Map>()
-            .map(
-              (m) => _normalizeLoadedMessage(
-                m.map((k, v) => MapEntry(k.toString(), v)),
-              ),
-            )
-            .where((m) => !_isDegradedAssistantMessage(m))
-            .toList(growable: true);
-      }
+    }
+    final activeSessionId = (raw['activeSessionId'] ?? '').toString().trim();
+    if (_sessions.containsKey(activeSessionId)) {
+      _activeSessionId = activeSessionId;
+    } else if (activeSessionId.isNotEmpty) {
+      mutated = true;
+    }
+    if (mutated) {
+      await save();
     }
   }
 
@@ -102,12 +112,44 @@ class AssistantSessionManager {
     final file = File(path);
     await file.parent.create(recursive: true);
     final payload = <String, dynamic>{
-      'version': 'v2',
+      'version': assistantHistoryStorageVersion,
       'activeSessionId': _activeSessionId,
       'sessions': _sessions,
       'metadata': _sessionMeta,
     };
     await file.writeAsString(jsonEncode(payload));
+  }
+
+  Future<void> _wipePersistedHistoryFile(File file) async {
+    _sessions.clear();
+    _sessionMeta.clear();
+    _activeSessionId = '';
+    await file.parent.create(recursive: true);
+    await file.writeAsString(
+      jsonEncode(<String, dynamic>{
+        'version': assistantHistoryStorageVersion,
+        'activeSessionId': '',
+        'sessions': const <String, dynamic>{},
+        'metadata': const <String, dynamic>{},
+      }),
+    );
+  }
+
+  List<Map<String, dynamic>>? _normalizeLoadedSessionMessages(
+    List<Map<String, dynamic>> rawMessages,
+  ) {
+    final normalized = <Map<String, dynamic>>[];
+    for (final raw in rawMessages) {
+      final message = _normalizeLoadedMessage(raw);
+      if (message == null) {
+        return null;
+      }
+      if (_isDegradedAssistantMessage(message)) {
+        return null;
+      }
+      normalized.add(message);
+    }
+    return normalized;
   }
 
   void appendMessage({
@@ -405,8 +447,8 @@ class AssistantSessionManager {
     final role = m['role']?.toString() ?? '';
     if (role != 'assistant') return false;
     final candidates = <String>[
-      (m['displayPlainText'] ?? '').toString(),
-      (m['displayMarkdown'] ?? '').toString(),
+      resolvePersistedAssistantDisplayPlainText(m),
+      resolvePersistedAssistantDisplayMarkdown(m),
       (m['content'] ?? '').toString(),
     ];
     for (final candidate in candidates) {
@@ -425,47 +467,46 @@ class AssistantSessionManager {
     return false;
   }
 
-  Map<String, dynamic> _normalizeLoadedMessage(Map<String, dynamic> raw) {
+  Map<String, dynamic>? _normalizeLoadedMessage(Map<String, dynamic> raw) {
     final normalized = Map<String, dynamic>.from(raw);
     final role = (normalized['role'] ?? '').toString();
     if (role != 'assistant') return normalized;
+    final canonical = normalizeCanonicalPersistedAssistantTurnMessage(normalized);
+    if (canonical == null) {
+      return null;
+    }
     final displayPlain = _sanitizeForSummary(
-      (normalized['displayPlainText'] ?? '').toString(),
+      resolvePersistedAssistantDisplayPlainText(canonical),
     );
     final displayMarkdown = _sanitizeForSummary(
-      (normalized['displayMarkdown'] ?? '').toString(),
+      resolvePersistedAssistantDisplayMarkdown(canonical),
     );
     final content = _sanitizeForSummary(
-      (normalized['content'] ?? '').toString(),
+      (canonical['content'] ?? '').toString(),
     );
     final best = [
       displayPlain,
       displayMarkdown,
       content,
     ].firstWhere((item) => item.trim().isNotEmpty, orElse: () => '');
-    if (best.isNotEmpty) {
-      normalized['content'] = best;
+    if (best.isEmpty) {
+      return null;
     }
-    final machineEnvelope = (normalized['machineEnvelope'] ?? '').toString();
-    if (_containsInternalHistoryText(machineEnvelope) ||
-        AssistantContentFilters.isJsonEnvelope(machineEnvelope) ||
-        _containsXmlToolCall(machineEnvelope)) {
-      normalized['machineEnvelope'] = '';
-    }
-    final runArtifacts = (normalized['runArtifacts'] as Map?)
+    canonical['content'] = best;
+    final runArtifacts = (canonical['runArtifacts'] as Map?)
         ?.cast<String, dynamic>();
     if (runArtifacts != null && runArtifacts.isNotEmpty) {
       final sanitizedArtifacts = Map<String, dynamic>.from(runArtifacts)
         ..remove('machineEnvelope');
-      normalized['runArtifacts'] = sanitizedArtifacts;
+      canonical['runArtifacts'] = sanitizedArtifacts;
     }
-    return normalized;
+    return canonical;
   }
 
   String _bestAssistantDisplayCandidate(Map<String, dynamic> message) {
     final candidates = <String>[
-      (message['displayPlainText'] ?? '').toString(),
-      (message['displayMarkdown'] ?? '').toString(),
+      resolvePersistedAssistantDisplayPlainText(message),
+      resolvePersistedAssistantDisplayMarkdown(message),
       (message['content'] ?? '').toString(),
     ];
     for (final candidate in candidates) {

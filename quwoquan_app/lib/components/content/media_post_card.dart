@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/components/more_actions_popup/configs/media_post_config.dart';
@@ -240,17 +241,7 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
 
   /// 显示提示信息
   void _showToast(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        duration: const Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-            margin: EdgeInsets.all(context.safeGetContainerSpacing(SpacingSize.lg)),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8.r),
-        ),
-      ),
-    );
+    AppToast.show(context, message, duration: const Duration(seconds: 2));
   }
 
   /// 显示更多选项弹窗 - 使用通用组件
@@ -569,7 +560,7 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
                     .safeGetIntraGroupSpacing(SpacingSize.xs)
                     .w),
             SizedBox(
-              width: 40.w,
+              width: AppSpacing.forty.w,
               child: Text(
                 count > 0 ? _formatCount(count) : '',
                 key: countKey,
@@ -648,7 +639,7 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
                           : AppColors.light.foregroundPrimary,
                     ),
                   ),
-                  SizedBox(width: 4.w),
+                  SizedBox(width: AppSpacing.xs.w),
                   Text(
                     AppStrings.likes,
                     style: TextStyle(

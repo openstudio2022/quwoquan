@@ -190,6 +190,37 @@ type workFormatFilterDef struct {
 	Order       int    `yaml:"order"`
 }
 
+type profileSubTabDef struct {
+	ID          string `yaml:"id"`
+	LabelKey    string `yaml:"label_key"`
+	ContentType string `yaml:"content_type"`
+	Order       int    `yaml:"order"`
+}
+
+type profileTabDef struct {
+	ID               string              `yaml:"id"`
+	LabelKey         string              `yaml:"label_key"`
+	Order            int                 `yaml:"order"`
+	Default          bool                `yaml:"default"`
+	SubTabs          []profileSubTabDef  `yaml:"sub_tabs"`
+	VisibilityFilter map[string][]string `yaml:"visibility_filter"`
+	DirectionFilter  map[string][]string `yaml:"direction_filter"`
+}
+
+type profileHeaderLayoutDef struct {
+	BaseHeightRatio       float64 `yaml:"base_height_ratio"`
+	MaxStretchHeightRatio float64 `yaml:"max_stretch_height_ratio"`
+	AvatarOverlapRatio    float64 `yaml:"avatar_overlap_ratio"`
+}
+
+type profileScrollMotionDef struct {
+	CompactIdentityBar           bool   `yaml:"compact_identity_bar"`
+	PrimaryTabStickyBelowToolbar bool   `yaml:"primary_tab_sticky_below_toolbar"`
+	SecondaryTabInlineScroll     bool   `yaml:"secondary_tab_inline_scroll"`
+	ReboundCurve                 string `yaml:"rebound_curve"`
+	CollapseCurve                string `yaml:"collapse_curve"`
+}
+
 type shareTemplateProfileDef struct {
 	ID                   string `yaml:"id"`
 	TitleKey             string `yaml:"title_key"`
@@ -220,6 +251,9 @@ type uiConfigFile struct {
 	DiscoveryRails          []discoveryRailDef        `yaml:"discovery_rails"`
 	CreationIdentityFilters []identityFilterDef       `yaml:"creation_identity_filters"`
 	WorkFormatFilters       []workFormatFilterDef     `yaml:"work_format_filters"`
+	HeaderLayout            profileHeaderLayoutDef    `yaml:"header_layout"`
+	ScrollMotion            profileScrollMotionDef    `yaml:"scroll_motion"`
+	ProfileTabs             []profileTabDef           `yaml:"profile_tabs"`
 	ShareTemplateProfiles   []shareTemplateProfileDef `yaml:"share_template_profiles"`
 	FeatureFlags            []featureFlagDef          `yaml:"feature_flags"`
 	EmptyStates             map[string]emptyStateDef  `yaml:"empty_states"`
@@ -324,6 +358,7 @@ func main() {
 	)
 	metaPath := filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "content", "content_metadata.g.dart")
 	writeFile(metaPath, metaOut)
+	generatedStandaloneProjectionPaths := map[string]bool{}
 
 	// 2. 生成 feed_item_dto.g.dart（FeedItemDto 强类型 DTO）
 	if len(projection.ClientProjection.Fields) > 0 {
@@ -334,6 +369,7 @@ func main() {
 		}
 		dtoPath := filepath.Join(appDir, "lib", dtoRelPath)
 		writeFile(dtoPath, dtoOut)
+		generatedStandaloneProjectionPaths[dtoRelPath] = true
 	}
 
 	// 3a. 生成 content_errors.g.dart（ContentErrorCode enum + messages）
@@ -362,6 +398,16 @@ func main() {
 	if uiDef != nil {
 		out := renderContentUIConfigDart(uiDef)
 		writeFile(filepath.Join(appDir, "lib", "cloud", "content", "generated", "content_ui_config.g.dart"), out)
+	}
+
+	userProfileDir := filepath.Join(metadataDir, "user", "user_profile")
+	userUIDef, userUIErr := readUIConfig(filepath.Join(userProfileDir, "ui_config.yaml"))
+	if userUIErr != nil && !os.IsNotExist(userUIErr) {
+		exitErr(fmt.Errorf("read user/user_profile/ui_config.yaml: %w", userUIErr))
+	}
+	if userUIDef != nil {
+		out := renderUserProfileUIConfigDart(userUIDef)
+		writeFile(filepath.Join(appDir, "lib", "cloud", "user", "generated", "user_profile_ui_config.g.dart"), out)
 	}
 
 	// 2b. 生成 integration/location 元数据（路径、response key）
@@ -413,6 +459,7 @@ func main() {
 				continue
 			}
 			writeFile(filepath.Join(appDir, "lib", relPath), out)
+			generatedStandaloneProjectionPaths[relPath] = true
 		}
 	}
 
@@ -445,6 +492,44 @@ func main() {
 		}
 		dtoPath := filepath.Join(appDir, "lib", relPath)
 		writeFile(dtoPath, out)
+	}
+
+	// 3b. 生成其他 domain projections（无 base_class 的 standalone DTO，如 chat inbox）
+	err = filepath.WalkDir(metadataDir, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() || !strings.HasSuffix(d.Name(), ".yaml") {
+			return nil
+		}
+		if filepath.Base(filepath.Dir(path)) != "projections" {
+			return nil
+		}
+		p, readErr := readProjection(path)
+		if readErr != nil || len(p.ClientProjection.Fields) == 0 {
+			return nil
+		}
+		if strings.TrimSpace(p.ClientProjection.BaseClass) != "" {
+			return nil
+		}
+		relPath := strings.TrimSpace(p.ClientProjection.OutputPath)
+		if relPath == "" || generatedStandaloneProjectionPaths[relPath] {
+			return nil
+		}
+		relSourcePath, relErr := filepath.Rel(metadataDir, path)
+		if relErr != nil {
+			relSourcePath = path
+		}
+		out := renderStandaloneDtoDart(
+			p.ClientProjection,
+			filepath.ToSlash(relSourcePath),
+		)
+		writeFile(filepath.Join(appDir, "lib", relPath), out)
+		generatedStandaloneProjectionPaths[relPath] = true
+		return nil
+	})
+	if err != nil {
+		exitErr(err)
 	}
 
 	domainRoutes, err := collectDomainServiceRoutes(metadataDir)
@@ -1030,7 +1115,51 @@ func renderStandaloneDtoDart(proj clientProjection, sourcePath string) string {
 	for _, f := range proj.Fields {
 		b.WriteString(fmt.Sprintf("      '%s': %s,\n", f.Name, f.Name))
 	}
-	b.WriteString("    };\n  }\n")
+	b.WriteString("    };\n  }\n\n")
+
+	b.WriteString(fmt.Sprintf("  %s copyWith({\n", className))
+	for _, f := range proj.Fields {
+		dartType := normalizeDartType(f.DartType)
+		if !strings.HasSuffix(dartType, "?") {
+			dartType += "?"
+		}
+		b.WriteString(fmt.Sprintf("    %s %s,\n", dartType, f.Name))
+	}
+	b.WriteString("  }) {\n")
+	b.WriteString(fmt.Sprintf("    return %s(\n", className))
+	for _, f := range proj.Fields {
+		b.WriteString(fmt.Sprintf("      %s: %s ?? this.%s,\n", f.Name, f.Name, f.Name))
+	}
+	b.WriteString("    );\n")
+	b.WriteString("  }\n")
+
+	if len(proj.ComputedGetters) > 0 {
+		b.WriteString("\n")
+		for _, g := range proj.ComputedGetters {
+			returnType := strings.TrimSpace(g.DartReturnType)
+			body := strings.TrimSpace(g.Body)
+			if g.Description != "" {
+				b.WriteString(fmt.Sprintf("  /// %s\n", g.Description))
+			}
+			b.WriteString(fmt.Sprintf("  %s get %s {\n", returnType, g.Name))
+			for _, line := range strings.Split(body, "\n") {
+				b.WriteString(fmt.Sprintf("    %s\n", strings.TrimSpace(line)))
+			}
+			b.WriteString("  }\n")
+		}
+	}
+
+	b.WriteString("}\n\n")
+	b.WriteString("DateTime? _parseDateTime(dynamic v) {\n")
+	b.WriteString("  if (v == null) return null;\n")
+	b.WriteString("  if (v is DateTime) return v;\n")
+	b.WriteString("  if (v is String) return DateTime.tryParse(v);\n")
+	b.WriteString("  return null;\n")
+	b.WriteString("}\n\n")
+	b.WriteString("List<String>? _parseStringList(dynamic v) {\n")
+	b.WriteString("  if (v == null) return null;\n")
+	b.WriteString("  if (v is List) return v.map((e) => e?.toString() ?? '').toList();\n")
+	b.WriteString("  return null;\n")
 	b.WriteString("}\n")
 	return b.String()
 }
@@ -1115,6 +1244,9 @@ func renderFeedItemDtoDart(proj clientProjection) string {
 			if g.Description != "" {
 				b.WriteString(fmt.Sprintf("  /// %s\n", g.Description))
 			}
+			if shouldAnnotateOverrideForComputedGetter(proj.BaseClass, g.Name) {
+				b.WriteString("  @override\n")
+			}
 			b.WriteString(fmt.Sprintf("  %s get %s {\n", returnType, g.Name))
 			for _, line := range strings.Split(body, "\n") {
 				b.WriteString(fmt.Sprintf("    %s\n", strings.TrimSpace(line)))
@@ -1158,6 +1290,17 @@ var postBaseDtoFields = map[string]bool{
 	"favoriteCount":       true,
 	"shareCount":          true,
 	"createdAt":           true,
+}
+
+var postBaseDtoComputedGetters = map[string]bool{
+	"displayFormat": true,
+}
+
+func shouldAnnotateOverrideForComputedGetter(baseClass, getterName string) bool {
+	if strings.TrimSpace(baseClass) != "PostBaseDto" {
+		return false
+	}
+	return postBaseDtoComputedGetters[strings.TrimSpace(getterName)]
 }
 
 // renderTypedPostDtoDart generates a typed DTO that extends a base class (e.g. PostBaseDto).
@@ -1245,6 +1388,9 @@ func renderTypedPostDtoDart(proj clientProjection, sourceFile string) string {
 			body := strings.TrimSpace(g.Body)
 			if g.Description != "" {
 				b.WriteString(fmt.Sprintf("  /// %s\n", g.Description))
+			}
+			if shouldAnnotateOverrideForComputedGetter(baseClass, g.Name) {
+				b.WriteString("  @override\n")
 			}
 			b.WriteString(fmt.Sprintf("  %s get %s {\n", returnType, g.Name))
 			for _, line := range strings.Split(body, "\n") {
@@ -1422,6 +1568,13 @@ func dartStringOrNull(v string) string {
 		return "null"
 	}
 	return dartStringLiteral(v)
+}
+
+func dartDoubleLiteral(v float64, fallback float64) string {
+	if v <= 0 {
+		v = fallback
+	}
+	return strconv.FormatFloat(v, 'f', -1, 64)
 }
 
 func writeSortedMap[T ~string](b *strings.Builder, m map[string]T) {
@@ -2166,6 +2319,170 @@ func renderContentUIConfigDart(uc *uiConfigFile) string {
 			b.WriteString("    },\n")
 		}
 		b.WriteString("  };\n")
+	}
+
+	b.WriteString("}\n")
+	return b.String()
+}
+
+func renderUserProfileUIConfigDart(uc *uiConfigFile) string {
+	var b strings.Builder
+	b.WriteString("// Code generated by tools/codegen_app_metadata from user/user_profile/ui_config.yaml. DO NOT EDIT.\n")
+	b.WriteString("// ignore_for_file: prefer_const_constructors\n\n")
+
+	b.WriteString("class UserProfileTabConfig {\n")
+	b.WriteString("  final String id;\n")
+	b.WriteString("  final String labelKey;\n")
+	b.WriteString("  final bool isDefault;\n\n")
+	b.WriteString("  const UserProfileTabConfig({\n")
+	b.WriteString("    required this.id,\n")
+	b.WriteString("    required this.labelKey,\n")
+	b.WriteString("    required this.isDefault,\n")
+	b.WriteString("  });\n")
+	b.WriteString("}\n\n")
+
+	b.WriteString("class UserProfileSubTabConfig {\n")
+	b.WriteString("  final String id;\n")
+	b.WriteString("  final String labelKey;\n")
+	b.WriteString("  final String? contentType;\n\n")
+	b.WriteString("  const UserProfileSubTabConfig({\n")
+	b.WriteString("    required this.id,\n")
+	b.WriteString("    required this.labelKey,\n")
+	b.WriteString("    required this.contentType,\n")
+	b.WriteString("  });\n")
+	b.WriteString("}\n\n")
+
+	b.WriteString("class UserProfileHeaderLayoutConfig {\n")
+	b.WriteString("  final double baseHeightRatio;\n")
+	b.WriteString("  final double maxStretchHeightRatio;\n")
+	b.WriteString("  final double avatarOverlapRatio;\n\n")
+	b.WriteString("  const UserProfileHeaderLayoutConfig({\n")
+	b.WriteString("    required this.baseHeightRatio,\n")
+	b.WriteString("    required this.maxStretchHeightRatio,\n")
+	b.WriteString("    required this.avatarOverlapRatio,\n")
+	b.WriteString("  });\n")
+	b.WriteString("}\n\n")
+
+	b.WriteString("class UserProfileScrollMotionConfig {\n")
+	b.WriteString("  final bool compactIdentityBar;\n")
+	b.WriteString("  final bool primaryTabStickyBelowToolbar;\n")
+	b.WriteString("  final bool secondaryTabInlineScroll;\n")
+	b.WriteString("  final String reboundCurve;\n")
+	b.WriteString("  final String collapseCurve;\n\n")
+	b.WriteString("  const UserProfileScrollMotionConfig({\n")
+	b.WriteString("    required this.compactIdentityBar,\n")
+	b.WriteString("    required this.primaryTabStickyBelowToolbar,\n")
+	b.WriteString("    required this.secondaryTabInlineScroll,\n")
+	b.WriteString("    required this.reboundCurve,\n")
+	b.WriteString("    required this.collapseCurve,\n")
+	b.WriteString("  });\n")
+	b.WriteString("}\n\n")
+
+	profileTabs := append([]profileTabDef(nil), uc.ProfileTabs...)
+	sort.Slice(profileTabs, func(i, j int) bool { return profileTabs[i].Order < profileTabs[j].Order })
+
+	defaultTabID := "creations"
+	for _, tab := range profileTabs {
+		if tab.Default {
+			defaultTabID = tab.ID
+			break
+		}
+	}
+	if len(profileTabs) > 0 && strings.TrimSpace(defaultTabID) == "" {
+		defaultTabID = profileTabs[0].ID
+	}
+
+	sortSubTabs := func(tabs []profileSubTabDef) []profileSubTabDef {
+		out := append([]profileSubTabDef(nil), tabs...)
+		sort.Slice(out, func(i, j int) bool { return out[i].Order < out[j].Order })
+		return out
+	}
+
+	findTab := func(id string) *profileTabDef {
+		for i := range profileTabs {
+			if profileTabs[i].ID == id {
+				return &profileTabs[i]
+			}
+		}
+		return nil
+	}
+
+	writeSubTabList := func(name string, tabs []profileSubTabDef) {
+		b.WriteString(fmt.Sprintf("  static const List<UserProfileSubTabConfig> %s = <UserProfileSubTabConfig>[\n", name))
+		for _, tab := range sortSubTabs(tabs) {
+			b.WriteString(fmt.Sprintf("    UserProfileSubTabConfig(id: %s, labelKey: %s, contentType: %s),\n",
+				dartStringLiteral(tab.ID),
+				dartStringLiteral(tab.LabelKey),
+				dartStringOrNull(tab.ContentType)))
+		}
+		b.WriteString("  ];\n\n")
+	}
+
+	writeModeFilterMap := func(name string, values map[string][]string) {
+		keys := make([]string, 0, len(values))
+		for key := range values {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		b.WriteString(fmt.Sprintf("  static const Map<String, List<String>> %s = <String, List<String>>{\n", name))
+		for _, key := range keys {
+			b.WriteString(fmt.Sprintf("    '%s': <String>[", key))
+			for idx, value := range values[key] {
+				if idx > 0 {
+					b.WriteString(", ")
+				}
+				b.WriteString(dartStringLiteral(value))
+			}
+			b.WriteString("],\n")
+		}
+		b.WriteString("  };\n\n")
+	}
+
+	b.WriteString("// ignore: avoid_classes_with_only_static_members\n")
+	b.WriteString("class UserProfileUIConfig {\n")
+	b.WriteString("  const UserProfileUIConfig._();\n\n")
+	b.WriteString(fmt.Sprintf("  static const String defaultTabId = %s;\n\n", dartStringLiteral(defaultTabID)))
+	b.WriteString(fmt.Sprintf("  static const UserProfileHeaderLayoutConfig headerLayout = UserProfileHeaderLayoutConfig(baseHeightRatio: %s, maxStretchHeightRatio: %s, avatarOverlapRatio: %s);\n\n",
+		dartDoubleLiteral(uc.HeaderLayout.BaseHeightRatio, 0.25),
+		dartDoubleLiteral(uc.HeaderLayout.MaxStretchHeightRatio, 0.333),
+		dartDoubleLiteral(uc.HeaderLayout.AvatarOverlapRatio, 0.333)))
+	reboundCurve := strings.TrimSpace(uc.ScrollMotion.ReboundCurve)
+	if reboundCurve == "" {
+		reboundCurve = "easeOutBack"
+	}
+	collapseCurve := strings.TrimSpace(uc.ScrollMotion.CollapseCurve)
+	if collapseCurve == "" {
+		collapseCurve = "easeOutCubic"
+	}
+	b.WriteString(fmt.Sprintf("  static const UserProfileScrollMotionConfig scrollMotion = UserProfileScrollMotionConfig(compactIdentityBar: %v, primaryTabStickyBelowToolbar: %v, secondaryTabInlineScroll: %v, reboundCurve: %s, collapseCurve: %s);\n\n",
+		uc.ScrollMotion.CompactIdentityBar,
+		uc.ScrollMotion.PrimaryTabStickyBelowToolbar,
+		uc.ScrollMotion.SecondaryTabInlineScroll,
+		dartStringLiteral(reboundCurve),
+		dartStringLiteral(collapseCurve)))
+	b.WriteString("  static const List<UserProfileTabConfig> profileTabs = <UserProfileTabConfig>[\n")
+	for _, tab := range profileTabs {
+		b.WriteString(fmt.Sprintf("    UserProfileTabConfig(id: %s, labelKey: %s, isDefault: %v),\n",
+			dartStringLiteral(tab.ID),
+			dartStringLiteral(tab.LabelKey),
+			tab.Default))
+	}
+	b.WriteString("  ];\n\n")
+
+	if creationTab := findTab("creations"); creationTab != nil {
+		writeSubTabList("creationSubTabs", creationTab.SubTabs)
+		writeModeFilterMap("creationVisibilityFiltersByMode", creationTab.VisibilityFilter)
+	} else {
+		writeSubTabList("creationSubTabs", nil)
+		writeModeFilterMap("creationVisibilityFiltersByMode", map[string][]string{})
+	}
+
+	if interactionTab := findTab("interaction"); interactionTab != nil {
+		writeSubTabList("interactionSubTabs", interactionTab.SubTabs)
+		writeModeFilterMap("interactionDirectionFiltersByMode", interactionTab.DirectionFilter)
+	} else {
+		writeSubTabList("interactionSubTabs", nil)
+		writeModeFilterMap("interactionDirectionFiltersByMode", map[string][]string{})
 	}
 
 	b.WriteString("}\n")

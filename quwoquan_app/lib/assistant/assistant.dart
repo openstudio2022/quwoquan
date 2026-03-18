@@ -1,8 +1,12 @@
 export 'application/assistant_edge_service.dart';
+export 'application/assistant_backend.dart';
 export 'application/assistant_gateway.dart';
 export 'application/assistant_http_gateway.dart';
 export 'application/assistant_providers.dart';
-export 'application/capability_gateway.dart';
+export 'application/assistant_request_policy.dart';
+export 'application/assistant_run_stream.dart';
+export 'application/local_assistant_entry.dart';
+export 'application/remote_assistant_entry.dart';
 export 'capabilities/capabilities.dart';
 export 'domain/domain.dart';
 export 'infrastructure/infrastructure.dart';

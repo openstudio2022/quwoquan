@@ -77,9 +77,10 @@
   - 禁止继续输出旧 `checks[]`
 - `diagnostics`:
   - 只允许 `emergedTags`、`failedChecks`、`parseStatus`、`notes`
+- 用户旅程由 runtime 基于 canonical `assistant_journey` 聚合，禁止输出 `userEvents`、`uiProcessTimeline`、`processSummary`、`processReferenceCount` 等历史过程字段
 
 ## 规划阶段硬约束
-- 只能输出新 `assistant_turn` 字段，禁止输出 `traceId`、`turnPhase`、`thinkingText`、`source`、`references`、`slotFillPlan`、`queryNormalization`、`queryTasks`、`contextSlots`
+- 只能输出新 `assistant_turn` 字段；禁止输出任何历史调试字段、旧阶段字段或未定义的并行顶层字段
 - 若 `decision.nextAction=ask_user`，`messageKind` 必须是 `ask_user`，且 `askUser.prompt` 与 `userMarkdown` 必须清晰可展示
 - 若 `decision.nextAction=tool_call`，`messageKind` 必须是 `progress`
 - 若 `decision.nextAction=answer`，`messageKind` 必须是 `answer`

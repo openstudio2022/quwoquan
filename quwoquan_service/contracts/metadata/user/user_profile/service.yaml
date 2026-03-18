@@ -75,20 +75,21 @@ api_routes:
     operation: ListSubAccounts
     description: 查看自己所有子账号列表
     response_entity: Persona
-    response_fields: [id, subAccountId, displayName, avatarUrl, isolationLevel, isActive, isPrimary]
+    response_fields: [id, subAccountId, displayName, avatarUrl, backgroundUrl, bio, isolationLevel, isActive, isPrimary, inheritsProfileFromOwner]
 
   - method: POST
     path: /v1/owner/sub-accounts
     operation: CreateSubAccount
     description: 创建新子账号
     request_entity: Persona
-    request_fields: [displayName, avatarUrl, isolationLevel, purposeHint]
+    request_fields: [displayName, avatarUrl, backgroundUrl, bio, isolationLevel, purposeHint]
 
   - method: PATCH
     path: /v1/owner/sub-accounts/{subAccountId}
     operation: UpdateSubAccount
     description: 更新子账号资料或隔离等级
-    request_fields: [displayName, avatarUrl, callerRingtoneId, isolationLevel, purposeHint]
+    request_entity: ProfileSubjectMutation
+    request_fields: [displayName, avatarUrl, backgroundUrl, bio, callerRingtoneId, isolationLevel, purposeHint, profileVisibility, applyScope, syncTargetIds, fieldsMask]
 
   - method: DELETE
     path: /v1/owner/sub-accounts/{subAccountId}
@@ -106,14 +107,16 @@ api_routes:
     path: /v1/user/{subAccountId}
     operation: GetSubAccountProfile
     description: 公开用户主页（按 subAccountId 读取）
-    response_entity: Persona
-    response_fields: [subAccountId, displayName, avatarUrl, bio, followerCount, followingCount, postCount]
+    response_entity: ProfileSubjectView
+    response_fields: [profileSubjectId, ownerUserId, subjectType, subAccountId, username, displayName, avatarUrl, backgroundUrl, bio, followerCount, followingCount, postCount, circleCount, likeCount, profileVisibility, inheritsFromOwner, overriddenFields, updatedAt]
     note: 不暴露 ownerId / userId，isolationLevel=strict 时返回 404
 
   - method: GET
     path: /v1/me
     operation: GetMeProfile
     description: 当前激活子账号快捷视图（等同于 GetSubAccountProfile(activeSub)）
+    response_entity: ProfileSubjectView
+    response_fields: [profileSubjectId, ownerUserId, subjectType, subAccountId, username, displayName, avatarUrl, backgroundUrl, bio, followerCount, followingCount, postCount, circleCount, likeCount, profileVisibility, inheritsFromOwner, overriddenFields, updatedAt]
 
   # ── 原有 API（保持兼容，逐步迁移到上方路径） ──────────────────────────────
 
@@ -129,26 +132,29 @@ api_routes:
     path: /v1/user/profile
     operation: UpdateUserProfile
     description: "[已有] 更新主控账号资料"
-    request_entity: UserProfile
-    writable_fields: [nickname, avatarUrl, bio, gender, birthDate, region]
+    request_entity: ProfileSubjectMutation
+    request_fields: [nickname, displayName, avatarUrl, backgroundUrl, bio, gender, birthDate, region, profileVisibility, applyScope, syncTargetIds, fieldsMask]
 
   - method: GET
     path: /v1/user/personas
     operation: ListPersonas
     description: "[已有] 子账号列表（向后兼容，等同于 ListSubAccounts）"
     response_entity: Persona
+    response_fields: [id, subAccountId, displayName, avatarUrl, backgroundUrl, bio, isolationLevel, isActive, isPrimary, inheritsProfileFromOwner]
 
   - method: POST
     path: /v1/user/personas
     operation: CreatePersona
     description: "[已有] 创建子账号（向后兼容）"
     request_entity: Persona
+    request_fields: [displayName, avatarUrl, backgroundUrl, bio, isolationLevel, purposeHint]
 
   - method: PATCH
     path: /v1/user/personas/{personaId}
     operation: UpdatePersona
     description: "[已有] 更新子账号（向后兼容）"
-    request_fields: [displayName, avatarUrl, callerRingtoneId, isolationLevel, purposeHint]
+    request_entity: ProfileSubjectMutation
+    request_fields: [displayName, avatarUrl, backgroundUrl, bio, callerRingtoneId, isolationLevel, purposeHint, profileVisibility, applyScope, syncTargetIds, fieldsMask]
 
   - method: DELETE
     path: /v1/user/personas/{personaId}

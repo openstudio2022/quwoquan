@@ -1,6 +1,5 @@
 // ignore_for_file: deprecated_member_use
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -76,7 +75,7 @@ class _CommentInputState extends ConsumerState<CommentInput> {
         border: Border(
           top: BorderSide(
             color: AppColorsFunctional.getColor(isDark, ColorType.borderPrimary),
-            width: 1,
+            width: AppSpacing.one,
           ),
         ),
       ),
@@ -114,10 +113,10 @@ class _CommentInputState extends ConsumerState<CommentInput> {
       ),
       decoration: BoxDecoration(
         color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
         border: Border.all(
-          color: AppColors.primaryColor.withOpacity(0.3),
-          width: 1,
+          color: AppColors.primaryColor.withValues(alpha: 0.3),
+          width: AppSpacing.one,
         ),
       ),
       child: Row(
@@ -178,12 +177,12 @@ class _CommentInputState extends ConsumerState<CommentInput> {
               height: CommentResponsive.getInputHeight(context),
               decoration: BoxDecoration(
                 color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
                 border: Border.all(
                   color: _focusNode.hasFocus 
                     ? AppColors.primaryColor 
                     : AppColorsFunctional.getColor(isDark, ColorType.borderPrimary),
-                  width: _focusNode.hasFocus ? 2 : 1,
+                  width: _focusNode.hasFocus ? AppSpacing.two : AppSpacing.one,
                 ),
               ),
               child: TextField(

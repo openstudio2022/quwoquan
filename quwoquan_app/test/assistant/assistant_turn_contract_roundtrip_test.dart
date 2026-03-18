@@ -63,7 +63,7 @@ void main() {
       expect(parsed!.missingContextSlots, <String>['city']);
     });
 
-    test('missing messageKind can be inferred for answer turn', () {
+    test('missing messageKind is rejected under strict contract parsing', () {
       final parsed = tryParseAssistantTurnOutput(<String, dynamic>{
         'contractVersion': kAssistantTurnCurrentVersion,
         'decision': <String, dynamic>{
@@ -79,12 +79,10 @@ void main() {
         },
       });
 
-      expect(parsed, isNotNull);
-      expect(parsed!.messageKindType, AssistantMessageKind.answer);
-      expect(parsed.nextActionType, AssistantNextAction.answer);
+      expect(parsed, isNull);
     });
 
-    test('answer-phase turn with stale progress messageKind is normalized', () {
+    test('answer-phase turn keeps explicit messageKind without compatibility rewrite', () {
       final parsed = tryParseAssistantTurnOutput(<String, dynamic>{
         'contractVersion': kAssistantTurnCurrentVersion,
         'decision': <String, dynamic>{
@@ -102,7 +100,7 @@ void main() {
       });
 
       expect(parsed, isNotNull);
-      expect(parsed!.messageKindType, AssistantMessageKind.answer);
+      expect(parsed!.messageKindType, AssistantMessageKind.progress);
       expect(parsed.nextActionType, AssistantNextAction.answer);
     });
   });

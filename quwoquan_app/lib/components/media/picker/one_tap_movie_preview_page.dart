@@ -112,17 +112,15 @@ class _OneTapMoviePreviewPageState extends State<OneTapMoviePreviewPage> {
                 children: [
                   CupertinoButton(
                     padding: EdgeInsets.zero,
-                    minSize: AppSpacing.minInteractiveSize,
-                    onPressed: () => Navigator.of(context).pop(false),
+                    onPressed: () => Navigator.of(context).pop(false), minimumSize: Size(AppSpacing.minInteractiveSize, AppSpacing.minInteractiveSize),
                     child: Icon(CupertinoIcons.back, color: fg),
                   ),
                   const Spacer(),
                   CupertinoButton(
                     padding: EdgeInsets.zero,
-                    minSize: AppSpacing.minInteractiveSize,
                     onPressed: _images.isEmpty
                         ? null
-                        : () => Navigator.of(context).pop(true),
+                        : () => Navigator.of(context).pop(true), minimumSize: Size(AppSpacing.minInteractiveSize, AppSpacing.minInteractiveSize),
                     child: Text(
                       UITextConstants.mediaPickerNextStep,
                       style: TextStyle(

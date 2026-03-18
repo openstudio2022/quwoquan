@@ -443,7 +443,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
             ),
             child: SafeArea(
               child: Padding(
-                padding: EdgeInsets.all(16.w),
+                padding: EdgeInsets.all(AppSpacing.md.w),
                 child: Column(
                   children: [
                     // 顶部信息栏
@@ -480,7 +480,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
                       ? Icon(Icons.person, color: AppColors.white)
                       : null,
                 ),
-                SizedBox(width: 12.w),
+                SizedBox(width: AppSpacing.interGroupSm.w),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -512,7 +512,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
         GestureDetector(
           onTap: _showMoreOptions,
           child: Container(
-            padding: EdgeInsets.all(8.w),
+            padding: EdgeInsets.all(AppSpacing.sm.w),
             child: Icon(
               Icons.more_horiz,
               color: AppColors.white,
@@ -533,8 +533,8 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
         children: List.generate(widget.imageUrls.length, (index) {
           return Container(
             margin: EdgeInsets.symmetric(horizontal: 2.w),
-            width: 8.w,
-            height: 8.w,
+            width: AppSpacing.sm.w,
+            height: AppSpacing.sm.w,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: index == _currentIndex 
@@ -567,13 +567,13 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
             ),
             child: SafeArea(
               child: Padding(
-                padding: EdgeInsets.all(16.w),
+                padding: EdgeInsets.all(AppSpacing.md.w),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     // 交互按钮
                     _buildInteractionButtons(isDark),
-                    SizedBox(height: 16.h),
+                    SizedBox(height: AppSpacing.md.h),
                     // 点赞和评论数
                     _buildLikesAndCommentsCount(isDark),
                   ],
@@ -699,7 +699,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
                     fontWeight: AppTypography.semiBold,
                   ),
                 ),
-                SizedBox(width: 4.w),
+                SizedBox(width: AppSpacing.xs.w),
                 Text(
                   '个赞',
                   style: TextStyle(
@@ -740,7 +740,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
             child: GestureDetector(
               onTap: widget.onClose,
               child: Container(
-                padding: EdgeInsets.all(8.w),
+                padding: EdgeInsets.all(AppSpacing.sm.w),
                 decoration: BoxDecoration(
                   color: AppColors.overlayMedium,
                   shape: BoxShape.circle,
@@ -779,8 +779,8 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
               children: [
                 // 拖拽指示器
                 Container(
-                  width: 40.w,
-                  height: 4.h,
+                  width: AppSpacing.forty.w,
+                  height: AppSpacing.xs.h,
                   margin: EdgeInsets.only(top: 12.h, bottom: 20.h),
                   decoration: BoxDecoration(
                     color: isDark ? AppColors.dark.foregroundTertiary : AppColors.light.foregroundTertiary,
@@ -795,7 +795,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> with TickerProviderSt
                 _buildMoreOptionItem(CupertinoIcons.link, UITextConstants.copyLink, isDark, () => _handleCopyLink()),
                 _buildMoreOptionItem(CupertinoIcons.photo, '查看原图', isDark, () => _handleViewOriginal()),
                 
-                SizedBox(height: 20.h),
+                SizedBox(height: AppSpacing.twenty.h),
               ],
             ),
           ),

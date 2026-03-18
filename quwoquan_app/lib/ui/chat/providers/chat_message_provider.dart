@@ -36,7 +36,7 @@ class ChatMessageState {
 /// 管理单个会话的消息列表、发送、撤回、seq gap 补全。
 class ChatMessageNotifier extends StateNotifier<ChatMessageState> {
   ChatMessageNotifier(this._repo, this.conversationId)
-      : super(const ChatMessageState());
+    : super(const ChatMessageState());
 
   final ChatRepository _repo;
   final String conversationId;
@@ -57,6 +57,35 @@ class ChatMessageNotifier extends StateNotifier<ChatMessageState> {
       }
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
+    }
+  }
+
+  /// 进入详情后用当前已加载的最后一条消息触发已读回执。
+  Future<bool> markConversationRead() async {
+    final latest = state.messages.reversed.firstWhere(
+      (message) => message.id.isNotEmpty,
+      orElse: () => const MessageDto(
+        id: '',
+        conversationId: '',
+        seq: 0,
+        clientMsgId: '',
+        senderId: '',
+        type: 'text',
+        status: 'sent',
+      ),
+    );
+    if (latest.id.isEmpty) {
+      return false;
+    }
+    try {
+      await _repo.markAsRead(
+        conversationId: conversationId,
+        messageId: latest.id,
+      );
+      return true;
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return false;
     }
   }
 
@@ -107,9 +136,7 @@ class ChatMessageNotifier extends StateNotifier<ChatMessageState> {
       state = state.copyWith(messages: _sorted(updated));
     } catch (e) {
       final failed = state.messages.map((m) {
-        return m.clientMsgId == clientMsgId
-            ? m.copyWith(status: 'failed')
-            : m;
+        return m.clientMsgId == clientMsgId ? m.copyWith(status: 'failed') : m;
       }).toList();
       state = state.copyWith(messages: _sorted(failed));
     }
@@ -122,9 +149,7 @@ class ChatMessageNotifier extends StateNotifier<ChatMessageState> {
       orElse: () => throw StateError('Message not found or not failed'),
     );
     final retrying = state.messages.map((m) {
-      return m.clientMsgId == clientMsgId
-          ? m.copyWith(status: 'sending')
-          : m;
+      return m.clientMsgId == clientMsgId ? m.copyWith(status: 'sending') : m;
     }).toList();
     state = state.copyWith(messages: _sorted(retrying));
     try {
@@ -149,9 +174,7 @@ class ChatMessageNotifier extends StateNotifier<ChatMessageState> {
       state = state.copyWith(messages: _sorted(updated));
     } catch (_) {
       final failed = state.messages.map((m) {
-        return m.clientMsgId == clientMsgId
-            ? m.copyWith(status: 'failed')
-            : m;
+        return m.clientMsgId == clientMsgId ? m.copyWith(status: 'failed') : m;
       }).toList();
       state = state.copyWith(messages: _sorted(failed));
     }
@@ -195,7 +218,9 @@ class ChatMessageNotifier extends StateNotifier<ChatMessageState> {
   /// 外部实时事件推送消息到列表（WebSocket/Long-poll 收到的新消息）。
   void addMessage(MessageDto msg) {
     final existing = state.messages.any(
-      (m) => m.id == msg.id || (msg.clientMsgId.isNotEmpty && m.clientMsgId == msg.clientMsgId),
+      (m) =>
+          m.id == msg.id ||
+          (msg.clientMsgId.isNotEmpty && m.clientMsgId == msg.clientMsgId),
     );
     if (existing) return;
     state = state.copyWith(messages: _sorted([...state.messages, msg]));
@@ -238,11 +263,12 @@ class ChatMessageNotifier extends StateNotifier<ChatMessageState> {
   // ── seq gap 检测 + 自动补全 ──────────────────────────────────────
 
   Future<void> _detectAndFillGap(int maxSeq) async {
-    final confirmedSeqs = state.messages
-        .where((m) => m.seq > _unconfirmedSeq)
-        .map((m) => m.seq)
-        .toList()
-      ..sort();
+    final confirmedSeqs =
+        state.messages
+            .where((m) => m.seq > _unconfirmedSeq)
+            .map((m) => m.seq)
+            .toList()
+          ..sort();
     if (confirmedSeqs.isEmpty) {
       await syncFromSeq(0);
       return;
@@ -277,10 +303,10 @@ class ChatMessageNotifier extends StateNotifier<ChatMessageState> {
 }
 
 /// 按 conversationId 创建独立的消息状态管理器。
-final chatMessageProvider = StateNotifierProvider.family<
-    ChatMessageNotifier, ChatMessageState, String>(
-  (ref, conversationId) {
-    final repo = ref.watch(chatRepositoryProvider);
-    return ChatMessageNotifier(repo, conversationId);
-  },
-);
+final chatMessageProvider =
+    StateNotifierProvider.family<ChatMessageNotifier, ChatMessageState, String>(
+      (ref, conversationId) {
+        final repo = ref.watch(chatRepositoryProvider);
+        return ChatMessageNotifier(repo, conversationId);
+      },
+    );

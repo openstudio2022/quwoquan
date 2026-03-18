@@ -14,6 +14,7 @@ import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dar
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1012,12 +1013,7 @@ class _CirclesPageState extends ConsumerState<CirclesPage>
                     padding: EdgeInsets.only(left: AppSpacing.sm),
                     child: GestureDetector(
                       onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(UITextConstants.createCircle),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
+                        AppToast.show(context, UITextConstants.createCircle);
                       },
                       child: Container(
                         width: _circleCardWidth(context),

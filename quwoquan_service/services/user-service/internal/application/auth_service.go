@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -321,12 +322,104 @@ func (s *SubAccountService) DeleteSubAccount(ctx context.Context, ownerID, subAc
 	return nil
 }
 
-// GetSubAccountProfile returns public-facing profile for a subAccountID.
-// Returns nil, ErrSubAccountStrictIsolation if isolation_level=strict.
+// GetSubAccountProfile returns the raw persona entity for compatibility callers.
 func (s *SubAccountService) GetSubAccountProfile(ctx context.Context, subAccountID string) (*model.Persona, error) {
-	// We don't have a direct FindBySubAccountID method; we'd need to add one.
-	// For now, this is implemented at the handler level via a JOIN query.
-	return nil, nil
+	return s.personas.FindBySubAccountID(ctx, subAccountID)
+}
+
+// GetSubAccountProfileView projects a sub-account to the public ProfileSubjectView shape.
+func (s *SubAccountService) GetSubAccountProfileView(ctx context.Context, subAccountID string) (map[string]any, error) {
+	persona, err := s.personas.FindBySubAccountID(ctx, subAccountID)
+	if err != nil {
+		return nil, err
+	}
+	if persona == nil {
+		return nil, nil
+	}
+	owner, err := s.profiles.FindByID(ctx, persona.UserID)
+	if err != nil {
+		return nil, err
+	}
+	return buildProfileSubjectView(owner, persona), nil
+}
+
+// GetMeProfileView projects the active owner/sub-account subject for the viewer.
+func (s *SubAccountService) GetMeProfileView(ctx context.Context, userID string) (map[string]any, error) {
+	owner, err := s.profiles.FindByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if owner == nil {
+		return nil, nil
+	}
+	persona, err := s.personas.FindActiveByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return buildProfileSubjectView(owner, persona), nil
+}
+
+func buildProfileSubjectView(owner *model.UserProfile, persona *model.Persona) map[string]any {
+	if owner == nil && persona == nil {
+		return map[string]any{}
+	}
+	if owner == nil {
+		owner = &model.UserProfile{UserID: persona.UserID}
+	}
+	subjectType := "owner"
+	profileSubjectID := owner.UserID
+	subAccountID := ""
+	displayName := owner.Nickname
+	avatarURL := owner.AvatarURL
+	overriddenFields := []string{}
+	updatedAt := owner.UpdatedAt
+
+	if persona != nil {
+		subjectType = "sub_account"
+		profileSubjectID = persona.SubAccountID
+		subAccountID = persona.SubAccountID
+		if persona.DisplayName != "" {
+			displayName = persona.DisplayName
+			overriddenFields = append(overriddenFields, "displayName")
+		}
+		if persona.AvatarURL != "" {
+			avatarURL = persona.AvatarURL
+			overriddenFields = append(overriddenFields, "avatarUrl")
+		}
+		updatedAt = persona.UpdatedAt
+	}
+	if displayName == "" {
+		displayName = owner.OwnerDisplayName
+	}
+	if displayName == "" {
+		displayName = owner.UserID
+	}
+	if updatedAt.IsZero() {
+		updatedAt = time.Now().UTC()
+	}
+
+	return map[string]any{
+		"profileSubjectId":  profileSubjectID,
+		"ownerUserId":       owner.UserID,
+		"subjectType":       subjectType,
+		"subAccountId":      subAccountID,
+		"userId":            profileSubjectID,
+		"username":          owner.Nickname,
+		"displayName":       displayName,
+		"nickname":          displayName,
+		"avatarUrl":         avatarURL,
+		"backgroundUrl":     "",
+		"bio":               owner.Bio,
+		"followerCount":     owner.FollowerCount,
+		"followingCount":    owner.FollowingCount,
+		"postCount":         owner.PostCount,
+		"circleCount":       owner.CircleCount,
+		"likeCount":         owner.LikeCount,
+		"profileVisibility": "public",
+		"inheritsFromOwner": persona != nil,
+		"overriddenFields":  overriddenFields,
+		"updatedAt":         updatedAt.Format(time.RFC3339),
+	}
 }
 
 var (

@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -115,7 +114,7 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
       initialPostIndex: _safeInitialIndex,
       layoutMode: isMoment ? 'nested' : 'flat',
       initialImageIndex: widget.initialExtra?.initialImageIndex ?? 0,
-      toolbarMode: 'backOnly',
+      toolbarMode: isMoment ? 'backOnly' : 'full',
       onUserClick: (username, {avatarUrl, displayName, backgroundUrl}) {
         context.push(
           '/user/$username',

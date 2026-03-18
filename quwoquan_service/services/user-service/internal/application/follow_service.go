@@ -24,6 +24,9 @@ func NewFollowService(
 }
 
 func (s *FollowService) Follow(ctx context.Context, followerID, followeeID string) error {
+	if s.follows == nil {
+		return nil
+	}
 	edge := &followmodel.FollowEdge{
 		FollowerID: followerID,
 		FolloweeID: followeeID,
@@ -45,6 +48,9 @@ func (s *FollowService) Follow(ctx context.Context, followerID, followeeID strin
 }
 
 func (s *FollowService) Unfollow(ctx context.Context, followerID, followeeID string) error {
+	if s.follows == nil {
+		return nil
+	}
 	deleted, err := s.follows.Delete(ctx, followerID, followeeID)
 	if err != nil {
 		return err
@@ -61,14 +67,23 @@ func (s *FollowService) Unfollow(ctx context.Context, followerID, followeeID str
 }
 
 func (s *FollowService) ListFollowing(ctx context.Context, userID, cursor string, limit int) ([]followmodel.FollowEdge, string, error) {
+	if s.follows == nil {
+		return []followmodel.FollowEdge{}, "", nil
+	}
 	return s.follows.ListByFollower(ctx, userID, cursor, limit)
 }
 
 func (s *FollowService) ListFollowers(ctx context.Context, userID, cursor string, limit int) ([]followmodel.FollowEdge, string, error) {
+	if s.follows == nil {
+		return []followmodel.FollowEdge{}, "", nil
+	}
 	return s.follows.ListByFollowee(ctx, userID, cursor, limit)
 }
 
 func (s *FollowService) GetRelationship(ctx context.Context, userID, targetID string) (*followrepo.Relationship, error) {
+	if s.follows == nil {
+		return &followrepo.Relationship{}, nil
+	}
 	isFollowing, err := s.follows.Exists(ctx, userID, targetID)
 	if err != nil {
 		return nil, err

@@ -224,7 +224,7 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
               child: ListView.separated(
                 itemCount: _albums.length,
                 separatorBuilder: (_, _) => Container(
-                  height: 0.5,
+                  height: AppSpacing.hairline,
                   color: AppColorsFunctional.getColor(
                     isDark,
                     ColorType.borderSecondary,
@@ -345,8 +345,7 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
         children: [
           CupertinoButton(
             padding: EdgeInsets.zero,
-            minSize: AppSpacing.minInteractiveSize,
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.of(context).pop(), minimumSize: Size(AppSpacing.minInteractiveSize, AppSpacing.minInteractiveSize),
             child: Icon(CupertinoIcons.xmark, color: fg),
           ),
           Expanded(

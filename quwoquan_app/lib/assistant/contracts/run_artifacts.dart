@@ -1,29 +1,23 @@
 export 'package:quwoquan_app/assistant/generated/contracts/run_artifacts.g.dart';
 export 'package:quwoquan_app/assistant/contracts/runtime_enums.dart'
     show
-        ProcessJournalEventType,
         SlotValueStatus,
         TraceVisibility,
-        parseProcessJournalEventType,
         parseSlotValueStatus,
         parseTraceVisibility;
 
+import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/run_artifacts.g.dart';
-import 'package:quwoquan_app/assistant/reasoning/contracts/planner_contracts.dart';
-import 'package:quwoquan_app/assistant/reasoning/contracts/process_protocol.dart';
-
-String processJournalEventTypeToWire(ProcessJournalEventType type) =>
-    type.wireName;
 
 String slotValueStatusToWire(SlotValueStatus status) => status.wireName;
 
 RunArtifacts parseRunArtifacts(Map<String, dynamic> json) =>
     RunArtifacts.fromJson(json);
 
-ProcessJournalEvent parseProcessJournalEvent(Map<String, dynamic> json) =>
-    ProcessJournalEvent.fromJson(json);
+AssistantJourney parseAssistantJourney(Map<String, dynamic> json) =>
+    AssistantJourney.fromJson(json);
 
 SlotStateSnapshot parseSlotStateSnapshot(Map<String, dynamic> json) =>
     SlotStateSnapshot.fromJson(json);
@@ -33,65 +27,6 @@ SlotValueSnapshot parseSlotValueSnapshot(Map<String, dynamic> json) =>
 
 extension TraceVisibilityCompat on TraceVisibility {
   bool get isUserVisible => this == TraceVisibility.userVisible;
-}
-
-extension ProcessJournalEventCompat on ProcessJournalEvent {
-  PlannerPhaseId get stageType => parsePlannerPhaseId(stage);
-
-  PlannerPhaseId get phaseIdType => parsePlannerPhaseId(phaseId);
-
-  PlannerActionCode get actionCodeType => parsePlannerActionCode(actionCode);
-
-  PlannerReasonCode get reasonCodeType => parsePlannerReasonCode(reasonCode);
-
-  ProcessProtocolCode get protocolCode => ProcessProtocolCode.fromWire(
-    stage: stage,
-    phaseId: phaseId,
-    actionCode: actionCode,
-    reasonCode: reasonCode,
-  );
-
-  ProcessJournalEvent copyWith({
-    String? eventId,
-    ProcessJournalEventType? type,
-    String? stage,
-    String? phaseId,
-    String? actionCode,
-    String? reasonCode,
-    String? reasonShort,
-    String? source,
-    String? nodeId,
-    String? message,
-    String? runId,
-    String? traceId,
-    List<ProcessSourceReference>? references,
-    Map<String, dynamic>? payload,
-    DateTime? timestamp,
-  }) {
-    return ProcessJournalEvent(
-      eventId: eventId ?? this.eventId,
-      type: type ?? this.type,
-      stage: stage ?? this.stage,
-      phaseId: phaseId ?? this.phaseId,
-      actionCode: actionCode ?? this.actionCode,
-      reasonCode: reasonCode ?? this.reasonCode,
-      reasonShort: reasonShort ?? this.reasonShort,
-      source: source ?? this.source,
-      nodeId: nodeId ?? this.nodeId,
-      message: message ?? this.message,
-      runId: runId ?? this.runId,
-      traceId: traceId ?? this.traceId,
-      references: references ?? this.references,
-      payload: payload ?? this.payload,
-      timestamp: timestamp ?? this.timestamp,
-    );
-  }
-
-  String get displayMessage {
-    final preferred = reasonShort.trim();
-    if (preferred.isNotEmpty) return preferred;
-    return message.trim();
-  }
 }
 
 extension EvidenceLedgerEntryCompat on EvidenceLedgerEntry {
@@ -104,6 +39,10 @@ extension EvidenceLedgerEntryCompat on EvidenceLedgerEntry {
       : dimensionType.displayLabel;
 
   EvidenceSourceTier get sourceTierType => parseEvidenceSourceTier(sourceTier);
+}
+
+extension RunArtifactsCompat on RunArtifacts {
+  AssistantJourney get canonicalJourney => journey;
 }
 
 const Object _slotValueNoop = Object();

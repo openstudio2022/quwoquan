@@ -1,11 +1,13 @@
 export 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 export 'package:quwoquan_app/assistant/generated/contracts/assistant_turn.g.dart';
 
+import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart'
+    show SlotStateSnapshot;
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_turn.g.dart';
 import 'package:quwoquan_app/assistant/reasoning/contracts/planner_contracts.dart';
 import 'package:quwoquan_app/assistant/reasoning/contracts/process_protocol.dart';
-import 'package:quwoquan_app/assistant/reasoning/contracts/run_artifacts.dart';
 
 const String kAssistantTurnCurrentVersion = 'assistant_turn';
 
@@ -19,82 +21,19 @@ AssistantTurnOutput? tryParseAssistantTurnOutput(Map<String, dynamic> json) {
   final version = (json['contractVersion'] as String?)?.trim() ?? '';
   if (version != kAssistantTurnCurrentVersion) return null;
   if (json['decision'] is! Map) return null;
+  final messageKind = (json['messageKind'] as String?)?.trim() ?? '';
+  if (messageKind.isEmpty ||
+      parseMessageKind(messageKind) == AssistantMessageKind.unknown) {
+    return null;
+  }
   try {
-    final compatJson = <String, dynamic>{...json};
-    if (compatJson['uiProcessTimeline'] == null &&
-        compatJson['uiProcessTimelineV2'] is List) {
-      compatJson['uiProcessTimeline'] = compatJson['uiProcessTimelineV2'];
-    }
-    final normalizedMessageKind = _normalizeCompatMessageKind(compatJson);
-    if (normalizedMessageKind.isEmpty) return null;
-    compatJson['messageKind'] = normalizedMessageKind;
-    return AssistantTurnOutput.fromJson(compatJson);
+    return AssistantTurnOutput.fromJson(json);
   } catch (_) {
     return null;
   }
 }
 
-String _normalizeCompatMessageKind(Map<String, dynamic> json) {
-  final raw = (json['messageKind'] as String?)?.trim() ?? '';
-  if (raw.isNotEmpty) {
-    if (parseMessageKind(raw) == AssistantMessageKind.progress &&
-        _looksLikeAnswerPhaseTurn(json)) {
-      return AssistantMessageKind.answer.wireName;
-    }
-    return raw;
-  }
-  final decision =
-      (json['decision'] as Map?)?.cast<String, dynamic>() ??
-      const <String, dynamic>{};
-  final nextAction = parseNextAction(
-    (decision['nextAction'] as String?)?.trim() ?? '',
-  );
-  switch (nextAction) {
-    case AssistantNextAction.toolCall:
-      return AssistantMessageKind.progress.wireName;
-    case AssistantNextAction.askUser:
-      return AssistantMessageKind.askUser.wireName;
-    case AssistantNextAction.answer:
-      return _hasRenderableAnswerCandidate(json)
-          ? AssistantMessageKind.answer.wireName
-          : '';
-    case AssistantNextAction.abort:
-      return AssistantMessageKind.fallback.wireName;
-    case AssistantNextAction.retry:
-      return AssistantMessageKind.progress.wireName;
-    case AssistantNextAction.unknown:
-      return '';
-  }
-}
-
-bool _looksLikeAnswerPhaseTurn(Map<String, dynamic> json) {
-  final decision =
-      (json['decision'] as Map?)?.cast<String, dynamic>() ??
-      const <String, dynamic>{};
-  final nextAction = parseNextAction(
-    (decision['nextAction'] as String?)?.trim() ?? '',
-  );
-  if (nextAction != AssistantNextAction.answer) return false;
-  if (!_hasRenderableAnswerCandidate(json)) return false;
-  final phaseId = (json['phaseId'] as String?)?.trim() ?? '';
-  final actionCode = (json['actionCode'] as String?)?.trim() ?? '';
-  final reasonCode = (json['reasonCode'] as String?)?.trim() ?? '';
-  return phaseId == PlannerPhaseId.answering.wireName ||
-      actionCode == PlannerActionCode.composeAnswer.wireName ||
-      reasonCode == PlannerReasonCode.evidenceReady.wireName;
-}
-
-bool _hasRenderableAnswerCandidate(Map<String, dynamic> json) {
-  final userMarkdown = (json['userMarkdown'] as String?)?.trim() ?? '';
-  if (userMarkdown.isNotEmpty) return true;
-  final result = (json['result'] as Map?)?.cast<String, dynamic>();
-  final resultText = (result?['text'] as String?)?.trim() ?? '';
-  if (resultText.isNotEmpty) return true;
-  final resultSummary = (result?['summary'] as String?)?.trim() ?? '';
-  return resultSummary.isNotEmpty;
-}
-
-extension AssistantTurnOutputCompat on AssistantTurnOutput {
+extension AssistantTurnOutputAccessors on AssistantTurnOutput {
   String get nextAction => decision.nextAction.wireName;
 
   AssistantNextAction get nextActionType => decision.nextAction;
@@ -120,6 +59,8 @@ extension AssistantTurnOutputCompat on AssistantTurnOutput {
 
   Map<String, dynamic> get resultData => result.toJson();
 
+  AssistantJourney get assistantJourney => journey;
+
   String get resultText => result.text.trim();
 
   String get interpretation => result.interpretation.trim();
@@ -137,6 +78,11 @@ extension AssistantTurnOutputCompat on AssistantTurnOutput {
 
   bool get hasRenderableAnswer =>
       userMarkdown.trim().isNotEmpty || resultText.isNotEmpty;
+
+  bool get hasJourney =>
+      journey.stages.isNotEmpty ||
+      journey.entries.isNotEmpty ||
+      journey.summary.trim().isNotEmpty;
 
   SlotStateSnapshot get slotStateSnapshot {
     return slotState;

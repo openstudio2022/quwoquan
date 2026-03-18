@@ -20,7 +20,7 @@
 
 ## 3. 设计约束
 
-- 禁止通过 `agent_loop` / `react_runtime` 为某个 domain 写特判
+- 禁止通过 `assistant_agent_loop` / `local_phase_execution_owner` / `react_runtime` 为某个 domain 写特判
 - 禁止把 trigger keywords 当作主路由策略
 - 禁止把示例回答或追问文案硬编码在 runtime
 - 新增 skill 时应同步补充 domain 描述、状态机和检索策略

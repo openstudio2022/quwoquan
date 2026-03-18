@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 
@@ -18,7 +20,11 @@ Widget _scopedApp({ChatRepository? mock}) {
             path: '/chat',
             builder: (_, _) => const Scaffold(body: ChatPage()),
           ),
-          GoRoute(path: '/chat/:id', builder: (_, _) => const SizedBox()),
+          GoRoute(
+            path: '/chat/:id',
+            builder: (_, _) =>
+                const SizedBox(key: ValueKey('chat-detail-page')),
+          ),
           GoRoute(
             path: '/chat/:id/settings',
             builder: (_, _) => const SizedBox(),
@@ -56,7 +62,7 @@ void main() {
         await tester.tap(listItems.first);
         await tester.pumpAndSettle();
       }
-      expect(find.byType(ChatPage), findsOneWidget);
+      expect(find.byKey(const ValueKey('chat-detail-page')), findsOneWidget);
     });
 
     testWidgets('下拉刷新不崩溃', (tester) async {
@@ -68,19 +74,45 @@ void main() {
 
       expect(find.byType(ChatPage), findsOneWidget);
     });
+
+    testWidgets('列表区左滑先切二级 Tab，二级越界后再切一级 Tab', (tester) async {
+      await tester.pumpWidget(_scopedApp());
+      await tester.pumpAndSettle();
+
+      final swipeRegion = find.byType(SafeArea).first;
+
+      for (var i = 0; i < 3; i++) {
+        await tester.fling(swipeRegion, const Offset(-420, 0), 1200);
+        await tester.pumpAndSettle();
+      }
+
+      expect(find.text('输入密码以查看对话'), findsOneWidget);
+
+      await tester.fling(find.text('输入密码以查看对话'), const Offset(-420, 0), 1200);
+      await tester.pumpAndSettle();
+
+      expect(find.text(UITextConstants.contactsTabFunGroup), findsOneWidget);
+      expect(find.text('输入密码以查看对话'), findsNothing);
+    });
   });
 
   group('ChatPage — 错误态渲染', () {
     testWidgets('Repository 返回空列表时安全渲染', (tester) async {
       await tester.pumpWidget(_scopedApp(mock: _EmptyChatRepository()));
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       expect(find.byType(ChatPage), findsOneWidget);
+      expect(find.text(UITextConstants.noConversations), findsOneWidget);
     });
   });
 }
 
 class _EmptyChatRepository extends MockChatRepository {
+  @override
+  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
+    return const <ChatInboxDto>[];
+  }
+
   @override
   Future<List<Map<String, dynamic>>> listConversations({
     String? cursor,

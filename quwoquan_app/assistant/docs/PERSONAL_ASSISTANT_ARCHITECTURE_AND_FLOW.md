@@ -10,7 +10,7 @@
 小趣私人助理是用户的个人全能助理，不是平台客服，也不是靠规则堆起来的垂类机器人。
 
 - `LLM-first`：意图识别、技能选择、检索策略与阶段推进以模型决策为主
-- `Runtime-thin`：`agent_loop`、`react_runtime`、`tool_registry` 负责编排、守卫、解析与回放，不承担垂类知识
+- `Runtime-thin`：`assistant_agent_loop`、`local_phase_execution_owner`、`react_runtime`、`tool_registry` 负责编排、守卫、解析与回放，不承担垂类知识
 - `Skill-centered`：垂类知识、约束、示例、工具策略、对话状态机沉淀在 skill 资产
 - `Metadata-driven`：工具文案、工具权限、提示词模板、输出契约、检索策略以 metadata 或 prompt asset 为真相源
 - `No-fake-answer`：没有证据就说明边界，不伪造实时结果
@@ -21,8 +21,8 @@
 
 ```mermaid
 flowchart TB
-    userInput[UserQuery] --> gateway[CapabilityGateway]
-    gateway --> loop[PersonalAssistantAgentLoop]
+    userInput[UserQuery] --> gateway[LocalAssistantEntry / RemoteAssistantEntry]
+    gateway --> loop[AssistantAgentLoop]
     loop --> context[ContextOrchestrator]
     context --> planner[PlannerLLM]
     planner --> skillLoad[LoadSkillContext]
@@ -35,7 +35,7 @@ flowchart TB
 
 ### 2.1 关键阶段
 
-1. `CapabilityGateway` / `AssistantGateway` 接收请求、选择本地或远程执行策略。
+1. `LocalAssistantEntry` / `RemoteAssistantEntry` 接收请求，并将会话绑定到单一 backend。
 2. `ContextOrchestrator` 组装会话摘要、长期记忆、位置与槽位提示。
 3. Planner 读取 skill catalog，由模型输出 `primaryDomainId`、`mode`、`queryNormalization`、`slotFillPlan`。
 4. 运行时按 `domainId` 加载 skill 指令、dialogue 状态与可用工具。
@@ -87,13 +87,11 @@ Decide -> 进入下一轮、切换阶段或结束
 
 ## 4. Prompt Stack 与上下文注入
 
-### 4.1 Prompt Stack
+### 4.1 Prompt Assets
 
-- `stack.global_system`：身份与全局底线
-- `stack.runtime_policy`：预算、工具与执行约束
-- `stack.recovery_policy`：失败恢复与降级策略
-- `stack.output_contract`：阶段输出契约
+- 全局基线模板：`stack.identity`、`stack.safety`、`stack.persona`、`stack.tool_policy`
 - 阶段模板：`planner.*`、`synthesizer.*`、`web.*`
+- 阶段输出契约：`phase.output_contract.*`
 
 ### 4.2 注入原则
 
@@ -130,10 +128,12 @@ Decide -> 进入下一轮、切换阶段或结束
 
 - `quwoquan_app/lib/assistant/application/assistant_providers.dart`
 - `quwoquan_app/lib/assistant/application/assistant_gateway.dart`
-- `quwoquan_app/lib/assistant/application/capability_gateway.dart`
+- `quwoquan_app/lib/assistant/application/local_assistant_entry.dart`
+- `quwoquan_app/lib/assistant/application/remote_assistant_entry.dart`
 - `quwoquan_app/lib/assistant/application/assistant_edge_service.dart`
 - `quwoquan_app/lib/assistant/runtime/assistant_runtime.dart`
-- `quwoquan_app/lib/assistant/orchestration/process_journal_bus.dart`
+- `quwoquan_app/lib/assistant/application/assistant_journey_projector.dart`
+- `quwoquan_app/lib/assistant/application/assistant_stream_projector.dart`
 - `quwoquan_app/lib/assistant/contracts/assistant_turn_contract.dart`
 - `quwoquan_app/lib/assistant/contracts/process_protocol.dart`
 
@@ -147,16 +147,16 @@ Decide -> 进入下一轮、切换阶段或结束
 - `quwoquan_app/assets/assistant/tools/catalog/tool_catalog.meta.json`
 - `quwoquan_app/assets/assistant/prompts/`
 
-更深层 legacy implementation 仍可能位于 `quwoquan_app/lib/personal_assistant/`，但当前开发入口统一以 `quwoquan_app/lib/assistant/` 为准。
+更深层历史实现仍可能位于 `quwoquan_app/lib/personal_assistant/`，但当前开发入口统一以 `quwoquan_app/lib/assistant/` 为准。
 
-**禁止**：不得在 `quwoquan_app/lib/assistant/conversation/orchestration/agent_loop.dart` 中增量堆新逻辑；该文件为兼容桥，未来将由 `orchestration/assistant_agent_loop.dart` 与各 phase 完全取代。
+**禁止**：不得再引入第二份 owner / gateway 主链；编排统一以 `orchestration/assistant_agent_loop.dart`、`orchestration/local_phase_execution_owner.dart` 与各 phase 为准。
 
 ### 2.3 架构升级目标（World-Class）
 
 - **等待体验**：用户在 30–60 秒长等待期间持续看到可信、用户语言、可解释的工作说明，过程流不出现长时间空白
 - **Single-pass-first**：默认一次深理解后，先产出 2–4 路互补检索 lanes，再并行执行；replan 仅作例外补救
 - **多路检索设计**：`QueryTask` 按证据维度驱动，不再只是 query 变体
-- **Process narrative**：phase 直接产出用户语言工作说明，统一到 `ProcessJournalEvent` 主链
+- **Process narrative**：phase / trace 统一投影到 canonical `AssistantJourney`，只保留用户可理解的阶段、里程碑与来源摘要
 
 ---
 

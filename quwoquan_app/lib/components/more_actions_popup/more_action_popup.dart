@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/components/more_actions_popup/configs/media_post_config.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 
 /// 更多操作弹窗组件
 class MoreActionPopup extends StatelessWidget {
@@ -218,8 +217,7 @@ class _MediaPostMoreActionSheetState
                   ),
                   CupertinoButton(
                     padding: EdgeInsets.zero,
-                    minSize: AppSpacing.minInteractiveSize,
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () => Navigator.pop(context), minimumSize: Size(AppSpacing.minInteractiveSize, AppSpacing.minInteractiveSize),
                     child: Icon(
                       CupertinoIcons.xmark,
                       size: AppSpacing.twenty.sp,
@@ -309,7 +307,7 @@ class _MediaPostMoreActionSheetState
             // 分隔线
             if (scrollActions.isNotEmpty && bottomActions.isNotEmpty) ...[
               Container(
-                height: 0.5,
+                height: AppSpacing.hairline,
                 color: AppColorsFunctional.getColor(
                   isDark,
                   ColorType.foregroundTertiary,
@@ -391,7 +389,7 @@ class _MediaPostMoreActionSheetState
                         // 分隔线 (除了最后一个选项)
                         if (index < bottomActions.length - 1)
                           Container(
-                            height: 0.5,
+                            height: AppSpacing.hairline,
                             color: AppColorsFunctional.getColor(
                               isDark,
                               ColorType.foregroundTertiary,

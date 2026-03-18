@@ -159,7 +159,9 @@ void main() {
         }
       }
       if (find.text('极简摄影俱乐部').evaluate().isNotEmpty ||
-          find.text('你的皮炎有点辣').evaluate().isNotEmpty) break;
+          find.text('你的皮炎有点辣').evaluate().isNotEmpty) {
+        break;
+      }
     }
   }
 

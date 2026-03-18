@@ -218,7 +218,7 @@ class AppLogService {
       case AppLogType.pageAccess:
         return 'ui';
       case AppLogType.agentRun:
-        return 'agent_loop';
+        return 'assistant_agent_loop';
       case AppLogType.llm:
         return 'llm_provider';
       case AppLogType.search:

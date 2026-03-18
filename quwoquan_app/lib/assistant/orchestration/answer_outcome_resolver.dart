@@ -1,9 +1,10 @@
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
-import 'package:quwoquan_app/assistant/conversation/contracts/conversation_state_decision.dart';
+import 'package:quwoquan_app/assistant/contracts/conversation_state_decision.dart';
 
 class AnswerOutcomeSnapshot {
   const AnswerOutcomeSnapshot({
@@ -15,8 +16,7 @@ class AnswerOutcomeSnapshot {
     this.synthesisReadiness = const SynthesisReadinessResult(),
     this.conversationStateDecision,
     this.domainPolicyBundle,
-    this.processJournal = const <ProcessJournalEvent>[],
-    this.liveCursor,
+    this.journey = const AssistantJourney(),
   });
 
   final SlotStateSnapshot slotState;
@@ -27,8 +27,7 @@ class AnswerOutcomeSnapshot {
   final SynthesisReadinessResult synthesisReadiness;
   final ConversationStateDecision? conversationStateDecision;
   final DomainPolicyBundle? domainPolicyBundle;
-  final List<ProcessJournalEvent> processJournal;
-  final ProcessJournalEvent? liveCursor;
+  final AssistantJourney journey;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
     'slotState': slotState.toJson(),
@@ -45,10 +44,7 @@ class AnswerOutcomeSnapshot {
       'conversationStateDecision': conversationStateDecision!.toDecisionMap(),
     if (domainPolicyBundle != null)
       'domainPolicyBundle': domainPolicyBundle!.toJson(),
-    'processJournal': processJournal
-        .map((item) => item.toJson())
-        .toList(growable: false),
-    if (liveCursor != null) 'liveCursor': liveCursor!.toJson(),
+    'journey': journey.toJson(),
   };
 }
 
@@ -68,9 +64,7 @@ class AnswerOutcomeResolver {
     SynthesisReadinessResult? fallbackSynthesisReadiness,
     SlotStateSnapshot? fallbackSlotState,
     DomainPolicyBundle? fallbackDomainPolicyBundle,
-    List<ProcessJournalEvent> fallbackProcessJournal =
-        const <ProcessJournalEvent>[],
-    ProcessJournalEvent? fallbackLiveCursor,
+    AssistantJourney fallbackJourney = const AssistantJourney(),
   }) {
     final rawOutcome = (structured['answerOutcome'] as Map?)
         ?.cast<String, dynamic>();
@@ -153,20 +147,13 @@ class AnswerOutcomeResolver {
             : null) ??
         runArtifacts?.domainPolicyBundle ??
         fallbackDomainPolicyBundle;
-    final processJournal =
-        (_hasOutcomeField(rawOutcome, 'processJournal')
-            ? _parseProcessJournal(rawOutcome!['processJournal'])
+    final journey =
+        (_hasOutcomeField(rawOutcome, 'journey')
+            ? _parseJourney(rawOutcome!['journey'])
             : null) ??
-        ((runArtifacts != null && runArtifacts.processJournal.isNotEmpty)
-            ? runArtifacts.processJournal
-            : null) ??
-        fallbackProcessJournal;
-    final liveCursor =
-        (_hasOutcomeField(rawOutcome, 'liveCursor')
-            ? _parseProcessJournalEvent(rawOutcome!['liveCursor'])
-            : null) ??
-        runArtifacts?.liveCursor ??
-        fallbackLiveCursor;
+        _parseJourney(structured['journey']) ??
+        runArtifacts?.journey ??
+        fallbackJourney;
     return AnswerOutcomeSnapshot(
       slotState: slotState,
       evidenceLedger: evidenceLedger,
@@ -176,8 +163,7 @@ class AnswerOutcomeResolver {
       synthesisReadiness: synthesisReadiness,
       conversationStateDecision: conversationStateDecision,
       domainPolicyBundle: domainPolicyBundle,
-      processJournal: processJournal,
-      liveCursor: liveCursor,
+      journey: journey,
     );
   }
 
@@ -328,25 +314,10 @@ class AnswerOutcomeResolver {
     }
   }
 
-  List<ProcessJournalEvent>? _parseProcessJournal(Object? raw) {
-    if (raw is! List) return null;
-    try {
-      return raw
-          .whereType<Map>()
-          .map(
-            (item) =>
-                ProcessJournalEvent.fromJson(item.cast<String, dynamic>()),
-          )
-          .toList(growable: false);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  ProcessJournalEvent? _parseProcessJournalEvent(Object? raw) {
+  AssistantJourney? _parseJourney(Object? raw) {
     if (raw is! Map) return null;
     try {
-      return ProcessJournalEvent.fromJson(raw.cast<String, dynamic>());
+      return AssistantJourney.fromJson(raw.cast<String, dynamic>());
     } catch (_) {
       return null;
     }

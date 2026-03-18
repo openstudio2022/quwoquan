@@ -134,6 +134,7 @@ class PhotoPostDto extends PostBaseDto {
   }
 
   /// 展示格式。图片作品固定为 image。
+  @override
   String get displayFormat {
     return 'image';
   }

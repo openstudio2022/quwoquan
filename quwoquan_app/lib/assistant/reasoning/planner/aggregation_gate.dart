@@ -4,7 +4,7 @@ import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/contracts/skill_run.dart';
 
 /// Stateless evaluator that builds [AggregationState] from the current
-/// set of [SkillRun]s. Extracted from the monolithic agent_loop to enable
+/// set of [SkillRun]s. Extracted from the old monolithic owner to enable
 /// independent testing and reuse in both single- and multi-agent paths.
 class AggregationGate {
   const AggregationGate();

@@ -5,7 +5,7 @@ class DisplayTextClassifier {
 
   static final DisplayTextClassifier instance = DisplayTextClassifier._();
   static const String _policyPath =
-      'assets/personal' '_assistant/config/progress_text_policy.json';
+      'assets/assistant/config/progress_text_policy.json';
 
   ProgressTextPolicy _policy = ProgressTextPolicy.defaults;
   Future<void>? _loading;

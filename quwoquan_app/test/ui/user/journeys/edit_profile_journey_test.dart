@@ -76,11 +76,11 @@ void main() {
             routes: [
               GoRoute(
                 path: '/profile',
-                builder: (_, __) => const MyProfilePage(),
+                builder: (context, state) => const MyProfilePage(),
                 routes: [
                   GoRoute(
                     path: 'edit',
-                    builder: (_, __) => const EditProfilePage(),
+                    builder: (context, state) => const EditProfilePage(),
                   ),
                 ],
               ),

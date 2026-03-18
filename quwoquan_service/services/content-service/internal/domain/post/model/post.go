@@ -59,6 +59,21 @@ type DeletedPostTombstone struct {
 	ExpireAt  time.Time `json:"expireAt" bson:"expireAt"`
 }
 
+// ProfileInteractionActivityView domain model.
+type ProfileInteractionActivityView struct {
+	ActivityId             string    `json:"activityId" bson:"activityId"`
+	ActivityType           string    `json:"activityType" bson:"activityType"`
+	Direction              string    `json:"direction" bson:"direction"`
+	ActorProfileSubjectId  string    `json:"actorProfileSubjectId" bson:"actorProfileSubjectId"`
+	ActorDisplayName       string    `json:"actorDisplayName" bson:"actorDisplayName"`
+	ActorAvatarUrl         string    `json:"actorAvatarUrl" bson:"actorAvatarUrl"`
+	TargetProfileSubjectId string    `json:"targetProfileSubjectId" bson:"targetProfileSubjectId"`
+	TargetContentId        string    `json:"targetContentId" bson:"targetContentId"`
+	TargetContentType      string    `json:"targetContentType" bson:"targetContentType"`
+	TargetContentSummary   string    `json:"targetContentSummary" bson:"targetContentSummary"`
+	CreatedAt              time.Time `json:"createdAt" bson:"createdAt"`
+}
+
 // Post domain model.
 type Post struct {
 	ID                  string         `json:"_id" bson:"_id"`

@@ -1,20 +1,18 @@
 import 'dart:convert';
 
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/context_continuity_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/recall_result.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/conversation/explainability/dialogue_state_runtime.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
-import 'package:quwoquan_app/assistant/infrastructure/llm/llm_response_parser.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase_types.dart';
 import 'package:quwoquan_app/assistant/orchestration/assistant_orchestration_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/model_output_extractors.dart';
 import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
-import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/reasoning/planner/mode_decider.dart';
 import 'package:quwoquan_app/assistant/reasoning/routing/domain_router.dart';
 import 'package:quwoquan_app/assistant/skill/domain/skill_manifest.dart';
@@ -444,15 +442,28 @@ class UnderstandPhase implements Phase {
     AssistantRunRequest request,
     RunArtifacts? previousRunArtifacts,
   ) {
+    final continuityPolicy =
+        bootstrapContext?.contextContinuityPolicy ??
+        const ContextContinuityPolicy();
+    final continuationActive = _isContinuationContext(bootstrapContext);
+    final sanitizedScopeHint = _sanitizePlannerScopeHint(
+      request.contextScopeHint,
+      allowLocationHints: continuityPolicy.allowLocationHints,
+    );
     final envelope = bootstrapContext == null
         ? const <String, dynamic>{}
         : <String, dynamic>{
-            'historySummary': bootstrapContext.historySummary,
-            'recalledTexts': bootstrapContext.recalledTexts,
-            if (bootstrapContext.previousIntentGraph != null)
+            'historySummary': continuityPolicy.allowHistorySummary
+                ? bootstrapContext.historySummary
+                : '',
+            'recalledTexts': continuityPolicy.allowLongtermMemory
+                ? bootstrapContext.recalledTexts
+                : const <String>[],
+            if (continuationActive && bootstrapContext.previousIntentGraph != null)
               'previousIntentGraph': bootstrapContext.previousIntentGraph!
                   .toJson(),
-            if (bootstrapContext.previousAnswerSummary.isNotEmpty)
+            if (continuationActive &&
+                bootstrapContext.previousAnswerSummary.isNotEmpty)
               'previousAnswerSummary': bootstrapContext.previousAnswerSummary,
             'continuityPolicy': bootstrapContext.contextContinuityPolicy
                 .toJson(),
@@ -471,8 +482,10 @@ class UnderstandPhase implements Phase {
       'deviceProfile': request.deviceProfile,
       'deviceModel': request.deviceModel,
       'deviceOs': request.deviceOs,
-      'gpsLocation': request.gpsLocation,
-      'contextScopeHint': request.contextScopeHint,
+      'gpsLocation': continuityPolicy.allowLocationHints
+          ? request.gpsLocation
+          : const <String, dynamic>{},
+      'contextScopeHint': sanitizedScopeHint,
     };
   }
 
@@ -482,15 +495,20 @@ class UnderstandPhase implements Phase {
     required String continuityMode,
     required String problemClass,
   }) {
+    final continuationActive = _isContinuationContext(bootstrapContext);
+    final allowHistorySummary =
+        bootstrapContext?.contextContinuityPolicy.allowHistorySummary == true;
     return [
       '当前用户问题：$query',
-      if (bootstrapContext?.historySummary.trim().isNotEmpty == true)
+      if (allowHistorySummary &&
+          bootstrapContext?.historySummary.trim().isNotEmpty == true)
         '最近历史摘要：${bootstrapContext!.historySummary.trim()}',
       if (continuityMode.isNotEmpty) '连续性判断：$continuityMode',
       if (problemClass.isNotEmpty) '已知问题类型提示：$problemClass',
-      if (bootstrapContext?.previousIntentGraph != null)
+      if (continuationActive && bootstrapContext?.previousIntentGraph != null)
         '上一轮意图：${jsonEncode(bootstrapContext!.previousIntentGraph!.toJson())}',
-      if (bootstrapContext?.previousAnswerSummary.trim().isNotEmpty == true)
+      if (continuationActive &&
+          bootstrapContext?.previousAnswerSummary.trim().isNotEmpty == true)
         '上一轮回答摘要：${bootstrapContext!.previousAnswerSummary.trim()}',
       if (bootstrapContext?.continuityOverrideSlots.isNotEmpty == true)
         '用户本轮显式覆盖：${jsonEncode(bootstrapContext!.continuityOverrideSlots)}',
@@ -701,7 +719,8 @@ class UnderstandPhase implements Phase {
         'mode': continuity.continuityMode.wireName,
         'explicitContinuation': continuity.explicitContinuation,
         'referenceQueries': continuity.referenceQueries,
-        if (bootstrapContext?.previousAnswerSummary.isNotEmpty == true)
+        if (continuationActive &&
+            bootstrapContext?.previousAnswerSummary.isNotEmpty == true)
           'previousAnswerSummary': bootstrapContext!.previousAnswerSummary,
       };
     }
@@ -741,10 +760,35 @@ class UnderstandPhase implements Phase {
         merged['referenceQueries'] = continuity.referenceQueries;
       }
     }
-    if (bootstrapContext?.previousAnswerSummary.isNotEmpty == true) {
+    if (continuationActive &&
+        bootstrapContext?.previousAnswerSummary.isNotEmpty == true) {
       merged['previousAnswerSummary'] = bootstrapContext!.previousAnswerSummary;
     }
     return merged;
+  }
+
+  Map<String, dynamic> _sanitizePlannerScopeHint(
+    Map<String, dynamic> scopeHint, {
+    required bool allowLocationHints,
+  }) {
+    if (scopeHint.isEmpty || allowLocationHints) {
+      return Map<String, dynamic>.from(scopeHint);
+    }
+    final sanitized = Map<String, dynamic>.from(scopeHint);
+    for (final key in const <String>[
+      'city',
+      'lat',
+      'lng',
+      'gpsCity',
+      'gpsLat',
+      'gpsLng',
+      'recentCityMentions',
+      'locationPrecision',
+      'locationTimestamp',
+    ]) {
+      sanitized.remove(key);
+    }
+    return sanitized;
   }
 
   Map<String, dynamic> _slotSnapshotMap(SlotStateSnapshot slotState) {

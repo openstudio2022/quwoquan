@@ -14,11 +14,13 @@ class ProfileCirclesTab extends ConsumerWidget {
     required this.mode,
     required this.userId,
     required this.isDark,
+    this.inlineScroll = false,
   });
 
   final ProfileMode mode;
   final String userId;
   final bool isDark;
+  final bool inlineScroll;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -27,6 +29,12 @@ class ProfileCirclesTab extends ConsumerWidget {
       isDark,
       ColorType.foregroundSecondary,
     );
+    if (state.isLoading && state.circles.isEmpty) {
+      return Padding(
+        padding: EdgeInsets.symmetric(vertical: AppSpacing.interGroupXl),
+        child: Center(child: CupertinoActivityIndicator()),
+      );
+    }
 
     if (state.circles.isEmpty) {
       return Center(
@@ -64,23 +72,28 @@ class ProfileCirclesTab extends ConsumerWidget {
     }
 
     return ListView.separated(
-      physics: const BouncingScrollPhysics(
-        parent: AlwaysScrollableScrollPhysics(),
+      physics: inlineScroll
+          ? const NeverScrollableScrollPhysics()
+          : const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(),
+            ),
+      shrinkWrap: inlineScroll,
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.containerMd,
+        AppSpacing.intraGroupSm,
+        AppSpacing.containerMd,
+        AppSpacing.containerMd,
       ),
-      padding: EdgeInsets.all(AppSpacing.containerMd),
       itemCount: state.circles.length,
       separatorBuilder: (context, index) => SizedBox(height: AppSpacing.sm),
       itemBuilder: (context, index) {
         final circle = state.circles[index];
-        final postCount = circle['postCount'] as int? ?? 0;
         return CircleCompactCard(
-          name: circle['name']?.toString() ?? '',
-          coverUrl: circle['coverUrl']?.toString() ?? '',
-          postCount: postCount,
+          name: circle.name,
+          coverUrl: circle.coverUrl,
+          postCount: circle.postCount,
           isDark: isDark,
-          onTap: () => context.push(
-            AppRoutePaths.circleDetail(id: '${circle['id']}'),
-          ),
+          onTap: () => context.push(AppRoutePaths.circleDetail(id: circle.id)),
         );
       },
     );

@@ -48,7 +48,9 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
       switch (action.id) {
         case 'copy_link':
           await Clipboard.setData(ClipboardData(text: template.deeplink));
-          AppToast.show(context, UITextConstants.shareLinkCopied);
+          if (context.mounted) {
+            AppToast.show(context, UITextConstants.shareLinkCopied);
+          }
           return ContentShareActionResult(
             actionId: action.id,
             success: true,
@@ -65,7 +67,9 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
           if (result.status == ShareResultStatus.success) {
             return ContentShareActionResult(actionId: action.id, success: true);
           }
-          AppToast.show(context, UITextConstants.shareCancelled);
+          if (context.mounted) {
+            AppToast.show(context, UITextConstants.shareCancelled);
+          }
           return ContentShareActionResult(
             actionId: action.id,
             success: false,
@@ -74,7 +78,9 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
           );
         case 'save_poster':
           final savedPath = await _savePoster(template);
-          AppToast.show(context, UITextConstants.sharePosterSaved);
+          if (context.mounted) {
+            AppToast.show(context, UITextConstants.sharePosterSaved);
+          }
           return ContentShareActionResult(
             actionId: action.id,
             success: true,
@@ -82,7 +88,9 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
             savedPath: savedPath,
           );
         default:
-          AppToast.show(context, UITextConstants.operationFailed);
+          if (context.mounted) {
+            AppToast.show(context, UITextConstants.operationFailed);
+          }
           return ContentShareActionResult(
             actionId: action.id,
             success: false,
@@ -90,7 +98,9 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
           );
       }
     } catch (_) {
-      AppToast.show(context, UITextConstants.shareFailed);
+      if (context.mounted) {
+        AppToast.show(context, UITextConstants.shareFailed);
+      }
       return ContentShareActionResult(
         actionId: action.id,
         success: false,

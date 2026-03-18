@@ -106,24 +106,6 @@ entities:
         api_exposure: read
         ops_exposure: read
 
-      - name: uiPhaseTimelineV1
-        type: "[]object"
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 对话过程阶段化时间线（phaseType/status/summary/details/references）
-
-      - name: uiUsageStatsV1
-        type: object
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 模型使用统计（modelCallCount/totalTokens/maxTokensPerCall）
-
       - name: responseMarkdown
         type: string
         constraints: [NULLABLE]
@@ -241,6 +223,15 @@ entities:
         ops_exposure: read
         description: 全局聚合出口状态
 
+      - name: journey
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 用户可见的 canonical 助理旅程（阶段轨道 + 流式条目 + readiness）
+
       - name: renderMode
         type: string
         constraints: [NULLABLE]
@@ -258,51 +249,6 @@ entities:
         api_exposure: read
         ops_exposure: read
         description: 回合协议版本（assistant_turn_v2 等）
-
-      - name: processSummaryV1
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 过程区一行摘要（面向用户任务进展，默认折叠展示）
-
-      - name: processSummary
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 统一过程区摘要字段（V1 兼容升级路径）
-
-      - name: processReferenceCountV1
-        type: int
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 过程区可展开来源计数
-
-      - name: processReferenceCount
-        type: int
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 统一过程区来源计数字段（V1 兼容升级路径）
-
-      - name: uiProcessTimeline
-        type: "[]object"
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 面向用户事件驱动的过程树时间线（root/skill/aggregation）
 
       - name: sessionPreferenceFacts
         type: "[]object"

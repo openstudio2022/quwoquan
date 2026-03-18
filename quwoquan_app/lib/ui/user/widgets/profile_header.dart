@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 /// Profile header with left-aligned avatar that intrudes 1/3 into the
@@ -21,11 +22,14 @@ class ProfileHeader extends StatelessWidget {
   static const double avatarRadius = AppSpacing.xl;
   static const double _avatarBorder = AppSpacing.intraGroupXs;
   static double get avatarOuterDiameter => (avatarRadius + _avatarBorder) * 2;
-  static double get avatarIntrusion => avatarRadius * 2 / 3;
+  static double get avatarOverlapPx =>
+      avatarOuterDiameter * UserProfileUIConfig.headerLayout.avatarOverlapRatio;
+  static double get avatarIntrusion => avatarOverlapPx;
 
   Widget _buildAvatar(Color bg, Color fgSecondary) {
     final hasAvatar = avatarUrl != null && avatarUrl!.isNotEmpty;
     return Container(
+      key: const ValueKey<String>('profile-header-avatar'),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         border: Border.all(color: bg, width: _avatarBorder),
@@ -60,6 +64,7 @@ class ProfileHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
+              SizedBox(height: AppSpacing.intraGroupXs),
               Text(
                 displayName ?? '',
                 style: TextStyle(
@@ -88,7 +93,7 @@ class ProfileHeader extends StatelessWidget {
           ),
         ),
         Positioned(
-          top: -avatarIntrusion,
+          top: -avatarOverlapPx,
           left: 0,
           child: _buildAvatar(bg, fgSecondary),
         ),

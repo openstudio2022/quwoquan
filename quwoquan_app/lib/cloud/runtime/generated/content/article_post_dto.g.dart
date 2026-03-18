@@ -122,6 +122,7 @@ class ArticlePostDto extends PostBaseDto {
   }
 
   /// 展示格式。作品态 article 在 UI 术语上统一映射为 note。
+  @override
   String get displayFormat {
     return 'note';
   }

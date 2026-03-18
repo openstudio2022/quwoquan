@@ -148,8 +148,8 @@ flutter run --dart-define=PERSONAL_ASSISTANT_ENABLE_API=true \
 
 - [ ] `GET /v1/assistant/providers` 返回 LLM/搜索 provider 元数据
 - [ ] `GET /v1/assistant/skills?channel=app` 返回受治理的 Skill 列表
-- [ ] `POST /v1/assistant/skills/invoke` 返回 `runId/traceId` 和结果 envelope
-- [ ] `POST /v1/assistant/runs` 返回 `runId/traceId/finalText/degraded/errorCode`
+- [ ] `POST /v1/assistant/skills/invoke` 返回 `runId` 和结果 envelope
+- [ ] `POST /v1/assistant/runs` 返回 `runId/finalText/degraded/errorCode`
 - [ ] `POST /v1/assistant/runs/stream` 流式输出 trace 事件和最终 payload
 - [ ] `GET /v1/assistant/sessions` 返回已持久化会话摘要
 
@@ -163,7 +163,7 @@ flutter run --dart-define=PERSONAL_ASSISTANT_ENABLE_API=true \
 
 - [ ] 每次 run 创建 `AssistantCostLedger` 记录
 - [ ] `GET /v1/assistant/costs` 返回摘要和近期记录
-- [ ] 所有 run/invoke 响应包含 `runId` 和 `traceId`
+- [ ] 所有 run/invoke 响应包含 `runId`
 
 ### 端到端场景
 

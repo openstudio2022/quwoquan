@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:quwoquan_app/assistant/conversation/orchestration/agent_loop.dart';
+import 'package:quwoquan_app/assistant/orchestration/local_phase_execution_owner.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
 import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
@@ -136,7 +136,7 @@ OpenAiCompatibleLlmProvider _buildProvider(HttpServer server) {
   );
 }
 
-PersonalAssistantAgentLoop _buildLoop({
+LocalPhaseExecutionOwner _buildLoop({
   required AssistantLlmProvider provider,
   required String tempDirPath,
 }) {
@@ -144,7 +144,7 @@ PersonalAssistantAgentLoop _buildLoop({
     llmProvider: provider,
     toolRegistry: AssistantToolRegistry(),
   );
-  return PersonalAssistantAgentLoop(
+  return LocalPhaseExecutionOwner(
     runtime,
     sessionManager: AssistantSessionManager(
       storagePath: '$tempDirPath/sessions.json',
@@ -214,10 +214,7 @@ void main() {
           ],
         ),
       );
-      final markdown =
-          ((response.structuredResponse['uiAnswer'] as Map?)?['markdownText']
-              as String?) ??
-          '';
+      final markdown = response.displayMarkdown;
 
       expect(markdown, contains('修复后的答案'));
       expect(markdown, isNot(contains('<tool_call>')));
@@ -279,46 +276,24 @@ void main() {
         ],
       ),
     );
-    final uiAnswer =
-        (response.structuredResponse['uiAnswer'] as Map?)
-            ?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final markdown = (uiAnswer['markdownText'] as String?) ?? '';
-    final evidenceLinks =
-        (uiAnswer['evidenceLinks'] as List?)?.whereType<Map>().toList() ??
-        const <Map>[];
-    final evidenceBindings =
-        (uiAnswer['evidenceBindings'] as List?)?.whereType<Map>().toList() ??
-        const <Map>[];
     final runArtifacts = response.runArtifacts;
+    final markdown = response.displayMarkdown;
 
     expect(markdown, contains('[来源1](https://example.com/weather'));
-    expect(evidenceLinks, isNotEmpty);
-    expect(
-      (evidenceLinks.first['url'] as String?) ?? '',
-      startsWith('https://example.com/weather'),
-    );
-    expect(evidenceBindings, isNotEmpty);
-    expect(
-      evidenceBindings.first['url'],
-      startsWith('https://example.com/weather'),
-    );
-    expect(
-      (evidenceBindings.first['claim'] as String?) ?? '',
-      contains('深圳今天有雨'),
-    );
-    expect(
-      ((evidenceBindings.first['bindingId'] as String?) ?? '').isNotEmpty,
-      isTrue,
-    );
-    expect(evidenceBindings.first['source'], equals('中国气象局'));
     expect(runArtifacts, isNotNull);
-    expect(runArtifacts!.answerEvidenceBindings, isNotEmpty);
+    final artifacts = runArtifacts!;
+    expect(artifacts.evidenceLedger, isNotEmpty);
     expect(
-      runArtifacts.answerEvidenceBindings.first.url,
+      artifacts.evidenceLedger.first.url,
       startsWith('https://example.com/weather'),
     );
-    expect(runArtifacts.answerEvidenceBindings.first.source, equals('中国气象局'));
+    expect(artifacts.evidenceLedger.first.source, equals('中国气象局'));
+    expect(artifacts.answerEvidenceBindings, isNotEmpty);
+    expect(
+      artifacts.answerEvidenceBindings.first.url,
+      startsWith('https://example.com/weather'),
+    );
+    expect(artifacts.answerEvidenceBindings.first.source, equals('中国气象局'));
   });
 
   test('passes typed topic anchors into synthesizer.final_answer', () async {
@@ -423,11 +398,7 @@ void main() {
           ],
         ),
       );
-      final uiAnswer =
-          (response.structuredResponse['uiAnswer'] as Map?)
-              ?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
-      final markdown = (uiAnswer['markdownText'] as String?) ?? '';
+      final markdown = response.displayMarkdown;
 
       expect(response.finalText, isNot(contains('route_recommendation')));
       expect(markdown, contains('4天路线建议'));

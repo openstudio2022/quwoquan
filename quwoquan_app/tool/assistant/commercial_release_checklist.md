@@ -1,9 +1,9 @@
 # 个人助手商用封板检查单（19 垂类）
 
 ## 运行时封板
-- [ ] `agent_loop` 已启用 19 垂类自动路由（无 `domainId` 也可分类）。
+- [ ] `assistant_agent_loop` 已启用 19 垂类自动路由（无 `domainId` 也可分类）。
 - [ ] 每轮请求注入 `dialogueRoundScript`（状态、事件、下一状态、必填字段、硬失败码）。
-- [ ] 结构化响应包含 `domainId`、`dialogueRuntime`、`roundTrace`、`uiAnswer.markdownText`。
+- [ ] 结构化响应包含 `domainId`、`dialogueRuntime`、`roundTrace`，并通过 `runArtifacts.displayMarkdown` 提供用户可见答案。
 - [ ] 对话续转已接入：上一轮 `dialogueState` 参与下一轮状态推进。
 
 ## 模板与状态机封板

@@ -128,6 +128,7 @@ class MomentPostDto extends PostBaseDto {
   }
 
   /// 点滴的展示格式由当前素材组合推导。
+  @override
   String get displayFormat {
     if (videoUrl != null && videoUrl!.isNotEmpty) return 'video';
     if (imageUrls.isNotEmpty) return 'image';

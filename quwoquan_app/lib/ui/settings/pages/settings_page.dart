@@ -5,9 +5,6 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/services/user/appearance_settings_repository.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
-import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 class SettingsPage extends ConsumerWidget {
@@ -629,8 +626,8 @@ class _SwitchRow extends StatelessWidget {
             CupertinoSwitch(
               value: value,
               onChanged: onChanged,
-              activeColor: SettingsSemanticConstants.switchActiveTrackColor,
-              trackColor: SettingsSemanticConstants.switchInactiveTrackColor(isDark),
+              activeTrackColor: SettingsSemanticConstants.switchActiveTrackColor,
+              inactiveTrackColor: SettingsSemanticConstants.switchInactiveTrackColor(isDark),
             ),
           ],
         ),

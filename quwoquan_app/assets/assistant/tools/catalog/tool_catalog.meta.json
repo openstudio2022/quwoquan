@@ -20,16 +20,17 @@
         "locationContext": false
       },
       "userInteraction": {
+        "journeyStageId": "search",
         "phaseTitle": "搜索资料",
         "phaseIcon": "search",
         "reasoning": {
           "label": "搜索策略设计",
-          "promptHint": "请在 thinkingText 中用自然语言向用户解释：1. 为什么需要搜索 2. 你设计的搜索关键词及理由 3. 你期望找到什么信息",
+          "promptHint": "请用用户可见的过程说明自然解释：1. 为什么需要搜索 2. 你设计的搜索关键词及理由 3. 你期望找到什么信息",
           "example": "用户询问深圳天气，这是一个实时天气查询。我将搜索'深圳 实时天气 今天'和'深圳 天气预报'来获取权威气象数据。"
         },
         "executing": {
           "startLabel": "正在搜索相关资料",
-          "progressTemplate": "检索查询：{{query}}",
+          "progressTemplate": "正在交叉核对候选资料",
           "completedTemplate": "已找到 {{referenceCount}} 篇相关资料"
         },
         "resultDisplay": {
@@ -118,11 +119,12 @@
         }
       ],
       "userInteraction": {
+        "journeyStageId": "analyze",
         "phaseTitle": "获取位置",
         "phaseIcon": "location",
         "reasoning": {
           "label": "位置获取",
-          "promptHint": "请在 thinkingText 中向用户解释：你需要获取用户当前位置来精准回答问题",
+          "promptHint": "请用用户可见的过程说明向用户解释：你需要获取用户当前位置来精准回答问题",
           "example": "为了查询您所在城市的天气，我需要获取您的位置信息。"
         },
         "executing": {
@@ -190,11 +192,12 @@
         "locationContext": false
       },
       "userInteraction": {
+        "journeyStageId": "search",
         "phaseTitle": "浏览相册",
         "phaseIcon": "photo",
         "reasoning": {
           "label": "相册访问",
-          "promptHint": "请在 thinkingText 中向用户解释：你需要访问哪些媒体资源、为什么",
+          "promptHint": "请用用户可见的过程说明向用户解释：你需要访问哪些媒体资源、为什么",
           "example": "您提到了照片，我需要访问您的相册来查找相关图片。"
         },
         "executing": {
@@ -238,11 +241,12 @@
         "locationContext": false
       },
       "userInteraction": {
+        "journeyStageId": "answer",
         "phaseTitle": "执行操作",
         "phaseIcon": "launch",
         "reasoning": {
           "label": "操作准备",
-          "promptHint": "请在 thinkingText 中向用户解释：你需要执行什么操作、为什么",
+          "promptHint": "请用用户可见的过程说明向用户解释：你需要执行什么操作、为什么",
           "example": "您需要设置日程提醒，我来帮您打开系统日历。"
         },
         "executing": {
@@ -289,16 +293,17 @@
         "locationContext": false
       },
       "userInteraction": {
+        "journeyStageId": "verify",
         "phaseTitle": "阅读网页",
         "phaseIcon": "article",
         "reasoning": {
           "label": "深度阅读",
-          "promptHint": "请在 thinkingText 中解释为什么需要深入阅读这个页面、你期望从中获取什么关键信息",
+          "promptHint": "请用用户可见的过程说明解释为什么需要深入阅读这个页面、你期望从中获取什么关键信息",
           "example": "搜索结果中有一篇气象局的详细预报，我来仔细阅读获取精确数据。"
         },
         "executing": {
           "startLabel": "正在阅读网页内容",
-          "progressTemplate": "抓取：{{url}}",
+          "progressTemplate": "正在提取网页关键信息",
           "completedTemplate": "已阅读 {{charCount}} 字内容"
         },
         "resultDisplay": {
@@ -344,16 +349,17 @@
         "locationContext": false
       },
       "userInteraction": {
+        "journeyStageId": "analyze",
         "phaseTitle": "回忆相关信息",
         "phaseIcon": "memory",
         "reasoning": {
           "label": "记忆检索",
-          "promptHint": "请在 thinkingText 中解释你为什么要检索记忆、你期望找到什么相关信息",
+          "promptHint": "请用用户可见的过程说明解释你为什么要检索记忆、你期望找到什么相关信息",
           "example": "用户之前提到过喜欢粤菜，我来回忆一下相关偏好。"
         },
         "executing": {
           "startLabel": "正在回忆相关信息",
-          "progressTemplate": "检索：{{query}}",
+          "progressTemplate": "正在梳理相关记忆",
           "completedTemplate": "回忆起 {{resultCount}} 条相关信息"
         },
         "resultDisplay": {
@@ -400,16 +406,17 @@
         "locationContext": false
       },
       "userInteraction": {
+        "journeyStageId": "answer",
         "phaseTitle": "日程管理",
         "phaseIcon": "calendar",
         "reasoning": {
           "label": "日程操作",
-          "promptHint": "请在 thinkingText 中解释你要创建/查询什么日程",
+          "promptHint": "请用用户可见的过程说明解释你要创建或查询什么日程",
           "example": "用户需要设置明天早上8点的会议提醒。"
         },
         "executing": {
           "startLabel": "正在处理日程",
-          "progressTemplate": "{{action}}日程...",
+          "progressTemplate": "正在整理日程信息",
           "completedTemplate": "日程操作已完成"
         },
         "resultDisplay": {
@@ -465,6 +472,7 @@
         "locationContext": false
       },
       "userInteraction": {
+        "journeyStageId": "answer",
         "phaseTitle": "页面跳转",
         "phaseIcon": "link",
         "reasoning": {
@@ -474,7 +482,7 @@
         },
         "executing": {
           "startLabel": "正在跳转",
-          "progressTemplate": "打开 {{url}}",
+          "progressTemplate": "正在准备跳转",
           "completedTemplate": "已跳转"
         },
         "resultDisplay": {
@@ -516,6 +524,7 @@
         "locationContext": false
       },
       "userInteraction": {
+        "journeyStageId": "answer",
         "phaseTitle": "执行操作",
         "phaseIcon": "action",
         "reasoning": {
@@ -525,7 +534,7 @@
         },
         "executing": {
           "startLabel": "正在执行操作",
-          "progressTemplate": "{{action}}...",
+          "progressTemplate": "正在准备执行设备操作",
           "completedTemplate": "操作已完成"
         },
         "resultDisplay": {

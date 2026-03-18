@@ -70,18 +70,10 @@ class AggregationState extends AggregationStateDto {
         normalized[key] = <String, dynamic>{
           'stopReason':
               (value['stopReason'] as String?)?.trim() ??
-              (value['reason'] as String?)?.trim() ??
               FinalAnswerMode.blocked.wireName,
           'answerReady': value['answerReady'] == true,
         };
-        continue;
       }
-      normalized[key] = <String, dynamic>{
-        'stopReason': value?.toString().trim().isNotEmpty == true
-            ? value.toString().trim()
-            : FinalAnswerMode.blocked.wireName,
-        'answerReady': false,
-      };
     }
     return normalized;
   }
@@ -97,15 +89,11 @@ class AggregationState extends AggregationStateDto {
               .map((item) => item.trim())
               .where((item) => item.isNotEmpty)
               .toList(growable: false) ??
-          ((raw['target'] as String?)?.trim().isNotEmpty == true
-              ? <String>[(raw['target'] as String).trim()]
-              : const <String>[]),
+          const <String>[],
       'policy':
           (raw['policy'] as String?)?.trim().isNotEmpty == true
           ? (raw['policy'] as String).trim()
-          : ((raw['strategy'] as String?)?.trim() == 'broaden_or_retry'
-                ? ContextScopeExpansionPolicy.expandScopeAndRequery.wireName
-                : ContextScopeExpansionPolicy.none.wireName),
+          : ContextScopeExpansionPolicy.none.wireName,
       'reasonCode':
           (raw['reasonCode'] as String?)?.trim().isNotEmpty == true
           ? (raw['reasonCode'] as String).trim()
@@ -132,17 +120,7 @@ class AggregationState extends AggregationStateDto {
                   .toList(growable: false) ??
               const <String>[],
         };
-        continue;
       }
-      normalized[key] = <String, dynamic>{
-        'runIds':
-            (value as List?)
-                ?.whereType<String>()
-                .map((item) => item.trim())
-                .where((item) => item.isNotEmpty)
-                .toList(growable: false) ??
-            const <String>[],
-      };
     }
     return normalized;
   }

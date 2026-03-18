@@ -1,5 +1,5 @@
-import 'package:quwoquan_app/assistant/conversation/orchestration/agent_loop.dart'
-    as legacy_agent;
+import 'package:quwoquan_app/assistant/orchestration/local_phase_execution_owner.dart'
+    as phase_owner;
 import 'package:quwoquan_app/assistant/orchestration/phases/phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/finalize_runner.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase_types.dart';
@@ -8,9 +8,9 @@ import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 /// Finalize: persist session, learning, return response.
 class FinalizePhase implements Phase {
   FinalizePhase(
-    legacy_agent.PersonalAssistantAgentLoop legacy, {
+    phase_owner.LocalPhaseExecutionOwner owner, {
     FinalizeRunner? runner,
-  }) : _runner = runner ?? legacy.buildFinalizeRunner();
+  }) : _runner = runner ?? owner.buildFinalizeRunner();
 
   final FinalizeRunner _runner;
 

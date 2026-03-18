@@ -308,8 +308,8 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
         backgroundColor: bgColor,
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
-          child: const Icon(CupertinoIcons.back),
           onPressed: widget.onBack,
+          child: const Icon(CupertinoIcons.back),
         ),
         middle: Text(
           UITextConstants.startGroupChat,
@@ -517,9 +517,8 @@ class _SelectionIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CupertinoButton(
-      minSize: AppSpacing.minInteractiveSize,
       padding: EdgeInsets.zero,
-      onPressed: onTap,
+      onPressed: onTap, minimumSize: Size(AppSpacing.minInteractiveSize, AppSpacing.minInteractiveSize),
       child: Icon(
         selected
             ? CupertinoIcons.check_mark_circled_solid
@@ -565,8 +564,8 @@ class _SelectGroupChatSheet extends StatelessWidget {
               children: [
                 CupertinoButton(
                   padding: EdgeInsets.zero,
-                  child: Icon(CupertinoIcons.chevron_down, color: fgPrimary),
                   onPressed: onClose,
+                  child: Icon(CupertinoIcons.chevron_down, color: fgPrimary),
                 ),
                 Expanded(
                   child: Text(
@@ -671,8 +670,8 @@ class _SelectCircleSheet extends StatelessWidget {
               children: [
                 CupertinoButton(
                   padding: EdgeInsets.zero,
-                  child: Icon(CupertinoIcons.chevron_down, color: fgPrimary),
                   onPressed: onClose,
+                  child: Icon(CupertinoIcons.chevron_down, color: fgPrimary),
                 ),
                 Expanded(
                   child: Text(
@@ -797,8 +796,8 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
             child: NavigationToolbar(
               leading: CupertinoButton(
                 padding: EdgeInsets.zero,
-                child: Icon(CupertinoIcons.back, color: fgPrimary),
                 onPressed: widget.onBack,
+                child: Icon(CupertinoIcons.back, color: fgPrimary),
               ),
               middle: Text(
                 widget.title,
@@ -899,7 +898,6 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
                     vertical: SettingsSemanticConstants
                         .actionButtonPaddingVertical,
                   ),
-                  minSize: SettingsSemanticConstants.actionButtonHeightMedium,
                   color: SettingsSemanticConstants.actionButtonPrimaryBackground,
                   disabledColor: SettingsSemanticConstants
                       .actionButtonDisabledBackground(isDark),
@@ -914,7 +912,7 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
                               .toList();
                           Navigator.of(context).pop();
                           widget.onConfirm(list);
-                        },
+                        }, minimumSize: Size(SettingsSemanticConstants.actionButtonHeightMedium, SettingsSemanticConstants.actionButtonHeightMedium),
                   child: Text(
                     UITextConstants.selectAction,
                     style: TextStyle(

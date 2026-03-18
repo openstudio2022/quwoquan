@@ -146,7 +146,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                       backgroundColor: AppColors.primaryColor,
                       child: const Icon(
                         CupertinoIcons.camera_fill,
-                        size: 18,
+                        size: AppSpacing.eighteen,
                         color: Colors.white,
                       ),
                     ),
@@ -157,7 +157,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
           ),
           SizedBox(height: AppSpacing.lg),
           _buildSectionLabel('昵称', fgSecondary),
-          SizedBox(height: 4),
+          SizedBox(height: AppSpacing.xs),
           CupertinoTextField(
             controller: _displayNameController,
             style: TextStyle(color: fg, fontSize: AppTypography.base),
@@ -166,13 +166,13 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: fillColor,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
               border: Border.all(color: fillColor),
             ),
           ),
           SizedBox(height: 16),
           _buildSectionLabel('用户名', fgSecondary),
-          SizedBox(height: 4),
+          SizedBox(height: AppSpacing.xs),
           CupertinoTextField(
             controller: _usernameController,
             style: TextStyle(color: fg, fontSize: AppTypography.base),
@@ -181,7 +181,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: fillColor,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
               border: Border.all(color: fillColor),
             ),
           ),
@@ -203,13 +203,13 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                   _showEmojiPanel
                       ? CupertinoIcons.keyboard
                       : CupertinoIcons.smiley,
-                  size: 22,
+                  size: AppTypography.xxxl,
                   color: fgSecondary,
                 ),
               ),
             ],
           ),
-          SizedBox(height: 4),
+          SizedBox(height: AppSpacing.xs),
           CupertinoTextField(
             controller: _bioController,
             focusNode: _bioFocusNode,
@@ -220,7 +220,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: fillColor,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
               border: Border.all(color: fillColor),
             ),
           ),
@@ -241,9 +241,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                 setState(() {});
               },
             ),
-          SizedBox(height: 16),
+          SizedBox(height: AppSpacing.md),
           _buildSectionLabel('网站', fgSecondary),
-          SizedBox(height: 4),
+          SizedBox(height: AppSpacing.xs),
           CupertinoTextField(
             controller: _websiteController,
             style: TextStyle(color: fg, fontSize: AppTypography.base),
@@ -252,7 +252,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: fillColor,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
               border: Border.all(color: fillColor),
             ),
           ),
@@ -265,7 +265,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     return Text(
       text,
       style: TextStyle(
-        fontSize: 12,
+        fontSize: AppTypography.sm,
         fontWeight: FontWeight.w700,
         color: color,
       ),

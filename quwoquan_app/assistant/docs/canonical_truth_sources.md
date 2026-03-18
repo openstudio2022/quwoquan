@@ -12,7 +12,7 @@
 
 | 维度 | 唯一真相源 | 禁止 |
 |------|------------|------|
-| 目标架构 | `docs/react-agent-tool-lifecycle-spec-v4.md` | 在 agent_loop/react/skill/tool 中偏离 v4 行为 |
+| 目标架构 | `docs/react-agent-tool-lifecycle-spec-v4.md` | 在 `assistant_agent_loop` / `local_phase_execution_owner` / react / skill / tool 中偏离 v4 行为 |
 | Prompt 模板 | `docs/prompt-template-architecture-v2.md` | 在 runtime 手写 prompt 模板或注入规则 |
 | 总体设计 | `docs/architecture_overview.md` | 在 engine 中引入文档未声明的分层或职责 |
 
@@ -35,7 +35,7 @@
 
 | 维度 | 唯一真相源 | 禁止 |
 |------|------------|------|
-| 工具 phase 文案 | `assets/assistant/tools/catalog/tool_catalog.meta.json` | 在 trace_user_event_translator、agent_loop、tool impl 中硬编码 phaseTitle/completedTemplate 等 |
+| 工具 phase 文案 | `assets/assistant/tools/catalog/tool_catalog.meta.json` | 在 journey projector、phase owner、tool impl 中硬编码 phaseTitle/completedTemplate 等 |
 | 工具描述与参数 | 同上 `tool_catalog.meta.json` | 在 websearch_tool、tool_registry 等中维护第二套文案或 label |
 
 `userInteraction.phaseTitle`、`executing.completedTemplate`、`reasoning.promptHint` 等均以该文件为准。
@@ -46,7 +46,7 @@
 
 | 维度 | 唯一真相源 | 禁止 |
 |------|------------|------|
-| 垂类特判与干预 | `assets/assistant/skills/<domain>/` 下 SKILL.md、config、scripts | 在 agent_loop、react_runtime、context_orchestrator、websearch_tool、tool_registry 中按 domainId 或关键词做 if/switch |
+| 垂类特判与干预 | `assets/assistant/skills/<domain>/` 下 SKILL.md、config、scripts | 在 `assistant_agent_loop`、`local_phase_execution_owner`、`react_runtime`、`context_orchestrator`、tool impl 中按 domainId 或关键词做 if/switch |
 | retrieval policy | 对应 skill 的 `config/retrieval_policy.json`、`retrieval_policy.json` | 在 runtime 中硬编码 providerPolicy、freshnessHoursMax、authorityDomains |
 | tool 权限 / domainToolMatrix | `tool_catalog.meta.json` 的 `domainToolMatrix` | 在 tool_registry 中按 domain 硬编码权限或 preferred tools |
 | tool 执行权限（requireConfirmation、allowedActions） | `assets/assistant/tools/catalog/tool_permissions.json` | 在 ToolExecutionGuard、ReactRuntime 中硬编码 requireConfirmation |
@@ -62,7 +62,7 @@
 | 旧 prompt stack（非 v4 规划链） | 兼容层 | 不用于新功能 |
 | 基于 RegExp/contains 的语义分类 | 待移除 | 只保留单点兼容兜底，其余移除 |
 | `lib/personal_assistant/app/*` | 兼容层 | 仅保留桥接到 `lib/assistant/{application,runtime}/` 的 shim，不再作为新 UI / provider / gateway 入口 |
-| `lib/assistant/conversation/orchestration/agent_loop.dart` | 兼容桥 / 待抽空 | 禁止新增逻辑；编排主逻辑应迁移到 `orchestration/assistant_agent_loop.dart` 与 `orchestration/phases/` |
+| `lib/assistant/orchestration/local_phase_execution_owner.dart` | 本地 phase 执行 owner | 禁止再分叉第二份 owner 实现；执行/合成/收尾逻辑统一在 `orchestration/phases/` 与 owner 下收口 |
 
 ---
 

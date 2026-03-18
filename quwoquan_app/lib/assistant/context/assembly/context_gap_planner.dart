@@ -2,7 +2,6 @@ import 'package:quwoquan_app/assistant/contracts/context_fill_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/context/assembly/continuity_resolver.dart';
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 
 /// Plans context gaps: slots, evidence, long-term memory, preferences, location,
 /// or ask_user. Uses [ResolvedContinuity] and optionally [RunArtifacts].
@@ -42,7 +41,7 @@ class ContextGapPlanner {
 
     final typedProblemClass =
         (contextAssembly.contextEnvelope['typedSignals'] as Map?)
-                ?.cast<String, dynamic>()?['problemClass']
+                ?.cast<String, dynamic>()['problemClass']
                 ?.toString()
                 .trim() ??
             '';

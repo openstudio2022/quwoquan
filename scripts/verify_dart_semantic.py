@@ -66,8 +66,8 @@ IOS_STYLE_EXCLUDE_FILES = {
 
 # Path substrings to exclude from scanning
 EXCLUDE_SUBSTRINGS = [
-    os.path.join("lib", "core", "design_system"),
-    os.path.join("lib", "core", "constants"),
+    os.path.join("core", "design_system"),
+    os.path.join("core", "constants"),
 ]
 
 

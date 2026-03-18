@@ -1,40 +1,134 @@
 version: 1
 entity: FollowEdge
 
-fields:
-  - name: followerId
-    type: string
-    constraints: [NOT_NULL]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
+entities:
+  FollowEdge:
+    fields:
+      - name: followerId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
 
-  - name: followeeId
-    type: string
-    constraints: [NOT_NULL]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
+      - name: followeeId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
 
-  - name: source
-    type: string
-    constraints: [NULLABLE]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-    description: 关注来源（profile/recommendation/circle，超前）
+      - name: source
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 关注来源（profile/recommendation/circle，超前）
 
-  - name: createdAt
-    type: timestamp
-    constraints: [NOT_NULL]
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
+      - name: createdAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
 
-unique_constraints:
-  - columns: [followerId, followeeId]
-    description: 幂等保证
+    unique_constraints:
+      - columns: [followerId, followeeId]
+        description: 幂等保证
+
+  RelationshipCapabilityView:
+    description: 主页按钮矩阵与聊天/通话门禁统一消费的关系能力视图
+    fields:
+      - name: viewerProfileSubjectId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: targetProfileSubjectId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: relationState
+        type: enum
+        enum_ref: RelationshipState
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: canFollow
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: canUnfollow
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: canMessage
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: canFollowBack
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: canStartVoiceCall
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: canStartVideoCall
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: isBlocked
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: isBlockedBy
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read

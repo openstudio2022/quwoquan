@@ -120,6 +120,22 @@ api_routes:
     auth: required
 
   - method: GET
+    path: /v1/content/profile-subjects/{profileSubjectId}/interactions/received
+    operation: ListProfileInteractionActivitiesReceived
+    description: 个人主页收到的互动活动（赞/评论/转发）
+    query_params: [cursor, limit]
+    response_entity: ProfileInteractionActivityView
+    auth: required
+
+  - method: GET
+    path: /v1/content/profile-subjects/{profileSubjectId}/interactions/sent
+    operation: ListProfileInteractionActivitiesSent
+    description: 个人主页发出的互动活动（赞/评论/转发）
+    query_params: [cursor, limit]
+    response_entity: ProfileInteractionActivityView
+    auth: required
+
+  - method: GET
     path: /v1/config/app
     operation: GetAppConfig
     description: 端侧业务规则配置（评论字数限制、折叠参数等），启动时拉取一次

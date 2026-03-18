@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 
 class MyCirclesRail extends StatelessWidget {
@@ -19,12 +20,13 @@ class MyCirclesRail extends StatelessWidget {
     if (circles.isEmpty) return const SizedBox.shrink();
 
     return SizedBox(
-      height: 90,
+      height: AppSpacing.avatarRailHeight,
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
         scrollDirection: Axis.horizontal,
         itemCount: circles.length + 1, // +1 for "More" or "Create"
-        separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.intraGroupMd),
+        separatorBuilder: (context, index) =>
+            const SizedBox(width: AppSpacing.intraGroupMd),
         itemBuilder: (context, index) {
           if (index == circles.length) {
             return _buildMoreButton(context);
@@ -42,13 +44,15 @@ class MyCirclesRail extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 56,
-            height: 56,
+            width: AppSpacing.avatarCircleLg,
+            height: AppSpacing.avatarCircleLg,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(
-                color: AppColors.light.foregroundSecondary.withOpacity(0.2),
-                width: 1,
+                color: AppColors.light.foregroundSecondary.withValues(
+                  alpha: 0.2,
+                ),
+                width: AppSpacing.one,
               ),
             ),
             child: ClipOval(
@@ -60,11 +64,11 @@ class MyCirclesRail extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.intraGroupXs),
           SizedBox(
-            width: 64,
+            width: AppSpacing.largeAvatarSize,
             child: Text(
               circle.name,
               style: TextStyle(
-                fontSize: 11,
+                fontSize: AppTypography.xsPlus,
                 color: AppColors.light.foregroundSecondary,
               ),
               maxLines: 1,
@@ -82,8 +86,8 @@ class MyCirclesRail extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 56,
-          height: 56,
+          width: AppSpacing.avatarCircleLg,
+          height: AppSpacing.avatarCircleLg,
           decoration: BoxDecoration(
             color: AppColors.light.backgroundSecondary,
             shape: BoxShape.circle,
@@ -91,14 +95,14 @@ class MyCirclesRail extends StatelessWidget {
           child: Icon(
             Icons.grid_view_rounded, // Or "All" icon
             color: AppColors.light.foregroundSecondary,
-            size: 24,
+            size: AppSpacing.iconMedium,
           ),
         ),
         const SizedBox(height: AppSpacing.intraGroupXs),
         Text(
           '全部',
           style: TextStyle(
-            fontSize: 11,
+            fontSize: AppTypography.xsPlus,
             color: AppColors.light.foregroundSecondary,
           ),
         ),

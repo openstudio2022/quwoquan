@@ -239,7 +239,7 @@ class _OutgoingCallPageState extends ConsumerState<OutgoingCallPage> {
                         ),
                       ),
                     ),
-                    CupertinoSwitch(value: _debugAutoConnect, onChanged: _toggleDebugAutoConnect, activeColor: SettingsSemanticConstants.switchActiveTrackColor),
+                    CupertinoSwitch(value: _debugAutoConnect, onChanged: _toggleDebugAutoConnect, activeTrackColor: SettingsSemanticConstants.switchActiveTrackColor),
                   ],
                 ),
                 Text(

@@ -38,6 +38,8 @@ class ContentApiMetadata {
     'ListComments': '/v1/content/posts/{postId}/comments',
     'ListCommentsByAuthor': '/v1/content/users/me/comments',
     'ListCommentsForPostAuthor': '/v1/content/users/me/received-comments',
+    'ListProfileInteractionActivitiesReceived': '/v1/content/profile-subjects/{profileSubjectId}/interactions/received',
+    'ListProfileInteractionActivitiesSent': '/v1/content/profile-subjects/{profileSubjectId}/interactions/sent',
     'ListUserPosts': '/v1/users/{userId}/posts',
     'PromotePostToWork': '/v1/content/posts/{postId}:promoteToWork',
     'PublishPost': '/v1/content/posts/{postId}/publish',
@@ -80,6 +82,8 @@ class ContentApiMetadata {
     'ListComments': 'GET',
     'ListCommentsByAuthor': 'GET',
     'ListCommentsForPostAuthor': 'GET',
+    'ListProfileInteractionActivitiesReceived': 'GET',
+    'ListProfileInteractionActivitiesSent': 'GET',
     'ListUserPosts': 'GET',
     'PromotePostToWork': 'POST',
     'PublishPost': 'POST',
@@ -197,6 +201,18 @@ class ContentApiMetadata {
   }
   static const String listCommentsByAuthorPath = '/v1/content/users/me/comments';
   static const String listCommentsForPostAuthorPath = '/v1/content/users/me/received-comments';
+  static const String listProfileInteractionActivitiesReceivedPathTemplate = '/v1/content/profile-subjects/{profileSubjectId}/interactions/received';
+  static String listProfileInteractionActivitiesReceivedPath({required String profileSubjectId}) {
+    return _fillPath(listProfileInteractionActivitiesReceivedPathTemplate, <String, String>{
+      'profileSubjectId': profileSubjectId,
+    });
+  }
+  static const String listProfileInteractionActivitiesSentPathTemplate = '/v1/content/profile-subjects/{profileSubjectId}/interactions/sent';
+  static String listProfileInteractionActivitiesSentPath({required String profileSubjectId}) {
+    return _fillPath(listProfileInteractionActivitiesSentPathTemplate, <String, String>{
+      'profileSubjectId': profileSubjectId,
+    });
+  }
   static const String listUserPostsPathTemplate = '/v1/users/{userId}/posts';
   static String listUserPostsPath({required String userId}) {
     return _fillPath(listUserPostsPathTemplate, <String, String>{

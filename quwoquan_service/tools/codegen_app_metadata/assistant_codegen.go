@@ -183,6 +183,16 @@ func generateAssistantRuntimeArtifacts(metadataDir, appDir string) error {
 		return err
 	}
 
+	assistantJourneySchema, err := readAssistantContractSchema(filepath.Join(baseDir, "assistant_journey", "schema.yaml"))
+	if err == nil {
+		writeFile(
+			filepath.Join(appDir, "lib", assistantJourneySchema.OutputPath),
+			renderAssistantSchemaDrivenContract(assistantJourneySchema, contractIndex, "assistant/assistant_journey/schema.yaml"),
+		)
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
 	answerBoundaryPolicySchema, err := readAssistantContractSchema(filepath.Join(baseDir, "answer_boundary_policy", "schema.yaml"))
 	if err == nil {
 		writeFile(
@@ -798,8 +808,6 @@ func assistantEnumDefault(name string) string {
 		return "unknown"
 	case "TraceVisibility":
 		return "userVisible"
-	case "ProcessJournalEventType":
-		return "narrativeCommit"
 	case "SlotValueStatus":
 		return "inferred"
 	case "SlotFillAction":

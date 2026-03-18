@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -48,7 +47,14 @@ void _setPhoneSize(WidgetTester tester) {
 
 Finder _profileSegment(String label) {
   return find.descendant(
-    of: find.byType(CupertinoSlidingSegmentedControl<int>),
+    of: find.byKey(const ValueKey<String>('profile-shell-primary-tabs-inline')),
+    matching: find.text(label),
+  );
+}
+
+Finder _pinnedProfileSegment(String label) {
+  return find.descendant(
+    of: find.byKey(const ValueKey<String>('profile-shell-primary-tabs-pinned')),
     matching: find.text(label),
   );
 }
@@ -95,9 +101,9 @@ void main() {
 
       await tester.pumpWidget(_scopedApp());
       await _pumpFrames(tester);
-      await tester.tap(find.text('互动'));
+      await tester.tap(_profileSegment('互动'));
       await _pumpFrames(tester, count: 20);
-      expect(find.text('接收'), findsOneWidget);
+      expect(find.text('收到'), findsOneWidget);
     });
   });
 
@@ -166,7 +172,7 @@ void main() {
 
       await tester.pumpWidget(_scopedApp());
       await _pumpFrames(tester);
-      await tester.tap(find.text('互动'));
+      await tester.tap(_profileSegment('互动'));
       await _pumpFrames(tester, count: 20);
       expect(find.text('你的皮炎有点辣'), findsOneWidget);
     });
@@ -208,6 +214,30 @@ void main() {
       await _pumpFrames(tester, count: 20);
       expect(find.text('创作'), findsOneWidget);
     });
+
+    testWidgets('旅程 F3：一级 tab 吸顶后切换不会把整页头部重置回内容区', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_scopedApp());
+      await _pumpFrames(tester, count: 20);
+
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -900));
+      await tester.pumpAndSettle();
+
+      final summaryFinder =
+          find.byKey(const ValueKey<String>('profile-shell-summary-card'));
+      final summaryBefore = tester.getTopLeft(summaryFinder).dy;
+
+      final circlesTab = _pinnedProfileSegment('圈子').evaluate().isNotEmpty
+          ? _pinnedProfileSegment('圈子')
+          : _profileSegment('圈子');
+      await tester.tap(circlesTab);
+      await tester.pumpAndSettle();
+      expect(find.text('极简摄影俱乐部'), findsOneWidget);
+      expect(tester.getTopLeft(summaryFinder).dy, closeTo(summaryBefore, 8));
+    });
   });
 
   group('旅程错误路径', () {
@@ -244,8 +274,8 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester);
-      expect(find.byIcon(CupertinoIcons.settings), findsOneWidget);
-      expect(find.byIcon(CupertinoIcons.ellipsis), findsNothing);
+      expect(find.byIcon(Icons.settings_outlined), findsOneWidget);
+      expect(find.byIcon(Icons.more_horiz), findsNothing);
     });
 
     testWidgets('旅程 C2：other 模式显示 more 按钮', (tester) async {
@@ -255,8 +285,8 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.other));
       await _pumpFrames(tester);
-      expect(find.byIcon(CupertinoIcons.ellipsis), findsOneWidget);
-      expect(find.byIcon(CupertinoIcons.settings), findsNothing);
+      expect(find.byIcon(Icons.more_horiz), findsOneWidget);
+      expect(find.byIcon(Icons.settings_outlined), findsNothing);
     });
   });
 }

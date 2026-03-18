@@ -9,10 +9,10 @@ import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 /// | 状态           | 按钮布局                                         |
 /// |---------------|------------------------------------------------|
 /// | self          | 编辑资料 / 管理分身                               |
-/// | none（陌生人）  | 关注（全宽主按钮）                                |
-/// | following_only | 打招呼（主）/ 已关注（次）                         |
-/// | same_interest  | 消息 / 视频通话 / 语音通话 三等分                  |
-/// | close_friend   | 消息 / 视频通话 / 语音通话 三等分 + 密友标记         |
+/// | not_following | 关注 / 私信                                      |
+/// | following     | 已关注 / 私信                                    |
+/// | followed_by   | 回关 / 私信                                      |
+/// | mutual        | 私信 / 视频通话 / 语音通话 三等分                  |
 class ProfileActionBar extends StatelessWidget {
   const ProfileActionBar({
     super.key,
@@ -51,12 +51,18 @@ class ProfileActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
-    final border =
-        AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
+    final fg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final border = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.borderPrimary,
+    );
 
     if (mode == ProfileMode.mine) {
       return Row(
@@ -86,9 +92,7 @@ class ProfileActionBar extends StatelessWidget {
 
     final cap = capability;
 
-    // 同好/密友：三等分按钮（消息 / 视频 / 语音）
-    if (cap != null &&
-        (cap.isSameInterest || cap.isCloseFriend)) {
+    if (cap != null && cap.isMutual) {
       return Row(
         children: [
           Expanded(
@@ -124,15 +128,14 @@ class ProfileActionBar extends StatelessWidget {
       );
     }
 
-    // 关注用户（following_only）：打招呼（主）/ 已关注（次）
-    if (cap != null && cap.isFollowingOnly) {
+    if (cap != null && cap.isFollowedBy) {
       return Row(
         children: [
           Expanded(
             child: _ActionButton(
-              label: UITextConstants.profileGreet,
-              icon: Icons.waving_hand_outlined,
-              onTap: cap.canGreet ? onGreet : null,
+              label: UITextConstants.followBack,
+              icon: Icons.add,
+              onTap: onFollow,
               fg: Colors.white,
               border: AppColors.primaryColor,
               filled: true,
@@ -141,10 +144,10 @@ class ProfileActionBar extends StatelessWidget {
           SizedBox(width: AppSpacing.sm),
           Expanded(
             child: _ActionButton(
-              label: UITextConstants.following,
-              icon: Icons.check,
-              onTap: onFollow,
-              fg: fgSecondary,
+              label: UITextConstants.profileDirectMessage,
+              icon: Icons.chat_bubble_outline,
+              onTap: onMessage,
+              fg: fg,
               border: border,
             ),
           ),
@@ -152,16 +155,33 @@ class ProfileActionBar extends StatelessWidget {
       );
     }
 
-    // 陌生人（none）：仅关注按钮
-    if (cap != null && cap.isStranger) {
-      return _ActionButton(
-        label: UITextConstants.follow,
-        icon: Icons.add,
-        onTap: onFollow,
-        fg: Colors.white,
-        border: AppColors.primaryColor,
-        filled: true,
-        fullWidth: true,
+    if (cap != null && (cap.isFollowing || cap.isNotFollowing)) {
+      final alreadyFollowing = cap.isFollowing;
+      return Row(
+        children: [
+          Expanded(
+            child: _ActionButton(
+              label: alreadyFollowing
+                  ? UITextConstants.following
+                  : UITextConstants.follow,
+              icon: alreadyFollowing ? Icons.check : Icons.add,
+              onTap: onFollow,
+              fg: alreadyFollowing ? fgSecondary : Colors.white,
+              border: alreadyFollowing ? border : AppColors.primaryColor,
+              filled: !alreadyFollowing,
+            ),
+          ),
+          SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: _ActionButton(
+              label: UITextConstants.profileDirectMessage,
+              icon: Icons.chat_bubble_outline,
+              onTap: onMessage,
+              fg: fg,
+              border: border,
+            ),
+          ),
+        ],
       );
     }
 
@@ -170,7 +190,9 @@ class ProfileActionBar extends StatelessWidget {
       children: [
         Expanded(
           child: _ActionButton(
-            label: isFollowing ? UITextConstants.following : UITextConstants.follow,
+            label: isFollowing
+                ? UITextConstants.following
+                : UITextConstants.follow,
             icon: isFollowing ? Icons.check : Icons.add,
             onTap: onFollow,
             fg: isFollowing ? fgSecondary : Colors.white,
@@ -201,7 +223,6 @@ class _ActionButton extends StatelessWidget {
     required this.fg,
     required this.border,
     this.filled = false,
-    this.fullWidth = false,
   });
 
   final String label;
@@ -210,7 +231,6 @@ class _ActionButton extends StatelessWidget {
   final Color fg;
   final Color border;
   final bool filled;
-  final bool fullWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -249,6 +269,6 @@ class _ActionButton extends StatelessWidget {
         ),
       ),
     );
-    return fullWidth ? SizedBox(width: double.infinity, child: btn) : btn;
+    return btn;
   }
 }

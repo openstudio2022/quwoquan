@@ -1,7 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
-import 'package:quwoquan_app/assistant/contracts/ui_process_timeline_entry.dart';
 import 'package:quwoquan_app/assistant/contracts/user_events.dart';
 import 'package:quwoquan_app/assistant/domain/agent/agent.dart';
 import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
@@ -110,21 +108,43 @@ void main() {
   });
 
   group('Typed contract models', () {
-    test('RunArtifacts 支持主过程契约序列化', () {
+    test('RunArtifacts 支持 journey 契约序列化', () {
       final artifacts = RunArtifacts.fromJson(const <String, dynamic>{
-        'processJournal': <Map<String, dynamic>>[
-          <String, dynamic>{
-            'eventId': 'stage_set::understanding',
-            'type': 'stage_set',
-            'stage': 'understanding',
-            'nodeId': 'stage.understanding',
-          },
-          <String, dynamic>{
-            'eventId': 'source_update::skill.search.result',
-            'type': 'source_update',
-            'stage': 'searching',
-            'nodeId': 'skill.search.result',
-            'message': '已核对 2 个来源',
+        'journey': <String, dynamic>{
+          'stages': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'stageId': 'analyze',
+              'status': 'completed',
+              'order': 0,
+              'summary': '先确认问题范围',
+            },
+            <String, dynamic>{
+              'stageId': 'search',
+              'status': 'completed',
+              'order': 1,
+              'summary': '已核对 1 个权威来源',
+              'referenceCount': 1,
+            },
+          ],
+          'entries': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'entryId': 'journey.search.1',
+              'stageId': 'search',
+              'kind': 'reference_bundle',
+              'status': 'completed',
+              'order': 1,
+              'headline': '已核对 1 个权威来源',
+              'references': <Map<String, dynamic>>[
+                <String, dynamic>{
+                  'title': '中国气象局',
+                  'url': 'https://weather.cma.cn/',
+                },
+              ],
+            },
+          ],
+          'summary': '已核对 1 个权威来源',
+          'referenceSummary': <String, dynamic>{
+            'count': 1,
             'references': <Map<String, dynamic>>[
               <String, dynamic>{
                 'title': '中国气象局',
@@ -132,7 +152,13 @@ void main() {
               },
             ],
           },
-        ],
+          'readiness': <String, dynamic>{
+            'nextAction': 'answer',
+            'finalAnswerMode': 'direct',
+            'answerEligibility': 'ready',
+            'finalAnswerReady': true,
+          },
+        },
         'slotState': <String, dynamic>{
           'domainId': 'weather',
           'slotValues': <String, dynamic>{
@@ -149,15 +175,13 @@ void main() {
         'domainPolicyBundle': <String, dynamic>{'domainId': 'weather'},
       });
 
-      expect(artifacts.processJournal.length, 2);
-      expect(
-        artifacts.processJournal.last.type,
-        ProcessJournalEventType.sourceUpdate,
-      );
+      expect(artifacts.journey.stages.length, 2);
+      expect(artifacts.journey.entries.single.headline, '已核对 1 个权威来源');
+      expect(artifacts.journey.referenceSummary.count, 1);
       expect(artifacts.slotState.domainId, equals('weather'));
       expect(artifacts.answerDecision['nextAction'], equals('answer'));
       expect(artifacts.domainPolicyBundle?.domainId, equals('weather'));
-      expect(artifacts.toJson()['processJournal'], isA<List<dynamic>>());
+      expect(artifacts.toJson()['journey'], isA<Map<String, dynamic>>());
     });
 
     test('SubagentPlan 支持完整策略字段解析', () {
@@ -178,20 +202,6 @@ void main() {
       expect(plan.searchIntensity, equals('high'));
       expect(plan.freshnessHoursMax, equals(6));
       expect(plan.answerThreshold, closeTo(0.8, 0.001));
-    });
-
-    test('UiProcessTimelineEntry 支持 references 解析', () {
-      final entry = UiProcessTimelineEntry.fromJson(const <String, dynamic>{
-        'scope': 'skill',
-        'type': 'processCommit',
-        'summary': '已完成天气核对',
-        'references': <Map<String, dynamic>>[
-          <String, dynamic>{'title': '中国气象局', 'url': 'https://weather.cma.cn/'},
-        ],
-      });
-
-      expect(entry.scope, equals('skill'));
-      expect(entry.references.single['title'], equals('中国气象局'));
     });
 
     test('PreferenceFact 支持会话与长期事实', () {
@@ -236,13 +246,43 @@ void main() {
           'blockingSkills': <String>['travel'],
           'canGivePartialAnswer': true,
         },
-        'userEvents': <Map<String, dynamic>>[
-          <String, dynamic>{
-            'type': 'process_replace',
-            'scope': 'root',
-            'message': '已识别为复合问题',
+        'journey': <String, dynamic>{
+          'stages': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'stageId': 'search',
+              'status': 'completed',
+              'order': 1,
+              'summary': '已核对 1 个天气来源',
+              'referenceCount': 1,
+            },
+          ],
+          'entries': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'entryId': 'journey.search.1',
+              'stageId': 'search',
+              'kind': 'reference_bundle',
+              'status': 'completed',
+              'order': 1,
+              'headline': '已核对 1 个天气来源',
+              'references': <Map<String, dynamic>>[
+                <String, dynamic>{
+                  'title': '中国气象局',
+                  'url': 'https://weather.cma.cn/',
+                },
+              ],
+            },
+          ],
+          'summary': '已核对 1 个天气来源',
+          'referenceSummary': <String, dynamic>{
+            'count': 1,
+            'references': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'title': '中国气象局',
+                'url': 'https://weather.cma.cn/',
+              },
+            ],
           },
-        ],
+        },
         'subagentPlan': <Map<String, dynamic>>[
           <String, dynamic>{
             'subagentId': 'travel_planner_1',
@@ -251,13 +291,6 @@ void main() {
             'goal': '结合天气补充旅游建议',
             'stopPolicy': 'balanced',
             'searchIntensity': 'medium',
-          },
-        ],
-        'uiProcessTimeline': <Map<String, dynamic>>[
-          <String, dynamic>{
-            'scope': 'root',
-            'summary': '已拆分为 2 个任务',
-            'references': <Map<String, dynamic>>[],
           },
         ],
         'sessionPreferenceFacts': <Map<String, dynamic>>[
@@ -275,18 +308,20 @@ void main() {
       expect(turn.intentGraph?.problemClass, ProblemClass.complexReasoning);
       expect(turn.skillRuns.single.domainId, 'weather');
       expect(turn.aggregationState?.canGivePartialAnswer, isTrue);
-      expect(turn.userEvents.single.scope, UserEventScope.root);
+      expect(turn.journey.summary, equals('已核对 1 个天气来源'));
+      expect(turn.journey.referenceSummary.count, equals(1));
       expect(
         turn.subagentPlan.single.problemClass,
         equals('complex_reasoning'),
       );
-      expect(turn.uiProcessTimeline.single.scope, 'root');
+      expect(turn.journey.entries.single.references.single.title, equals('中国气象局'));
       expect(turn.sessionPreferenceFacts.single.key, equals('feedbackHint'));
 
       final envelope = turn.toEnvelopeMap();
       expect(envelope['intentGraph'], isA<Map<String, dynamic>>());
       expect(envelope['skillRuns'], isA<List<dynamic>>());
       expect(envelope['aggregationState'], isA<Map<String, dynamic>>());
+      expect(envelope['journey'], isA<Map<String, dynamic>>());
     });
   });
 }

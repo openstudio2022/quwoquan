@@ -7,10 +7,18 @@ description: |
 
 scenarios:
   - name: chat_inbox_dto_parse
-    description: ChatInboxDto 解析（含 lastMessage 预览截断）
+    description: ChatInboxDto 解析（含 mention/unread、头像拼图与最近消息类型）
     assertions:
       - required_fields_non_empty
+      - avatar_composite_urls_preserved
+      - mention_unread_count_non_negative
       - last_message_truncated_at_100chars
+
+  - name: inbox_badge_decrement
+    description: 已读后 unreadCount / mentionUnreadCount 递减
+    assertions:
+      - unread_count_decremented_after_mark_read
+      - mention_unread_count_decremented_after_mark_read
 
   - name: error_code_mapping
     cases:

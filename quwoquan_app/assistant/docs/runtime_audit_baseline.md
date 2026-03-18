@@ -1,6 +1,6 @@
 # 小趣私人助理 Runtime 残留审计基线
 
-> **版本**：v1.0 · **日期**：2026-03-14  
+> **版本**：v1.1 · **日期**：2026-03-17  
 > **用途**：记录本轮字符串治理后的当前残留面，作为 metadata/codegen 与目录重构阶段的统一迁移基线。  
 > **从属**：`PERSONAL_ASSISTANT_DESIGN_AND_CONSTRAINTS.md`
 
@@ -8,7 +8,7 @@
 
 ## 一、审计结论
 
-当前个人助理链路已完成第一轮字符串治理，但尚未达到“runtime 只消费 typed contract + metadata + generated code”的目标状态。
+当前个人助理链路已完成 canonical `AssistantJourney` 切换，`processJournal / uiProcessTimeline / explainableFlow` 兼容主链已删除，但尚未达到“runtime 只消费 typed contract + metadata + generated code”的最终状态。
 
 已经明显收口的部分：
 
@@ -19,9 +19,9 @@
 
 当前最大的残留问题不在 skill，而在 runtime 核心和用户态过程链路：
 
-- `agent_loop.dart` 仍是散装 payload 消费中枢
+- `local_phase_execution_owner.dart` 与 phase pipeline 仍是本地执行链路的 payload 消费中枢
 - `react_runtime.dart` 仍保留工具名子串判断和原始 JSON 文本读取
-- `trace_user_event_translator.dart`、`process_event_consolidator.dart` 仍承载大量用户过程文案与黑名单过滤
+- `assistant_journey_projector.dart`、`assistant_stream_projector.dart` 已接管用户旅程投影，但仍需继续压缩共享 sanitization 与协议适配逻辑
 - `problem_framer.dart`、`retrieval_planner.dart`、`context_orchestrator.dart` 仍保留部分 query 拆解与检索 IA
 
 ---
@@ -32,7 +32,7 @@
 
 以下残留属于“协议或策略本应由 metadata/codegen 承担”的内容：
 
-- `lib/personal_assistant/engine/agent_loop.dart`
+- `lib/assistant/orchestration/local_phase_execution_owner.dart`
   - 直接读取 `answerPayload['...']`、`parsed['...']`、`payload['...']`
   - 直接读取 `decision`、`messageKind`、`phaseId`、`actionCode`、`reasonCode`
 - `lib/personal_assistant/engine/react_runtime.dart`
@@ -54,9 +54,10 @@
 
 以下残留属于“兼容边界或 UI 防泄漏策略”，不应继续散在多处：
 
-- `lib/assistant/application/capability_gateway.dart`
-- `lib/assistant/orchestration/trace_user_event_translator.dart`
-- `lib/personal_assistant/engine/process_event_consolidator.dart`
+- `lib/assistant/application/local_assistant_entry.dart`
+- `lib/assistant/application/remote_assistant_entry.dart`
+- `lib/assistant/application/assistant_stream_projector.dart`
+- `lib/assistant/application/assistant_journey_projector.dart`
 - `lib/ui/chat/pages/chat_detail_page.dart`
 
 这些文件当前仍重复维护：
@@ -95,8 +96,8 @@
 
 集中热点：
 
-- `lib/assistant/orchestration/trace_user_event_translator.dart`
-- `lib/personal_assistant/engine/process_event_consolidator.dart`
+- `lib/assistant/application/assistant_journey_projector.dart`
+- `lib/assistant/application/assistant_stream_projector.dart`
 - `lib/personal_assistant/tools/websearch_tool.dart`
 - `lib/personal_assistant/tools/web_fetch_tool.dart`
 - `lib/personal_assistant/tools/app_action_tool.dart`
@@ -112,8 +113,8 @@
 集中热点：
 
 - `lib/personal_assistant/engine/react_runtime.dart`
-- `lib/assistant/orchestration/trace_user_event_translator.dart`
-- `lib/personal_assistant/engine/process_event_consolidator.dart`
+- `lib/assistant/application/assistant_journey_projector.dart`
+- `lib/assistant/tool/runtime/tool_metadata_registry.dart`
 - `lib/personal_assistant/engine/device_capability.dart`
 
 典型模式：
@@ -132,7 +133,7 @@
 
 集中热点：
 
-- `lib/personal_assistant/engine/agent_loop.dart`
+- `lib/assistant/orchestration/local_phase_execution_owner.dart`
 - `lib/personal_assistant/engine/react_runtime.dart`
 - `lib/personal_assistant/engine/conversation_state_kernel.dart`
 

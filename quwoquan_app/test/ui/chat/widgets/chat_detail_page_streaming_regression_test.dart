@@ -4,11 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/assistant/application/assistant_gateway.dart';
+import 'package:quwoquan_app/assistant/application/local_assistant_entry.dart';
+import 'package:quwoquan_app/assistant/application/assistant_request_policy.dart';
 import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
-import 'package:quwoquan_app/assistant/application/capability_gateway.dart';
+import 'package:quwoquan_app/assistant/application/assistant_run_stream.dart';
+import 'package:quwoquan_app/assistant/application/remote_assistant_entry.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/domain/channel/channel.dart';
 import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
 import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
+import 'package:quwoquan_app/assistant/protocol/run_response.dart';
+import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/runtime/assistant_runtime.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
@@ -16,13 +23,105 @@ import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_detail_page.dart';
+import 'package:quwoquan_app/ui/chat/widgets/message/assistant_process_drawer.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
 
 void main() {
+  testWidgets('远端未配置时 assistant 对话页会自动回落本地 backend', (tester) async {
+    final localEntry = _ControlledLocalAssistantEntry();
+    addTearDown(localEntry.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          chatRepositoryProvider.overrideWithValue(
+            _EmptyAssistantChatRepository(),
+          ),
+          relationshipCapabilityRepositoryProvider.overrideWithValue(
+            _AssistantCapabilityRepository(),
+          ),
+          assistantGatewayProvider.overrideWithValue(
+            _ImmediateAssistantGateway(
+              const AssistantRunResponse(
+                finalText: '',
+                traces: <AssistantTraceEvent>[],
+              ),
+            ),
+          ),
+          localAssistantEntryProvider.overrideWithValue(localEntry),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: ChatDetailPage(
+              conversationId: AppConceptConstants.assistantConversationId,
+              onBack: _noop,
+            ),
+          ),
+        ),
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      condition: () => find.byType(TextField).evaluate().isNotEmpty,
+    );
+
+    await tester.tap(find.byType(TextField).last);
+    await tester.pump();
+    await tester.enterText(find.byType(TextField).last, 'Shenzhen tian qi');
+    await _pumpUntil(
+      tester,
+      condition: () =>
+          find.byIcon(Icons.arrow_upward_rounded).evaluate().isNotEmpty,
+    );
+    await tester.tap(find.byIcon(Icons.arrow_upward_rounded));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await localEntry.waitUntilSubscribed();
+    localEntry.emit(AssistantRunStreamEvent.answerDelta('深圳今天天气晴，适合出行。'));
+    localEntry.emit(
+      AssistantRunStreamEvent.completed(
+        const AssistantRunResponse(
+          finalText: '深圳今天天气晴，适合出行。',
+          traces: <AssistantTraceEvent>[],
+          structuredResponse: <String, dynamic>{
+            'runArtifacts': <String, dynamic>{
+              'displayMarkdown': '深圳今天天气晴，适合出行。',
+              'displayPlainText': '深圳今天天气晴，适合出行。',
+            },
+          },
+        ),
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      condition: () => find
+          .byWidgetPredicate(
+            (widget) =>
+                widget is ChatMessageBubble &&
+                (widget.message['senderId'] as String?) ==
+                    AppConceptConstants.assistantSenderId &&
+                (((widget.message['content'] as String?) ?? '').contains(
+                      '深圳今天天气晴，适合出行。',
+                    ) ||
+                    ((widget.message['streamFinalAnswer'] as String?) ?? '')
+                        .contains('深圳今天天气晴，适合出行。')),
+          )
+          .evaluate()
+          .isNotEmpty,
+    );
+
+    final bubble = _latestAssistantBubble(tester);
+    final content = (bubble.message['content'] as String?) ?? '';
+    final streamFinalAnswer =
+        (bubble.message['streamFinalAnswer'] as String?) ?? '';
+    final mergedAnswer = '$content$streamFinalAnswer';
+    expect(mergedAnswer, contains('深圳今天天气晴，适合出行。'));
+    expect(mergedAnswer, isNot(contains('remote_stream_incomplete')));
+  });
+
   testWidgets('assistant answerDelta 会逐步追加，completed 不重建 message id', (
     tester,
   ) async {
-    final gateway = _ControlledCapabilityGateway();
+    final gateway = _ControlledRemoteAssistantEntry();
     addTearDown(gateway.dispose);
 
     await tester.pumpWidget(
@@ -34,7 +133,8 @@ void main() {
           relationshipCapabilityRepositoryProvider.overrideWithValue(
             _AssistantCapabilityRepository(),
           ),
-          capabilityGatewayProvider.overrideWithValue(gateway),
+          assistantRemoteConfiguredProvider.overrideWith((ref) => true),
+          remoteAssistantEntryProvider.overrideWithValue(gateway),
         ],
         child: MaterialApp(
           home: Scaffold(
@@ -68,35 +168,21 @@ void main() {
     await gateway.waitUntilSubscribed();
 
     gateway.emit(
-      AssistantRunStreamEvent.processJournal(
-        const ProcessJournalEvent(
-          eventId: 'stream.plan.1',
-          type: ProcessJournalEventType.narrativeCommit,
-          stage: 'understanding',
-          phaseId: 'understanding',
-          actionCode: 'frame_problem',
-          reasonCode: 'align_goal',
-          reasonShort: '先把九寨沟方向的候选路线和适用条件分开核对。',
-          nodeId: 'root.intent.plan',
+      AssistantRunStreamEvent.journey(
+        _journeySnapshot(
+          activeStage: JourneyStageId.analyze,
+          analyzeHeadline: '先把九寨沟方向的候选路线和适用条件分开核对。',
         ),
       ),
     );
     await tester.pump();
 
     gateway.emit(
-      AssistantRunStreamEvent.explainableFlow(
-        const ExplainableFlowEvent(
-          phaseId: PhaseId.execute,
-          phaseOrder: 1,
-          phaseStatus: ExplainablePhaseStatus.active,
-          headline: '我在核对九寨沟方向的最新约束',
-          references: <FlowReference>[
-            FlowReference(
-              title: '九寨沟景区公告',
-              url: 'https://example.com/jiuzhaigou',
-              source: '官方',
-            ),
-          ],
+      AssistantRunStreamEvent.journey(
+        _journeySnapshot(
+          activeStage: JourneyStageId.search,
+          analyzeHeadline: '先把九寨沟方向的候选路线和适用条件分开核对。',
+          searchHeadline: '我在核对九寨沟方向的最新约束',
         ),
       ),
     );
@@ -131,16 +217,12 @@ void main() {
     );
 
     gateway.emit(
-      AssistantRunStreamEvent.processJournal(
-        const ProcessJournalEvent(
-          eventId: 'stream.answer.1',
-          type: ProcessJournalEventType.answerDelta,
-          stage: 'answering',
-          phaseId: 'answering',
-          actionCode: 'stream_answer',
-          reasonCode: 'deliver_increment',
-          nodeId: 'answer.stream',
-          message: '九寨沟方向',
+      AssistantRunStreamEvent.journey(
+        _journeySnapshot(
+          activeStage: JourneyStageId.answer,
+          analyzeHeadline: '先把九寨沟方向的候选路线和适用条件分开核对。',
+          searchHeadline: '我在核对九寨沟方向的最新约束',
+          answerHeadline: '我开始整理成最终方案。',
         ),
       ),
     );
@@ -239,23 +321,84 @@ void main() {
           finalText: '九寨沟方向备选方案\n1. 九寨沟 + 黄龙\n2. 川主寺中转',
           traces: const [],
           structuredResponse: <String, dynamic>{
-            'uiAnswer': const <String, dynamic>{
-              'markdownText':
-                  '## 九寨沟方向备选方案\n\n1. **九寨沟 + 黄龙**\n   适合：第一次走经典主线。\n2. **川主寺中转**\n   适合：更看重交通节奏。',
-            },
             'runArtifacts': const <String, dynamic>{
-              'processJournal': <Map<String, dynamic>>[
-                <String, dynamic>{
-                  'eventId': 'structured.plan.1',
-                  'type': 'narrative_commit',
-                  'stage': 'understanding',
-                  'phaseId': 'understanding',
-                  'actionCode': 'frame_problem',
-                  'reasonCode': 'align_goal',
-                  'reasonShort': '先把九寨沟方向的候选路线和适用条件分开核对。',
-                  'nodeId': 'root.intent.plan',
+              'displayMarkdown':
+                  '## 九寨沟方向备选方案\n\n1. **九寨沟 + 黄龙**\n   适合：第一次走经典主线。\n2. **川主寺中转**\n   适合：更看重交通节奏。',
+              'displayPlainText':
+                  '九寨沟方向备选方案\n1. 九寨沟 + 黄龙 适合：第一次走经典主线。\n2. 川主寺中转 适合：更看重交通节奏。',
+              'journey': <String, dynamic>{
+                'stages': <Map<String, dynamic>>[
+                  <String, dynamic>{
+                    'stageId': 'analyze',
+                    'status': 'completed',
+                    'order': 0,
+                    'summary': '先把九寨沟方向的候选路线和适用条件分开核对。',
+                  },
+                  <String, dynamic>{
+                    'stageId': 'search',
+                    'status': 'completed',
+                    'order': 1,
+                    'summary': '我在核对九寨沟方向的最新约束',
+                    'referenceCount': 1,
+                  },
+                  <String, dynamic>{
+                    'stageId': 'answer',
+                    'status': 'completed',
+                    'order': 3,
+                    'summary': '我开始整理成最终方案。',
+                  },
+                ],
+                'entries': <Map<String, dynamic>>[
+                  <String, dynamic>{
+                    'entryId': 'journey.analyze.plan',
+                    'stageId': 'analyze',
+                    'kind': 'narrative',
+                    'status': 'completed',
+                    'order': 0,
+                    'headline': '先把九寨沟方向的候选路线和适用条件分开核对。',
+                  },
+                  <String, dynamic>{
+                    'entryId': 'journey.search.verify',
+                    'stageId': 'search',
+                    'kind': 'reference_bundle',
+                    'status': 'completed',
+                    'order': 1,
+                    'headline': '我在核对九寨沟方向的最新约束',
+                    'references': <Map<String, dynamic>>[
+                      <String, dynamic>{
+                        'title': '九寨沟景区公告',
+                        'url': 'https://example.com/jiuzhaigou',
+                        'source': '官方',
+                      },
+                    ],
+                  },
+                  <String, dynamic>{
+                    'entryId': 'journey.answer.final',
+                    'stageId': 'answer',
+                    'kind': 'narrative',
+                    'status': 'completed',
+                    'order': 2,
+                    'headline': '我开始整理成最终方案。',
+                  },
+                ],
+                'summary': '我开始整理成最终方案。',
+                'referenceSummary': <String, dynamic>{
+                  'count': 1,
+                  'references': <Map<String, dynamic>>[
+                    <String, dynamic>{
+                      'title': '九寨沟景区公告',
+                      'url': 'https://example.com/jiuzhaigou',
+                      'source': '官方',
+                    },
+                  ],
                 },
-              ],
+                'readiness': <String, dynamic>{
+                  'nextAction': 'answer',
+                  'finalAnswerMode': 'direct',
+                  'answerEligibility': 'ready',
+                  'finalAnswerReady': true,
+                },
+              },
             },
             'qualityMetrics': const <String, dynamic>{
               'heuristicFallbackUsed': false,
@@ -281,42 +424,342 @@ void main() {
         '';
     expect(completedBubble.message['id'], streamingMessageId);
     expect(finalAnswer, contains('九寨沟方向备选方案'));
-    final mergedJournal =
-        (((completedBubble.message['runArtifacts'] as Map?)?['processJournal']
-                as List?)
-            ?.whereType<Map>()
-            .toList(growable: false)) ??
+    final persistedJourney =
+        ((completedBubble.message['journey'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{});
+    final mergedJourneyEntries =
+        ((persistedJourney['entries'] as List?)?.whereType<Map>().toList(
+              growable: false,
+            )) ??
         const <Map>[];
     expect(
-      mergedJournal
+      mergedJourneyEntries
           .where(
-            (item) =>
-                item['nodeId'] == 'root.intent.plan' &&
-                item['reasonCode'] == 'align_goal',
+            (item) => item['entryId'] == 'journey.search.verify',
           )
           .length,
       1,
-      reason: 'completed 合并后不应把同一语义的过程事件重复写两遍',
+      reason: 'completed 合并后不应把同一语义的 journey entry 重复写两遍',
     );
-    final flowEvents =
-        ((completedBubble.message['uiExplainableFlow'] as List?)
-            ?.whereType<Map>()
-            .toList(growable: false)) ??
+    expect(persistedJourney, isNotEmpty);
+    final persistedEntries =
+        ((persistedJourney['entries'] as List?)?.whereType<Map>().toList(
+              growable: false,
+            )) ??
         const <Map>[];
-    expect(flowEvents, isNotEmpty);
-    expect(flowEvents.first['headline'], '我在核对九寨沟方向的最新约束');
+    expect(
+      persistedEntries.any(
+        (entry) => entry['headline'] == '我在核对九寨沟方向的最新约束',
+      ),
+      isTrue,
+    );
+  });
+
+  testWidgets('无真实 journey 信号时不展示 seeded 假过程抽屉', (tester) async {
+    final gateway = _ControlledRemoteAssistantEntry();
+    addTearDown(gateway.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          chatRepositoryProvider.overrideWithValue(
+            _EmptyAssistantChatRepository(),
+          ),
+          relationshipCapabilityRepositoryProvider.overrideWithValue(
+            _AssistantCapabilityRepository(),
+          ),
+          assistantRemoteConfiguredProvider.overrideWith((ref) => true),
+          remoteAssistantEntryProvider.overrideWithValue(gateway),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: ChatDetailPage(
+              conversationId: AppConceptConstants.assistantConversationId,
+              onBack: _noop,
+            ),
+          ),
+        ),
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      condition: () => find.byType(TextField).evaluate().isNotEmpty,
+    );
+
+    await tester.tap(find.byType(TextField).last);
+    await tester.pump();
+    await tester.enterText(find.byType(TextField).last, '帮我看下深圳天气');
+    await _pumpUntil(
+      tester,
+      condition: () =>
+          find.byIcon(Icons.arrow_upward_rounded).evaluate().isNotEmpty,
+    );
+    await tester.tap(find.byIcon(Icons.arrow_upward_rounded));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    await gateway.waitUntilSubscribed();
+
+    expect(find.byType(AssistantProcessDrawer), findsNothing);
+
+    gateway.emit(
+      AssistantRunStreamEvent.journey(
+        _journeySnapshot(
+          activeStage: JourneyStageId.analyze,
+          analyzeHeadline: '我先确认这是天气查询。',
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(AssistantProcessDrawer), findsOneWidget);
+  });
+
+  testWidgets('structured answer stream 在成答前不应闪出内部 JSON 字段', (
+    tester,
+  ) async {
+    final gateway = _ControlledRemoteAssistantEntry();
+    addTearDown(gateway.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          chatRepositoryProvider.overrideWithValue(
+            _EmptyAssistantChatRepository(),
+          ),
+          relationshipCapabilityRepositoryProvider.overrideWithValue(
+            _AssistantCapabilityRepository(),
+          ),
+          assistantRemoteConfiguredProvider.overrideWith((ref) => true),
+          remoteAssistantEntryProvider.overrideWithValue(gateway),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: ChatDetailPage(
+              conversationId: AppConceptConstants.assistantConversationId,
+              onBack: _noop,
+            ),
+          ),
+        ),
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      condition: () => find.byType(TextField).evaluate().isNotEmpty,
+    );
+
+    await tester.tap(find.byType(TextField).last);
+    await tester.pump();
+    await tester.enterText(find.byType(TextField).last, 'Shenzhen tian qi');
+    await _pumpUntil(
+      tester,
+      condition: () =>
+          find.byIcon(Icons.arrow_upward_rounded).evaluate().isNotEmpty,
+    );
+    await tester.tap(find.byIcon(Icons.arrow_upward_rounded));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    await gateway.waitUntilSubscribed();
+
+    gateway.emit(
+      AssistantRunStreamEvent.journey(
+        _journeySnapshot(
+          activeStage: JourneyStageId.answer,
+          analyzeHeadline: '我先确认这是天气查询，不是行程规划。',
+          answerHeadline: '我开始整理成最终答案。',
+        ),
+      ),
+    );
+    await tester.pump();
+
+    gateway.emit(
+      AssistantRunStreamEvent.answerDelta(
+        '{"contractVersion":"assistant_turn","decision":{"nextAction":"answer"},"messageKind":"answer","userMar',
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      _latestAssistantBubble(tester).message['streamFinalAnswer'],
+      isEmpty,
+      reason: '结构化 envelope 尚未进入 userMarkdown 前，不应把 JSON 前缀写进气泡',
+    );
+    expect(find.textContaining('contractVersion'), findsNothing);
+    expect(find.textContaining('assistant_turn'), findsNothing);
+
+    gateway.emit(AssistantRunStreamEvent.answerDelta('kdown":"深圳今天天气晴'));
+    await tester.pump();
+    expect(_latestAssistantBubble(tester).message['streamFinalAnswer'], '深圳今天天气晴');
+    expect(find.text('深圳今天天气晴'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('contractVersion'), findsNothing);
+
+    gateway.emit(
+      AssistantRunStreamEvent.answerDelta(
+        '，适合出行。","result":{"text":"深圳今天天气晴，适合出行。"}}',
+      ),
+    );
+    await tester.pump();
+    expect(
+      _latestAssistantBubble(tester).message['streamFinalAnswer'],
+      '深圳今天天气晴，适合出行。',
+    );
+    expect(find.textContaining('assistant_turn'), findsNothing);
+
+    gateway.emit(
+      AssistantRunStreamEvent.completed(
+        const AssistantRunResponse(
+          finalText: '深圳今天天气晴，适合出行。',
+          traces: <AssistantTraceEvent>[],
+          structuredResponse: <String, dynamic>{
+            'runArtifacts': <String, dynamic>{
+              'displayMarkdown': '深圳今天天气晴，适合出行。',
+              'displayPlainText': '深圳今天天气晴，适合出行。',
+            },
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    final finalBubble = _latestAssistantBubble(tester);
+    final finalAnswer =
+        ((finalBubble.message['content'] as String?)?.trim().isNotEmpty == true
+            ? finalBubble.message['content']
+            : finalBubble.message['streamFinalAnswer']) ??
+        '';
+    expect(finalAnswer, contains('深圳今天天气晴，适合出行。'));
+    expect(find.textContaining('contractVersion'), findsNothing);
+    expect(find.textContaining('machineEnvelope'), findsNothing);
   });
 }
 
 void _noop() {}
 
-class _ControlledCapabilityGateway extends CapabilityGateway {
-  _ControlledCapabilityGateway()
+JourneyStageStatus _statusForStage(
+  JourneyStageId stageId,
+  JourneyStageId activeStage,
+) {
+  const order = <JourneyStageId, int>{
+    JourneyStageId.analyze: 0,
+    JourneyStageId.search: 1,
+    JourneyStageId.verify: 2,
+    JourneyStageId.answer: 3,
+  };
+  final stageOrder = order[stageId] ?? 0;
+  final activeOrder = order[activeStage] ?? 0;
+  if (stageId == activeStage) return JourneyStageStatus.active;
+  if (stageOrder < activeOrder) return JourneyStageStatus.completed;
+  return JourneyStageStatus.pending;
+}
+
+AssistantJourney _journeySnapshot({
+  required JourneyStageId activeStage,
+  String analyzeHeadline = '',
+  String searchHeadline = '',
+  String answerHeadline = '',
+}) {
+  final analyzeStatus = _statusForStage(JourneyStageId.analyze, activeStage);
+  final searchStatus = _statusForStage(JourneyStageId.search, activeStage);
+  final answerStatus = _statusForStage(JourneyStageId.answer, activeStage);
+  final entries = <AssistantJourneyEntry>[
+    if (analyzeHeadline.isNotEmpty)
+      AssistantJourneyEntry(
+        entryId: 'journey.analyze.plan',
+        stageId: JourneyStageId.analyze,
+        kind: JourneyEntryKind.narrative,
+        status: analyzeStatus,
+        order: 0,
+        headline: analyzeHeadline,
+      ),
+    if (searchHeadline.isNotEmpty)
+      AssistantJourneyEntry(
+        entryId: 'journey.search.verify',
+        stageId: JourneyStageId.search,
+        kind: JourneyEntryKind.referenceBundle,
+        status: searchStatus,
+        order: 1,
+        headline: searchHeadline,
+        references: const <AssistantJourneyReference>[
+          AssistantJourneyReference(
+            title: '九寨沟景区公告',
+            url: 'https://example.com/jiuzhaigou',
+            source: '官方',
+          ),
+        ],
+      ),
+    if (answerHeadline.isNotEmpty)
+      AssistantJourneyEntry(
+        entryId: 'journey.answer.final',
+        stageId: JourneyStageId.answer,
+        kind: JourneyEntryKind.narrative,
+        status: answerStatus,
+        order: 2,
+        headline: answerHeadline,
+      ),
+  ];
+  return AssistantJourney(
+    stages: <AssistantJourneyStage>[
+      AssistantJourneyStage(
+        stageId: JourneyStageId.analyze,
+        status: analyzeStatus,
+        order: 0,
+        summary: analyzeHeadline,
+      ),
+      AssistantJourneyStage(
+        stageId: JourneyStageId.search,
+        status: searchStatus,
+        order: 1,
+        summary: searchHeadline,
+        referenceCount: searchHeadline.isNotEmpty ? 1 : 0,
+      ),
+      AssistantJourneyStage(
+        stageId: JourneyStageId.verify,
+        status: _statusForStage(JourneyStageId.verify, activeStage),
+        order: 2,
+      ),
+      AssistantJourneyStage(
+        stageId: JourneyStageId.answer,
+        status: answerStatus,
+        order: 3,
+        summary: answerHeadline,
+      ),
+    ],
+    entries: entries,
+    summary: answerHeadline.isNotEmpty ? answerHeadline : searchHeadline,
+    referenceSummary: searchHeadline.isNotEmpty
+        ? const AssistantJourneyReferenceSummary(
+            count: 1,
+            references: <AssistantJourneyReference>[
+              AssistantJourneyReference(
+                title: '九寨沟景区公告',
+                url: 'https://example.com/jiuzhaigou',
+                source: '官方',
+              ),
+            ],
+          )
+        : const AssistantJourneyReferenceSummary(),
+    readiness: AssistantJourneyReadiness(
+      nextAction: activeStage == JourneyStageId.answer
+          ? AssistantNextAction.answer
+          : AssistantNextAction.toolCall,
+      finalAnswerMode: activeStage == JourneyStageId.answer
+          ? FinalAnswerMode.full
+          : FinalAnswerMode.blocked,
+      answerEligibility: activeStage == JourneyStageId.answer
+          ? AnswerEligibility.eligible
+          : AnswerEligibility.unknown,
+      finalAnswerReady: activeStage == JourneyStageId.answer,
+    ),
+  );
+}
+
+class _ControlledRemoteAssistantEntry extends RemoteAssistantEntry {
+  _ControlledRemoteAssistantEntry()
     : _controller = StreamController<AssistantRunStreamEvent>(),
       _subscribed = Completer<void>(),
       super(
-        assistantGateway: AssistantGateway(AssistantRuntime.createDefault()),
         openClawBridge: OpenClawBridge(baseUrl: ''),
+        requestPolicy: const AssistantRequestPolicy(),
       );
 
   final StreamController<AssistantRunStreamEvent> _controller;
@@ -331,7 +774,6 @@ class _ControlledCapabilityGateway extends CapabilityGateway {
   @override
   Stream<AssistantRunStreamEvent> runStream({
     required AssistantRunRequest request,
-    CapabilityRouteMode mode = CapabilityRouteMode.hybrid,
   }) {
     if (!_subscribed.isCompleted) {
       _subscribed.complete();
@@ -344,6 +786,80 @@ class _ControlledCapabilityGateway extends CapabilityGateway {
       return;
     }
     unawaited(_controller.close());
+  }
+}
+
+class _ControlledLocalAssistantEntry extends LocalAssistantEntry {
+  _ControlledLocalAssistantEntry()
+    : _controller = StreamController<AssistantRunStreamEvent>(),
+      _subscribed = Completer<void>(),
+      super(
+        assistantGateway: _ImmediateAssistantGateway(
+          const AssistantRunResponse(
+            finalText: '',
+            traces: <AssistantTraceEvent>[],
+          ),
+        ),
+        requestPolicy: const AssistantRequestPolicy(),
+      );
+
+  final StreamController<AssistantRunStreamEvent> _controller;
+  final Completer<void> _subscribed;
+
+  void emit(AssistantRunStreamEvent event) => _controller.add(event);
+
+  Future<void> waitUntilSubscribed({
+    Duration timeout = const Duration(seconds: 10),
+  }) => _subscribed.future.timeout(timeout);
+
+  @override
+  Stream<AssistantRunStreamEvent> runStream({
+    required AssistantRunRequest request,
+  }) {
+    if (!_subscribed.isCompleted) {
+      _subscribed.complete();
+    }
+    return _controller.stream;
+  }
+
+  Future<void> dispose() async {
+    if (_controller.isClosed) {
+      return;
+    }
+    unawaited(_controller.close());
+  }
+}
+
+class _ImmediateAssistantGateway extends AssistantGateway {
+  _ImmediateAssistantGateway(this._response)
+    : super(AssistantRuntime.createForTest());
+
+  final AssistantRunResponse _response;
+
+  @override
+  Future<AssistantRunResponse> run(AssistantRunRequest request) async {
+    return _response;
+  }
+
+  @override
+  Future<AssistantRunResponse> runWithTraceStream(
+    AssistantRunRequest request, {
+    void Function(AssistantTraceEvent event)? onTraceEvent,
+  }) async {
+    return _response;
+  }
+
+  @override
+  Future<void> ensureRemoteConfigLoaded() async {}
+
+  @override
+  Future<List<Map<String, dynamic>>> listSessions() async {
+    return const <Map<String, dynamic>>[];
+  }
+
+  @override
+  Future<Map<String, dynamic>?> sessionDetail(String sessionId) async {
+    return null;
   }
 }
 

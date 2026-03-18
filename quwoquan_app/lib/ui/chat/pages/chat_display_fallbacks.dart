@@ -1,25 +1,16 @@
+import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/domain/channel/channel.dart';
 
 String resolveActionLikeCompletedFallback(AssistantRunResponse response) {
-  final structured = response.structuredResponse;
-  final answerPayload =
-      (structured['answerPayload'] as Map?)?.cast<String, dynamic>() ??
-      const <String, dynamic>{};
-  final decision =
-      (answerPayload['decision'] as Map?)?.cast<String, dynamic>() ??
-      (structured['decision'] as Map?)?.cast<String, dynamic>() ??
-      const <String, dynamic>{};
-  final nextAction = (decision['nextAction'] as String?)?.trim() ?? '';
-  final messageKind =
-      (answerPayload['messageKind'] as String?)?.trim() ??
-      (structured['messageKind'] as String?)?.trim() ??
-      '';
+  final decision = AssistantTurnDecision.fromMaps(
+    structured: response.structuredResponse,
+  );
+  final nextAction = decision.nextAction.wireName;
+  final messageKind = decision.messageKind.wireName;
   final rawSignals = <String>[
     response.finalText,
     response.displayMarkdown,
     response.displayPlainText,
-    answerPayload.toString(),
-    structured['uiAnswer'].toString(),
   ].join('\n');
   final looksActionLike =
       nextAction == 'tool_call' ||

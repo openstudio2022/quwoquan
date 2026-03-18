@@ -65,7 +65,8 @@
 - `reasoningBasis` 必须是对象数组，禁止输出旧的字符串摘要
 - `selfCheck` 必须使用 `goalSatisfied`、`constraintSatisfied`、`safetyBoundarySatisfied`、`failedItems`
 - `diagnostics` 只允许 `emergedTags`、`failedChecks`、`parseStatus`、`notes`
-- 禁止继续输出旧字段 `traceId`、`turnPhase`、`thinkingText`、`source`、`references`
+- 用户旅程由 runtime 基于 canonical `assistant_journey` 聚合，禁止输出 `userEvents`、`uiProcessTimeline`、`processSummary`、`processReferenceCount` 等历史过程字段
+- 禁止继续输出任何历史调试字段、旧阶段字段或未定义的顶层字段
 - 禁止使用 `whyThisAnswer`、`riskFlags`、`needMoreInfo`、`improvementHints` 等旧 diagnostics / score 语义
 
 ## userMarkdown 质量红线

@@ -4,8 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
-import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
@@ -63,8 +61,7 @@ class _TopActionIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     return CupertinoButton(
       padding: EdgeInsets.zero,
-      minSize: AppSpacing.minInteractiveSize,
-      onPressed: onTap,
+      onPressed: onTap, minimumSize: Size(AppSpacing.minInteractiveSize, AppSpacing.minInteractiveSize),
       child: SizedBox(
         width: AppSpacing.minInteractiveSize,
         height: AppSpacing.minInteractiveSize,
@@ -313,7 +310,7 @@ class _AddContactSheet extends ConsumerWidget {
                     child: ListView.separated(
                       shrinkWrap: true,
                       itemCount: contacts.length.clamp(0, 8),
-                      separatorBuilder: (_, __) => Container(
+                      separatorBuilder: (context, index) => Container(
                         margin: EdgeInsets.only(
                           left: AppSpacing.largeAvatarSize + AppSpacing.md,
                         ),

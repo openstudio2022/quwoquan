@@ -1,13 +1,4 @@
 /// 聊天时间格式化 — 云端 UTC+8 → 设备本地时区展示
-///
-/// 统一格式："{日期标签} 上午/下午H:mm"
-///
-/// 日期标签规则：
-/// - 今天 → "今天"
-/// - 昨天 → "昨天"
-/// - 本周（2~6天前）→ "周X"
-/// - 同年 → "MM/dd"
-/// - 跨年 → "yy/MM/dd"（两位年，如 26/01/09）
 class ChatTimeFormatter {
   ChatTimeFormatter._();
 
@@ -27,6 +18,43 @@ class ChatTimeFormatter {
   /// 仅时间部分（上午/下午H:mm）
   static String formatTimeOnly(DateTime serverTime) {
     return _timeLabel(serverTime.toLocal());
+  }
+
+  /// 会话列表专用的时间格式化
+  static String formatForConversationList(DateTime serverTime) {
+    final local = serverTime.toLocal();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final msgDay = DateTime(local.year, local.month, local.day);
+    final diff = today.difference(msgDay).inDays;
+
+    if (diff == 0) {
+      final h = local.hour;
+      final m = local.minute.toString().padLeft(2, '0');
+      String prefix = '';
+      if (h >= 0 && h < 6) {
+        prefix = '凌晨';
+      } else if (h >= 6 && h < 12) {
+        prefix = '上午';
+      } else if (h == 12) {
+        prefix = '中午';
+      } else if (h > 12 && h < 18) {
+        prefix = '下午';
+      } else {
+        prefix = '晚上';
+      }
+      int displayH = h > 12 ? h - 12 : h;
+      if (displayH == 0) displayH = 12;
+      return '$prefix$displayH:$m';
+    } else if (diff == 1) {
+      return '昨天';
+    } else if (diff == 2) {
+      return '前天';
+    } else if (local.year == now.year) {
+      return '${local.month}月${local.day}日';
+    } else {
+      return '${local.year}年${local.month}月${local.day}日';
+    }
   }
 
   /// 从 ISO 8601 字符串解析，失败时返回 null（不回退到本地时钟）

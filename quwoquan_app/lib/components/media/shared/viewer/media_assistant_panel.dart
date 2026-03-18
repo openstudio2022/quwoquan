@@ -79,8 +79,7 @@ class MediaAssistantPanel extends StatelessWidget {
                     ),
                     CupertinoButton(
                       padding: EdgeInsets.zero,
-                      minSize: AppSpacing.minInteractiveSize,
-                      onPressed: onClose,
+                      onPressed: onClose, minimumSize: Size(AppSpacing.minInteractiveSize, AppSpacing.minInteractiveSize),
                       child: Icon(
                         CupertinoIcons.xmark,
                         size: AppSpacing.iconMedium,
@@ -488,8 +487,7 @@ class _MediaAssistantInput extends StatelessWidget {
           ),
           child: CupertinoButton(
             padding: EdgeInsets.zero,
-            minSize: AppSpacing.minInteractiveSize,
-            onPressed: onSend,
+            onPressed: onSend, minimumSize: Size(AppSpacing.minInteractiveSize, AppSpacing.minInteractiveSize),
             child: Padding(
               padding: EdgeInsets.all(context.safeGetIntraGroupSpacing(SpacingSize.xs)),
               child: Icon(

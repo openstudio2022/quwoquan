@@ -8,6 +8,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_pag
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/cloud/services/user/mock/user_profile_mock_data.dart';
 import 'package:http/http.dart' as http;
@@ -18,6 +19,8 @@ import 'dart:convert';
 /// 接口方法与 contracts/metadata/user/user_profile/service.yaml、
 /// contracts/metadata/user/follow_edge/service.yaml routes 一一对应。
 abstract class UserProfileRepository {
+  const UserProfileRepository();
+
   // ── 档案 ──────────────────────────────────────────────────────────────────
   Future<Map<String, dynamic>> getUserProfile(String userId);
   Future<void> updateProfile(Map<String, dynamic> data);
@@ -73,11 +76,55 @@ abstract class UserProfileRepository {
   Future<void> updatePersona(String personaId, Map<String, dynamic> data);
   Future<void> deletePersona(String personaId);
   Future<void> activatePersona(String personaId);
+
+  Future<ProfileSubjectViewData> getProfileSubject(String userId) async {
+    final profile = await getUserProfile(userId);
+    final stats = await getUserStats(userId);
+    return ProfileSubjectViewData.fromMap(profile).mergeStats(stats);
+  }
+
+  Future<List<ProfileCircleViewData>> listProfileCircles(
+    String userId, {
+    int limit = CloudApiDefaults.userCirclesLimit,
+  }) async {
+    final items = await listUserCircles(userId, limit: limit);
+    return items.map(ProfileCircleViewData.fromMap).toList(growable: false);
+  }
+
+  Future<List<ProfileInteractionActivityViewData>> listProfileInteractionReceivedView(
+    String userId, {
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final items = await listUserInteractionReceived(
+      userId,
+      cursor: cursor,
+      limit: limit,
+    );
+    return items
+        .map(ProfileInteractionActivityViewData.fromMap)
+        .toList(growable: false);
+  }
+
+  Future<List<ProfileInteractionActivityViewData>> listProfileInteractionSentView(
+    String userId, {
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final items = await listUserInteractionSent(
+      userId,
+      cursor: cursor,
+      limit: limit,
+    );
+    return items
+        .map(ProfileInteractionActivityViewData.fromMap)
+        .toList(growable: false);
+  }
 }
 
 // ─── Mock 实现（本地数据，不发 HTTP）──────────────────────────────────────────
 
-class MockUserProfileRepository implements UserProfileRepository {
+class MockUserProfileRepository extends UserProfileRepository {
   const MockUserProfileRepository();
 
   @override
@@ -116,21 +163,24 @@ class MockUserProfileRepository implements UserProfileRepository {
       {
         'id': 'c1',
         'name': '极简摄影俱乐部',
-        'coverUrl': 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600',
+        'coverUrl':
+            'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600',
         'memberCount': 2340,
         'postCount': 128,
       },
       {
         'id': 'c2',
         'name': '旅行手账',
-        'coverUrl': 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=600',
+        'coverUrl':
+            'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=600',
         'memberCount': 1280,
         'postCount': 56,
       },
       {
         'id': 'c3',
         'name': '咖啡品鉴',
-        'coverUrl': 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=600',
+        'coverUrl':
+            'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=600',
         'memberCount': 890,
         'postCount': 34,
       },
@@ -210,11 +260,19 @@ class MockUserProfileRepository implements UserProfileRepository {
 
   @override
   Future<Map<String, dynamic>> createPersona(Map<String, dynamic> data) async {
-    return {'id': 'new_persona_1', ...data, 'isActive': false, 'isPrimary': false};
+    return {
+      'id': 'new_persona_1',
+      ...data,
+      'isActive': false,
+      'isPrimary': false,
+    };
   }
 
   @override
-  Future<void> updatePersona(String personaId, Map<String, dynamic> data) async {}
+  Future<void> updatePersona(
+    String personaId,
+    Map<String, dynamic> data,
+  ) async {}
 
   @override
   Future<void> deletePersona(String personaId) async {}
@@ -232,7 +290,8 @@ class MockUserProfileRepository implements UserProfileRepository {
       'nickname': hasChatIdentity ? chatName : userId,
       'avatarUrl': ChatMockData.avatarFor(userId),
       'bio': hasChatIdentity ? '趣屋圈用户' : '',
-      'backgroundUrl': 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200',
+      'backgroundUrl':
+          'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200',
       'followerCount': hasChatIdentity ? 120 : 0,
       'followingCount': hasChatIdentity ? 85 : 0,
       'postCount': hasChatIdentity ? 30 : 0,
@@ -247,7 +306,8 @@ class MockUserProfileRepository implements UserProfileRepository {
       'nickname': '趣我圈用户',
       'avatarUrl': ChatMockData.avatarFor('user_001'),
       'bio': '关心时事、关注新闻、思考人生、思索生命',
-      'backgroundUrl': 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200',
+      'backgroundUrl':
+          'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200',
       'followerCount': 120,
       'followingCount': 85,
       'postCount': 30,
@@ -257,9 +317,11 @@ class MockUserProfileRepository implements UserProfileRepository {
     'nature_photographer': {
       'userId': 'nature_photographer',
       'nickname': '自然摄影师',
-      'avatarUrl': 'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100',
+      'avatarUrl':
+          'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100',
       'bio': '用镜头记录自然之美',
-      'backgroundUrl': 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200',
+      'backgroundUrl':
+          'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200',
       'followerCount': 1200,
       'followingCount': 284,
       'postCount': 156,
@@ -269,9 +331,11 @@ class MockUserProfileRepository implements UserProfileRepository {
     'travel_photographer': {
       'userId': 'travel_photographer',
       'nickname': '旅行摄影师',
-      'avatarUrl': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
+      'avatarUrl':
+          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
       'bio': '在路上，遇见世界',
-      'backgroundUrl': 'https://images.unsplash.com/photo-1539635278303-d4002c07eae3?w=1200',
+      'backgroundUrl':
+          'https://images.unsplash.com/photo-1539635278303-d4002c07eae3?w=1200',
       'followerCount': 890,
       'followingCount': 156,
       'postCount': 89,
@@ -281,9 +345,11 @@ class MockUserProfileRepository implements UserProfileRepository {
     'a1': {
       'userId': 'a1',
       'nickname': '楹语小筑',
-      'avatarUrl': 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100',
+      'avatarUrl':
+          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100',
       'bio': '分享美好生活',
-      'backgroundUrl': 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=1200',
+      'backgroundUrl':
+          'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=1200',
       'followerCount': 2400,
       'followingCount': 320,
       'postCount': 230,
@@ -296,28 +362,32 @@ class MockUserProfileRepository implements UserProfileRepository {
     {
       'userId': 'u1',
       'nickname': '你的皮炎有点辣',
-      'avatarUrl': 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=100',
+      'avatarUrl':
+          'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=100',
       'bio': '美食探索者',
       'isFollowing': true,
     },
     {
       'userId': 'u2',
       'nickname': '仅分组可见',
-      'avatarUrl': 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100',
+      'avatarUrl':
+          'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100',
       'bio': '设计师',
       'isFollowing': false,
     },
     {
       'userId': 'u3',
       'nickname': '原价帝吧',
-      'avatarUrl': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
+      'avatarUrl':
+          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
       'bio': '数码爱好者',
       'isFollowing': true,
     },
     {
       'userId': 'u4',
       'nickname': '李想',
-      'avatarUrl': 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100',
+      'avatarUrl':
+          'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100',
       'bio': '产品经理',
       'isFollowing': false,
     },
@@ -327,15 +397,19 @@ class MockUserProfileRepository implements UserProfileRepository {
     {
       'userId': 'u1',
       'nickname': '你的皮炎有点辣',
-      'avatarUrl': 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=100',
-      'contentType': 'comment',
-      'targetTitle': '评论了你的《川西秘境摄影集》',
+      'avatarUrl':
+          'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=100',
+      'activityType': 'like',
+      'contentType': 'like',
+      'targetTitle': '赞了你的《川西秘境摄影集》',
       'createdAt': '2025-12-21T10:00:00Z',
     },
     {
       'userId': 'u2',
       'nickname': '王小明',
-      'avatarUrl': 'https://images.unsplash.com/photo-1643816831234-e7cb32194e92?w=100',
+      'avatarUrl':
+          'https://images.unsplash.com/photo-1643816831234-e7cb32194e92?w=100',
+      'activityType': 'comment',
       'contentType': 'comment',
       'targetTitle': '评论了你的《摄影器材交流区》',
       'createdAt': '2025-12-20T10:05:00Z',
@@ -343,17 +417,21 @@ class MockUserProfileRepository implements UserProfileRepository {
     {
       'userId': 'u3',
       'nickname': '原价帝吧',
-      'avatarUrl': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
-      'contentType': 'favorite',
-      'targetTitle': '收藏了你的《森林的呼吸》',
+      'avatarUrl':
+          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
+      'activityType': 'share',
+      'contentType': 'share',
+      'targetTitle': '转发了你的《森林的呼吸》',
       'createdAt': '2025-12-20T08:00:00Z',
     },
     {
       'userId': 'u4',
       'nickname': '李想',
-      'avatarUrl': 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100',
-      'contentType': 'favorite',
-      'targetTitle': '收藏了你的《光影的节奏》',
+      'avatarUrl':
+          'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100',
+      'activityType': 'like',
+      'contentType': 'like',
+      'targetTitle': '赞了你的《光影的节奏》',
       'createdAt': '2025-12-19T16:00:00Z',
     },
   ];
@@ -362,7 +440,9 @@ class MockUserProfileRepository implements UserProfileRepository {
     {
       'userId': 'u3',
       'nickname': '原价帝吧',
-      'avatarUrl': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
+      'avatarUrl':
+          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
+      'activityType': 'comment',
       'contentType': 'comment',
       'targetTitle': '你评论了《森林的呼吸》',
       'createdAt': '2025-12-19T14:00:00Z',
@@ -370,10 +450,22 @@ class MockUserProfileRepository implements UserProfileRepository {
     {
       'userId': 'u1',
       'nickname': '你的皮炎有点辣',
-      'avatarUrl': 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=100',
-      'contentType': 'favorite',
-      'targetTitle': '你收藏了《川西秘境摄影集》',
+      'avatarUrl':
+          'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=100',
+      'activityType': 'share',
+      'contentType': 'share',
+      'targetTitle': '你转发了《川西秘境摄影集》',
       'createdAt': '2025-12-18T20:00:00Z',
+    },
+    {
+      'userId': 'u4',
+      'nickname': '李想',
+      'avatarUrl':
+          'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100',
+      'activityType': 'like',
+      'contentType': 'like',
+      'targetTitle': '你赞了《光影的节奏》',
+      'createdAt': '2025-12-17T18:30:00Z',
     },
   ];
 
@@ -381,17 +473,21 @@ class MockUserProfileRepository implements UserProfileRepository {
     {
       'postId': 'p1',
       'title': '光影的节奏',
-      'coverUrl': 'https://images.unsplash.com/photo-1647956450271-2ff54205bebf?q=80&w=400',
+      'coverUrl':
+          'https://images.unsplash.com/photo-1647956450271-2ff54205bebf?q=80&w=400',
       'likerNickname': '你的皮炎有点辣',
-      'likerAvatarUrl': 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=100',
+      'likerAvatarUrl':
+          'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=100',
       'likedAt': '2025-12-21T10:00:00Z',
     },
     {
       'postId': 'p2',
       'title': '森林的呼吸',
-      'coverUrl': 'https://images.unsplash.com/photo-1646034296147-d8ed3aace9a4?q=80&w=400',
+      'coverUrl':
+          'https://images.unsplash.com/photo-1646034296147-d8ed3aace9a4?q=80&w=400',
       'likerNickname': '原价帝吧',
-      'likerAvatarUrl': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
+      'likerAvatarUrl':
+          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
       'likedAt': '2025-12-20T15:00:00Z',
     },
   ];
@@ -400,7 +496,8 @@ class MockUserProfileRepository implements UserProfileRepository {
     {
       'id': 'persona_primary',
       'displayName': '主身份',
-      'avatarUrl': 'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100',
+      'avatarUrl':
+          'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100',
       'isPrimary': true,
       'isPrivate': false,
       'isActive': true,
@@ -408,7 +505,8 @@ class MockUserProfileRepository implements UserProfileRepository {
     {
       'id': 'persona_anon',
       'displayName': '匿名身份',
-      'avatarUrl': 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100',
+      'avatarUrl':
+          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100',
       'isPrimary': false,
       'isPrivate': true,
       'isActive': false,
@@ -418,9 +516,9 @@ class MockUserProfileRepository implements UserProfileRepository {
 
 // ─── Remote 实现（调用云侧 API）───────────────────────────────────────────────
 
-class RemoteUserProfileRepository implements UserProfileRepository {
+class RemoteUserProfileRepository extends UserProfileRepository {
   RemoteUserProfileRepository({http.Client? client})
-      : _client = client ?? http.Client();
+    : _client = client ?? http.Client();
 
   final http.Client _client;
 
@@ -430,19 +528,50 @@ class RemoteUserProfileRepository implements UserProfileRepository {
     ).replace(queryParameters: queryParameters);
   }
 
+  List<Map<String, dynamic>> _decodeItems(http.Response resp) {
+    final data = json.decode(resp.body) as Map<String, dynamic>;
+    return (data['items'] as List? ?? <dynamic>[]).cast<Map<String, dynamic>>();
+  }
+
   // ── 档案 ──────────────────────────────────────────────────────────────────
 
   @override
   Future<Map<String, dynamic>> getUserProfile(String userId) async {
-    final url = _uri(UserApiMetadata.getUserProfilePath(userId: userId));
-    final resp = await _client.get(
-      url,
+    if (userId == 'me') {
+      final meUrl = _uri(UserApiMetadata.getMeProfilePath);
+      final meResp = await _client.get(
+        meUrl,
+        headers: CloudRequestHeaders.forPage(UserRequestPageIds.getMeProfile),
+      );
+      if (meResp.statusCode == 200) {
+        return json.decode(meResp.body) as Map<String, dynamic>;
+      }
+    }
+
+    final subjectUrl = _uri(
+      UserApiMetadata.getSubAccountProfilePath(subAccountId: userId),
+    );
+    final subjectResp = await _client.get(
+      subjectUrl,
+      headers: CloudRequestHeaders.forPage(
+        UserRequestPageIds.getSubAccountProfile,
+      ),
+    );
+    if (subjectResp.statusCode == 200) {
+      return json.decode(subjectResp.body) as Map<String, dynamic>;
+    }
+
+    final legacyUrl = _uri(UserApiMetadata.getUserProfilePath(userId: userId));
+    final legacyResp = await _client.get(
+      legacyUrl,
       headers: CloudRequestHeaders.forPage(UserRequestPageIds.getUserProfile),
     );
-    if (resp.statusCode != 200) {
-      throw Exception('getUserProfile failed: ${resp.statusCode}');
+    if (legacyResp.statusCode != 200) {
+      throw Exception(
+        'getUserProfile failed: subject=${subjectResp.statusCode}, legacy=${legacyResp.statusCode}',
+      );
     }
-    return json.decode(resp.body) as Map<String, dynamic>;
+    return json.decode(legacyResp.body) as Map<String, dynamic>;
   }
 
   @override
@@ -480,7 +609,8 @@ class RemoteUserProfileRepository implements UserProfileRepository {
       throw Exception('listUserPosts failed: ${resp.statusCode}');
     }
     final data = json.decode(resp.body) as Map<String, dynamic>;
-    final items = (data['items'] as List? ?? <dynamic>[]).cast<Map<String, dynamic>>();
+    final items = (data['items'] as List? ?? <dynamic>[])
+        .cast<Map<String, dynamic>>();
     return items.map(postBaseDtoFromMap).toList();
   }
 
@@ -495,7 +625,8 @@ class RemoteUserProfileRepository implements UserProfileRepository {
       throw Exception('listUserWorks failed: ${resp.statusCode}');
     }
     final data = json.decode(resp.body) as Map<String, dynamic>;
-    final items = (data['items'] as List? ?? <dynamic>[]).cast<Map<String, dynamic>>();
+    final items = (data['items'] as List? ?? <dynamic>[])
+        .cast<Map<String, dynamic>>();
     return items.map(_workItemFromMap).toList();
   }
 
@@ -504,13 +635,16 @@ class RemoteUserProfileRepository implements UserProfileRepository {
     final url = _uri(UserApiMetadata.listUserLifeItemsPath(userId: userId));
     final resp = await _client.get(
       url,
-      headers: CloudRequestHeaders.forPage(UserRequestPageIds.listUserLifeItems),
+      headers: CloudRequestHeaders.forPage(
+        UserRequestPageIds.listUserLifeItems,
+      ),
     );
     if (resp.statusCode != 200) {
       throw Exception('listUserLifeItems failed: ${resp.statusCode}');
     }
     final data = json.decode(resp.body) as Map<String, dynamic>;
-    final items = (data['items'] as List? ?? <dynamic>[]).cast<Map<String, dynamic>>();
+    final items = (data['items'] as List? ?? <dynamic>[])
+        .cast<Map<String, dynamic>>();
     return items.map(_lifeItemFromMap).toList();
   }
 
@@ -525,7 +659,9 @@ class RemoteUserProfileRepository implements UserProfileRepository {
     );
     final resp = await _client.get(
       url,
-      headers: CloudRequestHeaders.forPage(CircleRequestPageIds.listUserCircles),
+      headers: CloudRequestHeaders.forPage(
+        CircleRequestPageIds.listUserCircles,
+      ),
     );
     if (resp.statusCode != 200) {
       throw Exception('listUserCircles failed: ${resp.statusCode}');
@@ -549,7 +685,9 @@ class RemoteUserProfileRepository implements UserProfileRepository {
 
   @override
   Future<void> followUser(String targetUserId) async {
-    final url = _uri(UserApiMetadata.followUserPath(targetUserId: targetUserId));
+    final url = _uri(
+      UserApiMetadata.followUserPath(targetUserId: targetUserId),
+    );
     final resp = await _client.post(
       url,
       headers: CloudRequestHeaders.forPage(UserRequestPageIds.followUser),
@@ -661,9 +799,27 @@ class RemoteUserProfileRepository implements UserProfileRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    throw UnimplementedError(
-      'listUserInteractionReceived: 云侧 API 未就绪，见 design.md 搁置任务',
+    final params = <String, String>{'limit': '$limit'};
+    if (cursor != null) params['cursor'] = cursor;
+    final url = _uri(
+      ContentApiMetadata.listProfileInteractionActivitiesReceivedPath(
+        profileSubjectId: userId,
+      ),
+      queryParameters: params,
     );
+    final resp = await _client.get(
+      url,
+      headers: CloudRequestHeaders.forPage(
+        ContentRequestPageIds.listProfileInteractionActivitiesReceived,
+      ),
+    );
+    if (resp.statusCode == 200) {
+      return _decodeItems(resp);
+    }
+    if (resp.statusCode == 204 || resp.statusCode == 404 || resp.statusCode == 501) {
+      return <Map<String, dynamic>>[];
+    }
+    throw Exception('listUserInteractionReceived failed: ${resp.statusCode}');
   }
 
   @override
@@ -672,9 +828,27 @@ class RemoteUserProfileRepository implements UserProfileRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    throw UnimplementedError(
-      'listUserInteractionSent: 云侧 API 未就绪，见 design.md 搁置任务',
+    final params = <String, String>{'limit': '$limit'};
+    if (cursor != null) params['cursor'] = cursor;
+    final url = _uri(
+      ContentApiMetadata.listProfileInteractionActivitiesSentPath(
+        profileSubjectId: userId,
+      ),
+      queryParameters: params,
     );
+    final resp = await _client.get(
+      url,
+      headers: CloudRequestHeaders.forPage(
+        ContentRequestPageIds.listProfileInteractionActivitiesSent,
+      ),
+    );
+    if (resp.statusCode == 200) {
+      return _decodeItems(resp);
+    }
+    if (resp.statusCode == 204 || resp.statusCode == 404 || resp.statusCode == 501) {
+      return <Map<String, dynamic>>[];
+    }
+    throw Exception('listUserInteractionSent failed: ${resp.statusCode}');
   }
 
   // ── 分身 ──────────────────────────────────────────────────────────────────
@@ -711,7 +885,10 @@ class RemoteUserProfileRepository implements UserProfileRepository {
   }
 
   @override
-  Future<void> updatePersona(String personaId, Map<String, dynamic> data) async {
+  Future<void> updatePersona(
+    String personaId,
+    Map<String, dynamic> data,
+  ) async {
     final url = _uri(UserApiMetadata.updatePersonaPath(personaId: personaId));
     final resp = await _client.patch(
       url,
@@ -740,9 +917,7 @@ class RemoteUserProfileRepository implements UserProfileRepository {
 
   @override
   Future<void> activatePersona(String personaId) async {
-    final url = _uri(
-      UserApiMetadata.activatePersonaPath(personaId: personaId),
-    );
+    final url = _uri(UserApiMetadata.activatePersonaPath(personaId: personaId));
     final resp = await _client.post(
       url,
       headers: CloudRequestHeaders.forPage(UserRequestPageIds.activatePersona),

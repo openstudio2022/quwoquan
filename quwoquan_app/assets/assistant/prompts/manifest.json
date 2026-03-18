@@ -29,22 +29,6 @@
       "contentPath": "assets/assistant/prompts/global/phase.output_contract.ask_user.md"
     },
     {
-      "metaPath": "assets/assistant/prompts/global/stack.global_system.meta.json",
-      "contentPath": "assets/assistant/prompts/global/stack.global_system.md"
-    },
-    {
-      "metaPath": "assets/assistant/prompts/global/stack.runtime_policy.meta.json",
-      "contentPath": "assets/assistant/prompts/global/stack.runtime_policy.md"
-    },
-    {
-      "metaPath": "assets/assistant/prompts/global/stack.recovery_policy.meta.json",
-      "contentPath": "assets/assistant/prompts/global/stack.recovery_policy.md"
-    },
-    {
-      "metaPath": "assets/assistant/prompts/global/stack.output_contract.meta.json",
-      "contentPath": "assets/assistant/prompts/global/stack.output_contract.md"
-    },
-    {
       "metaPath": "assets/assistant/prompts/global/planner.global_plan.meta.json",
       "contentPath": "assets/assistant/prompts/global/planner.global_plan.md"
     },

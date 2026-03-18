@@ -4,7 +4,8 @@ import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:quwoquan_app/assistant/application/capability_gateway.dart';
+import 'package:quwoquan_app/assistant/application/assistant_run_stream.dart';
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
 import 'package:quwoquan_app/assistant/orchestration/orchestration.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
@@ -12,21 +13,18 @@ import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/assistant_answer_toolbar.dart';
+import 'package:quwoquan_app/ui/chat/widgets/message/assistant_journey_view_model.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/assistant_process_drawer.dart';
-import 'package:quwoquan_app/ui/chat/widgets/message/assistant_process_projection.dart';
+import 'package:quwoquan_app/ui/chat/widgets/message/assistant_turn_message_resolver.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/regenerate_options_popup.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/voice_message_bubble.dart';
 
 bool _containsInternalAssistantText(String text) {
   final normalized = text.trim();
   if (normalized.isEmpty) return false;
-  return normalized.contains('assistant_turn') ||
-      normalized.contains('contractVersion') ||
-      normalized.contains('queryTasks') ||
-      normalized.contains('machineEnvelope') ||
-      normalized.contains('runArtifacts') ||
-      normalized.contains('<tool_call>') ||
-      normalized.contains('tool_call');
+  return AssistantDisplayTextResolver.containsInternalAssistantProtocolFragment(
+    normalized,
+  );
 }
 
 String _sanitizeAssistantTimelineText(String text) {
@@ -39,15 +37,17 @@ String _sanitizeAssistantTimelineText(String text) {
 
 String _resolveAssistantVisibleAnswerText({
   required Map<String, dynamic> message,
-  required String gatedStreamAnswer,
+  required String previewAnswer,
   required String content,
+  required bool isStreaming,
 }) {
-  final candidates = <String>[
-    gatedStreamAnswer,
-    (message['displayMarkdown'] as String?) ?? '',
-    (message['displayPlainText'] as String?) ?? '',
-    content,
-  ];
+  final candidates = isStreaming
+      ? <String>[previewAnswer]
+      : <String>[
+          (message['displayMarkdown'] as String?) ?? '',
+          (message['displayPlainText'] as String?) ?? '',
+          content,
+        ];
   for (final candidate in candidates) {
     final sanitized = _sanitizeAssistantTimelineText(candidate);
     if (sanitized.isNotEmpty) return sanitized;
@@ -93,11 +93,9 @@ class ChatMessageBubble extends StatelessWidget {
     this.useFullWidth = false,
     this.renderSelfTextWithoutBubble = false,
     this.runningStatusLabel,
-    this.processState,
+    this.journeyViewModel,
     this.answerGateOpen = true,
     this.isAssistantRunning = false,
-    this.streamingThinkingText = '',
-    this.flowEvents = const <ExplainableFlowEvent>[],
     this.onRegenerateOptionSelected,
     this.receiptEnabled = false,
     this.memberCount = 2,
@@ -126,8 +124,8 @@ class ChatMessageBubble extends StatelessWidget {
   /// 当前轮助手回复的顶部状态文案（如「小趣正在规划与执行中」），非 null 时在气泡顶部展示
   final String? runningStatusLabel;
 
-  /// Unified process state driving the single-drawer UI.
-  final AssistantProcessState? processState;
+  /// Canonical journey projection driving the assistant drawer.
+  final AssistantJourneyViewModel? journeyViewModel;
 
   /// Whether the answer gate is open (aggregate/merge phase completed).
   /// When false and assistant is running, the answer area is suppressed.
@@ -135,12 +133,6 @@ class ChatMessageBubble extends StatelessWidget {
 
   /// Whether the assistant is currently running (drives drawer animation).
   final bool isAssistantRunning;
-
-  /// Accumulated model thinking text for the drawer body.
-  final String streamingThinkingText;
-
-  /// Flow events for the new explainable process drawer (replaces legacy processState when non-empty).
-  final List<ExplainableFlowEvent> flowEvents;
 
   /// Callback from the regenerate options popup.
   final void Function(RegenerateOption option)? onRegenerateOptionSelected;
@@ -185,15 +177,16 @@ class ChatMessageBubble extends StatelessWidget {
     final isAssistantMessage =
         (message['senderId'] as String?) ==
         AppConceptConstants.assistantSenderId;
-    final gatedStreamAnswer =
-        isAssistantMessage && isAssistantRunning && !answerGateOpen
-        ? ''
-        : streamFinalAnswer;
+    final previewAnswer =
+        isAssistantMessage && isAssistantRunning && answerGateOpen
+        ? streamFinalAnswer
+        : '';
     final answerText = isAssistantMessage
         ? _resolveAssistantVisibleAnswerText(
             message: message,
-            gatedStreamAnswer: gatedStreamAnswer,
+            previewAnswer: previewAnswer,
             content: content,
+            isStreaming: isAssistantRunning,
           )
         : content;
     final renderPlainSelfText =
@@ -201,9 +194,18 @@ class ChatMessageBubble extends StatelessWidget {
         isRight &&
         !isAssistantMessage &&
         type == 'text';
-    final effectiveFlowEvents = flowEvents.isNotEmpty
-        ? flowEvents
-        : buildExplainableFlowFromMessage(message);
+    final resolvedJourneyViewModel = isAssistantMessage
+        ? (journeyViewModel ??
+              buildAssistantJourneyViewModel(
+                journey: resolveAssistantJourneyFromMessage(message),
+                isRunning: isAssistantRunning,
+                usageStats:
+                    (message['uiUsageStats'] as Map?)?.cast<String, dynamic>() ??
+                    const <String, dynamic>{},
+                elapsedMs:
+                    ((message['assistantElapsedMs'] as num?)?.toInt() ?? 0),
+              ))
+        : const AssistantJourneyViewModel();
 
     Widget contentWidget;
     if (type == 'task_card') {
@@ -375,38 +377,24 @@ class ChatMessageBubble extends StatelessWidget {
       );
     }
 
-    final phaseTimeline =
-        (message['uiPhaseTimelineV1'] as List?)
-            ?.whereType<Map>()
-            .map((item) => item.cast<String, dynamic>())
-            .toList(growable: false) ??
-        const <Map<String, dynamic>>[];
-    final hideAnswerBubbleWhileStreamingProcess =
-        isAssistantMessage &&
-        phaseTimeline.isNotEmpty &&
-        answerText.trim().isEmpty;
-    final showStreamingAnswerPhaseHint =
+    final showProcessDrawer =
+        isAssistantMessage && resolvedJourneyViewModel.hasVisibleContent;
+    final showAnswerPreview =
         isAssistantMessage &&
         isAssistantRunning &&
-        !hideAnswerBubbleWhileStreamingProcess &&
-        answerText.trim().isNotEmpty &&
-        (runningStatusLabel?.trim().isNotEmpty ?? false);
-    final followupPrompt =
-        (((message['uiAnswer'] as Map?)?['followupPrompt']) as String?)
-            ?.trim() ??
-        '';
-    final usageStats =
-        ((message['uiUsageStats'] as Map?) ??
-                (message['uiUsageStatsV1'] as Map?))
-            ?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final actionHints =
-        ((((message['uiAnswer'] as Map?)?['actionHints']) as List?)
-            ?.whereType<String>()
-            .map((item) => item.trim())
-            .where((item) => item.isNotEmpty)
-            .toList(growable: false)) ??
-        const <String>[];
+        answerGateOpen &&
+        answerText.trim().isNotEmpty;
+    final showFinalAnswer =
+        isAssistantMessage &&
+        !isAssistantRunning &&
+        answerText.trim().isNotEmpty;
+    final showAnswerBubble =
+        !isAssistantMessage ||
+        showAnswerPreview ||
+        showFinalAnswer ||
+        (!showProcessDrawer && answerText.trim().isNotEmpty);
+    final followupPrompt = resolveAssistantFollowupPrompt(message);
+    final actionHints = resolveAssistantActionHints(message);
     Widget? avatarWidget;
     if (!hideAvatarAndName) {
       final chatAvatarSize = AppSpacing.avatarUserMd;
@@ -479,29 +467,10 @@ class ChatMessageBubble extends StatelessWidget {
                         ),
                       ),
                     ),
-                  if (isAssistantMessage &&
-                      (processState != null || effectiveFlowEvents.isNotEmpty))
+                  if (showProcessDrawer)
                     AssistantProcessDrawer(
-                      processState:
-                          processState ??
-                          _rebuildProcessStateFromMessage(message),
-                      isRunning: isAssistantRunning,
+                      viewModel: resolvedJourneyViewModel,
                       initiallyExpanded: isAssistantRunning,
-                      flowEvents: effectiveFlowEvents,
-                      streamingThinkingText: streamingThinkingText,
-                      onReferenceUrlTap: onReferenceTap != null
-                          ? (url) =>
-                                onReferenceTap!(<String, dynamic>{'url': url})
-                          : null,
-                    )
-                  else if (isAssistantMessage &&
-                      _hasPersistedProcessBlocks(message))
-                    AssistantProcessDrawer(
-                      processState: _rebuildProcessStateFromMessage(message),
-                      isRunning: false,
-                      initiallyExpanded: false,
-                      streamingThinkingText:
-                          (message['processThinkingText'] as String?) ?? '',
                       onReferenceUrlTap: onReferenceTap != null
                           ? (url) =>
                                 onReferenceTap!(<String, dynamic>{'url': url})
@@ -510,17 +479,10 @@ class ChatMessageBubble extends StatelessWidget {
                   else if (runningStatusLabel != null)
                     _RunningStatusRow(
                       label: runningStatusLabel!,
+                      stageId: resolvedJourneyViewModel.activeStageId,
                       textColor: textColor,
-                    )
-                  else if (phaseTimeline.isNotEmpty) ...[
-                    SizedBox(height: AppSpacing.xs),
-                    _AssistantPhaseTimelineCard(
-                      phases: phaseTimeline,
-                      usageStats: usageStats,
-                      onReferenceTap: onReferenceTap,
                     ),
-                  ],
-                  if (!hideAnswerBubbleWhileStreamingProcess)
+                  if (showAnswerBubble)
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.end,
@@ -548,14 +510,6 @@ class ChatMessageBubble extends StatelessWidget {
                           ),
                         Flexible(fit: FlexFit.loose, child: contentWidget),
                       ],
-                    ),
-                  if (showStreamingAnswerPhaseHint)
-                    Padding(
-                      padding: EdgeInsets.only(top: AppSpacing.xs),
-                      child: _RunningStatusRow(
-                        label: runningStatusLabel!,
-                        textColor: textColor,
-                      ),
                     ),
                   if (followupPrompt.isNotEmpty || actionHints.isNotEmpty) ...[
                     SizedBox(height: AppSpacing.xs),
@@ -773,241 +727,17 @@ class ChatMessageBubble extends StatelessWidget {
   }
 }
 
-bool _hasPersistedProcessBlocks(Map<String, dynamic> message) {
-  final rawBlocks = (message['uiProcessContentBlocks'] as List?) ?? const [];
-  final rawTimeline =
-      (message['uiProcessTimeline'] as List?) ??
-      (message['uiProcessTimelineV2'] as List?) ??
-      const [];
-  final rawFlow = (message['uiExplainableFlow'] as List?) ?? const [];
-  final rawJournal =
-      (((message['runArtifacts'] as Map?)?['processJournal'] as List?) ??
-          (message['processJournalV1'] as List?)) ??
-      const [];
-  final thinkingText = (message['processThinkingText'] as String?) ?? '';
-  return rawJournal.isNotEmpty ||
-      rawFlow.isNotEmpty ||
-      rawBlocks.isNotEmpty ||
-      rawTimeline.isNotEmpty ||
-      thinkingText.isNotEmpty;
-}
-
-AssistantProcessState _rebuildProcessStateFromMessage(
-  Map<String, dynamic> message,
-) {
-  final persistedJournal = _processJournalFromMessage(message);
-  if (persistedJournal.isNotEmpty) {
-    final usageStats =
-        ((message['uiUsageStats'] as Map?) ??
-                (message['uiUsageStatsV1'] as Map?))
-            ?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final contentBlocks = _processBlocksFromJournalSnapshot(persistedJournal);
-    return AssistantProcessState(
-      stage: ProcessStage.completed,
-      stageLabel: _stageLabelFromJournalSnapshot(persistedJournal),
-      isStreaming: false,
-      contentBlocks: contentBlocks,
-      usageStats: usageStats,
-    );
-  }
-  final rawBlocks = (() {
-    final persisted =
-        (message['uiProcessContentBlocks'] as List?)?.whereType<Map>().toList(
-          growable: false,
-        ) ??
-        const <Map>[];
-    if (persisted.isNotEmpty) return persisted;
-    final timeline =
-        ((message['uiProcessTimeline'] as List?) ??
-                (message['uiProcessTimelineV2'] as List?))
-            ?.whereType<Map>()
-            .toList(growable: false) ??
-        const <Map>[];
-    return timeline
-        .map((item) => item.cast<String, dynamic>())
-        .where(
-          (item) => ((item['summary'] as String?)?.trim().isNotEmpty ?? false),
-        )
-        .map((item) {
-          final refs =
-              (item['references'] as List?)?.whereType<Map>().toList(
-                growable: false,
-              ) ??
-              const <Map>[];
-          return <String, dynamic>{
-            'type': refs.isNotEmpty ? 'analysisSummary' : 'text',
-            'text': _sanitizeAssistantTimelineText(
-              (item['summary'] as String?)?.trim() ?? '',
-            ),
-            'references': refs,
-          };
-        })
-        .where((item) => ((item['text'] as String?)?.isNotEmpty ?? false))
-        .toList(growable: false);
-  })();
-  final contentBlocks = <ProcessContentBlock>[];
-  for (final raw in rawBlocks) {
-    final typeName = (raw['type'] as String?) ?? 'text';
-    final text = _sanitizeAssistantTimelineText((raw['text'] as String?) ?? '');
-    if (text.isEmpty) {
-      continue;
-    }
-    final rawRefs =
-        (raw['references'] as List?)?.whereType<Map>() ?? const <Map>[];
-    final refs = rawRefs
-        .map(
-          (r) => ProcessReference(
-            title: (r['title'] as String?) ?? '',
-            url: (r['url'] as String?) ?? '',
-            source: (r['source'] as String?) ?? '',
-          ),
-        )
-        .toList(growable: false);
-    ProcessContentBlockType blockType;
-    switch (typeName) {
-      case 'searchSummary':
-        blockType = ProcessContentBlockType.searchSummary;
-      case 'analysisSummary':
-        blockType = ProcessContentBlockType.analysisSummary;
-      default:
-        blockType = ProcessContentBlockType.text;
-    }
-    contentBlocks.add(
-      ProcessContentBlock(type: blockType, text: text, references: refs),
-    );
-  }
-  final usageStats =
-      ((message['uiUsageStats'] as Map?) ?? (message['uiUsageStatsV1'] as Map?))
-          ?.cast<String, dynamic>() ??
-      const <String, dynamic>{};
-  final timeline =
-      (message['uiProcessTimeline'] as List?) ??
-      (message['uiProcessTimelineV2'] as List?) ??
-      const [];
-  final stageLabel = timeline.isNotEmpty
-      ? (_sanitizeAssistantTimelineText(
-              (((timeline.last as Map)['summary'] as String?) ?? ''),
-            ).isNotEmpty)
-            ? _sanitizeAssistantTimelineText(
-                ((timeline.last as Map)['summary'] as String?) ?? '',
-              )
-            : UITextConstants.assistantPhaseCompleted
-      : UITextConstants.assistantPhaseCompleted;
-  return AssistantProcessState(
-    stage: ProcessStage.completed,
-    stageLabel: stageLabel,
-    isStreaming: false,
-    contentBlocks: contentBlocks,
-    usageStats: usageStats,
-  );
-}
-
-List<ProcessJournalEvent> _processJournalFromMessage(
-  Map<String, dynamic> message,
-) {
-  final raw =
-      ((((message['runArtifacts'] as Map?)?['processJournal'] as List?) ??
-              (message['processJournalV1'] as List?))
-          ?.whereType<Map>()
-          .toList(growable: false) ??
-      const <Map>[]);
-  final normalized = <ProcessJournalEvent>[];
-  final indexById = <String, int>{};
-  for (final item in raw) {
-    final event = ProcessJournalEvent.fromJson(item.cast<String, dynamic>());
-    if (event.eventId.isEmpty) continue;
-    final existing = indexById[event.eventId];
-    if (existing == null) {
-      indexById[event.eventId] = normalized.length;
-      normalized.add(event);
-    } else if (_isLegacyProjectionEventId(event.eventId)) {
-      normalized[existing] = event;
-    }
-  }
-  return normalized;
-}
-
-bool _isLegacyProjectionEventId(String eventId) {
-  return eventId.startsWith('live_cursor::') ||
-      eventId.startsWith('source_update::') ||
-      eventId.startsWith('stage_set::') ||
-      eventId == 'completed.final';
-}
-
-List<ProcessContentBlock> _processBlocksFromJournalSnapshot(
-  List<ProcessJournalEvent> journal,
-) {
-  final snapshot = ProcessJournalBus.toDisplaySnapshot(journal);
-  final blocks = <ProcessContentBlock>[];
-  for (final item in snapshot) {
-    switch (item.type) {
-      case ProcessJournalEventType.narrativeCommit:
-      case ProcessJournalEventType.liveCursor:
-        final text = _sanitizeAssistantTimelineText(item.displayMessage);
-        if (text.isEmpty) continue;
-        blocks.add(
-          ProcessContentBlock(type: ProcessContentBlockType.text, text: text),
-        );
-        break;
-      case ProcessJournalEventType.sourceUpdate:
-        final refs = item.references
-            .map(
-              (ref) => ProcessReference(
-                title: ref.title,
-                url: ref.url,
-                source: ref.source,
-              ),
-            )
-            .where((ref) => ref.title.isNotEmpty && ref.url.isNotEmpty)
-            .toList(growable: false);
-        final summary = _sanitizeAssistantTimelineText(item.displayMessage);
-        if (summary.isEmpty && refs.isEmpty) continue;
-        blocks.add(
-          ProcessContentBlock(
-            type: item.stage == 'searching'
-                ? ProcessContentBlockType.searchSummary
-                : ProcessContentBlockType.analysisSummary,
-            text: summary.isNotEmpty
-                ? summary
-                : item.stage == 'searching'
-                ? '已核对参考资料'
-                : '已整理分析依据',
-            references: refs,
-          ),
-        );
-        break;
-      case ProcessJournalEventType.stageSet:
-      case ProcessJournalEventType.answerDelta:
-      case ProcessJournalEventType.completed:
-        continue;
-    }
-  }
-  return blocks;
-}
-
-String _stageLabelFromJournalSnapshot(List<ProcessJournalEvent> journal) {
-  final snapshot = ProcessJournalBus.toDisplaySnapshot(journal);
-  for (var i = snapshot.length - 1; i >= 0; i--) {
-    final event = snapshot[i];
-    final message = event.displayMessage;
-    final sanitized = _sanitizeAssistantTimelineText(message);
-    if (sanitized.isEmpty) continue;
-    if (event.type == ProcessJournalEventType.narrativeCommit ||
-        event.type == ProcessJournalEventType.liveCursor ||
-        event.type == ProcessJournalEventType.sourceUpdate) {
-      return sanitized;
-    }
-  }
-  return UITextConstants.assistantPhaseCompleted;
-}
-
 /// 助手当前轮回复顶部的状态行：按阶段展示不同动效 + 文案 + 可选引用数
 class _RunningStatusRow extends StatefulWidget {
-  const _RunningStatusRow({required this.label, required this.textColor});
+  const _RunningStatusRow({
+    required this.label,
+    required this.textColor,
+    this.stageId = JourneyStageId.unknown,
+  });
 
   final String label;
   final Color textColor;
+  final JourneyStageId stageId;
 
   @override
   State<_RunningStatusRow> createState() => _RunningStatusRowState();
@@ -1041,7 +771,7 @@ class _RunningStatusRowState extends State<_RunningStatusRow>
         mainAxisSize: MainAxisSize.min,
         children: [
           _PhaseActivityIndicator(
-            phaseLabel: label,
+            stageId: widget.stageId,
             animation: _controller,
             color: AppColors.primaryColor,
           ),
@@ -1061,31 +791,27 @@ class _RunningStatusRowState extends State<_RunningStatusRow>
 
 class _PhaseActivityIndicator extends StatelessWidget {
   const _PhaseActivityIndicator({
-    required this.phaseLabel,
+    required this.stageId,
     required this.animation,
     required this.color,
   });
 
-  final String phaseLabel;
+  final JourneyStageId stageId;
   final Animation<double> animation;
   final Color color;
 
   @override
   Widget build(BuildContext context) {
-    if (phaseLabel.contains(UITextConstants.assistantPhaseSearching) ||
-        phaseLabel.contains('搜索') ||
-        phaseLabel.contains('查')) {
-      return _SearchingFlowIndicator(animation: animation, color: color);
+    switch (stageId) {
+      case JourneyStageId.search:
+        return _SearchingFlowIndicator(animation: animation, color: color);
+      case JourneyStageId.analyze:
+      case JourneyStageId.verify:
+      case JourneyStageId.answer:
+        return _ThinkingPetalIndicator(animation: animation, color: color);
+      case JourneyStageId.unknown:
+        return _WaitingTwistIndicator(animation: animation, color: color);
     }
-    if (phaseLabel.contains(UITextConstants.assistantPhaseThinking) ||
-        phaseLabel.contains(UITextConstants.assistantPhaseAnalyzing) ||
-        phaseLabel.contains(UITextConstants.assistantPhaseAnswering)) {
-      return _ThinkingPetalIndicator(animation: animation, color: color);
-    }
-    if (phaseLabel.contains(UITextConstants.assistantPhaseAssessing)) {
-      return _ThinkingPetalIndicator(animation: animation, color: color);
-    }
-    return _WaitingTwistIndicator(animation: animation, color: color);
   }
 }
 
@@ -1505,266 +1231,6 @@ class _MarkdownSegment {
       return value.toString();
     }
     return jsonEncode(value);
-  }
-}
-
-class _AssistantPhaseTimelineCard extends StatefulWidget {
-  const _AssistantPhaseTimelineCard({
-    required this.phases,
-    required this.usageStats,
-    this.onReferenceTap,
-  });
-
-  final List<Map<String, dynamic>> phases;
-  final Map<String, dynamic> usageStats;
-  final void Function(Map<String, dynamic> reference)? onReferenceTap;
-
-  @override
-  State<_AssistantPhaseTimelineCard> createState() =>
-      _AssistantPhaseTimelineCardState();
-}
-
-class _AssistantPhaseTimelineCardState
-    extends State<_AssistantPhaseTimelineCard> {
-  final Set<String> _expandedPhaseIds = <String>{};
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(AppSpacing.containerSm),
-      decoration: BoxDecoration(
-        color: AppColors.primaryColor.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ...widget.phases.map((phase) {
-            final phaseId =
-                (phase['phaseId'] as String?)?.trim().isNotEmpty == true
-                ? (phase['phaseId'] as String).trim()
-                : 'phase_${phase.hashCode}';
-            final expanded = _expandedPhaseIds.contains(phaseId);
-            final title =
-                ((phase['title'] as String?)?.trim().isNotEmpty ?? false)
-                ? (phase['title'] as String).trim()
-                : '过程阶段';
-            final summary = (phase['summary'] as String?)?.trim() ?? '';
-            final status = (phase['status'] as String?)?.trim() ?? '';
-            final details =
-                (phase['details'] as List?)
-                    ?.map(
-                      (item) => _sanitizeAssistantTimelineText(item.toString()),
-                    )
-                    .where((item) => item.isNotEmpty)
-                    .toList(growable: false) ??
-                const <String>[];
-            final safeSummary = _sanitizeAssistantTimelineText(summary);
-            final safeTitle = _sanitizeAssistantTimelineText(title);
-            if (safeSummary.isEmpty && safeTitle.isEmpty && details.isEmpty) {
-              return const SizedBox.shrink();
-            }
-            final references =
-                (phase['references'] as List?)
-                    ?.whereType<Map>()
-                    .map((item) => item.cast<String, dynamic>())
-                    .toList(growable: false) ??
-                const <Map<String, dynamic>>[];
-            return Padding(
-              padding: EdgeInsets.only(bottom: AppSpacing.xs),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.85),
-                  borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-                ),
-                child: Column(
-                  children: [
-                    InkWell(
-                      onTap: () {
-                        setState(() {
-                          if (expanded) {
-                            _expandedPhaseIds.remove(phaseId);
-                          } else {
-                            _expandedPhaseIds.add(phaseId);
-                          }
-                        });
-                      },
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: AppSpacing.containerSm,
-                          vertical: AppSpacing.xs,
-                        ),
-                        child: Row(
-                          children: [
-                            _phaseStatusDot(status),
-                            SizedBox(width: AppSpacing.xs),
-                            Expanded(
-                              child: Text(
-                                safeSummary.isEmpty
-                                    ? safeTitle
-                                    : '${safeTitle.isEmpty ? '过程阶段' : safeTitle}：$safeSummary',
-                                style: TextStyle(
-                                  fontSize: AppTypography.sm,
-                                  color: AppColors.primaryColor.withValues(
-                                    alpha: 0.9,
-                                  ),
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                            Icon(
-                              expanded ? Icons.expand_less : Icons.expand_more,
-                              size: AppSpacing.iconSmall,
-                              color: AppColors.primaryColor,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    if (expanded) ...[
-                      if (details.isNotEmpty)
-                        Padding(
-                          padding: EdgeInsets.fromLTRB(
-                            AppSpacing.containerSm,
-                            0,
-                            AppSpacing.containerSm,
-                            AppSpacing.xs,
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: details
-                                .map(
-                                  (line) => Padding(
-                                    padding: EdgeInsets.only(
-                                      bottom: AppSpacing.xs / 2,
-                                    ),
-                                    child: Text(
-                                      '• $line',
-                                      style: TextStyle(
-                                        fontSize: AppTypography.sm,
-                                        color: AppColors.primaryColor
-                                            .withValues(alpha: 0.85),
-                                      ),
-                                    ),
-                                  ),
-                                )
-                                .toList(growable: false),
-                          ),
-                        ),
-                      if (references.isNotEmpty)
-                        Padding(
-                          padding: EdgeInsets.fromLTRB(
-                            AppSpacing.containerSm,
-                            0,
-                            AppSpacing.containerSm,
-                            AppSpacing.xs,
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: references
-                                .map(
-                                  (ref) => InkWell(
-                                    onTap: () =>
-                                        widget.onReferenceTap?.call(ref),
-                                    child: Padding(
-                                      padding: EdgeInsets.only(
-                                        bottom: AppSpacing.xs / 2,
-                                      ),
-                                      child: Text(
-                                        '来源：${(ref['title'] ?? '').toString()}',
-                                        style: TextStyle(
-                                          fontSize: AppTypography.sm,
-                                          color: AppColors.primaryColor,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                )
-                                .toList(growable: false),
-                          ),
-                        ),
-                    ],
-                  ],
-                ),
-              ),
-            );
-          }),
-          if (widget.usageStats.isNotEmpty) ...[
-            SizedBox(height: AppSpacing.xs),
-            Text(
-              _usageLabel(widget.usageStats),
-              style: TextStyle(
-                fontSize: AppTypography.sm,
-                color: AppColors.primaryColor.withValues(alpha: 0.8),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _phaseStatusDot(String status) {
-    if (status == 'completed') {
-      return Icon(
-        Icons.check_circle,
-        size: AppSpacing.seven + 2,
-        color: AppColors.primaryColor.withValues(alpha: 0.7),
-      );
-    }
-    if (status == 'warning') {
-      return Icon(
-        Icons.info_outline,
-        size: AppSpacing.seven + 2,
-        color: Colors.orange.withValues(alpha: 0.8),
-      );
-    }
-    final color = status == 'running'
-        ? AppColors.primaryColor
-        : AppColors.primaryColor.withValues(alpha: 0.45);
-    return Container(
-      width: AppSpacing.seven,
-      height: AppSpacing.seven,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-    );
-  }
-
-  String _usageLabel(Map<String, dynamic> usage) {
-    final runCalls =
-        ((usage['runModelCallCount'] as num?)?.toInt() ??
-        (usage['modelCallCount'] as num?)?.toInt() ??
-        0);
-    final runTotal =
-        ((usage['runTotalTokens'] as num?)?.toInt() ??
-        (usage['totalTokens'] as num?)?.toInt() ??
-        0);
-    final calls =
-        ((usage['cumulativeModelCallCount'] as num?)?.toInt() ?? runCalls);
-    final total =
-        ((usage['cumulativeTotalTokens'] as num?)?.toInt() ?? runTotal);
-    final max =
-        ((usage['cumulativeMaxTokensPerCall'] as num?)?.toInt() ??
-        (usage['maxTokensPerCall'] as num?)?.toInt() ??
-        0);
-    final parts = <String>[];
-    if (runCalls > 0) {
-      parts.add('本轮模型调用 $runCalls 次');
-    }
-    if (runTotal > 0) {
-      parts.add('本轮 Token $runTotal');
-    }
-    if (calls > 0 && calls != runCalls) {
-      parts.add('累计调用 $calls 次');
-    }
-    if (total > 0 && total != runTotal) {
-      parts.add('累计 Token $total');
-    }
-    if (max > 0) {
-      parts.add('单次最大 $max');
-    }
-    return parts.join('  ·  ');
   }
 }
 

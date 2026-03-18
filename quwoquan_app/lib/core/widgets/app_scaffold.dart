@@ -84,6 +84,6 @@ class AppNavigationBar extends StatelessWidget implements ObstructingPreferredSi
   bool shouldFullyObstruct(BuildContext context) {
     final backgroundColor =
         this.backgroundColor ?? CupertinoTheme.of(context).barBackgroundColor;
-    return backgroundColor.alpha == 0xFF;
+    return (backgroundColor.a * 255.0).round().clamp(0, 255) == 0xFF;
   }
 }

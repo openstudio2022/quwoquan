@@ -1,5 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 
 /// Circular FAB with a progress ring and down-arrow, shown during streaming
 /// when content has scrolled past the viewport bottom.
@@ -23,10 +25,10 @@ class StreamingScrollFab extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final bgColor = isDark ? const Color(0xFF2C2C2E) : Colors.white;
+    final bgColor = isDark ? AppColors.iosSystemSurfaceDark : Colors.white;
     final accentColor = isDark
-        ? const Color(0xFF64D2FF)
-        : const Color(0xFF007AFF);
+        ? AppColors.iosAccentDark
+        : AppColors.iosAccentLight;
 
     return GestureDetector(
       onTap: onTap,
@@ -61,7 +63,7 @@ class StreamingScrollFab extends StatelessWidget {
             ),
             Icon(
               CupertinoIcons.chevron_down,
-              size: 16,
+              size: AppSpacing.iconSmall,
               color: accentColor,
             ),
           ],

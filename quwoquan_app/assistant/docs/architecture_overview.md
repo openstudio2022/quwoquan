@@ -152,18 +152,18 @@ LLM 从以下 15 个技能中自主选择，每个技能一行 `description` 是
 LLM 每次调用的 system prompt 由以下层叠加组装（`llm_provider._resolvePlannerPrompt()`）：
 
 ```
-L1  stack.global_system.md      ← 身份、安全红线（固定层，几乎不变）
-L2  stack.runtime_policy.md     ← 本轮预算/工具权限/执行约束（半固定）
-L3  stack.recovery_policy.md    ← 失败恢复与降级策略
-L4  stack.output_contract.md    ← 输出格式契约（assistant_turn）
-L5  stack.global_policy.md      ← 全局政策追加
+L1  stack.identity.md           ← 身份与使命（固定层）
+L2  stack.safety.md             ← 安全、降级与危机边界
+L3  stack.persona.md            ← 全局人格与语气基线
+L4  stack.tool_policy.md        ← 工具权限与执行约束
+L5  phase.output_contract.*.md  ← 分阶段输出契约
 
 阶段模板（动态层，每轮变化）：
   ├── planner.global_plan.md         ← Planner 阶段：注入 {{skillCatalog}} + {{contextEnvelope}}
   ├── synthesizer.final_answer.md    ← Synthesis 阶段：生成用户可读答案
   └── synthesizer.multi_skill_fusion.md  ← 多技能融合（跨域时）
 
-额外注入（agent_loop 倒序 insert）：
+运行时附加上下文注入（phase owner 组装）：
   ├── <memory_recall>recalled texts</memory_recall>
   ├── <session_history>summarized history</session_history>
   └── <capability_catalog>tool descriptions</capability_catalog>
@@ -203,13 +203,13 @@ L5  stack.global_policy.md      ← 全局政策追加
 |---|---|
 | 端侧公开 Provider 入口 | `lib/assistant/application/assistant_providers.dart` |
 | 端侧公开 Gateway 入口 | `lib/assistant/application/assistant_gateway.dart` |
-| 端侧公开能力编排入口 | `lib/assistant/application/capability_gateway.dart` |
+| 端侧公开能力编排入口 | `lib/assistant/application/local_assistant_entry.dart` / `lib/assistant/application/remote_assistant_entry.dart` |
 | 端侧 edge assistant 新入口 | `lib/assistant/application/assistant_edge_service.dart` |
 | 端侧公开 runtime | `lib/assistant/runtime/assistant_runtime.dart` |
 | 端侧对外 API 网关 | `lib/assistant/api/assistant_api_gateway.dart` |
 | 当前 typed contract 入口 | `lib/assistant/contracts/assistant_turn_contract.dart` |
 | 当前 process protocol 入口 | `lib/assistant/contracts/process_protocol.dart` |
-| 当前编排事件总线 | `lib/assistant/orchestration/process_journal_bus.dart` |
+| 当前用户旅程投影入口 | `lib/assistant/application/assistant_journey_projector.dart` |
 | 当前渠道 Adapter SPI | `lib/assistant/spi/assistant_adapter_runtime.dart` |
 | 当前 Provider/告警治理 | `lib/assistant/observability/assistant_observability_runtime.dart` |
 | 技能分类配置 | `assets/assistant/prompts/domain_routing/domain_routing_catalog.json` |

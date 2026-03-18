@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
 import 'package:quwoquan_app/assistant/contracts/context_continuity_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/dialogue_round_script.dart';
@@ -8,7 +9,7 @@ import 'package:quwoquan_app/assistant/contracts/recall_result.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/subagent_plan.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
-import 'package:quwoquan_app/assistant/conversation/contracts/conversation_state_decision.dart';
+import 'package:quwoquan_app/assistant/contracts/conversation_state_decision.dart';
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/synthesis_draft.dart';
@@ -236,11 +237,10 @@ class AssistantExecutionPreparation {
   }
 }
 
-/// Unified internal execution state for the agent loop.
+/// Unified internal execution state for the phase owner pipeline.
 ///
-/// Consolidates runtime-critical state previously scattered across
-/// `agent_loop.dart` local variables. Owned by [AssistantAgentLoop];
-/// legacy [PersonalAssistantAgentLoop] uses this as a compatibility bridge.
+/// Consolidates runtime-critical state previously scattered across the old
+/// local owner implementation and is now owned by [AssistantAgentLoop].
 class AgentExecutionState {
   const AgentExecutionState({
     this.bootstrapContext,
@@ -259,8 +259,7 @@ class AgentExecutionState {
     this.previousRunArtifacts,
     this.domainPolicyBundle,
     this.conversationStateDecision,
-    this.processJournal = const [],
-    this.liveCursor,
+    this.journey = const AssistantJourney(),
     this.synthesisReadiness,
     this.synthesisDraft,
     this.pendingResponse,
@@ -282,8 +281,7 @@ class AgentExecutionState {
   final RunArtifacts? previousRunArtifacts;
   final DomainPolicyBundle? domainPolicyBundle;
   final ConversationStateDecision? conversationStateDecision;
-  final List<ProcessJournalEvent> processJournal;
-  final ProcessJournalEvent? liveCursor;
+  final AssistantJourney journey;
   final SynthesisReadinessResult? synthesisReadiness;
   final SynthesisDraft? synthesisDraft;
   final AssistantRunResponse? pendingResponse;
@@ -305,8 +303,7 @@ class AgentExecutionState {
     RunArtifacts? previousRunArtifacts,
     DomainPolicyBundle? domainPolicyBundle,
     ConversationStateDecision? conversationStateDecision,
-    List<ProcessJournalEvent>? processJournal,
-    ProcessJournalEvent? liveCursor,
+    AssistantJourney? journey,
     SynthesisReadinessResult? synthesisReadiness,
     SynthesisDraft? synthesisDraft,
     AssistantRunResponse? pendingResponse,
@@ -331,8 +328,7 @@ class AgentExecutionState {
       domainPolicyBundle: domainPolicyBundle ?? this.domainPolicyBundle,
       conversationStateDecision:
           conversationStateDecision ?? this.conversationStateDecision,
-      processJournal: processJournal ?? this.processJournal,
-      liveCursor: liveCursor ?? this.liveCursor,
+      journey: journey ?? this.journey,
       synthesisReadiness: synthesisReadiness ?? this.synthesisReadiness,
       synthesisDraft: synthesisDraft ?? this.synthesisDraft,
       pendingResponse: pendingResponse ?? this.pendingResponse,

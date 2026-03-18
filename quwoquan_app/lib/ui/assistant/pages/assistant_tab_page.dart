@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
+import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
@@ -20,6 +21,11 @@ class AssistantTabPage extends ConsumerStatefulWidget {
 
 class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
     with AutomaticKeepAliveClientMixin {
+  static const List<String> _tabOrder = <String>[
+    'schedule',
+    'dialog',
+    'skills',
+  ];
   String _activeTab = 'dialog';
   String? _lastInternalTab;
 
@@ -88,6 +94,26 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
     } else {
       context.go(AppRoutePaths.home);
     }
+  }
+
+  void _handleTabSwipeDragEnd(DragEndDetails details) {
+    final direction = TabSwipeSwitchRegion.directionFromDragEnd(details);
+    if (direction == null) {
+      return;
+    }
+    _handleTabSwipe(direction);
+  }
+
+  void _handleTabSwipe(TabSwipeDirection direction) {
+    final currentIndex = _tabOrder.indexOf(_activeTab);
+    if (currentIndex < 0) {
+      return;
+    }
+    final nextIndex = currentIndex + direction.delta;
+    if (nextIndex < 0 || nextIndex >= _tabOrder.length) {
+      return;
+    }
+    _handleTabChange(_tabOrder[nextIndex]);
   }
 
   Widget _buildBackAction(Color color) {
@@ -198,12 +224,16 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
           tabs: tabs,
           activeTab: _activeTab,
           onTabChange: _handleTabChange,
+          onHorizontalDragEnd: _handleTabSwipeDragEnd,
           leadingActions: [_buildBackAction(fgSecondary)],
           trailingActions: [_buildSettingsAction(fgSecondary)],
           transparentBackground: true,
         ),
       ),
-      child: _buildBody(embeddedBottomInset),
+      child: TabSwipeSwitchRegion(
+        onSwipe: _handleTabSwipe,
+        child: _buildBody(embeddedBottomInset),
+      ),
     );
   }
 
@@ -347,13 +377,13 @@ class _AssistantScheduleView extends ConsumerWidget {
                 children: [
                   Icon(
                     CupertinoIcons.chevron_left,
-                    size: 16,
+                    size: AppSpacing.iconSmall,
                     color: fgSecondary,
                   ),
-                  SizedBox(width: 16),
+                  SizedBox(width: AppSpacing.md),
                   Icon(
-                    CupertinoIcons.chevron_right,
-                    size: 16,
+                    CupertinoIcons.chevron_forward,
+                    size: AppSpacing.iconSmall,
                     color: fgSecondary,
                   ),
                 ],
@@ -383,8 +413,8 @@ class _AssistantScheduleView extends ConsumerWidget {
               final day = 12 + index;
               final isToday = index == 2; // Mock today is 14th
               return Container(
-                width: 32,
-                height: 32,
+                width: AppSpacing.smallButtonSize,
+                height: AppSpacing.smallButtonSize,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: isToday ? AppColors.primaryColor : Colors.transparent,

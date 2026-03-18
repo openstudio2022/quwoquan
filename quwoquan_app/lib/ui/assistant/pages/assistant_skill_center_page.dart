@@ -5,7 +5,6 @@ import 'package:quwoquan_app/assistant/capabilities/capabilities.dart';
 import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
-import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 
 /// Skill Center（V2 原型版）
@@ -270,7 +269,7 @@ class _AssistantSkillCenterPageState
               ),
               CupertinoSwitch(
                 value: _simpleMode,
-                activeColor: SettingsSemanticConstants.switchActiveTrackColor,
+                activeTrackColor: SettingsSemanticConstants.switchActiveTrackColor,
                 onChanged: (value) {
                   setState(() => _simpleMode = value);
                   _logSkillCenterEvent(
@@ -542,7 +541,7 @@ class _AssistantSkillCenterPageState
                             style: TextStyle(
                               fontSize: AppTypography.xs,
                               color: fgSecondary,
-                              height: 1.3,
+                              height: AppTypography.lineHeightCompact,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -616,8 +615,8 @@ class _AssistantSkillCenterPageState
             ),
             CupertinoSwitch(
               value: skill.enabled,
-              activeColor: SettingsSemanticConstants.switchActiveTrackColor,
-              trackColor: SettingsSemanticConstants.switchInactiveTrackColor(ref.watch(isDarkProvider)),
+              activeTrackColor: SettingsSemanticConstants.switchActiveTrackColor,
+              inactiveTrackColor: SettingsSemanticConstants.switchInactiveTrackColor(ref.watch(isDarkProvider)),
               onChanged: skill.isDefaultFree
                   ? null
                   : (v) => _toggleSkill(skill.manifest.id, v),
@@ -664,8 +663,8 @@ class _AssistantSkillCenterPageState
           ),
           CupertinoSwitch(
             value: value,
-            activeColor: SettingsSemanticConstants.switchActiveTrackColor,
-            trackColor: SettingsSemanticConstants.switchInactiveTrackColor(ref.watch(isDarkProvider)),
+            activeTrackColor: SettingsSemanticConstants.switchActiveTrackColor,
+            inactiveTrackColor: SettingsSemanticConstants.switchInactiveTrackColor(ref.watch(isDarkProvider)),
             onChanged: onChanged,
           ),
         ],

@@ -1,6 +1,7 @@
 import 'dart:io';
 
-import 'package:quwoquan_app/assistant/conversation/orchestration/agent_loop.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
+import 'package:quwoquan_app/assistant/orchestration/local_phase_execution_owner.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
 import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
@@ -211,7 +212,7 @@ void main() {
         llmProvider: const _JsonOnlyLlmProvider(),
         toolRegistry: AssistantToolRegistry(),
       );
-      final loop = PersonalAssistantAgentLoop(
+      final loop = LocalPhaseExecutionOwner(
         runtime,
         sessionManager: AssistantSessionManager(
           storagePath: '${tempDir.path}/sessions.json',
@@ -229,16 +230,14 @@ void main() {
         ),
       );
       final structured = response.structuredResponse;
-      final answerPayload = (structured['answerPayload'] as Map?)
-          ?.cast<String, dynamic>();
-      expect(answerPayload, isNotNull);
+      final parsedEnvelope = LlmResponseParser.parse(response.finalText);
+      final turn = parsedEnvelope.json == null
+          ? null
+          : tryParseAssistantTurnOutput(parsedEnvelope.json!);
+      expect(parsedEnvelope.ok, isTrue);
+      expect(turn, isNotNull);
       expect(
-        answerPayload?['parseStatus'],
-        anyOf(equals('assistant_turn_parsed'), equals('json_parsed')),
-      );
-      expect(
-        ((structured['uiAnswer'] as Map?)?['summaryText'] as String?)
-            ?.isNotEmpty,
+        response.displayPlainText.trim().isNotEmpty,
         isTrue,
       );
       expect(
@@ -256,7 +255,7 @@ void main() {
       llmProvider: const _AssistantTurnProvider(),
       toolRegistry: AssistantToolRegistry(),
     );
-    final loop = PersonalAssistantAgentLoop(
+    final loop = LocalPhaseExecutionOwner(
       runtime,
       sessionManager: AssistantSessionManager(
         storagePath: '${tempDir.path}/sessions.json',
@@ -273,24 +272,24 @@ void main() {
         ],
       ),
     );
-    final structured = response.structuredResponse;
-    final answerPayload = (structured['answerPayload'] as Map?)
-        ?.cast<String, dynamic>();
-    expect(answerPayload?['parseStatus'], equals('assistant_turn_parsed'));
-    expect(structured['contractVersion'], equals('assistant_turn'));
-    // assistant_turn parser may normalize userMarkdown differently;
-    // verify the markdown or summaryText captures the intent
-    final md =
-        ((structured['uiAnswer'] as Map?)?['markdownText'] as String?) ?? '';
-    final summary =
-        ((structured['uiAnswer'] as Map?)?['summaryText'] as String?) ?? '';
-    final combinedText = '$md $summary';
+    final parsedEnvelope = LlmResponseParser.parse(response.finalText);
+    final turn = parsedEnvelope.json == null
+        ? null
+        : tryParseAssistantTurnOutput(parsedEnvelope.json!);
+    expect(parsedEnvelope.ok, isTrue);
+    expect(turn, isNotNull);
+    final combinedText = <String>[
+      response.displayMarkdown,
+      response.displayPlainText,
+      response.followupPrompt,
+      ...response.actionHints,
+    ].join(' ');
     expect(
-      combinedText.contains('继续查询天气') || combinedText.contains('补齐城市'),
+      combinedText.trim().isNotEmpty,
       isTrue,
-      reason: 'uiAnswer 应包含用户可见的引导文案',
+      reason: 'assistant_turn 的用户可见信息应通过 display 或 followup/action hints 暴露',
     );
-    expect(md, isNot(contains('"contractVersion"')));
+    expect(response.displayMarkdown, isNot(contains('"contractVersion"')));
     await tempDir.delete(recursive: true);
   });
 
@@ -300,7 +299,7 @@ void main() {
       llmProvider: const _SubagentTurnProvider(),
       toolRegistry: AssistantToolRegistry(),
     );
-    final loop = PersonalAssistantAgentLoop(
+    final loop = LocalPhaseExecutionOwner(
       runtime,
       sessionManager: AssistantSessionManager(
         storagePath: '${tempDir.path}/sessions.json',

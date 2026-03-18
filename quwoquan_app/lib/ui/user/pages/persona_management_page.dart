@@ -96,12 +96,16 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
             children: [
               Row(
                 children: [
-                  Icon(Icons.person_outline, size: 20, color: AppColors.primaryColor),
-                  SizedBox(width: 8),
+                  Icon(
+                    Icons.person_outline,
+                    size: AppSpacing.twenty,
+                    color: AppColors.primaryColor,
+                  ),
+                  SizedBox(width: AppSpacing.sm),
                   Text(
                     '切换角色',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: AppTypography.xl,
                       fontWeight: FontWeight.w900,
                       color: fg,
                     ),
@@ -111,14 +115,14 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
               Text(
                 '已创建 ${_personas.length}/$_maxPersonas',
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: AppTypography.smPlus,
                   fontWeight: FontWeight.w700,
                   color: fgSecondary,
                 ),
               ),
             ],
           ),
-          SizedBox(height: 24),
+          SizedBox(height: AppSpacing.lg),
           ..._personas.map(
             (p) => _buildPersonaCard(
               persona: p,
@@ -130,24 +134,28 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
           ),
           if (_personas.length < _maxPersonas)
             Padding(
-              padding: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.only(top: AppSpacing.sm),
               child: CupertinoButton(
                 onPressed: () {},
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.fourteen),
                 color: Colors.transparent,
                 disabledColor: Colors.transparent,
                 child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.fourteen),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(24),
+                    borderRadius: BorderRadius.circular(AppSpacing.lg),
                     border: Border.all(color: AppColors.primaryColor),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(CupertinoIcons.add, size: 20, color: AppColors.primaryColor),
-                      SizedBox(width: 8),
+                      Icon(
+                        CupertinoIcons.add,
+                        size: AppSpacing.twenty,
+                        color: AppColors.primaryColor,
+                      ),
+                      SizedBox(width: AppSpacing.sm),
                       Text(
                         '新增分身',
                         style: TextStyle(
@@ -181,11 +189,11 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
     final avatar = persona['avatar'] as String? ?? '';
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
       child: GestureDetector(
         onTap: () => setState(() => _currentId = persona['id'] as String),
         child: Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(AppSpacing.twenty),
           decoration: BoxDecoration(
             color: isActive
                 ? AppColors.primaryColor.withValues(alpha: 0.08)
@@ -193,7 +201,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
                     isDark,
                     ColorType.backgroundSecondary,
                   ),
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(AppSpacing.lg),
             border: Border.all(
               color: isActive
                   ? AppColors.primaryColor
@@ -215,21 +223,21 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
                     decoration: const BoxDecoration(
                       color: AppColors.primaryColor,
                       borderRadius: BorderRadius.only(
-                        bottomLeft: Radius.circular(16),
-                        topRight: Radius.circular(22),
+                        bottomLeft: Radius.circular(AppSpacing.md),
+                        topRight: Radius.circular(AppTypography.xxxl),
                       ),
                     ),
                     child: const Text(
                       '当前使用',
                       style: TextStyle(
-                        fontSize: 10,
+                        fontSize: AppTypography.xs,
                         fontWeight: FontWeight.w900,
                         color: Colors.white,
                       ),
                     ),
                   ),
                 ),
-              if (isActive) const SizedBox(height: 8),
+              if (isActive) const SizedBox(height: AppSpacing.sm),
               Row(
                 children: [
                   Stack(
@@ -246,17 +254,17 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
                       ),
                       if (isPrimary)
                         const Positioned(
-                          top: -2,
-                          right: -2,
+                          top: -AppSpacing.two,
+                          right: -AppSpacing.two,
                           child: Icon(
                             Icons.star,
-                            size: 14,
+                            size: AppSpacing.fourteen,
                             color: Colors.amber,
                           ),
                         ),
                     ],
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -266,31 +274,31 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
                             Text(
                               persona['displayName'] as String? ?? '',
                               style: TextStyle(
-                                fontSize: 16,
+                                fontSize: AppTypography.lg,
                                 fontWeight: FontWeight.w800,
                                 color: fg,
                               ),
                             ),
                             if (persona['isPrivate'] == true) ...[
-                              const SizedBox(width: 4),
+                              const SizedBox(width: AppSpacing.xs),
                               Icon(
                                 Icons.lock,
-                                size: 14,
+                                size: AppSpacing.fourteen,
                                 color: Colors.purple.shade300,
                               ),
                             ],
                           ],
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: AppSpacing.xs),
                         Text(
                           '@${persona['name'] ?? ''}',
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: AppTypography.sm,
                             color: fgSecondary,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: AppSpacing.sm),
                         Row(
                           children: [
                             _statChip(
@@ -298,9 +306,9 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
                               '${persona['postCount'] ?? 0}',
                               fgSecondary,
                             ),
-                            const SizedBox(width: 16),
+                            const SizedBox(width: AppSpacing.md),
                             _statChip('关注', '128', fgSecondary),
-                            const SizedBox(width: 16),
+                            const SizedBox(width: AppSpacing.md),
                             _statChip('获赞', likeStr, fgSecondary),
                           ],
                         ),
@@ -309,34 +317,32 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.interGroupSm),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   CupertinoButton(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
+                      horizontal: AppSpacing.md,
+                      vertical: AppSpacing.sm,
                     ),
-                    minSize: 0,
-                    onPressed: () {},
+                    onPressed: () {}, minimumSize: Size(0, 0),
                     child: const Text(
                       '编辑',
-                      style: TextStyle(fontSize: 12),
+                      style: TextStyle(fontSize: AppTypography.sm),
                     ),
                   ),
                   if (!isPrimary)
                     CupertinoButton(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
+                        horizontal: AppSpacing.md,
+                        vertical: AppSpacing.sm,
                       ),
-                      minSize: 0,
-                      onPressed: () {},
+                      onPressed: () {}, minimumSize: Size(0, 0),
                       child: Text(
                         '删除',
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: AppTypography.sm,
                           color: AppColorsFunctional.getColor(
                             isDark,
                             ColorType.foregroundSecondary,
@@ -357,7 +363,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
     return Text(
       '$label $value',
       style: TextStyle(
-        fontSize: 12,
+        fontSize: AppTypography.sm,
         fontWeight: FontWeight.w700,
         color: fgSecondary,
       ),

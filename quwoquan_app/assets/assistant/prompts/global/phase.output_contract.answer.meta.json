@@ -3,7 +3,7 @@
   "version": "2026.03.05",
   "stage": "answer",
   "domainId": "global",
-  "requiredVariables": ["traceId"],
+  "requiredVariables": [],
   "outputContract": "assistant_turn",
   "selfCheckRules": ["has_title", "key_values_bold", "no_json_leak", "has_followup", "evidence_sufficient"]
 }

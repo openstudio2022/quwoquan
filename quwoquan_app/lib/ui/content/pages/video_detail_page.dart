@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -122,7 +121,7 @@ class _VideoDetailPageState extends ConsumerState<VideoDetailPage> {
       initialIndex: _safeInitialIndex,
       posts: _posts,
       initialPostIndex: _safeInitialIndex,
-      toolbarMode: 'backOnly',
+      toolbarMode: isMoment ? 'backOnly' : 'full',
       onUserClick: (username, {avatarUrl, displayName, backgroundUrl}) {
         context.push(
           '/user/$username',

@@ -13,9 +13,11 @@ import 'package:quwoquan_app/assistant/spi/assistant_adapter_runtime.dart';
 import 'package:quwoquan_app/assistant/sync/assistant_sync.dart';
 import 'package:quwoquan_app/assistant/skills/skill_manifest.dart';
 
+import 'assistant_request_policy.dart';
 import 'assistant_edge_service.dart';
 import 'assistant_gateway.dart';
-import 'capability_gateway.dart';
+import 'local_assistant_entry.dart';
+import 'remote_assistant_entry.dart';
 
 final assistantEdgeServiceProvider = Provider<AssistantEdgeService>((ref) {
   return AssistantEdgeService.createDefault();
@@ -40,14 +42,30 @@ final openClawBridgeProvider = Provider<OpenClawBridge>((ref) {
   );
 });
 
-final capabilityGatewayProvider = Provider<CapabilityGateway>((ref) {
-  return CapabilityGateway(
-    assistantGateway: ref.watch(assistantGatewayProvider),
-    openClawBridge: ref.watch(openClawBridgeProvider),
+final assistantRemoteConfiguredProvider = Provider<bool>((ref) {
+  return ref.watch(openClawBridgeProvider).isRemoteConfigured;
+});
+
+final assistantRequestPolicyProvider = Provider<AssistantRequestPolicy>((ref) {
+  return AssistantRequestPolicy(
     isPersonalContentAccessGranted: () =>
         ref.read(assistantPersonalContentAccessGrantedProvider),
     isAssistantContentIdentityIndexEnabled: () =>
         ref.read(assistantContentIdentityIndexEnabledProvider),
+  );
+});
+
+final localAssistantEntryProvider = Provider<LocalAssistantEntry>((ref) {
+  return LocalAssistantEntry(
+    assistantGateway: ref.watch(assistantGatewayProvider),
+    requestPolicy: ref.watch(assistantRequestPolicyProvider),
+  );
+});
+
+final remoteAssistantEntryProvider = Provider<RemoteAssistantEntry>((ref) {
+  return RemoteAssistantEntry(
+    openClawBridge: ref.watch(openClawBridgeProvider),
+    requestPolicy: ref.watch(assistantRequestPolicyProvider),
   );
 });
 
@@ -167,10 +185,7 @@ final assistantAlertDispatcherProvider = Provider<AssistantAlertDispatcher>((
 ) {
   final cfg = ref.watch(assistantConfigurationCenterProvider);
   return AssistantAlertDispatcher(
-    webhookUrl: cfg.readString(
-      'alert.webhookUrl',
-      _assistantAlertWebhookUrl(),
-    ),
+    webhookUrl: cfg.readString('alert.webhookUrl', _assistantAlertWebhookUrl()),
     feishuBotWebhook: cfg.readString(
       'alert.feishuWebhook',
       _assistantAlertFeishuWebhook(),

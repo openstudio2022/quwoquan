@@ -283,11 +283,62 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ContactPage" }
+  /v1/chat/inbox:
+    get:
+      summary: List inbox (ChatInbox per-user projection)
+      parameters:
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/Cursor
+        - $ref: ../_shared/openapi_common.yaml#/components/parameters/Limit
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatInboxPage" }
 components:
   securitySchemes:
     bearerAuth:
       $ref: ../_shared/openapi_common.yaml#/components/securitySchemes/bearerAuth
   schemas:
+    ChatInboxPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ChatInboxItem" }
+        nextCursor:
+          type: string
+          nullable: true
+    ChatInboxItem:
+      type: object
+      required:
+        [
+          conversationId,
+          type,
+          title,
+          lastSeq,
+          unreadCount,
+          mentionUnreadCount,
+          muted,
+          pinned,
+        ]
+      properties:
+        conversationId: { type: string }
+        type: { type: string, enum: [direct, group, circle, encrypted] }
+        title: { type: string }
+        avatarUrl: { type: string, nullable: true }
+        avatarCompositeUrls:
+          type: array
+          items: { type: string }
+        lastMessagePreview: { type: string }
+        lastMessageType: { type: string }
+        lastMessageTime: { type: string, format: date-time }
+        lastSeq: { type: integer, format: int64 }
+        unreadCount: { type: integer }
+        mentionUnreadCount: { type: integer }
+        muted: { type: boolean }
+        pinned: { type: boolean }
     ConversationPage:
       type: object
       required: [items]

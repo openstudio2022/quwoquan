@@ -134,7 +134,7 @@ class _ContentShareSheetState extends State<ContentShareSheet> {
   Future<void> _handleAction(ContentShareAction action) async {
     setState(() => _busyActionId = action.id);
     final result = await widget.actionHandler.execute(
-      this.context,
+      context,
       widget.template,
       action,
     );
@@ -145,7 +145,7 @@ class _ContentShareSheetState extends State<ContentShareSheet> {
     }
     await widget.onActionCompleted?.call(result);
     if (!mounted) return;
-    Navigator.of(this.context).pop(result);
+    Navigator.of(context).pop(result);
   }
 
   IconData _iconForAction(String actionId) {

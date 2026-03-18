@@ -54,6 +54,12 @@ class AppTypography {
   /// 正文行高倍数（TextStyle.height）
   static const double bodyLineHeight = 1.4;
 
+  /// 紧凑标题/卡片单行行高
+  static const double lineHeightTight = 1.2;
+
+  /// 紧凑说明文案行高
+  static const double lineHeightCompact = 1.3;
+
   /// 宽松行高倍数（展开文本等）
   static const double lineHeightRelaxed = 1.5;
 

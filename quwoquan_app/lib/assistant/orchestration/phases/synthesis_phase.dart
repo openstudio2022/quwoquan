@@ -1,5 +1,5 @@
-import 'package:quwoquan_app/assistant/conversation/orchestration/agent_loop.dart'
-    as legacy_agent;
+import 'package:quwoquan_app/assistant/orchestration/local_phase_execution_owner.dart'
+    as phase_owner;
 import 'package:quwoquan_app/assistant/orchestration/answer_outcome_resolver.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/synthesis_materializer.dart';
@@ -10,17 +10,17 @@ import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 /// Synthesis: finalize answer and hydrate grounding state for phase owners.
 class SynthesisPhase implements Phase {
   SynthesisPhase(
-    legacy_agent.PersonalAssistantAgentLoop legacy, {
+    phase_owner.LocalPhaseExecutionOwner owner, {
     SynthesisMaterializer? materializer,
     AnswerOutcomeResolver? outcomeResolver,
     SynthesisRunner? runner,
   }) : _runner =
            runner ??
            SynthesisRunner(
-             buildDraft: legacy.synthesizeDraftBridge,
+             buildDraft: owner.synthesizeDraftBridge,
              materialize:
                  (request, {required draft, onTraceEvent}) =>
-                     (materializer ?? SynthesisMaterializer(legacy))
+                     (materializer ?? SynthesisMaterializer(owner))
                          .materialize(
                            request,
                            draft: draft,
@@ -72,8 +72,7 @@ class SynthesisPhase implements Phase {
       fallbackSynthesisReadiness: input.state.synthesisReadiness,
       fallbackSlotState: input.state.slotState,
       fallbackDomainPolicyBundle: input.state.domainPolicyBundle,
-      fallbackProcessJournal: input.state.processJournal,
-      fallbackLiveCursor: input.state.liveCursor,
+      fallbackJourney: input.state.journey,
     );
     return PhaseOutput(
       state: input.state.copyWith(
@@ -87,8 +86,7 @@ class SynthesisPhase implements Phase {
         evidenceEvaluation: outcome.evidenceEvaluation,
         domainPolicyBundle: outcome.domainPolicyBundle,
         conversationStateDecision: outcome.conversationStateDecision,
-        processJournal: outcome.processJournal,
-        liveCursor: outcome.liveCursor,
+        journey: outcome.journey,
         synthesisReadiness: outcome.synthesisReadiness,
       ),
     );

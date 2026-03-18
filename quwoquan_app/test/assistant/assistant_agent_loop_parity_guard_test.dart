@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/assistant/conversation/orchestration/agent_loop.dart'
-    as legacy_agent;
+import 'package:quwoquan_app/assistant/orchestration/local_phase_execution_owner.dart'
+    as phase_owner;
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/assistant_agent_loop.dart';
@@ -243,8 +243,8 @@ void main() {
       return AssistantToolRegistry()..register(_FakeWeatherSearchTool());
     }
 
-    legacy_agent.PersonalAssistantAgentLoop buildLegacyLoop(String suffix) {
-      return legacy_agent.PersonalAssistantAgentLoop(
+    phase_owner.LocalPhaseExecutionOwner buildLegacyLoop(String suffix) {
+      return phase_owner.LocalPhaseExecutionOwner(
         ReactRuntime(
           llmProvider: _DeterministicWeatherLlm(),
           toolRegistry: buildRegistry(),
@@ -299,9 +299,15 @@ void main() {
 
     final phasedStructured = phasedResponse.structuredResponse;
     expect(phasedStructured.containsKey('qualityMetrics'), isTrue);
-    expect(phasedStructured.containsKey('uiAnswer'), isTrue);
+    expect(
+      phasedStructured.keys.any(
+        (key) => key.startsWith('ui') && key.toLowerCase().contains('answer'),
+      ),
+      isFalse,
+    );
     expect(phasedResponse.runArtifacts, isNotNull);
-    expect(phasedResponse.runArtifacts!.processJournal, isNotEmpty);
+    expect(phasedResponse.runArtifacts!.journey.isEmpty, isFalse);
+    expect(phasedResponse.runArtifacts!.displayMarkdown.trim().isNotEmpty, isTrue);
     expect(phasedLoop.executionState.synthesisDraft, isNotNull);
     expect(phasedLoop.executionState.previousRunArtifacts, isNotNull);
     expect(phasedLoop.executionState.evidenceLedger, isNotEmpty);

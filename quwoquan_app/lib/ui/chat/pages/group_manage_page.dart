@@ -263,8 +263,8 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
             CupertinoSwitch(
               value: value,
               onChanged: onChanged,
-              activeColor: SettingsSemanticConstants.switchActiveTrackColor,
-              trackColor: SettingsSemanticConstants.switchInactiveTrackColor(isDark),
+              activeTrackColor: SettingsSemanticConstants.switchActiveTrackColor,
+              inactiveTrackColor: SettingsSemanticConstants.switchInactiveTrackColor(isDark),
             ),
           ],
         ),

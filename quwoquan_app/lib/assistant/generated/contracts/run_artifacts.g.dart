@@ -2,6 +2,7 @@
 
 // ignore_for_file: avoid_classes_with_only_static_members
 
+import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 
 class AnswerEvidenceBinding {
@@ -215,130 +216,6 @@ class DomainPolicyBundleFields {
   static const String narrativePolicy = 'narrativePolicy';
 }
 
-class ProcessJournalEvent {
-  const ProcessJournalEvent({
-    required this.eventId,
-    required this.type,
-    required this.stage,
-    this.phaseId = "",
-    this.actionCode = "",
-    this.reasonCode = "",
-    this.reasonShort = "",
-    this.source = "",
-    this.nodeId = "",
-    this.message = "",
-    this.runId = "",
-    this.traceId = "",
-    this.references = const <ProcessSourceReference>[],
-    this.payload = const <String, dynamic>{},
-    this.timestamp,
-  });
-
-  final String eventId;
-  final ProcessJournalEventType type;
-  final String stage;
-  final String phaseId;
-  final String actionCode;
-  final String reasonCode;
-  final String reasonShort;
-  final String source;
-  final String nodeId;
-  final String message;
-  final String runId;
-  final String traceId;
-  final List<ProcessSourceReference> references;
-  final Map<String, dynamic> payload;
-  final DateTime? timestamp;
-
-  Map<String, dynamic> toJson() => <String, dynamic>{
-        'eventId': eventId,
-        'type': type.wireName,
-        'stage': stage,
-        'phaseId': phaseId,
-        'actionCode': actionCode,
-        'reasonCode': reasonCode,
-        'reasonShort': reasonShort,
-        'source': source,
-        'nodeId': nodeId,
-        'message': message,
-        'runId': runId,
-        'traceId': traceId,
-        'references': references.map((item) => item.toJson()).toList(growable: false),
-        'payload': payload,
-        'timestamp': timestamp?.toIso8601String(),
-      };
-
-  factory ProcessJournalEvent.fromJson(Map<String, dynamic> json) {
-    return ProcessJournalEvent(
-      eventId: (json['eventId'] as String?)?.trim() ?? "",
-      type: parseProcessJournalEventType((json['type'] as String?)?.trim() ?? ""),
-      stage: (json['stage'] as String?)?.trim() ?? "",
-      phaseId: (json['phaseId'] as String?)?.trim() ?? "",
-      actionCode: (json['actionCode'] as String?)?.trim() ?? "",
-      reasonCode: (json['reasonCode'] as String?)?.trim() ?? "",
-      reasonShort: (json['reasonShort'] as String?)?.trim() ?? "",
-      source: (json['source'] as String?)?.trim() ?? "",
-      nodeId: (json['nodeId'] as String?)?.trim() ?? "",
-      message: (json['message'] as String?)?.trim() ?? "",
-      runId: (json['runId'] as String?)?.trim() ?? "",
-      traceId: (json['traceId'] as String?)?.trim() ?? "",
-      references: (json['references'] as List?)?.whereType<Map>().map((item) => ProcessSourceReference.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <ProcessSourceReference>[],
-      payload: (json['payload'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
-      timestamp: ((json['timestamp'] as String?)?.trim().isNotEmpty == true) ? DateTime.tryParse((json['timestamp'] as String).trim()) : null,
-    );
-  }
-}
-
-class ProcessJournalEventFields {
-  static const String eventId = 'eventId';
-  static const String type = 'type';
-  static const String stage = 'stage';
-  static const String phaseId = 'phaseId';
-  static const String actionCode = 'actionCode';
-  static const String reasonCode = 'reasonCode';
-  static const String reasonShort = 'reasonShort';
-  static const String source = 'source';
-  static const String nodeId = 'nodeId';
-  static const String message = 'message';
-  static const String runId = 'runId';
-  static const String traceId = 'traceId';
-  static const String references = 'references';
-  static const String payload = 'payload';
-  static const String timestamp = 'timestamp';
-}
-
-class ProcessSourceReference {
-  const ProcessSourceReference({
-    required this.title,
-    required this.url,
-    this.source = "",
-  });
-
-  final String title;
-  final String url;
-  final String source;
-
-  Map<String, dynamic> toJson() => <String, dynamic>{
-        'title': title,
-        'url': url,
-        'source': source,
-      };
-
-  factory ProcessSourceReference.fromJson(Map<String, dynamic> json) {
-    return ProcessSourceReference(
-      title: (json['title'] as String?)?.trim() ?? "",
-      url: (json['url'] as String?)?.trim() ?? "",
-      source: (json['source'] as String?)?.trim() ?? "",
-    );
-  }
-}
-
-class ProcessSourceReferenceFields {
-  static const String title = 'title';
-  static const String url = 'url';
-  static const String source = 'source';
-}
-
 class SlotStateSnapshot {
   const SlotStateSnapshot({
     this.domainId = "",
@@ -478,8 +355,7 @@ class RunArtifacts {
     this.machineEnvelope = "",
     this.displayMarkdown = "",
     this.displayPlainText = "",
-    this.processJournal = const <ProcessJournalEvent>[],
-    this.liveCursor,
+    this.journey = const AssistantJourney(),
     this.evidenceLedger = const <EvidenceLedgerEntry>[],
     this.answerEvidenceBindings = const <AnswerEvidenceBinding>[],
     this.slotState = const SlotStateSnapshot(),
@@ -491,8 +367,7 @@ class RunArtifacts {
   final String machineEnvelope;
   final String displayMarkdown;
   final String displayPlainText;
-  final List<ProcessJournalEvent> processJournal;
-  final ProcessJournalEvent? liveCursor;
+  final AssistantJourney journey;
   final List<EvidenceLedgerEntry> evidenceLedger;
   final List<AnswerEvidenceBinding> answerEvidenceBindings;
   final SlotStateSnapshot slotState;
@@ -504,8 +379,7 @@ class RunArtifacts {
         'machineEnvelope': machineEnvelope,
         'displayMarkdown': displayMarkdown,
         'displayPlainText': displayPlainText,
-        'processJournal': processJournal.map((item) => item.toJson()).toList(growable: false),
-        'liveCursor': liveCursor?.toJson(),
+        'journey': journey.toJson(),
         'evidenceLedger': evidenceLedger.map((item) => item.toJson()).toList(growable: false),
         'answerEvidenceBindings': answerEvidenceBindings.map((item) => item.toJson()).toList(growable: false),
         'slotState': slotState.toJson(),
@@ -519,8 +393,7 @@ class RunArtifacts {
       machineEnvelope: (json['machineEnvelope'] as String?)?.trim() ?? "",
       displayMarkdown: (json['displayMarkdown'] as String?)?.trim() ?? "",
       displayPlainText: (json['displayPlainText'] as String?)?.trim() ?? "",
-      processJournal: (json['processJournal'] as List?)?.whereType<Map>().map((item) => ProcessJournalEvent.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <ProcessJournalEvent>[],
-      liveCursor: json['liveCursor'] is Map ? ProcessJournalEvent.fromJson((json['liveCursor'] as Map).cast<String, dynamic>()) : null,
+      journey: json['journey'] is Map ? AssistantJourney.fromJson((json['journey'] as Map).cast<String, dynamic>()) : const AssistantJourney(),
       evidenceLedger: (json['evidenceLedger'] as List?)?.whereType<Map>().map((item) => EvidenceLedgerEntry.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <EvidenceLedgerEntry>[],
       answerEvidenceBindings: (json['answerEvidenceBindings'] as List?)?.whereType<Map>().map((item) => AnswerEvidenceBinding.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AnswerEvidenceBinding>[],
       slotState: json['slotState'] is Map ? SlotStateSnapshot.fromJson((json['slotState'] as Map).cast<String, dynamic>()) : const SlotStateSnapshot(),
@@ -536,8 +409,7 @@ class RunArtifactsFields {
   static const String machineEnvelope = 'machineEnvelope';
   static const String displayMarkdown = 'displayMarkdown';
   static const String displayPlainText = 'displayPlainText';
-  static const String processJournal = 'processJournal';
-  static const String liveCursor = 'liveCursor';
+  static const String journey = 'journey';
   static const String evidenceLedger = 'evidenceLedger';
   static const String answerEvidenceBindings = 'answerEvidenceBindings';
   static const String slotState = 'slotState';

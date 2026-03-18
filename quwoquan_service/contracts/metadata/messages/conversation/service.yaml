@@ -113,9 +113,9 @@ api_routes:
   - method: GET
     path: /v1/chat/inbox
     operation: ListInbox
-    description: 用户收件箱（基于 ConversationUserState 投影，返回最近会话列表 + unreadCount + lastMessage 摘要）
+    description: 用户收件箱（基于 ChatInbox per-user 投影，返回最近会话列表 + unreadCount + mentionUnreadCount + 头像拼图）
     query_params: [cursor, limit]
-    response_entity: ConversationUserState
+    response_entity: ChatInbox
     auth: required
 
   # ── 聊天媒体上传 ──────────────────────────────
@@ -150,7 +150,7 @@ api_routes:
 
 consumers:
   - name: app
-    capabilities: [list_conversations, create_conversation, send_message, recall_message, sync_messages, mark_as_read, get_receipts, list_members, manage_members, update_settings, invite_assistant, remove_assistant, list_contacts, search_contacts]
+    capabilities: [list_conversations, list_inbox, create_conversation, send_message, recall_message, sync_messages, mark_as_read, get_receipts, list_members, manage_members, update_settings, invite_assistant, remove_assistant, list_contacts, search_contacts]
   - name: platform-ops
     capabilities: [read_conversation, read_messages, read_members]
   - name: assistant-service
@@ -169,6 +169,10 @@ contract_test:
         - name: conversation_list
           route: GET /v1/chat/conversations
           assertions: [status_200, items_match_schema, sorted_by_last_message_time, maxSeq_present]
+
+        - name: inbox_list
+          route: GET /v1/chat/inbox
+          assertions: [status_200, items_match_schema, sorted_by_pinned_then_last_message_time, unread_and_mention_counts_present]
 
         - name: send_message_with_seq
           route: POST /v1/chat/conversations/{id}/messages

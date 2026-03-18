@@ -1,0 +1,70 @@
+version: 1
+aggregate: UserProfile
+
+description: |
+  UserProfile 实体端侧 UI 可配置项声明。
+  codegen 从本文件生成 Dart UserProfileUIConfig（DO NOT EDIT），
+  端侧个人主页通过 UserProfileUIConfig 消费配置，消除主页 Tab/子筛选硬编码。
+
+header_layout:
+  base_height_ratio: 0.25
+  max_stretch_height_ratio: 0.333
+  avatar_overlap_ratio: 0.333
+
+scroll_motion:
+  compact_identity_bar: true
+  primary_tab_sticky_below_toolbar: true
+  secondary_tab_inline_scroll: true
+  rebound_curve: easeOutBack
+  collapse_curve: easeOutCubic
+
+profile_tabs:
+  - id: creations
+    label_key: profile_tab_creations
+    order: 0
+    default: true
+    sub_tabs:
+      - id: all
+        label_key: creation_sub_all
+        content_type: null
+        order: 0
+      - id: micro
+        label_key: creation_sub_micro
+        content_type: micro
+        order: 1
+      - id: image
+        label_key: creation_sub_image
+        content_type: image
+        order: 2
+      - id: video
+        label_key: creation_sub_video
+        content_type: video
+        order: 3
+      - id: article
+        label_key: creation_sub_article
+        content_type: article
+        order: 4
+    visibility_filter:
+      mine: [all, public, private]
+      other: [all, public]
+
+  - id: circles
+    label_key: profile_tab_circles
+    order: 1
+
+  - id: interaction
+    label_key: profile_tab_interaction
+    order: 2
+    sub_tabs:
+      - id: likes
+        label_key: interaction_sub_likes
+        order: 0
+      - id: comments
+        label_key: interaction_sub_comments
+        order: 1
+      - id: shares
+        label_key: interaction_sub_shares
+        order: 2
+    direction_filter:
+      mine: [received, sent]
+      other: [received]

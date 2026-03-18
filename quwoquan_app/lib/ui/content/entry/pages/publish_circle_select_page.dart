@@ -121,7 +121,7 @@ class _PublishCircleSelectPageState extends State<PublishCircleSelectPage> {
                               ) ...[
                                 if (i > 0)
                                   Divider(
-                                    height: 1,
+                                    height: AppSpacing.one,
                                     color: dividerClr,
                                     thickness: SettingsSemanticConstants
                                         .dividerThickness,
@@ -171,7 +171,7 @@ class _PublishCircleSelectPageState extends State<PublishCircleSelectPage> {
                               ) ...[
                                 if (i > 0)
                                   Divider(
-                                    height: 1,
+                                    height: AppSpacing.one,
                                     color: dividerClr,
                                     thickness: SettingsSemanticConstants
                                         .dividerThickness,
@@ -391,7 +391,7 @@ class _PublishCircleSelectPageState extends State<PublishCircleSelectPage> {
               style: TextStyle(
                 fontSize: AppTypography.lg,
                 color: fgSecondary,
-                height: 1.4,
+                height: AppTypography.bodyLineHeight,
               ),
               textAlign: TextAlign.center,
             ),

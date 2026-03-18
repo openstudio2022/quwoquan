@@ -5,10 +5,9 @@ contract: assistant_turn
 version: assistant_turn
 kind: output_contract
 imports:
+  - package:quwoquan_app/assistant/contracts/assistant_journey.dart
   - package:quwoquan_app/assistant/contracts/aggregation_state.dart
   - package:quwoquan_app/assistant/contracts/skill_run.dart
-  - package:quwoquan_app/assistant/contracts/ui_process_timeline_entry.dart
-  - package:quwoquan_app/assistant/contracts/user_events.dart
   - package:quwoquan_app/assistant/contracts/run_artifacts.dart
 fields:
   - name: contractVersion
@@ -75,14 +74,10 @@ fields:
   - name: aggregationState
     type: object
     ref: AggregationState
-  - name: userEvents
-    type: list<object>
-    ref: UserEvent
-    default: []
-  - name: uiProcessTimeline
-    type: list<object>
-    ref: UiProcessTimelineEntry
-    default: []
+  - name: journey
+    type: object
+    ref: AssistantJourney
+    default: {}
   - name: toolPlan
     type: list<object>
     ref: tool_call
@@ -97,12 +92,6 @@ fields:
   - name: followupPrompt
     type: string
     default: ''
-  - name: processSummary
-    type: string
-    default: ''
-  - name: processReferenceCount
-    type: int
-    default: 0
   - name: phaseId
     type: enum
     enum_ref: PlannerPhaseId
@@ -118,13 +107,6 @@ fields:
   - name: reasonShort
     type: string
     default: ''
-  - name: narrativeSource
-    type: string
-    default: ''
-  - name: narrativeReferences
-    type: list<object>
-    ref: ProcessSourceReference
-    default: []
   - name: sessionPreferenceFacts
     type: list<object>
     ref: PreferenceFact

@@ -28,7 +28,7 @@ class RectangularCircleCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: Colors.black.withValues(alpha: 0.08),
               blurRadius: 8,
               offset: const Offset(0, 4),
             ),
@@ -54,8 +54,8 @@ class RectangularCircleCard extends StatelessWidget {
                     end: Alignment.bottomCenter,
                     colors: [
                       Colors.transparent,
-                      Colors.black.withOpacity(0.2),
-                      Colors.black.withOpacity(0.8),
+                      Colors.black.withValues(alpha: 0.2),
+                      Colors.black.withValues(alpha: 0.8),
                     ],
                     stops: const [0.4, 0.7, 1.0],
                   ),
@@ -81,18 +81,20 @@ class RectangularCircleCard extends StatelessWidget {
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(4),
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.smallBorderRadius,
+                        ),
                         border: Border.all(
-                          color: Colors.white.withOpacity(0.1),
-                          width: 0.5,
+                          color: Colors.white.withValues(alpha: 0.1),
+                          width: AppSpacing.hairline,
                         ),
                       ),
                       child: Text(
                         circle.subCategory!,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 10,
+                          fontSize: AppTypography.xs,
                           fontWeight: AppTypography.medium,
                         ),
                       ),
@@ -103,15 +105,15 @@ class RectangularCircleCard extends StatelessWidget {
                     circle.name,
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 16,
+                      fontSize: AppTypography.lg,
                       fontWeight: AppTypography.bold,
-                      height: 1.2,
+                      height: AppTypography.lineHeightTight,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
 
-                  const SizedBox(height: 4),
+                  const SizedBox(height: AppSpacing.xs),
 
                   // Stats & Desc
                   Row(
@@ -119,26 +121,26 @@ class RectangularCircleCard extends StatelessWidget {
                       // Member Count
                       Icon(
                         Icons.people_rounded,
-                        size: 12,
-                        color: Colors.white.withOpacity(0.8),
+                        size: AppTypography.sm,
+                        color: Colors.white.withValues(alpha: 0.8),
                       ),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: AppSpacing.xs),
                       Text(
                         _formatNumber(circle.memberCount),
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.8),
-                          fontSize: 11,
+                          color: Colors.white.withValues(alpha: 0.8),
+                          fontSize: AppTypography.xsPlus,
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: AppSpacing.sm),
 
                       // Description (truncated)
                       Expanded(
                         child: Text(
                           circle.description ?? '',
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.7),
-                            fontSize: 11,
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontSize: AppTypography.xsPlus,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -155,15 +157,15 @@ class RectangularCircleCard extends StatelessWidget {
               right: 8,
               bottom: 8,
               child: Container(
-                padding: const EdgeInsets.all(6),
+                padding: const EdgeInsets.all(AppSpacing.six),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.15),
+                  color: Colors.white.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
                   Icons.arrow_forward_ios_rounded,
                   color: Colors.white,
-                  size: 12,
+                  size: AppTypography.sm,
                 ),
               ),
             ),

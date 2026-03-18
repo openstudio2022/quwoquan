@@ -63,7 +63,6 @@ echo "[gate] Step 2/3: flutter analyze"
 flutter analyze \
   lib/ui/chat/pages/chat_detail_page.dart \
   lib/assistant/api/assistant_api_gateway.dart \
-  lib/assistant/application/capability_gateway.dart \
   lib/assistant/application/assistant_gateway.dart \
   lib/assistant/application/assistant_providers.dart \
   lib/assistant/application/assistant_edge_service.dart \

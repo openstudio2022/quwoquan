@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,7 +9,6 @@ import 'package:quwoquan_app/cloud/services/user/relationship_capability_reposit
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
-import 'package:quwoquan_app/ui/user/pages/author_profile_page.dart';
 import 'package:quwoquan_app/ui/user/pages/other_profile_page.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 
@@ -31,7 +29,11 @@ class _FakeHttpClient implements HttpClient {
   @override
   String? userAgent;
   @override
-  void addCredentials(Uri url, String realm, HttpClientCredentials credentials) {}
+  void addCredentials(
+    Uri url,
+    String realm,
+    HttpClientCredentials credentials,
+  ) {}
   @override
   void addProxyCredentials(
     String host,
@@ -42,9 +44,13 @@ class _FakeHttpClient implements HttpClient {
   @override
   set authenticate(Future<bool> Function(Uri, String, String?)? f) {}
   @override
-  set authenticateProxy(Future<bool> Function(String, int, String, String?)? f) {}
+  set authenticateProxy(
+    Future<bool> Function(String, int, String, String?)? f,
+  ) {}
   @override
-  set badCertificateCallback(bool Function(X509Certificate, String, int)? callback) {}
+  set badCertificateCallback(
+    bool Function(X509Certificate, String, int)? callback,
+  ) {}
   @override
   set connectionFactory(
     Future<ConnectionTask<Socket>> Function(Uri, String?, int?)? f,
@@ -56,20 +62,27 @@ class _FakeHttpClient implements HttpClient {
   @override
   void close({bool force = false}) {}
   @override
-  Future<HttpClientRequest> open(String method, String host, int port, String path) =>
-      _fakeRequest();
+  Future<HttpClientRequest> open(
+    String method,
+    String host,
+    int port,
+    String path,
+  ) => _fakeRequest();
   @override
   Future<HttpClientRequest> openUrl(String method, Uri url) => _fakeRequest();
   @override
-  Future<HttpClientRequest> get(String host, int port, String path) => _fakeRequest();
+  Future<HttpClientRequest> get(String host, int port, String path) =>
+      _fakeRequest();
   @override
   Future<HttpClientRequest> getUrl(Uri url) => _fakeRequest();
   @override
-  Future<HttpClientRequest> post(String host, int port, String path) => _fakeRequest();
+  Future<HttpClientRequest> post(String host, int port, String path) =>
+      _fakeRequest();
   @override
   Future<HttpClientRequest> postUrl(Uri url) => _fakeRequest();
   @override
-  Future<HttpClientRequest> put(String host, int port, String path) => _fakeRequest();
+  Future<HttpClientRequest> put(String host, int port, String path) =>
+      _fakeRequest();
   @override
   Future<HttpClientRequest> putUrl(Uri url) => _fakeRequest();
   @override
@@ -78,11 +91,13 @@ class _FakeHttpClient implements HttpClient {
   @override
   Future<HttpClientRequest> deleteUrl(Uri url) => _fakeRequest();
   @override
-  Future<HttpClientRequest> head(String host, int port, String path) => _fakeRequest();
+  Future<HttpClientRequest> head(String host, int port, String path) =>
+      _fakeRequest();
   @override
   Future<HttpClientRequest> headUrl(Uri url) => _fakeRequest();
   @override
-  Future<HttpClientRequest> patch(String host, int port, String path) => _fakeRequest();
+  Future<HttpClientRequest> patch(String host, int port, String path) =>
+      _fakeRequest();
   @override
   Future<HttpClientRequest> patchUrl(Uri url) => _fakeRequest();
 
@@ -103,12 +118,72 @@ class _FakeHttpHeaders extends Fake implements HttpHeaders {}
 
 class _FakeHttpClientResponse extends Fake implements HttpClientResponse {
   static const _kTransparentPng = [
-    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
-    0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-    0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00,
-    0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x62, 0x00, 0x00, 0x00, 0x02,
-    0x00, 0x01, 0xE5, 0x27, 0xDE, 0xFC, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45,
-    0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+    0x89,
+    0x50,
+    0x4E,
+    0x47,
+    0x0D,
+    0x0A,
+    0x1A,
+    0x0A,
+    0x00,
+    0x00,
+    0x00,
+    0x0D,
+    0x49,
+    0x48,
+    0x44,
+    0x52,
+    0x00,
+    0x00,
+    0x00,
+    0x01,
+    0x00,
+    0x00,
+    0x00,
+    0x01,
+    0x08,
+    0x06,
+    0x00,
+    0x00,
+    0x00,
+    0x1F,
+    0x15,
+    0xC4,
+    0x89,
+    0x00,
+    0x00,
+    0x00,
+    0x0A,
+    0x49,
+    0x44,
+    0x41,
+    0x54,
+    0x78,
+    0x9C,
+    0x62,
+    0x00,
+    0x00,
+    0x00,
+    0x02,
+    0x00,
+    0x01,
+    0xE5,
+    0x27,
+    0xDE,
+    0xFC,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x49,
+    0x45,
+    0x4E,
+    0x44,
+    0xAE,
+    0x42,
+    0x60,
+    0x82,
   ];
 
   @override
@@ -161,7 +236,7 @@ void main() {
       ],
       child: ScreenUtilInit(
         designSize: const Size(375, 812),
-        builder: (_, __) => MaterialApp(
+        builder: (context, child) => MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: const OtherProfilePage(username: 'nature_photographer'),
@@ -175,14 +250,13 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
   }
 
-  testWidgets('OtherProfilePage 使用专用作者主页而不是统一壳层', (tester) async {
+  testWidgets('OtherProfilePage 使用统一 ProfileShell 壳层', (tester) async {
     setPhoneSize(tester);
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
     await tester.pumpWidget(buildTestApp());
 
-    expect(find.byType(AuthorProfile), findsOneWidget);
-    expect(find.byType(ProfileShell), findsNothing);
+    expect(find.byType(ProfileShell), findsOneWidget);
   });
 }

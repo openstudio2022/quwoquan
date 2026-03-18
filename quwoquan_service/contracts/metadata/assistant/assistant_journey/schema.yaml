@@ -1,0 +1,63 @@
+dart_class: AssistantJourney
+library_path: assistant/contracts/assistant_journey.dart
+output_path: assistant/generated/contracts/assistant_journey.g.dart
+contract: assistant_journey
+version: v1
+kind: explainability_contract
+imports:
+  - package:quwoquan_app/assistant/contracts/runtime_enums.dart
+fields:
+  - { name: stages, type: list<object>, ref: stage, default: [] }
+  - { name: entries, type: list<object>, ref: entry, default: [] }
+  - { name: summary, type: string, default: '' }
+  - { name: referenceSummary, type: object, ref: reference_summary, default: {} }
+  - { name: readiness, type: object, ref: readiness, default: {} }
+subcontracts:
+  stage:
+    class_name: AssistantJourneyStage
+    fields:
+      - { name: stageId, type: enum, enum_ref: JourneyStageId, default: '' }
+      - { name: status, type: enum, enum_ref: JourneyStageStatus, default: pending }
+      - { name: order, type: int, default: 0 }
+      - { name: summary, type: string, default: '' }
+      - { name: referenceCount, type: int, default: 0 }
+  entry_reference:
+    class_name: AssistantJourneyReference
+    fields:
+      - { name: title, type: string, default: '' }
+      - { name: url, type: string, default: '' }
+      - { name: source, type: string, default: '' }
+  provenance:
+    class_name: AssistantJourneyProvenance
+    fields:
+      - { name: phaseId, type: enum, enum_ref: PlannerPhaseId, default: '' }
+      - { name: actionCode, type: enum, enum_ref: PlannerActionCode, default: '' }
+      - { name: reasonCode, type: enum, enum_ref: PlannerReasonCode, default: '' }
+      - { name: toolName, type: string, default: '' }
+      - { name: source, type: string, default: '' }
+  entry:
+    class_name: AssistantJourneyEntry
+    fields:
+      - { name: entryId, type: string, required: true }
+      - { name: stageId, type: enum, enum_ref: JourneyStageId, default: '' }
+      - { name: kind, type: enum, enum_ref: JourneyEntryKind, default: '' }
+      - { name: status, type: enum, enum_ref: JourneyStageStatus, default: active }
+      - { name: order, type: int, default: 0 }
+      - { name: headline, type: string, default: '' }
+      - { name: detail, type: string, default: '' }
+      - { name: references, type: list<object>, ref: entry_reference, default: [] }
+      - { name: provenance, type: object, ref: provenance, default: {} }
+  reference_summary:
+    class_name: AssistantJourneyReferenceSummary
+    fields:
+      - { name: count, type: int, default: 0 }
+      - { name: references, type: list<object>, ref: entry_reference, default: [] }
+  readiness:
+    class_name: AssistantJourneyReadiness
+    fields:
+      - { name: nextAction, type: enum, enum_ref: AssistantNextAction, default: '' }
+      - { name: finalAnswerMode, type: enum, enum_ref: FinalAnswerMode, default: blocked }
+      - { name: answerEligibility, type: enum, enum_ref: AnswerEligibility, default: unknown }
+      - { name: finalAnswerReady, type: bool, default: false }
+      - { name: clarificationNeeded, type: bool, default: false }
+      - { name: needExpansion, type: bool, default: false }

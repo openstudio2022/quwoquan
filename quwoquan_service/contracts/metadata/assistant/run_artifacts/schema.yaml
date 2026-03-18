@@ -5,13 +5,13 @@ contract: run_artifacts
 version: v1
 kind: runtime_persistence_contract
 imports:
+  - package:quwoquan_app/assistant/contracts/assistant_journey.dart
   - package:quwoquan_app/assistant/contracts/runtime_enums.dart
 fields:
   - { name: machineEnvelope, type: string, default: '' }
   - { name: displayMarkdown, type: string, default: '' }
   - { name: displayPlainText, type: string, default: '' }
-  - { name: processJournal, type: list<object>, ref: process_journal_event, default: [] }
-  - { name: liveCursor, type: object, ref: process_journal_event }
+  - { name: journey, type: object, ref: AssistantJourney, default: {} }
   - { name: evidenceLedger, type: list<object>, ref: evidence_ledger_entry, default: [] }
   - { name: answerEvidenceBindings, type: list<object>, ref: answer_evidence_binding, default: [] }
   - { name: slotState, type: object, ref: slot_state, default: {} }
@@ -19,30 +19,6 @@ fields:
   - { name: diagnostics, type: map, default: {} }
   - { name: domainPolicyBundle, type: object, ref: policy_bundle }
 subcontracts:
-  process_source_reference:
-    class_name: ProcessSourceReference
-    fields:
-      - { name: title, type: string, required: true }
-      - { name: url, type: string, required: true }
-      - { name: source, type: string, default: '' }
-  process_journal_event:
-    class_name: ProcessJournalEvent
-    fields:
-      - { name: eventId, type: string, required: true }
-      - { name: type, type: enum, enum_ref: ProcessJournalEventType, required: true }
-      - { name: stage, type: string, required: true }
-      - { name: phaseId, type: string, default: '' }
-      - { name: actionCode, type: string, default: '' }
-      - { name: reasonCode, type: string, default: '' }
-      - { name: reasonShort, type: string, default: '' }
-      - { name: source, type: string, default: '' }
-      - { name: nodeId, type: string, default: '' }
-      - { name: message, type: string, default: '' }
-      - { name: runId, type: string, default: '' }
-      - { name: traceId, type: string, default: '' }
-      - { name: references, type: list<object>, ref: process_source_reference, default: [] }
-      - { name: payload, type: map, default: {} }
-      - { name: timestamp, type: datetime }
   evidence_ledger_entry:
     class_name: EvidenceLedgerEntry
     fields:

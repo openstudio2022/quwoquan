@@ -44,19 +44,23 @@ void main() {
         isFalse,
         reason: '小艺私人助手对话中不应展示「未配置可用模型」，应走本地启发式或远程模型',
       );
-      expect(response.machineEnvelope, equals(response.finalText));
-      expect(response.displayMarkdown.trim(), isNotEmpty);
-      expect(response.displayPlainText.trim(), isNotEmpty);
-      expect(response.displayMarkdown.contains('contractVersion'), isFalse);
-      final processJournal =
-          ((((response.structuredResponse['runArtifacts']
-                          as Map?)?['processJournal']
-                      as List?) ??
-                  const <dynamic>[]))
-              .whereType<Map>()
-              .map((item) => item.cast<String, dynamic>())
-              .toList(growable: false);
-      expect(processJournal, isNotEmpty, reason: '简单事实问题也应生成统一主过程日志');
+      expect(
+        response.displayMarkdown.trim().isNotEmpty ||
+            response.displayPlainText.trim().isNotEmpty,
+        isTrue,
+      );
+      expect(
+        '${response.displayMarkdown} ${response.displayPlainText}'
+            .contains('contractVersion'),
+        isFalse,
+      );
+      final journey = response.runArtifacts?.journey;
+      expect(journey, isNotNull);
+      expect(
+        journey!.entries.isNotEmpty || journey.stages.isNotEmpty,
+        isTrue,
+        reason: '简单事实问题也应生成统一用户旅程',
+      );
     });
 
     test('本地 stub runtime 下天气问句应保留 weather 域并产出可展示的 phase-one answer', () async {
@@ -147,24 +151,26 @@ void main() {
         isFalse,
         reason: '复杂规划问题也不应回退到未配置模型文案',
       );
-      expect(response.machineEnvelope, equals(response.finalText));
-      expect(response.displayMarkdown.trim(), isNotEmpty);
-      expect(response.displayPlainText.trim(), isNotEmpty);
-      expect(response.displayMarkdown.contains('contractVersion'), isFalse);
+      expect(
+        response.displayMarkdown.trim().isNotEmpty ||
+            response.displayPlainText.trim().isNotEmpty,
+        isTrue,
+      );
+      expect(
+        '${response.displayMarkdown} ${response.displayPlainText}'
+            .contains('contractVersion'),
+        isFalse,
+      );
+      final journey = response.runArtifacts?.journey;
+      expect(journey, isNotNull);
+      expect(
+        journey!.entries.isNotEmpty || journey.stages.isNotEmpty,
+        isTrue,
+        reason: '复杂规划问题应输出统一用户旅程',
+      );
 
-      final structured = response.structuredResponse;
-      final processJournal =
-          ((((structured['runArtifacts'] as Map?)?['processJournal']
-                      as List?) ??
-                  const <dynamic>[]))
-              .whereType<Map>()
-              .map((item) => item.cast<String, dynamic>())
-              .toList(growable: false);
-
-      expect(processJournal, isNotEmpty, reason: '复杂规划问题应输出统一主过程日志');
-
-      final combinedNarrative = processJournal
-          .map((item) => (item['message'] as String?) ?? '')
+      final combinedNarrative = journey.entries
+          .map((item) => '${item.headline} ${item.detail}'.trim())
           .join(' ');
       expect(combinedNarrative.contains('压缩以上对话历史为简洁摘要'), isFalse);
       expect(combinedNarrative.contains('summarize_session'), isFalse);

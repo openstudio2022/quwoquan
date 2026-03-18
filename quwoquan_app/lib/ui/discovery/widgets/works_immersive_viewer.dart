@@ -1061,8 +1061,9 @@ class _WorksPhotoCanvasState extends State<_WorksPhotoCanvas> {
               widget.onImageChanged(i);
             },
             itemBuilder: (context, i) {
-              if (images.isEmpty)
+              if (images.isEmpty) {
                 return Container(color: AppColors.worksBackground);
+              }
               return CachedNetworkImage(
                 imageUrl: images[i],
                 fit: BoxFit.cover,

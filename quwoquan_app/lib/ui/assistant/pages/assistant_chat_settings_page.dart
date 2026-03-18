@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/assistant/application/assistant_backend.dart';
 import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
@@ -10,14 +11,18 @@ class AssistantChatSettingsPage extends ConsumerStatefulWidget {
     super.key,
     required this.currentSessionId,
     required this.currentTopicTitle,
+    required this.currentBackend,
     required this.onOpenTrace,
     required this.onSessionSelected,
+    required this.onBackendSelected,
   });
 
   final String currentSessionId;
   final String currentTopicTitle;
+  final AssistantBackend currentBackend;
   final VoidCallback onOpenTrace;
   final Future<void> Function(String sessionId) onSessionSelected;
+  final Future<String> Function(AssistantBackend backend) onBackendSelected;
 
   @override
   ConsumerState<AssistantChatSettingsPage> createState() =>
@@ -27,10 +32,14 @@ class AssistantChatSettingsPage extends ConsumerStatefulWidget {
 class _AssistantChatSettingsPageState
     extends ConsumerState<AssistantChatSettingsPage> {
   late String _topicTitle;
+  late AssistantBackend _backend;
+  late String _sessionId;
 
   @override
   void initState() {
     super.initState();
+    _backend = widget.currentBackend;
+    _sessionId = widget.currentSessionId;
     _topicTitle = widget.currentTopicTitle.trim().isEmpty
         ? UITextConstants.assistantHistoryAll
         : widget.currentTopicTitle;
@@ -83,11 +92,23 @@ class _AssistantChatSettingsPageState
               child: Column(
                 children: [
                   _SettingsEntryRow(
-                    title: UITextConstants.assistantSettingsModel,
-                    value: modelText,
+                    title: UITextConstants.assistantSettingsBackend,
+                    value: _backendLabel(_backend),
                     fgPrimary: fgPrimary,
                     fgSecondary: fgSecondary,
-                    onTap: _openModelSelector,
+                    onTap: _openBackendSelector,
+                  ),
+                  _divider(isDark),
+                  _SettingsEntryRow(
+                    title: UITextConstants.assistantSettingsModel,
+                    value: _backend == AssistantBackend.local
+                        ? modelText
+                        : UITextConstants.assistantBackendRemote,
+                    fgPrimary: fgPrimary,
+                    fgSecondary: fgSecondary,
+                    onTap: _backend == AssistantBackend.local
+                        ? _openModelSelector
+                        : null,
                   ),
                   _divider(isDark),
                   if (kDebugMode) ...[
@@ -102,16 +123,22 @@ class _AssistantChatSettingsPageState
                   ],
                   _SettingsEntryRow(
                     title: UITextConstants.assistantSettingsConversationHistory,
-                    value: _topicTitle,
+                    value: _backend == AssistantBackend.local
+                        ? _topicTitle
+                        : UITextConstants
+                              .assistantSettingsRemoteHistoryDisabled,
                     fgPrimary: fgPrimary,
                     fgSecondary: fgSecondary,
-                    onTap: _openHistoryPage,
+                    onTap: _backend == AssistantBackend.local
+                        ? _openHistoryPage
+                        : null,
                   ),
                 ],
               ),
             ),
             SizedBox(height: AppSpacing.containerMd),
-            _PreferenceFactsSection(currentSessionId: widget.currentSessionId),
+            if (_backend == AssistantBackend.local)
+              _PreferenceFactsSection(currentSessionId: _sessionId),
           ],
         ),
       ),
@@ -129,6 +156,64 @@ class _AssistantChatSettingsPageState
     final slash = modelRef.indexOf('/');
     if (slash < 0 || slash >= modelRef.length - 1) return modelRef;
     return modelRef.substring(slash + 1);
+  }
+
+  String _backendLabel(AssistantBackend backend) {
+    switch (backend) {
+      case AssistantBackend.local:
+        return UITextConstants.assistantBackendLocal;
+      case AssistantBackend.remote:
+        return UITextConstants.assistantBackendRemote;
+    }
+  }
+
+  Future<void> _openBackendSelector() async {
+    final remoteConfigured = ref.read(assistantRemoteConfiguredProvider);
+    final availableBackends = remoteConfigured
+        ? AssistantBackend.values
+        : const <AssistantBackend>[AssistantBackend.local];
+    final selected = await showCupertinoModalPopup<AssistantBackend>(
+      context: context,
+      builder: (sheetContext) {
+        return CupertinoActionSheet(
+          title: Text(UITextConstants.assistantSettingsBackend),
+          message: Text(UITextConstants.assistantSettingsBackendHint),
+          actions: availableBackends
+              .map(
+                (backend) => CupertinoActionSheetAction(
+                  onPressed: () => Navigator.of(sheetContext).pop(backend),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(_backendLabel(backend)),
+                      if (backend == _backend) ...[
+                        SizedBox(width: AppSpacing.xs),
+                        Icon(
+                          CupertinoIcons.check_mark,
+                          size: AppSpacing.iconSmall,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              )
+              .toList(growable: false),
+          cancelButton: CupertinoActionSheetAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(sheetContext).pop(),
+            child: Text(UITextConstants.cancel),
+          ),
+        );
+      },
+    );
+    if (selected == null || selected == _backend) return;
+    final nextSessionId = await widget.onBackendSelected(selected);
+    if (!mounted) return;
+    setState(() {
+      _backend = selected;
+      _sessionId = nextSessionId;
+      _topicTitle = UITextConstants.assistantHistoryAll;
+    });
   }
 
   Future<void> _openModelSelector() async {
@@ -195,9 +280,8 @@ class _AssistantChatSettingsPageState
   Future<void> _openHistoryPage() async {
     final selected = await Navigator.of(context).push<String>(
       CupertinoPageRoute<String>(
-        builder: (_) => _AssistantConversationHistoryPage(
-          currentSessionId: widget.currentSessionId,
-        ),
+        builder: (_) =>
+            _AssistantConversationHistoryPage(currentSessionId: _sessionId),
       ),
     );
     if (selected == null || selected.isEmpty) return;
@@ -208,6 +292,7 @@ class _AssistantChatSettingsPageState
     for (final item in sessions) {
       if ((item['sessionId'] ?? '').toString() != selected) continue;
       setState(() {
+        _sessionId = selected;
         _topicTitle = (item['topicTitle'] as String?)?.trim().isNotEmpty == true
             ? (item['topicTitle'] as String).trim()
             : UITextConstants.assistantHistoryAll;
@@ -379,7 +464,15 @@ class _AssistantConversationHistoryPage extends ConsumerWidget {
             if (!snapshot.hasData) {
               return const Center(child: CupertinoActivityIndicator());
             }
-            final sessions = snapshot.data ?? const <Map<String, dynamic>>[];
+            final sessions = (snapshot.data ?? const <Map<String, dynamic>>[])
+                .where((item) {
+                  final sessionId = (item['sessionId'] ?? '').toString();
+                  return isAssistantSessionForBackend(
+                    sessionId,
+                    AssistantBackend.local,
+                  );
+                })
+                .toList(growable: false);
             if (sessions.isEmpty) {
               return Center(
                 child: Text(
@@ -447,7 +540,7 @@ class _SettingsEntryRow extends StatelessWidget {
   final String value;
   final Color fgPrimary;
   final Color fgSecondary;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -478,11 +571,12 @@ class _SettingsEntryRow extends StatelessWidget {
               ),
             ),
           SizedBox(width: AppSpacing.xs),
-          Icon(
-            CupertinoIcons.chevron_forward,
-            size: AppSpacing.iconSmall,
-            color: fgSecondary,
-          ),
+          if (onTap != null)
+            Icon(
+              CupertinoIcons.chevron_forward,
+              size: AppSpacing.iconSmall,
+              color: fgSecondary,
+            ),
         ],
       ),
     );

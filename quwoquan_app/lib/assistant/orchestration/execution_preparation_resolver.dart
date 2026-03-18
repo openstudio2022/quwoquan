@@ -111,15 +111,8 @@ class ExecutionPreparationResolver {
   }) async {
     try {
       final skills = await skillLoader.loadBundledSkills();
-      final globalPolicy = await loadGlobalPolicyMarkdown();
       if (skills.isEmpty) {
-        if (globalPolicy.isEmpty) return const ResolvedSkillContext.empty();
-        return ResolvedSkillContext(
-          skillName: 'Global Policy',
-          instructionMarkdown: globalPolicy,
-          executionShell: const SkillExecutionShell(),
-          allowedTools: const <String>[],
-        );
+        return const ResolvedSkillContext.empty();
       }
       final matched = skillRouter.resolveSkillForDomain(
         userText: userQuery,
@@ -132,13 +125,7 @@ class ExecutionPreparationResolver {
                 : (skillRouter.resolveSkill(userQuery, skills) ?? matched))
           : matched;
       if (effectiveMatch == null) {
-        if (globalPolicy.isEmpty) return const ResolvedSkillContext.empty();
-        return ResolvedSkillContext(
-          skillName: 'Global Policy',
-          instructionMarkdown: globalPolicy,
-          executionShell: const SkillExecutionShell(),
-          allowedTools: const <String>[],
-        );
+        return const ResolvedSkillContext.empty();
       }
       final skillPolicy = await loadSkillPolicyMarkdown(domainId);
       final phaseRefs = await loadPhaseAwareReferences(
@@ -146,7 +133,6 @@ class ExecutionPreparationResolver {
         dialogueRoundScript: dialogueRoundScript,
       );
       final mergedInstruction = mergeSkillInstructions(
-        globalPolicy: globalPolicy,
         baseSkillInstruction: effectiveMatch.skillInstructionMarkdown,
         skillPolicy: skillPolicy,
         phaseReferences: phaseRefs,
@@ -337,16 +323,6 @@ class ExecutionPreparationResolver {
     }
   }
 
-  Future<String> loadGlobalPolicyMarkdown() async {
-    const path = 'assets/assistant/prompts/global/stack.global_policy.md';
-    try {
-      final text = await rootBundle.loadString(path);
-      return text.trim();
-    } catch (_) {
-      return '';
-    }
-  }
-
   Future<String> loadSkillPersona(String domainId) async {
     if (domainId.trim().isEmpty) return '';
     final policyText = await loadSkillPolicyMarkdown(domainId);
@@ -391,13 +367,11 @@ class ExecutionPreparationResolver {
   }
 
   String mergeSkillInstructions({
-    required String globalPolicy,
     required String baseSkillInstruction,
     required String skillPolicy,
     String phaseReferences = '',
   }) {
     final blocks = <String>[
-      if (globalPolicy.trim().isNotEmpty) globalPolicy.trim(),
       if (baseSkillInstruction.trim().isNotEmpty) baseSkillInstruction.trim(),
       if (skillPolicy.trim().isNotEmpty) skillPolicy.trim(),
       if (phaseReferences.trim().isNotEmpty) phaseReferences.trim(),

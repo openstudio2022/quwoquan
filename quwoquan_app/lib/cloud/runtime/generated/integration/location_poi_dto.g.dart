@@ -39,4 +39,35 @@ class LocationPoiDto {
       'distanceMeters': distanceMeters,
     };
   }
+
+  LocationPoiDto copyWith({
+    String? id,
+    String? name,
+    double? latitude,
+    double? longitude,
+    String? address,
+    int? distanceMeters,
+  }) {
+    return LocationPoiDto(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      address: address ?? this.address,
+      distanceMeters: distanceMeters ?? this.distanceMeters,
+    );
+  }
+}
+
+DateTime? _parseDateTime(dynamic v) {
+  if (v == null) return null;
+  if (v is DateTime) return v;
+  if (v is String) return DateTime.tryParse(v);
+  return null;
+}
+
+List<String>? _parseStringList(dynamic v) {
+  if (v == null) return null;
+  if (v is List) return v.map((e) => e?.toString() ?? '').toList();
+  return null;
 }

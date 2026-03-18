@@ -66,10 +66,10 @@ abstract class AssistantRepository {
 }
 
 class MockAssistantRepository implements AssistantRepository {
-  MockAssistantRepository({_AssistantConsentStore? store})
-    : _store = store ?? const _AssistantConsentStore();
+  MockAssistantRepository({AssistantConsentStore? store})
+    : _store = store ?? const AssistantConsentStore();
 
-  final _AssistantConsentStore _store;
+  final AssistantConsentStore _store;
 
   @override
   Future<List<AssistantSkillConsent>> listConsents() {
@@ -100,12 +100,12 @@ class MockAssistantRepository implements AssistantRepository {
 class RemoteAssistantRepository implements AssistantRepository {
   RemoteAssistantRepository({
     http.Client? client,
-    _AssistantConsentStore? store,
+    AssistantConsentStore? store,
   }) : _client = client ?? http.Client(),
-       _store = store ?? const _AssistantConsentStore();
+       _store = store ?? const AssistantConsentStore();
 
   final http.Client _client;
-  final _AssistantConsentStore _store;
+  final AssistantConsentStore _store;
 
   @override
   Future<List<AssistantSkillConsent>> listConsents() async {
@@ -225,8 +225,8 @@ class RemoteAssistantRepository implements AssistantRepository {
   }
 }
 
-class _AssistantConsentStore {
-  const _AssistantConsentStore();
+class AssistantConsentStore {
+  const AssistantConsentStore();
 
   static const String _key = 'assistant_skill_consents_v1';
 

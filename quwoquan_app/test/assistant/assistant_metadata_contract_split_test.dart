@@ -4,9 +4,15 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('assistant 开放结构已拆为对象级 metadata 子合同', () {
+    final assistantJourney = _readMetadata('assistant/assistant_journey/schema.yaml');
     final assistantTurn = _readMetadata('assistant/assistant_turn/schema.yaml');
     final intentGraph = _readMetadata('assistant/intent_graph/schema.yaml');
     final runArtifacts = _readMetadata('assistant/run_artifacts/schema.yaml');
+
+    expect(assistantJourney, contains('AssistantJourney'));
+    expect(assistantJourney, contains('JourneyStageId'));
+    expect(assistantJourney, contains('name: referenceSummary'));
+    expect(assistantJourney, contains('readiness:'));
 
     expect(assistantTurn, contains('subcontracts:'));
     expect(assistantTurn, contains('decision:'));
@@ -16,6 +22,9 @@ void main() {
     expect(assistantTurn, contains('evidence_item:'));
     expect(assistantTurn, contains('reasoning_basis_item:'));
     expect(assistantTurn, contains('diagnostics:'));
+    expect(assistantTurn, contains('journey'));
+    expect(assistantTurn, isNot(contains('uiProcessTimeline')));
+    expect(assistantTurn, isNot(contains('processSummary')));
 
     expect(intentGraph, contains('query_normalization:'));
     expect(intentGraph, contains('queryTasks'));
@@ -23,6 +32,7 @@ void main() {
     expect(runArtifacts, contains('slot_value:'));
     expect(runArtifacts, contains('slot_state:'));
     expect(runArtifacts, contains('policy_bundle:'));
+    expect(runArtifacts, contains('journey'));
   });
 }
 

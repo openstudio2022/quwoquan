@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
+import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -14,7 +15,9 @@ import 'package:quwoquan_app/ui/circle/widgets/home_circles_category_tab.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class HomeCirclesHubPage extends ConsumerStatefulWidget {
-  const HomeCirclesHubPage({super.key});
+  const HomeCirclesHubPage({super.key, this.onPrimaryOverflowSwipe});
+
+  final ValueChanged<TabSwipeDirection>? onPrimaryOverflowSwipe;
 
   @override
   ConsumerState<HomeCirclesHubPage> createState() => _HomeCirclesHubPageState();
@@ -41,6 +44,7 @@ class _HomeCirclesHubPageState extends ConsumerState<HomeCirclesHubPage> {
   bool _isChannelPanelOpen = false;
   String? _draggingChannelId;
   List<String>? _selectedCategoryIds;
+  final GlobalKey _categoryBarKey = GlobalKey();
 
   @override
   void initState() {
@@ -107,6 +111,16 @@ class _HomeCirclesHubPageState extends ConsumerState<HomeCirclesHubPage> {
     ..._fixedCategoryIds,
     ..._manageableSelectedCategoryIds,
   ];
+
+  String get _effectiveActiveCategoryId {
+    final visibleCategoryIds = _visibleCategoryIds;
+    if (visibleCategoryIds.isEmpty) {
+      return 'all';
+    }
+    return visibleCategoryIds.contains(_activeCategoryId)
+        ? _activeCategoryId
+        : visibleCategoryIds.first;
+  }
 
   List<String> get _unselectedCategoryIds {
     final selectedSet = _manageableSelectedCategoryIds.toSet();
@@ -188,6 +202,50 @@ class _HomeCirclesHubPageState extends ConsumerState<HomeCirclesHubPage> {
     setState(() {
       _isChannelPanelOpen = !_isChannelPanelOpen;
     });
+  }
+
+  void _handleCategorySwipeDragEnd(DragEndDetails details) {
+    final direction = TabSwipeSwitchRegion.directionFromDragEnd(details);
+    if (direction == null) {
+      return;
+    }
+    _handleCategorySwipe(direction);
+  }
+
+  void _handleCategorySwipe(TabSwipeDirection direction) {
+    if (_isChannelPanelOpen) {
+      return;
+    }
+    if (!_isCategoryBarVisible()) {
+      widget.onPrimaryOverflowSwipe?.call(direction);
+      return;
+    }
+    final visibleCategoryIds = _visibleCategoryIds;
+    final currentIndex = visibleCategoryIds.indexOf(_effectiveActiveCategoryId);
+    if (currentIndex < 0) {
+      widget.onPrimaryOverflowSwipe?.call(direction);
+      return;
+    }
+    final nextIndex = currentIndex + direction.delta;
+    if (nextIndex < 0 || nextIndex >= visibleCategoryIds.length) {
+      widget.onPrimaryOverflowSwipe?.call(direction);
+      return;
+    }
+    setState(() {
+      _activeCategoryId = visibleCategoryIds[nextIndex];
+    });
+  }
+
+  bool _isCategoryBarVisible() {
+    final renderObject = _categoryBarKey.currentContext?.findRenderObject();
+    if (renderObject is! RenderBox ||
+        !renderObject.attached ||
+        !renderObject.hasSize) {
+      return false;
+    }
+    final top = renderObject.localToGlobal(Offset.zero).dy;
+    final bottom = top + renderObject.size.height;
+    return bottom > 0 && top < MediaQuery.sizeOf(context).height;
   }
 
   bool _isMyCircleId(String circleId) => _myCircleIds.contains(circleId);
@@ -294,11 +352,7 @@ class _HomeCirclesHubPageState extends ConsumerState<HomeCirclesHubPage> {
   Widget build(BuildContext context) {
     final isDark = ref.watch(effectiveIsDarkProvider);
     final categories = _visibleCategories;
-    final visibleCategoryIds = _visibleCategoryIds;
-    final effectiveActiveCategoryId =
-        visibleCategoryIds.contains(_activeCategoryId)
-        ? _activeCategoryId
-        : visibleCategoryIds.first;
+    final effectiveActiveCategoryId = _effectiveActiveCategoryId;
     final activeCategory = categories.firstWhere(
       (entry) => entry.key == effectiveActiveCategoryId,
       orElse: () => categories.first,
@@ -322,57 +376,64 @@ class _HomeCirclesHubPageState extends ConsumerState<HomeCirclesHubPage> {
 
     return Stack(
       children: [
-        CustomScrollView(
-          physics: const BouncingScrollPhysics(
-            parent: AlwaysScrollableScrollPhysics(),
-          ),
-          slivers: [
-            SliverToBoxAdapter(
-              child: _CirclesGlobalHeader(
-                isDark: isDark,
-                activeModuleTab: _activeModuleTab,
-                circles: circles,
-                stories: stories,
-                onModuleTabChanged: (nextTab) {
-                  if (nextTab == _activeModuleTab) return;
-                  setState(() {
-                    _activeModuleTab = nextTab;
-                  });
-                },
-              ),
+        TabSwipeSwitchRegion(
+          onSwipe: _handleCategorySwipe,
+          child: CustomScrollView(
+            physics: const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(),
             ),
-            SliverPersistentHeader(
-              floating: true,
-              delegate: _StickyTabBarDelegate(
-                extent: AppSpacing.subTabNavigationHeight,
-                child: _HomeCirclesCategoryCapsuleBar(
+            slivers: [
+              SliverToBoxAdapter(
+                child: _CirclesGlobalHeader(
                   isDark: isDark,
-                  categories: categories,
-                  activeCategoryId: effectiveActiveCategoryId,
-                  onCategoryTap: (index) {
-                    final nextCategoryId = categories[index].key;
-                    if (nextCategoryId == effectiveActiveCategoryId) return;
+                  activeModuleTab: _activeModuleTab,
+                  circles: circles,
+                  stories: stories,
+                  onModuleTabChanged: (nextTab) {
+                    if (nextTab == _activeModuleTab) return;
                     setState(() {
-                      _activeCategoryId = nextCategoryId;
+                      _activeModuleTab = nextTab;
                     });
                   },
-                  onChannelSelectorTap: _toggleChannelPanel,
                 ),
               ),
-            ),
-            HomeCirclesCategoryTab(
-              key: ValueKey('home-circles-category-$effectiveActiveCategoryId'),
-              categoryId: effectiveActiveCategoryId,
-              label:
-                  activeCategory.value['label']?.toString() ??
-                  effectiveActiveCategoryId,
-              subCategories:
-                  (activeCategory.value['subCategories'] as List<dynamic>? ??
-                          const [])
-                      .map((item) => item.toString())
-                      .toList(growable: false),
-            ),
-          ],
+              SliverPersistentHeader(
+                floating: true,
+                delegate: _StickyTabBarDelegate(
+                  extent: AppSpacing.subTabNavigationHeight,
+                  child: _HomeCirclesCategoryCapsuleBar(
+                    tabBarKey: _categoryBarKey,
+                    isDark: isDark,
+                    categories: categories,
+                    activeCategoryId: effectiveActiveCategoryId,
+                    onCategoryTap: (index) {
+                      final nextCategoryId = categories[index].key;
+                      if (nextCategoryId == effectiveActiveCategoryId) return;
+                      setState(() {
+                        _activeCategoryId = nextCategoryId;
+                      });
+                    },
+                    onHorizontalDragEnd: _handleCategorySwipeDragEnd,
+                    onChannelSelectorTap: _toggleChannelPanel,
+                  ),
+                ),
+              ),
+              HomeCirclesCategoryTab(
+                key: ValueKey(
+                  'home-circles-category-$effectiveActiveCategoryId',
+                ),
+                categoryId: effectiveActiveCategoryId,
+                label:
+                    activeCategory.value['label']?.toString() ??
+                    effectiveActiveCategoryId,
+                subCategories:
+                    (activeCategory.value['subCategories'] as List<dynamic>? ??
+                            const [])
+                        .map((item) => item.toString())
+                        .toList(growable: false),
+              ),
+            ],
+          ),
         ),
         if (_isChannelPanelOpen)
           Positioned.fill(
@@ -574,17 +635,21 @@ class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
 
 class _HomeCirclesCategoryCapsuleBar extends StatelessWidget {
   const _HomeCirclesCategoryCapsuleBar({
+    this.tabBarKey,
     required this.isDark,
     required this.categories,
     required this.activeCategoryId,
     required this.onCategoryTap,
+    this.onHorizontalDragEnd,
     required this.onChannelSelectorTap,
   });
 
+  final Key? tabBarKey;
   final bool isDark;
   final List<MapEntry<String, Map<String, dynamic>>> categories;
   final String activeCategoryId;
   final ValueChanged<int> onCategoryTap;
+  final GestureDragEndCallback? onHorizontalDragEnd;
   final VoidCallback onChannelSelectorTap;
 
   @override
@@ -601,10 +666,12 @@ class _HomeCirclesCategoryCapsuleBar extends StatelessWidget {
     );
 
     return SecondaryCapsuleTabBar(
+      key: tabBarKey,
       isDark: isDark,
       tabs: tabs,
       activeIndex: activeIndex < 0 ? 0 : activeIndex,
       onTap: onCategoryTap,
+      onHorizontalDragEnd: onHorizontalDragEnd,
       fontSize: AppTypography.smPlus,
       trailing: SizedBox(
         width: AppSpacing.minInteractiveSize + AppSpacing.intraGroupMd,

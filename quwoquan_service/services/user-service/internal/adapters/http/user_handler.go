@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"quwoquan_service/services/user-service/internal/application"
+	followrepo "quwoquan_service/services/user-service/internal/domain/follow/repository"
 )
 
 type UserHandler struct {
@@ -58,12 +59,15 @@ func (h *UserHandler) Routes() http.Handler {
 
 	mux.HandleFunc("GET /v1/user/profile/{userId}", h.handleGetProfile)
 	mux.HandleFunc("PATCH /v1/user/profile", h.handleUpdateProfile)
+	mux.HandleFunc("GET /v1/me", h.handleGetMeProfile)
+	mux.HandleFunc("GET /v1/user/{subAccountId}", h.handleGetSubAccountProfile)
 
 	mux.HandleFunc("POST /v1/user/follow/{targetUserId}", h.handleFollow)
 	mux.HandleFunc("DELETE /v1/user/follow/{targetUserId}", h.handleUnfollow)
 	mux.HandleFunc("GET /v1/users/{userId}/following", h.handleListFollowing)
 	mux.HandleFunc("GET /v1/users/{userId}/followers", h.handleListFollowers)
 	mux.HandleFunc("GET /v1/users/{userId}/relationship", h.handleGetRelationship)
+	mux.HandleFunc("GET /v1/user/{userId}/relationship/capability", h.handleGetRelationshipCapability)
 
 	mux.HandleFunc("POST /v1/user/block/{targetUserId}", h.handleBlock)
 	mux.HandleFunc("DELETE /v1/user/block/{targetUserId}", h.handleUnblock)
@@ -161,6 +165,24 @@ func (h *UserHandler) handleUpdateProfile(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, profile)
 }
 
+func (h *UserHandler) handleGetMeProfile(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, "X-Client-User-Id header required")
+		return
+	}
+	view, err := h.subAccount.GetMeProfileView(r.Context(), userID)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	if view == nil {
+		writeNotFound(w, "user "+userID)
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
 func appErrNicknameTaken(msg string) error {
 	return appErr("AppErrorFromNicknameTaken", msg)
 }
@@ -245,6 +267,34 @@ func (h *UserHandler) handleGetRelationship(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	writeJSON(w, http.StatusOK, rel)
+}
+
+func (h *UserHandler) handleGetRelationshipCapability(w http.ResponseWriter, r *http.Request) {
+	viewerID := userIDFromHeader(r)
+	targetID := r.PathValue("userId")
+	if viewerID == "" || targetID == "" {
+		writeInvalidArg(w, "userId required")
+		return
+	}
+	if targetID == "me" {
+		targetID = viewerID
+	}
+	rel, err := h.follow.GetRelationship(r.Context(), viewerID, targetID)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	isBlocked, err := h.block.CheckBlocked(r.Context(), viewerID, targetID)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	isBlockedBy, err := h.block.CheckBlocked(r.Context(), targetID, viewerID)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, buildRelationshipCapabilityView(viewerID, targetID, rel, isBlocked, isBlockedBy))
 }
 
 func (h *UserHandler) handleBlock(w http.ResponseWriter, r *http.Request) {
@@ -622,7 +672,7 @@ func (h *UserHandler) handleDeleteSubAccount(w http.ResponseWriter, r *http.Requ
 
 func (h *UserHandler) handleGetSubAccountProfile(w http.ResponseWriter, r *http.Request) {
 	subAccountID := r.PathValue("subAccountId")
-	profile, err := h.subAccount.GetSubAccountProfile(r.Context(), subAccountID)
+	profile, err := h.subAccount.GetSubAccountProfileView(r.Context(), subAccountID)
 	if err != nil {
 		writeHTTPError(w, err)
 		return
@@ -632,6 +682,62 @@ func (h *UserHandler) handleGetSubAccountProfile(w http.ResponseWriter, r *http.
 		return
 	}
 	writeJSON(w, http.StatusOK, profile)
+}
+
+func buildRelationshipCapabilityView(viewerID, targetID string, rel *followrepo.Relationship, isBlocked, isBlockedBy bool) map[string]any {
+	relationState := "not_following"
+	canFollow := true
+	canUnfollow := false
+	canMessage := true
+	canFollowBack := false
+	canStartVoiceCall := false
+	canStartVideoCall := false
+
+	switch {
+	case viewerID == targetID:
+		relationState = "self"
+		canFollow = false
+		canMessage = false
+	case rel != nil && rel.IsMutual:
+		relationState = "mutual"
+		canFollow = false
+		canUnfollow = true
+		canStartVoiceCall = true
+		canStartVideoCall = true
+	case rel != nil && rel.IsFollowing:
+		relationState = "following"
+		canFollow = false
+		canUnfollow = true
+	case rel != nil && rel.IsFollowedBy:
+		relationState = "followed_by"
+		canFollowBack = true
+	}
+
+	if isBlocked || isBlockedBy {
+		canMessage = false
+		canStartVoiceCall = false
+		canStartVideoCall = false
+	}
+
+	return map[string]any{
+		"viewerProfileSubjectId": viewerID,
+		"targetProfileSubjectId": targetID,
+		"viewerSubAccountId":     viewerID,
+		"targetSubAccountId":     targetID,
+		"relationState":          relationState,
+		"canFollow":              canFollow,
+		"canUnfollow":            canUnfollow,
+		"canMessage":             canMessage,
+		"canFollowBack":          canFollowBack,
+		"canOpenConversation":    canMessage,
+		"canGreet":               false,
+		"canAddSameInterest":     false,
+		"canSetCloseFriend":      false,
+		"canStartVoiceCall":      canStartVoiceCall,
+		"canStartVideoCall":      canStartVideoCall,
+		"isBlocked":              isBlocked,
+		"isBlockedBy":            isBlockedBy,
+	}
 }
 
 // --- Contact Discovery ---

@@ -32,7 +32,7 @@ class GroupAvatarGrid extends StatelessWidget {
           borderRadius ?? AppSpacing.borderRadius,
           resolvedSize / 2,
         );
-        final gap = innerGap ?? AppSpacing.one;
+        final gap = innerGap ?? 2.0;
         final validUrls = avatarUrls.where((u) => u.isNotEmpty).toList();
         final count = math.min(validUrls.length, 9);
 
@@ -45,15 +45,15 @@ class GroupAvatarGrid extends StatelessWidget {
         }
 
         final rows = _getLayout(count);
-        final maxCols = rows.fold<int>(0, math.max);
-        final maxRows = rows.length;
+        final maxCols = count <= 4 ? 2 : 3;
+        final maxRows = count <= 4 ? 2 : 3;
 
-        final bool fillSquare = count <= 4;
-        final double innerSize = fillSquare ? resolvedSize : resolvedSize * 0.88;
-        final cellSizeByWidth = (innerSize - gap * (maxCols - 1)) / maxCols;
-        final cellSizeByHeight = (innerSize - gap * (maxRows - 1)) / maxRows;
-        final cellSize = math.min(cellSizeByWidth, cellSizeByHeight);
-        final totalHeight = maxRows * cellSize + (maxRows - 1) * gap;
+        // WeChat style: fixed padding around the grid
+        final double padding = resolvedSize * 0.05;
+        final double innerSize = resolvedSize - padding * 2;
+
+        final cellSize = (innerSize - gap * (maxCols - 1)) / maxCols;
+        final totalHeight = rows.length * cellSize + (rows.length - 1) * gap;
 
         return SizedBox(
           width: resolvedSize,
@@ -66,14 +66,17 @@ class GroupAvatarGrid extends StatelessWidget {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(radius),
               child: Center(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: SizedBox(
-                    height: totalHeight,
-                    width: innerSize,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: _buildRows(validUrls, rows, cellSize, gap, innerSize),
+                child: SizedBox(
+                  height: totalHeight,
+                  width: innerSize,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: _buildRows(
+                      validUrls,
+                      rows,
+                      cellSize,
+                      gap,
+                      innerSize,
                     ),
                   ),
                 ),
@@ -144,17 +147,12 @@ class GroupAvatarGrid extends StatelessWidget {
       widgets.add(
         SizedBox(
           width: totalWidth,
+          height: cellSize,
           child: Center(
             child: SizedBox(
               width: rowWidth,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.center,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: rowChildren,
-                ),
-              ),
+              height: cellSize,
+              child: Row(mainAxisSize: MainAxisSize.min, children: rowChildren),
             ),
           ),
         ),

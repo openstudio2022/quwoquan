@@ -4,10 +4,10 @@ import 'package:test/test.dart';
 
 void main() {
   test(
-    'log payload includes routing, retrieval rounds and proposal lifecycle',
+    'phase owner log payload includes routing, retrieval rounds and proposal lifecycle',
     () {
       final file = File(
-        'lib/assistant/conversation/orchestration/agent_loop.dart',
+        'lib/assistant/orchestration/local_phase_execution_owner.dart',
       );
       expect(file.existsSync(), isTrue);
       final text = file.readAsStringSync();

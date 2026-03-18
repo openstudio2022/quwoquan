@@ -85,6 +85,7 @@ func (r *EntityRegistry) loadSharedTypes(metadataDir string) error {
 func (r *EntityRegistry) loadBusinessObject(dir, dirName string) error {
 	aggPath := filepath.Join(dir, "aggregate.yaml")
 	entPath := filepath.Join(dir, "entity.yaml")
+	schemaPath := filepath.Join(dir, "schema.yaml")
 
 	var aggSpec AggregateSpec
 	var isAggregate bool
@@ -98,6 +99,10 @@ func (r *EntityRegistry) loadBusinessObject(dir, dirName string) error {
 		if err := yaml.Unmarshal(data, &aggSpec); err != nil {
 			return fmt.Errorf("parse entity.yaml: %w", err)
 		}
+	} else if fileExists(schemaPath) {
+		// Some domains keep schema-only runtime metadata that should not be
+		// treated as a business object by aggregate/entity codegen.
+		return nil
 	} else {
 		return fmt.Errorf("neither aggregate.yaml nor entity.yaml found in %s", dirName)
 	}

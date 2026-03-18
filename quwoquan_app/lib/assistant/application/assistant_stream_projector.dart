@@ -1,0 +1,156 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:quwoquan_app/assistant/application/assistant_journey_projector.dart';
+import 'package:quwoquan_app/assistant/application/assistant_run_stream.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/user_events.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
+import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
+import 'package:quwoquan_app/assistant/protocol/run_request.dart';
+import 'package:quwoquan_app/assistant/protocol/run_response.dart';
+import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
+import 'package:quwoquan_app/assistant/tool/runtime/tool_metadata_registry.dart';
+
+class AssistantStreamingProjector {
+  AssistantStreamingProjector(
+    AssistantRunRequest request, {
+    required ToolMetadataRegistry toolMetadataRegistry,
+  }) : _toolMetadataRegistry = toolMetadataRegistry,
+       _journeyProjector = AssistantJourneyProjector(
+         toolMetadataRegistry: toolMetadataRegistry,
+       );
+
+  final ToolMetadataRegistry _toolMetadataRegistry;
+  final AssistantJourneyProjector _journeyProjector;
+  bool _sawAnswerDelta = false;
+  String _lastJourneySignature = '';
+
+  bool get sawAnswerDelta => _sawAnswerDelta;
+
+  void emitTrace(
+    AssistantTraceEvent event,
+    StreamController<AssistantRunStreamEvent> controller,
+  ) {
+    if (controller.isClosed) return;
+    final delta = _traceAnswerDelta(event);
+    if (delta.isNotEmpty) {
+      _sawAnswerDelta = true;
+      controller.add(AssistantRunStreamEvent.answerDelta(delta));
+    }
+    _emitJourney(controller, _journeyProjector.consumeTrace(event));
+  }
+
+  void emitUserEvent(
+    UserEvent event,
+    StreamController<AssistantRunStreamEvent> controller,
+  ) {
+    if (controller.isClosed) return;
+    if (event.type == UserEventType.answerDelta &&
+        event.message.trim().isNotEmpty) {
+      _sawAnswerDelta = true;
+      controller.add(AssistantRunStreamEvent.answerDelta(event.message));
+    }
+    if (event.type == UserEventType.processReplace ||
+        event.type == UserEventType.processAppend ||
+        event.type == UserEventType.processCommit ||
+        event.type == UserEventType.answerDelta) {
+      _emitJourney(controller, _journeyProjector.consumeUserEvent(event));
+    }
+  }
+
+  void emitRemoteChunk(
+    String chunkText,
+    StreamController<AssistantRunStreamEvent> controller,
+  ) {
+    if (controller.isClosed || chunkText.trim().isEmpty) return;
+    _sawAnswerDelta = true;
+    controller.add(AssistantRunStreamEvent.answerDelta(chunkText));
+    _emitJourney(
+      controller,
+      _journeyProjector.consumeUserEvent(
+        const UserEvent(
+          type: UserEventType.answerDelta,
+          scope: UserEventScope.aggregation,
+        ),
+      ),
+    );
+  }
+
+  String resolveCompletedDisplayText(AssistantRunResponse response) {
+    final structured = response.structuredResponse;
+    final decision = AssistantTurnDecision.fromMaps(structured: structured);
+    if (decision.nextAction != AssistantNextAction.unknown &&
+        decision.nextAction != AssistantNextAction.answer) {
+      return '';
+    }
+    if (decision.messageKind == AssistantMessageKind.progress) return '';
+
+    final artifactMarkdown =
+        AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
+          response.displayMarkdown,
+        );
+    if (!_isUnsafeChunkDisplayCandidate(artifactMarkdown)) {
+      return artifactMarkdown;
+    }
+    final artifactPlain =
+        AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(
+          response.displayPlainText,
+        );
+    if (!_isUnsafeChunkDisplayCandidate(artifactPlain)) {
+      return artifactPlain;
+    }
+    return '';
+  }
+
+  AssistantJourney resolveCompletedJourney(AssistantRunResponse response) {
+    final direct = _journeyFromResponse(response);
+    if (!direct.isEmpty) {
+      return direct;
+    }
+    return _journeyProjector.snapshot;
+  }
+
+  bool _isUnsafeChunkDisplayCandidate(String raw) {
+    final text =
+        AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(raw);
+    if (text.isEmpty) {
+      return true;
+    }
+    if (AssistantContentFilters.isNotDisplayable(text)) {
+      return true;
+    }
+    return text.contains('assistant_turn') ||
+        text.contains('contractVersion') ||
+        text.contains('queryTasks') ||
+        text.contains('machineEnvelope') ||
+        text.contains('<tool_call>') ||
+        text.contains('</tool_call>') ||
+        text.contains('tool_call');
+  }
+
+  String _traceAnswerDelta(AssistantTraceEvent event) {
+    if (event.type != AssistantTraceEventType.answerDelta &&
+        event.type != AssistantTraceEventType.streamDelta) {
+      return '';
+    }
+    return ((event.data?['delta'] as String?) ?? event.message).trim();
+  }
+
+  void _emitJourney(
+    StreamController<AssistantRunStreamEvent> controller,
+    AssistantJourney journey,
+  ) {
+    if (controller.isClosed) return;
+    final signature = jsonEncode(journey.toJson());
+    if (signature == _lastJourneySignature) return;
+    _lastJourneySignature = signature;
+    controller.add(AssistantRunStreamEvent.journey(journey));
+  }
+
+  AssistantJourney _journeyFromResponse(AssistantRunResponse response) {
+    return resolveAssistantJourneyFromRunResponse(response);
+  }
+}

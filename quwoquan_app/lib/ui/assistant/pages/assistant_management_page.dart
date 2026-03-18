@@ -413,8 +413,8 @@ class _AssistantManagementPageState
           CupertinoSwitch(
             value: value,
             onChanged: enabled ? onChanged : null,
-            activeColor: SettingsSemanticConstants.switchActiveTrackColor,
-            trackColor: SettingsSemanticConstants.switchInactiveTrackColor(isDark),
+            activeTrackColor: SettingsSemanticConstants.switchActiveTrackColor,
+            inactiveTrackColor: SettingsSemanticConstants.switchInactiveTrackColor(isDark),
           ),
         ],
       ),

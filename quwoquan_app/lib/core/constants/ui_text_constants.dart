@@ -132,6 +132,7 @@ class UITextConstants {
   static const String confirm = '确认';
   static const String user = '用户';
   static const String following = '已关注';
+  static const String followBack = '回关';
   static const String unknownUser = '未知用户';
   static const String copyLink = '复制链接';
 
@@ -261,6 +262,17 @@ class UITextConstants {
   static const String noSecretConversations = '暂无密信对话';
   static const String noConversations = '暂无对话';
   static const String startChatHint = '开始与圈友聊天吧！';
+  static const String noMentionsMessages = '暂无@我的消息';
+  static const String noMentionsHint = '有人提到你时，会在这里提醒你';
+  static const String noUnreadMessages = '暂无未读消息';
+  static const String noUnreadHint = '新消息来了，会第一时间出现在这里';
+  static const String untitledConversation = '未命名对话';
+  static const String chatPreviewImage = '[图片]';
+  static const String chatPreviewVideo = '[视频]';
+  static const String chatPreviewVoice = '[语音]';
+  static const String chatPreviewCall = '[通话]';
+  static const String chatPreviewCard = '[卡片]';
+  static const String chatPreviewRecalled = '[消息已撤回]';
   static const String contactsTabAll = '全部';
   static const String contactsTabCircles = '圈子';
 
@@ -425,28 +437,22 @@ class UITextConstants {
   static const String assistantRunningHint = '小趣正在规划与执行中...';
 
   /// v3 用户视角阶段：先帮用户理清问题
-  static const String assistantPhaseUnderstanding = '我先帮你理清问题';
+  static const String assistantPhaseUnderstanding = '理解问题';
 
   /// v3 用户视角阶段：替用户核对资料（工具执行，由元数据覆盖）
-  static const String assistantPhaseSearching = '我在替你核对资料';
+  static const String assistantPhaseSearching = '查找信息';
 
   /// v3 用户视角阶段：替用户整理判断
-  static const String assistantPhaseAnalyzing = '我在帮你整理判断';
+  static const String assistantPhaseAnalyzing = '核对结论';
 
   /// v3 用户视角阶段：替用户组织最终回答
-  static const String assistantPhaseAnswering = '我在组织最终回答';
+  static const String assistantPhaseAnswering = '整理回答';
 
   /// v3 用户视角阶段：确认当前信息是否已经够答
   static const String assistantPhaseAssessing = '我在确认现在的信息够不够回答';
 
   /// v3 用户视角阶段：完成
   static const String assistantPhaseCompleted = '已为你整理好';
-
-  /// 旧版兼容：等待
-  static const String assistantPhaseWaiting = '我先帮你理清问题';
-
-  /// 旧版兼容：深度思考
-  static const String assistantPhaseThinking = '我在帮你整理判断';
   static const String assistantFeedbackHelpful = '有帮助';
   static const String assistantFeedbackUnhelpful = '没帮助';
   static const String assistantFeedbackCorrect = '纠正';
@@ -471,18 +477,10 @@ class UITextConstants {
   static const String assistantModelSelectorHint = '选择当前对话使用的模型';
   static const String assistantModelSelectorConfirm = '应用';
   static const String assistantModelSelectorApplied = '已切换为 %m';
-  static const String assistantTimelineSearchProcess = '搜索过程';
-  static const String assistantTimelineReferenceCount = '可参考 %s 篇资料';
-  static const String assistantTimelineThinking = '正在思考';
-  static const String assistantTimelineKeywordSearch = '发起关键词检索';
-  static const String assistantTimelineReferenceIncrement = '检索到资料';
-  static const String assistantTimelineReady = '可参考资料已准备';
-  static const String assistantTimelineSubagentProgress = '子任务执行进度';
   static const String assistantSearchingReferenceCount = '参考 %s 篇资料';
   static const String assistantReferenceCopied = '链接已复制';
   static const String assistantReferenceOpenFailed = '链接打开失败，已复制到剪贴板';
   static const String assistantReferenceHostBlocked = '该链接域名未通过安全白名单，已复制到剪贴板';
-  static const String assistantProcessThinking = '正在思考';
   static const String assistantProcessSearching = '正在搜索';
   static const String assistantProcessOrganizing = '正在整理';
   static const String assistantProcessAnswering = '正在回答';
@@ -496,10 +494,17 @@ class UITextConstants {
   static const String assistantProcessStatusFailed = '待补稳';
   static const String assistantProcessReferenceCountTemplate = '已核对 %s 个来源';
   static const String assistantProcessStepProgressTemplate = '已完成 %s/%s 步';
+  static const String assistantProcessCompletedSummary = '已深度思考';
+  static const String assistantProcessCompletedSummaryReferencesTemplate =
+      '已深度思考，参考 %s 篇资料';
+  static const String assistantProcessCompletedSummaryElapsedTemplate =
+      '已深度思考，用时 %s 秒';
+  static const String assistantProcessCompletedSummaryFullTemplate =
+      '已深度思考，参考 %s 篇资料，用时 %s 秒';
   static const String assistantProcessStageUnderstand = '理解问题';
-  static const String assistantProcessStageSearch = '核对资料';
-  static const String assistantProcessStageAnalyze = '整理判断';
-  static const String assistantProcessStageAnswer = '组织回答';
+  static const String assistantProcessStageSearch = '查找信息';
+  static const String assistantProcessStageAnalyze = '核对结论';
+  static const String assistantProcessStageAnswer = '整理回答';
 
   /// 长等待（>6 秒）时的 reassurance 文案，符合 world-class 等待体验
   static const String assistantProcessLongWaitReassurance = '正在深入处理，请稍候…';
@@ -519,8 +524,14 @@ class UITextConstants {
   static const String assistantDevReplayScore = '评分聚合快照';
   static const String assistantNoReplayData = '暂无回放数据';
   static const String assistantSettingsModel = '选择模型';
+  static const String assistantSettingsBackend = '会话引擎';
+  static const String assistantSettingsBackendHint =
+      '创建新会话时只绑定一个 backend，不做 fallback 或混跑。';
+  static const String assistantSettingsRemoteHistoryDisabled = '远端链路不读取本地历史';
   static const String assistantSettingsTraceSession = '跟踪会话';
   static const String assistantSettingsConversationHistory = '对话历史';
+  static const String assistantBackendLocal = '本地 phase 引擎';
+  static const String assistantBackendRemote = '远端 API 引擎';
   static const String assistantViewHistory = '查看历史';
   static const String assistantWelcomeHeadline = 'Hi，今天从哪儿开始？';
   static const String assistantHistoryAll = '全部历史';
@@ -538,6 +549,17 @@ class UITextConstants {
   static const String profileEditLabel = '资料编辑';
   static const String profilePersonasLabel = '分身管理';
   static const String profileDirectMessage = '私信';
+  static const String profileTabCreations = '创作';
+  static const String profileTabCircles = '圈子';
+  static const String profileTabInteraction = '互动';
+  static const String creationSubAll = '全部';
+  static const String creationSubMicro = '点滴';
+  static const String creationSubImage = '图片';
+  static const String creationSubVideo = '视频';
+  static const String creationSubArticle = '文章';
+  static const String interactionSubLikes = '赞';
+  static const String interactionSubComments = '评论';
+  static const String interactionSubShares = '转发';
   static const String profileGreet = '打招呼';
   static const String profileSameInterest = '同好';
   static const String profileCloseFriend = '密友';
@@ -854,6 +876,28 @@ class UITextConstants {
         return creationFilterMoment;
       case 'creation_filter_work':
         return creationFilterWork;
+      case 'profile_tab_creations':
+        return profileTabCreations;
+      case 'profile_tab_circles':
+        return profileTabCircles;
+      case 'profile_tab_interaction':
+        return profileTabInteraction;
+      case 'creation_sub_all':
+        return creationSubAll;
+      case 'creation_sub_micro':
+        return creationSubMicro;
+      case 'creation_sub_image':
+        return creationSubImage;
+      case 'creation_sub_video':
+        return creationSubVideo;
+      case 'creation_sub_article':
+        return creationSubArticle;
+      case 'interaction_sub_likes':
+        return interactionSubLikes;
+      case 'interaction_sub_comments':
+        return interactionSubComments;
+      case 'interaction_sub_shares':
+        return interactionSubShares;
       case 'work_format_all':
         return workFormatFilterAll;
       case 'work_format_image':

@@ -38,13 +38,13 @@ evidence change.
 
 | Task | Status | Evidence | Exit Criteria |
 | --- | --- | --- | --- |
-| `intent-owner-rebuild` | `completed` | `AssistantAgentLoop` is the orchestrated entry; `agent_loop.dart` live path first resolves typed owner state before execution; `orchestration_phase_owner_test.dart`, `full_phase_pipeline_test.dart`, `assistant_agent_loop_parity_guard_test.dart` are green | Keep legacy loop as compat bridge only; do not re-introduce owner logic outside phases |
+| `intent-owner-rebuild` | `completed` | `AssistantAgentLoop` is the orchestrated entry; owner state is resolved before phase execution; `orchestration_phase_owner_test.dart`, `full_phase_pipeline_test.dart`, `assistant_agent_loop_parity_guard_test.dart` are green | Do not re-introduce owner logic outside phases and phase owner services |
 | `followup-continuity` | `in_progress` | continuity inputs, previous intent carryover, and follow-up answer repair are guarded by `orchestration_phase_owner_test.dart` | Re-run `integration_test/assistant_manual_replay_test.dart` after owner refactors and confirm no replay regression |
 | `multi-dimensional-retrieval` | `in_progress` | typed `queryTasks`, continuity-aware retrieval, and runtime consumption of phase-provided tasks are covered by `orchestration_phase_owner_test.dart`, `full_phase_pipeline_test.dart`, and `react_runtime_tool_observation_contract_test.dart` | Remove remaining execution-time fallback logic outside phase/retrieval owner paths |
 | `one-pass-answer-optimization` | `completed` | phase-one direct answer shortcut, repair, gap-fill retry, and bounded-answer readiness are covered by owner and full-pipeline tests | Maintain direct-answer path as default convergence path |
 | `replay-regression-upgrade` | `in_progress` | replay-related cleanup is covered by full-pipeline regression tests and the manual replay test file exists | Re-run manual replay integration on iOS after the current refactor set |
 | `live-weather-e2e-milestone` | `pending` | live test entry exists in `test/assistant/minimax_live_weather_fortune_test.dart` | Produce one successful live weather run with non-degraded answer evidence |
-| `fallback-dependency-burn-down-milestone` | `in_progress` | active owner path no longer depends on legacy `_resolveIntentGraph()` or ad hoc `problemClass` fallback; analyzer still shows dead helper warnings | Remove dead helpers and duplicate owner-era resolvers from `agent_loop.dart` |
+| `fallback-dependency-burn-down-milestone` | `in_progress` | active owner path no longer depends on legacy `_resolveIntentGraph()` or ad hoc `problemClass` fallback; remaining work is dead-code and legacy-marker cleanup around phase owner/runtime edges | Remove dead helpers and duplicate owner-era resolvers from the remaining phase owner/runtime files |
 | `live-provider-request-success` | `pending` | provider compat code and tests exist | Produce one confirmed real provider success trace |
 | `live-provider-credential-unblock` | `blocker` | live provider tests depend on valid credentials and a non-blocked remote account | Supply valid credentials and complete a real request successfully |
 
@@ -68,7 +68,7 @@ Evidence:
 
 Definition:
 
-- `agent_loop.dart` stops carrying dead or duplicated owner/routing helpers
+- phase owner/runtime files stop carrying dead or duplicated owner/routing helpers
 - execution preparation and subagent preparation stop drifting across two
   implementations
 
@@ -76,7 +76,7 @@ Status: `in_progress`
 
 Required exit:
 
-- analyzer dead-helper warnings removed from `agent_loop.dart`
+- analyzer dead-helper warnings removed from phase owner/runtime files
 - execution-preparation logic points to one resolver path
 
 ### M3 Phase Execution Owner
@@ -127,14 +127,14 @@ Current blocker:
 
 ## Current Blocking Notes
 
-- compat response keys such as `uiProcessTimelineV2` and `uiUsageStatsV1` are
-  still consumed downstream, so response-shape cleanup must be coordinated
+- legacy response keys have been removed from the active path; keep regression
+  gates enabled so downstream consumers do not re-introduce them
 - live provider closure is not a pure code task; it depends on credentials,
   remote availability, and non-blacklisted access
 
 ## Execution Order
 
-1. Finish legacy owner burn-down inside `agent_loop.dart`
+1. Finish legacy owner burn-down inside phase owner/runtime files
 2. Unify execution-preparation semantics on the shared resolver
 3. Extract execution/synthesis/finalize owner services
 4. Re-run manual replay integration

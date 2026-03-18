@@ -1,25 +1,46 @@
-# Tasks: chat-list-ui-polish — 聊天列表 UI 打磨
+# Tasks: chat-list-ui-polish — 趣信会话列表对齐微信基线
 
-## Phase A — 通用组件
+## 当前交付任务
 
-- [ ] A1: 新建 `RoundedSquareAvatar` 组件（`lib/components/avatar/rounded_square_avatar.dart`），支持 size/imageUrl/name/borderRadius/onTap，使用 `ClipRRect` + 错误占位 → A3
-- [ ] A2: 新建 `GroupAvatarGrid` 组件（`lib/components/avatar/group_avatar_grid.dart`），按 1~9+ 人布局算法渲染九宫格组合头像 → A5~A7
+### Metadata
 
-## Phase B — 趣聊列表页改造
+- [ ] M1: 更新 `quwoquan_service/contracts/metadata/messages/conversation/projections/chat_inbox.yaml`，补 `mentionUnreadCount`、`avatarCompositeUrls`，并新增 `client_projection` 生成 `ChatInboxDto` → A2 A5 A8 A10
+- [ ] M2: 更新 `quwoquan_service/contracts/metadata/messages/conversation/service.yaml`，明确 `ListInbox` 为会话列表唯一读模型入口，冻结 `@我` / 未读字段语义 → A8 A10
+- [ ] M3: 更新 `quwoquan_service/contracts/metadata/messages/openapi.yaml`，补 `/v1/chat/inbox`、`ChatInboxPage`、`ChatInboxItem` schema → A10
+- [ ] M4: 更新 `quwoquan_service/contracts/metadata/messages/conversation/tests/mock.yaml`，补 `ChatInboxDto`、mention/unread 减数场景 → A8 A9 A10
 
-- [ ] B1: Tab 居中修复 — `chat_page.dart` `_buildMainTabs` 中 `leadingActions` 添加与 trailing 等宽的透明占位 → A1
-- [ ] B2: 移除小趣助理条目 — 删除 `_buildMessagesContent` 中 `showAssistant` 条件渲染块及 `_openAssistantHalfSheet` 引用 → A2
-- [ ] B3: `_ConversationTile` 头像替换 — `CircleAvatar` → `RoundedSquareAvatar`；1v1 显示对方头像，群聊接入 `GroupAvatarGrid` → A3~A5
-- [ ] B4: 同好列表头像替换 — `_ContactsListWithIndex` 和 `_buildContactsContent` 中 `CircleAvatar` → `RoundedSquareAvatar` → A3
+### Codegen
 
-## Phase C — 对话设置页头像
+- [ ] C1: 执行 `make -C quwoquan_service verify-metadata`，确认 inbox projection 与 openapi / service 契约一致
+- [ ] C2: 执行 `make codegen`，刷新服务侧 / metadata 相关产物
+- [ ] C3: 执行 `make codegen-app`，生成 `ChatInboxDto` 与相关 app metadata 常量
 
-- [ ] C1: `ChatSettingsPage._MemberAvatar` 中 `CircleAvatar` → `RoundedSquareAvatar`，尺寸 52px → A3
+### 业务逻辑
 
-## Phase D — 测试
+- [ ] B1: 在 `ChatRepository` 中新增 `listInbox()` typed 接口，并为 Mock / Remote 两套实现接入 `ListInbox` → A10
+- [ ] B2: 引入 `ChatListItemViewModel`，统一映射标题、摘要、时间、未读、`@我`、头像模型，禁止 widget 直接读 raw `Map` → A1 A4 A8 A9
+- [ ] B3: 将 `ChatPage` 主列表从 `listConversations()` 切换到 `listInbox()`，并保留 feature flag 回滚路径 → A10 A11
+- [ ] B4: 重写 `_ConversationTile` 的微信式列表行结构，完成右上时间、两行文字、弱分割线与行节奏 → A1 A3 A4
+- [ ] B5: 将 `GroupAvatarGrid` 接入 `avatarCompositeUrls`，校正灰底辨识度和 1~9 宫格稳定布局 → A2 A5
+- [ ] B6: 实现 `全部 / @我 / 未读` 胶囊空状态与角标逻辑，统一来自 inbox row 字段 → A7 A8
+- [ ] B7: 修复二级胶囊上滑隐藏 / 回滑恢复动画，确保内容区即时补位、无留白 → A6
+- [ ] B8: 在已读同步成功后刷新列表缓存与胶囊计数，确保 unread / mention 同步递减 → A8 A9
 
-- [ ] D1: T2 Widget test — `RoundedSquareAvatar` 圆角渲染
-- [ ] D2: T2 Widget test — `GroupAvatarGrid` 各人数布局（3/4/5/6/7/8/9）
-- [ ] D3: T2 Widget test — Tab 居中验证
-- [ ] D4: T2 Widget test — 列表无助理条目
-- [ ] D5: `make gate`
+### 测试
+
+- [ ] T1: 单元测试 `ChatInboxDto.fromMap`、时间格式、摘要映射、角标汇总与减数逻辑 → A1 A4 A8 A9
+- [ ] T2: Widget / integration 测试会话列表两行布局、分割线、灰底头像、胶囊显隐和空状态 → A1 A2 A3 A6 A7
+- [ ] T3: Contract / staging 级验证 `ListInbox` response contract、codegen DTO、`MarkAsRead` 后 unread / mention 递减 → A5 A8 A9 A10
+- [ ] T4: 真机对标微信消息列表，验证首屏扫读感、时间层级、头像辨识度和显隐流畅度 → A2 A3 A4 A6
+
+## 搁置任务（带规划）
+
+- [ ] P1: 密信列表微信化改造单独立项，包含密信 badge、锁态列表、解锁态列表与权限生命周期，不并入本期主链路
+- [ ] P2: 群成员头像变更驱动 `avatarCompositeUrls` 实时刷新，若现有事件流不足则补用户资料变更投影链路
+- [ ] P3: inbox 增量同步替换当前“缓存 + 全量刷新”策略，降低重度用户列表首刷成本
+
+## 未来演进任务
+
+- [ ] F1: 会话列表滑动操作、归档、置顶管理等 IM 治理能力
+- [ ] F2: 会话列表支持更丰富的消息类型摘要，如语音时长、通话状态、卡片摘要
+- [ ] F3: `ChatListItemViewModel` 与详情页顶部会话头部统一为同一展示模型，减少重复格式化逻辑

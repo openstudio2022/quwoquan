@@ -46,12 +46,6 @@ class MediaViewerTopBar extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final leftWidth = AppSpacing.buttonSize +
-            (showPositionInBar
-                ? context.safeGetIntraGroupSpacing(SpacingSize.sm) +
-                    AppSpacing.mediaViewerPositionIndicatorWidth
-                : 0.0);
-        final rightWidth = AppSpacing.buttonSize;
         return Container(
           padding: EdgeInsets.only(
             left: horizontalPadding,
@@ -92,6 +86,10 @@ class MediaViewerTopBar extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         _buildBackButton(context),
+        if (showPos) ...[
+          const SizedBox(width: AppSpacing.intraGroupSm),
+          _buildPositionIndicator(context),
+        ],
       ],
     );
   }
@@ -115,10 +113,10 @@ class MediaViewerTopBar extends StatelessWidget {
 
   Widget _buildPositionIndicator(BuildContext context) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
       decoration: BoxDecoration(
         color: AppColors.black.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
       ),
       child: Text(
         positionText,

@@ -391,7 +391,7 @@ class _CenteredScrollableTabBarState
             : Border(
                 bottom: BorderSide(
                   color: borderColor.withValues(alpha: 0.3),
-                  width: 0.5,
+                  width: AppSpacing.hairline,
                 ),
               ),
       ),

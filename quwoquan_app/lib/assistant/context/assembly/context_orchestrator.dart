@@ -10,7 +10,6 @@ import 'package:quwoquan_app/assistant/context/assembly/answer_boundary_resolver
 import 'package:quwoquan_app/assistant/context/assembly/continuity_resolver.dart';
 import 'package:quwoquan_app/assistant/context/assembly/context_gap_planner.dart';
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 
 class PersonalAssistantContextOrchestrator {
   const PersonalAssistantContextOrchestrator();
@@ -197,7 +196,7 @@ class PersonalAssistantContextOrchestrator {
     final runArtifactsRaw = contextScopeHint['runArtifacts'];
     if (runArtifactsRaw is Map) {
       runArtifacts = parseRunArtifacts(
-        (runArtifactsRaw as Map).cast<String, dynamic>(),
+        (runArtifactsRaw).cast<String, dynamic>(),
       );
     }
 

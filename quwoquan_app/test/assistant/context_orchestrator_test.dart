@@ -1,9 +1,6 @@
 import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
-import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/context/assembly/context_orchestrator.dart';
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
-import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:test/test.dart';
 
 void main() {

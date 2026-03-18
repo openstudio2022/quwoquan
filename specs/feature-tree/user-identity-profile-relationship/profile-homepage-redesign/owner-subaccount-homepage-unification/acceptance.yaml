@@ -1,0 +1,114 @@
+feature: owner-subaccount-homepage-unification
+level: L3_story
+source_path: user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification
+archived: false
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+level_acceptance:
+  A1:
+    criteria: '用户域 metadata 已冻结统一主页主体模型：不存在独立 public profile 实体；owner 与每个 subAccount 都是可见主页主体。资料读取契约可唯一表达 profileSubjectId、ownerUserId、subjectType、username、displayName、avatarUrl、backgroundUrl、bio 及主页统计字段。'
+    status: pending
+    linked_tasks: [T01, T02, T03, T12, T18, T20]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests:
+      - verify-metadata
+      - codegen-app generated profile subject dto check
+      - user-service ProfileSubjectView contract test
+  A2:
+    criteria: '资料编辑写入契约已显式支持同步范围：修改 owner 或 subAccount 后，可选择同步到 owner、当前 subAccount、其它 subAccount 或保持仅当前主体生效。兼容场景下保留旧更新接口，但新写入链路以同步范围字段为准。'
+    status: pending
+    linked_tasks: [T01, T03, T07a, T13, T16, T19, T20, T21]
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: required
+    tests:
+      - ProfileSubjectMutation schema contract
+      - profile sync prompt widget test
+      - user-service profile sync write contract test
+      - owner subAccount sync journey test
+  A3:
+    criteria: '关系能力契约已正式化为独立视图，能够稳定支撑五种主页态：self、未关注、我关注Ta、Ta关注我、互关。主页按钮矩阵与聊天/通话门禁直接消费该视图，不再依赖手写字符串 tier 或隐式布尔组合。'
+    status: pending
+    linked_tasks: [T05, T07a, T14, T16, T19, T20]
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: optional
+    tests:
+      - RelationshipCapabilityView schema contract
+      - profile action bar widget matrix test
+      - user-service relationship capability contract test
+  A4:
+    criteria: '互动流契约已统一为赞、评论、转发三类活动；我的主页支持收到/发出方向过滤，他人主页仅展示公开收到互动。互动列表的字段、类型枚举、方向枚举和空态语义可由 metadata/codegen 驱动，端侧不再硬编码 comment/favorite 等历史类型。'
+    status: pending
+    linked_tasks: [T06, T07a, T15, T16, T19, T20]
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: optional
+    tests:
+      - ProfileInteractionActivityView schema contract
+      - profile interaction tab widget test
+      - content-service profile interaction received sent contract test
+  A5:
+    criteria: '个人主页 route、request_context、tab/filter UI 配置已收敛到 metadata 真相源。/user/{username} 仍为对外路由；端侧请求 page_id、tab 配置与 interaction/filter 配置均由 codegen 常量生成，不再在 UI/repository 中硬编码。'
+    status: pending
+    linked_tasks: [T04, T07, T11, T11a, T16, T18]
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: optional
+    tests:
+      - request_context and page_id generation test
+      - user profile ui config generation test
+      - app repository constant consumption test
+  A6:
+    criteria: '用户域与内容域的 codegen 基线可用：verify-metadata、codegen、codegen-app 可通过；App 侧已具备消费 ProfileSubjectView、RelationshipCapabilityView、ProfileInteractionActivityView 对应生成物的条件。'
+    status: pending
+    linked_tasks: [T08, T09, T10, T11, T11a, T20]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests:
+      - verify-metadata
+      - make codegen
+      - make codegen-app
+      - generated api metadata regression test
+  A7:
+    criteria: '统一 UI 设计口径已冻结：一级 Tab 为创作/圈子/互动；创作与互动都使用左对齐二级胶囊；互动去掉收藏，采用赞/评论/转发；背景图默认高度为屏幕高 1/4、最大拉伸至 1/3；头像侵入背景 1/3 且其余 2/3 落在资料区；整体升级到 iOS 风格；我的主页与他人主页最终共用一个 ProfileShell。'
+    status: pending
+    linked_tasks: [T04, T17, T17b, T19, T21]
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: required
+    tests:
+      - ProfileShell geometry widget test
+      - sticky identity bar journey test
+      - primary and secondary tab structure regression test
+  A8:
+    criteria: '下拉拉伸与滚动协调方案已冻结为可开发设计：页面基于单一主滚动坐标系；下拉时背景图、资料区、一级 Tab 与当前列表整体下移，背景图受控拉伸并松手回弹；上滑时整页整体上卷，头像和用户名先收进顶部工具栏，一级 Tab 再吸顶到工具栏下方；二级 Tab 只随内容滚动并在回滑时回显；需要的 feature flag、观测指标、SLO、回滚步骤和 T1~T4 证据矩阵已齐备，可直接进入 /dev。'
+    status: pending
+    linked_tasks: [T04, T11a, T17, T17a, T17b, T19, T21, T21a]
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: required
+    tests:
+      - single scroll coordinator widget test
+      - pull stretch rebound interaction test
+      - feature flag rollback rehearsal

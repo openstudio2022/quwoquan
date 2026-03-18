@@ -353,6 +353,7 @@
   - 一行摘要
   - 一项可展开来源计数
 - 过程区上游统一改为 `UserEvent` 协议，不再从 trace 中猜语义。
+- `trace`、raw reasoning、`<think>`、query 构造词、tool args 只进入 observability，不进入用户可见过程区和最终成答。
 - Skill 通过 `response_style` 定义 Markdown 编排骨架：
   - 标题层级
   - 结论优先或依据优先
@@ -382,6 +383,9 @@
 - `OpenClawBridge` 兼容新的 `user_event/*` SSE 事件。
 - 本地主线生成与远端桥回放必须产生相同形态的 `UserEvent`。
 - UI 采用 reducer 处理事件，禁止 `trace / userPhase / chunk / completed` 多处直接改同一份状态。
+- `answer_delta` 是最终答案正文的唯一流式来源；`process_*` 是过程抽屉的唯一流式来源；`completed` 是唯一终态封口来源。
+- terminal payload 缺失时，只允许在 answer 通道已确认闭合后合成 completed；禁止使用 `thinkingProgress`、repair thinking 或 raw reasoning 封箱。
+- 完成态摘要必须统一由 canonical `AssistantJourney` + 来源计数 + 整数秒耗时生成，历史重载与实时完成态使用同一口径。
 
 ### 包 4：Session + Long-term Preference Facts
 

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 
 /// Permission config for a tool, sourced from [tool_permissions.json].
 class ToolPermissionConfig {
@@ -260,20 +261,26 @@ class ToolMetadataRegistry {
     return (reasoning['promptHint'] as String?)?.trim();
   }
 
+  JourneyStageId journeyStageIdForTool(String toolName) {
+    final ui = userInteractionForTool(toolName);
+    if (ui == null) return JourneyStageId.unknown;
+    return parseJourneyStageId((ui['journeyStageId'] as String?)?.trim() ?? '');
+  }
+
   /// Returns permission config for [toolName] from tool_permissions.json.
   /// Call after [ensureLoaded]. Returns null if not configured.
   ToolPermissionConfig? permissionForTool(String toolName) =>
       _permissions[toolName];
 
   /// Resolves a template string containing `{{key}}` placeholders against
-  /// the supplied [variables] map.  Unknown placeholders are left as-is.
+  /// the supplied [variables] map. Unknown placeholders fail closed.
   String resolveTemplate(String template, Map<String, dynamic> variables) {
     return template.replaceAllMapped(
       RegExp(r'\{\{(\w+(?:\.\w+)*)\}\}'),
       (match) {
         final key = match.group(1)!;
         final value = _resolveNestedKey(variables, key);
-        return value?.toString() ?? match.group(0)!;
+        return value?.toString() ?? '';
       },
     );
   }

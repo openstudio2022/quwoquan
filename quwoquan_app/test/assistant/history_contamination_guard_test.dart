@@ -1,15 +1,72 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:quwoquan_app/assistant/conversation/orchestration/agent_loop.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/orchestration/local_phase_execution_owner.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
 import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
 import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
+import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/retrieval/contracts/capability_catalog.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/tool_registry.dart';
 import 'package:test/test.dart';
+
+Map<String, dynamic> _canonicalHistoryAssistantMessage(String content) {
+  const journey = AssistantJourney(
+    stages: <AssistantJourneyStage>[
+      AssistantJourneyStage(
+        stageId: JourneyStageId.analyze,
+        status: JourneyStageStatus.completed,
+        order: 0,
+        summary: '我先把问题边界理清',
+      ),
+      AssistantJourneyStage(
+        stageId: JourneyStageId.search,
+        status: JourneyStageStatus.completed,
+        order: 1,
+        summary: '我补充核对了关键来源',
+      ),
+      AssistantJourneyStage(
+        stageId: JourneyStageId.verify,
+        status: JourneyStageStatus.completed,
+        order: 2,
+        summary: '我交叉确认了结论',
+      ),
+      AssistantJourneyStage(
+        stageId: JourneyStageId.answer,
+        status: JourneyStageStatus.completed,
+        order: 3,
+        summary: '已为你整理好',
+      ),
+    ],
+    entries: <AssistantJourneyEntry>[
+      AssistantJourneyEntry(
+        entryId: 'journey.analyze',
+        stageId: JourneyStageId.analyze,
+        kind: JourneyEntryKind.narrative,
+        status: JourneyStageStatus.completed,
+        order: 0,
+        headline: '我先把问题边界理清',
+      ),
+    ],
+    readiness: AssistantJourneyReadiness(finalAnswerReady: true),
+  );
+  return <String, dynamic>{
+    'role': 'assistant',
+    'content': content,
+    ...buildPersistedAssistantTurnFields(
+      journey: journey,
+      displayMarkdown: content,
+      displayPlainText: content,
+      followupPrompt: '',
+      actionHints: const <String>[],
+      elapsedMs: 1200,
+    ),
+  };
+}
 
 // ─── In-memory VectorStore（无 ObjectBox 依赖，纯离线）──────────────────────
 class _InMemoryVectorStore implements AssistantVectorStore {
@@ -159,7 +216,7 @@ void main() {
         ]),
         toolRegistry: AssistantToolRegistry(),
       );
-      final loop = PersonalAssistantAgentLoop(
+      final loop = LocalPhaseExecutionOwner(
         runtime,
         sessionManager: AssistantSessionManager(
           storagePath: '${tempDir.path}/sessions.json',
@@ -218,7 +275,7 @@ void main() {
             ]),
             toolRegistry: AssistantToolRegistry(),
           );
-          final loop = PersonalAssistantAgentLoop(
+          final loop = LocalPhaseExecutionOwner(
             runtime,
             sessionManager: AssistantSessionManager(
               storagePath: '${tempSub.path}/sessions.json',
@@ -262,8 +319,7 @@ void main() {
   // 测试 2：sessions.json 加载时自动清洗历史降级消息
   // ══════════════════════════════════════════════════════════════════════════
   group('G2 — SessionManager 加载时自动清洗降级消息', () {
-    test('磁盘 sessions.json 含降级消息时，load() 后应自动过滤', () async {
-      // 直接写一个含污染消息的 sessions.json
+    test('旧版 sessions.json 含污染 assistant 历史时，load() 后应直接清空', () async {
       final sessionsPath = '${tempDir.path}/sessions.json';
       final pollutedData = {
         'version': 'v2',
@@ -289,30 +345,21 @@ void main() {
 
       expect(
         assistantContents,
-        everyElement(
-          isNot(
-            anyOf(
-              contains('模型调用失败'),
-              contains('助手暂时不可用'),
-              contains('HTTP 400'),
-            ),
-          ),
-        ),
-        reason: '从磁盘加载后，所有降级 assistant 消息应已被过滤',
+        isEmpty,
+        reason: '旧版历史不再兼容，应在 load() 时整体清空',
       );
     });
 
-    test('正常 assistant 消息不被误删', () async {
-      // 直接写一个正常 sessions.json
+    test('canonical v3 assistant 消息会被保留', () async {
       final sessionsPath = '${tempDir.path}/sessions_normal.json';
       final normalData = {
-        'version': 'v2',
+        'version': assistantHistoryStorageVersion,
         'sessions': {
           'assistant': [
             {'role': 'user', 'content': '深圳天气'},
-            {'role': 'assistant', 'content': '深圳今天晴朗，气温25°C。'},
+            _canonicalHistoryAssistantMessage('深圳今天晴朗，气温25°C。'),
             {'role': 'user', 'content': '明天呢'},
-            {'role': 'assistant', 'content': '明天多云，气温22-27°C。'},
+            _canonicalHistoryAssistantMessage('明天多云，气温22-27°C。'),
           ],
         },
       };
@@ -324,7 +371,7 @@ void main() {
       final history = manager.getOrCreateSession('assistant');
       final assistantContents = _assistantContents(history);
 
-      expect(assistantContents.length, 2, reason: '正常 assistant 消息不应被删除');
+      expect(assistantContents.length, 2, reason: 'canonical assistant 消息不应被删除');
       expect(assistantContents[0], '深圳今天晴朗，气温25°C。');
     });
   });
@@ -423,7 +470,7 @@ void main() {
           text: '九寨沟方向备选方案：沟口、川主寺、松潘古城',
         );
 
-        final loop = PersonalAssistantAgentLoop(
+        final loop = LocalPhaseExecutionOwner(
           runtime,
           sessionManager: sessionManager,
           memoryRepository: memoryRepository,

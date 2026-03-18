@@ -25,11 +25,11 @@ quwoquan_app/
 │   │
 │   ├── prompts/                             ← Prompt Stack 各层模板
 │   │   ├── global/
-│   │   │   ├── stack.global_system.md       ← L1 全局身份与安全
-│   │   │   ├── stack.runtime_policy.md      ← L2 本轮预算/权限/工具
-│   │   │   ├── stack.recovery_policy.md     ← L3 失败恢复策略
-│   │   │   ├── stack.output_contract.md     ← L4 输出契约（assistant_turn）
-│   │   │   ├── stack.global_policy.md       ← L5 全局政策叠加
+│   │   │   ├── stack.identity.md            ← L1 全局身份
+│   │   │   ├── stack.safety.md              ← L2 安全与降级边界
+│   │   │   ├── stack.persona.md             ← L3 全局人格/语气
+│   │   │   ├── stack.tool_policy.md         ← L4 工具与执行约束
+│   │   │   ├── phase.output_contract.*.md   ← L5 分阶段输出契约
 │   │   │   ├── planner.global_plan.md       ← Planner 主模板
 │   │   │   └── synthesizer.*.md             ← Synthesizer 模板族
 │   │   ├── domain_routing/                  ← 领域路由目录
@@ -127,7 +127,7 @@ skills/{domain}/
           └───────────────────┘
                    +
           ┌───────────────────┐
-          │  技能动态注入层    │ （agent_loop 组装，按轮次/阶段变化）
+          │  技能动态注入层    │ （assistant_agent_loop / phase owner 组装，按轮次/阶段变化）
           │                   │
           │  [bootstrap]       │ ← SKILL.md body + skill.policy.md（每轮）
           │  [phase-specific]  │ ← 按 nextAction 阶段加载 references/*
@@ -183,7 +183,7 @@ abort / fallback        → answer       → references/output-examples.md（降
 
 ### 3.4 Phase-aware 加载的代码扩展点
 
-当前 `agent_loop._resolveSkillContext` 无 phase 参数。扩展方案：
+当前 phase owner 的 skill context loader 需要显式接收 phase。扩展方案：
 
 ```dart
 // 当前（已实现）
@@ -380,7 +380,7 @@ skill_id: finance_consumer
 
 | 任务 | 对应代码位置 | 预估工时 |
 |---|---|---|
-| **Phase-aware 加载实现** | `agent_loop._resolveSkillContext` 增加 `phase` 参数，加载 `reference_docs`/`script_guides` 对应文件 | 0.5d |
+| **Phase-aware 加载实现** | phase owner 的 `_resolveSkillContext` 增加 `phase` 参数，加载 `reference_docs`/`script_guides` 对应文件 | 0.5d |
 | **tool-call-guidance 迁移** | 15 个活跃技能将 `scripts/tool-call-guidance.md` 重命名移入 `references/`，更新 SKILL.md frontmatter | 0.5d |
 | **skill.policy.md 中文化** | 15 个活跃技能将 `skill.policy.md` 由英文改写为中文 | 1d |
 | **state_transition_test_cases 接入测试** | 新建 `test/personal_assistant/dialogue_state_transition_contract_test.dart` | 0.5d |

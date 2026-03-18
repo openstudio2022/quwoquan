@@ -16,6 +16,9 @@ class AppColors {
 
   /// 媒体查看器等深色背景上的「已关注」按钮背景，与黑底明显区分
   static const Color followingButtonOnDark = Color(0xFF4A4A4A);
+  static const Color iosSystemSurfaceDark = Color(0xFF2C2C2E);
+  static const Color iosAccentLight = Color(0xFF007AFF);
+  static const Color iosAccentDark = Color(0xFF64D2FF);
 
   // ==================== 欢迎页语义色 ====================
   static const Color welcomeBackground = Color(0xFF2563EB); // blue-600

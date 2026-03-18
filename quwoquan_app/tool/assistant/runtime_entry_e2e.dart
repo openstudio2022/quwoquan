@@ -2,9 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:quwoquan_app/assistant/application/assistant_gateway.dart';
-import 'package:quwoquan_app/assistant/application/capability_gateway.dart';
+import 'package:quwoquan_app/assistant/application/assistant_request_policy.dart';
+import 'package:quwoquan_app/assistant/application/local_assistant_entry.dart';
 import 'package:quwoquan_app/assistant/domain/channel/channel.dart';
-import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
 import 'package:quwoquan_app/assistant/runtime/assistant_runtime.dart';
 
 Future<void> main() async {
@@ -19,13 +19,9 @@ Future<void> main() async {
     storagePath: '${tempDir.path}/vector_store.json',
   );
   final assistantGateway = AssistantGateway(runtime);
-  final capabilityGateway = CapabilityGateway(
+  final localEntry = LocalAssistantEntry(
     assistantGateway: assistantGateway,
-    openClawBridge: OpenClawBridge(
-      // Keep empty to force local path, same as app fallback behavior.
-      baseUrl: '',
-      authToken: '',
-    ),
+    requestPolicy: const AssistantRequestPolicy(),
   );
 
   final request = AssistantRunRequest(
@@ -41,14 +37,11 @@ Future<void> main() async {
     ],
   );
 
-  final response = await capabilityGateway.run(
-    request: request,
-    mode: CapabilityRouteMode.hybrid,
-  );
+  final response = await localEntry.run(request: request);
 
   final report = <String, dynamic>{
     'generatedAt': now,
-    'entry': 'capability_gateway.run',
+    'entry': 'local_assistant_entry.run',
     'request': request.toJson(),
     'result': <String, dynamic>{
       'degraded': response.degraded,

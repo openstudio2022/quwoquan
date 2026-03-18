@@ -3,9 +3,9 @@ import 'dart:io';
 import 'package:test/test.dart';
 
 void main() {
-  test('agent loop observability payload includes required fields', () {
+  test('phase owner observability payload includes required fields', () {
     final file = File(
-      'lib/assistant/conversation/orchestration/agent_loop.dart',
+      'lib/assistant/orchestration/local_phase_execution_owner.dart',
     );
     expect(file.existsSync(), isTrue);
     final text = file.readAsStringSync();

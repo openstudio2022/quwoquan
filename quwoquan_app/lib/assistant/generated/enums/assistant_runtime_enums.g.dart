@@ -601,6 +601,126 @@ extension AssistantMessageKindX on AssistantMessageKind {
   }
 }
 
+enum JourneyStageId {
+  unknown,
+  analyze,
+  search,
+  verify,
+  answer,
+}
+
+JourneyStageId parseJourneyStageId(String raw) {
+  switch (raw.trim()) {
+    case "analyze":
+      return JourneyStageId.analyze;
+    case "search":
+      return JourneyStageId.search;
+    case "verify":
+      return JourneyStageId.verify;
+    case "answer":
+      return JourneyStageId.answer;
+    default:
+      return JourneyStageId.unknown;
+  }
+}
+
+extension JourneyStageIdX on JourneyStageId {
+  String get wireName {
+    switch (this) {
+      case JourneyStageId.unknown:
+        return "";
+      case JourneyStageId.analyze:
+        return "analyze";
+      case JourneyStageId.search:
+        return "search";
+      case JourneyStageId.verify:
+        return "verify";
+      case JourneyStageId.answer:
+        return "answer";
+    }
+  }
+}
+
+enum JourneyStageStatus {
+  unknown,
+  pending,
+  active,
+  completed,
+  blocked,
+  skipped,
+}
+
+JourneyStageStatus parseJourneyStageStatus(String raw) {
+  switch (raw.trim()) {
+    case "pending":
+      return JourneyStageStatus.pending;
+    case "active":
+      return JourneyStageStatus.active;
+    case "completed":
+      return JourneyStageStatus.completed;
+    case "blocked":
+      return JourneyStageStatus.blocked;
+    case "skipped":
+      return JourneyStageStatus.skipped;
+    default:
+      return JourneyStageStatus.unknown;
+  }
+}
+
+extension JourneyStageStatusX on JourneyStageStatus {
+  String get wireName {
+    switch (this) {
+      case JourneyStageStatus.unknown:
+        return "";
+      case JourneyStageStatus.pending:
+        return "pending";
+      case JourneyStageStatus.active:
+        return "active";
+      case JourneyStageStatus.completed:
+        return "completed";
+      case JourneyStageStatus.blocked:
+        return "blocked";
+      case JourneyStageStatus.skipped:
+        return "skipped";
+    }
+  }
+}
+
+enum JourneyEntryKind {
+  unknown,
+  narrative,
+  referenceBundle,
+  milestone,
+}
+
+JourneyEntryKind parseJourneyEntryKind(String raw) {
+  switch (raw.trim()) {
+    case "narrative":
+      return JourneyEntryKind.narrative;
+    case "reference_bundle":
+      return JourneyEntryKind.referenceBundle;
+    case "milestone":
+      return JourneyEntryKind.milestone;
+    default:
+      return JourneyEntryKind.unknown;
+  }
+}
+
+extension JourneyEntryKindX on JourneyEntryKind {
+  String get wireName {
+    switch (this) {
+      case JourneyEntryKind.unknown:
+        return "";
+      case JourneyEntryKind.narrative:
+        return "narrative";
+      case JourneyEntryKind.referenceBundle:
+        return "reference_bundle";
+      case JourneyEntryKind.milestone:
+        return "milestone";
+    }
+  }
+}
+
 enum TraceVisibility {
   userVisible,
   system,
@@ -630,53 +750,6 @@ extension TraceVisibilityX on TraceVisibility {
         return "system";
       case TraceVisibility.internal:
         return "internal";
-    }
-  }
-}
-
-enum ProcessJournalEventType {
-  stageSet,
-  narrativeCommit,
-  liveCursor,
-  sourceUpdate,
-  answerDelta,
-  completed,
-}
-
-ProcessJournalEventType parseProcessJournalEventType(String raw) {
-  switch (raw.trim()) {
-    case "stage_set":
-      return ProcessJournalEventType.stageSet;
-    case "narrative_commit":
-      return ProcessJournalEventType.narrativeCommit;
-    case "live_cursor":
-      return ProcessJournalEventType.liveCursor;
-    case "source_update":
-      return ProcessJournalEventType.sourceUpdate;
-    case "answer_delta":
-      return ProcessJournalEventType.answerDelta;
-    case "completed":
-      return ProcessJournalEventType.completed;
-    default:
-      return ProcessJournalEventType.narrativeCommit;
-  }
-}
-
-extension ProcessJournalEventTypeX on ProcessJournalEventType {
-  String get wireName {
-    switch (this) {
-      case ProcessJournalEventType.stageSet:
-        return "stage_set";
-      case ProcessJournalEventType.narrativeCommit:
-        return "narrative_commit";
-      case ProcessJournalEventType.liveCursor:
-        return "live_cursor";
-      case ProcessJournalEventType.sourceUpdate:
-        return "source_update";
-      case ProcessJournalEventType.answerDelta:
-        return "answer_delta";
-      case ProcessJournalEventType.completed:
-        return "completed";
     }
   }
 }

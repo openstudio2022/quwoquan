@@ -65,6 +65,8 @@ func (h *ContentHandler) Routes() http.Handler {
 			writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET/PATCH"))
 		}
 	})
+	mux.HandleFunc("GET /v1/content/profile-subjects/{profileSubjectId}/interactions/received", h.handleListProfileInteractionActivitiesReceived)
+	mux.HandleFunc("GET /v1/content/profile-subjects/{profileSubjectId}/interactions/sent", h.handleListProfileInteractionActivitiesSent)
 	RegisterGeneratedRoutes(mux, h)
 	return mux
 }
@@ -756,6 +758,34 @@ func (h *ContentHandler) handleListCommentsForPostAuthor(w http.ResponseWriter, 
 		resp["nextCursor"] = nextCursor
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *ContentHandler) handleListProfileInteractionActivitiesReceived(w http.ResponseWriter, r *http.Request) {
+	h.handleListProfileInteractionActivities(w, r, "received")
+}
+
+func (h *ContentHandler) handleListProfileInteractionActivitiesSent(w http.ResponseWriter, r *http.Request) {
+	h.handleListProfileInteractionActivities(w, r, "sent")
+}
+
+func (h *ContentHandler) handleListProfileInteractionActivities(w http.ResponseWriter, r *http.Request, direction string) {
+	profileSubjectID := r.PathValue("profileSubjectId")
+	if strings.TrimSpace(profileSubjectID) == "" {
+		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "profileSubjectId 不能为空", "missing profileSubjectId"))
+		return
+	}
+	limit := 20
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	items, err := h.postService.ListProfileInteractionActivities(r.Context(), profileSubjectID, direction, limit)
+	if err != nil {
+		writeHTTPError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
 func (h *ContentHandler) handleGetAppConfig(w http.ResponseWriter, _ *http.Request) {

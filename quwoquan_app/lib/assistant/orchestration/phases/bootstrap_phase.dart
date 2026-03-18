@@ -7,12 +7,10 @@ import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
-import 'package:quwoquan_app/assistant/infrastructure/llm/llm_response_parser.dart';
 import 'package:quwoquan_app/assistant/orchestration/assistant_orchestration_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
-import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/reasoning/routing/domain_router.dart';
 import 'package:quwoquan_app/assistant/retrieval/contracts/capability_catalog.dart';
 import 'package:quwoquan_app/assistant/template_runtime/assistant_template_runtime.dart';
@@ -88,12 +86,21 @@ class BootstrapPhase implements Phase {
     );
     final continuityPolicy =
         continuityDecision?.policy ??
-        contextOrchestrator.buildContinuityPolicy(
+        _fallbackContinuityPolicy(
           query: latestUserQuery,
           sessionHistory: priorSessionHistory,
+          previousIntentGraph: previousIntentGraph,
+          previousAnswerSummary: previousAnswerSummary,
         );
     final continuityOverrideSlots =
         continuityDecision?.overrideSlots ?? const <String, dynamic>{};
+    final carryPreviousTurn = _shouldCarryPreviousTurn(continuityPolicy);
+    final carriedPreviousIntentGraph = carryPreviousTurn
+        ? previousIntentGraph
+        : null;
+    final carriedPreviousAnswerSummary = carryPreviousTurn
+        ? previousAnswerSummary
+        : '';
     if (latestUserQuery.isNotEmpty) {
       sessionManager.appendMessage(
         sessionId: sessionId,
@@ -177,8 +184,8 @@ class BootstrapPhase implements Phase {
           latestUserQuery: latestUserQuery,
           historySummary: historySummary,
           recalledTexts: recalledTexts,
-          previousIntentGraph: previousIntentGraph,
-          previousAnswerSummary: previousAnswerSummary,
+          previousIntentGraph: carriedPreviousIntentGraph,
+          previousAnswerSummary: carriedPreviousAnswerSummary,
           contextContinuityPolicy: continuityPolicy,
           continuityOverrideSlots: continuityOverrideSlots,
           recallResult: recallResult,
@@ -263,7 +270,7 @@ class BootstrapPhase implements Phase {
     final previousSlotState =
         previousRunArtifacts?.slotState.toJson() ??
         ((latestAssistant?['runArtifacts'] as Map?)
-                    ?.cast<String, dynamic>()?['slotState']
+                    ?.cast<String, dynamic>()['slotState']
                 as Map?)
             ?.cast<String, dynamic>() ??
         const <String, dynamic>{};
@@ -394,6 +401,83 @@ class BootstrapPhase implements Phase {
         (assistant['displayPlainText'] as String?)?.trim() ?? '';
     if (displayPlainText.isNotEmpty) return displayPlainText;
     return (assistant['content'] as String?)?.trim() ?? '';
+  }
+
+  ContextContinuityPolicy _fallbackContinuityPolicy({
+    required String query,
+    required List<Map<String, dynamic>> sessionHistory,
+    required IntentGraph? previousIntentGraph,
+    required String previousAnswerSummary,
+  }) {
+    final seeded = contextOrchestrator.buildContinuityPolicy(
+      query: query,
+      sessionHistory: sessionHistory,
+    );
+    if (_shouldCarryPreviousTurn(seeded)) return seeded;
+    final hasPriorTurn =
+        previousIntentGraph != null ||
+        previousAnswerSummary.trim().isNotEmpty ||
+        _latestAssistantMessage(sessionHistory) != null;
+    if (!hasPriorTurn || !_looksLikeFollowUpQuery(query)) {
+      return seeded;
+    }
+    final referenceQueries = _recentUserQueries(sessionHistory);
+    return ContextContinuityPolicy(
+      queryIntent: seeded.queryIntent,
+      problemClass: previousIntentGraph?.problemClass.wireName ??
+          seeded.problemClass,
+      continuityMode: ContextContinuityMode.explicitFollowUp,
+      explicitContinuation: true,
+      topicOverlap: seeded.topicOverlap > 0 ? seeded.topicOverlap : 0.6,
+      allowHistorySummary: true,
+      allowLongtermMemory: seeded.allowLongtermMemory,
+      allowLocationHints: _shouldCarryLocationHints(
+        previousIntentGraph,
+        previousAnswerSummary,
+      ),
+      referenceQueries: referenceQueries,
+    );
+  }
+
+  bool _looksLikeFollowUpQuery(String query) {
+    final compact = query.trim().replaceAll(RegExp(r'\s+'), '');
+    if (compact.isEmpty || compact.length > 32) return false;
+    final referentialCue = RegExp(
+      r'^(那|那如果|如果|如果我|改成|换成|继续|再|还有|这个|那个|这条|那条|上面|上述)',
+    ).hasMatch(compact);
+    final refinementCue = RegExp(
+      r'(明天|后天|只有\d+天|优先|哪条|哪个更|怎么选|这样|这么|这种|这一版)',
+    ).hasMatch(compact);
+    final explicitAnchor = RegExp(
+      r'([A-Za-z]{3,}|[\u4e00-\u9fff]{2,}(?:市|区|县|镇|乡|村|街道|公园|景区|机场|车站|大厦|广场|口岸|山|湖|河|沟|湾|岛|草原))',
+    ).hasMatch(compact);
+    return (referentialCue || refinementCue) && !explicitAnchor;
+  }
+
+  bool _shouldCarryLocationHints(
+    IntentGraph? previousIntentGraph,
+    String previousAnswerSummary,
+  ) {
+    final contextSlots = previousIntentGraph?.contextSlots ?? const <String, dynamic>{};
+    for (final key in const <String>[
+      'city',
+      'destination',
+      'location',
+      'place',
+    ]) {
+      if (contextSlots[key] != null) return true;
+    }
+    if (previousIntentGraph?.entityAnchors.isNotEmpty == true) {
+      return RegExp(
+        r'(市|区|县|镇|乡|村|街道|公园|景区|机场|车站|大厦|广场|口岸|山|湖|河|沟|湾|岛|草原)',
+      ).hasMatch(previousAnswerSummary);
+    }
+    return false;
+  }
+
+  bool _shouldCarryPreviousTurn(ContextContinuityPolicy policy) {
+    return policy.continuityMode != ContextContinuityMode.unknown &&
+        policy.continuityMode != ContextContinuityMode.freshTopic;
   }
 }
 

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
+import 'package:quwoquan_app/ui/circle/widgets/home_circles_category_tab.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
 
 Widget _buildApp() {
@@ -15,11 +16,20 @@ Widget _buildApp() {
         routes: [
           GoRoute(
             path: '/',
-            builder: (_, __) => const Scaffold(body: HomePage()),
+            builder: (context, state) => const Scaffold(body: HomePage()),
           ),
-          GoRoute(path: '/circle/:id', builder: (_, __) => const SizedBox()),
-          GoRoute(path: '/chat/:id', builder: (_, __) => const SizedBox()),
-          GoRoute(path: '/user/:username', builder: (_, __) => const SizedBox()),
+          GoRoute(
+            path: '/circle/:id',
+            builder: (context, state) => const SizedBox(),
+          ),
+          GoRoute(
+            path: '/chat/:id',
+            builder: (context, state) => const SizedBox(),
+          ),
+          GoRoute(
+            path: '/user/:username',
+            builder: (context, state) => const SizedBox(),
+          ),
         ],
       ),
     ),
@@ -65,7 +75,7 @@ void main() {
         of: find.byType(CenteredScrollableTabBar),
         matching: find.text('圈子'),
       );
-      
+
       if (circleTabFinder.evaluate().isNotEmpty) {
         // 确保它是选中的？或者只是为了触发切换
         // 如果已经是默认，点击可能没反应，或者重新加载
@@ -84,9 +94,7 @@ void main() {
       _suppressExpectedErrors();
       await tester.pumpWidget(
         const ProviderScope(
-          child: MaterialApp(
-            home: Scaffold(body: HomePage()),
-          ),
+          child: MaterialApp(home: Scaffold(body: HomePage())),
         ),
       );
       await tester.pumpAndSettle();
@@ -104,8 +112,45 @@ void main() {
 
       // Tab 栏应该消失 (进入沉浸模式)
       expect(find.byType(CenteredScrollableTabBar), findsNothing);
-      
+
       // WorksImmersiveViewer 应该存在
+      expect(find.byType(WorksImmersiveViewer), findsOneWidget);
+    });
+
+    testWidgets('圈子列表区左滑优先切换二级分类而不是一级 Tab', (tester) async {
+      _suppressExpectedErrors();
+      await tester.pumpWidget(_buildApp());
+      await tester.pumpAndSettle();
+
+      final before = tester.widget<HomeCirclesCategoryTab>(
+        find.byType(HomeCirclesCategoryTab),
+      );
+      final beforeKey = before.key! as ValueKey<String>;
+      final contentAnchor = find.text('圈子推荐');
+
+      await tester.fling(contentAnchor, const Offset(-420, 0), 1200);
+      await tester.pumpAndSettle();
+
+      final after = tester.widget<HomeCirclesCategoryTab>(
+        find.byType(HomeCirclesCategoryTab),
+      );
+      final afterKey = after.key! as ValueKey<String>;
+
+      expect(find.byType(CenteredScrollableTabBar), findsOneWidget);
+      expect(find.byType(WorksImmersiveViewer), findsNothing);
+      expect(afterKey.value, isNot(beforeKey.value));
+    });
+
+    testWidgets('圈子二级分类在左边界继续右滑会切到首页一级 Tab', (tester) async {
+      _suppressExpectedErrors();
+      await tester.pumpWidget(_buildApp());
+      await tester.pumpAndSettle();
+      final contentAnchor = find.text('圈子推荐');
+
+      await tester.fling(contentAnchor, const Offset(420, 0), 1200);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CenteredScrollableTabBar), findsNothing);
       expect(find.byType(WorksImmersiveViewer), findsOneWidget);
     });
   });

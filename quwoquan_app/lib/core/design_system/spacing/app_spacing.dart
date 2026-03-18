@@ -6,7 +6,10 @@ import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
 class AppSpacing {
   // ==================== 扩展语义尺寸（用于历史页面去字面量） ====================
   static const double one = 1.0;
+  static const double hairline = 0.5;
+  static const double two = 2.0;
   static const double oneHalf = 1.5;
+  static const double six = 6.0;
   static const double twoPointFour = 2.4;
   static const double three = 3.0;
   static const double seven = 7.0;
@@ -14,6 +17,7 @@ class AppSpacing {
   static const double fourteen = 14.0;
   static const double eighteen = 18.0;
   static const double twenty = 20.0;
+  static const double thirtySix = 36.0;
   static const double twentyEight = 28.0;
   static const double forty = 40.0;
   static const double oneHundred = 100.0;
@@ -178,6 +182,9 @@ class AppSpacing {
   /// 个人/作者/AI 头像 xl: 72px
   static const double avatarUserXl = 72.0;
   static const double avatarCircleXl = 72.0;
+
+  /// 横向头像栏高度
+  static const double avatarRailHeight = 90.0;
 
   /// 圈子头像圆角比例（border-radius: 20%）
   static const double avatarCircleBorderRadiusRatio = 0.2;

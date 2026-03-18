@@ -120,7 +120,7 @@ class TabNavigationWidget extends ConsumerWidget {
         border: Border(
           bottom: BorderSide(
             color: borderColor.withValues(alpha: 0.3),
-            width: 0.5,
+            width: AppSpacing.hairline,
           ),
         ),
       ),

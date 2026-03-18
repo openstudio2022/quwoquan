@@ -15,19 +15,6 @@ void main() {
         'result': const <String, dynamic>{'text': internalXml},
       }),
       traces: const [],
-      structuredResponse: <String, dynamic>{
-        'uiAnswer': const <String, dynamic>{'markdownText': internalXml},
-        'answerPayload': const <String, dynamic>{
-          'decision': <String, dynamic>{'nextAction': 'tool_call'},
-          'messageKind': 'progress',
-          'userMarkdown': 'tool_call',
-          'result': <String, dynamic>{'text': internalXml},
-        },
-        'runArtifactsV1': const <String, dynamic>{
-          'displayMarkdown': internalXml,
-          'displayPlainText': 'assistant_turn contractVersion tool_call',
-        },
-      },
     );
 
     expect(
@@ -38,14 +25,17 @@ void main() {
 
   test('clarify completed 会提示用户补充信息', () {
     final response = AssistantRunResponse(
-      finalText: '',
-      traces: const [],
-      structuredResponse: const <String, dynamic>{
-        'answerPayload': <String, dynamic>{
-          'decision': <String, dynamic>{'nextAction': 'clarify'},
-          'messageKind': 'progress',
+      finalText: jsonEncode(<String, dynamic>{
+        'contractVersion': 'assistant_turn',
+        'decision': const <String, dynamic>{'nextAction': 'ask_user'},
+        'messageKind': 'ask_user',
+        'askUser': const <String, dynamic>{
+          'slotId': 'city',
+          'prompt': '请告诉我你要查询哪个城市。',
         },
-      },
+        'result': const <String, dynamic>{'text': ''},
+      }),
+      traces: const [],
     );
 
     expect(

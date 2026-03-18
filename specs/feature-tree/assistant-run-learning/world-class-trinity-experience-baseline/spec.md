@@ -131,7 +131,9 @@
   - `process_append`
   - `process_commit`
   - `answer_delta`
+- `trace`、raw reasoning、`<think>`、queryVariants、tool args、协议字段名只允许进入观测和回放链路，**不得**直接进入用户可见过程区或最终成答。
 - 完成态必须把过程树持久化为 `uiProcessTimelineV2`，保证抽屉在完成后、重载后、切会话后仍可恢复。
+- 完成态抽屉首行必须使用统一的用户语言摘要模板，至少包含“已完成语义 + 来源计数 + 耗时（整数秒）”。
 - 过程区文案围绕“用户目标进展”，不围绕内部阶段名。
 - emoji 全局默认“少量点缀”，同时允许 Skill 在自己的 `response_style` 中增量扩展。
 - 结构块或 Markdown 解析失败时，必须安全降级到普通 Markdown，不中断对话。
@@ -267,6 +269,8 @@
   - 再演绎 skill 级推进
   - 最后演绎 aggregation 与成答组织
 - 过程区严禁暴露 `query`、`queryVariants`、`freshnessHoursMax`、`provider`、`contractVersion`、`assistant_turn_v4`、tool args 等内部字段。
+- 无真实过程数据时，UI 不得显示 seeded 假阶段或空壳过程抽屉。
+- 最终成答只能来自 `answer_delta` 与终态 `assistant_turn/runArtifacts`，不得从过程文本、thinking 文本或 repair 占位文本回填。
 
 ### 3) Markdown-first
 

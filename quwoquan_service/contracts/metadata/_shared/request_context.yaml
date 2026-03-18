@@ -62,6 +62,8 @@ domain_operation_page_ids:
     InitMediaUpload: content.media.init
     LikePost: content.post.like
     ListComments: content.comment.list
+    ListProfileInteractionActivitiesReceived: content.profile.interactions.received
+    ListProfileInteractionActivitiesSent: content.profile.interactions.sent
     ListUserPosts: content.user.posts
     PublishPost: content.post.publish
     QuoteToCircle: content.post.quote
@@ -104,9 +106,12 @@ domain_operation_page_ids:
     DeletePersona: user.personas.delete
     FollowUser: user.follow
     GetAppearanceSettings: user.settings.appearance.get
+    GetMeProfile: user.get.me.profile
     GetNotificationSettings: user.notification_settings.get
     GetPrivacySettings: user.settings.privacy.get
     GetRelationship: user.relationship
+    GetRelationshipCapability: user.get.relationship.capability
+    GetSubAccountProfile: user.get.sub.account.profile
     GetUserProfile: user.profile
     ListBlockedUsers: user.block.list
     ListFollowers: user.followers

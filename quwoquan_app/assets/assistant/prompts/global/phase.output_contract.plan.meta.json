@@ -3,7 +3,7 @@
   "version": "2026.03.05",
   "stage": "plan",
   "domainId": "global",
-  "requiredVariables": ["traceId"],
+  "requiredVariables": [],
   "outputContract": "assistant_turn",
   "selfCheckRules": ["slot_complete", "query_normalized", "safety_boundary"]
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -1225,6 +1226,202 @@ func (s *PostService) GetReactionState(postID, userID string) (liked, favorited 
 		return false, false
 	}
 	return state.Liked, state.Favorited
+}
+
+func (s *PostService) ListProfileInteractionActivities(
+	ctx context.Context,
+	profileSubjectID string,
+	direction string,
+	limit int,
+) ([]postmodel.ProfileInteractionActivityView, error) {
+	profileSubjectID = strings.TrimSpace(profileSubjectID)
+	direction = strings.TrimSpace(direction)
+	if profileSubjectID == "" {
+		return []postmodel.ProfileInteractionActivityView{}, nil
+	}
+	if direction == "" {
+		direction = "received"
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	items := make([]postmodel.ProfileInteractionActivityView, 0)
+	for postID, byUser := range s.reactions {
+		post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
+		if !ok {
+			continue
+		}
+		for actorID, state := range byUser {
+			if !state.Liked {
+				continue
+			}
+			if direction == "received" {
+				if post.AuthorId != profileSubjectID || actorID == profileSubjectID {
+					continue
+				}
+			} else if actorID != profileSubjectID {
+				continue
+			}
+			items = append(items, buildProfileInteractionActivityView(
+				fmt.Sprintf("like:%s:%s", postID, actorID),
+				"like",
+				direction,
+				actorID,
+				post.AuthorId,
+				post,
+				post.UpdatedAt,
+			))
+		}
+	}
+
+	for postID, comments := range s.comments {
+		post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
+		if !ok {
+			continue
+		}
+		for _, comment := range comments {
+			if deletedAt, _ := comment["deletedAt"].(string); deletedAt != "" {
+				continue
+			}
+			actorID, _ := comment["authorId"].(string)
+			if direction == "received" {
+				if post.AuthorId != profileSubjectID || actorID == profileSubjectID {
+					continue
+				}
+			} else if actorID != profileSubjectID {
+				continue
+			}
+			items = append(items, buildProfileInteractionActivityView(
+				fmt.Sprintf("comment:%s", stringValue(comment["_id"])),
+				"comment",
+				direction,
+				actorID,
+				post.AuthorId,
+				post,
+				parseActivityTime(comment["createdAt"]),
+			))
+		}
+	}
+
+	for postID, shares := range s.reshares {
+		post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
+		if !ok {
+			continue
+		}
+		for shareKey, active := range shares {
+			if !active {
+				continue
+			}
+			actorID := shareActorID(shareKey)
+			if actorID == "" {
+				continue
+			}
+			if direction == "received" {
+				if post.AuthorId != profileSubjectID || actorID == profileSubjectID {
+					continue
+				}
+			} else if actorID != profileSubjectID {
+				continue
+			}
+			items = append(items, buildProfileInteractionActivityView(
+				fmt.Sprintf("share:%s:%s", postID, actorID),
+				"share",
+				direction,
+				actorID,
+				post.AuthorId,
+				post,
+				post.UpdatedAt,
+			))
+		}
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].CreatedAt.After(items[j].CreatedAt)
+	})
+	if len(items) > limit {
+		items = items[:limit]
+	}
+	return items, nil
+}
+
+func buildProfileInteractionActivityView(
+	activityID string,
+	activityType string,
+	direction string,
+	actorID string,
+	targetProfileSubjectID string,
+	post *postmodel.Post,
+	createdAt time.Time,
+) postmodel.ProfileInteractionActivityView {
+	summary := ""
+	contentType := ""
+	targetContentID := ""
+	if post != nil {
+		summary = summarizeInteractionTarget(post)
+		contentType = post.ContentType
+		targetContentID = post.ID
+	}
+	if createdAt.IsZero() {
+		createdAt = time.Now().UTC()
+	}
+	return postmodel.ProfileInteractionActivityView{
+		ActivityId:             activityID,
+		ActivityType:           activityType,
+		Direction:              direction,
+		ActorProfileSubjectId:  actorID,
+		ActorDisplayName:       actorID,
+		ActorAvatarUrl:         "",
+		TargetProfileSubjectId: targetProfileSubjectID,
+		TargetContentId:        targetContentID,
+		TargetContentType:      contentType,
+		TargetContentSummary:   summary,
+		CreatedAt:              createdAt,
+	}
+}
+
+func summarizeInteractionTarget(post *postmodel.Post) string {
+	if post == nil {
+		return ""
+	}
+	if summary := strings.TrimSpace(post.Summary); summary != "" {
+		return summary
+	}
+	if title := strings.TrimSpace(post.Title); title != "" {
+		return title
+	}
+	body := strings.TrimSpace(post.Body)
+	if len(body) > 60 {
+		return body[:60]
+	}
+	return body
+}
+
+func parseActivityTime(raw any) time.Time {
+	if s, ok := raw.(string); ok {
+		if parsed, err := time.Parse(time.RFC3339, s); err == nil {
+			return parsed
+		}
+	}
+	return time.Now().UTC()
+}
+
+func shareActorID(shareKey string) string {
+	parts := strings.Split(strings.TrimSpace(shareKey), ":")
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(parts[len(parts)-1])
+}
+
+func stringValue(raw any) string {
+	if value, ok := raw.(string); ok {
+		return value
+	}
+	return ""
 }
 
 func (s *PostService) AddComment(ctx context.Context, postID, userID, content, replyToCommentID, personaId string) (map[string]any, int64, error) {

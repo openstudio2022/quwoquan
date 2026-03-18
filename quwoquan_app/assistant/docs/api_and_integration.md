@@ -68,7 +68,6 @@ Header: Authorization: Bearer <token>
   "sessionId": "assistant",
   "userId": "u1",
   "channel": "app",
-  "traceId": "trace_123",
   "deviceProfile": "mobile",
   "maxIterations": 8,
   "messages": [

@@ -2,9 +2,10 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/assistant/conversation/orchestration/agent_loop.dart'
-    as legacy_agent;
+import 'package:quwoquan_app/assistant/orchestration/local_phase_execution_owner.dart'
+    as phase_owner;
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/context_continuity_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
@@ -21,16 +22,17 @@ import 'package:quwoquan_app/assistant/orchestration/phases/phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase_orchestrator.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/bootstrap_phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/finalize_phase.dart';
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/synthesis_phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase_types.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/retrieval_design_phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/understand_phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state.dart';
+import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
-import 'package:quwoquan_app/assistant/conversation/contracts/conversation_state_decision.dart';
+import 'package:quwoquan_app/assistant/contracts/conversation_state_decision.dart';
 import 'package:quwoquan_app/assistant/reasoning/planner/mode_decider.dart';
+import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
 import 'package:quwoquan_app/assistant/reasoning/routing/domain_router.dart';
 import 'package:quwoquan_app/assistant/skill/domain/skill_manifest.dart';
 import 'package:quwoquan_app/assistant/template_runtime/assistant_template_runtime.dart';
@@ -74,7 +76,7 @@ void main() {
             'machineEnvelope': '',
             'displayMarkdown': '',
             'displayPlainText': '',
-            'processJournal': <Map<String, dynamic>>[],
+            'journey': <String, dynamic>{},
             'evidenceLedger': <Map<String, dynamic>>[],
             'answerEvidenceBindings': <Map<String, dynamic>>[],
             'slotState': <String, dynamic>{
@@ -341,7 +343,7 @@ void main() {
         'machineEnvelope': '',
         'displayMarkdown': '',
         'displayPlainText': '',
-        'processJournal': <Map<String, dynamic>>[],
+        'journey': <String, dynamic>{},
         'evidenceLedger': <Map<String, dynamic>>[],
         'answerEvidenceBindings': <Map<String, dynamic>>[],
         'slotState': <String, dynamic>{
@@ -562,7 +564,7 @@ void main() {
         'machineEnvelope': '',
         'displayMarkdown': '',
         'displayPlainText': '',
-        'processJournal': <Map<String, dynamic>>[],
+        'journey': <String, dynamic>{},
         'evidenceLedger': <Map<String, dynamic>>[],
         'answerEvidenceBindings': <Map<String, dynamic>>[],
         'slotState': <String, dynamic>{
@@ -637,7 +639,7 @@ void main() {
         }
       });
       final phase = SynthesisPhase(
-        legacy_agent.PersonalAssistantAgentLoop(
+        phase_owner.LocalPhaseExecutionOwner(
           ReactRuntime(
             llmProvider: const HeuristicLocalLlmProvider(),
             toolRegistry: AssistantToolRegistry(),
@@ -710,7 +712,7 @@ void main() {
             'machineEnvelope': '',
             'displayMarkdown': '你好',
             'displayPlainText': '你好',
-            'processJournal': <Map<String, dynamic>>[],
+            'journey': <String, dynamic>{},
             'evidenceLedger': <Map<String, dynamic>>[
               <String, dynamic>{
                 'evidenceId': 'ev_weather_1',
@@ -808,7 +810,7 @@ void main() {
       });
       final toolRegistry = AssistantToolRegistry()
         ..register(_SynthesisDraftWeatherSearchTool());
-      final loop = legacy_agent.PersonalAssistantAgentLoop(
+      final loop = phase_owner.LocalPhaseExecutionOwner(
         ReactRuntime(
           llmProvider: _SynthesisDraftWeatherLlm(),
           toolRegistry: toolRegistry,
@@ -866,7 +868,7 @@ void main() {
         }
       });
       final llm = _PhaseOneDirectAnswerLlm();
-      final loop = legacy_agent.PersonalAssistantAgentLoop(
+      final loop = phase_owner.LocalPhaseExecutionOwner(
         ReactRuntime(llmProvider: llm, toolRegistry: AssistantToolRegistry()),
         sessionManager: AssistantSessionManager(
           storagePath: '${tempDir.path}/sessions.json',
@@ -966,7 +968,7 @@ void main() {
         final llm = _PhaseOneGapFillThenDirectAnswerLlm();
         final toolRegistry = AssistantToolRegistry()
           ..register(_SynthesisDraftWeatherSearchTool());
-        final loop = legacy_agent.PersonalAssistantAgentLoop(
+        final loop = phase_owner.LocalPhaseExecutionOwner(
           ReactRuntime(llmProvider: llm, toolRegistry: toolRegistry),
           sessionManager: AssistantSessionManager(
             storagePath: '${tempDir.path}/sessions.json',
@@ -1070,7 +1072,7 @@ void main() {
         }
       });
       final llm = _PhaseOnePlainMarkdownAnswerLlm();
-      final loop = legacy_agent.PersonalAssistantAgentLoop(
+      final loop = phase_owner.LocalPhaseExecutionOwner(
         ReactRuntime(llmProvider: llm, toolRegistry: AssistantToolRegistry()),
         sessionManager: AssistantSessionManager(
           storagePath: '${tempDir.path}/sessions.json',
@@ -1162,7 +1164,7 @@ void main() {
         }
       });
       final llm = _PhaseOneNonContractJsonAnswerLlm();
-      final loop = legacy_agent.PersonalAssistantAgentLoop(
+      final loop = phase_owner.LocalPhaseExecutionOwner(
         ReactRuntime(llmProvider: llm, toolRegistry: AssistantToolRegistry()),
         sessionManager: AssistantSessionManager(
           storagePath: '${tempDir.path}/sessions.json',
@@ -1259,7 +1261,7 @@ void main() {
           }
         });
         final llm = _PhaseOneFollowupDirectAnswerRepairLlm();
-        final loop = legacy_agent.PersonalAssistantAgentLoop(
+        final loop = phase_owner.LocalPhaseExecutionOwner(
           ReactRuntime(llmProvider: llm, toolRegistry: AssistantToolRegistry()),
           sessionManager: AssistantSessionManager(
             storagePath: '${tempDir.path}/sessions.json',
@@ -1381,6 +1383,164 @@ void main() {
     );
 
     test(
+      'synthesis phase 在连续追问且已有检索痕迹时仍可走 phase-one answer repair',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp(
+          'assistant_phase_one_followup_answer_repair_with_execution_',
+        );
+        addTearDown(() async {
+          if (await tempDir.exists()) {
+            await tempDir.delete(recursive: true);
+          }
+        });
+        final llm = _PhaseOneFollowupDirectAnswerRepairLlm();
+        final loop = phase_owner.LocalPhaseExecutionOwner(
+          ReactRuntime(llmProvider: llm, toolRegistry: AssistantToolRegistry()),
+          sessionManager: AssistantSessionManager(
+            storagePath: '${tempDir.path}/sessions.json',
+          ),
+          memoryRepository: AssistantMemoryRepository(
+            ObjectBoxVectorStore(storagePath: '${tempDir.path}/memory.json'),
+          ),
+        );
+        final fallbackDomainId = AssistantDomainRouter().fallbackDomainId;
+        final prepared = AssistantExecutionPreparation(
+          domainId: fallbackDomainId,
+          modeDecision: const ModeDecision(
+            mode: AgentMode.singleAgent,
+            reason: 'phase_one_followup_answer_repair_with_execution_test',
+          ),
+          skillName: 'Travel Follow-up Answer',
+          skillInstructionMarkdown: '延续上一轮时，若已能回答就直接给出最终答复。',
+          executionShell: const SkillExecutionShell(
+            problemClass: 'simple_qa',
+            maxIterations: 1,
+            toolBudget: 0,
+            variantBudget: 0,
+            reflectionBudget: 0,
+            freshnessHoursMax: 72,
+          ),
+          plannerTemplateVersion: 'followup_repair_planner_v1',
+          postcheckTemplateVersion: 'followup_repair_postcheck_v1',
+          synthTemplateVersion: 'followup_repair_synth_v1',
+          fusionSynthTemplateVersion: 'followup_repair_fusion_v1',
+        );
+        const previousIntentGraph = IntentGraph(
+          userGoal: '给九寨沟行程做备选路线',
+          problemShape: ProblemShape.singleSkill,
+          primarySkill: 'travel',
+          problemClass: ProblemClass.complexReasoning,
+          answerShape: AnswerShape.options,
+          requiresExternalEvidence: false,
+          entityAnchors: <String>['九寨沟'],
+        );
+        final request = AssistantRunRequest(
+          sessionId: 'phase_one_followup_answer_repair_with_execution_owner',
+          messages: const <AssistantRunMessage>[
+            AssistantRunMessage(role: 'user', content: '如果我只有4天，优先哪条路线？'),
+          ],
+          contextScopeHint: <String, dynamic>{
+            'precomputedBootstrap': <String, dynamic>{
+              'sessionId':
+                  'phase_one_followup_answer_repair_with_execution_owner',
+              'latestUserQuery': '如果我只有4天，优先哪条路线？',
+              'historySummary': '上一轮刚讨论过九寨沟多条备选路线。',
+              'previousIntentGraph': previousIntentGraph.toJson(),
+              'previousAnswerSummary': '上轮推荐了九寨沟方向三条路线。',
+              'contextContinuityPolicy': const ContextContinuityPolicy(
+                continuityMode: ContextContinuityMode.explicitFollowUp,
+                explicitContinuation: true,
+                referenceQueries: <String>['给九寨沟行程做备选路线'],
+              ).toJson(),
+              'continuityOverrideSlots': const <String, dynamic>{
+                'durationDays': 4,
+              },
+            },
+            'precomputedIntentGraph': const IntentGraph(
+              userGoal: '4天优先哪条路线',
+              problemShape: ProblemShape.singleSkill,
+              primarySkill: '',
+              problemClass: ProblemClass.simpleQa,
+              answerShape: AnswerShape.directAnswer,
+              requiresExternalEvidence: false,
+              entityAnchors: <String>['九寨沟'],
+              contextSlots: <String, dynamic>{
+                'destination': '九寨沟',
+                'continuity': <String, dynamic>{'mode': 'explicit_follow_up'},
+                'overrideSlots': <String, dynamic>{'durationDays': 4},
+              },
+            ).toJson(),
+            'precomputedExecutionPreparation': prepared.toJson(),
+          },
+        );
+
+        final snapshot = await loop.executeBridge(
+          request,
+          runId: 'run_phase_one_followup_answer_repair_with_execution_owner',
+          traceId: 'trace_phase_one_followup_answer_repair_with_execution_owner',
+        );
+        final phaseOneResult =
+            snapshot['phaseOneResult'] as ReactRuntimeResult;
+        snapshot['phaseOneResult'] = ReactRuntimeResult(
+          finalText: phaseOneResult.finalText,
+          traces: <AssistantTraceEvent>[
+            ...phaseOneResult.traces,
+            AssistantTraceEvent(
+              type: AssistantTraceEventType.searchCompleted,
+              message: 'follow-up evidence checked',
+              timestamp: DateTime.now(),
+              data: const <String, dynamic>{
+                'references': <Map<String, dynamic>>[
+                  <String, dynamic>{
+                    'title': '九寨沟景区公告',
+                    'url': 'https://example.com/jiuzhaigou',
+                    'source': '官方',
+                  },
+                ],
+              },
+            ),
+          ],
+          degraded: phaseOneResult.degraded,
+          failureCode: phaseOneResult.failureCode,
+        );
+
+        final result = await SynthesisPhase(loop).run(
+          PhaseInput(
+            request: request,
+            state: AgentExecutionState(executionBridgeSnapshot: snapshot),
+            runId: 'run_phase_one_followup_answer_repair_with_execution_owner',
+            traceId:
+                'trace_phase_one_followup_answer_repair_with_execution_owner',
+          ),
+        );
+
+        final diagnostics =
+            result
+                    .state!
+                    .pendingResponse!
+                    .structuredResponse['phaseOneRoutingDiagnostics']
+                as Map<String, dynamic>;
+        expect(
+          result.state!.synthesisDraft!.templateVersionUsed,
+          'phase_one_direct_answer',
+        );
+        expect(llm.phaseOneCallCount, 1);
+        expect(llm.repairCallCount, 1);
+        expect(llm.synthesisCallCount, 0);
+        expect(
+          result.state!.pendingResponse!.displayPlainText,
+          contains('九寨沟'),
+        );
+        expect(diagnostics['route'], 'phase_one_direct_answer');
+        expect(diagnostics['phaseOneExecutionSignalsPresent'], isTrue);
+        expect(diagnostics['phaseOneContinuationCarryover'], isTrue);
+        expect(diagnostics['allowPhaseOneContractRepair'], isTrue);
+        expect(diagnostics['phaseOneRecoveryApplied'], isFalse);
+        expect(diagnostics['phaseOneModelRepairApplied'], isTrue);
+      },
+    );
+
+    test(
       'synthesis phase 应允许 direct-answer shortcut 覆盖 derived secondary-skill subagent fallback',
       () async {
         final tempDir = await Directory.systemTemp.createTemp(
@@ -1392,7 +1552,7 @@ void main() {
           }
         });
         final llm = _PhaseOneDerivedSecondarySkillRepairLlm();
-        final loop = legacy_agent.PersonalAssistantAgentLoop(
+        final loop = phase_owner.LocalPhaseExecutionOwner(
           ReactRuntime(llmProvider: llm, toolRegistry: AssistantToolRegistry()),
           sessionManager: AssistantSessionManager(
             storagePath: '${tempDir.path}/sessions.json',
@@ -1496,7 +1656,7 @@ void main() {
         }
       });
       final llm = _PhaseOneProgressAnswerLlm();
-      final loop = legacy_agent.PersonalAssistantAgentLoop(
+      final loop = phase_owner.LocalPhaseExecutionOwner(
         ReactRuntime(llmProvider: llm, toolRegistry: AssistantToolRegistry()),
         sessionManager: AssistantSessionManager(
           storagePath: '${tempDir.path}/sessions.json',
@@ -1596,7 +1756,7 @@ void main() {
           }
         });
         final llm = _PhaseOneTentativeSubagentPlanLlm();
-        final loop = legacy_agent.PersonalAssistantAgentLoop(
+        final loop = phase_owner.LocalPhaseExecutionOwner(
           ReactRuntime(llmProvider: llm, toolRegistry: AssistantToolRegistry()),
           sessionManager: AssistantSessionManager(
             storagePath: '${tempDir.path}/sessions.json',
@@ -1687,7 +1847,7 @@ void main() {
           }
         });
         final llm = _PhaseOneSubagentFusionLlm();
-        final loop = legacy_agent.PersonalAssistantAgentLoop(
+        final loop = phase_owner.LocalPhaseExecutionOwner(
           ReactRuntime(llmProvider: llm, toolRegistry: AssistantToolRegistry()),
           sessionManager: AssistantSessionManager(
             storagePath: '${tempDir.path}/sessions.json',
@@ -1783,7 +1943,7 @@ void main() {
         }
       });
       final phase = SynthesisPhase(
-        legacy_agent.PersonalAssistantAgentLoop(
+        phase_owner.LocalPhaseExecutionOwner(
           ReactRuntime(
             llmProvider: const HeuristicLocalLlmProvider(),
             toolRegistry: AssistantToolRegistry(),
@@ -1888,19 +2048,26 @@ void main() {
             'authorityDomains': <String>['example.com'],
           },
         ),
-        processJournal: const <ProcessJournalEvent>[
-          ProcessJournalEvent(
-            eventId: 'evt_1',
-            type: ProcessJournalEventType.completed,
-            stage: 'completed',
-            message: '答案已准备好',
-          ),
-        ],
-        liveCursor: const ProcessJournalEvent(
-          eventId: 'cursor_1',
-          type: ProcessJournalEventType.liveCursor,
-          stage: 'answering',
-          message: '正在整理答案',
+        journey: const AssistantJourney(
+          stages: <AssistantJourneyStage>[
+            AssistantJourneyStage(
+              stageId: JourneyStageId.answer,
+              status: JourneyStageStatus.completed,
+              order: 3,
+              summary: '答案已准备好',
+            ),
+          ],
+          entries: <AssistantJourneyEntry>[
+            AssistantJourneyEntry(
+              entryId: 'journey.answer.ready',
+              stageId: JourneyStageId.answer,
+              kind: JourneyEntryKind.narrative,
+              status: JourneyStageStatus.completed,
+              order: 0,
+              headline: '答案已准备好',
+              detail: '正在整理答案',
+            ),
+          ],
         ),
       );
       final pendingResponse = AssistantRunResponse(
@@ -1964,8 +2131,8 @@ void main() {
         'typed_answer_outcome_ready',
       );
       expect(result.state!.domainPolicyBundle?.domainId, 'travel');
-      expect(result.state!.processJournal, hasLength(1));
-      expect(result.state!.liveCursor?.message, '正在整理答案');
+      expect(result.state!.journey.entries, hasLength(1));
+      expect(result.state!.journey.entries.single.detail, '正在整理答案');
     });
 
     test('execute bridge 应优先消费 typed execution preparation 输入', () async {
@@ -1979,7 +2146,7 @@ void main() {
       });
       final toolRegistry = AssistantToolRegistry()
         ..register(_SynthesisDraftWeatherSearchTool());
-      final loop = legacy_agent.PersonalAssistantAgentLoop(
+      final loop = phase_owner.LocalPhaseExecutionOwner(
         ReactRuntime(
           llmProvider: _SynthesisDraftWeatherLlm(),
           toolRegistry: toolRegistry,
@@ -2094,7 +2261,7 @@ void main() {
         }
       });
       final phase = FinalizePhase(
-        legacy_agent.PersonalAssistantAgentLoop(
+        phase_owner.LocalPhaseExecutionOwner(
           ReactRuntime(
             llmProvider: const HeuristicLocalLlmProvider(),
             toolRegistry: AssistantToolRegistry(),

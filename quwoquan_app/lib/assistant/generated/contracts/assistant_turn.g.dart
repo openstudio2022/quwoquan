@@ -3,14 +3,13 @@
 // ignore_for_file: avoid_classes_with_only_static_members
 
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/preference_fact.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/contracts/skill_run.dart';
 import 'package:quwoquan_app/assistant/contracts/subagent_plan.dart';
-import 'package:quwoquan_app/assistant/contracts/ui_process_timeline_entry.dart';
-import 'package:quwoquan_app/assistant/contracts/user_events.dart';
 
 class AssistantTurnAskUser {
   const AssistantTurnAskUser({
@@ -431,20 +430,15 @@ class AssistantTurnOutput {
     this.intentGraph,
     this.skillRuns = const <SkillRun>[],
     this.aggregationState,
-    this.userEvents = const <UserEvent>[],
-    this.uiProcessTimeline = const <UiProcessTimelineEntry>[],
+    this.journey = const AssistantJourney(),
     this.toolPlan = const <AssistantTurnToolCall>[],
     this.missingContextSlots = const <String>[],
     this.fillGuidance = const <AssistantTurnFillGuidanceItem>[],
     this.followupPrompt = "",
-    this.processSummary = "",
-    this.processReferenceCount = 0,
     this.phaseId = PlannerPhaseId.unknown,
     this.actionCode = PlannerActionCode.unknown,
     this.reasonCode = PlannerReasonCode.unknownReason,
     this.reasonShort = "",
-    this.narrativeSource = "",
-    this.narrativeReferences = const <ProcessSourceReference>[],
     this.sessionPreferenceFacts = const <PreferenceFact>[],
     this.longTermPreferenceFacts = const <PreferenceFact>[],
   });
@@ -466,20 +460,15 @@ class AssistantTurnOutput {
   final IntentGraph? intentGraph;
   final List<SkillRun> skillRuns;
   final AggregationState? aggregationState;
-  final List<UserEvent> userEvents;
-  final List<UiProcessTimelineEntry> uiProcessTimeline;
+  final AssistantJourney journey;
   final List<AssistantTurnToolCall> toolPlan;
   final List<String> missingContextSlots;
   final List<AssistantTurnFillGuidanceItem> fillGuidance;
   final String followupPrompt;
-  final String processSummary;
-  final int processReferenceCount;
   final PlannerPhaseId phaseId;
   final PlannerActionCode actionCode;
   final PlannerReasonCode reasonCode;
   final String reasonShort;
-  final String narrativeSource;
-  final List<ProcessSourceReference> narrativeReferences;
   final List<PreferenceFact> sessionPreferenceFacts;
   final List<PreferenceFact> longTermPreferenceFacts;
 
@@ -501,20 +490,15 @@ class AssistantTurnOutput {
         'intentGraph': intentGraph?.toJson(),
         'skillRuns': skillRuns.map((item) => item.toJson()).toList(growable: false),
         'aggregationState': aggregationState?.toJson(),
-        'userEvents': userEvents.map((item) => item.toJson()).toList(growable: false),
-        'uiProcessTimeline': uiProcessTimeline.map((item) => item.toJson()).toList(growable: false),
+        'journey': journey.toJson(),
         'toolPlan': toolPlan.map((item) => item.toJson()).toList(growable: false),
         'missingContextSlots': missingContextSlots,
         'fillGuidance': fillGuidance.map((item) => item.toJson()).toList(growable: false),
         'followupPrompt': followupPrompt,
-        'processSummary': processSummary,
-        'processReferenceCount': processReferenceCount,
         'phaseId': phaseId.wireName,
         'actionCode': actionCode.wireName,
         'reasonCode': reasonCode.wireName,
         'reasonShort': reasonShort,
-        'narrativeSource': narrativeSource,
-        'narrativeReferences': narrativeReferences.map((item) => item.toJson()).toList(growable: false),
         'sessionPreferenceFacts': sessionPreferenceFacts.map((item) => item.toJson()).toList(growable: false),
         'longTermPreferenceFacts': longTermPreferenceFacts.map((item) => item.toJson()).toList(growable: false),
       };
@@ -538,20 +522,15 @@ class AssistantTurnOutput {
       intentGraph: json['intentGraph'] is Map ? IntentGraph.fromJson((json['intentGraph'] as Map).cast<String, dynamic>()) : null,
       skillRuns: (json['skillRuns'] as List?)?.whereType<Map>().map((item) => SkillRun.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <SkillRun>[],
       aggregationState: json['aggregationState'] is Map ? AggregationState.fromJson((json['aggregationState'] as Map).cast<String, dynamic>()) : null,
-      userEvents: (json['userEvents'] as List?)?.whereType<Map>().map((item) => UserEvent.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <UserEvent>[],
-      uiProcessTimeline: (json['uiProcessTimeline'] as List?)?.whereType<Map>().map((item) => UiProcessTimelineEntry.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <UiProcessTimelineEntry>[],
+      journey: json['journey'] is Map ? AssistantJourney.fromJson((json['journey'] as Map).cast<String, dynamic>()) : const AssistantJourney(),
       toolPlan: (json['toolPlan'] as List?)?.whereType<Map>().map((item) => AssistantTurnToolCall.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantTurnToolCall>[],
       missingContextSlots: _assistantStringList(json['missingContextSlots']),
       fillGuidance: (json['fillGuidance'] as List?)?.whereType<Map>().map((item) => AssistantTurnFillGuidanceItem.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantTurnFillGuidanceItem>[],
       followupPrompt: (json['followupPrompt'] as String?)?.trim() ?? "",
-      processSummary: (json['processSummary'] as String?)?.trim() ?? "",
-      processReferenceCount: (json['processReferenceCount'] as num?)?.toInt() ?? 0,
       phaseId: parsePlannerPhaseId((json['phaseId'] as String?)?.trim() ?? ""),
       actionCode: parsePlannerActionCode((json['actionCode'] as String?)?.trim() ?? ""),
       reasonCode: parsePlannerReasonCode((json['reasonCode'] as String?)?.trim() ?? ""),
       reasonShort: (json['reasonShort'] as String?)?.trim() ?? "",
-      narrativeSource: (json['narrativeSource'] as String?)?.trim() ?? "",
-      narrativeReferences: (json['narrativeReferences'] as List?)?.whereType<Map>().map((item) => ProcessSourceReference.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <ProcessSourceReference>[],
       sessionPreferenceFacts: (json['sessionPreferenceFacts'] as List?)?.whereType<Map>().map((item) => PreferenceFact.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <PreferenceFact>[],
       longTermPreferenceFacts: (json['longTermPreferenceFacts'] as List?)?.whereType<Map>().map((item) => PreferenceFact.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <PreferenceFact>[],
     );
@@ -583,20 +562,15 @@ class AssistantTurnOutputFields {
   static const String intentGraph = 'intentGraph';
   static const String skillRuns = 'skillRuns';
   static const String aggregationState = 'aggregationState';
-  static const String userEvents = 'userEvents';
-  static const String uiProcessTimeline = 'uiProcessTimeline';
+  static const String journey = 'journey';
   static const String toolPlan = 'toolPlan';
   static const String missingContextSlots = 'missingContextSlots';
   static const String fillGuidance = 'fillGuidance';
   static const String followupPrompt = 'followupPrompt';
-  static const String processSummary = 'processSummary';
-  static const String processReferenceCount = 'processReferenceCount';
   static const String phaseId = 'phaseId';
   static const String actionCode = 'actionCode';
   static const String reasonCode = 'reasonCode';
   static const String reasonShort = 'reasonShort';
-  static const String narrativeSource = 'narrativeSource';
-  static const String narrativeReferences = 'narrativeReferences';
   static const String sessionPreferenceFacts = 'sessionPreferenceFacts';
   static const String longTermPreferenceFacts = 'longTermPreferenceFacts';
 }

@@ -6,8 +6,8 @@ import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/context/assembly/context_orchestrator.dart';
 import 'package:quwoquan_app/assistant/context/assembly/recall_coordinator.dart';
 import 'package:quwoquan_app/assistant/tools/assistant_tool_runtime.dart';
-import 'package:quwoquan_app/assistant/conversation/orchestration/agent_loop.dart'
-    as legacy_agent;
+import 'package:quwoquan_app/assistant/orchestration/local_phase_execution_owner.dart'
+    as phase_owner;
 import 'package:quwoquan_app/assistant/orchestration/phases/bootstrap_phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/execution_phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/finalize_phase.dart';
@@ -34,7 +34,7 @@ class AssistantAgentLoop {
     final recallCoordinator = RecallCoordinator();
     const skillLoader = PersonalAssistantSkillLoader();
     const skillRouter = PersonalAssistantSkillRouter();
-    final delegate = legacy_agent.PersonalAssistantAgentLoop(
+    final owner = phase_owner.LocalPhaseExecutionOwner(
       runtime,
       sessionManager: sessionManager,
       memoryRepository: memoryRepository,
@@ -70,25 +70,24 @@ class AssistantAgentLoop {
           skillLoader: skillLoader,
           skillRouter: skillRouter,
         ),
-        ExecutionPhase(delegate),
-        SynthesisPhase(delegate),
-        FinalizePhase(delegate),
+        ExecutionPhase(owner),
+        SynthesisPhase(owner),
+        FinalizePhase(owner),
       ],
     );
-    return AssistantAgentLoop._(delegate: delegate, orchestrator: orchestrator);
+    return AssistantAgentLoop._(owner: owner, orchestrator: orchestrator);
   }
 
   AssistantAgentLoop._({
-    required legacy_agent.PersonalAssistantAgentLoop delegate,
+    required phase_owner.LocalPhaseExecutionOwner owner,
     required PhaseOrchestrator orchestrator,
-  }) : _delegate = delegate,
+  }) : _owner = owner,
        _orchestrator = orchestrator;
 
-  final legacy_agent.PersonalAssistantAgentLoop _delegate;
+  final phase_owner.LocalPhaseExecutionOwner _owner;
   final PhaseOrchestrator _orchestrator;
 
-  /// Unified execution state; owned by this loop. Legacy [PersonalAssistantAgentLoop]
-  /// remains the implementation bridge until phases are fully migrated.
+  /// Unified execution state owned by the phase orchestrator.
   AgentExecutionState get executionState => _executionState;
   AgentExecutionState _executionState = const AgentExecutionState();
 
@@ -129,23 +128,23 @@ class AssistantAgentLoop {
     String query,
     Map<String, dynamic> contextScopeHint,
   ) {
-    return _delegate.classifyDomain(query, contextScopeHint);
+    return _owner.classifyDomain(query, contextScopeHint);
   }
 
   Future<List<Map<String, dynamic>>> listSessions() async {
-    final sessions = await _delegate.listSessions();
+    final sessions = await _owner.listSessions();
     return sessions
         .map((item) => Map<String, dynamic>.from(item))
         .toList(growable: false);
   }
 
   Future<Map<String, dynamic>?> sessionDetail(String sessionId) async {
-    final detail = await _delegate.sessionDetail(sessionId);
+    final detail = await _owner.sessionDetail(sessionId);
     if (detail == null) return null;
     return Map<String, dynamic>.from(detail);
   }
 
   Future<void> switchSession(String sessionId) {
-    return _delegate.switchSession(sessionId);
+    return _owner.switchSession(sessionId);
   }
 }

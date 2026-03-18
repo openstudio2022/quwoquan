@@ -201,7 +201,7 @@ class _ProfileCommentItem extends StatelessWidget {
           bottom: BorderSide(
             color: AppColorsFunctional.getColor(
                 isDark, ColorType.borderPrimary),
-            width: 0.5,
+            width: AppSpacing.hairline,
           ),
         ),
       ),

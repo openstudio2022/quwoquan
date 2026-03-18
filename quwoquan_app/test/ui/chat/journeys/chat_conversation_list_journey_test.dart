@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
@@ -155,6 +156,11 @@ void main() {
 
 class _EmptyChatRepository extends MockChatRepository {
   @override
+  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
+    return const <ChatInboxDto>[];
+  }
+
+  @override
   Future<List<Map<String, dynamic>>> listConversations({
     String? cursor,
     int limit = 20,
@@ -164,6 +170,11 @@ class _EmptyChatRepository extends MockChatRepository {
 }
 
 class _ErrorChatRepository extends MockChatRepository {
+  @override
+  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
+    throw Exception('Network error');
+  }
+
   @override
   Future<List<Map<String, dynamic>>> listConversations({
     String? cursor,

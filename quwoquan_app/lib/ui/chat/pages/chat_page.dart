@@ -10,6 +10,7 @@ import 'package:quwoquan_app/components/avatar/group_avatar_grid.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
+import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
@@ -20,6 +21,8 @@ import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/utils/chat_time_formatter.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/ui/chat/models/chat_list_item_view_model.dart';
+import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
 
 /// 趣信页
 ///
@@ -50,7 +53,9 @@ class _ChatPageState extends ConsumerState<ChatPage>
   @override
   void initState() {
     super.initState();
-    _loadConversationsWithCache();
+    if (!ref.read(chatInboxListEnabledProvider)) {
+      _loadConversationsWithCache();
+    }
   }
 
   @override
@@ -73,15 +78,13 @@ class _ChatPageState extends ConsumerState<ChatPage>
     }
   }
 
-  void _secretLock() {
-    setState(() {
-      _secretUnlocked = false;
-      _secretAuthError = '';
-    });
-  }
-
   /// 与 MessagePage subTabsMap 一致
-  static const List<String> _messageSubTabs = ['全部', '@我', '未读', '密信'];
+  static const List<String> _messageSubTabs = [
+    UITextConstants.contactsTabAll,
+    UITextConstants.atMe,
+    UITextConstants.unread,
+    UITextConstants.secretMessage,
+  ];
   static const List<String> _contactsSubTabs = [
     UITextConstants.contactsTabAll,
     UITextConstants.contactsTabCircles,
@@ -109,6 +112,44 @@ class _ChatPageState extends ConsumerState<ChatPage>
       if (_hideSecondaryTab) setState(() => _hideSecondaryTab = false);
     }
     _lastScrollY = y;
+  }
+
+  void _handleTabSwipeDragEnd(DragEndDetails details) {
+    final direction = TabSwipeSwitchRegion.directionFromDragEnd(details);
+    if (direction == null) {
+      return;
+    }
+    _handleTabSwipe(direction);
+  }
+
+  void _handleTabSwipe(TabSwipeDirection direction) {
+    if (_trySwitchSecondaryTab(direction)) {
+      return;
+    }
+    final nextMainIndex = _mainTabIndex + direction.delta;
+    if (nextMainIndex < 0 || nextMainIndex > 1) {
+      return;
+    }
+    setState(() {
+      _mainTabIndex = nextMainIndex;
+      _subTabIndex = 0;
+      _hideSecondaryTab = false;
+    });
+  }
+
+  bool _trySwitchSecondaryTab(TabSwipeDirection direction) {
+    if (_hideSecondaryTab) {
+      return false;
+    }
+    final subTabs = _mainTabIndex == 0 ? _messageSubTabs : _contactsSubTabs;
+    final nextSubIndex = _subTabIndex + direction.delta;
+    if (nextSubIndex < 0 || nextSubIndex >= subTabs.length) {
+      return false;
+    }
+    setState(() {
+      _subTabIndex = nextSubIndex;
+    });
+    return true;
   }
 
   /// 本地缓存优先 → 异步云端同步 → 增量刷新
@@ -187,48 +228,64 @@ class _ChatPageState extends ConsumerState<ChatPage>
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildMainTabs(context, bgColor, fgPrimary, fgSecondary),
-            AnimatedSlide(
-              offset: _hideSecondaryTab ? const Offset(0, -1) : Offset.zero,
+            AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              child: AnimatedOpacity(
-                opacity: _hideSecondaryTab ? 0 : 1,
-                duration: const Duration(milliseconds: 200),
-                child: _buildSubTabs(context, borderColor),
-              ),
+              curve: Curves.easeInOut,
+              height: _hideSecondaryTab ? 0 : AppSpacing.subTabNavigationHeight,
+              clipBehavior: Clip.hardEdge,
+              decoration: const BoxDecoration(),
+              child: _buildSubTabs(context, borderColor),
             ),
             Expanded(
-              child: NotificationListener<ScrollNotification>(
-                onNotification: (n) {
-                  _onScroll();
-                  return false;
-                },
-                child: _mainTabIndex == 0
-                    ? (_messageSubTabs[_subTabIndex] ==
-                              UITextConstants.secretMessage
-                          ? _buildSecretMessageContent(
-                              context,
-                              fgPrimary,
-                              fgSecondary,
-                              borderColor,
-                            )
-                          : _buildMessagesContent(
-                              context,
-                              fgPrimary,
-                              fgSecondary,
-                              borderColor,
-                            ))
-                    : _buildContactsContent(
-                        context,
-                        fgPrimary,
-                        fgSecondary,
-                        borderColor,
-                      ),
+              child: TabSwipeSwitchRegion(
+                onSwipe: _handleTabSwipe,
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: (n) {
+                    _onScroll();
+                    return false;
+                  },
+                  child: _buildActiveTabContent(
+                    context,
+                    fgPrimary,
+                    fgSecondary,
+                    borderColor,
+                  ),
+                ),
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildActiveTabContent(
+    BuildContext context,
+    Color fgPrimary,
+    Color fgSecondary,
+    Color borderColor,
+  ) {
+    if (_mainTabIndex != 0) {
+      return _buildContactsContent(
+        context,
+        fgPrimary,
+        fgSecondary,
+        borderColor,
+      );
+    }
+    final subTab = _messageSubTabs[_subTabIndex];
+    if (subTab == UITextConstants.secretMessage) {
+      return _buildSecretMessageContent(
+        context,
+        fgPrimary,
+        fgSecondary,
+        borderColor,
+      );
+    }
+    if (ref.watch(chatInboxListEnabledProvider)) {
+      return _buildInboxMessagesContent(context, fgPrimary, fgSecondary);
+    }
+    return _buildMessagesContent(context, fgPrimary, fgSecondary, borderColor);
   }
 
   Widget _buildMainTabs(
@@ -270,6 +327,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
                   _subTabIndex = 0;
                 });
               },
+              onHorizontalDragEnd: _handleTabSwipeDragEnd,
               leadingActions: const [],
               trailingActions: const [],
               transparentBackground: true,
@@ -295,15 +353,81 @@ class _ChatPageState extends ConsumerState<ChatPage>
 
   Widget _buildSubTabs(BuildContext context, Color borderColor) {
     final subTabs = _mainTabIndex == 0 ? _messageSubTabs : _contactsSubTabs;
+    final useInboxList = ref.watch(chatInboxListEnabledProvider);
+
+    Map<int, int>? numberBadges;
+    Map<int, bool>? dotBadges;
+
+    if (_mainTabIndex == 0) {
+      int atMeCount = 0;
+      int unreadCount = 0;
+      bool hasSecretUnread = false;
+
+      if (useInboxList) {
+        final inboxItems = ref.watch(chatInboxListProvider).items;
+        for (final item in inboxItems) {
+          final isSecret = item.type == 'encrypted';
+          if (isSecret) {
+            if (item.hasUnread || item.hasMention) {
+              hasSecretUnread = true;
+            }
+            continue;
+          }
+          atMeCount += item.mentionUnreadCount;
+          unreadCount += item.unreadCount;
+        }
+      } else if (_conversations != null) {
+        for (final c in _conversations!) {
+          final isSecret = c['type'] == 'encrypted';
+          final unread = c['unreadCount'] as int? ?? 0;
+          final hasMention = c['hasMention'] == true;
+
+          if (isSecret) {
+            if (unread > 0 || hasMention) {
+              hasSecretUnread = true;
+            }
+          } else {
+            if (hasMention) {
+              atMeCount += unread > 0 ? unread : 1;
+            }
+            unreadCount += unread;
+          }
+        }
+      }
+
+      numberBadges = {};
+      dotBadges = {};
+
+      final atMeIndex = _messageSubTabs.indexOf(UITextConstants.atMe);
+      if (atMeIndex != -1 && atMeCount > 0) {
+        numberBadges[atMeIndex] = atMeCount;
+      }
+
+      final unreadIndex = _messageSubTabs.indexOf(UITextConstants.unread);
+      if (unreadIndex != -1 && unreadCount > 0) {
+        numberBadges[unreadIndex] = unreadCount;
+      }
+
+      final secretIndex = _messageSubTabs.indexOf(
+        UITextConstants.secretMessage,
+      );
+      if (secretIndex != -1 && hasSecretUnread) {
+        dotBadges[secretIndex] = true;
+      }
+    }
+
     return SecondaryCapsuleTabBar(
       isDark: ref.read(isDarkProvider),
       tabs: subTabs,
       activeIndex: _subTabIndex,
       onTap: (index) => setState(() => _subTabIndex = index),
+      onHorizontalDragEnd: _handleTabSwipeDragEnd,
       horizontalPadding: AppSpacing.feedContentHorizontal(context),
       border: Border(
         bottom: BorderSide(color: borderColor.withValues(alpha: 0.2)),
       ),
+      numberBadges: numberBadges,
+      dotBadges: dotBadges,
     );
   }
 
@@ -319,116 +443,42 @@ class _ChatPageState extends ConsumerState<ChatPage>
     final encrypted = ref
         .read(appContentRepositoryProvider)
         .chatEncryptedConversations;
-    return Column(
-      children: [
-        Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: AppSpacing.md,
-            vertical: 12,
-          ),
-          decoration: BoxDecoration(
-            color: AppColors.primaryColor.withValues(alpha: 0.08),
-            border: Border(
-              bottom: BorderSide(color: borderColor.withValues(alpha: 0.2)),
+
+    if (encrypted.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.chat_bubble_outline,
+              size: AppSpacing.iconButtonMinSizeMd,
+              color: fgSecondary,
             ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.shield,
-                color: AppColors.primaryColor,
-                size: AppSpacing.iconMedium,
-              ),
-              SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      UITextConstants.secretUnlockedBanner,
-                      style: TextStyle(
-                        fontSize: AppTypography.md,
-                        fontWeight: FontWeight.w700,
-                        color: fgPrimary,
-                      ),
-                    ),
-                    Text(
-                      '${encrypted.length} 个加密对话 · 安全保护中',
-                      style: TextStyle(
-                        fontSize: AppTypography.sm,
-                        color: fgSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              CupertinoButton(
-                padding: EdgeInsets.zero,
-                minimumSize: Size.zero,
-                onPressed: _secretLock,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.lock,
-                      size: AppSpacing.iconSmall,
-                      color: AppColors.primaryColor,
-                    ),
-                    SizedBox(width: AppSpacing.xs),
-                    Text(
-                      UITextConstants.secretLockButton,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.primaryColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+            SizedBox(height: AppSpacing.md),
+            Text(
+              '暂无密信对话',
+              style: TextStyle(fontSize: AppTypography.lg, color: fgSecondary),
+            ),
+          ],
         ),
-        Expanded(
-          child: encrypted.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.shield_outlined,
-                        size: AppSpacing.largeButtonSize,
-                        color: fgSecondary,
-                      ),
-                      SizedBox(height: AppSpacing.md),
-                      Text(
-                        UITextConstants.noSecretConversations,
-                        style: TextStyle(
-                          fontSize: AppTypography.md,
-                          color: fgSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  itemCount: encrypted.length,
-                  itemBuilder: (context, i) {
-                    final c = encrypted[i];
-                    return _ConversationTile(
-                      conversation: c,
-                      isSpecial: false,
-                      onTap: () => context.push(
-                        AppRoutePaths.chatDetail(id: '${c['id']}'),
-                      ),
-                      fgPrimary: fgPrimary,
-                      fgSecondary: fgSecondary,
-                      borderColor: borderColor,
-                      showEncryptedBadge: true,
-                    );
-                  },
-                ),
-        ),
-      ],
+      );
+    }
+
+    return ListView.builder(
+      controller: _scrollController,
+      itemCount: encrypted.length,
+      itemBuilder: (context, i) {
+        final c = encrypted[i];
+        return _ConversationTile(
+          conversation: c,
+          isSpecial: false,
+          onTap: () => context.push(AppRoutePaths.chatDetail(id: '${c['id']}')),
+          fgPrimary: fgPrimary,
+          fgSecondary: fgSecondary,
+          borderColor: borderColor,
+          showEncryptedBadge: false, // Do not show lock icon
+        );
+      },
     );
   }
 
@@ -466,7 +516,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
             SizedBox(height: AppSpacing.forty * 1.5),
             Icon(
               CupertinoIcons.lock_fill,
-              size: 56,
+              size: AppSpacing.avatarUserLg,
               color: fgSecondary.withValues(alpha: 0.5),
             ),
             SizedBox(height: AppSpacing.lg),
@@ -577,6 +627,118 @@ class _ChatPageState extends ConsumerState<ChatPage>
     );
   }
 
+  Widget _buildInboxMessagesContent(
+    BuildContext context,
+    Color fgPrimary,
+    Color fgSecondary,
+  ) {
+    final inboxState = ref.watch(chatInboxListProvider);
+    final items = _filterInboxListForSubTab(
+      inboxState.items
+          .map(ChatListItemViewModel.fromDto)
+          .toList(growable: false),
+    );
+
+    if (inboxState.isLoading && inboxState.items.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: EdgeInsets.all(AppSpacing.lg),
+          child: CupertinoActivityIndicator(),
+        ),
+      );
+    }
+
+    if (items.isEmpty) {
+      return _buildConversationEmptyState(
+        fgSecondary: fgSecondary,
+        subTab: _messageSubTabs[_subTabIndex],
+      );
+    }
+
+    return ListView.builder(
+      controller: _scrollController,
+      padding: EdgeInsets.only(
+        bottom:
+            MediaQuery.of(context).padding.bottom + AppSpacing.bottomNavHeight,
+      ),
+      itemCount: items.length,
+      itemBuilder: (context, index) {
+        final item = items[index];
+        return _InboxConversationTile(
+          item: item,
+          fgPrimary: fgPrimary,
+          fgSecondary: fgSecondary,
+          onTap: () => context.push(AppRoutePaths.chatDetail(id: item.id)),
+        );
+      },
+    );
+  }
+
+  Widget _buildConversationEmptyState({
+    required Color fgSecondary,
+    required String subTab,
+  }) {
+    var title = UITextConstants.noConversations;
+    var subtitle = UITextConstants.startChatHint;
+
+    if (subTab == UITextConstants.atMe) {
+      title = UITextConstants.noMentionsMessages;
+      subtitle = UITextConstants.noMentionsHint;
+    } else if (subTab == UITextConstants.unread) {
+      title = UITextConstants.noUnreadMessages;
+      subtitle = UITextConstants.noUnreadHint;
+    }
+
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              CupertinoIcons.chat_bubble_2,
+              size: AppSpacing.iconButtonMinSizeMd,
+              color: fgSecondary.withValues(alpha: 0.72),
+            ),
+            SizedBox(height: AppSpacing.md),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: AppTypography.lg,
+                fontWeight: AppTypography.medium,
+                color: fgSecondary,
+              ),
+            ),
+            SizedBox(height: AppSpacing.xs),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: AppTypography.base,
+                color: fgSecondary.withValues(alpha: 0.82),
+                height: AppTypography.lineHeightCompact,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<ChatListItemViewModel> _filterInboxListForSubTab(
+    List<ChatListItemViewModel> list,
+  ) {
+    final sub = _messageSubTabs[_subTabIndex];
+    if (sub == UITextConstants.atMe) {
+      return list.where((item) => item.hasMention).toList(growable: false);
+    }
+    if (sub == UITextConstants.unread) {
+      return list.where((item) => item.hasUnread).toList(growable: false);
+    }
+    return list;
+  }
+
   Widget _buildMessagesContent(
     BuildContext context,
     Color fgPrimary,
@@ -596,6 +758,19 @@ class _ChatPageState extends ConsumerState<ChatPage>
     }
 
     if (convs.isEmpty) {
+      final sub = _messageSubTabs[_subTabIndex];
+      String title = '';
+      String subtitle = '';
+
+      if (sub == '全部') {
+        title = '暂无对话';
+        subtitle = '开始与圈友聊天吧！';
+      } else if (sub == '@我') {
+        title = '暂无@我的消息';
+      } else if (sub == '未读') {
+        title = '暂无未读消息';
+      }
+
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -607,13 +782,17 @@ class _ChatPageState extends ConsumerState<ChatPage>
             ),
             SizedBox(height: AppSpacing.md),
             Text(
-              UITextConstants.noConversations,
+              title,
               style: TextStyle(fontSize: AppTypography.lg, color: fgSecondary),
             ),
-            Text(
-              UITextConstants.startChatHint,
-              style: TextStyle(fontSize: AppTypography.md, color: fgSecondary),
-            ),
+            if (subtitle.isNotEmpty)
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: AppTypography.md,
+                  color: fgSecondary,
+                ),
+              ),
           ],
         ),
       );
@@ -1187,7 +1366,7 @@ class _ConversationTile extends StatelessWidget {
     this.showEncryptedBadge = false,
   });
 
-  static const double _avatarSize = 56;
+  static const double _avatarSize = 48;
 
   String _formatConversationTime(Map<String, dynamic> conv) {
     final isoStr =
@@ -1196,7 +1375,7 @@ class _ConversationTile extends StatelessWidget {
         conv['updatedAt'] as String?;
     final dt = ChatTimeFormatter.tryParseServerTime(isoStr);
     if (dt == null) return '';
-    return ChatTimeFormatter.format(dt);
+    return ChatTimeFormatter.formatForConversationList(dt);
   }
 
   Widget _buildConversationAvatar() {
@@ -1225,133 +1404,340 @@ class _ConversationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final unread = conversation['unreadCount'] as int? ?? 0;
-    final isEncrypted =
-        showEncryptedBadge || conversation['type'] == 'encrypted';
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: borderColor.withValues(alpha: 0.3)),
+    final isEncrypted = showEncryptedBadge;
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: borderColor.withValues(alpha: 0.3),
+              width: 0.5,
+            ),
+          ),
         ),
-      ),
-      child: CupertinoListTile(
-        backgroundColor: Colors.transparent,
-        onTap: onTap,
-        leading: Stack(
-          clipBehavior: Clip.none,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            _buildConversationAvatar(),
-            if (isEncrypted)
-              Positioned(
-                right: -2,
-                bottom: -2,
-                child: Container(
-                  padding: EdgeInsets.all(AppSpacing.xs),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryColor,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Theme.of(context).scaffoldBackgroundColor,
-                      width: AppSpacing.oneHalf,
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                _buildConversationAvatar(),
+                if (isEncrypted)
+                  Positioned(
+                    right: -2,
+                    bottom: -2,
+                    child: Container(
+                      padding: EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryColor,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Theme.of(context).scaffoldBackgroundColor,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Icon(Icons.lock, size: 10, color: Colors.white),
                     ),
                   ),
-                  child: Icon(
-                    Icons.lock,
-                    size: AppSpacing.fourteen,
-                    color: Colors.white,
+                if (unread > 0)
+                  Positioned(
+                    right: -6,
+                    top: -6,
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: unread > 9 ? 5 : 4,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.error,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: Theme.of(context).scaffoldBackgroundColor,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Text(
+                        unread > 99 ? '99+' : '$unread',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          height: 1.1,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-          ],
-        ),
-        title: Row(
-          children: [
+              ],
+            ),
+            SizedBox(width: 12),
             Expanded(
-              child: Text(
-                conversation['title'] as String? ?? '',
-                style: TextStyle(
-                  fontSize: AppTypography.lg,
-                  fontWeight: FontWeight.w600,
-                  color: fgPrimary,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                conversation['title'] as String? ?? '',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                  color: fgPrimary,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (isSpecial) ...[
+                              SizedBox(width: 4),
+                              Container(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.warning.withValues(
+                                    alpha: 0.2,
+                                  ),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  'AI',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.warning,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        _formatConversationTime(conversation),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: fgSecondary.withValues(alpha: 0.8),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 4),
+                  Row(
+                    children: [
+                      if (isEncrypted) ...[
+                        Icon(
+                          Icons.lock,
+                          size: 14,
+                          color: fgSecondary.withValues(alpha: 0.8),
+                        ),
+                        SizedBox(width: 4),
+                      ],
+                      Expanded(
+                        child: Text(
+                          conversation['lastMessage'] as String? ?? '',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: fgSecondary.withValues(alpha: 0.8),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-            if (isSpecial) ...[
-              SizedBox(width: AppSpacing.intraGroupSm),
-              Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.intraGroupSm,
-                  vertical: AppSpacing.xs / 2,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.warning.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
-                ),
-                child: Text(
-                  'AI',
-                  style: TextStyle(
-                    fontSize: AppTypography.xs,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.warning,
-                  ),
-                ),
-              ),
-            ],
           ],
         ),
-        subtitle: Row(
+      ),
+    );
+  }
+}
+
+class _InboxConversationTile extends StatelessWidget {
+  const _InboxConversationTile({
+    required this.item,
+    required this.onTap,
+    required this.fgPrimary,
+    required this.fgSecondary,
+  });
+
+  final ChatListItemViewModel item;
+  final VoidCallback onTap;
+  final Color fgPrimary;
+  final Color fgSecondary;
+
+  static const double _avatarSize = 52.0;
+
+  Widget _buildAvatar() {
+    if (item.isGroup) {
+      return GroupAvatarGrid(
+        size: _avatarSize,
+        avatarUrls: item.avatarCompositeUrls,
+      );
+    }
+    return RoundedSquareAvatar(
+      size: _avatarSize,
+      imageUrl: item.avatarUrl,
+      name: item.title,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scaffoldBackground = Theme.of(context).scaffoldBackgroundColor;
+    final dividerColor = fgSecondary.withValues(alpha: 0.12);
+    final subtitleColor = fgSecondary.withValues(alpha: 0.9);
+    final timeColor = fgSecondary.withValues(alpha: 0.72);
+
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        color: item.isPinned
+            ? fgSecondary.withValues(alpha: 0.04)
+            : Colors.transparent,
+        padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        child: Column(
           children: [
-            if (isEncrypted) ...[
-              Icon(
-                Icons.lock,
-                size: AppSpacing.interGroupSm,
-                color: fgSecondary,
+            Padding(
+              padding: EdgeInsets.symmetric(
+                vertical: AppSpacing.sm + AppSpacing.xs,
               ),
-              SizedBox(width: AppSpacing.xs),
-            ],
-            Expanded(
-              child: Text(
-                conversation['lastMessage'] as String? ?? '',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: AppTypography.smPlus,
-                  color: fgSecondary,
-                ),
-              ),
-            ),
-          ],
-        ),
-        trailing: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              _formatConversationTime(conversation),
-              style: TextStyle(fontSize: AppTypography.sm, color: fgSecondary),
-            ),
-            if (unread > 0) ...[
-              SizedBox(height: AppSpacing.xs),
-              Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.intraGroupSm,
-                  vertical: AppSpacing.xs / 2,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.error,
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
-                ),
-                child: Text(
-                  unread > 99 ? '99+' : '$unread',
-                  style: TextStyle(
-                    fontSize: AppTypography.xsPlus,
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      _buildAvatar(),
+                      if (item.hasUnread)
+                        Positioned(
+                          top: -4,
+                          right: -4,
+                          child: Container(
+                            constraints: const BoxConstraints(minWidth: 20),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: item.unreadCount > 9
+                                  ? AppSpacing.xs + 1
+                                  : AppSpacing.xs,
+                              vertical: AppSpacing.two,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.error,
+                              borderRadius: BorderRadius.circular(
+                                AppSpacing.ten,
+                              ),
+                              border: Border.all(
+                                color: scaffoldBackground,
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Text(
+                              item.unreadCount > 99
+                                  ? '99+'
+                                  : '${item.unreadCount}',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: AppTypography.xs,
+                                fontWeight: AppTypography.semiBold,
+                                color: Colors.white,
+                                height: 1,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
-                ),
+                  SizedBox(width: AppSpacing.sm + AppSpacing.xs),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                item.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: AppTypography.lg,
+                                  fontWeight: AppTypography.medium,
+                                  color: fgPrimary,
+                                  height: AppTypography.lineHeightTight,
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: AppSpacing.sm),
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(minWidth: 64),
+                              child: Text(
+                                item.timeLabel,
+                                textAlign: TextAlign.right,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: AppTypography.base,
+                                  color: timeColor,
+                                  height: AppTypography.lineHeightTight,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: AppSpacing.xs),
+                        Row(
+                          children: [
+                            if (item.previewIcon != null) ...[
+                              Icon(
+                                item.previewIcon,
+                                size: AppSpacing.fourteen,
+                                color: subtitleColor,
+                              ),
+                              SizedBox(width: AppSpacing.xs),
+                            ],
+                            Expanded(
+                              child: Text(
+                                item.subtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: AppTypography.base,
+                                  color: subtitleColor,
+                                  height: AppTypography.lineHeightCompact,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
+            Padding(
+              padding: EdgeInsets.only(
+                left: _avatarSize + AppSpacing.sm + AppSpacing.xs,
+              ),
+              child: Divider(
+                height: 0,
+                thickness: AppSpacing.hairline,
+                color: dividerColor,
+              ),
+            ),
           ],
         ),
       ),

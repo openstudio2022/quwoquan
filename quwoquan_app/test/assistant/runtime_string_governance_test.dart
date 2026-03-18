@@ -66,9 +66,9 @@ void main() {
       expect(content, isNot(contains("toolAssessMessage('")));
     });
 
-    test('agent_loop 不再使用 realtimeTokens 关键词数组做实时判断', () {
+    test('phase owner 不再使用 realtimeTokens 关键词数组做实时判断', () {
       final content = _read(
-        'lib/assistant/conversation/orchestration/agent_loop.dart',
+        'lib/assistant/orchestration/local_phase_execution_owner.dart',
       );
 
       expect(content, isNot(contains('const realtimeTokens')));
@@ -104,9 +104,9 @@ void main() {
       expect(content, isNot(contains('再告诉我预算范围')));
     });
 
-    test('agent_loop 使用 typed nextAction/messageKind 合同而非裸字符串比较', () {
+    test('phase owner 使用 typed nextAction/messageKind 合同而非裸字符串比较', () {
       final content = _read(
-        'lib/assistant/conversation/orchestration/agent_loop.dart',
+        'lib/assistant/orchestration/local_phase_execution_owner.dart',
       );
 
       expect(content, contains('parseNextAction('));
@@ -199,9 +199,9 @@ void main() {
       },
     );
 
-    test('agent_loop 不再使用 fallbackFrame 回填 intent graph 关键字段', () {
+    test('phase owner 不再使用 fallbackFrame 回填 intent graph 关键字段', () {
       final content = _read(
-        'lib/assistant/conversation/orchestration/agent_loop.dart',
+        'lib/assistant/orchestration/local_phase_execution_owner.dart',
       );
 
       expect(content, isNot(contains('fallbackFrame.targetObject')));
@@ -324,43 +324,59 @@ void main() {
       );
     });
 
-    test('process_event_consolidator 使用 typed assessment 而非字符串 switch', () {
+    test('assistant_journey_projector 使用 typed journey stage/kind 而非旧 explainable 流', () {
       final content = _read(
-        'lib/assistant/conversation/explainability/process_event_consolidator.dart',
+        'lib/assistant/application/assistant_journey_projector.dart',
       );
 
-      expect(content, contains('parseAssessmentType'));
-      expect(content, contains('AssessmentType.sufficient'));
-      expect(content, contains('AssessmentType.needMoreSearch'));
-      expect(content, contains('AssessmentType.budgetExhausted'));
-      expect(content, contains('AssessmentType.toolFailed'));
-      expect(content, isNot(contains("case 'sufficient':")));
-      expect(content, isNot(contains("case 'needmoresearch':")));
-      expect(content, isNot(contains("case 'budgetexhausted':")));
-      expect(content, isNot(contains("case 'toolfailed':")));
-      expect(content, contains('parsePlannerPhaseId'));
-      expect(content, contains('PlannerPhaseId.answering'));
+      expect(content, contains('JourneyStageId.analyze'));
+      expect(content, contains('JourneyStageId.search'));
+      expect(content, contains('JourneyStageId.verify'));
+      expect(content, contains('JourneyStageId.answer'));
+      expect(content, contains('JourneyEntryKind.referenceBundle'));
+      expect(content, contains('JourneyEntryKind.narrative'));
+      expect(content, isNot(contains('ExplainableFlowEvent')));
+      expect(content, isNot(contains('processJournal')));
     });
 
-    test('process_journal_bus 使用 typed phase/action/reason 而非裸字符串', () {
+    test('assistant_stream_projector 只消费 canonical journey 流', () {
       final content = _read(
-        'lib/assistant/orchestration/process_journal_bus.dart',
+        'lib/assistant/application/assistant_stream_projector.dart',
       );
 
-      expect(content, contains('PlannerPhaseId.answering.wireName'));
-      expect(content, contains('PlannerPhaseId.completed.wireName'));
-      expect(content, contains('PlannerActionCode.streamAnswer.wireName'));
-      expect(content, contains('PlannerActionCode.completeTurn.wireName'));
-      expect(content, contains('PlannerReasonCode.deliverIncrement.wireName'));
-      expect(content, contains('PlannerReasonCode.readyToAnswer.wireName'));
-      expect(content, contains('parsePlannerPhaseId'));
-      expect(content, isNot(contains("stage: 'answering'")));
-      expect(content, isNot(contains("phaseId: 'answering'")));
-      expect(content, isNot(contains("actionCode: 'stream_answer'")));
-      expect(content, isNot(contains("reasonCode: 'deliver_increment'")));
-      expect(content, isNot(contains("phaseId: 'completed'")));
-      expect(content, isNot(contains("actionCode: 'complete_turn'")));
-      expect(content, isNot(contains("reasonCode: 'ready_to_answer'")));
+      expect(content, contains('AssistantJourneyProjector('));
+      expect(content, contains('resolveCompletedJourney'));
+      expect(content, contains('AssistantRunStreamEvent.journey'));
+      expect(content, isNot(contains('emitRemoteProcessJournal')));
+      expect(content, isNot(contains('processJournalEvent')));
+      expect(content, isNot(contains('explainableFlowEvent')));
+    });
+
+    test('display_text_classifier 与 tool catalog 清理旧路径和查询泄漏模板', () {
+      final classifier = _read(
+        'lib/assistant/protocol/display_text_classifier.dart',
+      );
+      final catalog = _read('assets/assistant/tools/catalog/tool_catalog.meta.json');
+
+      expect(
+        classifier,
+        contains('assets/assistant/config/progress_text_policy.json'),
+      );
+      expect(classifier, isNot(contains('assets/personal_assistant')));
+      expect(catalog, isNot(contains('检索查询：{{query}}')));
+      expect(catalog, isNot(contains('抓取：{{url}}')));
+      expect(catalog, isNot(contains('检索：{{query}}')));
+      expect(catalog, isNot(contains('打开 {{url}}')));
+    });
+
+    test('ui_text_constants 已清理旧 timeline 兼容常量', () {
+      final content = _read('lib/core/constants/ui_text_constants.dart');
+
+      expect(content, isNot(contains('assistantTimelineSearchProcess')));
+      expect(content, isNot(contains('assistantTimelineThinking')));
+      expect(content, isNot(contains('assistantPhaseWaiting')));
+      expect(content, isNot(contains('assistantPhaseThinking')));
+      expect(content, isNot(contains('assistantProcessThinking')));
     });
 
     test('retrieval_planner 使用 typed AnswerShape switch 而非字符串', () {
@@ -392,10 +408,10 @@ void main() {
         isNot(contains('DEPRECATED compatibility fallback')),
       );
 
-      final agentLoop = _read(
-        'lib/assistant/conversation/orchestration/agent_loop.dart',
+      final phaseOwner = _read(
+        'lib/assistant/orchestration/local_phase_execution_owner.dart',
       );
-      expect(agentLoop, isNot(contains('DEPRECATED compatibility fallback')));
+      expect(phaseOwner, isNot(contains('DEPRECATED compatibility fallback')));
     });
   });
 }

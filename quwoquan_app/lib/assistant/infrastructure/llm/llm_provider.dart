@@ -1192,11 +1192,6 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
     await appendLayer('stack.persona');
     // §6: Tool policy + runtime constraints
     await appendLayer('stack.tool_policy');
-    // Legacy behavior layers that still add general guidance, but do not define
-    // a parallel output schema.
-    await appendLayer('stack.global_system');
-    await appendLayer('stack.runtime_policy');
-    await appendLayer('stack.recovery_policy');
     return _ResolvedPromptStack(
       content: stackLayers.join('\n\n'),
       missingVariables: missing.toSet().toList(growable: false),

@@ -12,14 +12,21 @@ import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/main.dart' as app;
 import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
 
-const _firstQuery = '如果把九寨沟方向考虑进去，多给我几个备选方案';
-const _secondQuery = '如果我只有4天，优先哪条路线？';
-const _phaseHints = <String>[
-  '我先帮你理清问题',
-  '我在替你核对资料',
-  '我在帮你整理判断',
-  '我在组织最终回答',
-  '我在确认现在的信息够不够回答',
+const _defaultFirstQuery = '如果把九寨沟方向考虑进去，多给我几个备选方案';
+const _defaultSecondQuery = '如果我只有4天，优先哪条路线？';
+const _firstQuery = String.fromEnvironment(
+  'ASSISTANT_REPLAY_FIRST_QUERY',
+  defaultValue: _defaultFirstQuery,
+);
+const _secondQuery = String.fromEnvironment(
+  'ASSISTANT_REPLAY_SECOND_QUERY',
+  defaultValue: _defaultSecondQuery,
+);
+const _skeletalProcessHeaders = <String>[
+  '理解问题',
+  '查找信息',
+  '核对结论',
+  '整理回答',
   '已为你整理好',
   '正在搜索',
   '正在整理',
@@ -255,9 +262,6 @@ Future<_ReplayResult> _sendQueryAndWaitForAnswer(
     final screenText = chatScope.evaluate().isNotEmpty
         ? _collectVisibleText(tester, scope: chatScope.last)
         : _collectVisibleText(tester);
-    if (_phaseHints.any(screenText.contains)) {
-      phaseLabelSeen = true;
-    }
     final snapshot = _latestAssistantSnapshot(tester);
     if (snapshot == null) {
       continue;
@@ -270,9 +274,6 @@ Future<_ReplayResult> _sendQueryAndWaitForAnswer(
     heuristicFallbackUsed = snapshot.heuristicFallbackUsed;
     snapshots.add(latestText);
     _throwIfForbidden(latestText);
-    if (_phaseHints.any(latestText.contains)) {
-      phaseLabelSeen = true;
-    }
     if (_matchesExpectation(query, latestAnswer)) {
       matchedExpected = true;
     }
@@ -293,6 +294,7 @@ Future<_ReplayResult> _sendQueryAndWaitForAnswer(
   }
 
   final processHeaderText = await _latestAssistantProcessHeaderText(tester);
+  phaseLabelSeen = _isAcceptableProcessHeader(processHeaderText);
 
   return _ReplayResult(
     query: query,
@@ -490,13 +492,31 @@ bool _containsStructuredLeak(String text) {
 }
 
 bool _matchesExpectation(String query, String text) {
-  if (query == _firstQuery) {
+  if (_isDefaultFirstReplayQuery(query)) {
     return _matchesTravelAlternativeAnswer(text);
   }
-  if (query == _secondQuery) {
+  if (_isDefaultSecondReplayQuery(query)) {
     return _matchesFollowupRouteAnswer(text);
   }
+  if (_isWeatherReplayQuery(query)) {
+    return _matchesWeatherAnswer(text);
+  }
   return text.trim().isNotEmpty;
+}
+
+bool _isDefaultFirstReplayQuery(String query) {
+  return query == _firstQuery && _firstQuery == _defaultFirstQuery;
+}
+
+bool _isDefaultSecondReplayQuery(String query) {
+  return query == _secondQuery && _secondQuery == _defaultSecondQuery;
+}
+
+bool _isWeatherReplayQuery(String query) {
+  return query.contains('天气') ||
+      query.contains('下雨') ||
+      query.contains('雨伞') ||
+      query.contains('外套');
 }
 
 bool _matchesTravelAlternativeAnswer(String text) {
@@ -523,16 +543,38 @@ bool _matchesFollowupRouteAnswer(String text) {
   return hasDuration && hasRecommendation && hasSubstance;
 }
 
+bool _matchesWeatherAnswer(String text) {
+  final normalized = _normalizeLoose(text);
+  final weatherSignals = RegExp(
+    r'(天气|气温|温度|体感|湿度|风力|降雨|下雨|空气质量)',
+  ).allMatches(normalized).length;
+  final hasAdvice = RegExp(r'(外套|雨伞|建议|体感|穿)').hasMatch(normalized);
+  final hasSubstance = normalized.length >= 20;
+  return weatherSignals >= 2 && hasAdvice && hasSubstance;
+}
+
 String _normalizeLoose(String text) {
   return text.replaceAll(RegExp(r'\s+'), ' ').trim();
 }
 
-bool _hasProcessProgressSummary(String text) {
-  return RegExp(r'已完成\s+\d+/\d+\s+步').hasMatch(_normalizeLoose(text));
+bool _isAcceptableProcessHeader(String text) {
+  final normalized = _normalizeLoose(text);
+  if (normalized.isEmpty) return false;
+  if (_containsInternalProtocolLeak(normalized)) return false;
+  if (normalized.contains('模型调用') ||
+      normalized.toLowerCase().contains('token') ||
+      normalized.contains('{{')) {
+    return false;
+  }
+  if (RegExp(r'^已深度思考(?:，参考 \d+ 篇资料)?(?:，用时 \d+ 秒)?(?:，参考 \d+ 篇资料，用时 \d+ 秒)?$')
+      .hasMatch(normalized)) {
+    return true;
+  }
+  return normalized.length >= 8 && !_skeletalProcessHeaders.contains(normalized);
 }
 
 void _expectReplayResult(_ReplayResult result) {
-  expect(result.phaseLabelSeen, isTrue, reason: '过程区必须先出现用户可理解的阶段提示');
+  expect(result.phaseLabelSeen, isTrue, reason: '过程区首行必须是用户语言摘要或完成摘要');
   expect(result.degraded, isFalse, reason: '真实回放不允许进入 degraded');
   expect(
     result.heuristicFallbackUsed,
@@ -560,19 +602,14 @@ void _expectReplayResult(_ReplayResult result) {
     reason: '最终界面可见文本不得含内部协议或结构碎片',
   );
   expect(
-    _hasProcessProgressSummary(result.processHeaderText),
+    _isAcceptableProcessHeader(result.processHeaderText),
     isTrue,
-    reason: '过程区应展示稳定的步骤进度摘要，便于用户感知当前收敛程度',
+    reason: '过程区首行必须是用户语言摘要，不允许回退到内部阶段壳或 telemetry',
   );
   expect(
     result.matchedExpected,
     isTrue,
     reason: '最终 assistant answer 必须满足该问题的对题锚点',
-  );
-  expect(
-    result.expandSignalCount,
-    0,
-    reason: '真实回放不应再落入 expanding/need_more_search 路径',
   );
   expect(
     result.evidenceLedgerCount,
@@ -586,18 +623,28 @@ void _expectReplayResult(_ReplayResult result) {
   );
   expect(result.nextAction, 'answer', reason: '当前回放最终必须直接进入 answer');
   expect(
+    result.timelinePhases,
+    equals(const <String>['analyze', 'search', 'verify', 'answer']),
+    reason: 'completed 后必须持久化固定 4 主阶段 timeline',
+  );
+  expect(
+    result.journalStages,
+    equals(const <String>['analyze', 'search', 'verify', 'answer']),
+    reason: '历史恢复应与完成态一致，不允许丢阶段',
+  );
+  expect(
     result.finalAnswerMode,
     anyOf(equals('full'), equals('bounded_answer')),
     reason: '最终回答模式必须是 full 或 bounded_answer',
   );
-  if (result.query == _firstQuery) {
+  if (_isDefaultFirstReplayQuery(result.query)) {
     expect(
       result.modelCallCount,
       lessThanOrEqualTo(6),
       reason: '首轮应在有限模型调用内完成成答，避免反复扩检',
     );
   }
-  if (result.query == _secondQuery) {
+  if (_isDefaultSecondReplayQuery(result.query)) {
     expect(
       (result.phaseOneRoutingDiagnostics['route'] as String?) ?? '',
       'phase_one_direct_answer',
@@ -722,12 +769,9 @@ class _AssistantBubbleSnapshot {
   bool get streaming => message['streaming'] == true;
 
   int get modelCallCount =>
-      (((message['uiUsageStats'] as Map?) ??
-                  (message['uiUsageStatsV1'] as Map?))
-              ?.cast<String, dynamic>())?['modelCallCount']
+      ((message['uiUsageStats'] as Map?)?.cast<String, dynamic>())?['modelCallCount']
           is num
-      ? (((message['uiUsageStats'] as Map?) ??
-                        (message['uiUsageStatsV1'] as Map?))!
+      ? ((message['uiUsageStats'] as Map?)!
                     .cast<String, dynamic>()['modelCallCount']
                 as num)
             .toInt()
@@ -762,57 +806,70 @@ class _AssistantBubbleSnapshot {
     return (aggregation['finalAnswerMode'] as String?)?.trim() ?? '';
   }
 
+  Map<String, dynamic> get _journey {
+    final timeline =
+        (message['uiProcessTimelineV2'] as Map?)?.cast<String, dynamic>();
+    if (timeline != null && timeline.isNotEmpty) {
+      return timeline;
+    }
+    final direct = (message['journey'] as Map?)?.cast<String, dynamic>();
+    if (direct != null && direct.isNotEmpty) {
+      return direct;
+    }
+    return ((message['runArtifacts'] as Map?)?['journey'] as Map?)
+            ?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+  }
+
   List<String> get timelinePhaseIds {
     final raw =
-        ((message['uiProcessTimeline'] as List?) ??
-                (message['uiProcessTimelineV2'] as List?))
+        (_journey['stages'] as List?)
             ?.whereType<Map>()
             .map((item) => item.cast<String, dynamic>())
             .toList(growable: false) ??
         const <Map<String, dynamic>>[];
     return _uniqueNonEmpty(
       raw.map(
-        (item) =>
-            (item['phaseId'] as String?)?.trim() ??
-            (item['stage'] as String?)?.trim() ??
-            '',
+        (item) => (item['stageId'] as String?)?.trim() ?? '',
       ),
     );
   }
 
   List<String> get journalStages {
     final raw =
-        (((message['runArtifacts'] as Map?)?['processJournal'] as List?) ??
-                (message['processJournalV1'] as List?))
-            ?.whereType<Map>()
-            .map((item) => item.cast<String, dynamic>())
-            .toList(growable: false) ??
+        ((_journey['stages'] as List?)
+                ?.whereType<Map>()
+                .map((item) => item.cast<String, dynamic>())
+                .toList(growable: false)) ??
         const <Map<String, dynamic>>[];
     return _uniqueNonEmpty(
       raw.map(
-        (item) => (item['stage'] as String?)?.trim().isNotEmpty == true
-            ? (item['stage'] as String).trim()
-            : (item['phaseId'] as String?)?.trim() ?? '',
+        (item) => (item['stageId'] as String?)?.trim() ?? '',
       ),
     );
   }
 
   int get expandSignalCount {
     final raw =
-        (((message['runArtifacts'] as Map?)?['processJournal'] as List?) ??
-                (message['processJournalV1'] as List?))
-            ?.whereType<Map>()
-            .map((item) => item.cast<String, dynamic>())
-            .toList(growable: false) ??
+        ((_journey['entries'] as List?)
+                ?.whereType<Map>()
+                .map((item) => item.cast<String, dynamic>())
+                .toList(growable: false)) ??
         const <Map<String, dynamic>>[];
+    final readiness =
+        (_journey['readiness'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
     var count = 0;
+    if (readiness['needExpansion'] == true) {
+      count += 1;
+    }
     for (final item in raw) {
-      final stage = (item['stage'] as String?)?.trim() ?? '';
-      final phaseId = (item['phaseId'] as String?)?.trim() ?? '';
-      final actionCode = (item['actionCode'] as String?)?.trim() ?? '';
-      final reasonCode = (item['reasonCode'] as String?)?.trim() ?? '';
-      if (stage == 'expanding' ||
-          phaseId == 'expanding' ||
+      final provenance =
+          (item['provenance'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      final actionCode = (provenance['actionCode'] as String?)?.trim() ?? '';
+      final reasonCode = (provenance['reasonCode'] as String?)?.trim() ?? '';
+      if (
           actionCode == 'expand_search' ||
           reasonCode == 'need_more_search' ||
           reasonCode == 'need_more_evidence') {

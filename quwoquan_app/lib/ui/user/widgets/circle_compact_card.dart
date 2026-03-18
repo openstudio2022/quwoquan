@@ -49,7 +49,7 @@ class CircleCompactCard extends StatelessWidget {
             CircleAvatar(
               radius: 24,
               backgroundImage: coverUrl.isNotEmpty ? NetworkImage(coverUrl) : null,
-              onBackgroundImageError: (_, __) {},
+              onBackgroundImageError: (error, stackTrace) {},
               child: coverUrl.isEmpty
                   ? Icon(Icons.group, color: fgSecondary)
                   : null,

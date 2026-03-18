@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:quwoquan_app/assistant/conversation/orchestration/agent_loop.dart';
+import 'package:quwoquan_app/assistant/orchestration/local_phase_execution_owner.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
 import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
@@ -61,7 +61,7 @@ void main() {
           llmProvider: const HeuristicLocalLlmProvider(),
           toolRegistry: AssistantToolRegistry(),
         );
-        final agentLoop = PersonalAssistantAgentLoop(
+        final agentLoop = LocalPhaseExecutionOwner(
           runtime,
           sessionManager: AssistantSessionManager(
             storagePath: '${tempDir.path}/sessions.json',

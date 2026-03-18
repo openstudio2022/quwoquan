@@ -3,6 +3,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
+import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
@@ -15,11 +18,17 @@ class ProfileInteractionTab extends ConsumerStatefulWidget {
     required this.mode,
     required this.userId,
     required this.isDark,
+    this.inlineScroll = false,
+    this.secondaryTabBarKey,
+    this.onSecondaryHorizontalDragEnd,
   });
 
   final ProfileMode mode;
   final String userId;
   final bool isDark;
+  final bool inlineScroll;
+  final GlobalKey? secondaryTabBarKey;
+  final GestureDragEndCallback? onSecondaryHorizontalDragEnd;
 
   @override
   ConsumerState<ProfileInteractionTab> createState() =>
@@ -27,12 +36,20 @@ class ProfileInteractionTab extends ConsumerStatefulWidget {
 }
 
 class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
-  List<Map<String, dynamic>>? _items;
+  List<UserProfileSubTabConfig> get _interactionFilters =>
+      UserProfileUIConfig.interactionSubTabs;
+
+  List<ProfileInteractionActivityViewData>? _items;
   bool _loading = true;
+  InteractionSubTab? _loadedSubTab;
+  InteractionDirection? _loadedDirection;
 
   @override
   void initState() {
     super.initState();
+    final state = ref.read(profileNotifierProvider(widget.userId)).state;
+    _loadedSubTab = state.interactionSubTab;
+    _loadedDirection = state.interactionDirection;
     _load();
   }
 
@@ -40,20 +57,17 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
     final notifier = ref.read(profileNotifierProvider(widget.userId));
     final direction = notifier.state.interactionDirection;
     final subTab = notifier.state.interactionSubTab;
+    _loadedDirection = direction;
+    _loadedSubTab = subTab;
     final repo = ref.read(userProfileRepositoryProvider);
     setState(() => _loading = true);
     try {
       final list = direction == InteractionDirection.received
-          ? await repo.listUserInteractionReceived(widget.userId)
-          : await repo.listUserInteractionSent(widget.userId);
+          ? await repo.listProfileInteractionReceivedView(widget.userId)
+          : await repo.listProfileInteractionSentView(widget.userId);
 
       final filtered = list.where((item) {
-        final contentType = item['contentType'] as String? ?? '';
-        if (subTab == InteractionSubTab.comments) {
-          return contentType == 'comment';
-        } else {
-          return contentType == 'favorite';
-        }
+        return item.activityType == _activityTypeForSubTab(subTab);
       }).toList();
 
       if (mounted) {
@@ -76,6 +90,7 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
   Widget build(BuildContext context) {
     final notifier = ref.watch(profileNotifierProvider(widget.userId));
     final state = notifier.state;
+    _scheduleReloadIfNeeded(state);
     final fg = AppColorsFunctional.getColor(
       widget.isDark,
       ColorType.foregroundPrimary,
@@ -89,230 +104,246 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
       widget.isDark,
       ColorType.borderPrimary,
     );
+    final activeIndex = _interactionFilters.indexWhere(
+      (filter) => _interactionSubTabForId(filter.id) == state.interactionSubTab,
+    );
+
+    final header = SizedBox(
+      key: const ValueKey<String>('profile-interaction-secondary-tabs'),
+      child: SecondaryCapsuleTabBar(
+        key: widget.secondaryTabBarKey,
+        isDark: widget.isDark,
+        tabs: _interactionFilters
+            .map(
+              (filter) => UITextConstants.contentLabelForKey(filter.labelKey),
+            )
+            .toList(growable: false),
+        activeIndex: activeIndex < 0 ? 0 : activeIndex,
+        onTap: (index) {
+          notifier.setInteractionSubTab(
+            _interactionSubTabForId(_interactionFilters[index].id),
+          );
+        },
+        trailing: widget.mode == ProfileMode.mine
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _DirectionChip(
+                    label: '收到',
+                    isActive:
+                        state.interactionDirection ==
+                        InteractionDirection.received,
+                    onTap: () {
+                      notifier.setInteractionDirection(
+                        InteractionDirection.received,
+                      );
+                    },
+                    fg: fg,
+                    primary: primary,
+                    border: border,
+                  ),
+                  SizedBox(width: AppSpacing.xs),
+                  _DirectionChip(
+                    label: '发出',
+                    isActive:
+                        state.interactionDirection == InteractionDirection.sent,
+                    onTap: () {
+                      notifier.setInteractionDirection(
+                        InteractionDirection.sent,
+                      );
+                    },
+                    fg: fg,
+                    primary: primary,
+                    border: border,
+                  ),
+                  SizedBox(width: AppSpacing.containerMd),
+                ],
+              )
+            : null,
+        showTrailingDivider: widget.mode == ProfileMode.mine,
+        variant: SecondaryCapsuleTabBarVariant.inlineMuted,
+        onHorizontalDragEnd: widget.onSecondaryHorizontalDragEnd,
+      ),
+    );
+
+    final body = _loading
+        ? Center(child: CupertinoActivityIndicator())
+        : _items == null || _items!.isEmpty
+        ? Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  _emptyStateIcon(state.interactionSubTab),
+                  size: AppSpacing.xl * 2,
+                  color: fgSecondary,
+                ),
+                SizedBox(height: AppSpacing.md),
+                Text(
+                  _emptyStateTitle(state.interactionSubTab),
+                  style: TextStyle(
+                    fontSize: AppTypography.md,
+                    color: fgSecondary,
+                  ),
+                ),
+              ],
+            ),
+          )
+        : ListView.separated(
+            physics: widget.inlineScroll
+                ? const NeverScrollableScrollPhysics()
+                : const BouncingScrollPhysics(
+                    parent: AlwaysScrollableScrollPhysics(),
+                  ),
+            shrinkWrap: widget.inlineScroll,
+            padding: EdgeInsets.fromLTRB(
+              AppSpacing.containerMd,
+              AppSpacing.intraGroupSm,
+              AppSpacing.containerMd,
+              AppSpacing.containerMd,
+            ),
+            itemCount: _items!.length,
+            separatorBuilder: (context, index) =>
+                SizedBox(height: AppSpacing.sm),
+            itemBuilder: (context, i) {
+              final item = _items![i];
+              final userId = item.actorProfileSubjectId;
+              final nickname = item.actorDisplayName;
+              final avatarUrl = item.actorAvatarUrl;
+              final targetTitle = item.targetContentSummary;
+              return CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: () {
+                  if (userId.isNotEmpty) {
+                    context.push(
+                      AppRoutePaths.userProfile(username: userId),
+                      extra: UserProfileRouteExtra(
+                        avatar: avatarUrl.isNotEmpty ? avatarUrl : null,
+                        displayName: nickname.isNotEmpty ? nickname : null,
+                      ),
+                    );
+                  }
+                },
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 24,
+                      backgroundImage: avatarUrl.isNotEmpty
+                          ? NetworkImage(avatarUrl)
+                          : null,
+                      onBackgroundImageError: (error, stackTrace) {},
+                      child: avatarUrl.isEmpty
+                          ? Icon(CupertinoIcons.person, color: fgSecondary)
+                          : null,
+                    ),
+                    SizedBox(width: AppSpacing.containerSm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            nickname,
+                            style: TextStyle(
+                              fontSize: AppTypography.md,
+                              fontWeight: AppTypography.semiBold,
+                              color: fg,
+                            ),
+                          ),
+                          if (targetTitle.isNotEmpty)
+                            Text(
+                              targetTitle,
+                              style: TextStyle(
+                                fontSize: AppTypography.sm,
+                                color: fgSecondary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+
+    if (widget.inlineScroll) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          header,
+          SizedBox(height: AppSpacing.intraGroupXs),
+          body,
+        ],
+      );
+    }
 
     return Column(
       children: [
-        Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: AppSpacing.containerMd,
-            vertical: AppSpacing.sm,
-          ),
-          child: Row(
-            children: [
-              // 二级 Tab: 评论 | 收藏
-              _SubTabChip(
-                label: '评论',
-                isActive:
-                    state.interactionSubTab == InteractionSubTab.comments,
-                onTap: () {
-                  notifier.setInteractionSubTab(InteractionSubTab.comments);
-                  _load();
-                },
-                fg: fg,
-                primary: primary,
-              ),
-              SizedBox(width: AppSpacing.xs),
-              _SubTabChip(
-                label: '收藏',
-                isActive:
-                    state.interactionSubTab == InteractionSubTab.favorites,
-                onTap: () {
-                  notifier.setInteractionSubTab(InteractionSubTab.favorites);
-                  _load();
-                },
-                fg: fg,
-                primary: primary,
-              ),
-
-              const Spacer(),
-
-              // 方向切换: 接收 | 发送 (仅自己的主页显示)
-              if (widget.mode == ProfileMode.mine) ...[
-                _DirectionChip(
-                  label: '接收',
-                  isActive: state.interactionDirection ==
-                      InteractionDirection.received,
-                  onTap: () {
-                    notifier.setInteractionDirection(
-                      InteractionDirection.received,
-                    );
-                    _load();
-                  },
-                  fg: fg,
-                  primary: primary,
-                  border: border,
-                ),
-                SizedBox(width: AppSpacing.xs),
-                _DirectionChip(
-                  label: '发送',
-                  isActive:
-                      state.interactionDirection == InteractionDirection.sent,
-                  onTap: () {
-                    notifier.setInteractionDirection(
-                      InteractionDirection.sent,
-                    );
-                    _load();
-                  },
-                  fg: fg,
-                  primary: primary,
-                  border: border,
-                ),
-              ],
-            ],
-          ),
-        ),
-        Expanded(
-          child: _loading
-              ? Center(child: CupertinoActivityIndicator())
-              : _items == null || _items!.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            state.interactionSubTab ==
-                                    InteractionSubTab.comments
-                                ? Icons.chat_bubble_outline
-                                : Icons.star_outline,
-                            size: AppSpacing.xl * 2,
-                            color: fgSecondary,
-                          ),
-                          SizedBox(height: AppSpacing.md),
-                          Text(
-                            state.interactionSubTab ==
-                                    InteractionSubTab.comments
-                                ? '暂无评论记录'
-                                : '暂无收藏记录',
-                            style: TextStyle(
-                              fontSize: AppTypography.md,
-                              color: fgSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  : ListView.separated(
-                      physics: const BouncingScrollPhysics(
-                        parent: AlwaysScrollableScrollPhysics(),
-                      ),
-                      padding: EdgeInsets.all(AppSpacing.containerMd),
-                      itemCount: _items!.length,
-                      separatorBuilder: (context, index) =>
-                          SizedBox(height: AppSpacing.sm),
-                      itemBuilder: (context, i) {
-                        final item = _items![i];
-                        final userId = item['userId'] as String? ?? '';
-                        final nickname = item['nickname'] as String? ?? '';
-                        final avatarUrl = item['avatarUrl'] as String? ?? '';
-                        final targetTitle =
-                            item['targetTitle'] as String? ?? '';
-                        return CupertinoButton(
-                          padding: EdgeInsets.zero,
-                          onPressed: () {
-                            if (userId.isNotEmpty) {
-                              context.push(
-                                AppRoutePaths.userProfile(username: userId),
-                                extra: UserProfileRouteExtra(
-                                  avatar:
-                                      avatarUrl.isNotEmpty ? avatarUrl : null,
-                                  displayName:
-                                      nickname.isNotEmpty ? nickname : null,
-                                ),
-                              );
-                            }
-                          },
-                          child: Row(
-                            children: [
-                              CircleAvatar(
-                                radius: 24,
-                                backgroundImage: avatarUrl.isNotEmpty
-                                    ? NetworkImage(avatarUrl)
-                                    : null,
-                                onBackgroundImageError: (error, stackTrace) {},
-                                child: avatarUrl.isEmpty
-                                    ? Icon(CupertinoIcons.person, color: fgSecondary)
-                                    : null,
-                              ),
-                              SizedBox(width: AppSpacing.containerSm),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      nickname,
-                                      style: TextStyle(
-                                        fontSize: AppTypography.md,
-                                        fontWeight: AppTypography.semiBold,
-                                        color: fg,
-                                      ),
-                                    ),
-                                    if (targetTitle.isNotEmpty)
-                                      Text(
-                                        targetTitle,
-                                        style: TextStyle(
-                                          fontSize: AppTypography.sm,
-                                          color: fgSecondary,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-        ),
+        header,
+        Expanded(child: body),
       ],
     );
   }
-}
 
-/// 二级 Tab chip（评论/收藏），使用 Tab 样式：选中时有底部指示线效果。
-class _SubTabChip extends StatelessWidget {
-  const _SubTabChip({
-    required this.label,
-    required this.isActive,
-    required this.onTap,
-    required this.fg,
-    required this.primary,
-  });
+  InteractionSubTab _interactionSubTabForId(String id) {
+    switch (id) {
+      case 'comments':
+        return InteractionSubTab.comments;
+      case 'shares':
+        return InteractionSubTab.shares;
+      case 'likes':
+      default:
+        return InteractionSubTab.likes;
+    }
+  }
 
-  final String label;
-  final bool isActive;
-  final VoidCallback onTap;
-  final Color fg;
-  final Color primary;
+  String _activityTypeForSubTab(InteractionSubTab subTab) {
+    switch (subTab) {
+      case InteractionSubTab.likes:
+        return 'like';
+      case InteractionSubTab.comments:
+        return 'comment';
+      case InteractionSubTab.shares:
+        return 'share';
+    }
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.containerSm,
-          vertical: AppSpacing.intraGroupSm,
-        ),
-        decoration: BoxDecoration(
-          border: isActive
-              ? Border(
-                  bottom: BorderSide(color: primary, width: 2),
-                )
-              : null,
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: AppTypography.base,
-            fontWeight:
-                isActive ? AppTypography.semiBold : AppTypography.normal,
-            color: isActive ? fg : fg.withValues(alpha: 0.6),
-          ),
-        ),
-      ),
-    );
+  IconData _emptyStateIcon(InteractionSubTab subTab) {
+    switch (subTab) {
+      case InteractionSubTab.likes:
+        return Icons.favorite_border;
+      case InteractionSubTab.comments:
+        return Icons.chat_bubble_outline;
+      case InteractionSubTab.shares:
+        return Icons.repeat;
+    }
+  }
+
+  String _emptyStateTitle(InteractionSubTab subTab) {
+    switch (subTab) {
+      case InteractionSubTab.likes:
+        return '暂无点赞记录';
+      case InteractionSubTab.comments:
+        return '暂无评论记录';
+      case InteractionSubTab.shares:
+        return '暂无转发记录';
+    }
+  }
+
+  void _scheduleReloadIfNeeded(ProfileState state) {
+    if (_loadedSubTab == state.interactionSubTab &&
+        _loadedDirection == state.interactionDirection) {
+      return;
+    }
+    _loadedSubTab = state.interactionSubTab;
+    _loadedDirection = state.interactionDirection;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _load();
+      }
+    });
   }
 }
 
@@ -341,19 +372,27 @@ class _DirectionChip extends StatelessWidget {
       child: Container(
         padding: EdgeInsets.symmetric(
           horizontal: AppSpacing.containerSm,
-          vertical: AppSpacing.intraGroupSm,
+          vertical: AppSpacing.intraGroupXs + 1,
         ),
         decoration: BoxDecoration(
-          color: isActive ? primary.withValues(alpha: 0.08) : null,
-          borderRadius:
-              BorderRadius.circular(AppSpacing.circularBorderRadius),
+          color: isActive
+              ? primary.withValues(alpha: 0.08)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+          border: Border.all(
+            color: isActive
+                ? primary.withValues(alpha: 0.18)
+                : border.withValues(alpha: 0.18),
+            width: AppSpacing.intraGroupXs / 4,
+          ),
         ),
         child: Text(
           label,
           style: TextStyle(
             fontSize: AppTypography.sm,
-            fontWeight:
-                isActive ? AppTypography.semiBold : AppTypography.normal,
+            fontWeight: isActive
+                ? AppTypography.semiBold
+                : AppTypography.normal,
             color: isActive ? primary : fg,
           ),
         ),

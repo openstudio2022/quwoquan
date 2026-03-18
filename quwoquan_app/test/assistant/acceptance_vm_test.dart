@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:quwoquan_app/assistant/infrastructure/openclaw_bridge.dart';
-import 'package:quwoquan_app/assistant/conversation/orchestration/agent_loop.dart';
+import 'package:quwoquan_app/assistant/orchestration/local_phase_execution_owner.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
 import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
@@ -18,7 +18,7 @@ import 'package:test/test.dart';
 void main() {
   group('Acceptance VM scenarios', () {
     late AssistantToolRegistry toolRegistry;
-    late PersonalAssistantAgentLoop agentLoop;
+    late LocalPhaseExecutionOwner agentLoop;
     late SimpleSkillExecutor skillExecutor;
     late Directory tempDir;
 
@@ -30,7 +30,7 @@ void main() {
         llmProvider: const HeuristicLocalLlmProvider(),
         toolRegistry: toolRegistry,
       );
-      agentLoop = PersonalAssistantAgentLoop(
+      agentLoop = LocalPhaseExecutionOwner(
         runtime,
         sessionManager: AssistantSessionManager(
           storagePath: '${tempDir.path}/sessions.json',

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/assistant/application/capability_gateway.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
+import 'package:quwoquan_app/ui/chat/widgets/message/assistant_journey_view_model.dart';
 
 Widget _wrapBubble({
   required Map<String, dynamic> message,
@@ -12,7 +14,7 @@ Widget _wrapBubble({
   VoidCallback? onTap,
   void Function(LongPressStartDetails)? onLongPressStart,
   bool showFeedbackActions = false,
-  AssistantProcessState? processState,
+  AssistantJourneyViewModel? journeyViewModel,
   bool answerGateOpen = true,
   bool isAssistantRunning = false,
   String? runningStatusLabel,
@@ -30,7 +32,7 @@ Widget _wrapBubble({
           onLongPressStart: onLongPressStart ?? (_) {},
           onTap: onTap,
           showFeedbackActions: showFeedbackActions,
-          processState: processState,
+          journeyViewModel: journeyViewModel,
           answerGateOpen: answerGateOpen,
           isAssistantRunning: isAssistantRunning,
           runningStatusLabel: runningStatusLabel,
@@ -156,50 +158,79 @@ void main() {
       );
     });
 
-    testWidgets('assistant 历史消息会从 uiExplainableFlow 恢复过程视图', (tester) async {
+    testWidgets('assistant 历史消息会从 journey 恢复过程视图', (tester) async {
       final message = <String, dynamic>{
         'type': 'text',
         'content': '路线建议已经整理好了。',
         'senderId': AppConceptConstants.assistantSenderId,
-        'uiExplainableFlow': <Map<String, dynamic>>[
-          <String, dynamic>{
-            'phaseId': 'understand',
-            'phaseOrder': 0,
-            'phaseStatus': 'completed',
-            'headline': '我先把问题主线立住',
-            'detail': '',
-            'references': const <Map<String, dynamic>>[],
+        'journey': <String, dynamic>{
+          'stages': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'stageId': 'analyze',
+              'status': 'completed',
+              'order': 0,
+              'summary': '我先把问题主线立住',
+            },
+            <String, dynamic>{
+              'stageId': 'search',
+              'status': 'completed',
+              'order': 1,
+              'summary': '我在核对最新资料',
+              'referenceCount': 1,
+            },
+            <String, dynamic>{
+              'stageId': 'answer',
+              'status': 'completed',
+              'order': 3,
+              'summary': '已为你整理好',
+            },
+          ],
+          'entries': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'entryId': 'journey.analyze.1',
+              'stageId': 'analyze',
+              'kind': 'narrative',
+              'status': 'completed',
+              'order': 0,
+              'headline': '我先把问题主线立住',
+            },
+            <String, dynamic>{
+              'entryId': 'journey.search.1',
+              'stageId': 'search',
+              'kind': 'reference_bundle',
+              'status': 'completed',
+              'order': 1,
+              'headline': '我在核对最新资料',
+              'detail': '先把会影响路线判断的限制条件收拢。',
+              'references': <Map<String, dynamic>>[
+                <String, dynamic>{
+                  'title': '九寨沟景区公告',
+                  'url': 'https://example.com/jiuzhaigou',
+                  'source': '官方',
+                },
+              ],
+            },
+          ],
+          'summary': '已为你整理好',
+          'readiness': <String, dynamic>{
+            'nextAction': 'answer',
+            'finalAnswerMode': 'full',
+            'answerEligibility': 'eligible',
+            'finalAnswerReady': true,
           },
-          <String, dynamic>{
-            'phaseId': 'execute',
-            'phaseOrder': 1,
-            'phaseStatus': 'completed',
-            'headline': '我在核对最新资料',
-            'detail': '先把会影响路线判断的限制条件收拢。',
-            'references': <Map<String, dynamic>>[
-              <String, dynamic>{
-                'title': '九寨沟景区公告',
-                'url': 'https://example.com/jiuzhaigou',
-                'source': '官方',
-              },
-            ],
-          },
-        ],
+        },
       };
       await tester.pumpWidget(_wrapBubble(message: message));
       await tester.pump();
 
-      expect(
-        find.text(UITextConstants.assistantPhaseCompleted),
-        findsOneWidget,
-      );
-      expect(find.text('已完成 2/2 步'), findsOneWidget);
+      expect(find.byKey(TestKeys.assistantProcessHeader), findsOneWidget);
 
       await tester.tap(find.byKey(TestKeys.assistantProcessHeader));
       await tester.pump();
 
       expect(find.text('先把会影响路线判断的限制条件收拢。'), findsOneWidget);
-      expect(find.text('已核对 1 个来源'), findsOneWidget);
+      expect(find.text('我在核对最新资料'), findsOneWidget);
+      expect(find.text('来源：官方'), findsOneWidget);
       expect(
         find.text(UITextConstants.assistantProcessStageUnderstand),
         findsOneWidget,
@@ -208,6 +239,19 @@ void main() {
         find.text(UITextConstants.assistantProcessStageSearch),
         findsOneWidget,
       );
+      expect(
+        find.text(UITextConstants.assistantProcessStageAnalyze),
+        findsOneWidget,
+      );
+      expect(
+        find.text(UITextConstants.assistantProcessStageAnswer),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('我在核对最新资料'));
+      await tester.pump();
+
+      expect(find.text('九寨沟景区公告 · 官方'), findsOneWidget);
     });
 
     testWidgets('assistant 流式答案出现后仍保留用户可理解的阶段提示', (tester) async {
@@ -220,10 +264,28 @@ void main() {
       await tester.pumpWidget(
         _wrapBubble(
           message: message,
-          processState: const AssistantProcessState(
-            stage: ProcessStage.understanding,
-            stageLabel: UITextConstants.assistantPhaseUnderstanding,
-            isStreaming: true,
+          journeyViewModel: buildAssistantJourneyViewModel(
+            journey: const AssistantJourney(
+              stages: <AssistantJourneyStage>[
+                AssistantJourneyStage(
+                  stageId: JourneyStageId.answer,
+                  status: JourneyStageStatus.active,
+                  order: 3,
+                  summary: '我在组织最终回答',
+                ),
+              ],
+              entries: <AssistantJourneyEntry>[
+                AssistantJourneyEntry(
+                  entryId: 'journey.answer.streaming',
+                  stageId: JourneyStageId.answer,
+                  kind: JourneyEntryKind.narrative,
+                  status: JourneyStageStatus.active,
+                  order: 0,
+                  headline: '我在组织最终回答',
+                ),
+              ],
+            ),
+            isRunning: true,
           ),
           answerGateOpen: true,
           isAssistantRunning: true,
@@ -235,7 +297,7 @@ void main() {
       expect(find.textContaining('九寨沟方向备选方案'), findsAtLeastNWidgets(1));
       expect(
         find.text(UITextConstants.assistantPhaseAnswering),
-        findsOneWidget,
+        findsAtLeastNWidgets(1),
         reason: '答案开始显示后，仍应在答案附近保留当前阶段提示',
       );
     });

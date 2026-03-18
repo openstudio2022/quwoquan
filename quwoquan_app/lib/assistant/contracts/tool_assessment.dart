@@ -19,14 +19,7 @@ class ToolAssessment extends ToolAssessmentDto {
   });
 
   factory ToolAssessment.fromJson(Map<String, dynamic> json) {
-    final normalized = <String, dynamic>{
-      ...json,
-      if (json['assessmentType'] == null && json['type'] != null)
-        'assessmentType': json['type'],
-      if (json['reasonCode'] == null && json['reason'] != null)
-        'reasonCode': json['reason'],
-    };
-    final dto = ToolAssessmentDto.fromJson(normalized);
+    final dto = ToolAssessmentDto.fromJson(json);
     return ToolAssessment(
       assessmentType: dto.assessmentType,
       userMessage: dto.userMessage,

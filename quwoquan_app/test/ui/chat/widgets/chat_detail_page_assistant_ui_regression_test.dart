@@ -6,9 +6,6 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
 
-/// Helper that wraps a [ChatMessageBubble] inside a minimal widget tree
-/// (ScreenUtilInit + MaterialApp + Scaffold) so the bubble can be rendered
-/// in isolation without the full ChatDetailPage lifecycle.
 Widget _bubbleHarness(
   Map<String, dynamic> message, {
   void Function(Map<String, dynamic>)? onReferenceTap,
@@ -57,356 +54,290 @@ Map<String, dynamic> _assistantMessage({
   };
 }
 
-/// L1b Widget 测试：ChatMessageBubble 助理 UI 回归
-///
-/// 领域：ui/chat，业务对象：chat_message_bubble（助理消息渲染）
-void main() {
-  testWidgets('助理过程阶段时间线卡片正常渲染', (tester) async {
-    final message = _assistantMessage(
-      id: 'assistant_msg_timeline',
-      content: '这是测试回答',
-      extra: {
-        'uiPhaseTimelineV1': <Map<String, dynamic>>[
-          <String, dynamic>{
-            'phaseId': 'p1',
-            'title': '深度思考',
-            'summary': '已完成分析',
-            'status': 'completed',
-          },
-          <String, dynamic>{
-            'phaseId': 'p2',
-            'title': '关键词检索',
-            'status': 'completed',
-          },
-          <String, dynamic>{
-            'phaseId': 'p3',
-            'title': '资料整理',
-            'status': 'completed',
-            'details': <String>['汇总了 3 篇文献'],
-          },
-        ],
-      },
-    );
-    await tester.pumpWidget(_bubbleHarness(message));
-    await tester.pump(const Duration(seconds: 1));
+Map<String, dynamic> _journeyPayload({
+  required List<Map<String, dynamic>> stages,
+  required List<Map<String, dynamic>> entries,
+  String summary = '',
+  List<Map<String, dynamic>> references = const <Map<String, dynamic>>[],
+  bool finalAnswerReady = true,
+}) {
+  return <String, dynamic>{
+    'stages': stages,
+    'entries': entries,
+    'summary': summary,
+    'referenceSummary': <String, dynamic>{
+      'count': references.length,
+      'references': references,
+    },
+    'readiness': <String, dynamic>{
+      'nextAction': 'answer',
+      'finalAnswerMode': 'full',
+      'answerEligibility': finalAnswerReady ? 'eligible' : 'draft',
+      'finalAnswerReady': finalAnswerReady,
+    },
+  };
+}
 
-    expect(
-      find.textContaining('深度思考'),
-      findsOneWidget,
-      reason: '第一个阶段标题「深度思考」应显示',
+void main() {
+  testWidgets('助理过程轨道可从顶层 journey 渲染', (tester) async {
+    final journey = _journeyPayload(
+      stages: <Map<String, dynamic>>[
+        <String, dynamic>{
+          'stageId': 'analyze',
+          'status': 'completed',
+          'order': 0,
+          'summary': '先确认需求边界',
+        },
+        <String, dynamic>{
+          'stageId': 'search',
+          'status': 'completed',
+          'order': 1,
+          'summary': '已补齐检索材料',
+          'referenceCount': 1,
+        },
+        <String, dynamic>{
+          'stageId': 'verify',
+          'status': 'active',
+          'order': 2,
+          'summary': '正在交叉核实关键结论',
+          'referenceCount': 1,
+        },
+        <String, dynamic>{
+          'stageId': 'answer',
+          'status': 'pending',
+          'order': 3,
+        },
+      ],
+      entries: <Map<String, dynamic>>[
+        <String, dynamic>{
+          'entryId': 'journey.verify.1',
+          'stageId': 'verify',
+          'kind': 'narrative',
+          'status': 'active',
+          'order': 2,
+          'headline': '正在交叉核实关键结论',
+          'detail': '先把会影响判断的冲突信息排掉，再组织最终答案。',
+        },
+      ],
+      summary: '正在交叉核实关键结论',
     );
-    expect(
-      find.textContaining('关键词检索'),
-      findsOneWidget,
-      reason: '第二个阶段标题「关键词检索」应显示',
+    final message = _assistantMessage(
+      id: 'assistant_msg_top_level_journey',
+      content: '这是测试回答',
+      extra: {'journey': journey},
     );
-    expect(
-      find.textContaining('资料整理'),
-      findsOneWidget,
-      reason: '第三个阶段标题「资料整理」应显示',
-    );
+
+    await tester.pumpWidget(_bubbleHarness(message));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.textContaining('正在交叉核实关键结论'), findsOneWidget);
+
+    await tester.tap(find.byKey(TestKeys.assistantProcessHeader));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text(UITextConstants.assistantProcessStageUnderstand), findsOneWidget);
+    expect(find.text(UITextConstants.assistantProcessStageSearch), findsOneWidget);
+    expect(find.text(UITextConstants.assistantProcessStageAnalyze), findsOneWidget);
+    expect(find.text(UITextConstants.assistantProcessStageAnswer), findsOneWidget);
+    expect(find.text('先把会影响判断的冲突信息排掉，再组织最终答案。'), findsOneWidget);
   });
 
-  testWidgets('助理过程抽屉 searchSummary 参考资料可展开', (tester) async {
+  testWidgets('助理过程抽屉可从 runArtifacts.journey 恢复来源摘要', (tester) async {
     Map<String, dynamic>? tappedRef;
+    final references = <Map<String, dynamic>>[
+      <String, dynamic>{
+        'title': '中国气象局',
+        'url': 'https://weather.cma.cn/shenzhen',
+        'source': 'weather.cma.cn',
+      },
+    ];
+    final journey = _journeyPayload(
+      stages: <Map<String, dynamic>>[
+        <String, dynamic>{
+          'stageId': 'search',
+          'status': 'completed',
+          'order': 1,
+          'summary': '已核对 1 个天气来源',
+          'referenceCount': 1,
+        },
+        <String, dynamic>{
+          'stageId': 'verify',
+          'status': 'active',
+          'order': 2,
+          'summary': '正在整理可直接参考的结论',
+          'referenceCount': 1,
+        },
+      ],
+      entries: <Map<String, dynamic>>[
+        <String, dynamic>{
+          'entryId': 'journey.verify.1',
+          'stageId': 'verify',
+          'kind': 'reference_bundle',
+          'status': 'active',
+          'order': 2,
+          'headline': '正在整理可直接参考的结论',
+          'references': references,
+        },
+      ],
+      summary: '正在整理可直接参考的结论',
+      references: references,
+    );
     final message = _assistantMessage(
-      id: 'assistant_msg_process',
-      content: '参考如下',
+      id: 'assistant_msg_run_artifacts_journey',
+      content: '深圳天气晴朗',
       extra: {
-        'uiProcessContentBlocks': <Map<String, dynamic>>[
-          <String, dynamic>{
-            'type': 'searchSummary',
-            'text': '检索到 1 篇资料',
-            'references': <Map<String, dynamic>>[
-              <String, dynamic>{
-                'title': '外部来源标题',
-                'url': 'https://example.com/data',
-                'source': 'example.com',
-              },
-            ],
-          },
-        ],
+        'runArtifacts': <String, dynamic>{'journey': journey},
       },
     );
+
     await tester.pumpWidget(
       _bubbleHarness(message, onReferenceTap: (ref) => tappedRef = ref),
     );
-    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(milliseconds: 300));
 
-    expect(
-      find.textContaining('检索到 1 篇资料'),
-      findsOneWidget,
-      reason: '过程抽屉头部应显示任务摘要',
-    );
+    expect(find.textContaining('正在整理可直接参考的结论'), findsOneWidget);
 
     await tester.tap(find.byKey(TestKeys.assistantProcessHeader));
     await tester.pump(const Duration(milliseconds: 300));
-
-    expect(
-      find.textContaining('检索到 1 篇资料'),
-      findsOneWidget,
-      reason: '展开抽屉后应显示 searchSummary 文案',
-    );
-
-    await tester.tap(find.textContaining('检索到 1 篇资料'));
+    await tester.tap(find.text('正在整理可直接参考的结论'));
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(
-      find.textContaining('外部来源标题'),
-      findsOneWidget,
-      reason: '展开 searchSummary 后应显示参考资料标题',
-    );
+    expect(find.text('中国气象局 · weather.cma.cn'), findsOneWidget);
 
-    await tester.tap(find.textContaining('外部来源标题'));
+    await tester.tap(find.text('中国气象局 · weather.cma.cn'));
     await tester.pump();
 
-    expect(tappedRef, isNotNull, reason: 'onReferenceTap 应被触发');
-    expect(tappedRef!['url'], 'https://example.com/data');
+    expect(tappedRef, isNotNull);
+    expect(tappedRef!['url'], equals('https://weather.cma.cn/shenzhen'));
   });
 
-  testWidgets('助理过程抽屉不会把头部阶段标题在正文里重复显示', (tester) async {
-    final message = _assistantMessage(
-      id: 'assistant_msg_process_header_duplicate',
-      content: '这是最终回答',
-      extra: {
-        'uiProcessContentBlocks': <Map<String, dynamic>>[
-          <String, dynamic>{
-            'type': 'text',
-            'text': UITextConstants.assistantPhaseCompleted,
-            'references': const <Map<String, dynamic>>[],
-          },
-          <String, dynamic>{
-            'type': 'text',
-            'text': '已把结果整理成可直接查看的回答。',
-            'references': const <Map<String, dynamic>>[],
-          },
-        ],
-      },
-    );
-    await tester.pumpWidget(_bubbleHarness(message));
-    await tester.pump(const Duration(milliseconds: 300));
-
-    await tester.tap(find.byKey(TestKeys.assistantProcessHeader));
-    await tester.pump(const Duration(milliseconds: 300));
-
-    expect(
-      find.textContaining('已把结果整理成可直接查看的回答。'),
-      findsOneWidget,
-      reason: '头部摘要应保留，正文里不应再重复同一条摘要',
-    );
-    expect(find.textContaining('已把结果整理成可直接查看的回答。'), findsOneWidget);
-  });
-
-  testWidgets('助理过程抽屉可从 uiProcessTimeline 恢复', (tester) async {
-    final message = _assistantMessage(
-      id: 'assistant_msg_timeline_v2',
-      content: '深圳天气晴朗',
-      extra: {
-        'uiProcessTimeline': <Map<String, dynamic>>[
-          <String, dynamic>{
-            'scope': 'root',
-            'type': 'processReplace',
-            'nodeId': 'root.intent',
-            'summary': '已识别问题方向，准备开始处理',
-            'references': const <Map<String, dynamic>>[],
-          },
-          <String, dynamic>{
-            'scope': 'aggregation',
-            'type': 'processCommit',
-            'nodeId': 'aggregation.final',
-            'summary': '已核对 2 个来源，正在整理可直接参考的结论',
-            'references': <Map<String, dynamic>>[
-              <String, dynamic>{
-                'title': '中国气象局',
-                'url': 'https://weather.cma.cn/shenzhen',
-                'source': 'weather.cma.cn',
-              },
-            ],
-          },
-        ],
-      },
-    );
-    await tester.pumpWidget(_bubbleHarness(message));
-    await tester.pump(const Duration(milliseconds: 300));
-
-    expect(
-      find.textContaining('已核对 2 个来源'),
-      findsOneWidget,
-      reason: 'timeline 恢复后头部应显示任务摘要与来源计数',
-    );
-
-    await tester.tap(find.byKey(TestKeys.assistantProcessHeader));
-    await tester.pump(const Duration(milliseconds: 300));
-
-    expect(
-      find.textContaining('已核对 2 个来源'),
-      findsOneWidget,
-      reason: '展开后应恢复 timeline 的摘要文本',
-    );
-
-    await tester.tap(find.textContaining('已核对 2 个来源'));
-    await tester.pump(const Duration(milliseconds: 300));
-
-    expect(
-      find.textContaining('中国气象局'),
-      findsOneWidget,
-      reason: 'timeline 中的来源应可展开显示',
-    );
-  });
-
-  testWidgets('助理过程抽屉可直接从 processJournalV1 恢复', (tester) async {
-    final message = _assistantMessage(
-      id: 'assistant_msg_process_journal_v1',
-      content: '深圳天气晴朗',
-      extra: {
-        'processJournalV1': <Map<String, dynamic>>[
-          <String, dynamic>{
-            'eventId': 'stage_set::understanding',
-            'type': 'stage_set',
-            'stage': 'understanding',
-            'nodeId': 'stage.understanding',
-            'message': '',
-            'references': const <Map<String, dynamic>>[],
-            'payload': const <String, dynamic>{},
-          },
-          <String, dynamic>{
-            'eventId': 'narrative_0',
-            'type': 'narrative_commit',
-            'stage': 'understanding',
-            'nodeId': 'root.intent.plan',
-            'message': '我先确认你最想拿到的是实时天气还是出门建议。',
-            'references': const <Map<String, dynamic>>[],
-            'payload': const <String, dynamic>{'stage': 'understanding'},
-          },
-          <String, dynamic>{
-            'eventId': 'source_update::searching::skill.web.result',
-            'type': 'source_update',
-            'stage': 'searching',
-            'nodeId': 'skill.web.result',
-            'message': '已核对 2 个天气来源，正在整理可直接参考的结论。',
-            'references': <Map<String, dynamic>>[
-              <String, dynamic>{
-                'title': '中国气象局',
-                'url': 'https://weather.cma.cn/shenzhen',
-                'source': 'weather.cma.cn',
-              },
-            ],
-            'payload': const <String, dynamic>{'stage': 'searching'},
-          },
-        ],
-      },
-    );
-    await tester.pumpWidget(_bubbleHarness(message));
-    await tester.pump(const Duration(milliseconds: 300));
-
-    expect(
-      find.textContaining('已核对 2 个天气来源'),
-      findsOneWidget,
-      reason: '仅有 processJournalV1 时也应恢复任务摘要与来源计数',
-    );
-
-    await tester.tap(find.byKey(TestKeys.assistantProcessHeader));
-    await tester.pump(const Duration(milliseconds: 300));
-
-    expect(find.textContaining('已核对 2 个天气来源'), findsOneWidget);
-
-    await tester.tap(find.textContaining('已核对 2 个天气来源'));
-    await tester.pump(const Duration(milliseconds: 300));
-
-    expect(find.textContaining('中国气象局'), findsOneWidget);
-  });
-
-  testWidgets('processJournalV1 恢复时优先显示 reasonShort 而不是脏 message', (
+  testWidgets('journey 恢复时优先显示用户语言 headline 而不是脏 detail', (
     tester,
   ) async {
     final message = _assistantMessage(
       id: 'assistant_msg_process_reason_short',
       content: '最终回答',
       extra: {
-        'processJournalV1': <Map<String, dynamic>>[
-          <String, dynamic>{
-            'eventId': 'narrative_reason_short_0',
-            'type': 'narrative_commit',
-            'stage': 'understanding',
-            'phaseId': 'understanding',
-            'actionCode': 'frame_problem',
-            'reasonCode': 'align_goal',
-            'reasonShort': '先确认问题落点，后面的资料才更容易收敛。',
-            'source': 'trace_translator',
-            'nodeId': 'root.intent.plan',
-            'message': '{"contractVersion":"assistant_turn","queryTasks":[1]}',
-            'references': const <Map<String, dynamic>>[],
-            'payload': const <String, dynamic>{
-              'stage': 'understanding',
-              'phaseId': 'understanding',
-            },
-          },
-        ],
+        'runArtifacts': {
+          'journey': _journeyPayload(
+            stages: <Map<String, dynamic>>[
+              <String, dynamic>{
+                'stageId': 'analyze',
+                'status': 'completed',
+                'order': 0,
+                'summary': '先确认问题落点，后面的资料才更容易收敛。',
+              },
+            ],
+            entries: <Map<String, dynamic>>[
+              <String, dynamic>{
+                'entryId': 'journey.analyze.reason_short',
+                'stageId': 'analyze',
+                'kind': 'narrative',
+                'status': 'completed',
+                'order': 0,
+                'headline': '先确认问题落点，后面的资料才更容易收敛。',
+                'detail':
+                    '{"contractVersion":"assistant_turn","queryTasks":[1]}',
+              },
+            ],
+            summary: '先确认问题落点，后面的资料才更容易收敛。',
+          ),
+        },
       },
     );
+
     await tester.pumpWidget(_bubbleHarness(message));
     await tester.pump(const Duration(milliseconds: 300));
-
     await tester.tap(find.byKey(TestKeys.assistantProcessHeader));
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.textContaining('先确认问题落点'), findsOneWidget);
+    expect(find.textContaining('先确认问题落点'), findsAtLeastNWidgets(1));
     expect(find.textContaining('contractVersion'), findsNothing);
     expect(find.textContaining('queryTasks'), findsNothing);
   });
 
-  testWidgets('多 skill timeline 可同时恢复 root/skill/aggregation 过程', (
-    tester,
-  ) async {
+  testWidgets('多阶段多条目 journey 可同时恢复分析检索核实与成答文案', (tester) async {
     final message = _assistantMessage(
-      id: 'assistant_msg_multiskill_timeline_v2',
+      id: 'assistant_msg_multi_stage_journey',
       content: '深圳天气与出游建议',
       extra: {
-        'uiProcessTimeline': <Map<String, dynamic>>[
-          <String, dynamic>{
-            'scope': 'root',
-            'type': 'processReplace',
-            'nodeId': 'root.intent',
-            'summary': '我先拆成天气和出游两部分分别处理',
-            'references': const <Map<String, dynamic>>[],
-          },
-          <String, dynamic>{
-            'scope': 'skill',
-            'type': 'processCommit',
-            'nodeId': 'weather',
-            'runId': 'skill_weather_1',
-            'summary': '天气部分已核对完成，适合轻松出门',
-            'references': const <Map<String, dynamic>>[],
-          },
-          <String, dynamic>{
-            'scope': 'skill',
-            'type': 'processCommit',
-            'nodeId': 'fallback_general_search',
-            'runId': 'skill_travel_1',
-            'summary': '出游部分已补充室内外备选方案',
-            'references': const <Map<String, dynamic>>[],
-          },
-          <String, dynamic>{
-            'scope': 'aggregation',
-            'type': 'processCommit',
-            'nodeId': 'aggregation.final',
-            'summary': '已汇总成最终建议',
-            'references': const <Map<String, dynamic>>[],
-          },
-        ],
+        'journey': _journeyPayload(
+          stages: <Map<String, dynamic>>[
+            <String, dynamic>{
+              'stageId': 'analyze',
+              'status': 'completed',
+              'order': 0,
+              'summary': '先拆清楚天气和出游两个判断面',
+            },
+            <String, dynamic>{
+              'stageId': 'search',
+              'status': 'completed',
+              'order': 1,
+              'summary': '天气资料和游玩资料都已补齐',
+            },
+            <String, dynamic>{
+              'stageId': 'verify',
+              'status': 'completed',
+              'order': 2,
+              'summary': '已经交叉核实关键差异',
+            },
+            <String, dynamic>{
+              'stageId': 'answer',
+              'status': 'completed',
+              'order': 3,
+              'summary': '已汇总成最终建议',
+            },
+          ],
+          entries: <Map<String, dynamic>>[
+            <String, dynamic>{
+              'entryId': 'journey.analyze.1',
+              'stageId': 'analyze',
+              'kind': 'narrative',
+              'status': 'completed',
+              'order': 0,
+              'headline': '先拆清楚天气和出游两个判断面',
+            },
+            <String, dynamic>{
+              'entryId': 'journey.search.weather',
+              'stageId': 'search',
+              'kind': 'narrative',
+              'status': 'completed',
+              'order': 1,
+              'headline': '天气部分已核对完成，适合轻松出门',
+            },
+            <String, dynamic>{
+              'entryId': 'journey.search.travel',
+              'stageId': 'search',
+              'kind': 'narrative',
+              'status': 'completed',
+              'order': 2,
+              'headline': '出游部分已补充室内外备选方案',
+            },
+            <String, dynamic>{
+              'entryId': 'journey.answer.1',
+              'stageId': 'answer',
+              'kind': 'narrative',
+              'status': 'completed',
+              'order': 3,
+              'headline': '已汇总成最终建议',
+            },
+          ],
+          summary: '已汇总成最终建议',
+        ),
       },
     );
+
     await tester.pumpWidget(_bubbleHarness(message));
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.textContaining('已汇总成最终建议'), findsOneWidget);
+    expect(find.textContaining('已汇总成最终建议'), findsAtLeastNWidgets(1));
 
     await tester.tap(find.byKey(TestKeys.assistantProcessHeader));
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.textContaining('已汇总成最终建议'), findsOneWidget);
     expect(find.textContaining('天气部分已核对完成'), findsOneWidget);
     expect(find.textContaining('出游部分已补充'), findsOneWidget);
+    expect(find.textContaining('已汇总成最终建议'), findsAtLeastNWidgets(1));
   });
 
   testWidgets('助理 Markdown 与 card block 按层次渲染', (tester) async {
@@ -415,6 +346,7 @@ void main() {
       content:
           '# 结论\n- 建议：先做流式\n\n```card:compare\n{"title":"产品对比","wechat":"强关系","xiaohongshu":"内容决策"}\n```',
     );
+
     await tester.pumpWidget(_bubbleHarness(message));
     await tester.pump(const Duration(seconds: 1));
 
@@ -429,6 +361,7 @@ void main() {
       id: 'assistant_msg_md_fallback',
       content: '```card:compare\nnot-json-payload\n```',
     );
+
     await tester.pumpWidget(_bubbleHarness(message));
     await tester.pump(const Duration(seconds: 1));
 

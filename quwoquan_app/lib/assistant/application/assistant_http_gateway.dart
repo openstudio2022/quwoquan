@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:quwoquan_app/assistant/application/assistant_gateway.dart';
-import 'package:quwoquan_app/assistant/orchestration/process_journal_bus.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 
 class AssistantHttpGateway {
@@ -249,9 +248,6 @@ class AssistantHttpGateway {
         );
         request.response.headers.set(HttpHeaders.cacheControlHeader, 'no-cache');
         request.response.bufferOutput = false;
-        final journalBus = ProcessJournalBus(
-          userGoalSummary: _latestUserMessage(messages),
-        );
         final runRequest = AssistantRunRequest(
           messages: messages,
           sessionId: json['sessionId'] as String?,
@@ -264,13 +260,8 @@ class AssistantHttpGateway {
         final response = await _gateway.runWithTraceStream(
           runRequest,
           onTraceEvent: (trace) {
-            final journalEvents = journalBus.consumeTrace(trace);
-            for (final event in journalEvents) {
-              request.response.write('event: process_journal_event\n');
-              request.response.write(
-                'data: ${jsonEncode(event.toJson())}\n\n',
-              );
-            }
+            request.response.write('event: trace\n');
+            request.response.write('data: ${jsonEncode(trace.toJson())}\n\n');
           },
         );
         request.response.write('event: final\n');

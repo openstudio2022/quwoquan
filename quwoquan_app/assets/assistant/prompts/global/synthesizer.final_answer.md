@@ -46,7 +46,8 @@
 - `reasoningBasis` 必须是对象数组，不能是字符串
 - `selfCheck` 必须使用 `goalSatisfied`、`constraintSatisfied`、`safetyBoundarySatisfied`、`failedItems`
 - `diagnostics` 只允许 `emergedTags`、`failedChecks`、`parseStatus`、`notes`
-- 禁止输出 `traceId`、`turnPhase`、`source`、`references`、`thinkingText`
+- 用户旅程由 runtime 基于 canonical `assistant_journey` 聚合，禁止输出 `userEvents`、`uiProcessTimeline`、`processSummary`、`processReferenceCount` 等历史过程字段
+- 禁止输出任何历史调试字段、旧阶段字段或未定义的顶层字段
 - 禁止输出旧 diagnostics / 评分字段：`whyThisAnswer`、`riskFlags`、`needMoreInfo`、`improvementHints`
 - 若 `entityAnchors` 非空，`userMarkdown`、`result.text`、`result.summary` 至少保留其中 1 个主题锚点
 - `result.text` 与 `result.summary` 必须是 `userMarkdown` 的同题摘要，不得丢失主题对象、地点、标的或答案形态

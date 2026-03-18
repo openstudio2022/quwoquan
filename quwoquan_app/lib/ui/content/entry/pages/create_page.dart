@@ -18,7 +18,6 @@ import 'package:quwoquan_app/components/media/camera/camera_capture_page.dart';
 import 'package:quwoquan_app/components/media/picker/create_media_picker_page.dart';
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
@@ -1123,8 +1122,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                       ),
                       CupertinoButton(
                         padding: EdgeInsets.zero,
-                        minSize: AppSpacing.minInteractiveSize,
-                        onPressed: () => _switchIdentity(suggestion.identity),
+                        onPressed: () => _switchIdentity(suggestion.identity), minimumSize: Size(AppSpacing.minInteractiveSize, AppSpacing.minInteractiveSize),
                         child: Text(
                           suggestion.identity == CreateContentIdentity.work
                               ? UITextConstants.createSwitchToWork
@@ -1203,11 +1201,10 @@ class _CreatePageState extends ConsumerState<CreatePage> {
               .actionButtonPaddingVerticalInToolbar,
         ),
         color: bg,
-        minSize: SettingsSemanticConstants.actionButtonHeightInToolbar,
         borderRadius: BorderRadius.circular(
           SettingsSemanticConstants.actionButtonBorderRadius,
         ),
-        onPressed: enabled ? onPressed : null,
+        onPressed: enabled ? onPressed : null, minimumSize: Size(SettingsSemanticConstants.actionButtonHeightInToolbar, SettingsSemanticConstants.actionButtonHeightInToolbar),
         child: Text(
           text,
           style: TextStyle(
@@ -1502,8 +1499,8 @@ class _CreatePageState extends ConsumerState<CreatePage> {
             leading: CupertinoButton(
               key: TestKeys.createCloseButton,
               padding: EdgeInsets.zero,
-              child: const Icon(CupertinoIcons.clear),
               onPressed: _onCloseRequest,
+              child: const Icon(CupertinoIcons.clear),
             ),
             middle: ListenableBuilder(
               listenable: _pageController,
@@ -2239,7 +2236,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
           showChevron: false,
           trailingWidget: CupertinoSwitch(
             value: allowAssistantUse,
-            activeColor: blue,
+            activeTrackColor: blue,
             onChanged: (next) {
               ref.read(createEditorProvider.notifier).updateField(tabKey, 'assistantUsePolicy', next ? 'inherit' : 'exclude');
             },
@@ -2275,7 +2272,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
           showChevron: false,
           trailingWidget: CupertinoSwitch(
             value: isPublic,
-            activeColor: blue,
+            activeTrackColor: blue,
             onChanged: (next) {
               final nextData = Map<String, dynamic>.from(ref.read(createEditorProvider).data[tabKey] as Map? ?? {});
               nextData['visibility'] = next ? 'public' : 'private';
@@ -3789,8 +3786,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                         ),
                         CupertinoButton(
                           padding: EdgeInsets.zero,
-                          minSize: AppSpacing.minInteractiveSize,
-                          onPressed: () => Navigator.pop(context),
+                          onPressed: () => Navigator.pop(context), minimumSize: Size(AppSpacing.minInteractiveSize, AppSpacing.minInteractiveSize),
                           child: Icon(
                             CupertinoIcons.clear_circled_solid,
                             color: fgSecondary,
@@ -3887,16 +3883,15 @@ class _CreatePageState extends ConsumerState<CreatePage> {
                                           ),
                                           CupertinoButton(
                                             padding: EdgeInsets.zero,
-                                            minSize: AppSpacing.minInteractiveSize,
+                                            onPressed: () {
+                                              _handleDeleteDraft(d.id);
+                                              setModalState(() {});
+                                            }, minimumSize: Size(AppSpacing.minInteractiveSize, AppSpacing.minInteractiveSize),
                                             child: Icon(
                                               CupertinoIcons.delete,
                                               size: AppSpacing.iconMedium,
                                               color: fgSecondary,
                                             ),
-                                            onPressed: () {
-                                              _handleDeleteDraft(d.id);
-                                              setModalState(() {});
-                                            },
                                           ),
                                         ],
                                       ),
@@ -3976,7 +3971,7 @@ class _RestorableCupertinoTextField extends StatefulWidget {
   final FontWeight? fontWeight;
 
   const _RestorableCupertinoTextField({
-    Key? key,
+    super.key,
     this.initialValue,
     this.onChanged,
     this.placeholder,
@@ -3987,7 +3982,7 @@ class _RestorableCupertinoTextField extends StatefulWidget {
     this.decoration,
     this.padding = const EdgeInsets.all(AppSpacing.intraGroupSm),
     this.fontWeight,
-  }) : super(key: key);
+  });
 
   @override
   _RestorableCupertinoTextFieldState createState() => _RestorableCupertinoTextFieldState();

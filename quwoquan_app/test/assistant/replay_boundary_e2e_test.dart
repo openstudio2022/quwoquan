@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/assistant/application/assistant_gateway.dart';
 import 'package:quwoquan_app/assistant/domain/channel/channel.dart';
-import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
 import 'package:quwoquan_app/assistant/runtime/assistant_runtime.dart';
 
 const _firstReplayQuery = '如果把九寨沟方向考虑进去，多给我几个备选方案';
@@ -136,8 +135,20 @@ Future<_ReplayBoundaryDiagnostics> _runReplayTurn({
   final answerDecision =
       (runArtifacts['answerDecision'] as Map?)?.cast<String, dynamic>() ??
       const <String, dynamic>{};
-  final journal =
-      (runArtifacts['processJournal'] as List?)
+  final journey =
+      (runArtifacts['journey'] as Map?)?.cast<String, dynamic>() ??
+      const <String, dynamic>{};
+  final journeyReadiness =
+      (journey['readiness'] as Map?)?.cast<String, dynamic>() ??
+      const <String, dynamic>{};
+  final journeyStages =
+      (journey['stages'] as List?)
+          ?.whereType<Map>()
+          .map((item) => item.cast<String, dynamic>())
+          .toList(growable: false) ??
+      const <Map<String, dynamic>>[];
+  final journeyEntries =
+      (journey['entries'] as List?)
           ?.whereType<Map>()
           .map((item) => item.cast<String, dynamic>())
           .toList(growable: false) ??
@@ -168,17 +179,18 @@ Future<_ReplayBoundaryDiagnostics> _runReplayTurn({
             trace.message.startsWith('llm request synthesis '),
       )
       .length;
-  final expandSignalCount = journal.where((item) {
-    final stage = (item['stage'] as String?)?.trim() ?? '';
-    final phaseId = (item['phaseId'] as String?)?.trim() ?? '';
-    final actionCode = (item['actionCode'] as String?)?.trim() ?? '';
-    final reasonCode = (item['reasonCode'] as String?)?.trim() ?? '';
-    return stage == 'expanding' ||
-        phaseId == 'expanding' ||
-        actionCode == 'expand_search' ||
-        reasonCode == 'need_more_search' ||
-        reasonCode == 'need_more_evidence';
-  }).length;
+  final expandSignalCount =
+      (journeyReadiness['needExpansion'] == true ? 1 : 0) +
+      journeyEntries.where((item) {
+        final provenance =
+            (item['provenance'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+        final reasonCode = (provenance['reasonCode'] as String?)?.trim() ?? '';
+        final actionCode = (provenance['actionCode'] as String?)?.trim() ?? '';
+        return actionCode == 'expand_search' ||
+            reasonCode == 'need_more_search' ||
+            reasonCode == 'need_more_evidence';
+      }).length;
 
   return _ReplayBoundaryDiagnostics(
     query: query,
@@ -200,7 +212,7 @@ Future<_ReplayBoundaryDiagnostics> _runReplayTurn({
     synthesisCallCount: synthesisCallCount,
     toolSequence: toolSequence,
     journalStages: _uniqueNonEmpty(
-      journal.map((item) => (item['stage'] as String?)?.trim() ?? ''),
+      journeyStages.map((item) => (item['stageId'] as String?)?.trim() ?? ''),
     ),
   );
 }

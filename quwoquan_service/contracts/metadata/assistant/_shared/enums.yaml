@@ -186,6 +186,45 @@ enums:
       - name: unknown
         wire: ''
 
+  - name: JourneyStageId
+    values:
+      - name: unknown
+        wire: ''
+      - name: analyze
+        wire: analyze
+      - name: search
+        wire: search
+      - name: verify
+        wire: verify
+      - name: answer
+        wire: answer
+
+  - name: JourneyStageStatus
+    values:
+      - name: unknown
+        wire: ''
+      - name: pending
+        wire: pending
+      - name: active
+        wire: active
+      - name: completed
+        wire: completed
+      - name: blocked
+        wire: blocked
+      - name: skipped
+        wire: skipped
+
+  - name: JourneyEntryKind
+    values:
+      - name: unknown
+        wire: ''
+      - name: narrative
+        wire: narrative
+      - name: referenceBundle
+        wire: reference_bundle
+      - name: milestone
+        wire: milestone
+
   - name: TraceVisibility
     values:
       - name: userVisible
@@ -195,21 +234,6 @@ enums:
         wire: system
       - name: internal
         wire: internal
-
-  - name: ProcessJournalEventType
-    values:
-      - name: stageSet
-        wire: stage_set
-      - name: narrativeCommit
-        wire: narrative_commit
-      - name: liveCursor
-        wire: live_cursor
-      - name: sourceUpdate
-        wire: source_update
-      - name: answerDelta
-        wire: answer_delta
-      - name: completed
-        wire: completed
 
   - name: SlotValueStatus
     values:

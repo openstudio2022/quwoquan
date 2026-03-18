@@ -22,7 +22,7 @@
 
 ### 2.1 架构约束
 
-- `agent_loop + react_runtime + tool_registry` 不得承载垂类知识或垂类特判
+- `assistant_agent_loop + local_phase_execution_owner + react_runtime + tool_registry` 不得承载垂类知识或垂类特判
 - 运行时只做编排、守卫、解析、序列化和回放
 - 垂类扩展只能通过 `skills/<domain>/`、prompt asset、tool metadata、policy config 下沉
 
@@ -73,12 +73,12 @@
 | 助理协议 metadata | `quwoquan_service/contracts/metadata/assistant/` |
 | 端侧助理协议 codegen 产物 | `quwoquan_app/lib/assistant/generated/` |
 | 端侧 edge assistant 实现 | `quwoquan_app/lib/assistant/` |
-| 编排主入口（禁止旧 monolith 增量） | `orchestration/assistant_agent_loop.dart` 为真实 owner；`conversation/orchestration/agent_loop.dart` 仅作兼容桥，禁止继续堆逻辑 |
+| 编排主入口（禁止旧 monolith 增量） | `orchestration/assistant_agent_loop.dart` 为真实 owner，执行细节收敛到 `orchestration/local_phase_execution_owner.dart` 与 `orchestration/phases/` |
 | 主编排入口 | `quwoquan_app/lib/assistant/orchestration/assistant_agent_loop.dart` |
 | 端侧 cloud client | `quwoquan_app/lib/cloud/services/assistant/` |
 | 端侧 UI 入口 | `quwoquan_app/lib/ui/assistant/` |
 
-Legacy 兼容层允许存在，但不得作为新功能的首选依赖。
+仅允许保留必要的运行时桥接层，但不得作为新功能的首选依赖。
 
 ---
 

@@ -110,6 +110,20 @@ void main() {
           reason: 'manifest 中应注册 $required 模板',
         );
       }
+
+      for (final removed in [
+        'stack.' 'global_system',
+        'stack.' 'runtime_policy',
+        'stack.' 'recovery_policy',
+        'stack.' 'global_policy',
+        'stack.' 'output_contract',
+      ]) {
+        expect(
+          templateIds.contains(removed),
+          isFalse,
+          reason: 'manifest 不应再注册旧模板 $removed',
+        );
+      }
     });
 
     test('v4 contract version 被正确识别', () async {

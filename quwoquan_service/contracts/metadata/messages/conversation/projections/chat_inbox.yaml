@@ -5,7 +5,7 @@ description: |
   聊天列表 ReadModel（v2 per-user 投影）。
   由 ConversationUserState 驱动，按 pinned DESC + lastMessageTime DESC 排序。
   source_events 扩展：MemberJoined 创建条目，MemberLeft 删除条目，
-  ConversationSettingsUpdated 更新 muted/pinned。
+  ConversationSettingsUpdated 更新 muted/pinned，ReadReceiptSent 负责未读回落。
 
 storage_backend: mongodb
 collection: rm_chat_inbox
@@ -22,6 +22,7 @@ source_events:
   - MemberJoined
   - MemberLeft
   - ConversationSettingsUpdated
+  - ReadReceiptSent
 
 consumers:
   - app (chat list)
@@ -32,13 +33,125 @@ fields:
   - { name: type, type: enum }
   - { name: title, type: string }
   - { name: avatarUrl, type: string }
+  - { name: avatarCompositeUrls, type: "[]string", description: "群聊九宫格头像 URL，最多 9 个" }
   - { name: lastMessagePreview, type: string }
+  - { name: lastMessageType, type: string, description: "最近一条消息类型，用于列表副标题 icon" }
   - { name: lastMessageTime, type: timestamp }
   - { name: lastSeq, type: int64, description: "会话最新 seq（端侧 gap 检测用）" }
   - { name: unreadCount, type: int }
+  - { name: mentionUnreadCount, type: int, description: "@我且未读的消息数" }
   - { name: muted, type: bool }
   - { name: pinned, type: bool }
 
 indexes:
   - { name: idx_ci_user_pinned_time, keys: { userId: 1, pinned: -1, lastMessageTime: -1 } }
   - { name: idx_ci_user_conv, keys: { userId: 1, conversationId: 1 }, unique: true }
+
+client_projection:
+  dart_class: ChatInboxDto
+  base_class: ""
+  output_path: cloud/runtime/generated/chat/chat_inbox_dto.g.dart
+  computed_getters:
+    - name: hasMention
+      dart_return_type: bool
+      nullable: false
+      description: "是否存在 @我 且未读的消息。"
+      body: |
+        return mentionUnreadCount > 0;
+    - name: hasUnread
+      dart_return_type: bool
+      nullable: false
+      description: "是否存在未读消息。"
+      body: |
+        return unreadCount > 0;
+  fields:
+    - name: id
+      dart_type: String
+      nullable: false
+      source: conversationId
+      aliases: [conversationId, id, _id]
+      default: "''"
+
+    - name: type
+      dart_type: String
+      nullable: false
+      source: type
+      aliases: [type]
+      default: "''"
+
+    - name: title
+      dart_type: String
+      nullable: false
+      source: title
+      aliases: [title, conversationTitle]
+      default: "''"
+
+    - name: avatarUrl
+      dart_type: String
+      nullable: false
+      source: avatarUrl
+      aliases: [avatarUrl, avatar]
+      default: "''"
+
+    - name: avatarCompositeUrls
+      dart_type: List<String>
+      nullable: false
+      source: avatarCompositeUrls
+      aliases: [avatarCompositeUrls, memberAvatars]
+      default: "<String>[]"
+
+    - name: lastMessagePreview
+      dart_type: String
+      nullable: false
+      source: lastMessagePreview
+      aliases: [lastMessagePreview, lastMessage, preview]
+      default: "''"
+
+    - name: lastMessageType
+      dart_type: String
+      nullable: false
+      source: lastMessageType
+      aliases: [lastMessageType, messageType]
+      default: "'text'"
+
+    - name: lastMessageTime
+      dart_type: DateTime
+      nullable: true
+      source: lastMessageTime
+      aliases: [lastMessageTime, lastMessageAt, updatedAt]
+      default: "null"
+
+    - name: lastSeq
+      dart_type: int
+      nullable: false
+      source: lastSeq
+      aliases: [lastSeq, maxSeq]
+      default: "0"
+
+    - name: unreadCount
+      dart_type: int
+      nullable: false
+      source: unreadCount
+      aliases: [unreadCount]
+      default: "0"
+
+    - name: mentionUnreadCount
+      dart_type: int
+      nullable: false
+      source: mentionUnreadCount
+      aliases: [mentionUnreadCount, mentionCount]
+      default: "0"
+
+    - name: muted
+      dart_type: bool
+      nullable: false
+      source: muted
+      aliases: [muted]
+      default: "false"
+
+    - name: pinned
+      dart_type: bool
+      nullable: false
+      source: pinned
+      aliases: [pinned]
+      default: "false"

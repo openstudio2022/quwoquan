@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/conversation/orchestration/session_manager.dart';
 import 'package:quwoquan_app/assistant/debug/agent_loop_dev_logger.dart';
 import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
@@ -6,6 +7,7 @@ import 'package:quwoquan_app/assistant/observability/logging/app_log_models.dart
 import 'package:quwoquan_app/assistant/observability/logging/app_log_service.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_perf_probe.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
+import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 
@@ -55,6 +57,17 @@ class FinalizeRunner {
     final displayTextForSession = displayMarkdown.isNotEmpty
         ? displayMarkdown
         : displayPlainText;
+    final persistedJourney = resolveAssistantJourneyFromRunResponse(response);
+    final persistedTurnFields = buildPersistedAssistantTurnFields(
+      journey: persistedJourney,
+      displayMarkdown: displayMarkdown,
+      displayPlainText: displayPlainText,
+      followupPrompt: response.followupPrompt,
+      actionHints: response.actionHints,
+      elapsedMs: executionSnapshot['elapsedMs'] is num
+          ? (executionSnapshot['elapsedMs'] as num).toInt()
+          : 0,
+    );
     final isDegradedReply =
         response.degraded ||
         AssistantContentFilters.isDegradedText(response.finalText);
@@ -78,27 +91,18 @@ class FinalizeRunner {
         },
       );
     }
-    if (!isDegradedReply && displayTextForSession.isNotEmpty) {
+    if (!isDegradedReply &&
+        (displayTextForSession.isNotEmpty || !persistedJourney.isEmpty)) {
       final structuredResponse = response.structuredResponse;
       sessionManager.appendMessage(
         sessionId: sessionId,
         role: 'assistant',
         content: displayTextForSession,
         metadata: <String, dynamic>{
-          'displayMarkdown': displayMarkdown,
-          'displayPlainText': displayPlainText,
-          'machineEnvelope': completedArtifact.machineEnvelope,
+          ...persistedTurnFields,
           'runArtifacts': completedArtifact.toJson(),
-          'uiProcessContentBlocks':
-              (structuredResponse['uiProcessContentBlocks'] as List?) ??
-              const <dynamic>[],
-          'uiProcessTimeline':
-              (structuredResponse['uiProcessTimeline'] as List?) ??
-              (structuredResponse['uiProcessTimelineV2'] as List?) ??
-              const <dynamic>[],
           'uiUsageStats':
-              ((structuredResponse['uiUsageStats'] as Map?) ??
-                  (structuredResponse['uiUsageStatsV1'] as Map?)) ??
+              (structuredResponse['uiUsageStats'] as Map?) ??
               const <String, dynamic>{},
           'intentGraph':
               (structuredResponse['intentGraph'] as Map?) ??

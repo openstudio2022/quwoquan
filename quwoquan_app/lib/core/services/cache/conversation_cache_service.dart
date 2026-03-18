@@ -8,7 +8,7 @@ import 'dart:collection';
 /// 支持分拆时间戳：settingsUpdatedAt（低频）和 lastMessageAt（高频）
 class ConversationCacheService {
   ConversationCacheService({int maxMemoryEntries = 200})
-      : _maxMemory = maxMemoryEntries;
+    : _maxMemory = maxMemoryEntries;
 
   final int _maxMemory;
 
@@ -64,11 +64,12 @@ class ConversationCacheService {
   void put(String id, Map<String, dynamic> data, {String? updatedAt}) {
     final entry = _CacheEntry(
       data: Map<String, dynamic>.from(data),
-      updatedAt: updatedAt ?? data['updatedAt'] as String? ?? '',
-      settingsUpdatedAt: data['settingsUpdatedAt'] as String? ?? '',
-      lastMessageAt: data['lastMessageAt'] as String?
-          ?? data['lastMessageTime'] as String?
-          ?? '',
+      updatedAt: updatedAt ?? _asIsoString(data['updatedAt']) ?? '',
+      settingsUpdatedAt: _asIsoString(data['settingsUpdatedAt']) ?? '',
+      lastMessageAt:
+          _asIsoString(data['lastMessageAt']) ??
+          _asIsoString(data['lastMessageTime']) ??
+          '',
     );
     _putMemory(id, entry);
     _disk[id] = entry;
@@ -88,6 +89,7 @@ class ConversationCacheService {
     String? lastMessagePreview,
     String? lastMessageAt,
     int? unreadCount,
+    int? mentionUnreadCount,
   }) {
     final entry = _memory[id] ?? _disk[id];
     if (entry == null) return;
@@ -102,6 +104,9 @@ class ConversationCacheService {
     }
     if (unreadCount != null) {
       updated['unreadCount'] = unreadCount;
+    }
+    if (mentionUnreadCount != null) {
+      updated['mentionUnreadCount'] = mentionUnreadCount;
     }
 
     final newEntry = _CacheEntry(
@@ -125,6 +130,12 @@ class ConversationCacheService {
     while (_memory.length > _maxMemory) {
       _memory.remove(_memory.keys.first);
     }
+  }
+
+  String? _asIsoString(dynamic value) {
+    if (value is String) return value;
+    if (value is DateTime) return value.toIso8601String();
+    return null;
   }
 }
 

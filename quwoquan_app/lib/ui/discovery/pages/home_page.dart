@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
+import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
@@ -27,7 +28,13 @@ class HomePage extends ConsumerStatefulWidget {
 
 class _HomePageState extends ConsumerState<HomePage>
     with AutomaticKeepAliveClientMixin {
-  static const String _defaultTab = 'circles'; // Change default to circles to avoid starting in immersive mode without nav
+  static const String _defaultTab =
+      'circles'; // Change default to circles to avoid starting in immersive mode without nav
+  static const List<String> _tabOrder = <String>[
+    'following',
+    'featured',
+    'circles',
+  ];
   String _activeTab = _defaultTab;
   String _lastNonFeaturedTab = _defaultTab;
 
@@ -61,6 +68,26 @@ class _HomePageState extends ConsumerState<HomePage>
     _handleTabChange(nextTab);
   }
 
+  void _handleTabSwipeDragEnd(DragEndDetails details) {
+    final direction = TabSwipeSwitchRegion.directionFromDragEnd(details);
+    if (direction == null) {
+      return;
+    }
+    _handleTabSwipe(direction);
+  }
+
+  void _handleTabSwipe(TabSwipeDirection direction) {
+    final currentIndex = _tabOrder.indexOf(_activeTab);
+    if (currentIndex < 0) {
+      return;
+    }
+    final nextIndex = currentIndex + direction.delta;
+    if (nextIndex < 0 || nextIndex >= _tabOrder.length) {
+      return;
+    }
+    _handleTabChange(_tabOrder[nextIndex]);
+  }
+
   void _updateImmersiveState() {
     final isImmersive = _activeTab == 'featured';
     // Use Future.microtask to avoid build conflicts if called during build
@@ -74,7 +101,7 @@ class _HomePageState extends ConsumerState<HomePage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    
+
     // 沉浸式模式（精品页）直接返回全屏 Viewer
     if (_activeTab == 'featured') {
       return CupertinoPageScaffold(
@@ -140,6 +167,7 @@ class _HomePageState extends ConsumerState<HomePage>
                           tabs: tabs,
                           activeTab: _activeTab,
                           onTabChange: _handleTabChange,
+                          onHorizontalDragEnd: _handleTabSwipeDragEnd,
                           // Remove actions from here to ensure centering
                           leadingActions: const [],
                           trailingActions: const [],
@@ -164,7 +192,13 @@ class _HomePageState extends ConsumerState<HomePage>
                   ],
                 ),
               ),
-              Expanded(child: _buildBody(isDark)),
+              Expanded(
+                child: TabSwipeSwitchRegion(
+                  enabled: _activeTab != 'circles',
+                  onSwipe: _handleTabSwipe,
+                  child: _buildBody(isDark),
+                ),
+              ),
             ],
           ),
         ),
@@ -184,10 +218,10 @@ class _HomePageState extends ConsumerState<HomePage>
           },
         );
       case 'circles':
-        return const HomeCirclesHubPage();
+        return HomeCirclesHubPage(onPrimaryOverflowSwipe: _handleTabSwipe);
       case 'featured':
         // This case is handled in the main build method now for full screen
-        return const SizedBox.shrink(); 
+        return const SizedBox.shrink();
       default:
         return const SizedBox.shrink();
     }

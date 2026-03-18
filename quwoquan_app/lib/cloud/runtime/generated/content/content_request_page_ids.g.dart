@@ -29,6 +29,8 @@ class ContentRequestPageIds {
     'ListComments': 'content.comment.list',
     'ListCommentsByAuthor': 'content.list.comments.by.author',
     'ListCommentsForPostAuthor': 'content.list.comments.for.post.author',
+    'ListProfileInteractionActivitiesReceived': 'content.profile.interactions.received',
+    'ListProfileInteractionActivitiesSent': 'content.profile.interactions.sent',
     'ListUserPosts': 'content.user.posts',
     'PromotePostToWork': 'content.post.promote',
     'PublishPost': 'content.post.publish',
@@ -70,6 +72,8 @@ class ContentRequestPageIds {
   static const String listComments = 'content.comment.list';
   static const String listCommentsByAuthor = 'content.list.comments.by.author';
   static const String listCommentsForPostAuthor = 'content.list.comments.for.post.author';
+  static const String listProfileInteractionActivitiesReceived = 'content.profile.interactions.received';
+  static const String listProfileInteractionActivitiesSent = 'content.profile.interactions.sent';
   static const String listUserPosts = 'content.user.posts';
   static const String promotePostToWork = 'content.post.promote';
   static const String publishPost = 'content.post.publish';

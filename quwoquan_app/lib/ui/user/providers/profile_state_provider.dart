@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/mock/user_profile_mock_data.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -11,10 +12,11 @@ import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 class ProfileState {
   const ProfileState({
     required this.userId,
+    this.profile,
     this.activeSubTab = CreationSubTab.all,
     this.activeWorkFormat = CreationWorkFormat.all,
     this.activeVisibility = CreationVisibility.all,
-    this.interactionSubTab = InteractionSubTab.comments,
+    this.interactionSubTab = InteractionSubTab.likes,
     this.interactionDirection = InteractionDirection.received,
     this.lifestyleSubTab = LifestyleSubTab.footprint,
     this.creations = const [],
@@ -23,11 +25,11 @@ class ProfileState {
     this.works = const [],
     this.isLoading = false,
     this.isFollowing = false,
-    this.stats = const {},
     this.capability,
   });
 
   final String userId;
+  final ProfileSubjectViewData? profile;
   final CreationSubTab activeSubTab;
   final CreationWorkFormat activeWorkFormat;
   final CreationVisibility activeVisibility;
@@ -35,17 +37,16 @@ class ProfileState {
   final InteractionDirection interactionDirection;
   final LifestyleSubTab lifestyleSubTab;
   final List<PostBaseDto> creations;
-  final List<Map<String, dynamic>> circles;
+  final List<ProfileCircleViewData> circles;
   final List<UserLifeItem> lifeItems;
   final List<UserWorkItem> works;
   final bool isLoading;
   final bool isFollowing;
-  final Map<String, dynamic> stats;
-
   /// 关系能力位投影（null = 未载入）
   final RelationshipCapabilityDto? capability;
 
   ProfileState copyWith({
+    ProfileSubjectViewData? profile,
     CreationSubTab? activeSubTab,
     CreationWorkFormat? activeWorkFormat,
     CreationVisibility? activeVisibility,
@@ -53,17 +54,17 @@ class ProfileState {
     InteractionDirection? interactionDirection,
     LifestyleSubTab? lifestyleSubTab,
     List<PostBaseDto>? creations,
-    List<Map<String, dynamic>>? circles,
+    List<ProfileCircleViewData>? circles,
     List<UserLifeItem>? lifeItems,
     List<UserWorkItem>? works,
     bool? isLoading,
     bool? isFollowing,
-    Map<String, dynamic>? stats,
     RelationshipCapabilityDto? capability,
     bool clearCapability = false,
   }) {
     return ProfileState(
       userId: userId,
+      profile: profile ?? this.profile,
       activeSubTab: activeSubTab ?? this.activeSubTab,
       activeWorkFormat: activeWorkFormat ?? this.activeWorkFormat,
       activeVisibility: activeVisibility ?? this.activeVisibility,
@@ -76,7 +77,6 @@ class ProfileState {
       works: works ?? this.works,
       isLoading: isLoading ?? this.isLoading,
       isFollowing: isFollowing ?? this.isFollowing,
-      stats: stats ?? this.stats,
       capability: clearCapability ? null : (capability ?? this.capability),
     );
   }
@@ -85,7 +85,7 @@ class ProfileState {
 class ProfileNotifier extends ChangeNotifier {
   ProfileNotifier(this._ref, this._userId) {
     // Avoid notifying listeners during provider creation/build.
-    Future<void>(loadProfile);
+    Future<void>.microtask(loadProfile);
   }
 
   final Ref _ref;
@@ -99,17 +99,17 @@ class ProfileNotifier extends ChangeNotifier {
     notifyListeners();
     try {
       final repo = _ref.read(userProfileRepositoryProvider);
+      final profile = await repo.getProfileSubject(_userId);
       final posts = await repo.listUserPosts(_userId);
       final works = await repo.listUserWorks(_userId);
       final lifeItems = await repo.listUserLifeItems(_userId);
-      final circles = await repo.listUserCircles(_userId);
-      final stats = await repo.getUserStats(_userId);
+      final circles = await repo.listProfileCircles(_userId);
       _state = _state.copyWith(
+        profile: profile,
         creations: posts,
         works: works,
         lifeItems: lifeItems,
         circles: circles,
-        stats: stats,
         isLoading: false,
       );
     } catch (_) {
@@ -126,8 +126,7 @@ class ProfileNotifier extends ChangeNotifier {
       final cap = await capRepo.getCapability(_userId);
       _state = _state.copyWith(
         capability: cap,
-        isFollowing:
-            cap.isFollowingOnly || cap.isSameInterest || cap.isCloseFriend,
+        isFollowing: cap.isFollowing || cap.isMutual,
       );
       notifyListeners();
     } catch (_) {
@@ -138,9 +137,7 @@ class ProfileNotifier extends ChangeNotifier {
   void setSubTab(CreationSubTab tab) {
     _state = _state.copyWith(
       activeSubTab: tab,
-      activeWorkFormat: tab == CreationSubTab.work
-          ? _state.activeWorkFormat
-          : CreationWorkFormat.all,
+      activeWorkFormat: CreationWorkFormat.all,
     );
     notifyListeners();
   }

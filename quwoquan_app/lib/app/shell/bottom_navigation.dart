@@ -42,7 +42,7 @@ class BottomNavigationWidget extends ConsumerWidget {
         border: Border(
           top: BorderSide(
             color: inactiveColor.withValues(alpha: 0.16),
-            width: 0.5,
+            width: AppSpacing.hairline,
           ),
         ),
       ),
@@ -75,7 +75,7 @@ class BottomNavigationWidget extends ConsumerWidget {
                       fontSize: fontSize,
                       fontWeight: AppTypography.bottomNavLabelWeight,
                       color: selected ? activeColor : inactiveColor,
-                      height: 1,
+                      height: AppSpacing.one,
                     ),
                     child: Text(
                       labels[index],

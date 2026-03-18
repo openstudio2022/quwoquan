@@ -140,6 +140,7 @@ class VideoPostDto extends PostBaseDto {
   }
 
   /// 展示格式。视频作品固定为 video。
+  @override
   String get displayFormat {
     return 'video';
   }
