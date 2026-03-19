@@ -370,50 +370,113 @@ class CircleMockData {
 
   static List<Map<String, dynamic>> get circleFeedItems => [
     {
-      'id': 'circle_post_moment_1',
-      'circleId': 'circle_photo_01',
-      'type': 'moment',
-      'contentType': 'micro',
-      'contentIdentity': 'moment',
-      'coverUrl':
-          'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=900',
-      'imageUrls': [
-        'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=900',
-      ],
-      'likeCount': 128,
-    },
-    {
       'id': 'circle_post_image_1',
+      'postId': 'circle_post_image_1',
       'circleId': 'circle_photo_01',
       'type': 'photo',
       'contentType': 'image',
       'contentIdentity': 'work',
+      'authorId': 'u1',
+      'authorNickname': '旅行摄影师',
+      'authorAvatarUrl':
+          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
+      'title': '清晨光影练习',
+      'body': '第一次踩点就遇到很通透的晨雾，记录下圈友活动前的安静片刻。',
+      'circleIds': ['circle_photo_01', 'c1'],
+      'circleNames': ['光影摄影社', '极简摄影俱乐部'],
+      'circleSummaries': [
+        {'id': 'circle_photo_01', 'name': '光影摄影社'},
+        {'id': 'c1', 'name': '极简摄影俱乐部'},
+      ],
+      'circleName': '光影摄影社',
       'coverUrl':
           'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=900',
       'imageUrls': [
         'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=900',
       ],
       'likeCount': 342,
+      'favoriteCount': 31,
+      'shareCount': 12,
     },
     {
       'id': 'circle_post_video_1',
+      'postId': 'circle_post_video_1',
       'circleId': 'circle_photo_01',
       'type': 'video',
       'contentType': 'video',
       'contentIdentity': 'work',
+      'authorId': 'u2',
+      'authorNickname': '城市观察员',
+      'authorAvatarUrl':
+          'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
+      'title': '夜色车流延时',
+      'body': '圈子活动结束后补了一段桥面延时，准备回去剪一个一分钟短片。',
+      'circleIds': ['circle_photo_01', 'c-car-2'],
+      'circleNames': ['光影摄影社', '周末自驾发现上海'],
+      'circleSummaries': [
+        {'id': 'circle_photo_01', 'name': '光影摄影社'},
+        {'id': 'c-car-2', 'name': '周末自驾发现上海'},
+      ],
+      'circleName': '光影摄影社',
       'thumbnailUrl':
           'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=900',
+      'videoUrl':
+          'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4',
       'likeCount': 211,
+      'favoriteCount': 22,
+      'shareCount': 18,
+    },
+    {
+      'id': 'circle_post_moment_text_1',
+      'postId': 'circle_post_moment_text_1',
+      'circleId': 'circle_photo_01',
+      'type': 'moment',
+      'contentType': 'micro',
+      'contentIdentity': 'moment',
+      'authorId': 'u3',
+      'authorNickname': '阿秋',
+      'authorAvatarUrl':
+          'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200',
+      'title': '临时改地点提醒',
+      'body': '今天风有点大，傍晚拍摄集合点改到南门咖啡车旁，先到的圈友可以在群里报个到。',
+      'circleIds': ['circle_photo_01', 'c-meet-1'],
+      'circleNames': ['光影摄影社', '魔都搭子集合'],
+      'circleSummaries': [
+        {'id': 'circle_photo_01', 'name': '光影摄影社'},
+        {'id': 'c-meet-1', 'name': '魔都搭子集合'},
+      ],
+      'circleName': '光影摄影社',
+      'coverUrl':
+          'https://images.unsplash.com/photo-1455390582262-044cdead277a?w=900',
+      'likeCount': 128,
+      'favoriteCount': 9,
+      'shareCount': 6,
     },
     {
       'id': 'circle_post_note_1',
+      'postId': 'circle_post_note_1',
       'circleId': 'circle_photo_01',
       'type': 'article',
       'contentType': 'article',
       'contentIdentity': 'work',
+      'authorId': 'u4',
+      'authorNickname': '构图实验室',
+      'authorAvatarUrl':
+          'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200',
+      'title': '雨夜街拍的三种取景思路',
+      'body': '把高光控制、路面反射和人物停顿拆开看，文章里整理了这次活动最有用的 3 个构图模板。',
+      'circleIds': ['circle_photo_01', 'c-human-1'],
+      'circleNames': ['光影摄影社', '午夜电影俱乐部'],
+      'circleSummaries': [
+        {'id': 'circle_photo_01', 'name': '光影摄影社'},
+        {'id': 'c-human-1', 'name': '午夜电影俱乐部'},
+      ],
+      'circleName': '光影摄影社',
       'coverUrl':
           'https://images.unsplash.com/photo-1455390582262-044cdead277a?w=900',
       'likeCount': 89,
+      'favoriteCount': 14,
+      'shareCount': 4,
     },
   ];
 

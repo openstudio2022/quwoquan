@@ -221,7 +221,7 @@ void main() {
   group('AssistantTurnOutput', () {
     test('解析并序列化统一主线字段', () {
       final turn = tryParseAssistantTurnOutput(const <String, dynamic>{
-        'contractVersion': kAssistantTurnCurrentVersion,
+        'contractId': kAssistantTurnCurrentContractId,
         'decision': <String, dynamic>{'nextAction': 'answer'},
         'messageKind': 'answer',
         'userMarkdown': '## 深圳天气',

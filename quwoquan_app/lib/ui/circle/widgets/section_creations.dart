@@ -1,10 +1,16 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
+import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_tab.dart';
+import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
+import 'package:quwoquan_app/ui/circle/widgets/media_viewer_result_absorber.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 
 /// 圈子"创作"板块：SubTab 过滤 + 排序 + 二列网格
@@ -254,15 +260,19 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       case CreationSubTab.moment:
         return _itemIdentity(item) == 'moment';
       case CreationSubTab.micro:
-        return _itemIdentity(item) == 'moment' && _itemDisplayFormat(item) == 'micro';
+        return _itemIdentity(item) == 'moment' &&
+            _itemDisplayFormat(item) == 'micro';
       case CreationSubTab.work:
         return _itemIdentity(item) == 'work';
       case CreationSubTab.image:
-        return _itemIdentity(item) == 'work' && _itemDisplayFormat(item) == 'image';
+        return _itemIdentity(item) == 'work' &&
+            _itemDisplayFormat(item) == 'image';
       case CreationSubTab.video:
-        return _itemIdentity(item) == 'work' && _itemDisplayFormat(item) == 'video';
+        return _itemIdentity(item) == 'work' &&
+            _itemDisplayFormat(item) == 'video';
       case CreationSubTab.article:
-        return _itemIdentity(item) == 'work' && _itemDisplayFormat(item) == 'note';
+        return _itemIdentity(item) == 'work' &&
+            _itemDisplayFormat(item) == 'note';
       case CreationSubTab.all:
         return true;
     }
@@ -441,7 +451,11 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
         separatorBuilder: (_, _) => SizedBox(height: AppSpacing.sm),
         itemBuilder: (context, index) {
           final item = filtered[index];
-          return _buildListItem(item, fgSecondary);
+          return _buildListItem(
+            item,
+            fgSecondary,
+            onTap: () => _openMediaViewer(context, item, filtered),
+          );
         },
       );
     }
@@ -457,12 +471,127 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       itemCount: filtered.length,
       itemBuilder: (context, index) {
         final item = filtered[index];
-        return _buildGridItem(item, fgSecondary);
+        return _buildGridItem(
+          item,
+          fgSecondary,
+          onTap: () => _openMediaViewer(context, item, filtered),
+        );
       },
     );
   }
 
-  Widget _buildGridItem(Map<String, dynamic> item, Color fgSecondary) {
+  Future<void> _openMediaViewer(
+    BuildContext context,
+    Map<String, dynamic> tapped,
+    List<Map<String, dynamic>> sourceItems,
+  ) async {
+    final tappedDto = _tryParsePost(tapped);
+    if (tappedDto == null) return;
+    if (!_supportsViewer(tappedDto)) return;
+
+    final viewerEntries = sourceItems
+        .map((item) => (raw: item, dto: _tryParsePost(item)))
+        .where((entry) => entry.dto != null && _supportsViewer(entry.dto!))
+        .toList(growable: false);
+    if (viewerEntries.isEmpty) return;
+
+    final viewerDtos = viewerEntries
+        .map((entry) => entry.dto!)
+        .toList(growable: false);
+    final initialIndex = viewerDtos
+        .indexWhere((item) => item.id == tappedDto.id)
+        .clamp(0, viewerDtos.length - 1);
+    final rawPostsById = <String, Map<String, dynamic>>{
+      for (final entry in viewerEntries) entry.dto!.id: entry.raw,
+    };
+
+    final route = _isVideoPost(tappedDto)
+        ? AppRoutePaths.videoViewer(index: '$initialIndex')
+        : AppRoutePaths.mediaViewer(category: 'circle', index: '$initialIndex');
+    final relationshipState = ref.read(userRelationshipStateProvider);
+    final postInteractionState = ref.read(postInteractionStateProvider);
+    final result = await context.push<Object?>(
+      route,
+      extra: MediaViewerExtra(
+        posts: viewerDtos.map(PostSummaryView.fromDto).toList(growable: false),
+        dtoPosts: viewerDtos,
+        initialIndex: initialIndex,
+        category: 'circle',
+        source: 'circle',
+        circleId: widget.circleId,
+        rawPostsById: rawPostsById,
+        interactionSnapshot: MediaViewerInteractionSnapshot(
+          followingUsers: Set<String>.from(
+            relationshipState.followingProfileIds,
+          ),
+          likedPosts: Set<String>.from(postInteractionState.likedPostIds),
+          savedPosts: Set<String>.from(postInteractionState.savedPostIds),
+          postLikesCount: {
+            for (final entry in viewerEntries)
+              entry.dto!.id: postInteractionState.likeCountFor(
+                entry.dto!.id,
+                fallback:
+                    (entry.raw['likeCount'] as num?)?.toInt() ??
+                    (entry.raw['likes'] as num?)?.toInt() ??
+                    entry.dto!.likeCount,
+              ),
+          },
+          postBookmarksCount: {
+            for (final entry in viewerEntries)
+              entry.dto!.id: postInteractionState.bookmarkCountFor(
+                entry.dto!.id,
+                fallback:
+                    (entry.raw['favoriteCount'] as num?)?.toInt() ??
+                    (entry.raw['bookmarkCount'] as num?)?.toInt() ??
+                    entry.dto!.favoriteCount,
+              ),
+          },
+          postSharesCount: {
+            for (final entry in viewerEntries)
+              entry.dto!.id: postInteractionState.shareCountFor(
+                entry.dto!.id,
+                fallback:
+                    (entry.raw['shareCount'] as num?)?.toInt() ??
+                    entry.dto!.shareCount,
+              ),
+          },
+        ),
+      ),
+    );
+    if (result is MediaViewerResult) {
+      _applyViewerResult(result);
+    }
+  }
+
+  PostBaseDto? _tryParsePost(Map<String, dynamic> item) {
+    try {
+      return postBaseDtoFromMap(item);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _supportsViewer(PostBaseDto post) {
+    return post.supportsUnifiedViewer;
+  }
+
+  bool _isVideoPost(PostBaseDto post) {
+    return post.isVideoLike;
+  }
+
+  void _applyViewerResult(MediaViewerResult result) {
+    ref.read(userRelationshipStateProvider.notifier).applyViewerResult(result);
+    ref.read(postInteractionStateProvider.notifier).applyViewerResult(result);
+    setState(() {
+      _feedItems = applyMediaViewerResultToFeedItems(_feedItems, result);
+    });
+  }
+
+  Widget _buildGridItem(
+    Map<String, dynamic> item,
+    Color fgSecondary, {
+    required VoidCallback onTap,
+  }) {
     final cover = (item['coverUrl'] ?? item['thumbnailUrl'] ?? '').toString();
     final imageUrls = item['imageUrls'];
     final resolvedCover = cover.isNotEmpty
@@ -472,128 +601,140 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
               : '');
     final likeCount = item['likeCount'] ?? item['likes'] ?? 0;
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (resolvedCover.isNotEmpty)
-            Image.network(
-              resolvedCover,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => Container(
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (resolvedCover.isNotEmpty)
+              Image.network(
+                resolvedCover,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => Container(
+                  color: fgSecondary.withValues(alpha: 0.1),
+                  child: Icon(Icons.image, color: fgSecondary),
+                ),
+              )
+            else
+              Container(
                 color: fgSecondary.withValues(alpha: 0.1),
                 child: Icon(Icons.image, color: fgSecondary),
               ),
-            )
-          else
-            Container(
-              color: fgSecondary.withValues(alpha: 0.1),
-              child: Icon(Icons.image, color: fgSecondary),
-            ),
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              padding: EdgeInsets.all(AppSpacing.intraGroupMd),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.bottomCenter,
-                  end: Alignment.topCenter,
-                  colors: [
-                    Colors.black.withValues(alpha: 0.6),
-                    Colors.transparent,
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                padding: EdgeInsets.all(AppSpacing.intraGroupMd),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.6),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.favorite,
+                      size: AppTypography.sm,
+                      color: Colors.white,
+                    ),
+                    SizedBox(width: AppSpacing.intraGroupXs),
+                    Text(
+                      '$likeCount',
+                      style: TextStyle(
+                        fontSize: AppTypography.sm,
+                        fontWeight: AppTypography.medium,
+                        color: Colors.white,
+                      ),
+                    ),
                   ],
                 ),
               ),
-              child: Row(
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildListItem(
+    Map<String, dynamic> item,
+    Color fgSecondary, {
+    required VoidCallback onTap,
+  }) {
+    final cover = (item['coverUrl'] ?? item['thumbnailUrl'] ?? '').toString();
+    final likeCount = item['likeCount'] ?? item['likes'] ?? 0;
+    final typeLabel = _itemTypeLabel(item);
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: EdgeInsets.all(AppSpacing.containerSm),
+        decoration: BoxDecoration(
+          color: widget.isDark
+              ? Colors.white10
+              : Colors.black.withValues(alpha: 0.03),
+          borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+              child: SizedBox(
+                width: AppSpacing.followButtonWidth + AppSpacing.intraGroupMd,
+                height: AppSpacing.followButtonWidth + AppSpacing.intraGroupMd,
+                child: cover.isNotEmpty
+                    ? Image.network(
+                        cover,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => Container(
+                          color: fgSecondary.withValues(alpha: 0.1),
+                          child: Icon(Icons.image, color: fgSecondary),
+                        ),
+                      )
+                    : Container(
+                        color: fgSecondary.withValues(alpha: 0.1),
+                        child: Icon(Icons.image, color: fgSecondary),
+                      ),
+              ),
+            ),
+            SizedBox(width: AppSpacing.containerSm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    Icons.favorite,
-                    size: AppTypography.sm,
-                    color: Colors.white,
-                  ),
-                  SizedBox(width: AppSpacing.intraGroupXs),
                   Text(
-                    '$likeCount',
+                    typeLabel,
                     style: TextStyle(
                       fontSize: AppTypography.sm,
-                      fontWeight: AppTypography.medium,
-                      color: Colors.white,
+                      color: AppColors.primaryColor,
+                      fontWeight: AppTypography.semiBold,
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.intraGroupXs),
+                  Text(
+                    '赞 $likeCount',
+                    style: TextStyle(
+                      fontSize: AppTypography.base,
+                      color: AppColorsFunctional.getColor(
+                        widget.isDark,
+                        ColorType.foregroundPrimary,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildListItem(Map<String, dynamic> item, Color fgSecondary) {
-    final cover = (item['coverUrl'] ?? item['thumbnailUrl'] ?? '').toString();
-    final likeCount = item['likeCount'] ?? item['likes'] ?? 0;
-    final typeLabel = _itemTypeLabel(item);
-    return Container(
-      padding: EdgeInsets.all(AppSpacing.containerSm),
-      decoration: BoxDecoration(
-        color: widget.isDark
-            ? Colors.white10
-            : Colors.black.withValues(alpha: 0.03),
-        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-      ),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-            child: SizedBox(
-              width: AppSpacing.followButtonWidth + AppSpacing.intraGroupMd,
-              height: AppSpacing.followButtonWidth + AppSpacing.intraGroupMd,
-              child: cover.isNotEmpty
-                  ? Image.network(
-                      cover,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => Container(
-                        color: fgSecondary.withValues(alpha: 0.1),
-                        child: Icon(Icons.image, color: fgSecondary),
-                      ),
-                    )
-                  : Container(
-                      color: fgSecondary.withValues(alpha: 0.1),
-                      child: Icon(Icons.image, color: fgSecondary),
-                    ),
-            ),
-          ),
-          SizedBox(width: AppSpacing.containerSm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  typeLabel,
-                  style: TextStyle(
-                    fontSize: AppTypography.sm,
-                    color: AppColors.primaryColor,
-                    fontWeight: AppTypography.semiBold,
-                  ),
-                ),
-                SizedBox(height: AppSpacing.intraGroupXs),
-                Text(
-                  '赞 $likeCount',
-                  style: TextStyle(
-                    fontSize: AppTypography.base,
-                    color: AppColorsFunctional.getColor(
-                      widget.isDark,
-                      ColorType.foregroundPrimary,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -676,7 +817,9 @@ class _CupertinoFilterChip extends StatelessWidget {
       onPressed: onPressed,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: selected ? AppColors.primaryColor.withValues(alpha: 0.12) : null,
+          color: selected
+              ? AppColors.primaryColor.withValues(alpha: 0.12)
+              : null,
           borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
           border: Border.all(
             color: selected

@@ -13,14 +13,15 @@ alwaysApply: true
 - `metadata-first`：契约、字段、错误码、`path / operation / surface / route / decoder context` 先改 metadata，再 codegen，再改业务逻辑。
 - `commercial-ready-before-dev`：凡是用户可见、可灰度、可分享、可被小趣消费的能力，`/prd` 与 `/design` 必须先冻结 `SLO/KPI`、权限边界、数据生命周期、迁移灰度与回滚。
 - `benchmark-driven`：对标必须写明借鉴、不借鉴、适用边界、当前差距、收敛计划。
-- `single-source`：`tree_index.yaml`、`spec.md`、`design.md`、`tasks.md`、`acceptance.yaml`、metadata 各自是唯一真相源。
+- `single-source`：`tree_index.yaml`、`spec.md`、`design.md`、`acceptance.yaml`、`plan.yaml`、`specs/changelog/CR-*.yaml`、metadata 各自是唯一真相源。
 - 缺 benchmark、真实网络条件、容量假设、权限边界、生命周期合同或回滚条件时，直接 `GATE_BLOCK`。
 
 ## `/explore`
 
-- 映射 `L1/L2/L3`，识别业务对象、metadata、扩展场景。
+- 映射 `L1_capability / L2_journey / L3_scenario`，识别业务对象、metadata、扩展场景。
 - 识别 benchmark、NFR、权限边界、数据生命周期、迁移和发布风险。
-- 初步任务顺序固定为：`metadata -> codegen -> 业务逻辑 -> 测试`。
+- 判断本次增量是否需要创建或续写 `CR`。
+- 初步 plan slice 顺序固定为：`metadata -> codegen -> 业务逻辑 -> 测试`。
 - 不写代码，不创建第四/第五层树节点。
 
 ## `/prd`（G0）
@@ -41,6 +42,7 @@ alwaysApply: true
 
 - `spec.md`
 - `acceptance.yaml`
+- `specs/changelog/CR-*.yaml`
 - 商用基线：`SLO/KPI`、权限边界、生命周期、覆盖矩阵、迁移灰度回滚
 
 ## `/design`（G1）
@@ -51,7 +53,7 @@ alwaysApply: true
 - 至少有 2 个方案可比较，且权衡清晰。
 - 选定方案覆盖 metadata/codegen、字段或模型演进、数据迁移/回填、必要时双读双写、feature flag、观测、SLO 验证与回滚。
 - 若涉及小趣或私密内容，权限、撤销、保留模型已冻结。
-- `T1~T4` 证据矩阵已形成，`tasks.md` 顺序遵循 `metadata -> codegen -> 业务逻辑 -> 测试`。
+- `T1~T4` 证据矩阵已形成，`plan.yaml` 顺序遵循 `metadata -> codegen -> 业务逻辑 -> 测试`。
 
 自动执行：
 
@@ -64,7 +66,7 @@ make codegen-app
 产出：
 
 - `design.md`
-- `tasks.md`
+- `plan.yaml`
 - metadata / codegen 基线
 - 测试证据矩阵
 - 灰度发布设计
@@ -72,7 +74,8 @@ make codegen-app
 ## `/dev` 及以后
 
 - `/dev` 只在设计冻结、codegen 通过、Red 测试就绪后进入。
-- 每完成一个 task 运行：
+- `/dev` 先读 `plan.yaml` 与对应 CR，再派生会话 todo。
+- 每完成一组 slice 运行：
 
 ```bash
 make -C quwoquan_service build

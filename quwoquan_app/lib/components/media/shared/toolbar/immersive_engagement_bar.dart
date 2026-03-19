@@ -48,26 +48,51 @@ class ImmersiveEngagementBar extends StatelessWidget {
   final VoidCallback? onRevealSystemNav;
 
   static const double _kFollowBtnWidth = AppSpacing.followButtonWidthCompact;
-
-  static double _actionGap(BuildContext ctx) => AppSpacing.responsiveValue(
+  static const Duration _kTransitionDuration = Duration(milliseconds: 260);
+  static double _actionCellWidth(BuildContext ctx) =>
+      AppSpacing.responsiveValue(
         ctx,
-        compact: AppSpacing.intraGroupXl,
-        regular: AppSpacing.interGroupLg,
-        expanded: AppSpacing.interGroupXl,
+        compact: 44.0,
+        regular: 52.0,
+        expanded: 60.0,
       );
 
-  static double _interGroupGap(BuildContext ctx) => AppSpacing.responsiveValue(
-        ctx,
-        compact: AppSpacing.interGroupXl,
-        regular: AppSpacing.interGroupXl,
-        expanded: AppSpacing.interGroupXl,
-      );
+  static double _crossGroupGap(BuildContext ctx) => AppSpacing.responsiveValue(
+    ctx,
+    compact: AppSpacing.intraGroupSm,
+    regular: AppSpacing.intraGroupMd,
+    expanded: AppSpacing.intraGroupLg,
+  );
 
-  static double _nameVisibleWidth(BuildContext context, int charCount, TextStyle style) {
+  static int _restNameMaxChars(BuildContext ctx) => AppSpacing.responsiveValue(
+    ctx,
+    compact: 5,
+    regular: 6,
+    expanded: 7,
+  ).round();
+
+  static int _revealNameMaxChars(BuildContext ctx) =>
+      AppSpacing.responsiveValue(
+        ctx,
+        compact: 3,
+        regular: 3,
+        expanded: 3,
+      ).round();
+
+  static double _nameVisibleWidth(
+    int charCount,
+    TextStyle style, {
+    bool includeEllipsis = false,
+  }) {
     const sample = '一二三四五六七八九十';
-    final text = sample.length >= charCount ? sample.substring(0, charCount) : sample;
+    final text = sample.length >= charCount
+        ? sample.substring(0, charCount)
+        : sample;
     final painter = TextPainter(
-      text: TextSpan(text: text, style: style),
+      text: TextSpan(
+        text: '$text${includeEllipsis ? '...' : ''}',
+        style: style,
+      ),
       textDirection: TextDirection.ltr,
     )..layout();
     return painter.width;
@@ -76,10 +101,52 @@ class ImmersiveEngagementBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
-    final actionGap = _actionGap(context);
-    final interGroupGap = _interGroupGap(context);
-    const compressText = true;
-    final textDisplayName = displayName.isEmpty ? UITextConstants.unknownUser : displayName;
+    final textDisplayName = displayName.isEmpty
+        ? UITextConstants.unknownUser
+        : displayName;
+    final isRevealState = showFollowButton;
+    final restDisplayStyle = TextStyle(
+      color: AppColors.worksTitle,
+      fontSize: AppTypography.sm,
+      fontWeight: AppTypography.bold,
+    );
+    final compressedDisplayStyle = TextStyle(
+      color: AppColors.worksTitle,
+      fontSize: AppTypography.xxs,
+      fontWeight: AppTypography.bold,
+    );
+    final secondaryStyle = TextStyle(
+      color: AppColors.worksBodyText.withValues(alpha: 0.72),
+      fontSize: AppTypography.xxs,
+      fontWeight: AppTypography.medium,
+    );
+    final restNameWidth = _nameVisibleWidth(
+      _restNameMaxChars(context),
+      restDisplayStyle,
+      includeEllipsis: true,
+    );
+    final restSecondaryWidth = _nameVisibleWidth(
+      _restNameMaxChars(context),
+      secondaryStyle,
+      includeEllipsis: true,
+    );
+    final revealNameWidth = _nameVisibleWidth(
+      _revealNameMaxChars(context),
+      compressedDisplayStyle,
+    );
+    final revealSecondaryWidth = _nameVisibleWidth(
+      _revealNameMaxChars(context),
+      secondaryStyle,
+    );
+    final restNameSlotWidth = restNameWidth > restSecondaryWidth
+        ? restNameWidth
+        : restSecondaryWidth;
+    final revealNameSlotWidth = revealNameWidth > revealSecondaryWidth
+        ? revealNameWidth
+        : revealSecondaryWidth;
+    final actionCellWidth = _actionCellWidth(context);
+    final crossGroupGap = _crossGroupGap(context);
+    final avatarImage = avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null;
 
     return GestureDetector(
       onVerticalDragUpdate: (details) {
@@ -104,60 +171,109 @@ class ImmersiveEngagementBar extends StatelessWidget {
                   behavior: HitTestBehavior.opaque,
                   child: CircleAvatar(
                     radius: AppSpacing.avatarUserMd * 0.5,
-                    backgroundImage: avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
-                    onBackgroundImageError: (_, stackTrace) {},
+                    backgroundImage: avatarImage,
+                    onBackgroundImageError: avatarImage == null
+                        ? null
+                        : (_, stackTrace) {},
                     backgroundColor: AppColors.worksCaption,
                   ),
                 ),
                 const SizedBox(width: AppSpacing.intraGroupSm),
-                Flexible(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
+                SizedBox(
+                  width: restNameSlotWidth,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    alignment: Alignment.centerLeft,
                     children: [
-                      Flexible(
-                        child: _nameColumn(
-                          context: context,
-                          displayName: textDisplayName,
-                          compressText: compressText,
-                          clip: true,
-                          fixedMaxChars: 4,
-                        ),
+                      AnimatedContainer(
+                        duration: _kTransitionDuration,
+                        curve: Curves.easeOutCubic,
+                        width: isRevealState
+                            ? revealNameSlotWidth
+                            : restNameSlotWidth,
+                        child: isRevealState
+                            ? ShaderMask(
+                                shaderCallback: (bounds) {
+                                  const fadeWidth = 14.0;
+                                  final start = bounds.width <= fadeWidth
+                                      ? 0.0
+                                      : ((bounds.width - fadeWidth) /
+                                                bounds.width)
+                                            .clamp(0.0, 1.0);
+                                  return LinearGradient(
+                                    begin: Alignment.centerLeft,
+                                    end: Alignment.centerRight,
+                                    stops: [start, 1.0],
+                                    colors: const [
+                                      Colors.white,
+                                      Colors.transparent,
+                                    ],
+                                  ).createShader(bounds);
+                                },
+                                blendMode: BlendMode.dstIn,
+                                child: _nameColumn(
+                                  displayName: textDisplayName,
+                                  displayStyle: compressedDisplayStyle,
+                                  secondaryStyle: secondaryStyle,
+                                  primaryMaxWidth: revealNameWidth,
+                                  secondaryMaxWidth: revealSecondaryWidth,
+                                  clip: true,
+                                ),
+                              )
+                            : _nameColumn(
+                                displayName: textDisplayName,
+                                displayStyle: restDisplayStyle,
+                                secondaryStyle: secondaryStyle,
+                                primaryMaxWidth: restNameWidth,
+                                secondaryMaxWidth: restSecondaryWidth,
+                                clip: false,
+                              ),
                       ),
-                      Padding(
-                        padding: const EdgeInsets.only(left: AppSpacing.intraGroupSm),
-                        child: SizedBox(
-                          width: _kFollowBtnWidth,
-                          height: AppSpacing.buttonHeightXs,
+                      Positioned.fill(
+                        child: Align(
+                          alignment: Alignment.centerRight,
                           child: IgnorePointer(
                             ignoring: !showFollowButton,
-                            child: Opacity(
-                              opacity: showFollowButton ? 1 : 0,
-                              child: GestureDetector(
-                                onTap: onFollowTap,
-                                behavior: HitTestBehavior.opaque,
-                                child: Container(
-                                  width: _kFollowBtnWidth,
-                                  height: AppSpacing.buttonHeightXs,
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    color: isFollowing
-                                        ? AppColors.followingButtonOnDark
-                                        : AppColors.worksAccent,
-                                    borderRadius:
-                                        BorderRadius.circular(AppSpacing.circularBorderRadius),
-                                  ),
-                                  child: Text(
-                                    isFollowing ? UITextConstants.following : UITextConstants.follow,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.fade,
-                                    softWrap: false,
-                                    style: TextStyle(
+                            child: AnimatedSlide(
+                              duration: _kTransitionDuration,
+                              curve: Curves.easeOutCubic,
+                              offset: showFollowButton
+                                  ? Offset.zero
+                                  : const Offset(0.24, 0),
+                              child: AnimatedOpacity(
+                                duration: _kTransitionDuration,
+                                curve: Curves.easeOutCubic,
+                                opacity: showFollowButton ? 1 : 0,
+                                child: GestureDetector(
+                                  onTap: onFollowTap,
+                                  behavior: HitTestBehavior.opaque,
+                                  child: Container(
+                                    width: _kFollowBtnWidth,
+                                    height: AppSpacing.buttonHeightXs,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
                                       color: isFollowing
-                                          ? AppColors.worksBodyText.withValues(alpha: 0.72)
-                                          : AppColors.white,
-                                      fontSize: AppTypography.xs,
-                                      fontWeight: AppTypography.semiBold,
+                                          ? AppColors.followingButtonOnDark
+                                          : AppColors.worksAccent,
+                                      borderRadius: BorderRadius.circular(
+                                        AppSpacing.circularBorderRadius,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      isFollowing
+                                          ? UITextConstants.following
+                                          : UITextConstants.follow,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.fade,
+                                      softWrap: false,
+                                      style: TextStyle(
+                                        color: isFollowing
+                                            ? AppColors.worksBodyText
+                                                  .withValues(alpha: 0.72)
+                                            : AppColors.white,
+                                        fontSize: AppTypography.xs,
+                                        fontWeight: AppTypography.semiBold,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -169,41 +285,69 @@ class ImmersiveEngagementBar extends StatelessWidget {
                     ],
                   ),
                 ),
-                SizedBox(width: interGroupGap),
-                Spacer(),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _action(
-                      icon: Icon(
-                        isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
-                        color: isLiked ? AppColors.worksLike : AppColors.worksTitle,
-                        size: AppSpacing.iconMedium,
-                      ),
-                      label: formatCompactActionCount(likeCount),
-                      onTap: onLikeTap,
-                    ),
-                    SizedBox(width: actionGap),
-                    _action(
-                      icon: Icon(
-                        CupertinoIcons.arrowshape_turn_up_right,
-                        color: AppColors.worksTitle,
-                        size: AppSpacing.iconMedium,
-                      ),
-                      label: formatCompactActionCount(shareCount),
-                      onTap: onShareTap,
-                    ),
-                    SizedBox(width: actionGap),
-                    _action(
-                      icon: Icon(
-                        CupertinoIcons.chat_bubble,
-                        color: AppColors.worksTitle,
-                        size: AppSpacing.iconMedium,
-                      ),
-                      label: formatCompactActionCount(commentCount),
-                      onTap: onCommentTap,
-                    ),
-                  ],
+                SizedBox(width: crossGroupGap),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final actionGroupWidth = (actionCellWidth * 3).clamp(
+                        0.0,
+                        constraints.maxWidth,
+                      );
+                      final resolvedCellWidth = actionGroupWidth / 3;
+
+                      return Align(
+                        alignment: Alignment.centerRight,
+                        child: SizedBox(
+                          key: const ValueKey('immersive-actions-group'),
+                          width: actionGroupWidth,
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: resolvedCellWidth,
+                                child: _action(
+                                  icon: Icon(
+                                    isLiked
+                                        ? CupertinoIcons.heart_fill
+                                        : CupertinoIcons.heart,
+                                    color: isLiked
+                                        ? AppColors.worksLike
+                                        : AppColors.worksTitle,
+                                    size: AppSpacing.iconMedium,
+                                  ),
+                                  label: formatCompactActionCount(likeCount),
+                                  onTap: onLikeTap,
+                                ),
+                              ),
+                              SizedBox(
+                                width: resolvedCellWidth,
+                                child: _action(
+                                  icon: Icon(
+                                    CupertinoIcons.arrowshape_turn_up_right,
+                                    color: AppColors.worksTitle,
+                                    size: AppSpacing.iconMedium,
+                                  ),
+                                  label: formatCompactActionCount(shareCount),
+                                  onTap: onShareTap,
+                                ),
+                              ),
+                              SizedBox(
+                                width: resolvedCellWidth,
+                                child: _action(
+                                  icon: Icon(
+                                    CupertinoIcons.chat_bubble,
+                                    color: AppColors.worksTitle,
+                                    size: AppSpacing.iconMedium,
+                                  ),
+                                  label: formatCompactActionCount(commentCount),
+                                  onTap: onCommentTap,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ],
             ),
@@ -214,48 +358,44 @@ class ImmersiveEngagementBar extends StatelessWidget {
   }
 
   Widget _nameColumn({
-    required BuildContext context,
     required String displayName,
-    required bool compressText,
+    required TextStyle displayStyle,
+    required TextStyle secondaryStyle,
+    required double primaryMaxWidth,
+    required double secondaryMaxWidth,
     required bool clip,
-    required int fixedMaxChars,
   }) {
-    final displayStyle = TextStyle(
-      color: AppColors.worksTitle,
-      fontSize: compressText ? AppTypography.sm : AppTypography.base,
-      fontWeight: AppTypography.bold,
-    );
-    final maxNameWidth = _nameVisibleWidth(context, fixedMaxChars, displayStyle);
     final overflow = clip ? TextOverflow.clip : TextOverflow.ellipsis;
-    return ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: maxNameWidth),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AnimatedDefaultTextStyle(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOut,
-            style: displayStyle,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          style: displayStyle,
+          child: SizedBox(
+            width: primaryMaxWidth,
             child: Text(displayName, maxLines: 1, overflow: overflow),
           ),
+        ),
+        if (circleName.isNotEmpty) ...[
           SizedBox(height: AppSpacing.intraGroupXs / 2),
           AnimatedDefaultTextStyle(
             duration: const Duration(milliseconds: 180),
             curve: Curves.easeOut,
-            style: TextStyle(
-              color: AppColors.worksBodyText.withValues(alpha: 0.72),
-              fontSize: compressText ? AppTypography.xxs : AppTypography.xs,
-              fontWeight: AppTypography.medium,
-            ),
+            style: secondaryStyle,
             child: GestureDetector(
               onTap: onCircleTap,
               behavior: HitTestBehavior.opaque,
-              child: Text(circleName, maxLines: 1, overflow: overflow),
+              child: SizedBox(
+                width: secondaryMaxWidth,
+                child: Text(circleName, maxLines: 1, overflow: overflow),
+              ),
             ),
           ),
         ],
-      ),
+      ],
     );
   }
 
@@ -267,8 +407,8 @@ class ImmersiveEngagementBar extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Container(
-        constraints: const BoxConstraints(minWidth: AppSpacing.minInteractiveSize),
+      child: SizedBox(
+        width: double.infinity,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

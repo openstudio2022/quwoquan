@@ -37,7 +37,7 @@ description: 检测并清理特性树中的过期/作废节点（Stale Node Dete
 严重度：BLOCKING。
 
 #### 1C. 规划长期未推进（Long-stale Specified）
-条件：`status=specified` + tasks.md 全为 `[ ]` + 最后一次 git 变更超过 90 天。
+条件：`status=specified` + plan.yaml 无已完成 slice + 最后一次 git 变更超过 90 天。
 严重度：WARNING。
 
 #### 1D. 实施中断超期（Long-stale In-progress）
@@ -45,7 +45,7 @@ description: 检测并清理特性树中的过期/作废节点（Stale Node Dete
 严重度：WARNING。
 
 #### 1E. 归档未回写（Archive Not Synced）
-条件：所有当前交付任务均为 `[x]`，acceptance.yaml 所有 An 为 `implemented`，但 `status ≠ completed/archived`。
+条件：目标 slice 均已完成，acceptance.yaml 所有 An 为 `implemented`，但 `status ≠ completed/archived`。
 严重度：WARNING。
 处理：优先确认 `/dev` 是否已自动归档；若未回写，再执行 `/archive` 兼容补归档。
 
@@ -53,8 +53,8 @@ description: 检测并清理特性树中的过期/作废节点（Stale Node Dete
 条件：spec.md 顶部已有 `> **DEPRECATED**` 标注，但 tree_index status 仍为 `specified/in_progress`。
 严重度：WARNING。
 
-#### 1G. 取消后残留任务（Cancelled with Open Tasks）
-条件：`status=cancelled` 但 tasks.md 中仍有 `[ ]` 任务。
+#### 1G. 取消后残留切片（Cancelled with Open Slices）
+条件：`status=cancelled` 但 plan.yaml 中仍有未完成 slice。
 严重度：WARNING。
 
 ---
@@ -73,7 +73,7 @@ description: 检测并清理特性树中的过期/作废节点（Stale Node Dete
 
 ━━━ WARNING（建议处理，不阻塞 gate） ━━━━━━━━━━━━━━━━━━━━━━━
 
-[1C] 规划长期未推进（>90天，全 [ ] tasks）：
+[1C] 规划长期未推进（>90天，plan 无完成 slice）：
   → some/feature/node
     最后变更：<日期>（N 天前）
     处理选项：
@@ -101,7 +101,7 @@ WARNING:   N 项
    ```markdown
    > **CANCELLED**: <日期> — <取消原因>
    ```
-2. 将 `tasks.md` 中 `[ ]` 任务行改为 `~~- [ ]~~`（strikethrough）
+2. 将 `plan.yaml` 中未完成 slice 标记为 `cancelled`
 3. 更新 `tree_index.yaml` 中节点及所有子节点的 `status: cancelled`
 
 ---

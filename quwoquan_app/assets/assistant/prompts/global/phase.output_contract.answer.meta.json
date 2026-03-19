@@ -1,9 +1,9 @@
 {
   "templateId": "phase.output_contract.answer",
-  "version": "2026.03.05",
+  "version": "2026.03.18",
   "stage": "answer",
   "domainId": "global",
-  "requiredVariables": [],
+  "requiredVariables": ["_static"],
   "outputContract": "assistant_turn",
-  "selfCheckRules": ["has_title", "key_values_bold", "no_json_leak", "has_followup", "evidence_sufficient"]
+  "selfCheckRules": ["has_title", "key_values_bold", "no_json_leak", "evidence_sufficient", "fallback_explained"]
 }

@@ -236,11 +236,33 @@ class _HomePageState extends ConsumerState<HomePage>
     context.push(
       AppRoutePaths.userProfile(username: userId),
       extra: UserProfileRouteExtra(
+        profileSubjectId: userId,
         avatar: avatarUrl,
         displayName: displayName,
         backgroundImage: backgroundUrl,
       ),
     );
+  }
+
+  Map<String, dynamic>? _rawDiscoveryPostById(String postId) {
+    final repo = ref.read(appContentRepositoryProvider);
+    final all = <Map<String, dynamic>>[
+      ...repo.discoveryPhotoData,
+      ...repo.discoveryVideoData,
+      ...repo.discoveryArticleData,
+      ...repo.discoveryMomentData,
+    ];
+    for (final item in all) {
+      final itemId =
+          item['postId']?.toString() ??
+          item['_id']?.toString() ??
+          item['id']?.toString() ??
+          '';
+      if (itemId == postId) {
+        return item;
+      }
+    }
+    return null;
   }
 
   void _openAssistantHalfSheet() {
@@ -255,41 +277,99 @@ class _HomePageState extends ConsumerState<HomePage>
     AssistantHalfSheet.show(context, ctx);
   }
 
-  void _openFeedPost(
+  Future<void> _openFeedPost(
     PostBaseDto post,
     int mediaIndex, {
     List<PostBaseDto>? feedPosts,
-  }) {
-    final postViews = feedPosts?.map(PostSummaryView.fromDto).toList();
-    final initialIndex = (feedPosts != null && feedPosts.isNotEmpty)
-        ? feedPosts
-              .indexWhere((item) => item.id == post.id)
-              .clamp(0, feedPosts.length - 1)
-        : mediaIndex;
-    final moment = post is MomentPostDto ? post : null;
-    final hasVideo =
-        moment != null &&
-        moment.videoUrl != null &&
-        moment.videoUrl!.trim().isNotEmpty;
-    if (post.displayFormat == 'video' || hasVideo) {
-      context.push(
-        '/video-viewer/$initialIndex',
-        extra: MediaViewerExtra(
-          posts: postViews ?? const <PostSummaryView>[],
-          initialIndex: initialIndex,
-          category: 'following',
-        ),
-      );
+  }) async {
+    final viewerPosts = (feedPosts ?? const <PostBaseDto>[])
+        .where(_supportsUnifiedViewer)
+        .toList(growable: false);
+    if (viewerPosts.isEmpty) {
       return;
     }
-    context.push(
-      '/media-viewer/photo/$initialIndex',
+    final postViews = viewerPosts
+        .map(PostSummaryView.fromDto)
+        .toList(growable: false);
+    final initialIndex = viewerPosts.isNotEmpty
+        ? viewerPosts
+              .indexWhere((item) => item.id == post.id)
+              .clamp(0, viewerPosts.length - 1)
+        : mediaIndex;
+    final discoveryState = ref.read(discoveryStateProvider);
+    final relationshipState = ref.read(userRelationshipStateProvider);
+    final postInteractionState = ref.read(postInteractionStateProvider);
+    final result = await context.push<Object?>(
+      post.isVideoLike
+          ? '/video-viewer/$initialIndex'
+          : '/media-viewer/photo/$initialIndex',
       extra: MediaViewerExtra(
-        posts: postViews ?? const <PostSummaryView>[],
+        posts: postViews,
+        dtoPosts: viewerPosts,
         initialIndex: initialIndex,
         category: 'following',
+        source: 'following',
         initialImageIndex: mediaIndex,
+        rawPostsById: <String, Map<String, dynamic>>{
+          for (final item in viewerPosts)
+            item.id: _rawDiscoveryPostById(item.id) ?? item.toMap(),
+        },
+        interactionSnapshot: MediaViewerInteractionSnapshot(
+          followingUsers: Set<String>.from(
+            relationshipState.followingProfileIds.isEmpty
+                ? discoveryState.followingUsers
+                : relationshipState.followingProfileIds,
+          ),
+          likedPosts: Set<String>.from(
+            postInteractionState.likedPostIds.isEmpty
+                ? discoveryState.likedPosts
+                : postInteractionState.likedPostIds,
+          ),
+          savedPosts: Set<String>.from(
+            postInteractionState.savedPostIds.isEmpty
+                ? discoveryState.savedPosts
+                : postInteractionState.savedPostIds,
+          ),
+          postLikesCount: {
+            for (final item in viewerPosts)
+              item.id: postInteractionState.likeCountFor(
+                item.id,
+                fallback: discoveryState.getPostLikesCount(item.id) > 0
+                    ? discoveryState.getPostLikesCount(item.id)
+                    : item.likeCount,
+              ),
+          },
+          postBookmarksCount: {
+            for (final item in viewerPosts)
+              item.id: postInteractionState.bookmarkCountFor(
+                item.id,
+                fallback: discoveryState.getPostBookmarksCount(item.id) > 0
+                    ? discoveryState.getPostBookmarksCount(item.id)
+                    : item.favoriteCount,
+              ),
+          },
+          postSharesCount: {
+            for (final item in viewerPosts)
+              item.id: postInteractionState.shareCountFor(
+                item.id,
+                fallback: discoveryState.getPostSharesCount(item.id) > 0
+                    ? discoveryState.getPostSharesCount(item.id)
+                    : item.shareCount,
+              ),
+          },
+        ),
       ),
     );
+    if (result is MediaViewerResult) {
+      ref
+          .read(userRelationshipStateProvider.notifier)
+          .applyViewerResult(result);
+      ref.read(postInteractionStateProvider.notifier).applyViewerResult(result);
+      ref.read(discoveryStateProvider).applyMediaViewerResult(result);
+    }
+  }
+
+  bool _supportsUnifiedViewer(PostBaseDto post) {
+    return post.supportsUnifiedViewer;
   }
 }

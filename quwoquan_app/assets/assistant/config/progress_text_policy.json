@@ -1,7 +1,7 @@
 {
   "contractVersion": "progress_text_policy_v1",
   "jsonEnvelopeSignatures": [
-    "\"contractVersion\"",
+    "\"contractId\"",
     "\"decision\"",
     "\"userMarkdown\""
   ],

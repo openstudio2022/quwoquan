@@ -33,22 +33,30 @@ class RelationshipCapabilityDto {
        canFollow =
            canFollow ??
            _defaultCanFollow(
-             _normalizeRelationState(relationState ?? relationTier ?? 'not_following'),
+             _normalizeRelationState(
+               relationState ?? relationTier ?? 'not_following',
+             ),
            ),
        canUnfollow =
            canUnfollow ??
            _defaultCanUnfollow(
-             _normalizeRelationState(relationState ?? relationTier ?? 'not_following'),
+             _normalizeRelationState(
+               relationState ?? relationTier ?? 'not_following',
+             ),
            ),
        canMessage =
            canMessage ??
            _defaultCanMessage(
-             _normalizeRelationState(relationState ?? relationTier ?? 'not_following'),
+             _normalizeRelationState(
+               relationState ?? relationTier ?? 'not_following',
+             ),
            ),
        canFollowBack =
            canFollowBack ??
            _defaultCanFollowBack(
-             _normalizeRelationState(relationState ?? relationTier ?? 'not_following'),
+             _normalizeRelationState(
+               relationState ?? relationTier ?? 'not_following',
+             ),
            ),
        relationTier =
            relationTier ??
@@ -234,9 +242,10 @@ class MockRelationshipCapabilityRepository
       'viewerSubAccountId': 'mock_viewer',
       'targetSubAccountId': targetUserId,
       'relationState': 'mutual',
+      'relationTier': 'same_interest',
       'canGreet': false,
       'canOpenConversation': true,
-      'canAddSameInterest': false,
+      'canAddSameInterest': true,
       'canSetCloseFriend': false,
       'canStartVoiceCall': true,
       'canStartVideoCall': true,

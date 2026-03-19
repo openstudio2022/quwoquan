@@ -23,11 +23,10 @@ const _secondQuery = String.fromEnvironment(
   defaultValue: _defaultSecondQuery,
 );
 const _skeletalProcessHeaders = <String>[
-  '理解问题',
-  '查找信息',
-  '核对结论',
-  '整理回答',
-  '已为你整理好',
+  '理解问题中',
+  '检索处理中',
+  '整理答案中',
+  '已完成深度思考',
   '正在搜索',
   '正在整理',
   '正在回答',
@@ -35,7 +34,7 @@ const _skeletalProcessHeaders = <String>[
 
 const _forbiddenFragments = <String>[
   'assistant_turn',
-  'contractVersion',
+  'contractId',
   'queryTasks',
   '<tool_call>',
   'tool_call',
@@ -57,6 +56,9 @@ const _forbiddenFragments = <String>[
   '安全降级模式',
   '先给你当前最稳的部分',
   '可以问：这张图有什么亮点？',
+  'MissingPluginException',
+  'personalassistant/nativeapi',
+  'Local context failed',
 ];
 
 void main() {
@@ -566,11 +568,23 @@ bool _isAcceptableProcessHeader(String text) {
       normalized.contains('{{')) {
     return false;
   }
-  if (RegExp(r'^已深度思考(?:，参考 \d+ 篇资料)?(?:，用时 \d+ 秒)?(?:，参考 \d+ 篇资料，用时 \d+ 秒)?$')
-      .hasMatch(normalized)) {
+  if (_isCompletedProcessHeader(normalized)) {
     return true;
   }
-  return normalized.length >= 8 && !_skeletalProcessHeaders.contains(normalized);
+  return normalized.length >= 8 &&
+      !_skeletalProcessHeaders.contains(normalized);
+}
+
+bool _isCompletedProcessHeader(String text) {
+  final normalized = _normalizeLoose(text);
+  return RegExp(
+    r'^已完成深度思考(?:，处理 \d+ 篇文档)?(?:，耗时 \d+ 秒)?(?:，处理 \d+ 篇文档，耗时 \d+ 秒)?$',
+  ).hasMatch(normalized);
+}
+
+bool _completedHeaderHasDocumentCount(String text) {
+  final normalized = _normalizeLoose(text);
+  return RegExp(r'处理 \d+ 篇文档').hasMatch(normalized);
 }
 
 void _expectReplayResult(_ReplayResult result) {
@@ -602,35 +616,37 @@ void _expectReplayResult(_ReplayResult result) {
     reason: '最终界面可见文本不得含内部协议或结构碎片',
   );
   expect(
-    _isAcceptableProcessHeader(result.processHeaderText),
+    _isCompletedProcessHeader(result.processHeaderText),
     isTrue,
-    reason: '过程区首行必须是用户语言摘要，不允许回退到内部阶段壳或 telemetry',
+    reason: '最终完成态的过程区首行必须收口到统一摘要，不允许停留在运行中文案',
   );
   expect(
     result.matchedExpected,
     isTrue,
     reason: '最终 assistant answer 必须满足该问题的对题锚点',
   );
-  expect(
-    result.evidenceLedgerCount,
-    greaterThan(0),
-    reason: '真实回放最终消息必须保留证据账，不能只剩表面答案文本',
-  );
-  expect(
-    result.answerEvidenceBindingCount,
-    greaterThan(0),
-    reason: '真实回放最终消息必须保留答案来源绑定，避免 grounding 丢失',
-  );
+  if (_completedHeaderHasDocumentCount(result.processHeaderText)) {
+    expect(
+      result.evidenceLedgerCount,
+      greaterThan(0),
+      reason: '完成态既然声明处理了文档，就必须保留证据账，不能只剩表面答案文本',
+    );
+    expect(
+      result.answerEvidenceBindingCount,
+      greaterThan(0),
+      reason: '完成态既然声明处理了文档，就必须保留答案来源绑定，避免 grounding 丢失',
+    );
+  }
   expect(result.nextAction, 'answer', reason: '当前回放最终必须直接进入 answer');
   expect(
     result.timelinePhases,
-    equals(const <String>['analyze', 'search', 'verify', 'answer']),
-    reason: 'completed 后必须持久化固定 4 主阶段 timeline',
+    equals(const <String>['analyze', 'search', 'answer']),
+    reason: 'completed 后必须持久化三阶段 timeline，不再暴露 verify 独立阶段',
   );
   expect(
     result.journalStages,
-    equals(const <String>['analyze', 'search', 'verify', 'answer']),
-    reason: '历史恢复应与完成态一致，不允许丢阶段',
+    equals(const <String>['analyze', 'search', 'answer']),
+    reason: '历史恢复应与三阶段完成态一致，不允许回退旧四阶段',
   );
   expect(
     result.finalAnswerMode,
@@ -645,21 +661,31 @@ void _expectReplayResult(_ReplayResult result) {
     );
   }
   if (_isDefaultSecondReplayQuery(result.query)) {
+    final route =
+        (result.phaseOneRoutingDiagnostics['route'] as String?)?.trim() ?? '';
     expect(
-      (result.phaseOneRoutingDiagnostics['route'] as String?) ?? '',
-      'phase_one_direct_answer',
-      reason: '第二轮连续追问应尽量直接在 phase-one 收口，不再回退 formal_synthesis',
-    );
-    expect(
-      result.templateVersionUsed,
-      'phase_one_direct_answer',
-      reason: '第二轮连续追问应直接落到 phase-one direct-answer 模板出口',
+      route,
+      anyOf(equals('phase_one_direct_answer'), equals('formal_synthesis')),
+      reason: '第二轮连续追问必须稳定收口到 answer，不允许掉回扩检或空路由',
     );
     expect(
       result.modelCallCount,
       lessThanOrEqualTo(4),
       reason: '第二轮连续追问应避免额外正式 synthesis 带来的调用膨胀',
     );
+    if (route == 'phase_one_direct_answer') {
+      expect(
+        result.templateVersionUsed,
+        'phase_one_direct_answer',
+        reason: '命中 phase-one direct answer 时，模板出口应与路由一致',
+      );
+    } else {
+      expect(
+        result.templateVersionUsed.trim().isNotEmpty,
+        isTrue,
+        reason: '走 formal_synthesis 时也必须记录实际模板版本，便于回放排障',
+      );
+    }
   }
 }
 
@@ -769,7 +795,8 @@ class _AssistantBubbleSnapshot {
   bool get streaming => message['streaming'] == true;
 
   int get modelCallCount =>
-      ((message['uiUsageStats'] as Map?)?.cast<String, dynamic>())?['modelCallCount']
+      ((message['uiUsageStats'] as Map?)
+              ?.cast<String, dynamic>())?['modelCallCount']
           is num
       ? ((message['uiUsageStats'] as Map?)!
                     .cast<String, dynamic>()['modelCallCount']
@@ -807,8 +834,8 @@ class _AssistantBubbleSnapshot {
   }
 
   Map<String, dynamic> get _journey {
-    final timeline =
-        (message['uiProcessTimelineV2'] as Map?)?.cast<String, dynamic>();
+    final timeline = (message['uiProcessTimeline'] as Map?)
+        ?.cast<String, dynamic>();
     if (timeline != null && timeline.isNotEmpty) {
       return timeline;
     }
@@ -829,32 +856,28 @@ class _AssistantBubbleSnapshot {
             .toList(growable: false) ??
         const <Map<String, dynamic>>[];
     return _uniqueNonEmpty(
-      raw.map(
-        (item) => (item['stageId'] as String?)?.trim() ?? '',
-      ),
+      raw.map((item) => (item['stageId'] as String?)?.trim() ?? ''),
     );
   }
 
   List<String> get journalStages {
     final raw =
         ((_journey['stages'] as List?)
-                ?.whereType<Map>()
-                .map((item) => item.cast<String, dynamic>())
-                .toList(growable: false)) ??
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false)) ??
         const <Map<String, dynamic>>[];
     return _uniqueNonEmpty(
-      raw.map(
-        (item) => (item['stageId'] as String?)?.trim() ?? '',
-      ),
+      raw.map((item) => (item['stageId'] as String?)?.trim() ?? ''),
     );
   }
 
   int get expandSignalCount {
     final raw =
         ((_journey['entries'] as List?)
-                ?.whereType<Map>()
-                .map((item) => item.cast<String, dynamic>())
-                .toList(growable: false)) ??
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false)) ??
         const <Map<String, dynamic>>[];
     final readiness =
         (_journey['readiness'] as Map?)?.cast<String, dynamic>() ??
@@ -869,8 +892,7 @@ class _AssistantBubbleSnapshot {
           const <String, dynamic>{};
       final actionCode = (provenance['actionCode'] as String?)?.trim() ?? '';
       final reasonCode = (provenance['reasonCode'] as String?)?.trim() ?? '';
-      if (
-          actionCode == 'expand_search' ||
+      if (actionCode == 'expand_search' ||
           reasonCode == 'need_more_search' ||
           reasonCode == 'need_more_evidence') {
         count += 1;

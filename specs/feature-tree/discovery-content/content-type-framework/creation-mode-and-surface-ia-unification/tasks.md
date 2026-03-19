@@ -1,5 +1,17 @@
 # L3 Story：creation-mode-and-surface-ia-unification — 任务列表
 
+> 状态：迁移参考，非正式治理真相源。
+>
+> 当前场景的正式开发执行口径以以下文件为准：
+>
+> - `spec.md`
+> - `design.md`
+> - `acceptance.yaml`
+> - `plan.yaml`
+> - `specs/changelog/CR-20260319-001-create-entry-and-editor-baseline-reset.yaml`
+>
+> 本文件保留仅用于查看旧方案的历史拆解，不再作为 `/dev`、验收、测试或发布检查清单使用。
+
 ## 当前交付任务
 
 > 执行顺序固定为：`metadata -> codegen -> 业务逻辑 -> 测试`

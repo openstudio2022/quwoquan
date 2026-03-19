@@ -283,7 +283,7 @@ class _StableWeatherDirectAnswerLlm implements AssistantLlmProvider {
   Map<String, dynamic> _buildWeatherTurn(String query) {
     final normalizedQuery = query.trim().isEmpty ? '深圳天气怎么样' : query.trim();
     return <String, dynamic>{
-      'contractVersion': 'assistant_turn',
+      'contractId': 'assistant_turn',
       'messageKind': 'answer',
       'phaseId': 'answering',
       'actionCode': 'compose_answer',

@@ -58,6 +58,7 @@ class FinalizeRunner {
         ? displayMarkdown
         : displayPlainText;
     final persistedJourney = resolveAssistantJourneyFromRunResponse(response);
+    final structuredResponse = response.structuredResponse;
     final persistedTurnFields = buildPersistedAssistantTurnFields(
       journey: persistedJourney,
       displayMarkdown: displayMarkdown,
@@ -67,6 +68,28 @@ class FinalizeRunner {
       elapsedMs: executionSnapshot['elapsedMs'] is num
           ? (executionSnapshot['elapsedMs'] as num).toInt()
           : 0,
+      understandingSnapshot:
+          (structuredResponse[assistantUnderstandingSnapshotField] as Map?)
+              ?.cast<String, dynamic>() ??
+          completedArtifact.understandingSnapshot.toJson(),
+      answerProcessing:
+          (structuredResponse[assistantAnswerProcessingField] as Map?)
+              ?.cast<String, dynamic>() ??
+          completedArtifact.answerProcessing.toJson(),
+      historicalThinkingSnapshot:
+          (structuredResponse[assistantHistoricalThinkingSnapshotField]
+                  as Map?)
+              ?.cast<String, dynamic>() ??
+          completedArtifact.historicalThinkingSnapshot.toJson(),
+      retrievalProcessing:
+          (structuredResponse[assistantRetrievalProcessingField] as Map?)
+              ?.cast<String, dynamic>() ??
+          completedArtifact.retrievalProcessing.toJson(),
+      providerReasoningContinuation:
+          (structuredResponse[assistantProviderReasoningContinuationField]
+                  as String?)
+              ?.trim() ??
+          '',
     );
     final isDegradedReply =
         response.degraded ||
@@ -93,7 +116,6 @@ class FinalizeRunner {
     }
     if (!isDegradedReply &&
         (displayTextForSession.isNotEmpty || !persistedJourney.isEmpty)) {
-      final structuredResponse = response.structuredResponse;
       sessionManager.appendMessage(
         sessionId: sessionId,
         role: 'assistant',

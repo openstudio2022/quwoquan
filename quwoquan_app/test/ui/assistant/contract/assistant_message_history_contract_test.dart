@@ -52,7 +52,7 @@ List<AssistantRunMessage> buildAssistantMessages(
         if (m['isSelf'] != true &&
             content.startsWith('{') &&
             (content.contains('"decision"') ||
-                content.contains('"contractVersion"'))) {
+                content.contains('"contractId"'))) {
           return false;
         }
         return true;

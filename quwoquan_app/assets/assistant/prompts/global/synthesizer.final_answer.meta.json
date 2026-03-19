@@ -1,18 +1,16 @@
 {
   "templateId": "synthesizer.final_answer",
-  "version": "2026.03.16",
+  "version": "2026.03.18",
   "stage": "answer",
   "domainId": "global",
   "requiredVariables": [
     "userQuery",
     "userGoal",
-    "intentGraphJson",
-    "entityAnchors",
-    "queryTasksJson",
-    "domainResults",
-    "contextSlots",
-    "webEvidencePacks",
-    "userProfileSnapshot"
+    "understandingSnapshot",
+    "sharedContext",
+    "currentRuntimeState",
+    "dialogueContinuity",
+    "evidenceContext"
   ],
   "outputContract": "assistant_turn",
   "selfCheckRules": [

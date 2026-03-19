@@ -58,6 +58,72 @@ _PLATFORM_CONFIG_SCHEMA_JSON = r'''{
       "scope": "service",
       "type": "int",
       "ui_editable": true
+    },
+    {
+      "default": 10,
+      "key": "sys.client_state_sync.flush_delay_sec",
+      "owner": "platform-ops",
+      "reload": "hot",
+      "risk_level": "medium",
+      "rollout": "progressive",
+      "scope": "service",
+      "type": "int",
+      "ui_editable": true
+    },
+    {
+      "default": 300,
+      "key": "sys.client_state_sync.retry_delay_sec",
+      "owner": "platform-ops",
+      "reload": "hot",
+      "risk_level": "medium",
+      "rollout": "progressive",
+      "scope": "service",
+      "type": "int",
+      "ui_editable": true
+    },
+    {
+      "default": 20,
+      "key": "sys.client_state_sync.max_batch_size",
+      "owner": "platform-ops",
+      "reload": "hot",
+      "risk_level": "low",
+      "rollout": "progressive",
+      "scope": "service",
+      "type": "int",
+      "ui_editable": true
+    },
+    {
+      "default": 259200,
+      "key": "sys.client_state_sync.max_pending_age_sec",
+      "owner": "platform-ops",
+      "reload": "hot",
+      "risk_level": "low",
+      "rollout": "progressive",
+      "scope": "service",
+      "type": "int",
+      "ui_editable": true
+    },
+    {
+      "default": true,
+      "key": "sys.client_state_sync.flush_on_foreground_resume",
+      "owner": "platform-ops",
+      "reload": "hot",
+      "risk_level": "low",
+      "rollout": "progressive",
+      "scope": "service",
+      "type": "bool",
+      "ui_editable": true
+    },
+    {
+      "default": true,
+      "key": "sys.client_state_sync.flush_on_network_recovered",
+      "owner": "platform-ops",
+      "reload": "hot",
+      "risk_level": "low",
+      "rollout": "progressive",
+      "scope": "service",
+      "type": "bool",
+      "ui_editable": true
     }
   ]
 }'''

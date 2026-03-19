@@ -183,24 +183,28 @@ class SecondaryCapsuleTabBar extends StatelessWidget {
                                 top: -4,
                                 child: Container(
                                   padding: EdgeInsets.symmetric(
-                                    horizontal: badgeNumber > 9 ? 4 : 3,
-                                    vertical: 1,
+                                    horizontal: badgeNumber > 9
+                                        ? AppSpacing.xs
+                                        : AppSpacing.three,
+                                    vertical: AppSpacing.one,
                                   ),
                                   decoration: BoxDecoration(
                                     color: AppColors.error,
-                                    borderRadius: BorderRadius.circular(10),
+                                    borderRadius: BorderRadius.circular(
+                                      AppSpacing.radiusTen,
+                                    ),
                                     border: Border.all(
                                       color: bgPrimary,
-                                      width: 1.5,
+                                      width: AppSpacing.oneHalf,
                                     ),
                                   ),
                                   child: Text(
                                     badgeText,
                                     style: const TextStyle(
-                                      fontSize: 10,
+                                      fontSize: AppTypography.xs,
                                       color: Colors.white,
                                       fontWeight: FontWeight.w600,
-                                      height: 1.1,
+                                      height: AppTypography.lineHeightTight,
                                     ),
                                   ),
                                 ),
@@ -210,14 +214,14 @@ class SecondaryCapsuleTabBar extends StatelessWidget {
                                 right: 0,
                                 top: 0,
                                 child: Container(
-                                  width: 8,
-                                  height: 8,
+                                  width: AppSpacing.sm,
+                                  height: AppSpacing.sm,
                                   decoration: BoxDecoration(
                                     color: AppColors.error,
                                     shape: BoxShape.circle,
                                     border: Border.all(
                                       color: bgPrimary,
-                                      width: 1.5,
+                                      width: AppSpacing.oneHalf,
                                     ),
                                   ),
                                 ),

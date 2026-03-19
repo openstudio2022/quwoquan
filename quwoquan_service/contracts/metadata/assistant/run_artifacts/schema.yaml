@@ -12,6 +12,10 @@ fields:
   - { name: displayMarkdown, type: string, default: '' }
   - { name: displayPlainText, type: string, default: '' }
   - { name: journey, type: object, ref: AssistantJourney, default: {} }
+  - { name: understandingSnapshot, type: object, ref: understanding_snapshot, default: {} }
+  - { name: answerProcessing, type: object, ref: answer_processing, default: {} }
+  - { name: historicalThinkingSnapshot, type: object, ref: historical_thinking_snapshot, default: {} }
+  - { name: retrievalProcessing, type: object, ref: retrieval_processing, default: {} }
   - { name: evidenceLedger, type: list<object>, ref: evidence_ledger_entry, default: [] }
   - { name: answerEvidenceBindings, type: list<object>, ref: answer_evidence_binding, default: [] }
   - { name: slotState, type: object, ref: slot_state, default: {} }
@@ -80,3 +84,50 @@ subcontracts:
       - { name: retrievalPolicy, type: map, default: {} }
       - { name: answerPolicy, type: map, default: {} }
       - { name: narrativePolicy, type: map, default: {} }
+  understanding_snapshot:
+    class_name: RunArtifactsUnderstandingSnapshot
+    fields:
+      - { name: intentSummary, type: string, default: '' }
+      - { name: concernPoints, type: list<string>, default: [] }
+      - { name: emotionSignal, type: string, default: '' }
+      - { name: queryDesignSummary, type: string, default: '' }
+      - { name: queryGroups, type: list<object>, ref: understanding_query_group, default: [] }
+      - { name: assumptions, type: list<string>, default: [] }
+      - { name: mismatchSignal, type: string, default: '' }
+      - { name: carryForwardFacts, type: list<string>, default: [] }
+      - { name: discardedAssumptions, type: list<string>, default: [] }
+  understanding_query_group:
+    class_name: RunArtifactsUnderstandingQueryGroup
+    fields:
+      - { name: dimension, type: string, default: '' }
+      - { name: queries, type: list<string>, default: [] }
+      - { name: why, type: string, default: '' }
+  answer_processing:
+    class_name: RunArtifactsAnswerProcessing
+    fields:
+      - { name: readinessSummary, type: string, default: '' }
+      - { name: keyFacts, type: list<string>, default: [] }
+      - { name: missingDimensions, type: list<string>, default: [] }
+      - { name: retrieveMoreReason, type: string, default: '' }
+  historical_thinking_snapshot:
+    class_name: RunArtifactsHistoricalThinkingSnapshot
+    fields:
+      - { name: continuityMode, type: string, default: '' }
+      - { name: mismatchSignal, type: string, default: '' }
+      - { name: carryForwardFacts, type: list<string>, default: [] }
+      - { name: discardedAssumptions, type: list<string>, default: [] }
+  retrieval_reference:
+    class_name: RetrievalProcessingReference
+    fields:
+      - { name: title, type: string, default: '' }
+      - { name: url, type: string, default: '' }
+      - { name: source, type: string, default: '' }
+      - { name: snippet, type: string, default: '' }
+  retrieval_processing:
+    class_name: RetrievalProcessingSnapshot
+    fields:
+      - { name: processedDocumentCount, type: int, default: 0 }
+      - { name: acceptedDocumentCount, type: int, default: 0 }
+      - { name: processingSummary, type: string, default: '' }
+      - { name: expansionReason, type: string, default: '' }
+      - { name: acceptedReferences, type: list<object>, ref: retrieval_reference, default: [] }

@@ -20,6 +20,9 @@ ruby -e '
   files = Dir[
     File.join(root, "specs/feature-tree/**/acceptance.yaml"),
     File.join(root, "specs/feature-tree/tree_index.yaml"),
+    File.join(root, "specs/feature-tree/00_FEATURE_TREE_STANDARD.md"),
+    File.join(root, "specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md"),
+    File.join(root, "specs/changelog/README.md"),
     File.join(root, ".cursor/commands/*.md"),
     File.join(root, ".cursor/rules/*.mdc"),
     File.join(root, "scripts/new_feature_fullstack.sh"),

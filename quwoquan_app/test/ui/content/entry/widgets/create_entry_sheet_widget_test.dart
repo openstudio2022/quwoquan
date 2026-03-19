@@ -27,13 +27,15 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('从相册选'), findsOneWidget);
-    expect(find.text('写点什么'), findsOneWidget);
-    expect(find.text('拍一下'), findsOneWidget);
-    expect(find.text('照片'), findsNothing);
+    expect(find.text('从相册选择'), findsOneWidget);
+    expect(find.text('写文字'), findsOneWidget);
+    expect(find.text('相机'), findsOneWidget);
+    expect(find.text('发起群聊'), findsOneWidget);
+    expect(find.text('添加同好'), findsOneWidget);
+    expect(find.text('作品'), findsNothing);
     expect(find.text('文章'), findsNothing);
 
-    await tester.tap(find.text('拍一下'));
+    await tester.tap(find.text('相机'));
     await tester.pump();
 
     expect(selected, EditorStartAction.capture);

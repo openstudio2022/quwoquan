@@ -20,7 +20,7 @@ Map<String, dynamic> _intentEnvelope({
   String normalizedQuery = '',
 }) {
   return <String, dynamic>{
-    'contractVersion': 'assistant_turn',
+    'contractId': 'assistant_turn',
     'messageKind': 'progress',
     'phaseId': 'understanding',
     'actionCode': 'frame_problem',
@@ -84,12 +84,8 @@ class _DeterministicWeatherLlm implements AssistantLlmProvider {
     LlmCallOptions? callOptions,
     void Function(String delta)? onDelta,
   }) async {
-    final isPlannerCall =
-        templateId == 'planner.global_plan' ||
-        templateId == 'planner.postcondition_check';
-    final isSynthesisCall =
-        templateId.contains('synthesizer') ||
-        templateId.contains('final_answer');
+    final isPlannerCall = templateId == 'planner.global_plan';
+    final isSynthesisCall = templateId == 'synthesizer.final_answer';
     final isIntentStage =
         templateId == 'planner.global_plan' && availableTools.isEmpty;
 
@@ -116,7 +112,7 @@ class _DeterministicWeatherLlm implements AssistantLlmProvider {
         onDelta?.call('我先核对深圳今天的最新天气。');
         return AssistantModelOutput(
           text: jsonEncode(<String, dynamic>{
-            'contractVersion': 'assistant_turn',
+            'contractId': 'assistant_turn',
             'decision': <String, dynamic>{'nextAction': 'tool_call'},
             'toolCalls': const <Map<String, dynamic>>[
               <String, dynamic>{
@@ -147,7 +143,7 @@ class _DeterministicWeatherLlm implements AssistantLlmProvider {
     onDelta?.call('资料已经齐了，我来整理成最终答案。');
     return AssistantModelOutput(
       text: jsonEncode(<String, dynamic>{
-        'contractVersion': 'assistant_turn',
+        'contractId': 'assistant_turn',
         'decision': <String, dynamic>{'nextAction': 'answer'},
         'messageKind': 'answer',
         'userMarkdown': '## 深圳天气\n\n今天深圳天气晴朗，温度约25°C，适合轻装出门。',
@@ -218,7 +214,7 @@ bool _containsInternalLeak(String text) {
   final normalized = text.trim();
   if (normalized.isEmpty) return false;
   return normalized.contains('assistant_turn') ||
-      normalized.contains('contractVersion') ||
+      normalized.contains('contractId') ||
       normalized.contains('toolCalls') ||
       normalized.contains('queryTasks') ||
       normalized.contains('runArtifacts') ||
@@ -306,7 +302,12 @@ void main() {
       isFalse,
     );
     expect(phasedResponse.runArtifacts, isNotNull);
-    expect(phasedResponse.runArtifacts!.journey.isEmpty, isFalse);
+    expect(
+      phasedResponse.runArtifacts!.journey.entries.isNotEmpty ||
+          phasedResponse.runArtifacts!.journey.stages.isNotEmpty ||
+          phasedResponse.runArtifacts!.journey.summary.trim().isNotEmpty,
+      isTrue,
+    );
     expect(phasedResponse.runArtifacts!.displayMarkdown.trim().isNotEmpty, isTrue);
     expect(phasedLoop.executionState.synthesisDraft, isNotNull);
     expect(phasedLoop.executionState.previousRunArtifacts, isNotNull);

@@ -1,0 +1,47 @@
+id: CR-20260318-001
+title: profile homepage redesign journey scenario migration
+slug: profile-homepage-redesign-journey-scenario-migration
+revision: 1
+status: active
+
+affected_nodes:
+  - specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign
+  - specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification
+
+entries:
+  - timestamp: "2026-03-18T20:00:00+08:00"
+    summary: 将 `profile-homepage-redesign` 确定为 Journey 样板迁移对象，并为现有 Journey/Scenario 建立正式迁移计划
+    reason: 当前样板同时混杂 L2/L3 职责与 `tasks.md` 执行清单，需要先以 pilot 方式冻结拆分边界，再进入真正迁移
+    change_type:
+      - refine
+      - split
+      - migrate
+    changed_documents:
+      - path: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+          - P4
+          - P5
+      - path: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+          - P4
+          - P5
+      - path: specs/feature-tree/03_PROFILE_HOMEPAGE_REDESIGN_MIGRATION_SAMPLE.md
+        sections:
+          - 迁移目标
+          - plan 切片示意
+    impact:
+      replan_required: true
+      redesign_required: true
+      retest_layers:
+        - T1
+      rollout_impact: low
+      breaking_contract: false
+    notes:
+      - 本次仅冻结 pilot 迁移规划，不直接改写样板 Journey/Scenario 的 spec/design/acceptance 正文
+      - 下一轮落地应优先迁移 L2 acceptance，再拆出两个新增 Scenario 节点

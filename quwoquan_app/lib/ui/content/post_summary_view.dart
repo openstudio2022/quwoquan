@@ -87,43 +87,39 @@ class PostSummaryView {
       avatar: dto.avatarUrl,
     );
 
-    List<String>? images;
-    String? thumbnail, thumbnailUrl, coverUrl;
-    double? aspectRatio;
-    String? videoUrl, videoType;
-    int? duration;
-    String? title, body;
-
-    if (dto is PhotoPostDto) {
-      images = dto.imageUrls;
-      thumbnail = dto.coverUrl;
-      thumbnailUrl = dto.coverUrl;
-      coverUrl = dto.coverUrl;
-      aspectRatio = dto.aspectRatio;
-    } else if (dto is VideoPostDto) {
-      thumbnail = dto.thumbnailUrl;
-      thumbnailUrl = dto.thumbnailUrl;
-      coverUrl = dto.thumbnailUrl;
-      videoUrl = dto.videoUrl;
-      videoType = dto.type;
-      duration = dto.durationMs;
-    } else if (dto is ArticlePostDto) {
-      title = dto.title;
-      body = dto.body;
-      coverUrl = dto.coverUrl;
-      thumbnailUrl = dto.coverUrl;
-      images = [dto.coverUrl];
-    } else if (dto is MomentPostDto) {
-      images = dto.imageUrls.isEmpty ? null : dto.imageUrls;
-      videoUrl = dto.videoUrl;
-      duration = dto.durationMs;
-      body = dto.body;
+    List<String>? images = dto.hasImages ? dto.mediaImageUrls : null;
+    if (dto.isArticleLike &&
+        dto.mediaCoverUrl.isNotEmpty &&
+        (images == null || images.isEmpty)) {
+      images = <String>[dto.mediaCoverUrl];
     }
+
+    var thumbnail = dto.primaryVisualUrl.isEmpty ? null : dto.primaryVisualUrl;
+    var thumbnailUrl =
+        dto.mediaThumbnailUrl.isEmpty
+            ? (dto.primaryVisualUrl.isEmpty ? null : dto.primaryVisualUrl)
+            : dto.mediaThumbnailUrl;
+    final coverUrl =
+        dto.mediaCoverUrl.isEmpty
+            ? (dto.primaryImageUrl.isEmpty ? null : dto.primaryImageUrl)
+            : dto.mediaCoverUrl;
+
+    // 图片作品：外显缩略图优先封面，与多图 gallery（images）解耦
+    if (dto.displayFormat == 'image' && dto.mediaCoverUrl.isNotEmpty) {
+      thumbnail = dto.mediaCoverUrl;
+      thumbnailUrl = dto.mediaCoverUrl;
+    }
+    final aspectRatio = dto.aspectRatio;
+    final videoUrl = dto.hasVideo ? dto.mediaVideoUrl : null;
+    final videoType = dto.hasVideo ? dto.type : null;
+    final duration = dto.durationMs;
+    final title = dto.normalizedTitle.isEmpty ? null : dto.normalizedTitle;
+    final body = dto.normalizedBody.isEmpty ? null : dto.normalizedBody;
 
     return PostSummaryView(
       id: dto.id,
       type: dto.type,
-      authorId: dto.authorId,
+      authorId: dto.authorProfileSubjectId,
       displayName: dto.displayName,
       avatarUrl: dto.avatarUrl,
       backgroundImage: dto.authorBackgroundUrl,

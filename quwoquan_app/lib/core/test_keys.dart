@@ -88,6 +88,28 @@ class TestKeys {
   static const createPublishButton = ValueKey<String>('create_publish_button');
   static const createDraftsButton = ValueKey<String>('create_drafts_button');
   static const createCloseButton = ValueKey<String>('create_close_button');
+  static const createTitleToggle = ValueKey<String>('create_title_toggle');
+  static const createTitleInput = ValueKey<String>('create_title_input');
+  static const createBodyInput = ValueKey<String>('create_body_input');
+  static const createMediaAddButton = ValueKey<String>('create_media_add_button');
+  static const createPublishConfirmSheet = ValueKey<String>(
+    'create_publish_confirm_sheet',
+  );
+  static const createPublishConfirmButton = ValueKey<String>(
+    'create_publish_confirm_button',
+  );
+  static const createMediaModeAddImage = ValueKey<String>(
+    'create_media_mode_add_image',
+  );
+  static const createMediaModeAddVideo = ValueKey<String>(
+    'create_media_mode_add_video',
+  );
+  static const createMediaRemoveButton = ValueKey<String>(
+    'create_media_remove_button',
+  );
+  static const createSettingsSummary = ValueKey<String>('create_settings_summary');
+  static const createSettingsPage = ValueKey<String>('create_settings_page');
+  static const createTitleHint = ValueKey<String>('create_title_hint');
   static const createSaveAndExitButton = ValueKey<String>(
     'create_save_and_exit_button',
   );

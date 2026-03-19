@@ -1,9 +1,9 @@
 {
   "templateId": "phase.output_contract.plan",
-  "version": "2026.03.05",
+  "version": "2026.03.18",
   "stage": "plan",
   "domainId": "global",
-  "requiredVariables": [],
+  "requiredVariables": ["_static"],
   "outputContract": "assistant_turn",
   "selfCheckRules": ["slot_complete", "query_normalized", "safety_boundary"]
 }

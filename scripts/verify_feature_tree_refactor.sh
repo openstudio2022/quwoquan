@@ -15,6 +15,15 @@ ruby -ryaml -e '
   nodes = idx["features"] || []
   abort("[verify] FAIL: tree_index features empty") unless nodes.is_a?(Array) && !nodes.empty?
 
+  def require_node_docs!(dir)
+    abort("[verify] FAIL: missing spec.md in #{dir}") unless File.exist?(File.join(dir, "spec.md"))
+    abort("[verify] FAIL: missing design.md in #{dir}") unless File.exist?(File.join(dir, "design.md"))
+    abort("[verify] FAIL: missing acceptance.yaml in #{dir}") unless File.exist?(File.join(dir, "acceptance.yaml"))
+    unless File.exist?(File.join(dir, "plan.yaml")) || File.exist?(File.join(dir, "tasks.md"))
+      abort("[verify] FAIL: missing plan.yaml or legacy tasks.md in #{dir}")
+    end
+  end
+
   nodes.each do |node|
     %w[id name level path status].each do |k|
       abort("[verify] FAIL: missing #{k} in #{node.inspect}") if node[k].to_s.strip.empty?
@@ -23,33 +32,27 @@ ruby -ryaml -e '
 
     dir = File.expand_path(node["path"], File.dirname(index_file))
     abort("[verify] FAIL: missing l1 directory #{dir}") unless Dir.exist?(dir)
-    %w[spec.md design.md tasks.md acceptance.yaml].each do |f|
-      abort("[verify] FAIL: missing #{f} in #{dir}") unless File.exist?(File.join(dir, f))
-    end
+    require_node_docs!(dir)
 
     children = node["children"] || []
     children.each do |child|
-      abort("[verify] FAIL: child must be L2_feature: #{child["id"]}") unless child["level"] == "L2_feature"
+      abort("[verify] FAIL: child must be L2_feature or L2_journey: #{child["id"]}") unless ["L2_feature", "L2_journey"].include?(child["level"])
       child_dir = File.expand_path(child["path"], File.dirname(index_file))
       abort("[verify] FAIL: missing l2 directory #{child_dir}") unless Dir.exist?(child_dir)
-      %w[spec.md design.md tasks.md acceptance.yaml].each do |f|
-        abort("[verify] FAIL: missing #{f} in #{child_dir}") unless File.exist?(File.join(child_dir, f))
-      end
+      require_node_docs!(child_dir)
 
       story_dirs = Dir[File.join(child_dir, "*")].select { |p| File.directory?(p) }
       story_dirs.each do |story_dir|
         story_name = File.basename(story_dir)
         story = (child["children"] || []).find { |entry| entry["id"] == story_name }
-        abort("[verify] FAIL: missing L3_story entry for #{story_dir}") unless story
-        abort("[verify] FAIL: child must be L3_story: #{story_name}") unless story["level"] == "L3_story"
-        %w[spec.md design.md tasks.md acceptance.yaml].each do |f|
-          abort("[verify] FAIL: missing #{f} in #{story_dir}") unless File.exist?(File.join(story_dir, f))
-        end
+        abort("[verify] FAIL: missing L3 entry for #{story_dir}") unless story
+        abort("[verify] FAIL: child must be L3_story or L3_scenario: #{story_name}") unless ["L3_story", "L3_scenario"].include?(story["level"])
+        require_node_docs!(story_dir)
         deep_dirs = Dir[File.join(story_dir, "*")].select { |p| File.directory?(p) }
-        abort("[verify] FAIL: L3_story must not have nested directories: #{story_dir}") unless deep_dirs.empty?
+        abort("[verify] FAIL: L3 node must not have nested directories: #{story_dir}") unless deep_dirs.empty?
       end
     end
   end
 
-  puts "[verify] OK: feature tree follows L1/L2_feature/L3_story structure"
+  puts "[verify] OK: feature tree follows L1 / L2_feature|L2_journey / L3_story|L3_scenario structure"
 '

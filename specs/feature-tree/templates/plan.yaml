@@ -1,0 +1,38 @@
+version: 1
+node: l1-capability/journey-name/scenario-name
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-YYYYMMDD-NNN-semantic-slug.yaml
+
+slices:
+  - id: P1
+    title: first stable slice
+    goal: what this slice delivers
+    depends_on: []
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T1_schema
+      - T2_app_mock
+    done_when:
+      - exit condition 1
+      - exit condition 2
+    status: planned
+
+  - id: P2
+    title: second stable slice
+    goal: what this slice delivers
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A2
+    planned_evidence:
+      - T2_module_interaction
+      - T3_app_api_integration
+    done_when:
+      - exit condition
+    status: planned

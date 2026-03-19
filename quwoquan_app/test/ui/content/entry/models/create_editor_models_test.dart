@@ -4,21 +4,28 @@ import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dar
 
 void main() {
   group('CreateDraft', () {
-    test('从存储 map 恢复 identity 和预览文案', () {
+    test('从 v2 存储 map 恢复文字草稿与预览文案', () {
       final draft = CreateDraft.fromStorageMap({
         'id': 'draft_1',
-        'type': 'article',
+        'draftVersion': 'v2',
         'updatedAt': 123,
-        'identity': 'work',
-        'data': {'title': '东京三日清单'},
+        'type': 'text',
+        'editorKind': 'text',
+        'mediaKind': 'images',
+        'imagePaths': ['a.png'],
+        'title': '东京三日清单',
+        'body': '第一天先去浅草寺',
+        'titlePresentation': 'expanded',
+        'settings': const <String, dynamic>{},
       });
 
-      expect(draft.identity, CreateContentIdentity.work);
+      expect(draft.identity, CreateContentIdentity.moment);
       expect(draft.previewText, '东京三日清单');
-      expect(draft.toStorageMap()['identity'], 'work');
+      expect(draft.toStorageMap()['type'], 'text');
+      expect(draft.state.imagePaths, hasLength(1));
     });
 
-    test('旧草稿缺失 identity 时按 tabKey 回填作品身份', () {
+    test('旧草稿缺失 identity 时按 tabKey 迁移到 v2', () {
       final draft = CreateDraft.fromStorageMap({
         'id': 'legacy_photo',
         'type': 'photo',
@@ -28,33 +35,33 @@ void main() {
 
       expect(draft.identity, CreateContentIdentity.work);
       expect(draft.previewText, '旧版图片草稿');
+      expect(draft.state.editorKind, CreateEditorKind.media);
     });
   });
 
   group('PublishSettings', () {
-    test('toPayloadFields 包含 assistantUsePolicy', () {
+    test('toPayloadFields 输出发布设置基础字段', () {
       final payload = PublishSettings(
         isPublic: false,
-        allowAssistantUse: false,
         locationName: '成都',
         location: const {'latitude': 30.6, 'longitude': 104.0},
       ).toPayloadFields();
 
       expect(payload['visibility'], 'private');
-      expect(payload['assistantUsePolicy'], 'exclude');
+      expect(payload['locationName'], '成都');
+      expect(payload['location'], isNotEmpty);
     });
 
     test('fromMap 在私密态下清空圈子', () {
       final settings = PublishSettings.fromMap({
         'visibility': 'private',
-        'assistantUsePolicy': 'inherit',
         'circleIds': ['circle_1'],
         'circleNames': ['摄影圈'],
       });
 
       expect(settings.isPublic, isFalse);
       expect(settings.circleIds, isEmpty);
-      expect(settings.allowAssistantUse, isTrue);
+      expect(settings.locationName, isEmpty);
     });
   });
 }

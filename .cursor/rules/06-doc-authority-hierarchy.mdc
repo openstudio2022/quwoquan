@@ -4,7 +4,8 @@
 
 - `specs/00_MASTER_DEVELOPMENT_FLOW.md`（唯一主线）
 - `specs/00_AGENT_MASTER_SPEC.md`（Agent 入口）
-- `specs/feature-tree/`（特性树）；节点文档仅四类：spec.md、design.md、tasks.md、acceptance.yaml，见 `specs/feature-tree/00_FEATURE_TREE_STANDARD.md`
+- `specs/feature-tree/`（特性树）；节点文档仅四类：spec.md、design.md、plan.yaml、acceptance.yaml，见 `specs/feature-tree/00_FEATURE_TREE_STANDARD.md`
+- `specs/changelog/`（增量变更流）；CR 规范见 `specs/changelog/README.md`
 ---
 description: 文档权威层级：防止 Agent 引用过时文档
 alwaysApply: true

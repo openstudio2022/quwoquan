@@ -1,0 +1,64 @@
+version: 2
+feature: scenario-name
+level: L3_scenario
+source_path: l1-capability/journey-name/scenario-name
+parent_journey: journey-name
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+scope:
+  summary: one sentence scenario summary
+  journey_bindings:
+    - J1
+  in_scope:
+    - capability owned by this scenario
+  out_of_scope:
+    - owned by another scenario
+
+scenario_acceptance:
+  A1:
+    title: primary scenario title
+    scenario: scenario path description
+    journey_step: related journey step
+    done_when:
+      - observable outcome 1
+      - observable outcome 2
+    edge_cases:
+      - empty state
+      - permission denied
+    linked_plan_items:
+      - P1
+      - P2
+    evidence:
+      primary:
+        - T1_schema
+        - T2_app_mock
+      supporting:
+        - T3_app_api_integration
+    tests:
+      planned:
+        - contract test
+        - widget test
+      recorded: []
+    status: pending
+
+story_readiness:
+  S1:
+    title: readiness and fallback
+    done_when:
+      - feature flag is controllable
+      - observability is available
+    evidence:
+      primary:
+        - T1_schema
+        - T2_module_interaction
+      supporting:
+        - T4_user_journey
+    tests:
+      planned:
+        - fallback verification
+      recorded: []
+    status: pending

@@ -8,7 +8,7 @@ void main() {
 
       expect(
         decoder.appendChunk(
-          '{"contractVersion":"assistant_turn","decision":{"nextAction":"answer"},"messageKind":"answer","userMar',
+          '{"contractId":"assistant_turn","decision":{"nextAction":"answer"},"messageKind":"answer","userMar',
         ),
         isEmpty,
       );

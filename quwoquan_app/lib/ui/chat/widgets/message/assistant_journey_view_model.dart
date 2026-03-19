@@ -1,3 +1,4 @@
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
@@ -67,11 +68,14 @@ class AssistantJourneyBlockViewModel {
 class AssistantJourneyViewModel {
   const AssistantJourneyViewModel({
     this.journey = const AssistantJourney(),
+    this.retrievalProcessing = const RetrievalProcessingSnapshot(),
     this.stages = const <AssistantJourneyStageViewModel>[],
     this.blocks = const <AssistantJourneyBlockViewModel>[],
     this.summary = '',
     this.activeStageId = JourneyStageId.unknown,
     this.activeStageLabel = '',
+    this.processedDocumentCount = 0,
+    this.acceptedDocumentCount = 0,
     this.referenceCount = 0,
     this.isRunning = false,
     this.usageStats = const <String, dynamic>{},
@@ -82,11 +86,14 @@ class AssistantJourneyViewModel {
   });
 
   final AssistantJourney journey;
+  final RetrievalProcessingSnapshot retrievalProcessing;
   final List<AssistantJourneyStageViewModel> stages;
   final List<AssistantJourneyBlockViewModel> blocks;
   final String summary;
   final JourneyStageId activeStageId;
   final String activeStageLabel;
+  final int processedDocumentCount;
+  final int acceptedDocumentCount;
   final int referenceCount;
   final bool isRunning;
   final Map<String, dynamic> usageStats;
@@ -110,26 +117,54 @@ AssistantJourneyViewModel buildAssistantJourneyViewModel({
   required bool isRunning,
   Map<String, dynamic> usageStats = const <String, dynamic>{},
   int elapsedMs = 0,
+  RetrievalProcessingSnapshot retrievalProcessing =
+      const RetrievalProcessingSnapshot(),
 }) {
-  final timelineJourney = buildAssistantUiProcessTimelineV2(journey);
-  final stages = _buildStages(journey: timelineJourney, isRunning: isRunning);
-  final blocks = _buildBlocks(timelineJourney, stages: stages);
+  final timelineJourney = buildAssistantUiProcessTimeline(journey);
+  final effectiveRetrievalProcessing = _normalizeRetrievalProcessing(
+    retrievalProcessing,
+    timelineJourney,
+  );
+  final stages = _buildStages(
+    journey: timelineJourney,
+    isRunning: isRunning,
+    retrievalProcessing: effectiveRetrievalProcessing,
+  );
+  final blocks = _buildBlocks(
+    timelineJourney,
+    stages: stages,
+    retrievalProcessing: effectiveRetrievalProcessing,
+  );
   final activeStage = _resolveActiveStage(stages);
-  final summary = _resolveSummary(timelineJourney, stages: stages, blocks: blocks);
+  final summary = _resolveSummary(
+    timelineJourney,
+    stages: stages,
+    blocks: blocks,
+  );
+  final acceptedDocumentCount =
+      effectiveRetrievalProcessing.acceptedDocumentCount;
+  final processedDocumentCount =
+      effectiveRetrievalProcessing.processedDocumentCount;
+  final referenceCount = acceptedDocumentCount > 0
+      ? acceptedDocumentCount
+      : timelineJourney.referenceSummary.count > 0
+      ? timelineJourney.referenceSummary.count
+      : <String>{
+          for (final block in blocks)
+            for (final reference in block.references)
+              if (reference.url.trim().isNotEmpty) reference.url.trim(),
+        }.length;
   return AssistantJourneyViewModel(
     journey: timelineJourney,
+    retrievalProcessing: effectiveRetrievalProcessing,
     stages: stages,
     blocks: blocks,
     summary: summary,
     activeStageId: activeStage.stageId,
     activeStageLabel: activeStage.label,
-    referenceCount: timelineJourney.referenceSummary.count > 0
-        ? timelineJourney.referenceSummary.count
-        : <String>{
-            for (final block in blocks)
-              for (final reference in block.references)
-                if (reference.url.trim().isNotEmpty) reference.url.trim(),
-          }.length,
+    processedDocumentCount: processedDocumentCount,
+    acceptedDocumentCount: acceptedDocumentCount,
+    referenceCount: referenceCount,
     isRunning: isRunning,
     usageStats: usageStats,
     elapsedMs: elapsedMs,
@@ -142,6 +177,7 @@ AssistantJourneyViewModel buildAssistantJourneyViewModel({
 List<AssistantJourneyStageViewModel> _buildStages({
   required AssistantJourney journey,
   required bool isRunning,
+  required RetrievalProcessingSnapshot retrievalProcessing,
 }) {
   if (journey.isEmpty) {
     return const <AssistantJourneyStageViewModel>[];
@@ -156,21 +192,17 @@ List<AssistantJourneyStageViewModel> _buildStages({
       label: UITextConstants.assistantProcessStageUnderstand,
       stage: rawByStageId[JourneyStageId.analyze],
     ),
-    _stageViewModel(
+    _mergedStageViewModel(
       stageId: JourneyStageId.search,
       order: 1,
       label: UITextConstants.assistantProcessStageSearch,
-      stage: rawByStageId[JourneyStageId.search],
-    ),
-    _stageViewModel(
-      stageId: JourneyStageId.verify,
-      order: 2,
-      label: UITextConstants.assistantProcessStageAnalyze,
-      stage: rawByStageId[JourneyStageId.verify],
+      primaryStage: rawByStageId[JourneyStageId.search],
+      secondaryStage: rawByStageId[JourneyStageId.verify],
+      referenceCount: retrievalProcessing.acceptedDocumentCount,
     ),
     _stageViewModel(
       stageId: JourneyStageId.answer,
-      order: 3,
+      order: 2,
       label: UITextConstants.assistantProcessStageAnswer,
       stage: rawByStageId[JourneyStageId.answer],
     ),
@@ -192,6 +224,54 @@ AssistantJourneyStageViewModel _stageViewModel({
     summary: summary,
     referenceCount: stage?.referenceCount ?? 0,
   );
+}
+
+AssistantJourneyStageViewModel _mergedStageViewModel({
+  required JourneyStageId stageId,
+  required int order,
+  required String label,
+  required AssistantJourneyStage? primaryStage,
+  required AssistantJourneyStage? secondaryStage,
+  int referenceCount = 0,
+}) {
+  return AssistantJourneyStageViewModel(
+    stageId: stageId,
+    order: order,
+    label: label,
+    status: _mergeStageStatus(primaryStage?.status, secondaryStage?.status),
+    summary: _firstNonEmpty(<String>[
+      _sanitizeJourneyText(secondaryStage?.summary ?? ''),
+      _sanitizeJourneyText(primaryStage?.summary ?? ''),
+    ]),
+    referenceCount: _maxInt(<int>[
+      referenceCount,
+      primaryStage?.referenceCount ?? 0,
+      secondaryStage?.referenceCount ?? 0,
+    ]),
+  );
+}
+
+JourneyStageStatus _mergeStageStatus(
+  JourneyStageStatus? primary,
+  JourneyStageStatus? secondary,
+) {
+  final statuses = <JourneyStageStatus>[?primary, ?secondary];
+  if (statuses.contains(JourneyStageStatus.active)) {
+    return JourneyStageStatus.active;
+  }
+  if (statuses.contains(JourneyStageStatus.blocked)) {
+    return JourneyStageStatus.blocked;
+  }
+  if (statuses.contains(JourneyStageStatus.completed)) {
+    return JourneyStageStatus.completed;
+  }
+  if (statuses.contains(JourneyStageStatus.skipped)) {
+    return JourneyStageStatus.skipped;
+  }
+  if (statuses.contains(JourneyStageStatus.pending)) {
+    return JourneyStageStatus.pending;
+  }
+  return JourneyStageStatus.unknown;
 }
 
 AssistantJourneyStageViewModel _resolveActiveStage(
@@ -218,15 +298,18 @@ AssistantJourneyStageViewModel _resolveActiveStage(
 List<AssistantJourneyBlockViewModel> _buildBlocks(
   AssistantJourney journey, {
   required List<AssistantJourneyStageViewModel> stages,
+  required RetrievalProcessingSnapshot retrievalProcessing,
 }) {
   final labelByStageId = <JourneyStageId, String>{
     for (final stage in stages) stage.stageId: stage.label,
   };
   final blocks = <AssistantJourneyBlockViewModel>[];
   final signatures = <String>{};
+  final retrievalNarratives = <String>[];
   final orderedEntries = List<AssistantJourneyEntry>.of(journey.entries)
     ..sort((a, b) => a.order.compareTo(b.order));
   for (final entry in orderedEntries) {
+    final displayStageId = _displayStageId(entry.stageId);
     final headline = _sanitizeJourneyText(entry.headline);
     final detail = _sanitizeJourneyText(entry.detail);
     final references = entry.references
@@ -238,24 +321,35 @@ List<AssistantJourneyBlockViewModel> _buildBlocks(
           ),
         )
         .where(
-          (reference) =>
-              reference.title.isNotEmpty && reference.url.isNotEmpty,
+          (reference) => reference.title.isNotEmpty && reference.url.isNotEmpty,
         )
         .toList(growable: false);
     if (headline.isEmpty && detail.isEmpty && references.isEmpty) {
       continue;
     }
+    final shouldMergeIntoRetrievalBlock =
+        _hasRetrievalProcessingSignal(retrievalProcessing) &&
+        (entry.stageId == JourneyStageId.search ||
+            entry.stageId == JourneyStageId.verify);
+    if (shouldMergeIntoRetrievalBlock) {
+      if (detail.isNotEmpty) {
+        retrievalNarratives.add(detail);
+      } else if (headline.isNotEmpty) {
+        retrievalNarratives.add(headline);
+      }
+      continue;
+    }
     final kind = references.isEmpty
         ? AssistantJourneyBlockKind.narrative
-        : entry.stageId == JourneyStageId.search
+        : displayStageId == JourneyStageId.search
         ? AssistantJourneyBlockKind.searchSummary
         : AssistantJourneyBlockKind.verificationSummary;
     final resolvedHeadline = headline.isNotEmpty
         ? headline
-        : (labelByStageId[entry.stageId] ?? '');
+        : (labelByStageId[displayStageId] ?? '');
     final signature = <String>[
       kind.name,
-      entry.stageId.name,
+      displayStageId.name,
       resolvedHeadline,
       detail,
       references.map((item) => item.url).join('|'),
@@ -266,12 +360,26 @@ List<AssistantJourneyBlockViewModel> _buildBlocks(
     blocks.add(
       AssistantJourneyBlockViewModel(
         kind: kind,
-        stageId: entry.stageId,
+        stageId: displayStageId,
         headline: resolvedHeadline,
         detail: detail,
         references: references,
       ),
     );
+  }
+  final retrievalBlock = _buildRetrievalProcessingBlock(
+    retrievalProcessing,
+    fallbackNarratives: retrievalNarratives,
+  );
+  if (retrievalBlock != null) {
+    final answerIndex = blocks.indexWhere(
+      (block) => block.stageId == JourneyStageId.answer,
+    );
+    if (answerIndex >= 0) {
+      blocks.insert(answerIndex, retrievalBlock);
+    } else {
+      blocks.add(retrievalBlock);
+    }
   }
   if (blocks.isEmpty) {
     final summary = _resolveSummary(journey, stages: stages, blocks: blocks);
@@ -286,6 +394,146 @@ List<AssistantJourneyBlockViewModel> _buildBlocks(
     }
   }
   return blocks;
+}
+
+RetrievalProcessingSnapshot _normalizeRetrievalProcessing(
+  RetrievalProcessingSnapshot retrievalProcessing,
+  AssistantJourney journey,
+) {
+  final acceptedReferences = retrievalProcessing.acceptedReferences.isNotEmpty
+      ? retrievalProcessing.acceptedReferences
+      : _fallbackAcceptedReferences(journey);
+  final acceptedDocumentCount = retrievalProcessing.acceptedDocumentCount > 0
+      ? retrievalProcessing.acceptedDocumentCount
+      : acceptedReferences.length;
+  final processedDocumentCount = retrievalProcessing.processedDocumentCount > 0
+      ? retrievalProcessing.processedDocumentCount
+      : acceptedDocumentCount;
+  return RetrievalProcessingSnapshot(
+    processedDocumentCount: processedDocumentCount,
+    acceptedDocumentCount: acceptedDocumentCount,
+    processingSummary: _sanitizeJourneyText(
+      retrievalProcessing.processingSummary,
+    ),
+    expansionReason: _sanitizeJourneyText(retrievalProcessing.expansionReason),
+    acceptedReferences: acceptedReferences,
+  );
+}
+
+List<RetrievalProcessingReference> _fallbackAcceptedReferences(
+  AssistantJourney journey,
+) {
+  final byUrl = <String, RetrievalProcessingReference>{};
+  for (final reference in journey.referenceSummary.references) {
+    final url = reference.url.trim();
+    final title = reference.title.trim();
+    if (url.isEmpty || title.isEmpty) continue;
+    byUrl[url] = RetrievalProcessingReference(
+      title: title,
+      url: url,
+      source: reference.source.trim(),
+    );
+  }
+  if (byUrl.isNotEmpty) {
+    return byUrl.values.toList(growable: false);
+  }
+  for (final entry in journey.entries) {
+    if (entry.stageId != JourneyStageId.search &&
+        entry.stageId != JourneyStageId.verify) {
+      continue;
+    }
+    for (final reference in entry.references) {
+      final url = reference.url.trim();
+      final title = reference.title.trim();
+      if (url.isEmpty || title.isEmpty) continue;
+      byUrl[url] = RetrievalProcessingReference(
+        title: title,
+        url: url,
+        source: reference.source.trim(),
+      );
+    }
+  }
+  return byUrl.values.toList(growable: false);
+}
+
+AssistantJourneyBlockViewModel? _buildRetrievalProcessingBlock(
+  RetrievalProcessingSnapshot retrievalProcessing, {
+  Iterable<String> fallbackNarratives = const <String>[],
+}) {
+  final references = retrievalProcessing.acceptedReferences
+      .map(
+        (reference) => AssistantJourneyReferenceViewModel(
+          title: reference.title.trim(),
+          url: reference.url.trim(),
+          source: reference.source.trim(),
+        ),
+      )
+      .where(
+        (reference) => reference.title.isNotEmpty && reference.url.isNotEmpty,
+      )
+      .toList(growable: false);
+  final processedCount = retrievalProcessing.processedDocumentCount;
+  final acceptedCount = retrievalProcessing.acceptedDocumentCount > 0
+      ? retrievalProcessing.acceptedDocumentCount
+      : references.length;
+  final detailParts = _distinctNonEmpty(<String>[
+    retrievalProcessing.processingSummary,
+    retrievalProcessing.expansionReason,
+    ...fallbackNarratives,
+  ]);
+  if (!_hasRetrievalProcessingSignal(retrievalProcessing) &&
+      references.isEmpty &&
+      detailParts.isEmpty) {
+    return null;
+  }
+  final effectiveProcessedCount = processedCount > 0
+      ? processedCount
+      : acceptedCount;
+  return AssistantJourneyBlockViewModel(
+    kind: AssistantJourneyBlockKind.searchSummary,
+    stageId: JourneyStageId.search,
+    headline: _retrievalBlockHeadline(
+      processedCount: effectiveProcessedCount,
+      acceptedCount: acceptedCount,
+    ),
+    detail: detailParts.join('\n'),
+    references: references,
+  );
+}
+
+String _retrievalBlockHeadline({
+  required int processedCount,
+  required int acceptedCount,
+}) {
+  if (processedCount > 0 && acceptedCount > 0) {
+    return '处理$processedCount篇文档，接纳$acceptedCount篇如下';
+  }
+  if (acceptedCount > 0) {
+    return '接纳$acceptedCount篇资料如下';
+  }
+  if (processedCount > 0) {
+    return '处理$processedCount篇文档';
+  }
+  return '';
+}
+
+bool _hasRetrievalProcessingSignal(
+  RetrievalProcessingSnapshot retrievalProcessing,
+) {
+  return retrievalProcessing.processedDocumentCount > 0 ||
+      retrievalProcessing.acceptedDocumentCount > 0 ||
+      retrievalProcessing.processingSummary.isNotEmpty ||
+      retrievalProcessing.expansionReason.isNotEmpty ||
+      retrievalProcessing.acceptedReferences.isNotEmpty;
+}
+
+JourneyStageId _displayStageId(JourneyStageId stageId) {
+  switch (stageId) {
+    case JourneyStageId.verify:
+      return JourneyStageId.search;
+    default:
+      return stageId;
+  }
 }
 
 String _resolveSummary(
@@ -308,17 +556,65 @@ String _sanitizeJourneyText(String raw) {
   final normalized =
       AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(raw);
   if (normalized.isEmpty) return '';
+  if (_looksLikeRomanizedQueryFragment(normalized)) return '';
   if (RegExp(r'\{\{[^{}]+\}\}').hasMatch(normalized)) return '';
   if (AssistantContentFilters.isJsonEnvelope(normalized) ||
       AssistantContentFilters.isDegradedText(normalized) ||
+      AssistantDisplayTextResolver.containsInternalPlannerNarrationFragment(
+        normalized,
+      ) ||
       AssistantDisplayTextResolver.containsInternalAssistantProtocolFragment(
         normalized,
       ) ||
-      AssistantDisplayTextResolver.containsInternalProcessFragment(normalized) ||
+      AssistantDisplayTextResolver.containsTechnicalFailureFragment(
+        normalized,
+      ) ||
+      AssistantDisplayTextResolver.containsInternalProcessFragment(
+        normalized,
+      ) ||
       normalized.contains('模型调用') ||
       normalized.toLowerCase().contains('token')) {
     return '';
   }
   if (normalized.startsWith('{') || normalized.startsWith('[')) return '';
   return normalized.trim();
+}
+
+bool _looksLikeRomanizedQueryFragment(String text) {
+  return RegExp(
+    r'^[a-z]+(?:\s+[a-z]+){1,7}$',
+    caseSensitive: false,
+  ).hasMatch(text.trim());
+}
+
+String _firstNonEmpty(Iterable<String> values) {
+  for (final value in values) {
+    if (value.trim().isNotEmpty) {
+      return value.trim();
+    }
+  }
+  return '';
+}
+
+int _maxInt(Iterable<int> values) {
+  var current = 0;
+  for (final value in values) {
+    if (value > current) {
+      current = value;
+    }
+  }
+  return current;
+}
+
+List<String> _distinctNonEmpty(Iterable<String> values) {
+  final seen = <String>{};
+  final result = <String>[];
+  for (final value in values) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty || !seen.add(trimmed)) {
+      continue;
+    }
+    result.add(trimmed);
+  }
+  return result;
 }

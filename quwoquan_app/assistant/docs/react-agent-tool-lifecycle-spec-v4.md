@@ -386,7 +386,7 @@ final results = await Future.wait(
 
 ### 7.2 多技能融合（跨域时）
 
-当 planner 输出 `secondaryDomains` 时，phase owner 并发启动子代理，各自完成后由 `synthesizer.multi_skill_fusion.md` 融合：
+当 planner 输出 `secondaryDomains` 时，phase owner 并发启动子代理，各自完成后回到当前 answer 合成链路统一成答；不再依赖单独的 `synthesizer.multi_skill_fusion.md` 模板：
 
 ```
 主 AssistantAgentLoop
@@ -394,7 +394,7 @@ final results = await Future.wait(
   ├─ 副技能 subagent_1 (secondaryDomains[0])
   └─ 副技能 subagent_2 (secondaryDomains[1])
               ↓
-  synthesizer.multi_skill_fusion.md
+  当前 answer 合成链路
   ── 结论先行 ── 分域分节 ── 来源透明 ──
 ```
 

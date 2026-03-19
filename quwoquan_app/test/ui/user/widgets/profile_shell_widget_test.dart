@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
@@ -139,7 +140,7 @@ void main() {
       expect(summaryShare, closeTo(1 - backgroundShare, 0.08));
     });
 
-    testWidgets('other 模式渲染等宽「关注」+「私信」按钮', (tester) async {
+    testWidgets('other 模式渲染等宽「关注」+主消息入口按钮', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -147,7 +148,10 @@ void main() {
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.other));
       await _pumpFrames(tester);
       expect(find.text('关注'), findsAtLeastNWidgets(1));
-      expect(find.text('私信'), findsAtLeastNWidgets(1));
+      expect(
+        find.text(UITextConstants.profileDirectMessage),
+        findsAtLeastNWidgets(1),
+      );
     });
 
     testWidgets('下拉时背景顶边固定，资料区与一级 tab 整体下移', (tester) async {
@@ -349,7 +353,10 @@ void main() {
       );
       await _pumpFrames(tester);
       expect(find.text('关注'), findsAtLeastNWidgets(1));
-      expect(find.text('私信'), findsAtLeastNWidgets(1));
+      expect(
+        find.text(UITextConstants.profileDirectMessage),
+        findsAtLeastNWidgets(1),
+      );
     });
 
     testWidgets('AnnotatedRegion 存在于渲染树', (tester) async {

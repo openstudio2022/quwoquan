@@ -194,17 +194,18 @@ void main() {
       equals(assistantTurnSchemaVersion),
     );
     expect(
-      (assistantMsg[assistantUiProcessTimelineV2Field] as Map?)?.isNotEmpty,
+      (assistantMsg[assistantUiProcessTimelineField] as Map?)?.isNotEmpty,
       isTrue,
     );
     expect(
-      ((assistantMsg[assistantUiProcessTimelineV2Field] as Map?)?['stages'] as List?)
+      ((assistantMsg[assistantUiProcessTimelineField] as Map?)?['stages']
+              as List?)
           ?.length,
-      equals(4),
+      equals(3),
     );
   });
 
-  test('Rule-3: v3 中 assistant 历史不满足 canonical schema 时整段清理', () async {
+  test('Rule-3: v4 中 assistant 历史不满足 canonical schema 时整段清理', () async {
     final sm = await _loadFrom(tempDir, {
       'version': assistantHistoryStorageVersion,
       'activeSessionId': 'assistant',
@@ -223,37 +224,43 @@ void main() {
     expect(
       sm.getOrCreateSession('assistant'),
       isEmpty,
-      reason: '新版存储下不再兼容缺失 journey/uiProcessTimelineV2 的 assistant 历史',
+      reason: '新版存储下不再兼容缺失 journey/uiProcessTimeline 的 assistant 历史',
     );
   });
 
-  test('Rule-4: append→save→load round-trip preserves canonical assistant turn', () async {
-    final file = File('${tempDir.path}/sessions.json');
-    final sm = AssistantSessionManager(storagePath: file.path);
+  test(
+    'Rule-4: append→save→load round-trip preserves canonical assistant turn',
+    () async {
+      final file = File('${tempDir.path}/sessions.json');
+      final sm = AssistantSessionManager(storagePath: file.path);
 
-    sm.appendMessage(sessionId: 'assistant', role: 'user', content: '你好');
-    sm.appendMessage(
-      sessionId: 'assistant',
-      role: 'assistant',
-      content: '深圳今天晴，25°C，适合出行。',
-      metadata: _canonicalAssistantMessage(),
-    );
-    await sm.save();
+      sm.appendMessage(sessionId: 'assistant', role: 'user', content: '你好');
+      sm.appendMessage(
+        sessionId: 'assistant',
+        role: 'assistant',
+        content: '深圳今天晴，25°C，适合出行。',
+        metadata: _canonicalAssistantMessage(),
+      );
+      await sm.save();
 
-    final sm2 = AssistantSessionManager(storagePath: file.path);
-    await sm2.load();
-    final messages = sm2.getOrCreateSession('assistant');
-    expect(messages.length, equals(2));
-    expect(messages[0]['role'], equals('user'));
-    expect(messages[0]['content'], equals('你好'));
-    expect(messages[1]['role'], equals('assistant'));
-    expect(messages[1]['content'], equals('深圳今天晴，25°C，适合出行。'));
-    expect(
-      messages[1][assistantUiProcessTimelineV2Field],
-      isA<Map<String, dynamic>>(),
-    );
-    expect(messages[1][assistantTurnSchemaVersionField], assistantTurnSchemaVersion);
-  });
+      final sm2 = AssistantSessionManager(storagePath: file.path);
+      await sm2.load();
+      final messages = sm2.getOrCreateSession('assistant');
+      expect(messages.length, equals(2));
+      expect(messages[0]['role'], equals('user'));
+      expect(messages[0]['content'], equals('你好'));
+      expect(messages[1]['role'], equals('assistant'));
+      expect(messages[1]['content'], equals('深圳今天晴，25°C，适合出行。'));
+      expect(
+        messages[1][assistantUiProcessTimelineField],
+        isA<Map<String, dynamic>>(),
+      );
+      expect(
+        messages[1][assistantTurnSchemaVersionField],
+        assistantTurnSchemaVersion,
+      );
+    },
+  );
 
   test('Rule-5: summarizeRecent() 只输出用户可见答案，不输出内部字段', () async {
     final sm = await _loadFrom(tempDir, {
@@ -270,7 +277,7 @@ void main() {
 
     final summary = sm.summarizeRecent('assistant');
     expect(summary, contains('深圳今天晴'));
-    expect(summary.contains('contractVersion'), isFalse);
+    expect(summary.contains('contractId'), isFalse);
     expect(summary.contains('machineEnvelope'), isFalse);
     expect(summary.contains('{{'), isFalse);
   });

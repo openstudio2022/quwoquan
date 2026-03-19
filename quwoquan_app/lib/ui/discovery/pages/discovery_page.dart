@@ -555,7 +555,9 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     final dtos =
         feedAsync.value?.items ??
         fallbackRaw.map(postBaseDtoFromMap).toList(growable: false);
-    final moments = dtos.whereType<MomentPostDto>().toList(growable: false);
+    final moments = dtos
+        .where((post) => post.identity == 'moment')
+        .toList(growable: false);
     final hasError = feedAsync.value?.error != null;
     final horizontal = _contentHorizontalPadding(context);
     if (!feedMap.containsKey(tabId)) {
@@ -633,7 +635,9 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     final dtos =
         feedAsync.value?.items ??
         fallbackRaw.map(postBaseDtoFromMap).toList(growable: false);
-    final articles = dtos.whereType<ArticlePostDto>().toList(growable: false);
+    final articles = dtos
+        .where((post) => post.isArticleLike)
+        .toList(growable: false);
     final hasError = feedAsync.value?.error != null;
     final horizontal = _contentHorizontalPadding(context);
     if (!feedMap.containsKey(tabId)) {
@@ -711,14 +715,14 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     return null;
   }
 
-  double _photoItemHeight(double cardWidth, PhotoPostDto post, int index) {
+  double _photoItemHeight(double cardWidth, PostBaseDto post, int index) {
     double ratio = post.aspectRatio ?? 0;
-    if (ratio <= 0 && post.imageUrls.isNotEmpty) {
-      final fromImage = _aspectRatioFromImageUrl(post.imageUrls.first);
+    if (ratio <= 0 && post.mediaImageUrls.isNotEmpty) {
+      final fromImage = _aspectRatioFromImageUrl(post.mediaImageUrls.first);
       if (fromImage != null && fromImage > 0) ratio = fromImage;
     }
     if (ratio <= 0) {
-      final fromCover = _aspectRatioFromImageUrl(post.coverUrl);
+      final fromCover = _aspectRatioFromImageUrl(post.mediaCoverUrl);
       if (fromCover != null && fromCover > 0) ratio = fromCover;
     }
     if (ratio <= 0) {
@@ -753,7 +757,11 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     final dtos =
         feedAsync.value?.items ??
         fallbackRaw.map(postBaseDtoFromMap).toList(growable: false);
-    final photos = dtos.whereType<PhotoPostDto>().toList(growable: false);
+    final photos = dtos
+        .where(
+          (post) => post.identity == 'work' && post.displayFormat == 'image',
+        )
+        .toList(growable: false);
     final hasError = feedAsync.value?.error != null;
     final screenWidth = MediaQuery.of(context).size.width;
     final horizontal = _contentHorizontalPadding(context);
@@ -850,13 +858,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
               .indexWhere((p) => p.id == post.id)
               .clamp(0, feedPosts.length - 1)
         : mediaIndex;
-    // 点滴图片/视频分流：有 videoUrl 则进视频浏览器
-    final moment = post is MomentPostDto ? post : null;
-    final hasVideo =
-        moment != null &&
-        moment.videoUrl != null &&
-        moment.videoUrl!.trim().isNotEmpty;
-    if (post.displayFormat == 'video' || (category == 'moment' && hasVideo)) {
+    if (post.isVideoLike) {
       if (postViews != null && postViews.isNotEmpty) {
         context.push(
           '/video-viewer/$initialIndex',
@@ -1030,7 +1032,7 @@ String _toDate(DateTime time) {
 
 /// 微趣卡片：1:1 复制 MomentPost.tsx 结构（简化版，后续补全转发引用、九宫格等）
 class _MomentPostCard extends StatefulWidget {
-  final MomentPostDto item;
+  final PostBaseDto item;
   final bool isDark;
   final bool isFirst;
   final String sourceCircleName;
@@ -1165,7 +1167,7 @@ class _MomentPostCardState extends State<_MomentPostCard>
           ),
           SizedBox(height: AppSpacing.interGroupXs),
           Text(
-            item.body,
+            item.body ?? '',
             style: TextStyle(
               fontSize: AppTypography.lg,
               color: fg,
@@ -1282,7 +1284,7 @@ class _MomentPostCardState extends State<_MomentPostCard>
 
 /// 文章卡片占位：1:1 复制 ArticleCard 结构（简化，后续接 ArticleDetailView）
 class _ArticleCardPlaceholder extends StatelessWidget {
-  final ArticlePostDto article;
+  final PostBaseDto article;
   final bool isDark;
   final bool isFirst;
   final VoidCallback onTap;
@@ -1375,7 +1377,7 @@ class _ArticleCardPlaceholder extends StatelessWidget {
             ),
             SizedBox(height: AppSpacing.intraGroupXs),
             Text(
-              article.body,
+              article.body ?? '',
               style: TextStyle(fontSize: AppTypography.base, color: fg),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -1455,22 +1457,9 @@ class _DiscoveryItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    String thumb;
-    int imageCount;
-    if (post is PhotoPostDto) {
-      final photo = post as PhotoPostDto;
-      thumb = photo.coverUrl.trim().isNotEmpty
-          ? photo.coverUrl
-          : (photo.imageUrls.isNotEmpty ? photo.imageUrls.first : '');
-      imageCount = photo.imageUrls.length;
-    } else if (post is VideoPostDto) {
-      thumb = (post as VideoPostDto).thumbnailUrl.trim();
-      imageCount = 1;
-    } else {
-      thumb = '';
-      imageCount = 1;
-    }
-    final isVideo = post.type == 'video';
+    final thumb = post.primaryVisualUrl;
+    final imageCount = post.mediaCount > 0 ? post.mediaCount : 1;
+    final isVideo = post.isVideoLike;
 
     return GestureDetector(
       onTap: onTap,
@@ -1794,9 +1783,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                   final authorAvatar = post.avatarUrl;
                   final authorName = post.displayName;
                   final authorBg = post.authorBackgroundUrl;
-                  final thumbnail = post is VideoPostDto
-                      ? post.thumbnailUrl
-                      : '';
+                  final thumbnail = post.primaryVisualUrl;
                   final isLiked = _likedIndexes.contains(index);
                   return GestureDetector(
                     onTap: () {
@@ -2028,7 +2015,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                                 ),
                                 SizedBox(height: AppSpacing.intraGroupXs),
                                 Text(
-                                  post is VideoPostDto ? (post.body ?? '') : '',
+                                  post.normalizedBody,
                                   style: TextStyle(
                                     fontSize: AppTypography.base,
                                     color: Colors.white.withValues(alpha: 0.9),

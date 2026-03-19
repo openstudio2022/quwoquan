@@ -26,7 +26,7 @@ Map<String, dynamic> _intentPlanningEnvelope({
   List<Map<String, dynamic>> queryTasks = const <Map<String, dynamic>>[],
 }) {
   return <String, dynamic>{
-    'contractVersion': 'assistant_turn',
+    'contractId': 'assistant_turn',
     'messageKind': 'progress',
     'phaseId': 'understanding',
     'actionCode': 'frame_problem',
@@ -75,6 +75,12 @@ Map<String, dynamic> _intentPlanningEnvelope({
   };
 }
 
+bool _isFinalAnswerTemplate(String templateId) =>
+    templateId == 'synthesizer.final_answer';
+
+bool _hasSubagentRuns(Map<String, dynamic> templateVariables) =>
+    templateVariables['subagentRuns'] != null;
+
 /// Mock LLM that simulates the full pipeline:
 /// - Summarization/classification calls → return simple text
 /// - planner.global_plan first call with available tools → return tool call
@@ -101,12 +107,8 @@ class _WeatherPipelineLlm implements AssistantLlmProvider {
   }) async {
     totalCallCount += 1;
 
-    final isPlannerCall =
-        templateId == 'planner.global_plan' ||
-        templateId == 'planner.postcondition_check';
-    final isSynthesisCall =
-        templateId.contains('synthesizer') ||
-        templateId.contains('final_answer');
+    final isPlannerCall = templateId == 'planner.global_plan';
+    final isSynthesisCall = _isFinalAnswerTemplate(templateId);
     final isIntentStage =
         templateId == 'planner.global_plan' && availableTools.isEmpty;
 
@@ -142,7 +144,7 @@ class _WeatherPipelineLlm implements AssistantLlmProvider {
       if (planCallCount == 1 && availableTools.contains('web_search')) {
         return AssistantModelOutput(
           text: jsonEncode(<String, dynamic>{
-            'contractVersion': 'assistant_turn',
+            'contractId': 'assistant_turn',
             'decision': {'nextAction': 'tool_call'},
             'toolCalls': [
               {
@@ -180,7 +182,7 @@ class _WeatherPipelineLlm implements AssistantLlmProvider {
 
     return AssistantModelOutput(
       text: jsonEncode(<String, dynamic>{
-        'contractVersion': 'assistant_turn',
+        'contractId': 'assistant_turn',
         'decision': {'nextAction': 'answer'},
         'messageKind': 'answer',
         'slotState': {
@@ -230,12 +232,8 @@ class _RootLevelIntentWeatherPipelineLlm implements AssistantLlmProvider {
     LlmCallOptions? callOptions,
     void Function(String delta)? onDelta,
   }) async {
-    final isPlannerCall =
-        templateId == 'planner.global_plan' ||
-        templateId == 'planner.postcondition_check';
-    final isSynthesisCall =
-        templateId.contains('synthesizer') ||
-        templateId.contains('final_answer');
+    final isPlannerCall = templateId == 'planner.global_plan';
+    final isSynthesisCall = _isFinalAnswerTemplate(templateId);
     final isIntentStage =
         templateId == 'planner.global_plan' && availableTools.isEmpty;
 
@@ -275,7 +273,7 @@ class _RootLevelIntentWeatherPipelineLlm implements AssistantLlmProvider {
       if (planCallCount == 1 && availableTools.contains('web_search')) {
         return AssistantModelOutput(
           text: jsonEncode(<String, dynamic>{
-            'contractVersion': 'assistant_turn',
+            'contractId': 'assistant_turn',
             'decision': {'nextAction': 'tool_call'},
             'toolCalls': [
               {
@@ -304,7 +302,7 @@ class _RootLevelIntentWeatherPipelineLlm implements AssistantLlmProvider {
 
     return AssistantModelOutput(
       text: jsonEncode(<String, dynamic>{
-        'contractVersion': 'assistant_turn',
+        'contractId': 'assistant_turn',
         'decision': {'nextAction': 'answer'},
         'messageKind': 'answer',
         'userMarkdown': '深圳今天以晴到多云为主，适合安排外出。',
@@ -416,12 +414,8 @@ class _UsageLedgerWeatherLlm implements AssistantLlmProvider {
     LlmCallOptions? callOptions,
     void Function(String delta)? onDelta,
   }) async {
-    final isPlannerCall =
-        templateId == 'planner.global_plan' ||
-        templateId == 'planner.postcondition_check';
-    final isSynthesisCall =
-        templateId.contains('synthesizer') ||
-        templateId.contains('final_answer');
+    final isPlannerCall = templateId == 'planner.global_plan';
+    final isSynthesisCall = _isFinalAnswerTemplate(templateId);
     final isIntentStage =
         templateId == 'planner.global_plan' && availableTools.isEmpty;
     final hasToolMessage = messages.any((item) => item['role'] == 'tool');
@@ -445,7 +439,7 @@ class _UsageLedgerWeatherLlm implements AssistantLlmProvider {
     if (isPlannerCall && !hasToolMessage) {
       return _withUsage(
         text: jsonEncode(<String, dynamic>{
-          'contractVersion': 'assistant_turn',
+          'contractId': 'assistant_turn',
           'decision': {'nextAction': 'tool_call'},
           'toolCalls': [
             {
@@ -472,7 +466,7 @@ class _UsageLedgerWeatherLlm implements AssistantLlmProvider {
     }
     return _withUsage(
       text: jsonEncode(<String, dynamic>{
-        'contractVersion': 'assistant_turn',
+        'contractId': 'assistant_turn',
         'decision': {'nextAction': 'answer'},
         'messageKind': 'answer',
         'userMarkdown': '深圳天气晴朗，约 25°C。',
@@ -559,7 +553,7 @@ class _WeatherFallbackLlm implements AssistantLlmProvider {
     if (!hasToolFailure && availableTools.contains('web_search')) {
       return AssistantModelOutput(
         text: jsonEncode(<String, dynamic>{
-          'contractVersion': 'assistant_turn',
+          'contractId': 'assistant_turn',
           'decision': {'nextAction': 'tool_call'},
           'toolCalls': [
             {
@@ -578,7 +572,7 @@ class _WeatherFallbackLlm implements AssistantLlmProvider {
     }
     return AssistantModelOutput(
       text: jsonEncode(<String, dynamic>{
-        'contractVersion': 'assistant_turn',
+        'contractId': 'assistant_turn',
         'decision': {'nextAction': 'answer'},
         'messageKind': 'fallback',
         'slotState': {
@@ -609,9 +603,7 @@ class _FallbackAdaptiveLlm implements AssistantLlmProvider {
     LlmCallOptions? callOptions,
     void Function(String delta)? onDelta,
   }) async {
-    final isPlannerCall =
-        templateId == 'planner.global_plan' ||
-        templateId == 'planner.postcondition_check';
+    final isPlannerCall = templateId == 'planner.global_plan';
     final isIntentStage =
         templateId == 'planner.global_plan' && availableTools.isEmpty;
     if (isIntentStage) {
@@ -632,7 +624,7 @@ class _FallbackAdaptiveLlm implements AssistantLlmProvider {
       if (planCallCount == 1 && availableTools.contains('web_search')) {
         return AssistantModelOutput(
           text: jsonEncode(<String, dynamic>{
-            'contractVersion': 'assistant_turn',
+            'contractId': 'assistant_turn',
             'decision': <String, dynamic>{'nextAction': 'tool_call'},
             'toolCalls': <Map<String, dynamic>>[
               <String, dynamic>{
@@ -665,7 +657,7 @@ class _FallbackAdaptiveLlm implements AssistantLlmProvider {
     }
     return AssistantModelOutput(
       text: jsonEncode(<String, dynamic>{
-        'contractVersion': 'assistant_turn',
+        'contractId': 'assistant_turn',
         'decision': <String, dynamic>{'nextAction': 'answer'},
         'messageKind': 'answer',
         'userMarkdown':
@@ -697,12 +689,8 @@ class _InvalidSynthesisNextActionLlm implements AssistantLlmProvider {
     LlmCallOptions? callOptions,
     void Function(String delta)? onDelta,
   }) async {
-    final isPlannerCall =
-        templateId == 'planner.global_plan' ||
-        templateId == 'planner.postcondition_check';
-    final isSynthesisCall =
-        templateId.contains('synthesizer') ||
-        templateId.contains('final_answer');
+    final isPlannerCall = templateId == 'planner.global_plan';
+    final isSynthesisCall = _isFinalAnswerTemplate(templateId);
     final isIntentStage =
         templateId == 'planner.global_plan' && availableTools.isEmpty;
     final hasToolMessage = messages.any((item) => item['role'] == 'tool');
@@ -726,7 +714,7 @@ class _InvalidSynthesisNextActionLlm implements AssistantLlmProvider {
         availableTools.contains('web_search')) {
       return AssistantModelOutput(
         text: jsonEncode(const <String, dynamic>{
-          'contractVersion': 'assistant_turn',
+          'contractId': 'assistant_turn',
           'decision': <String, dynamic>{'nextAction': 'tool_call'},
           'toolCalls': <Map<String, dynamic>>[
             <String, dynamic>{
@@ -747,7 +735,7 @@ class _InvalidSynthesisNextActionLlm implements AssistantLlmProvider {
     if (isPlannerCall || isSynthesisCall) {
       return AssistantModelOutput(
         text: jsonEncode(const <String, dynamic>{
-          'contractVersion': 'assistant_turn',
+          'contractId': 'assistant_turn',
           'decision': <String, dynamic>{'nextAction': 'ask_user'},
           'messageKind': 'ask_user',
           'askUser': <String, dynamic>{
@@ -781,12 +769,8 @@ class _PhaseOneProcessLeakLlm implements AssistantLlmProvider {
     LlmCallOptions? callOptions,
     void Function(String delta)? onDelta,
   }) async {
-    final isPlannerCall =
-        templateId == 'planner.global_plan' ||
-        templateId == 'planner.postcondition_check';
-    final isSynthesisCall =
-        templateId.contains('synthesizer') ||
-        templateId.contains('final_answer');
+    final isPlannerCall = templateId == 'planner.global_plan';
+    final isSynthesisCall = _isFinalAnswerTemplate(templateId);
     final isIntentStage =
         templateId == 'planner.global_plan' && availableTools.isEmpty;
     final hasToolMessage = messages.any((item) => item['role'] == 'tool');
@@ -810,7 +794,7 @@ class _PhaseOneProcessLeakLlm implements AssistantLlmProvider {
         availableTools.contains('web_search')) {
       return AssistantModelOutput(
         text: jsonEncode(const <String, dynamic>{
-          'contractVersion': 'assistant_turn',
+          'contractId': 'assistant_turn',
           'messageKind': 'progress',
           'phaseId': 'understanding',
           'actionCode': 'frame_problem',
@@ -854,7 +838,7 @@ class _PhaseOneProcessLeakLlm implements AssistantLlmProvider {
       synthesisCallCount += 1;
       return AssistantModelOutput(
         text: jsonEncode(<String, dynamic>{
-          'contractVersion': 'assistant_turn',
+          'contractId': 'assistant_turn',
           'decision': const <String, dynamic>{'nextAction': 'answer'},
           'messageKind': 'answer',
           'phaseId': 'answering',
@@ -912,12 +896,8 @@ class _MultiSkillProblemClassLlm implements AssistantLlmProvider {
     LlmCallOptions? callOptions,
     void Function(String delta)? onDelta,
   }) async {
-    final isPlannerCall =
-        templateId == 'planner.global_plan' ||
-        templateId == 'planner.postcondition_check';
-    final isSynthesisCall =
-        templateId.contains('synthesizer') ||
-        templateId.contains('final_answer');
+    final isPlannerCall = templateId == 'planner.global_plan';
+    final isSynthesisCall = _isFinalAnswerTemplate(templateId);
     final isIntentStage =
         templateId == 'planner.global_plan' && availableTools.isEmpty;
     if (isIntentStage) {
@@ -945,13 +925,12 @@ class _MultiSkillProblemClassLlm implements AssistantLlmProvider {
     }
 
     if (isSynthesisCall) {
-      if (templateId == 'synthesizer.multi_skill_fusion' ||
-          templateVariables['subagentRuns'] != null) {
+      if (_hasSubagentRuns(templateVariables)) {
         lastFusionTemplateVariables = templateVariables;
       }
       return AssistantModelOutput(
         text: jsonEncode(const <String, dynamic>{
-          'contractVersion': 'assistant_turn',
+          'contractId': 'assistant_turn',
           'decision': <String, dynamic>{'nextAction': 'answer'},
           'messageKind': 'answer',
           'userMarkdown': '## 深圳天气与出游建议\n\n- 今天天气适合出门。\n- 建议优先安排轻松的城市漫步和室内备选点。',
@@ -970,7 +949,7 @@ class _MultiSkillProblemClassLlm implements AssistantLlmProvider {
     if (domainId == 'fallback_general_search') {
       return AssistantModelOutput(
         text: jsonEncode(const <String, dynamic>{
-          'contractVersion': 'assistant_turn',
+          'contractId': 'assistant_turn',
           'decision': <String, dynamic>{'nextAction': 'answer'},
           'messageKind': 'answer',
           'userMarkdown': '## 深圳旅游建议\n\n- 白天可安排城市漫步。\n- 准备一个室内备选点以应对天气变化。',
@@ -981,7 +960,7 @@ class _MultiSkillProblemClassLlm implements AssistantLlmProvider {
 
     return AssistantModelOutput(
       text: jsonEncode(const <String, dynamic>{
-        'contractVersion': 'assistant_turn',
+        'contractId': 'assistant_turn',
         'decision': <String, dynamic>{'nextAction': 'answer'},
         'messageKind': 'answer',
         'userMarkdown': '## 深圳天气\n\n- 今天深圳天气温和，适合出门。',
@@ -1030,9 +1009,8 @@ class _MultiSkillFusionAnchorRepairLlm implements AssistantLlmProvider {
     LlmCallOptions? callOptions,
     void Function(String delta)? onDelta,
   }) async {
-    final isPlannerCall =
-        templateId == 'planner.global_plan' ||
-        templateId == 'planner.postcondition_check';
+    final isPlannerCall = templateId == 'planner.global_plan';
+    final isSynthesisCall = _isFinalAnswerTemplate(templateId);
     final isIntentStage =
         templateId == 'planner.global_plan' && availableTools.isEmpty;
     final joined = messages
@@ -1064,7 +1042,7 @@ class _MultiSkillFusionAnchorRepairLlm implements AssistantLlmProvider {
       );
     }
 
-    if (templateId == 'synthesizer.multi_skill_fusion') {
+    if (isSynthesisCall && _hasSubagentRuns(templateVariables)) {
       fusionCallCount += 1;
       lastFusionTemplateVariables = templateVariables;
       if (joined.contains('missing_topic_anchor') ||
@@ -1073,7 +1051,7 @@ class _MultiSkillFusionAnchorRepairLlm implements AssistantLlmProvider {
         fusionRepairTriggered = true;
         return AssistantModelOutput(
           text: jsonEncode(const <String, dynamic>{
-            'contractVersion': 'assistant_turn',
+            'contractId': 'assistant_turn',
             'decision': <String, dynamic>{'nextAction': 'answer'},
             'messageKind': 'answer',
             'userMarkdown':
@@ -1087,7 +1065,7 @@ class _MultiSkillFusionAnchorRepairLlm implements AssistantLlmProvider {
       }
       return AssistantModelOutput(
         text: jsonEncode(const <String, dynamic>{
-          'contractVersion': 'assistant_turn',
+          'contractId': 'assistant_turn',
           'decision': <String, dynamic>{'nextAction': 'answer'},
           'messageKind': 'answer',
           'userMarkdown':
@@ -1100,11 +1078,10 @@ class _MultiSkillFusionAnchorRepairLlm implements AssistantLlmProvider {
       );
     }
 
-    if (templateId.contains('synthesizer') ||
-        templateId.contains('final_answer')) {
+    if (isSynthesisCall) {
       return AssistantModelOutput(
         text: jsonEncode(const <String, dynamic>{
-          'contractVersion': 'assistant_turn',
+          'contractId': 'assistant_turn',
           'decision': <String, dynamic>{'nextAction': 'answer'},
           'messageKind': 'answer',
           'userMarkdown': '## 深圳天气初步结论\n\n- 深圳今天天气适合出门。',
@@ -1124,7 +1101,7 @@ class _MultiSkillFusionAnchorRepairLlm implements AssistantLlmProvider {
     if (domainId == 'fallback_general_search') {
       return AssistantModelOutput(
         text: jsonEncode(const <String, dynamic>{
-          'contractVersion': 'assistant_turn',
+          'contractId': 'assistant_turn',
           'decision': <String, dynamic>{'nextAction': 'answer'},
           'messageKind': 'answer',
           'userMarkdown': '## 深圳轻松出游建议\n\n- 可优先城市漫步。\n- 同时保留室内备选点。',
@@ -1138,7 +1115,7 @@ class _MultiSkillFusionAnchorRepairLlm implements AssistantLlmProvider {
 
     return AssistantModelOutput(
       text: jsonEncode(const <String, dynamic>{
-        'contractVersion': 'assistant_turn',
+        'contractId': 'assistant_turn',
         'decision': <String, dynamic>{'nextAction': 'answer'},
         'messageKind': 'answer',
         'userMarkdown': '## 深圳天气\n\n- 今天深圳天气温和，适合出门。',
@@ -1211,13 +1188,8 @@ class _JourneyReplayLlm implements AssistantLlmProvider {
     LlmCallOptions? callOptions,
     void Function(String delta)? onDelta,
   }) async {
-    final isPlannerCall =
-        templateId == 'planner.global_plan' ||
-        templateId == 'planner.postcondition_check';
-    final isSynthesisCall =
-        templateId.contains('synthesizer') ||
-        templateId.contains('final_answer') ||
-        templateId.contains('output_contract.answer');
+    final isPlannerCall = templateId == 'planner.global_plan';
+    final isSynthesisCall = _isFinalAnswerTemplate(templateId);
     final isIntentStage =
         templateId == 'planner.global_plan' && availableTools.isEmpty;
     final query = _latestUserQuery(messages);
@@ -1261,7 +1233,7 @@ class _JourneyReplayLlm implements AssistantLlmProvider {
       onDelta?.call(reasonShort);
       return AssistantModelOutput(
         text: jsonEncode(<String, dynamic>{
-          'contractVersion': 'assistant_turn',
+          'contractId': 'assistant_turn',
           'phaseId': 'understanding',
           'actionCode': 'frame_problem',
           'reasonCode': 'align_goal',
@@ -1315,7 +1287,7 @@ class _JourneyReplayLlm implements AssistantLlmProvider {
         : '- 更适合在草甸返青后的稳定天气窗口前往。\n- 先确认当地天气，再决定具体日期。';
     return AssistantModelOutput(
       text: jsonEncode(<String, dynamic>{
-        'contractVersion': 'assistant_turn',
+        'contractId': 'assistant_turn',
         'phaseId': 'answering',
         'actionCode': 'compose_answer',
         'reasonCode': 'evidence_ready',
@@ -1657,18 +1629,22 @@ void main() {
           )
           .toList(growable: false);
       if (searchUpdates.isNotEmpty) {
+        final referencedUpdate = searchUpdates.firstWhere(
+          (item) => item.references.isNotEmpty,
+          orElse: () => searchUpdates.first,
+        );
         expect(
-          searchUpdates.first.references,
+          referencedUpdate.references,
           isNotEmpty,
           reason: '搜索阶段 sourceUpdate 应带引用',
         );
         expect(
-          searchUpdates.first.headline.contains('来源') ||
-              searchUpdates.first.headline.contains('资料') ||
-              searchUpdates.first.headline.contains('交叉看') ||
-              searchUpdates.first.detail.contains('来源') ||
-              searchUpdates.first.detail.contains('资料') ||
-              searchUpdates.first.detail.contains('交叉看'),
+          referencedUpdate.headline.contains('来源') ||
+              referencedUpdate.headline.contains('资料') ||
+              referencedUpdate.headline.contains('交叉看') ||
+              referencedUpdate.detail.contains('来源') ||
+              referencedUpdate.detail.contains('资料') ||
+              referencedUpdate.detail.contains('交叉看'),
           isTrue,
           reason: '搜索阶段叙事应是面向用户语言',
         );
@@ -1682,7 +1658,7 @@ void main() {
 
       for (final entry in journey.entries) {
         final allText = '${entry.headline} ${entry.detail}';
-        expect(allText.contains('contractVersion'), isFalse);
+        expect(allText.contains('contractId'), isFalse);
         expect(allText.contains('AssistantTrace'), isFalse);
         expect(allText.contains('toolStart'), isFalse);
       }
@@ -2096,7 +2072,7 @@ void main() {
           .join('\n');
       for (final forbidden in const <String>[
         'assistant_turn',
-        'contractVersion',
+        'contractId',
         '<tool_call>',
         '<session_history>',
         '<memory_recall>',
@@ -2123,7 +2099,7 @@ void main() {
       expect(summary, isNotEmpty);
       for (final forbidden in const <String>[
         'assistant_turn',
-        'contractVersion',
+        'contractId',
         'queryTasks',
         'tool_call',
         '<tool_call>',
@@ -2144,7 +2120,7 @@ void main() {
       final recalledText = recalledMemory.map((item) => item.text).join('\n');
       for (final forbidden in const <String>[
         'assistant_turn',
-        'contractVersion',
+        'contractId',
         'queryTasks',
         'tool_call',
         '<tool_call>',
@@ -2190,7 +2166,7 @@ void main() {
       expect(secondResponse.displayMarkdown, isNot(contains('先给你当前最稳的部分')));
       expect(
         secondResponse.displayMarkdown,
-        isNot(contains('contractVersion')),
+        isNot(contains('contractId')),
       );
       expect(secondResponse.displayMarkdown, isNot(contains('<tool_call>')));
       expect(secondResponse.displayMarkdown, isNot(contains('九寨沟方向备选方案')));
@@ -2307,7 +2283,7 @@ void main() {
       expect(markdown, isEmpty);
       expect(response.degraded, isTrue);
       expect(markdown, isNot(contains('<tool_call>')));
-      expect(markdown, isNot(contains('contractVersion')));
+      expect(markdown, isNot(contains('contractId')));
       final journey = response.runArtifacts?.journey;
       expect(
         (journey?.summary.trim().isNotEmpty ?? false) ||
@@ -2358,7 +2334,7 @@ void main() {
       expect(markdown, isNot(contains('<tool_call>')));
       expect(markdown, isEmpty);
       expect(response.degraded, isTrue);
-      expect(markdown, isNot(contains('contractVersion')));
+      expect(markdown, isNot(contains('contractId')));
     });
 
     test('synthesis 非 answer 输出不会被静默改写成 answer', () async {

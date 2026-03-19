@@ -2,24 +2,27 @@
 name: /verify
 id: verify
 category: Quality
-description: 验证 L3_story 完成度、测试证据与门禁状态
+description: 验证 Scenario / Journey 完成度、plan 覆盖率与 CR 证据
 ---
 
 > SDD 主流程：... → dev → **verify** / commit → deploy
 
 `/verify` 只验证：
 
-- `L3_story` 是否完成
-- `Task` 是否收口
+- `L3_scenario` 是否完成
+- `L2_journey` 是否因本次增量受到影响
+- `plan.yaml` 是否覆盖实施范围
 - `acceptance.yaml` 是否闭环
+- `CR` 是否记录了本次 delta 与影响
 - `T1~T4` 证据是否存在
 
 ## 核查项
 
 - 四件套是否齐全
-- 当前交付任务是否都已完成
+- `plan.yaml` 的目标 slice 是否已完成
 - `acceptance.yaml` 是否无 `pending`
 - `implemented` 项是否有 `tests`
+- `CR` 的 `affected_nodes`、`changed_documents`、`impact` 是否更新
 - 是否仍残留旧层级
 
 ## 助手专项核查
@@ -42,7 +45,9 @@ make gate-full
 
 ```text
 验证报告：<feature-path>
-L3_story: <story>
+L3_scenario: <scenario>
+L2_journey: <journey>
+CR: <change-request>
 BLOCKING: <N>
 WARNING: <N>
 ```

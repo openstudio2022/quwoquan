@@ -34,6 +34,8 @@ class SynthesisDraft {
     required this.answerBoundaryPolicy,
     required this.previousSlotState,
     this.phaseOneRoutingDiagnostics = const <String, dynamic>{},
+    this.understandingSnapshot = const <String, dynamic>{},
+    this.historicalThinkingSnapshot = const <String, dynamic>{},
     this.previousDomainPolicyBundle,
     this.profileUpdateProposal,
     this.responseDegraded = false,
@@ -59,6 +61,8 @@ class SynthesisDraft {
   final AnswerBoundaryPolicy answerBoundaryPolicy;
   final SlotStateSnapshot previousSlotState;
   final Map<String, dynamic> phaseOneRoutingDiagnostics;
+  final Map<String, dynamic> understandingSnapshot;
+  final Map<String, dynamic> historicalThinkingSnapshot;
   final DomainPolicyBundle? previousDomainPolicyBundle;
   final ProfileUpdateProposal? profileUpdateProposal;
   final bool responseDegraded;

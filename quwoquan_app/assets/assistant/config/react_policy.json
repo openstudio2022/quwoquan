@@ -55,6 +55,13 @@
         "检索完成但信息不足",
         "proxy"
       ]
+    },
+    {
+      "toolName": "local_context",
+      "errorCodes": [
+        "executionFailed"
+      ],
+      "messageKeywords": []
     }
   ],
   "llmRetryWithoutToolsStatusCodes": [400, 422, 500],

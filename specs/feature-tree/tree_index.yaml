@@ -739,6 +739,20 @@ features:
               domain: ""
               status: in_progress
               tags: []
+            - id: viewer-profile-state-sync-contract
+              name: viewer-profile-state-sync-contract
+              level: L3_scenario
+              path: discovery-content/content-display-journey-consistency/viewer-profile-state-sync-contract
+              domain: ""
+              status: specified
+              tags: []
+            - id: circle-feed-viewer-handoff-contract
+              name: circle-feed-viewer-handoff-contract
+              level: L3_scenario
+              path: discovery-content/content-display-journey-consistency/circle-feed-viewer-handoff-contract
+              domain: ""
+              status: specified
+              tags: []
             - id: feed-item-dto-contract
               name: feed-item-dto-contract
               level: L3_story

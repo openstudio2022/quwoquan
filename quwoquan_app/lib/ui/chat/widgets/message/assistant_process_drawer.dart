@@ -49,15 +49,6 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
     return UITextConstants.assistantProcessLongWaitReassurance;
   }
 
-  String _elapsedLabel() {
-    final seconds = _elapsedSeconds();
-    if (seconds <= 0) return '';
-    return UITextConstants.assistantProcessElapsedTemplate.replaceFirst(
-      '%s',
-      seconds.toString(),
-    );
-  }
-
   int _elapsedSeconds() {
     final elapsed = _viewModel.elapsedMs;
     if (elapsed <= 0) return 0;
@@ -72,18 +63,29 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
     );
   }
 
+  int _summaryDocumentCount() {
+    if (_viewModel.processedDocumentCount > 0) {
+      return _viewModel.processedDocumentCount;
+    }
+    if (_viewModel.acceptedDocumentCount > 0) {
+      return _viewModel.acceptedDocumentCount;
+    }
+    return _viewModel.referenceCount;
+  }
+
   String _summaryHeaderLabel() {
     if (!_viewModel.isRunning && _viewModel.finalAnswerReady) {
-      final referenceCount = _viewModel.referenceCount;
+      final documentCount = _summaryDocumentCount();
       final elapsedSeconds = _elapsedSeconds();
-      if (referenceCount > 0 && elapsedSeconds > 0) {
+      if (documentCount > 0 && elapsedSeconds > 0) {
         return UITextConstants.assistantProcessCompletedSummaryFullTemplate
-            .replaceFirst('%s', referenceCount.toString())
+            .replaceFirst('%s', documentCount.toString())
             .replaceFirst('%s', elapsedSeconds.toString());
       }
-      if (referenceCount > 0) {
-        return UITextConstants.assistantProcessCompletedSummaryReferencesTemplate
-            .replaceFirst('%s', referenceCount.toString());
+      if (documentCount > 0) {
+        return UITextConstants
+            .assistantProcessCompletedSummaryReferencesTemplate
+            .replaceFirst('%s', documentCount.toString());
       }
       if (elapsedSeconds > 0) {
         return UITextConstants.assistantProcessCompletedSummaryElapsedTemplate
@@ -105,14 +107,17 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
   }
 
   String _headerLabel() {
+    if (_viewModel.isRunning && _viewModel.activeStageLabel.isNotEmpty) {
+      return _viewModel.activeStageLabel;
+    }
+    if (!_viewModel.isRunning && _viewModel.finalAnswerReady) {
+      return _summaryHeaderLabel();
+    }
     if (!_viewModel.isRunning && !_expanded) {
       return _summaryHeaderLabel();
     }
     if (_viewModel.summary.isNotEmpty) {
       return _viewModel.summary;
-    }
-    if (_viewModel.isRunning && _viewModel.activeStageLabel.isNotEmpty) {
-      return _viewModel.activeStageLabel;
     }
     return _summaryHeaderLabel();
   }
@@ -191,24 +196,31 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
                   color: accentColor,
                 ),
               ),
-            if (_viewModel.isRunning && _viewModel.isInitialWait)
-              Padding(
-                padding: EdgeInsets.only(right: AppSpacing.xs + AppSpacing.xs / 2),
-                child: _BreathingCapsule(color: monochrome),
-              ),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    _headerLabel(),
-                    style: TextStyle(
-                      fontSize: AppTypography.base,
-                      fontWeight: FontWeight.w500,
-                      color: textColor,
-                      height: AppTypography.bodyLineHeight,
-                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          _headerLabel(),
+                          style: TextStyle(
+                            fontSize: AppTypography.base,
+                            fontWeight: FontWeight.w500,
+                            color: textColor,
+                            height: AppTypography.bodyLineHeight,
+                          ),
+                        ),
+                      ),
+                      if (_viewModel.isRunning)
+                        Padding(
+                          padding: EdgeInsets.only(left: AppSpacing.xs),
+                          child: _BreathingCapsule(color: monochrome),
+                        ),
+                    ],
                   ),
                   if (_isLongWaitWithoutProgress)
                     Padding(
@@ -222,28 +234,13 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
                         ),
                       ),
                     ),
-                  if (_elapsedLabel().isNotEmpty)
-                    Padding(
-                      padding: EdgeInsets.only(top: AppSpacing.xs / 2),
-                      child: Text(
-                        _elapsedLabel(),
-                        style: TextStyle(
-                          fontSize: AppTypography.xs,
-                          color: secondaryTextColor.withValues(alpha: 0.75),
-                          height: AppTypography.bodyLineHeight,
-                        ),
-                      ),
-                    ),
                 ],
               ),
             ),
-            if (_viewModel.isRunning && !_viewModel.isInitialWait)
-              Padding(
-                padding: EdgeInsets.only(left: AppSpacing.xs),
-                child: _ThreeDotPulse(color: monochrome, size: AppSpacing.xs),
-              ),
             Icon(
-              _expanded ? CupertinoIcons.chevron_up : CupertinoIcons.chevron_down,
+              _expanded
+                  ? CupertinoIcons.chevron_up
+                  : CupertinoIcons.chevron_down,
               size: AppTypography.smPlus,
               color: secondaryTextColor,
             ),
@@ -289,14 +286,6 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
               secondaryTextColor: secondaryTextColor,
               accentColor: accentColor,
             ),
-          if (_viewModel.isRunning)
-            Padding(
-              padding: EdgeInsets.only(top: AppSpacing.xs / 2),
-              child: _ThreeDotPulse(
-                color: accentColor.withValues(alpha: 0.5),
-                size: AppSpacing.xs,
-              ),
-            ),
         ],
       ),
     );
@@ -317,13 +306,16 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
                 vertical: AppSpacing.xs / 2,
               ),
               decoration: BoxDecoration(
-                color: _stageColor(
-                  stage.status,
-                  accentColor: accentColor,
-                  secondaryTextColor: secondaryTextColor,
-                ).withValues(
-                  alpha: stage.isActive ? 0.18 : (stage.isResolved ? 0.12 : 0.08),
-                ),
+                color:
+                    _stageColor(
+                      stage.status,
+                      accentColor: accentColor,
+                      secondaryTextColor: secondaryTextColor,
+                    ).withValues(
+                      alpha: stage.isActive
+                          ? 0.18
+                          : (stage.isResolved ? 0.12 : 0.08),
+                    ),
                 borderRadius: BorderRadius.circular(AppSpacing.sm),
               ),
               child: Text(
@@ -388,7 +380,9 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
               ),
             if (block.detail.isNotEmpty)
               Padding(
-                padding: EdgeInsets.only(top: block.headline.isNotEmpty ? 4 : 0),
+                padding: EdgeInsets.only(
+                  top: block.headline.isNotEmpty ? 4 : 0,
+                ),
                 child: Text(
                   block.detail,
                   style: TextStyle(
@@ -458,7 +452,9 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
                   SizedBox(width: AppSpacing.xs),
                   Expanded(
                     child: Text(
-                      label.isNotEmpty ? label : _referenceCountLabel(references.length),
+                      label.isNotEmpty
+                          ? label
+                          : _referenceCountLabel(references.length),
                       style: TextStyle(
                         fontSize: AppTypography.base,
                         fontWeight: FontWeight.w500,
@@ -519,7 +515,8 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
                     .map(
                       (reference) => GestureDetector(
                         onTap: reference.url.isNotEmpty
-                            ? () => widget.onReferenceUrlTap?.call(reference.url)
+                            ? () =>
+                                  widget.onReferenceUrlTap?.call(reference.url)
                             : null,
                         behavior: HitTestBehavior.opaque,
                         child: Padding(
@@ -564,7 +561,6 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
       ),
     );
   }
-
 }
 
 /// Breathing capsule: a rounded shape that smoothly stretches and contracts,

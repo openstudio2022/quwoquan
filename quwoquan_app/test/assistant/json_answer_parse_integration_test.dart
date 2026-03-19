@@ -30,7 +30,7 @@ class _JsonOnlyLlmProvider implements AssistantLlmProvider {
     return const AssistantModelOutput(
       text: '''
 {
-  "contractVersion": "assistant_turn",
+  "contractId": "assistant_turn",
   "messageKind": "answer",
   "phaseId": "answering",
   "actionCode": "compose_answer",
@@ -75,7 +75,7 @@ class _AssistantTurnProvider implements AssistantLlmProvider {
     return const AssistantModelOutput(
       text: '''
 {
-  "contractVersion": "assistant_turn",
+  "contractId": "assistant_turn",
   "messageKind": "ask_user",
   "phaseId": "clarifying",
   "actionCode": "ask_clarification",
@@ -121,7 +121,7 @@ class _SubagentTurnProvider implements AssistantLlmProvider {
       return const AssistantModelOutput(
         text: '''
 {
-  "contractVersion": "assistant_turn",
+  "contractId": "assistant_turn",
   "messageKind": "answer",
   "phaseId": "answering",
   "actionCode": "compose_answer",
@@ -149,7 +149,7 @@ class _SubagentTurnProvider implements AssistantLlmProvider {
       return const AssistantModelOutput(
         text: '''
 {
-  "contractVersion": "assistant_turn",
+  "contractId": "assistant_turn",
   "messageKind": "answer",
   "phaseId": "answering",
   "actionCode": "compose_answer",
@@ -171,7 +171,7 @@ class _SubagentTurnProvider implements AssistantLlmProvider {
     return const AssistantModelOutput(
       text: '''
 {
-  "contractVersion": "assistant_turn",
+  "contractId": "assistant_turn",
   "messageKind": "progress",
   "phaseId": "analyzing",
   "actionCode": "delegate_research",
@@ -289,7 +289,7 @@ void main() {
       isTrue,
       reason: 'assistant_turn 的用户可见信息应通过 display 或 followup/action hints 暴露',
     );
-    expect(response.displayMarkdown, isNot(contains('"contractVersion"')));
+    expect(response.displayMarkdown, isNot(contains('"contractId"')));
     await tempDir.delete(recursive: true);
   });
 

@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:test/test.dart';
 
 void main() {
-  test('web pipeline templates and thresholds are wired', () {
+  test('dead web pipeline templates are no longer registered', () {
     final manifest = File('assets/assistant/prompts/manifest.json');
     expect(manifest.existsSync(), isTrue);
     final manifestDecoded = jsonDecode(manifest.readAsStringSync()) as Map;
@@ -18,25 +18,25 @@ void main() {
       metaPaths.contains(
         'assets/assistant/prompts/web/domain.web_query_plan.meta.json',
       ),
-      isTrue,
+      isFalse,
     );
     expect(
       metaPaths.contains(
         'assets/assistant/prompts/web/domain.web_result_judge.meta.json',
       ),
-      isTrue,
+      isFalse,
     );
     expect(
       metaPaths.contains(
         'assets/assistant/prompts/web/domain.web_key_fact_extract.meta.json',
       ),
-      isTrue,
+      isFalse,
     );
     expect(
       metaPaths.contains(
         'assets/assistant/prompts/web/domain.web_evidence_pack.meta.json',
       ),
-      isTrue,
+      isFalse,
     );
 
     final slotContract = File(

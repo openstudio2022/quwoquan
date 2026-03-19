@@ -61,17 +61,9 @@ class ExecutionPreparationResolver {
       'planner.global_plan',
       fallback: '',
     );
-    final postcheckTemplateVersion = templateCatalogRuntime.latestVersionFor(
-      'planner.postcondition_check',
-      fallback: plannerTemplateVersion,
-    );
     final synthTemplateVersion = templateCatalogRuntime.latestVersionFor(
       'synthesizer.final_answer',
       fallback: plannerTemplateVersion,
-    );
-    final fusionSynthTemplateVersion = templateCatalogRuntime.latestVersionFor(
-      'synthesizer.multi_skill_fusion',
-      fallback: synthTemplateVersion,
     );
     final effectiveToolNames = resolveAvailableTools(
       domainId: effectiveDomainId,
@@ -95,9 +87,9 @@ class ExecutionPreparationResolver {
       allowedToolNames: effectiveToolNames,
       executionShell: executionShell,
       plannerTemplateVersion: plannerTemplateVersion,
-      postcheckTemplateVersion: postcheckTemplateVersion,
+      postcheckTemplateVersion: plannerTemplateVersion,
       synthTemplateVersion: synthTemplateVersion,
-      fusionSynthTemplateVersion: fusionSynthTemplateVersion,
+      fusionSynthTemplateVersion: synthTemplateVersion,
       previousSlotState: previousSlotState,
       previousDomainPolicyBundle: previousDomainPolicyBundle,
     );

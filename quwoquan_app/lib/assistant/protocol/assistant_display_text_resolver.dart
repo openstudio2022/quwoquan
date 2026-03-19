@@ -32,14 +32,22 @@ abstract final class AssistantDisplayTextResolver {
     r'^(#{1,6}|[-*+]\s|\d+\.\s|>\s?|[A-Za-z\u4E00-\u9FFF])',
   );
   static final RegExp _internalFieldRe = RegExp(
-    r'(assistant_turn|contractVersion|machineEnvelope|runArtifacts|queryTasks|tool_call)',
+    r'(assistant_turn|contractId|machineEnvelope|runArtifacts|queryTasks|tool_call)',
   );
   static final RegExp _assistantProtocolFragmentRe = RegExp(
-    r'(assistant_turn|contractVersion|machineEnvelope|runArtifacts|queryTasks|queryVariants|tool_call|<tool_call>|</tool_call>)',
+    r'(assistant_turn|contractId|machineEnvelope|runArtifacts|queryTasks|queryVariants|tool_call|<tool_call>|</tool_call>)',
     caseSensitive: false,
   );
   static final RegExp _processOnlyFragmentRe = RegExp(
-    r'(provider|freshnessHoursMax|timeScope|nextAction|finalAnswerReady|clarificationNeeded|needExpansion|phaseOneRoutingDiagnostics|modelCallCount|runModelCallCount|assistantElapsedMs|tokens?|模型调用|\{\{[^}]+\}\}|已完成\s+\d+/\d+\s+步)',
+    r'(provider|freshnessHoursMax|timeScope|nextAction|finalAnswerReady|clarificationNeeded|needExpansion|phaseOneRoutingDiagnostics|modelCallCount|runModelCallCount|assistantElapsedMs|tokens?|模型调用|\{\{[^}]+\}\}|已完成\s+\d+/\d+\s+步|用户想(?:了解|知道|确认|判断|解决)|我需要(?:搜索|检索|查询|调用|补充|分析|整理|确认)|我(?:先|再|正(?:在)?|已(?:经)?|会)?(?:聚焦|核对|整理|确认|搜索|检索|查询|补充|获取|拿到|找到))',
+    caseSensitive: false,
+  );
+  static final RegExp _technicalFailureFragmentRe = RegExp(
+    r'(MissingPluginException|No implementation found|Local context failed|PlatformException|Exception:|Error:|channel\s+[a-z0-9_./-]+|method\s+[a-zA-Z0-9_]+|personalassistant/nativeapi|getLocalContext|[\w./-]+\.dart:\d+)',
+    caseSensitive: false,
+  );
+  static final RegExp _internalPlannerNarrationFragmentRe = RegExp(
+    r'(用户(?:想|要|在(?:问|询问)|希望|关注|需要)|我需要(?:搜索|检索|查询|调用)|我(?:准备|打算|将要)(?:搜索|检索|查询|调用)|基于搜索结果整理)',
     caseSensitive: false,
   );
   static final RegExp _residualXmlToolFragmentRe = RegExp(
@@ -73,7 +81,7 @@ abstract final class AssistantDisplayTextResolver {
   static AssistantTurnOutput normalizeTurn(AssistantTurnOutput turn) {
     final projection = projectTurn(turn);
     return AssistantTurnOutput(
-      contractVersion: turn.contractVersion,
+      contractId: turn.contractId,
       decision: turn.decision,
       messageKind: turn.messageKind,
       userMarkdown: projection.markdown,
@@ -210,7 +218,20 @@ abstract final class AssistantDisplayTextResolver {
     final text = raw.trim();
     if (text.isEmpty) return false;
     return containsInternalAssistantProtocolFragment(text) ||
-        _processOnlyFragmentRe.hasMatch(text);
+        _processOnlyFragmentRe.hasMatch(text) ||
+        containsTechnicalFailureFragment(text);
+  }
+
+  static bool containsTechnicalFailureFragment(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) return false;
+    return _technicalFailureFragmentRe.hasMatch(text);
+  }
+
+  static bool containsInternalPlannerNarrationFragment(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) return false;
+    return _internalPlannerNarrationFragmentRe.hasMatch(text);
   }
 
   static bool hasStructuredPrefixLeak(String raw) {

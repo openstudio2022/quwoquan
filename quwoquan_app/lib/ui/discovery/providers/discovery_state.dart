@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/post_models.dart';
 import 'package:quwoquan_app/core/models/story_models.dart';
 import 'package:quwoquan_app/core/models/user_models.dart';
@@ -135,6 +136,22 @@ class DiscoveryState extends ChangeNotifier {
   
   int getPostSharesCount(String postId) {
     return _postSharesCount[postId] ?? 0;
+  }
+
+  void applyMediaViewerResult(MediaViewerResult result) {
+    _followingUsers = Set<String>.from(result.followingUsers);
+    _savedPosts = Set<String>.from(result.savedPosts);
+    _likedPosts = Set<String>.from(result.likedPosts);
+    _postLikesCount
+      ..clear()
+      ..addAll(result.postLikesCount);
+    _postBookmarksCount
+      ..clear()
+      ..addAll(result.postBookmarksCount);
+    _postSharesCount
+      ..clear()
+      ..addAll(result.postSharesCount);
+    notifyListeners();
   }
   
   // Stories管理

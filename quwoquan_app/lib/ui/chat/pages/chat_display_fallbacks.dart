@@ -1,9 +1,24 @@
+import 'dart:convert';
+
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/domain/channel/channel.dart';
 
+Map<String, dynamic> _structuredPayload(AssistantRunResponse response) {
+  final direct = response.structuredResponse;
+  if (direct.isNotEmpty) return direct;
+  final raw = response.finalText.trim();
+  if (raw.isEmpty) return const <String, dynamic>{};
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is Map<String, dynamic>) return decoded;
+    if (decoded is Map) return decoded.cast<String, dynamic>();
+  } catch (_) {}
+  return const <String, dynamic>{};
+}
+
 String resolveActionLikeCompletedFallback(AssistantRunResponse response) {
   final decision = AssistantTurnDecision.fromMaps(
-    structured: response.structuredResponse,
+    structured: _structuredPayload(response),
   );
   final nextAction = decision.nextAction.wireName;
   final messageKind = decision.messageKind.wireName;

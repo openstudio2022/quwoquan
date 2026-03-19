@@ -20,7 +20,7 @@
 当前最大的残留问题不在 skill，而在 runtime 核心和用户态过程链路：
 
 - `local_phase_execution_owner.dart` 与 phase pipeline 仍是本地执行链路的 payload 消费中枢
-- `react_runtime.dart` 仍保留工具名子串判断和原始 JSON 文本读取
+- `react_runtime.dart` 仍保留工具名子串判断和原始 JSON 文本读取；流式真相源已收口到运行时事件通道，JSON 只保留稳态结果，此处残留主要是兼容读取路径
 - `assistant_journey_projector.dart`、`assistant_stream_projector.dart` 已接管用户旅程投影，但仍需继续压缩共享 sanitization 与协议适配逻辑
 - `problem_framer.dart`、`retrieval_planner.dart`、`context_orchestrator.dart` 仍保留部分 query 拆解与检索 IA
 
@@ -62,7 +62,7 @@
 
 这些文件当前仍重复维护：
 
-- `contractVersion`
+- `contractId`
 - `assistant_turn`
 - `tool_call`
 - `machineEnvelope`

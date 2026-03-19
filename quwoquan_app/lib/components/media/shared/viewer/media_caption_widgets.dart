@@ -1,7 +1,6 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 class MediaCaptionBlock extends StatelessWidget {
@@ -11,24 +10,26 @@ class MediaCaptionBlock extends StatelessWidget {
     required this.caption,
     required this.isExpanded,
     required this.onToggle,
+    this.footer,
   });
 
   final String title;
   final String caption;
   final bool isExpanded;
   final VoidCallback onToggle;
+  final Widget? footer;
 
   @override
   Widget build(BuildContext context) {
     final horizontalPadding = context.safeGetContainerSpacing(SpacingSize.md);
     final titleStyle = TextStyle(
       color: AppColors.white,
-      fontSize: AppTypography.lg.sp,
+      fontSize: AppTypography.lg,
       fontWeight: FontWeight.w600,
     );
     final captionStyle = TextStyle(
       color: AppColors.white,
-      fontSize: AppTypography.base.sp,
+      fontSize: AppTypography.base,
       fontWeight: FontWeight.normal,
     );
 
@@ -52,6 +53,10 @@ class MediaCaptionBlock extends StatelessWidget {
               onToggle: onToggle,
               captionStyle: captionStyle,
             ),
+          if (footer != null) ...[
+            SizedBox(height: context.safeGetIntraGroupSpacing(SpacingSize.xs)),
+            footer!,
+          ],
         ],
       ),
     );
@@ -85,7 +90,8 @@ class MediaCaptionBlock extends StatelessWidget {
           child: isExpanded
               ? ConstrainedBox(
                   constraints: BoxConstraints(
-                    maxHeight: (captionStyle.fontSize ?? AppTypography.base) * 12,
+                    maxHeight:
+                        (captionStyle.fontSize ?? AppTypography.base) * 12,
                   ),
                   child: SingleChildScrollView(
                     child: Text.rich(
@@ -130,8 +136,14 @@ class MediaCaptionBlock extends StatelessWidget {
     );
   }
 
-  String _truncateCaption(String caption, TextPainter textPainter, double maxWidth) {
-    final position = textPainter.getPositionForOffset(Offset(maxWidth, textPainter.height));
+  String _truncateCaption(
+    String caption,
+    TextPainter textPainter,
+    double maxWidth,
+  ) {
+    final position = textPainter.getPositionForOffset(
+      Offset(maxWidth, textPainter.height),
+    );
     final truncatedLength = (position.offset - 4).clamp(0, caption.length);
     return '${caption.substring(0, truncatedLength)}${UITextConstants.ellipsis}';
   }
@@ -144,21 +156,20 @@ class MediaBlurCaptionOverlay extends StatelessWidget {
     required this.caption,
     required this.isExpanded,
     required this.onToggle,
+    this.footer,
   });
 
   final String title;
   final String caption;
   final bool isExpanded;
   final VoidCallback onToggle;
+  final Widget? footer;
 
   @override
   Widget build(BuildContext context) {
     return ClipRect(
       child: BackdropFilter(
-        filter: ImageFilter.blur(
-          sigmaX: AppSpacing.sm,
-          sigmaY: AppSpacing.sm,
-        ),
+        filter: ImageFilter.blur(sigmaX: AppSpacing.sm, sigmaY: AppSpacing.sm),
         child: Container(
           padding: EdgeInsets.symmetric(
             vertical: context.safeGetIntraGroupSpacing(SpacingSize.sm),
@@ -169,6 +180,7 @@ class MediaBlurCaptionOverlay extends StatelessWidget {
             caption: caption,
             isExpanded: isExpanded,
             onToggle: onToggle,
+            footer: footer,
           ),
         ),
       ),

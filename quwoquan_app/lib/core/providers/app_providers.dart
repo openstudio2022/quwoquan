@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
@@ -25,6 +27,8 @@ import 'package:quwoquan_app/cloud/services/rtc/rtc_repository.dart';
 import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/design_system/providers/theme_provider.dart';
+import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
+import 'package:quwoquan_app/core/models/client_state_sync.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_sync_service.dart';
 import 'package:quwoquan_app/core/services/cache/user_profile_cache_service.dart';
@@ -386,6 +390,9 @@ final visitRecorderServiceProvider = Provider<VisitRecorderService>((ref) {
 const Map<String, bool> _contentStoryBootstrapFlags = <String, bool>{
   'enable_create_action_entry': true,
   'enable_unified_create_editor': true,
+  'simple_create_action_sheet': true,
+  'create_editor_v2': true,
+  'progressive_title_prompt': true,
   'enable_identity_based_surfaces': true,
   'enable_identity_share_template': true,
   'enable_assistant_content_identity_index': true,
@@ -554,12 +561,14 @@ class ContentRuntimeConfigState {
     required this.experimentBucket,
     required this.currentCanaryStage,
     required this.canaryStages,
+    required this.clientStateSync,
   });
 
   final Map<String, bool> featureFlags;
   final String experimentBucket;
   final String currentCanaryStage;
   final List<ContentCanaryStage> canaryStages;
+  final ClientStateSyncConfig clientStateSync;
 
   bool isEnabled(String flag) => featureFlags[flag] ?? false;
 
@@ -582,6 +591,7 @@ class ContentRuntimeConfigState {
         ContentCanaryStage(stage: '50%', rolloutPercent: 50),
         ContentCanaryStage(stage: '100%', rolloutPercent: 100),
       ],
+      clientStateSync: ClientStateSyncConfig.defaults(),
     );
   }
 
@@ -624,6 +634,9 @@ class ContentRuntimeConfigState {
         (grayRelease['current_stage'] ?? fallback.currentCanaryStage)
             .toString()
             .trim();
+    final rawClientStateSync =
+        (content['client_state_sync'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
     return ContentRuntimeConfigState(
       featureFlags: mergedFlags,
       experimentBucket: experimentBucket.isEmpty
@@ -633,6 +646,10 @@ class ContentRuntimeConfigState {
           ? fallback.currentCanaryStage
           : currentCanaryStage,
       canaryStages: rawStages.isEmpty ? fallback.canaryStages : rawStages,
+      clientStateSync: ClientStateSyncConfig.fromMap(
+        rawClientStateSync,
+        fallback: fallback.clientStateSync,
+      ),
     );
   }
 }
@@ -677,6 +694,307 @@ final contentRuntimeConfigProvider =
 final contentFeatureFlagProvider = Provider.family<bool, String>((ref, flag) {
   return ref.watch(contentRuntimeConfigProvider).isEnabled(flag);
 });
+
+class UserRelationshipState {
+  const UserRelationshipState({
+    this.followingProfileIds = const <String>{},
+  });
+
+  final Set<String> followingProfileIds;
+
+  bool isFollowing(String profileSubjectId) {
+    return followingProfileIds.contains(profileSubjectId);
+  }
+
+  UserRelationshipState copyWith({
+    Set<String>? followingProfileIds,
+  }) {
+    return UserRelationshipState(
+      followingProfileIds: followingProfileIds ?? this.followingProfileIds,
+    );
+  }
+}
+
+class UserRelationshipStateNotifier extends Notifier<UserRelationshipState> {
+  @override
+  UserRelationshipState build() => const UserRelationshipState();
+
+  void seedFollowing(Iterable<String> profileSubjectIds) {
+    state = UserRelationshipState(
+      followingProfileIds: Set<String>.from(profileSubjectIds),
+    );
+  }
+
+  void setFollowing(String profileSubjectId, bool isFollowing) {
+    final next = Set<String>.from(state.followingProfileIds);
+    if (isFollowing) {
+      next.add(profileSubjectId);
+    } else {
+      next.remove(profileSubjectId);
+    }
+    state = state.copyWith(followingProfileIds: next);
+  }
+
+  void applyViewerResult(MediaViewerResult result) {
+    seedFollowing(result.followingUsers);
+  }
+}
+
+class PostInteractionState {
+  const PostInteractionState({
+    this.likedPostIds = const <String>{},
+    this.savedPostIds = const <String>{},
+    this.likeCounts = const <String, int>{},
+    this.bookmarkCounts = const <String, int>{},
+    this.shareCounts = const <String, int>{},
+  });
+
+  final Set<String> likedPostIds;
+  final Set<String> savedPostIds;
+  final Map<String, int> likeCounts;
+  final Map<String, int> bookmarkCounts;
+  final Map<String, int> shareCounts;
+
+  bool isLiked(String postId) => likedPostIds.contains(postId);
+  bool isSaved(String postId) => savedPostIds.contains(postId);
+
+  int likeCountFor(String postId, {int fallback = 0}) {
+    return likeCounts[postId] ?? fallback;
+  }
+
+  int bookmarkCountFor(String postId, {int fallback = 0}) {
+    return bookmarkCounts[postId] ?? fallback;
+  }
+
+  int shareCountFor(String postId, {int fallback = 0}) {
+    return shareCounts[postId] ?? fallback;
+  }
+
+  PostInteractionState copyWith({
+    Set<String>? likedPostIds,
+    Set<String>? savedPostIds,
+    Map<String, int>? likeCounts,
+    Map<String, int>? bookmarkCounts,
+    Map<String, int>? shareCounts,
+  }) {
+    return PostInteractionState(
+      likedPostIds: likedPostIds ?? this.likedPostIds,
+      savedPostIds: savedPostIds ?? this.savedPostIds,
+      likeCounts: likeCounts ?? this.likeCounts,
+      bookmarkCounts: bookmarkCounts ?? this.bookmarkCounts,
+      shareCounts: shareCounts ?? this.shareCounts,
+    );
+  }
+}
+
+class PostInteractionStateNotifier extends Notifier<PostInteractionState> {
+  @override
+  PostInteractionState build() => const PostInteractionState();
+
+  void setLiked(String postId, bool isLiked, {int? likeCount}) {
+    final nextLiked = Set<String>.from(state.likedPostIds);
+    final nextCounts = Map<String, int>.from(state.likeCounts);
+    if (isLiked) {
+      nextLiked.add(postId);
+    } else {
+      nextLiked.remove(postId);
+    }
+    if (likeCount != null) {
+      nextCounts[postId] = likeCount;
+    }
+    state = state.copyWith(likedPostIds: nextLiked, likeCounts: nextCounts);
+  }
+
+  void setSaved(String postId, bool isSaved, {int? bookmarkCount}) {
+    final nextSaved = Set<String>.from(state.savedPostIds);
+    final nextCounts = Map<String, int>.from(state.bookmarkCounts);
+    if (isSaved) {
+      nextSaved.add(postId);
+    } else {
+      nextSaved.remove(postId);
+    }
+    if (bookmarkCount != null) {
+      nextCounts[postId] = bookmarkCount;
+    }
+    state = state.copyWith(savedPostIds: nextSaved, bookmarkCounts: nextCounts);
+  }
+
+  void setShareCount(String postId, int shareCount) {
+    final next = Map<String, int>.from(state.shareCounts);
+    next[postId] = shareCount;
+    state = state.copyWith(shareCounts: next);
+  }
+
+  void applyViewerResult(MediaViewerResult result) {
+    state = PostInteractionState(
+      likedPostIds: Set<String>.from(result.likedPosts),
+      savedPostIds: Set<String>.from(result.savedPosts),
+      likeCounts: Map<String, int>.from(result.postLikesCount),
+      bookmarkCounts: Map<String, int>.from(result.postBookmarksCount),
+      shareCounts: Map<String, int>.from(result.postSharesCount),
+    );
+  }
+}
+
+class ClientStateSyncOutboxNotifier extends Notifier<ClientStateSyncOutboxState> {
+  Timer? _flushTimer;
+
+  @override
+  ClientStateSyncOutboxState build() {
+    ref.onDispose(() {
+      _flushTimer?.cancel();
+    });
+    return const ClientStateSyncOutboxState();
+  }
+
+  void enqueueFollow({
+    required String profileSubjectId,
+    required bool shouldFollow,
+  }) {
+    _upsertEntry(
+      objectType: 'profile',
+      objectId: profileSubjectId,
+      intentType: 'follow',
+      desiredBoolValue: shouldFollow,
+    );
+  }
+
+  void enqueuePostLike({
+    required String postId,
+    required bool isLiked,
+  }) {
+    _upsertEntry(
+      objectType: 'post',
+      objectId: postId,
+      intentType: 'like',
+      desiredBoolValue: isLiked,
+    );
+  }
+
+  void enqueuePostSave({
+    required String postId,
+    required bool isSaved,
+  }) {
+    _upsertEntry(
+      objectType: 'post',
+      objectId: postId,
+      intentType: 'save',
+      desiredBoolValue: isSaved,
+    );
+  }
+
+  Future<void> flushNow() async {
+    final config = ref.read(contentRuntimeConfigProvider).clientStateSync;
+    final now = DateTime.now();
+    final dueEntries = state.entries
+        .where((entry) => !entry.nextFlushAt.isAfter(now))
+        .take(config.maxBatchSize)
+        .toList(growable: false);
+    if (dueEntries.isEmpty) {
+      _scheduleNextFlush();
+      return;
+    }
+
+    var nextEntries = List<ClientStateSyncOutboxEntry>.from(state.entries);
+    for (final entry in dueEntries) {
+      try {
+        await _flushEntry(entry);
+        nextEntries.removeWhere((item) => item.coalesceKey == entry.coalesceKey);
+      } catch (_) {
+        nextEntries = nextEntries.map((item) {
+          if (item.coalesceKey != entry.coalesceKey) {
+            return item;
+          }
+          return item.copyWith(
+            retryCount: item.retryCount + 1,
+            nextFlushAt: now.add(config.retryDelay),
+          );
+        }).toList(growable: false);
+      }
+    }
+    state = state.copyWith(entries: nextEntries);
+    _scheduleNextFlush();
+  }
+
+  Future<void> _flushEntry(ClientStateSyncOutboxEntry entry) async {
+    switch ('${entry.objectType}:${entry.intentType}') {
+      case 'profile:follow':
+        final repo = ref.read(userProfileRepositoryProvider);
+        if (entry.desiredBoolValue) {
+          await repo.followUser(entry.objectId);
+        } else {
+          await repo.unfollowUser(entry.objectId);
+        }
+        return;
+      case 'post:like':
+        final repo = ref.read(contentRepositoryProvider);
+        if (entry.desiredBoolValue) {
+          await repo.likePost(postId: entry.objectId);
+        } else {
+          await repo.unlikePost(postId: entry.objectId);
+        }
+        return;
+      case 'post:save':
+        final repo = ref.read(contentRepositoryProvider);
+        if (entry.desiredBoolValue) {
+          await repo.favoritePost(postId: entry.objectId);
+        } else {
+          await repo.unfavoritePost(postId: entry.objectId);
+        }
+        return;
+    }
+  }
+
+  void _upsertEntry({
+    required String objectType,
+    required String objectId,
+    required String intentType,
+    required bool desiredBoolValue,
+  }) {
+    final config = ref.read(contentRuntimeConfigProvider).clientStateSync;
+    final coalesceKey = '$objectType:$intentType:$objectId';
+    final entry = ClientStateSyncOutboxEntry(
+      coalesceKey: coalesceKey,
+      objectType: objectType,
+      objectId: objectId,
+      intentType: intentType,
+      desiredBoolValue: desiredBoolValue,
+      nextFlushAt: DateTime.now().add(config.flushDelay),
+    );
+    final nextEntries = List<ClientStateSyncOutboxEntry>.from(state.entries)
+      ..removeWhere((item) => item.coalesceKey == coalesceKey)
+      ..add(entry);
+    state = state.copyWith(entries: nextEntries);
+    _scheduleNextFlush();
+  }
+
+  void _scheduleNextFlush() {
+    _flushTimer?.cancel();
+    if (state.entries.isEmpty) return;
+    final nextFlushAt = state.entries
+        .map((entry) => entry.nextFlushAt)
+        .reduce((a, b) => a.isBefore(b) ? a : b);
+    final delay = nextFlushAt.difference(DateTime.now());
+    _flushTimer = Timer(delay.isNegative ? Duration.zero : delay, () {
+      flushNow();
+    });
+  }
+}
+
+final userRelationshipStateProvider =
+    NotifierProvider<UserRelationshipStateNotifier, UserRelationshipState>(
+      UserRelationshipStateNotifier.new,
+    );
+
+final postInteractionStateProvider =
+    NotifierProvider<PostInteractionStateNotifier, PostInteractionState>(
+      PostInteractionStateNotifier.new,
+    );
+
+final clientStateSyncOutboxProvider =
+    NotifierProvider<ClientStateSyncOutboxNotifier, ClientStateSyncOutboxState>(
+      ClientStateSyncOutboxNotifier.new,
+    );
 
 final assistantRepositoryProvider = Provider<AssistantRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);

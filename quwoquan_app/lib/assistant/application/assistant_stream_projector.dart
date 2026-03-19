@@ -18,12 +18,10 @@ class AssistantStreamingProjector {
   AssistantStreamingProjector(
     AssistantRunRequest request, {
     required ToolMetadataRegistry toolMetadataRegistry,
-  }) : _toolMetadataRegistry = toolMetadataRegistry,
-       _journeyProjector = AssistantJourneyProjector(
+  }) : _journeyProjector = AssistantJourneyProjector(
          toolMetadataRegistry: toolMetadataRegistry,
        );
 
-  final ToolMetadataRegistry _toolMetadataRegistry;
   final AssistantJourneyProjector _journeyProjector;
   bool _sawAnswerDelta = false;
   String _lastJourneySignature = '';
@@ -123,7 +121,7 @@ class AssistantStreamingProjector {
       return true;
     }
     return text.contains('assistant_turn') ||
-        text.contains('contractVersion') ||
+        text.contains('contractId') ||
         text.contains('queryTasks') ||
         text.contains('machineEnvelope') ||
         text.contains('<tool_call>') ||

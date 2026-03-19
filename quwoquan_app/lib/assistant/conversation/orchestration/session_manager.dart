@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
-import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/preference_fact.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
@@ -524,17 +523,13 @@ class AssistantSessionManager {
     r'<parameter=[^>]*>[\s\S]*?</parameter>|'
     r'</?parameter[^>]*>',
   );
-  static final RegExp _xmlToolCallOpenRe = RegExp(r'<tool_call>|<function=');
-
-  bool _containsXmlToolCall(String text) => _xmlToolCallOpenRe.hasMatch(text);
-
   String _stripXmlToolCalls(String text) =>
       text.replaceAll(_xmlToolCallTagRe, '').trim();
 
   bool _containsInternalHistoryText(String text) {
     if (text.trim().isEmpty) return false;
     const fragments = <String>[
-      'contractVersion',
+      'contractId',
       'assistant_turn',
       'turnPhase',
       'queryTasks',

@@ -16,15 +16,15 @@ alwaysApply: true
 - UI、Repository、Router、埋点与文档不得维护第二套 IA、path、surface、operation 或 decoder 规则表。
 - 凡是用户可见、可灰度、可分享、可被小趣消费的能力，必须在 `/prd` 与 `/design` 先冻结 benchmark、`SLO/KPI`、权限边界、数据生命周期、迁移/灰度/回滚、观测方案。
 - 与既有 Story 冲突时，先在 `spec.md` 明确覆盖矩阵与优先级，再进入设计。
-- `/dev` 前必须已有稳定的 `spec.md`、`acceptance.yaml`、`design.md`、`tasks.md`，且 codegen 已通过。
+- `/dev` 前必须已有稳定的 `spec.md`、`acceptance.yaml`、`design.md`、`plan.yaml`、对应 `CR`，且 codegen 已通过。
 - 测试层只使用 `T1~T4`。
 - 缺关键前置时直接 `GATE_BLOCK`，不要绕过流程直接实现。
 
 ## 交付口径
 
-- `/explore`：定位 `L1/L2/L3`，识别 metadata、NFR、权限与发布风险。
+- `/explore`：定位 `L1/L2/L3`，识别 metadata、NFR、权限、CR 与发布风险。
 - `/prd`：冻结规格、验收、商用基线。
-- `/design`：冻结方案、任务、metadata/codegen、迁移与回滚。
-- `/dev`：按 `metadata -> codegen -> 业务逻辑 -> 测试` 执行。
+- `/design`：冻结方案、`plan.yaml`、metadata/codegen、迁移与回滚。
+- `/dev`：按 `plan.yaml` 切片和 `metadata -> codegen -> 业务逻辑 -> 测试` 顺序执行。
 - `/commit` / `/deploy`：以门禁、SLO、灰度与回滚演练为准。
 

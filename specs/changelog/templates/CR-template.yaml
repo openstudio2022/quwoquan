@@ -1,0 +1,34 @@
+id: CR-YYYYMMDD-NNN
+title: change request title
+slug: semantic-slug
+revision: 1
+status: active
+
+affected_nodes:
+  - specs/feature-tree/<l1>/<l2-journey>
+  - specs/feature-tree/<l1>/<l2-journey>/<l3-scenario>
+
+entries:
+  - timestamp: "2026-03-18T14:30:00+08:00"
+    summary: concise delta summary
+    reason: why the change is needed
+    change_type:
+      - refine
+      - split
+    changed_documents:
+      - path: specs/feature-tree/<l1>/<l2-journey>/spec.md
+        sections:
+          - 功能范围
+      - path: specs/feature-tree/<l1>/<l2-journey>/<l3-scenario>/acceptance.yaml
+        sections:
+          - A1
+    impact:
+      replan_required: true
+      redesign_required: false
+      retest_layers:
+        - T2
+        - T3
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - optional note

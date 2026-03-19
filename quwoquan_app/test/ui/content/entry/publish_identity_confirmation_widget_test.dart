@@ -8,7 +8,9 @@ import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
+import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
+import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _TrackingContentRepository extends MockContentRepository {
@@ -80,7 +82,7 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
-  testWidgets('长文案发布前提示切换为作品，继续当前发布时仍按点滴发布', (tester) async {
+  testWidgets('短文本直接按 micro 契约发布，且不暴露旧 taxonomy', (tester) async {
     final repository = _TrackingContentRepository();
 
     await tester.pumpWidget(_buildApp(repository));
@@ -88,34 +90,31 @@ void main() {
     await tester.tap(find.text('打开创作'));
     await tester.pumpAndSettle();
 
-    final longText = '很长的点滴内容' * 20;
-    await tester.enterText(find.byKey(TestKeys.createMomentInput), longText);
+    await tester.enterText(find.byKey(TestKeys.createMomentInput), '今天很开心');
     await tester.pump();
 
     await tester.tap(find.byKey(TestKeys.createPublishButton));
     await tester.pumpAndSettle();
 
-    final dialog = find.byType(CupertinoAlertDialog);
-    expect(dialog, findsOneWidget);
-    expect(
-      find.descendant(of: dialog, matching: find.text('当前内容更适合作为作品发布')),
-      findsOneWidget,
-    );
-
-    await tester.tap(
-      find.descendant(of: dialog, matching: find.text('仍按当前发布')),
-    );
+    expect(find.byKey(TestKeys.createPublishConfirmSheet), findsOneWidget);
+    expect(find.text('允许小趣使用'), findsNothing);
+    await tester.tap(find.byKey(TestKeys.createPublishConfirmButton));
     await tester.pumpAndSettle();
 
     expect(repository.createCallCount, 1);
     expect(repository.publishCallCount, 1);
-    expect(repository.lastCreatePayload?['contentIdentity'], 'moment');
+    expect(repository.lastCreatePayload?['contentType'], 'micro');
+    expect(
+      repository.lastCreatePayload?.containsKey('contentIdentity'),
+      isFalse,
+    );
+    expect(find.text('当前内容更适合作为作品发布'), findsNothing);
     await tester.pump(const Duration(seconds: 3));
     await tester.pump();
     expect(find.text('打开创作'), findsOneWidget);
   });
 
-  testWidgets('选择去调整时切到作品模式，且不立即发布', (tester) async {
+  testWidgets('长文本直接进入下一步并按 article 契约发布，且不暴露旧 taxonomy', (tester) async {
     final repository = _TrackingContentRepository();
 
     await tester.pumpWidget(_buildApp(repository));
@@ -129,21 +128,62 @@ void main() {
 
     await tester.tap(find.byKey(TestKeys.createPublishButton));
     await tester.pumpAndSettle();
+
     final dialog = find.byType(CupertinoAlertDialog);
-    expect(dialog, findsOneWidget);
-    await tester.tap(find.descendant(of: dialog, matching: find.text('切到作品')));
+    expect(dialog, findsNothing);
+    expect(find.text('当前内容更适合作为作品发布'), findsNothing);
+    expect(find.byKey(TestKeys.createPublishConfirmSheet), findsOneWidget);
+    await tester.tap(find.byKey(TestKeys.createPublishConfirmButton));
     await tester.pumpAndSettle();
 
-    expect(repository.createCallCount, 0);
-    expect(repository.publishCallCount, 0);
-    expect(find.text('作品·笔记'), findsOneWidget);
-
-    final articleBody = tester.widget<CupertinoTextField>(
-      find.descendant(
-        of: find.byKey(TestKeys.createArticleBodyInput),
-        matching: find.byType(CupertinoTextField),
-      ),
+    expect(repository.createCallCount, 1);
+    expect(repository.publishCallCount, 1);
+    expect(repository.lastCreatePayload?['contentType'], 'article');
+    expect(repository.lastCreatePayload?['body'], longText);
+    expect(
+      repository.lastCreatePayload?.containsKey('contentIdentity'),
+      isFalse,
     );
-    expect(articleBody.controller?.text, longText);
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump();
+    expect(find.text('打开创作'), findsOneWidget);
+  });
+
+  testWidgets('媒体编辑器对图片使用首图预览并写入 payload', (tester) async {
+    final repository = _TrackingContentRepository();
+
+    await tester.pumpWidget(_buildApp(repository));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('打开创作'));
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(CreatePage)),
+    );
+    final notifier = container.read(createEditorProvider.notifier);
+    notifier.setImages(<String>[
+      '/tmp/cover_a.jpg',
+      '/tmp/cover_b.jpg',
+    ], editorKind: CreateEditorKind.media);
+    notifier.setCurrentMediaIndex(1);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(TestKeys.createPublishButton));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(TestKeys.createPublishConfirmSheet), findsOneWidget);
+    expect(find.text('当前封面'), findsNothing);
+
+    await tester.tap(find.byKey(TestKeys.createPublishConfirmButton));
+    await tester.pumpAndSettle();
+
+    expect(repository.lastCreatePayload?['contentType'], 'image');
+    expect(repository.lastCreatePayload?['coverUrl'], '/tmp/cover_a.jpg');
+    expect(repository.lastCreatePayload?['mediaUrls'], <String>[
+      '/tmp/cover_a.jpg',
+      '/tmp/cover_b.jpg',
+    ]);
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump();
   });
 }

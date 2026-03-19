@@ -213,10 +213,13 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
         failureCode: AssistantFailureCode.templateMissing,
       );
     }
-    final requestMessages = <Map<String, dynamic>>[
-      <String, String>{'role': 'system', 'content': resolvedPrompt.content},
-      ...messages,
-    ];
+    final requestMessages = _buildRequestMessages(
+      messages: <Map<String, dynamic>>[
+        <String, String>{'role': 'system', 'content': resolvedPrompt.content},
+        ...messages,
+      ],
+      templateContext: templateContext,
+    );
     final toolSchemas = _buildToolSchemas(availableTools);
     final enableTools = toolSchemas.isNotEmpty;
 
@@ -490,6 +493,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       if (enableTools && toolSchemas.isNotEmpty) 'tool_choice': 'auto',
       'temperature': callOptions.temperature ?? 0.3,
       if (callOptions.maxTokens != null) 'max_tokens': callOptions.maxTokens,
+      ..._reasoningRequestEntries(_profile),
       if (callOptions.forceJsonObject && _profile.supportsJsonMode)
         'response_format': const <String, dynamic>{'type': 'json_object'},
     };
@@ -628,6 +632,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       'temperature': callOptions.temperature ?? 0.3,
       if (callOptions.maxTokens != null) 'max_tokens': callOptions.maxTokens,
       'stream': true,
+      ..._reasoningRequestEntries(_profile),
       if (callOptions.forceJsonObject && _profile.supportsJsonMode)
         'response_format': const <String, dynamic>{'type': 'json_object'},
     };
@@ -710,16 +715,12 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
           // MIMO / DeepSeek put thinking into a dedicated `reasoning` or
           // `reasoning_content` field instead of (or in addition to) `content`.
           if (profile.supportsReasoningField) {
-            final reasoningKey = profile.reasoningFieldName.isNotEmpty
-                ? profile.reasoningFieldName
-                : 'reasoning';
-            final reasoningDelta =
-                (delta[reasoningKey] as String?) ??
-                (delta['reasoning_content'] as String?) ??
-                '';
+            final reasoningDelta = _extractReasoningField(
+              delta.cast<String, dynamic>(),
+              profile,
+            );
             if (reasoningDelta.isNotEmpty) {
               reasoningBuffer.write(reasoningDelta);
-              onDelta(reasoningDelta);
             }
           }
 
@@ -833,16 +834,14 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
         },
       );
 
-      final reasoning = reasoningBuffer.toString();
+      final reasoning = reasoningBuffer.toString().trim();
 
       String effectiveText = fullText;
       if (effectiveText.isEmpty && toolCalls.isNotEmpty) {
         final names = toolCalls.map((c) => c.name).join('、');
         effectiveText = '正在调用工具：$names';
-      } else if (effectiveText.isEmpty && reasoning.isNotEmpty) {
-        effectiveText = reasoning;
       } else if (effectiveText.isEmpty) {
-        effectiveText = '已完成模型推理。';
+        effectiveText = _structuredReasoningPayload(reasoning);
       }
       return AssistantModelOutput(
         text: effectiveText,
@@ -996,7 +995,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
   static bool _looksLikeJsonEnvelope(String text) {
     final t = text.trimLeft();
     if (!t.startsWith('{') && !t.startsWith('```')) return false;
-    return t.contains('"contractVersion"') ||
+    return t.contains('"contractId"') ||
         t.contains('"decision"') ||
         t.contains('"toolPlan"') ||
         t.contains('"nextAction"');
@@ -1030,10 +1029,13 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
         resolvedPrompt.content.trim().isEmpty) {
       return '';
     }
-    final requestMessages = <Map<String, dynamic>>[
-      <String, String>{'role': 'system', 'content': resolvedPrompt.content},
-      ...messages,
-    ];
+    final requestMessages = _buildRequestMessages(
+      messages: <Map<String, dynamic>>[
+        <String, String>{'role': 'system', 'content': resolvedPrompt.content},
+        ...messages,
+      ],
+      templateContext: templateContext,
+    );
     final profile = _profile;
     final endpoint = '${_normalizeBaseUrl(baseUrl)}/chat/completions';
     final requestHeaders = <String, String>{
@@ -1047,6 +1049,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       'temperature': 0.2,
       'max_tokens': 4096,
       'stream': true,
+      ..._reasoningRequestEntries(profile),
       if (profile.supportsJsonMode)
         'response_format': const <String, dynamic>{'type': 'json_object'},
     };
@@ -1169,10 +1172,12 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       stackLayers.add(text);
     }
 
-    // v2 prompt ordering: identity → safety → task → output_contract → persona → tool_policy
-    // Stable prefix (§1-§2) maximizes cache hits; instructions precede data.
+    // Prompt ordering: identity → safety → model_thinking_policy → task →
+    // output_contract → persona → tool_policy.
+    // Stable prefix maximizes cache hits; instructions precede data.
     await appendLayer('stack.identity');
     await appendLayer('stack.safety');
+    await appendLayer('stack.model_thinking_policy');
     // §3: Stage-specific task prompt (planner / synthesizer / etc.)
     final stageText = stagePrompt.rendered.content.trim();
     if (stageText.isNotEmpty) {
@@ -1209,10 +1214,8 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
   static String _phaseContractForTemplate(String templateId) {
     switch (templateId) {
       case 'planner.global_plan':
-      case 'planner.postcondition_check':
         return 'phase.output_contract.plan';
       case 'synthesizer.final_answer':
-      case 'synthesizer.multi_skill_fusion':
         return 'phase.output_contract.answer';
       default:
         return '';
@@ -1294,13 +1297,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
     final content = (message['content'] as String?)?.trim() ?? '';
     final profile = ModelCapabilityProfile.forModelRef(modelRef);
     final reasoning = profile.supportsReasoningField
-        ? ((message[profile.reasoningFieldName.isNotEmpty
-                          ? profile.reasoningFieldName
-                          : 'reasoning']
-                      as String?) ??
-                  (message['reasoning_content'] as String?) ??
-                  '')
-              .trim()
+        ? _extractReasoningField(message.cast<String, dynamic>(), profile).trim()
         : '';
     final toolCallsRaw = message['tool_calls'];
     final toolCalls = <AssistantToolCall>[];
@@ -1344,10 +1341,8 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
     if (effectiveContent.isEmpty && toolCalls.isNotEmpty) {
       final names = toolCalls.map((c) => c.name).join('、');
       effectiveContent = '正在调用工具：$names';
-    } else if (effectiveContent.isEmpty && reasoning.isNotEmpty) {
-      effectiveContent = reasoning;
     } else if (effectiveContent.isEmpty) {
-      effectiveContent = '已完成模型推理。';
+      effectiveContent = _structuredReasoningPayload(reasoning);
     }
     return AssistantModelOutput(
       text: effectiveContent,
@@ -1521,6 +1516,118 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       }
     }
     return schemas;
+  }
+
+  List<Map<String, dynamic>> _buildRequestMessages({
+    required List<Map<String, dynamic>> messages,
+    required Map<String, dynamic> templateContext,
+  }) {
+    final normalized = messages
+        .map((message) => _normalizeMessageForProfile(message))
+        .toList(growable: true);
+    final continuation =
+        (templateContext['providerReasoningContinuation'] as String?)
+            ?.trim() ??
+        '';
+    if (continuation.isEmpty || !_profile.supportsReasoningField) {
+      return normalized;
+    }
+    final alreadyPresent = normalized.any(
+      (message) => _extractReasoningField(message, _profile).trim().isNotEmpty,
+    );
+    if (alreadyPresent) {
+      return normalized;
+    }
+    final reasoningFieldName = _profile.reasoningFieldName.isNotEmpty
+        ? _profile.reasoningFieldName
+        : 'reasoning_content';
+    final injected = <String, dynamic>{
+      'role': 'assistant',
+      'content': '',
+      reasoningFieldName: continuation,
+    };
+    final insertIndex = normalized.lastIndexWhere(
+      (message) => (message['role'] as String?)?.trim() == 'user',
+    );
+    if (insertIndex >= 0) {
+      normalized.insert(insertIndex, injected);
+    } else {
+      normalized.add(injected);
+    }
+    return normalized;
+  }
+
+  Map<String, dynamic> _normalizeMessageForProfile(Map<String, dynamic> message) {
+    final normalized = <String, dynamic>{};
+    final role = (message['role'] as String?)?.trim() ?? '';
+    if (role.isNotEmpty) {
+      normalized['role'] = role;
+    }
+    if (message.containsKey('content')) {
+      normalized['content'] = message['content'];
+    }
+    if (message['tool_calls'] is List) {
+      normalized['tool_calls'] = message['tool_calls'];
+    }
+    if (message['tool_call_id'] != null) {
+      normalized['tool_call_id'] = message['tool_call_id'];
+    }
+    if (message['name'] != null) {
+      normalized['name'] = message['name'];
+    }
+    final continuation = _firstNonEmptyText(<String?>[
+      (message['provider_reasoning_continuation'] as String?)?.trim(),
+      (message['providerReasoningContinuation'] as String?)?.trim(),
+      (message['reasoning_content'] as String?)?.trim(),
+      (message['reasoning'] as String?)?.trim(),
+    ]);
+    if (_profile.supportsReasoningField &&
+        role == 'assistant' &&
+        continuation.isNotEmpty) {
+      normalized[_profile.reasoningFieldName.isNotEmpty
+          ? _profile.reasoningFieldName
+          : 'reasoning_content'] = continuation;
+    }
+    return normalized;
+  }
+
+  Map<String, dynamic> _reasoningRequestEntries(ModelCapabilityProfile profile) {
+    if (profile.reasoningRequestObject.isEmpty) {
+      return const <String, dynamic>{};
+    }
+    return <String, dynamic>{'reasoning': profile.reasoningRequestObject};
+  }
+
+  String _extractReasoningField(
+    Map<String, dynamic> payload,
+    ModelCapabilityProfile profile,
+  ) {
+    return _firstNonEmptyText(<String?>[
+      (payload[profile.reasoningFieldName] as String?)?.trim(),
+      (payload['reasoning_content'] as String?)?.trim(),
+      (payload['reasoning'] as String?)?.trim(),
+    ]);
+  }
+
+  String _structuredReasoningPayload(String reasoning) {
+    final trimmed = reasoning.trim();
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      return trimmed;
+    }
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      return trimmed;
+    }
+    return '';
+  }
+
+  String _firstNonEmptyText(Iterable<String?> values) {
+    for (final value in values) {
+      final normalized = value?.trim() ?? '';
+      if (normalized.isNotEmpty) {
+        return normalized;
+      }
+    }
+    return '';
   }
 }
 
@@ -1918,7 +2025,7 @@ class HeuristicLocalLlmProvider implements AssistantLlmProvider {
       failureCode: AssistantFailureCode.heuristicFallback,
       text: jsonEncode(
         AssistantTurnOutput(
-          contractVersion: kAssistantTurnCurrentVersion,
+          contractId: kAssistantTurnCurrentContractId,
           decision: const AssistantTurnDecisionPayload(
             nextAction: AssistantNextAction.abort,
           ),

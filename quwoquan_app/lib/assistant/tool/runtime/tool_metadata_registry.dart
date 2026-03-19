@@ -285,6 +285,22 @@ class ToolMetadataRegistry {
     );
   }
 
+  /// Returns true only when all placeholders in [template] can be resolved to
+  /// non-empty values from [variables]. Numeric zero is considered resolvable.
+  bool canResolveTemplate(String template, Map<String, dynamic> variables) {
+    final matches = RegExp(r'\{\{(\w+(?:\.\w+)*)\}\}').allMatches(template);
+    for (final match in matches) {
+      final key = match.group(1);
+      if (key == null || key.isEmpty) continue;
+      final value = _resolveNestedKey(variables, key);
+      if (value == null) return false;
+      if (value is num || value is bool) continue;
+      if (value is String && value.trim().isEmpty) return false;
+      if (value is Iterable && value.isEmpty) return false;
+    }
+    return true;
+  }
+
   // ── private helpers ──────────────────────────────────────────────────
 
   dynamic _resolveNestedKey(Map<String, dynamic> map, String dotPath) {

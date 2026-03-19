@@ -4,10 +4,8 @@ import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:quwoquan_app/assistant/application/assistant_run_stream.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
-import 'package:quwoquan_app/assistant/orchestration/orchestration.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
@@ -199,6 +197,8 @@ class ChatMessageBubble extends StatelessWidget {
               buildAssistantJourneyViewModel(
                 journey: resolveAssistantJourneyFromMessage(message),
                 isRunning: isAssistantRunning,
+                retrievalProcessing:
+                    resolveAssistantRetrievalProcessingFromMessage(message),
                 usageStats:
                     (message['uiUsageStats'] as Map?)?.cast<String, dynamic>() ??
                     const <String, dynamic>{},

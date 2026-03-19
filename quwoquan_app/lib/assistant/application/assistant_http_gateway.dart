@@ -312,15 +312,6 @@ class AssistantHttpGateway {
     );
   }
 
-  static String _latestUserMessage(List<AssistantRunMessage> messages) {
-    for (var i = messages.length - 1; i >= 0; i--) {
-      final item = messages[i];
-      if (item.role == 'user' && item.content.trim().isNotEmpty) {
-        return item.content.trim();
-      }
-    }
-    return '';
-  }
 }
 
 class _SimpleRateLimiter {

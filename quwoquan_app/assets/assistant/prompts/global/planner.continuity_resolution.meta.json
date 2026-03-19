@@ -1,6 +1,6 @@
 {
   "templateId": "planner.continuity_resolution",
-  "version": "2026.03.16",
+  "version": "2026.03.18",
   "stage": "plan",
   "domainId": "global",
   "requiredVariables": [
@@ -8,6 +8,8 @@
     "referenceQueries",
     "historySummary",
     "previousIntentGraph",
+    "previousUnderstandingSnapshot",
+    "previousAnswerProcessing",
     "previousSlotState",
     "previousAnswerSummary"
   ],

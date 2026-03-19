@@ -1,0 +1,130 @@
+version: 2
+feature: circle-feed-viewer-handoff-contract
+level: L3_scenario
+source_path: discovery-content/content-display-journey-consistency/circle-feed-viewer-handoff-contract
+parent_journey: content-display-journey-consistency
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+scope:
+  summary: >
+    冻结 circle feed 进入 viewer 与返回 circle feed 的 handoff / return contract，
+    保证其与 discovery 来源协议同构。
+  journey_bindings:
+    - J1
+  in_scope:
+    - circle source context 与 viewer extra/result 字段集合
+    - circle -> viewer -> profile -> return 的回写闭环
+    - circle 来源下的 post 文案、关系态、互动状态一致性
+  out_of_scope:
+    - circle 排序推荐
+    - 非媒体内容详情重做
+    - circle 壳层视觉重做
+
+scenario_acceptance:
+  A1:
+    title: circle 进入 viewer 的 handoff 完整且同构
+    scenario: circle feed open immersive viewer
+    journey_step: open viewer from circle media post
+    done_when:
+      - circle 来源进入 viewer 时带入 PostId、authorProfileSubjectId、正文/媒体资源、互动 snapshot 与 CircleId
+      - 与 discovery 来源相比，除 source context 外字段集合保持同构
+      - viewer 首屏不依赖额外自拉请求补正文或状态
+    edge_cases:
+      - photo/video/moment 三类媒体
+      - 同一作者在多个圈子与 discovery 来源重复出现
+    linked_plan_items:
+      - P1
+      - P2
+    evidence:
+      primary:
+        - T1_schema
+        - T2_app_mock
+      supporting:
+        - T3_app_api_integration
+    tests:
+      planned:
+        - circle viewer extra contract test
+        - circle media handoff widget test
+      recorded:
+        - test/ui/content/post/post_summary_view_test.dart
+        - test/ui/circle/widgets/media_viewer_result_absorb_test.dart
+    status: implemented
+  A2:
+    title: viewer 返回 circle 后完整回写最终状态
+    scenario: dismiss viewer back to circle feed
+    journey_step: apply MediaViewerResult to circle source
+    done_when:
+      - circle feed 吸收 likedPosts、savedPosts、followingUsers 与最终计数
+      - 不再只回写 like/share 等局部数字
+      - 返回后 circle feed 与 viewer 最终状态一致
+    edge_cases:
+      - 进入 profile 后再返回 viewer，再返回 circle
+      - 一次会话内多次打开不同 post
+    linked_plan_items:
+      - P2
+      - P3
+    evidence:
+      primary:
+        - T2_app_mock
+        - T3_app_api_integration
+      supporting:
+        - T4_user_journey
+    tests:
+      planned:
+        - viewer result absorb integration test
+        - circle reentry consistency test
+      recorded:
+        - test/ui/circle/widgets/media_viewer_result_absorb_test.dart
+    status: implemented
+  A3:
+    title: circle 来源不自持第二套状态真相
+    scenario: circle source renders state from shared providers
+    journey_step: render feed after sync from viewer/profile
+    done_when:
+      - circle 只持有来源上下文，不自行定义 follow/post interaction 真相
+      - 关系态来自 viewer-profile-state-sync-contract 的统一 provider
+      - 文案与互动状态消费统一 post projections
+    edge_cases:
+      - provider 更新晚于 route result 返回
+      - 弱网下存在 pending intents
+    linked_plan_items:
+      - P3
+      - P4
+    evidence:
+      primary:
+        - T1_schema
+        - T2_module_interaction
+      supporting:
+        - T3_app_api_integration
+    tests:
+      planned:
+        - shared-provider circle integration test
+        - weak-network pending-state test
+      recorded:
+        - test/core/providers/client_state_sync_providers_test.dart
+        - test/ui/circle/widgets/media_viewer_result_absorb_test.dart
+    status: implemented
+
+story_readiness:
+  S1:
+    title: circle 纳入范围后的发布 guardrail 清晰
+    done_when:
+      - circle 来源可单独灰度与回滚
+      - circle 与 discovery 的协议差异仅限 source context
+      - circle 专项回归用例进入 T4 旅程验收
+    evidence:
+      primary:
+        - T1_schema
+        - T4_user_journey
+      supporting:
+        - T3_app_api_integration
+    tests:
+      planned:
+        - circle rollback verification
+        - journey regression checklist
+      recorded: []
+    status: pending

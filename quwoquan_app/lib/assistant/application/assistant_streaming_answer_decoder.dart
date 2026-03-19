@@ -403,10 +403,10 @@ class AssistantStreamingAnswerDecoder {
   }
 
   static final _jsonEnvelopeFragmentRe = RegExp(
-    r'"?(contractVersion|assistant_turn|decision|toolPlan|nextAction|userMarkdown)"?\s*:',
+    r'"?(contractId|assistant_turn|decision|toolPlan|nextAction|userMarkdown)"?\s*:',
   );
   static final _jsonKeyFragmentRe = RegExp(
-    r'"?(contractVersion|decision|nextAction|toolPlan|'
+    r'"?(contractId|decision|nextAction|toolPlan|'
     r'userMarkdown|messageKind|slotFillPlan|queryNormalization|'
     r'selfCheck|diagnostics|reasoningBasis|'
     r'queryTasks|contextSlots|subagentPlan|evidence|result|'

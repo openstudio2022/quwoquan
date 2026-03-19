@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_action_bar.dart';
@@ -118,7 +119,7 @@ void main() {
       expect(find.textContaining('@'), findsNothing);
     });
 
-    testWidgets('旅程 D2：other 模式渲染等宽「关注」「私信」', (tester) async {
+    testWidgets('旅程 D2：other 模式渲染等宽「关注」与主消息入口', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -126,7 +127,10 @@ void main() {
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.other));
       await _pumpFrames(tester);
       expect(_profileActionLabel('关注'), findsOneWidget);
-      expect(_profileActionLabel('私信'), findsOneWidget);
+      expect(
+        _profileActionLabel(UITextConstants.profileDirectMessage),
+        findsOneWidget,
+      );
     });
 
     testWidgets('旅程 D3：mine 模式渲染「资料编辑」「分身管理」', (tester) async {

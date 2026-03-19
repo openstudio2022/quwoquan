@@ -21,9 +21,13 @@ class LocalContextTool implements AssistantTool {
     if (result.containsKey('error')) {
       return AssistantToolResult(
         success: false,
-        message: 'Local context failed: ${result['error']}',
+        message: '本地上下文暂不可用',
         errorCode: AssistantErrorCode.executionFailed,
         degraded: true,
+        data: <String, dynamic>{
+          'userMessage': '本地上下文暂不可用',
+          'internalError': result['error'],
+        },
       );
     }
     final normalized = _normalizeContextResult(result);

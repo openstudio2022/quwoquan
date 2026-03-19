@@ -48,3 +48,63 @@ configs:
     rollout: progressive
     risk_level: medium
     ui_editable: true
+
+  - key: sys.client_state_sync.flush_delay_sec
+    type: int
+    owner: platform-ops
+    default: 10
+    scope: service
+    reload: hot
+    rollout: progressive
+    risk_level: medium
+    ui_editable: true
+
+  - key: sys.client_state_sync.retry_delay_sec
+    type: int
+    owner: platform-ops
+    default: 300
+    scope: service
+    reload: hot
+    rollout: progressive
+    risk_level: medium
+    ui_editable: true
+
+  - key: sys.client_state_sync.max_batch_size
+    type: int
+    owner: platform-ops
+    default: 20
+    scope: service
+    reload: hot
+    rollout: progressive
+    risk_level: low
+    ui_editable: true
+
+  - key: sys.client_state_sync.max_pending_age_sec
+    type: int
+    owner: platform-ops
+    default: 259200
+    scope: service
+    reload: hot
+    rollout: progressive
+    risk_level: low
+    ui_editable: true
+
+  - key: sys.client_state_sync.flush_on_foreground_resume
+    type: bool
+    owner: platform-ops
+    default: true
+    scope: service
+    reload: hot
+    rollout: progressive
+    risk_level: low
+    ui_editable: true
+
+  - key: sys.client_state_sync.flush_on_network_recovered
+    type: bool
+    owner: platform-ops
+    default: true
+    scope: service
+    reload: hot
+    rollout: progressive
+    risk_level: low
+    ui_editable: true

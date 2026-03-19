@@ -1,0 +1,191 @@
+id: CR-20260318-002
+title: content display journey consistency prd baseline expansion
+slug: content-display-journey-consistency-prd-baseline-expansion
+revision: 2
+status: active
+
+affected_nodes:
+  - specs/feature-tree/discovery-content/content-display-journey-consistency
+  - specs/feature-tree/discovery-content/content-display-journey-consistency/viewer-profile-state-sync-contract
+  - specs/feature-tree/discovery-content/content-display-journey-consistency/circle-feed-viewer-handoff-contract
+  - specs/feature-tree/discovery-content/tree.yaml
+  - specs/feature-tree/tree_index.yaml
+
+entries:
+  - timestamp: "2026-03-18T21:00:00+08:00"
+    summary: >
+      将 content-display-journey-consistency 扩展为正式 PRD baseline，纳入 circle 来源，
+      并新增 viewer/profile 同步契约与 circle/viewer handoff 契约两个 L3 scenario。
+    reason: >
+      现有 discovery-only 规格无法覆盖圈子来源 handoff、作者主页按钮矩阵一致性、
+      canonical key 统一以及 10s 批同步/5min 重试的系统级同步策略，需要在进入 design 前冻结。
+    change_type:
+      - refine
+      - expand
+      - split
+    changed_documents:
+      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/spec.md
+        sections:
+          - 背景与动机
+          - 功能范围
+          - 既有 Story 覆盖矩阵
+          - 数据生命周期合同
+          - 非功能目标
+          - 迁移、灰度与回滚要求
+      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/acceptance.yaml
+        sections:
+          - J1
+          - J2
+          - J3
+          - R1
+      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/viewer-profile-state-sync-contract/spec.md
+        sections:
+          - 功能范围
+          - 数据生命周期合同
+          - 非功能目标
+      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/viewer-profile-state-sync-contract/acceptance.yaml
+        sections:
+          - A1
+          - A2
+          - A3
+          - S1
+      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/circle-feed-viewer-handoff-contract/spec.md
+        sections:
+          - 功能范围
+          - 数据生命周期合同
+          - 验收重点
+      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/circle-feed-viewer-handoff-contract/acceptance.yaml
+        sections:
+          - A1
+          - A2
+          - A3
+          - S1
+      - path: specs/feature-tree/discovery-content/tree.yaml
+        sections:
+          - content-display-journey-consistency.l3
+      - path: specs/feature-tree/tree_index.yaml
+        sections:
+          - discovery-content/content-display-journey-consistency children
+    impact:
+      replan_required: true
+      redesign_required: true
+      retest_layers:
+        - T1
+        - T2
+        - T3
+        - T4
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - 本次冻结的是 PRD baseline，不直接产出 design/tasks。
+      - circle 被正式纳入来源范围，但仍不拥有独立状态真相源。
+      - user 与 post 的对象级唯一真相源已在本次 CR 中明确冻结。
+  - timestamp: "2026-03-18T21:30:00+08:00"
+    summary: >
+      为 content-display-journey-consistency 及两个新增 L3 scenario 补齐设计基线与 plan slices，
+      并完成一次真实 G1 verify/codegen/codegen-app 校验。
+    reason: >
+      `/prd` 已冻结范围、对象边界与验收，但尚未形成可执行方案、metadata/codegen 变更路径、
+      outbox 调度模型与实施切片，不能直接进入 `/dev`。
+    change_type:
+      - design
+      - replan
+      - validate
+    changed_documents:
+      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/design.md
+        sections:
+          - 方案对比
+          - 选型决策
+          - 关键设计决策
+          - metadata / codegen 方案
+          - plan slice 与 T1~T4 证据矩阵映射
+      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+          - P4
+          - P5
+          - P6
+      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/viewer-profile-state-sync-contract/design.md
+        sections:
+          - 方案对比
+          - 关键设计决策
+          - metadata / codegen 方案
+      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/viewer-profile-state-sync-contract/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+          - P4
+      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/circle-feed-viewer-handoff-contract/design.md
+        sections:
+          - 方案对比
+          - 关键设计决策
+          - TDD / ATDD 策略
+      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/circle-feed-viewer-handoff-contract/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+          - P4
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+        - T4
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - G1 命令 `make -C quwoquan_service verify-metadata && make codegen && make codegen-app` 已实际执行并通过。
+      - 当前设计选型为 shared provider 为主、route handoff/result 为补强、outbox 负责延迟批同步。
+      - 进入 `/dev` 前仍需按 plan slices 先做 metadata，再做 codegen，再做业务逻辑与测试。
+  - timestamp: "2026-03-19T02:20:00+08:00"
+    summary: >
+      完成 viewer/profile shared provider、circle viewer result absorb、client_state_sync
+      runtime config 与 outbox 延迟同步的首轮 `/dev` 实现，并补齐 L3 tasks / acceptance 证据。
+    reason: >
+      `/design` 已冻结方案与切片，需要落实最小可运行实现并以聚焦测试、metadata verify/codegen、
+      service build/test-contract 形成可交付证据。
+    change_type:
+      - dev
+      - validate
+    changed_documents:
+      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/viewer-profile-state-sync-contract/tasks.md
+        sections:
+          - P1
+          - P2
+          - P3
+          - Verification
+      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/circle-feed-viewer-handoff-contract/tasks.md
+        sections:
+          - P1
+          - P2
+          - P3
+          - Verification
+      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/viewer-profile-state-sync-contract/acceptance.yaml
+        sections:
+          - A1
+          - A2
+          - A3
+      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/circle-feed-viewer-handoff-contract/acceptance.yaml
+        sections:
+          - A1
+          - A2
+          - A3
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - 聚焦 Flutter Red/Green 测试已通过：runtime config、post body projection、outbox coalesce、profile follow sync、circle result absorb。
+      - `make -C quwoquan_service build && make -C quwoquan_service test-contract` 已通过。
+      - 全量 `flutter test test/cloud/ test/components/ test/ui/` 存在仓库既有失败，主因是 `retrieval_design_phase.dart` 缺少 `AnswerShape` / `FreshnessNeed` 符号，不由本次改动引入。

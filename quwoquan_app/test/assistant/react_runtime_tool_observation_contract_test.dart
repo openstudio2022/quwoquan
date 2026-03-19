@@ -177,6 +177,31 @@ class _ArgumentCaptureSearchTool implements AssistantTool {
   }
 }
 
+class _NoToolPlanProvider implements AssistantLlmProvider {
+  int callCount = 0;
+
+  @override
+  Future<AssistantModelOutput> reason({
+    required List<Map<String, dynamic>> messages,
+    required List<String> availableTools,
+    Map<String, dynamic> templateContext = const <String, dynamic>{},
+    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    String templateId = 'planner.global_plan',
+    String templateVersion = '',
+    String sessionId = '',
+    String runId = '',
+    String traceId = '',
+    LlmCallOptions? callOptions,
+    void Function(String delta)? onDelta,
+  }) async {
+    callCount += 1;
+    if (callCount == 1) {
+      return const AssistantModelOutput(text: '我先想一下检索方向');
+    }
+    return const AssistantModelOutput(text: '最终回答');
+  }
+}
+
 class _ForceAnswerOnlyProvider implements AssistantLlmProvider {
   int callCount = 0;
   final List<List<String>> availableToolsByCall = <List<String>>[];
@@ -459,5 +484,45 @@ void main() {
       equals(<String>['深圳酒店 位置 交通']),
       reason: '即便 phase 侧提供了 typed queryTasks，runtime 也不应篡改模型原始 queryVariants',
     );
+  });
+
+  test('phase 侧已有 precomputed queryTasks 时，runtime 不会空手跳过首轮检索', () async {
+    final provider = _NoToolPlanProvider();
+    final metadata = ToolMetadataRegistry();
+    await metadata.ensureLoaded();
+    final registry = AssistantToolRegistry(metadataRegistry: metadata);
+    final captureTool = _ArgumentCaptureSearchTool();
+    registry.register(captureTool);
+    final runtime = ReactRuntime(
+      llmProvider: provider,
+      toolRegistry: registry,
+      toolMetadataRegistry: metadata,
+    );
+
+    final result = await runtime.run(
+      messages: <Map<String, dynamic>>[
+        const <String, dynamic>{'role': 'user', 'content': '查深圳住宿建议'},
+      ],
+      maxIterations: 2,
+      goal: '查深圳住宿建议',
+      templateVariables: const <String, dynamic>{
+        'problemClass': 'complex_reasoning',
+        'skillExecutionShell': <String, dynamic>{
+          'preComputedQueryTasks': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'id': 'fit_scenarios',
+              'dimension': 'fit_scenarios',
+              'label': '适用场景',
+              'query': '深圳住宿 通勤 景点 夜生活 适合',
+            },
+          ],
+        },
+      },
+    );
+
+    expect(captureTool.executeCount, equals(1));
+    expect(provider.callCount, equals(2), reason: '自动补检索后应继续进入下一轮收敛');
+    expect(result.finalText, equals('最终回答'));
+    expect(captureTool.lastArguments['query'], equals('深圳住宿 通勤 景点 夜生活 适合'));
   });
 }

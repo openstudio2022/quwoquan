@@ -28,6 +28,7 @@ import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
 import 'package:quwoquan_app/assistant/application/assistant_run_stream.dart';
 import 'package:quwoquan_app/assistant/application/assistant_streaming_answer_decoder.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/capabilities/capabilities.dart';
 import 'package:quwoquan_app/assistant/domain/channel/channel.dart';
 import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
@@ -127,6 +128,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       AssistantStreamingAnswerDecoder();
 
   AssistantJourney _currentJourney = const AssistantJourney();
+  RetrievalProcessingSnapshot _currentRetrievalProcessing =
+      const RetrievalProcessingSnapshot();
   int _currentJourneyElapsedMs = 0;
   bool _answerGateOpen = true;
 
@@ -821,10 +824,13 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     required bool isRunning,
     Map<String, dynamic> usageStats = const <String, dynamic>{},
     int? elapsedMs,
+    RetrievalProcessingSnapshot retrievalProcessing =
+        const RetrievalProcessingSnapshot(),
   }) {
     return buildAssistantJourneyViewModel(
       journey: journey,
       isRunning: isRunning,
+      retrievalProcessing: retrievalProcessing,
       usageStats: usageStats,
       elapsedMs: elapsedMs ?? _currentJourneyElapsedMs,
     );
@@ -837,6 +843,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     return _buildJourneyViewModel(
       journey: resolveAssistantJourneyFromMessage(message),
       isRunning: isRunning,
+      retrievalProcessing: resolveAssistantRetrievalProcessingFromMessage(
+        message,
+      ),
       usageStats:
           (message['uiUsageStats'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{},
@@ -885,8 +894,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           _messages[index] = <String, dynamic>{
             ..._messages[index],
             assistantJourneyField: journey.toJson(),
-            assistantUiProcessTimelineV2Field:
-                buildAssistantUiProcessTimelineV2(journey).toJson(),
+            assistantUiProcessTimelineField: buildAssistantUiProcessTimeline(
+              journey,
+            ).toJson(),
             'assistantElapsedMs': _currentJourneyElapsedMs,
           };
         }
@@ -1618,6 +1628,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         _assistantResponding = true;
         _assistantPhaseLabel = UITextConstants.assistantPhaseUnderstanding;
         _currentJourney = const AssistantJourney();
+        _currentRetrievalProcessing = const RetrievalProcessingSnapshot();
         _currentJourneyElapsedMs = 0;
         _userScrolledAway = false;
         _showScrollFab = false;
@@ -1639,7 +1650,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           assistantDisplayPlainTextField: '',
           'runArtifacts': const <String, dynamic>{},
           assistantJourneyField: const <String, dynamic>{},
-          assistantUiProcessTimelineV2Field: const <String, dynamic>{},
+          assistantUiProcessTimelineField: const <String, dynamic>{},
           assistantFollowupPromptField: '',
           assistantActionHintsField: const <String>[],
           'assistantElapsedMs': 0,
@@ -1812,12 +1823,16 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         final resolvedJourney = resolveAssistantJourneyFromResponse(
           runResponse,
         );
-        final effectiveJourney = resolvedJourney.isEmpty
-            ? _currentJourney
-            : resolvedJourney;
+        final effectiveJourney = _persistableAssistantJourney(
+          response: runResponse,
+          journey: resolvedJourney.isEmpty ? _currentJourney : resolvedJourney,
+        );
+        final retrievalProcessing =
+            resolveAssistantRetrievalProcessingFromResponse(runResponse);
         if (!mounted) return;
         setState(() {
           _currentJourney = effectiveJourney;
+          _currentRetrievalProcessing = retrievalProcessing;
           _currentJourneyElapsedMs = elapsedMs;
           final persistedTurnFields =
               _buildAssistantPersistedTurnFieldsForResponse(
@@ -2233,6 +2248,50 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       actionHints: resolveAssistantActionHintsFromResponse(response),
       elapsedMs: elapsedMs,
     );
+  }
+
+  AssistantJourney _persistableAssistantJourney({
+    required AssistantRunResponse response,
+    required AssistantJourney journey,
+  }) {
+    final readiness = journey.readiness;
+    if (readiness.finalAnswerReady ||
+        !_responseMarksFinalAnswerReady(response)) {
+      return journey;
+    }
+    return AssistantJourney(
+      stages: journey.stages,
+      entries: journey.entries,
+      summary: journey.summary,
+      referenceSummary: journey.referenceSummary,
+      readiness: AssistantJourneyReadiness(
+        nextAction: readiness.nextAction,
+        finalAnswerMode: readiness.finalAnswerMode,
+        answerEligibility: readiness.answerEligibility,
+        finalAnswerReady: true,
+        clarificationNeeded: readiness.clarificationNeeded,
+        needExpansion: readiness.needExpansion,
+      ),
+    );
+  }
+
+  bool _responseMarksFinalAnswerReady(AssistantRunResponse response) {
+    if (response.degraded) return false;
+    final answerDecision =
+        response.runArtifacts?.answerDecision ?? const <String, dynamic>{};
+    final conversationDecision =
+        (response.structuredResponse['conversationStateDecision'] as Map?)
+            ?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final nextActionCandidates = <String>[
+      (answerDecision['nextAction'] as String?)?.trim() ?? '',
+      (conversationDecision['nextAction'] as String?)?.trim() ?? '',
+    ];
+    if (nextActionCandidates.any((item) => item == 'answer')) {
+      return true;
+    }
+    final visibleText = _resolveAssistantDisplayText(response).trim();
+    return visibleText.isNotEmpty && visibleText != '助手未生成有效回答，请重试。';
   }
 
   /// 判断文本是否为内部 JSON 信封 / think 标签残留 / XML tool-call / 结构化协议字段，
@@ -2724,6 +2783,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       _assistantResponding = true;
       _assistantPhaseLabel = UITextConstants.assistantPhaseAnswering;
       _currentJourney = const AssistantJourney();
+      _currentRetrievalProcessing = const RetrievalProcessingSnapshot();
       _currentJourneyElapsedMs = 0;
       _messages.add(<String, dynamic>{
         'id': streamingAssistantMessageId!,
@@ -2744,7 +2804,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         assistantDisplayPlainTextField: '',
         'runArtifacts': const <String, dynamic>{},
         assistantJourneyField: const <String, dynamic>{},
-        assistantUiProcessTimelineV2Field: const <String, dynamic>{},
+        assistantUiProcessTimelineField: const <String, dynamic>{},
         assistantFollowupPromptField: '',
         assistantActionHintsField: const <String>[],
         'assistantElapsedMs': 0,
@@ -2797,9 +2857,10 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         final resolvedJourney = resolveAssistantJourneyFromResponse(
           finalResponse,
         );
-        final effectiveJourney = resolvedJourney.isEmpty
-            ? _currentJourney
-            : resolvedJourney;
+        final effectiveJourney = _persistableAssistantJourney(
+          response: finalResponse,
+          journey: resolvedJourney.isEmpty ? _currentJourney : resolvedJourney,
+        );
         final finalText = _resolveAssistantDisplayText(finalResponse);
         final displayPlainText = _resolveAssistantDisplayPlainText(
           finalResponse,
@@ -2867,6 +2928,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
               ...persistedTurnFields,
             };
           }
+          _assistantResponding = false;
+          _assistantPhaseLabel = '';
+          _activeAssistantStreamingMessageId = null;
         });
       }
     } catch (_) {
@@ -3223,6 +3287,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                                     ? _buildJourneyViewModel(
                                         journey: _currentJourney,
                                         isRunning: true,
+                                        retrievalProcessing:
+                                            _currentRetrievalProcessing,
                                         elapsedMs: _currentJourneyElapsedMs,
                                       )
                                     : (_isAssistantConversation &&

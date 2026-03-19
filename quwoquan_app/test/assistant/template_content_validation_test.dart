@@ -124,6 +124,86 @@ void main() {
             'planner.global_plan.md 有 $endCount 个 CONTEXT_DATA_END，应为 1（无重复内容）',
       );
     });
+
+    test('主 prompt 改为运行时事件通道承载流式并收紧历史噪音', () {
+      const plannerContentPath =
+          'assets/assistant/prompts/global/planner.global_plan.md';
+      const synthContentPath =
+          'assets/assistant/prompts/global/synthesizer.final_answer.md';
+      final planner = File(plannerContentPath).readAsStringSync();
+      final synth = File(synthContentPath).readAsStringSync();
+
+      expect(
+        planner,
+        contains('运行时事件通道承载'),
+        reason: 'planner.global_plan 应明确声明阶段1流式由事件通道承载',
+      );
+      expect(
+        synth,
+        contains('运行时事件通道承载'),
+        reason: 'synthesizer.final_answer 应明确声明阶段3流式由事件通道承载',
+      );
+      expect(
+        planner,
+        isNot(contains('understanding.streamText')),
+        reason: 'planner.global_plan 不应再把嵌套 understanding.streamText 当作流式真相源',
+      );
+      expect(
+        synth,
+        isNot(contains('answerProcessing.streamText')),
+        reason: 'synthesizer.final_answer 不应再把嵌套 answerProcessing.streamText 当作流式真相源',
+      );
+      expect(
+        planner,
+        isNot(contains('uiProcessTimelineV2')),
+        reason: '主 planner prompt 不应继续携带历史 process timeline 字段名',
+      );
+      expect(
+        synth,
+        isNot(contains('whyThisAnswer')),
+        reason: '主 synthesizer prompt 不应继续携带旧 diagnostics 字段',
+      );
+    });
+
+    test('phase output contract 保留 reasonShort 并切回事件通道流式', () {
+      const phasePlanPath =
+          'assets/assistant/prompts/global/phase.output_contract.plan.md';
+      const phaseAnswerPath =
+          'assets/assistant/prompts/global/phase.output_contract.answer.md';
+      final phasePlan = File(phasePlanPath).readAsStringSync();
+      final phaseAnswer = File(phaseAnswerPath).readAsStringSync();
+
+      expect(
+        phasePlan,
+        contains('reasonShort'),
+        reason: '规划阶段 contract 仍需兼容当前 reasonShort 流式读取',
+      );
+      expect(
+        phasePlan,
+        contains('运行时事件通道承载'),
+        reason: '规划阶段 contract 应明确声明运行时事件通道承载流式',
+      );
+      expect(
+        phaseAnswer,
+        contains('运行时事件通道承载'),
+        reason: '回答阶段 contract 应明确声明运行时事件通道承载流式',
+      );
+      expect(
+        phasePlan,
+        isNot(contains('understanding.streamText')),
+        reason: '规划阶段 contract 不应再依赖 understanding.streamText',
+      );
+      expect(
+        phaseAnswer,
+        isNot(contains('answerProcessing.streamText')),
+        reason: '回答阶段 contract 不应再依赖 answerProcessing.streamText',
+      );
+      expect(
+        phaseAnswer,
+        contains('userMarkdown'),
+        reason: '回答阶段 contract 仍需约束最终成答字段 userMarkdown',
+      );
+    });
   });
 }
 

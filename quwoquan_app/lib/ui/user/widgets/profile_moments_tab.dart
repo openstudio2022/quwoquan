@@ -33,7 +33,7 @@ class ProfileMomentsTab extends ConsumerWidget {
     );
 
     final moments = state.creations
-        .whereType<MomentPostDto>()
+        .where((post) => post.identity == 'moment')
         .toList(growable: false);
 
     if (moments.isEmpty) {
@@ -93,7 +93,7 @@ class _ProfileMomentCard extends ConsumerStatefulWidget {
     required this.userId,
   });
 
-  final MomentPostDto item;
+  final PostBaseDto item;
   final bool isDark;
   final String userId;
 
@@ -159,22 +159,24 @@ class _ProfileMomentCardState extends ConsumerState<_ProfileMomentCard> {
               ),
             ],
           ),
-          if (item.body.isNotEmpty) ...[
+          if (item.normalizedBody.isNotEmpty) ...[
             SizedBox(height: AppSpacing.intraGroupSm),
             _ExpandableText(
-              text: item.body,
+              text: item.normalizedBody,
               maxLines: _maxLines,
               isDark: isDark,
               expanded: _isExpanded,
               onToggle: () => setState(() => _isExpanded = !_isExpanded),
             ),
           ],
-          if (item.imageUrls.isNotEmpty) ...[
+          if (item.hasImages) ...[
             SizedBox(height: AppSpacing.interGroupSm),
             GestureDetector(
               onTap: () {
                 final state = ref.read(profileNotifierProvider(userId)).state;
-                final moments = state.creations.whereType<MomentPostDto>().toList();
+                final moments = state.creations
+                    .where((post) => post.identity == 'moment')
+                    .toList();
                 final initialIndex = moments.indexWhere((p) => p.id == item.id).clamp(0, moments.length - 1);
                 final postViews = moments.map(PostSummaryView.fromDto).toList();
                 
@@ -182,23 +184,25 @@ class _ProfileMomentCardState extends ConsumerState<_ProfileMomentCard> {
                   '/media-viewer/photo/$initialIndex',
                   extra: MediaViewerExtra(
                     posts: postViews,
+                    dtoPosts: moments,
                     initialIndex: initialIndex,
                     category: 'moment',
                     initialImageIndex: 0,
+                    source: 'profile_moment',
                   ),
                 );
               },
-              child: AbsorbPointer(child: _MomentImageGrid(urls: item.imageUrls)),
+              child: AbsorbPointer(child: _MomentImageGrid(urls: item.mediaImageUrls)),
             ),
           ],
-          if (item.videoUrl != null &&
-              item.videoUrl!.isNotEmpty &&
-              item.imageUrls.isEmpty) ...[
+          if (item.hasVideo && !item.hasImages) ...[
             SizedBox(height: AppSpacing.interGroupSm),
             GestureDetector(
               onTap: () {
                 final state = ref.read(profileNotifierProvider(userId)).state;
-                final moments = state.creations.whereType<MomentPostDto>().toList();
+                final moments = state.creations
+                    .where((post) => post.identity == 'moment')
+                    .toList();
                 final initialIndex = moments.indexWhere((p) => p.id == item.id).clamp(0, moments.length - 1);
                 final postViews = moments.map(PostSummaryView.fromDto).toList();
                 
@@ -206,8 +210,10 @@ class _ProfileMomentCardState extends ConsumerState<_ProfileMomentCard> {
                   '/video-viewer/$initialIndex',
                   extra: MediaViewerExtra(
                     posts: postViews,
+                    dtoPosts: moments,
                     initialIndex: initialIndex,
                     category: 'moment',
+                    source: 'profile_moment',
                   ),
                 );
               },
@@ -397,7 +403,7 @@ class _MomentImageGrid extends StatelessWidget {
 class _MomentVideoCard extends StatelessWidget {
   const _MomentVideoCard({required this.dto, required this.isDark});
 
-  final MomentPostDto dto;
+  final PostBaseDto dto;
   final bool isDark;
 
   @override
@@ -444,7 +450,7 @@ class _MomentVideoCard extends StatelessWidget {
                         BorderRadius.circular(AppSpacing.smallBorderRadius),
                   ),
                   child: Text(
-                    _formatDuration(dto.durationMs!),
+                      _formatDuration(dto.durationMs!),
                     style: TextStyle(
                       fontSize: AppTypography.xs,
                       color: Colors.white,
@@ -472,7 +478,7 @@ class _MomentVideoCard extends StatelessWidget {
 class _ActionRow extends StatelessWidget {
   const _ActionRow({required this.item, required this.isDark});
 
-  final MomentPostDto item;
+  final PostBaseDto item;
   final bool isDark;
 
   static String _fmt(int n) {

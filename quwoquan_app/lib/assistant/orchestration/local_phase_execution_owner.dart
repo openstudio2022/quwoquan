@@ -8,6 +8,7 @@ import 'package:quwoquan_app/assistant/application/assistant_journey_projector.d
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
 import 'package:quwoquan_app/assistant/contracts/agent_run_observability.dart';
 import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/conversation_state_decision.dart';
 import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
@@ -238,8 +239,48 @@ class LocalPhaseExecutionOwner {
     required AssistantRunRequest request,
     required AgentExecutionState state,
   }) {
+    final continuationActive = _shouldCarryStructuredHistory(
+      state.bootstrapContext?.contextContinuityPolicy ??
+          const ContextContinuityPolicy(),
+    );
     return <String, dynamic>{
-      ...request.contextScopeHint,
+      ..._sanitizeModelTemplateContext(
+        request.contextScopeHint,
+        continuationActive: continuationActive,
+        previousRunArtifacts: state.previousRunArtifacts,
+      ),
+      if (state.bootstrapContext != null &&
+          _hasStructuredContent(
+            state.bootstrapContext!.previousUnderstandingSnapshot.toJson(),
+          ))
+        'previousUnderstandingSnapshot': state
+            .bootstrapContext!
+            .previousUnderstandingSnapshot
+            .toJson(),
+      if (state.bootstrapContext != null &&
+          _hasStructuredContent(
+            state.bootstrapContext!.previousAnswerProcessing.toJson(),
+          ))
+        'previousAnswerProcessing': state
+            .bootstrapContext!
+            .previousAnswerProcessing
+            .toJson(),
+      if (state.bootstrapContext != null &&
+          _hasStructuredContent(
+            state.bootstrapContext!.historicalThinkingSnapshot.toJson(),
+          ))
+        'historicalThinkingSnapshot': state
+            .bootstrapContext!
+            .historicalThinkingSnapshot
+            .toJson(),
+      if (state.bootstrapContext?.providerReasoningContinuation
+              .trim()
+              .isNotEmpty ==
+          true)
+        'providerReasoningContinuation': state
+            .bootstrapContext!
+            .providerReasoningContinuation
+            .trim(),
       if (state.bootstrapContext != null)
         'precomputedBootstrap': <String, dynamic>{
           'sessionId': state.bootstrapContext!.sessionId,
@@ -252,6 +293,34 @@ class LocalPhaseExecutionOwner {
           if (state.bootstrapContext!.previousAnswerSummary.isNotEmpty)
             'previousAnswerSummary':
                 state.bootstrapContext!.previousAnswerSummary,
+          if (_hasStructuredContent(
+            state.bootstrapContext!.previousUnderstandingSnapshot.toJson(),
+          ))
+            'previousUnderstandingSnapshot': state
+                .bootstrapContext!
+                .previousUnderstandingSnapshot
+                .toJson(),
+          if (_hasStructuredContent(
+            state.bootstrapContext!.previousAnswerProcessing.toJson(),
+          ))
+            'previousAnswerProcessing': state
+                .bootstrapContext!
+                .previousAnswerProcessing
+                .toJson(),
+          if (_hasStructuredContent(
+            state.bootstrapContext!.historicalThinkingSnapshot.toJson(),
+          ))
+            'historicalThinkingSnapshot': state
+                .bootstrapContext!
+                .historicalThinkingSnapshot
+                .toJson(),
+          if (state.bootstrapContext!.providerReasoningContinuation
+              .trim()
+              .isNotEmpty)
+            'providerReasoningContinuation': state
+                .bootstrapContext!
+                .providerReasoningContinuation
+                .trim(),
           'contextContinuityPolicy': state
               .bootstrapContext!
               .contextContinuityPolicy
@@ -314,6 +383,63 @@ class LocalPhaseExecutionOwner {
     };
   }
 
+  bool _shouldCarryStructuredHistory(ContextContinuityPolicy policy) {
+    switch (policy.continuityMode) {
+      case ContextContinuityMode.sameTopic:
+      case ContextContinuityMode.explicitFollowUp:
+        return true;
+      case ContextContinuityMode.freshTopic:
+      case ContextContinuityMode.unknown:
+        return false;
+    }
+  }
+
+  List<AssistantRunMessage> _messagesForCurrentTurn(
+    List<AssistantRunMessage> messages, {
+    required bool continuationActive,
+  }) {
+    if (continuationActive) {
+      return messages;
+    }
+    if (messages.isEmpty) {
+      return const <AssistantRunMessage>[];
+    }
+    return <AssistantRunMessage>[messages.last];
+  }
+
+  Map<String, dynamic> _sanitizeModelTemplateContext(
+    Map<String, dynamic> contextScopeHint, {
+    required bool continuationActive,
+    RunArtifacts? previousRunArtifacts,
+  }) {
+    if (contextScopeHint.isEmpty) {
+      return continuationActive && previousRunArtifacts != null
+          ? <String, dynamic>{'runArtifacts': previousRunArtifacts.toJson()}
+          : const <String, dynamic>{};
+    }
+    final sanitized = Map<String, dynamic>.from(contextScopeHint);
+    for (final key in const <String>[
+      'runArtifacts',
+      'previousRunArtifacts',
+      'machineEnvelope',
+      'displayMarkdown',
+      'displayPlainText',
+      'journey',
+      'uiProcessTimeline',
+      'uiProcessTimelineV2',
+      'assistantResponse',
+    ]) {
+      sanitized.remove(key);
+    }
+    if (!continuationActive) {
+      sanitized.remove('dialogueState');
+      sanitized.remove('currentStateId');
+    } else if (previousRunArtifacts != null) {
+      sanitized['runArtifacts'] = previousRunArtifacts.toJson();
+    }
+    return sanitized;
+  }
+
   Future<Map<String, dynamic>> executeBridge(
     AssistantRunRequest request, {
     String? runId,
@@ -367,6 +493,14 @@ class LocalPhaseExecutionOwner {
               ? _sessionManager.resolveAssistantSessionForQuery(latestUserQuery)
               : requestedSessionId);
     final contextContinuityPolicy = bootstrapContext.contextContinuityPolicy;
+    final continuationActive = _shouldCarryStructuredHistory(
+      contextContinuityPolicy,
+    );
+    final templateContext = _sanitizeModelTemplateContext(
+      request.contextScopeHint,
+      continuationActive: continuationActive,
+      previousRunArtifacts: ownerState.previousRunArtifacts,
+    );
     final historySummary = bootstrapContext.historySummary;
     final recalledTexts = bootstrapContext.recalledTexts;
     final contextAssembly =
@@ -424,7 +558,7 @@ class LocalPhaseExecutionOwner {
         await _dialogueStateRuntime.buildRoundScript(
           domainId: domainId,
           userQuery: latestUserQuery,
-          contextScopeHint: request.contextScopeHint,
+          contextScopeHint: templateContext,
           forceRefreshCatalog: forceRefreshDynamicCatalog,
         );
     final skillContext = ResolvedSkillContext(
@@ -440,8 +574,6 @@ class LocalPhaseExecutionOwner {
         resolvedExecutionPreparation.previousDomainPolicyBundle;
     final plannerTemplateVersion =
         resolvedExecutionPreparation.plannerTemplateVersion;
-    final postcheckTemplateVersion =
-        resolvedExecutionPreparation.postcheckTemplateVersion;
     final synthTemplateVersion =
         resolvedExecutionPreparation.synthTemplateVersion;
     final fusionSynthTemplateVersion =
@@ -494,7 +626,11 @@ class LocalPhaseExecutionOwner {
       );
       return <String, dynamic>{'shortCircuitResponse': blocked};
     }
-    final messages = request.messages
+    final modelMessages = _messagesForCurrentTurn(
+      request.messages,
+      continuationActive: continuationActive,
+    );
+    final messages = modelMessages
         .map((m) => <String, dynamic>{'role': m.role, 'content': m.content})
         .toList(growable: true);
     final dataLayerBuffer = StringBuffer();
@@ -532,7 +668,7 @@ class LocalPhaseExecutionOwner {
           .where(
             (t) =>
                 t.isNotEmpty &&
-                !t.contains('"contractVersion"') &&
+                !t.contains('"contractId"') &&
                 !t.contains('"decision"') &&
                 !t.contains('assistant_turn') &&
                 !t.contains('queryTasks') &&
@@ -557,8 +693,8 @@ class LocalPhaseExecutionOwner {
       );
       dataLayerBuffer.writeln('</capability_catalog>');
     }
-    if (request.contextScopeHint.isNotEmpty) {
-      final anchorText = _formatContextAnchor(request.contextScopeHint);
+    if (templateContext.isNotEmpty) {
+      final anchorText = _formatContextAnchor(templateContext);
       dataLayerBuffer.writeln();
       dataLayerBuffer.writeln('<context_anchor>');
       dataLayerBuffer.writeln(anchorText);
@@ -623,7 +759,7 @@ class LocalPhaseExecutionOwner {
       availableToolNamesOverride: rewriteToolNames,
       templateId: 'planner.global_plan',
       templateVersion: plannerTemplateVersion,
-      templateContext: request.contextScopeHint,
+      templateContext: templateContext,
       templateVariables: templateVariables,
       sessionId: sessionId,
       runId: effectiveRunId,
@@ -703,9 +839,9 @@ class LocalPhaseExecutionOwner {
         maxIterations: math.min(request.maxIterations, shellMaxIterations),
         goal: latestUserQuery,
         availableToolNamesOverride: effectiveToolNames,
-        templateId: 'planner.postcondition_check',
-        templateVersion: postcheckTemplateVersion,
-        templateContext: request.contextScopeHint,
+        templateId: 'planner.global_plan',
+        templateVersion: plannerTemplateVersion,
+        templateContext: templateContext,
         templateVariables: templateVariables,
         sessionId: sessionId,
         runId: effectiveRunId,
@@ -903,6 +1039,14 @@ class LocalPhaseExecutionOwner {
               recalledTexts: precomputedBootstrap.recalledTexts,
               previousIntentGraph: precomputedBootstrap.previousIntentGraph,
               previousAnswerSummary: precomputedBootstrap.previousAnswerSummary,
+              previousUnderstandingSnapshot:
+                  precomputedBootstrap.previousUnderstandingSnapshot,
+              previousAnswerProcessing:
+                  precomputedBootstrap.previousAnswerProcessing,
+              historicalThinkingSnapshot:
+                  precomputedBootstrap.historicalThinkingSnapshot,
+              providerReasoningContinuation:
+                  precomputedBootstrap.providerReasoningContinuation,
               contextContinuityPolicy: precomputedBootstrap.continuityPolicy,
               continuityOverrideSlots:
                   precomputedBootstrap.continuityOverrideSlots,
@@ -1117,6 +1261,13 @@ class LocalPhaseExecutionOwner {
         (executionSnapshot['templateVariables'] as Map?)
             ?.cast<String, dynamic>() ??
         const <String, dynamic>{};
+    final templateContext = _sanitizeModelTemplateContext(
+      request.contextScopeHint,
+      continuationActive: _hasContinuationCarryoverContext(templateVariables),
+      previousRunArtifacts: _recoverPreviousRunArtifacts(
+        request.contextScopeHint,
+      ),
+    );
     final messages =
         ((executionSnapshot['messages'] as List?) ?? const <dynamic>[])
             .whereType<Map>()
@@ -1124,8 +1275,6 @@ class LocalPhaseExecutionOwner {
             .toList(growable: false);
     final synthTemplateVersion =
         (executionSnapshot['synthTemplateVersion'] as String?) ?? '';
-    final fusionSynthTemplateVersion =
-        (executionSnapshot['fusionSynthTemplateVersion'] as String?) ?? '';
     final phaseOneResult =
         executionSnapshot['phaseOneResult'] as ReactRuntimeResult;
     final synthesisReadiness =
@@ -1140,22 +1289,113 @@ class LocalPhaseExecutionOwner {
       phaseOneResult.traces,
     );
     final synthesisQueryTasks = QueryTask.toJsonList(intentGraph.queryTasks);
+    final bootstrapPayload =
+        (request.contextScopeHint['precomputedBootstrap'] as Map?)
+            ?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final phaseOneText = phaseOneResult.finalText;
+    final phaseOneParsedJson =
+        LlmResponseParser.parse(phaseOneText).json ?? const <String, dynamic>{};
+    final phaseOneAnswerPayload = _parseAnswerPayload(
+      rawFinalText: phaseOneText,
+      traces: phaseOneResult.traces,
+    );
+    final previousUnderstandingSnapshotForSynthesis =
+        (bootstrapPayload['previousUnderstandingSnapshot'] as Map?)
+            ?.cast<String, dynamic>() ??
+        (request.contextScopeHint['previousUnderstandingSnapshot'] as Map?)
+            ?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final previousAnswerProcessingForSynthesis =
+        (bootstrapPayload['previousAnswerProcessing'] as Map?)
+            ?.cast<String, dynamic>() ??
+        (request.contextScopeHint['previousAnswerProcessing'] as Map?)
+            ?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final historicalThinkingSnapshotForSynthesis =
+        (bootstrapPayload['historicalThinkingSnapshot'] as Map?)
+            ?.cast<String, dynamic>() ??
+        (request.contextScopeHint['historicalThinkingSnapshot'] as Map?)
+            ?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final understandingSnapshotForSynthesis =
+        (phaseOneParsedJson['understandingSnapshot'] as Map?)
+            ?.cast<String, dynamic>() ??
+        previousUnderstandingSnapshotForSynthesis;
+    final historicalThinkingSnapshotFromPhaseOne =
+        (phaseOneParsedJson['historicalThinkingSnapshot'] as Map?)
+            ?.cast<String, dynamic>() ??
+        historicalThinkingSnapshotForSynthesis;
+    final sharedContextForSynthesis = <String, dynamic>{
+      'contextEnvelope': contextAssembly.contextEnvelope,
+      'userProfileSnapshot': request.userProfileSnapshot,
+      'historicalRetrievalFeedback':
+          (request.contextScopeHint['historicalRetrievalFeedback'] as Map?)
+              ?.cast<String, dynamic>() ??
+          const <String, dynamic>{},
+      'domainLearningSignals':
+          (request.contextScopeHint['domainLearningSignals'] as Map?)
+              ?.cast<String, dynamic>() ??
+          const <String, dynamic>{},
+    };
+    final currentRuntimeStateForSynthesis = <String, dynamic>{
+      'dialogueState': <String, dynamic>{
+        'domainId': domainId,
+        'problemClass': intentGraph.problemClassWireName,
+        'answerShape': intentGraph.answerShape.wireName,
+        'synthesisReady': synthesisReadiness.ready,
+        'synthesisReason': synthesisReadiness.reason,
+      },
+      'slotStateSnapshot': previousSlotState.toJson(),
+      'contextSlots': _buildContextSlots(contextAssembly),
+      'domainPolicyBundle':
+          previousDomainPolicyBundle?.toJson() ?? const <String, dynamic>{},
+      'skillExecutionShell': effectiveExecutionShell.toJson(),
+      'queryTasks': synthesisQueryTasks,
+    };
+    final dialogueContinuityForSynthesis = <String, dynamic>{
+      'historySummary':
+          (bootstrapPayload['historySummary'] as String?)?.trim() ?? '',
+      'previousIntentGraph':
+          (bootstrapPayload['previousIntentGraph'] as Map?)
+              ?.cast<String, dynamic>() ??
+          const <String, dynamic>{},
+      'previousUnderstandingSnapshot':
+          previousUnderstandingSnapshotForSynthesis,
+      'previousAnswerProcessing': previousAnswerProcessingForSynthesis,
+      'previousSlotState': previousSlotState.toJson(),
+      'previousAnswerSummary':
+          (bootstrapPayload['previousAnswerSummary'] as String?)?.trim() ?? '',
+      'historicalThinkingSnapshot': historicalThinkingSnapshotForSynthesis,
+      'continuityOverrideSlots':
+          (bootstrapPayload['continuityOverrideSlots'] as Map?)
+              ?.cast<String, dynamic>() ??
+          const <String, dynamic>{},
+    };
+    final evidenceContextForSynthesis = <String, dynamic>{
+      'intentGraph': intentGraph.toJson(),
+      'queryTasks': synthesisQueryTasks,
+      'domainResults': domainResultsForSynthesis,
+      'webEvidencePacks':
+          domainResultsForSynthesis['webEvidencePacks'] ?? const <dynamic>[],
+      'contextSlots': _buildContextSlots(contextAssembly),
+      'entityAnchors': intentGraph.entityAnchors,
+    };
     final synthesisTemplateVars = <String, dynamic>{
       ...templateVariables,
       'userGoal': intentGraph.userGoal.trim().isNotEmpty
           ? intentGraph.userGoal.trim()
           : latestUserQuery,
+      'understandingSnapshot': jsonEncode(understandingSnapshotForSynthesis),
+      'sharedContext': jsonEncode(sharedContextForSynthesis),
+      'currentRuntimeState': jsonEncode(currentRuntimeStateForSynthesis),
+      'dialogueContinuity': jsonEncode(dialogueContinuityForSynthesis),
+      'evidenceContext': jsonEncode(evidenceContextForSynthesis),
       'intentGraphJson': jsonEncode(intentGraph.toJson()),
+      'queryTasksJson': jsonEncode(synthesisQueryTasks),
       'entityAnchors': intentGraph.entityAnchors,
       'queryTasks': synthesisQueryTasks,
-      'queryTasksJson': jsonEncode(synthesisQueryTasks),
       'answerShape': intentGraph.answerShape.wireName,
-      'domainResults': jsonEncode(domainResultsForSynthesis),
-      'contextSlots': jsonEncode(_buildContextSlots(contextAssembly)),
-      'webEvidencePacks': jsonEncode(
-        domainResultsForSynthesis['webEvidencePacks'] ?? const <dynamic>[],
-      ),
-      'userProfileSnapshot': jsonEncode(request.userProfileSnapshot),
     };
     final synthesisInput = <Map<String, dynamic>>[
       ...messages,
@@ -1165,18 +1405,17 @@ class LocalPhaseExecutionOwner {
       },
       <String, dynamic>{'role': 'user', 'content': latestUserQuery},
     ];
-    final phaseOneText = phaseOneResult.finalText;
-    final phaseOneAnswerPayload = _parseAnswerPayload(
-      rawFinalText: phaseOneText,
-      traces: phaseOneResult.traces,
-    );
     final rawPhaseOneTurn = _tryParseAssistantTurnFromRawText(phaseOneText);
     final rawPhaseOneProjection = rawPhaseOneTurn != null
         ? AssistantDisplayTextResolver.projectTurn(rawPhaseOneTurn)
         : null;
+    final phaseOneExecutionSignalsPresent = _hasPhaseOneExecutionSignals(
+      phaseOneResult.traces,
+    );
     final rawDirectAnswerDecision = _phaseOneDirectAnswerGate.evaluate(
       rawFinalText: phaseOneText,
       synthesisReadiness: synthesisReadiness,
+      executionSignalsPresent: phaseOneExecutionSignalsPresent,
     );
     final explicitPhaseOneSkillRunPlans = _buildExplicitSkillRunPlans(
       answerPayload: phaseOneAnswerPayload,
@@ -1206,9 +1445,6 @@ class LocalPhaseExecutionOwner {
     var phaseOneModelRepairAttempted = false;
     var phaseOneModelRepairProducedText = false;
     var phaseOneModelRepairFailureCode = '';
-    final phaseOneExecutionSignalsPresent = _hasPhaseOneExecutionSignals(
-      phaseOneResult.traces,
-    );
     final phaseOneContinuationCarryover = _hasContinuationCarryoverContext(
       synthesisTemplateVars,
     );
@@ -1240,6 +1476,7 @@ class LocalPhaseExecutionOwner {
         directAnswerDecision = _phaseOneDirectAnswerGate.evaluate(
           rawFinalText: recoveredPhaseOneEnvelopeText,
           synthesisReadiness: synthesisReadiness,
+          executionSignalsPresent: phaseOneExecutionSignalsPresent,
         );
         phaseOneRecoveryApplied = directAnswerDecision.shouldSkipSynthesis;
       }
@@ -1271,7 +1508,7 @@ class LocalPhaseExecutionOwner {
             traces: effectivePhaseOneTraces,
             messages: messages,
             latestUserQuery: latestUserQuery,
-            templateContext: request.contextScopeHint,
+            templateContext: templateContext,
             templateVariables: synthesisTemplateVars,
             sessionId: sessionId,
             runId: runId,
@@ -1303,6 +1540,7 @@ class LocalPhaseExecutionOwner {
         directAnswerDecision = _phaseOneDirectAnswerGate.evaluate(
           rawFinalText: phaseOneRepairResult.finalText,
           synthesisReadiness: synthesisReadiness,
+          executionSignalsPresent: phaseOneExecutionSignalsPresent,
         );
         phaseOneModelRepairApplied = directAnswerDecision.shouldSkipSynthesis;
       }
@@ -1382,7 +1620,7 @@ class LocalPhaseExecutionOwner {
         messages: synthesisInput,
         goal: latestUserQuery,
         onDelta: (_) {},
-        templateContext: request.contextScopeHint,
+        templateContext: templateContext,
         templateVariables: synthesisTemplateVars,
         templateId: 'synthesizer.final_answer',
         templateVersion: synthTemplateVersion,
@@ -1436,7 +1674,7 @@ class LocalPhaseExecutionOwner {
           availableToolNamesOverride: const <String>[],
           templateId: 'synthesizer.final_answer',
           templateVersion: synthTemplateVersion,
-          templateContext: request.contextScopeHint,
+          templateContext: templateContext,
           templateVariables: synthesisTemplateVars,
           sessionId: sessionId,
           runId: runId,
@@ -1450,7 +1688,7 @@ class LocalPhaseExecutionOwner {
         currentResult: synthesisResult,
         synthesisInput: synthesisInput,
         latestUserQuery: latestUserQuery,
-        templateContext: request.contextScopeHint,
+        templateContext: templateContext,
         templateVariables: synthesisTemplateVars,
         templateId: 'synthesizer.final_answer',
         templateVersion: synthTemplateVersion,
@@ -1576,7 +1814,7 @@ class LocalPhaseExecutionOwner {
       sessionId: sessionId,
       runId: runId,
       traceId: traceId,
-      templateContext: request.contextScopeHint,
+      templateContext: templateContext,
       templateVariables: templateVariables,
       onTraceEvent: onTraceEvent,
     );
@@ -1599,13 +1837,7 @@ class LocalPhaseExecutionOwner {
         'aggregationState': jsonEncode(aggregationState.toJson()),
         'subagentRuns': jsonEncode(runsForModel),
       };
-      final fusionSynthesisTemplateId = subagentRuns.length > 1
-          ? 'synthesizer.multi_skill_fusion'
-          : 'synthesizer.final_answer';
-      templateVersionUsed =
-          fusionSynthesisTemplateId == 'synthesizer.multi_skill_fusion'
-          ? fusionSynthTemplateVersion
-          : synthTemplateVersion;
+      templateVersionUsed = synthTemplateVersion;
       final subagentSynthesisInput = <Map<String, dynamic>>[
         ...messages,
         <String, dynamic>{
@@ -1627,12 +1859,9 @@ class LocalPhaseExecutionOwner {
         maxIterations: 1,
         goal: latestUserQuery,
         availableToolNamesOverride: const <String>[],
-        templateId: fusionSynthesisTemplateId,
-        templateVersion:
-            fusionSynthesisTemplateId == 'synthesizer.multi_skill_fusion'
-            ? fusionSynthTemplateVersion
-            : synthTemplateVersion,
-        templateContext: request.contextScopeHint,
+        templateId: 'synthesizer.final_answer',
+        templateVersion: synthTemplateVersion,
+        templateContext: templateContext,
         templateVariables: fusionTemplateVars,
         sessionId: sessionId,
         runId: runId,
@@ -1645,13 +1874,10 @@ class LocalPhaseExecutionOwner {
         currentResult: subagentSynthesis,
         synthesisInput: subagentSynthesisInput,
         latestUserQuery: latestUserQuery,
-        templateContext: request.contextScopeHint,
+        templateContext: templateContext,
         templateVariables: fusionTemplateVars,
-        templateId: fusionSynthesisTemplateId,
-        templateVersion:
-            fusionSynthesisTemplateId == 'synthesizer.multi_skill_fusion'
-            ? fusionSynthTemplateVersion
-            : synthTemplateVersion,
+        templateId: 'synthesizer.final_answer',
+        templateVersion: synthTemplateVersion,
         sessionId: sessionId,
         runId: runId,
         traceId: traceId,
@@ -1702,6 +1928,8 @@ class LocalPhaseExecutionOwner {
       answerBoundaryPolicy: answerBoundaryPolicy,
       previousSlotState: previousSlotState,
       phaseOneRoutingDiagnostics: phaseOneRoutingDiagnostics,
+      understandingSnapshot: understandingSnapshotForSynthesis,
+      historicalThinkingSnapshot: historicalThinkingSnapshotFromPhaseOne,
       previousDomainPolicyBundle: previousDomainPolicyBundle,
       profileUpdateProposal: _buildProfileUpdateProposal(request: request),
       responseDegraded:
@@ -1734,6 +1962,8 @@ class LocalPhaseExecutionOwner {
       answerBoundaryPolicy: draft.answerBoundaryPolicy,
       previousSlotState: draft.previousSlotState,
       phaseOneRoutingDiagnostics: draft.phaseOneRoutingDiagnostics,
+      carriedUnderstandingSnapshot: draft.understandingSnapshot,
+      carriedHistoricalThinkingSnapshot: draft.historicalThinkingSnapshot,
       previousDomainPolicyBundle: draft.previousDomainPolicyBundle,
       onTraceEvent: onTraceEvent,
       runId: draft.runId,
@@ -2284,7 +2514,7 @@ class LocalPhaseExecutionOwner {
     return raw.toLowerCase().replaceAll(RegExp(r'\s+'), '');
   }
 
-  /// 确保 rawText 是符合当前契约版本（[kAssistantTurnCurrentVersion]）的 JSON 信封。
+  /// 确保 rawText 是符合当前契约标识（[kAssistantTurnCurrentContractId]）的 JSON 信封。
   /// 若 rawText 无法通过当前契约校验，则返回 fail-closed 的降级信封。
   String _ensureAssistantTurnEnvelopeText(String rawText) {
     final parseResult = LlmResponseParser.parse(rawText);
@@ -2314,7 +2544,7 @@ class LocalPhaseExecutionOwner {
   }) {
     return jsonEncode(
       AssistantTurnOutput(
-        contractVersion: kAssistantTurnCurrentVersion,
+        contractId: kAssistantTurnCurrentContractId,
         decision: const AssistantTurnDecisionPayload(
           nextAction: AssistantNextAction.abort,
         ),
@@ -2353,7 +2583,7 @@ class LocalPhaseExecutionOwner {
         : recoveredMarkdown;
     return jsonEncode(
       AssistantTurnOutput(
-        contractVersion: kAssistantTurnCurrentVersion,
+        contractId: kAssistantTurnCurrentContractId,
         decision: const AssistantTurnDecisionPayload(
           nextAction: AssistantNextAction.answer,
         ),
@@ -2386,7 +2616,26 @@ class LocalPhaseExecutionOwner {
     required List<AssistantTraceEvent> traces,
     Map<String, dynamic> templateVariables = const <String, dynamic>{},
   }) {
-    return '';
+    final recoveredMarkdown = _recoverDisplayMarkdownFromInvalidSynthesis(
+      primaryText: rawText,
+      primaryTraces: traces,
+      fallbackText: '',
+      fallbackTraces: const <AssistantTraceEvent>[],
+    );
+    if (recoveredMarkdown.isEmpty ||
+        AssistantContentFilters.isJsonEnvelope(recoveredMarkdown) ||
+        AssistantContentFilters.isProgressPlaceholder(recoveredMarkdown) ||
+        _containsXmlToolCallMarkup(recoveredMarkdown) ||
+        _missingRequiredTopicAnchor(
+          recoveredMarkdown,
+          templateVariables: templateVariables,
+        )) {
+      return '';
+    }
+    return _buildRecoveredAssistantTurnEnvelopeText(
+      recoveredMarkdown: recoveredMarkdown,
+      failureCode: 'phase_one_answer_recovery',
+    );
   }
 
   String _recoverDisplayMarkdownFromInvalidSynthesis({
@@ -2395,6 +2644,26 @@ class LocalPhaseExecutionOwner {
     required String fallbackText,
     required List<AssistantTraceEvent> fallbackTraces,
   }) {
+    final candidates = <String>[
+      _recoverDisplayMarkdownCandidate(primaryText),
+      _recoverDisplayMarkdownFromTraces(primaryTraces),
+      if (fallbackText.trim().isNotEmpty)
+        _recoverDisplayMarkdownCandidate(fallbackText),
+      _recoverDisplayMarkdownFromTraces(fallbackTraces),
+    ];
+    for (final candidate in candidates) {
+      final normalized = AssistantDisplayTextResolver.normalizeMarkdown(
+        candidate,
+      );
+      if (normalized.isEmpty) continue;
+      if (AssistantContentFilters.isJsonEnvelope(normalized) ||
+          AssistantContentFilters.isProgressPlaceholder(normalized) ||
+          _containsXmlToolCallMarkup(normalized) ||
+          !_looksLikeRecoverableAnswerText(normalized)) {
+        continue;
+      }
+      return normalized;
+    }
     return '';
   }
 
@@ -2410,7 +2679,19 @@ class LocalPhaseExecutionOwner {
           ? tryParseAssistantTurnOutput(payload)
           : null;
       if (turn != null) {
-        return AssistantDisplayTextResolver.projectTurn(turn).markdown;
+        final projection = AssistantDisplayTextResolver.projectTurn(turn);
+        if (turn.nextActionType != AssistantNextAction.answer ||
+            turn.messageKindType == AssistantMessageKind.progress ||
+            !projection.hasRenderableContent ||
+            AssistantDisplayTextResolver.containsInternalProcessFragment(
+              projection.markdown,
+            ) ||
+            AssistantDisplayTextResolver.containsInternalAssistantProtocolFragment(
+              projection.markdown,
+            )) {
+          return '';
+        }
+        return projection.markdown;
       }
       final compatMarkdown = _recoverCompatDisplayMarkdown(payload);
       if (compatMarkdown.isNotEmpty) {
@@ -2424,6 +2705,14 @@ class LocalPhaseExecutionOwner {
     if (sanitized.isEmpty) {
       return '';
     }
+    if (AssistantDisplayTextResolver.containsInternalProcessFragment(
+          sanitized,
+        ) ||
+        AssistantDisplayTextResolver.containsInternalAssistantProtocolFragment(
+          sanitized,
+        )) {
+      return '';
+    }
     if (!_looksLikeRecoverableAnswerText(sanitized)) {
       return '';
     }
@@ -2431,10 +2720,108 @@ class LocalPhaseExecutionOwner {
   }
 
   String _recoverCompatDisplayMarkdown(Map<String, dynamic>? payload) {
-    return '';
+    if (payload == null || payload.isEmpty) return '';
+    final decision =
+        (payload['decision'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final nextAction = parseNextAction(
+      (decision['nextAction'] as String?)?.trim() ?? '',
+    );
+    final messageKind = parseMessageKind(
+      (payload['messageKind'] as String?)?.trim() ?? '',
+    );
+    final toolCalls =
+        (payload['toolCalls'] as List?)?.whereType<Object>().toList() ??
+        const <Object>[];
+    final result =
+        (payload['result'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final candidates = <String>[
+      AssistantDisplayTextResolver.normalizeMarkdown(
+        (payload['userMarkdown'] as String?) ?? '',
+      ),
+      AssistantDisplayTextResolver.normalizeMarkdown(
+        (result['text'] as String?) ?? '',
+      ),
+      AssistantDisplayTextResolver.normalizeMarkdown(
+        (result['summary'] as String?) ?? '',
+      ),
+    ].where((item) => item.trim().isNotEmpty).toList(growable: false);
+    if (candidates.isEmpty) return '';
+    final candidate = candidates.first;
+    final answerLike =
+        nextAction == AssistantNextAction.answer ||
+        messageKind == AssistantMessageKind.answer ||
+        ((payload['phaseId'] as String?)?.trim() ?? '') == 'answering';
+    final staleProgressAnswer =
+        toolCalls.isEmpty &&
+        messageKind == AssistantMessageKind.progress &&
+        candidate.isNotEmpty &&
+        ((((payload['phaseId'] as String?)?.trim() ?? '') == 'answering') ||
+            ((result['text'] as String?)?.trim().isNotEmpty == true));
+    if (!answerLike && !staleProgressAnswer) {
+      return '';
+    }
+    if (AssistantDisplayTextResolver.containsInternalProcessFragment(
+          candidate,
+        ) ||
+        AssistantDisplayTextResolver.containsInternalAssistantProtocolFragment(
+          candidate,
+        )) {
+      return '';
+    }
+    return _looksLikeRecoverableAnswerText(candidate) ? candidate : '';
   }
 
   String _recoverDisplayMarkdownFromTraces(List<AssistantTraceEvent> traces) {
+    if (traces.isEmpty) return '';
+    final streamedAnswerBuffer = StringBuffer();
+    for (final event in traces) {
+      if (event.type != AssistantTraceEventType.answerDelta &&
+          event.type != AssistantTraceEventType.streamDelta) {
+        continue;
+      }
+      final data = event.data ?? const <String, dynamic>{};
+      final delta = (data['delta'] as String?)?.trim();
+      final chunk = (delta?.isNotEmpty == true ? delta! : event.message).trim();
+      if (chunk.isEmpty) continue;
+      streamedAnswerBuffer.write(chunk);
+    }
+    final streamedAnswer = _recoverDisplayMarkdownCandidate(
+      streamedAnswerBuffer.toString(),
+    );
+    if (streamedAnswer.isNotEmpty) {
+      return streamedAnswer;
+    }
+    for (final event in traces.reversed) {
+      if (event.type != AssistantTraceEventType.assistantDelta) continue;
+      final data = event.data ?? const <String, dynamic>{};
+      final toolCalls = data['toolCalls'] as List? ?? const <dynamic>[];
+      if (toolCalls.isNotEmpty) continue;
+      final raw = event.message.trim();
+      if (raw.isEmpty) continue;
+      final parsed = LlmResponseParser.parse(raw);
+      if (parsed.ok) {
+        final payload = parsed.json;
+        final turn = payload != null
+            ? tryParseAssistantTurnOutput(payload)
+            : null;
+        if (turn != null &&
+            turn.nextActionType == AssistantNextAction.answer &&
+            turn.messageKindType != AssistantMessageKind.progress) {
+          final markdown = AssistantDisplayTextResolver.projectTurn(
+            turn,
+          ).markdown;
+          if (markdown.isNotEmpty) return markdown;
+        }
+        final compat = _recoverCompatDisplayMarkdown(payload);
+        if (compat.isNotEmpty) return compat;
+      }
+      final candidate = _recoverDisplayMarkdownCandidate(raw);
+      if (candidate.isNotEmpty) {
+        return candidate;
+      }
+    }
     return '';
   }
 
@@ -3092,6 +3479,10 @@ class LocalPhaseExecutionOwner {
     required Map<String, dynamic> retrievalPolicy,
     required AnswerBoundaryPolicy answerBoundaryPolicy,
     required SlotStateSnapshot previousSlotState,
+    Map<String, dynamic> carriedUnderstandingSnapshot =
+        const <String, dynamic>{},
+    Map<String, dynamic> carriedHistoricalThinkingSnapshot =
+        const <String, dynamic>{},
     Map<String, dynamic> phaseOneRoutingDiagnostics = const <String, dynamic>{},
     DomainPolicyBundle? previousDomainPolicyBundle,
     void Function(AssistantTraceEvent event)? onTraceEvent,
@@ -3272,6 +3663,32 @@ class LocalPhaseExecutionOwner {
             isRealtimeLike: isRealtimeLike,
           )
         : _buildUiReferences(toolResults, isRealtimeLike: isRealtimeLike);
+    final understandingSnapshot = _buildUnderstandingSnapshot(
+      raw:
+          (answerPayload['understandingSnapshot'] as Map?)
+              ?.cast<String, dynamic>() ??
+          carriedUnderstandingSnapshot,
+      intentGraph: intentGraph,
+      latestUserQuery: latestUserQuery,
+    );
+    final answerProcessingSnapshot = _buildAnswerProcessingSnapshot(
+      raw:
+          (answerPayload['answerProcessing'] as Map?)
+              ?.cast<String, dynamic>() ??
+          const <String, dynamic>{},
+      synthesisReadiness: effectiveSynthesisReadiness,
+      stateDecision: effectiveStateDecision,
+      evidenceEvaluation: evidenceEvaluation,
+      evidenceLedger: evidenceLedger,
+      answerPayload: answerPayload,
+    );
+    final historicalThinkingSnapshot = _buildHistoricalThinkingSnapshot(
+      raw:
+          (answerPayload['historicalThinkingSnapshot'] as Map?)
+              ?.cast<String, dynamic>() ??
+          carriedHistoricalThinkingSnapshot,
+      understandingSnapshot: understandingSnapshot,
+    );
     final directMarkdown = _extractUiMarkdown(answerPayload, result.finalText);
     final preferredMarkdown = directMarkdown.trim();
     final hasDirectMarkdown = preferredMarkdown.isNotEmpty;
@@ -3290,6 +3707,13 @@ class LocalPhaseExecutionOwner {
     final linkedMarkdown = _applyInlineEvidenceLinks(
       normalizedMarkdown,
       evidenceLinks,
+    );
+    final retrievalProcessingSnapshot = _buildRetrievalProcessingSnapshot(
+      uiReferences: uiReferences,
+      toolResults: toolResults,
+      understandingSnapshot: understandingSnapshot,
+      synthesisReadiness: effectiveSynthesisReadiness,
+      finalAnswerReady: answerEligible,
     );
     final displayPlainText = _resolveDisplayPlainText(
       answerPayload: answerPayload,
@@ -3359,11 +3783,17 @@ class LocalPhaseExecutionOwner {
       ...result.traces,
       ...synthesizedAnsweringTraces,
     ];
-    final journey = AssistantJourneyProjector.replay(
-      traces: effectiveJourneyTraces,
-      toolMetadataRegistry: effectiveToolMetadataRegistry,
-      aggregationState: effectiveAggregationState,
-      conversationStateDecision: effectiveStateDecision,
+    final journey = _enrichJourneyWithStructuredSnapshots(
+      AssistantJourneyProjector.replay(
+        traces: effectiveJourneyTraces,
+        toolMetadataRegistry: effectiveToolMetadataRegistry,
+        aggregationState: effectiveAggregationState,
+        conversationStateDecision: effectiveStateDecision,
+      ),
+      understandingSnapshot: understandingSnapshot,
+      retrievalProcessing: retrievalProcessingSnapshot,
+      answerProcessing: answerProcessingSnapshot,
+      finalAnswerReady: answerEligible,
     );
     final effectiveSkillRuns = _finalizeSkillRuns(
       skillRuns: skillRuns,
@@ -3388,11 +3818,18 @@ class LocalPhaseExecutionOwner {
       domainPolicyBundle: domainPolicyBundle,
       journey: journey,
     );
+    final providerReasoningContinuation = _extractProviderReasoningContinuation(
+      result.traces,
+    );
     final runArtifacts = RunArtifacts(
       machineEnvelope: result.finalText,
       displayMarkdown: linkedMarkdown.trim(),
       displayPlainText: displayPlainText,
       journey: journey,
+      understandingSnapshot: understandingSnapshot,
+      answerProcessing: answerProcessingSnapshot,
+      historicalThinkingSnapshot: historicalThinkingSnapshot,
+      retrievalProcessing: retrievalProcessingSnapshot,
       evidenceLedger: evidenceLedger,
       answerEvidenceBindings: answerEvidenceBindings,
       slotState: groundedSlotState,
@@ -3440,6 +3877,10 @@ class LocalPhaseExecutionOwner {
       'evidenceEvaluation': evidenceEvaluation.toJson(),
       'slotState': groundedSlotState.toJson(),
       'missingContextSlots': effectiveStateDecision.missingCriticalSlots,
+      'understandingSnapshot': understandingSnapshot.toJson(),
+      'answerProcessing': answerProcessingSnapshot.toJson(),
+      'historicalThinkingSnapshot': historicalThinkingSnapshot.toJson(),
+      'retrievalProcessing': retrievalProcessingSnapshot.toJson(),
       'askUser':
           (answerPayload['askUser'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{},
@@ -3640,8 +4081,14 @@ class LocalPhaseExecutionOwner {
         'webEvidenceGatePassed': evidenceGatePassed,
         'qualityGates': effectiveStateDecision.qualityGatesData,
       },
+      'understandingSnapshot': understandingSnapshot.toJson(),
+      'answerProcessing': answerProcessingSnapshot.toJson(),
+      'historicalThinkingSnapshot': historicalThinkingSnapshot.toJson(),
+      'retrievalProcessing': retrievalProcessingSnapshot.toJson(),
+      if (providerReasoningContinuation.isNotEmpty)
+        'providerReasoningContinuation': providerReasoningContinuation,
       'answerPayload': enrichedAnswerPayload,
-      'decisionJson':
+      'decision':
           enrichedAnswerPayload['decision'] ?? const <String, dynamic>{},
       'messageKind': messageKind,
       'toolObservations': <Map<String, dynamic>>[
@@ -3688,9 +4135,9 @@ class LocalPhaseExecutionOwner {
         'criticalSlotsResolved':
             effectiveStateDecision.missingCriticalSlots.isEmpty,
       },
-      'contractVersion': kAssistantTurnCurrentVersion,
+      'contractId': kAssistantTurnCurrentContractId,
       '_meta': EngineResponseMeta(
-        contractVersion: kAssistantTurnCurrentVersion,
+        contractId: kAssistantTurnCurrentContractId,
         domainId: dialogueRoundScript.domainId,
         stateId: dialogueRoundScript.currentStateId,
         detectedEvent: dialogueRoundScript.detectedEvent,
@@ -4374,11 +4821,11 @@ class LocalPhaseExecutionOwner {
   int _scoreLineForEvidence(String line, Map<String, dynamic> link) {
     final haystack = line.toLowerCase();
     var score = 0;
-    final claim = (link['claim'] as String?)?.trim().toLowerCase() ?? '';
+    final claim = ((link['claim'] as String?)?.trim() ?? '').toLowerCase();
     if (claim.isNotEmpty && haystack.contains(claim)) {
       score += claim.length + 4;
     }
-    final title = (link['title'] as String?)?.trim().toLowerCase() ?? '';
+    final title = ((link['title'] as String?)?.trim() ?? '').toLowerCase();
     if (title.isNotEmpty && haystack.contains(title)) {
       score += title.length + 2;
     }
@@ -4496,6 +4943,15 @@ class LocalPhaseExecutionOwner {
       'messageKind': turn?.messageKind.wireName ?? '',
       'slotState': turn?.slotState.toJson() ?? const <String, dynamic>{},
       'askUser': turn?.askUser.toJson() ?? const <String, dynamic>{},
+      'understandingSnapshot':
+          turn?.understandingSnapshot.toJson() ??
+          _normalizeMap(parsed['understandingSnapshot']),
+      'answerProcessing':
+          turn?.answerProcessing.toJson() ??
+          _normalizeMap(parsed['answerProcessing']),
+      'historicalThinkingSnapshot':
+          turn?.historicalThinkingSnapshot.toJson() ??
+          _normalizeMap(parsed['historicalThinkingSnapshot']),
       'subagentPlan': turn != null
           ? turn.subagentPlan
                 .map((item) => item.toJson())
@@ -4522,9 +4978,12 @@ class LocalPhaseExecutionOwner {
                 .toList(growable: false)
           : _normalizeMapList(parsed['fillGuidance'], textKey: 'guidance'),
       'followupPrompt': turn?.followupPrompt ?? '',
-      'actionHints': turn?.result.actionHints ?? _normalizeStringList(
-        (parsed['result'] as Map?)?.cast<String, dynamic>()?['actionHints'],
-      ),
+      'actionHints':
+          turn?.result.actionHints ??
+          _normalizeStringList(
+            (((parsed['result'] as Map?)?.cast<String, dynamic>()) ??
+                const <String, dynamic>{})['actionHints'],
+          ),
       'sessionPreferenceFacts': turn != null
           ? turn.sessionPreferenceFacts
                 .map((item) => item.toJson())
@@ -4540,6 +4999,408 @@ class LocalPhaseExecutionOwner {
             ),
       'parseStatus': parseStatus,
     };
+  }
+
+  RunArtifactsUnderstandingSnapshot _buildUnderstandingSnapshot({
+    required Map<String, dynamic> raw,
+    required IntentGraph intentGraph,
+    required String latestUserQuery,
+  }) {
+    final parsed = _hasStructuredContent(raw)
+        ? RunArtifactsUnderstandingSnapshot.fromJson(raw)
+        : const RunArtifactsUnderstandingSnapshot();
+    final queryGroups = parsed.queryGroups.isNotEmpty
+        ? parsed.queryGroups
+        : _buildUnderstandingQueryGroups(intentGraph.queryTasks);
+    final concernPoints = parsed.concernPoints.isNotEmpty
+        ? parsed.concernPoints
+        : <String>[
+                ...intentGraph.hardConstraints,
+                ...intentGraph.softConstraints,
+              ]
+              .where((item) => item.trim().isNotEmpty)
+              .take(4)
+              .toList(growable: false);
+    return RunArtifactsUnderstandingSnapshot(
+      intentSummary: parsed.intentSummary.isNotEmpty
+          ? parsed.intentSummary
+          : _firstNonEmptyText(<String?>[
+              intentGraph.userGoal,
+              intentGraph.userJobToBeDone,
+              intentGraph.targetObject,
+              latestUserQuery,
+            ]),
+      concernPoints: concernPoints,
+      emotionSignal: parsed.emotionSignal,
+      queryDesignSummary: parsed.queryDesignSummary.isNotEmpty
+          ? parsed.queryDesignSummary
+          : (queryGroups.isNotEmpty
+                ? '围绕${queryGroups.map((item) => item.dimension).where((item) => item.trim().isNotEmpty).join('、')}组织检索'
+                : ''),
+      queryGroups: queryGroups,
+      assumptions: parsed.assumptions,
+      mismatchSignal: parsed.mismatchSignal,
+      carryForwardFacts: parsed.carryForwardFacts,
+      discardedAssumptions: parsed.discardedAssumptions,
+    );
+  }
+
+  List<RunArtifactsUnderstandingQueryGroup> _buildUnderstandingQueryGroups(
+    List<QueryTask> queryTasks,
+  ) {
+    final grouped = <String, List<String>>{};
+    final labels = <String, String>{};
+    for (final task in queryTasks) {
+      final dimension = task.dimensionLabel.trim().isNotEmpty
+          ? task.dimensionLabel.trim()
+          : (task.label.trim().isNotEmpty ? task.label.trim() : '综合');
+      final query = task.query.trim();
+      if (query.isEmpty) continue;
+      grouped.putIfAbsent(dimension, () => <String>[]).add(query);
+      labels[dimension] = task.label.trim();
+    }
+    return grouped.entries
+        .map(
+          (entry) => RunArtifactsUnderstandingQueryGroup(
+            dimension: entry.key,
+            queries: entry.value.toSet().toList(growable: false),
+            why: labels[entry.key]?.trim() ?? '',
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  RunArtifactsAnswerProcessing _buildAnswerProcessingSnapshot({
+    required Map<String, dynamic> raw,
+    required SynthesisReadinessResult synthesisReadiness,
+    required ConversationStateDecision stateDecision,
+    required EvidenceEvaluationResult evidenceEvaluation,
+    required List<EvidenceLedgerEntry> evidenceLedger,
+    required Map<String, dynamic> answerPayload,
+  }) {
+    final parsed = _hasStructuredContent(raw)
+        ? RunArtifactsAnswerProcessing.fromJson(raw)
+        : const RunArtifactsAnswerProcessing();
+    final missingDimensions = parsed.missingDimensions.isNotEmpty
+        ? parsed.missingDimensions
+        : stateDecision.missingCriticalSlots
+              .where((item) => item.trim().isNotEmpty)
+              .take(4)
+              .toList(growable: false);
+    final retrieveMoreReason = parsed.retrieveMoreReason.isNotEmpty
+        ? parsed.retrieveMoreReason
+        : (stateDecision.finalAnswerReady
+              ? ''
+              : _firstNonEmptyText(<String?>[
+                  synthesisReadiness.reason,
+                  evidenceEvaluation.summary,
+                ]));
+    return RunArtifactsAnswerProcessing(
+      readinessSummary: parsed.readinessSummary.isNotEmpty
+          ? parsed.readinessSummary
+          : (stateDecision.finalAnswerReady
+                ? '已满足成答条件'
+                : _firstNonEmptyText(<String?>[
+                    synthesisReadiness.reason,
+                    evidenceEvaluation.summary,
+                    '仍有维度待补充',
+                  ])),
+      keyFacts: parsed.keyFacts.isNotEmpty
+          ? parsed.keyFacts
+          : _buildAnswerKeyFacts(
+              answerPayload: answerPayload,
+              evidenceLedger: evidenceLedger,
+            ),
+      missingDimensions: missingDimensions,
+      retrieveMoreReason: retrieveMoreReason,
+    );
+  }
+
+  List<String> _buildAnswerKeyFacts({
+    required Map<String, dynamic> answerPayload,
+    required List<EvidenceLedgerEntry> evidenceLedger,
+  }) {
+    final fromPayload =
+        ((answerPayload['evidence'] as List?) ?? const <dynamic>[])
+            .whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .map(
+              (item) => (item['claim'] as String?)?.trim().isNotEmpty == true
+                  ? (item['claim'] as String).trim()
+                  : (item['text'] as String?)?.trim() ?? '',
+            )
+            .where((item) => item.isNotEmpty)
+            .take(4)
+            .toList(growable: false);
+    if (fromPayload.isNotEmpty) return fromPayload;
+    return evidenceLedger
+        .map(
+          (entry) => entry.snippet.trim().isNotEmpty
+              ? entry.snippet.trim()
+              : entry.title.trim(),
+        )
+        .where((item) => item.isNotEmpty)
+        .take(4)
+        .toList(growable: false);
+  }
+
+  RunArtifactsHistoricalThinkingSnapshot _buildHistoricalThinkingSnapshot({
+    required Map<String, dynamic> raw,
+    required RunArtifactsUnderstandingSnapshot understandingSnapshot,
+  }) {
+    final parsed = _hasStructuredContent(raw)
+        ? RunArtifactsHistoricalThinkingSnapshot.fromJson(raw)
+        : const RunArtifactsHistoricalThinkingSnapshot();
+    return RunArtifactsHistoricalThinkingSnapshot(
+      continuityMode: parsed.continuityMode,
+      mismatchSignal: parsed.mismatchSignal.isNotEmpty
+          ? parsed.mismatchSignal
+          : understandingSnapshot.mismatchSignal,
+      carryForwardFacts: parsed.carryForwardFacts.isNotEmpty
+          ? parsed.carryForwardFacts
+          : understandingSnapshot.carryForwardFacts,
+      discardedAssumptions: parsed.discardedAssumptions.isNotEmpty
+          ? parsed.discardedAssumptions
+          : understandingSnapshot.discardedAssumptions,
+    );
+  }
+
+  RetrievalProcessingSnapshot _buildRetrievalProcessingSnapshot({
+    required List<Map<String, dynamic>> uiReferences,
+    required List<Map<String, dynamic>> toolResults,
+    required RunArtifactsUnderstandingSnapshot understandingSnapshot,
+    required SynthesisReadinessResult synthesisReadiness,
+    required bool finalAnswerReady,
+  }) {
+    final acceptedReferences = uiReferences
+        .map(
+          (item) => RetrievalProcessingReference(
+            title: (item['title'] as String?)?.trim() ?? '',
+            url: (item['url'] as String?)?.trim() ?? '',
+            source: (item['source'] as String?)?.trim() ?? '',
+            snippet: (item['snippet'] as String?)?.trim() ?? '',
+          ),
+        )
+        .where(
+          (item) =>
+              item.title.isNotEmpty ||
+              item.url.isNotEmpty ||
+              item.source.isNotEmpty,
+        )
+        .toList(growable: false);
+    final processedDocumentCount = _resolveProcessedDocumentCount(
+      uiReferences: uiReferences,
+      toolResults: toolResults,
+      acceptedDocumentCount: acceptedReferences.length,
+    );
+    return RetrievalProcessingSnapshot(
+      processedDocumentCount: processedDocumentCount,
+      acceptedDocumentCount: acceptedReferences.length,
+      processingSummary: _firstNonEmptyText(<String?>[
+        understandingSnapshot.queryDesignSummary,
+        finalAnswerReady ? '已完成资料筛选并进入成答' : '已完成当前轮资料筛选',
+      ]),
+      expansionReason: finalAnswerReady
+          ? ''
+          : _firstNonEmptyText(<String?>[synthesisReadiness.reason]),
+      acceptedReferences: acceptedReferences,
+    );
+  }
+
+  int _resolveProcessedDocumentCount({
+    required List<Map<String, dynamic>> uiReferences,
+    required List<Map<String, dynamic>> toolResults,
+    required int acceptedDocumentCount,
+  }) {
+    var maxProcessed = acceptedDocumentCount;
+    for (final item in uiReferences) {
+      final total = (item['_totalSearched'] as num?)?.toInt() ?? 0;
+      if (total > maxProcessed) {
+        maxProcessed = total;
+      }
+    }
+    var summedToolTotal = 0;
+    for (final item in toolResults) {
+      final data =
+          (item['data'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      summedToolTotal += (data['totalReferences'] as num?)?.toInt() ?? 0;
+    }
+    if (summedToolTotal > maxProcessed) {
+      maxProcessed = summedToolTotal;
+    }
+    return maxProcessed;
+  }
+
+  AssistantJourney _enrichJourneyWithStructuredSnapshots(
+    AssistantJourney journey, {
+    required RunArtifactsUnderstandingSnapshot understandingSnapshot,
+    required RetrievalProcessingSnapshot retrievalProcessing,
+    required RunArtifactsAnswerProcessing answerProcessing,
+    required bool finalAnswerReady,
+  }) {
+    final entries = List<AssistantJourneyEntry>.of(journey.entries);
+    var changed = false;
+
+    if (!_hasVisibleJourneyEntry(entries, JourneyStageId.analyze)) {
+      final headline = _buildUnderstandingJourneyHeadline(
+        understandingSnapshot,
+      );
+      final detail = understandingSnapshot.queryDesignSummary.trim();
+      if (headline.isNotEmpty || detail.isNotEmpty) {
+        entries.add(
+          AssistantJourneyEntry(
+            entryId: 'journey.analyze.snapshot',
+            stageId: JourneyStageId.analyze,
+            kind: JourneyEntryKind.narrative,
+            status: JourneyStageStatus.completed,
+            order: -10,
+            headline: headline,
+            detail: detail,
+            provenance: const AssistantJourneyProvenance(source: 'snapshot'),
+          ),
+        );
+        changed = true;
+      }
+    }
+
+    if (!_hasVisibleJourneyEntry(entries, JourneyStageId.answer) &&
+        finalAnswerReady) {
+      final headline = answerProcessing.readinessSummary.trim();
+      final detail = answerProcessing.keyFacts.take(2).join('；').trim();
+      if (headline.isNotEmpty || detail.isNotEmpty) {
+        entries.add(
+          AssistantJourneyEntry(
+            entryId: 'journey.answer.snapshot',
+            stageId: JourneyStageId.answer,
+            kind: JourneyEntryKind.narrative,
+            status: JourneyStageStatus.completed,
+            order: 9990,
+            headline: headline,
+            detail: detail,
+            provenance: const AssistantJourneyProvenance(source: 'snapshot'),
+          ),
+        );
+        changed = true;
+      }
+    }
+
+    if (!_hasVisibleJourneyEntry(entries, JourneyStageId.search) &&
+        (retrievalProcessing.processingSummary.trim().isNotEmpty ||
+            retrievalProcessing.acceptedReferences.isNotEmpty)) {
+      entries.add(
+        AssistantJourneyEntry(
+          entryId: 'journey.search.snapshot',
+          stageId: JourneyStageId.search,
+          kind: retrievalProcessing.acceptedReferences.isNotEmpty
+              ? JourneyEntryKind.referenceBundle
+              : JourneyEntryKind.narrative,
+          status: finalAnswerReady
+              ? JourneyStageStatus.completed
+              : JourneyStageStatus.active,
+          order: 100,
+          headline: retrievalProcessing.processingSummary.trim(),
+          detail: understandingSnapshot.queryDesignSummary.trim(),
+          references: retrievalProcessing.acceptedReferences
+              .map(
+                (item) => AssistantJourneyReference(
+                  title: item.title.trim(),
+                  url: item.url.trim(),
+                  source: item.source.trim(),
+                ),
+              )
+              .where(
+                (item) =>
+                    item.title.isNotEmpty &&
+                    (item.url.isNotEmpty || item.source.isNotEmpty),
+              )
+              .toList(growable: false),
+          provenance: const AssistantJourneyProvenance(source: 'snapshot'),
+        ),
+      );
+      changed = true;
+    }
+
+    if (!changed) {
+      return journey;
+    }
+    entries.sort((a, b) => a.order.compareTo(b.order));
+    return AssistantJourney(
+      stages: journey.stages,
+      entries: entries,
+      summary: journey.summary,
+      referenceSummary: journey.referenceSummary,
+      readiness: journey.readiness,
+    );
+  }
+
+  bool _hasVisibleJourneyEntry(
+    List<AssistantJourneyEntry> entries,
+    JourneyStageId stageId,
+  ) {
+    for (final entry in entries) {
+      if (entry.stageId != stageId) continue;
+      if (entry.headline.trim().isNotEmpty || entry.detail.trim().isNotEmpty) {
+        return true;
+      }
+      if (entry.references.isNotEmpty) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  String _buildUnderstandingJourneyHeadline(
+    RunArtifactsUnderstandingSnapshot snapshot,
+  ) {
+    final intent = snapshot.intentSummary.trim();
+    final concern = snapshot.concernPoints
+        .where((item) => item.trim().isNotEmpty)
+        .take(2)
+        .join('、');
+    final emotion = snapshot.emotionSignal.trim();
+    if (intent.isEmpty && concern.isEmpty && emotion.isEmpty) {
+      return '';
+    }
+    final buffer = StringBuffer('先确认');
+    if (intent.isNotEmpty) {
+      buffer.write('你想了解的是$intent');
+    } else {
+      buffer.write('当前问题的核心目标');
+    }
+    if (concern.isNotEmpty) {
+      buffer.write('，重点看$concern');
+    }
+    if (emotion.isNotEmpty) {
+      buffer.write('，也考虑到你当前$emotion');
+    }
+    buffer.write('。');
+    return buffer.toString();
+  }
+
+  String _firstNonEmptyText(Iterable<String?> candidates) {
+    for (final candidate in candidates) {
+      final normalized = candidate?.trim() ?? '';
+      if (normalized.isNotEmpty) {
+        return normalized;
+      }
+    }
+    return '';
+  }
+
+  String _extractProviderReasoningContinuation(
+    List<AssistantTraceEvent> traces,
+  ) {
+    for (final trace in traces.reversed) {
+      final data = trace.data;
+      if (data == null) continue;
+      final continuation =
+          (data['providerReasoningContinuation'] as String?)?.trim() ?? '';
+      if (continuation.isNotEmpty) {
+        return continuation;
+      }
+    }
+    return '';
   }
 
   List<SubagentPlan> _buildSkillRunPlans({
@@ -5013,7 +5874,7 @@ class LocalPhaseExecutionOwner {
       return '';
     }
     if (text.contains('assistant_turn') ||
-        text.contains('contractVersion') ||
+        text.contains('contractId') ||
         text.contains('tool_call') ||
         text.contains('<tool_call>')) {
       return '';
@@ -5085,7 +5946,7 @@ class LocalPhaseExecutionOwner {
     if (normalized.isEmpty) return false;
     if (AssistantContentFilters.isNotDisplayable(normalized)) return false;
     if (normalized.contains('assistant_turn') ||
-        normalized.contains('contractVersion') ||
+        normalized.contains('contractId') ||
         normalized.contains('queryTasks') ||
         normalized.contains('tool_call')) {
       return false;
@@ -5383,6 +6244,27 @@ class LocalPhaseExecutionOwner {
             : null,
         previousAnswerSummary:
             (raw['previousAnswerSummary'] as String?)?.trim() ?? '',
+        previousUnderstandingSnapshot:
+            raw['previousUnderstandingSnapshot'] is Map
+            ? RunArtifactsUnderstandingSnapshot.fromJson(
+                (raw['previousUnderstandingSnapshot'] as Map)
+                    .cast<String, dynamic>(),
+              )
+            : const RunArtifactsUnderstandingSnapshot(),
+        previousAnswerProcessing: raw['previousAnswerProcessing'] is Map
+            ? RunArtifactsAnswerProcessing.fromJson(
+                (raw['previousAnswerProcessing'] as Map)
+                    .cast<String, dynamic>(),
+              )
+            : const RunArtifactsAnswerProcessing(),
+        historicalThinkingSnapshot: raw['historicalThinkingSnapshot'] is Map
+            ? RunArtifactsHistoricalThinkingSnapshot.fromJson(
+                (raw['historicalThinkingSnapshot'] as Map)
+                    .cast<String, dynamic>(),
+              )
+            : const RunArtifactsHistoricalThinkingSnapshot(),
+        providerReasoningContinuation:
+            (raw['providerReasoningContinuation'] as String?)?.trim() ?? '',
         continuityPolicy: raw['contextContinuityPolicy'] is Map
             ? ContextContinuityPolicy.fromJson(
                 (raw['contextContinuityPolicy'] as Map).cast<String, dynamic>(),
@@ -5421,6 +6303,17 @@ class LocalPhaseExecutionOwner {
     } catch (_) {
       return null;
     }
+  }
+
+  bool _hasStructuredContent(Map<String, dynamic> value) {
+    for (final item in value.values) {
+      if (item is String && item.trim().isNotEmpty) return true;
+      if (item is num && item != 0) return true;
+      if (item is bool && item) return true;
+      if (item is List && item.isNotEmpty) return true;
+      if (item is Map && item.isNotEmpty) return true;
+    }
+    return false;
   }
 
   _PrecomputedUnderstand? _recoverPrecomputedUnderstand(
@@ -6250,6 +7143,12 @@ class _PrecomputedBootstrap {
     required this.recalledTexts,
     this.previousIntentGraph,
     this.previousAnswerSummary = '',
+    this.previousUnderstandingSnapshot =
+        const RunArtifactsUnderstandingSnapshot(),
+    this.previousAnswerProcessing = const RunArtifactsAnswerProcessing(),
+    this.historicalThinkingSnapshot =
+        const RunArtifactsHistoricalThinkingSnapshot(),
+    this.providerReasoningContinuation = '',
     required this.continuityPolicy,
     this.continuityOverrideSlots = const <String, dynamic>{},
     required this.recallResult,
@@ -6268,6 +7167,10 @@ class _PrecomputedBootstrap {
   final List<String> recalledTexts;
   final IntentGraph? previousIntentGraph;
   final String previousAnswerSummary;
+  final RunArtifactsUnderstandingSnapshot previousUnderstandingSnapshot;
+  final RunArtifactsAnswerProcessing previousAnswerProcessing;
+  final RunArtifactsHistoricalThinkingSnapshot historicalThinkingSnapshot;
+  final String providerReasoningContinuation;
   final ContextContinuityPolicy continuityPolicy;
   final Map<String, dynamic> continuityOverrideSlots;
   final RecallResult recallResult;

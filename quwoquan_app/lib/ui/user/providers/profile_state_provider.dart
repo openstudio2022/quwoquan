@@ -5,7 +5,6 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/mock/user_profile_mock_data.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 
@@ -42,6 +41,7 @@ class ProfileState {
   final List<UserWorkItem> works;
   final bool isLoading;
   final bool isFollowing;
+
   /// 关系能力位投影（null = 未载入）
   final RelationshipCapabilityDto? capability;
 
@@ -104,6 +104,12 @@ class ProfileNotifier extends ChangeNotifier {
       final works = await repo.listUserWorks(_userId);
       final lifeItems = await repo.listUserLifeItems(_userId);
       final circles = await repo.listProfileCircles(_userId);
+      final profileSubjectId = profile.profileSubjectId.isNotEmpty
+          ? profile.profileSubjectId
+          : _userId;
+      final seededFollowing = _ref
+          .read(userRelationshipStateProvider)
+          .isFollowing(profileSubjectId);
       _state = _state.copyWith(
         profile: profile,
         creations: posts,
@@ -111,6 +117,7 @@ class ProfileNotifier extends ChangeNotifier {
         lifeItems: lifeItems,
         circles: circles,
         isLoading: false,
+        isFollowing: seededFollowing,
       );
     } catch (_) {
       _state = _state.copyWith(isLoading: false);
@@ -122,8 +129,28 @@ class ProfileNotifier extends ChangeNotifier {
 
   Future<void> _loadRelationshipCapability() async {
     try {
+      final targetUserId = _state.profile?.profileSubjectId.isNotEmpty == true
+          ? _state.profile!.profileSubjectId
+          : _userId;
+      final seededFollowing = _ref
+          .read(userRelationshipStateProvider)
+          .isFollowing(targetUserId);
       final capRepo = _ref.read(relationshipCapabilityRepositoryProvider);
-      final cap = await capRepo.getCapability(_userId);
+      var cap = await capRepo.getCapability(targetUserId);
+      if (_ref.read(appDataSourceModeProvider) != AppDataSourceMode.remote &&
+          seededFollowing &&
+          !(cap.isFollowing || cap.isMutual)) {
+        cap = _copyCapabilityWithFollowState(cap, true);
+      }
+      final latestTargetId = _state.profile?.profileSubjectId.isNotEmpty == true
+          ? _state.profile!.profileSubjectId
+          : _userId;
+      if (latestTargetId != targetUserId) {
+        return;
+      }
+      _ref
+          .read(userRelationshipStateProvider.notifier)
+          .setFollowing(targetUserId, cap.isFollowing || cap.isMutual);
       _state = _state.copyWith(
         capability: cap,
         isFollowing: cap.isFollowing || cap.isMutual,
@@ -168,21 +195,52 @@ class ProfileNotifier extends ChangeNotifier {
   }
 
   Future<void> toggleFollow() async {
+    final profileSubjectId = _state.profile?.profileSubjectId.isNotEmpty == true
+        ? _state.profile!.profileSubjectId
+        : _userId;
     final wasFollowing = _state.isFollowing;
-    _state = _state.copyWith(isFollowing: !wasFollowing);
+    final nextFollowing = !wasFollowing;
+    _ref
+        .read(userRelationshipStateProvider.notifier)
+        .setFollowing(profileSubjectId, nextFollowing);
+    _ref
+        .read(clientStateSyncOutboxProvider.notifier)
+        .enqueueFollow(
+          profileSubjectId: profileSubjectId,
+          shouldFollow: nextFollowing,
+        );
+    _state = _state.copyWith(
+      isFollowing: nextFollowing,
+      capability: _state.capability == null
+          ? null
+          : _copyCapabilityWithFollowState(_state.capability!, nextFollowing),
+    );
     notifyListeners();
-    try {
-      final repo = _ref.read(userProfileRepositoryProvider);
-      if (wasFollowing) {
-        await repo.unfollowUser(_userId);
-      } else {
-        await repo.followUser(_userId);
-      }
-    } catch (_) {
-      _state = _state.copyWith(isFollowing: wasFollowing);
-      notifyListeners();
-    }
   }
+}
+
+RelationshipCapabilityDto _copyCapabilityWithFollowState(
+  RelationshipCapabilityDto capability,
+  bool isFollowing,
+) {
+  final relationState = isFollowing ? 'following' : 'not_following';
+  return RelationshipCapabilityDto(
+    viewerSubAccountId: capability.viewerSubAccountId,
+    targetSubAccountId: capability.targetSubAccountId,
+    relationState: relationState,
+    canFollow: !isFollowing,
+    canUnfollow: isFollowing,
+    canMessage: capability.canMessage,
+    canFollowBack: capability.canFollowBack && !isFollowing,
+    canGreet: capability.canGreet,
+    canOpenConversation: capability.canOpenConversation,
+    canAddSameInterest: capability.canAddSameInterest,
+    canSetCloseFriend: capability.canSetCloseFriend,
+    canStartVoiceCall: capability.canStartVoiceCall,
+    canStartVideoCall: capability.canStartVideoCall,
+    isBlocked: capability.isBlocked,
+    isBlockedBy: capability.isBlockedBy,
+  );
 }
 
 final profileNotifierProvider =

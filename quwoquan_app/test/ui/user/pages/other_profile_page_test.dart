@@ -259,4 +259,39 @@ void main() {
 
     expect(find.byType(ProfileShell), findsOneWidget);
   });
+
+  testWidgets('OtherProfilePage 优先使用 profileSubjectId 作为 canonical key', (
+    tester,
+  ) async {
+    setPhoneSize(tester);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          userProfileRepositoryProvider.overrideWithValue(
+            const MockUserProfileRepository(),
+          ),
+          relationshipCapabilityRepositoryProvider.overrideWithValue(
+            _ThrowingCapabilityRepository(),
+          ),
+        ],
+        child: ScreenUtilInit(
+          designSize: const Size(375, 812),
+          builder: (context, child) => MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const OtherProfilePage(
+              username: 'nature_photographer',
+              profileSubjectId: 'profile-subject-1',
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final shell = tester.widget<ProfileShell>(find.byType(ProfileShell));
+    expect(shell.userId, 'profile-subject-1');
+  });
 }

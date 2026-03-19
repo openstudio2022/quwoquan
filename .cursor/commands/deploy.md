@@ -2,7 +2,7 @@
 name: /deploy
 id: deploy
 category: Workflow
-description: 部署并执行 T3/T4 验证
+description: 部署 release batch / CR，并执行 Journey 验证
 ---
 
 > SDD 主流程：commit → **deploy**
@@ -14,7 +14,8 @@ description: 部署并执行 T3/T4 验证
 1. 部署到 integration / staging
 2. 执行 `T3` 端云集成验证
 3. 执行 `T4` 端到端旅程验证
-4. 满足 SLO 与回滚条件后进入生产放量
+4. 验证受影响的 `L2_journey` 组合验收与发布 guardrails
+5. 满足 SLO 与回滚条件后进入生产放量
 
 ## 验证口径
 
@@ -24,7 +25,7 @@ description: 部署并执行 T3/T4 验证
 ## 输出
 
 ```text
-部署完成：<feature or release>
+部署完成：<release or CR>
 T3: PASS/FAIL
 T4: PASS/FAIL
 ```

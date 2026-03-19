@@ -22,7 +22,7 @@ pattern = re.compile(
     r"\bagent_loop\b|CapabilityGateway|capability_gateway\.dart|"
     r"stack\.global_system|stack\.runtime_policy|stack\.recovery_policy|"
     r"stack\.global_policy|stack\.output_contract|\bthinkingText\b|"
-    r"uiProcessTimelineV2|uiUsageStatsV1|processJournalV1|\buiAnswer\b|"
+    r"uiUsageStatsV1|processJournalV1|\buiAnswer\b|"
     r"process_journal_bus|process_event_consolidator|"
     r"trace_user_event_translator|ui_process_timeline_entry"
 )

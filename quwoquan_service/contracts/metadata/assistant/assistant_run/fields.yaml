@@ -133,14 +133,14 @@ entities:
         ops_exposure: read
         description: Markdown 输出协议版本（例如 md.v1）
 
-      - name: decisionJson
+      - name: decision
         type: object
         constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: assistant_turn_v2 机器决策通道（nextAction/toolPlan/slotState/askUser）
+        description: 当前回合的结构化决策通道（nextAction/slotState/askUser 等）
 
       - name: toolObservations
         type: "[]object"
@@ -248,7 +248,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: 回合协议版本（assistant_turn_v2 等）
+        description: 回合协议标识或版本标签
 
       - name: sessionPreferenceFacts
         type: "[]object"

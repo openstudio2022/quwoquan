@@ -75,7 +75,9 @@ class MomentSocialFeed extends ConsumerWidget {
     final dtos =
         feedAsync.value?.items ??
         fallbackRaw.map(postBaseDtoFromMap).toList(growable: false);
-    final moments = dtos.whereType<MomentPostDto>().toList(growable: false);
+    final moments = dtos
+        .where((post) => post.identity == 'moment')
+        .toList(growable: false);
     final hasError = feedAsync.value?.error != null;
 
     if (feedAsync.isLoading && moments.isEmpty && !hasError) {
@@ -211,7 +213,7 @@ class MomentSocialFeed extends ConsumerWidget {
                               .blockUser(dto.authorId);
                         },
                         onBlockWords: () async {
-                          final keyword = _extractKeyword(dto.body);
+                          final keyword = _extractKeyword(dto.normalizedBody);
                           if (keyword.isEmpty) return;
                           await ref
                               .read(keywordBlockRepositoryProvider)
@@ -249,7 +251,7 @@ class MomentSocialFeed extends ConsumerWidget {
   void _showShare(
     BuildContext context,
     WidgetRef ref,
-    MomentPostDto post, {
+    PostBaseDto post, {
     required bool enableIdentityTemplate,
   }) {
     final template = _buildShareTemplate(
@@ -269,7 +271,7 @@ class MomentSocialFeed extends ConsumerWidget {
   Future<void> _copyLink(
     BuildContext context,
     WidgetRef ref,
-    MomentPostDto post, {
+    PostBaseDto post, {
     required bool enableIdentityTemplate,
   }) async {
     final result = await const DefaultContentShareActionHandler().execute(
@@ -291,7 +293,7 @@ class MomentSocialFeed extends ConsumerWidget {
 
   ContentShareTemplate _buildShareTemplate({
     required WidgetRef ref,
-    required MomentPostDto post,
+    required PostBaseDto post,
     required bool enableIdentityTemplate,
   }) {
     final raw = ref
@@ -371,7 +373,7 @@ class _MomentWeiboCard extends ConsumerStatefulWidget {
     required this.onMoreTap,
   });
 
-  final MomentPostDto item;
+  final PostBaseDto item;
   final bool isDark;
   final bool isLiked;
   final int likeCount;
@@ -485,10 +487,10 @@ class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
           ),
 
           // 正文（5 行截断 + 就地展开）
-          if (item.body.isNotEmpty) ...[
+          if (item.normalizedBody.isNotEmpty) ...[
             SizedBox(height: AppSpacing.intraGroupSm),
             _ExpandableText(
-              text: item.body,
+              text: item.normalizedBody,
               maxLines: _maxLines,
               isDark: isDark,
               expanded: _isExpanded,
@@ -748,7 +750,7 @@ class _MomentVideoCard extends StatelessWidget {
     required this.onTap,
   });
 
-  final MomentPostDto dto;
+  final PostBaseDto dto;
   final bool isDark;
   final VoidCallback onTap;
 
@@ -843,7 +845,7 @@ class _ActionRow extends StatelessWidget {
     required this.onShare,
   });
 
-  final MomentPostDto item;
+  final PostBaseDto item;
   final bool isDark;
   final bool isLiked;
   final int likeCount;

@@ -32,9 +32,11 @@ void main() {
     expect(find.byKey(TestKeys.createActionWrite), findsOneWidget);
     expect(find.byKey(TestKeys.createActionCapture), findsOneWidget);
 
-    expect(find.text('从相册选'), findsOneWidget);
-    expect(find.text('写点什么'), findsOneWidget);
-    expect(find.text('拍一下'), findsOneWidget);
+    expect(find.text('从相册选择'), findsOneWidget);
+    expect(find.text('写文字'), findsOneWidget);
+    expect(find.text('相机'), findsOneWidget);
+    expect(find.text('发起群聊'), findsOneWidget);
+    expect(find.text('添加同好'), findsOneWidget);
 
     expect(find.text('发微趣'), findsNothing);
     expect(find.text('发美图'), findsNothing);

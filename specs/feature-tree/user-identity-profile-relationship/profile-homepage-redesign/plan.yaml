@@ -1,0 +1,88 @@
+version: 1
+node: user-identity-profile-relationship/profile-homepage-redesign
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260318-001-profile-homepage-redesign-journey-scenario-migration.yaml
+
+slices:
+  - id: P1
+    title: reframe feature as journey
+    goal: 收拢 `profile-homepage-redesign` 的 Journey 边界，移除 L2 中的文件级实现与测试 case 数量
+    depends_on: []
+    acceptance_refs:
+      - J1
+      - J2
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - L2 文档只保留端到端主页旅程、跨场景 IA 与发布 guardrails
+      - L2 不再直接链接实现级 task 或文件迁移项
+    status: planned
+
+  - id: P2
+    title: split scenario topology
+    goal: 冻结本 Journey 下的 Scenario 拆分边界
+    depends_on:
+      - P1
+    acceptance_refs:
+      - J1
+    planned_evidence:
+      - T1_schema
+      - T2_module_interaction
+    done_when:
+      - 现有 `owner-subaccount-homepage-unification` 收缩为主体模型与契约 Scenario
+      - 新 Scenario `profile-shell-ui-unification` 与 `profile-motion-and-sticky-coordination` 的职责边界冻结
+    status: planned
+
+  - id: P3
+    title: migrate journey acceptance
+    goal: 把现有 L2 acceptance 迁移到 `journey_acceptance` schema
+    depends_on:
+      - P2
+    acceptance_refs:
+      - J1
+      - J2
+      - R1
+    planned_evidence:
+      - T1_schema
+      - T3_cross_service_integration
+      - T4_user_journey
+    done_when:
+      - L2 acceptance 只保留组合旅程、跨 Scenario 一致性、发布回滚 guardrails
+      - 细颗粒实现要求全部下沉到对应 Scenario
+    status: planned
+
+  - id: P4
+    title: backfill new scenario nodes
+    goal: 为拆出的两个新 Scenario 建立正式节点文档骨架
+    depends_on:
+      - P2
+    acceptance_refs:
+      - J1
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - 新 Scenario 目录与四件套创建完成
+      - tree index 与 CR 受影响节点同步
+    status: planned
+
+  - id: P5
+    title: retire legacy task framing
+    goal: 将样板 Journey 从 `tasks.md` 主导迁移到 `plan.yaml` 主导
+    depends_on:
+      - P3
+      - P4
+    acceptance_refs:
+      - J2
+      - R1
+    planned_evidence:
+      - T1_schema
+      - T2_module_interaction
+    done_when:
+      - `plan.yaml` 成为样板 Journey 的正式实施计划
+      - 旧 `tasks.md` 仅作为迁移期参考，后续可删除
+    status: planned

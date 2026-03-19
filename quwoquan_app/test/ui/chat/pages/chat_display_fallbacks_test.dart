@@ -9,7 +9,7 @@ void main() {
     const internalXml = '<tool_call><name>launch_app</name></tool_call>';
     final response = AssistantRunResponse(
       finalText: jsonEncode(<String, dynamic>{
-        'contractVersion': 'assistant_turn',
+        'contractId': 'assistant_turn',
         'decision': const <String, dynamic>{'nextAction': 'tool_call'},
         'messageKind': 'progress',
         'result': const <String, dynamic>{'text': internalXml},
@@ -26,7 +26,7 @@ void main() {
   test('clarify completed 会提示用户补充信息', () {
     final response = AssistantRunResponse(
       finalText: jsonEncode(<String, dynamic>{
-        'contractVersion': 'assistant_turn',
+        'contractId': 'assistant_turn',
         'decision': const <String, dynamic>{'nextAction': 'ask_user'},
         'messageKind': 'ask_user',
         'askUser': const <String, dynamic>{

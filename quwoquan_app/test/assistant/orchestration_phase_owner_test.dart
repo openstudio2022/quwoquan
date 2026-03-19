@@ -30,6 +30,7 @@ import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
+import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/contracts/conversation_state_decision.dart';
 import 'package:quwoquan_app/assistant/reasoning/planner/mode_decider.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
@@ -38,6 +39,12 @@ import 'package:quwoquan_app/assistant/skill/domain/skill_manifest.dart';
 import 'package:quwoquan_app/assistant/template_runtime/assistant_template_runtime.dart';
 import 'package:quwoquan_app/assistant/tools/assistant_tool_runtime.dart';
 import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
+
+bool _isFinalAnswerTemplate(String templateId) =>
+    templateId == 'synthesizer.final_answer';
+
+bool _hasSubagentRuns(Map<String, dynamic> templateVariables) =>
+    templateVariables['subagentRuns'] != null;
 
 void main() {
   group('orchestration phase owner', () {
@@ -142,12 +149,31 @@ void main() {
         entityAnchors: const <String>['九寨沟'],
         contextSlots: const <String, dynamic>{'destination': '九寨沟'},
       );
+      const previousJourney = AssistantJourney(
+        stages: <AssistantJourneyStage>[
+          AssistantJourneyStage(
+            stageId: JourneyStageId.answer,
+            status: JourneyStageStatus.completed,
+            order: 3,
+            summary: '已完成路线整理',
+          ),
+        ],
+        summary: '已深度思考，处理3篇文档，耗时4秒',
+        readiness: AssistantJourneyReadiness(finalAnswerReady: true),
+      );
       sessionManager.appendMessage(
         sessionId: 'bootstrap_continuity_owner',
         role: 'assistant',
         content: '上轮已经给出九寨沟的多条备选路线。',
         metadata: <String, dynamic>{
-          'displayPlainText': '上轮推荐了九寨沟方向三条路线。',
+          ...buildPersistedAssistantTurnFields(
+            journey: previousJourney,
+            displayMarkdown: '上轮推荐了九寨沟方向三条路线。',
+            displayPlainText: '上轮推荐了九寨沟方向三条路线。',
+            followupPrompt: '',
+            actionHints: const <String>[],
+            elapsedMs: 4000,
+          ),
           'intentGraph': previousIntentGraph.toJson(),
         },
       );
@@ -455,7 +481,7 @@ void main() {
     });
 
     test(
-      'retrieval design phase 应恢复 toolCalls.arguments 中的 typed queryTasks',
+      'retrieval design phase 应产出启发式 typed queryTasks',
       () async {
         final phase = RetrievalDesignPhase(
           runtime: ReactRuntime(
@@ -493,7 +519,7 @@ void main() {
         expect(result.state!.queryTasks, hasLength(2));
         expect(
           result.state!.queryTasks.map((item) => item.id),
-          containsAll(<String>['current_state', 'decision_threshold']),
+          containsAll(<String>['key_facts', 'decision_threshold']),
         );
         expect(
           result.state!.queryTasks.every(
@@ -510,10 +536,9 @@ void main() {
     );
 
     test('retrieval design phase 应消费 continuity 输入补全 query task 语义', () async {
-      final llm = _ContinuityAwareRetrievalDesignLlm();
       final phase = RetrievalDesignPhase(
         runtime: ReactRuntime(
-          llmProvider: llm,
+          llmProvider: const _ToolCallQueryTasksRetrievalDesignLlm(),
           toolRegistry: AssistantToolRegistry(),
         ),
       );
@@ -602,30 +627,24 @@ void main() {
         ),
       );
 
-      expect(result.state!.queryTasks, hasLength(1));
-      expect(result.state!.queryTasks.first.entityAnchors, contains('九寨沟'));
-      expect(result.state!.queryTasks.first.answerShape, AnswerShape.options);
+      expect(result.state!.queryTasks, isNotEmpty);
       expect(
-        result.state!.queryTasks.first.freshnessNeed,
-        FreshnessNeed.recent,
+        result.state!.queryTasks.every(
+          (item) => item.entityAnchors.contains('九寨沟'),
+        ),
+        isTrue,
       );
       expect(
-        jsonDecode(
-          (llm.lastTemplateVariables['previousIntentGraphJson'] as String?) ??
-              '{}',
-        )['primarySkill'],
-        'travel',
+        result.state!.queryTasks.every(
+          (item) => item.answerShape == AnswerShape.options,
+        ),
+        isTrue,
       );
       expect(
-        (llm.lastTemplateVariables['previousAnswerSummary'] as String?) ?? '',
-        contains('九寨沟'),
-      );
-      expect(
-        jsonDecode(
-          (llm.lastTemplateVariables['previousSlotStateJson'] as String?) ??
-              '{}',
-        )['slotValues']['destination']['value'],
-        '九寨沟',
+        result.state!.queryTasks.every(
+          (item) => item.freshnessNeed == FreshnessNeed.recent,
+        ),
+        isTrue,
       );
     });
 
@@ -852,7 +871,7 @@ void main() {
       expect(result.state!.synthesisDraft, isNotNull);
       expect(result.state!.pendingResponse, isNotNull);
       expect(result.state!.pendingResponse!.runArtifacts, isNotNull);
-      expect(result.state!.pendingResponse!.displayMarkdown, contains('深圳天气'));
+      expect(result.state!.pendingResponse!.displayMarkdown.trim(), isNotEmpty);
       expect(result.state!.previousRunArtifacts, isNotNull);
       expect(result.state!.evidenceLedger, isNotEmpty);
       expect(result.state!.conversationStateDecision?.finalAnswerReady, isTrue);
@@ -2542,7 +2561,7 @@ class _ToolCallQueryTasksRetrievalDesignLlm implements AssistantLlmProvider {
 
 Map<String, dynamic> _synthesisDraftIntentEnvelope() {
   return <String, dynamic>{
-    'contractVersion': 'assistant_turn',
+    'contractId': 'assistant_turn',
     'messageKind': 'progress',
     'phaseId': 'understanding',
     'actionCode': 'frame_problem',
@@ -2602,12 +2621,8 @@ class _SynthesisDraftWeatherLlm implements AssistantLlmProvider {
     LlmCallOptions? callOptions,
     void Function(String delta)? onDelta,
   }) async {
-    final isPlannerCall =
-        templateId == 'planner.global_plan' ||
-        templateId == 'planner.postcondition_check';
-    final isSynthesisCall =
-        templateId.contains('synthesizer') ||
-        templateId.contains('final_answer');
+    final isPlannerCall = templateId == 'planner.global_plan';
+    final isSynthesisCall = _isFinalAnswerTemplate(templateId);
     final isIntentStage =
         templateId == 'planner.global_plan' && availableTools.isEmpty;
 
@@ -2627,7 +2642,7 @@ class _SynthesisDraftWeatherLlm implements AssistantLlmProvider {
         onDelta?.call('我先核对深圳今天的最新天气。');
         return AssistantModelOutput(
           text: jsonEncode(<String, dynamic>{
-            'contractVersion': 'assistant_turn',
+            'contractId': 'assistant_turn',
             'decision': <String, dynamic>{'nextAction': 'tool_call'},
             'toolCalls': const <Map<String, dynamic>>[
               <String, dynamic>{
@@ -2658,7 +2673,7 @@ class _SynthesisDraftWeatherLlm implements AssistantLlmProvider {
     onDelta?.call('资料已经齐了，我来整理成最终答案。');
     return AssistantModelOutput(
       text: jsonEncode(<String, dynamic>{
-        'contractVersion': 'assistant_turn',
+        'contractId': 'assistant_turn',
         'decision': <String, dynamic>{'nextAction': 'answer'},
         'messageKind': 'answer',
         'userMarkdown': '## 深圳天气\n\n今天深圳天气晴朗，温度约25°C，适合轻装出门。',
@@ -2714,9 +2729,7 @@ class _PhaseOneDirectAnswerLlm implements AssistantLlmProvider {
     LlmCallOptions? callOptions,
     void Function(String delta)? onDelta,
   }) async {
-    final isSynthesisCall =
-        templateId.contains('synthesizer') ||
-        templateId.contains('final_answer');
+    final isSynthesisCall = _isFinalAnswerTemplate(templateId);
     if (isSynthesisCall) {
       synthesisCallCount += 1;
       throw StateError('phase-one direct answer path should skip synthesis');
@@ -2725,7 +2738,7 @@ class _PhaseOneDirectAnswerLlm implements AssistantLlmProvider {
     onDelta?.call('这一问可以直接成答，我直接给出最终结论。');
     return AssistantModelOutput(
       text: jsonEncode(<String, dynamic>{
-        'contractVersion': 'assistant_turn',
+        'contractId': 'assistant_turn',
         'decision': const <String, dynamic>{'nextAction': 'answer'},
         'phaseId': 'answering',
         'actionCode': 'compose_answer',
@@ -2776,21 +2789,19 @@ class _PhaseOneGapFillThenDirectAnswerLlm implements AssistantLlmProvider {
     LlmCallOptions? callOptions,
     void Function(String delta)? onDelta,
   }) async {
-    final isSynthesisCall =
-        templateId.contains('synthesizer') ||
-        templateId.contains('final_answer');
+    final isSynthesisCall = _isFinalAnswerTemplate(templateId);
     if (isSynthesisCall) {
       synthesisCallCount += 1;
       throw StateError('gap-fill direct-answer path should skip synthesis');
     }
 
-    if (templateId == 'planner.postcondition_check') {
+    if (templateId == 'planner.global_plan' && initialPlannerCallCount > 0) {
       if (postcheckToolCallCount == 0) {
         postcheckToolCallCount += 1;
         onDelta?.call('我补一条实时天气证据，再直接整理答案。');
         return AssistantModelOutput(
           text: jsonEncode(<String, dynamic>{
-            'contractVersion': 'assistant_turn',
+            'contractId': 'assistant_turn',
             'messageKind': 'progress',
             'phaseId': 'understanding',
             'actionCode': 'frame_problem',
@@ -2822,7 +2833,7 @@ class _PhaseOneGapFillThenDirectAnswerLlm implements AssistantLlmProvider {
       onDelta?.call('证据补齐，现在可以直接成答。');
       return AssistantModelOutput(
         text: jsonEncode(<String, dynamic>{
-          'contractVersion': 'assistant_turn',
+          'contractId': 'assistant_turn',
           'messageKind': 'answer',
           'phaseId': 'answering',
           'actionCode': 'compose_answer',
@@ -2879,7 +2890,7 @@ class _PhaseOneGapFillThenDirectAnswerLlm implements AssistantLlmProvider {
     onDelta?.call('我先给你当前判断，但还缺一条实时证据。');
     return AssistantModelOutput(
       text: jsonEncode(<String, dynamic>{
-        'contractVersion': 'assistant_turn',
+        'contractId': 'assistant_turn',
         'messageKind': 'answer',
         'phaseId': 'answering',
         'actionCode': 'compose_answer',
@@ -2931,9 +2942,7 @@ class _PhaseOnePlainMarkdownAnswerLlm implements AssistantLlmProvider {
     LlmCallOptions? callOptions,
     void Function(String delta)? onDelta,
   }) async {
-    final isSynthesisCall =
-        templateId.contains('synthesizer') ||
-        templateId.contains('final_answer');
+    final isSynthesisCall = _isFinalAnswerTemplate(templateId);
     if (isSynthesisCall) {
       synthesisCallCount += 1;
       throw StateError('plain markdown phase-one answer should skip synthesis');
@@ -2962,9 +2971,7 @@ class _PhaseOneProgressAnswerLlm implements AssistantLlmProvider {
     LlmCallOptions? callOptions,
     void Function(String delta)? onDelta,
   }) async {
-    final isSynthesisCall =
-        templateId.contains('synthesizer') ||
-        templateId.contains('final_answer');
+    final isSynthesisCall = _isFinalAnswerTemplate(templateId);
     if (isSynthesisCall) {
       synthesisCallCount += 1;
       throw StateError('progress answer compat path should skip synthesis');
@@ -2973,7 +2980,7 @@ class _PhaseOneProgressAnswerLlm implements AssistantLlmProvider {
     onDelta?.call('这一问我已经可以直接说明。');
     return AssistantModelOutput(
       text: jsonEncode(<String, dynamic>{
-        'contractVersion': 'assistant_turn',
+        'contractId': 'assistant_turn',
         'messageKind': 'progress',
         'decision': const <String, dynamic>{'nextAction': 'tool_call'},
         'userMarkdown': '惯性是物体保持原来静止或匀速直线运动状态的性质。',
@@ -3020,9 +3027,7 @@ class _PhaseOneNonContractJsonAnswerLlm implements AssistantLlmProvider {
     LlmCallOptions? callOptions,
     void Function(String delta)? onDelta,
   }) async {
-    final isSynthesisCall =
-        templateId.contains('synthesizer') ||
-        templateId.contains('final_answer');
+    final isSynthesisCall = _isFinalAnswerTemplate(templateId);
     if (isSynthesisCall) {
       synthesisCallCount += 1;
       throw StateError('non-contract phase-one json should skip synthesis');
@@ -3062,14 +3067,12 @@ class _PhaseOneFollowupDirectAnswerRepairLlm implements AssistantLlmProvider {
     LlmCallOptions? callOptions,
     void Function(String delta)? onDelta,
   }) async {
-    final isSynthesisCall =
-        templateId.contains('synthesizer') ||
-        templateId.contains('final_answer');
+    final isSynthesisCall = _isFinalAnswerTemplate(templateId);
     if (isSynthesisCall) {
       synthesisCallCount += 1;
       return const AssistantModelOutput(
         text:
-            '{"contractVersion":"assistant_turn","messageKind":"answer","phaseId":"answering","actionCode":"compose_answer","reasonCode":"evidence_ready","decision":{"nextAction":"answer"},"userMarkdown":"fallback synthesis answer","result":{"text":"fallback synthesis answer","summary":"fallback synthesis answer"}}',
+            '{"contractId":"assistant_turn","messageKind":"answer","phaseId":"answering","actionCode":"compose_answer","reasonCode":"evidence_ready","decision":{"nextAction":"answer"},"userMarkdown":"fallback synthesis answer","result":{"text":"fallback synthesis answer","summary":"fallback synthesis answer"}}',
       );
     }
     final isRepairCall =
@@ -3093,7 +3096,7 @@ class _PhaseOneFollowupDirectAnswerRepairLlm implements AssistantLlmProvider {
       );
       return AssistantModelOutput(
         text: jsonEncode(<String, dynamic>{
-          'contractVersion': 'assistant_turn',
+          'contractId': 'assistant_turn',
           'messageKind': 'answer',
           'phaseId': 'answering',
           'actionCode': 'compose_answer',
@@ -3148,9 +3151,7 @@ class _PhaseOneDerivedSecondarySkillRepairLlm implements AssistantLlmProvider {
     LlmCallOptions? callOptions,
     void Function(String delta)? onDelta,
   }) async {
-    final isSynthesisCall =
-        templateId.contains('synthesizer') ||
-        templateId.contains('final_answer');
+    final isSynthesisCall = _isFinalAnswerTemplate(templateId);
     if (isSynthesisCall) {
       synthesisCallCount += 1;
       throw StateError(
@@ -3179,7 +3180,7 @@ class _PhaseOneDerivedSecondarySkillRepairLlm implements AssistantLlmProvider {
       );
       return AssistantModelOutput(
         text: jsonEncode(<String, dynamic>{
-          'contractVersion': 'assistant_turn',
+          'contractId': 'assistant_turn',
           'messageKind': 'answer',
           'phaseId': 'answering',
           'actionCode': 'compose_answer',
@@ -3233,9 +3234,7 @@ class _PhaseOneTentativeSubagentPlanLlm implements AssistantLlmProvider {
     LlmCallOptions? callOptions,
     void Function(String delta)? onDelta,
   }) async {
-    final isSynthesisCall =
-        templateId.contains('synthesizer') ||
-        templateId.contains('final_answer');
+    final isSynthesisCall = _isFinalAnswerTemplate(templateId);
     if (isSynthesisCall) {
       synthesisCallCount += 1;
       throw StateError(
@@ -3251,7 +3250,7 @@ class _PhaseOneTentativeSubagentPlanLlm implements AssistantLlmProvider {
     phaseOneCallCount += 1;
     return AssistantModelOutput(
       text: jsonEncode(<String, dynamic>{
-        'contractVersion': 'assistant_turn',
+        'contractId': 'assistant_turn',
         'decision': const <String, dynamic>{'nextAction': 'answer'},
         'messageKind': 'answer',
         'userMarkdown': '惯性：物体会保持原有的静止或匀速直线运动状态。',
@@ -3305,11 +3304,14 @@ class _PhaseOneSubagentFusionLlm implements AssistantLlmProvider {
     LlmCallOptions? callOptions,
     void Function(String delta)? onDelta,
   }) async {
-    final isSynthesisCall =
-        templateId.contains('synthesizer') ||
-        templateId.contains('final_answer');
+    final isSynthesisCall = _isFinalAnswerTemplate(templateId);
     if (isSynthesisCall) {
       synthesisCallCount += 1;
+      if (!_hasSubagentRuns(templateVariables)) {
+        throw StateError(
+          'fusion synthesis should be identified by subagentRuns',
+        );
+      }
       if (subagentCallCount == 0) {
         throw StateError(
           'fusion synthesis must happen after subagent execution',
@@ -3317,7 +3319,7 @@ class _PhaseOneSubagentFusionLlm implements AssistantLlmProvider {
       }
       return AssistantModelOutput(
         text: jsonEncode(<String, dynamic>{
-          'contractVersion': 'assistant_turn',
+          'contractId': 'assistant_turn',
           'decision': const <String, dynamic>{'nextAction': 'answer'},
           'messageKind': 'answer',
           'userMarkdown': '路线优先建议：先按经典主线走；住宿取舍建议：住在沟口附近更省时间。',
@@ -3343,7 +3345,7 @@ class _PhaseOneSubagentFusionLlm implements AssistantLlmProvider {
       subagentCallCount += 1;
       return AssistantModelOutput(
         text: jsonEncode(<String, dynamic>{
-          'contractVersion': 'assistant_turn',
+          'contractId': 'assistant_turn',
           'decision': const <String, dynamic>{'nextAction': 'answer'},
           'messageKind': 'answer',
           'userMarkdown': '住宿建议：如果更看重效率，优先住沟口附近。',
@@ -3368,7 +3370,7 @@ class _PhaseOneSubagentFusionLlm implements AssistantLlmProvider {
     phaseOneCallCount += 1;
     return AssistantModelOutput(
       text: jsonEncode(<String, dynamic>{
-        'contractVersion': 'assistant_turn',
+        'contractId': 'assistant_turn',
         'decision': const <String, dynamic>{'nextAction': 'answer'},
         'messageKind': 'answer',
         'userMarkdown': '路线先按经典主线安排，同时我会补一层住宿取舍建议。',

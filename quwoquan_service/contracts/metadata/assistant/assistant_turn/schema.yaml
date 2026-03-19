@@ -10,7 +10,7 @@ imports:
   - package:quwoquan_app/assistant/contracts/skill_run.dart
   - package:quwoquan_app/assistant/contracts/run_artifacts.dart
 fields:
-  - name: contractVersion
+  - name: contractId
     type: string
     required: true
   - name: decision
@@ -107,6 +107,18 @@ fields:
   - name: reasonShort
     type: string
     default: ''
+  - name: understandingSnapshot
+    type: object
+    ref: understanding_snapshot
+    default: {}
+  - name: answerProcessing
+    type: object
+    ref: answer_processing
+    default: {}
+  - name: historicalThinkingSnapshot
+    type: object
+    ref: historical_thinking_snapshot
+    default: {}
   - name: sessionPreferenceFacts
     type: list<object>
     ref: PreferenceFact
@@ -185,3 +197,35 @@ subcontracts:
       - { name: slotId, type: string, default: '' }
       - { name: reason, type: string, default: '' }
       - { name: guidance, type: string, default: '' }
+  understanding_snapshot:
+    class_name: AssistantTurnUnderstandingSnapshot
+    fields:
+      - { name: intentSummary, type: string, default: '' }
+      - { name: concernPoints, type: list<string>, default: [] }
+      - { name: emotionSignal, type: string, default: '' }
+      - { name: queryDesignSummary, type: string, default: '' }
+      - { name: queryGroups, type: list<object>, ref: understanding_query_group, default: [] }
+      - { name: assumptions, type: list<string>, default: [] }
+      - { name: mismatchSignal, type: string, default: '' }
+      - { name: carryForwardFacts, type: list<string>, default: [] }
+      - { name: discardedAssumptions, type: list<string>, default: [] }
+  understanding_query_group:
+    class_name: AssistantTurnUnderstandingQueryGroup
+    fields:
+      - { name: dimension, type: string, default: '' }
+      - { name: queries, type: list<string>, default: [] }
+      - { name: why, type: string, default: '' }
+  answer_processing:
+    class_name: AssistantTurnAnswerProcessing
+    fields:
+      - { name: readinessSummary, type: string, default: '' }
+      - { name: keyFacts, type: list<string>, default: [] }
+      - { name: missingDimensions, type: list<string>, default: [] }
+      - { name: retrieveMoreReason, type: string, default: '' }
+  historical_thinking_snapshot:
+    class_name: AssistantTurnHistoricalThinkingSnapshot
+    fields:
+      - { name: continuityMode, type: string, default: '' }
+      - { name: mismatchSignal, type: string, default: '' }
+      - { name: carryForwardFacts, type: list<string>, default: [] }
+      - { name: discardedAssumptions, type: list<string>, default: [] }

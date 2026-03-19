@@ -81,6 +81,12 @@ void main() {
       '50%',
       '100%',
     ]);
+    expect(state.clientStateSync.flushDelay, const Duration(seconds: 10));
+    expect(state.clientStateSync.retryDelay, const Duration(minutes: 5));
+    expect(state.clientStateSync.maxBatchSize, 20);
+    expect(state.clientStateSync.maxPendingAge, const Duration(hours: 72));
+    expect(state.clientStateSync.flushOnForegroundResume, isTrue);
+    expect(state.clientStateSync.flushOnNetworkRecovered, isTrue);
   });
 
   test('refresh 会重新拉取远端 runtime config', () async {
@@ -142,5 +148,43 @@ void main() {
       '20%',
       '50%',
     ]);
+  });
+
+  test('remote app config 覆盖 client state sync 参数', () async {
+    final container = ProviderContainer(
+      overrides: [
+        contentRepositoryProvider.overrideWithValue(
+          _RuntimeConfigRepository({
+            'content': {
+              'client_state_sync': {
+                'flush_delay_sec': 15,
+                'retry_delay_sec': 90,
+                'max_batch_size': 8,
+                'max_pending_age_sec': 3600,
+                'flush_on_foreground_resume': false,
+                'flush_on_network_recovered': true,
+              },
+            },
+          }),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container
+        .read(appDataSourceModeProvider.notifier)
+        .setMode(AppDataSourceMode.remote);
+    container.read(contentRuntimeConfigProvider);
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+
+    final state = container.read(contentRuntimeConfigProvider);
+
+    expect(state.clientStateSync.flushDelay, const Duration(seconds: 15));
+    expect(state.clientStateSync.retryDelay, const Duration(seconds: 90));
+    expect(state.clientStateSync.maxBatchSize, 8);
+    expect(state.clientStateSync.maxPendingAge, const Duration(hours: 1));
+    expect(state.clientStateSync.flushOnForegroundResume, isFalse);
+    expect(state.clientStateSync.flushOnNetworkRecovered, isTrue);
   });
 }

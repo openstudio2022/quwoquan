@@ -1,38 +1,31 @@
 import 'dart:async';
-import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
-import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:video_player/video_player.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/media/camera/camera_capture_page.dart';
+import 'package:quwoquan_app/components/media/image/editor/image_editor_page.dart';
 import 'package:quwoquan_app/components/media/picker/create_media_picker_page.dart';
-import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
-import 'package:quwoquan_app/core/models/visit_models.dart';
-import 'package:quwoquan_app/core/test_keys.dart';
-import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
+import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/test_keys.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/publish_circle_select_page.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/publish_location_selector_page.dart';
-import 'package:quwoquan_app/ui/content/entry/services/publish_settings_services.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.dart';
-import 'package:quwoquan_app/l10n/l10n.dart';
+import 'package:quwoquan_app/ui/content/entry/services/publish_settings_services.dart';
 
-/// 创作页
-///
-/// 1:1 复制自 趣我圈2026/src CreatePage.tsx
-/// 四 Tab moment|photo|video|article、草稿箱、退出确认、10 秒自动保存、hasContent 判断
 class CreatePage extends ConsumerStatefulWidget {
   const CreatePage({super.key, this.initialAction, this.initialTabKey});
 
@@ -44,455 +37,290 @@ class CreatePage extends ConsumerStatefulWidget {
 }
 
 class _CreatePageState extends ConsumerState<CreatePage> {
-  late PageController _pageController;
-  int _currentIndex = 0;
-  static const List<String> _tabIds = ['moment', 'photo', 'video', 'article'];
-
-  Map<String, dynamic> get _currentData => ref.read(createEditorProvider).data;
-  String? _currentDraftId;
-  // _showDraftsList removed
-  // _showExitConfirm removed
-  Timer? _autoSaveTimer;
   static const String _draftsStorageKey = 'create_drafts_list';
   static const String _currentDraftIdKey = 'create_current_draft_id';
+  static const int _kMaxMediaImages = 20;
+  static const int _kMaxBodyLength = 5000;
 
-  /// 发微趣编辑态：全屏、无一级 Tab、底部 emoji 栏、键盘弹起（图二）
-  bool _isMomentEditingMode = false;
-
-  /// 发美图编辑态：底部 TabBar 隐退（参考微趣编辑态）
-  bool _isPhotoEditingMode = false;
-  final FocusNode _momentFocusNode = FocusNode();
-
-  /// 添加图片按钮焦点：进入时边框渐深，离开变回（图一）
-  final FocusNode _momentAddImageFocusNode = FocusNode();
-
-  /// 底部 emoji 面板展开时隐藏键盘、与键盘高度一致
-  bool _showEmojiPanel = false;
-  late final TextEditingController _momentContentController;
-  static const int _kMomentMaxLength = 1000;
-
-  /// 美图缩略图是否展开（超过 4 行时第四行之下显示“显示更多图片”，展开后全部之下显示“收起”）
-  bool _photoThumbnailsExpanded = false;
-
-  /// 创作设置行：右侧选项列固定宽度，确保三行右边缘对齐
-  static const double _kTrailingColumnWidth = 140.0;
-
-  /// 一行 5 个；4 行 = 19 缩略图 + 1 添加（参考群聊群信息更多群成员/收起）
-  static const int _kPhotoThumbnailsPerRow = 5;
-  static const int _kPhotoSlotsCollapsed =
-      (_kPhotoThumbnailsPerRow * 4) - 1; // 19
-  final PageController _photoPageController = PageController();
   final CreateLocationService _locationService = CreateLocationService();
   final CreateCircleService _circleService = const CreateCircleService();
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _bodyController = TextEditingController();
+  final FocusNode _titleFocusNode = FocusNode();
+  final FocusNode _bodyFocusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
+
+  Timer? _autoSaveTimer;
   bool _didApplyInitialAction = false;
+  bool _isPublishing = false;
+  double _heroCollapseProgress = 0;
+  String? _draggingMediaPath;
+  List<CreateDraft> _savedDrafts = <CreateDraft>[];
+  String? _currentDraftId;
 
-  final List<CreateDraft> _savedDrafts = [];
-
-  void _recordCreateVisit(String tabId) {
-    ref
-        .read(visitRecorderServiceProvider)
-        .recordVisit(VisitTarget.page('create_$tabId'));
-  }
+  bool get _editorV2Enabled =>
+      ref.read(contentFeatureFlagProvider('create_editor_v2')) ||
+      ref.read(contentFeatureFlagProvider('enable_unified_create_editor'));
 
   @override
   void initState() {
     super.initState();
-    _momentContentController = TextEditingController(
-      text:
-          (_currentData['moment'] as Map<String, dynamic>)['content']
-              as String? ??
-          '',
-    );
-    final initialIndex = _resolveInitialTabIndex();
-    _currentIndex = initialIndex;
-    _pageController = PageController(initialPage: initialIndex);
+    _scrollController.addListener(_handleScroll);
     _loadDrafts();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _recordCreateVisit(_tabIds[_currentIndex]);
-      unawaited(_applyInitialActionIfNeeded());
-    });
     _autoSaveTimer = Timer.periodic(const Duration(seconds: 10), (_) {
-      if (_hasContent()) _saveDraft();
+      final state = ref.read(createEditorProvider);
+      if (state.hasContent) {
+        unawaited(_saveDraft(silent: true));
+      }
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        return;
+      }
+      final notifier = ref.read(createEditorProvider.notifier);
+      notifier.reset(editorKind: _resolveInitialEditorKind());
+      if (widget.initialAction != null) {
+        notifier.setStartAction(widget.initialAction);
+      }
+      _syncControllersFromState(ref.read(createEditorProvider));
+      await _applyInitialActionIfNeeded();
+      await _reportEvent('create_editor_ready', <String, dynamic>{
+        'editorKind': ref.read(createEditorProvider).editorKind.name,
+        'flag': _editorV2Enabled,
+      });
     });
   }
 
   @override
   void dispose() {
     _autoSaveTimer?.cancel();
-    _momentFocusNode.dispose();
-    _momentAddImageFocusNode.dispose();
-    _momentContentController.dispose();
-    _photoPageController.dispose();
-    _pageController.dispose();
+    _scrollController
+      ..removeListener(_handleScroll)
+      ..dispose();
+    _titleController.dispose();
+    _bodyController.dispose();
+    _titleFocusNode.dispose();
+    _bodyFocusNode.dispose();
     super.dispose();
   }
 
-  void _enterMomentEditingMode() {
-    if (_currentIndex != 0) return;
-    _momentAddImageFocusNode.unfocus();
-    setState(() {
-      _isMomentEditingMode = true;
-      _showEmojiPanel = false;
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_momentFocusNode.canRequestFocus) _momentFocusNode.requestFocus();
-    });
-  }
-
-  void _exitMomentEditingMode() {
-    setState(() {
-      _isMomentEditingMode = false;
-      _showEmojiPanel = false;
-    });
-    _momentFocusNode.unfocus();
-    // 同步内容回 _currentData
-    final content = _momentContentController.text;
-    ref.read(createEditorProvider.notifier).updateField('moment', 'content', content);
-  }
-
-  void _enterPhotoEditingMode() {
-    if (_currentIndex != 1) return;
-    if (_isPhotoEditingMode) return;
-    final photoData = _currentData['photo'] as Map<String, dynamic>? ?? {};
-    final images = List<String>.from(photoData['images'] as List? ?? []);
-    final currentIndex = (photoData['_photoCurrentIndex'] as int? ?? 0).clamp(
-      0,
-      images.isEmpty ? 0 : images.length - 1,
-    );
-    setState(() => _isPhotoEditingMode = true);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_photoPageController.hasClients) return;
-      if (images.isNotEmpty) {
-        _photoPageController.jumpToPage(currentIndex);
-      }
-    });
-  }
-
-  Future<void> _showArticleCoverOptions(bool isDark) async {
-    final fg = SettingsSemanticConstants.labelColor(isDark);
-    final secondary = SettingsSemanticConstants.secondaryColor(isDark);
-    final selection = await showCupertinoModalPopup<int>(
-      context: context,
-      builder: (context) {
-        return CupertinoActionSheet(
-          actions: [
-            CupertinoActionSheetAction(
-              onPressed: () => Navigator.of(context).pop(0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    UITextConstants.articleCoverOptionNone,
-                    style: TextStyle(color: fg),
-                  ),
-                  Text(
-                    UITextConstants.articleCoverOptionNoneDesc,
-                    style: TextStyle(color: secondary, fontSize: AppTypography.xs),
-                  ),
-                ],
-              ),
-            ),
-            CupertinoActionSheetAction(
-              onPressed: () => Navigator.of(context).pop(1),
-              child: Text(
-                UITextConstants.articleCoverOptionOne,
-                style: TextStyle(color: fg),
-              ),
-            ),
-            CupertinoActionSheetAction(
-              onPressed: () => Navigator.of(context).pop(2),
-              child: Text(
-                UITextConstants.articleCoverOptionTwo,
-                style: TextStyle(color: fg),
-              ),
-            ),
-            CupertinoActionSheetAction(
-              onPressed: () => Navigator.of(context).pop(3),
-              child: Text(
-                UITextConstants.articleCoverOptionThree,
-                style: TextStyle(color: fg),
-              ),
-            ),
-          ],
-          cancelButton: CupertinoActionSheetAction(
-            isDefaultAction: true,
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(UITextConstants.cancel),
-          ),
-        );
-      },
-    );
-    if (!mounted || selection == null) return;
-    if (selection == 0) {
-      ref.read(createEditorProvider.notifier).updateField('article', 'covers', <String>[]);
+  void _handleScroll() {
+    final next =
+        (_scrollController.hasClients ? _scrollController.offset / 96 : 0.0)
+            .clamp(0.0, 1.0)
+            .toDouble();
+    if ((next - _heroCollapseProgress).abs() < 0.02 || !mounted) {
       return;
     }
-    final currentCovers = List<String>.from(
-      ((_currentData['article'] as Map<String, dynamic>?)?['covers']
-              as List?) ??
-          <String>[],
-    );
-    final paths = await _pickImages(
-      maxCount: selection,
-      initialPaths: currentCovers,
-    );
-    if (!mounted) return;
-    ref.read(createEditorProvider.notifier).updateField('article', 'covers', paths);
+    setState(() {
+      _heroCollapseProgress = next;
+    });
   }
 
-  /// 发表微趣：发布到云侧内容服务，成功后退出编辑态并提示
-  Future<void> _publishMoment() async {
-    await _publishTab('moment', exitMomentEditing: true);
-  }
-
-  Future<void> _publishCurrentTab() async {
-    final tab = _tabIds[_currentIndex];
-    await _publishTab(tab);
-  }
-
-  Future<void> _publishTab(String tab, {bool exitMomentEditing = false}) async {
-    if (tab == 'moment') {
-      ref.read(createEditorProvider.notifier).updateField('moment', 'content', _momentContentController.text);
+  CreateEditorKind _resolveInitialEditorKind() {
+    if (widget.initialAction == EditorStartAction.gallery ||
+        widget.initialAction == EditorStartAction.capture) {
+      return CreateEditorKind.media;
     }
-    final confirmed = await _ensurePublishIdentityConfirmed(tab);
-    if (!confirmed) return;
-    final payload = _buildPostPayload(tab);
-    if (payload == null) {
-      if (mounted) {
-        AppToast.show(context, context.l10n.loadFailed);
-      }
-      return;
-    }
-    try {
-      final repository = ref.read(contentRepositoryProvider);
-      final created = await repository.createPost(payload: payload);
-      final postId = _extractPostId(created);
-      if (postId.isEmpty) {
-        throw StateError('missing post id');
-      }
-      await repository.publishPost(
-        postId: postId,
-        payload: _buildPublishPayloadFields(tab),
-      );
-      if (_currentDraftId != null) {
-        final nextDrafts = _savedDrafts
-            .where((e) => e.id != _currentDraftId)
-            .toList();
-        setState(() {
-          _savedDrafts
-            ..clear()
-            ..addAll(nextDrafts);
-          _currentDraftId = null;
-        });
-        await _persistDrafts(nextDrafts, null);
-      }
-      if (exitMomentEditing) {
-        _exitMomentEditingMode();
-      }
-      if (!mounted) return;
-      AppToast.show(context, UITextConstants.momentPublished);
-      _doClose();
-    } catch (_) {
-      if (!mounted) return;
-      AppToast.show(context, context.l10n.loadFailed);
-    }
-  }
-
-  String _extractPostId(Map<String, dynamic> payload) {
-    return (payload['_id'] ?? payload['postId'] ?? payload['id'] ?? '')
-        .toString()
-        .trim();
-  }
-
-  Map<String, dynamic>? _buildPostPayload(String tab) {
-    final publishFields = _buildPublishPayloadFields(tab);
-    final contentIdentity = _identityForTab(tab).value;
-    switch (tab) {
-      case 'moment':
-        final d = _currentData['moment'] as Map<String, dynamic>? ?? {};
-        return <String, dynamic>{
-          'contentType': 'micro',
-          'contentIdentity': contentIdentity,
-          'body': (d['content'] as String? ?? '').trim(),
-          'mediaUrls': List<String>.from(d['images'] as List? ?? <String>[]),
-          'videoUrl': (d['videoPath'] as String? ?? '').trim(),
-          'coverUrl': (d['videoThumbnail'] as String? ?? '').trim(),
-          'title': '',
-          'tags': <String>[],
-          ...publishFields,
-        };
+    switch ((widget.initialTabKey ?? '').trim()) {
       case 'photo':
-        final d = _currentData['photo'] as Map<String, dynamic>? ?? {};
-        return <String, dynamic>{
-          'contentType': 'image',
-          'contentIdentity': contentIdentity,
-          'title': (d['title'] as String? ?? '').trim(),
-          'body': (d['description'] as String? ?? '').trim(),
-          'mediaUrls': List<String>.from(d['images'] as List? ?? <String>[]),
-          'tags': <String>[],
-          ...publishFields,
-        };
       case 'video':
-        final d = _currentData['video'] as Map<String, dynamic>? ?? {};
-        final videoPath = (d['videoPath'] as String? ?? '').trim();
-        final mediaUrls = <String>[if (videoPath.isNotEmpty) videoPath];
-        return <String, dynamic>{
-          'contentType': 'video',
-          'contentIdentity': contentIdentity,
-          'title': (d['title'] as String? ?? '').trim(),
-          'body': (d['description'] as String? ?? '').trim(),
-          'videoUrl': videoPath,
-          'mediaUrls': mediaUrls,
-          'coverUrl': (d['thumbnail'] as String? ?? '').trim(),
-          'tags': <String>[],
-          ...publishFields,
-        };
-      case 'article':
-        final d = _currentData['article'] as Map<String, dynamic>? ?? {};
-        final covers = List<String>.from(d['covers'] as List? ?? <String>[]);
-        return <String, dynamic>{
-          'contentType': 'article',
-          'contentIdentity': contentIdentity,
-          'title': (d['title'] as String? ?? '').trim(),
-          'body': (d['content'] as String? ?? '').trim(),
-          'coverUrl': covers.isNotEmpty ? covers.first : '',
-          'mediaUrls': covers,
-          'tags': <String>[],
-          ...publishFields,
-        };
+        return CreateEditorKind.media;
       default:
-        return null;
+        return CreateEditorKind.text;
     }
   }
 
-  Map<String, dynamic> _tabData(String tab) {
-    final data =
-        _currentData[tab] as Map<String, dynamic>? ?? <String, dynamic>{};
-    if (!data.containsKey('visibility')) data['visibility'] = 'public';
-    if (!data.containsKey('assistantUsePolicy')) {
-      data['assistantUsePolicy'] = 'inherit';
+  Future<void> _applyInitialActionIfNeeded() async {
+    if (_didApplyInitialAction) {
+      return;
     }
-    if (!data.containsKey('circleIds')) data['circleIds'] = <String>[];
-    if (!data.containsKey('circleNames')) data['circleNames'] = <String>[];
-    if (!data.containsKey('locationName')) data['locationName'] = '';
-    if (!data.containsKey('location')) data['location'] = <String, dynamic>{};
-    if (!data.containsKey('contentIdentity')) {
-      data['contentIdentity'] = tab == 'moment'
-          ? CreateContentIdentity.moment.value
-          : CreateContentIdentity.work.value;
-    }
-    return data;
-  }
-
-  bool _isPublic(String tab) =>
-      (_tabData(tab)['visibility']?.toString() ?? 'public').toLowerCase() ==
-      'public';
-
-  String _locationDisplay(String tab, AppLocalizations l10n) {
-    final name = (_tabData(tab)['locationName'] as String? ?? '').trim();
-    return name.isEmpty ? l10n.locationHidden : name;
-  }
-
-  String _circlesDisplay(String tab, AppLocalizations l10n) {
-    final names = List<String>.from(
-      _tabData(tab)['circleNames'] as List? ?? const <String>[],
-    );
-    if (names.isEmpty) return l10n.noCirclesAvailable;
-    return names.join(', ');
-  }
-
-  Map<String, dynamic> _buildPublishPayloadFields(String tab) {
-    return PublishSettings.fromMap(_tabData(tab)).toPayloadFields();
-  }
-
-  CreateContentIdentity _identityForTab(String tab) {
-    return tab == 'moment'
-        ? CreateContentIdentity.moment
-        : CreateContentIdentity.work;
-  }
-
-  int _resolveInitialTabIndex() {
-    if (_isValidTabKey(widget.initialTabKey)) {
-      return _tabIds.indexOf(widget.initialTabKey!);
-    }
-    return _tabIndexFromAction(widget.initialAction);
-  }
-
-  bool _isValidTabKey(String? tabKey) {
-    if (tabKey == null) return false;
-    return _tabIds.contains(tabKey);
-  }
-
-  int _tabIndexFromAction(EditorStartAction? action) {
-    switch (action) {
+    _didApplyInitialAction = true;
+    switch (widget.initialAction) {
       case EditorStartAction.gallery:
-        return 1;
+        await _pickImagesForCurrentEditor();
+        return;
       case EditorStartAction.capture:
+        await _openCameraForCurrentEditor();
+        return;
       case EditorStartAction.write:
       case null:
-        return 0;
+        _focusBodyField();
+        return;
     }
   }
 
-  /// 发微趣时是否有内容可发表（有文字或图片则可点发表）
-  bool get _canPublishMoment {
-    final d = _currentData['moment'] as Map<String, dynamic>? ?? {};
-    return (d['content'] as String? ?? '').trim().isNotEmpty ||
-        (d['images'] as List?)?.isNotEmpty == true ||
-        (d['videoPath'] as String? ?? '').trim().isNotEmpty;
+  void _syncControllersFromState(CreateEditorStateV2 state) {
+    if (_titleController.text != state.title) {
+      _titleController.value = TextEditingValue(
+        text: state.title,
+        selection: TextSelection.collapsed(offset: state.title.length),
+      );
+    }
+    if (_bodyController.text != state.body) {
+      _bodyController.value = TextEditingValue(
+        text: state.body,
+        selection: TextSelection.collapsed(offset: state.body.length),
+      );
+    }
   }
 
-  bool _hasContent() {
-    final tab = _tabIds[_currentIndex];
-    final d = _currentData[tab] as Map<String, dynamic>? ?? {};
-    switch (tab) {
-      case 'moment':
-        return (d['content'] as String? ?? '').isNotEmpty ||
-            (d['images'] as List?)?.isNotEmpty == true ||
-            (d['videoPath'] as String? ?? '').isNotEmpty;
-      case 'photo':
-        return (d['title'] as String? ?? '').isNotEmpty ||
-            (d['images'] as List?)?.isNotEmpty == true;
-      case 'video':
-        return (d['title'] as String? ?? '').isNotEmpty ||
-            (d['videoPath'] as String? ?? '').isNotEmpty ||
-            (d['thumbnail'] as String? ?? '').isNotEmpty ||
-            (d['storyboardImages'] as List?)?.isNotEmpty == true;
-      case 'article':
-        return (d['title'] as String? ?? '').isNotEmpty ||
-            (d['content'] as String? ?? '').isNotEmpty ||
-            (d['covers'] as List?)?.isNotEmpty == true ||
-            (d['cover'] as String? ?? '').isNotEmpty;
+  void _focusBodyField() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _bodyFocusNode.requestFocus();
+      }
+    });
+  }
+
+  void _focusTitleField() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _titleFocusNode.requestFocus();
+      }
+    });
+  }
+
+  String _coverAssetPathForState(CreateEditorStateV2 state) {
+    if (state.hasVideo) {
+      if (state.videoThumbnail.trim().isNotEmpty) {
+        return state.videoThumbnail.trim();
+      }
+      return state.videoPath.trim();
+    }
+    if (state.imagePaths.isEmpty) {
+      return '';
+    }
+    return state.imagePaths.first;
+  }
+
+  int _mediaColumnsForWidth(double width) {
+    if (width >= 520) {
+      return 4;
+    }
+    if (width >= 340) {
+      return 3;
+    }
+    return 2;
+  }
+
+  double _mediaTileAspectRatioForColumns(int columns) {
+    switch (columns) {
+      case 4:
+        return 1.08;
+      case 3:
+        return 1.12;
       default:
-        return false;
+        return 1.16;
+    }
+  }
+
+  void _autoScrollDuringMediaDrag(Offset globalPosition) {
+    if (!_scrollController.hasClients || !mounted) {
+      return;
+    }
+    final overlay = Overlay.maybeOf(context);
+    final renderBox = overlay?.context.findRenderObject() as RenderBox?;
+    if (renderBox == null) {
+      return;
+    }
+    final local = renderBox.globalToLocal(globalPosition);
+    final viewportHeight = MediaQuery.sizeOf(context).height;
+    final topBoundary =
+        MediaQuery.paddingOf(context).top + AppSpacing.toolbarHeight;
+    final bottomBoundary =
+        viewportHeight - MediaQuery.paddingOf(context).bottom;
+    const edgeThreshold = 96.0;
+    const maxDelta = 18.0;
+
+    double delta = 0;
+    if (local.dy < topBoundary + edgeThreshold) {
+      final ratio = ((topBoundary + edgeThreshold - local.dy) / edgeThreshold)
+          .clamp(0.0, 1.0);
+      delta = -maxDelta * ratio;
+    } else if (local.dy > bottomBoundary - edgeThreshold) {
+      final ratio =
+          ((local.dy - (bottomBoundary - edgeThreshold)) / edgeThreshold).clamp(
+            0.0,
+            1.0,
+          );
+      delta = maxDelta * ratio;
+    }
+
+    if (delta.abs() < 0.5) {
+      return;
+    }
+
+    final nextOffset = (_scrollController.offset + delta).clamp(
+      0.0,
+      _scrollController.position.maxScrollExtent,
+    );
+    if ((nextOffset - _scrollController.offset).abs() < 0.1) {
+      return;
+    }
+    _scrollController.jumpTo(nextOffset);
+  }
+
+  void _reorderImageByPath(String draggedPath, int targetIndex) {
+    final state = ref.read(createEditorProvider);
+    final fromIndex = state.imagePaths.indexOf(draggedPath);
+    if (fromIndex < 0 || fromIndex == targetIndex) {
+      return;
+    }
+    ref
+        .read(createEditorProvider.notifier)
+        .reorderImages(fromIndex, targetIndex);
+  }
+
+  Future<void> _reportEvent(
+    String event, [
+    Map<String, dynamic> extras = const <String, dynamic>{},
+  ]) async {
+    try {
+      await ref
+          .read(contentRepositoryProvider)
+          .reportBehaviors(
+            events: <Map<String, dynamic>>[
+              <String, dynamic>{
+                'event': event,
+                'surface': 'create_editor',
+                'timestamp': DateTime.now().toIso8601String(),
+                ...extras,
+              },
+            ],
+          );
+    } catch (_) {
+      // Keep editor resilient when reporting fails.
     }
   }
 
   Future<void> _loadDrafts() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_draftsStorageKey);
-    if (raw == null || raw.isEmpty) return;
+    if (raw == null || raw.isEmpty) {
+      return;
+    }
     try {
       final decoded = jsonDecode(raw);
-      if (decoded is List) {
-        final drafts = decoded
-            .whereType<Map>()
-            .map(
-              (e) => CreateDraft.fromStorageMap(Map<String, dynamic>.from(e)),
-            )
-            .toList();
-        if (!mounted) return;
-        setState(() {
-          _savedDrafts
-            ..clear()
-            ..addAll(drafts);
-          // 不恢复 currentDraftId：每次进入创作页视为新会话，保存时新增草稿；只有从草稿箱点选才绑定并覆盖该条
-          _currentDraftId = null;
-        });
+      if (decoded is! List) {
+        return;
       }
+      final drafts = decoded
+          .whereType<Map>()
+          .map(
+            (entry) =>
+                CreateDraft.fromStorageMap(Map<String, dynamic>.from(entry)),
+          )
+          .toList(growable: false);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _savedDrafts = drafts;
+      });
+      _currentDraftId = prefs.getString(_currentDraftIdKey);
     } catch (_) {
-      // ignore malformed local cache
+      // Ignore malformed drafts cache.
     }
   }
 
@@ -503,7 +331,9 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       _draftsStorageKey,
-      jsonEncode(drafts.map((draft) => draft.toStorageMap()).toList()),
+      jsonEncode(
+        drafts.map((draft) => draft.toStorageMap()).toList(growable: false),
+      ),
     );
     if (currentId == null) {
       await prefs.remove(_currentDraftIdKey);
@@ -512,719 +342,167 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     }
   }
 
-  void _saveDraft() {
-    final tab = _tabIds[_currentIndex];
-    final dataToSave = Map<String, dynamic>.from(
-      _currentData[tab] as Map<String, dynamic>? ?? const <String, dynamic>{},
-    );
+  Future<void> _saveDraft({bool silent = false}) async {
+    final state = ref.read(createEditorProvider);
+    if (!state.hasContent) {
+      return;
+    }
     final now = DateTime.now().millisecondsSinceEpoch;
-    final nextDrafts = List<CreateDraft>.from(_savedDrafts);
-    String? nextId = _currentDraftId;
-    final draft = CreateDraft(
-      id: nextId ?? now.toString(),
-      tabKey: tab,
+    final nextId = _currentDraftId ?? state.draftId ?? 'draft_$now';
+    final nextDraft = CreateDraft(
+      id: nextId,
       updatedAtMs: now,
-      identity: _identityForTab(tab),
-      data: dataToSave,
+      state: state.copyWith(draftId: nextId),
     );
-    if (nextId != null) {
-      final idx = nextDrafts.indexWhere((e) => e.id == nextId);
-      if (idx >= 0) {
-        nextDrafts[idx] = draft;
-      } else {
-        nextId = null;
-      }
-    }
-    if (nextId == null) {
-      nextId = draft.id;
-      nextDrafts.insert(0, draft);
-    }
+    final nextDrafts = <CreateDraft>[
+      nextDraft,
+      ..._savedDrafts.where((draft) => draft.id != nextId),
+    ];
     setState(() {
-      _savedDrafts
-        ..clear()
-        ..addAll(nextDrafts);
+      _savedDrafts = nextDrafts;
       _currentDraftId = nextId;
     });
-    _persistDrafts(nextDrafts, nextId);
+    ref.read(createEditorProvider.notifier).setDraftId(nextId);
+    await _persistDrafts(nextDrafts, nextId);
+    await _reportEvent('create_draft_saved', <String, dynamic>{
+      'editorKind': nextDraft.state.editorKind.name,
+    });
+    if (!silent && mounted) {
+      AppToast.show(context, UITextConstants.saveDraft);
+    }
   }
 
-  void _onCloseRequest() {
-    if (_hasContent()) {
-      showCupertinoDialog(
-        context: context,
-        builder: (context) => CupertinoAlertDialog(
-          title: Text(UITextConstants.createExitConfirmTitle),
-          content: Text(UITextConstants.createExitConfirmDesc),
-          actions: [
+  Future<void> _clearCurrentDraft() async {
+    if (_currentDraftId == null) {
+      return;
+    }
+    final nextDrafts = _savedDrafts
+        .where((draft) => draft.id != _currentDraftId)
+        .toList(growable: false);
+    setState(() {
+      _savedDrafts = nextDrafts;
+      _currentDraftId = null;
+    });
+    ref.read(createEditorProvider.notifier).setDraftId(null);
+    await _persistDrafts(nextDrafts, null);
+  }
+
+  Future<void> _restoreDraft(CreateDraft draft) async {
+    ref.read(createEditorProvider.notifier).restoreFromDraft(draft);
+    _syncControllersFromState(draft.state);
+    setState(() {
+      _currentDraftId = draft.id;
+    });
+    await _persistDrafts(_savedDrafts, draft.id);
+    await _reportEvent('create_draft_restored', <String, dynamic>{
+      'editorKind': draft.state.editorKind.name,
+    });
+    if (draft.state.editorKind == CreateEditorKind.text) {
+      _focusBodyField();
+    }
+  }
+
+  Future<void> _deleteDraft(String draftId) async {
+    final nextDrafts = _savedDrafts
+        .where((draft) => draft.id != draftId)
+        .toList(growable: false);
+    final nextCurrentId = _currentDraftId == draftId ? null : _currentDraftId;
+    setState(() {
+      _savedDrafts = nextDrafts;
+      _currentDraftId = nextCurrentId;
+    });
+    if (nextCurrentId == null) {
+      ref.read(createEditorProvider.notifier).setDraftId(null);
+    }
+    await _persistDrafts(nextDrafts, nextCurrentId);
+  }
+
+  Future<void> _showDraftsSheet() async {
+    if (_savedDrafts.isEmpty) {
+      return;
+    }
+    await showCupertinoModalPopup<void>(
+      context: context,
+      builder: (sheetContext) {
+        return _CreateDraftsSheet(
+          drafts: _savedDrafts,
+          onSelect: (draft) async {
+            Navigator.of(sheetContext).pop();
+            await _restoreDraft(draft);
+          },
+          onDelete: (draft) async {
+            await _deleteDraft(draft.id);
+            if (sheetContext.mounted && _savedDrafts.isEmpty) {
+              Navigator.of(sheetContext).pop();
+            }
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _onCloseRequest() async {
+    final state = ref.read(createEditorProvider);
+    if (!state.hasContent) {
+      _doClose();
+      return;
+    }
+    await showCupertinoDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return CupertinoAlertDialog(
+          title: const Text(UITextConstants.createExitConfirmTitle),
+          content: const Text(UITextConstants.createExitConfirmDesc),
+          actions: <Widget>[
             CupertinoDialogAction(
+              key: TestKeys.createDiscardAndExitButton,
               isDestructiveAction: true,
-              onPressed: () {
-                Navigator.pop(context);
-                _handleDiscardAndExit();
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                await _clearCurrentDraft();
+                _doClose();
               },
-              child: Text(UITextConstants.discard),
+              child: const Text(UITextConstants.discard),
             ),
             CupertinoDialogAction(
+              key: TestKeys.createSaveAndExitButton,
               isDefaultAction: true,
-              onPressed: () {
-                Navigator.pop(context);
-                _handleSaveAndExit();
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                await _saveDraft();
+                _doClose();
               },
-              child: Text(UITextConstants.saveDraft),
+              child: const Text(UITextConstants.saveDraft),
             ),
             CupertinoDialogAction(
-              onPressed: () => Navigator.pop(context),
-              child: Text(UITextConstants.cancel),
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text(UITextConstants.cancel),
             ),
           ],
-        ),
-      );
-    } else {
-      _doClose();
-    }
+        );
+      },
+    );
   }
 
   void _doClose() {
     final navigator = Navigator.maybeOf(context);
     if (navigator != null && navigator.canPop()) {
       navigator.pop();
-    } else {
-      try {
-        context.go(AppRoutePaths.home);
-      } catch (_) {
-        // Widget tests may mount CreatePage without a GoRouter.
-      }
-    }
-  }
-
-  void _handleSaveAndExit() {
-    _saveDraft();
-    _doClose();
-  }
-
-  void _handleDiscardAndExit() {
-    if (_currentDraftId != null) {
-      final nextDrafts = _savedDrafts
-          .where((e) => e.id != _currentDraftId)
-          .toList();
-      setState(() {
-        _savedDrafts
-          ..clear()
-          ..addAll(nextDrafts);
-        _currentDraftId = null;
-      });
-      _persistDrafts(nextDrafts, null);
-    }
-    _doClose();
-  }
-
-  void _handleRestoreDraft(CreateDraft draft) {
-    final tab = draft.tabKey;
-    final idx = _tabIds.indexOf(tab);
-    if (idx >= 0) {
-      _pageController.jumpToPage(idx);
-      _currentIndex = idx;
-    }
-    
-    ref.read(createEditorProvider.notifier).restoreFromDraft(draft);
-
-    setState(() {
-      _currentDraftId = draft.id;
-      _isMomentEditingMode = false;
-      _showEmojiPanel = false;
-      _isPhotoEditingMode = false;
-    });
-    final moment = _currentData['moment'] as Map<String, dynamic>?;
-    _momentContentController.text = moment?['content'] as String? ?? '';
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      if (tab == 'moment') {
-        _enterMomentEditingMode();
-      } else if (tab == 'photo') {
-        _enterPhotoEditingMode();
-      }
-    });
-    _persistDrafts(_savedDrafts, _currentDraftId);
-  }
-
-  void _handleDeleteDraft(String id) {
-    final nextDrafts = _savedDrafts.where((e) => e.id != id).toList();
-    final nextId = _currentDraftId == id ? null : _currentDraftId;
-    setState(() {
-      _savedDrafts
-        ..clear()
-        ..addAll(nextDrafts);
-      _currentDraftId = nextId;
-    });
-    _persistDrafts(nextDrafts, nextId);
-  }
-
-  String get _currentTabId => _tabIds[_currentIndex];
-
-  CreateContentIdentity get _currentIdentity => _identityForTab(_currentTabId);
-
-  bool get _isUnifiedCreateEnabled =>
-      ref.read(contentFeatureFlagProvider('enable_unified_create_editor'));
-
-  String get _currentEditorTitle {
-    switch (_currentTabId) {
-      case 'moment':
-        return UITextConstants.createIdentityMoment;
-      case 'photo':
-        return '${UITextConstants.createIdentityWork}·${UITextConstants.createWorkFormatImage}';
-      case 'video':
-        return '${UITextConstants.createIdentityWork}·${UITextConstants.createWorkFormatVideo}';
-      case 'article':
-        return '${UITextConstants.createIdentityWork}·${UITextConstants.createWorkFormatNote}';
-      default:
-        return UITextConstants.createIdentityMoment;
-    }
-  }
-
-  Future<void> _applyInitialActionIfNeeded() async {
-    if (_didApplyInitialAction) return;
-    _didApplyInitialAction = true;
-    switch (widget.initialAction) {
-      case EditorStartAction.gallery:
-        await _applyGalleryStartAction();
-        return;
-      case EditorStartAction.capture:
-        await _applyCaptureStartAction();
-        return;
-      case EditorStartAction.write:
-        _switchToTabKey('moment');
-        _enterMomentEditingMode();
-        return;
-      case null:
-        if (_isValidTabKey(widget.initialTabKey)) {
-          _switchToTabKey(widget.initialTabKey!);
-        }
-        return;
-    }
-  }
-
-  Future<void> _applyGalleryStartAction() async {
-    final currentImages = List<String>.from(
-      _tabData('moment')['images'] as List? ?? const <String>[],
-    );
-    final paths = await _pickImages(maxCount: 9, initialPaths: currentImages);
-    if (!mounted || paths.isEmpty) return;
-    _applyMomentImages(paths, enterEditing: true);
-  }
-
-  Future<void> _applyCaptureStartAction() async {
-    final result = await Navigator.of(context).push<CameraCaptureResult>(
-      MaterialPageRoute<CameraCaptureResult>(
-        fullscreenDialog: true,
-        builder: (_) =>
-            const CameraCapturePage(initialMode: MediaPickerEntryMode.image),
-      ),
-    );
-    if (!mounted || result == null) return;
-    if (result.type == CreateMediaType.video) {
-      await _applyMomentVideoFromPath(result.path, enterEditing: true);
       return;
     }
-    final currentImages = List<String>.from(
-      _tabData('moment')['images'] as List? ?? const <String>[],
-    );
-    _applyMomentImages(<String>[
-      ...currentImages,
-      result.path,
-    ], enterEditing: true);
-  }
-
-  void _applyMomentImages(List<String> images, {bool enterEditing = false}) {
-    final limitedImages = images.take(9).toList(growable: false);
-    final currentMoment = ref.read(createEditorProvider).data['moment'] as Map<String, dynamic>? ?? {};
-    final moment = Map<String, dynamic>.from(currentMoment);
-    moment['images'] = limitedImages;
-    moment['videoPath'] = '';
-    moment['videoThumbnail'] = '';
-    moment['durationMs'] = 0;
-    moment['contentIdentity'] = CreateContentIdentity.moment.value;
-    ref.read(createEditorProvider.notifier).updateTabData('moment', moment);
-    _switchToTabKey('moment');
-    if (!enterEditing) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _enterMomentEditingMode();
-    });
-  }
-
-  Future<void> _applyMomentVideoFromPath(
-    String path, {
-    bool enterEditing = false,
-  }) async {
-    final duration = await _getVideoDuration(path);
-    final thumb = await _generateVideoThumbnail(path);
-    if (!mounted) return;
-      final currentMoment = ref.read(createEditorProvider).data['moment'] as Map<String, dynamic>? ?? {};
-      final moment = Map<String, dynamic>.from(currentMoment);
-      moment['images'] = <String>[];
-      moment['videoPath'] = path;
-      moment['videoThumbnail'] = thumb ?? '';
-      moment['durationMs'] = duration?.inMilliseconds ?? 0;
-      moment['contentIdentity'] = CreateContentIdentity.moment.value;
-      ref.read(createEditorProvider.notifier).updateTabData('moment', moment);
-    _switchToTabKey('moment');
-    if (!enterEditing) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _enterMomentEditingMode();
-    });
-  }
-
-  void _switchToTabKey(String tabKey) {
-    final nextIndex = _tabIds.indexOf(tabKey);
-    if (nextIndex < 0 || nextIndex == _currentIndex) return;
-    _pageController.animateToPage(
-      nextIndex,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-    );
-  }
-
-  void _switchIdentity(CreateContentIdentity identity) {
-    final currentTab = _currentTabId;
-    if (_currentIdentity == identity) return;
-    if (currentTab == 'moment') {
-      ref.read(createEditorProvider.notifier).updateField('moment', 'content', _momentContentController.text);
+    try {
+      context.go(AppRoutePaths.home);
+    } catch (_) {
+      // Widget tests may not mount a GoRouter.
     }
-    if (identity == CreateContentIdentity.moment) {
-      _seedMomentFromWorkTab(currentTab);
-      _switchToTabKey('moment');
-      return;
-    }
-    final targetTab = currentTab == 'moment'
-        ? _preferredWorkTabForMoment()
-        : currentTab;
-    if (currentTab == 'moment') {
-      _seedWorkTabFromMoment(targetTab);
-    }
-    _switchToTabKey(targetTab);
   }
 
-  void _switchWorkFormat(String tabKey) {
-    if (tabKey == _currentTabId || tabKey == 'moment') return;
-    final currentTab = _currentTabId;
-    if (currentTab == 'moment') {
-      ref.read(createEditorProvider.notifier).updateField('moment', 'content', _momentContentController.text);
-      _seedWorkTabFromMoment(tabKey);
-    } else {
-      _seedWorkTabFromWorkTab(currentTab, tabKey);
-    }
-    _switchToTabKey(tabKey);
-  }
-
-  String _preferredWorkTabForMoment() {
-    final moment = _tabData('moment');
-    if ((moment['videoPath'] as String? ?? '').trim().isNotEmpty) {
-      return 'video';
-    }
-    if ((moment['images'] as List?)?.isNotEmpty == true) {
-      return 'photo';
-    }
-    return 'article';
-  }
-
-  void _seedMomentFromWorkTab(String sourceTab) {
-    if (sourceTab == 'moment') return;
-    final data = ref.read(createEditorProvider).data;
-    final source = Map<String, dynamic>.from(data[sourceTab] as Map? ?? {});
-    final moment = Map<String, dynamic>.from(data['moment'] as Map? ?? {});
-    _copySharedPublishFields(source, moment);
-    switch (sourceTab) {
-      case 'photo':
-        moment['content'] = (source['description'] ?? '').toString();
-        moment['images'] = List<String>.from(
-          source['images'] as List? ?? const <String>[],
-        );
-        moment['videoPath'] = '';
-        moment['videoThumbnail'] = '';
-        moment['durationMs'] = 0;
-        break;
-      case 'video':
-        moment['content'] = (source['description'] ?? '').toString();
-        moment['images'] = <String>[];
-        moment['videoPath'] = (source['videoPath'] ?? '').toString();
-        moment['videoThumbnail'] = (source['thumbnail'] ?? '').toString();
-        moment['durationMs'] = (source['durationMs'] as num?)?.toInt() ?? 0;
-        break;
-      case 'article':
-        moment['content'] = (source['content'] ?? '').toString();
-        moment['images'] = List<String>.from(
-          source['covers'] as List? ?? const <String>[],
-        );
-        moment['videoPath'] = '';
-        moment['videoThumbnail'] = '';
-        moment['durationMs'] = 0;
-        break;
-    }
-    moment['contentIdentity'] = CreateContentIdentity.moment.value;
-    ref.read(createEditorProvider.notifier).updateTabData('moment', moment);
-    
-    _momentContentController.text =
-        (moment['content'] as String? ?? '').trim();
-  }
-
-  void _seedWorkTabFromMoment(String targetTab) {
-    final data = ref.read(createEditorProvider).data;
-    final moment = Map<String, dynamic>.from(data['moment'] as Map? ?? {});
-    final target = Map<String, dynamic>.from(data[targetTab] as Map? ?? {});
-    _copySharedPublishFields(moment, target);
-    switch (targetTab) {
-      case 'photo':
-        target['description'] = (moment['content'] ?? '').toString();
-        target['images'] = List<String>.from(
-          moment['images'] as List? ?? const <String>[],
-        );
-        break;
-      case 'video':
-        target['description'] = (moment['content'] ?? '').toString();
-        target['videoPath'] = (moment['videoPath'] ?? '').toString();
-        target['thumbnail'] = (moment['videoThumbnail'] ?? '').toString();
-        target['durationMs'] = (moment['durationMs'] as num?)?.toInt() ?? 0;
-        break;
-      case 'article':
-        target['content'] = (moment['content'] ?? '').toString();
-        target['covers'] = List<String>.from(
-          moment['images'] as List? ?? const <String>[],
-        ).take(3).toList();
-        break;
-    }
-    target['contentIdentity'] = CreateContentIdentity.work.value;
-    ref.read(createEditorProvider.notifier).updateTabData(targetTab, target);
-  }
-
-  void _seedWorkTabFromWorkTab(String sourceTab, String targetTab) {
-    if (sourceTab == targetTab) return;
-    final data = ref.read(createEditorProvider).data;
-    final source = Map<String, dynamic>.from(data[sourceTab] as Map? ?? {});
-    final target = Map<String, dynamic>.from(data[targetTab] as Map? ?? {});
-    _copySharedPublishFields(source, target);
-    target['title'] = (source['title'] ?? '').toString();
-    switch (targetTab) {
-      case 'photo':
-        target['description'] =
-            (source['description'] ?? source['content'] ?? '').toString();
-        target['images'] = List<String>.from(
-          (source['images'] ?? source['covers']) as List? ?? const <String>[],
-        );
-        break;
-      case 'video':
-        target['description'] =
-            (source['description'] ?? source['content'] ?? '').toString();
-        target['videoPath'] = (source['videoPath'] ?? '').toString();
-        target['thumbnail'] =
-            (source['thumbnail'] ?? source['coverUrl'] ?? '').toString();
-        target['durationMs'] = (source['durationMs'] as num?)?.toInt() ?? 0;
-        break;
-      case 'article':
-        target['content'] = (source['description'] ?? source['content'] ?? '')
-            .toString();
-        target['covers'] = List<String>.from(
-          (source['images'] ?? source['covers']) as List? ?? const <String>[],
-        ).take(3).toList();
-        break;
-    }
-    target['contentIdentity'] = CreateContentIdentity.work.value;
-    ref.read(createEditorProvider.notifier).updateTabData(targetTab, target);
-  }
-
-  void _copySharedPublishFields(
-    Map<String, dynamic> source,
-    Map<String, dynamic> target,
-  ) {
-    target['visibility'] = (source['visibility'] ?? 'public').toString();
-    target['assistantUsePolicy'] = (source['assistantUsePolicy'] ?? 'inherit')
-        .toString();
-    target['locationName'] = (source['locationName'] ?? '').toString();
-    target['location'] = Map<String, dynamic>.from(
-      source['location'] as Map? ?? const <String, dynamic>{},
-    );
-    target['circleIds'] = List<String>.from(
-      source['circleIds'] as List? ?? const <String>[],
-    );
-    target['circleNames'] = List<String>.from(
-      source['circleNames'] as List? ?? const <String>[],
-    );
-  }
-
-  IdentitySuggestion? _identitySuggestionForTab(String tab) {
-    final data = _tabData(tab);
-    if (tab == 'moment') {
-      final imageCount = (data['images'] as List?)?.length ?? 0;
-      final hasVideo = (data['videoPath'] as String? ?? '').trim().isNotEmpty;
-      final bodyLength = (data['content'] as String? ?? '').trim().length;
-      if (hasVideo || imageCount >= 3 || bodyLength >= 120) {
-        return const IdentitySuggestion(
-          identity: CreateContentIdentity.work,
-          reason: UITextConstants.createSuggestionToWork,
-        );
-      }
-      return null;
-    }
-    final title = (data['title'] as String? ?? '').trim();
-    final body = (data['description'] ?? data['content'] ?? '')
-        .toString()
-        .trim();
-    final hasStrongPackaging = title.isNotEmpty || body.length >= 120;
-    if (!hasStrongPackaging) {
-      return const IdentitySuggestion(
-        identity: CreateContentIdentity.moment,
-        reason: UITextConstants.createSuggestionToMoment,
-      );
-    }
-    return null;
-  }
-
-  Future<bool> _ensurePublishIdentityConfirmed(String tab) async {
-    if (!_isUnifiedCreateEnabled) {
-      return true;
-    }
-    final suggestion = _identitySuggestionForTab(tab);
-    if (suggestion == null || suggestion.identity == _identityForTab(tab)) {
-      return true;
-    }
-    final action = await showCupertinoDialog<String>(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: Text(suggestion.reason),
-        content: Padding(
-          padding: EdgeInsets.only(top: AppSpacing.sm),
-          child: Text(
-            suggestion.identity == CreateContentIdentity.work
-                ? '补充标题、封面或摘要后，会更适合作为作品沉淀。'
-                : '当前内容较轻，直接作为点滴发布会更自然。',
-          ),
-        ),
-        actions: [
-          CupertinoDialogAction(
-            onPressed: () => Navigator.of(
-              context,
-            ).pop(UITextConstants.createSuggestionKeepCurrent),
-            child: Text(UITextConstants.createSuggestionKeepCurrent),
-          ),
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            onPressed: () => Navigator.of(
-              context,
-            ).pop(UITextConstants.createSuggestionSwitch),
-            child: Text(
-              suggestion.identity == CreateContentIdentity.work
-                  ? UITextConstants.createSwitchToWork
-                  : UITextConstants.createSwitchToMoment,
-            ),
-          ),
-        ],
-      ),
-    );
-    if (!mounted) return false;
-    if (action == UITextConstants.createSuggestionKeepCurrent) {
-      return true;
-    }
-    if (action == UITextConstants.createSuggestionSwitch) {
-      _switchIdentity(suggestion.identity);
-    }
-    return false;
-  }
-
-  Widget _buildUnifiedEditorShell(
-    bool isDark,
-    Color blockSurface,
-    Color fgColor,
-    Color fgSecondary,
-  ) {
-    final suggestion = _identitySuggestionForTab(_currentTabId);
-    return Container(
-          width: double.infinity,
-          padding: EdgeInsets.fromLTRB(
-            AppSpacing.containerMd,
-            AppSpacing.sm,
-            AppSpacing.containerMd,
-            AppSpacing.containerSm,
-          ),
-          decoration: BoxDecoration(
-            color: blockSurface,
-            border: Border(
-              bottom: BorderSide(
-                color: SettingsSemanticConstants.dividerColor(isDark),
-              ),
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              CupertinoSlidingSegmentedControl<CreateContentIdentity>(
-                groupValue: _currentIdentity,
-                children: <CreateContentIdentity, Widget>{
-                  CreateContentIdentity.moment: Padding(
-                    key: TestKeys.createIdentityMoment,
-                    padding: EdgeInsets.symmetric(
-                      horizontal: AppSpacing.containerMd,
-                      vertical: AppSpacing.intraGroupSm,
-                    ),
-                    child: Text(UITextConstants.createIdentityMoment),
-                  ),
-                  CreateContentIdentity.work: Padding(
-                    key: TestKeys.createIdentityWork,
-                    padding: EdgeInsets.symmetric(
-                      horizontal: AppSpacing.containerMd,
-                      vertical: AppSpacing.intraGroupSm,
-                    ),
-                    child: Text(UITextConstants.createIdentityWork),
-                  ),
-                },
-                onValueChanged: (value) {
-                  if (value != null) _switchIdentity(value);
-                },
-              ),
-              if (_currentIdentity == CreateContentIdentity.work) ...[
-                SizedBox(height: AppSpacing.interGroupSm),
-                Wrap(
-                  spacing: AppSpacing.intraGroupSm,
-                  children: [
-                    _buildFormatChip(
-                      'photo',
-                      UITextConstants.createWorkFormatImage,
-                    ),
-                    _buildFormatChip(
-                      'video',
-                      UITextConstants.createWorkFormatVideo,
-                    ),
-                    _buildFormatChip(
-                      'article',
-                      UITextConstants.createWorkFormatNote,
-                    ),
-                  ],
-                ),
-              ],
-              if (suggestion != null) ...[
-                SizedBox(height: AppSpacing.interGroupSm),
-                Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.all(AppSpacing.containerSm),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryColor.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(
-                      AppSpacing.smallBorderRadius,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          suggestion.reason,
-                          style: TextStyle(
-                            color: fgColor,
-                            fontSize: AppTypography.sm,
-                          ),
-                        ),
-                      ),
-                      CupertinoButton(
-                        padding: EdgeInsets.zero,
-                        onPressed: () => _switchIdentity(suggestion.identity), minimumSize: Size(AppSpacing.minInteractiveSize, AppSpacing.minInteractiveSize),
-                        child: Text(
-                          suggestion.identity == CreateContentIdentity.work
-                              ? UITextConstants.createSwitchToWork
-                              : UITextConstants.createSwitchToMoment,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ),
-        );
-  }
-
-  Widget _buildFormatChip(String tabKey, String label) {
-    final selected = _currentTabId == tabKey;
-    final chipKey = switch (tabKey) {
-      'photo' => TestKeys.createWorkFormatImage,
-      'video' => TestKeys.createWorkFormatVideo,
-      'article' => TestKeys.createWorkFormatNote,
-      _ => null,
-    };
-    final isDark = ref.watch(isDarkProvider);
-    final activeColor = AppColors.primaryColor;
-    final inactiveColor = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.backgroundSecondary,
-    );
-
-    return GestureDetector(
-      key: chipKey,
-      onTap: () => _switchWorkFormat(tabKey),
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected ? activeColor : inactiveColor,
-          borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected
-                ? CupertinoColors.white
-                : SettingsSemanticConstants.labelColor(isDark),
-            fontSize: AppTypography.sm,
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// 发表按钮：AppBar 内紧凑样式（高度小、上下间距小）。无内容时 [enabled]==false 为浅色不可点。
-  Widget _buildPublishButton({
-    required bool isDark,
-    required VoidCallback onPressed,
-    String? label,
-    bool enabled = true,
-    Key? buttonKey,
-  }) {
-    final text = label ?? UITextConstants.publish;
-    final bg = enabled
-        ? SettingsSemanticConstants.actionButtonPrimaryBackground
-        : SettingsSemanticConstants.actionButtonDisabledBackground(isDark);
-    final fg = enabled
-        ? SettingsSemanticConstants.actionButtonPrimaryForeground
-        : SettingsSemanticConstants.actionButtonDisabledForeground(isDark);
-    return Padding(
-      padding: EdgeInsets.only(right: AppSpacing.sm),
-      child: CupertinoButton(
-        key: buttonKey,
-        padding: EdgeInsets.symmetric(
-          horizontal: SettingsSemanticConstants
-              .actionButtonPaddingHorizontalInToolbar,
-          vertical: SettingsSemanticConstants
-              .actionButtonPaddingVerticalInToolbar,
-        ),
-        color: bg,
-        borderRadius: BorderRadius.circular(
-          SettingsSemanticConstants.actionButtonBorderRadius,
-        ),
-        onPressed: enabled ? onPressed : null, minimumSize: Size(SettingsSemanticConstants.actionButtonHeightInToolbar, SettingsSemanticConstants.actionButtonHeightInToolbar),
-        child: Text(
-          text,
-          style: TextStyle(
-            fontSize:
-                SettingsSemanticConstants.actionButtonTextSizeInToolbar,
-            fontWeight: FontWeight.w600,
-            color: fg,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<CreateMediaPickerResult?> _openCreateMediaPicker({
+  Future<CreateMediaPickerResult?> _openMediaPicker({
     required MediaPickerEntryMode mode,
     required int maxSelection,
     List<String> initialPaths = const <String>[],
   }) {
     final initialSelection = initialPaths
-        .where((path) => path.trim().isNotEmpty)
         .map(
           (path) => CreateMediaItem(
             id: path,
@@ -1235,8 +513,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
             source: CreateMediaSource.album,
           ),
         )
-        .take(maxSelection)
-        .toList();
+        .toList(growable: false);
     return Navigator.of(context).push<CreateMediaPickerResult>(
       MaterialPageRoute<CreateMediaPickerResult>(
         fullscreenDialog: true,
@@ -1249,2788 +526,2264 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     );
   }
 
-  /// 打开创作媒体选择器并返回图片路径列表（微趣/美图/文章共用）
-  Future<List<String>> _pickImages({
-    int maxCount = 9,
-    List<String> initialPaths = const <String>[],
-  }) async {
-    final result = await _openCreateMediaPicker(
-      mode: MediaPickerEntryMode.image,
-      maxSelection: maxCount,
-      initialPaths: initialPaths,
-    );
-    if (!mounted || result == null) return <String>[];
-    final imagePaths = result.items
-        .where((item) => item.isImage)
-        .map((item) => item.path)
-        .take(maxCount)
-        .toList();
-    if (result.openOneTapMovie) {
-      _applyOneTapMovieSelection(result.items);
-      return imagePaths;
+  Future<void> _pickImagesForCurrentEditor() async {
+    final state = ref.read(createEditorProvider);
+    if (state.hasVideo && state.editorKind == CreateEditorKind.media) {
+      AppToast.show(context, '请先删除当前视频，再改为图片');
+      return;
     }
-    return imagePaths;
-  }
-
-  void _applyOneTapMovieSelection(List<CreateMediaItem> items) {
-    final imagePaths = items
+    final result = await _openMediaPicker(
+      mode: MediaPickerEntryMode.image,
+      maxSelection: _kMaxMediaImages,
+      initialPaths: state.imagePaths,
+    );
+    if (!mounted || result == null) {
+      return;
+    }
+    final paths = result.items
         .where((item) => item.isImage)
         .map((item) => item.path)
-        .toList();
-    if (imagePaths.isEmpty) return;
-      final currentVideo = ref.read(createEditorProvider).data['video'] as Map<String, dynamic>? ?? {};
-      final video = Map<String, dynamic>.from(currentVideo);
-      video['storyboardImages'] = imagePaths;
-      ref.read(createEditorProvider.notifier).updateTabData('video', video);
-    AppToast.show(context, UITextConstants.mediaPickerOneTapMovieQueued);
+        .take(_kMaxMediaImages)
+        .toList(growable: false);
+    ref
+        .read(createEditorProvider.notifier)
+        .setImages(paths, editorKind: state.editorKind);
+    await _reportEvent('create_media_images_selected', <String, dynamic>{
+      'count': paths.length,
+      'editorKind': state.editorKind.name,
+    });
   }
 
-  /// 打开创作媒体选择器并返回视频路径（发视频使用）
-  Future<String?> _pickVideo() async {
-    final currentVideo =
-        (_currentData['video'] as Map<String, dynamic>?)?['videoPath']
-            ?.toString() ??
-        '';
-    final result = await _openCreateMediaPicker(
+  Future<void> _pickVideoForMedia() async {
+    final state = ref.read(createEditorProvider);
+    if (state.imagePaths.isNotEmpty) {
+      AppToast.show(context, '请先删空图片，再改为视频');
+      return;
+    }
+    final result = await _openMediaPicker(
       mode: MediaPickerEntryMode.video,
       maxSelection: 1,
-      initialPaths: currentVideo.isEmpty
+      initialPaths: state.videoPath.trim().isEmpty
           ? const <String>[]
-          : <String>[currentVideo],
+          : <String>[state.videoPath],
     );
-    if (!mounted || result == null || result.items.isEmpty) return null;
-    final firstVideo = result.items.firstWhere(
-      (item) => item.isVideo,
-      orElse: () => result.items.first,
-    );
-    return firstVideo.path;
-  }
-
-  bool _isVideoFilePath(String path) {
-    final lower = path.toLowerCase();
-    return lower.endsWith('.mp4') ||
-        lower.endsWith('.mov') ||
-        lower.endsWith('.m4v') ||
-        lower.endsWith('.avi') ||
-        lower.endsWith('.mkv') ||
-        lower.endsWith('.webm');
-  }
-
-  Future<Duration?> _getVideoDuration(String path) async {
-    try {
-      final controller = VideoPlayerController.file(File(path));
-      await controller.initialize();
-      final duration = controller.value.duration;
-      await controller.dispose();
-      return duration;
-    } catch (_) {
-      return null;
+    if (!mounted || result == null || result.items.isEmpty) {
+      return;
     }
+    final item = result.items.first;
+    final thumbnail = await _generateVideoThumbnail(item.path);
+    ref
+        .read(createEditorProvider.notifier)
+        .setVideo(
+          item.path,
+          editorKind: CreateEditorKind.media,
+          thumbnail: thumbnail ?? '',
+        );
+    await _reportEvent('create_media_video_selected');
+  }
+
+  Future<void> _openCameraForCurrentEditor({
+    MediaPickerEntryMode? forcedMode,
+  }) async {
+    final state = ref.read(createEditorProvider);
+    final initialMode =
+        forcedMode ??
+        (state.editorKind == CreateEditorKind.media &&
+                state.mediaKind == CreateMediaKind.video
+            ? MediaPickerEntryMode.video
+            : MediaPickerEntryMode.image);
+    final result = await Navigator.of(context).push<CameraCaptureResult>(
+      MaterialPageRoute<CameraCaptureResult>(
+        fullscreenDialog: true,
+        builder: (_) => CameraCapturePage(initialMode: initialMode),
+      ),
+    );
+    if (!mounted || result == null) {
+      return;
+    }
+    if (state.editorKind == CreateEditorKind.text) {
+      if (result.type == CreateMediaType.video) {
+        AppToast.show(context, '写文字编辑器暂不支持视频');
+        return;
+      }
+      ref
+          .read(createEditorProvider.notifier)
+          .appendImages(
+            <String>[result.path],
+            editorKind: CreateEditorKind.text,
+            maxImages: _kMaxMediaImages,
+          );
+      return;
+    }
+    if (result.type == CreateMediaType.video) {
+      if (state.imagePaths.isNotEmpty) {
+        AppToast.show(context, '请先删空图片，再改为视频');
+        return;
+      }
+      final thumbnail = await _generateVideoThumbnail(result.path);
+      ref
+          .read(createEditorProvider.notifier)
+          .setVideo(
+            result.path,
+            editorKind: CreateEditorKind.media,
+            thumbnail: thumbnail ?? '',
+          );
+      return;
+    }
+    if (state.hasVideo) {
+      AppToast.show(context, '请先删除当前视频，再改为图片');
+      return;
+    }
+    ref
+        .read(createEditorProvider.notifier)
+        .appendImages(
+          <String>[result.path],
+          editorKind: CreateEditorKind.media,
+          maxImages: _kMaxMediaImages,
+        );
+  }
+
+  Future<void> _showAddMediaOptions(CreateEditorStateV2 state) async {
+    await showCupertinoModalPopup<void>(
+      context: context,
+      builder: (sheetContext) {
+        Future<void> runAction(Future<void> Function() action) async {
+          Navigator.of(sheetContext).pop();
+          await action();
+        }
+
+        final isTextEditor = state.editorKind == CreateEditorKind.text;
+        final isVideoState = state.mediaKind == CreateMediaKind.video;
+        final supportsVideo =
+            !isTextEditor && state.mediaKind == CreateMediaKind.none;
+
+        return CupertinoActionSheet(
+          actions: <Widget>[
+            if (!isVideoState)
+              CupertinoActionSheetAction(
+                onPressed: () => runAction(_pickImagesForCurrentEditor),
+                child: Text(isTextEditor ? '添加图片' : '从相册选择'),
+              ),
+            CupertinoActionSheetAction(
+              onPressed: () => runAction(
+                () => _openCameraForCurrentEditor(
+                  forcedMode: isVideoState
+                      ? MediaPickerEntryMode.video
+                      : MediaPickerEntryMode.image,
+                ),
+              ),
+              child: Text(isVideoState ? '拍摄视频' : '拍摄'),
+            ),
+            if (supportsVideo || isVideoState)
+              CupertinoActionSheetAction(
+                onPressed: () => runAction(_pickVideoForMedia),
+                child: Text(isVideoState ? '替换视频' : '选择视频'),
+              ),
+          ],
+          cancelButton: CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(sheetContext).pop(),
+            isDefaultAction: true,
+            child: const Text('取消'),
+          ),
+        );
+      },
+    );
   }
 
   Future<String?> _generateVideoThumbnail(String path) async {
     try {
-      final dir = await getTemporaryDirectory();
       return await VideoThumbnail.thumbnailFile(
         video: path,
-        thumbnailPath: dir.path,
-        imageFormat: ImageFormat.PNG,
-        quality: 75,
+        imageFormat: ImageFormat.JPEG,
+        quality: 80,
       );
     } catch (_) {
       return null;
     }
   }
 
-  Future<void> _handlePickVideo() async {
-    final path = await _pickVideo();
-    if (path == null || !mounted) return;
-    final duration = await _getVideoDuration(path);
-    if (!mounted) return;
-    if (duration != null && duration > const Duration(hours: 1)) {
-      AppToast.show(context, UITextConstants.videoDurationTooLong);
+  Future<void> _editCurrentImage(int index) async {
+    final state = ref.read(createEditorProvider);
+    if (index < 0 || index >= state.imagePaths.length) {
       return;
     }
-    final thumb = await _generateVideoThumbnail(path);
-    if (!mounted) return;
-      final currentVideo = ref.read(createEditorProvider).data['video'] as Map<String, dynamic>? ?? {};
-      final video = Map<String, dynamic>.from(currentVideo);
-      video['videoPath'] = path;
-      video['thumbnail'] = thumb ?? '';
-      video['durationMs'] = duration?.inMilliseconds ?? 0;
-      video['storyboardImages'] = <String>[];
-      ref.read(createEditorProvider.notifier).updateTabData('video', video);
-  }
-
-  Future<void> _handlePickMomentVideo() async {
-    final path = await _pickVideo();
-    if (path == null || !mounted) return;
-    await _applyMomentVideoFromPath(path, enterEditing: true);
-  }
-
-  void _clearMomentVideo() {
-      final currentMoment = ref.read(createEditorProvider).data['moment'] as Map<String, dynamic>? ?? {};
-      final moment = Map<String, dynamic>.from(currentMoment);
-      moment['videoPath'] = '';
-      moment['videoThumbnail'] = '';
-      moment['durationMs'] = 0;
-      ref.read(createEditorProvider.notifier).updateTabData('moment', moment);
-  }
-
-  String _formatDurationMs(int durationMs) {
-    final duration = Duration(milliseconds: durationMs);
-    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
-    final hours = duration.inHours;
-    if (hours > 0) {
-      return '$hours:$minutes:$seconds';
-    }
-    return '$minutes:$seconds';
-  }
-
-  /// 打开图片编辑页（重建后三段式编辑器），返回编辑后的路径（String）或多图时 {index, path}（Map）
-  Future<Object?> _openEditImage(
-    String source,
-    String path,
-    int index, {
-    int total = 1,
-    List<String>? allPaths,
-  }) async {
-    if (path.isEmpty) return null;
-    final params = <String, String>{
-      'path': path,
-      'source': source,
-      'index': '$index',
-      'total': '$total',
-    };
-    final paths = allPaths ?? (path.isNotEmpty ? [path] : <String>[]);
-    for (var i = 0; i < paths.length; i++) {
-      params['path$i'] = paths[i];
-    }
-    final uri = Uri.parse(
-      AppRoutePaths.createEditImage(
-        path: path,
-        source: source,
-        index: '$index',
-        total: '$total',
+    final result = await Navigator.of(context).push<Object?>(
+      MaterialPageRoute<Object?>(
+        fullscreenDialog: true,
+        builder: (_) => ImageEditorPage(
+          initialPath: state.imagePaths[index],
+          source: 'create',
+          index: index,
+          total: state.imagePaths.length,
+          imagePaths: state.imagePaths,
+        ),
       ),
-    ).replace(queryParameters: params);
-    return context.push<Object>(uri.toString());
-  }
-
-  ({int index, String path})? _parseEditImageResult(
-    Object? result,
-    int fallbackIndex,
-  ) {
-    if (result == null) return null;
-    if (result is String && result.isNotEmpty) {
-      return (index: fallbackIndex, path: result);
-    }
-    if (result is Map) {
-      final path = result['path']?.toString() ?? '';
-      if (path.isEmpty) return null;
-      final rawIndex = result['index'];
-      final parsedIndex = rawIndex is int
-          ? rawIndex
-          : int.tryParse(rawIndex?.toString() ?? '');
-      return (index: parsedIndex ?? fallbackIndex, path: path);
-    }
-    return null;
-  }
-
-  void _applyEditedImageToTab({
-    required String tabKey,
-    required int fallbackIndex,
-    required Object? result,
-  }) {
-    final parsed = _parseEditImageResult(result, fallbackIndex);
-    if (parsed == null) return;
-    final data = ref.read(createEditorProvider).data;
-    final tab = Map<String, dynamic>.from(data[tabKey] as Map? ?? {});
-    final list = List<String>.from(tab['images'] as List? ?? []);
-    if (list.isEmpty) return;
-    final safeIndex = parsed.index.clamp(0, list.length - 1);
-    list[safeIndex] = parsed.path;
-    tab['images'] = list;
-    if (tabKey == 'photo') {
-      tab['_photoCurrentIndex'] = safeIndex;
-    }
-    ref.read(createEditorProvider.notifier).updateTabData(tabKey, tab);
-  }
-
-  Future<void> _openPhotoImageEditorAt(int index) async {
-    final photoData = _currentData['photo'] as Map<String, dynamic>? ?? {};
-    final images = List<String>.from(photoData['images'] as List? ?? []);
-    if (images.isEmpty || index < 0 || index >= images.length) return;
-    final result = await _openEditImage(
-      'photo',
-      images[index],
-      index,
-      total: images.length,
-      allPaths: images,
     );
-    if (!mounted) return;
-    _applyEditedImageToTab(
-      tabKey: 'photo',
-      fallbackIndex: index,
-      result: result,
+    if (!mounted || result is! String || result.trim().isEmpty) {
+      return;
+    }
+    final next = List<String>.from(state.imagePaths);
+    next[index] = result;
+    ref
+        .read(createEditorProvider.notifier)
+        .setImages(next, editorKind: state.editorKind, currentIndex: index);
+  }
+
+  Future<List<CreateCircleOption>> _loadJoinedCircles() {
+    return _circleService.listCircles(ref.read(circleRepositoryProvider));
+  }
+
+  String _previewAssetForState(CreateEditorStateV2 state) {
+    return _coverAssetPathForState(state);
+  }
+
+  Future<PublishSettings?> _showPublishConfirmationSheet(
+    CreateEditorStateV2 state,
+  ) async {
+    final joinedCircles = await _loadJoinedCircles();
+    if (!mounted) {
+      return null;
+    }
+    return showCupertinoModalPopup<PublishSettings>(
+      context: context,
+      builder: (_) => _CreatePublishConfirmSheet(
+        initialSettings: state.settings,
+        title: state.title.trim(),
+        body: state.body.trim(),
+        previewAssetPath: _previewAssetForState(state),
+        showsVideoBadge: state.hasVideo,
+        locationService: _locationService,
+        joinedCircles: joinedCircles,
+        recommendedCircles: mockRecommendedCircles,
+      ),
     );
+  }
+
+  int _paragraphCount(String text) {
+    return text
+        .split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .length;
+  }
+
+  List<TextInputFormatter> get _bodyInputFormatters => <TextInputFormatter>[
+    LengthLimitingTextInputFormatter(_kMaxBodyLength),
+  ];
+
+  bool _shouldPublishAsArticle(CreateEditorStateV2 state) {
+    return state.title.trim().isNotEmpty ||
+        state.imagePaths.isNotEmpty ||
+        state.body.trim().length >= 140 ||
+        _paragraphCount(state.body) >= 2;
+  }
+
+  bool _canPublish(CreateEditorStateV2 state) {
+    if (state.editorKind == CreateEditorKind.media) {
+      return state.hasImages ||
+          state.hasVideo ||
+          state.hasBody ||
+          state.hasTitle;
+    }
+    return state.hasBody || state.hasTitle || state.hasImages;
+  }
+
+  Map<String, dynamic> _buildCreatePayload(CreateEditorStateV2 state) {
+    final settings = state.settings.toPayloadFields();
+    final coverAssetPath = _coverAssetPathForState(state);
+    if (state.editorKind == CreateEditorKind.media) {
+      if (state.hasVideo) {
+        return <String, dynamic>{
+          'contentType': 'video',
+          'title': state.title.trim(),
+          'body': state.body.trim(),
+          'videoUrl': state.videoPath,
+          'mediaUrls': <String>[state.videoPath],
+          'coverUrl': coverAssetPath,
+          ...settings,
+        };
+      }
+      return <String, dynamic>{
+        'contentType': 'image',
+        'title': state.title.trim(),
+        'body': state.body.trim(),
+        'mediaUrls': state.imagePaths,
+        'coverUrl': coverAssetPath,
+        ...settings,
+      };
+    }
+    final asArticle = _shouldPublishAsArticle(state);
+    return <String, dynamic>{
+      'contentType': asArticle ? 'article' : 'micro',
+      'title': state.title.trim(),
+      'body': state.body.trim(),
+      'mediaUrls': state.imagePaths,
+      'coverUrl': coverAssetPath,
+      ...settings,
+    };
+  }
+
+  String _extractPostId(Map<String, dynamic> payload) {
+    return (payload['_id'] ?? payload['postId'] ?? payload['id'] ?? '')
+        .toString()
+        .trim();
+  }
+
+  Future<void> _publish() async {
+    final state = ref.read(createEditorProvider);
+    if (_isPublishing) {
+      return;
+    }
+    if (!_canPublish(state)) {
+      AppToast.show(context, '先写点内容');
+      return;
+    }
+    final confirmedSettings = await _showPublishConfirmationSheet(state);
+    if (confirmedSettings == null) {
+      return;
+    }
+    final publishState = state.copyWith(settings: confirmedSettings);
+    ref.read(createEditorProvider.notifier).setSettings(confirmedSettings);
+    setState(() => _isPublishing = true);
+    try {
+      final repository = ref.read(contentRepositoryProvider);
+      final payload = _buildCreatePayload(publishState);
+      final created = await repository.createPost(payload: payload);
+      final postId = _extractPostId(created);
+      if (postId.isEmpty) {
+        throw StateError('missing post id');
+      }
+      await repository.publishPost(
+        postId: postId,
+        payload: confirmedSettings.toPayloadFields(),
+      );
+      await _clearCurrentDraft();
+      await _reportEvent('create_publish_success', <String, dynamic>{
+        'contentType': payload['contentType'],
+      });
+      if (!mounted) {
+        return;
+      }
+      AppToast.show(context, UITextConstants.publishAction);
+      _doClose();
+    } catch (_) {
+      await _reportEvent('create_publish_failure');
+      if (mounted) {
+        AppToast.show(context, context.l10n.loadFailed);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isPublishing = false);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(createEditorProvider);
-    final isDark = ref.watch(isDarkProvider);
-    final pageBg = SettingsSemanticConstants.createPageBackground(isDark);
-    final blockSurface = SettingsSemanticConstants.createPageBlockBackground(
-      isDark,
+    final state = ref.watch(createEditorProvider);
+    _syncControllersFromState(state);
+    final background = CupertinoColors.systemGroupedBackground.resolveFrom(
+      context,
     );
-    final fgColor = SettingsSemanticConstants.labelColor(isDark);
-    final fgSecondary = SettingsSemanticConstants.secondaryColor(isDark);
-    final hasContent = _hasContent();
-
-    return Stack(
-      children: [
-        AppScaffold(
+    final foreground = CupertinoColors.label.resolveFrom(context);
+    final secondary = CupertinoColors.secondaryLabel.resolveFrom(context);
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (!didPop) {
+          await _onCloseRequest();
+        }
+      },
+      child: CupertinoPageScaffold(
+        backgroundColor: background,
+        child: Material(
           key: TestKeys.createPage,
-          backgroundColor: pageBg,
-          navigationBar: AppNavigationBar(
-            backgroundColor: blockSurface,
-            leading: CupertinoButton(
-              key: TestKeys.createCloseButton,
-              padding: EdgeInsets.zero,
-              onPressed: _onCloseRequest,
-              child: const Icon(CupertinoIcons.clear),
-            ),
-            middle: ListenableBuilder(
-              listenable: _pageController,
-              builder: (context, _) {
-                return Text(
-                  _currentEditorTitle,
-                  style: TextStyle(
-                    color: fgColor,
-                    fontSize:
-                        SettingsSemanticConstants.createToolbarTitleFontSize,
-                    fontWeight: FontWeight.normal,
-                  ),
-                );
-              },
-            ),
-            border: Border(
-              bottom: BorderSide(
-                color: SettingsSemanticConstants.dividerColor(isDark),
-                width: AppSpacing.one,
-              ),
-            ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                if (_isMomentEditingMode && _canPublishMoment)
-                  _buildPublishButton(
-                    isDark: isDark,
-                    onPressed: () {
-                      _publishMoment();
-                    },
-                    buttonKey: TestKeys.createPublishButton,
-                  )
-                else if (hasContent)
-                  _buildPublishButton(
-                    isDark: isDark,
-                    onPressed: () {
-                      _publishCurrentTab();
-                    },
-                    label: _currentIndex == 0
-                        ? UITextConstants.publish
-                        : UITextConstants.publishAction,
-                    buttonKey: TestKeys.createPublishButton,
-                  )
-                else
-                  CupertinoButton(
-                    key: TestKeys.createDraftsButton,
-                    padding: EdgeInsets.zero,
-                    onPressed: _showDraftsModal,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.inventory_2_outlined,
-                          size: AppSpacing.iconMedium,
-                          color: fgSecondary,
+          color: background,
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              children: <Widget>[
+                _buildHeader(
+                  foreground: foreground,
+                  secondary: secondary,
+                  state: state,
+                  collapseProgress: _heroCollapseProgress,
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    controller: _scrollController,
+                    padding: EdgeInsets.fromLTRB(
+                      AppSpacing.containerMd,
+                      AppSpacing.containerSm,
+                      AppSpacing.containerMd,
+                      MediaQuery.of(context).padding.bottom +
+                          AppSpacing.containerLg,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        if (!_editorV2Enabled) _buildRollbackBanner(secondary),
+                        _buildHeroIntro(
+                          state: state,
+                          foreground: foreground,
+                          collapseProgress: _heroCollapseProgress,
                         ),
-                        SizedBox(width: AppSpacing.intraGroupXs),
-                        Text(
-                          UITextConstants.drafts,
-                          style: TextStyle(
-                            fontSize: AppTypography.base,
-                            color: fgSecondary,
-                          ),
-                        ),
+                        SizedBox(height: AppSpacing.interGroupMd),
+                        if (state.editorKind == CreateEditorKind.media)
+                          _buildMediaEditor(state)
+                        else
+                          _buildTextEditor(state),
                       ],
                     ),
                   ),
+                ),
               ],
             ),
           ),
-          child: Material(
-            type: MaterialType.transparency,
-            child: Column(
-              children: [
-                if (_isUnifiedCreateEnabled &&
-                    !_isMomentEditingMode &&
-                    !_isPhotoEditingMode)
-                  _buildUnifiedEditorShell(
-                    isDark,
-                    blockSurface,
-                    fgColor,
-                    fgSecondary,
-                  ),
-                Expanded(
-                  child: PageView(
-                    controller: _pageController,
-                    physics: const BouncingScrollPhysics(),
-                    onPageChanged: (index) {
-                      setState(() {
-                        _currentIndex = index;
-                      });
-                      _recordCreateVisit(_tabIds[index]);
-                    },
-                    children: _tabIds.asMap().entries.map((e) {
-                      return _buildEditorPlaceholder(
-                        context,
-                        e.key,
-                        isDark,
-                        fgColor,
-                        fgSecondary,
-                      );
-                    }).toList(),
-                  ),
-                ),
-                if (_isMomentEditingMode)
-                  Column(
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRollbackBanner(Color secondary) {
+    return Container(
+      margin: EdgeInsets.only(bottom: AppSpacing.interGroupMd),
+      padding: EdgeInsets.all(AppSpacing.containerSm),
+      decoration: BoxDecoration(
+        color: AppColors.primaryColor.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+      ),
+      child: Text(
+        '当前处于编辑器回退模式，保留双编辑器骨架并关闭增强提示。',
+        style: TextStyle(color: secondary, fontSize: AppTypography.sm),
+      ),
+    );
+  }
+
+  Widget _buildHeader({
+    required Color foreground,
+    required Color secondary,
+    required CreateEditorStateV2 state,
+    required double collapseProgress,
+  }) {
+    final title = state.editorKind == CreateEditorKind.media ? '发布内容' : '写点内容';
+    final divider = CupertinoColors.separator.resolveFrom(context);
+    final chrome = CupertinoColors.systemBackground
+        .resolveFrom(context)
+        .withValues(alpha: lerpDouble(0.78, 0.94, collapseProgress)!);
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: AppSpacing.sm, sigmaY: AppSpacing.sm),
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
+          decoration: BoxDecoration(
+            color: chrome,
+            border: Border(
+              bottom: BorderSide(
+                color: divider.withValues(alpha: 0.45),
+                width: AppSpacing.hairline,
+              ),
+            ),
+          ),
+          child: SizedBox(
+            height: AppSpacing.toolbarHeight,
+            child: Stack(
+              children: <Widget>[
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
-                    children: [
-                      GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _showEmojiPanel = !_showEmojiPanel;
-                            if (_showEmojiPanel) {
-                              _momentFocusNode.unfocus();
-                            } else {
-                              _momentFocusNode.requestFocus();
-                            }
-                          });
-                        },
-                        child: Container(
-                          height:
-                              SettingsSemanticConstants.toolbarHeightOverKeyboard,
-                          width: double.infinity,
-                          padding: EdgeInsets.symmetric(
-                            horizontal:
-                                SettingsSemanticConstants.blockHorizontalPadding,
-                            vertical:
-                                (SettingsSemanticConstants
-                                        .toolbarHeightOverKeyboard -
-                                    SettingsSemanticConstants
-                                        .createToolbarIconSize) /
-                                2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: blockSurface,
-                            border: Border(
-                              top: BorderSide(
-                                color: SettingsSemanticConstants.dividerColor(
-                                  isDark,
-                                ),
-                              ),
-                            ),
-                          ),
-                          child: SafeArea(
-                            top: false,
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: Icon(
-                                _showEmojiPanel
-                                    ? Icons.keyboard_outlined
-                                    : Icons.emoji_emotions_outlined,
-                                color: fgColor,
-                                size: SettingsSemanticConstants
-                                    .createToolbarIconSize,
-                              ),
-                            ),
-                          ),
-                        ),
+                    children: <Widget>[
+                      _buildHeaderIconButton(
+                        key: TestKeys.createCloseButton,
+                        icon: CupertinoIcons.xmark,
+                        color: foreground,
+                        onPressed: _onCloseRequest,
                       ),
-                      if (_showEmojiPanel)
-                        UnifiedEmojiPicker(
-                          onEmojiSelected: (char) {
-                            final t = _momentContentController;
-                            final pos = t.selection.baseOffset.clamp(
-                              0,
-                              t.text.length,
-                            );
-                            t.text =
-                                t.text.substring(0, pos) +
-                                char +
-                                t.text.substring(pos);
-                            t.selection = TextSelection.collapsed(
-                              offset: pos + char.length,
-                            );
-                            ref.read(createEditorProvider.notifier).updateField('moment', 'content', t.text);
-                          },
+                      if (_savedDrafts.isNotEmpty)
+                        Padding(
+                          padding: EdgeInsets.only(
+                            left: AppSpacing.intraGroupXs,
+                          ),
+                          child: CupertinoButton(
+                            key: TestKeys.createDraftsButton,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: AppSpacing.containerSm,
+                              vertical: AppSpacing.intraGroupXs,
+                            ),
+                            minimumSize: const Size.square(
+                              AppSpacing.buttonHeightSm,
+                            ),
+                            color: CupertinoColors.systemFill.resolveFrom(
+                              context,
+                            ),
+                            borderRadius: BorderRadius.circular(
+                              AppSpacing.radiusTwenty,
+                            ),
+                            onPressed: _showDraftsSheet,
+                            child: Text(
+                              UITextConstants.drafts,
+                              style: TextStyle(
+                                color: secondary,
+                                fontSize: AppTypography.smPlus,
+                                fontWeight: AppTypography.medium,
+                              ),
+                            ),
+                          ),
                         ),
                     ],
-                  )
-                else if (_isPhotoEditingMode)
-                  const SizedBox.shrink()
-                else
-                  const SizedBox.shrink(),
+                  ),
+                ),
+                Center(
+                  child: Opacity(
+                    opacity: collapseProgress,
+                    child: Transform.translate(
+                      offset: Offset(0, lerpDouble(6, 0, collapseProgress)!),
+                      child: Text(
+                        title,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: foreground,
+                          fontSize: AppTypography.xl,
+                          fontWeight: AppTypography.semiBold,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: CupertinoButton(
+                    key: TestKeys.createPublishButton,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.containerSm,
+                    ),
+                    minimumSize: const Size.square(AppSpacing.buttonHeightSm),
+                    color: AppColors.iosAccentLight,
+                    borderRadius: BorderRadius.circular(
+                      AppSpacing.radiusTwenty,
+                    ),
+                    onPressed: _isPublishing ? null : _publish,
+                    child: _isPublishing
+                        ? const CupertinoActivityIndicator(color: Colors.white)
+                        : const Text(
+                            '下一步',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: AppTypography.base,
+                              fontWeight: AppTypography.semiBold,
+                            ),
+                          ),
+                  ),
+                ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeroIntro({
+    required CreateEditorStateV2 state,
+    required Color foreground,
+    required double collapseProgress,
+  }) {
+    final title = state.editorKind == CreateEditorKind.media ? '发布内容' : '写点内容';
+    final titleOpacity = (1 - collapseProgress * 1.2).clamp(0.0, 1.0);
+    final bottomSpacing = lerpDouble(
+      AppSpacing.containerSm,
+      AppSpacing.intraGroupXs,
+      collapseProgress,
+    )!;
+    return ClipRect(
+      child: Padding(
+        padding: EdgeInsets.only(
+          top: AppSpacing.containerSm,
+          bottom: bottomSpacing,
+        ),
+        child: Transform.translate(
+          offset: Offset(0, lerpDouble(0, -18, collapseProgress)!),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Opacity(
+                opacity: titleOpacity,
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    color: foreground,
+                    fontSize: lerpDouble(
+                      AppTypography.xxxl.toDouble(),
+                      AppTypography.xl.toDouble(),
+                      collapseProgress,
+                    ),
+                    fontWeight: AppTypography.bold,
+                    height: AppTypography.lineHeightTight,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderIconButton({
+    required Key key,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return CupertinoButton(
+      key: key,
+      padding: EdgeInsets.zero,
+      onPressed: onPressed,
+      child: Container(
+        width: AppSpacing.buttonHeightSm,
+        height: AppSpacing.buttonHeightSm,
+        decoration: BoxDecoration(
+          color: CupertinoColors.systemFill.resolveFrom(context),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: color, size: AppSpacing.iconMedium),
+      ),
+    );
+  }
+
+  Widget _buildTextEditor(CreateEditorStateV2 state) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        _buildMediaComposerSection(
+          state: state,
+          title: '图片',
+          trailing: state.imagePaths.isEmpty
+              ? '可选'
+              : '${state.imagePaths.length} / $_kMaxMediaImages',
+        ),
+        SizedBox(height: AppSpacing.interGroupMd),
+        _buildTitleSection(
+          state: state,
+          titleFieldKey: TestKeys.createTitleInput,
+        ),
+        SizedBox(height: AppSpacing.interGroupSm),
+        _buildInputPanel(
+          label: '正文',
+          currentLength: state.body.length,
+          input: CupertinoTextField(
+            key: TestKeys.createMomentInput,
+            controller: _bodyController,
+            focusNode: _bodyFocusNode,
+            inputFormatters: _bodyInputFormatters,
+            maxLines: null,
+            minLines: 10,
+            padding: EdgeInsets.zero,
+            placeholder: '先写下你想表达的内容',
+            decoration: const BoxDecoration(),
+            onChanged: (value) {
+              ref.read(createEditorProvider.notifier).updateBody(value);
+            },
           ),
         ),
       ],
     );
   }
 
-  /// 1:1 结构对应 CreatePage.tsx：发微趣为文字+图片一体块、带状分割、三选项块
-  Widget _buildEditorPlaceholder(
-    BuildContext context,
-    int tabIndex,
-    bool isDark,
-    Color fgColor,
-    Color fgSecondary,
-  ) {
-    final tabId = _tabIds[tabIndex];
-    final data = _currentData[tabId] as Map<String, dynamic>? ?? {};
-    final blockSurface = SettingsSemanticConstants.createPageBlockBackground(
-      isDark,
-    );
-    final blockBorderColor = SettingsSemanticConstants.blockBorderColor(isDark);
-    final blockDecoration = BoxDecoration(
-      color: blockSurface,
-      borderRadius: BorderRadius.circular(
-        SettingsSemanticConstants.blockBorderRadius,
-      ),
-      border: Border.all(color: blockBorderColor),
-    );
-    final blockSpacing = SettingsSemanticConstants.blockSpacing;
-    final blockPad = SettingsSemanticConstants.blockHorizontalPadding;
-
-    if (tabId == 'moment') {
-      final momentBlocks = _buildMomentFields(
-        data,
-        fgColor,
-        fgSecondary,
-        isDark: isDark,
-        focusNode: _momentFocusNode,
-        onEnterEditing: _enterMomentEditingMode,
-        addImageFocusNode: _momentAddImageFocusNode,
-      );
-      final textBlock = momentBlocks[0];
-      final mediaBlock = momentBlocks.length >= 3 ? momentBlocks[2] : null;
-      final hintBlock = momentBlocks.length >= 6 ? momentBlocks[3] : null;
-      final optionsBlock = momentBlocks.length >= 5 ? momentBlocks.last : null;
-      final momentContentChildren = <Widget>[
-        textBlock,
-        Padding(
-          padding: EdgeInsets.symmetric(
-            vertical: SettingsSemanticConstants.sectionVerticalPadding - 4,
-          ),
-          child: Divider(
-            height: AppSpacing.one,
-            thickness: SettingsSemanticConstants.dividerThickness,
-            color: SettingsSemanticConstants.createInlineDividerColor(isDark),
+  Widget _buildMediaEditor(CreateEditorStateV2 state) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        _buildMediaComposerSection(
+          state: state,
+          title: state.hasVideo ? '视频' : '素材',
+          trailing: state.hasVideo
+              ? '仅 1 个视频'
+              : '${state.imagePaths.length} / $_kMaxMediaImages',
+        ),
+        SizedBox(height: AppSpacing.interGroupMd),
+        _buildTitleSection(
+          state: state,
+          titleFieldKey: state.mediaKind == CreateMediaKind.video
+              ? TestKeys.createVideoTitleInput
+              : TestKeys.createPhotoTitleInput,
+        ),
+        SizedBox(height: AppSpacing.interGroupSm),
+        _buildInputPanel(
+          label: '正文',
+          currentLength: state.body.length,
+          input: CupertinoTextField(
+            key: state.mediaKind == CreateMediaKind.video
+                ? TestKeys.createVideoBodyInput
+                : TestKeys.createPhotoBodyInput,
+            controller: _bodyController,
+            focusNode: _bodyFocusNode,
+            inputFormatters: _bodyInputFormatters,
+            maxLines: null,
+            minLines: 4,
+            padding: EdgeInsets.zero,
+            placeholder: '补一段配文，让内容更完整',
+            decoration: const BoxDecoration(),
+            onChanged: (value) {
+              ref.read(createEditorProvider.notifier).updateBody(value);
+            },
           ),
         ),
-      ];
-      if (mediaBlock != null) {
-        momentContentChildren.add(mediaBlock);
-      }
-      if (hintBlock != null) {
-        momentContentChildren.add(hintBlock);
-      }
-      return SingleChildScrollView(
-        padding: EdgeInsets.only(
-          left: 0,
-          right: 0,
-          top: SettingsSemanticConstants.createContentTopPadding,
-          bottom: blockSpacing,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              width: double.infinity,
-              decoration: blockDecoration,
-              padding: EdgeInsets.all(blockPad),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: momentContentChildren,
-              ),
-            ),
-            if (optionsBlock != null) ...[
-              SizedBox(
-                height: SettingsSemanticConstants.createStripSeparatorHeight,
-              ),
-              Container(
-                width: double.infinity,
-                decoration: blockDecoration,
-                padding: EdgeInsets.zero,
-                child: optionsBlock,
-              ),
-            ],
-          ],
-        ),
-      );
-    }
-
-    if (tabId == 'photo') {
-      final photoBlocks = _buildPhotoFields(data, fgColor, fgSecondary, isDark);
-      return SingleChildScrollView(
-        padding: EdgeInsets.only(
-          left: 0,
-          right: 0,
-          top: SettingsSemanticConstants.createContentTopPadding,
-          bottom: blockSpacing,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: photoBlocks.asMap().entries.map((e) {
-            return Padding(
-              padding: EdgeInsets.only(bottom: blockSpacing),
-              child: Container(
-                width: double.infinity,
-                decoration: blockDecoration,
-                padding: e.key == photoBlocks.length - 1
-                    ? EdgeInsets.zero
-                    : EdgeInsets.all(blockPad),
-                child: e.value,
-              ),
-            );
-          }).toList(),
-        ),
-      );
-    }
-
-    if (tabId == 'video') {
-      final videoBlocks = _buildVideoFields(data, fgColor, fgSecondary, isDark);
-      return SingleChildScrollView(
-        padding: EdgeInsets.only(
-          left: 0,
-          right: 0,
-          top: SettingsSemanticConstants.createContentTopPadding,
-          bottom: blockSpacing,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: videoBlocks.asMap().entries.map((e) {
-            return Padding(
-              padding: EdgeInsets.only(bottom: blockSpacing),
-              child: Container(
-                width: double.infinity,
-                decoration: blockDecoration,
-                padding: e.key == videoBlocks.length - 1
-                    ? EdgeInsets.zero
-                    : EdgeInsets.all(blockPad),
-                child: e.value,
-              ),
-            );
-          }).toList(),
-        ),
-      );
-    }
-
-    if (tabId == 'article') {
-      final articleBlocks = _buildArticleFields(
-        data,
-        fgColor,
-        fgSecondary,
-        isDark,
-      );
-      return SingleChildScrollView(
-        padding: EdgeInsets.only(
-          left: 0,
-          right: 0,
-          top: SettingsSemanticConstants.createContentTopPadding,
-          bottom: blockSpacing,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: articleBlocks.asMap().entries.map((e) {
-            return Padding(
-              padding: EdgeInsets.only(bottom: blockSpacing),
-              child: Container(
-                width: double.infinity,
-                decoration: blockDecoration,
-                padding: e.key == articleBlocks.length - 1
-                    ? EdgeInsets.zero
-                    : EdgeInsets.all(blockPad),
-                child: e.value,
-              ),
-            );
-          }).toList(),
-        ),
-      );
-    }
-
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(blockPad),
-      child: Container(
-        width: double.infinity,
-        decoration: blockDecoration,
-        padding: EdgeInsets.all(blockPad),
-        child: const SizedBox.shrink(),
-      ),
+      ],
     );
   }
 
-  /// MomentEditorCard 1:1（图一）：白块、分割线、字数在输入区内、添加图焦点边框、拖动排序
-  List<Widget> _buildMomentFields(
-    Map<String, dynamic> data,
-    Color fgColor,
-    Color fgSecondary, {
-    required bool isDark,
-    FocusNode? focusNode,
-    VoidCallback? onEnterEditing,
-    FocusNode? addImageFocusNode,
+  Widget _buildMediaComposerSection({
+    required CreateEditorStateV2 state,
+    required String title,
+    required String trailing,
   }) {
-    final images = List<String>.from(data['images'] as List? ?? []);
-    final videoPath = (data['videoPath'] as String? ?? '').trim();
-    final videoThumbnail = (data['videoThumbnail'] as String? ?? '').trim();
-    final durationMs = (data['durationMs'] as num?)?.toInt() ?? 0;
-    final hasVideo = videoPath.isNotEmpty;
-    return [
-      // 1. 文本输入区 + 字数在输入区内显示（非工具栏底）
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CupertinoTextField(
-            key: TestKeys.createMomentInput,
-            controller: _momentContentController,
-            focusNode: focusNode,
-            placeholder: UITextConstants.momentPlaceholder,
-            placeholderStyle: TextStyle(
-              color: SettingsSemanticConstants.createInputHintColor(isDark),
-              fontSize: SettingsSemanticConstants.createInputMomentFontSize,
-            ),
-            decoration: null,
-            padding: EdgeInsets.zero,
-            style: TextStyle(
-              color: fgColor,
-              fontSize: SettingsSemanticConstants.createInputMomentFontSize,
-            ),
-            maxLines: 4,
-            minLines: 2,
-            maxLength: _kMomentMaxLength,
-            onTap: onEnterEditing,
-            onChanged: (v) => ref.read(createEditorProvider.notifier).updateField('moment', 'content', v),
-            contextMenuBuilder: (context, editableTextState) {
-              final items = editableTextState.contextMenuButtonItems.where((
-                item,
-              ) {
-                final label = item.label?.toLowerCase() ?? '';
-                return !label.contains('scan') && !label.contains('扫描');
-              }).toList();
-              return AdaptiveTextSelectionToolbar.buttonItems(
-                anchors: editableTextState.contextMenuAnchors,
-                buttonItems: items,
-              );
-            },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        _buildSectionHeader(title: title, trailing: trailing),
+        SizedBox(height: AppSpacing.intraGroupSm),
+        _buildSurfacePanel(
+          padding: EdgeInsets.all(AppSpacing.containerSm),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              _buildMediaStrip(
+                state: state,
+                onAdd: () => _showAddMediaOptions(state),
+                onTapImage: _editCurrentImage,
+                onRemove: (index) {
+                  if (state.mediaKind == CreateMediaKind.video) {
+                    ref.read(createEditorProvider.notifier).clearVideo();
+                  } else {
+                    ref
+                        .read(createEditorProvider.notifier)
+                        .removeImageAt(index);
+                  }
+                },
+              ),
+            ],
           ),
-          SizedBox(height: AppSpacing.intraGroupXs),
-          Align(
-            alignment: Alignment.centerRight,
-            child: Text(
-              '${_momentContentController.text.length}/$_kMomentMaxLength',
-              style: TextStyle(fontSize: AppTypography.sm, color: fgSecondary),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSectionHeader({required String title, String? trailing}) {
+    return Row(
+      children: <Widget>[
+        Text(
+          title,
+          style: TextStyle(
+            color: CupertinoColors.secondaryLabel.resolveFrom(context),
+            fontSize: AppTypography.sm,
+            fontWeight: AppTypography.semiBold,
+            letterSpacing: 0.2,
+          ),
+        ),
+        const Spacer(),
+        if (trailing != null)
+          Text(
+            trailing,
+            style: TextStyle(
+              color: CupertinoColors.secondaryLabel.resolveFrom(context),
+              fontSize: AppTypography.sm,
             ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildSurfacePanel({required Widget child, EdgeInsets? padding}) {
+    final panelBackground = CupertinoColors.secondarySystemGroupedBackground
+        .resolveFrom(context);
+    final separator = CupertinoColors.separator.resolveFrom(context);
+    return Container(
+      padding: padding ?? EdgeInsets.all(AppSpacing.containerMd),
+      decoration: BoxDecoration(
+        color: panelBackground,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+        border: Border.all(
+          color: separator.withValues(alpha: 0.18),
+          width: AppSpacing.hairline,
+        ),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: AppSpacing.twenty,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
-      // 文字与图片区间隔两行（一空行一待输入）
-      SizedBox(height: AppSpacing.interGroupXl),
-      // 2. 媒体区：图片点滴使用九宫格；视频点滴使用单视频卡片
-      if (hasVideo)
-        _buildMomentVideoCard(
-          isDark: isDark,
-          fgSecondary: fgSecondary,
-          thumbnailPath: videoThumbnail,
-          durationMs: durationMs,
-        )
-      else
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final gap = AppSpacing.interGroupXs;
-            final cellSize = (constraints.maxWidth - gap * 2) / 3;
-            final totalCells = images.length + 1;
-            final rowCount = (totalCells / 3).ceil();
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: List.generate(rowCount, (row) {
-                return Padding(
-                  padding: EdgeInsets.only(
-                    bottom: row < rowCount - 1 ? gap : 0,
-                  ),
-                  child: Row(
-                    children: List.generate(3, (col) {
-                      final index = row * 3 + col;
-                      if (index >= totalCells) {
-                        return SizedBox(width: cellSize, height: cellSize);
-                      }
-                      if (index == images.length) {
-                        return Padding(
-                          padding: EdgeInsets.only(right: col < 2 ? gap : 0),
-                          child: GestureDetector(
-                            onTap: () async {
-                              addImageFocusNode?.requestFocus();
-                              onEnterEditing?.call();
-                              final paths = await _pickImages(
-                                maxCount: 9,
-                                initialPaths: images,
-                              );
-                              if (paths.isEmpty) return;
-                              final oldLength = images.length;
-                              _applyMomentImages(paths);
-                              if (!mounted) return;
-                              final merged = List<String>.from(
-                                (_currentData['moment'] as Map)['images']
-                                        as List? ??
-                                    [],
-                              );
-                              if (merged.isEmpty) return;
-                              final targetIndex = oldLength.clamp(
-                                0,
-                                merged.length - 1,
-                              );
-                              final result = await _openEditImage(
-                                'moment',
-                                merged[targetIndex],
-                                targetIndex,
-                                total: merged.length,
-                                allPaths: merged,
-                              );
-                              if (!mounted) return;
-                              _applyEditedImageToTab(
-                                tabKey: 'moment',
-                                fallbackIndex: targetIndex,
-                                result: result,
-                              );
-                            },
-                            child: _buildDashedAddTile(
-                              isDark: isDark,
-                              width: cellSize,
-                              height: cellSize,
-                              borderRadius: SettingsSemanticConstants
-                                  .createAddTileBorderRadius,
-                              child: Icon(
-                                Icons.add,
-                                size:
-                                    AppSpacing.iconLarge + AppSpacing.iconSmall,
-                                color:
-                                    SettingsSemanticConstants.createAddTileIconColor(
-                                      isDark,
-                                    ),
-                              ),
-                            ),
-                          ),
-                        );
-                      }
-                      final path = images[index];
-                      return Padding(
-                        padding: EdgeInsets.only(right: col < 2 ? gap : 0),
-                        child: _buildMomentDraggableImageCell(
-                          key: ValueKey(path),
-                          path: path,
-                          index: index,
-                          cellSize: cellSize,
-                          images: images,
-                          fgSecondary: fgSecondary,
-                          onEnterEditing: onEnterEditing,
-                        ),
-                      );
-                    }),
-                  ),
-                );
-              }),
-            );
-          },
-        ),
-      if (images.isNotEmpty && !hasVideo)
-        Padding(
-          padding: EdgeInsets.only(top: AppSpacing.interGroupXs),
-          child: Text(
-            UITextConstants.momentImageReorderHint,
-            style: TextStyle(
-              fontSize: AppTypography.sm,
-              color: fgSecondary.withValues(alpha: 0.9),
-            ),
-          ),
-        ),
-      SizedBox(height: AppSpacing.interGroupLg),
-      _buildPublishSettingsSection(
-        tabKey: 'moment',
-        fgColor: fgColor,
-        fgSecondary: fgSecondary,
-        isDark: isDark,
-      ),
-    ];
-  }
-
-  Widget _buildMomentVideoCard({
-    required bool isDark,
-    required Color fgSecondary,
-    required String thumbnailPath,
-    required int durationMs,
-  }) {
-    return AspectRatio(
-      aspectRatio: 4 / 3,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: thumbnailPath.isNotEmpty
-                  ? _photoImage(thumbnailPath, fgSecondary)
-                  : _buildVideoPlaceholder(fgSecondary),
-            ),
-            Center(
-              child: Container(
-                width: AppSpacing.bottomNavHeight + AppSpacing.sm,
-                height: AppSpacing.bottomNavHeight + AppSpacing.sm,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.92),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.play_arrow,
-                  size: AppSpacing.iconLarge + AppSpacing.xs,
-                  color: Colors.black87,
-                ),
-              ),
-            ),
-            Positioned(
-              left: AppSpacing.containerSm,
-              bottom: AppSpacing.containerSm,
-              child: Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.intraGroupMd,
-                  vertical: AppSpacing.intraGroupXs,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(
-                    AppSpacing.smallBorderRadius,
-                  ),
-                ),
-                child: Text(
-                  _formatDurationMs(durationMs),
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: AppTypography.sm,
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              top: AppSpacing.containerSm,
-              right: AppSpacing.containerSm,
-              child: Row(
-                children: [
-                  TextButton(
-                    onPressed: _handlePickMomentVideo,
-                    child: const Text(
-                      '换视频',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: _clearMomentVideo,
-                    child: const Text(
-                      '移除',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Positioned(
-              left: AppSpacing.containerSm,
-              top: AppSpacing.containerSm,
-              child: Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.intraGroupMd,
-                  vertical: AppSpacing.intraGroupXs,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.black38,
-                  borderRadius: BorderRadius.circular(
-                    AppSpacing.smallBorderRadius,
-                  ),
-                ),
-                child: const Text(
-                  '点滴视频',
-                  style: TextStyle(color: Colors.white),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+      child: child,
     );
   }
 
-  Widget _createOptionDivider(bool isDark) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: AppSpacing.xs / 2),
-      child: Divider(
-        height: AppSpacing.one,
-        thickness: SettingsSemanticConstants.dividerThickness,
-        color: SettingsSemanticConstants.dividerColor(isDark),
-      ),
-    );
-  }
-
-  Widget _buildPublishSettingsSection({
-    required String tabKey,
-    required Color fgColor,
-    required Color fgSecondary,
-    required bool isDark,
+  Widget _buildInputPanel({
+    required String label,
+    required int currentLength,
+    required Widget input,
   }) {
-    final l10n = context.l10n;
-    final locationText = _locationDisplay(tabKey, l10n);
-    final isPublic = _isPublic(tabKey);
-    final allowAssistantUse =
-        (_tabData(tabKey)['assistantUsePolicy']?.toString() ?? 'inherit') !=
-        'exclude';
-    final circlesText = _circlesDisplay(tabKey, l10n);
-    final blue = AppColors.primaryColor;
-    final isLocationSelected = locationText != l10n.locationHidden;
-
-    return Column(
-      children: [
-        _momentListTile(
-          icon: CupertinoIcons.location,
-          label: l10n.locationLabel,
-          trailing: locationText,
-          trailingColor: isLocationSelected
-              ? blue
-              : SettingsSemanticConstants.createSettingItemValueColor(isDark),
-          fgColor: fgColor,
-          fgSecondary: fgSecondary,
-          isDark: isDark,
-          onTap: () => _selectLocation(tabKey),
-        ),
-        _createOptionDivider(isDark),
-        _momentListTile(
-          icon: CupertinoIcons.sparkles,
-          label: UITextConstants.createAssistantUseLabel,
-          trailing: allowAssistantUse ? '允许' : '已排除',
-          trailingColor: allowAssistantUse
-              ? blue
-              : SettingsSemanticConstants.createSettingItemValueColor(isDark),
-          fgColor: fgColor,
-          fgSecondary: fgSecondary,
-          isDark: isDark,
-          showChevron: false,
-          trailingWidget: CupertinoSwitch(
-            value: allowAssistantUse,
-            activeTrackColor: blue,
-            onChanged: (next) {
-              ref.read(createEditorProvider.notifier).updateField(tabKey, 'assistantUsePolicy', next ? 'inherit' : 'exclude');
-            },
-          ),
-          onTap: () {
-            ref.read(createEditorProvider.notifier).updateField(tabKey, 'assistantUsePolicy', allowAssistantUse ? 'exclude' : 'inherit');
-          },
-        ),
-        if (!allowAssistantUse)
-          Padding(
-            padding: EdgeInsets.only(
-              top: AppSpacing.intraGroupXs,
-              bottom: AppSpacing.intraGroupSm,
-            ),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                UITextConstants.createAssistantUseHint,
+    return _buildSurfacePanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: AppTypography.base,
+                  fontWeight: AppTypography.semiBold,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '$currentLength / $_kMaxBodyLength',
                 style: TextStyle(
-                  color: fgSecondary,
+                  color: CupertinoColors.secondaryLabel.resolveFrom(context),
                   fontSize: AppTypography.sm,
                 ),
               ),
+            ],
+          ),
+          SizedBox(height: AppSpacing.intraGroupSm),
+          Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.containerSm,
+              vertical: AppSpacing.containerSm,
             ),
-          ),
-        _createOptionDivider(isDark),
-        _momentListTile(
-          icon: CupertinoIcons.globe,
-          label: l10n.isPublicLabel,
-          fgColor: fgColor,
-          fgSecondary: fgSecondary,
-          isDark: isDark,
-          showChevron: false,
-          trailingWidget: CupertinoSwitch(
-            value: isPublic,
-            activeTrackColor: blue,
-            onChanged: (next) {
-              final nextData = Map<String, dynamic>.from(ref.read(createEditorProvider).data[tabKey] as Map? ?? {});
-              nextData['visibility'] = next ? 'public' : 'private';
-              if (!next) {
-                nextData['circleIds'] = <String>[];
-                nextData['circleNames'] = <String>[];
-              }
-              ref.read(createEditorProvider.notifier).updateTabData(tabKey, nextData);
-            },
-          ),
-          onTap: () {
-            final nextPublic = !_isPublic(tabKey);
-            final nextData = Map<String, dynamic>.from(ref.read(createEditorProvider).data[tabKey] as Map? ?? {});
-            nextData['visibility'] = nextPublic ? 'public' : 'private';
-            if (!nextPublic) {
-              nextData['circleIds'] = <String>[];
-              nextData['circleNames'] = <String>[];
-            }
-            ref.read(createEditorProvider.notifier).updateTabData(tabKey, nextData);
-          },
-        ),
-        if (isPublic) ...[
-          _createOptionDivider(isDark),
-          _momentListTile(
-            icon: CupertinoIcons.person_2,
-            label: l10n.selectPublishCirclesLabel,
-            trailing: circlesText,
-            trailingColor: circlesText == l10n.noCirclesAvailable
-                ? SettingsSemanticConstants.createSettingItemValueColor(isDark)
-                : blue,
-            fgColor: fgColor,
-            fgSecondary: fgSecondary,
-            isDark: isDark,
-            onTap: () => _selectCircles(tabKey),
+            decoration: BoxDecoration(
+              color: CupertinoColors.systemBackground.resolveFrom(context),
+              borderRadius: BorderRadius.circular(AppSpacing.containerSm),
+            ),
+            child: DefaultTextStyle(
+              style: TextStyle(
+                fontSize: AppTypography.base,
+                color: CupertinoColors.label.resolveFrom(context),
+                height: AppTypography.bodyLineHeight,
+              ),
+              child: input,
+            ),
           ),
         ],
-      ],
-    );
-  }
-
-  Future<void> _selectLocation(String tabKey) async {
-    final result = await Navigator.of(context).push<CreateLocationOption>(
-      CupertinoPageRoute<CreateLocationOption>(
-        builder: (context) =>
-            PublishLocationSelectorPage(locationService: _locationService),
       ),
     );
-    if (!mounted || result == null) return;
-      final nextData = Map<String, dynamic>.from(ref.read(createEditorProvider).data[tabKey] as Map? ?? {});
-      if (result.name.isEmpty) {
-        nextData['locationName'] = '';
-        nextData['location'] = <String, dynamic>{};
-      } else {
-        nextData['locationName'] = result.name;
-        nextData['location'] = result.toLocationMap();
-      }
-      ref.read(createEditorProvider.notifier).updateTabData(tabKey, nextData);
   }
 
-  Future<void> _selectCircles(String tabKey) async {
-    final circleRepository = ref.read(circleRepositoryProvider);
-    final joinedCircles = await _circleService.listCircles(circleRepository);
-    if (!mounted) return;
-    final selectedIds = List<String>.from(
-      _tabData(tabKey)['circleIds'] as List? ?? const <String>[],
-    );
-    final selectedNames = List<String>.from(
-      _tabData(tabKey)['circleNames'] as List? ?? const <String>[],
-    );
-    final selected = <String, String>{};
-    if (selectedIds.isEmpty && joinedCircles.isNotEmpty) {
-      for (final c in joinedCircles) {
-        selected[c.id] = c.name;
-      }
-    } else {
-      for (var i = 0; i < selectedIds.length; i++) {
-        selected[selectedIds[i]] = i < selectedNames.length
-            ? selectedNames[i]
-            : selectedIds[i];
-      }
-    }
-    final result = await Navigator.of(context).push<Map<String, String>>(
-      CupertinoPageRoute<Map<String, String>>(
-        fullscreenDialog: true,
-        builder: (context) => PublishCircleSelectPage(
-          joinedCircles: joinedCircles,
-          initialSelected: selected,
-          recommendedCircles: mockRecommendedCircles,
-        ),
-      ),
-    );
-    if (!mounted || result == null) return;
-      final nextData = Map<String, dynamic>.from(ref.read(createEditorProvider).data[tabKey] as Map? ?? {});
-      nextData['circleIds'] = result.keys.toList();
-      nextData['circleNames'] = result.values.toList();
-      ref.read(createEditorProvider.notifier).updateTabData(tabKey, nextData);
-  }
-
-  Widget _momentListTile({
-    required IconData icon,
-    required String label,
-    required Color fgColor,
-    required Color fgSecondary,
-    required bool isDark,
-    String? trailing,
-    Color? trailingColor,
-    Widget? trailingWidget,
-    bool showChevron = true,
-    required VoidCallback onTap,
+  Widget _buildMediaStrip({
+    required CreateEditorStateV2 state,
+    required Future<void> Function() onAdd,
+    required Future<void> Function(int index) onTapImage,
+    required void Function(int index) onRemove,
   }) {
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      onPressed: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: SettingsSemanticConstants.blockHorizontalPadding,
-          vertical: SettingsSemanticConstants.sectionVerticalPadding,
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: AppSpacing.iconMedium, color: fgColor),
-            SizedBox(width: AppSpacing.interGroupSm),
-            Expanded(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: SettingsSemanticConstants
-                            .createSettingItemLabelFontSize,
-                        fontWeight: FontWeight.normal,
-                        color: fgColor,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  SizedBox(width: AppSpacing.interGroupSm),
-                  SizedBox(
-                    width: _kTrailingColumnWidth,
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          ...?(trailingWidget != null
-                              ? [trailingWidget]
-                              : null),
-                          if (trailing != null)
-                            Flexible(
-                              child: Text(
-                                trailing,
-                                style: TextStyle(
-                                  fontSize: SettingsSemanticConstants
-                                      .createSettingItemValueFontSize,
-                                  color:
-                                      trailingColor ??
-                                      SettingsSemanticConstants.createSettingItemValueColor(
-                                        isDark,
-                                      ),
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                                textAlign: TextAlign.end,
-                              ),
-                            ),
-                          if (showChevron) ...[
-                            SizedBox(width: AppSpacing.interGroupXs),
-                            Icon(
-                              CupertinoIcons.chevron_forward,
-                              size: AppSpacing.iconMedium,
-                              color: fgSecondary,
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+    final isVideo =
+        state.mediaKind == CreateMediaKind.video && state.videoPath.isNotEmpty;
+    final items = isVideo
+        ? <String>[
+            state.videoThumbnail.trim().isEmpty
+                ? state.videoPath
+                : state.videoThumbnail,
+          ]
+        : state.imagePaths;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final spacing = AppSpacing.intraGroupSm;
+        final columns = _mediaColumnsForWidth(constraints.maxWidth);
+        final tileWidth =
+            ((constraints.maxWidth - spacing * (columns - 1)) / columns)
+                .clamp(104.0, 148.0)
+                .toDouble();
+        final tileHeight = tileWidth * _mediaTileAspectRatioForColumns(columns);
+        final addLabel = state.editorKind == CreateEditorKind.text
+            ? '添加图片'
+            : (isVideo ? '替换视频' : (items.isEmpty ? '添加图片或视频' : '添加图片'));
+        if (isVideo) {
+          return Wrap(
+            spacing: spacing,
+            runSpacing: spacing,
+            children: <Widget>[
+              _buildMediaTile(
+                assetPath: items.first,
+                index: 0,
+                isVideo: true,
+                width: tileWidth,
+                height: tileHeight,
+                showDragHandle: false,
+                isEmphasized: true,
+                onTap: () => onAdd(),
+                onRemove: () => onRemove(0),
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+              _AddThumbnailButton(
+                key: TestKeys.createMediaAddButton,
+                onPressed: onAdd,
+                width: tileWidth,
+                height: tileHeight,
+                label: addLabel,
+              ),
+            ],
+          );
+        }
+        if (items.isEmpty) {
+          return _AddThumbnailButton(
+            key: TestKeys.createMediaAddButton,
+            onPressed: onAdd,
+            width: tileWidth,
+            height: tileHeight,
+            label: addLabel,
+          );
+        }
 
-  /// 发微趣媒体区：可拖动排序的图片格（长按拖拽，动效由 Draggable 默认提供）
-  Widget _buildMomentDraggableImageCell({
-    required Key key,
-    required String path,
-    required int index,
-    required double cellSize,
-    required List<String> images,
-    required Color fgSecondary,
-    VoidCallback? onEnterEditing,
-  }) {
-    return LongPressDraggable<int>(
-      data: index,
-      delay: const Duration(milliseconds: 200),
-      feedback: Material(
-        elevation: AppSpacing.intraGroupMd,
-        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-        child: SizedBox(
-          width: cellSize,
-          height: cellSize,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-            child: _photoImage(path, fgSecondary),
-          ),
-        ),
-      ),
-      childWhenDragging: Opacity(
-        opacity: 0.4,
-        child: SizedBox(
-          width: cellSize,
-          height: cellSize,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-            child: _photoImage(path, fgSecondary),
-          ),
-        ),
-      ),
-      child: DragTarget<int>(
-        onAcceptWithDetails: (details) {
-          final from = details.data;
-          if (from == index) return;
-            final currentMoment = ref.read(createEditorProvider).data['moment'] as Map<String, dynamic>? ?? {};
-            final list = List<String>.from(currentMoment['images'] as List? ?? []);
-            if (from < 0 ||
-                from >= list.length ||
-                index < 0 ||
-                index >= list.length) {
-              return;
-            }
-            final a = list[from];
-            list[from] = list[index];
-            list[index] = a;
-            ref.read(createEditorProvider.notifier).updateField('moment', 'images', list);
-        },
-        builder: (context, candidateData, rejectedData) {
-          final isDragTarget = candidateData.isNotEmpty;
-          return AnimatedScale(
-            scale: isDragTarget ? 1.08 : 1.0,
-            duration: const Duration(milliseconds: 120),
-            curve: Curves.easeOut,
-            child: Container(
-              width: cellSize,
-              height: cellSize,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(
-                  AppSpacing.largeBorderRadius,
-                ),
-              ),
-              child: GestureDetector(
-                onTap: () async {
-                  onEnterEditing?.call();
-                  final result = await _openEditImage(
-                    'moment',
-                    path,
-                    index,
-                    total: images.length,
-                    allPaths: images,
-                  );
-                  if (!mounted) return;
-                  _applyEditedImageToTab(
-                    tabKey: 'moment',
-                    fallbackIndex: index,
-                    result: result,
-                  );
-                },
-                child: _momentImageCell(
-                  path,
-                  onRemove: () {
-                    final currentMoment = ref.read(createEditorProvider).data['moment'] as Map<String, dynamic>? ?? {};
-                    final list = List<String>.from(currentMoment['images'] as List? ?? []);
-                    if (index >= 0 && index < list.length) {
-                      list.removeAt(index);
-                      ref.read(createEditorProvider.notifier).updateField('moment', 'images', list);
-                    }
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: <Widget>[
+            for (int index = 0; index < items.length; index++)
+              SizedBox(
+                width: tileWidth,
+                child: DragTarget<String>(
+                  onWillAcceptWithDetails: (details) =>
+                      details.data != items[index],
+                  onMove: (details) {
+                    _autoScrollDuringMediaDrag(details.offset);
+                    _reorderImageByPath(details.data, index);
+                  },
+                  builder: (context, candidateData, rejectedData) {
+                    final assetPath = items[index];
+                    final tile = _buildMediaTile(
+                      assetPath: assetPath,
+                      index: index,
+                      isVideo: false,
+                      width: tileWidth,
+                      height: tileHeight,
+                      showDragHandle: true,
+                      isEmphasized: candidateData.isNotEmpty,
+                      onTap: () => onTapImage(index),
+                      onRemove: () => onRemove(index),
+                    );
+                    return LongPressDraggable<String>(
+                      data: assetPath,
+                      onDragStarted: () {
+                        HapticFeedback.mediumImpact();
+                        setState(() {
+                          _draggingMediaPath = assetPath;
+                        });
+                      },
+                      onDragUpdate: (details) {
+                        _autoScrollDuringMediaDrag(details.globalPosition);
+                      },
+                      onDragEnd: (_) {
+                        HapticFeedback.selectionClick();
+                        if (!mounted) {
+                          return;
+                        }
+                        setState(() {
+                          _draggingMediaPath = null;
+                        });
+                      },
+                      onDraggableCanceled: (_, offset) {
+                        _autoScrollDuringMediaDrag(offset);
+                        if (!mounted) {
+                          return;
+                        }
+                        setState(() {
+                          _draggingMediaPath = null;
+                        });
+                      },
+                      onDragCompleted: () {
+                        if (!mounted) {
+                          return;
+                        }
+                        setState(() {
+                          _draggingMediaPath = null;
+                        });
+                      },
+                      feedback: Material(
+                        color: Colors.transparent,
+                        child: Transform.scale(
+                          scale: 1.03,
+                          child: _buildMediaTile(
+                            assetPath: assetPath,
+                            index: index,
+                            isVideo: false,
+                            width: tileWidth,
+                            height: tileHeight,
+                            showDragHandle: true,
+                            showRemoveButton: false,
+                            isEmphasized: true,
+                            showFloatingShadow: true,
+                            onTap: () async {},
+                            onRemove: () {},
+                          ),
+                        ),
+                      ),
+                      childWhenDragging: Opacity(opacity: 0.18, child: tile),
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 180),
+                        opacity: _draggingMediaPath == assetPath ? 0.84 : 1,
+                        child: tile,
+                      ),
+                    );
                   },
                 ),
               ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  /// 发微趣媒体区：与添加格同大的图片格，仅删除按钮；点击整格由外层打开编辑页，无编辑笔（原型：小字提示点击编辑）
-  Widget _momentImageCell(String path, {required VoidCallback onRemove}) {
-    final isFilePath =
-        path.startsWith('/') ||
-        (path.length > 1 && path[1] == ':' && path.length > 2);
-    final image = isFilePath
-        ? Image.file(
-            File(path),
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) => Container(
-              color: AppColorsFunctional.getColor(
-                ref.read(isDarkProvider),
-                ColorType.backgroundSecondary,
-              ),
-            ),
-          )
-        : Image.network(
-            path,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) => Container(
-              color: AppColorsFunctional.getColor(
-                ref.read(isDarkProvider),
-                ColorType.backgroundSecondary,
-              ),
-            ),
-          );
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-          child: image,
-        ),
-        Positioned(
-          top: AppSpacing.xs,
-          right: AppSpacing.xs,
-          child: GestureDetector(
-            onTap: onRemove,
-            child: CircleAvatar(
-              radius: AppSpacing.sm + AppSpacing.xs / 2,
-              backgroundColor: Colors.black54,
-              child: Icon(
-                Icons.close,
-                size: AppSpacing.iconSmall,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// UnifiedImagePostCard：添加图片+标题配文一体块 / 三选项（无分割条）
-  static const int _kMaxPhotoImages = 30;
-
-  List<Widget> _buildPhotoFields(
-    Map<String, dynamic> data,
-    Color fgColor,
-    Color fgSecondary,
-    bool isDark,
-  ) {
-    final images = List<String>.from(data['images'] as List? ?? []);
-    final currentIndex = images.isEmpty
-        ? 0
-        : (data['_photoCurrentIndex'] as int? ?? 0).clamp(0, images.length - 1);
-
-    final blockBg = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.backgroundPrimary,
-    );
-
-    final imageBlock = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        AspectRatio(
-          aspectRatio: 4 / 3,
-          child: Container(
-            decoration: BoxDecoration(
-              color: blockBg,
-              borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-              child: images.isEmpty
-                  ? GestureDetector(
-                      onTap: () async {
-                        final paths = await _pickImages(
-                          maxCount: _kMaxPhotoImages,
-                          initialPaths: images,
-                        );
-                        if (paths.isEmpty) return;
-                        final oldLength = images.length;
-                        ref.read(createEditorProvider.notifier).updateField('photo', 'images', paths);
-                        if (!mounted) return;
-                        final list = List<String>.from(
-                          (_currentData['photo'] as Map)['images'] as List? ??
-                              [],
-                        );
-                        if (list.isEmpty) return;
-                        final targetIndex = oldLength.clamp(0, list.length - 1);
-                        final result = await _openEditImage(
-                          'photo',
-                          list[targetIndex],
-                          targetIndex,
-                          total: list.length,
-                          allPaths: list,
-                        );
-                        if (!mounted) return;
-                        _applyEditedImageToTab(
-                          tabKey: 'photo',
-                          fallbackIndex: targetIndex,
-                          result: result,
-                        );
-                        _enterPhotoEditingMode();
-                      },
-                      child: _buildDashedAddTile(
-                        isDark: isDark,
-                        borderRadius: AppSpacing.largeBorderRadius,
-                        child: Icon(
-                          Icons.add,
-                          size: AppSpacing.largeButtonSize,
-                          color:
-                              SettingsSemanticConstants.createAddTileIconColor(
-                                isDark,
-                              ),
-                        ),
-                      ),
-                    )
-                  : _buildPhotoMainImageStack(
-                      images: images,
-                      currentIndex: currentIndex,
-                      data: data,
-                      fgSecondary: fgSecondary,
-                    ),
-            ),
-          ),
-        ),
-        if (images.isNotEmpty) ...[
-          SizedBox(height: AppSpacing.interGroupXs),
-          _buildPhotoThumbnailGrid(
-            images: images,
-            currentIndex: currentIndex,
-            data: data,
-            fgColor: fgColor,
-            fgSecondary: fgSecondary,
-            isDark: isDark,
-            blockBg: blockBg,
-          ),
-          Padding(
-            padding: EdgeInsets.only(top: AppSpacing.intraGroupSm),
-            child: Text(
-              UITextConstants.photoReorderHint,
-              style: TextStyle(fontSize: AppTypography.sm, color: fgSecondary),
-            ),
-          ),
-        ],
-      ],
-    );
-    final titleDescBlock = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _RestorableCupertinoTextField(
-          key: TestKeys.createPhotoTitleInput,
-          initialValue: data['title'] as String? ?? '',
-          onTap: _enterPhotoEditingMode,
-          placeholder: UITextConstants.photoTitleHint,
-          placeholderStyle: TextStyle(
-            color: SettingsSemanticConstants.createInputHintColor(isDark),
-            fontSize: SettingsSemanticConstants.createInputTitleFontSize,
-          ),
-          decoration: null,
-          padding: EdgeInsets.zero,
-          style: TextStyle(
-            color: fgColor,
-            fontSize: SettingsSemanticConstants.createInputTitleFontSize,
-          ),
-          fontWeight: FontWeight.bold,
-          onChanged: (v) {
-            _enterPhotoEditingMode();
-            ref.read(createEditorProvider.notifier).updateField('photo', 'title', v);
-          },
-        ),
-        Padding(
-          padding: EdgeInsets.only(top: 8),
-          child: _RestorableCupertinoTextField(
-            key: TestKeys.createPhotoBodyInput,
-            initialValue: data['description'] as String? ?? '',
-            onTap: _enterPhotoEditingMode,
-            placeholder: UITextConstants.photoBodyHint,
-            placeholderStyle: TextStyle(
-              color: SettingsSemanticConstants.createInputHintColor(isDark),
-              fontSize: SettingsSemanticConstants.createInputBodyFontSize,
-            ),
-            decoration: null,
-            padding: EdgeInsets.zero,
-            style: TextStyle(
-              color: fgColor,
-              fontSize: SettingsSemanticConstants.createInputBodyFontSize,
-            ),
-            maxLines: 2,
-            onChanged: (v) {
-              _enterPhotoEditingMode();
-              ref.read(createEditorProvider.notifier).updateField('photo', 'description', v);
-            },
-          ),
-        ),
-      ],
-    );
-    return [
-      // 1. 添加图片 + 标题配文一体（无分割条）
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          imageBlock,
-          Padding(padding: EdgeInsets.only(top: 8), child: titleDescBlock),
-        ],
-      ),
-      _buildPublishSettingsSection(
-        tabKey: 'photo',
-        fgColor: fgColor,
-        fgSecondary: fgSecondary,
-        isDark: isDark,
-      ),
-    ];
-  }
-
-  Widget _buildPhotoMainImageStack({
-    required List<String> images,
-    required int currentIndex,
-    required Map<String, dynamic> data,
-    required Color fgSecondary,
-  }) {
-    if (_isPhotoEditingMode && images.length > 1) {
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          PageView.builder(
-            controller: _photoPageController,
-            itemCount: images.length,
-            onPageChanged: (index) {
-              ref.read(createEditorProvider.notifier).updateField('photo', '_photoCurrentIndex', index);
-            },
-            itemBuilder: (context, index) {
-              return GestureDetector(
-                onTap: () => _openPhotoImageEditorAt(index),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(
-                    AppSpacing.largeBorderRadius,
-                  ),
-                  child: _photoImage(images[index], fgSecondary),
-                ),
-              );
-            },
-          ),
-          Positioned(
-            top: AppSpacing.containerSm,
-            right: AppSpacing.containerSm,
-            child: Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: AppSpacing.intraGroupLg,
-                vertical: AppSpacing.intraGroupXs,
-              ),
-              decoration: BoxDecoration(
-                color: Colors.black54,
-                borderRadius: BorderRadius.circular(
-                  AppSpacing.circularBorderRadius,
-                ),
-              ),
-              child: Text(
-                '${currentIndex + 1} / ${images.length}',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: AppTypography.sm,
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            top: AppSpacing.containerSm,
-            left: AppSpacing.containerSm,
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  final photoData = Map<String, dynamic>.from(
-                    (_currentData['photo'] as Map?) ?? <String, dynamic>{},
-                  );
-                  final list = List<String>.from(
-                    photoData['images'] as List? ?? [],
-                  );
-                  list.removeAt(currentIndex);
-                  photoData['images'] = list;
-                  int next = (data['_photoCurrentIndex'] as int? ?? 0);
-                  if (next >= list.length) {
-                    next = list.isNotEmpty ? list.length - 1 : 0;
+            SizedBox(
+              width: tileWidth,
+              child: DragTarget<String>(
+                onWillAcceptWithDetails: (details) =>
+                    items.isNotEmpty && details.data != items.last,
+                onMove: (details) {
+                  _autoScrollDuringMediaDrag(details.offset);
+                  final latestItems = ref.read(createEditorProvider).imagePaths;
+                  final fromIndex = latestItems.indexOf(details.data);
+                  if (fromIndex >= 0 && fromIndex != latestItems.length - 1) {
+                    ref
+                        .read(createEditorProvider.notifier)
+                        .reorderImages(fromIndex, latestItems.length);
                   }
-                  photoData['_photoCurrentIndex'] = next;
-                  ref.read(createEditorProvider.notifier).updateTabData(
-                    'photo',
-                    photoData,
+                },
+                builder: (context, candidateData, rejectedData) {
+                  return _AddThumbnailButton(
+                    key: TestKeys.createMediaAddButton,
+                    onPressed: onAdd,
+                    width: tileWidth,
+                    height: tileHeight,
+                    label: addLabel,
+                    isHighlighted: candidateData.isNotEmpty,
                   );
-                });
-              },
-              child: CircleAvatar(
-                radius: AppSpacing.iconButtonMinSizeSm / 2,
-                backgroundColor: Colors.black54,
-                child: Icon(
-                  Icons.close,
-                  size: AppSpacing.iconMedium,
-                  color: Colors.white,
-                ),
+                },
               ),
             ),
-          ),
-        ],
-      );
-    }
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        Positioned.fill(
-          child: GestureDetector(
-            onTap: () {
-              _enterPhotoEditingMode();
-              _openPhotoImageEditorAt(currentIndex);
-            },
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-              child: _photoImage(images[currentIndex], fgSecondary),
-            ),
-          ),
-        ),
-        if (images.length > 1)
-          Positioned(
-            top: AppSpacing.containerSm,
-            right: AppSpacing.containerSm,
-            child: Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: AppSpacing.intraGroupLg,
-                vertical: AppSpacing.intraGroupXs,
-              ),
-              decoration: BoxDecoration(
-                color: Colors.black54,
-                borderRadius: BorderRadius.circular(
-                  AppSpacing.circularBorderRadius,
-                ),
-              ),
-              child: Text(
-                '${currentIndex + 1} / ${images.length}',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: AppTypography.sm,
-                ),
-              ),
-            ),
-          ),
-        Positioned(
-          top: AppSpacing.containerSm,
-          left: AppSpacing.containerSm,
-          child: GestureDetector(
-            onTap: () {
-              setState(() {
-                final photoData = Map<String, dynamic>.from(
-                  (_currentData['photo'] as Map?) ?? <String, dynamic>{},
-                );
-                final list = List<String>.from(
-                  photoData['images'] as List? ?? [],
-                );
-                list.removeAt(currentIndex);
-                photoData['images'] = list;
-                int next = (data['_photoCurrentIndex'] as int? ?? 0);
-                if (next >= list.length) {
-                  next = list.isNotEmpty ? list.length - 1 : 0;
-                }
-                photoData['_photoCurrentIndex'] = next;
-                ref.read(createEditorProvider.notifier).updateTabData(
-                  'photo',
-                  photoData,
-                );
-              });
-            },
-            child: CircleAvatar(
-              radius: AppSpacing.iconButtonMinSizeSm / 2,
-              backgroundColor: Colors.black54,
-              child: Icon(
-                Icons.close,
-                size: AppSpacing.iconMedium,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          top: 0,
-          child: IgnorePointer(
-            child: Center(
-              child: Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.containerMd,
-                  vertical: AppSpacing.intraGroupMd,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(
-                    AppSpacing.circularBorderRadius,
-                  ),
-                ),
-                child: Text(
-                  UITextConstants.photoTapToEdit,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: AppTypography.base,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// 美图缩略图网格：4 行 × 5 列，最后一格为添加按钮；超过 19 张第四行之下显示“显示更多图片”，展开后全部之下显示“收起”（参考群信息更多群成员/收起）
-  Widget _buildPhotoThumbnailGrid({
-    required List<String> images,
-    required int currentIndex,
-    required Map<String, dynamic> data,
-    required Color fgSecondary,
-    required Color fgColor,
-    required bool isDark,
-    required Color blockBg,
-  }) {
-    const gap = 8.0;
-    final crossCount = _kPhotoThumbnailsPerRow;
-    final visibleCount =
-        images.length > _kPhotoSlotsCollapsed && !_photoThumbnailsExpanded
-        ? _kPhotoSlotsCollapsed
-        : images.length;
-    final showMoreOrCollapse = images.length > _kPhotoSlotsCollapsed;
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final cellW = (width - gap * (crossCount - 1)) / crossCount;
-        final size = cellW.clamp(48.0, 72.0);
-
-        Widget cellThumbnail(int index) {
-          final path = images[index];
-          final isCurrent = index == currentIndex;
-          return LongPressDraggable<int>(
-            data: index,
-            delay: const Duration(milliseconds: 200),
-            feedback: Material(
-              elevation: AppSpacing.intraGroupXs,
-              borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-              child: SizedBox(
-                width: size,
-                height: size,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-                  child: _photoImage(path, fgSecondary),
-                ),
-              ),
-            ),
-            childWhenDragging: Opacity(
-              opacity: 0.4,
-              child: SizedBox(
-                width: size,
-                height: size,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-                  child: _photoImage(path, fgSecondary),
-                ),
-              ),
-            ),
-            child: DragTarget<int>(
-              onAcceptWithDetails: (details) {
-                final from = details.data;
-                if (from == index) return;
-                setState(() {
-                  final photoData = Map<String, dynamic>.from(
-                    (_currentData['photo'] as Map?) ?? <String, dynamic>{},
-                  );
-                  final list = List<String>.from(
-                    photoData['images'] as List? ?? [],
-                  );
-                  if (from < 0 ||
-                      from >= list.length ||
-                      index < 0 ||
-                      index >= list.length) {
-                    return;
-                  }
-                  final a = list[from];
-                  list[from] = list[index];
-                  list[index] = a;
-                  photoData['images'] = list;
-                  final cur = (data['_photoCurrentIndex'] as int? ?? 0);
-                  if (cur == from) {
-                    photoData['_photoCurrentIndex'] = index;
-                  } else if (cur == index) {
-                    photoData['_photoCurrentIndex'] = from;
-                  }
-                  ref.read(createEditorProvider.notifier).updateTabData(
-                    'photo',
-                    photoData,
-                  );
-                });
-              },
-              builder: (context, candidateData, rejectedData) {
-                final isDragTarget = candidateData.isNotEmpty;
-                return AnimatedScale(
-                  scale: isDragTarget ? 1.08 : 1.0,
-                  duration: const Duration(milliseconds: 120),
-                  curve: Curves.easeOut,
-                  child: Container(
-                    width: size,
-                    height: size,
-                    decoration: BoxDecoration(
-                      color: blockBg,
-                      borderRadius: BorderRadius.circular(
-                        AppSpacing.borderRadius,
-                      ),
-                      border: Border.all(
-                        color: isCurrent
-                            ? AppColors.primaryColor
-                            : fgSecondary.withValues(alpha: 0.2),
-                        width: isCurrent
-                            ? AppSpacing.toolPanelItemBorderWidthSelected
-                            : AppSpacing.toolPanelItemBorderWidthUnselected,
-                      ),
-                    ),
-                    child: CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      onPressed: () => ref.read(createEditorProvider.notifier).updateField('photo', '_photoCurrentIndex', index),
-                      borderRadius: BorderRadius.circular(
-                        AppSpacing.smallBorderRadius + AppSpacing.xs / 2,
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(
-                          AppSpacing.smallBorderRadius + AppSpacing.xs / 2,
-                        ),
-                        child: _photoImage(path, fgSecondary),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          );
-        }
-
-        final cells = <Widget>[];
-        for (var i = 0; i < visibleCount; i++) {
-          cells.add(cellThumbnail(i));
-        }
-        if (images.length < _kMaxPhotoImages) {
-          cells.add(
-            GestureDetector(
-              onTap: () async {
-                final paths = await _pickImages(
-                  maxCount: _kMaxPhotoImages,
-                  initialPaths: images,
-                );
-                if (paths.isEmpty) return;
-                final oldLength = images.length;
-                ref.read(createEditorProvider.notifier).updateField('photo', 'images', paths);
-                if (!mounted) return;
-                final merged = List<String>.from(
-                  (_currentData['photo'] as Map)['images'] as List? ?? [],
-                );
-                if (merged.isEmpty) return;
-                final targetIndex = oldLength.clamp(0, merged.length - 1);
-                final result = await _openEditImage(
-                  'photo',
-                  merged[targetIndex],
-                  targetIndex,
-                  total: merged.length,
-                  allPaths: merged,
-                );
-                if (!mounted) return;
-                _applyEditedImageToTab(
-                  tabKey: 'photo',
-                  fallbackIndex: targetIndex,
-                  result: result,
-                );
-                _enterPhotoEditingMode();
-              },
-              child: _buildDashedAddTile(
-                isDark: isDark,
-                width: size,
-                height: size,
-                borderRadius:
-                    SettingsSemanticConstants.createAddTileBorderRadius,
-                child: Icon(
-                  Icons.add,
-                  color: SettingsSemanticConstants.createAddTileIconColor(
-                    isDark,
-                  ),
-                  size: AppSpacing.iconLarge - AppSpacing.xs,
-                ),
-              ),
-            ),
-          );
-        }
-
-        final rowCount = (cells.length / crossCount).ceil();
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            ...List.generate(rowCount, (row) {
-              return Padding(
-                padding: EdgeInsets.only(bottom: row < rowCount - 1 ? gap : 0),
-                child: Row(
-                  children: List.generate(crossCount, (col) {
-                    final idx = row * crossCount + col;
-                    if (idx >= cells.length) {
-                      return SizedBox(width: size, height: size);
-                    }
-                    return Padding(
-                      padding: EdgeInsets.only(
-                        right: col < crossCount - 1 ? gap : 0,
-                      ),
-                      child: cells[idx],
-                    );
-                  }),
-                ),
-              );
-            }),
-            if (showMoreOrCollapse) ...[
-              SizedBox(height: AppSpacing.xs),
-              Center(
-                child: GestureDetector(
-                  onTap: () => setState(
-                    () => _photoThumbnailsExpanded = !_photoThumbnailsExpanded,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _photoThumbnailsExpanded
-                            ? UITextConstants.photoCollapseLabel
-                            : UITextConstants.photoShowMorePictures,
-                        style: TextStyle(
-                          fontSize: AppTypography.md,
-                          color: fgColor.withValues(alpha: 0.75),
-                        ),
-                      ),
-                      SizedBox(width: AppSpacing.xs),
-                      Icon(
-                        _photoThumbnailsExpanded
-                            ? Icons.keyboard_arrow_up
-                            : Icons.keyboard_arrow_down,
-                        size: AppSpacing.iconMedium,
-                        color: fgColor.withValues(alpha: 0.75),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
           ],
         );
       },
     );
   }
 
-  Widget _photoImage(String path, Color fgSecondary) {
-    final isFile = path.startsWith('/') || (path.length > 1 && path[1] == ':');
-    final errorBg = Colors.white;
-    if (isFile) {
-      return Image.file(
-        File(path),
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) => Container(
-          color: errorBg,
-          child: Icon(
-            Icons.broken_image_outlined,
-            color: fgSecondary.withValues(alpha: 0.5),
+  Widget _buildMediaTile({
+    required String assetPath,
+    required int index,
+    required bool isVideo,
+    required double width,
+    required double height,
+    required Future<void> Function() onTap,
+    required VoidCallback onRemove,
+    bool isEmphasized = false,
+    bool showDragHandle = true,
+    bool showRemoveButton = true,
+    bool showFloatingShadow = false,
+  }) {
+    return GestureDetector(
+      onTap: () async => onTap(),
+      child: SizedBox(
+        width: width,
+        height: height,
+        child: Transform.scale(
+          scale: isEmphasized ? 1.015 : 1.0,
+          child: Stack(
+            children: <Widget>[
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                width: width,
+                height: height,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(AppSpacing.containerSm),
+                  border: Border.all(
+                    color: isEmphasized
+                        ? AppColors.iosAccentLight
+                        : CupertinoColors.separator
+                              .resolveFrom(context)
+                              .withValues(alpha: 0.12),
+                    width: isEmphasized
+                        ? AppSpacing.oneHalf
+                        : AppSpacing.hairline,
+                  ),
+                  boxShadow: isEmphasized
+                      ? <BoxShadow>[
+                          BoxShadow(
+                            color: AppColors.iosAccentLight.withValues(
+                              alpha: showFloatingShadow ? 0.22 : 0.14,
+                            ),
+                            blurRadius: showFloatingShadow
+                                ? 18
+                                : AppSpacing.ten,
+                            offset: Offset(0, showFloatingShadow ? 10 : 4),
+                            spreadRadius: showFloatingShadow ? 1.5 : 0,
+                          ),
+                        ]
+                      : const <BoxShadow>[],
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: <Widget>[
+                    if (isVideo)
+                      Container(
+                        color: Colors.black87,
+                        alignment: Alignment.center,
+                        child: Icon(
+                          CupertinoIcons.play_fill,
+                          color: Colors.white,
+                          size: AppSpacing.iconLarge,
+                        ),
+                      )
+                    else
+                      Image.file(
+                        File(assetPath),
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) =>
+                            Container(color: Colors.black12),
+                      ),
+                    if (isVideo)
+                      Positioned(
+                        top: AppSpacing.intraGroupXs,
+                        right: AppSpacing.intraGroupXs,
+                        child: _PreviewBadge(
+                          label: '视频',
+                          backgroundColor: Colors.black.withValues(alpha: 0.48),
+                        ),
+                      )
+                    else
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: Center(
+                            child: AnimatedOpacity(
+                              duration: const Duration(milliseconds: 180),
+                              opacity: isEmphasized ? 0.92 : 0.82,
+                              child: Container(
+                                width: AppSpacing.buttonHeight,
+                                height: AppSpacing.buttonHeight,
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.16),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.14),
+                                    width: AppSpacing.hairline,
+                                  ),
+                                  boxShadow: <BoxShadow>[
+                                    BoxShadow(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.08,
+                                      ),
+                                      blurRadius: AppSpacing.containerSm,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(
+                                  CupertinoIcons.pencil,
+                                  size: AppSpacing.iconMedium,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (!isVideo)
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: Center(
+                            child: AnimatedOpacity(
+                              duration: const Duration(milliseconds: 180),
+                              opacity: isEmphasized ? 0.92 : 0.82,
+                              child: Container(
+                                width: AppSpacing.buttonHeight,
+                                height: AppSpacing.buttonHeight,
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.16),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.14),
+                                    width: AppSpacing.hairline,
+                                  ),
+                                  boxShadow: <BoxShadow>[
+                                    BoxShadow(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.08,
+                                      ),
+                                      blurRadius: AppSpacing.containerSm,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(
+                                  CupertinoIcons.pencil,
+                                  size: AppSpacing.iconMedium,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (showDragHandle && !isVideo)
+                      Positioned(
+                        right: AppSpacing.intraGroupXs,
+                        bottom: AppSpacing.intraGroupXs,
+                        child: Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: AppSpacing.intraGroupXs,
+                            vertical: AppSpacing.intraGroupXs / 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(
+                              AppSpacing.radiusTwenty,
+                            ),
+                          ),
+                          child: const Icon(
+                            CupertinoIcons.line_horizontal_3,
+                            size: AppTypography.base,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              if (showRemoveButton)
+                Positioned(
+                  left: AppSpacing.intraGroupXs,
+                  top: AppSpacing.intraGroupXs,
+                  child: GestureDetector(
+                    key: index == 0 ? TestKeys.createMediaRemoveButton : null,
+                    onTap: onRemove,
+                    child: Container(
+                      width: AppSpacing.iconMedium,
+                      height: AppSpacing.iconMedium,
+                      decoration: BoxDecoration(
+                        color: CupertinoColors.systemBackground.resolveFrom(
+                          context,
+                        ),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: CupertinoColors.separator.resolveFrom(context),
+                          width: AppSpacing.hairline,
+                        ),
+                      ),
+                      child: const Icon(
+                        CupertinoIcons.xmark,
+                        size: AppTypography.xs,
+                        color: CupertinoColors.secondaryLabel,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
-      );
-    }
-    return Image.network(
-      path,
-      fit: BoxFit.cover,
-      errorBuilder: (context, error, stackTrace) => Container(
-        color: errorBg,
-        child: Icon(
-          Icons.broken_image_outlined,
-          color: fgSecondary.withValues(alpha: 0.5),
-        ),
       ),
     );
   }
 
-  Widget _buildVideoPlaceholder(Color fgSecondary) {
-    return Container(
-      color: fgSecondary.withValues(alpha: 0.08),
-      child: Center(
-        child: Icon(
-          Icons.play_circle_outline,
-          size: AppSpacing.bottomNavHeight,
-          color: fgSecondary.withValues(alpha: 0.6),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDashedAddTile({
-    required bool isDark,
-    required Widget child,
-    double? width,
-    double? height,
-    double? borderRadius,
+  Widget _buildTitleSection({
+    required CreateEditorStateV2 state,
+    required Key titleFieldKey,
   }) {
-    final radius =
-        borderRadius ?? SettingsSemanticConstants.createAddTileBorderRadius;
-    final bg = SettingsSemanticConstants.createAddTileBackground(isDark);
-    final border = SettingsSemanticConstants.createAddTileBorderColor(isDark);
-    Widget content = CustomPaint(
-      painter: _DashedBorderPainter(
-        color: border,
-        strokeWidth: SettingsSemanticConstants.createAddTileBorderWidth,
-        dashLength: SettingsSemanticConstants.createAddTileDashLength,
-        dashGap: SettingsSemanticConstants.createAddTileDashGap,
-        radius: radius,
-      ),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(radius),
-        ),
-        child: Center(child: child),
-      ),
-    );
-    if (width == null && height == null) {
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          return SizedBox(
-            width: constraints.maxWidth,
-            height: constraints.maxHeight,
-            child: content,
-          );
-        },
-      );
-    }
-    return SizedBox(width: width, height: height, child: content);
-  }
-
-  /// VideoEditorCard：上传区+标题描述一体块 / 三选项（与美图添加图片背景一致，无分割条）
-  List<Widget> _buildVideoFields(
-    Map<String, dynamic> data,
-    Color fgColor,
-    Color fgSecondary,
-    bool isDark,
-  ) {
-    final blockBg = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.backgroundPrimary,
-    );
-    final rawVideo = data['videoPath'] as String? ?? '';
-    final rawThumb = data['thumbnail'] as String? ?? '';
-    final storyboardImages = List<String>.from(
-      data['storyboardImages'] as List? ?? const <String>[],
-    );
-    final legacyVideo = rawVideo.isEmpty && _isVideoFilePath(rawThumb)
-        ? rawThumb
-        : '';
-    final videoPath = rawVideo.isNotEmpty ? rawVideo : legacyVideo;
-    final thumb = rawVideo.isNotEmpty
-        ? rawThumb
-        : (legacyVideo.isNotEmpty ? '' : rawThumb);
-    final hasVideo = videoPath.isNotEmpty;
-    final hasStoryboard = storyboardImages.isNotEmpty;
-    final uploadBlock = AspectRatio(
-      aspectRatio: 4 / 3,
-      child: Container(
-        decoration: BoxDecoration(
-          color: blockBg,
-          borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-        ),
-        child: hasVideo
-            ? Stack(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(
-                      AppSpacing.largeBorderRadius,
-                    ),
-                    child: thumb.isNotEmpty
-                        ? _photoImage(thumb, fgSecondary)
-                        : _buildVideoPlaceholder(fgSecondary),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        if (state.titlePresentation == TitlePresentation.collapsed &&
+            state.title.trim().isEmpty)
+          CupertinoButton(
+            key: TestKeys.createTitleToggle,
+            padding: EdgeInsets.zero,
+            alignment: Alignment.centerLeft,
+            onPressed: () {
+              ref.read(createEditorProvider.notifier).expandTitle();
+              _focusTitleField();
+            },
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppSpacing.containerSm,
+                vertical: AppSpacing.intraGroupSm,
+              ),
+              decoration: BoxDecoration(
+                color: CupertinoColors.secondarySystemGroupedBackground
+                    .resolveFrom(context),
+                borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+                border: Border.all(
+                  color: CupertinoColors.separator
+                      .resolveFrom(context)
+                      .withValues(alpha: 0.14),
+                  width: AppSpacing.hairline,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Icon(
+                    CupertinoIcons.text_badge_plus,
+                    size: AppSpacing.iconMedium,
+                    color: AppColors.iosAccentLight,
                   ),
-                  Center(
-                    child: Container(
-                      width: AppSpacing.bottomNavHeight + AppSpacing.sm,
-                      height: AppSpacing.bottomNavHeight + AppSpacing.sm,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.9),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(color: Colors.black12, blurRadius: 8),
-                        ],
-                      ),
-                      child: Icon(
-                        Icons.play_arrow,
-                        size: AppSpacing.iconLarge + AppSpacing.xs,
-                        color: Colors.black87,
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: AppSpacing.containerSm,
-                    right: AppSpacing.containerSm,
-                    child: Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: AppSpacing.intraGroupMd,
-                        vertical: AppSpacing.intraGroupXs,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black54,
-                        borderRadius: BorderRadius.circular(
-                          AppSpacing.smallBorderRadius,
-                        ),
-                      ),
-                      child: Text(
-                        '00:00',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: AppTypography.sm,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: AppSpacing.containerSm,
-                    right: AppSpacing.containerSm,
-                    child: TextButton(
-                      onPressed: _handlePickVideo,
-                      child: Text(
-                        UITextConstants.videoChangeCover,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: AppTypography.sm,
-                        ),
-                      ),
+                  SizedBox(width: AppSpacing.intraGroupXs),
+                  Text(
+                    '添加标题（可选）',
+                    style: TextStyle(
+                      color: AppColors.iosAccentLight,
+                      fontSize: AppTypography.base,
+                      fontWeight: AppTypography.medium,
                     ),
                   ),
                 ],
-              )
-            : GestureDetector(
-                onTap: _handlePickVideo,
-                child: _buildDashedAddTile(
-                  isDark: isDark,
-                  borderRadius: 12,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        hasStoryboard
-                            ? Icons.movie_creation_outlined
-                            : Icons.upload_outlined,
-                        size: AppSpacing.iconLarge,
-                        color: SettingsSemanticConstants.createAddTileIconColor(
-                          isDark,
-                        ),
-                      ),
-                      SizedBox(height: AppSpacing.interGroupSm),
-                      Text(
-                        hasStoryboard
-                            ? '${UITextConstants.mediaPickerOneTapMovie} (${storyboardImages.length})'
-                            : UITextConstants.videoUploadLabel,
-                        style: TextStyle(
-                          fontSize:
-                              SettingsSemanticConstants.createInputBodyFontSize,
-                          fontWeight: FontWeight.w500,
-                          color:
-                              SettingsSemanticConstants.createAddTileIconColor(
-                                isDark,
-                              ),
-                        ),
-                      ),
-                      if (hasStoryboard) ...[
-                        SizedBox(height: AppSpacing.intraGroupXs),
-                        Text(
-                          UITextConstants.mediaPickerOneTapMovieQueued,
-                          style: TextStyle(
-                            fontSize: AppTypography.sm,
-                            color:
-                                SettingsSemanticConstants.createAddTileIconColor(
-                                  isDark,
-                                ),
-                          ),
-                        ),
-                      ] else if (UITextConstants
-                          .videoUploadHint
-                          .isNotEmpty) ...[
-                        SizedBox(height: AppSpacing.intraGroupXs),
-                        Text(
-                          UITextConstants.videoUploadHint,
-                          style: TextStyle(
-                            fontSize: AppTypography.sm,
-                            color:
-                                SettingsSemanticConstants.createAddTileIconColor(
-                                  isDark,
-                                ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
               ),
-      ),
-    );
-    final titleDescBlock = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _RestorableCupertinoTextField(
-          key: TestKeys.createVideoTitleInput,
-          initialValue: data['title'] as String? ?? '',
-          placeholder: UITextConstants.videoTitlePlaceholder,
-          placeholderStyle: TextStyle(
-            color: SettingsSemanticConstants.createInputHintColor(isDark),
-            fontSize: SettingsSemanticConstants.createInputTitleFontSize,
-          ),
-          decoration: null,
-          padding: EdgeInsets.zero,
-          style: TextStyle(
-            color: fgColor,
-            fontSize: SettingsSemanticConstants.createInputTitleFontSize,
-          ),
-          fontWeight: FontWeight.bold,
-          onChanged: (v) => ref.read(createEditorProvider.notifier).updateField('video', 'title', v),
-        ),
-        Padding(
-          padding: EdgeInsets.only(top: 8),
-          child: _RestorableCupertinoTextField(
-            key: TestKeys.createVideoBodyInput,
-            initialValue: data['description'] as String? ?? '',
-            placeholder: UITextConstants.videoDescPlaceholder,
-            placeholderStyle: TextStyle(
-              color: SettingsSemanticConstants.createInputHintColor(isDark),
-              fontSize: SettingsSemanticConstants.createInputBodyFontSize,
             ),
-            decoration: null,
-            padding: EdgeInsets.zero,
-            style: TextStyle(
-              color: fgColor,
-              fontSize: SettingsSemanticConstants.createInputBodyFontSize,
+          )
+        else
+          _buildSurfacePanel(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                _buildSectionHeader(title: '标题', trailing: '可选'),
+                SizedBox(height: AppSpacing.intraGroupSm),
+                CupertinoTextField(
+                  key: titleFieldKey,
+                  controller: _titleController,
+                  focusNode: _titleFocusNode,
+                  padding: EdgeInsets.zero,
+                  placeholder: '补一个能概括内容的标题',
+                  decoration: const BoxDecoration(),
+                  onChanged: (value) {
+                    ref.read(createEditorProvider.notifier).updateTitle(value);
+                  },
+                  onEditingComplete: () {
+                    if (_titleController.text.trim().isEmpty) {
+                      ref
+                          .read(createEditorProvider.notifier)
+                          .collapseTitleIfEmpty();
+                    }
+                  },
+                ),
+              ],
             ),
-            maxLines: 2,
-            onChanged: (v) => ref.read(createEditorProvider.notifier).updateField('video', 'description', v),
           ),
-        ),
       ],
     );
-    return [
-      // 1. 上传区 + 标题描述一体（无分割条）
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          uploadBlock,
-          Padding(padding: EdgeInsets.only(top: 8), child: titleDescBlock),
-        ],
-      ),
-      _buildPublishSettingsSection(
-        tabKey: 'video',
-        fgColor: fgColor,
-        fgSecondary: fgSecondary,
-        isDark: isDark,
-      ),
-    ];
   }
+}
 
-  /// ArticleEditorCard 1:1：封面在前、标题+正文同块、三选项
-  List<Widget> _buildArticleFields(
-    Map<String, dynamic> data,
-    Color fgColor,
-    Color fgSecondary,
-    bool isDark,
-  ) {
-    final covers = List<String>.from(data['covers'] as List? ?? []);
-    final legacyCover = data['cover'] as String? ?? '';
-    if (covers.isEmpty && legacyCover.isNotEmpty) {
-      covers.add(legacyCover);
-    }
-    final titleText = (data['title'] as String? ?? '').trim();
-    final titleDisplay = titleText.isEmpty
-        ? UITextConstants.articleTitlePlaceholder
-        : titleText;
-    final titleColor = titleText.isEmpty
-        ? SettingsSemanticConstants.createInputHintColor(isDark)
-        : fgColor;
+class _PreviewBadge extends StatelessWidget {
+  const _PreviewBadge({required this.label, this.backgroundColor});
 
-    Widget buildCoverImage(String path) {
-      final isFilePath =
-          path.isNotEmpty &&
-          (path.startsWith('/') || (path.length > 1 && path[1] == ':'));
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-        child: isFilePath
-            ? Image.file(
-                File(path),
-                fit: BoxFit.cover,
-                errorBuilder: (ctx, error, stackTrace) => Center(
-                  child: Text(
-                    ctx.l10n.loadFailed,
-                    style: TextStyle(color: fgSecondary),
-                  ),
-                ),
-              )
-            : Image.network(
-                path,
-                fit: BoxFit.cover,
-                errorBuilder: (ctx, error, stackTrace) => Center(
-                  child: Text(
-                    ctx.l10n.loadFailed,
-                    style: TextStyle(color: fgSecondary),
-                  ),
-                ),
-              ),
-      );
-    }
+  final String label;
+  final Color? backgroundColor;
 
-    Widget coverPreview;
-    if (covers.isEmpty) {
-      coverPreview = _buildDashedAddTile(
-        isDark: isDark,
-        height: AppSpacing.oneHundred + AppSpacing.twenty,
-        borderRadius: AppSpacing.largeBorderRadius,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.add,
-              size: AppSpacing.iconLarge - AppSpacing.xs,
-              color: SettingsSemanticConstants.createAddTileIconColor(isDark),
-            ),
-            SizedBox(height: AppSpacing.interGroupXs),
-            Text(
-              UITextConstants.addCover,
-              style: TextStyle(
-                color: SettingsSemanticConstants.createAddTileIconColor(isDark),
-              ),
-            ),
-          ],
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.containerSm,
+        vertical: AppSpacing.intraGroupXs,
+      ),
+      decoration: BoxDecoration(
+        color: backgroundColor ?? Colors.black.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: AppTypography.sm,
+          fontWeight: AppTypography.medium,
         ),
-      );
-    } else if (covers.length == 1) {
-      coverPreview = Row(
-        children: [
-          Expanded(
-            child: Text(
-              titleDisplay,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: SettingsSemanticConstants.createInputTitleFontSize,
-                fontWeight: FontWeight.bold,
-                color: titleColor,
-              ),
-            ),
-          ),
-          SizedBox(width: AppSpacing.interGroupSm),
-          SizedBox(
-            width: AppSpacing.buttonHeight * 2.5,
-            height: AppSpacing.buttonHeight + AppSpacing.buttonHeightSm,
-            child: buildCoverImage(covers.first),
-          ),
-        ],
-      );
-    } else {
-      final rowCovers = covers.take(3).toList();
-      coverPreview = Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            titleDisplay,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: SettingsSemanticConstants.createInputTitleFontSize,
-              fontWeight: FontWeight.bold,
-              color: titleColor,
-            ),
-          ),
-          SizedBox(height: AppSpacing.interGroupXs),
-          Row(
-            children: List.generate(rowCovers.length, (i) {
-              return Expanded(
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    right: i < rowCovers.length - 1
-                        ? AppSpacing.interGroupXs
-                        : 0,
-                  ),
-                  child: AspectRatio(
-                    aspectRatio: 4 / 3,
-                    child: buildCoverImage(rowCovers[i]),
-                  ),
-                ),
-              );
-            }),
-          ),
-        ],
-      );
-    }
-
-    return [
-      // 1. 封面（支持 1-3 图）
-      GestureDetector(
-        onTap: () async {
-          await _showArticleCoverOptions(isDark);
-        },
-        child: coverPreview,
       ),
-      // 2. 标题 + 正文（同一功能块）
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _RestorableCupertinoTextField(
-            key: TestKeys.createArticleTitleInput,
-            initialValue: data['title'] as String? ?? '',
-            placeholder: UITextConstants.articleTitlePlaceholder,
-            placeholderStyle: TextStyle(
-              color: SettingsSemanticConstants.createInputHintColor(isDark),
-              fontSize: SettingsSemanticConstants.createInputTitleFontSize,
-            ),
-            decoration: null,
-            padding: EdgeInsets.zero,
-            style: TextStyle(
-              color: fgColor,
-              fontSize: SettingsSemanticConstants.createInputTitleFontSize,
-            ),
-            fontWeight: FontWeight.bold,
-            onChanged: (v) => ref.read(createEditorProvider.notifier).updateField('article', 'title', v),
-          ),
-          Padding(
-            padding: EdgeInsets.only(top: 8),
-            child: _RestorableCupertinoTextField(
-              key: TestKeys.createArticleBodyInput,
-              initialValue: data['content'] as String? ?? '',
-              placeholder: UITextConstants.createArticleBodyHint,
-              placeholderStyle: TextStyle(
-                color: SettingsSemanticConstants.createInputHintColor(isDark),
-                fontSize:
-                    SettingsSemanticConstants.createInputArticleBodyFontSize,
-              ),
-              decoration: null,
-              padding: EdgeInsets.zero,
-              style: TextStyle(
-                color: fgColor,
-                fontSize:
-                    SettingsSemanticConstants.createInputArticleBodyFontSize,
-              ),
-              maxLines: 8,
-              onChanged: (v) => ref.read(createEditorProvider.notifier).updateField('article', 'content', v),
-            ),
-          ),
-        ],
-      ),
-      _buildPublishSettingsSection(
-        tabKey: 'article',
-        fgColor: fgColor,
-        fgSecondary: fgSecondary,
-        isDark: isDark,
-      ),
-    ];
-  }
-
-  Future<void> _showDraftsModal() async {
-    final isDark = ref.read(isDarkProvider);
-    final fgColor = SettingsSemanticConstants.labelColor(isDark);
-    final fgSecondary = SettingsSemanticConstants.secondaryColor(isDark);
-    final bg = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.backgroundPrimary,
     );
+  }
+}
 
-    await showCupertinoModalPopup(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            final sorted = List<CreateDraft>.from(_savedDrafts)
-              ..sort((a, b) => b.updatedAtMs.compareTo(a.updatedAtMs));
-            
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.7,
-              decoration: BoxDecoration(
-                color: bg,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(AppSpacing.largeBorderRadius),
+class _AddThumbnailButton extends StatelessWidget {
+  const _AddThumbnailButton({
+    super.key,
+    required this.onPressed,
+    required this.width,
+    required this.height,
+    required this.label,
+    this.isHighlighted = false,
+  });
+
+  final Future<void> Function() onPressed;
+  final double width;
+  final double height;
+  final String label;
+  final bool isHighlighted;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => onPressed(),
+      child: Transform.scale(
+        scale: isHighlighted ? 1.015 : 1.0,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          width: width,
+          height: height,
+          padding: EdgeInsets.all(AppSpacing.containerSm),
+          decoration: BoxDecoration(
+            color: CupertinoColors.systemBackground.resolveFrom(context),
+            borderRadius: BorderRadius.circular(AppSpacing.containerSm),
+            border: Border.all(
+              color: (isHighlighted
+                  ? AppColors.iosAccentLight
+                  : AppColors.iosAccentLight.withValues(alpha: 0.24)),
+              width: isHighlighted ? AppSpacing.oneHalf : AppSpacing.hairline,
+            ),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: AppColors.iosAccentLight.withValues(
+                  alpha: isHighlighted ? 0.12 : 0.06,
                 ),
+                blurRadius: isHighlighted ? 12 : AppSpacing.ten,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              Icon(
+                CupertinoIcons.add,
+                color: AppColors.iosAccentLight,
+                size: AppSpacing.iconLarge,
+              ),
+              SizedBox(height: AppSpacing.intraGroupXs),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppColors.iosAccentLight,
+                  fontSize: AppTypography.smPlus,
+                  fontWeight: AppTypography.medium,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CreateDraftsSheet extends StatelessWidget {
+  const _CreateDraftsSheet({
+    required this.drafts,
+    required this.onSelect,
+    required this.onDelete,
+  });
+
+  final List<CreateDraft> drafts;
+  final ValueChanged<CreateDraft> onSelect;
+  final ValueChanged<CreateDraft> onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final secondary = CupertinoColors.secondaryLabel.resolveFrom(context);
+    return Material(
+      type: MaterialType.transparency,
+      child: SafeArea(
+        top: false,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(
+              sigmaX: AppSpacing.sm,
+              sigmaY: AppSpacing.sm,
+            ),
+            child: Container(
+              margin: EdgeInsets.all(AppSpacing.containerSm),
+              decoration: BoxDecoration(
+                color: CupertinoColors.systemBackground
+                    .resolveFrom(context)
+                    .withValues(alpha: 0.9),
+                borderRadius: BorderRadius.circular(
+                  AppSpacing.largeBorderRadius,
+                ),
+                border: Border.all(
+                  color: CupertinoColors.separator
+                      .resolveFrom(context)
+                      .withValues(alpha: 0.18),
+                  width: AppSpacing.hairline,
+                ),
+              ),
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.7,
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                children: [
+                children: <Widget>[
                   Padding(
-                    padding: EdgeInsets.all(AppSpacing.containerMd),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '${UITextConstants.draftCount} (${_savedDrafts.length})',
-                          style: TextStyle(
-                            fontSize: AppTypography.xl,
-                            fontWeight: FontWeight.bold,
-                            color: fgColor,
+                    padding: EdgeInsets.fromLTRB(
+                      AppSpacing.containerMd,
+                      AppSpacing.containerMd,
+                      AppSpacing.containerMd,
+                      AppSpacing.containerSm,
+                    ),
+                    child: Column(
+                      children: <Widget>[
+                        Container(
+                          width: AppSpacing.forty,
+                          height: AppSpacing.xs,
+                          decoration: BoxDecoration(
+                            color: CupertinoColors.systemGrey3.resolveFrom(
+                              context,
+                            ),
+                            borderRadius: BorderRadius.circular(
+                              AppSpacing.xs / 2,
+                            ),
                           ),
                         ),
-                        CupertinoButton(
-                          padding: EdgeInsets.zero,
-                          onPressed: () => Navigator.pop(context), minimumSize: Size(AppSpacing.minInteractiveSize, AppSpacing.minInteractiveSize),
-                          child: Icon(
-                            CupertinoIcons.clear_circled_solid,
-                            color: fgSecondary,
+                        SizedBox(height: AppSpacing.containerSm),
+                        Text(
+                          UITextConstants.drafts,
+                          style: TextStyle(
+                            fontSize: AppTypography.lg,
+                            fontWeight: AppTypography.semiBold,
+                          ),
+                        ),
+                        SizedBox(height: AppSpacing.intraGroupXs),
+                        Text(
+                          '最近保存的内容会保留在这里',
+                          style: TextStyle(
+                            color: secondary,
+                            fontSize: AppTypography.sm,
                           ),
                         ),
                       ],
                     ),
                   ),
                   Flexible(
-                    child: sorted.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.inventory_2_outlined,
-                                  size: AppSpacing.iconLarge,
-                                  color: fgSecondary.withValues(alpha: 0.5),
-                                ),
-                                SizedBox(height: AppSpacing.interGroupXs),
-                                Text(
-                                  UITextConstants.noDraft,
-                                  style: TextStyle(color: fgSecondary),
-                                ),
-                              ],
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      padding: EdgeInsets.fromLTRB(
+                        AppSpacing.containerSm,
+                        0,
+                        AppSpacing.containerSm,
+                        AppSpacing.containerSm,
+                      ),
+                      itemCount: drafts.length,
+                      separatorBuilder: (context, index) =>
+                          SizedBox(height: AppSpacing.intraGroupSm),
+                      itemBuilder: (context, index) {
+                        final draft = drafts[index];
+                        final preview = draft.previewText.trim().isEmpty
+                            ? '继续完善这条内容'
+                            : draft.previewText.trim();
+                        return Container(
+                          decoration: BoxDecoration(
+                            color: CupertinoColors
+                                .secondarySystemGroupedBackground
+                                .resolveFrom(context),
+                            borderRadius: BorderRadius.circular(
+                              AppSpacing.largeBorderRadius,
                             ),
-                          )
-                        : ListView.separated(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: AppSpacing.containerMd,
-                            ),
-                            itemCount: sorted.length,
-                            separatorBuilder: (c, i) => Divider(
-                              height: AppSpacing.one,
-                              color: SettingsSemanticConstants.dividerColor(isDark),
-                            ),
-                            itemBuilder: (context, i) {
-                              final d = sorted[i];
-                              final type = d.tabKey;
-                              final title = type == 'moment' ? '点滴草稿' : '作品草稿';
-                              final desc = d.previewText;
-                              final date = DateTime.fromMillisecondsSinceEpoch(
-                                d.updatedAtMs,
-                              );
-                              final dateStr =
-                                  '${date.month}/${date.day} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
-                              
-                              return GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onTap: () {
-                                  Navigator.pop(context);
-                                  _handleRestoreDraft(d);
-                                },
-                                child: Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 12),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              title,
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.w700,
-                                                color: fgColor,
-                                              ),
-                                            ),
-                                            SizedBox(height: AppSpacing.intraGroupXs),
-                                            Text(
-                                              desc.isEmpty
-                                                  ? UITextConstants.unlabeled
-                                                  : desc,
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                fontSize: AppTypography.sm,
-                                                color: fgSecondary,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      SizedBox(width: AppSpacing.interGroupXs),
-                                      Column(
-                                        crossAxisAlignment: CrossAxisAlignment.end,
-                                        children: [
-                                          Text(
-                                            dateStr,
-                                            style: TextStyle(
-                                              fontSize: AppTypography.xs,
-                                              color: fgSecondary,
-                                            ),
-                                          ),
-                                          CupertinoButton(
-                                            padding: EdgeInsets.zero,
-                                            onPressed: () {
-                                              _handleDeleteDraft(d.id);
-                                              setModalState(() {});
-                                            }, minimumSize: Size(AppSpacing.minInteractiveSize, AppSpacing.minInteractiveSize),
-                                            child: Icon(
-                                              CupertinoIcons.delete,
-                                              size: AppSpacing.iconMedium,
-                                              color: fgSecondary,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
                           ),
+                          child: CupertinoListTile(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: AppSpacing.containerSm,
+                              vertical: AppSpacing.intraGroupXs,
+                            ),
+                            title: Text(draft.draftLabel),
+                            subtitle: Text(
+                              preview,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            trailing: CupertinoButton(
+                              padding: EdgeInsets.zero,
+                              onPressed: () => onDelete(draft),
+                              child: Container(
+                                width: AppSpacing.largeButtonSize,
+                                height: AppSpacing.largeButtonSize,
+                                decoration: BoxDecoration(
+                                  color: CupertinoColors.systemBackground
+                                      .resolveFrom(context),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  CupertinoIcons.delete,
+                                  color: CupertinoColors.destructiveRed,
+                                ),
+                              ),
+                            ),
+                            onTap: () => onSelect(draft),
+                          ),
+                        );
+                      },
+                    ),
                   ),
-                  SizedBox(height: MediaQuery.of(context).padding.bottom),
+                  Padding(
+                    padding: EdgeInsets.only(bottom: AppSpacing.containerSm),
+                    child: CupertinoButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text(UITextConstants.cancel),
+                    ),
+                  ),
                 ],
               ),
-            );
-          },
-        );
-      },
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
 
-class _DashedBorderPainter extends CustomPainter {
-  _DashedBorderPainter({
-    required this.color,
-    required this.strokeWidth,
-    required this.dashLength,
-    required this.dashGap,
-    required this.radius,
+class _CreatePublishConfirmSheet extends StatefulWidget {
+  const _CreatePublishConfirmSheet({
+    required this.initialSettings,
+    required this.title,
+    required this.body,
+    required this.previewAssetPath,
+    required this.showsVideoBadge,
+    required this.locationService,
+    required this.joinedCircles,
+    required this.recommendedCircles,
   });
 
-  final Color color;
-  final double strokeWidth;
-  final double dashLength;
-  final double dashGap;
-  final double radius;
+  final PublishSettings initialSettings;
+  final String title;
+  final String body;
+  final String previewAssetPath;
+  final bool showsVideoBadge;
+  final CreateLocationService locationService;
+  final List<CreateCircleOption> joinedCircles;
+  final List<CreateCircleOption> recommendedCircles;
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    final rrect = RRect.fromRectAndRadius(rect, Radius.circular(radius));
-    final path = Path()..addRRect(rrect);
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..color = color;
-
-    for (final metric in path.computeMetrics()) {
-      double distance = 0;
-      while (distance < metric.length) {
-        final len = math.min(dashLength, metric.length - distance);
-        canvas.drawPath(metric.extractPath(distance, distance + len), paint);
-        distance += dashLength + dashGap;
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) {
-    return oldDelegate.color != color ||
-        oldDelegate.strokeWidth != strokeWidth ||
-        oldDelegate.dashLength != dashLength ||
-        oldDelegate.dashGap != dashGap ||
-        oldDelegate.radius != radius;
-  }
+  State<_CreatePublishConfirmSheet> createState() =>
+      _CreatePublishConfirmSheetState();
 }
 
-class _RestorableCupertinoTextField extends StatefulWidget {
-  final String? initialValue;
-  final ValueChanged<String>? onChanged;
-  final String? placeholder;
-  final TextStyle? placeholderStyle;
-  final TextStyle? style;
-  final int? maxLines;
-  final VoidCallback? onTap;
-  final BoxDecoration? decoration;
-  final EdgeInsetsGeometry padding;
-  final FontWeight? fontWeight;
-
-  const _RestorableCupertinoTextField({
-    super.key,
-    this.initialValue,
-    this.onChanged,
-    this.placeholder,
-    this.placeholderStyle,
-    this.style,
-    this.maxLines = 1,
-    this.onTap,
-    this.decoration,
-    this.padding = const EdgeInsets.all(AppSpacing.intraGroupSm),
-    this.fontWeight,
-  });
-
-  @override
-  _RestorableCupertinoTextFieldState createState() => _RestorableCupertinoTextFieldState();
-}
-
-class _RestorableCupertinoTextFieldState extends State<_RestorableCupertinoTextField> {
-  late TextEditingController _controller;
+class _CreatePublishConfirmSheetState
+    extends State<_CreatePublishConfirmSheet> {
+  late PublishSettings _settings;
+  bool _bodyExpanded = false;
+  bool _previewReady = false;
+  bool _settingsReady = false;
+  bool _buttonReady = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController(text: widget.initialValue);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  void didUpdateWidget(_RestorableCupertinoTextField oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.initialValue != null &&
-        widget.initialValue != oldWidget.initialValue &&
-        widget.initialValue != _controller.text) {
-      _controller.text = widget.initialValue!;
-      _controller.selection = TextSelection.collapsed(offset: _controller.text.length);
-    }
+    _settings = widget.initialSettings;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _previewReady = true;
+      });
+      Future<void>.delayed(const Duration(milliseconds: 90), () {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _settingsReady = true;
+        });
+      });
+      Future<void>.delayed(const Duration(milliseconds: 190), () {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _buttonReady = true;
+        });
+      });
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    // Merge fontWeight into style if provided
-    final effectiveStyle = widget.style?.copyWith(
-      fontWeight: widget.fontWeight ?? widget.style?.fontWeight,
-    ) ?? TextStyle(fontWeight: widget.fontWeight);
+    final secondary = CupertinoColors.secondaryLabel.resolveFrom(context);
+    return Material(
+      type: MaterialType.transparency,
+      child: SafeArea(
+        top: false,
+        child: ClipRRect(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppSpacing.largeBorderRadius),
+          ),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(
+              sigmaX: AppSpacing.sm,
+              sigmaY: AppSpacing.sm,
+            ),
+            child: Container(
+              key: TestKeys.createPublishConfirmSheet,
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.82,
+              ),
+              decoration: BoxDecoration(
+                color: CupertinoColors.systemBackground
+                    .resolveFrom(context)
+                    .withValues(alpha: 0.92),
+                borderRadius: BorderRadius.vertical(
+                  top: Radius.circular(AppSpacing.largeBorderRadius),
+                ),
+                border: Border.all(
+                  color: CupertinoColors.separator
+                      .resolveFrom(context)
+                      .withValues(alpha: 0.18),
+                  width: AppSpacing.hairline,
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Padding(
+                    padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                    child: Container(
+                      width: AppSpacing.forty,
+                      height: AppSpacing.xs,
+                      decoration: BoxDecoration(
+                        color: CupertinoColors.systemGrey3.resolveFrom(context),
+                        borderRadius: BorderRadius.circular(AppSpacing.xs / 2),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      AppSpacing.containerMd,
+                      0,
+                      AppSpacing.containerMd,
+                      AppSpacing.containerSm,
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                '确认发布',
+                                style: TextStyle(
+                                  fontSize: AppTypography.xl,
+                                  fontWeight: AppTypography.semiBold,
+                                ),
+                              ),
+                              SizedBox(height: AppSpacing.intraGroupXs),
+                              Text(
+                                '再看一眼内容和发布范围，确认后再发出去。',
+                                style: TextStyle(
+                                  color: secondary,
+                                  fontSize: AppTypography.sm,
+                                  height: AppTypography.lineHeightCompact,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        SizedBox(width: AppSpacing.intraGroupSm),
+                        CupertinoButton(
+                          padding: EdgeInsets.zero,
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: Container(
+                            width: AppSpacing.buttonHeightSm,
+                            height: AppSpacing.buttonHeightSm,
+                            decoration: BoxDecoration(
+                              color: CupertinoColors.systemFill.resolveFrom(
+                                context,
+                              ),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(CupertinoIcons.xmark),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Flexible(
+                    child: ListView(
+                      padding: EdgeInsets.fromLTRB(
+                        AppSpacing.containerMd,
+                        0,
+                        AppSpacing.containerMd,
+                        AppSpacing.containerMd,
+                      ),
+                      children: <Widget>[
+                        Text(
+                          '内容预览',
+                          style: TextStyle(
+                            color: secondary,
+                            fontSize: AppTypography.sm,
+                            fontWeight: AppTypography.medium,
+                          ),
+                        ),
+                        SizedBox(height: AppSpacing.intraGroupSm),
+                        _buildSheetEntrance(
+                          visible: _previewReady,
+                          beginOffsetY: 0.035,
+                          beginScale: 0.972,
+                          child: _buildPreviewCard(context),
+                        ),
+                        SizedBox(height: AppSpacing.interGroupMd),
+                        Text(
+                          '发布设置',
+                          style: TextStyle(
+                            color: secondary,
+                            fontSize: AppTypography.sm,
+                            fontWeight: AppTypography.medium,
+                          ),
+                        ),
+                        SizedBox(height: AppSpacing.intraGroupSm),
+                        _buildSheetEntrance(
+                          visible: _settingsReady,
+                          beginOffsetY: 0.05,
+                          beginScale: 0.982,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: CupertinoColors
+                                  .secondarySystemGroupedBackground
+                                  .resolveFrom(context),
+                              borderRadius: BorderRadius.circular(
+                                AppSpacing.largeBorderRadius,
+                              ),
+                            ),
+                            child: Column(
+                              children: <Widget>[
+                                _buildSettingRow(
+                                  context: context,
+                                  title: '可见性',
+                                  value: _settings.isPublic ? '公开' : '私密',
+                                  trailing: CupertinoSwitch(
+                                    value: _settings.isPublic,
+                                    activeTrackColor: AppColors.iosAccentLight,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _settings = _settings.copyWith(
+                                          isPublic: value,
+                                          circleIds: value
+                                              ? _settings.circleIds
+                                              : const <String>[],
+                                          circleNames: value
+                                              ? _settings.circleNames
+                                              : const <String>[],
+                                        );
+                                      });
+                                    },
+                                  ),
+                                ),
+                                Divider(
+                                  height: AppSpacing.one,
+                                  color: CupertinoColors.separator
+                                      .resolveFrom(context)
+                                      .withValues(alpha: 0.18),
+                                ),
+                                _buildSettingRow(
+                                  context: context,
+                                  title: '位置',
+                                  value: _settings.locationName.trim().isEmpty
+                                      ? '不显示位置'
+                                      : _settings.locationName.trim(),
+                                  onTap: _pickLocation,
+                                ),
+                                Divider(
+                                  height: AppSpacing.one,
+                                  color: CupertinoColors.separator
+                                      .resolveFrom(context)
+                                      .withValues(alpha: 0.18),
+                                ),
+                                _buildSettingRow(
+                                  context: context,
+                                  title: '圈子',
+                                  value: _settings.circleNames.isEmpty
+                                      ? '未选圈子'
+                                      : _settings.circleNames.join('、'),
+                                  onTap: _settings.isPublic
+                                      ? _pickCircles
+                                      : null,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _buildSheetEntrance(
+                    visible: _buttonReady,
+                    beginOffsetY: 0.075,
+                    beginScale: 0.988,
+                    child: Container(
+                      padding: EdgeInsets.fromLTRB(
+                        AppSpacing.containerMd,
+                        AppSpacing.intraGroupSm,
+                        AppSpacing.containerMd,
+                        MediaQuery.paddingOf(context).bottom +
+                            AppSpacing.containerSm,
+                      ),
+                      decoration: BoxDecoration(
+                        color: CupertinoColors.systemBackground
+                            .resolveFrom(context)
+                            .withValues(alpha: 0.94),
+                        border: Border(
+                          top: BorderSide(
+                            color: CupertinoColors.separator
+                                .resolveFrom(context)
+                                .withValues(alpha: 0.18),
+                            width: AppSpacing.hairline,
+                          ),
+                        ),
+                      ),
+                      child: AnimatedScale(
+                        scale: _buttonReady ? 1 : 0.98,
+                        duration: const Duration(milliseconds: 320),
+                        curve: Curves.easeOutCubic,
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: AppSpacing.buttonHeight,
+                          child: CupertinoButton(
+                            key: TestKeys.createPublishConfirmButton,
+                            color: AppColors.iosAccentLight,
+                            borderRadius: BorderRadius.circular(
+                              AppSpacing.radiusTwenty,
+                            ),
+                            onPressed: () =>
+                                Navigator.of(context).pop(_settings),
+                            child: const Text('确认发布'),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
-    return CupertinoTextField(
-      controller: _controller,
-      onChanged: widget.onChanged,
-      placeholder: widget.placeholder,
-      placeholderStyle: widget.placeholderStyle,
-      style: effectiveStyle,
-      maxLines: widget.maxLines,
-      onTap: widget.onTap,
-      decoration: widget.decoration,
-      padding: widget.padding,
+  Widget _buildPreviewCard(BuildContext context) {
+    final summaryItems = <String>[
+      _settings.isPublic ? '公开' : '私密',
+      _settings.locationName.trim().isEmpty
+          ? '不显示位置'
+          : _settings.locationName.trim(),
+      _settings.circleNames.isEmpty
+          ? '未选圈子'
+          : '${_settings.circleNames.length} 个圈子',
+    ];
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+      padding: EdgeInsets.all(AppSpacing.containerMd),
+      decoration: BoxDecoration(
+        color: CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
+          context,
+        ),
+        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+      ),
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Wrap(
+              spacing: AppSpacing.intraGroupSm,
+              runSpacing: AppSpacing.intraGroupSm,
+              children: summaryItems
+                  .map((item) => _buildSummaryChip(context, item))
+                  .toList(growable: false),
+            ),
+            SizedBox(height: AppSpacing.interGroupSm),
+            if (widget.previewAssetPath.trim().isNotEmpty) ...<Widget>[
+              AspectRatio(
+                aspectRatio: widget.showsVideoBadge ? 3 / 4 : 4 / 5,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(
+                    AppSpacing.largeBorderRadius,
+                  ),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: <Widget>[
+                      Image.file(
+                        File(widget.previewAssetPath),
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          color: CupertinoColors.systemGrey5.resolveFrom(
+                            context,
+                          ),
+                        ),
+                      ),
+                      if (widget.showsVideoBadge)
+                        Center(
+                          child: Container(
+                            padding: EdgeInsets.all(AppSpacing.containerSm),
+                            decoration: const BoxDecoration(
+                              color: Colors.black54,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              CupertinoIcons.play_fill,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      if (widget.showsVideoBadge)
+                        Positioned(
+                          left: AppSpacing.containerSm,
+                          bottom: AppSpacing.containerSm,
+                          child: _PreviewBadge(
+                            label: '视频封面',
+                            backgroundColor: Colors.black.withValues(
+                              alpha: 0.48,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(height: AppSpacing.interGroupSm),
+            ],
+            if (widget.title.isNotEmpty) ...<Widget>[
+              Text(
+                widget.title,
+                style: const TextStyle(
+                  fontSize: AppTypography.base,
+                  fontWeight: AppTypography.semiBold,
+                ),
+              ),
+              SizedBox(height: AppSpacing.intraGroupXs),
+            ],
+            if (widget.body.isNotEmpty)
+              _ExpandablePreviewText(
+                text: widget.body,
+                expanded: _bodyExpanded,
+                onToggle: () {
+                  setState(() {
+                    _bodyExpanded = !_bodyExpanded;
+                  });
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSheetEntrance({
+    required Widget child,
+    required bool visible,
+    double beginOffsetY = 0.04,
+    double beginScale = 0.985,
+  }) {
+    return AnimatedSlide(
+      offset: visible ? Offset.zero : Offset(0, beginOffsetY),
+      duration: const Duration(milliseconds: 360),
+      curve: Curves.easeOutCubic,
+      child: AnimatedScale(
+        scale: visible ? 1 : beginScale,
+        duration: const Duration(milliseconds: 420),
+        curve: Curves.easeOutCubic,
+        child: AnimatedOpacity(
+          opacity: visible ? 1 : 0,
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOutCubic,
+          child: child,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSettingRow({
+    required BuildContext context,
+    required String title,
+    required String value,
+    Widget? trailing,
+    VoidCallback? onTap,
+  }) {
+    final chevronColor = CupertinoColors.tertiaryLabel.resolveFrom(context);
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      onPressed: onTap,
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: AppSpacing.containerSm,
+          vertical: AppSpacing.containerSm,
+        ),
+        child: Row(
+          children: <Widget>[
+            Text(
+              title,
+              style: TextStyle(
+                color: CupertinoColors.label.resolveFrom(context),
+                fontSize: AppTypography.base,
+                fontWeight: AppTypography.medium,
+              ),
+            ),
+            const Spacer(),
+            Flexible(
+              child: Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                  color: AppColors.iosAccentLight,
+                  fontSize: AppTypography.sm,
+                  fontWeight: AppTypography.medium,
+                ),
+              ),
+            ),
+            SizedBox(width: AppSpacing.intraGroupSm),
+            trailing ??
+                Icon(
+                  CupertinoIcons.chevron_forward,
+                  color: chevronColor,
+                  size: AppSpacing.iconSmall,
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryChip(BuildContext context, String label) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.containerSm,
+        vertical: AppSpacing.intraGroupXs,
+      ),
+      decoration: BoxDecoration(
+        color: CupertinoColors.systemBackground.resolveFrom(context),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: CupertinoColors.secondaryLabel.resolveFrom(context),
+          fontSize: AppTypography.sm,
+          fontWeight: AppTypography.medium,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickLocation() async {
+    final option = await Navigator.of(context).push<CreateLocationOption>(
+      CupertinoPageRoute<CreateLocationOption>(
+        builder: (_) => PublishLocationSelectorPage(
+          locationService: widget.locationService,
+        ),
+      ),
+    );
+    if (option == null) {
+      return;
+    }
+    setState(() {
+      _settings = _settings.copyWith(
+        locationName: option.name,
+        location: option == CreateLocationOption.hidden
+            ? const <String, dynamic>{}
+            : option.toLocationMap(),
+      );
+    });
+  }
+
+  Future<void> _pickCircles() async {
+    final selected = await Navigator.of(context).push<Map<String, String>>(
+      CupertinoPageRoute<Map<String, String>>(
+        builder: (_) => PublishCircleSelectPage(
+          joinedCircles: widget.joinedCircles,
+          recommendedCircles: widget.recommendedCircles,
+          initialSelected: <String, String>{
+            for (var i = 0; i < _settings.circleIds.length; i++)
+              _settings.circleIds[i]: i < _settings.circleNames.length
+                  ? _settings.circleNames[i]
+                  : _settings.circleIds[i],
+          },
+        ),
+      ),
+    );
+    if (selected == null) {
+      return;
+    }
+    setState(() {
+      _settings = _settings.copyWith(
+        circleIds: selected.keys.toList(growable: false),
+        circleNames: selected.values.toList(growable: false),
+      );
+    });
+  }
+}
+
+class _ExpandablePreviewText extends StatelessWidget {
+  const _ExpandablePreviewText({
+    required this.text,
+    required this.expanded,
+    required this.onToggle,
+  });
+
+  final String text;
+  final bool expanded;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    const maxLines = 3;
+    final style = TextStyle(
+      fontSize: AppTypography.base,
+      color: CupertinoColors.label.resolveFrom(context),
+      height: AppTypography.lineHeightCompact,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final textPainter = TextPainter(
+          text: TextSpan(text: text, style: style),
+          maxLines: maxLines,
+          textDirection: TextDirection.ltr,
+        )..layout(maxWidth: constraints.maxWidth);
+        final isOverflow = textPainter.didExceedMaxLines;
+
+        if (!isOverflow) {
+          return Text(text, style: style);
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              text,
+              style: style,
+              maxLines: expanded ? null : maxLines,
+              overflow: expanded ? null : TextOverflow.ellipsis,
+            ),
+            SizedBox(height: AppSpacing.intraGroupXs),
+            CupertinoButton(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppSpacing.containerSm,
+                vertical: AppSpacing.intraGroupXs,
+              ),
+              minimumSize: const Size(
+                AppSpacing.buttonHeightXs,
+                AppSpacing.buttonHeightXs,
+              ),
+              color: AppColors.iosAccentLight.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+              onPressed: onToggle,
+              child: Text(
+                expanded ? '收起' : '展开全文',
+                style: const TextStyle(
+                  fontSize: AppTypography.sm,
+                  color: AppColors.iosAccentLight,
+                  fontWeight: AppTypography.medium,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

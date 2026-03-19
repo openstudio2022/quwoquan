@@ -6,7 +6,7 @@ import 'package:test/test.dart';
 void main() {
   test('explicitUserMarkdown 不回退到 result.text', () {
     final raw = jsonEncode(<String, dynamic>{
-      'contractVersion': 'assistant_turn',
+      'contractId': 'assistant_turn',
       'decision': <String, dynamic>{'nextAction': 'tool_call'},
       'messageKind': 'progress',
       'result': <String, dynamic>{

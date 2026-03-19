@@ -45,12 +45,8 @@ class _MultiToolLlm implements AssistantLlmProvider {
   }) async {
     totalCallCount += 1;
 
-    final isPlannerCall =
-        templateId == 'planner.global_plan' ||
-        templateId == 'planner.postcondition_check';
-    final isSynthesisCall =
-        templateId.contains('synthesizer') ||
-        templateId.contains('final_answer');
+    final isPlannerCall = templateId == 'planner.global_plan';
+    final isSynthesisCall = templateId == 'synthesizer.final_answer';
 
     if (!isPlannerCall && !isSynthesisCall) {
       return const AssistantModelOutput(text: '{"summary": "用户在询问深圳的天气情况。"}');
@@ -68,7 +64,7 @@ class _MultiToolLlm implements AssistantLlmProvider {
       if (!hasWebSearch && availableTools.contains('web_search')) {
         return AssistantModelOutput(
           text: jsonEncode(<String, dynamic>{
-            'contractVersion': 'assistant_turn',
+            'contractId': 'assistant_turn',
             'decision': {'nextAction': 'tool_call'},
             'toolCalls': [
               {
@@ -93,7 +89,7 @@ class _MultiToolLlm implements AssistantLlmProvider {
           availableTools.contains('web_fetch')) {
         return AssistantModelOutput(
           text: jsonEncode(<String, dynamic>{
-            'contractVersion': 'assistant_turn',
+            'contractId': 'assistant_turn',
             'decision': {'nextAction': 'tool_call'},
             'toolCalls': [
               {
@@ -123,7 +119,7 @@ class _MultiToolLlm implements AssistantLlmProvider {
     onDelta?.call('整理最终答案...');
     return AssistantModelOutput(
       text: jsonEncode(<String, dynamic>{
-        'contractVersion': 'assistant_turn',
+        'contractId': 'assistant_turn',
         'decision': {'nextAction': 'answer'},
         'messageKind': 'answer',
         'userMarkdown': '## 深圳天气\n\n今天深圳天气晴朗，温度约25°C，相对湿度65%，东南风3级。适合户外活动。',

@@ -277,8 +277,10 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
         '/video-viewer/$initialIndex',
         extra: MediaViewerExtra(
           posts: postViews,
+          dtoPosts: filtered,
           initialIndex: initialIndex,
           category: isMoment ? 'profile_moment' : 'profile',
+          source: isMoment ? 'profile_moment' : 'profile',
         ),
       );
       return;
@@ -288,9 +290,11 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
       '/media-viewer/photo/$initialIndex',
       extra: MediaViewerExtra(
         posts: postViews,
+        dtoPosts: filtered,
         initialIndex: initialIndex,
         category: isMoment ? 'profile_moment' : 'profile',
         initialImageIndex: 0,
+        source: isMoment ? 'profile_moment' : 'profile',
       ),
     );
   }

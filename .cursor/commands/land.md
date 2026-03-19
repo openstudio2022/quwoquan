@@ -6,7 +6,7 @@ description: 原型落地基线化（/try 验证通过后 → 逆向提取规格
 ---
 
 > 前置：已完成 `/try` 并验证成功。
-> 目的：将原型成果"落地"为正式的特性树节点，建立规格、设计和代码基线。
+> 目的：将原型成果"落地"为正式的特性树节点，建立规格、设计、计划和代码基线。
 
 **核心流程**：
 
@@ -50,18 +50,19 @@ description: 原型落地基线化（/try 验证通过后 → 逆向提取规格
 - 关键设计决策：已定不变的决策
 - 未来演进：原型中有意保留的技术债或演进点
 
-#### 2c. tasks.md 草稿
+#### 2c. plan.yaml 草稿
 
-从原型已完成工作整理：
-- **当前交付任务**：所有原型中完成的工作，全部标 `[x]`
-- **搁置任务**：原型中发现但未做的工作（含明确重启条件）
-- **未来演进任务**：与 design.md 未来演进对应
+从原型已完成工作整理稳定切片：
+- **当前交付 slices**：原型中已完成、可沉淀为正式切片的工作
+- **依赖顺序**：哪些切片必须先完成
+- **acceptance_refs**：每个切片回链到哪些验收项
+- **done_when**：每个切片的退出条件
 
 #### 2d. acceptance.yaml 草稿
 
 从原型验证结果生成：
 - 原型中**已验证**的能力 → status: `implemented`（须补充 `tests[]` 文件链接）
-- 原型中**未测试**的验收项 → status: `deferred`（记入 tasks.md 搁置任务）
+- 原型中**未测试**的验收项 → status: `deferred`（记入 plan 后续 slices 或 CR）
 - 每条核心验收项补齐 `test_layers`（`T1~T4`）
 - 禁止保留 status: `pending`（land 完成时所有项必须为 implemented/waived/deferred）
 
@@ -89,10 +90,10 @@ design.md 草稿：
   关键决策：<N 条>
   未来演进：<N 条>
 
-tasks.md 草稿：
-  已完成 [x]：<N 条>
-  搁置任务：<N 条>（含重启条件）
-  未来演进：<N 条>
+plan.yaml 草稿：
+  slices：<N 条>
+  依赖：<N 条>
+  acceptance_refs：<N 条>
 
 acceptance.yaml 草稿：
   implemented：A1~AN（<N 条>，需补 tests[] 链接）
@@ -122,7 +123,7 @@ acceptance.yaml 草稿：
    ```bash
    bash scripts/new_feature_fullstack.sh "<slug>"
    ```
-3. 写入 spec.md、design.md、tasks.md、acceptance.yaml（使用步骤 2 的草稿）
+3. 写入 spec.md、design.md、plan.yaml、acceptance.yaml（使用步骤 2 的草稿）
 4. 若原型中已产生元数据 YAML，确认其完整性（所有必填字段已填，无 TODO 遗漏关键项）
 
 ---
@@ -141,7 +142,7 @@ make codegen-app               # 端侧 codegen 一致性
 
 ### 步骤 6：代码质量检查（产品化验收）
 
-若原型代码存在以下情况，在 tasks.md 中生成**专项重构任务**，在 /commit 前必须完成：
+若原型代码存在以下情况，在 plan.yaml 中生成**专项重构 slice**，在 /commit 前必须完成：
 
 | 检查项 | 违规示例 | 处理方式 |
 |--------|---------|---------|
@@ -187,7 +188,7 @@ status: completed
 |----------------|-------------------------------|
 | spec.md        | ✓ 写入                        |
 | design.md      | ✓ 写入                        |
-| tasks.md       | ✓ <N> 条任务（全部 [x]）       |
+| plan.yaml      | ✓ <N> 个 slices                |
 | acceptance.yaml | ✓ A1~AN（implemented N，deferred N）|
 | tree_index.yaml | ✓ 节点注册，status=completed  |
 

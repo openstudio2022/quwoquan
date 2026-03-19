@@ -15,15 +15,18 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
-  testWidgets('关闭 unified create editor flag 后隐藏身份切换壳层', (tester) async {
+  testWidgets('关闭 unified create editor flag 后进入回退模式但不恢复旧 taxonomy', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           contentRepositoryProvider.overrideWithValue(MockContentRepository()),
           circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
-          contentFeatureFlagProvider(
-            'enable_unified_create_editor',
-          ).overrideWith((ref) => false),
+          contentFeatureFlagProvider('enable_unified_create_editor').overrideWith(
+            (ref) => false,
+          ),
+          contentFeatureFlagProvider('create_editor_v2').overrideWith(
+            (ref) => false,
+          ),
         ],
         child: ScreenUtilInit(
           designSize: const Size(390, 844),
@@ -41,5 +44,7 @@ void main() {
     expect(find.byKey(TestKeys.createIdentityMoment), findsNothing);
     expect(find.byKey(TestKeys.createIdentityWork), findsNothing);
     expect(find.byKey(TestKeys.createWorkFormatImage), findsNothing);
+    expect(find.textContaining('回退模式'), findsOneWidget);
+    expect(find.byKey(TestKeys.createMomentInput), findsOneWidget);
   });
 }

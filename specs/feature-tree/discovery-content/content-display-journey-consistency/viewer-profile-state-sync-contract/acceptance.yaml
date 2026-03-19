@@ -1,0 +1,136 @@
+version: 2
+feature: viewer-profile-state-sync-contract
+level: L3_scenario
+source_path: discovery-content/content-display-journey-consistency/viewer-profile-state-sync-contract
+parent_journey: content-display-journey-consistency
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+scope:
+  summary: >
+    冻结 viewer 与 author profile 之间的 canonical key、Provider 自动同步、outbox
+    聚合同步与失败重试协议。
+  journey_bindings:
+    - J2
+    - J3
+  in_scope:
+    - ProfileSubjectId / authorProfileSubjectId / PostId 语义统一
+    - UserRelationshipStateProvider 与 PostInteractionStateProvider 边界
+    - RelationshipCapabilityView 驱动 profile 按钮矩阵
+    - sync outbox、10s flush、5min retry、sys.client_state_sync.* 配置
+  out_of_scope:
+    - profile 壳层重画
+    - RTC 业务能力重做
+    - article 非 viewer 页面同步重做
+
+scenario_acceptance:
+  A1:
+    title: canonical key 与对象真相源统一
+    scenario: viewer/profile/feed 全链路统一内部标识与状态源
+    journey_step: open profile from viewer and sync back
+    done_when:
+      - 内部用户 key 统一为 ProfileSubjectId
+      - post 状态 key 统一为 PostId
+      - usernameSlug 仅作为路由展示标识，不再作为内部状态 key
+    edge_cases:
+      - usernameSlug 可变更但内部状态不失效
+      - 同一作者在多个 feed 来源下 key 一致
+    linked_plan_items:
+      - P1
+      - P2
+    evidence:
+      primary:
+        - T1_schema
+        - T2_module_interaction
+      supporting:
+        - T3_app_api_integration
+    tests:
+      planned:
+        - canonical key consistency test
+        - provider key mapping test
+      recorded:
+        - test/ui/content/post/post_summary_view_test.dart
+        - test/ui/user/providers/profile_state_provider_test.dart
+    status: implemented
+  A2:
+    title: Provider 自动同步关系态与 post 互动态
+    scenario: 在 viewer、profile、feed 之间共享状态源
+    journey_step: update relationship or post interaction
+    done_when:
+      - profile 内 follow/unfollow 后，viewer 与 feed 自动更新
+      - viewer 内 like/save/share 后，feed 与 profile 相关展示自动更新
+      - 不再依赖 callback 链回传布尔值维持一致
+    edge_cases:
+      - 同时存在多个 viewer / profile 页面实例
+      - 返回重入后状态仍一致
+    linked_plan_items:
+      - P2
+      - P3
+    evidence:
+      primary:
+        - T2_app_mock
+        - T3_app_api_integration
+      supporting:
+        - T4_user_journey
+    tests:
+      planned:
+        - viewer profile shared-provider integration test
+        - multi-entry reentry test
+      recorded:
+        - test/ui/user/providers/profile_state_provider_test.dart
+        - test/core/providers/client_state_sync_providers_test.dart
+    status: implemented
+  A3:
+    title: 延迟批同步、失败重试与云端 sys 配置生效
+    scenario: 本地乐观更新后通过 outbox 聚合同步到云端
+    journey_step: flush sync queue after local interaction
+    done_when:
+      - 默认最后一次操作后 10s 触发首次 flush
+      - 默认 5min 后重试失败批次
+      - flush_delay_sec 与 retry_delay_sec 可由 sys.client_state_sync.* 覆盖
+      - 同一对象多次操作按 latest_wins 合并
+    edge_cases:
+      - 连续反复点击
+      - 弱网失败后前台恢复或网络恢复
+      - 云端覆盖配置与本地默认不一致
+    linked_plan_items:
+      - P3
+      - P4
+    evidence:
+      primary:
+        - T1_schema
+        - T3_app_api_integration
+      supporting:
+        - T4_user_journey
+    tests:
+      planned:
+        - outbox coalesce test
+        - retry scheduling test
+        - sys config override persistence test
+      recorded:
+        - test/ui/content/post/contract/content_runtime_config_provider_test.dart
+        - test/core/providers/client_state_sync_providers_test.dart
+    status: implemented
+
+story_readiness:
+  S1:
+    title: 灰度、观测与回滚可执行
+    done_when:
+      - feature flag 可按阶段放量
+      - flush failure、retry backlog、reconcile mismatch 可观测
+      - sys 配置可回退到本地默认值
+    evidence:
+      primary:
+        - T1_schema
+        - T3_app_api_integration
+      supporting:
+        - T4_user_journey
+    tests:
+      planned:
+        - rollback verification
+        - metrics and audit verification
+      recorded: []
+    status: pending

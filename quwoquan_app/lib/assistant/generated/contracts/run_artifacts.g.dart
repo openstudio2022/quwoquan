@@ -62,6 +62,50 @@ class AnswerEvidenceBindingFields {
   static const String snippet = 'snippet';
 }
 
+class RunArtifactsAnswerProcessing {
+  const RunArtifactsAnswerProcessing({
+    this.readinessSummary = "",
+    this.keyFacts = const <String>[],
+    this.missingDimensions = const <String>[],
+    this.retrieveMoreReason = "",
+  });
+
+  final String readinessSummary;
+  final List<String> keyFacts;
+  final List<String> missingDimensions;
+  final String retrieveMoreReason;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'readinessSummary': readinessSummary,
+        'keyFacts': keyFacts,
+        'missingDimensions': missingDimensions,
+        'retrieveMoreReason': retrieveMoreReason,
+      };
+
+  factory RunArtifactsAnswerProcessing.fromJson(Map<String, dynamic> json) {
+    return RunArtifactsAnswerProcessing(
+      readinessSummary: (json['readinessSummary'] as String?)?.trim() ?? "",
+      keyFacts: _assistantStringList(json['keyFacts']),
+      missingDimensions: _assistantStringList(json['missingDimensions']),
+      retrieveMoreReason: (json['retrieveMoreReason'] as String?)?.trim() ?? "",
+    );
+  }
+
+  static List<String> _assistantStringList(Object? value) {
+    if (value is List) {
+      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
+    }
+    return const <String>[];
+  }
+}
+
+class RunArtifactsAnswerProcessingFields {
+  static const String readinessSummary = 'readinessSummary';
+  static const String keyFacts = 'keyFacts';
+  static const String missingDimensions = 'missingDimensions';
+  static const String retrieveMoreReason = 'retrieveMoreReason';
+}
+
 class EvidenceLedgerEntry {
   const EvidenceLedgerEntry({
     required this.evidenceId,
@@ -159,6 +203,50 @@ class EvidenceLedgerEntryFields {
   static const String retrievedAt = 'retrievedAt';
 }
 
+class RunArtifactsHistoricalThinkingSnapshot {
+  const RunArtifactsHistoricalThinkingSnapshot({
+    this.continuityMode = "",
+    this.mismatchSignal = "",
+    this.carryForwardFacts = const <String>[],
+    this.discardedAssumptions = const <String>[],
+  });
+
+  final String continuityMode;
+  final String mismatchSignal;
+  final List<String> carryForwardFacts;
+  final List<String> discardedAssumptions;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'continuityMode': continuityMode,
+        'mismatchSignal': mismatchSignal,
+        'carryForwardFacts': carryForwardFacts,
+        'discardedAssumptions': discardedAssumptions,
+      };
+
+  factory RunArtifactsHistoricalThinkingSnapshot.fromJson(Map<String, dynamic> json) {
+    return RunArtifactsHistoricalThinkingSnapshot(
+      continuityMode: (json['continuityMode'] as String?)?.trim() ?? "",
+      mismatchSignal: (json['mismatchSignal'] as String?)?.trim() ?? "",
+      carryForwardFacts: _assistantStringList(json['carryForwardFacts']),
+      discardedAssumptions: _assistantStringList(json['discardedAssumptions']),
+    );
+  }
+
+  static List<String> _assistantStringList(Object? value) {
+    if (value is List) {
+      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
+    }
+    return const <String>[];
+  }
+}
+
+class RunArtifactsHistoricalThinkingSnapshotFields {
+  static const String continuityMode = 'continuityMode';
+  static const String mismatchSignal = 'mismatchSignal';
+  static const String carryForwardFacts = 'carryForwardFacts';
+  static const String discardedAssumptions = 'discardedAssumptions';
+}
+
 class DomainPolicyBundle {
   const DomainPolicyBundle({
     this.domainId = "",
@@ -214,6 +302,85 @@ class DomainPolicyBundleFields {
   static const String retrievalPolicy = 'retrievalPolicy';
   static const String answerPolicy = 'answerPolicy';
   static const String narrativePolicy = 'narrativePolicy';
+}
+
+class RetrievalProcessingSnapshot {
+  const RetrievalProcessingSnapshot({
+    this.processedDocumentCount = 0,
+    this.acceptedDocumentCount = 0,
+    this.processingSummary = "",
+    this.expansionReason = "",
+    this.acceptedReferences = const <RetrievalProcessingReference>[],
+  });
+
+  final int processedDocumentCount;
+  final int acceptedDocumentCount;
+  final String processingSummary;
+  final String expansionReason;
+  final List<RetrievalProcessingReference> acceptedReferences;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'processedDocumentCount': processedDocumentCount,
+        'acceptedDocumentCount': acceptedDocumentCount,
+        'processingSummary': processingSummary,
+        'expansionReason': expansionReason,
+        'acceptedReferences': acceptedReferences.map((item) => item.toJson()).toList(growable: false),
+      };
+
+  factory RetrievalProcessingSnapshot.fromJson(Map<String, dynamic> json) {
+    return RetrievalProcessingSnapshot(
+      processedDocumentCount: (json['processedDocumentCount'] as num?)?.toInt() ?? 0,
+      acceptedDocumentCount: (json['acceptedDocumentCount'] as num?)?.toInt() ?? 0,
+      processingSummary: (json['processingSummary'] as String?)?.trim() ?? "",
+      expansionReason: (json['expansionReason'] as String?)?.trim() ?? "",
+      acceptedReferences: (json['acceptedReferences'] as List?)?.whereType<Map>().map((item) => RetrievalProcessingReference.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <RetrievalProcessingReference>[],
+    );
+  }
+}
+
+class RetrievalProcessingSnapshotFields {
+  static const String processedDocumentCount = 'processedDocumentCount';
+  static const String acceptedDocumentCount = 'acceptedDocumentCount';
+  static const String processingSummary = 'processingSummary';
+  static const String expansionReason = 'expansionReason';
+  static const String acceptedReferences = 'acceptedReferences';
+}
+
+class RetrievalProcessingReference {
+  const RetrievalProcessingReference({
+    this.title = "",
+    this.url = "",
+    this.source = "",
+    this.snippet = "",
+  });
+
+  final String title;
+  final String url;
+  final String source;
+  final String snippet;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'title': title,
+        'url': url,
+        'source': source,
+        'snippet': snippet,
+      };
+
+  factory RetrievalProcessingReference.fromJson(Map<String, dynamic> json) {
+    return RetrievalProcessingReference(
+      title: (json['title'] as String?)?.trim() ?? "",
+      url: (json['url'] as String?)?.trim() ?? "",
+      source: (json['source'] as String?)?.trim() ?? "",
+      snippet: (json['snippet'] as String?)?.trim() ?? "",
+    );
+  }
+}
+
+class RetrievalProcessingReferenceFields {
+  static const String title = 'title';
+  static const String url = 'url';
+  static const String source = 'source';
+  static const String snippet = 'snippet';
 }
 
 class SlotStateSnapshot {
@@ -350,12 +517,124 @@ class SlotValueSnapshotFields {
   static const String evidenceIds = 'evidenceIds';
 }
 
+class RunArtifactsUnderstandingQueryGroup {
+  const RunArtifactsUnderstandingQueryGroup({
+    this.dimension = "",
+    this.queries = const <String>[],
+    this.why = "",
+  });
+
+  final String dimension;
+  final List<String> queries;
+  final String why;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'dimension': dimension,
+        'queries': queries,
+        'why': why,
+      };
+
+  factory RunArtifactsUnderstandingQueryGroup.fromJson(Map<String, dynamic> json) {
+    return RunArtifactsUnderstandingQueryGroup(
+      dimension: (json['dimension'] as String?)?.trim() ?? "",
+      queries: _assistantStringList(json['queries']),
+      why: (json['why'] as String?)?.trim() ?? "",
+    );
+  }
+
+  static List<String> _assistantStringList(Object? value) {
+    if (value is List) {
+      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
+    }
+    return const <String>[];
+  }
+}
+
+class RunArtifactsUnderstandingQueryGroupFields {
+  static const String dimension = 'dimension';
+  static const String queries = 'queries';
+  static const String why = 'why';
+}
+
+class RunArtifactsUnderstandingSnapshot {
+  const RunArtifactsUnderstandingSnapshot({
+    this.intentSummary = "",
+    this.concernPoints = const <String>[],
+    this.emotionSignal = "",
+    this.queryDesignSummary = "",
+    this.queryGroups = const <RunArtifactsUnderstandingQueryGroup>[],
+    this.assumptions = const <String>[],
+    this.mismatchSignal = "",
+    this.carryForwardFacts = const <String>[],
+    this.discardedAssumptions = const <String>[],
+  });
+
+  final String intentSummary;
+  final List<String> concernPoints;
+  final String emotionSignal;
+  final String queryDesignSummary;
+  final List<RunArtifactsUnderstandingQueryGroup> queryGroups;
+  final List<String> assumptions;
+  final String mismatchSignal;
+  final List<String> carryForwardFacts;
+  final List<String> discardedAssumptions;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'intentSummary': intentSummary,
+        'concernPoints': concernPoints,
+        'emotionSignal': emotionSignal,
+        'queryDesignSummary': queryDesignSummary,
+        'queryGroups': queryGroups.map((item) => item.toJson()).toList(growable: false),
+        'assumptions': assumptions,
+        'mismatchSignal': mismatchSignal,
+        'carryForwardFacts': carryForwardFacts,
+        'discardedAssumptions': discardedAssumptions,
+      };
+
+  factory RunArtifactsUnderstandingSnapshot.fromJson(Map<String, dynamic> json) {
+    return RunArtifactsUnderstandingSnapshot(
+      intentSummary: (json['intentSummary'] as String?)?.trim() ?? "",
+      concernPoints: _assistantStringList(json['concernPoints']),
+      emotionSignal: (json['emotionSignal'] as String?)?.trim() ?? "",
+      queryDesignSummary: (json['queryDesignSummary'] as String?)?.trim() ?? "",
+      queryGroups: (json['queryGroups'] as List?)?.whereType<Map>().map((item) => RunArtifactsUnderstandingQueryGroup.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <RunArtifactsUnderstandingQueryGroup>[],
+      assumptions: _assistantStringList(json['assumptions']),
+      mismatchSignal: (json['mismatchSignal'] as String?)?.trim() ?? "",
+      carryForwardFacts: _assistantStringList(json['carryForwardFacts']),
+      discardedAssumptions: _assistantStringList(json['discardedAssumptions']),
+    );
+  }
+
+  static List<String> _assistantStringList(Object? value) {
+    if (value is List) {
+      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
+    }
+    return const <String>[];
+  }
+}
+
+class RunArtifactsUnderstandingSnapshotFields {
+  static const String intentSummary = 'intentSummary';
+  static const String concernPoints = 'concernPoints';
+  static const String emotionSignal = 'emotionSignal';
+  static const String queryDesignSummary = 'queryDesignSummary';
+  static const String queryGroups = 'queryGroups';
+  static const String assumptions = 'assumptions';
+  static const String mismatchSignal = 'mismatchSignal';
+  static const String carryForwardFacts = 'carryForwardFacts';
+  static const String discardedAssumptions = 'discardedAssumptions';
+}
+
 class RunArtifacts {
   const RunArtifacts({
     this.machineEnvelope = "",
     this.displayMarkdown = "",
     this.displayPlainText = "",
     this.journey = const AssistantJourney(),
+    this.understandingSnapshot = const RunArtifactsUnderstandingSnapshot(),
+    this.answerProcessing = const RunArtifactsAnswerProcessing(),
+    this.historicalThinkingSnapshot = const RunArtifactsHistoricalThinkingSnapshot(),
+    this.retrievalProcessing = const RetrievalProcessingSnapshot(),
     this.evidenceLedger = const <EvidenceLedgerEntry>[],
     this.answerEvidenceBindings = const <AnswerEvidenceBinding>[],
     this.slotState = const SlotStateSnapshot(),
@@ -368,6 +647,10 @@ class RunArtifacts {
   final String displayMarkdown;
   final String displayPlainText;
   final AssistantJourney journey;
+  final RunArtifactsUnderstandingSnapshot understandingSnapshot;
+  final RunArtifactsAnswerProcessing answerProcessing;
+  final RunArtifactsHistoricalThinkingSnapshot historicalThinkingSnapshot;
+  final RetrievalProcessingSnapshot retrievalProcessing;
   final List<EvidenceLedgerEntry> evidenceLedger;
   final List<AnswerEvidenceBinding> answerEvidenceBindings;
   final SlotStateSnapshot slotState;
@@ -380,6 +663,10 @@ class RunArtifacts {
         'displayMarkdown': displayMarkdown,
         'displayPlainText': displayPlainText,
         'journey': journey.toJson(),
+        'understandingSnapshot': understandingSnapshot.toJson(),
+        'answerProcessing': answerProcessing.toJson(),
+        'historicalThinkingSnapshot': historicalThinkingSnapshot.toJson(),
+        'retrievalProcessing': retrievalProcessing.toJson(),
         'evidenceLedger': evidenceLedger.map((item) => item.toJson()).toList(growable: false),
         'answerEvidenceBindings': answerEvidenceBindings.map((item) => item.toJson()).toList(growable: false),
         'slotState': slotState.toJson(),
@@ -394,6 +681,10 @@ class RunArtifacts {
       displayMarkdown: (json['displayMarkdown'] as String?)?.trim() ?? "",
       displayPlainText: (json['displayPlainText'] as String?)?.trim() ?? "",
       journey: json['journey'] is Map ? AssistantJourney.fromJson((json['journey'] as Map).cast<String, dynamic>()) : const AssistantJourney(),
+      understandingSnapshot: json['understandingSnapshot'] is Map ? RunArtifactsUnderstandingSnapshot.fromJson((json['understandingSnapshot'] as Map).cast<String, dynamic>()) : const RunArtifactsUnderstandingSnapshot(),
+      answerProcessing: json['answerProcessing'] is Map ? RunArtifactsAnswerProcessing.fromJson((json['answerProcessing'] as Map).cast<String, dynamic>()) : const RunArtifactsAnswerProcessing(),
+      historicalThinkingSnapshot: json['historicalThinkingSnapshot'] is Map ? RunArtifactsHistoricalThinkingSnapshot.fromJson((json['historicalThinkingSnapshot'] as Map).cast<String, dynamic>()) : const RunArtifactsHistoricalThinkingSnapshot(),
+      retrievalProcessing: json['retrievalProcessing'] is Map ? RetrievalProcessingSnapshot.fromJson((json['retrievalProcessing'] as Map).cast<String, dynamic>()) : const RetrievalProcessingSnapshot(),
       evidenceLedger: (json['evidenceLedger'] as List?)?.whereType<Map>().map((item) => EvidenceLedgerEntry.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <EvidenceLedgerEntry>[],
       answerEvidenceBindings: (json['answerEvidenceBindings'] as List?)?.whereType<Map>().map((item) => AnswerEvidenceBinding.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AnswerEvidenceBinding>[],
       slotState: json['slotState'] is Map ? SlotStateSnapshot.fromJson((json['slotState'] as Map).cast<String, dynamic>()) : const SlotStateSnapshot(),
@@ -410,6 +701,10 @@ class RunArtifactsFields {
   static const String displayMarkdown = 'displayMarkdown';
   static const String displayPlainText = 'displayPlainText';
   static const String journey = 'journey';
+  static const String understandingSnapshot = 'understandingSnapshot';
+  static const String answerProcessing = 'answerProcessing';
+  static const String historicalThinkingSnapshot = 'historicalThinkingSnapshot';
+  static const String retrievalProcessing = 'retrievalProcessing';
   static const String evidenceLedger = 'evidenceLedger';
   static const String answerEvidenceBindings = 'answerEvidenceBindings';
   static const String slotState = 'slotState';

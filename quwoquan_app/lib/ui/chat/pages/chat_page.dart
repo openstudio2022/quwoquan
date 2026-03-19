@@ -1413,7 +1413,7 @@ class _ConversationTile extends StatelessWidget {
           border: Border(
             bottom: BorderSide(
               color: borderColor.withValues(alpha: 0.3),
-              width: 0.5,
+              width: AppSpacing.hairline,
             ),
           ),
         ),
@@ -1429,16 +1429,20 @@ class _ConversationTile extends StatelessWidget {
                     right: -2,
                     bottom: -2,
                     child: Container(
-                      padding: EdgeInsets.all(2),
+                      padding: EdgeInsets.all(AppSpacing.two),
                       decoration: BoxDecoration(
                         color: AppColors.primaryColor,
                         shape: BoxShape.circle,
                         border: Border.all(
                           color: Theme.of(context).scaffoldBackgroundColor,
-                          width: 1.5,
+                          width: AppSpacing.oneHalf,
                         ),
                       ),
-                      child: Icon(Icons.lock, size: 10, color: Colors.white),
+                      child: Icon(
+                        Icons.lock,
+                        size: AppTypography.xs,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 if (unread > 0)
@@ -1452,26 +1456,26 @@ class _ConversationTile extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         color: AppColors.error,
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
                         border: Border.all(
                           color: Theme.of(context).scaffoldBackgroundColor,
-                          width: 1.5,
+                          width: AppSpacing.oneHalf,
                         ),
                       ),
                       child: Text(
                         unread > 99 ? '99+' : '$unread',
                         style: TextStyle(
-                          fontSize: 10,
+                          fontSize: AppTypography.xs,
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
-                          height: 1.1,
+                          height: AppTypography.lineHeightTight,
                         ),
                       ),
                     ),
                   ),
               ],
             ),
-            SizedBox(width: 12),
+            SizedBox(width: AppSpacing.sm + AppSpacing.xs),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1486,7 +1490,7 @@ class _ConversationTile extends StatelessWidget {
                               child: Text(
                                 conversation['title'] as String? ?? '',
                                 style: TextStyle(
-                                  fontSize: 16,
+                                  fontSize: AppTypography.lg,
                                   fontWeight: FontWeight.w500,
                                   color: fgPrimary,
                                 ),
@@ -1495,22 +1499,22 @@ class _ConversationTile extends StatelessWidget {
                               ),
                             ),
                             if (isSpecial) ...[
-                              SizedBox(width: 4),
+                              SizedBox(width: AppSpacing.xs),
                               Container(
                                 padding: EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                  vertical: 2,
+                                  horizontal: AppSpacing.xs,
+                                  vertical: AppSpacing.two,
                                 ),
                                 decoration: BoxDecoration(
                                   color: AppColors.warning.withValues(
                                     alpha: 0.2,
                                   ),
-                                  borderRadius: BorderRadius.circular(4),
+                                  borderRadius: BorderRadius.circular(AppSpacing.xs),
                                 ),
                                 child: Text(
                                   'AI',
                                   style: TextStyle(
-                                    fontSize: 10,
+                                    fontSize: AppTypography.xs,
                                     fontWeight: FontWeight.w800,
                                     color: AppColors.warning,
                                   ),
@@ -1520,26 +1524,26 @@ class _ConversationTile extends StatelessWidget {
                           ],
                         ),
                       ),
-                      SizedBox(width: 8),
+                      SizedBox(width: AppSpacing.sm),
                       Text(
                         _formatConversationTime(conversation),
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: AppTypography.base,
                           color: fgSecondary.withValues(alpha: 0.8),
                         ),
                       ),
                     ],
                   ),
-                  SizedBox(height: 4),
+                  SizedBox(height: AppSpacing.xs),
                   Row(
                     children: [
                       if (isEncrypted) ...[
                         Icon(
                           Icons.lock,
-                          size: 14,
+                          size: AppSpacing.fourteen,
                           color: fgSecondary.withValues(alpha: 0.8),
                         ),
-                        SizedBox(width: 4),
+                        SizedBox(width: AppSpacing.xs),
                       ],
                       Expanded(
                         child: Text(
@@ -1547,7 +1551,7 @@ class _ConversationTile extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 14,
+                            fontSize: AppTypography.base,
                             color: fgSecondary.withValues(alpha: 0.8),
                           ),
                         ),
@@ -1639,7 +1643,7 @@ class _InboxConversationTile extends StatelessWidget {
                               ),
                               border: Border.all(
                                 color: scaffoldBackground,
-                                width: 1.5,
+                                width: AppSpacing.oneHalf,
                               ),
                             ),
                             child: Text(
@@ -1651,7 +1655,7 @@ class _InboxConversationTile extends StatelessWidget {
                                 fontSize: AppTypography.xs,
                                 fontWeight: AppTypography.semiBold,
                                 color: Colors.white,
-                                height: 1,
+                                height: AppTypography.lineHeightTight,
                               ),
                             ),
                           ),
@@ -1733,7 +1737,7 @@ class _InboxConversationTile extends StatelessWidget {
                 left: _avatarSize + AppSpacing.sm + AppSpacing.xs,
               ),
               child: Divider(
-                height: 0,
+                height: AppSpacing.one,
                 thickness: AppSpacing.hairline,
                 color: dividerColor,
               ),

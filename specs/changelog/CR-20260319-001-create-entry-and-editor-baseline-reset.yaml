@@ -1,0 +1,98 @@
+id: CR-20260319-001
+title: reset create entry and editor baseline
+slug: create-entry-and-editor-baseline-reset
+revision: 2
+status: active
+
+affected_nodes:
+  - specs/feature-tree/discovery-content/content-type-framework
+  - specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification
+  - specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update--create-entry-location-visibility-circle
+
+entries:
+  - timestamp: "2026-03-19T10:30:00+08:00"
+    summary: 将旧的“身份切换 + 四 Tab + 六宫格入口”创作基线重置为“iOS 三段式入口 + 双编辑器 + 标题渐进披露”的新基线。
+    reason: 旧场景虽已形成完成态文档，但不满足当前产品对极简、清爽、动作优先与高完成度创作体验的要求；若继续沿旧基线开发，将大概率产生结构性返工。
+    change_type:
+      - refine
+      - redesign
+      - rebaseline
+    changed_documents:
+      - path: specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/spec.md
+        sections:
+          - 节点定位
+          - 功能范围
+          - 用户可见术语冻结
+          - 非功能目标
+          - 灰度、迁移与回滚
+      - path: specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/design.md
+        sections:
+          - 方案对比
+          - 选型决策
+          - 关键设计决策
+          - 开发切片
+      - path: specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/acceptance.yaml
+        sections:
+          - A1
+          - A2
+          - A3
+          - A4
+          - A5
+          - A6
+          - A7
+          - A8
+      - path: specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/plan.yaml
+        sections:
+          - slices
+    impact:
+      replan_required: true
+      redesign_required: true
+      retest_layers:
+        - T2
+        - T3
+        - T4
+      rollout_impact: high
+      breaking_contract: false
+    notes:
+      - 第一开发批次不强绑定新的 metadata 字段演进，优先完成端侧 IA 与编辑体验重构。
+      - 现有 tasks.md 保留为迁移参考，不再作为正式治理计划真相源。
+  - timestamp: "2026-03-19T11:20:00+08:00"
+    summary: 将创作重构实施计划从高层 `P1-P7` 收敛为可直接进入 `/dev` 的 `D0-D12` 全量开发分解，并补齐验收与设计证据映射。
+    reason: 现有正式文档已完成基线重置，但实施层仍存在高层切片、旧任务语言和 `A7/A8` 证据边界不够清晰的问题；若不继续细化，开发阶段容易在执行、验收和回滚口径上再次分叉。
+    change_type:
+      - refine
+      - execution_alignment
+    changed_documents:
+      - path: specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/design.md
+        sections:
+          - 测试与证据矩阵
+          - 开发切片
+      - path: specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/acceptance.yaml
+        sections:
+          - A1
+          - A2
+          - A3
+          - A4
+          - A5
+          - A6
+          - A7
+          - A8
+      - path: specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/plan.yaml
+        sections:
+          - slices
+      - path: specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/tasks.md
+        sections:
+          - 顶部迁移提示
+    impact:
+      replan_required: true
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+        - T4
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - 新执行语言以 `D0-D12` 为准，同时保留原高层切片只作为历史背景，不再驱动实施。
+      - `A7` 被重新收口为发布映射兼容，`A8` 专注灰度、观测与回滚护栏。

@@ -1,0 +1,237 @@
+version: 1
+node: discovery-content/content-type-framework/creation-mode-and-surface-ia-unification
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260319-001-create-entry-and-editor-baseline-reset.yaml
+
+slices:
+  - id: D0
+    title: canonize execution sources
+    goal: 开发阶段统一以新版四件套和 CR 为真相源，并明确旧 `tasks.md` 仅作迁移参考。
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - A2
+      - A3
+      - A4
+      - A5
+      - A6
+      - A7
+      - A8
+    planned_evidence:
+      - governance_sync_review
+    done_when:
+      - `spec.md / design.md / acceptance.yaml / plan.yaml / CR` 被明确为正式治理口径
+      - `tasks.md` 被显式标注为历史参考，不再作为 `/dev` 检查清单
+      - 后续开发与验收任务均使用 `D0-D12` 语言
+    status: planned
+
+  - id: D1
+    title: audit create entry surfaces
+    goal: 盘点所有 `+` 入口并冻结必须同构与仅复用行为的边界。
+    depends_on:
+      - D0
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T4_user_journey
+    done_when:
+      - 全局 `+`、发现页 `+`、`create-entry` 路由入口被统一纳入同一条首层链路
+      - 明确 `CreateActionSheet` 作为共享入口组件
+      - 明确 `create-entry` 仅承担兼容壳层职责
+    status: planned
+
+  - id: D2
+    title: implement shared action sheet
+    goal: 抽出共享 `CreateActionSheet`，以标准 iOS 三段式菜单承载创作和社交动作。
+    depends_on:
+      - D1
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - `GlobalQuickActionSheet` 与 `CreateEntrySheet` 不再维护两套首层 UI
+      - 首组只保留 `从相册选择 / 相机 / 写文字`
+      - 第二组只保留 `发起群聊 / 添加同好`，第三组只保留 `取消`
+    status: planned
+
+  - id: D3
+    title: converge shell and routes
+    goal: 保留 `create-entry`、`create` 与 `gallery/capture/write` 协议，同时让 `CreatePage` 收敛为双编辑器壳层。
+    depends_on:
+      - D2
+    acceptance_refs:
+      - A2
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 路由仍兼容现有起始动作协议
+      - 页面主结构只表达 `media` 与 `text` 两类编辑器
+      - 旧四页签与身份/格式切换不再作为主路径 UI
+    status: planned
+
+  - id: D4
+    title: introduce create state v2
+    goal: 引入统一 `CreateEditorStateV2`，用双编辑器共享字段替代旧四态主状态。
+    depends_on:
+      - D3
+    acceptance_refs:
+      - A2
+      - A6
+    planned_evidence:
+      - T2_module_interaction
+    done_when:
+      - provider 不再以 `moment/photo/video/article` 四份平行 map 为主结构
+      - 状态内显式表达编辑器类型、媒体类型、标题展示态、共享发布设置与草稿 ID
+      - 图片/视频互斥由状态模型本身保证
+    status: planned
+
+  - id: D5
+    title: harden draft migration
+    goal: 将旧草稿迁移、新草稿写入、自动保存与冷启动恢复拆成独立兼容任务。
+    depends_on:
+      - D4
+    acceptance_refs:
+      - A6
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 旧 `moment/photo/video/article` 草稿可稳定映射到 `v2`
+      - 新草稿统一写入 `draftVersion=v2`
+      - 自动保存、恢复、发布后清理与媒体类型切换不破坏草稿结构
+    status: planned
+
+  - id: D6
+    title: build media editor
+    goal: 实现统一媒体编辑器的大预览、横向缩略列表、继续添加与互斥规则。
+    depends_on:
+      - D4
+    acceptance_refs:
+      - A3
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 支持初始从相册或相机进入媒体编辑器
+      - 多图主预览、缩略列表与继续添加路径全部稳定
+      - 单视频替换、删除后切换图片态与删空图片后切换视频态全部成立
+    status: planned
+
+  - id: D7
+    title: build text first editor
+    goal: 实现正文优先、标题渐进披露、写后补图且不回退到旧 taxonomy 的文字编辑器。
+    depends_on:
+      - D4
+    acceptance_refs:
+      - A4
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 默认聚焦正文，标题以 `添加标题（可选）` 轻入口呈现
+      - 标题展开/收起与长内容 hint 为非阻塞规则
+      - 写后补图仍保持在文字编辑器语境中
+    status: planned
+
+  - id: D8
+    title: slim settings surface
+    goal: 将发布设置改为摘要态或二级入口，并保持与现有选择器页面往返兼容。
+    depends_on:
+      - D6
+      - D7
+    acceptance_refs:
+      - A5
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+    done_when:
+      - 位置、圈子、可见性、小趣使用开关不再默认长期展开在首屏
+      - 设置摘要、进入设置页、回填与回写链路稳定
+      - 与现有位置/圈子选择器 roundtrip 兼容
+    status: planned
+
+  - id: D9
+    title: stabilize publish mapping
+    goal: 将新编辑器的发布行为稳定映射回现有 `image/video/micro/article` 契约。
+    depends_on:
+      - D8
+    acceptance_refs:
+      - A7
+    planned_evidence:
+      - T2_module_interaction
+      - T3_cross_service_integration
+    done_when:
+      - 媒体编辑器稳定映射到 `image/video`
+      - 文字编辑器根据内容重量稳定映射到 `micro/article`
+      - 首层体验中不再重新暴露旧术语
+    status: planned
+
+  - id: D10
+    title: wire flags and telemetry
+    goal: 为入口、编辑器和标题提示补齐独立开关与关键路径观测。
+    depends_on:
+      - D9
+    acceptance_refs:
+      - A8
+    planned_evidence:
+      - T1_schema
+      - T3_cross_service_integration
+    done_when:
+      - `simple_create_action_sheet`、`create_editor_v2`、`progressive_title_prompt` 可独立开关
+      - 入口耗时、编辑器 ready、草稿恢复、发布成功率与 crash-free 指标可观测
+      - 任一能力异常都可单独回退
+    status: planned
+
+  - id: D11
+    title: close acceptance evidence
+    goal: 为 `A1-A8` 建立完整 `T1-T4` 证据矩阵，避免实现完成但验收空档。
+    depends_on:
+      - D5
+      - D6
+      - D7
+      - D8
+      - D9
+      - D10
+    acceptance_refs:
+      - A1
+      - A2
+      - A3
+      - A4
+      - A5
+      - A6
+      - A7
+      - A8
+    planned_evidence:
+      - T1_schema
+      - T2_module_interaction
+      - T3_cross_service_integration
+      - T4_user_journey
+    done_when:
+      - 每个验收项都有明确测试归属和优先级
+      - 新增动作菜单、编辑器 V2、媒体规则、标题渐进披露与草稿兼容测试
+      - 入口启动和草稿恢复的巡检路径被纳入回归矩阵
+    status: planned
+
+  - id: D12
+    title: rehearse rollback playbook
+    goal: 在进入全量开发完成态前，验证真实可执行的回滚路径与放量前检查项。
+    depends_on:
+      - D10
+      - D11
+    acceptance_refs:
+      - A8
+    planned_evidence:
+      - T4_user_journey
+    done_when:
+      - 三个关键开关的独立关闭路径已验证
+      - 回退后草稿仍可读、发布仍可用
+      - 形成从 canary 到全量的实际操作手册与放量前检查项
+    status: planned

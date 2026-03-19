@@ -8,7 +8,7 @@ import 'package:quwoquan_app/assistant/tool/runtime/tool_metadata_registry.dart'
 
 void main() {
   group('AssistantJourneyProjector', () {
-    test('thinkingProgress 的 extracted reasoning 不进入用户可见 journey', () {
+    test('thinkingProgress 的拼音检索碎片不进入用户抽屉', () {
       final projector = AssistantJourneyProjector(
         toolMetadataRegistry: ToolMetadataRegistry(),
       );
@@ -26,7 +26,132 @@ void main() {
         ),
       );
 
-      expect(journey.stageFor(JourneyStageId.analyze)?.status, JourneyStageStatus.active);
+      expect(
+        journey.stageFor(JourneyStageId.analyze)?.status,
+        JourneyStageStatus.active,
+      );
+      expect(journey.entries, isEmpty);
+      expect(journey.summary, isEmpty);
+    });
+
+    test('理解阶段的用户语言流式会进入用户抽屉', () {
+      final projector = AssistantJourneyProjector(
+        toolMetadataRegistry: ToolMetadataRegistry(),
+      );
+
+      final journey = projector.consumeTrace(
+        AssistantTraceEvent(
+          type: AssistantTraceEventType.thinkingProgress,
+          message: '我先确认你更在意的是今天出门会不会被雨淋到。',
+          timestamp: DateTime.now(),
+          data: const <String, dynamic>{
+            'phase': 'understanding',
+            'streaming': true,
+            'extracted': true,
+          },
+        ),
+      );
+
+      expect(
+        journey.stageFor(JourneyStageId.analyze)?.status,
+        JourneyStageStatus.active,
+      );
+      expect(journey.entries, isNotEmpty);
+      expect(journey.entries.first.headline, contains('我先确认你更在意的是今天出门会不会被雨淋到'));
+    });
+
+    test('理解阶段的内部规划口吻不会进入用户抽屉', () {
+      final projector = AssistantJourneyProjector(
+        toolMetadataRegistry: ToolMetadataRegistry(),
+      );
+
+      final journey = projector.consumeTrace(
+        AssistantTraceEvent(
+          type: AssistantTraceEventType.thinkingProgress,
+          message: '用户想了解深圳天气，我需要搜索最新的天气信息。',
+          timestamp: DateTime.now(),
+          data: const <String, dynamic>{
+            'phase': 'understanding',
+            'streaming': true,
+            'extracted': true,
+          },
+        ),
+      );
+
+      expect(
+        journey.stageFor(JourneyStageId.analyze)?.status,
+        JourneyStageStatus.active,
+      );
+      expect(journey.entries, isEmpty);
+      expect(journey.summary, isEmpty);
+    });
+
+    test('检索阶段 trace thinkingProgress 只切换阶段，不把模型思维流写进用户抽屉', () {
+      final projector = AssistantJourneyProjector(
+        toolMetadataRegistry: ToolMetadataRegistry(),
+      );
+
+      final journey = projector.consumeTrace(
+        AssistantTraceEvent(
+          type: AssistantTraceEventType.thinkingProgress,
+          message: '我先换几个检索词继续找',
+          timestamp: DateTime.now(),
+          data: const <String, dynamic>{'phase': 'search', 'streaming': true},
+        ),
+      );
+
+      expect(
+        journey.stageFor(JourneyStageId.search)?.status,
+        JourneyStageStatus.active,
+      );
+      expect(journey.entries, isEmpty);
+      expect(journey.summary, isEmpty);
+    });
+
+    test('answerDelta 只驱动答案主线，不把最终答案正文写进抽屉', () {
+      final projector = AssistantJourneyProjector(
+        toolMetadataRegistry: ToolMetadataRegistry(),
+      );
+
+      final journey = projector.consumeTrace(
+        AssistantTraceEvent(
+          type: AssistantTraceEventType.answerDelta,
+          message: '## 深圳今日天气',
+          timestamp: DateTime.now(),
+          data: const <String, dynamic>{'delta': '## 深圳今日天气'},
+        ),
+      );
+
+      expect(
+        journey.stageFor(JourneyStageId.answer)?.status,
+        JourneyStageStatus.active,
+      );
+      expect(journey.entries, isEmpty);
+      expect(journey.summary, isEmpty);
+    });
+
+    test('suppressed tool error 与技术异常文本不进入用户抽屉', () {
+      final projector = AssistantJourneyProjector(
+        toolMetadataRegistry: ToolMetadataRegistry(),
+      );
+
+      final journey = projector.consumeTrace(
+        AssistantTraceEvent(
+          type: AssistantTraceEventType.toolError,
+          message:
+              'Local context failed: MissingPluginException(No implementation found for method getLocalContext on channel personalassistant/nativeapi)',
+          timestamp: DateTime.now(),
+          data: const <String, dynamic>{
+            'toolName': 'local_context',
+            'suppressed': true,
+          },
+        ),
+      );
+
+      expect(
+        journey.stageFor(JourneyStageId.analyze)?.status,
+        JourneyStageStatus.pending,
+      );
       expect(journey.entries, isEmpty);
       expect(journey.summary, isEmpty);
     });
@@ -69,10 +194,6 @@ void main() {
       );
 
       expect(journey.summary, '已核对 2 个来源。');
-      expect(
-        journey.entries.any((entry) => entry.headline == '我先确认你的问题边界。'),
-        isTrue,
-      );
       expect(
         journey.entries.any(
           (entry) =>

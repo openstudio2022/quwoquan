@@ -9,7 +9,7 @@ import 'package:quwoquan_app/assistant/generated/contracts/assistant_turn.g.dart
 import 'package:quwoquan_app/assistant/reasoning/contracts/planner_contracts.dart';
 import 'package:quwoquan_app/assistant/reasoning/contracts/process_protocol.dart';
 
-const String kAssistantTurnCurrentVersion = 'assistant_turn';
+const String kAssistantTurnCurrentContractId = 'assistant_turn';
 
 AssistantNextAction parseNextAction(String value) =>
     parseAssistantNextAction(value);
@@ -18,8 +18,8 @@ AssistantMessageKind parseMessageKind(String value) =>
     parseAssistantMessageKind(value);
 
 AssistantTurnOutput? tryParseAssistantTurnOutput(Map<String, dynamic> json) {
-  final version = (json['contractVersion'] as String?)?.trim() ?? '';
-  if (version != kAssistantTurnCurrentVersion) return null;
+  final contractId = (json['contractId'] as String?)?.trim() ?? '';
+  if (contractId != kAssistantTurnCurrentContractId) return null;
   if (json['decision'] is! Map) return null;
   final messageKind = (json['messageKind'] as String?)?.trim() ?? '';
   if (messageKind.isEmpty ||
@@ -130,7 +130,7 @@ class AssistantTurnDecision {
     Map<String, dynamic> answerPayload = const <String, dynamic>{},
   }) {
     final decisionFromStructured =
-        (structured['decisionJson'] as Map?)?.cast<String, dynamic>() ??
+        (structured['decision'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final decisionFromPayload =
         (answerPayload['decision'] as Map?)?.cast<String, dynamic>() ??

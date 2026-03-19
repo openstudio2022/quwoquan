@@ -37,6 +37,7 @@ class ModelCapabilityProfile {
     this.supportsReasoningField = false,
     this.supportsThinkTags = false,
     this.reasoningFieldName = '',
+    this.reasoningRequestObject = const <String, dynamic>{},
     this.supportsJsonMode = true,
     this.reasoningMode = ModelReasoningMode.jsonThinkingText,
     this.toolCallMode = ModelToolCallMode.nativeFunction,
@@ -49,6 +50,7 @@ class ModelCapabilityProfile {
   final bool supportsReasoningField;
   final bool supportsThinkTags;
   final String reasoningFieldName;
+  final Map<String, dynamic> reasoningRequestObject;
   final bool supportsJsonMode;
   final ModelReasoningMode reasoningMode;
   final ModelToolCallMode toolCallMode;
@@ -62,7 +64,8 @@ class ModelCapabilityProfile {
   static const ModelCapabilityProfile mimo = ModelCapabilityProfile(
     supportsNativeFunctionCalling: false,
     supportsReasoningField: true,
-    reasoningFieldName: 'reasoning',
+    reasoningFieldName: 'reasoning_content',
+    reasoningRequestObject: <String, dynamic>{'enabled': true},
     supportsJsonMode: false,
     reasoningMode: ModelReasoningMode.nativeField,
     toolCallMode: ModelToolCallMode.jsonEnvelope,

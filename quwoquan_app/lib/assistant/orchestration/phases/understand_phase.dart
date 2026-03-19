@@ -49,6 +49,8 @@ class UnderstandPhase implements Phase {
     final mergedScopeHint = _mergedScopeHint(
       request: request,
       bootstrapContext: bootstrapContext,
+      allowLocationHints:
+          bootstrapContext?.contextContinuityPolicy.allowLocationHints ?? false,
     );
     if (latestUserQuery.isEmpty) {
       return PhaseOutput(state: input.state);
@@ -232,14 +234,16 @@ class UnderstandPhase implements Phase {
         intentGraph.answerShape != AnswerShape.unspecified
         ? intentGraph.answerShape
         : continuationActive &&
-              previousIntentGraph?.answerShape != AnswerShape.unspecified
+              previousIntentGraph != null &&
+              previousIntentGraph.answerShape != AnswerShape.unspecified
         ? previousIntentGraph!.answerShape
         : intentGraph.answerShape;
     final effectiveFreshnessNeed =
         intentGraph.freshnessNeed != FreshnessNeed.unspecified
         ? intentGraph.freshnessNeed
         : continuationActive &&
-              previousIntentGraph?.freshnessNeed != FreshnessNeed.unspecified
+              previousIntentGraph != null &&
+              previousIntentGraph.freshnessNeed != FreshnessNeed.unspecified
         ? previousIntentGraph!.freshnessNeed
         : intentGraph.freshnessNeed;
     return IntentGraph(
@@ -374,25 +378,55 @@ class UnderstandPhase implements Phase {
       'planner.global_plan',
       fallback: '',
     );
-    final contextEnvelopeJson = jsonEncode(
-      inputSafeContextEnvelope(bootstrapContext, request, previousRunArtifacts),
-    );
     final continuityMode =
         bootstrapContext?.contextContinuityPolicy.continuityMode.wireName ?? '';
     final problemClass =
         bootstrapContext?.contextContinuityPolicy.problemClass.trim() ?? '';
+    final sharedContextJson = jsonEncode(
+      _plannerSharedContextPayload(
+        bootstrapContext: bootstrapContext,
+        request: request,
+        previousRunArtifacts: previousRunArtifacts,
+      ),
+    );
+    final currentRuntimeStateJson = jsonEncode(
+      _plannerCurrentRuntimeStatePayload(
+        bootstrapContext: bootstrapContext,
+        request: request,
+        previousRunArtifacts: previousRunArtifacts,
+        continuityMode: continuityMode,
+        problemClass: problemClass,
+      ),
+    );
+    final dialogueContinuityJson = jsonEncode(
+      _plannerDialogueContinuityPayload(
+        bootstrapContext: bootstrapContext,
+        request: request,
+        previousRunArtifacts: previousRunArtifacts,
+        continuityMode: continuityMode,
+        problemClass: problemClass,
+      ),
+    );
+    final mergedScopeHint = _mergedScopeHint(
+      request: request,
+      bootstrapContext: bootstrapContext,
+      allowLocationHints:
+          bootstrapContext?.contextContinuityPolicy.allowLocationHints ?? false,
+    );
+    final plannerMessages = _plannerMessages(
+      request: request,
+      bootstrapContext: bootstrapContext,
+    );
     final result = await runtime.run(
       messages: <Map<String, dynamic>>[
         <String, dynamic>{
           'role': 'system',
           'content': _buildIntentPlanningContext(
-            query: latestUserQuery,
-            bootstrapContext: bootstrapContext,
             continuityMode: continuityMode,
             problemClass: problemClass,
           ),
         },
-        for (final item in request.messages)
+        for (final item in plannerMessages)
           <String, dynamic>{'role': item.role, 'content': item.content},
       ],
       maxIterations: 1,
@@ -400,21 +434,13 @@ class UnderstandPhase implements Phase {
       availableToolNamesOverride: const <String>[],
       templateId: 'planner.global_plan',
       templateVersion: templateVersion,
-      templateContext: request.contextScopeHint,
+      templateContext: mergedScopeHint,
       templateVariables: <String, dynamic>{
         'userQuery': latestUserQuery,
         'skillCatalog': bootstrapContext?.skillCatalog ?? '',
-        'contextEnvelope': contextEnvelopeJson,
-        'userProfileSnapshot': jsonEncode(request.userProfileSnapshot),
-        'historicalRetrievalFeedback': jsonEncode(
-          request.contextScopeHint['historicalRetrievalFeedback'] ??
-              const <String, dynamic>{},
-        ),
-        'domainLearningSignals': jsonEncode(
-          request.contextScopeHint['domainLearningSignals'] ??
-              const <String, dynamic>{},
-        ),
-        'skillExecutionShell': const SkillExecutionShell().toJson(),
+        'sharedContext': sharedContextJson,
+        'currentRuntimeState': currentRuntimeStateJson,
+        'dialogueContinuity': dialogueContinuityJson,
       },
       sessionId: bootstrapContext?.sessionId ?? request.sessionId ?? 'default',
       runId: runId,
@@ -445,40 +471,15 @@ class UnderstandPhase implements Phase {
     final continuityPolicy =
         bootstrapContext?.contextContinuityPolicy ??
         const ContextContinuityPolicy();
-    final continuationActive = _isContinuationContext(bootstrapContext);
     final sanitizedScopeHint = _sanitizePlannerScopeHint(
       request.contextScopeHint,
       allowLocationHints: continuityPolicy.allowLocationHints,
     );
-    final envelope = bootstrapContext == null
-        ? const <String, dynamic>{}
-        : <String, dynamic>{
-            'historySummary': continuityPolicy.allowHistorySummary
-                ? bootstrapContext.historySummary
-                : '',
-            'recalledTexts': continuityPolicy.allowLongtermMemory
-                ? bootstrapContext.recalledTexts
-                : const <String>[],
-            if (continuationActive && bootstrapContext.previousIntentGraph != null)
-              'previousIntentGraph': bootstrapContext.previousIntentGraph!
-                  .toJson(),
-            if (continuationActive &&
-                bootstrapContext.previousAnswerSummary.isNotEmpty)
-              'previousAnswerSummary': bootstrapContext.previousAnswerSummary,
-            'continuityPolicy': bootstrapContext.contextContinuityPolicy
-                .toJson(),
-            if (bootstrapContext.continuityOverrideSlots.isNotEmpty)
-              'continuityOverrideSlots':
-                  bootstrapContext.continuityOverrideSlots,
-            if (previousRunArtifacts != null)
-              'previousSlotState': previousRunArtifacts.slotState.toJson(),
-            if (previousRunArtifacts?.domainPolicyBundle != null)
-              'previousDomainPolicyBundle': previousRunArtifacts
-                  ?.domainPolicyBundle
-                  ?.toJson(),
-          };
     return <String, dynamic>{
-      ...envelope,
+      'recalledTexts':
+          continuityPolicy.allowLongtermMemory && bootstrapContext != null
+          ? bootstrapContext.recalledTexts
+          : const <String>[],
       'deviceProfile': request.deviceProfile,
       'deviceModel': request.deviceModel,
       'deviceOs': request.deviceOs,
@@ -489,29 +490,133 @@ class UnderstandPhase implements Phase {
     };
   }
 
-  String _buildIntentPlanningContext({
-    required String query,
+  Map<String, dynamic> _plannerSharedContextPayload({
     required AssistantBootstrapContext? bootstrapContext,
+    required AssistantRunRequest request,
+    required RunArtifacts? previousRunArtifacts,
+  }) {
+    return <String, dynamic>{
+      'contextEnvelope': inputSafeContextEnvelope(
+        bootstrapContext,
+        request,
+        previousRunArtifacts,
+      ),
+      'userProfileSnapshot': request.userProfileSnapshot,
+      'historicalRetrievalFeedback':
+          (request.contextScopeHint['historicalRetrievalFeedback'] as Map?)
+              ?.cast<String, dynamic>() ??
+          const <String, dynamic>{},
+      'domainLearningSignals':
+          (request.contextScopeHint['domainLearningSignals'] as Map?)
+              ?.cast<String, dynamic>() ??
+          const <String, dynamic>{},
+    };
+  }
+
+  Map<String, dynamic> _plannerCurrentRuntimeStatePayload({
+    required AssistantBootstrapContext? bootstrapContext,
+    required AssistantRunRequest request,
+    required RunArtifacts? previousRunArtifacts,
+    required String continuityMode,
+    required String problemClass,
+  }) {
+    final continuationActive = _isContinuationContext(bootstrapContext);
+    final previousIntentGraph = continuationActive
+        ? bootstrapContext?.previousIntentGraph
+        : null;
+    return <String, dynamic>{
+      'dialogueState': <String, dynamic>{
+        'continuityMode': continuityMode,
+        'problemClassHint': problemClass,
+        'continuationActive': continuationActive,
+        'sessionId':
+            bootstrapContext?.sessionId ?? request.sessionId ?? 'default',
+      },
+      'slotStateSnapshot': continuationActive
+          ? previousRunArtifacts?.slotState.toJson() ??
+                const <String, dynamic>{}
+          : const <String, dynamic>{},
+      'contextSlots': continuationActive
+          ? previousIntentGraph?.contextSlots ?? const <String, dynamic>{}
+          : const <String, dynamic>{},
+      'domainPolicyBundle': continuationActive
+          ? previousRunArtifacts?.domainPolicyBundle?.toJson() ??
+                const <String, dynamic>{}
+          : const <String, dynamic>{},
+      'skillExecutionShell': const SkillExecutionShell().toJson(),
+    };
+  }
+
+  Map<String, dynamic> _plannerDialogueContinuityPayload({
+    required AssistantBootstrapContext? bootstrapContext,
+    required AssistantRunRequest request,
+    required RunArtifacts? previousRunArtifacts,
     required String continuityMode,
     required String problemClass,
   }) {
     final continuationActive = _isContinuationContext(bootstrapContext);
     final allowHistorySummary =
+        continuationActive &&
         bootstrapContext?.contextContinuityPolicy.allowHistorySummary == true;
+    final previousUnderstandingSnapshot =
+        continuationActive &&
+            bootstrapContext != null &&
+            _hasStructuredContent(
+              bootstrapContext.previousUnderstandingSnapshot.toJson(),
+            )
+        ? bootstrapContext.previousUnderstandingSnapshot.toJson()
+        : const <String, dynamic>{};
+    final previousAnswerProcessing =
+        continuationActive &&
+            bootstrapContext != null &&
+            _hasStructuredContent(
+              bootstrapContext.previousAnswerProcessing.toJson(),
+            )
+        ? bootstrapContext.previousAnswerProcessing.toJson()
+        : const <String, dynamic>{};
+    final historicalThinkingSnapshot =
+        continuationActive &&
+            bootstrapContext != null &&
+            _hasStructuredContent(
+              bootstrapContext.historicalThinkingSnapshot.toJson(),
+            )
+        ? bootstrapContext.historicalThinkingSnapshot.toJson()
+        : const <String, dynamic>{};
+    return <String, dynamic>{
+      'continuityMode': continuityMode,
+      'problemClassHint': problemClass,
+      'historySummary': allowHistorySummary
+          ? bootstrapContext?.historySummary ?? ''
+          : '',
+      'previousIntentGraph':
+          continuationActive && bootstrapContext?.previousIntentGraph != null
+          ? bootstrapContext!.previousIntentGraph!.toJson()
+          : const <String, dynamic>{},
+      'previousUnderstandingSnapshot': previousUnderstandingSnapshot,
+      'previousAnswerProcessing': previousAnswerProcessing,
+      'previousSlotState': continuationActive
+          ? previousRunArtifacts?.slotState.toJson() ??
+                const <String, dynamic>{}
+          : const <String, dynamic>{},
+      'previousAnswerSummary': continuationActive
+          ? bootstrapContext?.previousAnswerSummary ?? ''
+          : '',
+      'historicalThinkingSnapshot': historicalThinkingSnapshot,
+      if (continuationActive &&
+          bootstrapContext?.continuityOverrideSlots.isNotEmpty == true)
+        'continuityOverrideSlots': bootstrapContext!.continuityOverrideSlots,
+    };
+  }
+
+  String _buildIntentPlanningContext({
+    required String continuityMode,
+    required String problemClass,
+  }) {
     return [
-      '当前用户问题：$query',
-      if (allowHistorySummary &&
-          bootstrapContext?.historySummary.trim().isNotEmpty == true)
-        '最近历史摘要：${bootstrapContext!.historySummary.trim()}',
+      '请把公共外壳中的 shared_context / current_runtime_state / dialogue_continuity 当作唯一上下文入口。',
       if (continuityMode.isNotEmpty) '连续性判断：$continuityMode',
       if (problemClass.isNotEmpty) '已知问题类型提示：$problemClass',
-      if (continuationActive && bootstrapContext?.previousIntentGraph != null)
-        '上一轮意图：${jsonEncode(bootstrapContext!.previousIntentGraph!.toJson())}',
-      if (continuationActive &&
-          bootstrapContext?.previousAnswerSummary.trim().isNotEmpty == true)
-        '上一轮回答摘要：${bootstrapContext!.previousAnswerSummary.trim()}',
-      if (bootstrapContext?.continuityOverrideSlots.isNotEmpty == true)
-        '用户本轮显式覆盖：${jsonEncode(bootstrapContext!.continuityOverrideSlots)}',
+      '如果本轮是在纠正上一轮理解，优先修正旧假设。',
       '请直接输出 assistant_turn JSON，并把结构化意图完整放入 intentGraph。',
     ].join('\n');
   }
@@ -519,12 +624,86 @@ class UnderstandPhase implements Phase {
   Map<String, dynamic> _mergedScopeHint({
     required AssistantRunRequest request,
     required AssistantBootstrapContext? bootstrapContext,
+    required bool allowLocationHints,
   }) {
     return <String, dynamic>{
-      ...request.contextScopeHint,
+      ..._sanitizePlannerScopeHint(
+        request.contextScopeHint,
+        allowLocationHints: allowLocationHints,
+      ),
+      if (bootstrapContext?.providerReasoningContinuation.trim().isNotEmpty ==
+          true)
+        'providerReasoningContinuation': bootstrapContext!
+            .providerReasoningContinuation
+            .trim(),
       if (bootstrapContext?.continuityOverrideSlots.isNotEmpty == true)
         'continuityOverrideSlots': bootstrapContext!.continuityOverrideSlots,
     };
+  }
+
+  List<AssistantRunMessage> _plannerMessages({
+    required AssistantRunRequest request,
+    required AssistantBootstrapContext? bootstrapContext,
+  }) {
+    final continuationActive = _isContinuationContext(bootstrapContext);
+    if (continuationActive) {
+      return request.messages;
+    }
+    if (request.messages.isEmpty) {
+      return const <AssistantRunMessage>[];
+    }
+    return <AssistantRunMessage>[request.messages.last];
+  }
+
+  bool _hasStructuredContent(Map<String, dynamic> value) {
+    for (final item in value.values) {
+      if (item is String && item.trim().isNotEmpty) return true;
+      if (item is num && item != 0) return true;
+      if (item is bool && item) return true;
+      if (item is List && item.isNotEmpty) return true;
+      if (item is Map && item.isNotEmpty) return true;
+    }
+    return false;
+  }
+
+  Map<String, dynamic> _sanitizePlannerScopeHint(
+    Map<String, dynamic> scopeHint, {
+    required bool allowLocationHints,
+  }) {
+    if (scopeHint.isEmpty) {
+      return const <String, dynamic>{};
+    }
+    final sanitized = Map<String, dynamic>.from(scopeHint);
+    for (final key in const <String>[
+      'runArtifacts',
+      'previousRunArtifacts',
+      'machineEnvelope',
+      'displayMarkdown',
+      'displayPlainText',
+      'journey',
+      'uiProcessTimeline',
+      'uiProcessTimelineV2',
+      'assistantResponse',
+    ]) {
+      sanitized.remove(key);
+    }
+    if (allowLocationHints) {
+      return sanitized;
+    }
+    for (final key in const <String>[
+      'city',
+      'lat',
+      'lng',
+      'gpsCity',
+      'gpsLat',
+      'gpsLng',
+      'recentCityMentions',
+      'locationPrecision',
+      'locationTimestamp',
+    ]) {
+      sanitized.remove(key);
+    }
+    return sanitized;
   }
 
   IntentGraph _buildFallbackIntentGraph({
@@ -559,7 +738,8 @@ class UnderstandPhase implements Phase {
       userGoal: latestUserQuery,
       problemShape:
           continuationActive &&
-              previousIntentGraph?.problemShape != ProblemShape.unknown
+              previousIntentGraph != null &&
+              previousIntentGraph.problemShape != ProblemShape.unknown
           ? previousIntentGraph!.problemShape
           : ProblemShape.singleSkill,
       primarySkill: primarySkill,
@@ -765,30 +945,6 @@ class UnderstandPhase implements Phase {
       merged['previousAnswerSummary'] = bootstrapContext!.previousAnswerSummary;
     }
     return merged;
-  }
-
-  Map<String, dynamic> _sanitizePlannerScopeHint(
-    Map<String, dynamic> scopeHint, {
-    required bool allowLocationHints,
-  }) {
-    if (scopeHint.isEmpty || allowLocationHints) {
-      return Map<String, dynamic>.from(scopeHint);
-    }
-    final sanitized = Map<String, dynamic>.from(scopeHint);
-    for (final key in const <String>[
-      'city',
-      'lat',
-      'lng',
-      'gpsCity',
-      'gpsLat',
-      'gpsLng',
-      'recentCityMentions',
-      'locationPrecision',
-      'locationTimestamp',
-    ]) {
-      sanitized.remove(key);
-    }
-    return sanitized;
   }
 
   Map<String, dynamic> _slotSnapshotMap(SlotStateSnapshot slotState) {

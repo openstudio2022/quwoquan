@@ -5,13 +5,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
+import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/ui/circle/widgets/home_circles_category_tab.dart';
+import 'package:quwoquan_app/ui/circle/widgets/media_viewer_result_absorber.dart';
+import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class HomeCirclesHubPage extends ConsumerStatefulWidget {
@@ -45,10 +49,14 @@ class _HomeCirclesHubPageState extends ConsumerState<HomeCirclesHubPage> {
   String? _draggingChannelId;
   List<String>? _selectedCategoryIds;
   final GlobalKey _categoryBarKey = GlobalKey();
+  late List<Map<String, dynamic>> _circleFeedItems;
 
   @override
   void initState() {
     super.initState();
+    _circleFeedItems = CircleMockData.circleFeedItems
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList(growable: true);
     unawaited(_restoreChannelSelection());
   }
 
@@ -297,40 +305,42 @@ class _HomeCirclesHubPageState extends ConsumerState<HomeCirclesHubPage> {
       for (final circle in CircleMockData.circles)
         circle['id']?.toString() ?? '': circle,
     };
-    final activityItems = CircleMockData.activities.map((activity) {
-      final circleId = activity['circleId']?.toString() ?? '';
-      final sourceCircle = circleById[circleId];
-      return _HomeCircleStoryItem(
-        id: activity['id']?.toString() ?? circleId,
-        title: activity['title']?.toString() ?? '',
-        subtitle: activity['circleName']?.toString() ?? '',
-        imageUrl: activity['image']?.toString() ?? '',
-        circleId: circleId,
-        categoryId: sourceCircle?['categoryId']?.toString() ?? 'all',
-        typeLabel: UITextConstants.homeCirclesStoryTypeActivity,
-        isMine: _isMyCircleId(circleId),
-      );
-    });
-    final creationItems = CircleMockData.circles.map((circle) {
-      final circleId = circle['id']?.toString() ?? '';
-      final circleName = circle['name']?.toString() ?? '';
-      final description = circle['desc']?.toString() ?? circleName;
-      return _HomeCircleStoryItem(
-        id: 'creation_$circleId',
-        title: description,
-        subtitle: circleName,
-        imageUrl:
-            circle['coverUrl']?.toString() ??
-            circle['cover']?.toString() ??
-            circle['avatar']?.toString() ??
-            '',
-        circleId: circleId,
-        categoryId: circle['categoryId']?.toString() ?? 'all',
-        typeLabel: UITextConstants.homeCirclesStoryTypeCreation,
-        isMine: _isMyCircleId(circleId),
-      );
-    });
-    final pool = <_HomeCircleStoryItem>[...activityItems, ...creationItems];
+    final pool =
+        _filteredLevelOnePosts(tab, categoryId, fallbackToAllWhenEmpty: true)
+            .map((item) {
+              final circleId = item['circleId']?.toString() ?? '';
+              final sourceCircle = circleById[circleId];
+              final circleName = sourceCircle?['name']?.toString() ?? '';
+              final mergedRaw = <String, dynamic>{
+                ...item,
+                if (!item.containsKey('circleName')) 'circleName': circleName,
+              };
+              final title =
+                  item['title']?.toString() ??
+                  item['body']?.toString() ??
+                  circleName;
+              return _HomeCircleStoryItem(
+                id:
+                    item['postId']?.toString() ??
+                    item['id']?.toString() ??
+                    circleId,
+                title: title,
+                subtitle: circleName,
+                imageUrl:
+                    item['coverUrl']?.toString() ??
+                    item['thumbnailUrl']?.toString() ??
+                    sourceCircle?['coverUrl']?.toString() ??
+                    sourceCircle?['cover']?.toString() ??
+                    sourceCircle?['avatar']?.toString() ??
+                    '',
+                circleId: circleId,
+                categoryId: sourceCircle?['categoryId']?.toString() ?? 'all',
+                typeLabel: _storyTypeLabel(mergedRaw),
+                isMine: _isMyCircleId(circleId),
+                rawPost: mergedRaw,
+              );
+            })
+            .toList(growable: false);
     final isMineMode = tab == _HomeCirclesModuleTab.mine;
     final modeFiltered = pool.where(
       (item) => isMineMode ? item.isMine : !item.isMine,
@@ -346,6 +356,167 @@ class _HomeCirclesHubPageState extends ConsumerState<HomeCirclesHubPage> {
         ? categoryFiltered
         : ordered;
     return fallbackPool.take(3).toList(growable: false);
+  }
+
+  List<Map<String, dynamic>> _filteredLevelOnePosts(
+    _HomeCirclesModuleTab tab,
+    String categoryId, {
+    bool fallbackToAllWhenEmpty = false,
+  }) {
+    final circleById = <String, Map<String, dynamic>>{
+      for (final circle in CircleMockData.circles)
+        circle['id']?.toString() ?? '': circle,
+    };
+    final isMineMode = tab == _HomeCirclesModuleTab.mine;
+    final modeFiltered = _circleFeedItems
+        .where((item) {
+          final circleId = item['circleId']?.toString() ?? '';
+          return isMineMode
+              ? _isMyCircleId(circleId)
+              : !_isMyCircleId(circleId);
+        })
+        .toList(growable: false);
+    if (categoryId == 'all') {
+      return modeFiltered;
+    }
+    final categoryFiltered = modeFiltered
+        .where((item) {
+          final circleId = item['circleId']?.toString() ?? '';
+          final circle = circleById[circleId];
+          return circle?['categoryId']?.toString() == categoryId;
+        })
+        .toList(growable: false);
+    if (categoryFiltered.isNotEmpty || !fallbackToAllWhenEmpty) {
+      return categoryFiltered;
+    }
+    return modeFiltered;
+  }
+
+  String _storyTypeLabel(Map<String, dynamic> item) {
+    final type = (item['type'] ?? item['contentType'] ?? '').toString();
+    switch (type) {
+      case 'photo':
+      case 'image':
+        return UITextConstants.discoveryTabPhoto;
+      case 'video':
+        return UITextConstants.discoveryTabVideo;
+      case 'article':
+        return UITextConstants.creationSubArticle;
+      case 'moment':
+      case 'micro':
+        final hasVideo = (item['videoUrl']?.toString().trim() ?? '').isNotEmpty;
+        final hasImages =
+            item['imageUrls'] is List && (item['imageUrls'] as List).isNotEmpty;
+        if (hasVideo) return UITextConstants.discoveryTabVideo;
+        if (hasImages) return UITextConstants.discoveryTabPhoto;
+        return UITextConstants.creationSubMicro;
+      default:
+        return UITextConstants.homeCirclesStoryTypeCreation;
+    }
+  }
+
+  PostBaseDto? _tryParsePost(Map<String, dynamic> item) {
+    try {
+      return postBaseDtoFromMap(item);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _supportsViewer(PostBaseDto post) {
+    return post.supportsUnifiedViewer;
+  }
+
+  bool _isVideoPost(PostBaseDto post) {
+    return post.isVideoLike;
+  }
+
+  Future<void> _openCircleFeedViewer(
+    BuildContext context,
+    Map<String, dynamic> tapped,
+    List<Map<String, dynamic>> sourceItems,
+  ) async {
+    final viewerEntries = sourceItems
+        .map((item) => (raw: item, dto: _tryParsePost(item)))
+        .where((entry) => entry.dto != null && _supportsViewer(entry.dto!))
+        .toList(growable: false);
+    if (viewerEntries.isEmpty) return;
+    final tappedDto = _tryParsePost(tapped);
+    if (tappedDto == null || !_supportsViewer(tappedDto)) return;
+    final viewerDtos = viewerEntries
+        .map((entry) => entry.dto!)
+        .toList(growable: false);
+    final initialIndex = viewerDtos
+        .indexWhere((item) => item.id == tappedDto.id)
+        .clamp(0, viewerDtos.length - 1);
+    final relationshipState = ref.read(userRelationshipStateProvider);
+    final postInteractionState = ref.read(postInteractionStateProvider);
+    final result = await context.push<Object?>(
+      _isVideoPost(tappedDto)
+          ? AppRoutePaths.videoViewer(index: '$initialIndex')
+          : AppRoutePaths.mediaViewer(
+              category: 'circle',
+              index: '$initialIndex',
+            ),
+      extra: MediaViewerExtra(
+        posts: viewerDtos.map(PostSummaryView.fromDto).toList(growable: false),
+        dtoPosts: viewerDtos,
+        initialIndex: initialIndex,
+        category: 'circle',
+        source: 'circle',
+        circleId: tapped['circleId']?.toString(),
+        rawPostsById: <String, Map<String, dynamic>>{
+          for (final entry in viewerEntries) entry.dto!.id: entry.raw,
+        },
+        interactionSnapshot: MediaViewerInteractionSnapshot(
+          followingUsers: Set<String>.from(
+            relationshipState.followingProfileIds,
+          ),
+          likedPosts: Set<String>.from(postInteractionState.likedPostIds),
+          savedPosts: Set<String>.from(postInteractionState.savedPostIds),
+          postLikesCount: {
+            for (final entry in viewerEntries)
+              entry.dto!.id: postInteractionState.likeCountFor(
+                entry.dto!.id,
+                fallback:
+                    (entry.raw['likeCount'] as num?)?.toInt() ??
+                    entry.dto!.likeCount,
+              ),
+          },
+          postBookmarksCount: {
+            for (final entry in viewerEntries)
+              entry.dto!.id: postInteractionState.bookmarkCountFor(
+                entry.dto!.id,
+                fallback:
+                    (entry.raw['favoriteCount'] as num?)?.toInt() ??
+                    (entry.raw['bookmarkCount'] as num?)?.toInt() ??
+                    entry.dto!.favoriteCount,
+              ),
+          },
+          postSharesCount: {
+            for (final entry in viewerEntries)
+              entry.dto!.id: postInteractionState.shareCountFor(
+                entry.dto!.id,
+                fallback:
+                    (entry.raw['shareCount'] as num?)?.toInt() ??
+                    entry.dto!.shareCount,
+              ),
+          },
+        ),
+      ),
+    );
+    if (result is MediaViewerResult) {
+      ref
+          .read(userRelationshipStateProvider.notifier)
+          .applyViewerResult(result);
+      ref.read(postInteractionStateProvider.notifier).applyViewerResult(result);
+      setState(() {
+        _circleFeedItems = applyMediaViewerResultToFeedItems(
+          _circleFeedItems,
+          result,
+        );
+      });
+    }
   }
 
   @override
@@ -373,6 +544,11 @@ class _HomeCirclesHubPageState extends ConsumerState<HomeCirclesHubPage> {
       _activeModuleTab,
       effectiveActiveCategoryId,
     );
+    final levelOnePosts = _filteredLevelOnePosts(
+      _activeModuleTab,
+      effectiveActiveCategoryId,
+      fallbackToAllWhenEmpty: true,
+    );
 
     return Stack(
       children: [
@@ -389,6 +565,11 @@ class _HomeCirclesHubPageState extends ConsumerState<HomeCirclesHubPage> {
                   activeModuleTab: _activeModuleTab,
                   circles: circles,
                   stories: stories,
+                  onStoryTap: (item, items) => _openCircleFeedViewer(
+                    context,
+                    item.rawPost,
+                    items.map((entry) => entry.rawPost).toList(growable: false),
+                  ),
                   onModuleTabChanged: (nextTab) {
                     if (nextTab == _activeModuleTab) return;
                     setState(() {
@@ -423,6 +604,9 @@ class _HomeCirclesHubPageState extends ConsumerState<HomeCirclesHubPage> {
                   'home-circles-category-$effectiveActiveCategoryId',
                 ),
                 categoryId: effectiveActiveCategoryId,
+                posts: levelOnePosts,
+                onPostTap: (tapped, sourceItems) =>
+                    _openCircleFeedViewer(context, tapped, sourceItems),
                 label:
                     activeCategory.value['label']?.toString() ??
                     effectiveActiveCategoryId,
@@ -471,6 +655,7 @@ class _CirclesGlobalHeader extends StatelessWidget {
     required this.activeModuleTab,
     required this.circles,
     required this.stories,
+    required this.onStoryTap,
     required this.onModuleTabChanged,
   });
 
@@ -478,6 +663,11 @@ class _CirclesGlobalHeader extends StatelessWidget {
   final _HomeCirclesModuleTab activeModuleTab;
   final List<CircleDto> circles;
   final List<_HomeCircleStoryItem> stories;
+  final void Function(
+    _HomeCircleStoryItem item,
+    List<_HomeCircleStoryItem> items,
+  )
+  onStoryTap;
   final ValueChanged<_HomeCirclesModuleTab> onModuleTabChanged;
 
   double _circleCardWidth(BuildContext context) {
@@ -591,9 +781,7 @@ class _CirclesGlobalHeader extends StatelessWidget {
                   _HomeCircleStoryCard(
                     item: stories[index],
                     isDark: isDark,
-                    onTap: () => context.push(
-                      AppRoutePaths.circleDetail(id: stories[index].circleId),
-                    ),
+                    onTap: () => onStoryTap(stories[index], stories),
                   ),
                   if (index < stories.length - 1)
                     SizedBox(height: AppSpacing.intraGroupSm),
@@ -919,7 +1107,7 @@ class _HomeCircleStoryCard extends StatelessWidget {
 }
 
 class _HomeCircleStoryItem {
-  const _HomeCircleStoryItem({
+  _HomeCircleStoryItem({
     required this.id,
     required this.title,
     required this.subtitle,
@@ -928,6 +1116,7 @@ class _HomeCircleStoryItem {
     required this.categoryId,
     required this.typeLabel,
     required this.isMine,
+    required this.rawPost,
   });
 
   final String id;
@@ -938,6 +1127,7 @@ class _HomeCircleStoryItem {
   final String categoryId;
   final String typeLabel;
   final bool isMine;
+  final Map<String, dynamic> rawPost;
 }
 
 class _HomeCirclesChannelPanel extends StatelessWidget {

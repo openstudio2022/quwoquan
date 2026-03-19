@@ -5,7 +5,7 @@ void main() {
   group('assistant turn contract roundtrip', () {
     test('typed getters expose canonical process protocol', () {
       final output = AssistantTurnOutput(
-        contractVersion: kAssistantTurnCurrentVersion,
+        contractId: kAssistantTurnCurrentContractId,
         decision: const AssistantTurnDecisionPayload(
           nextAction: AssistantNextAction.answer,
           confidence: 0.92,
@@ -50,7 +50,7 @@ void main() {
 
     test('missingContextSlots uses canonical field only', () {
       final parsed = tryParseAssistantTurnOutput(<String, dynamic>{
-        'contractVersion': kAssistantTurnCurrentVersion,
+        'contractId': kAssistantTurnCurrentContractId,
         'decision': <String, dynamic>{
           'nextAction': AssistantNextAction.askUser.wireName,
         },
@@ -65,7 +65,7 @@ void main() {
 
     test('missing messageKind is rejected under strict contract parsing', () {
       final parsed = tryParseAssistantTurnOutput(<String, dynamic>{
-        'contractVersion': kAssistantTurnCurrentVersion,
+        'contractId': kAssistantTurnCurrentContractId,
         'decision': <String, dynamic>{
           'nextAction': AssistantNextAction.answer.wireName,
         },
@@ -84,7 +84,7 @@ void main() {
 
     test('answer-phase turn keeps explicit messageKind without compatibility rewrite', () {
       final parsed = tryParseAssistantTurnOutput(<String, dynamic>{
-        'contractVersion': kAssistantTurnCurrentVersion,
+        'contractId': kAssistantTurnCurrentContractId,
         'decision': <String, dynamic>{
           'nextAction': AssistantNextAction.answer.wireName,
         },

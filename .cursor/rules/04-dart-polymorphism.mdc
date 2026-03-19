@@ -1,0 +1,31 @@
+---
+description: Dart 多态消费约束，禁止直接判断 DTO 子类型
+globs: **/*.dart
+alwaysApply: false
+---
+
+# Dart 多态消费约束
+
+## 禁止直接判断 DTO 子类型
+
+- 对抽象基类/共享接口（如 `PostBaseDto`）的消费，禁止在业务/UI 代码中写 `is` / `is!` / `as` / `whereType<T>()` 去分支判断具体子类型。
+- 必须优先把差异收口到基类接口、抽象 getter、语义化 capability（如 `isVideoLike`、`primaryVisualUrl`、`supportsUnifiedViewer`）。
+- 新增字段访问需求时，先补基类契约，再改消费方；不要在页面里继续加 `if (post is XxxPostDto)`.
+
+```dart
+// ❌ 禁止
+if (post is VideoPostDto) return post.thumbnailUrl;
+if (post is MomentPostDto) return post.videoUrl?.trim() ?? '';
+final photos = items.whereType<PhotoPostDto>().toList();
+final article = post as ArticlePostDto;
+
+// ✅ 必须
+if (post.isVideoLike) return post.primaryVisualUrl;
+final visuals = items.where((item) => item.displayFormat == 'image').toList();
+final title = post.normalizedTitle;
+```
+
+## 唯一允许的例外
+
+- 反序列化/工厂分发层可以按 wire format 决定实例化哪一个子类，例如 `postBaseDtoFromMap()`。
+- 测试里如果要验证 codegen 分发结果，可以断言具体类型；生产代码禁止依赖这种分支。

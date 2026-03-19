@@ -64,7 +64,7 @@ flowchart TB
     end
 
     subgraph synthesis [合成层]
-        Synthesizer[分域合成器\nfinal_answer + multi_skill_fusion]
+        Synthesizer[分域合成器\nfinal_answer（含跨域融合）]
         Learning[学习闭环\n_persistLearningTags]
     end
 
@@ -160,14 +160,15 @@ L5  phase.output_contract.*.md  ← 分阶段输出契约
 
 阶段模板（动态层，每轮变化）：
   ├── planner.global_plan.md         ← Planner 阶段：注入 {{skillCatalog}} + {{contextEnvelope}}
-  ├── synthesizer.final_answer.md    ← Synthesis 阶段：生成用户可读答案
-  └── synthesizer.multi_skill_fusion.md  ← 多技能融合（跨域时）
+  └── synthesizer.final_answer.md    ← Synthesis 阶段：生成用户可读答案
 
 运行时附加上下文注入（phase owner 组装）：
   ├── <memory_recall>recalled texts</memory_recall>
   ├── <session_history>summarized history</session_history>
   └── <capability_catalog>tool descriptions</capability_catalog>
 ```
+
+跨域融合已并回当前 answer 合成链路，不再使用独立的 `synthesizer.multi_skill_fusion.md`；流式由运行时事件通道承载，`assistant_turn` JSON 只保留稳态语义，嵌套 `understanding.streamText` / `answerProcessing.streamText` 不再作为流式真相源。
 
 **关键变量**（注入 planner）：
 - `{{skillCatalog}}`：所有 15 个 skill 的 `domainId: description [mode=xxx]` 列表

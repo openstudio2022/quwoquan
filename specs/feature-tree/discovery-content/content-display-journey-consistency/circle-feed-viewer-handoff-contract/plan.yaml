@@ -1,0 +1,73 @@
+version: 1
+node: discovery-content/content-display-journey-consistency/circle-feed-viewer-handoff-contract
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260318-002-content-display-journey-consistency-prd-baseline-expansion.yaml
+
+slices:
+  - id: P1
+    title: freeze circle handoff contract
+    goal: 收口 circle 来源的 `MediaViewerExtra` / `MediaViewerResult` 字段与来源上下文语义
+    depends_on: []
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T1_schema
+      - T2_app_mock
+    done_when:
+      - circle 与 discovery 的 extra/result 字段集合同构
+      - `circleId`、`rawPostsById`、interaction snapshot 的职责清晰
+      - viewer 首屏不依赖额外请求补正文
+    status: planned
+
+  - id: P2
+    title: integrate viewer open and dismiss flows
+    goal: 改造圈子入口与 viewer 返回吸收逻辑，完成完整闭环
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A1
+      - A2
+    planned_evidence:
+      - T2_app_mock
+      - T3_app_api_integration
+    done_when:
+      - `section_creations.dart` 完整构造 extra
+      - circle 来源能完整吸收 viewer result
+      - profile 往返后返回 circle 仍一致
+    status: planned
+
+  - id: P3
+    title: align shared provider source of truth
+    goal: 确保 circle 只消费共享 provider，不自持第二套关系态与 post 互动态
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A3
+    planned_evidence:
+      - T2_module_interaction
+      - T3_app_api_integration
+    done_when:
+      - circle 来源只保留来源上下文
+      - relationship 与 interaction 状态均来自共享 provider
+      - 弱网 pending intent 与 route result 不发生长期冲突
+    status: planned
+
+  - id: P4
+    title: validate rollout and regression
+    goal: 验证 circle 专项灰度、回滚与旅程回归
+    depends_on:
+      - P3
+    acceptance_refs:
+      - S1
+    planned_evidence:
+      - T4_user_journey
+    done_when:
+      - circle feature flag 可独立控制
+      - circle 专项回归清单可执行
+      - 回滚不会影响 discovery 主旅程
+    status: planned

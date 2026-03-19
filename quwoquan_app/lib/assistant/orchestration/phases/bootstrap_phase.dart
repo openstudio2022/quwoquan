@@ -10,6 +10,7 @@ import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.da
 import 'package:quwoquan_app/assistant/orchestration/assistant_orchestration_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
+import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/reasoning/routing/domain_router.dart';
 import 'package:quwoquan_app/assistant/retrieval/contracts/capability_catalog.dart';
@@ -74,6 +75,20 @@ class BootstrapPhase implements Phase {
     final previousAnswerSummary = _resolvePreviousAnswerSummary(
       latestAssistant,
     );
+    final previousProviderReasoningContinuation =
+        _resolveProviderReasoningContinuation(latestAssistant);
+    final previousUnderstandingSnapshot = _parsePreviousUnderstandingSnapshot(
+      latestAssistant,
+      previousRunArtifacts,
+    );
+    final previousAnswerProcessing = _parsePreviousAnswerProcessing(
+      latestAssistant,
+      previousRunArtifacts,
+    );
+    final historicalThinkingSnapshot = _parseHistoricalThinkingSnapshot(
+      latestAssistant,
+      previousRunArtifacts,
+    );
     final continuityDecision = await _resolveContinuityWithModel(
       request: request,
       latestUserQuery: latestUserQuery,
@@ -95,11 +110,26 @@ class BootstrapPhase implements Phase {
     final continuityOverrideSlots =
         continuityDecision?.overrideSlots ?? const <String, dynamic>{};
     final carryPreviousTurn = _shouldCarryPreviousTurn(continuityPolicy);
+    final carriedPreviousRunArtifacts = carryPreviousTurn
+        ? previousRunArtifacts
+        : null;
     final carriedPreviousIntentGraph = carryPreviousTurn
         ? previousIntentGraph
         : null;
     final carriedPreviousAnswerSummary = carryPreviousTurn
         ? previousAnswerSummary
+        : '';
+    final carriedPreviousUnderstandingSnapshot = carryPreviousTurn
+        ? previousUnderstandingSnapshot
+        : const RunArtifactsUnderstandingSnapshot();
+    final carriedPreviousAnswerProcessing = carryPreviousTurn
+        ? previousAnswerProcessing
+        : const RunArtifactsAnswerProcessing();
+    final carriedHistoricalThinkingSnapshot = carryPreviousTurn
+        ? historicalThinkingSnapshot
+        : const RunArtifactsHistoricalThinkingSnapshot();
+    final carriedProviderReasoningContinuation = carryPreviousTurn
+        ? previousProviderReasoningContinuation
         : '';
     if (latestUserQuery.isNotEmpty) {
       sessionManager.appendMessage(
@@ -137,9 +167,23 @@ class BootstrapPhase implements Phase {
         .map((item) => item.text.toString())
         .toList(growable: false);
     final contextScopeHint = <String, dynamic>{
-      ...request.contextScopeHint,
+      ..._sanitizeForwardedContextScopeHint(
+        request.contextScopeHint,
+        carryPreviousTurn: carryPreviousTurn,
+        previousRunArtifacts: carriedPreviousRunArtifacts,
+      ),
       if (continuityOverrideSlots.isNotEmpty)
         'continuityOverrideSlots': continuityOverrideSlots,
+      if (_hasStructuredContent(carriedPreviousUnderstandingSnapshot.toJson()))
+        'previousUnderstandingSnapshot': carriedPreviousUnderstandingSnapshot
+            .toJson(),
+      if (_hasStructuredContent(carriedPreviousAnswerProcessing.toJson()))
+        'previousAnswerProcessing': carriedPreviousAnswerProcessing.toJson(),
+      if (_hasStructuredContent(carriedHistoricalThinkingSnapshot.toJson()))
+        'historicalThinkingSnapshot': carriedHistoricalThinkingSnapshot
+            .toJson(),
+      if (carriedProviderReasoningContinuation.isNotEmpty)
+        'providerReasoningContinuation': carriedProviderReasoningContinuation,
     };
     final contextAssembly = contextOrchestrator.assemble(
       query: latestUserQuery,
@@ -186,6 +230,10 @@ class BootstrapPhase implements Phase {
           recalledTexts: recalledTexts,
           previousIntentGraph: carriedPreviousIntentGraph,
           previousAnswerSummary: carriedPreviousAnswerSummary,
+          previousUnderstandingSnapshot: carriedPreviousUnderstandingSnapshot,
+          previousAnswerProcessing: carriedPreviousAnswerProcessing,
+          historicalThinkingSnapshot: carriedHistoricalThinkingSnapshot,
+          providerReasoningContinuation: carriedProviderReasoningContinuation,
           contextContinuityPolicy: continuityPolicy,
           continuityOverrideSlots: continuityOverrideSlots,
           recallResult: recallResult,
@@ -196,7 +244,7 @@ class BootstrapPhase implements Phase {
           skillCatalog: skillCatalog,
         ),
         contextAssembly: contextAssembly,
-        previousRunArtifacts: previousRunArtifacts,
+        previousRunArtifacts: carriedPreviousRunArtifacts,
       ),
     );
   }
@@ -216,6 +264,46 @@ class BootstrapPhase implements Phase {
     } catch (_) {
       return null;
     }
+  }
+
+  Map<String, dynamic> _sanitizeForwardedContextScopeHint(
+    Map<String, dynamic> contextScopeHint, {
+    required bool carryPreviousTurn,
+    RunArtifacts? previousRunArtifacts,
+  }) {
+    if (contextScopeHint.isEmpty) {
+      return carryPreviousTurn && previousRunArtifacts != null
+          ? <String, dynamic>{'runArtifacts': previousRunArtifacts.toJson()}
+          : const <String, dynamic>{};
+    }
+    final sanitized = Map<String, dynamic>.from(contextScopeHint);
+    for (final key in const <String>[
+      'runArtifacts',
+      'previousRunArtifacts',
+      'machineEnvelope',
+      'displayMarkdown',
+      'displayPlainText',
+      'journey',
+      'uiProcessTimeline',
+      'uiProcessTimelineV2',
+      'assistantResponse',
+      'previousUnderstandingSnapshot',
+      'previousAnswerProcessing',
+      'historicalThinkingSnapshot',
+      'providerReasoningContinuation',
+      'continuityOverrideSlots',
+    ]) {
+      sanitized.remove(key);
+    }
+    if (!carryPreviousTurn) {
+      sanitized.remove('dialogueState');
+      sanitized.remove('currentStateId');
+      return sanitized;
+    }
+    if (previousRunArtifacts != null) {
+      sanitized['runArtifacts'] = previousRunArtifacts.toJson();
+    }
+    return sanitized;
   }
 
   Future<String> _summarizeWithLlm({
@@ -267,6 +355,16 @@ class BootstrapPhase implements Phase {
     final previousIntentGraph =
         (latestAssistant?['intentGraph'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
+    final previousUnderstandingSnapshot = _assistantStructuredMap(
+      latestAssistant,
+      'understandingSnapshot',
+      previousRunArtifacts?.understandingSnapshot.toJson(),
+    );
+    final previousAnswerProcessing = _assistantStructuredMap(
+      latestAssistant,
+      'answerProcessing',
+      previousRunArtifacts?.answerProcessing.toJson(),
+    );
     final previousSlotState =
         previousRunArtifacts?.slotState.toJson() ??
         ((latestAssistant?['runArtifacts'] as Map?)
@@ -293,6 +391,10 @@ class BootstrapPhase implements Phase {
         'referenceQueries': jsonEncode(recentQueries),
         'historySummary': _recentAssistantHistorySummary(sessionHistory),
         'previousIntentGraph': jsonEncode(previousIntentGraph),
+        'previousUnderstandingSnapshot': jsonEncode(
+          previousUnderstandingSnapshot,
+        ),
+        'previousAnswerProcessing': jsonEncode(previousAnswerProcessing),
         'previousSlotState': jsonEncode(previousSlotState),
         'previousAnswerSummary': previousAnswerSummary,
       },
@@ -359,6 +461,84 @@ class BootstrapPhase implements Phase {
     }
   }
 
+  RunArtifactsUnderstandingSnapshot _parsePreviousUnderstandingSnapshot(
+    Map<String, dynamic>? latestAssistant,
+    RunArtifacts? previousRunArtifacts,
+  ) {
+    final raw = _assistantStructuredMap(
+      latestAssistant,
+      'understandingSnapshot',
+      previousRunArtifacts?.understandingSnapshot.toJson(),
+    );
+    if (raw.isEmpty) return const RunArtifactsUnderstandingSnapshot();
+    try {
+      return RunArtifactsUnderstandingSnapshot.fromJson(raw);
+    } catch (_) {
+      return const RunArtifactsUnderstandingSnapshot();
+    }
+  }
+
+  RunArtifactsAnswerProcessing _parsePreviousAnswerProcessing(
+    Map<String, dynamic>? latestAssistant,
+    RunArtifacts? previousRunArtifacts,
+  ) {
+    final raw = _assistantStructuredMap(
+      latestAssistant,
+      'answerProcessing',
+      previousRunArtifacts?.answerProcessing.toJson(),
+    );
+    if (raw.isEmpty) return const RunArtifactsAnswerProcessing();
+    try {
+      return RunArtifactsAnswerProcessing.fromJson(raw);
+    } catch (_) {
+      return const RunArtifactsAnswerProcessing();
+    }
+  }
+
+  RunArtifactsHistoricalThinkingSnapshot _parseHistoricalThinkingSnapshot(
+    Map<String, dynamic>? latestAssistant,
+    RunArtifacts? previousRunArtifacts,
+  ) {
+    final raw = _assistantStructuredMap(
+      latestAssistant,
+      'historicalThinkingSnapshot',
+      previousRunArtifacts?.historicalThinkingSnapshot.toJson(),
+    );
+    if (raw.isEmpty) return const RunArtifactsHistoricalThinkingSnapshot();
+    try {
+      return RunArtifactsHistoricalThinkingSnapshot.fromJson(raw);
+    } catch (_) {
+      return const RunArtifactsHistoricalThinkingSnapshot();
+    }
+  }
+
+  Map<String, dynamic> _assistantStructuredMap(
+    Map<String, dynamic>? latestAssistant,
+    String key, [
+    Map<String, dynamic>? fallback,
+  ]) {
+    final direct = (latestAssistant?[key] as Map?)?.cast<String, dynamic>();
+    if (direct != null && _hasStructuredContent(direct)) return direct;
+    final runArtifacts =
+        (latestAssistant?['runArtifacts'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final nested = (runArtifacts[key] as Map?)?.cast<String, dynamic>();
+    if (nested != null && _hasStructuredContent(nested)) return nested;
+    if (fallback != null && _hasStructuredContent(fallback)) return fallback;
+    return const <String, dynamic>{};
+  }
+
+  bool _hasStructuredContent(Map<String, dynamic> value) {
+    for (final item in value.values) {
+      if (item is String && item.trim().isNotEmpty) return true;
+      if (item is num && item != 0) return true;
+      if (item is bool && item) return true;
+      if (item is List && item.isNotEmpty) return true;
+      if (item is Map && item.isNotEmpty) return true;
+    }
+    return false;
+  }
+
   String _resolvePreviousAnswerSummary(Map<String, dynamic>? latestAssistant) {
     if (latestAssistant == null) return '';
     final displayPlainText =
@@ -367,6 +547,15 @@ class BootstrapPhase implements Phase {
     final content = (latestAssistant['content'] as String?)?.trim() ?? '';
     if (content.isNotEmpty) return content;
     return '';
+  }
+
+  String _resolveProviderReasoningContinuation(
+    Map<String, dynamic>? latestAssistant,
+  ) {
+    return (latestAssistant?[assistantProviderReasoningContinuationField]
+                as String?)
+            ?.trim() ??
+        '';
   }
 
   List<String> _recentUserQueries(List<Map<String, dynamic>> sessionHistory) {
@@ -424,8 +613,8 @@ class BootstrapPhase implements Phase {
     final referenceQueries = _recentUserQueries(sessionHistory);
     return ContextContinuityPolicy(
       queryIntent: seeded.queryIntent,
-      problemClass: previousIntentGraph?.problemClass.wireName ??
-          seeded.problemClass,
+      problemClass:
+          previousIntentGraph?.problemClass.wireName ?? seeded.problemClass,
       continuityMode: ContextContinuityMode.explicitFollowUp,
       explicitContinuation: true,
       topicOverlap: seeded.topicOverlap > 0 ? seeded.topicOverlap : 0.6,
@@ -458,7 +647,8 @@ class BootstrapPhase implements Phase {
     IntentGraph? previousIntentGraph,
     String previousAnswerSummary,
   ) {
-    final contextSlots = previousIntentGraph?.contextSlots ?? const <String, dynamic>{};
+    final contextSlots =
+        previousIntentGraph?.contextSlots ?? const <String, dynamic>{};
     for (final key in const <String>[
       'city',
       'destination',

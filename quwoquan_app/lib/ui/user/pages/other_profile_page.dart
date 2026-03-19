@@ -11,6 +11,7 @@ class OtherProfilePage extends ConsumerWidget {
   const OtherProfilePage({
     super.key,
     required this.username,
+    this.profileSubjectId,
     this.initialAvatarUrl,
     this.initialDisplayName,
     this.initialBackgroundImageUrl,
@@ -18,6 +19,7 @@ class OtherProfilePage extends ConsumerWidget {
   });
 
   final String username;
+  final String? profileSubjectId;
   final String? initialAvatarUrl;
   final String? initialDisplayName;
   final String? initialBackgroundImageUrl;
@@ -27,7 +29,9 @@ class OtherProfilePage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return ProfileShell(
       mode: ProfileMode.other,
-      userId: username,
+      userId: profileSubjectId?.isNotEmpty == true
+          ? profileSubjectId!
+          : username,
       initialAvatarUrl: initialAvatarUrl,
       initialDisplayName: initialDisplayName,
       initialBackgroundUrl: initialBackgroundImageUrl,

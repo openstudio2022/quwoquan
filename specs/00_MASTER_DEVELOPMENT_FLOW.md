@@ -1,14 +1,14 @@
-# 端云一体化开发主线（三层目录版）
+# 端云一体化开发主线（Journey / Scenario 版）
 
-> 本文档是整个项目开发的唯一主线。正式交付围绕 `L3_story` 运作，正式测试只使用 `T1~T4`。
+> 本文档是整个项目开发的唯一主线。正式交付围绕 `L3_scenario` 实施，正式组合验收围绕 `L2_journey` 收口，正式测试只使用 `T1~T4`。
 
 ## 一、主流程
 
 ### 标准链路
 
 ```text
-explore → prd → design → dev → commit → deploy
-                 └────── deliver（= dev + commit）──────┘
+explore → prd → design → dev → verify → commit → deploy
+                 └──────────── deliver（= dev + verify + commit）────────────┘
 ```
 
 ### 原型链路
@@ -22,18 +22,18 @@ try → land → commit → deploy
 | 层级 | 作用 | 对应阶段 |
 |------|------|---------|
 | `L1_capability` | 能力边界、关键旅程、NFR、发布治理 | explore / prd / design / deploy |
-| `L2_feature` | 稳定业务特性容器 | explore / prd / design |
-| `L3_story` | 最小交付、最小验收、最小归档单元 | prd / design / dev / verify / commit |
+| `L2_journey` | 端到端用户旅程、跨场景组合验收、发布 guardrails | explore / prd / design / verify / deploy |
+| `L3_scenario` | 单环节场景、异常边界、最小实施与验证单元 | prd / design / dev / verify / commit |
 
 ## 二、非协商原则
 
 - `spec-first`：先有规格，再有设计，再有实现。
-- `acceptance-first`：先定义 `A1~An` 和 `T1~T4`，再进入实现。
+- `acceptance-first`：先定义 `L2_journey` 与 `L3_scenario` 的验收，再进入实现。
 - `metadata-first`：契约、字段、错误码、route、surface、operation 一律先改 metadata，再 codegen，再改业务逻辑。
 - `test-first`：进入 `/dev`、`/deliver`、`/try` 后默认执行 `Red → Green → Refactor`。
 - `benchmark-driven`：对标必须落到“借鉴 / 不借鉴 / 适用边界 / 当前差距 / 收敛计划”。
 - `commercial-ready-before-dev`：凡是用户可见、可灰度、可分享、可被小趣消费的能力，`/prd` 与 `/design` 必须冻结 `SLO/KPI`、权限边界、数据生命周期、迁移灰度与回滚方案。
-- `single-source`：`tree_index.yaml`、`spec.md`、`design.md`、`tasks.md`、`acceptance.yaml`、metadata 各自有唯一真相源。
+- `single-source`：`tree_index.yaml`、`spec.md`、`design.md`、`acceptance.yaml`、`plan.yaml`、`specs/changelog/CR-*.yaml`、metadata 各自有唯一真相源。
 - 缺少对标输入、真实网络条件、容量假设、权限边界或回滚条件时，直接 `GATE_BLOCK`。
 
 ## 三、阶段 Gate
@@ -45,14 +45,16 @@ try → land → commit → deploy
 - 映射需求归属的 `L1/L2/L3`
 - 识别涉及的业务对象、metadata、扩展场景
 - 识别对标输入、NFR、权限边界、数据生命周期、迁移与发布风险
-- 输出初步 Task 方向，顺序必须是 `metadata -> codegen -> 业务逻辑 -> 测试`
+- 判断本次增量是否需要新建或续写 `specs/changelog/CR-*.yaml`
+- 输出初步 plan slice 方向，顺序必须是 `metadata -> codegen -> 业务逻辑 -> 测试`
 
 输出要求：
 
 - 已澄清事实
 - 仍待澄清问题
-- 建议归属的 `L1/L2/L3`
-- 初步 Task 方向
+- 建议归属的 `L1_capability / L2_journey / L3_scenario`
+- 初步 plan slice 方向
+- 受影响的 CR 范围
 - `EXPLORE_READY` 或 `GATE_BLOCK`
 
 禁止：
@@ -66,12 +68,12 @@ try → land → commit → deploy
 
 - 目标用户、核心问题、范围边界、Out of Scope 清晰
 - `L1/L2/L3` 与涉及业务对象已明确
-- `A1~An` 可量化且映射 `T1~T4`
+- `journey_acceptance` / `scenario_acceptance` 可量化且映射 `T1~T4`
 - 对标输入与不可打折的交互基线明确
 - `SLO/KPI`、弱网、并发、性能、容量目标明确
 - 若涉及小趣、权限、可见性或删除撤销，必须冻结权限边界、保留策略与撤销时效
 - 若涉及创作、编辑、升级、删除、分享，必须冻结数据生命周期合同
-- 若与已有 Story 重叠，必须冻结覆盖矩阵与优先级
+- 若与已有 Journey/Scenario 重叠，必须冻结覆盖矩阵与优先级
 - 若可灰度上线，必须冻结迁移方案、feature flag、观测指标与回滚条件
 - 若涉及 `API path / operation / surface / route / decoder context`，必须明确 metadata 唯一真相源
 
@@ -79,13 +81,14 @@ try → land → commit → deploy
 
 - `spec.md`
 - `acceptance.yaml`
+- 关联或新建 `specs/changelog/CR-*.yaml`
 - 商用基线：`SLO/KPI`、权限边界、生命周期、覆盖矩阵、迁移灰度回滚
 
 `spec.md` 最少包含：
 
 - 背景与动机、目标用户、功能范围、Out of Scope
 - 约束、对标输入与吸收结论、角色分工
-- 既有 Story 覆盖矩阵、数据生命周期合同、权限与分享边界
+- 既有 Journey/Scenario 覆盖矩阵、数据生命周期合同、权限与分享边界
 - 非功能目标、迁移灰度与回滚要求、验收重点
 
 任一项未满足：`GATE_BLOCK`
@@ -98,8 +101,7 @@ try → land → commit → deploy
 - 至少有 2 个方案可比较，且权衡清晰
 - 选定方案覆盖 metadata/codegen、模型或字段演进、数据迁移/回填、feature flag、观测与回滚
 - 若涉及小趣或私密内容，权限、撤销、保留模型已冻结
-- `T1~T4` 证据矩阵已形成，当前 task 已绑定 Red 测试
-- `tasks.md` 顺序明确，且遵循 `metadata -> codegen -> 业务逻辑 -> 测试`
+- `T1~T4` 证据矩阵已形成，`plan.yaml` 已能表达切片顺序与退出条件
 
 自动执行 G1：
 
@@ -112,7 +114,7 @@ make codegen-app
 产出物：
 
 - `design.md`
-- `tasks.md`
+- `plan.yaml`
 - metadata / codegen 基线
 - 测试证据矩阵
 - 灰度发布设计
@@ -122,60 +124,65 @@ make codegen-app
 - 上游规格评审、方案对比与选型
 - metadata/codegen 方案、字段演进与数据迁移方案
 - feature flag、观测、SLO 验证与回滚方案
-- `T1~T4` 证据矩阵与任务拆解
+- `T1~T4` 证据矩阵与 plan slices
 
-### 3.4 `/dev`（G2/G3）
+### 3.4 `/dev`（G2）
 
 进入 `/dev` 前必须满足：
 
 - `design.md` 已冻结
 - codegen 已通过
-- `tasks.md` 已就绪
+- `plan.yaml` 已就绪
 - `acceptance.yaml` 可测量且映射 `T1~T4`
-- 当前 task 已绑定先行失败测试
+- 当前要实施的 slice 已绑定先行失败测试
+- 对应 CR 已存在且明确受影响节点
 
-每完成一个 task：
+每次会话实施顺序：
+
+```text
+1. 读取 `plan.yaml` 与对应 CR
+2. 派生本次会话 todo（仅本次会话有效）
+3. 逐条 todo 执行 Red → Green → Refactor
+4. 回填 `acceptance.yaml` 与 CR 证据
+```
+
+每完成一组 slice：
 
 ```bash
 make -C quwoquan_service build
 make -C quwoquan_service test-contract
 ```
 
-全部 task 完成后必须执行：
+若涉及 Flutter 变更，追加：
 
 ```bash
-make gate-full
+cd quwoquan_app && flutter test test/cloud/ test/components/ test/ui/
 ```
 
-收口要求：
+### 3.5 `/verify`（G3）
 
-- `T1~T4` 证据齐全
-- 非功能验收齐全
-- 已达到 gray-release ready
-- 自动回写归档状态
-
-### 3.5 `/verify`
-
-- 检查 `L3_story` 完成度与 `acceptance.yaml` 闭环
+- 检查 `L3_scenario` 完成度与 `scenario_acceptance` 闭环
+- 检查 `L2_journey` 的组合验收是否因本次增量受影响
+- 检查 `plan.yaml` 覆盖率、CR 影响项、`T1~T4` 证据
 - 执行 `make gate-full`
-- 作为标准流程的独立复核或补救入口
 
 ### 3.6 `/commit`（G4）
 
-- 只提交已完成的 `L3_story`
-- 提交前必须执行端侧 `L1` 与仓库 `L2` 门禁
+- 只提交已完成的 slice 与对应 CR 范围
+- 提交前必须执行端侧 `T1/T2` 与仓库 `make gate`
 
 ```bash
 cd quwoquan_app && flutter test test/cloud/ test/components/ test/ui/
 make gate
 ```
 
-- 门禁、验收、证据、归档状态全部闭环后才可提交
+- 门禁、验收、证据、CR 更新状态全部闭环后才可提交
 
 ### 3.7 `/deploy`（G5）
 
 - 先 integration，再灰度 prod
 - 必须完成 `T3/T4`、SLO 卡点、观测确认与回滚演练
+- 发布对象是 release batch / CR 范围，不再只看单个 Scenario
 - 未达到 SLO 或回滚条件不清时不得放量
 
 ### 3.8 `/try`
@@ -197,6 +204,8 @@ make gate
 规则：
 
 - 特性树层级不用 `L3/L4` 表示测试
+- `L2_journey` 主要收口 `T3/T4`
+- `L3_scenario` 主要收口 `T1/T2`，必要时补 `T3`
 - `/deploy`、`/verify`、`/deliver`、`/commit` 文档只使用 `T1~T4`
 
 ## 五、单一真相源
@@ -204,15 +213,17 @@ make gate
 - 特性树索引：`specs/feature-tree/tree_index.yaml`
 - 规格：`spec.md`
 - 设计：`design.md`
-- 任务：`tasks.md` / `tasks.yaml`
 - 验收：`acceptance.yaml`
+- 实施计划：`plan.yaml`
+- 增量变更：`specs/changelog/CR-*.yaml`
 - 契约与生成：`contracts/metadata/*`
 
 禁止：
 
 - 维护第二套树 taxonomy
 - 维护第二套 operation/surface/route/path 规则表
-- 用测试执行桶替代正式测试治理语言
+- 用会话 todo 替代正式治理文档
+- 让 `specs/changelog/` 长成第二套特性树
 
 ## 六、与命令文档的关系
 

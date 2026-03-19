@@ -31,13 +31,14 @@
 - 禁止用用户可见字符串、中文文案、label 文本做行为路由
 - 禁止在 engine、react、tool 中新增 `contains()` / `RegExp` 语义分类
 - 协议与值域应优先使用 typed contract、enum、schema
-- `assistant_turn_v2`、`assistant_turn_v3` 视为已淘汰协议，当前运行时禁止继续保留读取兼容
+- `assistant_turn_v2`、`assistant_turn_v3` 视为已淘汰协议，当前运行时禁止继续保留读取兼容；当前基线为 `assistant_turn_v4`
 
 ### 2.3 提示词与文案约束
 
 - 提示词正文必须在 `assets/assistant/prompts/` 中管理
 - 工具 phase 文案、完成文案、提示语以工具 metadata 为准
 - 追问文案、兜底文案、过程文案不得再散落在 runtime
+- 流式由运行时事件通道承载，`assistant_turn` JSON 仅保留稳态语义；禁止把流式文本回填到 `understanding.streamText` / `answerProcessing.streamText` 等嵌套字段
 
 ### 2.4 回答质量约束
 
@@ -116,7 +117,7 @@
 
 - 开发前确认读过本文第 2 节与第 3 节
 - 优先改 asset / metadata / config，其次才是 runtime
-- 若涉及协议对象、enum、contractVersion、字段名，必须先改 `quwoquan_service/contracts/metadata/assistant/`，不得先手写 Dart contract
+- 若涉及协议对象、enum、contractId、字段名，必须先改 `quwoquan_service/contracts/metadata/assistant/`，不得先手写 Dart contract
 - 若涉及目录迁移，优先迁到 `quwoquan_app/lib/assistant/` 新结构，不再新增 `lib/personal_assistant/contracts/*`、`lib/personal_assistant/app/*` 或 `personal_assistant/runtime/*` 风格目录
 - 若不得不新增兼容逻辑，必须说明退出条件与清理路径
 

@@ -9,6 +9,10 @@
       "contentPath": "assets/assistant/prompts/global/stack.safety.md"
     },
     {
+      "metaPath": "assets/assistant/prompts/global/stack.model_thinking_policy.meta.json",
+      "contentPath": "assets/assistant/prompts/global/stack.model_thinking_policy.md"
+    },
+    {
       "metaPath": "assets/assistant/prompts/global/stack.persona.meta.json",
       "contentPath": "assets/assistant/prompts/global/stack.persona.md"
     },
@@ -25,10 +29,6 @@
       "contentPath": "assets/assistant/prompts/global/phase.output_contract.answer.md"
     },
     {
-      "metaPath": "assets/assistant/prompts/global/phase.output_contract.ask_user.meta.json",
-      "contentPath": "assets/assistant/prompts/global/phase.output_contract.ask_user.md"
-    },
-    {
       "metaPath": "assets/assistant/prompts/global/planner.global_plan.meta.json",
       "contentPath": "assets/assistant/prompts/global/planner.global_plan.md"
     },
@@ -37,40 +37,12 @@
       "contentPath": "assets/assistant/prompts/global/planner.continuity_resolution.md"
     },
     {
-      "metaPath": "assets/assistant/prompts/global/planner.retrieval_design.meta.json",
-      "contentPath": "assets/assistant/prompts/global/planner.retrieval_design.md"
-    },
-    {
-      "metaPath": "assets/assistant/prompts/global/planner.postcondition_check.meta.json",
-      "contentPath": "assets/assistant/prompts/global/planner.postcondition_check.md"
-    },
-    {
       "metaPath": "assets/assistant/prompts/global/synthesizer.final_answer.meta.json",
       "contentPath": "assets/assistant/prompts/global/synthesizer.final_answer.md"
     },
     {
-      "metaPath": "assets/assistant/prompts/global/synthesizer.multi_skill_fusion.meta.json",
-      "contentPath": "assets/assistant/prompts/global/synthesizer.multi_skill_fusion.md"
-    },
-    {
       "metaPath": "assets/assistant/prompts/global/summarize_session.meta.json",
       "contentPath": "assets/assistant/prompts/global/summarize_session.md"
-    },
-    {
-      "metaPath": "assets/assistant/prompts/web/domain.web_query_plan.meta.json",
-      "contentPath": "assets/assistant/prompts/web/domain.web_query_plan.md"
-    },
-    {
-      "metaPath": "assets/assistant/prompts/web/domain.web_result_judge.meta.json",
-      "contentPath": "assets/assistant/prompts/web/domain.web_result_judge.md"
-    },
-    {
-      "metaPath": "assets/assistant/prompts/web/domain.web_key_fact_extract.meta.json",
-      "contentPath": "assets/assistant/prompts/web/domain.web_key_fact_extract.md"
-    },
-    {
-      "metaPath": "assets/assistant/prompts/web/domain.web_evidence_pack.meta.json",
-      "contentPath": "assets/assistant/prompts/web/domain.web_evidence_pack.md"
     }
   ]
 }

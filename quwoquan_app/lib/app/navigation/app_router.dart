@@ -9,6 +9,7 @@ import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/content/pages/article_detail_page.dart';
 import 'package:quwoquan_app/ui/content/pages/photo_detail_page.dart';
+import 'package:quwoquan_app/ui/content/pages/unified_media_viewer_page.dart';
 import 'package:quwoquan_app/ui/content/pages/video_detail_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_detail_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_stats_page.dart';
@@ -223,6 +224,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           } else if (state.extra is Map) {
             final m = state.extra! as Map;
             extra = UserProfileRouteExtra(
+              profileSubjectId: m['profileSubjectId']?.toString(),
               avatar: m['avatar']?.toString(),
               displayName: m['displayName']?.toString(),
               backgroundImage: m['backgroundImage']?.toString(),
@@ -230,6 +232,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           }
           return OtherProfilePage(
             username: username,
+            profileSubjectId: extra?.safeProfileSubjectId,
             initialAvatarUrl: extra?.safeAvatar,
             initialDisplayName: extra?.safeDisplayName,
             initialBackgroundImageUrl: extra?.safeBackgroundImage,
@@ -249,6 +252,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ? state.extra! as MediaViewerExtra
               : null;
           final dataService = ref.read(dataServiceProvider);
+
+          if (extra != null && extra.dtoPosts.isNotEmpty) {
+            return UnifiedMediaViewerPage(extra: extra);
+          }
 
           return PhotoDetailPage(
             category: category,
@@ -270,6 +277,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ? state.extra! as MediaViewerExtra
               : null;
           final dataService = ref.read(dataServiceProvider);
+
+          if (extra != null && extra.dtoPosts.isNotEmpty) {
+            return UnifiedMediaViewerPage(extra: extra);
+          }
 
           return VideoDetailPage(
             initialIndex: index,
@@ -494,15 +505,7 @@ class _CreateEntryRoutePage extends ConsumerWidget {
         isOpen: true,
         onClose: () => context.pop(),
         onSelect: (EditorStartAction action) {
-          // 用 go 替换当前路由，避免先 pop 再 push 导致 CreateEntrySheet 卸载时触发 Element 依赖断言
           context.go(AppRoutePaths.create(type: action.name));
-        },
-        onOpenLegacyTab: (String tabKey) {
-          final uri = Uri(
-            path: AppRoutePaths.createPathTemplate,
-            queryParameters: <String, String>{'tab': tabKey},
-          );
-          context.go(uri.toString());
         },
       ),
     );

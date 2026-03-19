@@ -9,8 +9,9 @@ import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/tool_metadata_registry.dart';
 
 class AssistantJourneyProjector {
-  AssistantJourneyProjector({required ToolMetadataRegistry toolMetadataRegistry})
-    : _toolMetadataRegistry = toolMetadataRegistry {
+  AssistantJourneyProjector({
+    required ToolMetadataRegistry toolMetadataRegistry,
+  }) : _toolMetadataRegistry = toolMetadataRegistry {
     for (final stage in _baseStages()) {
       _stages[stage.stageId] = stage;
     }
@@ -63,20 +64,19 @@ class AssistantJourneyProjector {
           (data['phase'] as String?)?.trim() ?? '',
         );
         _activateStage(stageId);
-        final allowTraceNarrative =
-            data['streaming'] != true && data['extracted'] != true;
-        final message = allowTraceNarrative
-            ? _sanitizeJourneyText(event.message)
-            : '';
-        if (message.isNotEmpty) {
-          _upsertNarrativeEntry(
-            key: 'thinking::${data['iteration'] ?? 0}::${stageId.name}',
+        final message = _sanitizeThinkingStreamText(event.message);
+        final isStreaming =
+            data['streaming'] == true || data['extracted'] == true;
+        final supportsProcessStreaming =
+            stageId == JourneyStageId.analyze ||
+            stageId == JourneyStageId.answer;
+        if (isStreaming && supportsProcessStreaming && message.isNotEmpty) {
+          _appendTraceNarrativeEntry(
+            key: 'thinking_stream::${stageId.name}',
             stageId: stageId,
-            headline: message,
-            status: data['streaming'] == true
-                ? JourneyStageStatus.active
-                : JourneyStageStatus.completed,
+            chunk: message,
             provenance: provenance,
+            preserveChunk: true,
           );
         }
         break;
@@ -111,7 +111,8 @@ class AssistantJourneyProjector {
           ),
         );
         _upsertReferenceBundleEntry(
-          key: 'search_completed::${event.toolCallId ?? _toolNameFromData(data)}',
+          key:
+              'search_completed::${event.toolCallId ?? _toolNameFromData(data)}',
           stageId: JourneyStageId.verify,
           headline: _toolCompletedHeadline(
             toolName: _toolNameFromData(data),
@@ -152,7 +153,10 @@ class AssistantJourneyProjector {
         final isAssessment = data['isAssessment'] == true;
         final stageId = isAssessment
             ? JourneyStageId.verify
-            : _stageForToolResult(toolName, hasReferences: references.isNotEmpty);
+            : _stageForToolResult(
+                toolName,
+                hasReferences: references.isNotEmpty,
+              );
         if (stageId != JourneyStageId.unknown) {
           _activateStage(stageId);
         }
@@ -189,6 +193,9 @@ class AssistantJourneyProjector {
         }
         break;
       case AssistantTraceEventType.toolError:
+        if (data['suppressed'] == true) {
+          break;
+        }
         final message = _sanitizeJourneyText(event.message);
         final toolName = _toolNameFromData(data);
         final stageId = _stageForTool(toolName);
@@ -219,10 +226,7 @@ class AssistantJourneyProjector {
         break;
       case AssistantTraceEventType.answerCompleted:
         final message = _sanitizeJourneyText(event.message);
-        _completeStage(
-          JourneyStageId.answer,
-          summary: message,
-        );
+        _completeStage(JourneyStageId.answer, summary: message);
         break;
       case AssistantTraceEventType.replanTriggered:
         final message = _sanitizeJourneyText(event.message);
@@ -307,9 +311,8 @@ class AssistantJourneyProjector {
             current: existingHeadline,
             incoming: incomingHeadline,
           ),
-          UserEventType.processCommit => incomingHeadline.isNotEmpty
-              ? incomingHeadline
-              : existingHeadline,
+          UserEventType.processCommit =>
+            incomingHeadline.isNotEmpty ? incomingHeadline : existingHeadline,
           _ => incomingHeadline,
         };
         final provenance = AssistantJourneyProvenance(
@@ -416,7 +419,9 @@ class AssistantJourneyProjector {
     if (journey.isEmpty) return snapshot;
     _stages
       ..clear()
-      ..addEntries(journey.stages.map((stage) => MapEntry(stage.stageId, stage)));
+      ..addEntries(
+        journey.stages.map((stage) => MapEntry(stage.stageId, stage)),
+      );
     _entries
       ..clear()
       ..addAll(journey.entries);
@@ -538,10 +543,7 @@ class AssistantJourneyProjector {
     }
   }
 
-  void _completeStage(
-    JourneyStageId stageId, {
-    String? summary,
-  }) {
+  void _completeStage(JourneyStageId stageId, {String? summary}) {
     final current = _stages[stageId];
     if (current == null) return;
     _stages[stageId] = AssistantJourneyStage(
@@ -627,9 +629,13 @@ class AssistantJourneyProjector {
     required JourneyStageStatus status,
     required AssistantJourneyProvenance provenance,
     JourneyEntryKind kind = JourneyEntryKind.narrative,
-    List<AssistantJourneyReference> references = const <AssistantJourneyReference>[],
+    bool preserveHeadline = false,
+    List<AssistantJourneyReference> references =
+        const <AssistantJourneyReference>[],
   }) {
-    final normalizedHeadline = _sanitizeJourneyText(headline);
+    final normalizedHeadline = preserveHeadline
+        ? headline.trim()
+        : _sanitizeJourneyText(headline);
     final normalizedDetail = _sanitizeJourneyUserEventText(detail);
     if ((normalizedHeadline.isEmpty && normalizedDetail.isEmpty) ||
         stageId == JourneyStageId.unknown) {
@@ -641,7 +647,9 @@ class AssistantJourneyProjector {
       stageId: stageId,
       kind: kind,
       status: status,
-      order: existingIndex == null ? _orderSeed++ : _entries[existingIndex].order,
+      order: existingIndex == null
+          ? _orderSeed++
+          : _entries[existingIndex].order,
       headline: normalizedHeadline,
       detail: normalizedDetail,
       references: references,
@@ -666,6 +674,28 @@ class AssistantJourneyProjector {
     );
   }
 
+  void _appendTraceNarrativeEntry({
+    required String key,
+    required JourneyStageId stageId,
+    required String chunk,
+    required AssistantJourneyProvenance provenance,
+    bool preserveChunk = false,
+  }) {
+    final merged = _mergeNarrativeText(
+      current: _existingEntryHeadline(key),
+      incoming: chunk,
+    );
+    if (merged.isEmpty) return;
+    _upsertNarrativeEntry(
+      key: key,
+      stageId: stageId,
+      headline: merged,
+      status: JourneyStageStatus.active,
+      provenance: provenance,
+      preserveHeadline: preserveChunk,
+    );
+  }
+
   String _existingEntryHeadline(String key) {
     final index = _entryIndexByKey[key];
     if (index == null || index < 0 || index >= _entries.length) {
@@ -682,15 +712,20 @@ class AssistantJourneyProjector {
     final next = incoming.trim();
     if (next.isEmpty) return existing;
     if (existing.isEmpty) return next;
-    if (existing == next || existing.endsWith(next) || existing.contains(next)) {
+    if (existing == next ||
+        existing.endsWith(next) ||
+        existing.contains(next)) {
       return existing;
     }
     if (next.startsWith(existing)) {
       return next;
     }
-    final maxOverlap = existing.length < next.length ? existing.length : next.length;
+    final maxOverlap = existing.length < next.length
+        ? existing.length
+        : next.length;
     for (var size = maxOverlap; size > 0; size--) {
-      if (existing.substring(existing.length - size) == next.substring(0, size)) {
+      if (existing.substring(existing.length - size) ==
+          next.substring(0, size)) {
         return '$existing${next.substring(size)}';
       }
     }
@@ -716,7 +751,8 @@ class AssistantJourneyProjector {
     if (explicit != JourneyStageId.unknown) {
       return explicit;
     }
-    final phase = (payload['phaseId'] as String?)?.trim() ??
+    final phase =
+        (payload['phaseId'] as String?)?.trim() ??
         (payload['phase'] as String?)?.trim() ??
         '';
     if (phase.isNotEmpty) {
@@ -802,7 +838,10 @@ class AssistantJourneyProjector {
     };
   }
 
-  JourneyStageId _stageForToolResult(String toolName, {required bool hasReferences}) {
+  JourneyStageId _stageForToolResult(
+    String toolName, {
+    required bool hasReferences,
+  }) {
     final stageId = _stageForTool(toolName);
     if (hasReferences && stageId == JourneyStageId.search) {
       return JourneyStageId.verify;
@@ -826,7 +865,8 @@ class AssistantJourneyProjector {
         (interaction?['executing'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final startLabel = (executing['startLabel'] as String?)?.trim() ?? '';
-    if (startLabel.isNotEmpty) {
+    if (startLabel.isNotEmpty &&
+        _toolMetadataRegistry.canResolveTemplate(startLabel, data)) {
       return _toolMetadataRegistry.resolveTemplate(startLabel, data);
     }
     return fallback;
@@ -843,7 +883,8 @@ class AssistantJourneyProjector {
         const <String, dynamic>{};
     final progressTemplate =
         (executing['progressTemplate'] as String?)?.trim() ?? '';
-    if (progressTemplate.isNotEmpty) {
+    if (progressTemplate.isNotEmpty &&
+        _toolMetadataRegistry.canResolveTemplate(progressTemplate, data)) {
       return _toolMetadataRegistry.resolveTemplate(progressTemplate, data);
     }
     return _toolStartHeadline(
@@ -864,7 +905,8 @@ class AssistantJourneyProjector {
         const <String, dynamic>{};
     final completedTemplate =
         (executing['completedTemplate'] as String?)?.trim() ?? '';
-    if (completedTemplate.isNotEmpty) {
+    if (completedTemplate.isNotEmpty &&
+        _toolMetadataRegistry.canResolveTemplate(completedTemplate, data)) {
       return _toolMetadataRegistry.resolveTemplate(completedTemplate, data);
     }
     final userMessage = _sanitizeJourneyText(
@@ -909,10 +951,13 @@ class AssistantJourneyProjector {
   String _sanitizeJourneyText(String raw) {
     final text = raw.trim();
     if (text.isEmpty) return '';
+    if (_looksLikeRomanizedQueryFragment(text)) return '';
     if (AssistantDisplayTextResolver.containsInternalProcessFragment(text) ||
         AssistantDisplayTextResolver.containsInternalAssistantProtocolFragment(
           text,
         ) ||
+        AssistantDisplayTextResolver.containsTechnicalFailureFragment(text) ||
+        AssistantContentFilters.isJsonEnvelope(text) ||
         AssistantContentFilters.isDegradedText(text)) {
       return '';
     }
@@ -922,14 +967,40 @@ class AssistantJourneyProjector {
   String _sanitizeJourneyUserEventText(String raw) {
     final text = raw.trim();
     if (text.isEmpty) return '';
+    if (_looksLikeRomanizedQueryFragment(text)) return '';
     if (AssistantDisplayTextResolver.containsInternalProcessFragment(text) ||
         AssistantDisplayTextResolver.containsInternalAssistantProtocolFragment(
           text,
         ) ||
+        AssistantDisplayTextResolver.containsTechnicalFailureFragment(text) ||
         AssistantContentFilters.isDegradedText(text) ||
         AssistantContentFilters.isJsonEnvelope(text)) {
       return '';
     }
     return text;
+  }
+
+  String _sanitizeThinkingStreamText(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) return '';
+    if (_looksLikeRomanizedQueryFragment(text)) return '';
+    if (AssistantDisplayTextResolver.containsInternalAssistantProtocolFragment(
+          text,
+        ) ||
+        AssistantDisplayTextResolver.containsInternalPlannerNarrationFragment(
+          text,
+        ) ||
+        AssistantDisplayTextResolver.containsTechnicalFailureFragment(text) ||
+        AssistantContentFilters.isJsonEnvelope(text)) {
+      return '';
+    }
+    return text;
+  }
+
+  bool _looksLikeRomanizedQueryFragment(String text) {
+    return RegExp(
+      r'^[a-z]+(?:\s+[a-z]+){1,7}$',
+      caseSensitive: false,
+    ).hasMatch(text);
   }
 }

@@ -1,9 +1,0 @@
-{
-  "templateId": "phase.output_contract.ask_user",
-  "version": "2026.03.05",
-  "stage": "ask_user",
-  "domainId": "global",
-  "requiredVariables": [],
-  "outputContract": "assistant_turn",
-  "selfCheckRules": ["question_clear", "max_one_question"]
-}

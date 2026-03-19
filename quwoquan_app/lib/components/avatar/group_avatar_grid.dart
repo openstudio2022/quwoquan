@@ -46,8 +46,6 @@ class GroupAvatarGrid extends StatelessWidget {
 
         final rows = _getLayout(count);
         final maxCols = count <= 4 ? 2 : 3;
-        final maxRows = count <= 4 ? 2 : 3;
-
         // WeChat style: fixed padding around the grid
         final double padding = resolvedSize * 0.05;
         final double innerSize = resolvedSize - padding * 2;

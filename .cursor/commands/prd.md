@@ -2,7 +2,7 @@
 name: /prd
 id: prd
 category: Workflow
-description: 需求规格基线（面向 L3_story，先冻结商用要求）
+description: 需求规格基线（面向 Journey / Scenario，先冻结商用要求）
 ---
 
 > SDD 主流程：explore → **prd** → design → dev → commit → deploy
@@ -12,9 +12,9 @@ description: 需求规格基线（面向 L3_story，先冻结商用要求）
 进入 `/prd` 前必须确认：
 
 - 已定位 `L1_capability`
-- 已确定目标 `L2_feature`
-- 已确定目标 `L3_story`
-- `A1~An` 可量化并映射 `T1~T4`
+- 已确定目标 `L2_journey`
+- 已确定目标 `L3_scenario`
+- `journey_acceptance` / `scenario_acceptance` 可量化并映射 `T1~T4`
 - 范围边界与 Out of Scope 清晰
 - 已识别对标输入或明确无需对标
 - 已冻结不可打折的交互基线
@@ -34,12 +34,13 @@ GATE_BLOCK（PRD 准入未满足）
 
 ## 执行对象
 
-`/prd` 只创建或更新 `L3_story`，不创建第四层或第五层节点。
+`/prd` 创建或更新 `L2_journey`、`L3_scenario` 的规格与验收，并创建或续写对应 `CR`。
 
 ## 产出
 
 - `spec.md`
 - `acceptance.yaml`
+- `specs/changelog/CR-*.yaml`
 - 商用基线：`SLO/KPI`、权限边界、生命周期、覆盖矩阵、迁移灰度回滚
 
 ## `spec.md` 要求
@@ -70,19 +71,40 @@ GATE_BLOCK（PRD 准入未满足）
 
 必须包含：
 
+- `version`
 - `feature`
-- `level: L3_story`
+- `level`
 - `execution`
-- `level_acceptance`
+- `scope`
+- `journey_acceptance` 或 `scenario_acceptance`
 
-每条核心验收项必须可映射到 `T1~T4`，商业上线 blocker 必须单独写成可判定验收项。
+要求：
+
+- `L2_journey`：主要冻结端到端旅程、跨 Scenario 组合规则、发布 guardrails
+- `L3_scenario`：主要冻结单环节场景、异常边界、路径覆盖与最小可实施范围
+- 每条核心验收项必须可映射到 `T1~T4`
+- 商业上线 blocker 必须单独写成可判定验收项
+
+## `CR` 要求
+
+若本次变更影响行为、边界或验收，必须创建或续写：
+
+- `specs/changelog/CR-YYYYMMDD-NNN-<slug>.yaml`
+
+CR 至少要记录：
+
+- `affected_nodes`
+- `revision`
+- `changed_documents`
+- `impact`
 
 ## 结束输出
 
 ```text
 PRD 完成：<feature-path>
 L1: <capability>
-L2: <feature>
-L3: <story>
+L2: <journey>
+L3: <scenario>
+CR: <change-request>
 下一步：/design
 ```

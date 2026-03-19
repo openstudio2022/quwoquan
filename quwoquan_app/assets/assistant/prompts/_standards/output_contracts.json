@@ -2,7 +2,7 @@
   "contracts": {
     "assistant_turn": {
       "required": [
-        "contractVersion",
+        "contractId",
         "decision",
         "messageKind",
         "userMarkdown",

@@ -444,6 +444,9 @@ class MockContentRepository implements ContentRepository {
         'feature_flags': {
           'enable_create_action_entry': true,
           'enable_unified_create_editor': true,
+          'simple_create_action_sheet': true,
+          'create_editor_v2': true,
+          'progressive_title_prompt': true,
           'enable_identity_based_surfaces': true,
           'enable_identity_share_template': true,
           'enable_assistant_content_identity_index': true,

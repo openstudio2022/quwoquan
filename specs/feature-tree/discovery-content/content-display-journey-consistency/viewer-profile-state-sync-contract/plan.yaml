@@ -1,0 +1,76 @@
+version: 1
+node: discovery-content/content-display-journey-consistency/viewer-profile-state-sync-contract
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260318-002-content-display-journey-consistency-prd-baseline-expansion.yaml
+
+slices:
+  - id: P1
+    title: freeze canonical key and sync config metadata
+    goal: 收口 `ProfileSubjectId`、`authorProfileSubjectId` 与 `sys.client_state_sync.*` 的 metadata 基线
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - A3
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - content projection 可输出 canonical 作者 key
+      - `GetAppConfig` 可输出 sync 参数
+      - config schema 可表达 flush / retry / batch / pending age
+    status: planned
+
+  - id: P2
+    title: integrate codegen and shared providers
+    goal: 让 App 生成物、provider 与 profile/viewer 页面都消费统一状态源
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A1
+      - A2
+    planned_evidence:
+      - T1_schema
+      - T2_module_interaction
+      - T3_app_api_integration
+    done_when:
+      - `UserRelationshipStateProvider` 与 `PostInteractionStateProvider` 可用
+      - profile 不再以局部 `isFollowing` 作为主真相源
+      - viewer / profile / feed 共享同一状态
+    status: planned
+
+  - id: P3
+    title: land outbox scheduler and reconcile
+    goal: 完成本地乐观更新、10s flush、5min retry 与最终 reconcile
+    depends_on:
+      - P2
+    acceptance_refs:
+      - A3
+    planned_evidence:
+      - T2_module_interaction
+      - T3_app_api_integration
+      - T4_user_journey
+    done_when:
+      - pending intents 可按 `latest_wins` 合并
+      - flush / retry 可被远端配置覆盖
+      - 弱网、恢复、重入场景下状态最终一致
+    status: planned
+
+  - id: P4
+    title: validate rollout guardrails
+    goal: 验证观测、灰度与回滚方案
+    depends_on:
+      - P3
+    acceptance_refs:
+      - S1
+    planned_evidence:
+      - T3_app_api_integration
+      - T4_user_journey
+    done_when:
+      - guardrail 指标可观测
+      - feature flag 与 fallback 路径可验证
+      - 回滚不破坏 viewer/profile 基础读链路
+    status: planned

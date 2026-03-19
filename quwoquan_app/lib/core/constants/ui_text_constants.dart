@@ -437,16 +437,16 @@ class UITextConstants {
   static const String assistantRunningHint = '小趣正在规划与执行中...';
 
   /// v3 用户视角阶段：先帮用户理清问题
-  static const String assistantPhaseUnderstanding = '理解问题';
+  static const String assistantPhaseUnderstanding = '理解问题中';
 
   /// v3 用户视角阶段：替用户核对资料（工具执行，由元数据覆盖）
-  static const String assistantPhaseSearching = '查找信息';
+  static const String assistantPhaseSearching = '检索处理中';
 
   /// v3 用户视角阶段：替用户整理判断
-  static const String assistantPhaseAnalyzing = '核对结论';
+  static const String assistantPhaseAnalyzing = '检索处理中';
 
   /// v3 用户视角阶段：替用户组织最终回答
-  static const String assistantPhaseAnswering = '整理回答';
+  static const String assistantPhaseAnswering = '整理答案中';
 
   /// v3 用户视角阶段：确认当前信息是否已经够答
   static const String assistantPhaseAssessing = '我在确认现在的信息够不够回答';
@@ -492,19 +492,19 @@ class UITextConstants {
   static const String assistantProcessStatusCompleted = '已完成';
   static const String assistantProcessStatusSkipped = '已跳过';
   static const String assistantProcessStatusFailed = '待补稳';
-  static const String assistantProcessReferenceCountTemplate = '已核对 %s 个来源';
+  static const String assistantProcessReferenceCountTemplate = '接纳 %s 篇资料';
   static const String assistantProcessStepProgressTemplate = '已完成 %s/%s 步';
-  static const String assistantProcessCompletedSummary = '已深度思考';
+  static const String assistantProcessCompletedSummary = '已完成深度思考';
   static const String assistantProcessCompletedSummaryReferencesTemplate =
-      '已深度思考，参考 %s 篇资料';
+      '已完成深度思考，处理 %s 篇文档';
   static const String assistantProcessCompletedSummaryElapsedTemplate =
-      '已深度思考，用时 %s 秒';
+      '已完成深度思考，耗时 %s 秒';
   static const String assistantProcessCompletedSummaryFullTemplate =
-      '已深度思考，参考 %s 篇资料，用时 %s 秒';
-  static const String assistantProcessStageUnderstand = '理解问题';
-  static const String assistantProcessStageSearch = '查找信息';
-  static const String assistantProcessStageAnalyze = '核对结论';
-  static const String assistantProcessStageAnswer = '整理回答';
+      '已完成深度思考，处理 %s 篇文档，耗时 %s 秒';
+  static const String assistantProcessStageUnderstand = '理解问题中';
+  static const String assistantProcessStageSearch = '检索处理中';
+  static const String assistantProcessStageAnalyze = '检索处理中';
+  static const String assistantProcessStageAnswer = '整理答案中';
 
   /// 长等待（>6 秒）时的 reassurance 文案，符合 world-class 等待体验
   static const String assistantProcessLongWaitReassurance = '正在深入处理，请稍候…';
@@ -548,7 +548,7 @@ class UITextConstants {
   static const String myResonance = '我的交集';
   static const String profileEditLabel = '资料编辑';
   static const String profilePersonasLabel = '分身管理';
-  static const String profileDirectMessage = '私信';
+  static const String profileDirectMessage = '消息';
   static const String profileTabCreations = '创作';
   static const String profileTabCircles = '圈子';
   static const String profileTabInteraction = '互动';
@@ -605,8 +605,6 @@ class UITextConstants {
   static const String createWorkFormatNote = '笔记';
   static const String createSuggestionKeepCurrent = '仍按当前发布';
   static const String createSuggestionSwitch = '去调整';
-  static const String createAssistantUseLabel = '允许小趣使用';
-  static const String createAssistantUseHint = '关闭后，这条内容不会被小趣读取或引用';
   static const String createSuggestionToWork = '当前内容更适合作为作品发布';
   static const String createSuggestionToMoment = '这条内容也可以更轻量地作为点滴发布';
   static const String postMoment = '发点滴';

@@ -1,0 +1,62 @@
+version: 2
+feature: journey-name
+level: L2_journey
+source_path: l1-capability/journey-name
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+scope:
+  summary: one sentence journey summary
+  composed_scenarios:
+    - scenario-a
+    - scenario-b
+  out_of_scope:
+    - out-of-scope item
+
+journey_acceptance:
+  J1:
+    title: core journey title
+    journey: end-to-end journey description
+    scenario_refs:
+      - scenario-a
+      - scenario-b
+    done_when:
+      - observable outcome 1
+      - observable outcome 2
+    release_guardrails:
+      - permission boundary fixed
+      - rollback path available
+    evidence:
+      primary:
+        - T3_cross_service_integration
+        - T4_user_journey
+      supporting:
+        - T1_schema
+        - T2_module_interaction
+    tests:
+      planned:
+        - integration test name
+        - journey test name
+      recorded: []
+    status: pending
+
+release_acceptance:
+  R1:
+    title: release readiness
+    done_when:
+      - slo validated
+      - rollout guardrails are executable
+    evidence:
+      primary:
+        - T3_cross_service_integration
+        - T4_release_rehearsal
+      supporting:
+        - T1_schema
+    tests:
+      planned:
+        - rollback rehearsal
+      recorded: []
+    status: pending

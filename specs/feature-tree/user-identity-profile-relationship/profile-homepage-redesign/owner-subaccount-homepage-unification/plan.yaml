@@ -1,0 +1,96 @@
+version: 1
+node: user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260318-001-profile-homepage-redesign-journey-scenario-migration.yaml
+
+slices:
+  - id: P1
+    title: freeze profile subject metadata
+    goal: 收口 `ProfileSubjectView / Mutation / InheritanceState` 及共享枚举
+    depends_on: []
+    acceptance_refs:
+      - A1
+      - A5
+      - A6
+    planned_evidence:
+      - T1_schema
+      - T3_app_api_integration
+    done_when:
+      - 用户域 metadata 与 codegen 基线可表达统一主页主体与 request_context
+      - App 侧存在消费新生成物的前置条件
+    status: planned
+
+  - id: P2
+    title: implement sync and relationship contracts
+    goal: 收口资料同步写契约与关系能力视图
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A2
+      - A3
+    planned_evidence:
+      - T1_schema
+      - T2_app_mock
+      - T3_app_api_integration
+    done_when:
+      - 资料同步范围、关系态矩阵与错误码进入正式契约
+      - 端侧不再依赖手写 tier / bool 组合推断关系能力
+    status: planned
+
+  - id: P3
+    title: unify interaction activity contracts
+    goal: 收口主页互动活动的内容域读契约
+    depends_on:
+      - P1
+    acceptance_refs:
+      - A4
+      - A6
+    planned_evidence:
+      - T1_schema
+      - T2_module_interaction
+      - T3_cross_service_integration
+    done_when:
+      - `like/comment/share` 三类互动活动进入 metadata/codegen
+      - 收到/发出方向过滤具备稳定契约
+    status: planned
+
+  - id: P4
+    title: hand off shell and motion concerns
+    goal: 把统一壳层与滚动动效从当前 Scenario 中拆出
+    depends_on:
+      - P2
+      - P3
+    acceptance_refs:
+      - A7
+      - A8
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - 当前 Scenario 只保留主体模型与契约冻结职责
+      - `ProfileShell` 结构与单主滚动动效的职责已迁移到新增 Scenario 规划中
+    status: planned
+
+  - id: P5
+    title: migrate scenario acceptance schema
+    goal: 把当前 L3 acceptance 迁移到 `scenario_acceptance` schema，并替换 `linked_tasks`
+    depends_on:
+      - P4
+    acceptance_refs:
+      - A1
+      - A2
+      - A3
+      - A4
+      - A5
+      - A6
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - `linked_plan_items` 替代 `linked_tasks`
+      - 当前 Scenario 的范围、边界与证据类型能被新 schema 唯一表达
+    status: planned

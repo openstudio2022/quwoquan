@@ -183,34 +183,32 @@ class ContentShareTemplateBuilder {
   }
 
   static _ShareSeed _shareSeedForPost(PostBaseDto post) {
-    if (post is ArticlePostDto) {
+    if (post.isArticleLike) {
       return _ShareSeed(
-        title: _clip(post.title, fallback: '作品'),
-        summary: _clip(post.body, maxLength: 48),
-        coverUrl: post.coverUrl,
+        title: _clip(post.normalizedTitle, fallback: '作品'),
+        summary: _clip(post.normalizedBody, maxLength: 48),
+        coverUrl: post.primaryVisualUrl,
       );
     }
-    if (post is PhotoPostDto) {
+    if (post.isVideoLike) {
       return _ShareSeed(
-        title: _clip(post.body ?? '', fallback: '${post.displayName} 的图片作品'),
-        summary: _clip(post.body ?? '', maxLength: 48),
-        coverUrl: post.coverUrl.isNotEmpty
-            ? post.coverUrl
-            : (post.imageUrls.isNotEmpty ? post.imageUrls.first : ''),
+        title: _clip(post.normalizedBody, fallback: '${post.displayName} 的视频作品'),
+        summary: _clip(post.normalizedBody, maxLength: 48),
+        coverUrl: post.primaryVisualUrl,
       );
     }
-    if (post is VideoPostDto) {
+    if (post.hasImages || post.mediaCoverUrl.isNotEmpty) {
       return _ShareSeed(
-        title: _clip(post.body ?? '', fallback: '${post.displayName} 的视频作品'),
-        summary: _clip(post.body ?? '', maxLength: 48),
-        coverUrl: post.thumbnailUrl,
+        title: _clip(post.normalizedBody, fallback: '${post.displayName} 的图片作品'),
+        summary: _clip(post.normalizedBody, maxLength: 48),
+        coverUrl: post.primaryVisualUrl,
       );
     }
-    if (post is MomentPostDto) {
+    if (post.identity == 'moment') {
       return _ShareSeed(
-        title: _clip(post.body, fallback: '${post.displayName} 的点滴'),
-        summary: _clip(post.body, maxLength: 48),
-        coverUrl: post.imageUrls.isNotEmpty ? post.imageUrls.first : '',
+        title: _clip(post.normalizedBody, fallback: '${post.displayName} 的点滴'),
+        summary: _clip(post.normalizedBody, maxLength: 48),
+        coverUrl: post.primaryVisualUrl,
       );
     }
     return _ShareSeed(

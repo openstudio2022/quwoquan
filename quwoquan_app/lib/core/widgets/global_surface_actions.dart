@@ -7,6 +7,7 @@ import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
+import 'package:quwoquan_app/ui/content/entry/widgets/create_action_sheet.dart';
 
 class GlobalTopActions extends StatelessWidget {
   const GlobalTopActions({
@@ -102,90 +103,11 @@ class _QuickActionSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final backgroundColor = SettingsSemanticConstants.pageBackground(isDark);
-    
-    return Material(
-      type: MaterialType.transparency,
-      child: Container(
-        margin: EdgeInsets.all(AppSpacing.sm),
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              AppSpacing.containerMd,
-              AppSpacing.containerSm,
-              AppSpacing.containerMd,
-              AppSpacing.containerLg,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  UITextConstants.globalActionSheetTitle,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: AppTypography.lg,
-                    fontWeight: AppTypography.semiBold,
-                    color: CupertinoColors.label.resolveFrom(context),
-                  ),
-                ),
-                SizedBox(height: AppSpacing.interGroupMd),
-                _ActionTile(
-                  icon: CupertinoIcons.photo_on_rectangle,
-                  title: UITextConstants.createActionGallery,
-                  subtitle: UITextConstants.createActionGalleryHint,
-                  onTap: () => _openCreateAction(
-                    context,
-                    EditorStartAction.gallery,
-                  ),
-                ),
-                _ActionTile(
-                  icon: CupertinoIcons.camera,
-                  title: UITextConstants.createActionCamera,
-                  subtitle: UITextConstants.createActionCaptureHint,
-                  onTap: () => _openCreateAction(
-                    context,
-                    EditorStartAction.capture,
-                  ),
-                ),
-                _ActionTile(
-                  icon: CupertinoIcons.pencil,
-                  title: UITextConstants.createActionTextShort,
-                  subtitle: UITextConstants.createActionWriteHint,
-                  onTap: () => _openCreateAction(
-                    context,
-                    EditorStartAction.write,
-                  ),
-                ),
-                SizedBox(height: AppSpacing.interGroupXs),
-                _ActionTile(
-                  icon: CupertinoIcons.person_3,
-                  title: UITextConstants.startGroupChat,
-                  subtitle: UITextConstants.createActionGroupChatHint,
-                  onTap: () => _openStartGroupChat(context),
-                ),
-                _ActionTile(
-                  icon: CupertinoIcons.person_add,
-                  title: UITextConstants.addContact,
-                  subtitle: UITextConstants.createActionContactHint,
-                  onTap: () => _openAddContact(context),
-                ),
-                SizedBox(height: AppSpacing.md),
-                CupertinoButton(
-                  child: const Text(UITextConstants.cancel),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    return CreateActionSheet(
+      onCreateAction: (action) => _openCreateAction(context, action),
+      onStartGroupChat: () => _openStartGroupChat(context),
+      onAddContact: () => _openAddContact(context),
+      onCancel: () => Navigator.of(context).pop(),
     );
   }
 
@@ -210,55 +132,6 @@ class _QuickActionSheet extends StatelessWidget {
         builder: (_) => const _AddContactSheet(),
       );
     });
-  }
-}
-
-class _ActionTile extends StatelessWidget {
-  const _ActionTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return CupertinoListTile(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.xs,
-        vertical: AppSpacing.xs,
-      ),
-      leading: Container(
-        width: AppSpacing.largeButtonSize,
-        height: AppSpacing.largeButtonSize,
-        decoration: BoxDecoration(
-          color: AppColors.primaryColor.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-        ),
-        child: Icon(icon, color: AppColors.primaryColor),
-      ),
-      title: Text(
-        title,
-        style: TextStyle(
-          fontSize: AppTypography.base,
-          fontWeight: AppTypography.semiBold,
-          color: CupertinoColors.label.resolveFrom(context),
-        ),
-      ),
-      subtitle: Text(
-        subtitle,
-        style: TextStyle(
-          fontSize: AppTypography.sm,
-          color: CupertinoColors.secondaryLabel.resolveFrom(context),
-        ),
-      ),
-      onTap: onTap,
-    );
   }
 }
 

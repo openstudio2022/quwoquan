@@ -1,34 +1,114 @@
-version: 1
+version: 2
 feature: content-display-journey-consistency
-level: "L2_feature"
-template: A1-A8
-focus_groups: []
-tests:
-  mock:
-  - 场景：DiscoveryFeedProvider mock 模式下返回 PrototypeMockData 或 DataServiceImpl 数据
-  - 场景：HomeState 关注/赞/收藏变更后，列表与浏览器展示一致
-  unit:
-  - 场景：DiscoveryFeedProvider appendNextPage 正确追加 items 并更新 cursor
-  - 场景：路由 extra 传递 posts + initialIndex 正确解析
-  contract:
-  - 场景：ContentRepository.listDiscoveryFeedPage 与 post/service.yaml GetFeed 契约一致
-  integration:
-  - 场景：remote 模式下，列表→浏览器→作者详情 全链路使用同一 feed 数据
-  uat:
-  - 场景：美图频道点击 post → 浏览器展示与 post 一致 → 作者详情同源 → 关注变更返回同步
-  - 场景：浏览器滑动顺序与列表一致，加载更多后顺序正确
-  - 场景：退出再进，关注/赞/收藏状态保持
-  - 场景：视频旅程与图片一致
-  - 场景：Mock/Remote 切换后全链路正确
+level: L2_journey
+source_path: discovery-content/content-display-journey-consistency
+archived: false
+
 execution:
   local_gate: make gate
   full_gate: make gate-full
-level_acceptance:
-  A1: 列表、浏览器、作者详情数据与 post 一致，来源一致
-  A2: 关注/赞/收藏跨页面一致，重入后保持
-  A3: 作者详情关注/取消后返回，浏览器展示更新
-  A4: 浏览器滑动顺序与列表一致，支持加载更多
-  A5: 视频旅程与图片一致
-  A6: Mock/Remote 切换后全链路正确
-  A7: 与 metadata、API 契约一致
-  A8: mock/unit/contract/integration/uat 覆盖上述场景
+
+scope:
+  summary: >
+    冻结 discovery 与 circle 两类来源在 feed -> immersive viewer -> author profile ->
+    返回 feed 的统一旅程基线，统一对象真相源、canonical key、Provider 自动同步与延迟批同步策略。
+  in_scope:
+    - discovery / circle 两类来源进入图片、视频、微趣媒体浏览器的 handoff 契约
+    - ProfileSubjectId / authorProfileSubjectId / PostId 的 canonical key 语义
+    - user / post 对象级唯一状态源与 Provider 自动同步
+    - sync outbox 的默认 10s 聚合 flush 与 5min 失败重试
+    - sys.client_state_sync.* 作为系统级运行时配置真相源
+  out_of_scope:
+    - article 沉浸式浏览重做
+    - RTC 能力重做
+    - 圈子 feed 排序、推荐与召回
+    - profile 壳层视觉重构
+
+journey_acceptance:
+  J1:
+    title: discovery 与 circle 多来源内容展示旅程一致
+    journey: discovery/circle feed -> viewer -> author profile -> return
+    done_when:
+      - discovery 与 circle 两类来源进入 viewer 时都能带入 post 文案、作者信息、互动状态与返回上下文
+      - 图片、视频、微趣媒体在 viewer 中的标题与正文展示与对应 post 一致
+      - 退出 viewer 返回原来源后，feed 状态与 viewer 最终状态一致
+    blockers:
+      - 任一来源无法进入 viewer 或进入后缺失 post 文案
+      - 任一来源返回后 like/follow/save 状态回写缺失或漂移
+    evidence:
+      primary:
+        - T2_app_mock
+        - T3_app_api_integration
+      supporting:
+        - T4_user_journey
+    tests:
+      planned:
+        - discovery photo/video/moment journey integration test
+        - circle photo/video/moment handoff integration test
+      recorded: []
+    status: pending
+  J2:
+    title: user 与 post 对象真相源统一且可演进
+    journey: provider state -> viewer/profile/feed rendering -> cloud persistence
+    done_when:
+      - user 关系态只由 RelationshipCapabilityView 与 UserRelationshipStateProvider 决定
+      - post 互动状态只由 PostInteractionStateProvider 与 canonical PostId 决定
+      - usernameSlug 不再作为内部状态 key 使用
+    blockers:
+      - 同一状态同时由 capability 与局部布尔值双写维护
+      - usernameSlug / authorId / userId 混用导致同一用户多 key
+    evidence:
+      primary:
+        - T1_schema
+        - T2_module_interaction
+      supporting:
+        - T3_app_api_integration
+    tests:
+      planned:
+        - canonical-key consistency test
+        - provider-source-of-truth module test
+      recorded: []
+    status: pending
+  J3:
+    title: 延迟批同步、失败重试与系统配置可灰度可回滚
+    journey: local optimistic update -> sync outbox -> delayed batch flush -> retry -> reconcile
+    done_when:
+      - 点击后 UI 即时变化，但默认不立刻请求云端，而是在 10s 聚合窗口后批同步
+      - 失败批次默认 5min 后重试，且等待期新增操作会合并并触发下一轮批同步
+      - flush_delay_sec 与 retry_delay_sec 等参数由 sys.client_state_sync.* 下发且本地持久化
+    blockers:
+      - 运行时参数仍硬编码在客户端
+      - 失败意图丢失或无法追踪
+    evidence:
+      primary:
+        - T1_schema
+        - T3_app_api_integration
+      supporting:
+        - T4_user_journey
+    tests:
+      planned:
+        - outbox coalesce test
+        - retry schedule test
+        - remote config override test
+      recorded: []
+    status: pending
+
+release_guardrails:
+  R1:
+    title: 灰度与回滚基线
+    done_when:
+      - ops feature flag 支持 5/25/50/100 放量
+      - sys.client_state_sync.* 可单独回退到默认值
+      - mismatch / flush failure / retry backlog 有可观测 guardrail
+    evidence:
+      primary:
+        - T1_schema
+        - T3_app_api_integration
+      supporting:
+        - T4_user_journey
+    tests:
+      planned:
+        - rollback verification
+        - observability dashboard verification
+      recorded: []
+    status: pending

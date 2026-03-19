@@ -1,0 +1,9 @@
+{
+  "templateId": "stack.model_thinking_policy",
+  "version": "2026.03.18",
+  "stage": "global",
+  "domainId": "global",
+  "requiredVariables": ["_static"],
+  "outputContract": "none",
+  "selfCheckRules": ["thinking_boundary", "no_reasoning_leak"]
+}

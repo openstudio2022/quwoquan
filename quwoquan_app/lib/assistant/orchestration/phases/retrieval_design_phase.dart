@@ -1,14 +1,10 @@
-import 'dart:convert';
-
-import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/generated/enums/assistant_runtime_enums.g.dart';
 import 'package:quwoquan_app/assistant/context/assembly/answer_boundary_resolver.dart';
-import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/execution_preparation_resolver.dart';
 import 'package:quwoquan_app/assistant/orchestration/assistant_orchestration_runtime.dart';
-import 'package:quwoquan_app/assistant/orchestration/model_output_extractors.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase_types.dart';
 import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state.dart';
@@ -78,22 +74,19 @@ class RetrievalDesignPhase implements Phase {
       intentGraph: intentGraph,
       contextEnvelope: contextEnvelope,
     );
-    final modelDesignedTasks = seededTasks.isNotEmpty
+    final plannedTasks = seededTasks.isNotEmpty
         ? seededTasks
         : !needsQueryPlan
         ? const <QueryTask>[]
-        : await _resolveQueryTasksWithModel(
-            request: request,
+        : _resolveQueryTasksWithoutModel(
             latestUserQuery: latestUserQuery,
             intentGraph: intentGraph,
-            contextEnvelope: contextEnvelope,
-            bootstrapContext: bootstrapContext,
-            previousRunArtifacts: input.state.previousRunArtifacts,
-            sessionId:
-                bootstrapContext?.sessionId ?? request.sessionId ?? 'default',
-            runId: input.runId,
-            traceId: input.traceId,
-            onTraceEvent: input.onTraceEvent,
+            availableTools: (() {
+              final toolNames = runtime?.listAvailableToolNames() ?? const <String>[];
+              return toolNames.isNotEmpty
+                  ? toolNames
+                  : const <String>['web_search'];
+            })(),
           );
     final continuitySlotState = _recoverPreviousSlotState(
       fallbackDomainId: intentGraph.primarySkill.trim(),
@@ -107,7 +100,7 @@ class RetrievalDesignPhase implements Phase {
           const <String, dynamic>{},
     );
 
-    final queryTasks = modelDesignedTasks
+    final queryTasks = plannedTasks
         .map(
           (task) => task.copyWith(
             entityAnchors: task.entityAnchors.isNotEmpty
@@ -190,99 +183,34 @@ class RetrievalDesignPhase implements Phase {
     );
   }
 
-  Future<List<QueryTask>> _resolveQueryTasksWithModel({
-    required AssistantRunRequest request,
+  List<QueryTask> _resolveQueryTasksWithoutModel({
     required String latestUserQuery,
     required IntentGraph intentGraph,
-    required Map<String, dynamic> contextEnvelope,
-    required AssistantBootstrapContext? bootstrapContext,
-    required RunArtifacts? previousRunArtifacts,
-    required String sessionId,
-    required String runId,
-    required String traceId,
-    void Function(dynamic event)? onTraceEvent,
-  }) async {
-    final runtime = this.runtime;
-    if (runtime == null) return const <QueryTask>[];
-    final templateVersion = _templateCatalogRuntime.latestVersionFor(
-      'planner.retrieval_design',
-      fallback: '',
-    );
-    final result = await runtime.run(
-      messages: <Map<String, dynamic>>[
-        <String, dynamic>{'role': 'user', 'content': latestUserQuery},
-      ],
-      maxIterations: 1,
-      goal: '为当前问题设计最小但足够的一轮检索计划',
-      availableToolNamesOverride: const <String>[],
-      templateId: 'planner.retrieval_design',
-      templateVersion: templateVersion,
-      templateContext: request.contextScopeHint,
-      templateVariables: <String, dynamic>{
-        'currentQuery': latestUserQuery,
-        'intentGraphJson': jsonEncode(intentGraph.toJson()),
-        'contextEnvelopeJson': jsonEncode(contextEnvelope),
-        'contextSlotsJson': jsonEncode(intentGraph.contextSlots),
-        'continuityPolicyJson': jsonEncode(
-          bootstrapContext?.contextContinuityPolicy.toJson() ??
-              const <String, dynamic>{},
-        ),
-        'continuityOverrideSlotsJson': jsonEncode(
-          bootstrapContext?.continuityOverrideSlots ??
-              const <String, dynamic>{},
-        ),
-        'previousIntentGraphJson': jsonEncode(
-          bootstrapContext?.previousIntentGraph?.toJson() ??
-              const <String, dynamic>{},
-        ),
-        'previousAnswerSummary': bootstrapContext?.previousAnswerSummary ?? '',
-        'previousSlotStateJson': jsonEncode(
-          previousRunArtifacts?.slotState.toJson() ?? const <String, dynamic>{},
-        ),
-        'previousDomainPolicyBundleJson': jsonEncode(
-          previousRunArtifacts?.domainPolicyBundle?.toJson() ??
-              const <String, dynamic>{},
-        ),
-        'availableTools': jsonEncode(runtime.listAvailableToolNames()),
-        'toolMetadata': jsonEncode(
-          toolMetadataRegistry?.invocationGuidelinesForTools(
-                runtime.listAvailableToolNames(),
-              ) ??
-              const <Map<String, dynamic>>[],
-        ),
-        'skillExecutionShell': jsonEncode(
-          inputSkillExecutionShell(intentGraph).toJson(),
-        ),
+    required List<String> availableTools,
+  }) {
+    final plan = kernel.buildRetrievalPlan(
+      latestUserQuery,
+      availableTools,
+      intentPayload: <String, dynamic>{
+        'primaryDomainId': intentGraph.primarySkill.trim(),
+        'secondaryDomains': intentGraph.secondarySkills,
+        'problemClass': intentGraph.problemClassWireName,
+        'inferredMotive': intentGraph.inferredMotive,
+        'targetObject': intentGraph.targetObject,
+        'userJobToBeDone': intentGraph.userJobToBeDone,
+        'hardConstraints': intentGraph.hardConstraints,
+        'softConstraints': intentGraph.softConstraints,
+        'excludedScopes': intentGraph.excludedScopes,
+        'freshnessNeed': intentGraph.freshnessNeedWireName,
+        'answerShape': intentGraph.answerShapeWireName,
+        'requiresExternalEvidence': intentGraph.requiresExternalEvidence,
+        'entityAnchors': intentGraph.entityAnchors,
+        'negativeKeywords': intentGraph.negativeKeywords,
+        'queryNormalization': intentGraph.queryNormalization.toJson(),
+        'queryTasks': QueryTask.toJsonList(intentGraph.queryTasks),
       },
-      sessionId: sessionId,
-      runId: runId,
-      traceId: traceId,
-      onTraceEvent: onTraceEvent == null
-          ? null
-          : (event) => onTraceEvent(
-              event.copyWith(visibility: TraceVisibility.internal),
-            ),
-      callOptions: const LlmCallOptions(
-        temperature: 0.15,
-        maxTokens: 1200,
-        forceJsonObject: true,
-        timeoutSeconds: 20,
-      ),
     );
-    final parsed =
-        LlmResponseParser.parse(result.finalText).json ?? <String, dynamic>{};
-    final turn = tryParseAssistantTurnOutput(parsed);
-    final extractedIntentGraph = extractIntentGraphFromModelPayload(
-      parsed,
-      parsedTurn: turn,
-    );
-    final tasks = extractQueryTasksFromModelPayload(
-      parsed,
-      parsedTurn: turn,
-      extractedIntentGraph: extractedIntentGraph,
-    );
-    if (tasks.isNotEmpty) return tasks;
-    return const <QueryTask>[];
+    return plan?.queryTasks ?? const <QueryTask>[];
   }
 
   SkillExecutionShell inputSkillExecutionShell(IntentGraph intentGraph) {

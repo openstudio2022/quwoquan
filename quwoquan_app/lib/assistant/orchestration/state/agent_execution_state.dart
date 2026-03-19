@@ -24,6 +24,12 @@ class AssistantBootstrapContext {
     this.recalledTexts = const <String>[],
     this.previousIntentGraph,
     this.previousAnswerSummary = '',
+    this.previousUnderstandingSnapshot =
+        const RunArtifactsUnderstandingSnapshot(),
+    this.previousAnswerProcessing = const RunArtifactsAnswerProcessing(),
+    this.historicalThinkingSnapshot =
+        const RunArtifactsHistoricalThinkingSnapshot(),
+    this.providerReasoningContinuation = '',
     this.contextContinuityPolicy = const ContextContinuityPolicy(),
     this.continuityOverrideSlots = const <String, dynamic>{},
     this.recallResult = const RecallResult(topK: <RecallCandidate>[]),
@@ -40,6 +46,10 @@ class AssistantBootstrapContext {
   final List<String> recalledTexts;
   final IntentGraph? previousIntentGraph;
   final String previousAnswerSummary;
+  final RunArtifactsUnderstandingSnapshot previousUnderstandingSnapshot;
+  final RunArtifactsAnswerProcessing previousAnswerProcessing;
+  final RunArtifactsHistoricalThinkingSnapshot historicalThinkingSnapshot;
+  final String providerReasoningContinuation;
   final ContextContinuityPolicy contextContinuityPolicy;
   final Map<String, dynamic> continuityOverrideSlots;
   final RecallResult recallResult;
@@ -56,6 +66,10 @@ class AssistantBootstrapContext {
     List<String>? recalledTexts,
     IntentGraph? previousIntentGraph,
     String? previousAnswerSummary,
+    RunArtifactsUnderstandingSnapshot? previousUnderstandingSnapshot,
+    RunArtifactsAnswerProcessing? previousAnswerProcessing,
+    RunArtifactsHistoricalThinkingSnapshot? historicalThinkingSnapshot,
+    String? providerReasoningContinuation,
     ContextContinuityPolicy? contextContinuityPolicy,
     Map<String, dynamic>? continuityOverrideSlots,
     RecallResult? recallResult,
@@ -73,6 +87,14 @@ class AssistantBootstrapContext {
       previousIntentGraph: previousIntentGraph ?? this.previousIntentGraph,
       previousAnswerSummary:
           previousAnswerSummary ?? this.previousAnswerSummary,
+      previousUnderstandingSnapshot:
+          previousUnderstandingSnapshot ?? this.previousUnderstandingSnapshot,
+      previousAnswerProcessing:
+          previousAnswerProcessing ?? this.previousAnswerProcessing,
+      historicalThinkingSnapshot:
+          historicalThinkingSnapshot ?? this.historicalThinkingSnapshot,
+      providerReasoningContinuation:
+          providerReasoningContinuation ?? this.providerReasoningContinuation,
       contextContinuityPolicy:
           contextContinuityPolicy ?? this.contextContinuityPolicy,
       continuityOverrideSlots:

@@ -45,19 +45,21 @@ globs: **/*_test.dart,**/test/**/*.dart,**/*_test.go,**/tests/**/*.go
 - 发布/回滚
 - `T3/T4` 证据
 
-### `L2_story`
+### `L2_journey`
 
 是测试映射主单元：
 
-- 每个 `L2_story` 的 `acceptance.yaml` 必须声明 `T1~T4`
-- 每个核心验收项至少映射到一个测试层
+- 每个 `L2_journey` 的 `acceptance.yaml` 必须声明 `journey_acceptance`
+- `L2_journey` 主要聚合 `T3/T4`
+- 每个核心 Journey 验收项至少映射到一个测试层
 
-### `L3_task`
+### `L3_scenario`
 
-只负责执行，不是独立测试治理层：
+是最小实施与测试收口单元：
 
-- 可关联测试任务
-- 不拥有独立 `acceptance.yaml`
+- 每个 `L3_scenario` 的 `acceptance.yaml` 必须声明 `scenario_acceptance`
+- `L3_scenario` 主要收口 `T1/T2`
+- 必要时补 `T3` 验证端云边界
 
 ---
 
@@ -68,6 +70,7 @@ globs: **/*_test.dart,**/test/**/*.dart,**/*_test.go,**/tests/**/*.go
 ```text
 先定义 acceptance
 → 再确定 T1~T4
+→ 再确定 `plan.yaml` 中的 acceptance refs
 → 先写失败测试（Red）
 → 写最小实现（Green）
 → 重构（Refactor）
@@ -77,6 +80,7 @@ globs: **/*_test.dart,**/test/**/*.dart,**/*_test.go,**/tests/**/*.go
 强制要求：
 
 - 每个当前交付任务开始前，必须能指出对应的验收项和测试层
+- 每个会话 todo 开始前，必须能指出来源 slice 和 `acceptance_ref`
 - 高风险改动必须有明确的先失败再转绿证据
 - 若无法先写测试，必须在 `design.md` 说明原因和替代验证手段
 
@@ -126,7 +130,7 @@ globs: **/*_test.dart,**/test/**/*.dart,**/*_test.go,**/tests/**/*.go
 
 - 组件渲染
 - 交互状态变化
-- Story 常规/异常路径
+- Scenario 常规/异常路径
 
 ### `T3`
 
@@ -171,6 +175,7 @@ tests:
 
 - `implemented` 但 `tests` 为空
 - 使用 `L3/L4` 作为测试层标识
+- 将 `L2_journey` 与 `L3_scenario` 的测试职责写反
 
 ---
 

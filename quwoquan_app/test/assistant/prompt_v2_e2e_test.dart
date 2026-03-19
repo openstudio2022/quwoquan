@@ -102,7 +102,6 @@ void main() {
         'stack.tool_policy',
         'phase.output_contract.plan',
         'phase.output_contract.answer',
-        'phase.output_contract.ask_user',
       ]) {
         expect(
           templateIds.contains(required),
@@ -143,14 +142,13 @@ void main() {
       final text = response.finalText.trim();
       expect(text, isNotEmpty);
 
-      // Structured response should contain contract version info
+      // Structured response should contain contract id info
       final structured = response.structuredResponse;
-      final contractVersion =
-          (structured['contractVersion'] as String?)?.trim() ?? '';
+      final contractId = (structured['contractId'] as String?)?.trim() ?? '';
       expect(
-        contractVersion,
+        contractId,
         equals('assistant_turn'),
-        reason: '应输出 assistant_turn 合约版本，实际: $contractVersion',
+        reason: '应输出 assistant_turn 合约标识，实际: $contractId',
       );
     });
   });

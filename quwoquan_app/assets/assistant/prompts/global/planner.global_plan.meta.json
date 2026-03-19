@@ -1,14 +1,14 @@
 {
   "templateId": "planner.global_plan",
-  "version": "2026.02.18",
+  "version": "2026.03.18",
   "stage": "plan",
   "domainId": "global",
   "requiredVariables": [
     "userQuery",
-    "contextEnvelope",
-    "userProfileSnapshot",
-    "historicalRetrievalFeedback",
-    "domainLearningSignals"
+    "skillCatalog",
+    "sharedContext",
+    "currentRuntimeState",
+    "dialogueContinuity"
   ],
   "outputContract": "assistant_turn",
   "selfCheckRules": [

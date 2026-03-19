@@ -1,0 +1,107 @@
+version: 1
+node: discovery-content/content-display-journey-consistency
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260318-002-content-display-journey-consistency-prd-baseline-expansion.yaml
+
+slices:
+  - id: P1
+    title: freeze canonical metadata and sync config schema
+    goal: 收口 `authorProfileSubjectId`、`sys.client_state_sync.*` 与统一 handoff 所依赖的 metadata 真相源
+    depends_on: []
+    acceptance_refs:
+      - J2
+      - J3
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - `content/post` 可输出 canonical 作者 key
+      - `_control_plane/platform/config_schema.yaml` 可表达 flush/retry 等系统参数
+      - `GetAppConfig` 的配置结构能承载 `client_state_sync`
+    status: planned
+
+  - id: P2
+    title: establish codegen baseline
+    goal: 让 App / service / control plane 生成物具备消费新 metadata 的稳定前提
+    depends_on:
+      - P1
+    acceptance_refs:
+      - J2
+      - J3
+    planned_evidence:
+      - T1_schema
+      - T3_app_api_integration
+    done_when:
+      - `make -C quwoquan_service verify-metadata` 通过
+      - `make codegen` 与 `make codegen-app` 产出可被 App 消费的新生成物
+      - App 侧 repository 与 config provider 有接入新生成物的落点
+    status: planned
+
+  - id: P3
+    title: implement shared provider state sync
+    goal: 建立 viewer / profile / feed 共享的关系态与 post 互动态 provider
+    depends_on:
+      - P2
+    acceptance_refs:
+      - J2
+    planned_evidence:
+      - T2_module_interaction
+      - T3_app_api_integration
+    done_when:
+      - `UserRelationshipStateProvider` 与 `PostInteractionStateProvider` 具备稳定边界
+      - profile 不再以局部 `isFollowing` 作为主真相源
+      - viewer / profile / feed 可共享同一状态并支持重入
+    status: planned
+
+  - id: P4
+    title: unify discovery and circle handoff contracts
+    goal: 让 discovery 与 circle 两类来源进入 viewer 和返回来源时使用同构协议
+    depends_on:
+      - P3
+    acceptance_refs:
+      - J1
+    planned_evidence:
+      - T2_app_mock
+      - T3_app_api_integration
+    done_when:
+      - `MediaViewerExtra` / `MediaViewerResult` 对两类来源保持同构
+      - `section_creations.dart` 与 discovery 入口都能完整传递文案与互动快照
+      - viewer 返回来源后能完整吸收最终状态
+    status: planned
+
+  - id: P5
+    title: land delayed batch sync outbox
+    goal: 以 outbox 取代点击即请求，完成 flush / retry / reconcile 主链路
+    depends_on:
+      - P4
+    acceptance_refs:
+      - J3
+    planned_evidence:
+      - T2_module_interaction
+      - T3_app_api_integration
+      - T4_user_journey
+    done_when:
+      - follow / like / save 等写操作先乐观更新再入 outbox
+      - 10s flush 与 5min retry 可由远端配置覆盖
+      - 弱网与重入场景下 pending intent 不丢失
+    status: planned
+
+  - id: P6
+    title: validate rollout guardrails
+    goal: 建立灰度、观测与回滚验证，确保 Journey 可以安全进入 `/dev`
+    depends_on:
+      - P5
+    acceptance_refs:
+      - R1
+    planned_evidence:
+      - T3_app_api_integration
+      - T4_user_journey
+    done_when:
+      - feature flag、观测指标与回滚动作可执行
+      - mismatch / backlog / flush failure guardrail 可验证
+      - discovery 与 circle 的关键用户旅程回归清单明确
+    status: planned

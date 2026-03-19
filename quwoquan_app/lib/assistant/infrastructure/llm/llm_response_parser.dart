@@ -98,8 +98,8 @@ class LlmResponseParser {
 
     if (decoded.containsKey('decision')) return decoded;
 
-    final version = (decoded['contractVersion'] as String?)?.trim() ?? '';
-    if (version == 'assistant_turn') return decoded;
+    final contractId = (decoded['contractId'] as String?)?.trim() ?? '';
+    if (contractId == 'assistant_turn') return decoded;
 
     if (decoded.containsKey('userMarkdown')) return decoded;
 
@@ -216,7 +216,7 @@ class LlmParseResult {
 /// 引擎元数据（模型不输出，由引擎注入）。
 class EngineResponseMeta {
   const EngineResponseMeta({
-    this.contractVersion = 'assistant_turn',
+    this.contractId = 'assistant_turn',
     this.domainId = '',
     this.stateId = '',
     this.detectedEvent = '',
@@ -228,7 +228,7 @@ class EngineResponseMeta {
     this.timestamp,
   });
 
-  final String contractVersion;
+  final String contractId;
   final String domainId;
   final String stateId;
   final String detectedEvent;
@@ -240,7 +240,7 @@ class EngineResponseMeta {
   final DateTime? timestamp;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-    'contractVersion': contractVersion,
+    'contractId': contractId,
     'domainId': domainId,
     'stateId': stateId,
     'detectedEvent': detectedEvent,

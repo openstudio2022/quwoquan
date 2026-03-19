@@ -46,6 +46,8 @@ l2:
     l3:
       - feature: feed-item-dto-contract
       - feature: content-action-intent-contract
+      - feature: viewer-profile-state-sync-contract
+      - feature: circle-feed-viewer-handoff-contract
       - feature: photo-display-journey
       - feature: video-display-journey
       - feature: article-display-journey

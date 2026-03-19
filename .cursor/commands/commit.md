@@ -2,20 +2,20 @@
 name: /commit
 id: commit
 category: Workflow
-description: 提交已完成的 L3_story
+description: 提交已完成的 Scenario slice 与对应 CR
 ---
 
 > SDD 主流程：... → dev（已归档） → **commit** → deploy
 
-`/commit` 的前置对象只有一个：**已完成并归档的 `L3_story`**。
+`/commit` 的前置对象是：**已完成的 `L3_scenario` slice 与其对应 CR 范围**。
 
 ## 前置条件
 
 - 四件套齐全
-- 当前 Task 已完成
+- `plan.yaml` 的目标 slice 已完成
 - `acceptance.yaml` 无 `pending`
 - `tests` 证据已回填
-- `tree_index.yaml` 状态已完成
+- `CR` 已完成本轮修订
 
 ## 提交前门禁
 
@@ -39,6 +39,7 @@ make gate
 
 ```text
 提交完成：<feature-path>
-L3_story: <story>
+L3_scenario: <scenario>
+CR: <change-request>
 下一步：/deploy
 ```

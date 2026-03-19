@@ -425,18 +425,17 @@ void main() {
     expect(completedBubble.message['id'], streamingMessageId);
     expect(finalAnswer, contains('九寨沟方向备选方案'));
     final persistedJourney =
-        ((completedBubble.message['journey'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{});
+        ((completedBubble.message['journey'] as Map?)
+            ?.cast<String, dynamic>() ??
+        const <String, dynamic>{});
     final mergedJourneyEntries =
         ((persistedJourney['entries'] as List?)?.whereType<Map>().toList(
-              growable: false,
-            )) ??
+          growable: false,
+        )) ??
         const <Map>[];
     expect(
       mergedJourneyEntries
-          .where(
-            (item) => item['entryId'] == 'journey.search.verify',
-          )
+          .where((item) => item['entryId'] == 'journey.search.verify')
           .length,
       1,
       reason: 'completed 合并后不应把同一语义的 journey entry 重复写两遍',
@@ -444,13 +443,11 @@ void main() {
     expect(persistedJourney, isNotEmpty);
     final persistedEntries =
         ((persistedJourney['entries'] as List?)?.whereType<Map>().toList(
-              growable: false,
-            )) ??
+          growable: false,
+        )) ??
         const <Map>[];
     expect(
-      persistedEntries.any(
-        (entry) => entry['headline'] == '我在核对九寨沟方向的最新约束',
-      ),
+      persistedEntries.any((entry) => entry['headline'] == '我在核对九寨沟方向的最新约束'),
       isTrue,
     );
   });
@@ -514,9 +511,7 @@ void main() {
     expect(find.byType(AssistantProcessDrawer), findsOneWidget);
   });
 
-  testWidgets('structured answer stream 在成答前不应闪出内部 JSON 字段', (
-    tester,
-  ) async {
+  testWidgets('structured answer stream 在成答前不应闪出内部 JSON 字段', (tester) async {
     final gateway = _ControlledRemoteAssistantEntry();
     addTearDown(gateway.dispose);
 
@@ -573,7 +568,7 @@ void main() {
 
     gateway.emit(
       AssistantRunStreamEvent.answerDelta(
-        '{"contractVersion":"assistant_turn","decision":{"nextAction":"answer"},"messageKind":"answer","userMar',
+        '{"contractId":"assistant_turn","decision":{"nextAction":"answer"},"messageKind":"answer","userMar',
       ),
     );
     await tester.pump();
@@ -583,14 +578,17 @@ void main() {
       isEmpty,
       reason: '结构化 envelope 尚未进入 userMarkdown 前，不应把 JSON 前缀写进气泡',
     );
-    expect(find.textContaining('contractVersion'), findsNothing);
+    expect(find.textContaining('contractId'), findsNothing);
     expect(find.textContaining('assistant_turn'), findsNothing);
 
     gateway.emit(AssistantRunStreamEvent.answerDelta('kdown":"深圳今天天气晴'));
     await tester.pump();
-    expect(_latestAssistantBubble(tester).message['streamFinalAnswer'], '深圳今天天气晴');
+    expect(
+      _latestAssistantBubble(tester).message['streamFinalAnswer'],
+      '深圳今天天气晴',
+    );
     expect(find.text('深圳今天天气晴'), findsAtLeastNWidgets(1));
-    expect(find.textContaining('contractVersion'), findsNothing);
+    expect(find.textContaining('contractId'), findsNothing);
 
     gateway.emit(
       AssistantRunStreamEvent.answerDelta(
@@ -628,7 +626,7 @@ void main() {
             : finalBubble.message['streamFinalAnswer']) ??
         '';
     expect(finalAnswer, contains('深圳今天天气晴，适合出行。'));
-    expect(find.textContaining('contractVersion'), findsNothing);
+    expect(find.textContaining('contractId'), findsNothing);
     expect(find.textContaining('machineEnvelope'), findsNothing);
   });
 }

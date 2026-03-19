@@ -15,7 +15,7 @@ void main() {
     final internalXml = '<tool_call><name>launch_app</name></tool_call>';
     final response = AssistantRunResponse(
       finalText: jsonEncode(<String, dynamic>{
-        'contractVersion': 'assistant_turn',
+        'contractId': 'assistant_turn',
         'decision': <String, dynamic>{'nextAction': 'tool_call'},
         'messageKind': 'progress',
         'result': <String, dynamic>{'text': internalXml},
@@ -24,7 +24,7 @@ void main() {
       structuredResponse: <String, dynamic>{
         'runArtifacts': <String, dynamic>{
           'displayMarkdown': internalXml,
-          'displayPlainText': 'assistant_turn contractVersion tool_call',
+          'displayPlainText': 'assistant_turn contractId tool_call',
         },
       },
     );

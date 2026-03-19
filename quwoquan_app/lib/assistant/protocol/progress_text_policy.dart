@@ -18,7 +18,7 @@ class ProgressTextPolicy {
 
   static const ProgressTextPolicy defaults = ProgressTextPolicy(
     jsonEnvelopeSignatures: <String>[
-      '"contractVersion"',
+      '"contractId"',
       '"decision"',
       '"userMarkdown"',
     ],

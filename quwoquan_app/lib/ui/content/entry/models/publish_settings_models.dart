@@ -4,7 +4,6 @@ import 'package:quwoquan_app/cloud/runtime/generated/integration/location_poi_dt
 class PublishSettings {
   const PublishSettings({
     this.isPublic = true,
-    this.allowAssistantUse = true,
     this.locationName = '',
     this.location = const <String, dynamic>{},
     this.circleIds = const <String>[],
@@ -12,7 +11,6 @@ class PublishSettings {
   });
 
   final bool isPublic;
-  final bool allowAssistantUse;
   final String locationName;
   final Map<String, dynamic> location;
   final List<String> circleIds;
@@ -21,11 +19,8 @@ class PublishSettings {
   /// 从 Map（如 _tabData）解析
   factory PublishSettings.fromMap(Map<String, dynamic> map) {
     final vis = (map['visibility']?.toString() ?? 'public').toLowerCase();
-    final assistantUsePolicy =
-        (map['assistantUsePolicy']?.toString() ?? 'inherit').toLowerCase();
     return PublishSettings(
       isPublic: vis == 'public',
-      allowAssistantUse: assistantUsePolicy != 'exclude',
       locationName: (map['locationName'] as String? ?? '').trim(),
       location: Map<String, dynamic>.from(
         map['location'] as Map? ?? const <String, dynamic>{},
@@ -41,7 +36,6 @@ class PublishSettings {
 
   Map<String, dynamic> toMap() => <String, dynamic>{
     'visibility': isPublic ? 'public' : 'private',
-    'assistantUsePolicy': allowAssistantUse ? 'inherit' : 'exclude',
     'locationName': locationName,
     'location': location,
     'circleIds': circleIds,
@@ -52,7 +46,6 @@ class PublishSettings {
   Map<String, dynamic> toPayloadFields() {
     final payload = <String, dynamic>{
       'visibility': isPublic ? 'public' : 'private',
-      'assistantUsePolicy': allowAssistantUse ? 'inherit' : 'exclude',
       'circleIds': circleIds,
     };
     if (locationName.isNotEmpty) payload['locationName'] = locationName;
@@ -64,14 +57,12 @@ class PublishSettings {
 
   PublishSettings copyWith({
     bool? isPublic,
-    bool? allowAssistantUse,
     String? locationName,
     Map<String, dynamic>? location,
     List<String>? circleIds,
     List<String>? circleNames,
   }) => PublishSettings(
     isPublic: isPublic ?? this.isPublic,
-    allowAssistantUse: allowAssistantUse ?? this.allowAssistantUse,
     locationName: locationName ?? this.locationName,
     location: location ?? this.location,
     circleIds: circleIds ?? this.circleIds,

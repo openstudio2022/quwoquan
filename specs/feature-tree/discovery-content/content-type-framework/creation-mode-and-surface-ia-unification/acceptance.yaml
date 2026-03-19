@@ -1,242 +1,113 @@
 feature: creation-mode-and-surface-ia-unification
-level: "L3_story"
-template: A1-A14
-archived: true
-archived_at: '2026-03-13T15:36:15+08:00'
-status: completed
-focus_groups:
-  - content_identity
-  - create_entry
-  - unified_editor
-  - cross_surface_ia
-  - assistant_consumption
-  - commercial_readiness
-  - lifecycle_contract
-  - privacy_and_share
-  - migration_release
+level: L3_scenario
+source_path: discovery-content/content-type-framework/creation-mode-and-surface-ia-unification
+archived: false
+status: pending
 execution:
-  local_gate: make -C quwoquan_service verify-metadata
+  local_gate: flutter analyze quwoquan_app/lib && python3 scripts/verify_dart_semantic.py
   full_gate: make gate-full
 level_acceptance:
   A1:
-    criteria: "统一内容语法冻结并对外一致：`创作` 为总集合，`点滴/作品` 为身份层，`图片/视频/笔记` 为格式层；历史别名 `微趣/micro/moment` 只允许保留在兼容层，不再出现在新的用户可见 IA 文案中"
-    status: implemented
-    linked_tasks:
-      - P1
-      - P2
+    criteria: '全局 `+` 与发现页 `+` 已统一为同一套 iOS 风格三段式动作菜单：首组只含 `从相册选择 / 相机 / 写文字`，第二组只含 `发起群聊 / 添加同好`，第三组为 `取消`；首层不再暴露 `点滴/作品/图片/视频/文章` 等分类。'
+    status: pending
+    linked_tasks: [D1, D2]
     test_layers:
-      T1: required
+      T1: optional
       T2: required
       T3: optional
-      T4: optional
+      T4: required
     tests:
-      - quwoquan_app/test/ui/content/entry/create_entry_information_architecture_widget_test.dart
-      - quwoquan_app/test/ui/content/post/contract/post_ui_config_contract_test.dart
-      - quwoquan_app/test/ui/discovery/discovery_content_identity_widget_test.dart
+      - create action sheet widget test
+      - global plus and discovery plus parity audit
+      - create entry rollback flag rehearsal
   A2:
-    criteria: "创作首层入口改为动作优先，首屏仅保留 `从相册选`、`写点什么`、可选 `拍一下` 三类开始动作；首屏不再要求用户先选 `图片/视频/笔记` 或 `点滴/作品`"
-    status: implemented
-    linked_tasks:
-      - P3
-      - P4
+    criteria: '创作一级流程已收敛为两个编辑器：相册/相机进入媒体编辑器，写文字进入文字为主编辑器；用户可见主路径中不再保留四个创作页、身份切换和格式切换的并行心智。'
+    status: pending
+    linked_tasks: [D3, D4]
     test_layers:
       T1: optional
       T2: required
       T3: optional
       T4: required
     tests:
-      - quwoquan_app/test/ui/content/entry/create_entry_information_architecture_widget_test.dart
-      - quwoquan_app/test/ui/content/entry/widgets/create_entry_sheet_widget_test.dart
-      - quwoquan_app/test/patrol/content/create_entry_start_actions_e2e_test.dart
+      - create editor v2 route test
+      - start action to editor kind widget test
+      - create editor v2 patrol smoke test
   A3:
-    criteria: "统一编辑器能够根据用户已选素材自动适配图文、视频、文字编辑态，并支持 `点滴/作品` 身份切换；切换前后文本、媒体、圈子、位置、可见性不丢失"
-    status: implemented
-    linked_tasks:
-      - P5
-      - P6
-      - P7
+    criteria: '媒体编辑器已冻结并实现统一媒体规则：图片与视频互斥、视频最多 1 个、图片沿用现有图片作品上限、编辑页内可继续追加图片、可删空图片后改视频或删视频后改图片，主预览与横向缩略列表结构稳定。'
+    status: pending
+    linked_tasks: [D4, D6]
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: required
+    tests:
+      - media editor rules widget test
+      - media picker mutual exclusion regression test
+      - add more images and replace video patrol test
+  A4:
+    criteria: '文字为主编辑器已冻结并实现“正文优先、标题可选、短内容可无标题直接发布、长内容轻提醒补标题”的交互；标题默认以 `添加标题（可选）` 轻入口呈现，点击后展开输入，提示只做非阻塞建议。'
+    status: pending
+    linked_tasks: [D4, D7]
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: required
+    tests:
+      - text editor title progressive disclosure test
+      - title hint threshold widget test
+      - publish without title journey test
+  A5:
+    criteria: '发布设置能力被保留但已轻量化：主编辑页默认展示摘要态或二级入口，不再长期展开完整表单；位置、圈子、可见性、小趣使用开关仍可完整配置，并保持与现有选择器和发布契约兼容。'
+    status: pending
+    linked_tasks: [D8]
     test_layers:
       T1: optional
       T2: required
       T3: required
-      T4: required
-    tests:
-      - quwoquan_app/test/ui/content/entry/unified_editor_mode_switch_widget_test.dart
-      - quwoquan_app/test/personal_assistant/content_draft_mode_roundtrip_journey_test.dart
-      - quwoquan_app/test/patrol/content/content_draft_preservation_e2e_test.dart
-  A4:
-    criteria: "发布前存在轻量身份确认与默认建议规则：无标题短文案优先建议 `点滴`，有标题/封面/摘要/标签优先建议 `作品`；`点滴` 与 `作品` 使用同一 Post 聚合但具备不同包装深度"
-    status: implemented
-    linked_tasks:
-      - P8
-      - P9
-    test_layers:
-      T1: required
-      T2: required
-      T3: required
       T4: optional
     tests:
-      - quwoquan_service/services/content-service/tests/post_crud_contract_test.go
-      - quwoquan_service/services/content-service/tests/post_identity_contract_test.go
-      - quwoquan_app/test/ui/content/entry/publish_identity_confirmation_widget_test.dart
-  A5:
-    criteria: "发现页保持 `点滴/作品` 消费双轨，且 `作品` 内仅做格式筛选；`点滴` 卡片以人、时间、互动优先，`作品` 卡片以封面、标题、收藏价值优先；分享始终属于动作层而非一级分类层"
-    status: implemented
-    linked_tasks:
-      - P10
-      - P11
-    test_layers:
-      T1: required
-      T2: required
-      T3: required
-      T4: optional
-    tests:
-      - quwoquan_service/services/content-service/tests/post_feed_contract_test.go
-      - quwoquan_app/test/ui/discovery/discovery_content_identity_widget_test.dart
-      - quwoquan_app/test/ui/discovery/post/journeys/discovery_post_feed_load_journey_test.dart
+      - publish settings summary widget test
+      - publish settings roundtrip integration test
+      - content repository publish payload compatibility test
   A6:
-    criteria: "圈子页与主页采用 `创作` 容器语义：一级不复用发现页消费双轨，二级使用 `全部/点滴/作品`，进入 `作品` 后可继续筛选 `图片/视频/笔记`；同一条内容跨发现、圈子、主页身份一致"
-    status: implemented
-    linked_tasks:
-      - P12
-      - P13
-      - P14
+    criteria: '旧草稿到新编辑器的兼容路径已冻结并可验证：旧 `moment/photo/video/article` 草稿可读，新草稿统一写入 `v2` 结构；自动保存、杀进程恢复、继续追加媒体和发布后返回不造成草稿结构性损坏。'
+    status: pending
+    linked_tasks: [D4, D5]
     test_layers:
-      T1: required
-      T2: required
-      T3: required
-      T4: optional
-    tests:
-      - quwoquan_service/services/content-service/tests/post_user_list_contract_test.go
-      - quwoquan_app/test/ui/user/profile_content_identity_widget_test.dart
-      - quwoquan_app/test/ui/circle/circle_content_identity_widget_test.dart
-      - quwoquan_app/test/ui/discovery/discovery_content_identity_widget_test.dart
-  A7:
-    criteria: "支持 `点滴 -> 作品` 升级链路：已有点滴可在保留原素材与文案的前提下补标题、封面、摘要和标签后转为作品；UI 术语 `笔记` 在迁移期映射到既有 `article` 契约，不产生第二套内容类型真相源"
-    status: implemented
-    linked_tasks:
-      - P15
-      - P16
-    test_layers:
-      T1: required
-      T2: required
-      T3: required
-      T4: optional
-    tests:
-      - quwoquan_service/services/content-service/tests/post_identity_contract_test.go
-      - quwoquan_service/services/content-service/tests/post_event_contract_test.go
-      - quwoquan_service/services/content-service/tests/post_compat_contract_test.go
-      - quwoquan_app/test/ui/content/entry/unified_editor_mode_switch_widget_test.dart
-  A8:
-    criteria: "小趣助手内容消费规则清晰可实施：`点滴` 进入短中期上下文记忆，`作品` 进入长期知识资产，`精选/攻略/清单` 作为高优先级引用来源，但必须受权限、撤销与新鲜度约束"
-    status: implemented
-    linked_tasks:
-      - P17
-      - P18
-    test_layers:
-      T1: required
-      T2: optional
-      T3: required
-      T4: optional
-    tests:
-      - quwoquan_service/services/content-service/tests/post_identity_contract_test.go
-      - quwoquan_app/test/personal_assistant/page_context_identity_routing_test.dart
-  A9:
-    criteria: "商用品质指标冻结并可作为上线 blocker：入口到编辑器可交互 warm `P95 <= 1.2s`、cold `P95 <= 2.0s`；身份切换反馈 `P95 <= 150ms`；发布成功率 `>= 99.5%`；关键路径 `crash-free >= 99.8%`"
-    status: implemented
-    linked_tasks:
-      - P19
-      - P20
-      - P21
-    test_layers:
-      T1: required
-      T2: required
-      T3: required
-      T4: required
-    tests:
-      - quwoquan_app/test/ui/content/entry/create_entry_runtime_flag_test.dart
-      - quwoquan_app/test/ui/content/entry/unified_editor_runtime_flag_test.dart
-      - quwoquan_app/test/patrol/content/create_entry_start_actions_e2e_test.dart
-      - quwoquan_app/test/patrol/content/content_draft_preservation_e2e_test.dart
-      - make gate-full
-  A10:
-    criteria: "既有 Story 覆盖与继承矩阵明确：`dual-rail-discovery-redesign`、`profile-homepage-redesign`、`circle-homepage-redesign`、`content-service-cloud-production` 的覆盖边界、保留内容与优先级全部冻结，不再保留第二套 IA 词表"
-    status: implemented
-    linked_tasks:
-      - P22
-      - P23
-    test_layers:
-      T1: required
+      T1: optional
       T2: required
       T3: optional
-      T4: optional
+      T4: required
     tests:
-      - quwoquan_app/test/ui/content/entry/create_entry_information_architecture_widget_test.dart
-      - quwoquan_app/test/ui/discovery/discovery_content_identity_widget_test.dart
-      - quwoquan_app/test/ui/user/profile_content_identity_widget_test.dart
-      - quwoquan_app/test/ui/circle/circle_content_identity_widget_test.dart
-  A11:
-    criteria: "`点滴 -> 作品` 的数据生命周期合同冻结：默认原地升级，`postId`、deeplink 与分享链接保持不变；评论、点赞、收藏、审核轨迹延续；作者主页和圈子收敛 `P95 <= 5s`，发现页和助手索引收敛 `P95 <= 30s`；本期不支持 `作品 -> 点滴`"
-    status: implemented
-    linked_tasks:
-      - P24
-      - P25
+      - create draft v2 compatibility test
+      - autosave and restore widget test
+      - create draft recovery patrol test
+  A7:
+    criteria: '第一版内部兼容映射已明确并可回归：媒体编辑器发布继续落到现有 `image/video` 契约，文字为主编辑器根据内容重量映射到现有轻内容或文章契约；用户首层体验中不再重新暴露旧术语。'
+    status: pending
+    linked_tasks: [D8, D9]
     test_layers:
-      T1: required
-      T2: optional
-      T3: required
-      T4: optional
-    tests:
-      - quwoquan_service/services/content-service/tests/post_crud_contract_test.go
-      - quwoquan_service/services/content-service/tests/post_event_contract_test.go
-      - quwoquan_service/services/content-service/tests/post_identity_contract_test.go
-      - quwoquan_service/services/content-service/tests/post_compat_contract_test.go
-  A12:
-    criteria: "小趣权限边界、保留策略与撤销时效冻结：`仅自己可见`、`圈内可见`、`公开可见` 三类内容的小趣可用范围明确；删除、转私密、退圈或关闭授权后，助手与分享资格撤销 `P95 <= 5 分钟`；回答引用必须标注来源类型"
-    status: implemented
-    linked_tasks:
-      - P26
-      - P27
-    test_layers:
-      T1: required
-      T2: optional
-      T3: required
-      T4: optional
-    tests:
-      - quwoquan_service/services/content-service/tests/post_identity_contract_test.go
-      - quwoquan_service/services/content-service/tests/post_feed_contract_test.go
-      - quwoquan_app/test/personal_assistant/page_context_identity_routing_test.dart
-  A13:
-    criteria: "分享产品契约冻结：`点滴` 与 `作品` 分别拥有稳定的分享模板、deeplink、落地页与失败回退（复制链接/保存海报/系统分享）；平台差异不改变站内 IA，且 `仅自己可见` 内容禁止对外分享"
-    status: implemented
-    linked_tasks:
-      - P28
-      - P29
-    test_layers:
-      T1: required
+      T1: optional
       T2: required
       T3: required
       T4: optional
     tests:
-      - quwoquan_app/test/ui/content/share/share_template_by_identity_widget_test.dart
-      - quwoquan_app/test/cloud/content/contract/content_repository_contract_test.dart
-  A14:
-    criteria: "历史内容迁移、旧草稿兼容、feature flag、灰度步进、观测指标与回滚条件全部冻结；入口、编辑器、展示、分享、小趣索引支持独立 kill switch，任一核心指标越线可单独回退"
-    status: implemented
-    linked_tasks:
-      - P30
-      - P31
-      - P32
+      - create publish payload mapping test
+      - content repository contract regression test
+      - legacy taxonomy label audit
+  A8:
+    criteria: '灰度、回滚与商用品质 guardrails 已齐备：`simple_create_action_sheet`、`create_editor_v2`、`progressive_title_prompt` 可独立开关；入口耗时、编辑器可交互、草稿恢复、发布成功率和 crash-free 指标可观测，任一能力异常都可单独回退。'
+    status: pending
+    linked_tasks: [D10, D11, D12]
     test_layers:
       T1: required
       T2: optional
       T3: required
       T4: required
     tests:
-      - quwoquan_app/test/ui/content/post/contract/content_runtime_config_provider_test.dart
-      - quwoquan_service/services/content-service/tests/post_compat_contract_test.go
-      - quwoquan_service/services/content-service/tests/post_comment_contract_test.go
-      - make verify
-      - make gate-full
-      - bash scripts/gate_repo.sh --scope patrol (SKIP: patrol CLI not found)
-      - make test-api-contract (SKIP: STAGING_BASE_URL not set)
+      - runtime flag contract test
+      - create entry and editor rollout rehearsal
+      - create editor key path sla probe

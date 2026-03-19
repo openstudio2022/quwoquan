@@ -5,6 +5,7 @@ import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_policies.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/assistant/reasoning/planner/react_planner.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_state.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/tool_execution_guard.dart';
@@ -262,7 +263,11 @@ class ReactRuntime {
         ),
       );
       // Inject phase hint for user-visible thinking guidance
-      final currentPhase = _determineUserPhase(state);
+      final currentPhase = _determineUserPhase(
+        state,
+        availableToolNames,
+        templateId: templateId,
+      );
       final phaseHint = _buildPhaseHint(currentPhase, availableToolNames);
       if (phaseHint.isNotEmpty) {
         messages.add(<String, String>{'role': 'system', 'content': phaseHint});
@@ -271,7 +276,7 @@ class ReactRuntime {
       pushTrace(
         AssistantTraceEvent(
           type: AssistantTraceEventType.thinkingProgress,
-          message: currentPhase == 'analyzing' ? '正在深入分析...' : '正在思考...',
+          message: _seedThinkingProgressMessage(currentPhase, state.goal),
           timestamp: DateTime.now(),
           runId: runId,
           traceId: traceId,
@@ -345,6 +350,8 @@ class ReactRuntime {
                 )
                 .toList(growable: false),
             'searchQueries': _extractPlannedSearchQueries(output.toolCalls),
+            if (output.reasoningText.trim().isNotEmpty)
+              'providerReasoningContinuation': output.reasoningText.trim(),
             if (output.usageEntries.isNotEmpty)
               'usageEntries': output.usageEntries,
           },
@@ -353,6 +360,7 @@ class ReactRuntime {
       final extractedThinking = _extractBestThinking(
         output.text,
         output.reasoningText,
+        currentPhase: currentPhase,
       );
       if (extractedThinking.isNotEmpty && !anyDeltaForwarded) {
         pushTrace(
@@ -387,6 +395,7 @@ class ReactRuntime {
       final effectiveToolCalls = _sanitizeToolCalls(
         rawToolCalls,
         shell: executionShell,
+        availableToolNames: availableToolNames,
       );
       for (final call in effectiveToolCalls) {
         if (!_isRetrievalLikeTool(call.name)) continue;
@@ -510,6 +519,8 @@ class ReactRuntime {
             'role': rawMsg['role'] ?? 'assistant',
             if (rawMsg['content'] != null) 'content': rawMsg['content'],
             'tool_calls': sanitizedToolCalls,
+            if (output.reasoningText.trim().isNotEmpty)
+              'provider_reasoning_continuation': output.reasoningText.trim(),
           }.map((k, v) => MapEntry(k, v)),
         );
       } else {
@@ -533,6 +544,8 @@ class ReactRuntime {
           'role': 'assistant',
           'content': null,
           'tool_calls': syntheticToolCalls,
+          if (output.reasoningText.trim().isNotEmpty)
+            'provider_reasoning_continuation': output.reasoningText.trim(),
         });
       }
       for (final step in state.plan) {
@@ -585,7 +598,10 @@ class ReactRuntime {
             ),
           );
         }
-        state.usedTools += 1;
+        final toolKind = _toolKind(step.toolName);
+        if (toolKind != 'context') {
+          state.usedTools += 1;
+        }
         final retrievalLike = _isRetrievalLikeTool(step.toolName);
         if (retrievalLike) {
           final query =
@@ -666,8 +682,11 @@ class ReactRuntime {
         final traceData = <String, dynamic>{
           ...?result.data,
           'toolName': step.toolName,
+          if (toolKind.isNotEmpty) 'toolKind': toolKind,
           'problemClass': executionShell.problemClass,
           'retrievalLike': retrievalLike,
+          if ((result.data?['references'] as List?) != null)
+            'referenceCount': (result.data?['references'] as List).length,
           if (!isOk && shouldSuppressToolErrorForUser) 'suppressed': true,
         };
         pushTrace(
@@ -784,11 +803,19 @@ class ReactRuntime {
         if (!isOk && !shouldSuppressToolErrorForUser) {
           finalText = result.message;
         } else if (!isOk && shouldSuppressToolErrorForUser) {
-          messages.add(const <String, String>{
-            'role': 'system',
-            'content':
-                '本轮外部检索能力暂不可用。请不要继续调用检索工具，改为基于当前上下文与已有知识直接回答用户问题，并明确说明无法联网检索最新数据。',
-          });
+          if (retrievalLike) {
+            messages.add(const <String, String>{
+              'role': 'system',
+              'content':
+                  '本轮外部检索能力暂不可用。若当前证据仍不足，请不要编造确定性答案。优先给出稳态降级答复，并明确说明无法拿到最新外部信息与是否值得稍后重试。',
+            });
+          } else if (toolKind == 'context') {
+            messages.add(const <String, String>{
+              'role': 'system',
+              'content':
+                  '本地上下文暂不可用，但这不等于外部检索不可用。优先利用用户已明确提供的信息继续检索或判断；只有在关键地点或设备信息仍缺失时，才改为 ask_user 澄清。',
+            });
+          }
         }
 
         // Skip reflection loop entirely when reflectionBudget == 0
@@ -924,6 +951,7 @@ class ReactRuntime {
     final codeName = result.errorCode.name;
     if (!rule.errorCodes.contains(codeName)) return false;
     if (codeName != AssistantErrorCode.executionFailed.name) return true;
+    if (rule.messageKeywords.isEmpty) return true;
     final lowered = result.message.toLowerCase();
     for (final keyword in rule.messageKeywords) {
       final token = keyword.trim().toLowerCase();
@@ -1049,6 +1077,11 @@ class ReactRuntime {
     return registry?.isRetrievalLikeTool(toolName) ?? false;
   }
 
+  String _toolKind(String toolName) {
+    final registry = _toolMetadataRegistry;
+    return registry?.toolKindByName(toolName) ?? '';
+  }
+
   _RuntimeExecutionShell _resolveExecutionShell(
     Map<String, dynamic> templateVariables,
   ) {
@@ -1082,10 +1115,10 @@ class ReactRuntime {
   List<AssistantToolCall> _sanitizeToolCalls(
     List<AssistantToolCall> toolCalls, {
     required _RuntimeExecutionShell shell,
+    required List<String> availableToolNames,
   }) {
-    if (toolCalls.isEmpty) return toolCalls;
     final metadata = _toolMetadataRegistry;
-    return toolCalls
+    final sanitized = toolCalls
         .map((call) {
           final args = _flattenToolArguments(call.arguments);
           if (!(metadata?.supportsQueryTasks(call.name) ?? false)) {
@@ -1129,7 +1162,42 @@ class ReactRuntime {
             id: call.id,
           );
         })
-        .toList(growable: false);
+        .toList(growable: true);
+    final hasRetrievalCall = sanitized.any(
+      (call) => _isRetrievalLikeTool(call.name),
+    );
+    final hasContextCall = sanitized.any(
+      (call) => _toolKind(call.name) == 'context',
+    );
+    final shouldAutoInjectRetrieval =
+        !hasRetrievalCall &&
+        shell.preComputedQueryTasks.isNotEmpty &&
+        availableToolNames.contains('web_search') &&
+        (sanitized.isEmpty || hasContextCall);
+    if (shouldAutoInjectRetrieval) {
+      final queryTasks = _buildSearchQueryTasks(
+        args: const <String, dynamic>{},
+        shell: shell,
+      );
+      if (queryTasks.isNotEmpty) {
+        final firstQuery = (queryTasks.first['query'] as String?)?.trim() ?? '';
+        if (firstQuery.isNotEmpty) {
+          sanitized.add(
+            AssistantToolCall(
+              name: 'web_search',
+              arguments: <String, dynamic>{
+                'query': firstQuery,
+                'queryTasks': queryTasks,
+              },
+              id: hasContextCall
+                  ? 'auto_web_search_after_context'
+                  : 'auto_web_search_from_precomputed_tasks',
+            ),
+          );
+        }
+      }
+    }
+    return sanitized;
   }
 
   Map<String, dynamic> _flattenToolArguments(
@@ -1370,12 +1438,28 @@ class ReactRuntime {
   }
 
   /// Determines the user-facing phase based on current state.
-  String _determineUserPhase(ReactRunState state) {
-    if (state.iteration == 1 && state.evidences.isEmpty) {
+  String _determineUserPhase(
+    ReactRunState state,
+    List<String> availableToolNames, {
+    required String templateId,
+  }) {
+    final normalizedTemplateId = templateId.trim();
+    final answeringTemplate =
+        normalizedTemplateId == 'synthesizer.final_answer' ||
+        normalizedTemplateId == 'phase_one_direct_answer';
+    if (state.forceAnswerOnly || answeringTemplate) {
+      return 'answering';
+    }
+    if (state.iteration == 1 &&
+        state.evidences.isEmpty &&
+        state.usedTools == 0) {
       return 'understanding';
     }
-    if (state.evidences.isNotEmpty) {
-      return 'analyzing';
+    if (state.evidences.isNotEmpty || state.usedTools > 0) {
+      return 'search';
+    }
+    if (state.iteration > 1 && availableToolNames.isNotEmpty) {
+      return 'search';
     }
     return 'understanding';
   }
@@ -1392,7 +1476,7 @@ class ReactRuntime {
         ? userFacingNarrativeHint
         : '$baseHint\n\n$userFacingNarrativeHint';
 
-    if (phase == 'understanding' || phase == 'analyzing') {
+    if (phase == 'understanding') {
       final toolHints = <String>[];
       final registry = _toolMetadataRegistry;
       if (registry != null) {
@@ -1433,14 +1517,20 @@ class ReactRuntime {
     await _reactPolicyLoading;
   }
 
-  String _extractThinkingTextFromJson(String text) {
+  String _extractThinkingTextFromJson(String text, {String currentPhase = ''}) {
     try {
       final decoded = jsonDecode(text);
       if (decoded is Map) {
         final payload = decoded.cast<String, dynamic>();
         final turn = tryParseAssistantTurnOutput(payload);
         final rs = turn?.reasonShort.trim() ?? '';
-        if (rs.isNotEmpty) return rs;
+        if (rs.isNotEmpty) {
+          return _normalizeStructuredThinking(
+            raw: rs,
+            currentPhase: currentPhase,
+            turn: turn,
+          );
+        }
         final um =
             turn?.userMarkdown.trim() ??
             (payload['userMarkdown'] as String?)?.trim() ??
@@ -1455,35 +1545,101 @@ class ReactRuntime {
 
   /// Extract user-visible reasoning from the LLM output, combining canonical
   /// `reasonShort`, reasoning text, and cleaned raw output.
-  String _extractBestThinking(String outputText, String reasoningText) {
-    final fromJson = _extractThinkingTextFromJson(outputText);
+  String _extractBestThinking(
+    String outputText,
+    String reasoningText, {
+    required String currentPhase,
+  }) {
+    final fromJson = _extractThinkingTextFromJson(
+      outputText,
+      currentPhase: currentPhase,
+    );
     if (fromJson.isNotEmpty) return fromJson;
-    final cleaned = _cleanReasoningForDisplay(reasoningText);
-    if (cleaned.isNotEmpty) return cleaned;
-    if (outputText.trim().isNotEmpty) {
-      final fromOutput = _extractThinkingTextFromJson(
-        outputText.trim().startsWith('{') ? outputText : reasoningText,
-      );
-      if (fromOutput.isNotEmpty) return fromOutput;
-    }
+    final fromReasoningJson = _extractThinkingTextFromJson(
+      reasoningText,
+      currentPhase: currentPhase,
+    );
+    if (fromReasoningJson.isNotEmpty) return fromReasoningJson;
     return '';
   }
 
-  static final _jsonKeyPattern = RegExp(
-    r'"(?:contractVersion|decision|nextAction|toolPlan|slotState|messageKind|tool_calls)',
-  );
+  String _normalizeStructuredThinking({
+    required String raw,
+    required String currentPhase,
+    AssistantTurnOutput? turn,
+  }) {
+    final text = raw.trim();
+    if (text.isEmpty) return '';
+    final intentSummary =
+        turn?.understandingSnapshot.intentSummary.trim() ?? '';
+    final userGoal = turn?.intentGraph?.userGoal.trim() ?? '';
+    final topic = _normalizeThinkingTopic(
+      intentSummary.isNotEmpty ? intentSummary : userGoal,
+    );
+    final internalNarration =
+        AssistantDisplayTextResolver.containsInternalPlannerNarrationFragment(
+          text,
+        );
+    final needsTopicEnrichment =
+        topic.isNotEmpty &&
+        !text.contains(topic) &&
+        _looksLikeGenericThinkingText(text);
+    if (!internalNarration && !needsTopicEnrichment) {
+      return text;
+    }
+    switch (currentPhase) {
+      case 'understanding':
+        if (topic.isNotEmpty) {
+          return '我先确认你想知道的重点是$topic，再核对最新信息。';
+        }
+        return '我先确认你最关心的重点，再核对最新信息。';
+      case 'answering':
+        if (topic.isNotEmpty) {
+          return '我已经把$topic的关键信息核对好了，开始整理结论。';
+        }
+        return '我已经把关键信息核对好了，开始整理结论。';
+      default:
+        return text;
+    }
+  }
 
-  String _cleanReasoningForDisplay(String reasoning) {
-    final text = reasoning.trim();
-    if (text.isEmpty || text.length < 10) return '';
-    if (text.startsWith('{') && _jsonKeyPattern.hasMatch(text)) return '';
-    final cleaned = text
-        .replaceAll(RegExp(r'<think>|</think>', multiLine: true), '')
-        .replaceAll(RegExp(r'```json[\s\S]*?```', multiLine: true), '')
+  String _normalizeThinkingTopic(String raw) {
+    var topic = raw.trim();
+    if (topic.isEmpty) return '';
+    topic = topic
+        .replaceFirst(RegExp(r'^(用户)?(?:想|要)?(?:了解|知道|确认|判断|查询)'), '')
+        .replaceFirst(RegExp(r'^(一下|当前|现在|一下子)'), '')
         .trim();
-    if (cleaned.isEmpty || cleaned.length < 10) return '';
-    if (cleaned.startsWith('{') && cleaned.endsWith('}')) return '';
-    return cleaned;
+    return topic;
+  }
+
+  String _seedThinkingProgressMessage(String currentPhase, String goal) {
+    final topic = _normalizeThinkingTopic(goal);
+    switch (currentPhase) {
+      case 'understanding':
+        if (topic.isNotEmpty) {
+          return '我先确认你想知道的重点是$topic。';
+        }
+        return '我先确认你最关心的重点。';
+      case 'answering':
+        if (topic.isNotEmpty) {
+          return '我开始整理$topic的关键信息。';
+        }
+        return '我开始整理已经核对好的关键信息。';
+      case 'search':
+        return '检索处理中';
+      default:
+        return '理解问题中';
+    }
+  }
+
+  bool _looksLikeGenericThinkingText(String text) {
+    final normalized = text.trim();
+    if (normalized.isEmpty) return false;
+    if (normalized.runes.length <= 16) return true;
+    return RegExp(
+      r'(问题焦点|组织执行|开始处理|开始整理|聚焦问题主线|进入理解阶段|进入检索准备|进入回答阶段)',
+    ).hasMatch(normalized);
   }
 }
 

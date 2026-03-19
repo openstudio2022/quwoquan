@@ -2,16 +2,20 @@
 /// 取代之前散落的 `Map<String, String?>` {'avatar':..., 'displayName':..., 'backgroundImage':...}
 class UserProfileRouteExtra {
   const UserProfileRouteExtra({
+    this.profileSubjectId,
     this.avatar,
     this.displayName,
     this.backgroundImage,
   });
 
+  final String? profileSubjectId;
   final String? avatar;
   final String? displayName;
   final String? backgroundImage;
 
   /// null / empty 过滤：与路由解析侧保持一致
+  String? get safeProfileSubjectId =>
+      profileSubjectId?.isEmpty == true ? null : profileSubjectId;
   String? get safeAvatar => avatar?.isEmpty == true ? null : avatar;
   String? get safeDisplayName => displayName?.isEmpty == true ? null : displayName;
   String? get safeBackgroundImage =>

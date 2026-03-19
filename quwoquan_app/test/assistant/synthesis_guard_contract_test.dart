@@ -99,7 +99,7 @@ String _assistantTurnJson({
   List<Map<String, dynamic>> evidence = const <Map<String, dynamic>>[],
 }) {
   return jsonEncode(<String, dynamic>{
-    'contractVersion': 'assistant_turn',
+    'contractId': 'assistant_turn',
     'decision': <String, dynamic>{'nextAction': 'answer'},
     'messageKind': 'answer',
     'userMarkdown': markdown,
@@ -339,7 +339,7 @@ void main() {
           '[{"id":"route_recommendation","query":"九寨沟 4天 路线","dimension":"route"}]'
           '## 4天路线建议\n\n- 只有 4 天时更推荐西线。';
       final dirtySynthesisJson = jsonEncode(<String, dynamic>{
-        'contractVersion': 'assistant_turn',
+        'contractId': 'assistant_turn',
         'decision': const <String, dynamic>{'nextAction': 'answer'},
         'messageKind': 'answer',
         'userMarkdown': dirtyMarkdown,
@@ -444,7 +444,7 @@ class _SynthesisTemplateCaptureProvider implements AssistantLlmProvider {
 
   String _planningTurnWithIntent() {
     return jsonEncode(<String, dynamic>{
-      'contractVersion': 'assistant_turn',
+      'contractId': 'assistant_turn',
       'decision': const <String, dynamic>{'nextAction': 'answer'},
       'messageKind': 'answer',
       'userMarkdown': '## 中间结果\n\n- 我先收拢九寨沟方向的路线备选。',

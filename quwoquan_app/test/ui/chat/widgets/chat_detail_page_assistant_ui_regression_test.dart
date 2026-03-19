@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -39,6 +41,7 @@ Map<String, dynamic> _assistantMessage({
   required String content,
   Map<String, dynamic> extra = const <String, dynamic>{},
 }) {
+  final journey = _extractJourney(extra);
   return <String, dynamic>{
     'id': id,
     'conversationId': AppConceptConstants.assistantConversationId,
@@ -50,8 +53,30 @@ Map<String, dynamic> _assistantMessage({
     'timestamp': '10:10',
     'isRead': true,
     'isSelf': false,
+    if (journey != null)
+      ...buildPersistedAssistantTurnFields(
+        journey: journey,
+        displayMarkdown: content,
+        displayPlainText: content,
+        followupPrompt: '',
+        actionHints: const <String>[],
+        elapsedMs: 4200,
+      ),
     ...extra,
   };
+}
+
+AssistantJourney? _extractJourney(Map<String, dynamic> extra) {
+  final topLevel = extra['journey'];
+  if (topLevel is Map) {
+    return AssistantJourney.fromJson(topLevel.cast<String, dynamic>());
+  }
+  final runArtifacts = (extra['runArtifacts'] as Map?)?.cast<String, dynamic>();
+  final nested = runArtifacts?['journey'];
+  if (nested is Map) {
+    return AssistantJourney.fromJson(nested.cast<String, dynamic>());
+  }
+  return null;
 }
 
 Map<String, dynamic> _journeyPayload({
@@ -119,6 +144,7 @@ void main() {
           'detail': '先把会影响判断的冲突信息排掉，再组织最终答案。',
         },
       ],
+      finalAnswerReady: false,
       summary: '正在交叉核实关键结论',
     );
     final message = _assistantMessage(
@@ -137,7 +163,6 @@ void main() {
 
     expect(find.text(UITextConstants.assistantProcessStageUnderstand), findsOneWidget);
     expect(find.text(UITextConstants.assistantProcessStageSearch), findsOneWidget);
-    expect(find.text(UITextConstants.assistantProcessStageAnalyze), findsOneWidget);
     expect(find.text(UITextConstants.assistantProcessStageAnswer), findsOneWidget);
     expect(find.text('先把会影响判断的冲突信息排掉，再组织最终答案。'), findsOneWidget);
   });
@@ -179,6 +204,7 @@ void main() {
           'references': references,
         },
       ],
+      finalAnswerReady: false,
       summary: '正在整理可直接参考的结论',
       references: references,
     );
@@ -199,7 +225,7 @@ void main() {
 
     await tester.tap(find.byKey(TestKeys.assistantProcessHeader));
     await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.text('正在整理可直接参考的结论'));
+    await tester.tap(find.text('处理1篇文档，接纳1篇如下'));
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('中国气象局 · weather.cma.cn'), findsOneWidget);
@@ -237,7 +263,7 @@ void main() {
                 'order': 0,
                 'headline': '先确认问题落点，后面的资料才更容易收敛。',
                 'detail':
-                    '{"contractVersion":"assistant_turn","queryTasks":[1]}',
+                    '{"contractId":"assistant_turn","queryTasks":[1]}',
               },
             ],
             summary: '先确认问题落点，后面的资料才更容易收敛。',
@@ -252,7 +278,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.textContaining('先确认问题落点'), findsAtLeastNWidgets(1));
-    expect(find.textContaining('contractVersion'), findsNothing);
+    expect(find.textContaining('contractId'), findsNothing);
     expect(find.textContaining('queryTasks'), findsNothing);
   });
 
@@ -330,7 +356,7 @@ void main() {
     await tester.pumpWidget(_bubbleHarness(message));
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.textContaining('已汇总成最终建议'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('已完成深度思考'), findsAtLeastNWidgets(1));
 
     await tester.tap(find.byKey(TestKeys.assistantProcessHeader));
     await tester.pump(const Duration(milliseconds: 300));

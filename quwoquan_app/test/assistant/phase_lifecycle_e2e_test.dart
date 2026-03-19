@@ -94,7 +94,7 @@ void main() {
 
       // --- 用户语言检查：禁止内部字符串 ---
       final forbiddenStrings = [
-        'contractVersion',
+        'contractId',
         'assistant_turn"',
         'turnPhase',
         'AssistantTraceEventType',
@@ -233,9 +233,9 @@ void main() {
       for (final entry in journey?.entries ?? const <AssistantJourneyEntry>[]) {
         final text = '${entry.headline} ${entry.detail}'.trim();
         expect(
-          text.contains('"contractVersion"'),
+          text.contains('"contractId"'),
           isFalse,
-          reason: '用户旅程不应包含 JSON 原文片段 contractVersion',
+          reason: '用户旅程不应包含 JSON 原文片段 contractId',
         );
         expect(
           text.contains('"turnPhase"'),

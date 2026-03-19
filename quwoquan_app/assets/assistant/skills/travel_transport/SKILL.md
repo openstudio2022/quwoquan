@@ -49,7 +49,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 ### 结构化 JSON 契约（必填字段）
 ```json
 {
-  "contractVersion": "assistant_turn",
+  "contractId": "assistant_turn",
   "decision": {"nextAction": "tool_call|answer|ask_user|retry|abort"},
   "slotState": {
     "origin": {"value": "", "source": "user_query|local_context|memory|unknown"},

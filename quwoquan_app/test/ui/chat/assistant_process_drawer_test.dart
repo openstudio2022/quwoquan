@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/assistant_journey_view_model.dart';
@@ -10,11 +11,14 @@ AssistantJourneyViewModel _viewModel({
   AssistantJourney journey = const AssistantJourney(),
   bool isRunning = false,
   int elapsedMs = 0,
+  RetrievalProcessingSnapshot retrievalProcessing =
+      const RetrievalProcessingSnapshot(),
 }) {
   return buildAssistantJourneyViewModel(
     journey: journey,
     isRunning: isRunning,
     elapsedMs: elapsedMs,
+    retrievalProcessing: retrievalProcessing,
   );
 }
 
@@ -126,6 +130,20 @@ void main() {
       );
     });
 
+    testWidgets('运行中最小态不再展示耗时秒数', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AssistantProcessDrawer(
+              viewModel: _viewModel(isRunning: true, elapsedMs: 9000),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.textContaining('耗时'), findsNothing);
+    });
+
     testWidgets('更长等待时升级为 handoff 与 recovery 提示', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
@@ -170,7 +188,7 @@ void main() {
       );
 
       expect(find.text('我先把问题立住'), findsOneWidget);
-      expect(find.text('我在核对最新资料'), findsOneWidget);
+      expect(find.text('处理1篇文档，接纳1篇如下'), findsOneWidget);
       expect(
         find.text(UITextConstants.assistantProcessStageUnderstand),
         findsAtLeastNWidgets(1),
@@ -180,13 +198,15 @@ void main() {
         findsAtLeastNWidgets(1),
       );
       expect(
-        find.text(UITextConstants.assistantProcessStageAnalyze),
+        find.text(UITextConstants.assistantProcessStageAnswer),
         findsAtLeastNWidgets(1),
-        reason: 'timeline v2 会保留固定 4 主阶段骨架',
       );
+      expect(find.text('查找信息'), findsNothing);
+      expect(find.text('核对结论'), findsNothing);
+      expect(find.text('整理回答'), findsNothing);
       expect(find.text('来源：官方'), findsOneWidget);
 
-      await tester.tap(find.text('我在核对最新资料'));
+      await tester.tap(find.text('处理1篇文档，接纳1篇如下'));
       await tester.pump();
 
       expect(find.text('四川文旅公告 · 官方'), findsOneWidget);
@@ -244,6 +264,7 @@ void main() {
         ),
       );
 
+      expect(find.text('已完成深度思考'), findsOneWidget);
       expect(find.text('先把问题主线立住'), findsOneWidget);
       expect(find.text('已为你整理好'), findsAtLeastNWidgets(1));
       expect(find.text('我把重点条件和答案边界一起收拢了。'), findsOneWidget);
@@ -326,7 +347,7 @@ void main() {
         ),
       );
 
-      expect(find.text('已深度思考，参考 2 篇资料，用时 4 秒'), findsOneWidget);
+      expect(find.text('已完成深度思考，处理 2 篇文档，耗时 4 秒'), findsOneWidget);
       expect(find.textContaining('4.2'), findsNothing);
     });
   });
